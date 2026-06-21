@@ -975,6 +975,22 @@ pub async fn list_unit_model_textures(
 }
 
 #[tauri::command]
+pub async fn sync_unit_model_texture_containers(
+    model_root: String,
+    structure_json_path: Option<String>,
+) -> Result<unit_model_models::UnitModelTextureContainerSyncResult, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_models::sync_unit_model_texture_containers_result(
+            &model_root,
+            structure_json_path.as_deref(),
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
+#[tauri::command]
 pub async fn add_unit_model_nutexb(
     model_root: String,
     structure_json_path: Option<String>,

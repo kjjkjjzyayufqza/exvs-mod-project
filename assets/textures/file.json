@@ -1,0 +1,2757 @@
+{
+  "modelName": "N1_rocket",
+  "numatbPaths": {
+    "maya": "D:/output/N1_rocket/models/N1_rocket__maya__.numatb",
+    "nust": "D:/output/N1_rocket/models/N1_rocket__nust__.numatb"
+  },
+  "mirrorTexturePathsAcrossProfiles": true,
+  "mayaProfile": {
+    "major_version": 1,
+    "minor_version": 6,
+    "entries": [
+      {
+        "material_label": "HexShroud",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "n1_back"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "N1_c1",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "c1"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "N1_c3",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "c3"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "N1_c4",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "c4"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "N1_c5",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "c5"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "N1_c6",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "c6"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "N1_c6_solid",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "c6"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_00_hull_color",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_01_deck_color",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_02_ship_bottom_color",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_03_anti_glare_color",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_04_brass",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_05_silver",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_06_black_iron_color",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_08_white",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_09_signal_light",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_10_signal_light_red",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_11_signal_light_green",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_12_infrared_filter",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_13_glass",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_14_handrail",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "detail_atlas"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_15_wire_mesh",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "detail_atlas"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_16_hedgehog",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [],
+        "booleans": [],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      }
+    ]
+  },
+  "nustProfile": {
+    "major_version": 1,
+    "minor_version": 6,
+    "entries": [
+      {
+        "material_label": "HexShroud",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "n1_back"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "N1_c1",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "c1"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "N1_c3",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "c3"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "N1_c4",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "c4"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "N1_c5",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "c5"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "N1_c6",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "c6"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "N1_c6_solid",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "c6"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_00_hull_color",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_01_deck_color",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_02_ship_bottom_color",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_03_anti_glare_color",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_04_brass",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_05_silver",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_06_black_iron_color",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_08_white",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_09_signal_light",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_10_signal_light_red",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_11_signal_light_green",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_12_infrared_filter",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_13_glass",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_14_handrail",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "detail_atlas"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_15_wire_mesh",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "detail_atlas"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      },
+      {
+        "material_label": "export_16_hedgehog",
+        "shader_label": "vstgStandard_VertexColor",
+        "blend_states": [],
+        "floats": [],
+        "float1s": [],
+        "booleans": [
+          {
+            "param_id": "UseBaseColorMap",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "BaseColorMap",
+            "data": "color_palette"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      }
+    ]
+  }
+}

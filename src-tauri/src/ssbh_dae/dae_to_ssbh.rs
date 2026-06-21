@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use serde::Serialize;
-use ssbh_data::mesh_data::{AttributeData, MeshData, MeshObjectData, MeshWriteProfile, VectorData};
+use ssbh_data::mesh_data::{AttributeData, MeshData, MeshObjectData, VectorData};
 use ssbh_data::modl_data::{ModlData, ModlEntryData};
 use ssbh_data::skel_data::{BillboardType, BoneData, SkelData};
 use std::collections::HashSet;
@@ -95,10 +95,13 @@ pub fn convert_import_scene_to_ssbh_files(
         let mesh_path = config
             .output_directory
             .join(format!("{}.numshb", config.base_filename));
-        // EXVS2 exports use the canonical profile, which omits the unused
-        // all-zero dummy vertex buffer 2 the same way StudioSB writes meshes.
+        // Mesh export MUST use write_to_file (legacy / MeshWriteProfile::LegacyCompatible).
+        // Do NOT switch to write_to_file_with_profile(MeshWriteProfile::Vs2Canonical):
+        // real FBX/DAE conversions showed skin stretching and missing mesh objects
+        // even though the canonical profile only omits the all-zero dummy vertex buffer 2.
+        // See docs/agent-sessions/ssbh-model-optimization/ for the original Vs2Canonical plan.
         mesh_data
-            .write_to_file_with_profile(&mesh_path, MeshWriteProfile::Vs2Canonical)
+            .write_to_file(&mesh_path)
             .map_err(|e| anyhow!("Failed to write mesh: {}", e))?;
         converted_files.numshb_path = Some(mesh_path);
     }
@@ -907,6 +910,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "write_to_file_with_profile(Vs2Canonical) breaks in-game meshes; production uses write_to_file"]
     fn exported_numshb_uses_canonical_profile_without_dummy_buffer2() {
         use ssbh_lib::formats::mesh::Mesh;
 

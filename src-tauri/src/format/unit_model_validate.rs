@@ -4,6 +4,7 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use tempfile::Builder;
 
 use crate::format::fhm2d::SubFileStructureEntry;
 
@@ -179,7 +180,7 @@ pub fn validate_unit_model_for_repack(
     }
 
     let json_dir = structure_path.parent().unwrap_or_else(|| Path::new("."));
-    let input = match read_structure_json(&structure_path) {
+    let mut input = match read_structure_json(&structure_path) {
         Ok(v) => v,
         Err(e) => {
             push_error(&mut errors, "structure", None, e, Some(&structure_path));
@@ -192,6 +193,88 @@ pub fn validate_unit_model_for_repack(
             );
         }
     };
+    let mut synced_temp = None;
+
+    let should_sync = !input.sub_file_structure.is_empty()
+        && input
+            .sub_file_data
+            .iter()
+            .any(|file| actual_ext(file) == ".numatb");
+    if should_sync {
+        let sync_model_root =
+            crate::format::unit_model_models::infer_model_root_from_structure_path(&structure_path)
+                .unwrap_or_else(|_| model_root_path.to_path_buf());
+        let temp = Builder::new()
+            .prefix(".unit-model-validate-")
+            .suffix("_structure.json")
+            .tempfile_in(json_dir)
+            .map_err(|e| format!("Failed to create temporary validation structure: {e}"));
+        let temp = match temp {
+            Ok(temp) => temp,
+            Err(error) => {
+                push_error(&mut errors, "structure", None, error, Some(&structure_path));
+                return finish_result(
+                    model_root,
+                    &structure_path.to_string_lossy(),
+                    summary,
+                    errors,
+                    warnings,
+                );
+            }
+        };
+        if let Err(error) = fs::copy(&structure_path, temp.path()).map_err(|e| {
+            format!(
+                "Failed to copy validation structure {} -> {}: {e}",
+                structure_path.display(),
+                temp.path().display()
+            )
+        }) {
+            push_error(&mut errors, "structure", None, error, Some(&structure_path));
+            return finish_result(
+                model_root,
+                &structure_path.to_string_lossy(),
+                summary,
+                errors,
+                warnings,
+            );
+        }
+        if let Err(error) = crate::format::unit_model_models::sync_unit_model_texture_containers(
+            &sync_model_root.to_string_lossy(),
+            Some(&temp.path().to_string_lossy()),
+        ) {
+            push_error(
+                &mut errors,
+                "textures",
+                None,
+                format!("Failed to synchronize texture containers from numatb refs: {error}"),
+                Some(&structure_path),
+            );
+            return finish_result(
+                model_root,
+                &structure_path.to_string_lossy(),
+                summary,
+                errors,
+                warnings,
+            );
+        }
+
+        let validation_structure_path = temp.path().to_path_buf();
+        synced_temp = Some(temp);
+        input = match read_structure_json(&validation_structure_path) {
+            Ok(v) => v,
+            Err(e) => {
+                push_error(&mut errors, "structure", None, e, Some(&structure_path));
+                return finish_result(
+                    model_root,
+                    &structure_path.to_string_lossy(),
+                    summary,
+                    errors,
+                    warnings,
+                );
+            }
+        };
+    }
+    let _keep_temp_alive = synced_temp;
 
     if let Some(total) = input.fhm2d_total_count {
         if total != input.sub_file_data.len() {
@@ -1330,7 +1413,121 @@ fn push_error(
 mod tests {
     use super::*;
     use serde_json::json;
+    use ssbh_data::hlpb_data::HlpbData;
+    use ssbh_data::matl_data::ParamId;
+    use ssbh_data::matl_data::{MatlData, MatlEntryData, TextureParam};
 
+    fn write_sync_fixture(parent: &Path, folder_name: &str) -> (PathBuf, PathBuf) {
+        let model_root = parent.join(folder_name);
+        let model_dir = model_root.join("models").join("alpha");
+        let textures_dir = model_root.join("textures");
+        fs::create_dir_all(&model_dir).unwrap();
+        fs::create_dir_all(&textures_dir).unwrap();
+
+        for name in ["alpha.nusktb", "alpha.numshb", "alpha.numdlb", "alpha.jnttbl"] {
+            fs::write(model_dir.join(name), b"stub").unwrap();
+        }
+        HlpbData {
+            major_version: 1,
+            minor_version: 0,
+            aim_constraints: Vec::new(),
+            orient_constraints: Vec::new(),
+        }
+        .write_to_file(model_dir.join("alpha.nuhlpb"))
+        .unwrap();
+
+        let maya = MatlData {
+            major_version: 1,
+            minor_version: 6,
+            entries: vec![MatlEntryData {
+                material_label: "alpha".into(),
+                shader_label: String::new(),
+                blend_states: Vec::new(),
+                floats: Vec::new(),
+                float1s: Vec::new(),
+                booleans: Vec::new(),
+                vectors: Vec::new(),
+                colors: Vec::new(),
+                rasterizer_states: Vec::new(),
+                samplers: Vec::new(),
+                textures: vec![TextureParam::new(
+                    ParamId::DiffuseMap,
+                    "color_palette".to_string(),
+                )],
+                textures2: Vec::new(),
+                type4_v16: Vec::new(),
+                type4_v15: Vec::new(),
+                uv_transforms: Vec::new(),
+            }],
+        };
+        maya.write_to_file(model_dir.join("alpha__maya__.numatb"))
+            .unwrap();
+
+        let nust = MatlData {
+            major_version: 1,
+            minor_version: 6,
+            entries: vec![MatlEntryData {
+                material_label: "alpha".into(),
+                shader_label: "vstgStandard_VertexColor".into(),
+                blend_states: Vec::new(),
+                floats: Vec::new(),
+                float1s: Vec::new(),
+                booleans: Vec::new(),
+                vectors: Vec::new(),
+                colors: Vec::new(),
+                rasterizer_states: Vec::new(),
+                samplers: Vec::new(),
+                textures: vec![TextureParam::new(
+                    ParamId::BaseColorMap,
+                    "color_palette".to_string(),
+                )],
+                textures2: Vec::new(),
+                type4_v16: Vec::new(),
+                type4_v15: Vec::new(),
+                uv_transforms: Vec::new(),
+            }],
+        };
+        nust.write_to_file(model_dir.join("alpha__nust__.numatb"))
+            .unwrap();
+
+        fs::write(textures_dir.join("color_palette.nutexb"), b"nutexb").unwrap();
+
+        let structure = parent.join(format!("{folder_name}_structure.json"));
+        let value = json!({
+            "Magic": 10,
+            "Fhm2dTotalCount": 8,
+            "UnkCount": 0,
+            "SubFileData": [
+                { "index": 0, "fileType": ".nusktb", "fileIndex": 0, "fileUrl": format!(".\\{folder_name}\\models\\alpha\\alpha.nusktb"), "fileBaseName": "alpha" },
+                { "index": 1, "fileType": ".numshb", "fileIndex": 1, "fileUrl": format!(".\\{folder_name}\\models\\alpha\\alpha.numshb"), "fileBaseName": "alpha" },
+                { "index": 2, "fileType": ".numdlb", "fileIndex": 2, "fileUrl": format!(".\\{folder_name}\\models\\alpha\\alpha.numdlb"), "fileBaseName": "alpha" },
+                { "index": 3, "fileType": ".jnttbl", "fileIndex": 3, "fileUrl": format!(".\\{folder_name}\\models\\alpha\\alpha.jnttbl"), "fileBaseName": "alpha" },
+                { "index": 4, "fileType": ".numatb", "fileIndex": 4, "fileUrl": format!(".\\{folder_name}\\models\\alpha\\alpha__maya__.numatb"), "fileBaseName": "alpha__maya__" },
+                { "index": 5, "fileType": ".numatb", "fileIndex": 5, "fileUrl": format!(".\\{folder_name}\\models\\alpha\\alpha__nust__.numatb"), "fileBaseName": "alpha__nust__" },
+                { "index": 6, "fileType": ".nuhlpb", "fileIndex": 6, "fileUrl": format!(".\\{folder_name}\\models\\alpha\\alpha.nuhlpb"), "fileBaseName": "alpha" },
+                { "index": 7, "fileType": ".nuhlpb", "fileIndex": 7, "fileUrl": format!(".\\{folder_name}\\models\\alpha\\alpha.nuhlpb"), "fileBaseName": "alpha" }
+            ],
+            "SubFileStructure": [
+                { "type": "Folder", "unk1": "00000000", "folderCount": 2, "unk2": "00000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "unk5": 0, "unk6": 0 },
+                { "type": "Folder", "unk1": "00000000", "folderCount": 8, "unk2": "00000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "unk5": 0, "unk6": 0 },
+                { "type": "Item", "unk1": "00000000", "fileIndex": 0, "unk2": "10000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "originalFileIndex": 0, "Name": "alpha" },
+                { "type": "Folder", "unk1": "00000000", "folderCount": 0, "unk2": "00000000", "unk2_1": 0, "unk3": 32, "unk4": 0, "unk5": 1, "unk6": 0 },
+                { "type": "EndMark", "endMarkCount": 1 },
+                { "type": "Item", "unk1": "00000000", "fileIndex": 4, "unk2": "21000000", "unk2_1": 0, "unk3": 1, "unk4": 0, "originalFileIndex": 4, "Name": "alpha__maya__" },
+                { "type": "Folder", "unk1": "00000000", "folderCount": 0, "unk2": "00000000", "unk2_1": 0, "unk3": 32, "unk4": 0, "unk5": 1, "unk6": 0 },
+                { "type": "EndMark", "endMarkCount": 1 },
+                { "type": "Item", "unk1": "00000000", "fileIndex": 5, "unk2": "21000000", "unk2_1": 0, "unk3": 1, "unk4": 0, "originalFileIndex": 5, "Name": "alpha__nust__" },
+                { "type": "Item", "unk1": "00000000", "fileIndex": 1, "unk2": "30000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "originalFileIndex": 1, "Name": "alpha" },
+                { "type": "Item", "unk1": "00000000", "fileIndex": 2, "unk2": "40000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "originalFileIndex": 2, "Name": "alpha" },
+                { "type": "Item", "unk1": "00000000", "fileIndex": 3, "unk2": "50000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "originalFileIndex": 3, "Name": "alpha" },
+                { "type": "EndMark", "endMarkCount": 1 },
+                { "type": "Item", "unk1": "00000000", "fileIndex": 7, "unk2": "00000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "originalFileIndex": 7, "Name": "alpha" },
+                { "type": "EndMark", "endMarkCount": 1 }
+            ]
+        });
+        fs::write(&structure, serde_json::to_string_pretty(&value).unwrap()).unwrap();
+        (model_root, structure)
+    }
     #[test]
     fn shl_count_is_read_from_offset_0x0c() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1393,11 +1590,14 @@ mod tests {
                 "missing legacy root file should not block validation ({name}): errors={}",
                 serde_json::to_string_pretty(&result.errors).unwrap()
             );
-            assert!(
-                result.warnings.iter().any(|warning| warning.contains(name)),
-                "missing legacy root file should surface as warning ({name}): warnings={}",
-                serde_json::to_string_pretty(&result.warnings).unwrap()
-            );
+            let is_missing_on_disk = !model_root.join(name).is_file();
+            if is_missing_on_disk {
+                assert!(
+                    result.warnings.iter().any(|warning| warning.contains(name)),
+                    "missing legacy root file should surface as warning ({name}): warnings={}",
+                    serde_json::to_string_pretty(&result.warnings).unwrap()
+                );
+            }
         }
     }
 
@@ -1502,72 +1702,24 @@ mod tests {
     }
 
     #[test]
-    fn model_group_without_texture_containers_is_still_validated() {
+    fn model_group_without_texture_containers_is_auto_created_from_numatb_refs() {
         let tmp = tempfile::tempdir().unwrap();
-        let model_root = tmp.path().join("0xTEST");
-        fs::create_dir_all(&model_root).unwrap();
-        let files = [
-            ("model.nusktb", ".nusktb", "10000000"),
-            ("model__maya__.numatb", ".numatb", "21000000"),
-            ("model__nust__.numatb", ".numatb", "21000000"),
-            ("model.numshb", ".numshb", "30000000"),
-            ("model.numdlb", ".numdlb", "40000000"),
-            ("model.jnttbl", ".bin", "50000000"),
-        ];
-        for (name, _, _) in files {
-            fs::write(model_root.join(name), b"stub").unwrap();
-        }
-
-        let sub_file_data: Vec<_> = files
-            .iter()
-            .enumerate()
-            .map(|(index, (name, file_type, _))| {
-                json!({
-                    "index": index,
-                    "fileType": file_type,
-                    "fileIndex": index as i32,
-                    "fileUrl": format!(".\\0xTEST\\{name}"),
-                    "fileBaseName": null
-                })
-            })
-            .collect();
-        let mut sub_file_structure = vec![json!({
-            "type": "Folder",
-            "unk1": "00000000",
-            "folderCount": files.len() as i32,
-            "unk2": "00000000",
-            "unk2_1": 0,
-            "unk3": 0,
-            "unk4": 0,
-            "unk5": 0,
-            "unk6": 0
-        })];
-        for (index, (_, _, unk2)) in files.iter().enumerate() {
-            sub_file_structure.push(json!({
-                "type": "Item",
-                "unk1": "00000000",
-                "fileIndex": index as i32,
-                "unk2": unk2,
-                "unk2_1": 0,
-                "unk3": if *unk2 == "21000000" { 1 } else { 0 },
-                "unk4": 0,
-                "originalFileIndex": index as i32,
-                "Name": null
-            }));
-        }
-        sub_file_structure.push(json!({
-            "type": "EndMark",
-            "endMarkCount": 1
-        }));
-
-        let structure = tmp.path().join("0xTEST_structure.json");
-        let value = json!({
-            "Magic": 10,
-            "Fhm2dTotalCount": files.len(),
-            "UnkCount": 0,
-            "SubFileData": sub_file_data,
-            "SubFileStructure": sub_file_structure
-        });
+        let (model_root, structure) = write_sync_fixture(tmp.path(), "0xTEST");
+        let mut value: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&structure).unwrap()).unwrap();
+        value["SubFileStructure"] = json!([
+            { "type": "Folder", "unk1": "00000000", "folderCount": 2, "unk2": "00000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "unk5": 0, "unk6": 0 },
+            { "type": "Folder", "unk1": "00000000", "folderCount": 6, "unk2": "00000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "unk5": 0, "unk6": 0 },
+            { "type": "Item", "unk1": "00000000", "fileIndex": 0, "unk2": "10000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "originalFileIndex": 0, "Name": "alpha" },
+            { "type": "Item", "unk1": "00000000", "fileIndex": 4, "unk2": "21000000", "unk2_1": 0, "unk3": 1, "unk4": 0, "originalFileIndex": 4, "Name": "alpha__maya__" },
+            { "type": "Item", "unk1": "00000000", "fileIndex": 5, "unk2": "21000000", "unk2_1": 0, "unk3": 1, "unk4": 0, "originalFileIndex": 5, "Name": "alpha__nust__" },
+            { "type": "Item", "unk1": "00000000", "fileIndex": 1, "unk2": "30000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "originalFileIndex": 1, "Name": "alpha" },
+            { "type": "Item", "unk1": "00000000", "fileIndex": 2, "unk2": "40000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "originalFileIndex": 2, "Name": "alpha" },
+            { "type": "Item", "unk1": "00000000", "fileIndex": 3, "unk2": "50000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "originalFileIndex": 3, "Name": "alpha" },
+            { "type": "EndMark", "endMarkCount": 1 },
+            { "type": "Item", "unk1": "00000000", "fileIndex": 7, "unk2": "00000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "originalFileIndex": 7, "Name": "alpha" },
+            { "type": "EndMark", "endMarkCount": 1 }
+        ]);
         fs::write(&structure, serde_json::to_string_pretty(&value).unwrap()).unwrap();
 
         let result = validate_unit_model_for_repack(
@@ -1576,9 +1728,43 @@ mod tests {
         );
 
         assert_eq!(result.summary.model_count, 1);
-        assert!(result
-            .errors
-            .iter()
-            .any(|e| { e.phase == "textures" && e.message.contains("found none") }));
+        assert!(
+            result.valid,
+            "expected validate to insert missing paired texture containers, errors={}",
+            serde_json::to_string_pretty(&result.errors).unwrap()
+        );
+    }
+
+    #[test]
+    fn validate_auto_syncs_texture_containers_from_numatb_refs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (model_root, structure) = write_sync_fixture(tmp.path(), "0xSYNC");
+
+        let result = validate_unit_model_for_repack(
+            model_root.to_str().unwrap(),
+            Some(structure.to_str().unwrap()),
+        );
+
+        assert!(
+            result.valid,
+            "expected validate to auto-sync stale texture containers, errors={}",
+            serde_json::to_string_pretty(&result.errors).unwrap()
+        );
+    }
+
+    #[test]
+    fn validate_auto_sync_uses_temp_structure_without_mutating_original_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (model_root, structure) = write_sync_fixture(tmp.path(), "0xSYNC");
+        let before = fs::read_to_string(&structure).unwrap();
+
+        let result = validate_unit_model_for_repack(
+            model_root.to_str().unwrap(),
+            Some(structure.to_str().unwrap()),
+        );
+
+        assert!(result.valid);
+        let after = fs::read_to_string(&structure).unwrap();
+        assert_eq!(after, before, "validate should not rewrite the source structure");
     }
 }

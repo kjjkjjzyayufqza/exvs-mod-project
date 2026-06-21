@@ -273,3 +273,16 @@ export function applyTemplateToBundle(
     nustFile: ensured.nustFile,
   };
 }
+
+export function applyNumatbProfilesImport(
+  bundle: NumatbModalBundle,
+  mayaFile: MatlDataJson,
+  nustFile: MatlDataJson,
+  mirrorTexturePathsAcrossProfiles?: boolean,
+): NumatbModalBundle {
+  const next = applyTemplateToBundle(bundle, mayaFile, nustFile);
+  if (mirrorTexturePathsAcrossProfiles === undefined) {
+    return next;
+  }
+  return { ...next, mirrorTexturePathsAcrossProfiles };
+}

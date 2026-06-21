@@ -32,6 +32,14 @@ pub struct UnitModelMutationResult {
     pub removed_files: Vec<String>,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitModelTextureContainerSyncResult {
+    pub model_root: String,
+    pub structure_json_path: String,
+    pub changed: bool,
+}
+
 enum Node {
     Folder {
         entry: SubFileStructureEntry,
@@ -48,6 +56,571 @@ enum Tok {
     Folder(SubFileStructureEntry),
     Item(SubFileStructureEntry, i32, Option<String>),
     End,
+}
+
+/// Synchronize every model group's paired texture container folders from the live
+/// numatb texture references and persist the updated `_structure.json`.
+pub fn sync_unit_model_texture_containers(
+    model_root: &str,
+    structure_json_path: Option<&str>,
+) -> Result<bool, String> {
+    let root_path = validate_dir(model_root)?;
+    let structure_path = resolve_structure_path(&root_path, structure_json_path)?;
+    sync_unit_model_texture_containers_at_paths(&root_path, &structure_path)
+}
+
+pub fn sync_unit_model_texture_containers_result(
+    model_root: &str,
+    structure_json_path: Option<&str>,
+) -> Result<UnitModelTextureContainerSyncResult, String> {
+    let root_path = validate_dir(model_root)?;
+    let structure_path = resolve_structure_path(&root_path, structure_json_path)?;
+    let changed = sync_unit_model_texture_containers_at_paths(&root_path, &structure_path)?;
+    Ok(UnitModelTextureContainerSyncResult {
+        model_root: root_path.to_string_lossy().to_string(),
+        structure_json_path: structure_path.to_string_lossy().to_string(),
+        changed,
+    })
+}
+
+/// Same as `sync_unit_model_texture_containers`, but infers the package root from
+/// a sibling `*_structure.json` path. Useful for repack flows that only know the
+/// structure file.
+pub fn sync_unit_model_texture_containers_for_structure(
+    structure_json_path: &str,
+) -> Result<bool, String> {
+    let structure_path = PathBuf::from(structure_json_path.trim());
+    if structure_path.as_os_str().is_empty() {
+        return Err("structure_json_path cannot be empty.".to_string());
+    }
+    let root_path = infer_model_root_from_structure_path(&structure_path)?;
+    sync_unit_model_texture_containers_at_paths(&root_path, &structure_path)
+}
+
+fn sync_unit_model_texture_containers_at_paths(
+    model_root: &Path,
+    structure_path: &Path,
+) -> Result<bool, String> {
+    let json_dir = structure_path.parent().ok_or_else(|| {
+        format!(
+            "Cannot determine parent directory of structure JSON {}",
+            structure_path.display()
+        )
+    })?;
+    let raw = fs::read_to_string(structure_path).map_err(|e| {
+        format!(
+            "Failed to read structure JSON {}: {e}",
+            structure_path.display()
+        )
+    })?;
+    let mut value: Value = serde_json::from_str(&raw).map_err(|e| {
+        format!(
+            "Failed to parse structure JSON {}: {e}",
+            structure_path.display()
+        )
+    })?;
+    let mut sub_file_data = value
+        .get("SubFileData")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "Structure JSON missing SubFileData array".to_string())?
+        .clone();
+    let sub_file_structure: Vec<SubFileStructureEntry> = serde_json::from_value(
+        value
+            .get("SubFileStructure")
+            .cloned()
+            .ok_or_else(|| "Structure JSON missing SubFileStructure".to_string())?,
+    )
+    .map_err(|e| format!("Failed to parse SubFileStructure: {e}"))?;
+    let ext_by_index = build_ext_by_index(&sub_file_data);
+    let mut root = parse_root(&sub_file_structure)?;
+    let mut texture_pool = build_texture_pool_index(&sub_file_data);
+    let mut next_file_index = sub_file_data
+        .iter()
+        .filter_map(|entry| entry.get("fileIndex").and_then(Value::as_i64))
+        .max()
+        .unwrap_or(-1) as i32
+        + 1;
+
+    let tree_changed = sync_texture_containers_in_tree(
+        &mut root,
+        &ext_by_index,
+        &mut sub_file_data,
+        json_dir,
+        model_root,
+        &mut texture_pool,
+        &mut next_file_index,
+    )?;
+    let mut new_structure = Vec::new();
+    serialize_node(&root, &mut new_structure);
+    let pool_changed = prune_unreferenced_nutexb_entries(&mut sub_file_data, &new_structure);
+    let changed = tree_changed || pool_changed;
+    if !changed {
+        return Ok(false);
+    }
+
+    reindex_sub_file_data_values(&mut sub_file_data);
+
+    let sub_file_data_value = Value::Array(sub_file_data);
+    let structure_value = serde_json::to_value(&new_structure)
+        .map_err(|e| format!("Failed to serialize SubFileStructure: {e}"))?;
+    let obj = value
+        .as_object_mut()
+        .ok_or_else(|| "Structure JSON root must be an object".to_string())?;
+    let file_count = sub_file_data_value
+        .as_array()
+        .map(Vec::len)
+        .unwrap_or_default();
+    obj.insert("Fhm2dTotalCount".to_string(), json!(file_count));
+    obj.insert("SubFileData".to_string(), sub_file_data_value);
+    obj.insert("SubFileStructure".to_string(), structure_value);
+
+    let serialized = serde_json::to_string_pretty(&value)
+        .map_err(|e| format!("Failed to serialize structure JSON: {e}"))?;
+    replace_structure_json(structure_path, &format!("{serialized}\n"))?;
+    Ok(true)
+}
+
+fn prune_unreferenced_nutexb_entries(
+    sub_file_data: &mut Vec<Value>,
+    structure: &[SubFileStructureEntry],
+) -> bool {
+    let referenced = collect_referenced_indices(structure);
+    let original_len = sub_file_data.len();
+    sub_file_data.retain(|entry| {
+        let file_index = entry
+            .get("fileIndex")
+            .and_then(Value::as_i64)
+            .map(|value| value as i32);
+        match file_index {
+            Some(idx) if referenced.contains(&idx) => true,
+            Some(_) => {
+                let file_type = entry.get("fileType").and_then(Value::as_str).unwrap_or("");
+                let file_url = entry.get("fileUrl").and_then(Value::as_str).unwrap_or("");
+                extension_of(file_type, file_url) != ".nutexb"
+            }
+            None => true,
+        }
+    });
+    sub_file_data.len() != original_len
+}
+
+fn sync_texture_containers_in_tree(
+    node: &mut Node,
+    ext_by_index: &HashMap<i32, String>,
+    sub_file_data: &mut Vec<Value>,
+    json_dir: &Path,
+    model_root: &Path,
+    texture_pool: &mut HashMap<String, i32>,
+    next_file_index: &mut i32,
+) -> Result<bool, String> {
+    let self_is_model_group = folder_has_direct_ext(node, ".numdlb", ext_by_index);
+    match node {
+        Node::Item { .. } => Ok(false),
+        Node::Folder { children, .. } => {
+            if self_is_model_group {
+                sync_model_group_texture_containers(
+                    children,
+                    ext_by_index,
+                    sub_file_data,
+                    json_dir,
+                    model_root,
+                    texture_pool,
+                    next_file_index,
+                )
+            } else {
+                let mut changed = false;
+                for child in children.iter_mut() {
+                    changed |= sync_texture_containers_in_tree(
+                        child,
+                        ext_by_index,
+                        sub_file_data,
+                        json_dir,
+                        model_root,
+                        texture_pool,
+                        next_file_index,
+                    )?;
+                }
+                Ok(changed)
+            }
+        }
+    }
+}
+
+fn sync_model_group_texture_containers(
+    children: &mut Vec<Node>,
+    ext_by_index: &HashMap<i32, String>,
+    sub_file_data: &mut Vec<Value>,
+    json_dir: &Path,
+    model_root: &Path,
+    texture_pool: &mut HashMap<String, i32>,
+    next_file_index: &mut i32,
+) -> Result<bool, String> {
+    let old_children = std::mem::take(children);
+    let mut iter = old_children.into_iter().peekable();
+    let mut next_children = Vec::new();
+    let mut changed = false;
+    let mut pending_container: Option<Node> = None;
+
+    while let Some(child) = iter.next() {
+        if texture_container_entry(&child, ext_by_index).is_some() {
+            if pending_container.is_some() {
+                changed = true;
+            }
+            pending_container = Some(child);
+            continue;
+        }
+
+        if let Some((numatb_file_index, variant_unk3)) = numatb_item_info(&child, ext_by_index) {
+            let existing_container_entry = pending_container
+                .as_ref()
+                .and_then(|container| texture_container_entry(container, ext_by_index));
+            let (synced_container, pool_changed) = build_synced_container_node(
+                existing_container_entry,
+                variant_unk3,
+                numatb_file_index,
+                sub_file_data,
+                json_dir,
+                model_root,
+                texture_pool,
+                next_file_index,
+            )?;
+            match pending_container.take() {
+                Some(existing_container) => {
+                    changed |= pool_changed || !nodes_equal(&existing_container, &synced_container);
+                }
+                None => {
+                    changed = true | pool_changed;
+                }
+            }
+            next_children.push(synced_container);
+            next_children.push(child);
+            continue;
+        }
+
+        next_children.push(child);
+    }
+
+    if pending_container.is_some() {
+        changed = true;
+    }
+    *children = next_children;
+    Ok(changed)
+}
+
+fn build_synced_container_node(
+    existing_container: Option<&SubFileStructureEntry>,
+    numatb_variant: i32,
+    numatb_file_index: i32,
+    sub_file_data: &mut Vec<Value>,
+    json_dir: &Path,
+    model_root: &Path,
+    texture_pool: &mut HashMap<String, i32>,
+    next_file_index: &mut i32,
+) -> Result<(Node, bool), String> {
+    let numatb_path = file_path_for_index(sub_file_data, json_dir, numatb_file_index)?;
+    let refs = numatb_texture_refs(&numatb_path)?;
+    let variant = resolved_container_variant(existing_container, numatb_variant);
+    let mut pool_changed = false;
+    let children = refs
+        .into_iter()
+        .map(|reference| {
+            let (file_index, changed) = ensure_texture_pool_entry(
+                sub_file_data,
+                json_dir,
+                model_root,
+                texture_pool,
+                next_file_index,
+                &reference,
+            )?;
+            pool_changed |= changed;
+            let display_name = stem(&reference);
+            Ok(Node::Item {
+                entry: make_item(file_index, "00000000", 0, &display_name),
+                file_index,
+                name: Some(display_name),
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    Ok((
+        Node::Folder {
+            entry: synced_container_entry(existing_container, variant),
+            children,
+        },
+        pool_changed,
+    ))
+}
+
+fn texture_container_entry<'a>(
+    node: &'a Node,
+    ext_by_index: &HashMap<i32, String>,
+) -> Option<&'a SubFileStructureEntry> {
+    match node {
+        Node::Folder { entry, children } => match entry {
+            SubFileStructureEntry::Folder { unk3, .. } if *unk3 == 32 => Some(entry),
+            SubFileStructureEntry::Folder { .. }
+                if !children.is_empty()
+                    && children.iter().all(|child| {
+                        matches!(child, Node::Item { file_index, .. }
+                        if ext_by_index.get(file_index).map(String::as_str) == Some(".nutexb"))
+                    }) =>
+            {
+                Some(entry)
+            }
+            _ => None,
+        },
+        Node::Item { .. } => None,
+    }
+}
+
+fn numatb_item_info(node: &Node, ext_by_index: &HashMap<i32, String>) -> Option<(i32, i32)> {
+    match node {
+        Node::Item {
+            entry, file_index, ..
+        } if ext_by_index.get(file_index).map(String::as_str) == Some(".numatb") => match entry {
+            SubFileStructureEntry::Item { unk3, .. } => Some((*file_index, *unk3)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn resolved_container_variant(existing_container: Option<&SubFileStructureEntry>, numatb_unk3: i32) -> i32 {
+    if numatb_unk3 >= 1 {
+        return numatb_unk3;
+    }
+    match existing_container {
+        Some(SubFileStructureEntry::Folder { unk5, .. }) if *unk5 >= 1 => *unk5,
+        _ => UNIT_MODEL_BASE_MATERIAL_VARIANT,
+    }
+}
+
+fn synced_container_entry(
+    existing_container: Option<&SubFileStructureEntry>,
+    variant: i32,
+) -> SubFileStructureEntry {
+    match existing_container {
+        Some(SubFileStructureEntry::Folder {
+            unk1,
+            unk2,
+            unk2_1,
+            unk4,
+            unk6,
+            ..
+        }) => SubFileStructureEntry::Folder {
+            unk1: unk1.clone(),
+            folder_count: 0,
+            unk2: unk2.clone(),
+            unk2_1: *unk2_1,
+            unk3: 32,
+            unk4: *unk4,
+            unk5: variant,
+            unk6: *unk6,
+        },
+        _ => make_folder(32, variant),
+    }
+}
+
+fn build_texture_pool_index(sub_file_data: &[Value]) -> HashMap<String, i32> {
+    let mut out = HashMap::new();
+    for entry in sub_file_data {
+        let Some(file_index) = entry.get("fileIndex").and_then(Value::as_i64) else {
+            continue;
+        };
+        if extension_of(
+            entry.get("fileType").and_then(Value::as_str).unwrap_or(""),
+            entry.get("fileUrl").and_then(Value::as_str).unwrap_or(""),
+        ) != ".nutexb"
+        {
+            continue;
+        }
+        let key = normalize_texture_filename(entry.get("fileUrl").and_then(Value::as_str).unwrap_or(""));
+        if !key.is_empty() {
+            out.insert(key, file_index as i32);
+        }
+    }
+    out
+}
+
+fn ensure_texture_pool_entry(
+    sub_file_data: &mut Vec<Value>,
+    json_dir: &Path,
+    model_root: &Path,
+    texture_pool: &mut HashMap<String, i32>,
+    next_file_index: &mut i32,
+    reference: &str,
+) -> Result<(i32, bool), String> {
+    let key = normalize_texture_filename(reference);
+    if key.is_empty() || key == ".nutexb" {
+        return Err(format!("Invalid empty texture reference: '{reference}'"));
+    }
+
+    if let Some(file_index) = texture_pool.get(&key).copied() {
+        let changed =
+            maybe_repair_texture_pool_path(sub_file_data, json_dir, model_root, file_index, &key);
+        return Ok((file_index, changed));
+    }
+
+    let target_path = find_texture_source_path(model_root, &key).ok_or_else(|| {
+        format!(
+            "Referenced texture '{}' was not found in SubFileData or on disk under {}",
+            key,
+            model_root.display()
+        )
+    })?;
+    let file_index = *next_file_index;
+    *next_file_index += 1;
+    sub_file_data.push(json!({
+        "index": sub_file_data.len(),
+        "fileType": ".nutexb",
+        "fileIndex": file_index,
+        "fileUrl": file_url_for_target(json_dir, &target_path),
+        "fileBaseName": stem(&key),
+    }));
+    texture_pool.insert(key, file_index);
+    Ok((file_index, true))
+}
+
+fn maybe_repair_texture_pool_path(
+    sub_file_data: &mut [Value],
+    json_dir: &Path,
+    model_root: &Path,
+    file_index: i32,
+    filename: &str,
+) -> bool {
+    let Some(entry) = sub_file_data.iter_mut().find(|entry| {
+        entry.get("fileIndex").and_then(Value::as_i64) == Some(file_index as i64)
+    }) else {
+        return false;
+    };
+    let Some(file_url) = entry.get("fileUrl").and_then(Value::as_str) else {
+        return false;
+    };
+    if resolve_file_path(json_dir, file_url).is_file() {
+        return false;
+    }
+    let Some(target_path) = find_texture_source_path(model_root, filename) else {
+        return false;
+    };
+    if let Some(obj) = entry.as_object_mut() {
+        obj.insert("fileType".to_string(), json!(".nutexb"));
+        obj.insert(
+            "fileUrl".to_string(),
+            json!(file_url_for_target(json_dir, &target_path)),
+        );
+        obj.insert("fileBaseName".to_string(), json!(stem(filename)));
+        return true;
+    }
+    false
+}
+
+fn find_texture_source_path(model_root: &Path, filename: &str) -> Option<PathBuf> {
+    let direct = model_root.join("textures").join(filename);
+    if direct.is_file() {
+        return Some(direct);
+    }
+    let legacy = model_root.join(filename);
+    if legacy.is_file() {
+        return Some(legacy);
+    }
+    None
+}
+
+fn file_path_for_index(
+    sub_file_data: &[Value],
+    json_dir: &Path,
+    file_index: i32,
+) -> Result<PathBuf, String> {
+    let file_url = sub_file_data
+        .iter()
+        .find(|entry| entry.get("fileIndex").and_then(Value::as_i64) == Some(file_index as i64))
+        .and_then(|entry| entry.get("fileUrl").and_then(Value::as_str))
+        .ok_or_else(|| format!("Missing SubFileData entry for fileIndex {file_index}"))?;
+    Ok(resolve_file_path(json_dir, file_url))
+}
+
+fn resolve_file_path(json_dir: &Path, file_url: &str) -> PathBuf {
+    let cleaned = file_url.replace('\\', "/");
+    let cleaned = cleaned.trim_start_matches("./");
+    json_dir.join(cleaned)
+}
+
+fn file_url_for_target(json_dir: &Path, target: &Path) -> String {
+    let rel = target
+        .strip_prefix(json_dir)
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|_| target.to_path_buf());
+    format!(".\\{}", rel.to_string_lossy().replace('/', "\\"))
+}
+
+fn normalize_texture_filename(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    let mut filename = trimmed
+        .replace('/', "\\")
+        .split('\\')
+        .filter(|segment| !segment.is_empty() && *segment != ".")
+        .last()
+        .unwrap_or(trimmed)
+        .to_string();
+    if !filename.to_ascii_lowercase().ends_with(".nutexb") {
+        filename.push_str(".nutexb");
+    }
+    filename.to_ascii_lowercase()
+}
+
+fn reindex_sub_file_data_values(entries: &mut [Value]) {
+    for (index, entry) in entries.iter_mut().enumerate() {
+        if let Some(obj) = entry.as_object_mut() {
+            obj.insert("index".to_string(), json!(index));
+        }
+    }
+}
+
+fn nodes_equal(left: &Node, right: &Node) -> bool {
+    let mut left_entries = Vec::new();
+    let mut right_entries = Vec::new();
+    serialize_node(left, &mut left_entries);
+    serialize_node(right, &mut right_entries);
+    serde_json::to_value(&left_entries).ok() == serde_json::to_value(&right_entries).ok()
+}
+
+pub(crate) fn infer_model_root_from_structure_path(structure_path: &Path) -> Result<PathBuf, String> {
+    let parent = structure_path.parent().ok_or_else(|| {
+        format!(
+            "Cannot infer unit model root from structure JSON {}",
+            structure_path.display()
+        )
+    })?;
+    let file_name = structure_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| {
+            format!(
+                "Cannot infer unit model root from structure JSON {}",
+                structure_path.display()
+            )
+        })?;
+    let stem = file_name
+        .strip_suffix("_structure.json")
+        .or_else(|| file_name.strip_suffix(".json"))
+        .ok_or_else(|| {
+            format!(
+                "Structure JSON name must end with _structure.json or .json: {}",
+                structure_path.display()
+            )
+        })?;
+    let model_root = parent.join(stem);
+    if !model_root.is_dir() {
+        return Err(format!(
+            "Expected unit model root sibling directory '{}' for structure JSON {}",
+            model_root.display(),
+            structure_path.display()
+        ));
+    }
+    Ok(model_root)
 }
 
 /// Remove a whole model (its folder of model files plus its paired nuhlpb), dropping any pool
@@ -1639,15 +2212,15 @@ fn build_ext_by_index(sub_file_data: &[Value]) -> std::collections::HashMap<i32,
 }
 
 fn extension_of(file_type: &str, file_url: &str) -> String {
+    let name = file_basename(file_url);
+    if let Some(idx) = name.rfind('.') {
+        return name[idx..].to_ascii_lowercase();
+    }
     let ft = file_type.trim().to_ascii_lowercase();
     if ft.starts_with('.') {
         return ft;
     }
-    let name = file_basename(file_url);
-    match name.rfind('.') {
-        Some(idx) => name[idx..].to_ascii_lowercase(),
-        None => String::new(),
-    }
+    String::new()
 }
 
 fn file_basename(file_url: &str) -> String {

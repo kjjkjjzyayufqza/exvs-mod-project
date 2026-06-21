@@ -19,7 +19,11 @@ import {
 } from "../utils/unitModelRepackService";
 import { type UnitModelExtractResult } from "../utils/unitModelExtractService";
 import { buildUnitModelAiReviewPayload } from "../utils/unitModelAiReviewPayload";
-import { listUnitModelTextures, type UnitModelTextureInventory } from "../utils/unitModelTextureService";
+import {
+  listUnitModelTextures,
+  syncUnitModelTextureContainers,
+  type UnitModelTextureInventory,
+} from "../utils/unitModelTextureService";
 import {
   analyzeUnitModelFolderMigration,
   migrateUnitModelFolderLayout,
@@ -144,6 +148,16 @@ export function useUnitModelWorkspace(unitRoot: string | null, onUnitRootChange:
     [activeRoot, structurePath],
   );
 
+  const autoSyncStructureForRoot = useCallback(async (rootPath: string) => {
+    const resolvedStructurePath = inferUnitModelStructurePath(rootPath);
+    try {
+      await syncUnitModelTextureContainers(rootPath, resolvedStructurePath);
+    } catch (error) {
+      console.error("Failed to auto-sync unit-model structure before load", error);
+      toast.error("Unit model auto-fix failed", { description: String(error) });
+    }
+  }, []);
+
   useEffect(() => {
     if (!activeRoot || !structurePath) {
       validationRequestIdRef.current += 1;
@@ -206,6 +220,7 @@ export function useUnitModelWorkspace(unitRoot: string | null, onUnitRootChange:
           });
         }
       }
+      await autoSyncStructureForRoot(rootToLoad);
       onUnitRootChange(rootToLoad);
       await preview.loadModelAt(rootToLoad);
       setLastRepack(null);
@@ -223,6 +238,7 @@ export function useUnitModelWorkspace(unitRoot: string | null, onUnitRootChange:
   const handleExtracted = async (result: UnitModelExtractResult) => {
     setBusy("extract");
     try {
+      await autoSyncStructureForRoot(result.modelRoot);
       onUnitRootChange(result.modelRoot);
       await preview.loadModelAt(result.modelRoot);
       setLastRepack(null);
@@ -233,8 +249,9 @@ export function useUnitModelWorkspace(unitRoot: string | null, onUnitRootChange:
     }
   };
 
-  const useLoadedRoot = () => {
+  const useLoadedRoot = async () => {
     if (!loadedRoot) return;
+    await autoSyncStructureForRoot(loadedRoot);
     onUnitRootChange(loadedRoot);
     toast.success("Using loaded model root");
   };

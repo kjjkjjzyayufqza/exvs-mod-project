@@ -151,6 +151,7 @@ pub fn run() {
             stage_commands::scene_validate_numatb_empty_params,
             stage_commands::validate_unit_model_for_repack,
             stage_commands::list_unit_model_textures,
+            stage_commands::sync_unit_model_texture_containers,
             stage_commands::add_unit_model_nutexb,
             stage_commands::remove_unit_model_nutexb,
             stage_commands::extract_unit_model_fhm2d_to_folder,

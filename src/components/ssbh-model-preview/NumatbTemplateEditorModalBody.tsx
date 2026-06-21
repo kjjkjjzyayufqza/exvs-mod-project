@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Boxes, Check, Copy, FileInput, Loader2, Plus, RotateCw, Save, Search, Trash2 } from "lucide-react";
+import { readTextFile } from "@tauri-apps/plugin-fs";
+import { Boxes, Check, Copy, FileInput, FileJson, Loader2, Plus, RotateCw, Save, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -18,12 +19,14 @@ import {
   applyRemoveProfileAttribute,
   applyRemoveProfileMaterialEntry,
   applySetProfileFile,
+  applyNumatbProfilesImport,
   applyTemplateToBundle,
   applyUpdateProfileAttribute,
   applyUpdateProfileMaterialLabel,
   applyUpdateProfileShaderLabel,
   type NumatbModalBundle,
 } from "./numatbEditorUtils";
+import { parseNumatbProfilesJsonText } from "./copyNumatbProfilesJson";
 import { cloneProfile } from "./store/numatbTemplateStoreHelpers";
 import {
   deleteNumatbTemplate,
@@ -153,6 +156,39 @@ export function NumatbTemplateEditorModalBody({
       const file = await ssbhTemplateReadNumatb(selected.trim());
       onChange(applySetProfileFile(bundle, profile, file));
       toast.success(`Imported ${profile} profile`);
+    } catch (error) {
+      toast.error(String(error));
+    }
+  };
+
+  const handleImportProfilesJson = async () => {
+    const selected = await open({
+      directory: false,
+      multiple: false,
+      filters: [{ name: "JSON", extensions: ["json"] }],
+      title: "Import Maya + Nust profiles from JSON",
+    });
+    if (typeof selected !== "string" || !selected.trim()) {
+      return;
+    }
+    try {
+      const raw = await readTextFile(selected.trim());
+      const payload = parseNumatbProfilesJsonText(raw);
+      onChange(
+        applyNumatbProfilesImport(
+          bundle,
+          payload.mayaProfile,
+          payload.nustProfile,
+          payload.mirrorTexturePathsAcrossProfiles,
+        ),
+      );
+      setSelectedMaterialByProfile({ maya: 0, nust: 0 });
+      setMaterialQuery("");
+      toast.success(
+        payload.modelName
+          ? `Imported NUMATB profiles for "${payload.modelName}"`
+          : "Imported NUMATB profiles from JSON",
+      );
     } catch (error) {
       toast.error(String(error));
     }
@@ -297,6 +333,17 @@ export function NumatbTemplateEditorModalBody({
         >
           <FileInput className="mr-1 h-3.5 w-3.5" />
           Import {activeProfile}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 text-[10px] uppercase tracking-wide"
+          disabled={disabled}
+          onClick={() => void handleImportProfilesJson()}
+        >
+          <FileJson className="mr-1 h-3.5 w-3.5" />
+          Import JSON
         </Button>
         {onCopyProfilesJson ? (
           <Button

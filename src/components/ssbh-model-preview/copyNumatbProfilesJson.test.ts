@@ -5,6 +5,7 @@ import { createEmptyNumatbFile } from "./daeSsbhTypes";
 import {
   buildNumatbClipboardExportPayload,
   copyNumatbProfilesJsonToClipboard,
+  parseNumatbProfilesJsonText,
 } from "./copyNumatbProfilesJson";
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
@@ -65,5 +66,35 @@ describe("copyNumatbProfilesJson", () => {
 
     expect(ok).toBe(false);
     expect(toast.error).toHaveBeenCalledWith("Failed to copy NUMATB profiles to clipboard");
+  });
+
+  it("parseNumatbProfilesJsonText accepts mayaProfile and nustProfile bundle JSON", () => {
+    const maya = createEmptyNumatbFile();
+    const nust = createEmptyNumatbFile();
+    maya.entries.push({
+      material_label: "export_00_hull_color",
+      shader_label: "",
+      textures: [{ param_id: "DiffuseMap", data: "color_palette" }],
+    });
+    nust.entries.push({
+      material_label: "export_00_hull_color",
+      shader_label: "vstgStandard_VertexColor",
+      textures: [{ param_id: "BaseColorMap", data: "color_palette" }],
+      booleans: [{ param_id: "UseBaseColorMap", data: true }],
+    });
+
+    const payload = parseNumatbProfilesJsonText(
+      JSON.stringify({
+        modelName: "N1_rocket",
+        mirrorTexturePathsAcrossProfiles: true,
+        mayaProfile: maya,
+        nustProfile: nust,
+      }),
+    );
+
+    expect(payload.modelName).toBe("N1_rocket");
+    expect(payload.mayaProfile.entries[0]?.material_label).toBe("export_00_hull_color");
+    expect(payload.nustProfile.entries[0]?.textures?.[0]?.data).toBe("color_palette");
+    expect(payload.mirrorTexturePathsAcrossProfiles).toBe(true);
   });
 });

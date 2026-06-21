@@ -36,7 +36,11 @@ import {
   UNIT_MODEL_HIERARCHY_TAB_TRIGGER,
   UNIT_MODEL_HIERARCHY_TABS_LIST,
 } from "./utils/unitModelEditorSettings";
-import { listUnitModelTextures, unitTextureToManagerEntry } from "./utils/unitModelTextureService";
+import {
+  listUnitModelTextures,
+  syncUnitModelTextureContainers,
+  unitTextureToManagerEntry,
+} from "./utils/unitModelTextureService";
 import type { TextureManagerEntry } from "@/page/SceneEdit/store/sceneTextureManagerStore";
 import { NumatbTextureOptionsProvider } from "@/components/ssbh-model-preview/numatbTextureOptionsContext";
 import { getParentDir, inferUnitModelStructurePath } from "./utils/unitModelRepackService";
@@ -173,6 +177,12 @@ function UnitModelEditWorkspace({
     }, 200);
   }, [preview, workspace.activeRoot, setModelImportViewportSuspend]);
 
+  const handleStructureMutated = useCallback(() => {
+    onStructureMutated();
+    workspace.markValidationStale();
+    schedulePreviewReload();
+  }, [onStructureMutated, workspace.markValidationStale, schedulePreviewReload]);
+
   const handleEditorSaved = useCallback(
     (savedAbsPath: string) => {
       const rel = toRelKey(savedAbsPath);
@@ -185,22 +195,43 @@ function UnitModelEditWorkspace({
         });
       }
       const lower = savedAbsPath.toLowerCase();
-      if (lower.endsWith(".numatb") || lower.endsWith(".numdlb")) {
+      if (lower.endsWith(".numatb")) {
+        void (async () => {
+          try {
+            if (workspace.activeRoot && workspace.structurePath) {
+              const result = await syncUnitModelTextureContainers(
+                workspace.activeRoot,
+                workspace.structurePath,
+              );
+              if (result.changed) {
+                handleStructureMutated();
+                return;
+              }
+            }
+          } catch (error) {
+            console.error("Failed to auto-sync unit model texture containers", error);
+            toast.error("Auto-fix failed", { description: String(error) });
+          }
+          schedulePreviewReload();
+          workspace.markValidationStale();
+        })();
+      } else if (lower.endsWith(".numdlb")) {
         // Material / model-mapping edits change what the preview renders.
         schedulePreviewReload();
         workspace.markValidationStale();
       }
     },
-    [toRelKey, schedulePreviewReload, workspace.markValidationStale],
+    [
+      handleStructureMutated,
+      schedulePreviewReload,
+      toRelKey,
+      workspace.activeRoot,
+      workspace.markValidationStale,
+      workspace.structurePath,
+    ],
   );
 
   const editors = useSsbhFileEditorSessions({ onSaved: handleEditorSaved });
-
-  const handleStructureMutated = useCallback(() => {
-    onStructureMutated();
-    workspace.markValidationStale();
-    schedulePreviewReload();
-  }, [onStructureMutated, workspace.markValidationStale, schedulePreviewReload]);
 
   // Editor `editingPaths` are absolute; the tree compares relative fileUrls.
   const editingRelPaths = useMemo(() => {

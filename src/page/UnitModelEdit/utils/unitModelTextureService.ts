@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import type { TextureManagerEntry } from "@/page/SceneEdit/store/sceneTextureManagerStore";
 import { toWindowsPath } from "./unitModelRepackService";
 
+const unitModelTextureSyncQueue = new Map<string, Promise<void>>();
+
 export interface UnitModelTextureEntry {
   id: string;
   index: number;
@@ -29,6 +31,12 @@ export interface UnitModelTextureInventory {
   warnings: string[];
 }
 
+export interface UnitModelTextureContainerSyncResult {
+  modelRoot: string;
+  structureJsonPath: string;
+  changed: boolean;
+}
+
 export async function listUnitModelTextures(
   modelRoot: string,
   structureJsonPath: string,
@@ -37,6 +45,34 @@ export async function listUnitModelTextures(
     modelRoot: toWindowsPath(modelRoot),
     structureJsonPath: toWindowsPath(structureJsonPath),
   });
+}
+
+export async function syncUnitModelTextureContainers(
+  modelRoot: string,
+  structureJsonPath: string,
+): Promise<UnitModelTextureContainerSyncResult> {
+  const normalizedModelRoot = toWindowsPath(modelRoot);
+  const normalizedStructurePath = toWindowsPath(structureJsonPath);
+  const queueKey = normalizedStructurePath.toLowerCase();
+  const previous = unitModelTextureSyncQueue.get(queueKey) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const queued = previous.catch(() => undefined).then(() => current);
+  unitModelTextureSyncQueue.set(queueKey, queued);
+  await previous.catch(() => undefined);
+  try {
+    return await invoke<UnitModelTextureContainerSyncResult>("sync_unit_model_texture_containers", {
+      modelRoot: normalizedModelRoot,
+      structureJsonPath: normalizedStructurePath,
+    });
+  } finally {
+    release();
+    if (unitModelTextureSyncQueue.get(queueKey) === queued) {
+      unitModelTextureSyncQueue.delete(queueKey);
+    }
+  }
 }
 
 export async function addUnitModelNutexb(params: {

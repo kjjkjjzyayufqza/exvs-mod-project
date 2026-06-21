@@ -1,7 +1,0 @@
-mesh_name,texture_name,material_name,vertex_count,face_count
-N1_c1,D:\output\N1_rocket\c1.png,N1_c1_texture,48228,17904
-N1_c3,D:\output\N1_rocket\c3.png,N1_c3_texture,31930,10910
-N1_c4,D:\output\N1_rocket\c4.png,N1_c4_texture,1862,1008
-N1_c5,D:\output\N1_rocket\c5.png,N1_c5_texture,33402,11321
-N1_c6,D:\output\N1_rocket\c6.png,N1_c6_texture,84358,30984
-N1_c6_solid,D:\output\N1_rocket\c6.png,N1_c6_texture,80464,30773
