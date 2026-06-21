@@ -21,7 +21,7 @@
 | 解释动作、射击、格斗、镜头、移动、BD 等复杂系统 | `0c-to-2c-input-action-boundary.md`、`resource-control-surface-for-modders.md`、`system-control-surface-matrix.md`、`2c-source-proof-walkthrough-for-modders.md`、`msc-modder-operating-manual.md`、`2c-key-function-atlas-for-patching.md`、`modder-human-flow-overview.md`、`modder-worked-traces.md`、`2c-function-responsibility-proof-handbook.md`、`modding-system-cards-handbook.md`、`modding-walkthroughs-action-to-patch-points.md`、`2c-frame-lifecycle-human-trace.md`、runtime map、cookbook、practical guide、`movement-bd-modding-workbook.md`、movement / BD 文档、`sys_46` 参数地图、`func_11` / `0xc000*` 状态槽地图 | 脚本侧已能指导实战，新增 `0.c -> 2.c` 边界、资源层 patch 指南、控制面矩阵和源码证据走读，把每个系统落到真实行号、输入/action selector、资源层、脚本层、syscall 层和验证点；movement / gate native 仍需深化 |
 | 使用 Notion MCP 记录的经验 | `notion-msc-cross-reference.md`，本轮重新 fetch Notion 页面并用于 `sys_46/global172` 说明 | 已覆盖 |
 | 使用 OverBoost wiki 熟悉游戏操作系统 | cookbook 和 movement 文档引用系统页、初心者指南、用语集 | 已覆盖外部语义 |
-| 解决 offset / `func_N` 变化后命名失效 | `2c-function-role-map-for-modders.md`、十台真实源样本 `.c`、action hash、callback shape、Param row 与 resource 输出 | 已完成第二轮跨样本验证：十台共享 25 个 handler hash；Aerial/Pharact 的 `0.c/1.c` 完全相同但单位 action graph 不同，证明必须回到当前 `.c + raw Param`，不能靠旧 overlay 或单独 action hash |
+| 解决 offset / `func_N` 变化后命名失效 | `2c-function-role-map-for-modders.md`、十二台真实源样本 `.c`、action hash、callback shape、Param row 与 resource 输出 | 已完成第二轮跨样本验证：十二台共享 25 个 handler hash；Aerial/Pharact/Darilbalde 的 `0.c/1.c` 完全相同但单位 action graph 不同，Kshatriya 又证明相同 field `0x17` 可承载不同形态机制，因此必须回到当前 `.c + raw Param`，不能靠旧 overlay 或单独 action hash |
 
 ## 目前已经能支撑模组开发的部分
 
@@ -223,7 +223,7 @@ Param 证据：
 
 ### 4. 上游原始输入与 native selector
 
-当前十台样本已经把 `0.c` 纳入主证据链。classic 样本可直接读取固定 input/action
+当前十二台样本已经把 `0.c` 纳入主证据链。classic 样本可直接读取固定 input/action
 selector；external-table 样本可读取 `func_143 -> sys_41 -> row index -> func_145`。
 因此“只看 `2.c` 不知道 action 从哪里来”的缺口已部分关闭，但仍不能单靠脚本证明：
 
@@ -246,15 +246,24 @@ global48/global49/global92/global140
 
 ### 5. 直接 `.c` 的跨样本验证
 
-当前已完成 Unicorn、Sinanju、NEXA-N、AGE-FX、Delta Plus、RX-78-2、G-Self、
-Mack Knife、Gundam Aerial、Gundam Pharact 十台真实源样本的验证：
+当前已完成 Unicorn、Kshatriya、Sinanju、NEXA-N、AGE-FX、Delta Plus、RX-78-2、G-Self、
+Mack Knife、Gundam Aerial、Gundam Pharact、Darilbalde 十二台真实源样本的验证：
 
 - `func_N` 漂移后，25 个共享 nonzero action handler hash 仍稳定。
-- Aerial 与 Pharact 的 `0.c/1.c` 完全相同，但 `2.c`、external rows、resolver、bullet
-  rows 与 assist surface 明显不同。
+- Aerial、Pharact、Darilbalde 的 `0.c/1.c` 完全相同，但 `2.c`、external rows、resolver、
+  bullet rows 与持久状态机明显不同。
 - 同一 `0xD02D6AD4` 在 Aerial 是多弹体 timeline，在 Pharact 是临时
   `characterparam` 超远锁定态；action hash 不能单独当跨机体语义主键。
 - `sys_46`、loadout、unit callback 仍有明显单位差异，不能仅靠单一 syscall count 命名。
+- Kshatriya 把 `global143 -> field 0x17 -> global39` 用于普通态/Besserung 复活轴，并同步
+  切 5-to-3 arms loadout、character/speed Param 行和 registry；98 个 projectile literal
+  全部命中 raw bullet rows，说明 classic selector 同样能做高密度多弹体状态机。
+- Darilbalde 只有 51 个 bullet rows，却用 `func_1174` 和 `func_1167..1170` 实现四机
+  auto-release 与 barrier detach/restore；资源规模小不等于脚本状态简单。
+- RX-78-2 已增加同机体跨版本对照：legacy 1011 的 29 x 128 embedded B4AC、81 个
+  phase keys 与 OB v27 local selector 已直接从 `.c` 对齐；29 个旧 action hash 与 OB
+  55 个 registry hash 的交集为 0。旧文件缺 binary/FHM2D 且含 FB/XB 人工 patch，仍需
+  clean MBON source 才能关闭 provenance 缺口。
 
 仍需扩大作品、形态系统和 Param shape 覆盖，并把 semantic candidate 继续追到 motion、
 effect、hitgroup、interaction 与 native slot binding。
@@ -272,6 +281,17 @@ effect、hitgroup、interaction 与 native slot binding。
 
 本轮新增：
 
+- [15002001 Kshatriya MSC 研究](./units/15002001-kshatriya/README.md)
+- Kshatriya `0x3724E360 + 0x66DFD978` 已直接建立普通态/Besserung runtime field、5-to-3
+  arms loadout、character/speed 双行和 98/98 projectile literal bridge；wiki 只用于动作名候选。
+- [RX-78-2 legacy 1011 与 OB v27 跨版本对比](./units/1001001-rx-78-2/legacy-1011-vs-ob-v27.md)
+- 旧侧 embedded B4AC、phase resolver、Beam Rifle/CS/Bazooka/Javelin/assist/Last Shooting
+  与 OB selector/Param 已按实际 `.c` 对齐；旧文件版本污染与证据等级已单独记录。
+- [66003001 Darilbalde MSC 研究](./units/66003001-darilbalde/README.md)
+- Darilbalde `0x39DD42B7/0.c`、`1.c` 与 Aerial/Pharact byte-for-byte 相同；单位差异落在
+  43-row raw action table、132-case resolver 与 `2.c` unit tail。
+- 四机 drone deployment/manual/auto-release、scatter/mine 分槽、slot-4 Daya Ambicar
+  双侧 barrier proxy、shell detach/restore、24/51 bullet row bridge 已直接闭环。
 - [66002001 Gundam Pharact MSC 研究](./units/66002001-gundam-pharact/README.md)
 - Pharact `0x33BAAE59/0.c` 与 Aerial `0x19CE466D/0.c` byte-for-byte 相同；单位差异落在
   raw action table 与 `2.c`。
@@ -304,11 +324,27 @@ effect、hitgroup、interaction 与 native slot binding。
 - OverBoost wiki 初心者指南 / BRズンダ页：`https://w.atwiki.jp/exvs2ob/pages/560.html`
 - OverBoost wiki 用语集：`https://w.atwiki.jp/exvs2ob/pages/82.html`
 - Pharact wiki：`https://w.atwiki.jp/exvs2ob/pages/675.html`
-- 当前真实源样本：`E:\XB\解包\com\file\040msc\0x33BAAE59\0.c/1.c/2.c`
-- 当前 raw Param：`E:\XB\解包\com\file\041cpm\0x62419441`
+- Darilbalde wiki：`https://w.atwiki.jp/exvs2ob/pages/746.html`
+- Kshatriya wiki：`https://w.atwiki.jp/exvs2ob/pages/63.html`
+- 当前真实源样本：`E:\XB\解包\com\file\040msc\0x3724E360\0.c/1.c/2.c`
+- 当前 raw Param：`E:\XB\解包\com\file\041cpm\0x66DFD978`
 - 历史行号基线：`E:\XB\解包\com\file\0xBDBE6FEA\2.c`
 
 本轮用到的关键源码范围：
+
+- Kshatriya input selector：`0.c:3349-3501`
+- Kshatriya state publish：`2.c:2561`
+- Kshatriya normal/revival callers：`2.c:25354-25555`
+- Kshatriya normal/revival loadout：`2.c:29887-29936`
+- Kshatriya action registry：`2.c:29978-30043`
+- Kshatriya main/CS/Funnel/special shot families：`2.c:25919-27147`
+- Kshatriya Besserung weapon families：`2.c:29257-29847`
+- Darilbalde dynamic registry：`2.c:25060-25133`
+- Darilbalde phase resolver：`2.c:28395-28801`
+- Darilbalde unit init：`2.c:31798-31826`
+- Darilbalde drone state machine：`2.c:28900-28972`, `32851-32977`
+- Darilbalde barrier state machine：`2.c:29446-29493`, `32730-32814`
+- Darilbalde fixed/resource registries：`2.c:33073-33258`
 
 - `main`: `2.c:779-788`
 - `func_1`: `2.c:789-842`

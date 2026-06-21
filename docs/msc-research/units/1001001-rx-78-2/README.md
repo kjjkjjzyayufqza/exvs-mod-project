@@ -7,6 +7,7 @@
 - [跨机体 MSC 研究总览](../../cross-unit-msc-research-overview.md)
 - [首批跨机体 MSC 对比](../../cross-unit-first-batch-comparison.md)
 - [MSC 代际与 Param Action Bridge 对比](../../msc-generation-param-bridge-comparison.md)
+- [Legacy 1011 与 OB v27 跨版本对比](legacy-1011-vs-ob-v27.md)
 - [Delta Plus 主射与 RX-78-2 自动装填对比](../../delta-plus-main-shot-rx78-style-auto-reload.md)
 
 ## 身份与来源
@@ -46,6 +47,10 @@
 
 本页不使用 generated analysis JSON。结构统计来自完整 `.c` 扫描；行为结论来自下面
 列出的实际函数体、syscall 和原始 Param row。
+
+旧对照 `G:\1. Gundam - 1011.c` 的 embedded B4AC、人工 FB/XB patch 边界和同动作
+hash 迁移见[跨版本对比](legacy-1011-vs-ob-v27.md)。该文件不是可回溯到原始 FHM2D 的
+官方 clean build，不能和本页 OB v27 源证据等量看待。
 
 ## Action storage 分类
 

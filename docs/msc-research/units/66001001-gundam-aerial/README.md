@@ -10,6 +10,7 @@ semantic overlay 或 resolved-label 中间物。
 - [MSC Research 入口](../../README.md)
 - [跨机体 MSC 研究总览](../../cross-unit-msc-research-overview.md)
 - [MSC 代际与 Param Action Bridge 对比](../../msc-generation-param-bridge-comparison.md)
+- [66003001 Darilbalde](../66003001-darilbalde/README.md)
 
 身份由 Character ID Table 与 `character_list.json` 交叉确认。玩家语义只参考
 [EXVS2OB wiki Gundam Aerial](https://w.atwiki.jp/exvs2ob/pages/28.html)：Beam Rifle、
@@ -48,9 +49,9 @@ Extracted and decompiled scripts:
 
 | Part | Binary size / SHA-256 | `.c` lines / functions / SHA-256 |
 |---|---|---|
-| `0` | `27232` / `50CA4F4B00B7D5AFAAC14684679C65DADFC8FDB81B641631AC02DFDECF308E39` | `3594` / `main + func_0..func_161` / `70F360731C28E2B3DCD9DA14915FCAC0452A57861A65919193BE31B330871795` |
+| `0` | `27232` / `50CA4F4B00B7D5AFAAC14684679C65DADFC8FDB81B641631AC02DFDECF308E39` | `3594` / `162 definitions (func_0..func_161)` / `70F360731C28E2B3DCD9DA14915FCAC0452A57861A65919193BE31B330871795` |
 | `1` | `192` / `3BA97A583CC93CEC2E2BFBF85F02FDA0729C17ABE3E2959E4451FBCC04B1C151` | `34` / `main + func_1..func_5` / `24FF3EEB5235F34AE9B99918B1C59CC5D5D8972CEE09121DBAF3135F35E6452F` |
-| `2` | `313392` / `6368BAE05E77188444FD870575A082CB873710ACED81D4901FA6687F0DC49CE5` | `33544` / `main + func_0..func_1197` / `1F3F59DE67F7BEF7C0A6D6F1893ECD31DD9E1A30F29704FCC1212E259D232964` |
+| `2` | `313392` / `6368BAE05E77188444FD870575A082CB873710ACED81D4901FA6687F0DC49CE5` | `33544` / `1198 definitions (main + func_1..func_1197)` / `1F3F59DE67F7BEF7C0A6D6F1893ECD31DD9E1A30F29704FCC1212E259D232964` |
 
 `1.c` is the standard 34-line glue script. Unit-specific input routing and behavior are in
 `0.c` and `2.c`.

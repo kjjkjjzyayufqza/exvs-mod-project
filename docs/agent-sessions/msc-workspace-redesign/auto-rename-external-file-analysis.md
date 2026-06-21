@@ -840,7 +840,7 @@ Suggested naming behavior:
 5. Keep the action hash as evidence or collision suffix, not as the primary
    source of meaning.
 
-## Old EXVS1-style in-MSC B4AC comparison
+## MBON-derived, FB-compatible in-MSC B4AC comparison
 
 User-provided comparison file:
 
@@ -1241,7 +1241,7 @@ exact input fields were still unresolved at this point.
 
 ## Old embedded B4AC reveals the likely `0x700002` formula
 
-The old EXVS1-style file `G:\1. Gundam - 1011.c` contains a script-side
+The MBON-derived, FB-compatible file `G:\1. Gundam - 1011.c` contains a script-side
 equivalent of the missing native `0x700002` behavior.
 
 Its `func_138(actionCallback, routeEnum, flagsMask, category)` is structurally
@@ -1755,7 +1755,7 @@ if (category == 1) {
 }
 ```
 
-The user-provided old EXVS1-style file contains the same category-derivation
+The user-provided MBON-derived, FB-compatible file contains the same category-derivation
 shape, but the `field_0x04` values differ by version:
 
 | category | old field `0x04` | new field `0x04` |

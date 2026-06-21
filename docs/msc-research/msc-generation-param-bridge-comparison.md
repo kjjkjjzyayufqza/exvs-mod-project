@@ -14,6 +14,7 @@
 | 机体 | Character ID | Msc | Param | MSC workspace | Param workspace |
 |---|---:|---|---|---|---|
 | Unicorn | `15001001` | `0x0B180D9E` | `0x5AE33786` | `E:\XB\解包\com\file\040msc\0x0B180D9E` | `E:\XB\解包\com\file\041cpm\0x5AE33786` |
+| Kshatriya | `15002001` | `0x3724E360` | `0x66DFD978` | `E:\XB\解包\com\file\040msc\0x3724E360` | `E:\XB\解包\com\file\041cpm\0x66DFD978` |
 | Sinanju | `15003001` | `0xCF8FC16A` | `0x9E74FB72` | `E:\XB\解包\com\file\040msc\0xCF8FC16A` | `E:\XB\解包\com\file\041cpm\0x9E74FB72` |
 | N-EXTREME Gundam Explosion | `59001001` | `0x693F756D` | `0x38C44F75` | `E:\XB\解包\com\file\040msc\0x693F756D` | `E:\XB\解包\com\file\041cpm\0x38C44F75` |
 | Gundam AGE-FX | `33004001` | `0x605245CC` | `0x31A97FD4` | `E:\XB\解包\com\file\040msc\0x605245CC` | `E:\XB\解包\com\file\041cpm\0x31A97FD4` |
@@ -23,6 +24,7 @@
 | Mack Knife (Mask) | `42002001` | `0xC33AA885` | `0x92C1929D` | `E:\XB\解包\com\file\040msc\0xC33AA885` | `E:\XB\解包\com\file\041cpm\0x92C1929D` |
 | Gundam Aerial | `66001001` | `0x19CE466D` | `0x48357C75` | `E:\XB\解包\com\file\040msc\0x19CE466D` | `E:\XB\解包\com\file\041cpm\0x48357C75` |
 | Gundam Pharact | `66002001` | `0x33BAAE59` | `0x62419441` | `E:\XB\解包\com\file\040msc\0x33BAAE59` | `E:\XB\解包\com\file\041cpm\0x62419441` |
+| Darilbalde | `66003001` | `0x39DD42B7` | `0x682678AF` | `E:\XB\解包\com\file\040msc\0x39DD42B7` | `E:\XB\解包\com\file\041cpm\0x682678AF` |
 
 所有源 FHM2D 只读。输出写入 TestEditor workspace route：
 
@@ -43,6 +45,7 @@ Param -> unit.param -> 041cpm
 - `33004001 / 0x605245CC + 0x31A97FD4`
 - `66001001 / 0x19CE466D + 0x48357C75`
 - `66002001 / 0x33BAAE59 + 0x62419441`
+- `66003001 / 0x39DD42B7 + 0x682678AF`
 
 识别特征：
 
@@ -52,8 +55,8 @@ Param -> unit.param -> 041cpm
 - `0.c func_144..160` 是外部 action row bridge；传统固定 registry 后移到 `func_161`。
 - `2.c` 通过 group resolver 和 phase hash resolver 把 Param row 连到单位 callback。
 
-四机 `0.c func_144..161` 中 17/18 个函数源码完全一致。NEXA-N、Aerial 与 Pharact 的
-18 个函数逐字相同；AGE-FX 只有单位初始化钩子 `func_152` 不同：
+五机 `0.c func_144..161` 中 17/18 个函数源码完全一致。NEXA-N、Aerial、Pharact 与
+Darilbalde 的 18 个函数逐字相同；AGE-FX 只有单位初始化钩子 `func_152` 不同：
 
 ```text
 NEXA-N: func_135()
@@ -67,6 +70,7 @@ AGE-FX: global57 = 0x6D00AEAA; func_13(); func_14(); func_135()
 已验证样本：
 
 - Unicorn `0x0B180D9E`
+- Kshatriya `0x3724E360`
 - Sinanju `0xCF8FC16A`
 - Delta Plus `0x04AD9F33`
 - RX-78-2 `0xF22E425D`
@@ -75,12 +79,12 @@ AGE-FX: global57 = 0x6D00AEAA; func_13(); func_14(); func_135()
 
 识别特征：
 
-- Unicorn / Sinanju / Delta Plus / RX-78-2 / G-Self / Mack Knife 的 `chrsysparam.csyspm` 都是 68 bytes。
-- 六个文件都只有两张 `1 x 1` 空表：table0 marker `0xA8BBBAB9`，table1 marker `0xA8BAA9BA`。
+- Unicorn / Kshatriya / Sinanju / Delta Plus / RX-78-2 / G-Self / Mack Knife 的 `chrsysparam.csyspm` 都是 68 bytes。
+- 七个文件都只有两张 `1 x 1` 空表：table0 marker `0xA8BBBAB9`，table1 marker `0xA8BAA9BA`。
 - `0.c` 没有 `0x700000/1/2` 调用。
 - `2.c` 没有 `0x700000/1/2` 调用。
 - `0.c func_144()` 直接注册 17 个固定 `hash -> callback`：`sys_1(0x10002, 0x1, hash, func_N)`。
-- RX、Unicorn、Sinanju、Delta Plus、G-Self、Mack Knife 的 `func_144()` 源码逐字相同，均含 17 个非零 callback 加一条 zero row。
+- RX、Unicorn、Kshatriya、Sinanju、Delta Plus、G-Self、Mack Knife 的 `func_144()` 源码逐字相同，均含 17 个非零 callback 加一条 zero row。
 
 历史 `0xBDBE6FEA` 目录仍保留相同 registry 形状，但其当前 `2.c/2.dscex` 含 2026-06-19 Delta Kai AI patch，且当前源库没有对应 FHM2D。它只作为 semantic reference，不再作为未经修改的官方版本证据。
 
@@ -89,12 +93,20 @@ AGE-FX: global57 = 0x6D00AEAA; func_13(); func_14(); func_135()
 ### C. 真 legacy embedded B4AC 型
 
 当前证据来自旧对照文件 `G:\1. Gundam - 1011.c`，不是本轮 OB v27 FHM2D 抽取样本。
+该文件注释证明 B4AC 来自 MBON `011.bin`，但同时有 43 处 `FB Change`，并混入
+`Original MBON` / `XB Version of C Burst` 人工逻辑；旧 binary/FHM2D 未找到。因此它的
+准确证据标签是 **MBON-derived、FB-compatible legacy code**，不是 EXVS1 或 MBON
+官方 clean build。
 
 识别特征：
 
 - `add_B4AC()` 用 `sys_2D` 写入 action rows。
 - `sys_2C` 读取 row fields。
 - action matrix 内嵌于 MSC，而不是外部 `chrsysparam.csyspm`。
+
+完整 29-row、81 phase-key、19 derived-link 与 RX 同动作跨版本对齐见
+[RX-78-2 legacy 1011 与 OB v27](units/1001001-rx-78-2/legacy-1011-vs-ob-v27.md)。该对比还
+证明 RX 的实际迁移是 embedded B4AC -> classic local selector，而不是 embedded -> external。
 
 因此后续文档必须区分：
 
@@ -108,7 +120,7 @@ legacy embedded B4AC
 
 ## 外部-table 桥接函数
 
-NEXA-N、AGE-FX、Aerial 与 Pharact 的稳定 `0.c` 结构：
+NEXA-N、AGE-FX、Aerial、Pharact 与 Darilbalde 的稳定 `0.c` 结构：
 
 | Function | Evidence-based role |
 |---|---|
@@ -123,7 +135,7 @@ NEXA-N、AGE-FX、Aerial 与 Pharact 的稳定 `0.c` 结构：
 
 ## 共享 runtime 与单位数据分层
 
-NEXA-N / AGE-FX 的首轮对照给出分层证据，Aerial / Pharact 的同模板异数据结果继续复核该分层：
+NEXA-N / AGE-FX 的首轮对照给出分层证据，Aerial / Pharact / Darilbalde 的同模板异数据结果继续复核该分层：
 
 | Evidence | NEXA-N | AGE-FX | Cross-unit result |
 |---|---:|---:|---|
@@ -151,7 +163,7 @@ unit behavior layer
 - `0.c` 类似 input/category adapter 与 action request dispatcher。
 - `2.c` 前中段类似共享 character controller/runtime framework。
 - `2.c` 后段 callback 类似单位状态、武器、形态和表现层脚本。
-- `1.c` 在十个当前真实源样本中完全相同，仍是 6 函数 / 34 行 glue stub。
+- `1.c` 在十一个当前真实源样本中完全相同，仍是 6 函数 / 34 行 glue stub。
 
 ## RX-78-2：classic selector 的直接闭环
 
@@ -401,6 +413,63 @@ action hash 不能脱离 unit/group/callback/resource shape 跨机体命名。
 证据边界见 [66002001 Gundam Pharact](units/66002001-gundam-pharact/README.md)。
 本结论没有使用 generated JSON。
 
+## Darilbalde：43-action external Param bridge
+
+Darilbalde 是 `66003001 / 0x39DD42B7 + 0x682678AF`。它的 `0.c/1.c` 与
+Aerial/Pharact 完全相同，但 table0 为 `44 x 128`、rows `1..43` live，
+`2.c func_967` 有 132 cases；126 个非零 phase slots 复用 120 个 keys，全部可解析。
+
+直接 `.c + raw Param` 链：
+
+```text
+row 1 main
+  field 0x1E = 0x51A926BB
+  func_944/947 -> func_220 -> sys_4F -> bullet row 15
+
+row 3 drone deploy
+  func_975 -> four slot-5 bullet rows
+  func_1119/1174 -> deploy/release action gate + 4-count auto-release timer
+
+row 6 back special shot
+  field 0x20 + func_993 literals -> eight raw bullet rows
+
+row 15 back special melee
+  func_1002 -> func_1167 -> two +/-180 barrier proxies
+  -> consume slot 4 -> shell detach -> func_1170 restore
+```
+
+Darilbalde 只有 51 个 bullet rows 与 63 个 `sys_4F` call，少于 Aerial/Pharact；但
+`func_1167..1176` 的持久状态明显更密集。resource 数量或 syscall count 不能替代
+action-state machine 读码。完整证据见
+[66003001 Darilbalde](units/66003001-darilbalde/README.md)。本结论没有使用 generated JSON。
+
+## Kshatriya：classic selector 的复活态 Param bridge
+
+Kshatriya 是 `15002001 / 0x3724E360 + 0x66DFD978`。它与 Unicorn 一样把
+`global143` 写到 runtime field `0x17`，再由 `0.c global39` 读取；但这里的 `0/1`
+不是主动换装，而是普通 Kshatriya / Kshatriya Besserung 复活状态。
+
+直接 `.c + raw Param` 链：
+
+```text
+normal init func_877 -> func_1048
+  global143 = 0
+  arms slots = 0x445E947A / 0xA2DAC8DD / 0xA2251A98 / 0x1806D2DE / 0x3265E86A
+  characterparam = 0x1B12AE7D
+  speedparam = 0xC2B19D12
+
+revival callers func_870/874/875 -> func_1047
+  global143 = 1
+  arms slots = 0xA8B96E10 / 0x26D2841C / 0x34E46713 / 0 / 0
+  characterparam = 0x6C159EEB
+  speedparam = 0xE6D63D1C
+```
+
+普通态 callback 覆盖 main、back main、8-beam shooting CS、N/front/side/back Funnel、
+neutral/back special shot 和 special movement。单位 action 区 98 个唯一 `sys_4F` projectile
+literal 全部命中 114-row raw `bulletparam.bin`；0 missing。完整 input/action/callback/row 表见
+[15002001 Kshatriya](units/15002001-kshatriya/README.md)。
+
 ## NEXA-N action table
 
 `0x38C44F75/chrsysparam.csyspm`：
@@ -509,6 +578,7 @@ EXVS2OB wiki 只提供玩家可见名称与输入候选。它不能单独证明�
 | Unit | Candidate gameplay vocabulary | Source |
 |---|---|---|
 | Unicorn | Unicorn / Destroy two forms; Beam Magnum; Beam Gatling; ReZEL assist; Beam Tonfa; NT-D transition | [EXVS2OB Unicorn overview](https://w.atwiki.jp/exvs2ob/pages/270.html), [normal](https://w.atwiki.jp/exvs2ob/pages/271.html), [NT-D](https://w.atwiki.jp/exvs2ob/pages/272.html) |
+| Kshatriya | Kshatriya / Besserung revival; Beam Gun; binder beam; eight-beam CS; four Funnel patterns; high-output/scatter and irradiation special shots | [EXVS2OB Kshatriya](https://w.atwiki.jp/exvs2ob/pages/63.html) |
 | Sinanju | Beam Rifle; Bazooka stationary/moving shots; Rozen Zulu assist; Meteor Kick; `赤い彗星の再来` timed mobility buff | [EXVS2OB Sinanju](https://w.atwiki.jp/exvs2ob/pages/70.html) |
 | NEXA-N | RAIKIRI Sword; Dagger Funnel; Bomber Knuckle; no form transition | [EXVS2OB N-EXTREME Explosion](https://w.atwiki.jp/exvs2ob/pages/98.html) |
 | AGE-FX | Normal / FX Burst forms; Stungle Rifle; Daidal Bazooka; C-Funnel; AGE-1 Full Glansa and AGE-2 Dark Hound assists | [EXVS2OB AGE-FX](https://w.atwiki.jp/exvs2ob/pages/360.html), [normal](https://w.atwiki.jp/exvs2ob/pages/362.html), [FX Burst](https://w.atwiki.jp/exvs2ob/pages/361.html) |
@@ -518,6 +588,7 @@ EXVS2OB wiki 只提供玩家可见名称与输入候选。它不能单独证明�
 | Mack Knife (Mask) | Beam Vulcan; concentrated CS; Plasma Claw irradiation; Grenade Launcher; Barara assist; Long-Range Booster | [EXVS2OB Mack Knife](https://w.atwiki.jp/exvs2ob/pages/179.html) |
 | Gundam Aerial | Beam Rifle; Long Barrel irradiation/stance/moving shots; GUND-BIT all-range/deploy; Demi Trainer assist | [EXVS2OB Gundam Aerial](https://w.atwiki.jp/exvs2ob/pages/28.html) |
 | Gundam Pharact | Beam Arquebus; irradiation CS; Corax all-range/deploy; Beakfoot retreat/moving shots; directional special movement; no assist | [EXVS2OB Gundam Pharact](https://w.atwiki.jp/exvs2ob/pages/675.html) |
+| Darilbalde | Beam Shot Rifle; Gusser Ishvara deploy/manual/auto attack; scatter shot; Pellet Mine; Daya Ambicar barrier attack; wire/katana melee | [EXVS2OB Darilbalde](https://w.atwiki.jp/exvs2ob/pages/746.html) |
 
 使用规则：
 
@@ -527,7 +598,7 @@ EXVS2OB wiki 只提供玩家可见名称与输入候选。它不能单独证明�
 
 ## 代码优先记录规则
 
-本页不再把机器导出结果作为交付物列出。NEXA-N、AGE-FX、Aerial 与 Pharact 等 external-table
+本页不再把机器导出结果作为交付物列出。NEXA-N、AGE-FX、Aerial、Pharact 与 Darilbalde 等 external-table
 样本的后续研究按下面顺序写：
 
 1. 从 `0.c` 证明 action row 如何被选择并写入 `func_95`。
@@ -541,10 +612,12 @@ EXVS2OB wiki 只提供玩家可见名称与输入候选。它不能单独证明�
 
 - NEXA-N row `33 / 0x3AC14535` 已确认由 `func_1185` 前输入显式投递，并在 phase tick 执行移动；下一步追 melee param 的伤害和 hitbox。
 - AGE-FX group `0x35` 与 `0x1D` 已分别追到 `sys_51` assist payload 和 `0x9B4748FB` resource row；下一步从 group `0x0C/0x1F` 各选一行读取三相 callback。
-- RX、Unicorn、Sinanju 已分别建立单形态武器链、双形态 loadout/武器链、时限 mobility-buff 的 classic selector 闭环。Delta Plus 已有代表 callback，下一步补全 raw Param 对齐。
+- RX、Unicorn、Kshatriya、Sinanju 已分别建立单形态武器链、主动双形态、复活双形态、时限 mobility-buff 的 classic selector 闭环。Delta Plus 已有代表 callback，下一步补全 raw Param 对齐。
+- Kshatriya 已建立普通态/Besserung 5-to-3 loadout、character/speed 双行和 98/98 projectile literal bridge；下一步追 native revival event、Besserung 精确武装语义与 all-fire effect/hit chain。
 - G-Self 已建立四状态 classic selector、Assault-state 多弹体族与 resource count 的 `.c -> raw Param` 闭环；下一步追 Reflector stored/deployed 精确语义、motion/resource 名称与 assist payload。
 - Mack Knife 已建立二状态 classic selector、slot 1/2 loadout 与 Beam Vulcan / Plasma Claw / Grenade Launcher 候选链；下一步追 `func_921`/`0x1000`、方向特射、interaction/hitgroup 与 slot 0 native 初始化。
 - Gundam Aerial 已建立 46-action external table、动态 action/phase registry 和代表性多弹体族的 `.c -> raw Param` 闭环；下一步追全部输入映射、Demi Trainer `sys_51`、GUND-BIT resource/effect 与 arms slot 绑定。
 - Gundam Pharact 已建立 32-action external table、方向特殊移动、Corax/Beakfoot 候选、82 个 literal bullet hashes 与临时超远锁定态的 `.c -> raw Param` 闭环；下一步追 rows `15..31` 的 melee/hitgroup/interaction 与 arms slot 绑定。
+- Darilbalde 已建立 43-action external table、四机 drone state machine、scatter/mine 分槽、Daya Ambicar barrier proxy 与 melee transition graph 的 `.c -> raw Param` 闭环；下一步追 Motion、child projectile、interaction/hitgroup 与 arms slot 绑定。
 - 加入更多 Character ID 样本，优先每个大 chrsysparam 一机、每个 68-byte empty chrsysparam 一机，避免只按作品或知名度采样。
 - wiki 只维护 semantic candidate；最终名称必须回到硬盘证据验证。

@@ -1037,7 +1037,7 @@ Detailed row-level notes were added to:
 
 - `docs/agent-sessions/msc-workspace-redesign/auto-rename-external-file-analysis.md`
 
-## 2026-06-03 follow-up: old EXVS1-style in-MSC B4AC comparison
+## 2026-06-03 follow-up: MBON-derived, FB-compatible in-MSC B4AC comparison
 
 User provided:
 
@@ -1845,7 +1845,7 @@ mask branches. It is not directly valid for newer `sys_41 -> func_144 ->
 func_145` flow because the newer flow returns a row-derived category, not the
 old branch mask.
 
-Re-read the user-provided old EXVS1-style file around `input()` and
+Re-read the user-provided MBON-derived, FB-compatible file around `input()` and
 `assign_B4AC_Weapon_Inputs()`. Its category derivation matches the newer
 `0x693F756D/0.c func_144()` shape, but with different field `0x04` values:
 

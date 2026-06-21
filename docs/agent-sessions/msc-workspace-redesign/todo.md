@@ -107,7 +107,7 @@ Use a dynamic mapping/report contract, not a dictionary contract. Confirm phase 
       `0x02/0x7c/0x7d` phase callback keys.
 - [x] Map `0x38C44F75/chrsysparam.csyspm` rows to
       `0x693F756D/2.c func_873()` callback functions.
-- [x] Compare user-provided old EXVS1-style MSC
+- [x] Compare user-provided MBON-derived, FB-compatible MSC code
       `G:\1. Gundam - 1011.c` against the new `chrsysparam.csyspm`
       evidence. Conclusion: old MSC embeds the same B4AC/action row-field
       model with `sys_2D/sys_2C`; new MSC reads the external matrix via

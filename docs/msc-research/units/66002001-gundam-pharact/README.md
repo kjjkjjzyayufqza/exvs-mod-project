@@ -11,6 +11,7 @@ semantic overlay 或 resolved-label 中间物。
 - [跨机体 MSC 研究总览](../../cross-unit-msc-research-overview.md)
 - [首批跨机体 MSC 对比](../../cross-unit-first-batch-comparison.md)
 - [MSC 代际与 Param Action Bridge 对比](../../msc-generation-param-bridge-comparison.md)
+- [66003001 Darilbalde](../66003001-darilbalde/README.md)
 
 身份由 Character ID Table 与 `character_list.json` 交叉确认：机体名
 `ガンダム・ファラクト`，驾驶员 `エラン・ケレス`。玩家可见语义参考
@@ -50,9 +51,9 @@ E:\XB\解包\com\file\041cpm\0x62419441
 
 | Part | Binary size / SHA-256 | `.c` lines / functions / SHA-256 |
 |---|---|---|
-| `0` | `27232` / `50CA4F4B00B7D5AFAAC14684679C65DADFC8FDB81B641631AC02DFDECF308E39` | `3594` / `main + func_0..func_161` / `70F360731C28E2B3DCD9DA14915FCAC0452A57861A65919193BE31B330871795` |
+| `0` | `27232` / `50CA4F4B00B7D5AFAAC14684679C65DADFC8FDB81B641631AC02DFDECF308E39` | `3594` / `162 definitions (func_0..func_161)` / `70F360731C28E2B3DCD9DA14915FCAC0452A57861A65919193BE31B330871795` |
 | `1` | `192` / `3BA97A583CC93CEC2E2BFBF85F02FDA0729C17ABE3E2959E4451FBCC04B1C151` | `34` / `main + func_1..func_5` / `24FF3EEB5235F34AE9B99918B1C59CC5D5D8972CEE09121DBAF3135F35E6452F` |
-| `2` | `314848` / `84FA00ADBCBDDF686CB951575A3B608D36B78454F776F211AE6647E757EE33D2` | `33339` / `main + func_0..func_1152` / `1287A81D28FA2659A1FABC00E3BE4B743364EA3AD73B4E804E2AA730C92D6D81` |
+| `2` | `314848` / `84FA00ADBCBDDF686CB951575A3B608D36B78454F776F211AE6647E757EE33D2` | `33339` / `1153 definitions (main + func_1..func_1152)` / `1287A81D28FA2659A1FABC00E3BE4B743364EA3AD73B4E804E2AA730C92D6D81` |
 
 `0.c` 与 Aerial `0x19CE466D/0.c` 的大小和 SHA 完全相同；`1.c` 也完全相同。
 这两份文件是稳定 external-table input/glue 模板，Pharact 的单位差异主要位于

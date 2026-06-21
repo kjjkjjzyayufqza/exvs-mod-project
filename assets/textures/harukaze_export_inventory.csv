@@ -1,0 +1,17 @@
+mesh_name,texture_name,material_name
+export_00_hull_color,D:\output\はるかぜ型護衛艦\textures\color_hull_color.png,std_hull_color.004
+export_01_deck_color,D:\output\はるかぜ型護衛艦\textures\color_deck_color.png,std_deck_color.004
+export_02_ship_bottom_color,D:\output\はるかぜ型護衛艦\textures\color_ship_bottom_color.png,std_ship_bottom_color.004
+export_03_anti_glare_color,D:\output\はるかぜ型護衛艦\textures\color_anti_glare_color.png,std_anti_glare_color.004
+export_04_brass,D:\output\はるかぜ型護衛艦\textures\color_brass.png,std_brass.004
+export_05_silver,D:\output\はるかぜ型護衛艦\textures\color_silver.png,std_silver.004
+export_06_black_iron_color,D:\output\はるかぜ型護衛艦\textures\color_black_iron_color.png,std_black_iron_color.004
+export_08_white,D:\output\はるかぜ型護衛艦\textures\color_white.png,std_white.004
+export_09_signal_light,D:\output\はるかぜ型護衛艦\textures\color_signal_light.png,std_signal_light.004
+export_10_signal_light_red,D:\output\はるかぜ型護衛艦\textures\color_signal_light_red.png,std_signal_light_red.004
+export_11_signal_light_green,D:\output\はるかぜ型護衛艦\textures\color_signal_light_green.png,std_signal_light_green.004
+export_12_infrared_filter,D:\output\はるかぜ型護衛艦\textures\color_infrared_filter.png,std_infrared_filter.004
+export_13_glass,D:\output\はるかぜ型護衛艦\textures\color_glass.png,std_glass.004
+export_14_handrail,D:\output\はるかぜ型護衛艦\textures\handrail.png,std_handrail.004
+export_15_wire_mesh,D:\output\はるかぜ型護衛艦\textures\mesh.png,std_wire_mesh.004
+export_16_hedgehog,D:\output\はるかぜ型護衛艦\textures\color_hedgehog.png,std_hedgehog.004
