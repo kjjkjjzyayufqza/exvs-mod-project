@@ -1,6 +1,26 @@
 import type { NumdlbMappingRow } from "./daeSsbhTypes";
 import type { NumdlbReadResult } from "./ssbhDaeIoService";
 
+/** Trailing `__part<N>` suffix our DAE/FBX -> SSBH mesh-split pipeline appends (dae_to_ssbh.rs). */
+const PART_SUFFIX_RE = /__part\d+$/i;
+
+/** Remove the generated `__part<N>` suffix from a mesh object name (any digit count). */
+export function stripPartSuffix(meshObjectName: string): string {
+  return meshObjectName.replace(PART_SUFFIX_RE, "");
+}
+
+/**
+ * Set every row's materialLabel to its mesh name with the generated `__part<N>` suffix removed.
+ * Overwrites all rows unconditionally. Unchanged rows are returned by reference so React can skip
+ * re-rendering them.
+ */
+export function applyMeshNameAsMaterialLabel(entries: NumdlbMappingRow[]): NumdlbMappingRow[] {
+  return entries.map((row) => {
+    const next = stripPartSuffix(row.meshObjectName);
+    return row.materialLabel === next ? row : { ...row, materialLabel: next };
+  });
+}
+
 function cloneStructured<T>(data: T): T {
   return structuredClone(data);
 }
