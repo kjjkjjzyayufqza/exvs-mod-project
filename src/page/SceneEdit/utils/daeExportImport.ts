@@ -158,6 +158,36 @@ interface ExportedTextureRef {
   relativePath: string;
 }
 
+interface FbxClusterRecord {
+  clusterId: number;
+  boneIndex: number;
+  indexes: number[];
+  weights: number[];
+  transform: number[];
+  transformLink: number[];
+}
+
+interface FbxSkinBinding {
+  skinId: number;
+  clusters: FbxClusterRecord[];
+}
+
+interface FbxBoneRecord {
+  name: string;
+  modelId: number;
+  parentBoneIndex: number | null;
+  localTranslation: [number, number, number];
+  localRotation: [number, number, number];
+  localScaling: [number, number, number];
+  bindPoseMatrix: number[];
+}
+
+interface FbxExportPayload {
+  records: FbxMeshExportRecord[];
+  bones: FbxBoneRecord[];
+  bindPoseId: number;
+}
+
 interface FbxMeshExportRecord {
   name: string;
   geometryId: number;
@@ -172,6 +202,8 @@ interface FbxMeshExportRecord {
   normals: number[];
   uvs: number[];
   color: THREE.Color;
+  skin?: FbxSkinBinding;
+  bindPoseMatrix?: number[];
 }
 
 interface FbxTextureNameState {
@@ -226,6 +258,10 @@ function formatFbxNumber(value: number): string {
 
 function formatFbxArray(values: number[]): string {
   return values.map(formatFbxNumber).join(",");
+}
+
+function matrixToFbxArray(matrix: THREE.Matrix4): number[] {
+  return Array.from(matrix.elements);
 }
 
 function materialArray(material: THREE.Material | THREE.Material[] | undefined): THREE.Material[] {
@@ -287,6 +323,7 @@ function addTriangleFromGeometry(
   transform: THREE.Matrix4,
   normalMatrix: THREE.Matrix3,
   record: FbxMeshExportRecord,
+  sourceVertexExportIndices?: Map<number, number[]>,
 ) {
   const position = geometry.getAttribute("position");
   const normal = geometry.getAttribute("normal");
@@ -307,13 +344,21 @@ function addTriangleFromGeometry(
 
     if (uv) {
       const u = uv.getX(sourceIndex);
-      const v = uv.getY(sourceIndex);
+      // FBX consumers such as Blender expect the V axis to use the opposite
+      // origin from the preview UV space we serialize from Three.js.
+      const v = 1 - uv.getY(sourceIndex);
       record.uvs.push(u, v);
     } else {
       record.uvs.push(0, 0);
     }
 
     record.polygonVertexIndices.push(corner === 2 ? -vertexIndex - 1 : vertexIndex);
+
+    if (sourceVertexExportIndices) {
+      const exported = sourceVertexExportIndices.get(sourceIndex) ?? [];
+      exported.push(vertexIndex);
+      sourceVertexExportIndices.set(sourceIndex, exported);
+    }
   }
 }
 
@@ -323,6 +368,8 @@ function buildFbxMeshRecord(
   rootName: string,
   index: number,
   textureRelativePath: string | null,
+  useBindPoseLocalSpace = false,
+  sourceVertexExportIndices?: Map<number, number[]>,
 ): FbxMeshExportRecord | null {
   const sourceGeometry = mesh.geometry;
   if (!sourceGeometry?.getAttribute("position")) return null;
@@ -333,7 +380,10 @@ function buildFbxMeshRecord(
   }
 
   const name = sanitizeExportName(mesh.name || `${rootName}_mesh_${index + 1}`);
-  const normalMatrix = new THREE.Matrix3().getNormalMatrix(transform);
+  const vertexTransform = useBindPoseLocalSpace ? new THREE.Matrix4() : transform;
+  const normalMatrix = useBindPoseLocalSpace
+    ? new THREE.Matrix3()
+    : new THREE.Matrix3().getNormalMatrix(transform);
   const record: FbxMeshExportRecord = {
     name,
     geometryId: 100000 + index * 10,
@@ -357,23 +407,160 @@ function buildFbxMeshRecord(
     const a = indexed ? indexed.getX(i) : i;
     const b = indexed ? indexed.getX(i + 1) : i + 1;
     const c = indexed ? indexed.getX(i + 2) : i + 2;
-    addTriangleFromGeometry(geometry, [a, b, c], transform, normalMatrix, record);
+    addTriangleFromGeometry(
+      geometry,
+      [a, b, c],
+      vertexTransform,
+      normalMatrix,
+      record,
+      useBindPoseLocalSpace ? sourceVertexExportIndices : undefined,
+    );
   }
 
   geometry.dispose();
   return record.vertices.length > 0 ? record : null;
 }
 
-async function collectFbxMeshRecords(
+function boneLocalTransform(bone: THREE.Bone): {
+  translation: [number, number, number];
+  rotation: [number, number, number];
+  scaling: [number, number, number];
+} {
+  const euler = new THREE.Euler().setFromQuaternion(bone.quaternion, "XYZ");
+  return {
+    translation: [bone.position.x, bone.position.y, bone.position.z],
+    rotation: [
+      THREE.MathUtils.radToDeg(euler.x),
+      THREE.MathUtils.radToDeg(euler.y),
+      THREE.MathUtils.radToDeg(euler.z),
+    ],
+    scaling: [bone.scale.x, bone.scale.y, bone.scale.z],
+  };
+}
+
+function collectBonesFromSkeleton(
+  skeleton: THREE.Skeleton,
+  rootInverse: THREE.Matrix4,
+  baseModelId: number,
+): FbxBoneRecord[] {
+  skeleton.pose();
+  const boneToIndex = new Map<THREE.Bone, number>();
+  skeleton.bones.forEach((bone, index) => {
+    boneToIndex.set(bone, index);
+    bone.updateMatrixWorld(true);
+  });
+
+  return skeleton.bones.map((bone, index) => {
+    const parentBone = bone.parent?.type === "Bone" ? (bone.parent as THREE.Bone) : null;
+    const parentBoneIndex = parentBone ? (boneToIndex.get(parentBone) ?? null) : null;
+    const local = boneLocalTransform(bone);
+    const bindWorld = rootInverse.clone().multiply(bone.matrixWorld);
+    return {
+      name: sanitizeExportName(bone.name || `bone_${index + 1}`),
+      modelId: baseModelId + index * 10,
+      parentBoneIndex,
+      localTranslation: local.translation,
+      localRotation: local.rotation,
+      localScaling: local.scaling,
+      bindPoseMatrix: matrixToFbxArray(bindWorld),
+    };
+  });
+}
+
+function remapClusterIndexes(
+  clusters: FbxClusterRecord[],
+  sourceVertexExportIndices: Map<number, number[]>,
+): FbxClusterRecord[] {
+  return clusters.map((cluster) => {
+    const indexes: number[] = [];
+    const weights: number[] = [];
+    for (let i = 0; i < cluster.indexes.length; i += 1) {
+      const exported = sourceVertexExportIndices.get(cluster.indexes[i]) ?? [];
+      for (const vertexIndex of exported) {
+        indexes.push(vertexIndex);
+        weights.push(cluster.weights[i]);
+      }
+    }
+    return { ...cluster, indexes, weights };
+  });
+}
+
+function collectSkinClusters(
+  mesh: THREE.SkinnedMesh,
+  rootInverse: THREE.Matrix4,
+  skinId: number,
+  clusterBaseId: number,
+): FbxClusterRecord[] {
+  const skeleton = mesh.skeleton;
+  const geometry = mesh.geometry;
+  const skinIndexAttr = geometry.getAttribute("skinIndex");
+  const skinWeightAttr = geometry.getAttribute("skinWeight");
+  if (!skinIndexAttr || !skinWeightAttr) return [];
+
+  skeleton.pose();
+  mesh.updateMatrixWorld(true);
+  const meshWorld = rootInverse.clone().multiply(mesh.matrixWorld);
+
+  const clustersByBone = new Map<number, { indexes: number[]; weights: number[] }>();
+  const position = geometry.getAttribute("position");
+  for (let vertexIndex = 0; vertexIndex < position.count; vertexIndex += 1) {
+    for (let slot = 0; slot < skinIndexAttr.itemSize; slot += 1) {
+      const boneIndex = skinIndexAttr.getComponent(vertexIndex, slot);
+      const weight = skinWeightAttr.getComponent(vertexIndex, slot);
+      if (weight <= 0) continue;
+      const cluster = clustersByBone.get(boneIndex) ?? { indexes: [], weights: [] };
+      cluster.indexes.push(vertexIndex);
+      cluster.weights.push(weight);
+      clustersByBone.set(boneIndex, cluster);
+    }
+  }
+
+  const clusters: FbxClusterRecord[] = [];
+  let clusterOffset = 0;
+  clustersByBone.forEach((data, boneIndex) => {
+    const bone = skeleton.bones[boneIndex];
+    if (!bone) return;
+    bone.updateMatrixWorld(true);
+    const boneWorld = rootInverse.clone().multiply(bone.matrixWorld);
+    const transform = boneWorld.clone().invert().multiply(meshWorld);
+    clusters.push({
+      clusterId: clusterBaseId + clusterOffset,
+      boneIndex,
+      indexes: data.indexes,
+      weights: data.weights,
+      transform: matrixToFbxArray(transform),
+      transformLink: matrixToFbxArray(boneWorld),
+    });
+    clusterOffset += 1;
+  });
+
+  return clusters;
+}
+
+async function collectFbxExportPayload(
   object: THREE.Object3D,
   outputDir: string,
   exportTextures: boolean,
   textureState: FbxTextureNameState,
-): Promise<FbxMeshExportRecord[]> {
+): Promise<FbxExportPayload> {
   object.updateMatrixWorld(true);
   const rootInverse = object.matrixWorld.clone().invert();
   const records: FbxMeshExportRecord[] = [];
   const texturePromises = new Map<THREE.Texture, Promise<ExportedTextureRef | null>>();
+
+  let sharedSkeleton: THREE.Skeleton | null = null;
+  object.traverse((child) => {
+    if (sharedSkeleton) return;
+    const skinned = child as THREE.SkinnedMesh;
+    if (skinned.isSkinnedMesh && skinned.skeleton) {
+      sharedSkeleton = skinned.skeleton;
+    }
+  });
+
+  const bones = sharedSkeleton
+    ? collectBonesFromSkeleton(sharedSkeleton, rootInverse, 600000)
+    : [];
+  const bindPoseId = bones.length > 0 ? 800000 : 0;
 
   const getTextureRel = async (texture: THREE.Texture | null) => {
     if (!exportTextures || !texture) return null;
@@ -387,10 +574,24 @@ async function collectFbxMeshRecords(
     return (await promise)?.relativePath ?? null;
   };
 
-  const meshEntries: Array<{ mesh: THREE.Mesh | THREE.InstancedMesh; transform: THREE.Matrix4 }> = [];
+  const meshEntries: Array<{
+    mesh: THREE.Mesh | THREE.InstancedMesh;
+    transform: THREE.Matrix4;
+    isSkinned: boolean;
+  }> = [];
+
   object.traverse((child) => {
     const maybeMesh = child as THREE.Mesh | THREE.InstancedMesh;
     if (!maybeMesh.isMesh && !(maybeMesh as THREE.InstancedMesh).isInstancedMesh) return;
+    const skinned = maybeMesh as THREE.SkinnedMesh;
+    if (skinned.isSkinnedMesh) {
+      meshEntries.push({
+        mesh: maybeMesh,
+        transform: new THREE.Matrix4(),
+        isSkinned: true,
+      });
+      return;
+    }
     maybeMesh.updateWorldMatrix(true, false);
     if ((maybeMesh as THREE.InstancedMesh).isInstancedMesh) {
       const instanced = maybeMesh as THREE.InstancedMesh;
@@ -400,12 +601,14 @@ async function collectFbxMeshRecords(
         meshEntries.push({
           mesh: instanced,
           transform: rootInverse.clone().multiply(instanced.matrixWorld).multiply(instanceMatrix),
+          isSkinned: false,
         });
       }
     } else {
       meshEntries.push({
         mesh: maybeMesh,
         transform: rootInverse.clone().multiply(maybeMesh.matrixWorld),
+        isSkinned: false,
       });
     }
   });
@@ -413,23 +616,64 @@ async function collectFbxMeshRecords(
   for (const entry of meshEntries) {
     const material = firstMaterial(entry.mesh);
     const textureRel = await getTextureRel(materialMap(material));
-    const record = buildFbxMeshRecord(entry.mesh, entry.transform, object.name || "object", records.length, textureRel);
-    if (record) records.push(record);
+    const sourceVertexExportIndices = entry.isSkinned ? new Map<number, number[]>() : undefined;
+    const record = buildFbxMeshRecord(
+      entry.mesh,
+      entry.transform,
+      object.name || "object",
+      records.length,
+      textureRel,
+      entry.isSkinned,
+      sourceVertexExportIndices,
+    );
+    if (!record) continue;
+
+    if (entry.isSkinned && bones.length > 0 && sourceVertexExportIndices) {
+      const skinnedMesh = entry.mesh as THREE.SkinnedMesh;
+      skinnedMesh.updateMatrixWorld(true);
+      record.bindPoseMatrix = matrixToFbxArray(rootInverse.clone().multiply(skinnedMesh.matrixWorld));
+      const skinId = 700000 + records.length * 10;
+      const clusterBaseId = 710000 + records.length * 100;
+      const clusters = remapClusterIndexes(
+        collectSkinClusters(skinnedMesh, rootInverse, skinId, clusterBaseId),
+        sourceVertexExportIndices,
+      );
+      if (clusters.length > 0) {
+        record.skin = { skinId, clusters };
+      }
+    }
+
+    records.push(record);
   }
 
-  return records;
+  return { records, bones, bindPoseId };
 }
 
-function serializeRecordsAsFbx(
-  records: FbxMeshExportRecord[],
+function serializeFbxExportPayload(
+  payload: FbxExportPayload,
   sourceName: string,
   upAxis: ModelExportUpAxis,
 ): string {
+  const { records, bones, bindPoseId } = payload;
   if (records.length === 0) {
     throw new Error("FBX export found no mesh geometry");
   }
 
   const upAxisIndex = upAxis === "z_up" ? 2 : 1;
+  const textureCount = records.filter((record) => record.textureRelativePath).length;
+  const skinnedRecords = records.filter((record) => record.skin);
+  const clusterCount = skinnedRecords.reduce(
+    (count, record) => count + (record.skin?.clusters.length ?? 0),
+    0,
+  );
+  const deformerCount = skinnedRecords.length + clusterCount;
+  const definitionCount =
+    records.length * 3
+    + textureCount * 2
+    + bones.length
+    + deformerCount
+    + (bindPoseId > 0 ? 1 : 0);
+
   const lines: string[] = [];
   lines.push("; FBX 7.4.0 project file");
   lines.push("; Generated by EXVS2 Scene Editor");
@@ -452,14 +696,19 @@ function serializeRecordsAsFbx(
   lines.push("}");
   lines.push("Definitions:  {");
   lines.push("\tVersion: 100");
-  lines.push(`\tCount: ${records.length * 3 + records.filter((r) => r.textureRelativePath).length * 2}`);
+  lines.push(`\tCount: ${definitionCount}`);
   lines.push(`\tObjectType: "Geometry" { Count: ${records.length} }`);
-  lines.push(`\tObjectType: "Model" { Count: ${records.length} }`);
+  lines.push(`\tObjectType: "Model" { Count: ${records.length + bones.length} }`);
   lines.push(`\tObjectType: "Material" { Count: ${records.length} }`);
-  const textureCount = records.filter((r) => r.textureRelativePath).length;
   if (textureCount > 0) {
     lines.push(`\tObjectType: "Texture" { Count: ${textureCount} }`);
     lines.push(`\tObjectType: "Video" { Count: ${textureCount} }`);
+  }
+  if (deformerCount > 0) {
+    lines.push(`\tObjectType: "Deformer" { Count: ${deformerCount} }`);
+  }
+  if (bindPoseId > 0) {
+    lines.push("\tObjectType: \"Pose\" { Count: 1 }");
   }
   lines.push("}");
   lines.push("Objects:  {");
@@ -548,6 +797,63 @@ function serializeRecordsAsFbx(
       lines.push(`\t\tRelativeFilename: "${record.textureRelativePath}"`);
       lines.push("\t}");
     }
+
+    if (record.skin) {
+      lines.push(`\tDeformer: ${record.skin.skinId}, "Deformer::", "Skin" {`);
+      lines.push("\t\tVersion: 101");
+      for (const cluster of record.skin.clusters) {
+        lines.push(`\t\tLink: ${cluster.clusterId}`);
+      }
+      lines.push("\t}");
+      for (const cluster of record.skin.clusters) {
+        lines.push(`\tSubDeformer: ${cluster.clusterId}, "SubDeformer::", "Cluster" {`);
+        lines.push("\t\tVersion: 100");
+        lines.push(`\t\tIndexes: *${cluster.indexes.length} {`);
+        lines.push(`\t\t\ta: ${cluster.indexes.join(",")}`);
+        lines.push("\t\t}");
+        lines.push(`\t\tWeights: *${cluster.weights.length} {`);
+        lines.push(`\t\t\ta: ${formatFbxArray(cluster.weights)}`);
+        lines.push("\t\t}");
+        lines.push(`\t\tTransform: ${formatFbxArray(cluster.transform)}`);
+        lines.push(`\t\tTransformLink: ${formatFbxArray(cluster.transformLink)}`);
+        lines.push("\t}");
+      }
+    }
+  }
+
+  for (const bone of bones) {
+    lines.push(`\tModel: ${bone.modelId}, "Model::${bone.name}", "LimbNode" {`);
+    lines.push("\t\tVersion: 232");
+    lines.push("\t\tProperties70:  {");
+    lines.push(`\t\t\tP: "Lcl Translation", "Lcl Translation", "", "A",${formatFbxArray(bone.localTranslation)}`);
+    lines.push(`\t\t\tP: "Lcl Rotation", "Lcl Rotation", "", "A",${formatFbxArray(bone.localRotation)}`);
+    lines.push(`\t\t\tP: "Lcl Scaling", "Lcl Scaling", "", "A",${formatFbxArray(bone.localScaling)}`);
+    lines.push("\t\t}");
+    lines.push("\t\tShading: Y");
+    lines.push("\t\tCulling: \"CullingOff\"");
+    lines.push("\t}");
+  }
+
+  if (bindPoseId > 0) {
+    const poseNodeCount = records.length + bones.length;
+    lines.push(`\tPose: ${bindPoseId}, "Pose::BindPose", "BindPose" {`);
+    lines.push("\t\tType: \"BindPose\"");
+    lines.push("\t\tVersion: 100");
+    lines.push(`\t\tNbPoseNodes: ${poseNodeCount}`);
+    for (const record of records) {
+      lines.push("\t\tPoseNode:  {");
+      lines.push(`\t\t\tNode: ${record.modelId}`);
+      const bindMatrix = record.bindPoseMatrix ?? matrixToFbxArray(new THREE.Matrix4());
+      lines.push(`\t\t\tMatrix: ${formatFbxArray(bindMatrix)}`);
+      lines.push("\t\t}");
+    }
+    for (const bone of bones) {
+      lines.push("\t\tPoseNode:  {");
+      lines.push(`\t\t\tNode: ${bone.modelId}`);
+      lines.push(`\t\t\tMatrix: ${formatFbxArray(bone.bindPoseMatrix)}`);
+      lines.push("\t\t}");
+    }
+    lines.push("\t}");
   }
 
   lines.push("}");
@@ -560,12 +866,63 @@ function serializeRecordsAsFbx(
       lines.push(`\tC: "OO",${record.videoId},${record.textureId}`);
       lines.push(`\tC: "OP",${record.textureId},${record.materialId},"DiffuseColor"`);
     }
+    if (record.skin) {
+      lines.push(`\tC: "OO",${record.skin.skinId},${record.geometryId}`);
+      for (const cluster of record.skin.clusters) {
+        lines.push(`\tC: "OO",${cluster.clusterId},${record.skin.skinId}`);
+        const bone = bones[cluster.boneIndex];
+        if (bone) {
+          lines.push(`\tC: "OO",${bone.modelId},${cluster.clusterId}`);
+        }
+      }
+    }
+  }
+  for (const bone of bones) {
+    if (bone.parentBoneIndex === null) {
+      lines.push(`\tC: "OO",${bone.modelId},0`);
+      continue;
+    }
+    const parent = bones[bone.parentBoneIndex];
+    if (parent) {
+      lines.push(`\tC: "OO",${bone.modelId},${parent.modelId}`);
+    }
+  }
+  if (bindPoseId > 0) {
+    lines.push(`\tC: "OO",${bindPoseId},0`);
   }
   lines.push("}");
   lines.push(`; Source: ${sourceName}`);
   return `${lines.join("\n")}\n`;
 }
 
+export async function buildFbxExportContent(
+  object: THREE.Object3D,
+  options?: {
+    outputDir?: string;
+    exportTextures?: boolean;
+    upAxis?: ModelExportUpAxis;
+    textureState?: FbxTextureNameState;
+  },
+): Promise<string> {
+  const textureState = options?.textureState ?? {
+    usedNames: new Set<string>(),
+    sourceToRelative: new Map<string, string>(),
+  };
+  const payload = await collectFbxExportPayload(
+    object,
+    options?.outputDir ?? "",
+    options?.exportTextures ?? false,
+    textureState,
+  );
+  return serializeFbxExportPayload(payload, object.name || "object", options?.upAxis ?? "y_up");
+}
+
+/**
+ * Deprecated frontend FBX export path.
+ * Keep this as a stopgap until a Rust-side SSBH -> FBX exporter backed by a
+ * maintained high-level library is available. Avoid expanding this surface area
+ * for new export features.
+ */
 export async function writeObjectAsFBX(
   object: THREE.Object3D,
   filePath: string,
@@ -578,8 +935,8 @@ export async function writeObjectAsFBX(
 ): Promise<string> {
   const outputDir = options?.outputDir ?? filePath.replace(/[/\\][^/\\]*$/, "");
   const textureState = options?.textureState ?? { usedNames: new Set<string>(), sourceToRelative: new Map<string, string>() };
-  const records = await collectFbxMeshRecords(object, outputDir, options?.exportTextures ?? false, textureState);
-  const content = serializeRecordsAsFbx(records, object.name || "object", options?.upAxis ?? "y_up");
+  const payload = await collectFbxExportPayload(object, outputDir, options?.exportTextures ?? false, textureState);
+  const content = serializeFbxExportPayload(payload, object.name || "object", options?.upAxis ?? "y_up");
   await writeTextFile(filePath, content);
   return filePath;
 }

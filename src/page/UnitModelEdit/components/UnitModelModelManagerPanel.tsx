@@ -4,6 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import {
   Boxes,
   ChevronDown,
+  Download,
   FileBox,
   FileUp,
   FolderPlus,
@@ -90,6 +91,7 @@ interface UnitModelModelManagerPanelProps {
    * can pause the background 3D viewport, matching the standalone DAE/FBX to SSBH modal.
    */
   onViewportSuspendChange?: (suspended: boolean) => void;
+  onExportModel?: (modelLabel: string) => void;
   className?: string;
 }
 
@@ -275,6 +277,7 @@ export function UnitModelModelManagerPanel({
   onSelectModel,
   onMutated,
   onViewportSuspendChange,
+  onExportModel,
   className,
 }: UnitModelModelManagerPanelProps) {
   const [busy, setBusy] = useState<string | null>(null);
@@ -771,6 +774,20 @@ export function UnitModelModelManagerPanel({
                       data: model.node,
                     })}
                   />
+                  {onExportModel ? (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 text-muted-foreground opacity-0 transition-colors hover:text-primary group-hover:opacity-100 focus-visible:opacity-100"
+                      disabled={busy !== null}
+                      onClick={() => onExportModel(model.label)}
+                      title={`Export ${model.label}`}
+                      aria-label={`Export ${model.label}`}
+                    >
+                      <Download className="h-3.5 w-3.5" aria-hidden />
+                    </Button>
+                  ) : null}
                   {canMutate ? (
                     <>
                       <Button

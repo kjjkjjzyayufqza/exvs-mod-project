@@ -161,12 +161,12 @@ export function UnitModelToolbar({
             className="h-6 w-6"
             onClick={onExportModels}
             disabled={!canExportModels || isBusy}
-            aria-label="Export loaded models as DAE or FBX"
+            aria-label="Export loaded models as FBX"
           >
             <Download className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Export loaded models as DAE / FBX</TooltipContent>
+        <TooltipContent side="bottom">Export loaded models as FBX</TooltipContent>
       </Tooltip>
 
       <Separator orientation="vertical" className="mx-0.5 h-4" />

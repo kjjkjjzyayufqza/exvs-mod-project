@@ -23,13 +23,13 @@ import {
 import type { SceneExportObject } from "@/page/SceneEdit/components/MapViewport";
 import {
   exportObjectsAsFBXToDirectory,
-  exportStageDaeBatchToDirectory,
-  type BatchDaeExportEntry,
 } from "@/page/SceneEdit/utils/daeExportImport";
 import {
   buildUnitModelExportDialogState,
+  filterUnitModelInstancesByLabel,
   getUnitModelExportCapabilities,
 } from "./utils/unitModelExport";
+import type { SsbhModelPreviewInstance } from "@/components/ssbh-model-preview/types";
 import { UNIT_MODEL_EDIT_ROUTE_URL } from "./constants";
 import { UnitModelHierarchyPanel } from "./components/UnitModelHierarchyPanel";
 import { UnitModelPropertiesPanel } from "./components/UnitModelPropertiesPanel";
@@ -390,56 +390,54 @@ function UnitModelEditWorkspace({
   }, [daeExportDialog.targets]);
 
   const daeExportDialogSummary = useMemo(() => {
-    const diskBackedCount = daeExportDialog.targets.filter((target) => Boolean(target.rootPath)).length;
-    const viewportObjectIds = new Set(daeExportDialog.threeObjects.map((entry) => entry.name));
-    const fbxCount = daeExportDialog.targets.filter((target) => viewportObjectIds.has(target.nodeId)).length;
-    const fbxOnlyCount = daeExportDialog.targets.filter((target) => !target.rootPath).length;
-
     return (
-      <>
-        {diskBackedCount > 0 ? (
-          <p className="text-muted-foreground">
-            <span className="font-medium text-foreground">{diskBackedCount}</span> loaded model
-            {diskBackedCount > 1 ? "s" : ""} support DAE export
-          </p>
-        ) : null}
-        {fbxCount > 0 ? (
-          <p className="text-muted-foreground">
-            <span className="font-medium text-foreground">{fbxCount}</span> currently rendered model
-            {fbxCount > 1 ? "s" : ""} support FBX export
-          </p>
-        ) : null}
-        {fbxOnlyCount > 0 ? (
-          <p className="text-muted-foreground">
-            <span className="font-medium text-foreground">{fbxOnlyCount}</span> model
-            {fbxOnlyCount > 1 ? "s are" : " is"} FBX-only in this session
-          </p>
-        ) : null}
-      </>
+      <p className="text-muted-foreground">
+        <span className="font-medium text-foreground">{daeExportDialog.targets.length}</span> loaded model
+        {daeExportDialog.targets.length > 1 ? "s" : ""} ready for FBX export
+      </p>
     );
-  }, [daeExportDialog.targets, daeExportDialog.threeObjects]);
+  }, [daeExportDialog.targets.length]);
+
+  const openDaeExportDialogForInstances = useCallback(
+    (instances: readonly SsbhModelPreviewInstance[]) => {
+      const exportObjects = viewportExportRef.current?.getExportObjectsByInstanceId() ?? new Map();
+      const payload = buildUnitModelExportDialogState(instances, exportObjects);
+      if (!payload) {
+        toast.error("No loaded models can be exported");
+        return;
+      }
+      if (payload.skipped.length > 0) {
+        const labels = payload.skipped.map((entry) => entry.label).slice(0, 3);
+        const suffix =
+          payload.skipped.length > labels.length ? ` (+${payload.skipped.length - labels.length} more)` : "";
+        toast.message(`Skipping ${payload.skipped.length} instance(s) without viewport export data`, {
+          description: `${labels.join(", ")}${suffix}`,
+        });
+      }
+      setDaeExportDialog({
+        open: true,
+        targets: payload.targets,
+        threeObjects: payload.threeObjects,
+      });
+    },
+    [],
+  );
 
   const openDaeExportDialog = useCallback(() => {
-    const exportObjects = viewportExportRef.current?.getExportObjectsByInstanceId() ?? new Map();
-    const payload = buildUnitModelExportDialogState(preview.previewInstances, exportObjects);
-    if (!payload) {
-      toast.error("No loaded models can be exported");
-      return;
-    }
-    if (payload.skipped.length > 0) {
-      const labels = payload.skipped.map((entry) => entry.label).slice(0, 3);
-      const suffix =
-        payload.skipped.length > labels.length ? ` (+${payload.skipped.length - labels.length} more)` : "";
-      toast.message(`Skipping ${payload.skipped.length} instance(s) without exportable data`, {
-        description: `${labels.join(", ")}${suffix}`,
-      });
-    }
-    setDaeExportDialog({
-      open: true,
-      targets: payload.targets,
-      threeObjects: payload.threeObjects,
-    });
-  }, [preview.previewInstances]);
+    openDaeExportDialogForInstances(preview.previewInstances);
+  }, [openDaeExportDialogForInstances, preview.previewInstances]);
+
+  const openSingleModelExportDialog = useCallback(
+    (modelLabel: string) => {
+      const filtered = filterUnitModelInstancesByLabel(preview.previewInstances, modelLabel);
+      if (filtered.length === 0) {
+        toast.error(`Model "${modelLabel}" is not loaded in the preview`);
+        return;
+      }
+      openDaeExportDialogForInstances(filtered);
+    },
+    [openDaeExportDialogForInstances, preview.previewInstances],
+  );
 
   const handleDaeExport = useCallback(
     async (config: DaeExportConfig) => {
@@ -448,24 +446,8 @@ function UnitModelEditWorkspace({
       toast.loading("Exporting loaded models...", { id: "unit-model-export" });
 
       try {
-        const wantsDae = config.formats.includes("dae");
         const wantsFbx = config.formats.includes("fbx");
         const outputDir = config.outputDirectory;
-        const ssbhTargets = targets.filter((t) => t.type === "ssbh" && t.rootPath);
-
-        if (wantsDae && ssbhTargets.length > 0) {
-          const entries: BatchDaeExportEntry[] = ssbhTargets.map((t) => ({
-            rootPath: t.rootPath!,
-            outputName: t.name,
-          }));
-          await exportStageDaeBatchToDirectory(entries, outputDir, {
-            scaleFactor: config.scaleFactor,
-            upAxis: config.upAxis,
-            exportTextures: config.exportTextures,
-          });
-        } else if (wantsDae && ssbhTargets.length === 0) {
-          toast.warning("No disk-backed models available for DAE export");
-        }
 
         const selectedExportObjects = targets
           .map((t) => {
@@ -477,14 +459,6 @@ function UnitModelEditWorkspace({
         if (wantsFbx) {
           if (selectedExportObjects.length === 0) {
             toast.warning("FBX export needs loaded models to be visible in the viewport");
-          } else if (selectedExportObjects.length < targets.length) {
-            const exported = await exportObjectsAsFBXToDirectory(selectedExportObjects, outputDir, {
-              exportTextures: config.exportTextures,
-              upAxis: config.upAxis,
-            });
-            toast.success(`Exported ${exported.length} FBX file${exported.length === 1 ? "" : "s"}`, {
-              description: `${targets.length - selectedExportObjects.length} instance(s) skipped (not visible in viewport)`,
-            });
           } else {
             const exported = await exportObjectsAsFBXToDirectory(selectedExportObjects, outputDir, {
               exportTextures: config.exportTextures,
@@ -581,6 +555,7 @@ function UnitModelEditWorkspace({
                   onCopyNodePath={handleCopyNodePath}
                   onShowTextureInPanel={handleShowTextureInPanel}
                   onModelImportViewportSuspendChange={setModelImportViewportSuspend}
+                  onExportModel={openSingleModelExportDialog}
                   editingPaths={editingRelPaths}
                   modifiedPaths={modifiedPaths}
                 />
@@ -642,7 +617,8 @@ function UnitModelEditWorkspace({
         outputDialogPathKey={UNIT_MODEL_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY}
         subtitle={daeExportDialogSubtitle}
         summaryContent={daeExportDialogSummary}
-        formatHint="Scale factor applies to DAE export. FBX uses the current viewport object transform."
+        formatHint="FBX uses the current viewport object transform."
+        availableFormats={["fbx"]}
         onExport={(config) => void handleDaeExport(config)}
         onCancel={() => setDaeExportDialog((prev) => ({ ...prev, open: false }))}
       />

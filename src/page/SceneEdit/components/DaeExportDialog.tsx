@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
   getStoredDialogDefaultPath,
   rememberStoredDialogSelection,
 } from "@/utils/dialogDefaultPathStore";
+import { resolveDaeExportFormatDefaults } from "../utils/daeExportDialogState";
 import { SCENE_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY } from "../utils/sceneEditorSettings";
 
 const DAE_EXPORT_DIMENSIONS = {
@@ -53,6 +54,10 @@ interface DaeExportDialogProps {
   subtitle?: string;
   summaryContent?: ReactNode;
   formatHint?: string;
+  /** Initial format checkbox state whenever the dialog opens. Defaults to DAE + FBX. */
+  defaultFormats?: ModelExportFormat[];
+  /** Limit the selectable export formats for callers that only support a subset. */
+  availableFormats?: ModelExportFormat[];
 }
 
 export function DaeExportDialog({
@@ -64,6 +69,8 @@ export function DaeExportDialog({
   subtitle,
   summaryContent,
   formatHint,
+  defaultFormats,
+  availableFormats,
 }: DaeExportDialogProps) {
   const [scaleFactor, setScaleFactor] = useState(1.0);
   const [upAxis, setUpAxis] = useState<"y_up" | "z_up">("y_up");
@@ -71,10 +78,26 @@ export function DaeExportDialog({
   const [exportDae, setExportDae] = useState(true);
   const [exportFbx, setExportFbx] = useState(true);
   const [outputDirectory, setOutputDirectory] = useState("");
+  const enabledFormats = useMemo(
+    () => (availableFormats && availableFormats.length > 0
+      ? [...new Set(availableFormats)]
+      : (["dae", "fbx"] as const)),
+    [availableFormats],
+  );
+  const supportsDae = enabledFormats.includes("dae");
+  const supportsFbx = enabledFormats.includes("fbx");
+  const showFormatSelector = enabledFormats.length > 1;
+
+  useEffect(() => {
+    if (!open) return;
+    const defaults = resolveDaeExportFormatDefaults(defaultFormats, enabledFormats);
+    setExportDae(defaults.exportDae);
+    setExportFbx(defaults.exportFbx);
+  }, [open, defaultFormats, enabledFormats]);
 
   const ssbhCount = targets.filter((t) => t.type === "ssbh").length;
   const daeCount = targets.filter((t) => t.type === "imported-dae").length;
-  const hasFormat = exportDae || exportFbx;
+  const hasFormat = (supportsDae && exportDae) || (supportsFbx && exportFbx);
   const canExport = hasFormat && outputDirectory.trim().length > 0;
   const resolvedSubtitle =
     subtitle ?? (targets.length === 1 ? (targets[0]?.name ?? "Export target") : `${targets.length} objects selected`);
@@ -108,8 +131,8 @@ export function DaeExportDialog({
       upAxis,
       exportTextures,
       formats: [
-        ...(exportDae ? ["dae" as const] : []),
-        ...(exportFbx ? ["fbx" as const] : []),
+        ...(supportsDae && exportDae ? ["dae" as const] : []),
+        ...(supportsFbx && exportFbx ? ["fbx" as const] : []),
       ],
       outputDirectory: outputDirectory.trim(),
     });
@@ -179,38 +202,53 @@ export function DaeExportDialog({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <label className="flex h-8 items-center gap-2 rounded-md border px-2 text-xs">
-            <Checkbox
-              checked={exportDae}
-              onCheckedChange={(v) => setExportDae(v === true)}
-            />
-            DAE
-          </label>
-          <label className="flex h-8 items-center gap-2 rounded-md border px-2 text-xs">
-            <Checkbox
-              checked={exportFbx}
-              onCheckedChange={(v) => setExportFbx(v === true)}
-            />
-            FBX
-          </label>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Scale Factor</Label>
-            <Input
-              type="number"
-              min={0.001}
-              step={0.1}
-              value={scaleFactor}
-              onChange={(e) => {
-                const v = parseFloat(e.target.value);
-                if (Number.isFinite(v) && v > 0) setScaleFactor(v);
-              }}
-              className="h-8 text-xs"
-            />
+        {showFormatSelector ? (
+          <div className="grid grid-cols-2 gap-2">
+            {supportsDae ? (
+              <label className="flex h-8 items-center gap-2 rounded-md border px-2 text-xs">
+                <Checkbox
+                  checked={exportDae}
+                  onCheckedChange={(v) => setExportDae(v === true)}
+                />
+                DAE
+              </label>
+            ) : null}
+            {supportsFbx ? (
+              <label className="flex h-8 items-center gap-2 rounded-md border px-2 text-xs">
+                <Checkbox
+                  checked={exportFbx}
+                  onCheckedChange={(v) => setExportFbx(v === true)}
+                />
+                FBX
+              </label>
+            ) : null}
           </div>
+        ) : (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Format</Label>
+            <div className="flex h-8 items-center rounded-md border px-3 text-xs font-medium">
+              {supportsFbx ? "FBX" : "DAE"}
+            </div>
+          </div>
+        )}
+
+        <div className={`grid gap-3 ${supportsDae ? "grid-cols-2" : "grid-cols-1"}`}>
+          {supportsDae ? (
+            <div className="space-y-1.5">
+              <Label className="text-xs">Scale Factor</Label>
+              <Input
+                type="number"
+                min={0.001}
+                step={0.1}
+                value={scaleFactor}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  if (Number.isFinite(v) && v > 0) setScaleFactor(v);
+                }}
+                className="h-8 text-xs"
+              />
+            </div>
+          ) : null}
           <div className="space-y-1.5">
             <Label className="text-xs">Up Axis</Label>
             <Select value={upAxis} onValueChange={(v) => setUpAxis(v as "y_up" | "z_up")}>

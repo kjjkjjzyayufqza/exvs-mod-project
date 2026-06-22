@@ -4,7 +4,7 @@ import type { DaeExportTarget } from "@/page/SceneEdit/components/DaeExportDialo
 import type { SceneExportObject } from "@/page/SceneEdit/components/MapViewport";
 import type { SsbhModelPreviewInstance } from "@/components/ssbh-model-preview/types";
 
-export type UnitModelExportSkipReason = "no_disk_root" | "no_viewport_object";
+export type UnitModelExportSkipReason = "no_viewport_object";
 
 export type UnitModelExportSkippedInstance = {
   instanceId: string;
@@ -48,6 +48,17 @@ export function nextUniqueExportName(baseName: string, usedNames: Set<string>): 
   return candidate;
 }
 
+export function filterUnitModelInstancesByLabel(
+  instances: readonly SsbhModelPreviewInstance[],
+  modelLabel: string,
+): SsbhModelPreviewInstance[] {
+  const key = modelLabel.trim().toLowerCase();
+  if (!key) return [];
+  return instances.filter(
+    (inst) => resolveUnitModelInstanceLabel(inst).toLowerCase() === key,
+  );
+}
+
 export function resolveUnitModelInstanceLabel(inst: SsbhModelPreviewInstance): string {
   const fromLabel = inst.displayLabel?.trim();
   if (fromLabel) return fromLabel;
@@ -77,7 +88,7 @@ export function getUnitModelExportCapabilities(
   return {
     daeCount,
     fbxCount,
-    canExport: daeCount > 0 || fbxCount > 0,
+    canExport: fbxCount > 0,
   };
 }
 
@@ -92,39 +103,27 @@ export function buildUnitModelExportDialogState(
 
   for (const inst of instances) {
     const label = resolveUnitModelInstanceLabel(inst);
-    const daeExportable = isUnitModelInstanceDaeExportable(inst);
     const viewportObject = exportObjectsByInstanceId.get(inst.id)?.object ?? null;
 
-    if (!daeExportable && !viewportObject) {
+    if (!viewportObject) {
       skipped.push({
         instanceId: inst.id,
         label,
-        reason: inst.bundle.sourceKind !== "disk" ? "no_disk_root" : "no_viewport_object",
+        reason: "no_viewport_object",
       });
       continue;
     }
 
     const exportName = nextUniqueExportName(label, usedNames);
+    const rootPath = isUnitModelInstanceDaeExportable(inst) ? inst.bundle.rootFolder : null;
 
-    if (daeExportable) {
-      targets.push({
-        nodeId: inst.id,
-        name: exportName,
-        rootPath: inst.bundle.rootFolder,
-        type: "ssbh",
-      });
-    } else {
-      targets.push({
-        nodeId: inst.id,
-        name: exportName,
-        rootPath: null,
-        type: "ssbh",
-      });
-    }
-
-    if (viewportObject) {
-      threeObjects.push({ object: viewportObject, name: inst.id });
-    }
+    targets.push({
+      nodeId: inst.id,
+      name: exportName,
+      rootPath,
+      type: "ssbh",
+    });
+    threeObjects.push({ object: viewportObject, name: inst.id });
   }
 
   if (targets.length === 0 && threeObjects.length === 0) {

@@ -14,6 +14,7 @@ type UnitModelHierarchyPanelProps = {
   onShowTextureInPanel?: (node: UnitModelTreeNode) => void;
   /** Forwarded to the model manager so the host can pause the viewport during FBX/DAE import. */
   onModelImportViewportSuspendChange?: (suspended: boolean) => void;
+  onExportModel?: (modelLabel: string) => void;
   editingPaths?: ReadonlySet<string>;
   modifiedPaths?: ReadonlySet<string>;
 };
@@ -32,6 +33,7 @@ export function UnitModelHierarchyPanel({
   onCopyNodePath,
   onShowTextureInPanel,
   onModelImportViewportSuspendChange,
+  onExportModel,
   editingPaths,
   modifiedPaths,
 }: UnitModelHierarchyPanelProps) {
@@ -60,6 +62,7 @@ export function UnitModelHierarchyPanel({
           modelRoot={modelRoot}
           onMutated={onMutated}
           onViewportSuspendChange={onModelImportViewportSuspendChange}
+          onExportModel={onExportModel}
           className="h-full border-r-0"
         />
       </ResizablePanel>

@@ -2,7 +2,45 @@ import { describe, expect, it } from "vitest";
 import {
   buildDaeExportDialogState,
   canExportNodeRoleToDae,
+  resolveDaeExportFormatDefaults,
 } from "./daeExportDialogState";
+
+describe("resolveDaeExportFormatDefaults", () => {
+  it("defaults to both DAE and FBX when no formats are provided", () => {
+    expect(resolveDaeExportFormatDefaults()).toEqual({
+      exportDae: true,
+      exportFbx: true,
+    });
+  });
+
+  it("enables only FBX when defaultFormats is fbx-only", () => {
+    expect(resolveDaeExportFormatDefaults(["fbx"])).toEqual({
+      exportDae: false,
+      exportFbx: true,
+    });
+  });
+
+  it("enables only DAE when defaultFormats is dae-only", () => {
+    expect(resolveDaeExportFormatDefaults(["dae"])).toEqual({
+      exportDae: true,
+      exportFbx: false,
+    });
+  });
+
+  it("limits defaults to available formats when a caller requests FBX-only mode", () => {
+    expect(resolveDaeExportFormatDefaults(undefined, ["fbx"])).toEqual({
+      exportDae: false,
+      exportFbx: true,
+    });
+  });
+
+  it("drops unavailable default formats", () => {
+    expect(resolveDaeExportFormatDefaults(["dae", "fbx"], ["fbx"])).toEqual({
+      exportDae: false,
+      exportFbx: true,
+    });
+  });
+});
 
 describe("canExportNodeRoleToDae", () => {
   it("allows base, sub_model, and imported_dae", () => {

@@ -1,7 +1,32 @@
-import type { DaeExportTarget } from "../components/DaeExportDialog";
+import type { DaeExportTarget, ModelExportFormat } from "../components/DaeExportDialog";
 import type { SceneExportObject } from "../components/MapViewport";
 import { SSBH_MODEL_ROLES } from "../components/detail-view/sceneDetailViewTypes";
 import type { StageTreeNode } from "../components/StageHierarchyTree";
+
+export interface DaeExportFormatDefaults {
+  exportDae: boolean;
+  exportFbx: boolean;
+}
+
+export function resolveDaeExportFormatDefaults(
+  defaultFormats?: readonly ModelExportFormat[],
+  availableFormats?: readonly ModelExportFormat[],
+): DaeExportFormatDefaults {
+  const allowedFormats = (availableFormats && availableFormats.length > 0
+    ? [...new Set(availableFormats)]
+    : (["dae", "fbx"] as const));
+  const allowedSet = new Set<ModelExportFormat>(allowedFormats);
+  const requestedDefaults = defaultFormats?.filter((format, index, formats) =>
+    allowedSet.has(format) && formats.indexOf(format) === index,
+  );
+  const formats = requestedDefaults && requestedDefaults.length > 0
+    ? requestedDefaults
+    : allowedFormats;
+  return {
+    exportDae: formats.includes("dae"),
+    exportFbx: formats.includes("fbx"),
+  };
+}
 
 export function canExportNodeRoleToDae(role: StageTreeNode["role"]): boolean {
   return (SSBH_MODEL_ROLES as readonly string[]).includes(role);
