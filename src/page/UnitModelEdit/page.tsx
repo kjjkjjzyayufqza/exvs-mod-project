@@ -79,7 +79,18 @@ function UnitModelEditWorkspace({
   onStructureMutated: () => void;
   setModelImportViewportSuspend: (suspended: boolean) => void;
 }) {
-  const workspace = useUnitModelWorkspace(unitRoot, onUnitRootChange);
+  const previewReloadTimer = useRef<number | null>(null);
+
+  const clearPreviewReloadTimer = useCallback(() => {
+    if (previewReloadTimer.current !== null) {
+      window.clearTimeout(previewReloadTimer.current);
+      previewReloadTimer.current = null;
+    }
+  }, []);
+
+  const workspace = useUnitModelWorkspace(unitRoot, onUnitRootChange, {
+    clearScheduledPreviewReload: clearPreviewReloadTimer,
+  });
   const preview = useSsbhModelPreview();
   const viewportExportRef = useRef<SsbhModelPreviewViewportHandle | null>(null);
   const [viewportExportObjectIds, setViewportExportObjectIds] = useState<string[]>([]);
@@ -142,7 +153,6 @@ function UnitModelEditWorkspace({
   // --- SSBH file editing (numatb / numdlb / nuhlpb / jnttbl) ------------------
   const [modifiedPaths, setModifiedPaths] = useState<Set<string>>(new Set());
   const [focusTextureFilename, setFocusTextureFilename] = useState<string | null>(null);
-  const previewReloadTimer = useRef<number | null>(null);
 
   // Clear "modified this session" markers when the workspace root changes.
   useEffect(() => {
@@ -151,9 +161,9 @@ function UnitModelEditWorkspace({
 
   useEffect(
     () => () => {
-      if (previewReloadTimer.current) window.clearTimeout(previewReloadTimer.current);
+      clearPreviewReloadTimer();
     },
-    [],
+    [clearPreviewReloadTimer],
   );
 
   // Normalized key of the `_structure.json` directory; node fileUrls are relative to it.
@@ -174,10 +184,12 @@ function UnitModelEditWorkspace({
 
   const schedulePreviewReload = useCallback(() => {
     const root = workspace.activeRoot;
-    if (!root) return;
+    if (!root || preview.loading) return;
     setModelImportViewportSuspend(false);
-    if (previewReloadTimer.current) window.clearTimeout(previewReloadTimer.current);
+    clearPreviewReloadTimer();
     previewReloadTimer.current = window.setTimeout(() => {
+      previewReloadTimer.current = null;
+      if (preview.loading) return;
       void (async () => {
         try {
           await preview.loadModelAt(root);
@@ -188,7 +200,7 @@ function UnitModelEditWorkspace({
         }
       })();
     }, 200);
-  }, [preview, workspace.activeRoot, setModelImportViewportSuspend]);
+  }, [clearPreviewReloadTimer, preview, workspace.activeRoot, setModelImportViewportSuspend]);
 
   const handleStructureMutated = useCallback(() => {
     onStructureMutated();

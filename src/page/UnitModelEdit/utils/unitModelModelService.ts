@@ -5,6 +5,7 @@ import type {
   StaticMeshImportProgress,
 } from "@/page/SceneEdit/utils/sceneSessionService";
 import { toWindowsPath } from "./unitModelRepackService";
+import { syncUnitModelTextureContainers } from "./unitModelTextureService";
 
 export interface UnitModelMutationResult {
   modelRoot: string;
@@ -12,6 +13,7 @@ export interface UnitModelMutationResult {
   modelCount: number;
   totalFiles: number;
   removedFiles: string[];
+  syncWarning?: string;
 }
 
 export interface UnitModelSourceValidation {
@@ -65,6 +67,36 @@ export interface UnitModelReplacePreview {
   blockers: string[];
 }
 
+async function syncAllModelTextureContainers(
+  mutation: UnitModelMutationResult,
+  fallbackModelRoot: string,
+  fallbackStructureJsonPath?: string,
+): Promise<UnitModelMutationResult> {
+  const modelRoot = mutation.modelRoot?.trim() || fallbackModelRoot.trim();
+  const structureJsonPath = mutation.structureJsonPath?.trim() || fallbackStructureJsonPath?.trim() || "";
+  if (!modelRoot) {
+    return {
+      ...mutation,
+      syncWarning: "Texture container sync skipped: missing model root.",
+    };
+  }
+  if (!structureJsonPath) {
+    return {
+      ...mutation,
+      syncWarning: "Texture container sync skipped: missing structure JSON path.",
+    };
+  }
+  try {
+    await syncUnitModelTextureContainers(modelRoot, structureJsonPath);
+  } catch (error) {
+    return {
+      ...mutation,
+      syncWarning: error instanceof Error ? error.toString() : String(error),
+    };
+  }
+  return mutation;
+}
+
 /**
  * Remove a whole model (its model-file folder + paired nuhlpb) from the package, dropping any pool
  * entries that become unreferenced (model files and now-orphaned textures) and rewriting
@@ -83,11 +115,12 @@ export async function removeUnitModelModel(
   if (!trimmedName) {
     throw new Error("Model name is required.");
   }
-  return await invoke<UnitModelMutationResult>("remove_unit_model_model", {
+  const mutation = await invoke<UnitModelMutationResult>("remove_unit_model_model", {
     modelRoot: toWindowsPath(trimmedRoot),
     structureJsonPath: structureJsonPath ? toWindowsPath(structureJsonPath) : null,
     modelName: trimmedName,
   });
+  return await syncAllModelTextureContainers(mutation, trimmedRoot, structureJsonPath);
 }
 
 /**
@@ -109,11 +142,12 @@ export async function addUnitModelModel(
   if (!trimmedSource) {
     throw new Error("Source model folder is required.");
   }
-  return await invoke<UnitModelMutationResult>("add_unit_model_model", {
+  const mutation = await invoke<UnitModelMutationResult>("add_unit_model_model", {
     modelRoot: toWindowsPath(trimmedRoot),
     structureJsonPath: structureJsonPath ? toWindowsPath(structureJsonPath) : null,
     sourceDir: toWindowsPath(trimmedSource),
   });
+  return await syncAllModelTextureContainers(mutation, trimmedRoot, structureJsonPath);
 }
 
 /**
@@ -139,12 +173,13 @@ export async function replaceUnitModelModel(
   if (!trimmedSource) {
     throw new Error("Source model folder is required.");
   }
-  return await invoke<UnitModelMutationResult>("replace_unit_model_model", {
+  const mutation = await invoke<UnitModelMutationResult>("replace_unit_model_model", {
     modelRoot: toWindowsPath(trimmedRoot),
     structureJsonPath: structureJsonPath ? toWindowsPath(structureJsonPath) : null,
     targetModelName: trimmedName,
     sourceDir: toWindowsPath(trimmedSource),
   });
+  return await syncAllModelTextureContainers(mutation, trimmedRoot, structureJsonPath);
 }
 
 export async function previewUnitModelModelReplacement(
@@ -198,7 +233,7 @@ export async function importUnitModelStaticMesh(
 ): Promise<UnitModelMutationResult> {
   const channel = new Channel<StaticMeshImportProgress>();
   channel.onmessage = onProgress;
-  return await invoke<UnitModelMutationResult>("unit_model_import_static_mesh", {
+  const mutation = await invoke<UnitModelMutationResult>("unit_model_import_static_mesh", {
     options: {
       modelRoot: toWindowsPath(params.modelRoot),
       structureJsonPath: toWindowsPath(params.structureJsonPath),
@@ -208,4 +243,9 @@ export async function importUnitModelStaticMesh(
     },
     onProgress: channel,
   });
+  return await syncAllModelTextureContainers(
+    mutation,
+    params.modelRoot,
+    params.structureJsonPath,
+  );
 }

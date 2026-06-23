@@ -258,7 +258,7 @@ export default function MscWorkspaceView({
     }
   };
 
-  /** Decompile one script and apply the func_0 -> main / action-rename post pass. Throws on tool failure. */
+  /** Decompile one script; 2.dscex also gets action-rename + func_0 -> main post pass. Throws on tool failure. */
   const convertScriptCore = useCallback(
     async (file: MscFileInfo): Promise<string> => {
       const inputPath = file.path;
@@ -304,12 +304,6 @@ export default function MscWorkspaceView({
         const normalized = cContent.replace(/func_0/g, "main");
         await writeTextFile(outputPath, normalized);
         return `${file.name}: func_0 to main (0.c missing, action rename skipped)`;
-      }
-
-      if (baseName === "0" || baseName === "1") {
-        const normalized = cContent.replace(/func_0/g, "main");
-        await writeTextFile(outputPath, normalized);
-        return `${file.name}: func_0 to main`;
       }
 
       return `${file.name} converted to C`;

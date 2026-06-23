@@ -1,6 +1,11 @@
 import type { DaeAnalysisResult, DaeImportConfig, SsbhDaeUpAxis, SsbhImportConfig, StaticMeshImportFormat } from "./daeImportTypes";
 import { DEFAULT_HKT_SIMPLIFY } from "../../utils/hktSimplifyUtils";
 
+/** EXVS2 unit-model mesh units vs typical Blender FBX export (dm vs m). */
+export const UNIT_MODEL_BLENDER_FBX_SCALE_FACTOR = 0.1;
+
+export const UNIT_MODEL_BLENDER_FBX_SCALE_FACTOR_TEXT = "0.1";
+
 export function createDefaultSsbhConfig(
   baseFilename: string,
 ): SsbhImportConfig {
@@ -93,6 +98,27 @@ export function syncDaeImportConfigUpAxisFromAnalysis(
     ssbhConfig: {
       ...config.ssbhConfig,
       upAxis,
+    },
+  };
+}
+
+/**
+ * Unit Model Editor: Blender FBX imports target EXVS2 mesh units and UV convention.
+ * DAE imports keep generic defaults (scale 1, no UV flip).
+ */
+export function applyUnitModelFbxImportDefaults(
+  config: DaeImportConfig,
+  sourceFormat: StaticMeshImportFormat,
+): DaeImportConfig {
+  if (sourceFormat !== "fbx") {
+    return config;
+  }
+  return {
+    ...config,
+    ssbhConfig: {
+      ...config.ssbhConfig,
+      scaleFactor: UNIT_MODEL_BLENDER_FBX_SCALE_FACTOR,
+      flipUv: true,
     },
   };
 }

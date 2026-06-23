@@ -34,7 +34,7 @@ import {
   type ResolvedMaterialBinding,
   type TexturePreviewSlotKey,
 } from "./meshFromSsbh";
-import { hydrateBundleGeometry } from "./meshGeometryHydrate";
+import { clearMeshGeometryRegistry, hydrateBundleGeometry } from "./meshGeometryHydrate";
 import type { NutexbTextureData, NutexbTextureDataMap } from "./ssbhTextureUpload";
 import { decodeSceneNutexbRgba } from "@/page/SceneEdit/utils/sceneTextureDecode";
 import {
@@ -703,6 +703,35 @@ export function SsbhModelPreviewProvider({
     setBonePoseResetNonce((n) => n + 1);
   }, []);
 
+  const loadGenerationRef = useRef(0);
+  const textureDecodeGenerationRef = useRef(0);
+
+  const releasePreviewResourcesSync = useCallback(() => {
+    setDraws((prev) => {
+      prev.forEach((d) => d.geometry.dispose());
+      return [];
+    });
+    setTextureDataMap(new Map());
+    setDrawMaterialBindingsByDrawKey(new Map());
+    setTextureDecodeProgressBatched(null);
+    clearMotion();
+    void clearMeshGeometryRegistry();
+  }, [clearMotion, setTextureDecodeProgressBatched]);
+
+  const bumpLoadGeneration = useCallback(() => {
+    const gen = loadGenerationRef.current + 1;
+    loadGenerationRef.current = gen;
+    textureDecodeGenerationRef.current = gen;
+    releasePreviewResourcesSync();
+    return gen;
+  }, [releasePreviewResourcesSync]);
+
+  const disposeLoadedDraws = useCallback((loadedDraws: readonly BuiltMeshDraw[]) => {
+    for (const draw of loadedDraws) {
+      draw.geometry.dispose();
+    }
+  }, []);
+
   const bundle = useMemo((): SsbhModelPreviewBundle | null => {
     if (previewInstances.length === 0) return null;
     if (!activePreviewInstanceId) {
@@ -912,38 +941,49 @@ export function SsbhModelPreviewProvider({
     return buildInstancesFromBundles(bundles, startSlotIndex);
   }, [buildInstancesFromBundles]);
 
-  const loadInstancesFromPaths = useCallback(async (paths: string[]) => {
-    const oldMemorySessionIds = collectMemorySessionIdsFromBundles(
-      previewInstances.map((instance) => instance.bundle),
-    );
-    const loaded = await buildInstancesFromPaths(paths, 0);
-    await syncPreviewCollectionReplace(loaded.instances);
-    const nextMemorySessionIds = collectMemorySessionIdsFromBundles(
-      loaded.instances.map((instance) => instance.bundle),
-    );
-    startTransition(() => {
-      setDraws((prev) => {
-        prev.forEach((d) => d.geometry.dispose());
-        return loaded.draws;
+  const loadInstancesFromPaths = useCallback(
+    async (paths: string[], options?: { generation?: number }) => {
+      const gen = options?.generation ?? bumpLoadGeneration();
+      const oldMemorySessionIds = collectMemorySessionIdsFromBundles(
+        previewInstances.map((instance) => instance.bundle),
+      );
+      const loaded = await buildInstancesFromPaths(paths, 0);
+      if (gen !== loadGenerationRef.current) {
+        disposeLoadedDraws(loaded.draws);
+        return [];
+      }
+      await syncPreviewCollectionReplace(loaded.instances);
+      if (gen !== loadGenerationRef.current) {
+        disposeLoadedDraws(loaded.draws);
+        return [];
+      }
+      startTransition(() => {
+        setDraws(loaded.draws);
+        setPreviewInstances(loaded.instances);
+        setVisibleKeys(new Set(loaded.draws.map((draw) => draw.key)));
+        setDrawError(null);
       });
-      setPreviewInstances(loaded.instances);
-      setVisibleKeys(new Set(loaded.draws.map((draw) => draw.key)));
-      setDrawError(null);
-    });
-    const disposeIds = oldMemorySessionIds.filter(
-      (sessionId) => !nextMemorySessionIds.includes(sessionId),
-    );
-    clearMemoryWorkspaceIfDisposed(disposeIds);
-    void disposeMemorySessions(disposeIds);
-    return loaded.instances;
-  }, [
-    buildInstancesFromPaths,
-    clearMemoryWorkspaceIfDisposed,
-    disposeMemorySessions,
-    previewInstances,
-    startTransition,
-    syncPreviewCollectionReplace,
-  ]);
+      const nextMemorySessionIds = collectMemorySessionIdsFromBundles(
+        loaded.instances.map((instance) => instance.bundle),
+      );
+      const disposeIds = oldMemorySessionIds.filter(
+        (sessionId) => !nextMemorySessionIds.includes(sessionId),
+      );
+      clearMemoryWorkspaceIfDisposed(disposeIds);
+      void disposeMemorySessions(disposeIds);
+      return loaded.instances;
+    },
+    [
+      buildInstancesFromPaths,
+      bumpLoadGeneration,
+      clearMemoryWorkspaceIfDisposed,
+      disposeLoadedDraws,
+      disposeMemorySessions,
+      previewInstances,
+      startTransition,
+      syncPreviewCollectionReplace,
+    ],
+  );
 
   const loadMemoryPreviewBundles = useCallback(
     (bundles: SsbhModelPreviewBundle[]) => {
@@ -1377,7 +1417,11 @@ export function SsbhModelPreviewProvider({
       setTextureDecodeProgressBatched(null);
       return;
     }
+    const decodeGen = ++textureDecodeGenerationRef.current;
     let cancelled = false;
+
+    const isDecodeStale = () =>
+      cancelled || decodeGen !== textureDecodeGenerationRef.current;
 
     const instanceById = new Map(previewInstances.map((inst) => [inst.id, inst] as const));
     const materialCtxByInstanceId = new Map<string, PreviewInstanceMaterialContext>();
@@ -1444,12 +1488,12 @@ export function SsbhModelPreviewProvider({
       const uniquePaths = [...pathSlotCounts.keys()];
 
       const flushTextureDataToReact = () => {
-        if (cancelled) return;
+        if (isDecodeStale()) return;
         setTextureDataMap(new Map(pathToData));
       };
 
       const scheduleTextureDataFlush = () => {
-        if (cancelled || dataFlushRafId !== null) return;
+        if (isDecodeStale() || dataFlushRafId !== null) return;
         dataFlushRafId = requestAnimationFrame(() => {
           dataFlushRafId = null;
           flushTextureDataToReact();
@@ -1459,19 +1503,20 @@ export function SsbhModelPreviewProvider({
       await new Promise<void>((resolve) => {
         requestAnimationFrame(() => resolve());
       });
-      if (cancelled) {
+      if (isDecodeStale()) {
         return;
       }
 
       const bumpDoneBy = (n: number) => {
-        if (cancelled || n <= 0) return;
+        if (isDecodeStale() || n <= 0) return;
         setTextureDecodeProgressBatched((prev) =>
           prev ? { ...prev, done: prev.done + n } : null,
         );
       };
 
       const decodeOnePath = async (path: string): Promise<void> => {
-        if (!cancelled) {
+        if (isDecodeStale()) return;
+        if (!isDecodeStale()) {
           setTextureDecodeProgressBatched((prev) =>
             prev ? { ...prev, currentLabel: `${fileBasename(path)} · decode` } : null,
           );
@@ -1487,11 +1532,13 @@ export function SsbhModelPreviewProvider({
             sourceKind,
             maxDimension: null,
           });
-          if (cancelled) return;
+          if (isDecodeStale()) return;
           pathToData.set(path, { kind: "rgba", width: rgba.width, height: rgba.height, rgba: rgba.rgba });
           scheduleTextureDataFlush();
         } catch (e) {
-          failedTextures.push(`${path}: ${String(e)}`);
+          if (!isDecodeStale()) {
+            failedTextures.push(`${path}: ${String(e)}`);
+          }
         } finally {
           bumpDoneBy(1);
         }
@@ -1501,7 +1548,7 @@ export function SsbhModelPreviewProvider({
         const queue = [...uniquePaths];
         const workerCount = Math.min(NUTEXB_DECODE_CONCURRENCY, uniquePaths.length);
         const worker = async () => {
-          while (!cancelled) {
+          while (!isDecodeStale()) {
             const path = queue.shift();
             if (path === undefined) return;
             await decodeOnePath(path);
@@ -1510,7 +1557,7 @@ export function SsbhModelPreviewProvider({
         await Promise.all(Array.from({ length: workerCount }, () => worker()));
       }
 
-      if (cancelled) {
+      if (isDecodeStale()) {
         return;
       }
       if (dataFlushRafId !== null) {
@@ -1559,19 +1606,25 @@ export function SsbhModelPreviewProvider({
         toast.error(msg);
         return;
       }
+      const gen = bumpLoadGeneration();
       setLoading(true);
       setLoadError(null);
-      setTextureDecodeProgressBatched(null);
       try {
         const normalized = normalizeScenePathStrict(t);
         if (/\.numdlb$/i.test(normalized)) {
-          await loadInstancesFromPaths([normalized]);
+          await loadInstancesFromPaths([normalized], { generation: gen });
         } else {
           const listed = await invoke<string[]>("ssbh_list_numdlb_under_tree", { rootPath: normalized });
+          if (gen !== loadGenerationRef.current) {
+            return;
+          }
           if (listed.length === 0) {
             throw new Error("No .numdlb files found under the selected folder.");
           }
-          await loadInstancesFromPaths(listed);
+          await loadInstancesFromPaths(listed, { generation: gen });
+        }
+        if (gen !== loadGenerationRef.current) {
+          return;
         }
         setRecentModelPaths((prev) => {
           const next = buildNextRecentPaths(prev, normalized);
@@ -1580,14 +1633,19 @@ export function SsbhModelPreviewProvider({
         });
         setModelLoadNonce((n) => n + 1);
       } catch (e) {
+        if (gen !== loadGenerationRef.current) {
+          return;
+        }
         const msg = String(e);
         setLoadError(msg);
         toast.error(msg);
       } finally {
-        setLoading(false);
+        if (gen === loadGenerationRef.current) {
+          setLoading(false);
+        }
       }
     },
-    [loadInstancesFromPaths],
+    [bumpLoadGeneration, loadInstancesFromPaths],
   );
 
   const pickFolder = useCallback(async () => {
@@ -1728,20 +1786,28 @@ export function SsbhModelPreviewProvider({
       throw new Error("Reload is available only for disk-backed preview models.");
     }
     const paths = previewInstances.map((i) => i.modlPath);
+    const gen = bumpLoadGeneration();
     setLoading(true);
     setLoadError(null);
-    setTextureDecodeProgressBatched(null);
     try {
-      await loadInstancesFromPaths(paths);
+      await loadInstancesFromPaths(paths, { generation: gen });
+      if (gen !== loadGenerationRef.current) {
+        return;
+      }
       setModelLoadNonce((n) => n + 1);
     } catch (e) {
+      if (gen !== loadGenerationRef.current) {
+        return;
+      }
       const msg = String(e);
       setLoadError(msg);
       toast.error(msg);
     } finally {
-      setLoading(false);
+      if (gen === loadGenerationRef.current) {
+        setLoading(false);
+      }
     }
-  }, [previewInstances, loadInstancesFromPaths]);
+  }, [previewInstances, bumpLoadGeneration, loadInstancesFromPaths]);
 
   const resetDisplaySettingsToDefaults = useCallback(() => {
     setWireframe(false);

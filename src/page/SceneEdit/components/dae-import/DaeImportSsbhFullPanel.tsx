@@ -22,6 +22,10 @@ import {
   collectTexturePathSlotRefsForExportSession,
   missingTexturePathSlotKey,
 } from "@/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
+import {
+  detectStaticMeshImportFormat,
+  UNIT_MODEL_BLENDER_FBX_SCALE_FACTOR_TEXT,
+} from "./daeImportDefaults";
 import type { DaeAnalysisResult } from "./daeImportTypes";
 import { DaeImportPanelSection } from "./daeImportUi";
 
@@ -67,6 +71,12 @@ export function DaeImportSsbhFullPanel({
     state.setWriteNusktb(true);
     state.setWriteNumatb(true);
     state.setWriteMayaProfile(true);
+    const fileName = sourcePath.split(/[/\\]/).pop() ?? "";
+    if (detectStaticMeshImportFormat(fileName) === "fbx") {
+      state.setImportKind("fbx");
+      state.setScaleFactorText(UNIT_MODEL_BLENDER_FBX_SCALE_FACTOR_TEXT);
+      state.setFlipUv(true);
+    }
   }, [sourcePath, unitModelMode]);
 
   useEffect(() => {

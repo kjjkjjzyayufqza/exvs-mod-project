@@ -35,6 +35,10 @@ type RunValidationOptions = {
   silent?: boolean;
 };
 
+type UseUnitModelWorkspaceOptions = {
+  clearScheduledPreviewReload?: () => void;
+};
+
 function inferLoadedRoot(preview: ReturnType<typeof useSsbhModelPreview>): string | null {
   const active = preview.previewInstances.find((inst) => inst.id === preview.activePreviewInstanceId);
   const bundle = active?.bundle ?? preview.previewInstances[0]?.bundle ?? preview.bundle;
@@ -42,7 +46,12 @@ function inferLoadedRoot(preview: ReturnType<typeof useSsbhModelPreview>): strin
   return bundle.rootFolder || null;
 }
 
-export function useUnitModelWorkspace(unitRoot: string | null, onUnitRootChange: (path: string | null) => void) {
+export function useUnitModelWorkspace(
+  unitRoot: string | null,
+  onUnitRootChange: (path: string | null) => void,
+  options: UseUnitModelWorkspaceOptions = {},
+) {
+  const { clearScheduledPreviewReload } = options;
   const preview = useSsbhModelPreview();
   const obModPath = useConfigStore((state) => state.obModPath ?? "");
   const loadedRoot = inferLoadedRoot(preview);
@@ -170,6 +179,10 @@ export function useUnitModelWorkspace(unitRoot: string | null, onUnitRootChange:
   }, [activeRoot, structurePath, validationRefreshTick, runValidation]);
 
   const pickUnitFolder = async () => {
+    if (busy === "pick" || preview.loading) {
+      return;
+    }
+    clearScheduledPreviewReload?.();
     setBusy("pick");
     try {
       const storedDefault = await getStoredDialogDefaultPath(UNIT_MODEL_OPEN_FOLDER_DIALOG_PATH_KEY);
@@ -180,13 +193,14 @@ export function useUnitModelWorkspace(unitRoot: string | null, onUnitRootChange:
         defaultPath: storedDefault ?? activeRoot ?? preview.workspaceRoot ?? undefined,
       });
       if (typeof selected !== "string" || !selected.trim()) return;
+      const trimmedSelected = selected.trim();
       await rememberStoredDialogSelection(
         UNIT_MODEL_OPEN_FOLDER_DIALOG_PATH_KEY,
-        selected,
+        trimmedSelected,
         "directory",
       );
-      let rootToLoad = selected;
-      const migration = await analyzeUnitModelFolderMigration(selected);
+      let rootToLoad = trimmedSelected;
+      const migration = await analyzeUnitModelFolderMigration(trimmedSelected);
       if (migration.canMigrate && migration.state === "legacy") {
         const ok = await confirm(
           [
@@ -204,7 +218,7 @@ export function useUnitModelWorkspace(unitRoot: string | null, onUnitRootChange:
         );
         if (ok) {
           setBusy("migrate");
-          const result = await migrateUnitModelFolderLayout(selected, migration.structureJsonPath);
+          const result = await migrateUnitModelFolderLayout(trimmedSelected, migration.structureJsonPath);
           rootToLoad = result.modelRoot;
           toast.success("Unit model folder migrated", {
             description: `${result.updatedFileUrls} fileUrl(s) updated. Backup: ${
@@ -236,6 +250,10 @@ export function useUnitModelWorkspace(unitRoot: string | null, onUnitRootChange:
   };
 
   const handleExtracted = async (result: UnitModelExtractResult) => {
+    if (preview.loading) {
+      return;
+    }
+    clearScheduledPreviewReload?.();
     setBusy("extract");
     try {
       await autoSyncStructureForRoot(result.modelRoot);

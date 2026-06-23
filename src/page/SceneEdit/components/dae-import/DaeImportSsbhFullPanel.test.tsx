@@ -97,6 +97,43 @@ describe("DaeImportSsbhFullPanel", () => {
     expect(useDaeSsbhSessionStore.getState().flipUv).toBe(true);
   });
 
+  it("applies Blender FBX unit-model defaults in unit model mode", async () => {
+    render(
+      <DaeImportSsbhFullPanel
+        analysis={analysis}
+        sourcePath="E:\\unit\\body.fbx"
+        stageRoot="E:\\unit\\0"
+        directToDisk
+        unitModelMode
+      />,
+    );
+
+    await waitFor(() => {
+      const state = useDaeSsbhSessionStore.getState();
+      expect(state.importKind).toBe("fbx");
+      expect(state.scaleFactorText).toBe("0.1");
+      expect(state.flipUv).toBe(true);
+    });
+  });
+
+  it("keeps generic defaults for unit model DAE imports", async () => {
+    render(
+      <DaeImportSsbhFullPanel
+        analysis={analysis}
+        sourcePath={analysis.daePath}
+        stageRoot="E:\\unit\\0"
+        directToDisk
+        unitModelMode
+      />,
+    );
+
+    await waitFor(() => {
+      const state = useDaeSsbhSessionStore.getState();
+      expect(state.scaleFactorText).toBe("1");
+      expect(state.flipUv).toBe(false);
+    });
+  });
+
   it("locks every required Unit model output on", async () => {
     useDaeSsbhSessionStore.setState({
       writeNumdlb: false,

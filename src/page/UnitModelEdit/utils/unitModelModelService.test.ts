@@ -24,8 +24,11 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import {
+  addUnitModelModel,
   importUnitModelStaticMesh,
   previewUnitModelModelReplacement,
+  removeUnitModelModel,
+  replaceUnitModelModel,
   validateUnitModelSourceFolder,
 } from "./unitModelModelService";
 
@@ -115,14 +118,154 @@ describe("unitModelModelService", () => {
     );
   });
 
-  it("passes selected geometries and streams progress for FBX/DAE imports", async () => {
-    mocks.invokeMock.mockResolvedValue({
+  it("syncs all texture containers after adding a prepared SSBH folder", async () => {
+    mocks.invokeMock
+      .mockResolvedValueOnce({
+        modelRoot: "E:\\unit\\0",
+        structureJsonPath: "E:\\unit\\0_structure.json",
+        modelCount: 2,
+        totalFiles: 20,
+        removedFiles: [],
+      })
+      .mockResolvedValueOnce({
+        modelRoot: "E:\\unit\\0",
+        structureJsonPath: "E:\\unit\\0_structure.json",
+        changed: true,
+      });
+
+    await addUnitModelModel("E:/unit/0", "E:/source", "E:/unit/0_structure.json");
+
+    expect(mocks.invokeMock).toHaveBeenNthCalledWith(1, "add_unit_model_model", {
+      modelRoot: "E:\\unit\\0",
+      structureJsonPath: "E:\\unit\\0_structure.json",
+      sourceDir: "E:\\source",
+    });
+    expect(mocks.invokeMock).toHaveBeenNthCalledWith(2, "sync_unit_model_texture_containers", {
+      modelRoot: "E:\\unit\\0",
+      structureJsonPath: "E:\\unit\\0_structure.json",
+    });
+  });
+
+  it("returns the mutation result with a sync warning when the follow-up sync fails", async () => {
+    mocks.invokeMock
+      .mockResolvedValueOnce({
+        modelRoot: "E:\\unit\\0",
+        structureJsonPath: "E:\\unit\\0_structure.json",
+        modelCount: 2,
+        totalFiles: 20,
+        removedFiles: [],
+      })
+      .mockRejectedValueOnce(new Error("sync exploded"));
+
+    await expect(
+      addUnitModelModel("E:/unit/0", "E:/source", "E:/unit/0_structure.json"),
+    ).resolves.toEqual({
       modelRoot: "E:\\unit\\0",
       structureJsonPath: "E:\\unit\\0_structure.json",
       modelCount: 2,
       totalFiles: 20,
       removedFiles: [],
+      syncWarning: "Error: sync exploded",
     });
+  });
+
+  it("returns a sync warning when the mutation result has no structure path for follow-up sync", async () => {
+    mocks.invokeMock.mockResolvedValueOnce({
+      modelRoot: "E:\\unit\\0",
+      structureJsonPath: "",
+      modelCount: 2,
+      totalFiles: 20,
+      removedFiles: [],
+    });
+
+    await expect(
+      addUnitModelModel("E:/unit/0", "E:/source"),
+    ).resolves.toEqual({
+      modelRoot: "E:\\unit\\0",
+      structureJsonPath: "",
+      modelCount: 2,
+      totalFiles: 20,
+      removedFiles: [],
+      syncWarning: "Texture container sync skipped: missing structure JSON path.",
+    });
+  });
+
+  it("syncs all texture containers after removing a model", async () => {
+    mocks.invokeMock
+      .mockResolvedValueOnce({
+        modelRoot: "E:\\unit\\0",
+        structureJsonPath: "E:\\unit\\0_structure.json",
+        modelCount: 1,
+        totalFiles: 12,
+        removedFiles: [".\\0\\models\\alpha\\alpha.numdlb"],
+      })
+      .mockResolvedValueOnce({
+        modelRoot: "E:\\unit\\0",
+        structureJsonPath: "E:\\unit\\0_structure.json",
+        changed: true,
+      });
+
+    await removeUnitModelModel("E:/unit/0", "alpha", "E:/unit/0_structure.json");
+
+    expect(mocks.invokeMock).toHaveBeenNthCalledWith(1, "remove_unit_model_model", {
+      modelRoot: "E:\\unit\\0",
+      structureJsonPath: "E:\\unit\\0_structure.json",
+      modelName: "alpha",
+    });
+    expect(mocks.invokeMock).toHaveBeenNthCalledWith(2, "sync_unit_model_texture_containers", {
+      modelRoot: "E:\\unit\\0",
+      structureJsonPath: "E:\\unit\\0_structure.json",
+    });
+  });
+
+  it("syncs all texture containers after replacing a model", async () => {
+    mocks.invokeMock
+      .mockResolvedValueOnce({
+        modelRoot: "E:\\unit\\0",
+        structureJsonPath: "E:\\unit\\0_structure.json",
+        modelCount: 2,
+        totalFiles: 20,
+        removedFiles: [".\\0\\models\\alpha\\alpha_old.numatb"],
+      })
+      .mockResolvedValueOnce({
+        modelRoot: "E:\\unit\\0",
+        structureJsonPath: "E:\\unit\\0_structure.json",
+        changed: false,
+      });
+
+    await replaceUnitModelModel(
+      "E:/unit/0",
+      "alpha",
+      "E:/source",
+      "E:/unit/0_structure.json",
+    );
+
+    expect(mocks.invokeMock).toHaveBeenNthCalledWith(1, "replace_unit_model_model", {
+      modelRoot: "E:\\unit\\0",
+      structureJsonPath: "E:\\unit\\0_structure.json",
+      targetModelName: "alpha",
+      sourceDir: "E:\\source",
+    });
+    expect(mocks.invokeMock).toHaveBeenNthCalledWith(2, "sync_unit_model_texture_containers", {
+      modelRoot: "E:\\unit\\0",
+      structureJsonPath: "E:\\unit\\0_structure.json",
+    });
+  });
+
+  it("passes selected geometries and streams progress for FBX/DAE imports", async () => {
+    mocks.invokeMock
+      .mockResolvedValueOnce({
+        modelRoot: "E:\\unit\\0",
+        structureJsonPath: "E:\\unit\\0_structure.json",
+        modelCount: 2,
+        totalFiles: 20,
+        removedFiles: [],
+      })
+      .mockResolvedValueOnce({
+        modelRoot: "E:\\unit\\0",
+        structureJsonPath: "E:\\unit\\0_structure.json",
+        changed: true,
+      });
     const onProgress = vi.fn();
 
     await importUnitModelStaticMesh(
@@ -165,6 +308,10 @@ describe("unitModelModelService", () => {
         onProgress: mocks.channels[0],
       }),
     );
+    expect(mocks.invokeMock).toHaveBeenNthCalledWith(2, "sync_unit_model_texture_containers", {
+      modelRoot: "E:\\unit\\0",
+      structureJsonPath: "E:\\unit\\0_structure.json",
+    });
 
     mocks.channels[0]?.onmessage?.({ kind: "complete" });
     expect(onProgress).toHaveBeenCalledWith({ kind: "complete" });

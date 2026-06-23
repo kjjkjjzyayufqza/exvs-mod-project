@@ -32,10 +32,12 @@ import {
 } from "@/utils/dialogDefaultPathStore";
 import { DaeImportConfigModal } from "@/page/SceneEdit/components/dae-import/DaeImportConfigModal";
 import {
+  applyUnitModelFbxImportDefaults,
   createDefaultDaeImportConfig,
   detectStaticMeshImportFormat,
   sanitizeBaseFilename,
   syncDaeImportConfigUpAxisFromAnalysis,
+  UNIT_MODEL_BLENDER_FBX_SCALE_FACTOR_TEXT,
 } from "@/page/SceneEdit/components/dae-import/daeImportDefaults";
 import type {
   DaeImportConfig,
@@ -265,6 +267,17 @@ function buildSourceTexturePlan(
   };
 }
 
+function emitUnitModelTexturesChanged(): void {
+  window.dispatchEvent(new Event("unit-model-textures-changed"));
+}
+
+function showMutationSyncWarning(syncWarning?: string): void {
+  if (!syncWarning) return;
+  toast.warning("Unit model texture container sync warning", {
+    description: syncWarning,
+  });
+}
+
 /**
  * Structured list of the package's models (one folder per model), with add, replace, remove, and
  * "Copy info to AI" affordances backed by the Unit model structure mutation commands.
@@ -350,10 +363,12 @@ export function UnitModelModelManagerPanel({
       toast.success(`Model '${validation.modelName}' added`, {
         description: `${result.modelCount} models, ${result.totalFiles} files. Empty NUHLPB created automatically.`,
       });
+      showMutationSyncWarning(result.syncWarning);
       if (validation.ignoredSourceNuhlpb) {
         toast.info("The source NUHLPB was ignored; a new empty NUHLPB was created.");
       }
       setAddFolderPreview(null);
+      emitUnitModelTexturesChanged();
       onMutated?.();
     } catch (error) {
       toast.error("Failed to add model", { description: String(error) });
@@ -387,7 +402,8 @@ export function UnitModelModelManagerPanel({
       );
       const fileName = filePath.split(/[/\\]/).pop() ?? "model.dae";
       const baseFilename = sanitizeBaseFilename(fileName);
-      const config = createDefaultDaeImportConfig(baseFilename);
+      const sourceFormat = detectStaticMeshImportFormat(fileName);
+      let config = createDefaultDaeImportConfig(baseFilename);
       config.loadToScene = false;
       config.convertToSsbh = true;
       config.generateHkt = false;
@@ -399,12 +415,13 @@ export function UnitModelModelManagerPanel({
       config.ssbhConfig.writeNumatb = true;
       config.ssbhConfig.writeJnttbl = true;
       config.ssbhConfig.writeMayaProfile = true;
+      config = applyUnitModelFbxImportDefaults(config, sourceFormat);
 
       const entry: DaeImportEntry = {
         importId: `unit_model_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         fileName,
         filePath,
-        sourceFormat: detectStaticMeshImportFormat(fileName),
+        sourceFormat,
         analysis: null,
         config,
         analyzing: true,
@@ -419,6 +436,11 @@ export function UnitModelModelManagerPanel({
       session.setWriteNusktb(true);
       session.setWriteNumatb(true);
       session.setWriteMayaProfile(true);
+      if (sourceFormat === "fbx") {
+        session.setImportKind("fbx");
+        session.setScaleFactorText(UNIT_MODEL_BLENDER_FBX_SCALE_FACTOR_TEXT);
+        session.setFlipUv(true);
+      }
 
       setImportEntries([entry]);
       setShowImportConfig(true);
@@ -433,9 +455,12 @@ export function UnitModelModelManagerPanel({
               ? {
                   ...candidate,
                   analysis,
-                  config: syncDaeImportConfigUpAxisFromAnalysis(
-                    candidate.config,
-                    analysis,
+                  config: applyUnitModelFbxImportDefaults(
+                    syncDaeImportConfigUpAxisFromAnalysis(
+                      candidate.config,
+                      analysis,
+                    ),
+                    candidate.sourceFormat,
                   ),
                   analyzing: false,
                 }
@@ -533,8 +558,9 @@ export function UnitModelModelManagerPanel({
       toast.success(`Unit model '${baseFilename}' added`, {
         description: `${result.modelCount} models, ${result.totalFiles} files. Empty NUHLPB created automatically.`,
       });
+      showMutationSyncWarning(result.syncWarning);
       setImportEntries([]);
-      window.dispatchEvent(new Event("unit-model-textures-changed"));
+      emitUnitModelTexturesChanged();
       onMutated?.();
     } catch (error) {
       toast.error("Failed to import FBX/DAE as Unit model", {
@@ -555,7 +581,9 @@ export function UnitModelModelManagerPanel({
       toast.success("Model removed", {
         description: `${result.modelCount} models, ${result.removedFiles.length} files deleted`,
       });
+      showMutationSyncWarning(result.syncWarning);
       setRemoveTarget(null);
+      emitUnitModelTexturesChanged();
       onMutated?.();
     } catch (error) {
       toast.error("Failed to remove model", { description: String(error) });
@@ -626,7 +654,9 @@ export function UnitModelModelManagerPanel({
       toast.success(`Model '${targetName}' replaced`, {
         description: `${result.modelCount} models, ${result.totalFiles} files. ${result.removedFiles.length} old file(s) removed.`,
       });
+      showMutationSyncWarning(result.syncWarning);
       setReplaceFolderPreview(null);
+      emitUnitModelTexturesChanged();
       onMutated?.();
     } catch (error) {
       toast.error("Failed to replace model", {
