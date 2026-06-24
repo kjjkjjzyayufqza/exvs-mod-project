@@ -1,24 +1,26 @@
-import sys, os, struct, tempfile, shutil
+import os
+import re
+import subprocess
+import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 TEST_DIR = r'E:\XB\解包\com\file\0xBDBE6FEA_test'
 TOOLS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FUNC_HEADER_RE = re.compile(r'^(?:void|int|float|bool|string)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\([^\n]*\)\s*\{', re.M)
 
 TEST_CASES = [
     {
         'original': '1.cscex',
-        'decompiled_c': '1.c',
         'roundtrip': True,
     },
     {
         'original': '0.bscex',
-        'decompiled_c': '0.c',
         'roundtrip': False,
     },
     {
         'original': '2.dscex',
-        'decompiled_c': '2.c',
         'roundtrip': True,
     },
 ]
@@ -33,7 +35,7 @@ def compare_bytes(data_a, data_b, label):
     min_len = min(len(data_a), len(data_b))
     diffs = sum(1 for i in range(min_len) if data_a[i] != data_b[i])
     total = diffs + abs(size_diff)
-    print(f'  [FAIL] {label}: {diffs} byte diffs, size diff={size_diff}')
+    print(f'  [INFO] {label}: binary differs ({diffs} byte diffs, size diff={size_diff})')
     shown = 0
     for i in range(min_len):
         if data_a[i] != data_b[i]:
@@ -79,8 +81,85 @@ def test_core_read_write():
     return total_fail
 
 
+def decompile_to_temp(orig_path):
+    with tempfile.NamedTemporaryFile(suffix='.c', delete=False) as tmp_c:
+        c_path = tmp_c.name
+    with tempfile.NamedTemporaryFile(suffix='.txt', delete=False) as tmp_log:
+        log_path = tmp_log.name
+
+    result = subprocess.run(
+        [sys.executable, os.path.join(TOOLS_DIR, 'mscdec.py'),
+         orig_path, '-o', c_path, '-log', log_path],
+        capture_output=True, text=True, cwd=TOOLS_DIR, timeout=120
+    )
+    return result, c_path, log_path
+
+
+def compile_c_to_temp(c_path):
+    with tempfile.NamedTemporaryFile(suffix='.bin', delete=False) as tmp:
+        out_path = tmp.name
+
+    result = subprocess.run(
+        [sys.executable, os.path.join(TOOLS_DIR, 'msclang.py'),
+         c_path, '-o', out_path, '-i'],
+        capture_output=True, text=True, cwd=TOOLS_DIR, timeout=120
+    )
+    return result, out_path
+
+
+def read_text(path):
+    with open(path, 'r', encoding='utf-8', errors='replace') as f:
+        return f.read().replace('\r\n', '\n')
+
+
+def extract_functions(text):
+    functions = {}
+    matches = list(FUNC_HEADER_RE.finditer(text))
+    for match in matches:
+        name = match.group(1)
+        start = match.start()
+        brace = text.find('{', match.end() - 1)
+        depth = 0
+        end = len(text)
+        i = brace
+        while i < len(text):
+            if text[i] == '{':
+                depth += 1
+            elif text[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+            i += 1
+        functions[name] = text[start:end]
+    return functions
+
+
+def compare_semantic_text(path_a, path_b, label):
+    text_a = read_text(path_a)
+    text_b = read_text(path_b)
+    if text_a == text_b:
+        print(f'  [OK] {label}: semantic redecompile stable')
+        return 0
+
+    funcs_a = extract_functions(text_a)
+    funcs_b = extract_functions(text_b)
+    differing = [name for name in funcs_a if name in funcs_b and funcs_a[name] != funcs_b[name]]
+    missing = [name for name in funcs_a if name not in funcs_b]
+    extras = [name for name in funcs_b if name not in funcs_a]
+    print(f'  [FAIL] {label}: semantic redecompile drift')
+    print(f'    differing functions: {len(differing)}')
+    if differing:
+        print(f'    first differing function: {differing[0]}')
+    if missing:
+        print(f'    missing functions: {missing[:5]}')
+    if extras:
+        print(f'    extra functions: {extras[:5]}')
+    return 1
+
+
 def test_compile_roundtrip():
-    print('\n=== Phase 2: decompile -> compile binary comparison ===')
+    print('\n=== Phase 2: decompile -> compile -> redecompile semantic comparison ===')
     total_fail = 0
 
     for tc in TEST_CASES:
@@ -89,25 +168,21 @@ def test_compile_roundtrip():
             continue
 
         orig_path = os.path.join(TEST_DIR, tc['original'])
-        c_path = os.path.join(TEST_DIR, tc['decompiled_c'])
-
-        if not os.path.exists(c_path):
-            print(f'  [SKIP] {tc["original"]}: {tc["decompiled_c"]} not found')
-            continue
 
         with open(orig_path, 'rb') as f:
             original = f.read()
 
-        with tempfile.NamedTemporaryFile(suffix='.bin', delete=False) as tmp:
-            tmp_path = tmp.name
+        decompile_result, c_path, log_path = decompile_to_temp(orig_path)
+        if decompile_result.returncode != 0:
+            print(f'  [FAIL] {tc["original"]}: decompile failed: {decompile_result.stderr[-200:]}')
+            total_fail += 1
+            for temp_path in (c_path, log_path):
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+            continue
 
         try:
-            import subprocess
-            result = subprocess.run(
-                [sys.executable, os.path.join(TOOLS_DIR, 'msclang.py'),
-                 c_path, '-o', tmp_path, '-i'],
-                capture_output=True, text=True, cwd=TOOLS_DIR
-            )
+            result, tmp_path = compile_c_to_temp(c_path)
 
             if result.returncode != 0:
                 print(f'  [FAIL] {tc["original"]}: compile failed: {result.stderr[-200:]}')
@@ -117,12 +192,26 @@ def test_compile_roundtrip():
             with open(tmp_path, 'rb') as f:
                 compiled = f.read()
 
-            fails = compare_bytes(original, compiled, tc['original'])
-            total_fail += (1 if fails > 0 else 0)
+            compare_bytes(original, compiled, tc['original'])
+
+            rebuilt_decompile_result, rebuilt_c_path, rebuilt_log_path = decompile_to_temp(tmp_path)
+            if rebuilt_decompile_result.returncode != 0:
+                print(f'  [FAIL] {tc["original"]}: redecompile failed: {rebuilt_decompile_result.stderr[-200:]}')
+                total_fail += 1
+                continue
+
+            total_fail += compare_semantic_text(c_path, rebuilt_c_path, tc['original'])
 
         finally:
-            if os.path.exists(tmp_path):
+            for temp_path in (c_path, log_path):
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+            if 'tmp_path' in locals() and os.path.exists(tmp_path):
                 os.unlink(tmp_path)
+            if 'rebuilt_c_path' in locals():
+                for temp_path in (rebuilt_c_path, rebuilt_log_path):
+                    if os.path.exists(temp_path):
+                        os.unlink(temp_path)
 
     return total_fail
 

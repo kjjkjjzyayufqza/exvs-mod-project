@@ -586,25 +586,22 @@ class MscFile:
             scriptOffsets.append(readInt(f, he) + SCRIPT_BASE)
         sortedScriptOffsets = list(scriptOffsets)
         sortedScriptOffsets.sort()
-
-        count = 0
-        for i in sortedScriptOffsets:
-            logging.info("[func_name: func_%i, pointer: %i]" % (count, i))
-            count += 1
+        layoutRanksByOffset = {offset: rank for rank, offset in enumerate(sortedScriptOffsets)}
 
         if f.tell() % 0x10 != 0:
             f.seek(0x10 - (f.tell() % 0x10), 1)
         for i in range(stringCount):
             self.strings.append(f.read(self.stringSize).decode('utf-8').replace('\x00',''))
-        for j in scriptOffsets:
-            i = sortedScriptOffsets.index(j)
-            start = sortedScriptOffsets[i]
-            if i != len(scriptOffsets) - 1:
-                end = sortedScriptOffsets[i+1]
+        for tableIndex, tableOffset in enumerate(scriptOffsets):
+            layoutRank = layoutRanksByOffset[tableOffset]
+            start = sortedScriptOffsets[layoutRank]
+            if layoutRank != len(scriptOffsets) - 1:
+                end = sortedScriptOffsets[layoutRank+1]
             else:
                 end = endOfScripts
             newScript = MscScript()
-            newScript.name = 'func_%i' % i
+            newScript.name = 'func_%i' % tableIndex
+            logging.info("[func_name: func_%i, pointer: %i]" % (tableIndex, start))
             newScript.read(f, start, end)
             self.scripts.append(newScript)
         return self
