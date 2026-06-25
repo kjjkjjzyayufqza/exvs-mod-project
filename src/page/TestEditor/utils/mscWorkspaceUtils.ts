@@ -67,6 +67,14 @@ export function getMscRepackOutputPath(cFilePath: string): string {
   return replaceTrailingExtension(cFilePath, extension, targetExtension);
 }
 
+export function getMscResolvedOverlayPath(cFilePath: string): string {
+  const extension = getLowerCaseFileExtension(cFilePath);
+  if (extension !== ".c") {
+    throw new Error(`MSC workspace: unsupported resolved overlay source: ${cFilePath}`);
+  }
+  return replaceTrailingExtension(cFilePath, extension, ".resolved.md");
+}
+
 /**
  * Returns true if the directory contains at least one file with a .bscex / .cscex / .dscex suffix (non-recursive).
  */

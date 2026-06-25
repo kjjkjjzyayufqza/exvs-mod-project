@@ -103,7 +103,7 @@ MSC binary (.bscex/.cscex/.dscex)
   → .c file
 
 .c file
-  → msclang.py (C → MSC bytecode compilation, correct try pushBit via addArg)
+  → msclang.py (legacy repack; use msclang_modern.py for semantic research only)
   → MSC binary (.mscsb)
 ```
 

@@ -14,7 +14,7 @@ export interface MscFileInfo {
   path: string;
 }
 
-export type MscFileRole = "script" | "c" | "log" | "other";
+export type MscFileRole = "script" | "c" | "resolved" | "log" | "other";
 
 export interface MscPackSlot {
   index: number;
@@ -39,6 +39,7 @@ export function isMscPackScriptCFile(name: string): boolean {
 export function getMscFileRole(name: string): MscFileRole {
   const lower = name.toLowerCase();
   if (SCRIPT_EXTENSIONS.some((ext) => lower.endsWith(ext))) return "script";
+  if (lower.endsWith(".resolved.md")) return "resolved";
   if (lower.endsWith(".c")) return "c";
   if (lower.endsWith(".txt")) return "log";
   return "other";
@@ -86,6 +87,7 @@ export interface MscFileGroup {
 const GROUP_ORDER: ReadonlyArray<{ role: MscFileRole; label: string }> = [
   { role: "script", label: "Source scripts" },
   { role: "c", label: "Decompiled C" },
+  { role: "resolved", label: "Resolved overlays" },
   { role: "log", label: "Logs" },
   { role: "other", label: "Other" },
 ];

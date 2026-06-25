@@ -21,6 +21,7 @@ describe("getMscFileRole", () => {
 
   it("classifies decompiled C, logs, and other files", () => {
     expect(getMscFileRole("0.c")).toBe("c");
+    expect(getMscFileRole("2.resolved.md")).toBe("resolved");
     expect(getMscFileRole("0.txt")).toBe("log");
     expect(getMscFileRole("notes.md")).toBe("other");
   });
@@ -53,8 +54,14 @@ describe("computeMscSlotStatuses", () => {
 
 describe("groupMscFiles", () => {
   it("groups by role in pipeline order and drops empty groups", () => {
-    const groups = groupMscFiles([file("2.dscex"), file("0.c"), file("0.bscex"), file("0.txt")]);
-    expect(groups.map((g) => g.role)).toEqual(["script", "c", "log"]);
+    const groups = groupMscFiles([
+      file("2.dscex"),
+      file("0.c"),
+      file("2.resolved.md"),
+      file("0.bscex"),
+      file("0.txt"),
+    ]);
+    expect(groups.map((g) => g.role)).toEqual(["script", "c", "resolved", "log"]);
   });
 
   it("sorts files inside a group by leading index", () => {

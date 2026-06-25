@@ -1,16 +1,17 @@
 # MSC Auto Rename Mapping
 
-这份文档是 TestEditor 里 MSC 专属 Auto Rename 的 mapping 记录入口。
+这份文档是 TestEditor 里 MSC 专属 stable overlay / legacy alias 的记录入口。
 
-它负责记录类似下面这种显示层改写：
+旧显示层曾直接把 `2.c` 改写成下面这种样子：
 
 ```c
 func_241(0xf48d2d49, ACTION_A_SHOT); //射击
 ```
 
-这里的目标不是修改原始游戏符号，也不是给 `mscdec.py` 增加外部开关，而是让
-TestEditor 在打开当前 MSC workspace 时，按可验证证据把 `func_N` 和 hash
-叠加显示成更可读的 action / slot 名称。
+当前默认目标不是修改原始游戏符号，也不是给 `mscdec.py` 增加外部开关，而是让
+TestEditor 生成并维护 `2.resolved.md` sidecar：`2.c` 保持 raw 反编译结果，
+overlay 再按可验证证据把 `func_N`、action hash、slot、arms entry hash
+叠加显示成更可读的 action / slot 信息。
 
 ## 文档边界
 
@@ -29,8 +30,11 @@ native-truth 辅助层；TestEditor 的 Auto Rename 应该在编辑器自己的 
 
 | 入口 | 角色 |
 |---|---|
-| `src/page/TestEditor/utils/mscActionRename.ts` | 当前已实现的旧 action-mask rename utility。 |
-| `renameScript2CallbacksByActionMask(script0Content, script2Content)` | 从 `0.c func_143` 的 mask 路由推导 `ACTION_*` 名称，再改写 `2.c` 的 `func_241` 绑定显示。 |
+| `src/page/TestEditor/utils/mscActionRename.ts` | legacy alias helper；只从旧 route 提取兼容提示，不再负责改写 raw `2.c`。 |
+| `collectLegacyActionAliases(script0Content, script2Content)` | 从 `0.c func_143` 的旧 mask 路由提取 `ACTION_*` working alias。 |
+| `src/page/TestEditor/utils/mscStableEvidence.ts` | 从 `0.c` / `2.c` 提取 stable registry evidence。 |
+| `src/page/TestEditor/utils/mscParamLabelResolver.ts` | 从 `armsparam.bin` / `characterparam.bin` 解 label， enrich overlay。 |
+| `src/page/TestEditor/utils/mscResolvedOverlay.ts` | 把 stable evidence 渲染成 `2.resolved.md`。 |
 | `docs/msc-research/2c-function-role-map-for-modders.md` | 解释为什么不能持久绑定 `func_N`，以及怎样用 `.c` evidence shape 建立工作名。 |
 | `docs/msc-research/func1044-simulated-renames.md` | `func_1044` slot callback 的 Auto Rename 期望输出。 |
 
@@ -72,13 +76,13 @@ src-tauri/src/format/obf_string.rs
 src/utils/obfString.ts
 ```
 
-因此 rename utility 的实现方向应该是：
+因此 overlay 的实现方向应该是：
 
 1. 扫描 `2.c` 的 `sys_4F(0xb, slot, armsEntryHash)`。
 2. 在当前 unit param 包的 `armsparam.bin` 中用 `entry_id == armsEntryHash` 查 row。
 3. 读取 `0xE6213731` / `0xF3C4CAE9` 的绝对文件 offset。
 4. 用 obfuscated string codec 解出 action/resource label。
-5. 在 TestEditor resolved view 里显示 slot 注释或 overlay 名称。
+5. 在 TestEditor 的 `2.resolved.md` sidecar 里显示 slot 注释或 overlay 名称。
 
 示例输出风格：
 
@@ -142,10 +146,11 @@ Delta Kai clone 当前 `0x08248A8D/characterparam.bin` 的证据：
 `CHR_015GNDMUC_004DELTPL_001`，native assist gate / 资源身份可能仍按原机体
 处理。单看 `2.c` 看不出这个错位。
 
-## 当前旧 Rename 规则
+## Legacy Alias 规则（仅兼容层）
 
 当前 `mscActionRename.ts` 的旧路径是从 `0.c func_143` 里的 `global48 & mask`
-和 `func_95(hash, ...)` 推导武装输入语义。
+和 `func_95(hash, ...)` 推导武装输入语义。它现在只产出 legacy alias hint，
+不再直接重写 raw `2.c`。
 
 现有固定 mask 语义包括：
 
@@ -159,7 +164,7 @@ Delta Kai clone 当前 `0x08248A8D/characterparam.bin` 的证据：
 | `0x400` | `ABC_FINAL_ATTACK` | 觉醒技 |
 | `0x800` | `CHARGE_SHOT` | 蓄力射击 |
 
-输出应保持这种风格：
+legacy alias 仍可在 overlay 中保留这种显示：
 
 ```c
 func_241(0xf48d2d49, ACTION_A_SHOT); //射击
@@ -167,11 +172,11 @@ func_241(0x12345678, ACTION_AC_SPECIAL_SHOT_LOCK_SWITCH); //特射 换锁分支
 ```
 
 这一层仍然有价值，但它不能覆盖德尔塔 Plus 变形这种不经过旧
-`func_143/func_95` 路由的 action 族。
+`func_143/func_95` 路由的 action 族；缺失时必须允许 overlay 继续工作。
 
-## 新 Rename 规则
+## 当前默认规则：Stable Overlay
 
-新规则应从证据图谱生成候选名，而不是只查字典。
+当前默认规则应从证据图谱生成 resolved overlay，而不是只查字典、也不是改写 raw `2.c`。
 
 推荐顺序：
 
@@ -187,16 +192,23 @@ func_241(0x12345678, ACTION_AC_SPECIAL_SHOT_LOCK_SWITCH); //特射 换锁分支
 
 ## 当前记录格式
 
-不再为研究单独生成 mapping JSON。用 Markdown 保存可复查证据：
+不再为研究单独生成 mapping JSON。用 Markdown 保存可复查证据，按 stable key 优先：
 
-| Kind | Stable key | Current symbol | Working name | Required evidence |
+| Kind | Stable key | Current symbol | Working name / legacy alias | Required evidence |
 |---|---|---|---|---|
 | Lifecycle | called from `func_1` | `func_877` | unit shell/resource initializer | calls `func_887/1042`; writes `global20/170/1`; contains `sys_4B/sys_4F` |
-| Action | hash `0x9475130E` | `func_450` | transform dash entry | action index `0x17`; slot `0x23`; callback `func_870`; resource `0x37` |
+| Action | hash `0x9475130E` | `func_450` | transform dash entry (`ACTION_TRANSFORM_DASH_ENTRY` if kept as legacy alias) | action index `0x17`; slot `0x23`; callback `func_870`; resource `0x37` |
 | Slot callback | registry `0x10001/0x2`, slot `0x23` | `func_870` | transform entry depiction | resource `0x37`; writes `global143` |
 
 `func_N` 只能作为当前样本定位信息。真正可复用的是 action hash、registry 形态、
 slot、resource index、常量集合和行为证据。
+
+引用顺序固定：
+
+1. `action hash` / registry key
+2. `action index` / `slot`
+3. 当前 `func_N`
+4. legacy alias（如果存在）
 
 ## 当前确认示例
 
@@ -235,8 +247,9 @@ void INIT_UNIT_SHELL_RESOURCE_TABLES()
 func_241(0xf48d2d49, ACTION_A_SHOT); //射击
 ```
 
-这类名称来自旧 action-mask route。它适合武装按钮输入，但仍然要以当前
-`0.c` 和 `2.c` 的实际绑定为准。
+这类名称来自旧 action-mask route。它适合武装按钮输入，但现在只算
+legacy alias；引用时仍然要先写当前 `action hash`，再补当前 `0.c` / `2.c`
+绑定证据。
 
 ### 德尔塔 Plus 变形 action 族
 
@@ -278,6 +291,7 @@ func_241(0x9475130e, 0); //disabled: 变形突入 / 飞机模式入口
 禁止事项：
 
 - 不把 `func_N` 作为跨版本主键。
+- 不把 `ACTION_*` 当成主键；没有 hash / slot / registry 证据时，不单独引用 alias。
 - 不把 `command_mapping.md` 当成 MSC action / slot 命名表。
 - 不用 `--exvsMapping` 承担 TestEditor rename 职责。
 - 不因为某个 hash 有一个猜测名，就跳过输入、handler、slot、resource 的闭环验证。

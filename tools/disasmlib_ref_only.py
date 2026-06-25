@@ -3,8 +3,7 @@
 # LICENSE or go to https://github.com/jam1garner/pymsc/blob/master/LICENSE #
 # for full license details.                                                #
 #**************************************************************************#
-from mscdec_msc import *
-from disasmlib_ref_only import Label as RefOnlyLabel, ScriptRef as RefOnlyScriptRef, disasm as disasm_cfg_ref_only
+from msc_core_ref_only import *
 import sys, os, time, os.path, timeit
 from argparse import ArgumentParser
 from struct import unpack, pack
@@ -31,11 +30,6 @@ class Label:
 
 class ScriptRef(str):
     pass
-
-# Keep exported Label/ScriptRef types aligned with the CFG bridge so callers
-# can rely on stable isinstance() checks regardless of use_cfg mode.
-Label = RefOnlyLabel
-ScriptRef = RefOnlyScriptRef
 
 def updateScriptReference(popped, index, scriptName):
     global scriptCalledVars, mscFile, acmdNames, charAcmdNames
@@ -218,49 +212,65 @@ def pickTypes(script):
                     if not (asFloat > 0 and asFloat < 0.000001):
                         cmd.parameters[0] = asFloat
 
-def disasm(fname, use_cfg=False):
-    global clearedPaths,scriptCalledVars,mscFile,charAcmdNames
+def _insert_labels(script):
+    jumpPositions = {}
+    for cmd in script.cmds:
+        if isinstance(cmd, Command) and cmd.command in [0x4, 0x5, 0x2e, 0x34, 0x35, 0x36]:
+            if not cmd.parameters[0] in jumpPositions:
+                jumpPositions[cmd.parameters[0]] = Label("loc_%X" % (cmd.parameters[0]))
+            cmd.parameters[0] = jumpPositions[cmd.parameters[0]]
 
-    if use_cfg:
-        return disasm_cfg_ref_only(fname, use_cfg=True)
+    j = 0
+    while j < len(script.cmds):
+        item = script.cmds[j]
+        if isinstance(item, Command) and item.commandPosition in jumpPositions:
+            script.cmds.insert(j, jumpPositions[item.commandPosition])
+            j += 1
+        j += 1
+
+
+def disasm(fname, use_cfg=True):
+    global clearedPaths, scriptCalledVars, mscFile
 
     mscFile = MscFile()
 
     with open(fname, 'rb') as f:
         mscFile.readFromFile(f)
 
-    for i,script in enumerate(mscFile):
+    for i, script in enumerate(mscFile):
         if not script.bounds[0] in scriptOffsets:
             scriptNames[script.bounds[0]] = script.name
             scriptOffsets.append(script.bounds[0])
 
     scriptCalledVars = {}
 
-    # 2 = number of passes for script offset analysis
-    for i in range(2):
-        for script in mscFile:
+    if use_cfg:
+        from msc_cfg import resolve_script_refs_cfg, resolve_cross_script_refs, ScriptRefStr
+        offset_to_name = dict(scriptNames)
+        cfg_called_vars = {}
+
+        for script in mscFile.scripts:
+            resolve_script_refs_cfg(script, offset_to_name, cfg_called_vars)
+
+        resolve_cross_script_refs(mscFile, offset_to_name, cfg_called_vars)
+        resolve_cross_script_refs(mscFile, offset_to_name, cfg_called_vars)
+
+        for script in mscFile.scripts:
+            for cmd in script.cmds:
+                if isinstance(cmd, Command) and cmd.command in (0x0A, 0x0D):
+                    if isinstance(cmd.parameters[0], ScriptRefStr):
+                        cmd.parameters[0] = ScriptRef(str(cmd.parameters[0]))
+    else:
+        for i in range(2):
+            for script in mscFile:
+                clearedPaths = []
+                emuScript(script, 0, [], i)
+
+        for i, script in enumerate(mscFile):
             clearedPaths = []
-            emuScript(script, 0, [], i)
+            emuScript(script, 0, [], 2)
 
-    for i,script in enumerate(mscFile):
-        clearedPaths = []
-        emuScript(script, 0, [], 2)
-        #pickTypes(script)
-
-        jumpPositions = {}
-        for cmd in script:
-            if cmd.command in [0x4, 0x5, 0x2e, 0x34, 0x35, 0x36]:
-                if not cmd.parameters[0] in jumpPositions:
-                    jumpPositions[cmd.parameters[0]] = Label("loc_%X" % (cmd.parameters[0]))
-                cmd.parameters[0] = jumpPositions[cmd.parameters[0]]
-
-        j = 0
-        while j < len(script):
-            cmd = script[j]
-            if cmd.commandPosition in jumpPositions:
-                script.cmds.insert(j, jumpPositions[cmd.commandPosition])
-                # Go ahead and skip over the label
-                j += 1
-            j += 1
+    for script in mscFile.scripts:
+        _insert_labels(script)
 
     return mscFile

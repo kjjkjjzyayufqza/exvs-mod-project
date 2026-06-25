@@ -28,6 +28,24 @@ E:\XB\解包\com\file\0xBDBE6FEA\
   -> 2.c segment 输出 sys_4F / sys_51 / sys_46 / sys_53 / sys_4B / sys_47
 ```
 
+## 引用规则
+
+这页里的 `ACTION_*` 现在统一视为 legacy alias，不再当主键。
+
+写研究结论时按这个顺序引用：
+
+1. `action hash`
+2. `0.c` action index / `2.c` slot
+3. 当前 `func_N`
+4. `ACTION_*`（如果 legacy alias 还成立，再补）
+
+换句话说：
+
+```text
+正确：0xf48d2d49 -> action index 0x0 -> 当前 2.c callback func_915 -> legacy alias ACTION_A_SHOT
+错误：这个就是 ACTION_A_SHOT，所以以后都叫 ACTION_A_SHOT
+```
+
 ## 1. 当前源码快照
 
 `0.c`：
@@ -364,7 +382,7 @@ else if (global48 & 0x2)
 
 把 hash 对回 `2.c func_1043`：
 
-| `0.c func_143` 条件 | 选出的 action hash | `2.c func_1043` callback | 玩家语义 |
+| `0.c func_143` 条件 | 选出的 action hash | `2.c func_1043` callback / legacy alias | 玩家语义 |
 |---|---|---|---|
 | `global48 & 0x1`，slot 0 有 ammo | `0xf48d2d49` | `ACTION_A_SHOT` | 主射 |
 | `global48 & 0x1`，slot 0 空 | `0x7158fa47` | `ACTION_A_SHOT_STATE_0` | 主射空弹 / 状态 0 |
@@ -376,7 +394,8 @@ else if (global48 & 0x2)
 | `global48 & 0x2` | `0x178d1109` | `ACTION_B_MELEE` | N 格 |
 | `global48 & 0x4/0x8/0x10/0x20` | `0xa2236f44 / 0xe962048 / 0xa1635c24` | `ACTION_B_MELEE_DIR_*` | 方向格斗 |
 
-这个表是目前最重要的“按键到 `2.c`”证据。
+这个表是目前最重要的“按键到 `2.c`”证据。重点是 `action hash`，不是
+`ACTION_*` 字符串本身。
 
 人话：
 
@@ -518,7 +537,7 @@ func_98 更像“输入成立但资源不满足”的失败反馈 / empty slot /
 | 目标 | 应看层 |
 |---|---|
 | 主射是否能进入 | `0.c func_143` 的 `global48 & 1` 和 `sys_0(0x90000,0)` |
-| 主射进入哪个 `ACTION_*` | `0.c func_95` 的 hash + `2.c func_1043` |
+| 主射进入哪个当前 callback / legacy alias | `0.c func_95` 的 hash + `2.c func_1043` |
 | 主射发什么弹 | `2.c func_915 -> sys_4F` |
 | 主射弹速/伤害/判定 | `arms_param` / `bullet_param` |
 | 主射能不能 BDC | `2.c func_914/915 func_123` + `2.c func_11` gate |

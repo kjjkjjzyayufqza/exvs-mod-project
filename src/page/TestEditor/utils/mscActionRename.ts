@@ -1,3 +1,5 @@
+import { canonicalMscHashHex } from "./mscHash";
+
 interface ActionSemantic {
   maskHex: string;
   nameStem: string;
@@ -7,6 +9,12 @@ interface ActionSemantic {
 interface ActionDescriptor {
   hashHex: string;
   functionName: string;
+  comment: string;
+}
+
+export interface MscLegacyActionAlias {
+  hashHex: string;
+  workingName: string;
   comment: string;
 }
 
@@ -139,7 +147,7 @@ function extractActionDescriptorsFrom0(script0Content: string): Map<string, Acti
 
     const func95Match = line.match(/func_95\(\s*(0x[0-9a-fA-F]+)\s*,/);
     if (func95Match) {
-      const hashHex = func95Match[1].toLowerCase();
+      const hashHex = canonicalMscHashHex(func95Match[1]);
       if (!descriptors.has(hashHex)) {
         descriptors.set(hashHex, buildActionDescriptor(hashHex, conditionStack, duplicateCountByStem));
       }
@@ -160,11 +168,37 @@ function extractActionDescriptorsFrom0(script0Content: string): Map<string, Acti
   return descriptors;
 }
 
+export function collectLegacyActionAliases(
+  script0Content: string,
+  script2Content: string,
+): Map<string, MscLegacyActionAlias> {
+  const descriptorsByHash = extractActionDescriptorsFrom0(script0Content);
+  const aliases = new Map<string, MscLegacyActionAlias>();
+  const bindingRegex = /func_241\(\s*(0x[0-9a-fA-F]+)\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*\);/g;
+
+  let bindingMatch: RegExpExecArray | null;
+  while ((bindingMatch = bindingRegex.exec(script2Content)) !== null) {
+    const hashHex = canonicalMscHashHex(bindingMatch[1]);
+    const descriptor = descriptorsByHash.get(hashHex);
+    if (!descriptor) {
+      continue;
+    }
+
+    aliases.set(hashHex, {
+      hashHex,
+      workingName: descriptor.functionName,
+      comment: descriptor.comment,
+    });
+  }
+
+  return aliases;
+}
+
 export function renameScript2CallbacksByActionMask(
   script0Content: string,
   script2Content: string,
 ): MscActionRenameResult {
-  const descriptorsByHash = extractActionDescriptorsFrom0(script0Content);
+  const aliases = collectLegacyActionAliases(script0Content, script2Content);
   const bindingRegex = /func_241\(\s*(0x[0-9a-fA-F]+)\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*\);/g;
   const callbackRenameMap = new Map<string, string>();
   const commentByHash = new Map<string, string>();
@@ -172,14 +206,14 @@ export function renameScript2CallbacksByActionMask(
 
   let bindingMatch: RegExpExecArray | null;
   while ((bindingMatch = bindingRegex.exec(script2Content)) !== null) {
-    const hashHex = bindingMatch[1].toLowerCase();
+    const hashHex = canonicalMscHashHex(bindingMatch[1]);
     const callbackName = bindingMatch[2];
-    const descriptor = descriptorsByHash.get(hashHex);
-    if (!descriptor) {
+    const alias = aliases.get(hashHex);
+    if (!alias) {
       continue;
     }
 
-    let targetFunctionName = descriptor.functionName;
+    let targetFunctionName = alias.workingName;
     if (usedNames.has(targetFunctionName) && callbackRenameMap.get(callbackName) !== targetFunctionName) {
       let suffix = 2;
       while (usedNames.has(`${targetFunctionName}_${suffix}`)) {
@@ -190,11 +224,11 @@ export function renameScript2CallbacksByActionMask(
 
     usedNames.add(targetFunctionName);
     callbackRenameMap.set(callbackName, targetFunctionName);
-    commentByHash.set(hashHex, descriptor.comment);
+    commentByHash.set(hashHex, alias.comment);
   }
 
   if (callbackRenameMap.size === 0) {
-    throw new Error("MSC action rename: no func_241 bindings matched func_143 action routes");
+    throw new Error("MSC action rename: no func_241 bindings matched legacy action routes");
   }
 
   let updatedScript2 = script2Content;

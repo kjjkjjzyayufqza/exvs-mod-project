@@ -1,4 +1,3 @@
-# DEPRECATED: This file is no longer used. Use msc_core.py instead.
 #**************************************************************************#
 # This file is part of pymsc which is released under MIT License. See file #
 # LICENSE or go to https://github.com/jam1garner/pymsc/blob/master/LICENSE #

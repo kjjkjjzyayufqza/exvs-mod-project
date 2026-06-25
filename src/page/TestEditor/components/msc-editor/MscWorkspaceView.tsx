@@ -42,7 +42,9 @@ import {
   getMscConvertOutputPath,
   getMscRepackOutputPath,
 } from "../../utils/mscWorkspaceUtils";
-import { renameScript2CallbacksByActionMask } from "../../utils/mscActionRename";
+import {
+  renameScript2CallbacksByActionMask,
+} from "../../utils/mscActionRename";
 import {
   compareByLeadingIndex,
   computeMscSlotStatuses,
@@ -258,7 +260,7 @@ export default function MscWorkspaceView({
     }
   };
 
-  /** Decompile one script; 2.dscex also gets action-rename + func_0 -> main post pass. Throws on tool failure. */
+  /** Decompile one script to raw C/log outputs. Throws on tool failure. */
   const convertScriptCore = useCallback(
     async (file: MscFileInfo): Promise<string> => {
       const inputPath = file.path;
@@ -281,32 +283,7 @@ export default function MscWorkspaceView({
         throw new Error(command.stderr || `mscdec failed for ${file.name}`);
       }
 
-      const cContent = await readTextFile(outputPath);
-      const baseName = file.name.split(".")[0].toLowerCase();
-
-      if (baseName === "2") {
-        const scriptFolder = await dirname(file.path);
-        const script0Path = await join(scriptFolder, "0.c");
-        if (await exists(script0Path)) {
-          try {
-            const script0Content = await readTextFile(script0Path);
-            const result = renameScript2CallbacksByActionMask(script0Content, cContent);
-            const normalized = result.updatedScript2.replace(/func_0/g, "main");
-            await writeTextFile(outputPath, normalized);
-            return `${file.name}: ${result.renamedCallbackCount} callbacks renamed, func_0 to main`;
-          } catch (renameError) {
-            const normalized = cContent.replace(/func_0/g, "main");
-            await writeTextFile(outputPath, normalized);
-            const reason = renameError instanceof Error ? renameError.message : String(renameError);
-            return `${file.name}: func_0 to main (action rename skipped: ${reason})`;
-          }
-        }
-        const normalized = cContent.replace(/func_0/g, "main");
-        await writeTextFile(outputPath, normalized);
-        return `${file.name}: func_0 to main (0.c missing, action rename skipped)`;
-      }
-
-      return `${file.name} converted to C`;
+      return `${file.name} converted to raw C`;
     },
     [resolveOptionalExvsMappingPath],
   );
@@ -370,27 +347,26 @@ export default function MscWorkspaceView({
     [repackScriptCore, fetchFiles],
   );
 
-  const handleRenameActions = useCallback(
+  const handleResolveOverlay = useCallback(
     async (file: MscFileInfo) => {
       try {
         setProcessingFile(file.name);
         const scriptFolder = await dirname(file.path);
         const script0Path = await join(scriptFolder, "0.c");
         if (!(await exists(script0Path))) {
-          toast.error("MSC workspace: 0.c not found, cannot rename actions");
-          return;
+          throw new Error("MSC workspace: 0.c not found, cannot write ACTION aliases");
         }
+
         const script0Content = await readTextFile(script0Path);
         const script2Content = await readTextFile(file.path);
         const result = renameScript2CallbacksByActionMask(script0Content, script2Content);
-        const normalized = result.updatedScript2.replace(/func_0/g, "main");
-        await writeTextFile(file.path, normalized);
+        await writeTextFile(file.path, result.updatedScript2);
         toast.success(
-          `Renamed ${result.renamedCallbackCount} callbacks, updated ${result.bindingCommentCount} bindings, func_0 to main in ${file.name}`,
+          `Wrote ${result.renamedCallbackCount} ACTION aliases and ${result.bindingCommentCount} binding comments into ${file.name}`,
         );
         await fetchFiles();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : `Error renaming actions in ${file.name}`);
+        toast.error(error instanceof Error ? error.message : `Error resolving overlay for ${file.name}`);
       } finally {
         setProcessingFile(null);
       }
@@ -517,9 +493,9 @@ export default function MscWorkspaceView({
         if (isMscPackScriptCFile(file.name)) {
           if (file.name.toLowerCase() === "2.c") {
             actions.push({
-              key: "rename",
-              label: working ? "Renaming…" : "Rename Actions",
-              onClick: () => handleRenameActions(file),
+              key: "resolve-overlay",
+              label: working ? "Resolving…" : "Resolve Overlay",
+              onClick: () => handleResolveOverlay(file),
               variant: "secondary",
               disabled,
               icon: <Wand2 />,
@@ -537,7 +513,7 @@ export default function MscWorkspaceView({
         return actions;
       }
 
-      if (role === "log") {
+      if (role === "log" || role === "resolved") {
         return [
           {
             key: "open",
@@ -552,7 +528,7 @@ export default function MscWorkspaceView({
 
       return [];
     },
-    [processingFile, isBusy, openConvertOne, handleOpenInEditor, handleRenameActions, handleRepackOne],
+    [processingFile, isBusy, openConvertOne, handleOpenInEditor, handleResolveOverlay, handleRepackOne],
   );
 
   if (!mscFolderPath) {
