@@ -59,6 +59,16 @@ def updateScriptReference(popped, index, scriptName):
         logging.info(scriptName)
         raise
 
+def updateDirectScriptReference(popped, index):
+    if abs(index) > len(popped):
+        return
+    cmd = popped[index]
+    if cmd.command not in [0xA, 0xD]:
+        return
+    value = cmd.parameters[0]
+    if isinstance(value, int) and value > 0x50 and value in scriptOffsets:
+        cmd.parameters[0] = ScriptRef(scriptNames[value])
+
 funcName = "a"
 iteration = 0
 
@@ -103,22 +113,17 @@ def emuScript(script, startIndex, stack, passCount, endPosition=None, depth=0):
                 #if the command is a function call
                 if script[i].command in [0x2f, 0x30, 0x31]:
                     updateScriptReference(popped, 0, scriptName)
+                    for poppedIndex in range(1, len(popped)):
+                        updateDirectScriptReference(popped, poppedIndex)
                 #if the command is a logging.infof
                 if script[i].command == 0x2c and popped[-1].command in [0xA, 0xD]:
                     if type(popped[-1].parameters[0]) != str:
                         popped[-1].parameters[0] = mscFile.strings[popped[-1].parameters[0]]
-                #if the command in a sys call
-                if script[i].command == 0x2d:
-                    #script[i].parameters[1] = sys number
-                    poppedIndex = 0
-                    for x in popped:
-                        if len(x.parameters) > 0:
-                            try:
-                                if x.parameters[0] > 0x50: #ignore first few func where it might be wrongly identified as a reference. Might be wrong and we need to investigate manually 
-                                    updateScriptReference(popped, poppedIndex, scriptName)
-                            except TypeError:
-                                logging.info("Ignore Script Ref for x.parameters[0]")
-                        poppedIndex = poppedIndex + 1
+                # Syscall arguments are native data unless a syscall signature
+                # proves that a specific argument is a script callback.
+                # Resolving every offset-shaped syscall constant as a script
+                # reference causes text-unstable roundtrips when data values
+                # collide with script offsets.
                 #If gv16 flag is enabled and it is setting GlobalVar16
                 if script[i].command == 0x1C and script[i].parameters[0] == 0x1: #and gvIsOffset[script[i].parameters[1]]:
                     updateScriptReference(popped, 0, scriptName)

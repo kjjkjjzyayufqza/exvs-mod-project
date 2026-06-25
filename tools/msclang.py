@@ -384,6 +384,7 @@ nodeCount = 0
 position = 0
 outputAB34 = False
 binaryOpCount = 0
+forceOrAB34 = False
 exvs_native_truth_mapping = None
 
 
@@ -418,7 +419,7 @@ def compile_call_argument(
 
 # Take a abstract syntax tree node and recursively compile it
 def compileNode(node, loopParent=None, parentLoopCondition=None):
-    global refs, localVars, localVarTypes, args, xmlInfo, nodeDic, nodeCount, isNot, position, outputAB34, binaryOpCount
+    global refs, localVars, localVarTypes, args, xmlInfo, nodeDic, nodeCount, isNot, position, outputAB34, binaryOpCount, forceOrAB34
 
     nodeOut = []
 
@@ -438,21 +439,55 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
                     return nodeOut[-i]
                 i += 1
 
+    def normalizeConditionExpr(node):
+        if type(node) == c_ast.UnaryOp and node.op == "!":
+            expr = normalizeConditionExpr(node.expr)
+            if type(expr) == c_ast.UnaryOp and expr.op == "!":
+                return normalizeConditionExpr(expr.expr)
+            if type(expr) == c_ast.BinaryOp and expr.op == "||":
+                return c_ast.BinaryOp(
+                    "&&",
+                    normalizeConditionExpr(c_ast.UnaryOp("!", expr.left)),
+                    normalizeConditionExpr(c_ast.UnaryOp("!", expr.right)),
+                )
+            return c_ast.UnaryOp("!", expr)
+        if type(node) == c_ast.BinaryOp and node.op in ["&&", "||"]:
+            return c_ast.BinaryOp(
+                node.op,
+                normalizeConditionExpr(node.left),
+                normalizeConditionExpr(node.right),
+            )
+        return node
+
     # Macro for marking the last command as an argument for the current command
     def addArg():
         if len(nodeOut) > 0:
             i = 1
             while i <= len(nodeOut):
-                if type(nodeOut[-i]) == Command and not nodeOut[-i].command in range(0x2f,0x32) and not nodeOut[-i].command in range(0x38,0x3a):
-                    nodeOut[-i].pushBit = True
+                item = nodeOut[-i]
+                if not isinstance(item, Command):
+                    i += 1
+                    continue
+                if item.command in range(0x38, 0x3a):
+                    i += 1
+                    continue
+                if item.command not in range(0x2f, 0x32):
+                    item.pushBit = True
                     return
-                elif type(nodeOut[-i]) == Command and not nodeOut[-i].command in range(0x38,0x3a):
-                    while i <= len(nodeOut):
-                        if type(nodeOut[-i]) == Command and nodeOut[-i].command == 0x2e:
-                            nodeOut[-i].pushBit = True
-                            return
-                        i += 1
+                depth = 0
                 i += 1
+                while i <= len(nodeOut):
+                    inner = nodeOut[-i]
+                    if isinstance(inner, Command):
+                        if inner.command == 0x2f:
+                            depth += 1
+                        elif inner.command == 0x2e:
+                            if depth == 0:
+                                inner.pushBit = True
+                                return
+                            depth -= 1
+                    i += 1
+                return
 
     t = type(node)
 
@@ -517,6 +552,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
             operation = assignmentOperationsInt[node.op]
         nodeOut.append(Command(operation,[varScope,varIndex]))
     elif t == c_ast.TernaryOp:
+        condNode = normalizeConditionExpr(node.cond)
         if (type(node.iftrue) == c_ast.TernaryOp and type(node.iffalse) == c_ast.Constant and
             node.iffalse.type == "int" and int(node.iffalse.value, 0) == 0 and
             type(node.iftrue.iftrue) == c_ast.Constant and node.iftrue.iftrue.type == "int" and
@@ -525,7 +561,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
             # If tail end ternary combination is possible
             endLabel = Label()
             isFalseLabel = Label()
-            nodeOut += compileNode(node.cond, loopParent, parentLoopCondition)
+            nodeOut += compileNode(condNode, loopParent, parentLoopCondition)
             addArg()
             nodeOut.append(Command(0x34, [isFalseLabel]))
             nodeOut += compileNode(node.iftrue.cond, loopParent, parentLoopCondition)
@@ -539,7 +575,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
         else:
             endLabel = Label()
             isFalseLabel = Label()
-            nodeOut += compileNode(node.cond, loopParent, parentLoopCondition)
+            nodeOut += compileNode(condNode, loopParent, parentLoopCondition)
             addArg()
             nodeOut.append(Command(0x34, [isFalseLabel]))
             nodeOut += compileNode(node.iftrue, loopParent, parentLoopCondition)
@@ -642,6 +678,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
                 endOrLabel, trueLabel, falseLabel = Label(), Label(), Label()
 
                 isFirstOR = False
+                useAB34 = outputAB34
                 
                 try:
                     testNode = node.right
@@ -654,16 +691,19 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
                 except:
                     isFirstOR = False
 
-                if localisNot == True and (binaryOpCount >= 2 or isFirstOR) and outputAB34 != True:
+                if forceOrAB34 == True and useAB34 != True:
                     nodeOut.append(Command(0x2B, pushBit=True))
-                    print("nodeOut.append(Command(0x2B, pushBit=True))")
+                    useAB34 = True
+                elif localisNot == True and (binaryOpCount >= 2 or isFirstOR) and useAB34 != True:
+                    nodeOut.append(Command(0x2B, pushBit=True))
                     outputAB34 = True
+                    useAB34 = True
                     
-                nodeOut.append(Command(0x34 if outputAB34 else 0x35, [falseLabel] if outputAB34 else [trueLabel]))
+                nodeOut.append(Command(0x34 if useAB34 else 0x35, [falseLabel] if useAB34 else [trueLabel]))
                 nodeOut += compileNode(node.right, loopParent, parentLoopCondition)
                 addArg()
 
-                if outputAB34 == True:
+                if useAB34 == True:
                     nodeOut.append(Command(0x2B, pushBit=True))
                 
                 nodeOut.append(Command(0x34, [falseLabel]))
@@ -679,12 +719,25 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
                 endAndLabel, falseLabel = Label(), Label()
 
                 if outputAB34 == True:
-                   nodeOut.append(Command(0x2B, pushBit=True))
-                   print("b")
+                   lastCommand = getLastCommand()
+                   if lastCommand == None or lastCommand.command != 0x2B:
+                       nodeOut.append(Command(0x2B, pushBit=True))
                 
                 nodeOut.append(Command(0x34, [falseLabel]))
+                savedForceOrAB34 = forceOrAB34
+                forcedRightOrAB34 = (type(node.right) == c_ast.BinaryOp and
+                                     node.right.op == "||" and
+                                     type(node.left) == c_ast.UnaryOp and
+                                     node.left.op == "!")
+                if forcedRightOrAB34:
+                    forceOrAB34 = True
                 nodeOut += compileNode(node.right, loopParent, parentLoopCondition)
+                forceOrAB34 = savedForceOrAB34
                 addArg()
+                if forcedRightOrAB34:
+                    lastCommand = getLastCommand()
+                    if lastCommand == None or lastCommand.command != 0x2B:
+                        nodeOut.append(Command(0x2B, pushBit=True))
                 nodeOut.append(Command(0x34, [falseLabel]))
                 nodeOut.append(Command(0xD if args.usePushShort else 0xA, [1]))
                 addArg()
@@ -716,7 +769,8 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
         nodeOut.append(Label(node.name))
         nodeOut += compileNode(node.stmt, loopParent, parentLoopCondition)
     elif t == c_ast.If:
-        nodeOut += compileNode(node.cond, loopParent, parentLoopCondition)
+        condNode = normalizeConditionExpr(node.cond)
+        nodeOut += compileNode(condNode, loopParent, parentLoopCondition)
         isIfNot = False
         lastCommand = getLastCommand()
         if lastCommand != None and lastCommand.command == 0x2b:
@@ -731,7 +785,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
         ifFalseLabel = Label()
         if node.iffalse != None:
             endLabel = Label()
-        nodeOut.append(Command(0x34 if isIfNot else 0x34, [ifFalseLabel]))
+        nodeOut.append(Command(0x34, [ifFalseLabel]))
         nodeOut += compileNode(node.iftrue, loopParent, parentLoopCondition)
         if node.iffalse != None:
             nodeOut.append(Command(0x36, [endLabel]))
@@ -744,6 +798,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
             for i in node.block_items:
                 nodeOut += compileNode(i, loopParent, parentLoopCondition)
     elif t == c_ast.While:
+        condNode = normalizeConditionExpr(node.cond)
         loopTop = Label()
         endLabel = Label()
         conditionLabel = Label()
@@ -751,22 +806,24 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
         nodeOut.append(loopTop)
         nodeOut += compileNode(node.stmt, endLabel, conditionLabel)
         nodeOut.append(conditionLabel)
-        nodeOut += compileNode(node.cond, loopParent, parentLoopCondition)
+        nodeOut += compileNode(condNode, loopParent, parentLoopCondition)
         addArg()
         nodeOut.append(Command(0x35, [loopTop]))
         nodeOut.append(endLabel)
     elif t == c_ast.DoWhile:
+        condNode = normalizeConditionExpr(node.cond)
         loopTop = Label()
         endLabel = Label()
         conditionLabel = Label()
         nodeOut.append(loopTop)
         nodeOut += compileNode(node.stmt, endLabel, conditionLabel)
         nodeOut.append(conditionLabel)
-        nodeOut += compileNode(node.cond, loopParent, parentLoopCondition)
+        nodeOut += compileNode(condNode, loopParent, parentLoopCondition)
         addArg()
         nodeOut.append(Command(0x35, [loopTop]))
         nodeOut.append(endLabel)
     elif t == c_ast.For:
+        condNode = normalizeConditionExpr(node.cond)
         for decl in node.init.decls:
             nodeOut += compileNode(decl, loopParent, parentLoopCondition)
         loopTop = Label()
@@ -776,7 +833,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
         nodeOut += compileNode(node.stmt, endLabel, conditionLabel)
         nodeOut.append(conditionLabel)
         nodeOut += compileNode(node.next, endLabel, conditionLabel)
-        nodeOut += compileNode(node.cond, loopParent, parentLoopCondition)
+        nodeOut += compileNode(condNode, loopParent, parentLoopCondition)
         addArg()
         nodeOut.append(Command(0x35, [loopTop]))
         nodeOut.append(endLabel)
@@ -909,12 +966,13 @@ def compileScript(func):
     i = 0
     if func.body.block_items != None:
         for node in func.body.block_items:
-            global nodeDic, nodeCount, outputAB34, isNot, binaryOpCount
+            global nodeDic, nodeCount, outputAB34, isNot, binaryOpCount, forceOrAB34
             nodeDic = {}
             nodeCount = 0
             outputAB34 = False
             isNot = False
             binaryOpCount = 0
+            forceOrAB34 = False
             script += compileNode(node) 
             i = i + 1
     script.insert(0, Command(2, [argCount, len(localVars)]))
@@ -978,6 +1036,65 @@ def _RepresentsFloat(s):
     except:
         return False
 
+def align16(value):
+    if value % 0x10 == 0:
+        return value
+    return value + (0x10 - (value % 0x10))
+
+def readLayoutReference(path):
+    with open(path, 'rb') as f:
+        data = f.read()
+    if len(data) < 0x30:
+        raise CompilerError("Layout reference is too small: %s" % path)
+
+    entriesOffset, entryPoint, entryCount, unk, stringSize, stringCount = struct.unpack_from('<6I', data, 0x10)
+    tableOffset = align16(0x30 + entriesOffset)
+    tableSize = entryCount * 4
+    if tableOffset + tableSize > len(data):
+        raise CompilerError("Layout reference has an invalid script table: %s" % path)
+
+    table = list(struct.unpack_from('<' + ('I' * entryCount), data, tableOffset))
+    sortedTable = sorted(table)
+    offsetToPhysicalIndex = {}
+    for index, offset in enumerate(sortedTable):
+        if offset in offsetToPhysicalIndex:
+            raise CompilerError("Layout reference has duplicate script offset %s" % hex(offset))
+        offsetToPhysicalIndex[offset] = index
+
+    return {
+        "headerPrefix": data[:0x10],
+        "entryPoint": entryPoint,
+        "entryCount": entryCount,
+        "unk": unk,
+        "stringSize": stringSize,
+        "stringCount": stringCount,
+        "table": table,
+        "offsetToPhysicalIndex": offsetToPhysicalIndex,
+    }
+
+def remapLayoutReferenceTable(layoutReference, scriptPositions):
+    if layoutReference == None:
+        return scriptPositions
+    if layoutReference["entryCount"] != len(scriptPositions):
+        raise CompilerError(
+            "Layout reference entry count %i does not match compiled script count %i" %
+            (layoutReference["entryCount"], len(scriptPositions))
+        )
+
+    remappedTable = []
+    for oldOffset in layoutReference["table"]:
+        physicalIndex = layoutReference["offsetToPhysicalIndex"][oldOffset]
+        remappedTable.append(scriptPositions[physicalIndex])
+    return remappedTable
+
+def remapLayoutReferenceEntryPoint(layoutReference, scriptPositions):
+    if layoutReference == None:
+        return 0x10 if not 'main' in refs.functions else refs.scriptPositions[refs.functions.index('main')]
+    if layoutReference["entryPoint"] in layoutReference["offsetToPhysicalIndex"]:
+        physicalIndex = layoutReference["offsetToPhysicalIndex"][layoutReference["entryPoint"]]
+        return scriptPositions[physicalIndex]
+    return layoutReference["entryPoint"]
+
 # Write as MSCSB format
 def writeToFile(msc):
     global refs, args
@@ -993,12 +1110,18 @@ def writeToFile(msc):
     if maxStringLength % 0x10 != 0:
         maxStringLength += 0x10 - (maxStringLength % 0x10)
 
+    layoutReference = readLayoutReference(args.layoutReference) if args.layoutReference != None else None
+    scriptTable = remapLayoutReferenceTable(layoutReference, refs.scriptPositions)
+    entryPoint = remapLayoutReferenceEntryPoint(layoutReference, refs.scriptPositions)
+    unk = layoutReference["unk"] if layoutReference != None else 0x16
+    headerPrefix = layoutReference["headerPrefix"] if layoutReference != None else MSC_MAGIC
+
     # Write file header
-    fileBytes = MSC_MAGIC
+    fileBytes = headerPrefix
     fileBytes += struct.pack(ENDIANESS, currentPos)
-    fileBytes += struct.pack(ENDIANESS, 0x10 if not 'main' in refs.functions else refs.scriptPositions[refs.functions.index('main')])
+    fileBytes += struct.pack(ENDIANESS, entryPoint)
     fileBytes += struct.pack(ENDIANESS, len(msc.scripts))
-    fileBytes += struct.pack(ENDIANESS, 0x16)#This probably doesn't matter? A: It doesn't.
+    fileBytes += struct.pack(ENDIANESS, unk)
     fileBytes += struct.pack(ENDIANESS, maxStringLength)
     fileBytes += struct.pack(ENDIANESS, len(msc.strings))
     fileBytes += struct.pack(ENDIANESS, 0)
@@ -1019,8 +1142,8 @@ def writeToFile(msc):
         fileBytes += b'\x00' * (0x10 - (len(fileBytes) % 0x10))
 
     # Write script positions (may be unused tbh)
-    for i in range(len(msc.scripts)):
-        fileBytes += struct.pack(ENDIANESS,refs.scriptPositions[i])
+    for scriptPosition in scriptTable:
+        fileBytes += struct.pack(ENDIANESS, scriptPosition)
 
     # Write more padding
     if len(fileBytes) % 0x10 != 0:
@@ -1114,37 +1237,41 @@ def main(arguments):
             args.filename = os.path.basename(os.path.splitext(file)[0]) + '.mscsb'
         compileString(preprocess(file))
 
-def handle_EXVS2_2E_to_AE(args):
-    file_name = args.filename or os.path.basename(os.path.splitext(args.files[0])[0]) + '.mscsb'
-    target_index1 = bytes([0x8A, 0x00, 0x01, 0x00, 0x01, 0x8A, 0x00, 0x00, 0x00, 0x10, 0x8B, 0x00, 0x00, 0x01])
-    target_index2 = bytes([0x8A, 0x00, 0x01, 0x00, 0x01, 0x8A, 0x00, 0x00, 0x00, 0x11, 0x8B, 0x00, 0x00, 0x01])
-    target_index3 = bytes([0x8A, 0x00, 0x01, 0x00, 0x01, 0x8A, 0x00, 0x00, 0x00, 0x12, 0x8B, 0x00, 0x00, 0x01])
-        
-    with open(file_name, 'rb') as file:
-        content = file.read()
-        content = bytearray(content)
-    target_position1 = content.find(target_index1)
-    target_position2 = content.find(target_index2)
-    target_position3 = content.find(target_index3)
-
-    for target_position, target_index in (
-        (target_position1, target_index1),
-        (target_position2, target_index2),
-        (target_position3, target_index3),
-    ):
-        if target_position < 0:
-            continue
-        patch_index = target_position + len(target_index)
-        if patch_index < 0x40 or patch_index >= len(content):
-            continue
-        if content[patch_index] == 0x2E:
-            content[patch_index] = 0xAE
-    
-    with open(file_name, 'wb') as file:
-        file.write(content)
-    
-    print(f"Modify the {file_name} from 0x2E to 0xAE Done")
-        
+# Legacy reference only.
+# This disabled post-build patch searched for a few known byte layouts and
+# changed the following opcode from 0x2E to 0xAE. It was useful evidence while
+# investigating missing pushBit emission, but it mutates compiled output after
+# the compiler has finished and therefore must not be part of the active
+# roundtrip path. The active fix belongs in compileNode()/addArg() so nested
+# try/callFunc lowering emits the right command form directly.
+#
+# def handle_EXVS2_2E_to_AE(args):
+#     file_name = args.filename or os.path.basename(os.path.splitext(args.files[0])[0]) + '.mscsb'
+#     target_index1 = bytes([0x8A, 0x00, 0x01, 0x00, 0x01, 0x8A, 0x00, 0x00, 0x00, 0x10, 0x8B, 0x00, 0x00, 0x01])
+#     target_index2 = bytes([0x8A, 0x00, 0x01, 0x00, 0x01, 0x8A, 0x00, 0x00, 0x00, 0x11, 0x8B, 0x00, 0x00, 0x01])
+#     target_index3 = bytes([0x8A, 0x00, 0x01, 0x00, 0x01, 0x8A, 0x00, 0x00, 0x00, 0x12, 0x8B, 0x00, 0x00, 0x01])
+#
+#     with open(file_name, 'rb') as file:
+#         content = bytearray(file.read())
+#     target_position1 = content.find(target_index1)
+#     target_position2 = content.find(target_index2)
+#     target_position3 = content.find(target_index3)
+#
+#     for target_position, target_index in (
+#         (target_position1, target_index1),
+#         (target_position2, target_index2),
+#         (target_position3, target_index3),
+#     ):
+#         if target_position < 0:
+#             continue
+#         patch_index = target_position + len(target_index)
+#         if patch_index < 0x40 or patch_index >= len(content):
+#             continue
+#         if content[patch_index] == 0x2E:
+#             content[patch_index] = 0xAE
+#
+#     with open(file_name, 'wb') as file:
+#         file.write(content)
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="Compile msC to MSC bytecode")
@@ -1156,6 +1283,6 @@ if __name__ == "__main__":
     parser.add_argument('-i', '--pushInt', dest='usePushShort', action='store_false', help='Disable using pushShort as a space saver')
     parser.add_argument('-x', '--xmlPath', dest='xmlPath', help="Path to load overload MSC xml info")
     parser.add_argument('--exvsMapping', dest='exvsMapping', help="Path to EXVS native-truth mapping JSON")
+    parser.add_argument('--layoutReference', dest='layoutReference', help="MSC binary whose header prefix, unk value, and script table order should be preserved")
     args = parser.parse_args()
     main(args)
-    handle_EXVS2_2E_to_AE(args)

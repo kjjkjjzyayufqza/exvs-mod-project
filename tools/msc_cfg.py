@@ -132,13 +132,6 @@ def resolve_script_refs_cfg(script, script_offset_to_name, script_called_vars=No
                         if isinstance(val, int) and val > 0x50 and val in valid_offsets:
                             p.parameters[0] = ScriptRefStr(script_offset_to_name[val])
 
-            if cmd.command == 0x2d:
-                for p in popped:
-                    if p is not None and isinstance(p, Command) and p.command in (0x0A, 0x0D):
-                        val = p.parameters[0]
-                        if isinstance(val, int) and val > 0x50 and val in valid_offsets:
-                            p.parameters[0] = ScriptRefStr(script_offset_to_name[val])
-
             if cmd.command == 0x2c and popped:
                 last_pop = popped[-1]
                 if last_pop is not None and isinstance(last_pop, Command) and last_pop.command in (0x0A, 0x0D):
