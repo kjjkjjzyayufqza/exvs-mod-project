@@ -1041,130 +1041,6 @@ def _RepresentsFloat(s):
     except:
         return False
 
-def align16(value):
-    if value % 0x10 == 0:
-        return value
-    return value + (0x10 - (value % 0x10))
-
-def readLayoutReference(path):
-    with open(path, 'rb') as f:
-        data = f.read()
-    if len(data) < 0x30:
-        raise CompilerError("Layout reference is too small: %s" % path)
-
-    entriesOffset, entryPoint, entryCount, unk, stringSize, stringCount = struct.unpack_from('<6I', data, 0x10)
-    tableOffset = align16(0x30 + entriesOffset)
-    tableSize = entryCount * 4
-    if tableOffset + tableSize > len(data):
-        raise CompilerError("Layout reference has an invalid script table: %s" % path)
-
-    table = list(struct.unpack_from('<' + ('I' * entryCount), data, tableOffset))
-    sortedTable = sorted(table)
-    offsetToPhysicalIndex = {}
-    for index, offset in enumerate(sortedTable):
-        if offset in offsetToPhysicalIndex:
-            raise CompilerError("Layout reference has duplicate script offset %s" % hex(offset))
-        offsetToPhysicalIndex[offset] = index
-
-    return {
-        "headerPrefix": data[:0x10],
-        "entryPoint": entryPoint,
-        "entryCount": entryCount,
-        "unk": unk,
-        "stringSize": stringSize,
-        "stringCount": stringCount,
-        "table": table,
-        "offsetToPhysicalIndex": offsetToPhysicalIndex,
-    }
-
-def getLayoutReferenceSymbol(layoutReference, oldOffset, tableIndex=None):
-    if oldOffset == layoutReference["entryPoint"] and "main" in refs.functions:
-        return "main"
-
-    physicalIndex = layoutReference["offsetToPhysicalIndex"][oldOffset]
-    physicalSymbol = "func_%i" % physicalIndex
-    if physicalSymbol in refs.functions:
-        return physicalSymbol
-
-    if tableIndex != None:
-        tableSymbol = "func_%i" % tableIndex
-        if tableSymbol in refs.functions:
-            return tableSymbol
-
-    if physicalIndex == 0 and "main" in refs.functions:
-        return "main"
-
-    return None
-
-def applyLayoutReferencePhysicalOrder(msc):
-    global refs, args
-    if args.layoutReference == None:
-        return
-
-    layoutReference = readLayoutReference(args.layoutReference)
-    scriptsByFunction = dict(zip(refs.functions, msc.scripts))
-    orderedFunctions = []
-    orderedScripts = []
-    usedFunctions = set()
-
-    for oldOffset in sorted(layoutReference["table"]):
-        symbol = getLayoutReferenceSymbol(layoutReference, oldOffset)
-        if symbol == None or symbol not in scriptsByFunction:
-            raise CompilerError(
-                "Layout reference offset %s does not map to a compiled function" %
-                hex(oldOffset)
-            )
-        if symbol in usedFunctions:
-            raise CompilerError(
-                "Layout reference maps multiple offsets to compiled function %s" %
-                symbol
-            )
-        orderedFunctions.append(symbol)
-        orderedScripts.append(scriptsByFunction[symbol])
-        usedFunctions.add(symbol)
-
-    if len(orderedScripts) != len(msc.scripts):
-        missing = [name for name in refs.functions if name not in usedFunctions]
-        raise CompilerError(
-            "Layout reference physical order did not cover compiled functions: %s" %
-            ", ".join(missing)
-        )
-
-    refs.functions = orderedFunctions
-    msc.scripts = orderedScripts
-
-def remapLayoutReferenceTable(layoutReference, scriptPositions):
-    if layoutReference == None:
-        return scriptPositions
-    if layoutReference["entryCount"] != len(scriptPositions):
-        raise CompilerError(
-            "Layout reference entry count %i does not match compiled script count %i" %
-            (layoutReference["entryCount"], len(scriptPositions))
-        )
-
-    remappedTable = []
-    for tableIndex, oldOffset in enumerate(layoutReference["table"]):
-        symbol = getLayoutReferenceSymbol(layoutReference, oldOffset, tableIndex)
-        if symbol != None:
-            remappedTable.append(scriptPositions[refs.functions.index(symbol)])
-            continue
-
-        physicalIndex = layoutReference["offsetToPhysicalIndex"][oldOffset]
-        remappedTable.append(scriptPositions[physicalIndex])
-    return remappedTable
-
-def remapLayoutReferenceEntryPoint(layoutReference, scriptPositions):
-    if layoutReference == None:
-        return 0x10 if not 'main' in refs.functions else refs.scriptPositions[refs.functions.index('main')]
-    if layoutReference["entryPoint"] in layoutReference["offsetToPhysicalIndex"]:
-        symbol = getLayoutReferenceSymbol(layoutReference, layoutReference["entryPoint"])
-        if symbol != None:
-            return scriptPositions[refs.functions.index(symbol)]
-
-        physicalIndex = layoutReference["offsetToPhysicalIndex"][layoutReference["entryPoint"]]
-        return scriptPositions[physicalIndex]
-    return layoutReference["entryPoint"]
-
 # Write as MSCSB format
 def writeToFile(msc):
     global refs, args
@@ -1180,14 +1056,12 @@ def writeToFile(msc):
     if maxStringLength % 0x10 != 0:
         maxStringLength += 0x10 - (maxStringLength % 0x10)
 
-    layoutReference = readLayoutReference(args.layoutReference) if args.layoutReference != None else None
-    scriptTable = remapLayoutReferenceTable(layoutReference, refs.scriptPositions)
-    entryPoint = remapLayoutReferenceEntryPoint(layoutReference, refs.scriptPositions)
-    unk = layoutReference["unk"] if layoutReference != None else 0x16
-    headerPrefix = layoutReference["headerPrefix"] if layoutReference != None else MSC_MAGIC
+    scriptTable = refs.scriptPositions
+    entryPoint = 0x10 if not 'main' in refs.functions else refs.scriptPositions[refs.functions.index('main')]
+    unk = 0x16 if len(msc.strings) > 0 or len(msc.scripts) > 10 else 0x00
 
     # Write file header
-    fileBytes = headerPrefix
+    fileBytes = MSC_MAGIC
     fileBytes += struct.pack(ENDIANESS, currentPos)
     fileBytes += struct.pack(ENDIANESS, entryPoint)
     fileBytes += struct.pack(ENDIANESS, len(msc.scripts))
@@ -1257,7 +1131,6 @@ def compileAST(ast):
             newScript = MscScript()
             newScript.cmds = compileScript(decl)
             msc.scripts.append(newScript)
-    applyLayoutReferencePhysicalOrder(msc)
     resolveReferences(msc)
     writeToFile(msc)
 
@@ -1354,6 +1227,5 @@ if __name__ == "__main__":
     parser.add_argument('-i', '--pushInt', dest='usePushShort', action='store_false', help='Disable using pushShort as a space saver')
     parser.add_argument('-x', '--xmlPath', dest='xmlPath', help="Path to load overload MSC xml info")
     parser.add_argument('--exvsMapping', dest='exvsMapping', help="Path to EXVS native-truth mapping JSON")
-    parser.add_argument('--layoutReference', dest='layoutReference', help="MSC binary whose header prefix, unk value, and script table order should be preserved")
     args = parser.parse_args()
     main(args)

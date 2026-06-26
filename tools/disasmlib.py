@@ -5,6 +5,7 @@
 #**************************************************************************#
 from mscdec_msc import *
 from disasmlib_ref_only import Label as RefOnlyLabel, ScriptRef as RefOnlyScriptRef, disasm as disasm_cfg_ref_only
+from msc_cfg import resolve_exvs_syscall_script_refs
 import sys, os, time, os.path, timeit
 from argparse import ArgumentParser
 from struct import unpack, pack
@@ -124,6 +125,12 @@ def emuScript(script, startIndex, stack, passCount, endPosition=None, depth=0):
                 # Resolving every offset-shaped syscall constant as a script
                 # reference causes text-unstable roundtrips when data values
                 # collide with script offsets.
+                if script[i].command == 0x2d:
+                    resolve_exvs_syscall_script_refs(
+                        script[i],
+                        popped,
+                        lambda poppedIndex: updateScriptReference(popped, poppedIndex, scriptName),
+                    )
                 #If gv16 flag is enabled and it is setting GlobalVar16
                 if script[i].command == 0x1C and script[i].parameters[0] == 0x1: #and gvIsOffset[script[i].parameters[1]]:
                     updateScriptReference(popped, 0, scriptName)

@@ -95,6 +95,59 @@ class ScriptRefStr(str):
     pass
 
 
+EXVS_SYS1_SCRIPT_CALLBACK_SIGNATURES = {
+    (0x10001, 0x02): (3,),
+    (0x10001, 0x0A): (3,),
+    (0x10002, 0x02): (3,),
+}
+
+
+def _is_command_like(cmd_obj):
+    return hasattr(cmd_obj, "command") and hasattr(cmd_obj, "parameters")
+
+
+def _constant_int_from_command(cmd_obj):
+    if not _is_command_like(cmd_obj):
+        return None
+    if cmd_obj.command not in (0x0A, 0x0D):
+        return None
+    val = cmd_obj.parameters[0]
+    return val if isinstance(val, int) else None
+
+
+def _popped_index_for_source_arg(popped, source_arg_index):
+    index = len(popped) - 1 - source_arg_index
+    return index if 0 <= index < len(popped) else None
+
+
+def _source_arg_int(popped, source_arg_index):
+    index = _popped_index_for_source_arg(popped, source_arg_index)
+    if index is None:
+        return None
+    return _constant_int_from_command(popped[index])
+
+
+def resolve_exvs_syscall_script_refs(cmd, popped, resolve_popped_index):
+    if not _is_command_like(cmd):
+        return
+    if cmd.command != 0x2D or cmd.parameters[1] != 0x01:
+        return
+
+    table_id = _source_arg_int(popped, 0)
+    method_id = _source_arg_int(popped, 1)
+    if table_id is None or method_id is None:
+        return
+
+    callback_arg_indices = EXVS_SYS1_SCRIPT_CALLBACK_SIGNATURES.get((table_id, method_id))
+    if callback_arg_indices is None:
+        return
+
+    for source_arg_index in callback_arg_indices:
+        popped_index = _popped_index_for_source_arg(popped, source_arg_index)
+        if popped_index is not None:
+            resolve_popped_index(popped_index)
+
+
 def resolve_script_refs_cfg(script, script_offset_to_name, script_called_vars=None):
     cmds = script.cmds
     if not cmds:
@@ -154,6 +207,16 @@ def resolve_script_refs_cfg(script, script_offset_to_name, script_called_vars=No
                             var_idx = cmd.parameters[1]
                             if var_idx not in script_called_vars[script_name]:
                                 script_called_vars[script_name].append(var_idx)
+
+            resolve_exvs_syscall_script_refs(
+                cmd,
+                popped,
+                lambda popped_index: _try_resolve_ref(
+                    popped[popped_index],
+                    valid_offsets,
+                    script_offset_to_name,
+                ),
+            )
 
             if cmd.command == 0x32:
                 if idx > 0 and isinstance(cmds[idx - 1], Command):

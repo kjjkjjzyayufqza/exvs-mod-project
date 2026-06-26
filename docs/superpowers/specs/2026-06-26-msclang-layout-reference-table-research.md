@@ -5,69 +5,93 @@
 - Files under test:
   - Reference: `E:\XB\解包\com\file\040msc\0x18AF7533\2.dscex`
   - Target source: `E:\XB\解包\com\file\040msc\0xFEEA714A\2.c`
+  - Target binary: `E:\XB\解包\com\file\040msc\0xFEEA714A\2.dscex`
 
-## Finding
+## Final Finding
 
-The previous `--layoutReference` implementation remapped the reference script
-offset table through physical script index:
+`--layoutReference` is not required for this unit and has been removed from the
+active `msclang.py` CLI.
 
-1. Sort the reference offsets.
-2. Resolve each old table offset to a physical index.
-3. Use `scriptPositions[physicalIndex]` in the rebuilt file.
+The earlier hypothesis was that the game required the original script offset
+table order. In-game testing disproved that for this case:
 
-That is only correct when the compiled C declaration order is physical order.
-The current `2.c` declaration order follows the reference offset-table order:
+1. A build preserving the reference table worked.
+2. A build preserving the table but not the reference `unk` field also worked.
+3. A clean build with no `--layoutReference` and no table preservation also
+   worked.
+
+Therefore the previous in-game freeze / no-control behavior was caused by
+roundtrip bytecode-shape drift, not by the script table order.
+
+## What Was Removed
+
+The active compiler no longer accepts or uses:
 
 ```text
-main, func_3, func_1, func_4, func_18, func_2, ...
+--layoutReference
 ```
 
-With the physical-index remap, table entry 1, which should still point to
-`func_3`, was redirected to the compiled position for physical index 3. This
-can preserve decompiled-looking text while breaking runtime table-index
-semantics.
+The following support code was removed from `tools/msclang.py`:
 
-## Fix
+- reference layout parsing
+- reference table-to-symbol remapping
+- reference physical-order script reordering
+- reference entry-point remapping
+- reference header-prefix preservation
 
-`--layoutReference` now maps each old reference table offset to the decompiler
-symbol it represents:
+`msclang` now writes its normal compiler layout:
 
-1. Resolve the old offset to `main` when it is the reference entry point.
-2. Otherwise resolve the old offset to `func_<physicalIndex>`.
-3. Look up that symbol in the current compiled `refs.functions`.
-4. Write the current compiled position for that symbol into the rebuilt table.
-5. Fall back to the old physical-index mapping only if the symbol does not exist.
+```text
+script table = refs.scriptPositions
+entry point  = main position, or 0x10 when main is absent
+unk          = compiler default derivation
+header       = MSC_MAGIC
+```
 
-This keeps table-index identity stable without hardcoded offsets or unit IDs.
+## Current Clean Pipeline
 
-## Final Evidence
-
-The accepted repair path is a real roundtrip, not binary preservation:
+The accepted no-op roundtrip is:
 
 ```text
 0x18AF7533\2.dscex
   -> tools\mscdec.py -c
-  -> 2.c
-  -> tools\msclang.py --layoutReference 0x18AF7533\2.dscex
+  -> 0xFEEA714A\2.c
+  -> tools\msclang.py -i
   -> 0xFEEA714A\2.dscex
 ```
 
-The current target was regenerated through that pipeline:
+No raw binary copying is involved.
+
+## Current Evidence
+
+The current target was regenerated with no `--layoutReference`:
 
 ```text
 reference SHA256: 0C9C8E29090046E07DC14747DAFA70C0CA387A8FD52E2DA6F20946600B697D43
-target SHA256:    0C9C8E29090046E07DC14747DAFA70C0CA387A8FD52E2DA6F20946600B697D43
+target SHA256:    28418D89C789F890BA271F0C72217D50DCDB37B6EDB94CCD22906E0CD29EA388
 
 target length: 255424 bytes
 entriesOffset: 251299
 entryPoint: 0x10
 entryCount: 1015
-unk: 777
+reference unk: 777
+target unk: 22
 
-byte_diff: 0
-opcode_shape_diff_count: 0
-param_type_shape_diff_count: 0
+byte_diff: 1221
+body_diff_0x40_to_table: 0
+table_same: false
+table_set_same: true
+table_diff_entries: 633
+opcode_shape_diff_count_by_table_index: 597
 ```
+
+Interpretation:
+
+- Script body bytes are identical.
+- The script offset table contains the same offsets but in a different order.
+- The table-index-based shape diff is expected because the reader names scripts
+  by table index; it does not indicate opcode drift in the script body.
+- In-game testing showed this table order difference does not affect this unit.
 
 The regenerated target C was also decompiled again from the regenerated
 `2.dscex`; the second decompile matched the first C byte-for-byte:
@@ -78,56 +102,29 @@ moded2.c SHA256:    B41F5F16F486355239576FDF182F6B95384FBD34562ACD42514FC76B332F
 c_identical: true
 ```
 
-## Compiler/Decompiler Shape Fixes
+## Actual Core Fixes
 
-The layout table fix alone exposed expression-shape drift. The remaining
-roundtrip failures were eliminated by preserving decompiler boolean shape
+The roundtrip failures were eliminated by preserving decompiler bytecode shape
 instead of folding everything to prettier C:
 
-- `ast2str.BinaryOp.__str__()` now parenthesizes right-hand same-precedence
-  binary expressions, preserving stack evaluation order for arithmetic chains.
+- `ast2str.BinaryOp.__str__()` parenthesizes right-hand same-precedence binary
+  expressions, preserving stack evaluation order for arithmetic chains.
 - `mscdec.ifToTernaryOp()` maps the `[0, [0, 1]]` boolean-array shape to
-  `!a && !b` instead of `!(a || b)`. This keeps the original two-branch
-  `if/ifNot` shape instead of losing it through De Morgan prettification.
-- `msclang.normalizeConditionExpr()` no longer rewrites `!(comparison || ... ||
-  comparison)` into De Morgan form. Pure comparison OR trees are kept as OR
-  trees so `ifNot` lowering matches the original bytecode.
+  `!a && !b` instead of `!(a || b)`, preserving the original branch shape.
+- `msclang.normalizeConditionExpr()` keeps pure comparison OR trees as OR trees
+  instead of forcing De Morgan form.
 - `msclang` applies the same comparison-only OR check before forcing the legacy
-  `not + if(0x34)` AB34 path for nested OR. This fixes the three-term OR in
-  `func_648` without hardcoding that function.
+  `not + if(0x34)` AB34 path for nested OR.
 
 These fixes are structural AST/bytecode-shape rules. They do not depend on unit
-IDs, function names, offsets, or raw byte preservation.
+IDs, function names, offsets, table order, or raw byte preservation.
 
-## Reverted Probe
+## Reverted Or Rejected Paths
 
-A probe that converted trailing `not + if(0x34)` into `ifNot(0x35)` was tested
-and reverted. It expanded opcode-shape drift from 8 functions to 86 functions,
-so the current decompiler expressions cannot be globally folded that way.
+- Raw binary preservation was rejected. The output must go through
+  `mscdec -> msclang`.
+- A probe that converted trailing `not + if(0x34)` into `ifNot(0x35)` globally
+  expanded opcode-shape drift and was reverted.
+- `--layoutReference` table preservation was tested in-game and then removed
+  after the no-layout build also behaved correctly.
 
-## Rejected Raw Preservation
-
-The current target source
-`E:\XB\解包\com\file\040msc\0xFEEA714A\2.c` was compared against a fresh
-`mscdec` decompile of the reference binary. A direct text diff is noisy because
-function order and offset-vs-symbol rendering differ, so the comparison used a
-canonical profile:
-
-1. Strip comments.
-2. Extract global declarations.
-3. Extract all `main` / `func_N` bodies by name.
-4. Normalize reference script offsets into their matching `func_N` symbols.
-5. Compare function profiles independent of file order.
-
-Result:
-
-```text
-globals_equal: true
-function_count: 1015 / 1015
-canonical_function_diffs: 0
-```
-
-This proves the C source is semantically a no-op reference source, but copying
-the reference binary back out is not an acceptable compiler repair. The active
-repair path must keep going through `mscdec -> msclang` and reduce the remaining
-compiler lowering drift directly.
