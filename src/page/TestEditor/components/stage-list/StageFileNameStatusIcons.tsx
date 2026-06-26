@@ -132,7 +132,7 @@ export function StageFileNameStatusIcons({
       <StatusBadge
         exists={wsExists}
         label="WS"
-        tooltip={wsExists ? "Extracted folder exists. Click to reveal in File Tree." : "Not extracted in workspace"}
+        tooltip={wsExists ? "Extracted folder exists. Click to filter the file tree." : "Not extracted in workspace"}
         onClick={wsExists && paths?.wsFolderPath ? () => onReveal?.(paths.wsFolderPath) : undefined}
       />
     </div>

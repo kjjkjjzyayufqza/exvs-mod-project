@@ -277,13 +277,38 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
         fieldKey: asset.fieldKey,
       });
 
-      onFieldUpdate?.(asset.fieldKey, result.newRawValue);
+      const unitSlot = UNIT_FIELD_KEY_TO_SLOT[asset.fieldKey] ?? asset.fieldKey.toLowerCase();
+      let registrySaved = false;
+      if (resourceRegistry) {
+        const registerResult = await resourceRegistry.registerWorkspace({
+          category: "unit",
+          slot: unitSlot,
+          seed: trimmedSeed,
+          notes: `copy-as-new from ${asset.hashHex}`,
+        });
+        if (registerResult.ok) {
+          registrySaved = true;
+        } else if (registerResult.reason === "duplicate_hash") {
+          toast.warning("Hash already registered under a different seed");
+        }
+      }
+
       onReveal?.(result.newFolderPath);
       setCopyDialogOpen(false);
       setCopySeed("");
 
+      const descriptionParts = [
+        `Current ${asset.fieldKey} left unchanged (${asset.hashHex}).`,
+        registrySaved
+          ? "Seed saved to workspace registry."
+          : resourceRegistry
+            ? "Seed was not saved to workspace registry."
+            : "Workspace registry is unavailable.",
+        `Updated fileUrl entries: ${result.updatedFileUrlCount}`,
+      ];
+
       toast.success(`Copied as new: ${result.newHashHex}`, {
-        description: `Updated fileUrl entries: ${result.updatedFileUrlCount}`,
+        description: descriptionParts.join(" "),
         action: {
           label: "Open New Folder",
           onClick: () => openPath(result.newFolderPath),
@@ -370,7 +395,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
         <StatusIcon 
           exists={workspaceExists} 
           label="WS" 
-          tooltip={workspaceExists ? "Extracted folder exists in workspace. Click to reveal in File Tree." : "Not extracted in workspace"} 
+          tooltip={workspaceExists ? "Extracted folder exists in workspace. Click to filter the file tree." : "Not extracted in workspace"} 
           onClick={workspaceExists ? () => onReveal?.(asset.workspaceFolderPath) : undefined}
         />
       </div>
@@ -634,7 +659,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
         <AppRndModalShell
           titleId={`copy-as-new-${asset.fieldKey}-title`}
           title="Copy as New"
-          subtitle="Compute CRC32 and create a new asset folder and structure JSON."
+          subtitle="Create a new asset folder from the seed. The current row hash stays unchanged; the seed is saved to the workspace registry."
           headerIcon={<Copy className="h-5 w-5 text-primary" />}
           dimensions={COPY_AS_NEW_MODAL_DIMENSIONS}
           storageKey="app.rnd-size.character-asset-copy-as-new"

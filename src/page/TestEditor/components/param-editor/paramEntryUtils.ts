@@ -7,6 +7,55 @@ export interface TypedParamEntryRow {
   entryId: number;
 }
 
+export type TypedParamEntryOrigin = "loaded" | "copied" | "blank";
+
+export interface TypedParamEntryEditorMeta {
+  origin: TypedParamEntryOrigin;
+  sourceEntryId?: number;
+  sourceIndex?: number;
+  isDirty: boolean;
+}
+
+export function createInitialEntryEditorMeta(entryCount: number): TypedParamEntryEditorMeta[] {
+  return Array.from({ length: entryCount }, () => ({
+    origin: "loaded",
+    isDirty: false,
+  }));
+}
+
+export function removeEntryEditorMetaAt(
+  meta: TypedParamEntryEditorMeta[],
+  index: number,
+): TypedParamEntryEditorMeta[] {
+  return meta.filter((_, rowIndex) => rowIndex !== index);
+}
+
+export function appendEntryEditorMeta(
+  meta: TypedParamEntryEditorMeta[],
+  next: TypedParamEntryEditorMeta,
+): TypedParamEntryEditorMeta[] {
+  return [...meta, next];
+}
+
+export function markEntryEditorMetaDirty(
+  meta: TypedParamEntryEditorMeta[],
+  index: number,
+): TypedParamEntryEditorMeta[] {
+  if (index < 0 || index >= meta.length) return meta;
+  return meta.map((item, rowIndex) =>
+    rowIndex === index ? { ...item, isDirty: true } : item,
+  );
+}
+
+export function shiftHighlightedEntryIndices(indices: Set<number>, deletedIndex: number): Set<number> {
+  const next = new Set<number>();
+  indices.forEach((entryIndex) => {
+    if (entryIndex === deletedIndex) return;
+    next.add(entryIndex > deletedIndex ? entryIndex - 1 : entryIndex);
+  });
+  return next;
+}
+
 export interface HexPreviewRow {
   offset: string;
   hex: string;

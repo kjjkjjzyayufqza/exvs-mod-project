@@ -58,6 +58,35 @@ export function normalizePathForTreeMatch(input: string): string {
     .toLowerCase();
 }
 
+export function relativePathSegmentsFromRoot(targetPath: string, rootDir: string): string[] | null {
+  const normalizedRoot = normalizePathForTreeMatch(rootDir);
+  const normalizedTarget = normalizePathForTreeMatch(targetPath);
+  if (!normalizedRoot || !normalizedTarget) return null;
+  if (normalizedTarget !== normalizedRoot && !normalizedTarget.startsWith(`${normalizedRoot}/`)) {
+    return null;
+  }
+  if (normalizedTarget === normalizedRoot) return [];
+  return normalizedTarget.slice(normalizedRoot.length + 1).split("/").filter(Boolean);
+}
+
+function walkTreeByRelativeSegments(
+  items: TestTreeNode[],
+  segments: string[],
+): TestTreeNode | null {
+  if (segments.length === 0) return null;
+  const [head, ...rest] = segments;
+  const normalizedHead = head.toLowerCase();
+  for (const node of items) {
+    if (!node.isDir) continue;
+    if (node.name.toLowerCase() !== normalizedHead) continue;
+    if (rest.length === 0) return node;
+    if (!node.children?.length) return null;
+    const found = walkTreeByRelativeSegments(node.children, rest);
+    if (found) return found;
+  }
+  return null;
+}
+
 export function findTreeNodeByPath(
   nodes: TestTreeNode[],
   targetPath: string,
@@ -82,11 +111,14 @@ export function findTreeNodeByPath(
   if (direct) return direct;
 
   if (!rootDir) return null;
-  const normalizedRoot = normalizePathForTreeMatch(rootDir);
-  if (!normalizedTarget.startsWith(`${normalizedRoot}/`) && normalizedTarget !== normalizedRoot) {
-    return null;
+  const segments = relativePathSegmentsFromRoot(targetPath, rootDir);
+  if (segments === null) return null;
+  if (segments.length > 0) {
+    const bySegments = walkTreeByRelativeSegments(nodes, segments);
+    if (bySegments) return bySegments;
   }
 
+  const normalizedRoot = normalizePathForTreeMatch(rootDir);
   const folderName = targetPath.replace(/[\\/]+$/, "").split(/[/\\]/).pop();
   if (!folderName) return null;
   const normalizedFolder = folderName.toLowerCase();
@@ -112,6 +144,14 @@ export function findTreeNodeByPath(
   };
 
   return walkByName(nodes);
+}
+
+/** Last path segment used to filter the file tree (e.g. workspace pack folder `0x49544F2B`). */
+export function buildFileTreeRevealSearchValue(targetPath: string): string | null {
+  const trimmed = targetPath.trim().replace(/[\\/]+$/, "");
+  if (!trimmed) return null;
+  const segment = trimmed.split(/[/\\]/).pop()?.trim();
+  return segment || null;
 }
 
 function removeNode(nodes: TestTreeNode[], targetId: string): TestTreeNode[] {

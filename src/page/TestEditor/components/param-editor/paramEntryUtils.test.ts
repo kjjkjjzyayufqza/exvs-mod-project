@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  appendEntryEditorMeta,
   buildTypedEntryHexPreview,
   createBlankTypedParamEntry,
   createCopyAsNewTypedParamEntry,
+  createInitialEntryEditorMeta,
   filterTypedParamEntryRows,
+  markEntryEditorMetaDirty,
   readTypedEntryId,
+  removeEntryEditorMetaAt,
+  shiftHighlightedEntryIndices,
 } from "./paramEntryUtils";
 import type { TypedParamEntry, TypedParamFile } from "./typedParamTypes";
 
@@ -65,6 +70,36 @@ describe("paramEntryUtils", () => {
       ammoCount: 0,
       speedRate: 0,
     });
+  });
+
+  it("tracks entry editor metadata for badges and dirty state", () => {
+    let meta = createInitialEntryEditorMeta(2);
+    expect(meta).toEqual([
+      { origin: "loaded", isDirty: false },
+      { origin: "loaded", isDirty: false },
+    ]);
+
+    meta = appendEntryEditorMeta(meta, {
+      origin: "copied",
+      sourceEntryId: 0x100,
+      sourceIndex: 0,
+      isDirty: false,
+    });
+    expect(meta).toHaveLength(3);
+    expect(meta[2]?.origin).toBe("copied");
+
+    meta = markEntryEditorMetaDirty(meta, 0);
+    expect(meta[0]?.isDirty).toBe(true);
+
+    meta = removeEntryEditorMetaAt(meta, 1);
+    expect(meta).toHaveLength(2);
+    expect(meta[1]?.origin).toBe("copied");
+  });
+
+  it("reindexes highlighted entry indices after delete", () => {
+    const highlighted = new Set([0, 2, 4]);
+    expect(shiftHighlightedEntryIndices(highlighted, 2)).toEqual(new Set([0, 3]));
+    expect(shiftHighlightedEntryIndices(highlighted, 0)).toEqual(new Set([1, 3]));
   });
 
   it("builds a little-endian hex preview with offsets and ascii text", () => {

@@ -18,7 +18,7 @@ import {
   applyPayloadQueue,
   filterTree,
   findNode,
-  findTreeNodeByPath,
+  buildFileTreeRevealSearchValue,
   getDirtyPackFromPath,
   normalizeTree,
   type RawTreeNode,
@@ -108,8 +108,6 @@ const TestEditorPage = () => {
   const getSetting = useConfigStore((s) => s.getSetting);
   const [treeData, setTreeData] = useState<TestTreeNode[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [pendingRevealPath, setPendingRevealPath] = useState<string | null>(null);
-  const pendingRevealRefreshAttemptedRef = useRef(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentDir, setCurrentDir] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -253,34 +251,10 @@ const TestEditorPage = () => {
   const deferredSearchTerm = useDeferredValue(searchTerm);
 
   const revealInTreeByPath = useCallback((targetPath: string) => {
-    const trimmed = targetPath.trim();
-    if (!trimmed) return;
-    setSearchTerm("");
-    pendingRevealRefreshAttemptedRef.current = false;
-    setPendingRevealPath(trimmed);
+    const searchValue = buildFileTreeRevealSearchValue(targetPath);
+    if (!searchValue) return;
+    setSearchTerm(searchValue);
   }, []);
-
-  useEffect(() => {
-    if (!pendingRevealPath || !currentDir) return;
-    if (deferredSearchTerm.trim()) return;
-
-    const node = findTreeNodeByPath(treeData, pendingRevealPath, currentDir);
-    if (node) {
-      setSelectedId(node.id);
-      setPendingRevealPath(null);
-      toast.success(`Revealed folder: ${node.name}`);
-      return;
-    }
-
-    if (!pendingRevealRefreshAttemptedRef.current) {
-      pendingRevealRefreshAttemptedRef.current = true;
-      void refreshFolder();
-      return;
-    }
-
-    setPendingRevealPath(null);
-    toast.error("Folder not found in current workspace root");
-  }, [pendingRevealPath, deferredSearchTerm, treeData, currentDir, refreshFolder]);
 
   useEffect(() => {
     const hydrate = async () => {

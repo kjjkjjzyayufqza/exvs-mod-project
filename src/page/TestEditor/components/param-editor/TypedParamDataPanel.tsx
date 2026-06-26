@@ -5,23 +5,111 @@ import { AppRndModalShell } from "@/components/AppRndModalShell"
 import { Button } from "@/components/ui/button"
 import { formatHash } from "@/models/commandTable"
 import { DualValueProperty } from "@/components/ui/dual-value-property"
+import { cn } from "@/lib/utils"
 import type { TypedParamEntry, TypedParamFile } from "./typedParamTypes"
 import {
+  appendEntryEditorMeta,
   buildTypedEntryHexPreview,
   createBlankTypedParamEntry,
   createCopyAsNewTypedParamEntry,
+  createInitialEntryEditorMeta,
   filterTypedParamEntryRows,
+  markEntryEditorMetaDirty,
   readTypedEntryId,
+  removeEntryEditorMetaAt,
+  shiftHighlightedEntryIndices,
+  type TypedParamEntryEditorMeta,
 } from "./paramEntryUtils"
+import { ParamEntryListBadges } from "./ParamEntryListBadges"
+import { ParamEntryListRow } from "./ParamEntryListRow"
 
-const ENTRY_ROW_HEIGHT = 40
-const FIELD_ROW_HEIGHT = 42
+const ENTRY_ROW_HEIGHT = 56
+const FIELD_ROW_HEIGHT = 94
+const FIELDS_PER_ROW = 2
 const HEX_PREVIEW_ROW_HEIGHT = 24
 const HEX_PREVIEW_MODAL_DIMENSIONS = {
   width: 900,
   height: 700,
   minWidth: 640,
   minHeight: 420,
+}
+
+function chunkFieldKeys(keys: string[], columns: number): string[][] {
+  if (columns <= 1) {
+    return keys.map((key) => [key])
+  }
+  const rows: string[][] = []
+  for (let index = 0; index < keys.length; index += columns) {
+    rows.push(keys.slice(index, index + columns))
+  }
+  return rows
+}
+
+function formatFieldOffset(offset: number): string {
+  return `0x${offset.toString(16).toUpperCase().padStart(2, "0")}`
+}
+
+function ParamFieldCell({
+  fieldKey,
+  value,
+  kind,
+  offset,
+  onCommit,
+}: {
+  fieldKey: string
+  value: number
+  kind: number
+  offset: number
+  onCommit: (nextValue: number) => void
+}) {
+  const isFloat = kind === 5
+  const offsetBadge =
+    offset !== -1 ? (
+      <span className="shrink-0 rounded border border-border/50 bg-muted/50 px-1 py-0.5 font-mono text-[9px] tabular-nums tracking-wide text-muted-foreground">
+        {formatFieldOffset(offset)}
+      </span>
+    ) : null
+  const kindBadge = isFloat ? (
+    <span className="shrink-0 rounded bg-cyan-500/15 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-cyan-700 dark:text-cyan-300">
+      f32
+    </span>
+  ) : (
+    <span className="shrink-0 rounded bg-violet-500/10 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+      i32
+    </span>
+  )
+
+  return (
+    <DualValueProperty
+      label={fieldKey}
+      labelExtra={
+        <div className="flex items-center gap-1">
+          {kindBadge}
+          {offsetBadge}
+        </div>
+      }
+      value={value}
+      property={fieldKey}
+      editable={true}
+      editingProperty={null}
+      editValue={""}
+      validationError={""}
+      onStartEdit={() => {}}
+      onSaveEdit={() => {}}
+      onCancelEdit={() => {}}
+      onValueChange={() => {}}
+      onCommit={onCommit}
+      showHex={true}
+      isFloat={isFloat}
+      variant="compact"
+      mode="live"
+      containerClassName={cn(
+        "min-h-[5.25rem] border-border/45 bg-background/90 p-2.5 shadow-sm transition-[border-color,box-shadow,background-color] duration-200",
+        "hover:border-primary/30 hover:bg-background hover:shadow-md focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20",
+        isFloat && "border-cyan-500/20 bg-cyan-950/[0.07] hover:bg-cyan-950/[0.12]",
+      )}
+    />
+  )
 }
 
 export function TypedParamDataPanel({
@@ -43,6 +131,10 @@ export function TypedParamDataPanel({
   const [previewOpen, setPreviewOpen] = useState(false)
   const [activePreviewSelection, setActivePreviewSelection] = useState<"hex" | "ascii" | null>(null)
   const [isEntrySearchPending, startEntrySearchTransition] = useTransition()
+  const [entryEditorMeta, setEntryEditorMeta] = useState<TypedParamEntryEditorMeta[]>(() =>
+    createInitialEntryEditorMeta(data.entries.length),
+  )
+  const [highlightedEntryIndices, setHighlightedEntryIndices] = useState<Set<number>>(() => new Set())
   const entry = data.entries[selectedEntryIndex] ?? null
   const entryListRef = useRef<HTMLDivElement | null>(null)
   const fieldListRef = useRef<HTMLDivElement | null>(null)
@@ -59,6 +151,10 @@ export function TypedParamDataPanel({
     () => filterTypedParamEntryRows(data.entries, entrySearch),
     [data.entries, entrySearch]
   )
+  const filteredFieldRows = useMemo(
+    () => chunkFieldKeys(filteredKeys, FIELDS_PER_ROW),
+    [filteredKeys],
+  )
   const getEntryListScrollElement = useCallback(() => entryListRef.current, [])
   const entryVirtualizer = useVirtualizer({
     count: filteredEntryRows.length,
@@ -68,10 +164,10 @@ export function TypedParamDataPanel({
   })
   const getFieldListScrollElement = useCallback(() => fieldListRef.current, [])
   const fieldVirtualizer = useVirtualizer({
-    count: filteredKeys.length,
+    count: filteredFieldRows.length,
     getScrollElement: getFieldListScrollElement,
     estimateSize: () => FIELD_ROW_HEIGHT,
-    overscan: 16,
+    overscan: 10,
   })
 
   const preview = useMemo(
@@ -106,20 +202,30 @@ export function TypedParamDataPanel({
     return map
   }, [entry, data.fieldSpecs])
 
-  const appendEntry = (created: TypedParamEntry | null) => {
+  const appendEntry = (created: TypedParamEntry | null, meta: TypedParamEntryEditorMeta) => {
     if (!created) return
     const nextEntries = [...data.entries, created]
     const nextEntryIds = nextEntries.map((item, idx) => readTypedEntryId(item, idx))
     onChange({ ...data, entries: nextEntries, entryIds: nextEntryIds })
+    setEntryEditorMeta((prev) => appendEntryEditorMeta(prev, meta))
     onSelectEntry(nextEntries.length - 1)
   }
 
   const copyEntryAsNew = () => {
-    appendEntry(createCopyAsNewTypedParamEntry(data.entries, selectedEntryIndex))
+    const sourceEntryId = readTypedEntryId(data.entries[selectedEntryIndex] ?? {}, selectedEntryIndex)
+    appendEntry(createCopyAsNewTypedParamEntry(data.entries, selectedEntryIndex), {
+      origin: "copied",
+      sourceEntryId,
+      sourceIndex: selectedEntryIndex,
+      isDirty: false,
+    })
   }
 
   const addEntry = () => {
-    appendEntry(createBlankTypedParamEntry(data.entries, selectedEntryIndex))
+    appendEntry(createBlankTypedParamEntry(data.entries, selectedEntryIndex), {
+      origin: "blank",
+      isDirty: false,
+    })
   }
 
   const deleteEntry = () => {
@@ -127,6 +233,8 @@ export function TypedParamDataPanel({
     const nextEntries = data.entries.filter((_, idx) => idx !== selectedEntryIndex)
     const nextEntryIds = nextEntries.map((item, idx) => readTypedEntryId(item, idx))
     onChange({ ...data, entries: nextEntries, entryIds: nextEntryIds })
+    setEntryEditorMeta((prev) => removeEntryEditorMetaAt(prev, selectedEntryIndex))
+    setHighlightedEntryIndices((prev) => shiftHighlightedEntryIndices(prev, selectedEntryIndex))
     if (!nextEntries.length) {
       onSelectEntry(0)
       return
@@ -135,16 +243,75 @@ export function TypedParamDataPanel({
     onSelectEntry(nextIndex)
   }
 
+  const commitEntryFieldChange = (key: string, nextValue: number) => {
+    const nextEntries = data.entries.map((item, idx) =>
+      idx === selectedEntryIndex ? { ...item, [key]: nextValue } : item,
+    )
+    const nextEntryIds = nextEntries.map((item, idx) => readTypedEntryId(item, idx))
+    onChange({ ...data, entries: nextEntries, entryIds: nextEntryIds })
+    setEntryEditorMeta((prev) => markEntryEditorMetaDirty(prev, selectedEntryIndex))
+  }
+
+  const entryLegendCounts = useMemo(() => {
+    return entryEditorMeta.reduce(
+      (acc, meta) => {
+        if (meta.origin === "copied") acc.copied += 1
+        if (meta.origin === "blank") acc.blank += 1
+        if (meta.origin === "loaded" && !meta.isDirty) acc.file += 1
+        if (meta.isDirty) acc.edited += 1
+        return acc
+      },
+      { file: 0, copied: 0, blank: 0, edited: 0, highlighted: highlightedEntryIndices.size },
+    )
+  }, [entryEditorMeta, highlightedEntryIndices])
+
+  const toggleEntryHighlight = useCallback((index: number) => {
+    setHighlightedEntryIndices((prev) => {
+      const next = new Set(prev)
+      if (next.has(index)) {
+        next.delete(index)
+      } else {
+        next.add(index)
+      }
+      return next
+    })
+  }, [])
+
   return (
     <div className="grid h-full min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[minmax(220px,280px)_minmax(0,1fr)]">
       <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border bg-card shadow-sm">
         <div className="space-y-2 border-b bg-muted/20 px-3 py-2">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-xs font-semibold">Entries</h3>
-            <span className="font-mono text-[10px] text-muted-foreground">
+            <h3 className="text-xs font-semibold tracking-tight">Entries</h3>
+            <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
               {entrySearch.trim() ? `${filteredEntryRows.length} / ${data.entries.length}` : `${data.entries.length} rows`}
               {isEntrySearchPending ? " ..." : ""}
             </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5 text-[9px] text-muted-foreground">
+            {entryLegendCounts.file > 0 ? (
+              <span className="rounded border border-border/60 bg-muted/30 px-1 py-0.5">File {entryLegendCounts.file}</span>
+            ) : null}
+            {entryLegendCounts.copied > 0 ? (
+              <span className="rounded border border-sky-500/25 bg-sky-500/10 px-1 py-0.5 text-sky-700 dark:text-sky-300">
+                Copy {entryLegendCounts.copied}
+              </span>
+            ) : null}
+            {entryLegendCounts.blank > 0 ? (
+              <span className="rounded border border-emerald-500/25 bg-emerald-500/10 px-1 py-0.5 text-emerald-700 dark:text-emerald-300">
+                New {entryLegendCounts.blank}
+              </span>
+            ) : null}
+            {entryLegendCounts.edited > 0 ? (
+              <span className="rounded border border-amber-500/25 bg-amber-500/10 px-1 py-0.5 text-amber-800 dark:text-amber-300">
+                Edited {entryLegendCounts.edited}
+              </span>
+            ) : null}
+            {entryLegendCounts.highlighted > 0 ? (
+              <span className="rounded border border-amber-400/30 bg-amber-400/10 px-1 py-0.5 text-amber-700 dark:text-amber-200">
+                Highlight {entryLegendCounts.highlighted}
+              </span>
+            ) : null}
           </div>
           <div className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 shadow-sm">
             <Search className="h-3 w-3 text-muted-foreground" />
@@ -171,21 +338,23 @@ export function TypedParamDataPanel({
                 const row = filteredEntryRows[virtualRow.index]
                 if (!row) return null
                 const { index: i, entryId: id } = row
+                const meta = entryEditorMeta[i]
+                const isSelected = selectedEntryIndex === i
+                const isHighlighted = highlightedEntryIndices.has(i)
                 return (
-                  <button
+                  <ParamEntryListRow
                     key={`${i}-${id}`}
-                    type="button"
-                    className={`absolute left-0 top-0 flex w-full flex-col border-b border-border/40 px-3 py-2 text-left text-xs transition-colors hover:bg-muted/50 ${
-                      selectedEntryIndex === i ? "bg-primary/10 border-l-2 border-l-primary" : "border-l-2 border-l-transparent"
-                    }`}
-                    style={{ height: virtualRow.size, transform: `translateY(${virtualRow.start}px)` }}
-                    onClick={() => onSelectEntry(i)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="truncate font-mono font-medium">{formatHash(id)}</span>
-                      <span className="font-mono text-[10px] text-muted-foreground">#{i}</span>
-                    </div>
-                  </button>
+                    entryIndex={i}
+                    entryId={id}
+                    meta={meta}
+                    isSelected={isSelected}
+                    isHighlighted={isHighlighted}
+                    onSelect={() => onSelectEntry(i)}
+                    onToggleHighlight={() => toggleEntryHighlight(i)}
+                    measureRef={entryVirtualizer.measureElement}
+                    dataIndex={virtualRow.index}
+                    style={{ transform: `translateY(${virtualRow.start}px)` }}
+                  />
                 )
               })}
             </div>
@@ -197,8 +366,11 @@ export function TypedParamDataPanel({
           <div className="flex items-center gap-2">
             <h3 className="text-xs font-semibold">{fileType} typed entry</h3>
             {entry && (
-              <span className="rounded-md border border-border/60 bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                {formatHash(readTypedEntryId(entry, selectedEntryIndex))} · {Object.keys(entry).length} fields
+              <span className="flex flex-wrap items-center gap-1.5">
+                <span className="rounded-md border border-border/60 bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                  {formatHash(readTypedEntryId(entry, selectedEntryIndex))} · {Object.keys(entry).length} fields
+                </span>
+                <ParamEntryListBadges meta={entryEditorMeta[selectedEntryIndex]} />
               </span>
             )}
           </div>
@@ -244,54 +416,48 @@ export function TypedParamDataPanel({
             </Button>
           </div>
         </div>
-        <div ref={fieldListRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-muted/5 p-4">
+        <div ref={fieldListRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.04),transparent_55%)] p-4 dark:bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.03),transparent_55%)]">
           {!entry ? (
             <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">No entry selected</div>
+          ) : filteredFieldRows.length === 0 ? (
+            <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">No fields match the filter.</div>
           ) : (
             <div className="relative w-full" style={{ height: fieldVirtualizer.getTotalSize() }}>
               {fieldVirtualizer.getVirtualItems().map((virtualRow) => {
-                const key = filteredKeys[virtualRow.index]
-                if (!key) return null
-                const value = entry[key]
-                const current = value === undefined ? null : value
-                const info = fieldInfoMap[key]
-                const kind = info?.kind || 1
-                const offset = info?.offset ?? -1
-                const isFloat = kind === 5
-                const offsetLabel = offset !== -1 ? ` (0x${offset.toString(16).toUpperCase()})` : ""
+                const rowKeys = filteredFieldRows[virtualRow.index]
+                if (!rowKeys?.length) return null
 
                 return (
                   <div
-                    key={key}
+                    key={`field-row-${virtualRow.index}-${rowKeys.join("-")}`}
                     ref={fieldVirtualizer.measureElement}
                     data-index={virtualRow.index}
-                    className="absolute left-0 top-0 w-full pb-2"
+                    className={cn(
+                      "absolute left-0 top-0 w-full pb-3",
+                      virtualRow.index % 2 === 1 && "rounded-md bg-muted/10",
+                    )}
                     style={{ transform: `translateY(${virtualRow.start}px)` }}
                   >
-                    <DualValueProperty
-                      label={`${key}${offsetLabel}`}
-                      value={typeof current === "number" ? current : 0}
-                      property={key}
-                      editable={true}
-                      editingProperty={null}
-                      editValue={""}
-                      validationError={""}
-                      onStartEdit={() => {}}
-                      onSaveEdit={() => {}}
-                      onCancelEdit={() => {}}
-                      onValueChange={() => {}}
-                      onCommit={(nextValue) => {
-                        const nextEntries = data.entries.map((item, idx) =>
-                          idx === selectedEntryIndex ? { ...item, [key]: nextValue } : item
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      {rowKeys.map((key) => {
+                        const value = entry[key]
+                        const current = value === undefined ? null : value
+                        const info = fieldInfoMap[key]
+                        const kind = info?.kind || 1
+                        const offset = info?.offset ?? -1
+
+                        return (
+                          <ParamFieldCell
+                            key={key}
+                            fieldKey={key}
+                            value={typeof current === "number" ? current : 0}
+                            kind={kind}
+                            offset={offset}
+                            onCommit={(nextValue) => commitEntryFieldChange(key, nextValue)}
+                          />
                         )
-                        const nextEntryIds = nextEntries.map((item, idx) => readTypedEntryId(item, idx))
-                        onChange({ ...data, entries: nextEntries, entryIds: nextEntryIds })
-                      }}
-                      showHex={true}
-                      isFloat={isFloat}
-                      variant="compact"
-                      mode="live"
-                    />
+                      })}
+                    </div>
                   </div>
                 )
               })}

@@ -7,6 +7,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Edit3, Save, X } from "lucide-react";
 import { toast } from 'sonner';
 import { int32ToHexDisplay, hexDisplayToInt32, float32ToHexDisplay, hexDisplayToFloat32, validateHexInput } from "@/module/commonFunc";
+import { cn } from "@/lib/utils";
 
 interface DualValuePropertyProps {
   label: string;
@@ -25,6 +26,7 @@ interface DualValuePropertyProps {
   showHex?: boolean; // Option to hide hex display for simple properties
   isFloat?: boolean; // Toggle to parse/display as Float32 instead of Int32
   variant?: "default" | "compact";
+  containerClassName?: string;
   editOnRowClick?: boolean;
   mode?: "toggle" | "live";
   onCommit?: (value: number) => void;
@@ -53,6 +55,7 @@ export function DualValueProperty({
   showHex = true,
   isFloat = false,
   variant = "default",
+  containerClassName,
   editOnRowClick = false,
   mode = "toggle",
   onCommit,
@@ -156,7 +159,10 @@ export function DualValueProperty({
 
   if (editable && variant === "compact") {
     const startEditOnRowClick = editOnRowClick && !isEditing;
-    const containerBaseClass = "group relative space-y-2 rounded-md border p-3";
+    const containerBaseClass = cn(
+      "group relative space-y-2 rounded-md border p-3",
+      containerClassName,
+    );
 
     if (mode === "live") {
       const commit = (nextValue: number) => {
@@ -167,7 +173,7 @@ export function DualValueProperty({
       return (
         <div className={containerBaseClass}>
           <div className="flex items-center justify-between gap-2">
-            <Label className="text-xs font-medium text-muted-foreground truncate">
+            <Label className="min-w-0 flex-1 text-xs font-medium text-foreground/85 truncate">
               {label}
             </Label>
             {labelExtra}
@@ -290,7 +296,7 @@ export function DualValueProperty({
     const CardContent = (
       <div className={containerBaseClass}>
         <div className="flex items-center justify-between gap-2">
-          <Label className="text-xs font-medium text-muted-foreground truncate">
+          <Label className="min-w-0 flex-1 text-xs font-medium text-foreground/85 truncate">
             {label}
           </Label>
           {labelExtra}

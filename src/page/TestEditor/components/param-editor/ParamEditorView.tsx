@@ -48,6 +48,7 @@ export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const [loadSession, setLoadSession] = useState(0)
   const [pendingKindId, setPendingKindId] = useState<ParamKindId | null>(null)
 
   useEffect(() => {
@@ -116,6 +117,7 @@ export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath
         }
         setDirty(false)
         setSelectedEntry(0)
+        setLoadSession((session) => session + 1)
         toast.success("Loaded")
       } catch (e) {
         setErr(String(e))
@@ -298,6 +300,7 @@ export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath
         <div className="min-h-0 flex-1">
           {typed && (
             <TypedParamDataPanel
+              key={`${typed.path}:${loadSession}`}
               fileType={typed.fileType}
               data={typed.data}
               selectedEntryIndex={selectedEntry}

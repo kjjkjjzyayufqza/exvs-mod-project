@@ -132,10 +132,17 @@ pub fn raw_u32_to_json_for_kind(kind: u32, raw: u32) -> Value {
 fn json_to_raw_u32_for_kind(kind: u32, v: &Value) -> Result<u32, String> {
     match kind {
         KIND_U32 => match v {
-            Value::Number(n) => n
-                .as_u64()
-                .map(|u| u as u32)
-                .ok_or_else(|| "expected u32 (kind 1)".to_string()),
+            Value::Number(n) => {
+                if let Some(u) = n.as_u64() {
+                    return Ok(u as u32);
+                }
+                if let Some(i) = n.as_i64() {
+                    // Editor/hash fields often round-trip as signed int32 in JSON while the
+                    // on-disk format stores the same 32-bit pattern as u32.
+                    return Ok(i as u32);
+                }
+                Err("expected u32 (kind 1)".to_string())
+            }
             Value::String(s) => u32::from_str(s.as_str()).map_err(|e| e.to_string()),
             _ => Err("expected u32 (kind 1)".to_string()),
         },
@@ -245,4 +252,30 @@ pub fn entry_commands_from_named_json(
         }
     }
     Ok((entry_id, commands))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::format::bulletparam::BULLETPARAM_COMMAND_POOL;
+
+    #[test]
+    fn kind_u32_accepts_signed_json_for_hash_bit_pattern() {
+        let expected: u32 = 0xD8F283FB;
+        let signed = expected as i32;
+        let raw = json_to_raw_u32_for_kind(KIND_U32, &json!(signed)).expect("signed hash should save");
+        assert_eq!(raw, expected);
+    }
+
+    #[test]
+    fn secondary_effect_hash_roundtrips_from_signed_editor_json() {
+        let expected: u32 = 0xD8F283FB;
+        let entry = json!({
+            "entryId": 1,
+            "secondaryEffectHash": expected as i32,
+        });
+        let (_, commands) =
+            entry_commands_from_named_json(&entry, BULLETPARAM_COMMAND_POOL).expect("entry json");
+        assert_eq!(commands.get(&0xD8F283FB).copied(), Some(expected));
+    }
 }

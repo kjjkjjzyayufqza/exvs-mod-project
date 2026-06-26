@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { DEFAULT_TEST_EDITOR_WORKSPACE } from "@/services/testEditorWorkspace/defaults";
 import type { TestTreeNode } from "../types";
-import { findTreeNodeByPath, getDirtyPackFromPath } from "./testEditorTreeOps";
+import { findTreeNodeByPath, getDirtyPackFromPath, buildFileTreeRevealSearchValue } from "./testEditorTreeOps";
 
 function dir(path: string, name: string, children: TestTreeNode[] = []): TestTreeNode {
   return {
@@ -46,6 +46,36 @@ describe("findTreeNodeByPath", () => {
       findTreeNodeByPath(nestedTree, "E:\\workspace\\002chara\\0xBDBE6FEA", "E:/workspace")
         ?.name,
     ).toBe("0xBDBE6FEA");
+  });
+
+  it("finds a deeply nested hash folder by relative segments", () => {
+    const nestedTree = [
+      dir("E:/workspace/041cpm", "041cpm", [
+        dir("E:/workspace/041cpm/arms_param", "arms_param", [
+          dir("E:/workspace/041cpm/arms_param/0xFF832E7F", "0xFF832E7F"),
+        ]),
+      ]),
+    ];
+
+    expect(
+      findTreeNodeByPath(
+        nestedTree,
+        "E:\\workspace\\041cpm\\arms_param\\0xFF832E7F",
+        "E:/workspace",
+      )?.name,
+    ).toBe("0xFF832E7F");
+  });
+});
+
+describe("buildFileTreeRevealSearchValue", () => {
+  it("uses the leaf folder name for nested workspace pack paths", () => {
+    expect(
+      buildFileTreeRevealSearchValue("E:\\workspace\\002chara\\0x49544F2B"),
+    ).toBe("0x49544F2B");
+  });
+
+  it("returns null for empty paths", () => {
+    expect(buildFileTreeRevealSearchValue("   ")).toBeNull();
   });
 });
 

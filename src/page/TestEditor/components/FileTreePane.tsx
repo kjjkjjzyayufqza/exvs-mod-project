@@ -118,26 +118,17 @@ function FileTreePaneImpl({
 
   useEffect(() => {
     if (!selectedId || !treeRef.current) return;
-    // Skip scrolling when the selection was triggered by a user click in the tree;
-    // only scroll to center when selection is changed programmatically (e.g., reveal-in-tree).
     if (isUserClickRef.current) {
       isUserClickRef.current = false;
       return;
     }
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       const tree = treeRef.current;
       if (!tree) return;
-      const node = tree.get(selectedId);
-      if (node) {
-        let current = node;
-        while (current.parent) {
-          current.parent.open();
-          current = current.parent;
-        }
-      }
-      tree.scrollTo(selectedId, "center");
+      tree.openParents(selectedId);
+      void tree.scrollTo(selectedId, "center");
     }, 100);
-    return () => clearTimeout(timer);
+    return () => window.clearTimeout(timer);
   }, [selectedId, data]);
 
   const dirtyPackKeys = useMemo(() => new Set(dirtyPacks.map((pack) => pack.packKey)), [dirtyPacks]);
