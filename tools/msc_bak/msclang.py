@@ -1,4 +1,4 @@
-from msc_core_ref_only import *
+from msc_core import *
 from argparse import ArgumentParser
 # Try and install pycparser if it's not found 
 try:
@@ -384,7 +384,6 @@ nodeCount = 0
 position = 0
 outputAB34 = False
 binaryOpCount = 0
-forceOrAB34 = False
 exvs_native_truth_mapping = None
 
 
@@ -419,7 +418,7 @@ def compile_call_argument(
 
 # Take a abstract syntax tree node and recursively compile it
 def compileNode(node, loopParent=None, parentLoopCondition=None):
-    global refs, localVars, localVarTypes, args, xmlInfo, nodeDic, nodeCount, isNot, position, outputAB34, binaryOpCount, forceOrAB34
+    global refs, localVars, localVarTypes, args, xmlInfo, nodeDic, nodeCount, isNot, position, outputAB34, binaryOpCount
 
     nodeOut = []
 
@@ -438,48 +437,6 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
                 if type(nodeOut[-i]) == Command:
                     return nodeOut[-i]
                 i += 1
-
-    def isGenericFuncCallNode(node):
-        if type(node) != c_ast.FuncCall:
-            return False
-        if type(node.name) == c_ast.StructRef:
-            return False
-        if type(node.name) == c_ast.ID:
-            if node.name.name in syscalls:
-                return False
-            if node.name.name in ["printf", "set_main", "callFunc3"]:
-                return False
-        return True
-
-    def hasNestedGenericFuncCall(node):
-        if node == None:
-            return False
-        for _, child in node.children():
-            if isGenericFuncCallNode(child):
-                return True
-            if hasNestedGenericFuncCall(child):
-                return True
-        return False
-
-    def normalizeConditionExpr(node):
-        if type(node) == c_ast.UnaryOp and node.op == "!":
-            expr = normalizeConditionExpr(node.expr)
-            if type(expr) == c_ast.UnaryOp and expr.op == "!":
-                return normalizeConditionExpr(expr.expr)
-            if type(expr) == c_ast.BinaryOp and expr.op == "||":
-                return c_ast.BinaryOp(
-                    "&&",
-                    normalizeConditionExpr(c_ast.UnaryOp("!", expr.left)),
-                    normalizeConditionExpr(c_ast.UnaryOp("!", expr.right)),
-                )
-            return c_ast.UnaryOp("!", expr)
-        if type(node) == c_ast.BinaryOp and node.op in ["&&", "||"]:
-            return c_ast.BinaryOp(
-                node.op,
-                normalizeConditionExpr(node.left),
-                normalizeConditionExpr(node.right),
-            )
-        return node
 
     # Macro for marking the last command as an argument for the current command
     def addArg():
@@ -574,7 +531,6 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
             operation = assignmentOperationsInt[node.op]
         nodeOut.append(Command(operation,[varScope,varIndex]))
     elif t == c_ast.TernaryOp:
-        condNode = normalizeConditionExpr(node.cond)
         if (type(node.iftrue) == c_ast.TernaryOp and type(node.iffalse) == c_ast.Constant and
             node.iffalse.type == "int" and int(node.iffalse.value, 0) == 0 and
             type(node.iftrue.iftrue) == c_ast.Constant and node.iftrue.iftrue.type == "int" and
@@ -583,7 +539,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
             # If tail end ternary combination is possible
             endLabel = Label()
             isFalseLabel = Label()
-            nodeOut += compileNode(condNode, loopParent, parentLoopCondition)
+            nodeOut += compileNode(node.cond, loopParent, parentLoopCondition)
             addArg()
             nodeOut.append(Command(0x34, [isFalseLabel]))
             nodeOut += compileNode(node.iftrue.cond, loopParent, parentLoopCondition)
@@ -597,7 +553,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
         else:
             endLabel = Label()
             isFalseLabel = Label()
-            nodeOut += compileNode(condNode, loopParent, parentLoopCondition)
+            nodeOut += compileNode(node.cond, loopParent, parentLoopCondition)
             addArg()
             nodeOut.append(Command(0x34, [isFalseLabel]))
             nodeOut += compileNode(node.iftrue, loopParent, parentLoopCondition)
@@ -700,7 +656,6 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
                 endOrLabel, trueLabel, falseLabel = Label(), Label(), Label()
 
                 isFirstOR = False
-                useAB34 = outputAB34
                 
                 try:
                     testNode = node.right
@@ -713,19 +668,15 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
                 except:
                     isFirstOR = False
 
-                if forceOrAB34 == True and useAB34 != True:
-                    nodeOut.append(Command(0x2B, pushBit=True))
-                    useAB34 = True
-                elif localisNot == True and (binaryOpCount >= 2 or isFirstOR) and useAB34 != True:
+                if localisNot == True and (binaryOpCount >= 2 or isFirstOR) and outputAB34 != True:
                     nodeOut.append(Command(0x2B, pushBit=True))
                     outputAB34 = True
-                    useAB34 = True
                     
-                nodeOut.append(Command(0x34 if useAB34 else 0x35, [falseLabel] if useAB34 else [trueLabel]))
+                nodeOut.append(Command(0x34 if outputAB34 else 0x35, [falseLabel] if outputAB34 else [trueLabel]))
                 nodeOut += compileNode(node.right, loopParent, parentLoopCondition)
                 addArg()
 
-                if useAB34 == True:
+                if outputAB34 == True:
                     nodeOut.append(Command(0x2B, pushBit=True))
                 
                 nodeOut.append(Command(0x34, [falseLabel]))
@@ -741,25 +692,11 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
                 endAndLabel, falseLabel = Label(), Label()
 
                 if outputAB34 == True:
-                   lastCommand = getLastCommand()
-                   if lastCommand == None or lastCommand.command != 0x2B:
-                       nodeOut.append(Command(0x2B, pushBit=True))
+                   nodeOut.append(Command(0x2B, pushBit=True))
                 
                 nodeOut.append(Command(0x34, [falseLabel]))
-                savedForceOrAB34 = forceOrAB34
-                forcedRightOrAB34 = (type(node.right) == c_ast.BinaryOp and
-                                     node.right.op == "||" and
-                                     type(node.left) == c_ast.UnaryOp and
-                                     node.left.op == "!")
-                if forcedRightOrAB34:
-                    forceOrAB34 = True
                 nodeOut += compileNode(node.right, loopParent, parentLoopCondition)
-                forceOrAB34 = savedForceOrAB34
                 addArg()
-                if forcedRightOrAB34:
-                    lastCommand = getLastCommand()
-                    if lastCommand == None or lastCommand.command != 0x2B:
-                        nodeOut.append(Command(0x2B, pushBit=True))
                 nodeOut.append(Command(0x34, [falseLabel]))
                 nodeOut.append(Command(0xD if args.usePushShort else 0xA, [1]))
                 addArg()
@@ -791,8 +728,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
         nodeOut.append(Label(node.name))
         nodeOut += compileNode(node.stmt, loopParent, parentLoopCondition)
     elif t == c_ast.If:
-        condNode = normalizeConditionExpr(node.cond)
-        nodeOut += compileNode(condNode, loopParent, parentLoopCondition)
+        nodeOut += compileNode(node.cond, loopParent, parentLoopCondition)
         isIfNot = False
         lastCommand = getLastCommand()
         if lastCommand != None and lastCommand.command == 0x2b:
@@ -803,10 +739,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
             #print(position)
             isIfNot = True
 
-        isGenericFuncCondition = isGenericFuncCallNode(condNode)
-        skipIfArgPromotion = isGenericFuncCondition and hasNestedGenericFuncCall(condNode.args)
-        if not skipIfArgPromotion:
-            addArg()
+        addArg()
         ifFalseLabel = Label()
         if node.iffalse != None:
             endLabel = Label()
@@ -823,7 +756,6 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
             for i in node.block_items:
                 nodeOut += compileNode(i, loopParent, parentLoopCondition)
     elif t == c_ast.While:
-        condNode = normalizeConditionExpr(node.cond)
         loopTop = Label()
         endLabel = Label()
         conditionLabel = Label()
@@ -831,24 +763,22 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
         nodeOut.append(loopTop)
         nodeOut += compileNode(node.stmt, endLabel, conditionLabel)
         nodeOut.append(conditionLabel)
-        nodeOut += compileNode(condNode, loopParent, parentLoopCondition)
+        nodeOut += compileNode(node.cond, loopParent, parentLoopCondition)
         addArg()
         nodeOut.append(Command(0x35, [loopTop]))
         nodeOut.append(endLabel)
     elif t == c_ast.DoWhile:
-        condNode = normalizeConditionExpr(node.cond)
         loopTop = Label()
         endLabel = Label()
         conditionLabel = Label()
         nodeOut.append(loopTop)
         nodeOut += compileNode(node.stmt, endLabel, conditionLabel)
         nodeOut.append(conditionLabel)
-        nodeOut += compileNode(condNode, loopParent, parentLoopCondition)
+        nodeOut += compileNode(node.cond, loopParent, parentLoopCondition)
         addArg()
         nodeOut.append(Command(0x35, [loopTop]))
         nodeOut.append(endLabel)
     elif t == c_ast.For:
-        condNode = normalizeConditionExpr(node.cond)
         for decl in node.init.decls:
             nodeOut += compileNode(decl, loopParent, parentLoopCondition)
         loopTop = Label()
@@ -858,7 +788,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
         nodeOut += compileNode(node.stmt, endLabel, conditionLabel)
         nodeOut.append(conditionLabel)
         nodeOut += compileNode(node.next, endLabel, conditionLabel)
-        nodeOut += compileNode(condNode, loopParent, parentLoopCondition)
+        nodeOut += compileNode(node.cond, loopParent, parentLoopCondition)
         addArg()
         nodeOut.append(Command(0x35, [loopTop]))
         nodeOut.append(endLabel)
@@ -988,13 +918,12 @@ def compileScript(func):
     i = 0
     if func.body.block_items != None:
         for node in func.body.block_items:
-            global nodeDic, nodeCount, outputAB34, isNot, binaryOpCount, forceOrAB34
+            global nodeDic, nodeCount, outputAB34, isNot, binaryOpCount
             nodeDic = {}
             nodeCount = 0
             outputAB34 = False
             isNot = False
             binaryOpCount = 0
-            forceOrAB34 = False
             script += compileNode(node) 
             i = i + 1
     script.insert(0, Command(2, [argCount, len(localVars)]))

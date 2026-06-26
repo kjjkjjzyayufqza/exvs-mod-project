@@ -439,12 +439,17 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
                     return nodeOut[-i]
                 i += 1
 
+    def isComparisonOnlyOrTree(expr):
+        if type(expr) == c_ast.BinaryOp and expr.op == "||":
+            return isComparisonOnlyOrTree(expr.left) and isComparisonOnlyOrTree(expr.right)
+        return type(expr) == c_ast.BinaryOp and expr.op in ["==", "!=", "<", "<=", ">", ">="]
+
     def normalizeConditionExpr(node):
         if type(node) == c_ast.UnaryOp and node.op == "!":
             expr = normalizeConditionExpr(node.expr)
             if type(expr) == c_ast.UnaryOp and expr.op == "!":
                 return normalizeConditionExpr(expr.expr)
-            if type(expr) == c_ast.BinaryOp and expr.op == "||":
+            if type(expr) == c_ast.BinaryOp and expr.op == "||" and not isComparisonOnlyOrTree(expr):
                 return c_ast.BinaryOp(
                     "&&",
                     normalizeConditionExpr(c_ast.UnaryOp("!", expr.left)),
@@ -694,7 +699,7 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
                 if forceOrAB34 == True and useAB34 != True:
                     nodeOut.append(Command(0x2B, pushBit=True))
                     useAB34 = True
-                elif localisNot == True and (binaryOpCount >= 2 or isFirstOR) and useAB34 != True:
+                elif localisNot == True and (binaryOpCount >= 2 or isFirstOR) and useAB34 != True and not isComparisonOnlyOrTree(node):
                     nodeOut.append(Command(0x2B, pushBit=True))
                     outputAB34 = True
                     useAB34 = True
@@ -1072,6 +1077,62 @@ def readLayoutReference(path):
         "offsetToPhysicalIndex": offsetToPhysicalIndex,
     }
 
+def getLayoutReferenceSymbol(layoutReference, oldOffset, tableIndex=None):
+    if oldOffset == layoutReference["entryPoint"] and "main" in refs.functions:
+        return "main"
+
+    physicalIndex = layoutReference["offsetToPhysicalIndex"][oldOffset]
+    physicalSymbol = "func_%i" % physicalIndex
+    if physicalSymbol in refs.functions:
+        return physicalSymbol
+
+    if tableIndex != None:
+        tableSymbol = "func_%i" % tableIndex
+        if tableSymbol in refs.functions:
+            return tableSymbol
+
+    if physicalIndex == 0 and "main" in refs.functions:
+        return "main"
+
+    return None
+
+def applyLayoutReferencePhysicalOrder(msc):
+    global refs, args
+    if args.layoutReference == None:
+        return
+
+    layoutReference = readLayoutReference(args.layoutReference)
+    scriptsByFunction = dict(zip(refs.functions, msc.scripts))
+    orderedFunctions = []
+    orderedScripts = []
+    usedFunctions = set()
+
+    for oldOffset in sorted(layoutReference["table"]):
+        symbol = getLayoutReferenceSymbol(layoutReference, oldOffset)
+        if symbol == None or symbol not in scriptsByFunction:
+            raise CompilerError(
+                "Layout reference offset %s does not map to a compiled function" %
+                hex(oldOffset)
+            )
+        if symbol in usedFunctions:
+            raise CompilerError(
+                "Layout reference maps multiple offsets to compiled function %s" %
+                symbol
+            )
+        orderedFunctions.append(symbol)
+        orderedScripts.append(scriptsByFunction[symbol])
+        usedFunctions.add(symbol)
+
+    if len(orderedScripts) != len(msc.scripts):
+        missing = [name for name in refs.functions if name not in usedFunctions]
+        raise CompilerError(
+            "Layout reference physical order did not cover compiled functions: %s" %
+            ", ".join(missing)
+        )
+
+    refs.functions = orderedFunctions
+    msc.scripts = orderedScripts
+
 def remapLayoutReferenceTable(layoutReference, scriptPositions):
     if layoutReference == None:
         return scriptPositions
@@ -1082,7 +1143,12 @@ def remapLayoutReferenceTable(layoutReference, scriptPositions):
         )
 
     remappedTable = []
-    for oldOffset in layoutReference["table"]:
+    for tableIndex, oldOffset in enumerate(layoutReference["table"]):
+        symbol = getLayoutReferenceSymbol(layoutReference, oldOffset, tableIndex)
+        if symbol != None:
+            remappedTable.append(scriptPositions[refs.functions.index(symbol)])
+            continue
+
         physicalIndex = layoutReference["offsetToPhysicalIndex"][oldOffset]
         remappedTable.append(scriptPositions[physicalIndex])
     return remappedTable
@@ -1091,6 +1157,10 @@ def remapLayoutReferenceEntryPoint(layoutReference, scriptPositions):
     if layoutReference == None:
         return 0x10 if not 'main' in refs.functions else refs.scriptPositions[refs.functions.index('main')]
     if layoutReference["entryPoint"] in layoutReference["offsetToPhysicalIndex"]:
+        symbol = getLayoutReferenceSymbol(layoutReference, layoutReference["entryPoint"])
+        if symbol != None:
+            return scriptPositions[refs.functions.index(symbol)]
+
         physicalIndex = layoutReference["offsetToPhysicalIndex"][layoutReference["entryPoint"]]
         return scriptPositions[physicalIndex]
     return layoutReference["entryPoint"]
@@ -1187,6 +1257,7 @@ def compileAST(ast):
             newScript = MscScript()
             newScript.cmds = compileScript(decl)
             msc.scripts.append(newScript)
+    applyLayoutReferencePhysicalOrder(msc)
     resolveReferences(msc)
     writeToFile(msc)
 

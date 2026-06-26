@@ -1,4 +1,4 @@
-from msc_core_ref_only import Command, COMMAND_STACKPOPS, MscScript, MscFile
+from msc_core import Command, COMMAND_STACKPOPS, MscScript, MscFile
 import logging
 
 class BasicBlock:

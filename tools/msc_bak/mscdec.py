@@ -1,9 +1,9 @@
-from msc_core_ref_only import *
+from msc_core import *
 from xml_info import MscXmlInfo, getXmlInfoPath
 from argparse import ArgumentParser
 import ast2str as c_ast
-from disasmlib_ref_only import disasm as mscsb_disasm
-from disasmlib_ref_only import Label, ScriptRef
+from disasmlib import disasm as mscsb_disasm
+from disasmlib import Label, ScriptRef
 import operator
 import os
 import timeit
@@ -610,9 +610,6 @@ def pullOutGroups(commands):
                 index -= 1
         elif type(cmd) == Command and cmd.command in [0x34, 0x35]:
             isIfNot = (cmd.command == 0x35)
-            if len(newCommands) >= 2 and type(newCommands[-1]) == Label and type(newCommands[-2]) == FunctionCallGroup:
-                if len(newCommands[-2]) > 0 and newCommands[-2][-1] == newCommands[-1]:
-                    newCommands[-2].pushBit = True
             labelPosition = commands.index(cmd.parameters[0])
             if labelPosition == -1:
                 raise DecompilerError("Label for if/ifNot not found at {}".format(cmd.commandPosition))

@@ -35,8 +35,6 @@ class BinaryOp:
                 Arg2Precedence = _binaryOpPrecedence[self.arg2.op]
                 if Arg2Precedence < MainPrecedence:
                     formatString += "{}"
-                elif Arg2Precedence == MainPrecedence and self.op in _associativeBinaryOps:
-                    formatString += "{}"
                 else:
                     formatString += "({})"
             else:
