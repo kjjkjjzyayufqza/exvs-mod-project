@@ -178,7 +178,11 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
           },
         });
       } else {
-        toast.success(`Extracted ${asset.fieldKey} to output folder`, {
+        const modelSummary =
+          result.modelCount != null && result.totalFiles != null
+            ? ` (${result.modelCount} models, ${result.totalFiles} files)`
+            : "";
+        toast.success(`Extracted ${asset.fieldKey} to output folder${modelSummary}`, {
           action: {
             label: "Open Folder",
             onClick: () => openPath(result.path!),

@@ -67,6 +67,7 @@ export async function getUnitModelExtractCollisionInfo(
 export async function extractUnitModelToFolder(
   sourcePath: string,
   outRoot: string,
+  options?: { writeMetaBin?: boolean },
 ): Promise<UnitModelExtractResult> {
   const trimmedSource = sourcePath.trim();
   const trimmedOut = outRoot.trim();
@@ -79,5 +80,6 @@ export async function extractUnitModelToFolder(
   return await invoke<UnitModelExtractResult>("extract_unit_model_fhm2d_to_folder", {
     sourcePath: toWindowsPath(trimmedSource),
     outRoot: toWindowsPath(trimmedOut),
+    writeMetaBin: options?.writeMetaBin === true,
   });
 }

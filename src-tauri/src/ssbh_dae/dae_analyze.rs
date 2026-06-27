@@ -134,7 +134,7 @@ pub fn analysis_report_for_import_scene(source_path: String, scene: &ImportScene
 
     if scene.fbx_import_source == Some(FbxImportSource::Blender) {
         warnings.push(
-            "Blender FBX detected: mesh positions and bone translations will be scaled by 0.1 during conversion (cm to EXVS2 dm).".to_string(),
+            "Blender FBX detected: a 180-degree Y-axis convention correction is applied during import to match EXVS2 Model Editor FBX orientation.".to_string(),
         );
     }
 

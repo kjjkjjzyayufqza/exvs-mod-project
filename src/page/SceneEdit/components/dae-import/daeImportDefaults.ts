@@ -98,7 +98,7 @@ export function syncDaeImportConfigUpAxisFromAnalysis(
 }
 
 /**
- * Unit Model Editor: Blender FBX mesh scale is applied in Rust via FBX metadata detection.
+ * Unit Model Editor: Blender FBX axis convention correction is applied in Rust via FBX metadata detection.
  * This helper only sets UV flip; DAE imports keep generic defaults (scale 1, no UV flip).
  */
 export function applyUnitModelFbxImportDefaults(

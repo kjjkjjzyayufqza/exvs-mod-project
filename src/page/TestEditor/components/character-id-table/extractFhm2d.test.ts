@@ -4,11 +4,12 @@ import { resolveFhm2dPackPaths } from "@/services/testEditorWorkspace/paths";
 import type { AssetRefInfo } from "./assetRef";
 import { extractAsset, getExtractOutputFolderCollisionInfo } from "./extractFhm2d";
 
-const { existsMock, readFileMock, invokeMock, extractFHMDataMock } = vi.hoisted(() => ({
+const { existsMock, readFileMock, invokeMock, extractFHMDataMock, extractUnitModelMock } = vi.hoisted(() => ({
   existsMock: vi.fn(),
   readFileMock: vi.fn(),
   invokeMock: vi.fn(),
   extractFHMDataMock: vi.fn(),
+  extractUnitModelMock: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/path", () => ({
@@ -39,7 +40,11 @@ vi.mock("@/models/fhm2d", () => ({
   },
 }));
 
-function assetFixture(): AssetRefInfo {
+vi.mock("@/page/UnitModelEdit/utils/unitModelExtractService", () => ({
+  extractUnitModelToFolder: extractUnitModelMock,
+}));
+
+function modelAssetFixture(): AssetRefInfo {
   return {
     fieldKey: "Model",
     routeId: "unit.model",
@@ -73,19 +78,36 @@ function assetFixture(): AssetRefInfo {
   };
 }
 
+function effectAssetFixture(): AssetRefInfo {
+  return {
+    ...modelAssetFixture(),
+    fieldKey: "Effect",
+    routeId: "unit.effect",
+    isModel: false,
+    isEffectAsset: true,
+  };
+}
+
 describe("extractFhm2d route targets", () => {
   beforeEach(() => {
     existsMock.mockReset();
     readFileMock.mockReset();
     invokeMock.mockReset();
     extractFHMDataMock.mockReset();
+    extractUnitModelMock.mockReset();
     existsMock.mockResolvedValue(true);
     readFileMock.mockResolvedValue(new Uint8Array([0xb9, 0xb7, 0xb2, 0xcd, 0x00]));
     invokeMock.mockResolvedValue(false);
     extractFHMDataMock.mockResolvedValue({ namingError: undefined });
+    extractUnitModelMock.mockResolvedValue({
+      modelRoot: "E:/output/002chara/0xBDBE6FEA",
+      structureJsonPath: "E:/output/002chara/0xBDBE6FEA_structure.json",
+      totalFiles: 42,
+      modelCount: 3,
+    });
   });
 
-  it("extracts Model to the configured 002chara pack folder", async () => {
+  it("extracts Model with the unit-model grouped folder layout", async () => {
     const target = await resolveFhm2dPackPaths(
       "E:/output",
       DEFAULT_TEST_EDITOR_WORKSPACE,
@@ -93,17 +115,40 @@ describe("extractFhm2d route targets", () => {
       "0xBDBE6FEA",
     );
 
-    const result = await extractAsset(assetFixture(), target);
+    const result = await extractAsset(modelAssetFixture(), target, { writeMetaBin: true });
 
-    expect(extractFHMDataMock).toHaveBeenCalledWith(
+    expect(extractUnitModelMock).toHaveBeenCalledWith(
       "E:/OB/dplcache/0xBDBE6FEA.fhm2d",
       "E:/output/002chara/0xBDBE6FEA",
+      { writeMetaBin: true },
+    );
+    expect(extractFHMDataMock).not.toHaveBeenCalled();
+    expect(readFileMock).not.toHaveBeenCalled();
+    expect(result.path).toBe("E:/output/002chara/0xBDBE6FEA");
+    expect(result.modelCount).toBe(3);
+    expect(result.totalFiles).toBe(42);
+  });
+
+  it("keeps flat extraction for non-model assets", async () => {
+    const target = await resolveFhm2dPackPaths(
+      "E:/output",
+      DEFAULT_TEST_EDITOR_WORKSPACE,
+      "unit.effect",
+      "0xBDBE6FEA",
+    );
+
+    const result = await extractAsset(effectAssetFixture(), target);
+
+    expect(extractUnitModelMock).not.toHaveBeenCalled();
+    expect(extractFHMDataMock).toHaveBeenCalledWith(
+      "E:/OB/dplcache/0xBDBE6FEA.fhm2d",
+      "E:/output/006effect/0xBDBE6FEA",
       "SingleFolder",
-      "fhm2d_character",
+      "fhm2d_effect",
       undefined,
       false,
     );
-    expect(result.path).toBe("E:/output/002chara/0xBDBE6FEA");
+    expect(result.path).toBe("E:/output/006effect/0xBDBE6FEA");
   });
 
   it("checks collisions at the resolved pack target", async () => {

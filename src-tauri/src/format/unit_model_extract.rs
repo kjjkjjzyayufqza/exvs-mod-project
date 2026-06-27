@@ -47,10 +47,14 @@ enum TreeNode {
 pub fn extract_unit_model_fhm2d_to_folder_impl(
     source_path: &str,
     out_root: &str,
+    write_meta_bin: bool,
 ) -> Result<UnitModelExtractResult, String> {
     let bytes =
         fs::read(source_path).map_err(|e| format!("Failed to read fhm2d {source_path}: {e}"))?;
     let out_root_path = PathBuf::from(out_root.trim());
+    if write_meta_bin {
+        crate::format::fhm2d::write_ob_meta_bin_from_bytes(&bytes, out_root_path.as_path())?;
+    }
     let out_name = out_root_path
         .file_name()
         .and_then(|n| n.to_str())

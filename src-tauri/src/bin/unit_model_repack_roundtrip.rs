@@ -196,6 +196,7 @@ fn main() {
     let unit_ext = extract_unit_model_fhm2d_to_folder_impl(
         &input,
         unit_out_root.to_str().unwrap(),
+        false,
     )
     .expect("unit-model extract failed");
     println!(
@@ -279,6 +280,7 @@ fn main() {
     let unit2_ext = extract_unit_model_fhm2d_to_folder_impl(
         unit_repacked.to_str().unwrap(),
         unit2_out_root.to_str().unwrap(),
+        false,
     )
     .expect("re-extract of repacked unit fhm2d failed");
     let s1 = fs::read(&unit_ext.structure_json_path).expect("read structure 1");

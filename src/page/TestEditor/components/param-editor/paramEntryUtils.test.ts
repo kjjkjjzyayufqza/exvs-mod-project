@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   appendEntryEditorMeta,
+  applyHexBytesToTypedEntry,
+  buildTypedEntryFieldLayout,
   buildTypedEntryHexPreview,
   createBlankTypedParamEntry,
   createCopyAsNewTypedParamEntry,
   createInitialEntryEditorMeta,
   filterTypedParamEntryRows,
+  formatHexPreviewEditText,
   markEntryEditorMetaDirty,
+  parseHexPreviewEditText,
   readTypedEntryId,
   removeEntryEditorMetaAt,
   shiftHighlightedEntryIndices,
@@ -124,5 +128,36 @@ describe("paramEntryUtils", () => {
         ascii: "xV4........?DCBA",
       },
     ]);
+  });
+
+  it("round-trips hex edit text through field layout", () => {
+    const data = createData([
+      { entryId: 0x10, ammoCount: 0x12345678, damage: -2, speedRate: 1, bulletEffectHash: 0x41424344 },
+    ]);
+    const preview = buildTypedEntryHexPreview(data, 0);
+    const layout = buildTypedEntryFieldLayout(data, 0);
+    expect(preview).not.toBeNull();
+    expect(layout).not.toBeNull();
+    if (!preview || !layout) return;
+
+    const editText = formatHexPreviewEditText(preview.bytes);
+    expect(editText).toBe("78 56 34 12 FE FF FF FF 00 00 80 3F 44 43 42 41");
+
+    const parsed = parseHexPreviewEditText(`${editText}\nAA BB`, preview.bytes.length + 2);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const nextEntry = applyHexBytesToTypedEntry(data.entries[0]!, layout, parsed.bytes);
+    expect(nextEntry.ammoCount).toBe(0x12345678);
+    expect(nextEntry.damage).toBe(-2);
+    expect(nextEntry.speedRate).toBe(1);
+    expect(nextEntry.bulletEffectHash).toBe(0x41424344);
+  });
+
+  it("rejects hex edit text with the wrong byte count", () => {
+    const parsed = parseHexPreviewEditText("FF 00", 4);
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.error).toContain("Expected 4 bytes");
   });
 });

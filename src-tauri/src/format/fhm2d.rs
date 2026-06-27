@@ -331,6 +331,16 @@ pub fn extract_fhm2d_to_folder_impl(
     .extract()
 }
 
+/// Write decompressed OB meta section to `<out_dir>/meta.bin`.
+pub fn write_ob_meta_bin_from_bytes(bytes: &[u8], out_dir: &Path) -> Result<(), String> {
+    let (_, meta_inflated) = parse_ob_fhm2d(bytes)?;
+    fs::create_dir_all(out_dir).map_err(|e| format!("Failed to create {}: {e}", out_dir.display()))?;
+    let meta_path = out_dir.join("meta.bin");
+    fs::write(&meta_path, meta_inflated.as_slice())
+        .map_err(|e| format!("Write meta.bin failed: {e}"))?;
+    Ok(())
+}
+
 pub fn extract_fhm2d_to_memory_impl(
     file_bytes: &[u8],
     source_name: &str,

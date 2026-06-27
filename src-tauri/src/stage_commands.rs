@@ -1032,9 +1032,15 @@ pub async fn remove_unit_model_nutexb(
 pub async fn extract_unit_model_fhm2d_to_folder(
     source_path: String,
     out_root: String,
+    write_meta_bin: Option<bool>,
 ) -> Result<unit_model_extract::UnitModelExtractResult, String> {
+    let write_meta = write_meta_bin.unwrap_or(false);
     let result = tauri::async_runtime::spawn_blocking(move || {
-        unit_model_extract::extract_unit_model_fhm2d_to_folder_impl(&source_path, &out_root)
+        unit_model_extract::extract_unit_model_fhm2d_to_folder_impl(
+            &source_path,
+            &out_root,
+            write_meta,
+        )
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))??;

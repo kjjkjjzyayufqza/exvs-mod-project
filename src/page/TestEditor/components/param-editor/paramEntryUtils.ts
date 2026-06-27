@@ -68,6 +68,16 @@ export interface TypedEntryHexPreview {
   rows: HexPreviewRow[];
 }
 
+export interface TypedEntryFieldLayout {
+  key: string;
+  offset: number;
+  kind: number;
+}
+
+export type ParseHexPreviewResult =
+  | { ok: true; bytes: number[] }
+  | { ok: false; error: string };
+
 function normalizeSearchText(value: string): string {
   return value.toLowerCase().replace(/^0x/, "").replace(/[^a-z0-9.-]/g, "");
 }
@@ -195,6 +205,17 @@ function numericValue(value: TypedFieldValue): number {
   return 0;
 }
 
+function readFieldBytes(bytes: number[], offset: number, kind: number): number {
+  const view = new DataView(Uint8Array.from(bytes).buffer);
+  if (kind === 5) {
+    return view.getFloat32(offset, true);
+  }
+  if (kind === 2) {
+    return view.getInt32(offset, true);
+  }
+  return view.getUint32(offset, true);
+}
+
 function writeFieldBytes(bytes: number[], offset: number, kind: number, value: TypedFieldValue): void {
   const buffer = new ArrayBuffer(4);
   const view = new DataView(buffer);
@@ -227,11 +248,14 @@ function formatHexPreviewRows(bytes: number[]): HexPreviewRow[] {
   return rows;
 }
 
-export function buildTypedEntryHexPreview(data: TypedParamFile, entryIndex: number): TypedEntryHexPreview | null {
+export function buildTypedEntryFieldLayout(
+  data: TypedParamFile,
+  entryIndex: number,
+): TypedEntryFieldLayout[] | null {
   const entry = data.entries[entryIndex];
   if (!entry) return null;
   const keys = Object.keys(entry).filter((key) => key !== "entryId" && !key.endsWith("Size"));
-  const fieldLayout = keys.map((key, index) => {
+  return keys.map((key, index) => {
     const spec = data.fieldSpecs[index];
     return {
       key,
@@ -239,6 +263,49 @@ export function buildTypedEntryHexPreview(data: TypedParamFile, entryIndex: numb
       kind: fieldSpecKind(spec),
     };
   });
+}
+
+export function formatHexPreviewEditText(bytes: number[]): string {
+  const rows: string[] = [];
+  for (let offset = 0; offset < bytes.length; offset += 16) {
+    const chunk = bytes.slice(offset, offset + 16);
+    const hexBytes = chunk.map((byte) => byte.toString(16).toUpperCase().padStart(2, "0"));
+    rows.push(hexBytes.join(" "));
+  }
+  return rows.join("\n");
+}
+
+export function parseHexPreviewEditText(text: string, expectedLength: number): ParseHexPreviewResult {
+  const tokens = text.match(/[0-9A-Fa-f]{2}/g);
+  if (!tokens || tokens.length === 0) {
+    return { ok: false, error: "No hex bytes found in editor text." };
+  }
+  const bytes = tokens.map((token) => Number.parseInt(token, 16));
+  if (bytes.length !== expectedLength) {
+    return {
+      ok: false,
+      error: `Expected ${expectedLength} bytes, found ${bytes.length}.`,
+    };
+  }
+  return { ok: true, bytes };
+}
+
+export function applyHexBytesToTypedEntry(
+  entry: TypedParamEntry,
+  fieldLayout: TypedEntryFieldLayout[],
+  bytes: number[],
+): TypedParamEntry {
+  const next: TypedParamEntry = { ...entry };
+  fieldLayout.forEach((field) => {
+    next[field.key] = readFieldBytes(bytes, field.offset, field.kind);
+  });
+  return next;
+}
+
+export function buildTypedEntryHexPreview(data: TypedParamFile, entryIndex: number): TypedEntryHexPreview | null {
+  const fieldLayout = buildTypedEntryFieldLayout(data, entryIndex);
+  const entry = data.entries[entryIndex];
+  if (!entry || !fieldLayout) return null;
   const size = fieldLayout.reduce((acc, field) => Math.max(acc, field.offset + 4), 0);
   const bytes = Array.from({ length: size }, () => 0);
   fieldLayout.forEach((field) => {

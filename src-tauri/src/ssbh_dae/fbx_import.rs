@@ -20,9 +20,6 @@ use super::import_scene::{
 const DEFAULT_NORMAL: [f32; 3] = [0.0, 0.0, 1.0];
 const DEFAULT_UV: [f32; 2] = [0.0, 0.0];
 
-/// Blender FBX exports mesh positions in centimeters; EXVS2 unit-model meshes use decimeters.
-pub const BLENDER_FBX_TO_EXVS2_MESH_SCALE: f32 = 0.1;
-
 fn application_text_indicates_blender(app: &Application) -> bool {
     text_indicates_blender(&app.name, &app.vendor)
 }
@@ -63,11 +60,40 @@ pub fn detect_fbx_import_source(scene: &Scene) -> FbxImportSource {
     FbxImportSource::Unknown
 }
 
-/// Automatic mesh scale applied on top of the user `scale_factor` during FBX conversion.
-pub fn fbx_source_mesh_scale(source: FbxImportSource) -> f32 {
-    match source {
-        FbxImportSource::Blender => BLENDER_FBX_TO_EXVS2_MESH_SCALE,
-        FbxImportSource::Maya | FbxImportSource::Unknown => 1.0,
+/// Blender FBX IO uses `FrontAxisSign=+1` / `CoordAxisSign=+1`, while our FBX export uses
+/// Maya-style `-1`/`-1`. ufbx resolves those conventions into different scene spaces; without
+/// correction, a Blender round-trip flips the model 180 degrees around Y (head/tail reversed).
+fn scene_uses_blender_fbx_axis_convention(scene: &Scene) -> bool {
+    scene.settings.axes.front == ufbx::CoordinateAxis::PositiveZ
+        && scene.settings.axes.right == ufbx::CoordinateAxis::PositiveX
+        && matches!(
+            scene.settings.axes.up,
+            ufbx::CoordinateAxis::PositiveY | ufbx::CoordinateAxis::NegativeY
+        )
+}
+
+fn apply_y180_axis_convention_correction(scene: &mut ImportScene) {
+    let rot = Mat4::from_rotation_y(std::f32::consts::PI);
+    for mesh in &mut scene.meshes {
+        for vertex in &mut mesh.vertices {
+            *vertex = rot
+                .transform_point3(Vec3::from_array(*vertex))
+                .to_array();
+        }
+        for normal in &mut mesh.normals {
+            let transformed = rot.transform_vector3(Vec3::from_array(*normal));
+            if let Some(normalized) = normalized_vec3(transformed) {
+                *normal = normalized;
+            }
+        }
+    }
+    for bone in &mut scene.bones {
+        let local = Mat4::from_cols_array_2d(&bone.transform);
+        bone.transform = glam_to_import_columns(rot * local * rot);
+        if let Some(inverse_bind_matrix) = bone.inverse_bind_matrix.as_mut() {
+            let inverse = Mat4::from_cols_array_2d(inverse_bind_matrix);
+            *inverse_bind_matrix = glam_to_import_columns(inverse * rot);
+        }
     }
 }
 
@@ -870,13 +896,17 @@ fn build_import_scene_from_fbx(scene: &Scene, fbx_import_source: FbxImportSource
         }
     }
 
-    Ok(ImportScene {
+    let mut import_scene = ImportScene {
         meshes,
         materials: Vec::new(),
         bones,
         up_axis,
         fbx_import_source: Some(fbx_import_source),
-    })
+    };
+    if scene_uses_blender_fbx_axis_convention(scene) {
+        apply_y180_axis_convention_correction(&mut import_scene);
+    }
+    Ok(import_scene)
 }
 
 /// Load an FBX file and build an `ImportScene` (same downstream path as COLLADA).
@@ -903,9 +933,7 @@ pub fn convert_fbx_file(
     let root = load_fbx_scene(fbx_file_path)?;
     let fbx_import_source = detect_fbx_import_source(&root);
     let scene = build_import_scene_from_fbx(&root, fbx_import_source)?;
-    let mut effective_config = config.clone();
-    effective_config.scale_factor *= fbx_source_mesh_scale(fbx_import_source);
-    convert_import_scene_file(scene, &effective_config)
+    convert_import_scene_file(scene, config)
 }
 
 #[cfg(test)]
@@ -925,14 +953,6 @@ mod tests {
                 "expected {expected}, got {actual}"
             );
         }
-    }
-
-    #[test]
-    fn blender_fbx_to_exvs2_mesh_scale_is_one_tenth() {
-        assert_eq!(BLENDER_FBX_TO_EXVS2_MESH_SCALE, 0.1);
-        assert_eq!(fbx_source_mesh_scale(FbxImportSource::Blender), 0.1);
-        assert_eq!(fbx_source_mesh_scale(FbxImportSource::Maya), 1.0);
-        assert_eq!(fbx_source_mesh_scale(FbxImportSource::Unknown), 1.0);
     }
 
     #[test]
@@ -1190,6 +1210,147 @@ mod tests {
             eprintln!(
                 "[large_test3] biggest object='{}' vertex_count={} index_count={}",
                 name, vertex_count, index_count
+            );
+        }
+    }
+
+    #[test]
+    fn diagnose_gyan_fbx_axis_flip() {
+        const ORIGINAL: &str = r"D:\output\exvs2\Gyan\001gundam_005gyan00_001_wep_suibaku00.fbx";
+        const BLENDER: &str = r"D:\output\exvs2\Gyan\Untitled.fbx";
+
+        let original_path = Path::new(ORIGINAL);
+        let blender_path = Path::new(BLENDER);
+        if !original_path.is_file() || !blender_path.is_file() {
+            eprintln!("SKIP: Gyan FBX samples not found");
+            return;
+        }
+
+        let original_root = load_fbx_scene(original_path).expect("original fbx");
+        let blender_root = load_fbx_scene(blender_path).expect("blender fbx");
+
+        fn log_scene_settings(label: &str, scene: &Scene) {
+            let s = &scene.settings;
+            eprintln!(
+                "[{label}] up={:?} front={:?} right={:?} original_up={:?} meters_per_unit={}",
+                s.axes.up, s.axes.front, s.axes.right, s.original_axis_up, s.unit_meters
+            );
+            eprintln!(
+                "[{label}] creator='{}' original_app='{}' latest_app='{}'",
+                scene.metadata.creator,
+                scene.metadata.original_application.name,
+                scene.metadata.latest_application.name
+            );
+        }
+
+        log_scene_settings("original", &original_root);
+        log_scene_settings("blender", &blender_root);
+
+        let original_scene =
+            build_import_scene_from_fbx(&original_root, detect_fbx_import_source(&original_root))
+                .expect("original import scene");
+        let blender_scene =
+            build_import_scene_from_fbx(&blender_root, detect_fbx_import_source(&blender_root))
+                .expect("blender import scene");
+
+        eprintln!(
+            "[original] meshes={} bones={} up_axis={:?} source={:?}",
+            original_scene.meshes.len(),
+            original_scene.bones.len(),
+            original_scene.up_axis,
+            original_scene.fbx_import_source
+        );
+        eprintln!(
+            "[blender] meshes={} bones={} up_axis={:?} source={:?}",
+            blender_scene.meshes.len(),
+            blender_scene.bones.len(),
+            blender_scene.up_axis,
+            blender_scene.fbx_import_source
+        );
+
+        for mesh in &original_scene.meshes {
+            if mesh.vertices.is_empty() {
+                continue;
+            }
+            let mut min = mesh.vertices[0];
+            let mut max = mesh.vertices[0];
+            for v in &mesh.vertices {
+                for i in 0..3 {
+                    min[i] = min[i].min(v[i]);
+                    max[i] = max[i].max(v[i]);
+                }
+            }
+            eprintln!("[original mesh '{}'] verts={} bbox min={min:?} max={max:?}", mesh.name, mesh.vertices.len());
+        }
+        for mesh in &blender_scene.meshes {
+            if mesh.vertices.is_empty() {
+                continue;
+            }
+            let mut min = mesh.vertices[0];
+            let mut max = mesh.vertices[0];
+            for v in &mesh.vertices {
+                for i in 0..3 {
+                    min[i] = min[i].min(v[i]);
+                    max[i] = max[i].max(v[i]);
+                }
+            }
+            eprintln!("[blender mesh '{}'] verts={} bbox min={min:?} max={max:?}", mesh.name, mesh.vertices.len());
+        }
+
+        for (label, scene) in [("original", &original_scene), ("blender", &blender_scene)] {
+            for bone in &scene.bones {
+                let t = bone.transform[3];
+                eprintln!("[{label} bone '{}'] parent={:?} translation={t:?}", bone.name, bone.parent_index);
+            }
+        }
+
+        fn collect_mesh_nodes<'a>(node: &'a Node, out: &mut Vec<&'a Node>) {
+            if node.mesh.is_some() {
+                out.push(node);
+            }
+            for child in node.children.iter() {
+                collect_mesh_nodes(child.as_ref(), out);
+            }
+        }
+
+        for (label, root) in [("original", &original_root), ("blender", &blender_root)] {
+            let mut nodes = Vec::new();
+            collect_mesh_nodes(root.root_node.as_ref(), &mut nodes);
+            for node in nodes {
+                let gtw = node.geometry_to_world;
+                eprintln!(
+                    "[{label} mesh node '{}'] geometry_to_world translation=({}, {}, {})",
+                    node.element.name,
+                    rf32(gtw.m03),
+                    rf32(gtw.m13),
+                    rf32(gtw.m23)
+                );
+            }
+        }
+
+        if let (Some(om), Some(bm)) = (
+            original_scene.meshes.first(),
+            blender_scene.meshes.first(),
+        ) {
+            assert_eq!(om.vertices.len(), bm.vertices.len());
+            let mut matched = 0usize;
+            for (ov, bv) in om.vertices.iter().zip(bm.vertices.iter()) {
+                let diff = ov
+                    .iter()
+                    .zip(bv.iter())
+                    .map(|(a, b)| (a - b).abs())
+                    .fold(0.0f32, f32::max);
+                if diff < 0.05 {
+                    matched += 1;
+                }
+            }
+            eprintln!(
+                "[vertex compare after blender axis correction] matched={matched} total={}",
+                om.vertices.len()
+            );
+            assert!(
+                matched >= om.vertices.len().saturating_sub(1),
+                "Blender round-trip vertices should match original fbxA after Y180 correction"
             );
         }
     }

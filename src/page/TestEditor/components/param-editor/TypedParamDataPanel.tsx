@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
-import { Search, CopyPlus, Eye, Plus, Trash2 } from "lucide-react"
+import { toast } from "sonner"
+import { Search, CopyPlus, Eye, Plus, Trash2, Pencil, Save, X } from "lucide-react"
 import { AppRndModalShell } from "@/components/AppRndModalShell"
 import { Button } from "@/components/ui/button"
 import { formatHash } from "@/models/commandTable"
@@ -9,12 +10,16 @@ import { cn } from "@/lib/utils"
 import type { TypedParamEntry, TypedParamFile } from "./typedParamTypes"
 import {
   appendEntryEditorMeta,
+  applyHexBytesToTypedEntry,
+  buildTypedEntryFieldLayout,
   buildTypedEntryHexPreview,
   createBlankTypedParamEntry,
   createCopyAsNewTypedParamEntry,
   createInitialEntryEditorMeta,
   filterTypedParamEntryRows,
+  formatHexPreviewEditText,
   markEntryEditorMetaDirty,
+  parseHexPreviewEditText,
   readTypedEntryId,
   removeEntryEditorMetaAt,
   shiftHighlightedEntryIndices,
@@ -129,7 +134,8 @@ export function TypedParamDataPanel({
   const [entrySearchDraft, setEntrySearchDraft] = useState("")
   const [entrySearch, setEntrySearch] = useState("")
   const [previewOpen, setPreviewOpen] = useState(false)
-  const [activePreviewSelection, setActivePreviewSelection] = useState<"hex" | "ascii" | null>(null)
+  const [hexPreviewMode, setHexPreviewMode] = useState<"view" | "edit">("view")
+  const [hexEditDraft, setHexEditDraft] = useState("")
   const [isEntrySearchPending, startEntrySearchTransition] = useTransition()
   const [entryEditorMeta, setEntryEditorMeta] = useState<TypedParamEntryEditorMeta[]>(() =>
     createInitialEntryEditorMeta(data.entries.length),
@@ -176,15 +182,60 @@ export function TypedParamDataPanel({
   )
 
   useEffect(() => {
-    if (!activePreviewSelection) return
-    const clearSelectionMode = () => setActivePreviewSelection(null)
-    window.addEventListener("mouseup", clearSelectionMode)
-    window.addEventListener("blur", clearSelectionMode)
-    return () => {
-      window.removeEventListener("mouseup", clearSelectionMode)
-      window.removeEventListener("blur", clearSelectionMode)
+    if (!previewOpen) {
+      setHexPreviewMode("view")
+      setHexEditDraft("")
     }
-  }, [activePreviewSelection])
+  }, [previewOpen])
+
+  useEffect(() => {
+    setHexPreviewMode("view")
+    setHexEditDraft("")
+  }, [selectedEntryIndex])
+
+  const hexEditDirty = useMemo(() => {
+    if (!preview || hexPreviewMode !== "edit") return false
+    return hexEditDraft !== formatHexPreviewEditText(preview.bytes)
+  }, [hexEditDraft, hexPreviewMode, preview])
+
+  const beginHexEdit = useCallback(() => {
+    if (!preview) return
+    setHexEditDraft(formatHexPreviewEditText(preview.bytes))
+    setHexPreviewMode("edit")
+  }, [preview])
+
+  const cancelHexEdit = useCallback(() => {
+    if (!preview) {
+      setHexPreviewMode("view")
+      setHexEditDraft("")
+      return
+    }
+    setHexEditDraft(formatHexPreviewEditText(preview.bytes))
+    setHexPreviewMode("view")
+  }, [preview])
+
+  const saveHexEdit = useCallback(() => {
+    if (!preview || !entry) return
+    const fieldLayout = buildTypedEntryFieldLayout(data, selectedEntryIndex)
+    if (!fieldLayout) {
+      toast.error("Unable to resolve entry field layout.")
+      return
+    }
+    const parsed = parseHexPreviewEditText(hexEditDraft, preview.bytes.length)
+    if (!parsed.ok) {
+      toast.error(parsed.error)
+      return
+    }
+    const nextEntry = applyHexBytesToTypedEntry(entry, fieldLayout, parsed.bytes)
+    const nextEntries = data.entries.map((item, idx) =>
+      idx === selectedEntryIndex ? nextEntry : item,
+    )
+    const nextEntryIds = nextEntries.map((item, idx) => readTypedEntryId(item, idx))
+    onChange({ ...data, entries: nextEntries, entryIds: nextEntryIds })
+    setEntryEditorMeta((prev) => markEntryEditorMetaDirty(prev, selectedEntryIndex))
+    setHexPreviewMode("view")
+    toast.success("Hex preview changes saved to entry fields")
+  }, [data, entry, hexEditDraft, onChange, preview, selectedEntryIndex])
 
   const fieldInfoMap = useMemo(() => {
     if (!entry || !data.fieldSpecs) return {}
@@ -471,21 +522,49 @@ export function TypedParamDataPanel({
           title="Hex Preview"
           subtitle={
             preview
-              ? `${formatHash(preview.entryId)} · ${preview.bytes.length} bytes · little-endian row data`
+              ? `${formatHash(preview.entryId)} · ${preview.bytes.length} bytes · little-endian row data${
+                  hexPreviewMode === "edit" ? " · editing" : " · view only"
+                }`
               : "No entry selected"
           }
           headerIcon={<Eye className="h-5 w-5 text-primary" />}
+          headerActions={
+            preview ? (
+              hexPreviewMode === "view" ? (
+                <Button type="button" size="sm" variant="outline" className="h-7 gap-1 px-2 text-[10px]" onClick={beginHexEdit}>
+                  <Pencil className="h-3 w-3" />
+                  Edit
+                </Button>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  {hexEditDirty ? (
+                    <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-800 dark:text-amber-200">
+                      Unsaved
+                    </span>
+                  ) : null}
+                  <Button type="button" size="sm" variant="outline" className="h-7 gap-1 px-2 text-[10px]" onClick={cancelHexEdit}>
+                    <X className="h-3 w-3" />
+                    Cancel
+                  </Button>
+                  <Button type="button" size="sm" className="h-7 gap-1 px-2 text-[10px]" onClick={saveHexEdit}>
+                    <Save className="h-3 w-3" />
+                    Save
+                  </Button>
+                </div>
+              )
+            ) : null
+          }
           dimensions={HEX_PREVIEW_MODAL_DIMENSIONS}
           storageKey="app.rnd-size.typed-param-hex-preview"
           onClose={() => setPreviewOpen(false)}
         >
-          <div className="min-h-0 flex-1 overflow-auto bg-muted/20 p-4">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/20 p-4">
             {preview ? (
-              <HexPreviewRows
-                rows={preview.rows}
-                activePreviewSelection={activePreviewSelection}
-                onPreviewSelectionChange={setActivePreviewSelection}
-              />
+              hexPreviewMode === "view" ? (
+                <HexPreviewRows rows={preview.rows} />
+              ) : (
+                <HexPreviewEditor draft={hexEditDraft} onDraftChange={setHexEditDraft} byteCount={preview.bytes.length} />
+              )
             ) : (
               <div className="flex h-28 items-center justify-center text-sm text-muted-foreground">No entry selected</div>
             )}
@@ -496,15 +575,36 @@ export function TypedParamDataPanel({
   )
 }
 
-function HexPreviewRows({
-  rows,
-  activePreviewSelection,
-  onPreviewSelectionChange,
+function sanitizeHexSelectionText(text: string): string {
+  const bytes = text.match(/[0-9A-Fa-f]{2}/g)
+  return bytes ? bytes.join(" ") : ""
+}
+
+function HexPreviewEditor({
+  draft,
+  onDraftChange,
+  byteCount,
 }: {
-  rows: Array<{ offset: string; hex: string; ascii: string }>
-  activePreviewSelection: "hex" | "ascii" | null
-  onPreviewSelectionChange: (next: "hex" | "ascii") => void
+  draft: string
+  onDraftChange: (next: string) => void
+  byteCount: number
 }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border bg-[#0d1117] text-[#d6deeb] shadow-inner">
+      <div className="border-b border-white/10 bg-white/5 px-3 py-2 font-mono text-[10px] uppercase tracking-wide text-slate-400">
+        Edit hex bytes · {byteCount} bytes · 16 bytes per line
+      </div>
+      <textarea
+        value={draft}
+        onChange={(event) => onDraftChange(event.target.value)}
+        spellCheck={false}
+        className="min-h-0 flex-1 resize-none border-0 bg-transparent px-3 py-2 font-mono text-[11px] leading-6 text-slate-100 outline-none selection:bg-cyan-500/40 selection:text-white"
+      />
+    </div>
+  )
+}
+
+function HexPreviewRows({ rows }: { rows: Array<{ offset: string; hex: string; ascii: string }> }) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const getScrollElement = useCallback(() => scrollRef.current, [])
   const virtualizer = useVirtualizer({
@@ -514,6 +614,16 @@ function HexPreviewRows({
     overscan: 20,
   })
 
+  const handleCopy = useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
+    const selection = window.getSelection()
+    if (!selection || selection.isCollapsed) return
+    const raw = selection.toString()
+    if (!raw.trim()) return
+    const sanitized = sanitizeHexSelectionText(raw)
+    event.preventDefault()
+    event.clipboardData.setData("text/plain", sanitized)
+  }, [])
+
   return (
     <div className="overflow-hidden rounded-md border bg-[#0d1117] text-[#d6deeb] shadow-inner">
       <div className="grid select-none grid-cols-[6.5rem_minmax(24rem,1fr)_minmax(8rem,0.35fr)] border-b border-white/10 bg-white/5 px-3 py-2 font-mono text-[10px] uppercase tracking-wide text-slate-400">
@@ -521,7 +631,11 @@ function HexPreviewRows({
         <span>Hex</span>
         <span>Ascii</span>
       </div>
-      <div ref={scrollRef} className="max-h-[calc(85vh-12rem)] overflow-auto px-3 font-mono text-[11px] leading-6">
+      <div
+        ref={scrollRef}
+        className="max-h-[calc(85vh-12rem)] overflow-auto px-3 font-mono text-[11px] leading-6"
+        onCopy={handleCopy}
+      >
         <div className="relative min-w-[42rem]" style={{ height: virtualizer.getTotalSize() }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const row = rows[virtualRow.index]
@@ -529,22 +643,14 @@ function HexPreviewRows({
             return (
               <div
                 key={`${row.offset}-${virtualRow.index}`}
-                className="absolute left-0 top-0 grid w-full grid-cols-[6.5rem_minmax(24rem,1fr)_minmax(8rem,0.35fr)] border-b border-white/4 hover:bg-cyan-400/10"
+                className="absolute left-0 top-0 grid w-full grid-cols-[6.5rem_minmax(24rem,1fr)_minmax(8rem,0.35fr)] border-b border-white/4"
                 style={{ height: virtualRow.size, transform: `translateY(${virtualRow.start}px)` }}
               >
                 <div className="select-none text-slate-500">{row.offset}</div>
-                <div
-                  className={`${activePreviewSelection === "ascii" ? "select-none" : "select-text"} text-slate-100`}
-                  onMouseDown={() => onPreviewSelectionChange("hex")}
-                >
+                <div className="select-text text-slate-100 hover:bg-cyan-400/10 selection:bg-cyan-500/40 selection:text-white">
                   {row.hex}
                 </div>
-                <div
-                  className={`${activePreviewSelection === "hex" ? "select-none" : "select-text"} text-cyan-200/90`}
-                  onMouseDown={() => onPreviewSelectionChange("ascii")}
-                >
-                  {row.ascii}
-                </div>
+                <div className="pointer-events-none select-none text-cyan-200/90">{row.ascii}</div>
               </div>
             )
           })}
