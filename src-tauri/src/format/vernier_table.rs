@@ -29,7 +29,10 @@ pub const VERNIER_TABLE_COMMAND_POOL: ParamCommandPool = &[
     (0x3C036434, 1, "alignment_type"),       // [D:0~1] boolean despite "_type" name
     (0x42B21889, 1, "blend_mode"),           // [D:always 0] unused
     (0x43298ECB, 5, "particle_size_2"),      // [D:0~5] 31 unique
-    (0x49672094, 1, "model_hash"),           // [D:HASH] 364 unique
+    // Offset 0x30 (hash 0x49672094). Previously named `model_hash` (serialized as modelHash;
+    // sometimes described as modelId) from an incorrect assumption that this referenced a 3D model
+    // resource hash. User analysis (2026-06-28) determined this field is the vernier slot effect id.
+    (0x49672094, 1, "effect_id"),            // [D:HASH] effect id ref at entry+0x30
     (0x4B0454A2, 1, "has_texture"),          // [D:0~1] boolean. was "texture_hash" — NOT a hash
     (0x4C6990BB, 1, "has_animation"),        // [D:0~1] boolean. was "animation_hash" — NOT a hash
     (0x618D354C, 1, "material_hash"),        // [D:always 0] unused

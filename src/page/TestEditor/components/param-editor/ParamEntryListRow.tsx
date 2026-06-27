@@ -46,12 +46,12 @@ export function ParamEntryListRow({
       ref={measureRef}
       data-index={dataIndex}
       className={cn(
-        "absolute left-0 top-0 flex w-full gap-1 border-b border-border/40 px-2 py-2 text-left text-xs transition-[background-color,border-color,box-shadow] duration-200",
-        "border-l-2",
+        "absolute left-0 top-0 flex w-full gap-1.5 border-b border-border/40 px-2.5 py-2 text-left text-xs transition-[background-color,border-color,box-shadow] duration-200",
+        "border-l-[3px]",
         isSelected
-          ? "border-l-primary bg-primary/10 ring-1 ring-inset ring-primary/15"
+          ? "border-l-primary bg-primary/10 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]"
           : isHighlighted
-            ? "border-l-amber-400/80 bg-amber-500/[0.08] ring-1 ring-inset ring-amber-400/20"
+            ? "border-l-amber-400/80 bg-amber-500/[0.08]"
             : paramEntryRowAccentClass(meta, false),
         !isSelected && "hover:bg-muted/45",
       )}
@@ -71,12 +71,12 @@ export function ParamEntryListRow({
         <ParamEntryListBadges meta={meta} />
       </button>
 
-      <div className="flex shrink-0 flex-col items-center gap-0.5 pt-0.5">
+      <div className="flex shrink-0 flex-col items-center gap-1 pt-0.5">
         <Button
           type="button"
           size="icon"
           variant="ghost"
-          className="h-6 w-6 text-muted-foreground hover:text-foreground active:scale-95"
+          className="h-6 w-6 text-muted-foreground transition-[background-color,transform,color] duration-200 hover:bg-muted/60 hover:text-foreground active:scale-95 focus-visible:ring-2 focus-visible:ring-primary/30"
           title={`Copy ${formatHash(entryId)}`}
           aria-label={`Copy entry id ${formatHash(entryId)}`}
           onClick={(event) => {
@@ -91,7 +91,7 @@ export function ParamEntryListRow({
           size="icon"
           variant="ghost"
           className={cn(
-            "h-6 w-6 text-muted-foreground hover:text-amber-600 active:scale-95 dark:hover:text-amber-300",
+            "h-6 w-6 text-muted-foreground transition-[background-color,transform,color] duration-200 hover:bg-muted/60 hover:text-amber-600 active:scale-95 focus-visible:ring-2 focus-visible:ring-primary/30 dark:hover:text-amber-300",
             isHighlighted && "text-amber-600 dark:text-amber-300",
           )}
           title={isHighlighted ? "Remove highlight" : "Highlight entry"}

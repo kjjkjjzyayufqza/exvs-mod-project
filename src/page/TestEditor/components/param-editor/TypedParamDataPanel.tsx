@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { toast } from "sonner"
-import { Search, CopyPlus, Eye, Plus, Trash2, Pencil, Save, X } from "lucide-react"
+import { Search, CopyPlus, Eye, Plus, Trash2, Pencil, Save, X, ClipboardCopy, Braces, FileInput } from "lucide-react"
 import { AppRndModalShell } from "@/components/AppRndModalShell"
 import { Button } from "@/components/ui/button"
 import { formatHash } from "@/models/commandTable"
@@ -27,11 +27,22 @@ import {
 } from "./paramEntryUtils"
 import { ParamEntryListBadges } from "./ParamEntryListBadges"
 import { ParamEntryListRow } from "./ParamEntryListRow"
+import {
+  copyTypedParamEntryJsonToClipboard,
+  copyTypedParamFileJsonToClipboard,
+} from "./typedParamClipboard"
+import { TypedParamImportDialog } from "./TypedParamImportDialog"
 
-const ENTRY_ROW_HEIGHT = 56
-const FIELD_ROW_HEIGHT = 94
+const ENTRY_ROW_HEIGHT = 58
+const FIELD_ROW_HEIGHT = 104
 const FIELDS_PER_ROW = 2
 const HEX_PREVIEW_ROW_HEIGHT = 24
+const PANEL_SEARCH_CLASS =
+  "flex min-w-0 flex-1 items-center gap-1.5 rounded-md border border-border/60 bg-background px-2.5 py-1.5 shadow-sm transition-[border-color,box-shadow] duration-200 focus-within:border-primary/35 focus-within:ring-1 focus-within:ring-primary/15"
+const PANEL_SEARCH_INPUT_CLASS =
+  "h-5 w-full min-w-0 bg-transparent text-[11px] outline-none placeholder:text-muted-foreground"
+const PANEL_TOOLBAR_BUTTON_CLASS =
+  "h-7 gap-1 px-2 text-[10px] transition-[background-color,transform,box-shadow] duration-200 hover:bg-muted/60 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-primary/30"
 const HEX_PREVIEW_MODAL_DIMENSIONS = {
   width: 900,
   height: 700,
@@ -109,9 +120,9 @@ function ParamFieldCell({
       variant="compact"
       mode="live"
       containerClassName={cn(
-        "min-h-[5.25rem] border-border/45 bg-background/90 p-2.5 shadow-sm transition-[border-color,box-shadow,background-color] duration-200",
+        "min-h-[5.5rem] rounded-md border-border/45 bg-background/90 p-3 shadow-sm transition-[border-color,box-shadow,background-color] duration-200",
         "hover:border-primary/30 hover:bg-background hover:shadow-md focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20",
-        isFloat && "border-cyan-500/20 bg-cyan-950/[0.07] hover:bg-cyan-950/[0.12]",
+        isFloat && "border-cyan-500/25 bg-cyan-950/[0.06] hover:bg-cyan-950/[0.1]",
       )}
     />
   )
@@ -134,6 +145,7 @@ export function TypedParamDataPanel({
   const [entrySearchDraft, setEntrySearchDraft] = useState("")
   const [entrySearch, setEntrySearch] = useState("")
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [hexPreviewMode, setHexPreviewMode] = useState<"view" | "edit">("view")
   const [hexEditDraft, setHexEditDraft] = useState("")
   const [isEntrySearchPending, startEntrySearchTransition] = useTransition()
@@ -328,10 +340,28 @@ export function TypedParamDataPanel({
     })
   }, [])
 
+  const copySelectedEntryJson = useCallback(() => {
+    void copyTypedParamEntryJsonToClipboard(fileType, data, selectedEntryIndex)
+  }, [data, fileType, selectedEntryIndex])
+
+  const copyFullViewJson = useCallback(() => {
+    void copyTypedParamFileJsonToClipboard(fileType, data)
+  }, [data, fileType])
+
+  const applyImportedEntry = useCallback(
+    (nextEntry: TypedParamEntry) => {
+      const nextEntries = data.entries.map((item, idx) => (idx === selectedEntryIndex ? nextEntry : item))
+      const nextEntryIds = nextEntries.map((item, idx) => readTypedEntryId(item, idx))
+      onChange({ ...data, entries: nextEntries, entryIds: nextEntryIds })
+      setEntryEditorMeta((prev) => markEntryEditorMetaDirty(prev, selectedEntryIndex))
+    },
+    [data, onChange, selectedEntryIndex],
+  )
+
   return (
     <div className="grid h-full min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[minmax(220px,280px)_minmax(0,1fr)]">
       <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border bg-card shadow-sm">
-        <div className="space-y-2 border-b bg-muted/20 px-3 py-2">
+        <div className="space-y-2.5 border-b bg-muted/20 px-3 py-2.5">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-xs font-semibold tracking-tight">Entries</h3>
             <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
@@ -364,8 +394,8 @@ export function TypedParamDataPanel({
               </span>
             ) : null}
           </div>
-          <div className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 shadow-sm">
-            <Search className="h-3 w-3 text-muted-foreground" />
+          <div className={PANEL_SEARCH_CLASS}>
+            <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <input
               value={entrySearchDraft}
               onChange={(e) => {
@@ -374,11 +404,11 @@ export function TypedParamDataPanel({
                 startEntrySearchTransition(() => setEntrySearch(next))
               }}
               placeholder="Search id / field / value..."
-              className="h-4 w-full bg-transparent font-mono text-[10px] outline-none placeholder:text-muted-foreground"
+              className={cn(PANEL_SEARCH_INPUT_CLASS, "font-mono tabular-nums")}
             />
           </div>
         </div>
-        <div ref={entryListRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div ref={entryListRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
           {filteredEntryRows.length === 0 ? (
             <div className="flex h-28 items-center justify-center px-3 text-center text-xs text-muted-foreground">
               No entries match the search.
@@ -413,61 +443,130 @@ export function TypedParamDataPanel({
         </div>
       </div>
       <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border bg-card shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/20 px-3 py-2">
-          <div className="flex items-center gap-2">
-            <h3 className="text-xs font-semibold">{fileType} typed entry</h3>
-            {entry && (
-              <span className="flex flex-wrap items-center gap-1.5">
-                <span className="rounded-md border border-border/60 bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+        <div className="space-y-2.5 border-b bg-muted/20 px-3 py-2.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <h3 className="text-xs font-semibold tracking-tight text-foreground">{fileType} typed entry</h3>
+            {entry ? (
+              <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                <span className="rounded-md border border-border/60 bg-background px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-muted-foreground">
                   {formatHash(readTypedEntryId(entry, selectedEntryIndex))} · {Object.keys(entry).length} fields
                 </span>
                 <ParamEntryListBadges meta={entryEditorMeta[selectedEntryIndex]} />
               </span>
-            )}
+            ) : null}
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 shadow-sm">
-              <Search className="h-3 w-3 text-muted-foreground" />
+          <div className="flex min-w-0 flex-col gap-2 xl:flex-row xl:items-stretch xl:gap-3">
+            <div className={cn(PANEL_SEARCH_CLASS, "xl:max-w-xs")}>
+              <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
               <input
                 value={fieldSearch}
                 onChange={(e) => setFieldSearch(e.target.value)}
                 placeholder="Filter field…"
-                className="h-4 w-32 bg-transparent text-[10px] outline-none placeholder:text-muted-foreground"
+                className={PANEL_SEARCH_INPUT_CLASS}
               />
             </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-7 gap-1 px-2 text-[10px]"
-              disabled={!entry}
-              onClick={() => setPreviewOpen(true)}
-            >
-              <Eye className="h-3 w-3" />
-              Hex Preview
-            </Button>
-            <Button type="button" size="sm" variant="outline" className="h-7 gap-1 px-2 text-[10px]" onClick={copyEntryAsNew}>
-              <CopyPlus className="h-3 w-3" />
-              Copy as New
-            </Button>
-            <Button type="button" size="sm" variant="secondary" className="h-7 gap-1 px-2 text-[10px]" onClick={addEntry}>
-              <Plus className="h-3 w-3" />
-              Add New
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-7 gap-1 px-2 text-[10px] text-destructive hover:bg-destructive/10 hover:text-destructive"
-              disabled={!data.entries.length}
-              onClick={deleteEntry}
-            >
-              <Trash2 className="h-3 w-3" />
-              Delete
-            </Button>
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <div
+                className="flex flex-wrap items-center gap-1 rounded-md border border-border/50 bg-background/70 p-0.5"
+                role="group"
+                aria-label="Import and export"
+              >
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className={PANEL_TOOLBAR_BUTTON_CLASS}
+                  disabled={!entry}
+                  title="Import hex bytes or entry JSON"
+                  onClick={() => setImportOpen(true)}
+                >
+                  <FileInput className="h-3 w-3" />
+                  Import
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className={PANEL_TOOLBAR_BUTTON_CLASS}
+                  disabled={!entry}
+                  title="Copy selected entry as JSON"
+                  onClick={copySelectedEntryJson}
+                >
+                  <ClipboardCopy className="h-3 w-3" />
+                  Entry JSON
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className={PANEL_TOOLBAR_BUTTON_CLASS}
+                  disabled={!data.entries.length}
+                  title="Copy full view data as JSON"
+                  onClick={copyFullViewJson}
+                >
+                  <Braces className="h-3 w-3" />
+                  All JSON
+                </Button>
+              </div>
+              <div
+                className="flex flex-wrap items-center gap-1 rounded-md border border-border/50 bg-background/70 p-0.5"
+                role="group"
+                aria-label="Entry tools"
+              >
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className={PANEL_TOOLBAR_BUTTON_CLASS}
+                  disabled={!entry}
+                  title="Hex preview"
+                  onClick={() => setPreviewOpen(true)}
+                >
+                  <Eye className="h-3 w-3" />
+                  Hex
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className={PANEL_TOOLBAR_BUTTON_CLASS}
+                  onClick={copyEntryAsNew}
+                >
+                  <CopyPlus className="h-3 w-3" />
+                  Duplicate
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className={PANEL_TOOLBAR_BUTTON_CLASS}
+                  onClick={addEntry}
+                >
+                  <Plus className="h-3 w-3" />
+                  Add
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className={cn(
+                    PANEL_TOOLBAR_BUTTON_CLASS,
+                    "text-destructive hover:bg-destructive/10 hover:text-destructive",
+                  )}
+                  disabled={!data.entries.length}
+                  onClick={deleteEntry}
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Delete
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
-        <div ref={fieldListRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.04),transparent_55%)] p-4 dark:bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.03),transparent_55%)]">
+        <div
+          ref={fieldListRef}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.04),transparent_55%)] px-4 py-3 pr-3 dark:bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.03),transparent_55%)]"
+        >
           {!entry ? (
             <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">No entry selected</div>
           ) : filteredFieldRows.length === 0 ? (
@@ -484,12 +583,12 @@ export function TypedParamDataPanel({
                     ref={fieldVirtualizer.measureElement}
                     data-index={virtualRow.index}
                     className={cn(
-                      "absolute left-0 top-0 w-full pb-3",
+                      "absolute left-0 top-0 w-full pb-4",
                       virtualRow.index % 2 === 1 && "rounded-md bg-muted/10",
                     )}
                     style={{ transform: `translateY(${virtualRow.start}px)` }}
                   >
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       {rowKeys.map((key) => {
                         const value = entry[key]
                         const current = value === undefined ? null : value
@@ -571,6 +670,14 @@ export function TypedParamDataPanel({
           </div>
         </AppRndModalShell>
       ) : null}
+      <TypedParamImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        fileType={fileType}
+        data={data}
+        selectedEntryIndex={selectedEntryIndex}
+        onApply={applyImportedEntry}
+      />
     </div>
   )
 }

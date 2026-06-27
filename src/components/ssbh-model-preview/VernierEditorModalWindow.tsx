@@ -79,40 +79,40 @@ export function VernierEditorModalWindow({
   const title = fileBasename(session.filePath);
   const footer =
     !session.loading && !session.loadError && session.draftData ? (
-      <div className="flex flex-wrap items-center justify-end gap-2 bg-muted/20 px-5 py-4">
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border/40 bg-muted/20 px-4 py-3">
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="h-8 text-[10px]"
+          className="h-8 gap-1 px-2.5 text-[10px] transition-[background-color,transform] duration-200 hover:bg-muted/60 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-primary/30"
           disabled={session.saving || session.loading}
           onClick={onReloadRequest}
         >
-          <RefreshCw className="mr-1 h-3.5 w-3.5" />
+          <RefreshCw className="h-3.5 w-3.5" />
           Reload
         </Button>
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="h-8 text-[10px]"
+          className="h-8 gap-1 px-2.5 text-[10px] transition-[background-color,transform] duration-200 hover:bg-muted/60 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-primary/30"
           disabled={session.saving || !dirty}
           onClick={onReset}
         >
-          <RotateCcw className="mr-1 h-3.5 w-3.5" />
+          <RotateCcw className="h-3.5 w-3.5" />
           Reset
         </Button>
         <Button
           type="button"
           size="sm"
-          className="h-8 text-[10px] uppercase tracking-wide"
+          className="h-8 gap-1 px-3 text-[10px] font-semibold tracking-wide transition-[background-color,transform] duration-200 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-primary/30"
           disabled={session.saving || !dirty}
           onClick={onSave}
         >
           {session.saving ? (
-            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <Save className="mr-1 h-3.5 w-3.5" />
+            <Save className="h-3.5 w-3.5" />
           )}
           {session.saving ? "Saving..." : "Save"}
         </Button>
@@ -120,7 +120,7 @@ export function VernierEditorModalWindow({
           type="button"
           variant="outline"
           size="sm"
-          className="h-8 text-[10px]"
+          className="h-8 gap-1 px-2.5 text-[10px] transition-[background-color,transform] duration-200 hover:bg-muted/60 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-primary/30"
           disabled={session.saving}
           onClick={onCloseRequest}
         >

@@ -180,7 +180,7 @@ export function DualValueProperty({
           </div>
 
           {showHex ? (
-            <div className="flex rounded-md shadow-xs">
+            <div className="flex items-stretch rounded-md shadow-xs">
               <Input
                 value={liveIntDraft}
                 onChange={(e) => {
@@ -211,10 +211,10 @@ export function DualValueProperty({
                 onFocus={onLiveIntInputFocus}
                 onClick={onLiveIntInputClick}
                 placeholder={numberLabel}
-                className={[
-                  "h-8 font-mono text-sm shadow-none rounded-l-md rounded-r-none -mr-px",
-                  liveValidationError ? "border-red-500" : "",
-                ].join(" ")}
+                className={cn(
+                  "h-8 flex-1 font-mono text-xs tabular-nums shadow-none rounded-l-md rounded-r-none -mr-px",
+                  liveValidationError && "border-red-500",
+                )}
                 aria-invalid={liveValidationError ? true : undefined}
                 title={liveValidationError || undefined}
               />
@@ -236,10 +236,10 @@ export function DualValueProperty({
                 placeholder="XX XX XX XX"
                 onFocus={onLiveIntInputFocus}
                 onClick={onLiveIntInputClick}
-                className={[
-                  "h-8 font-mono text-sm shadow-none rounded-r-md rounded-l-none -ml-px",
-                  liveValidationError ? "border-red-500" : "",
-                ].join(" ")}
+                className={cn(
+                  "h-8 w-[9.5rem] shrink-0 font-mono text-xs tabular-nums uppercase tracking-wide shadow-none rounded-r-md rounded-l-none -ml-px text-right",
+                  liveValidationError && "border-red-500",
+                )}
                 aria-invalid={liveValidationError ? true : undefined}
                 title={liveValidationError || undefined}
               />
