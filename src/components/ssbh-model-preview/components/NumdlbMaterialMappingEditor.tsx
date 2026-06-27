@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
-import { Search, Sparkles, WandSparkles } from "lucide-react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { Search, Sparkles, Trash2, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,10 +11,43 @@ import { SsbhEditorThemeScope, type SsbhEditorThemeVariant } from "./ssbhEditorT
 
 const MAPPING_ROW_HEIGHT = 49;
 
+function MeshObjectNameInput({
+  value,
+  onCommit,
+  disabled,
+}: {
+  value: string;
+  onCommit: (next: string) => void;
+  disabled?: boolean;
+}) {
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  return (
+    <Input
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        if (draft === value) {
+          return;
+        }
+        onCommit(draft);
+      }}
+      disabled={disabled}
+      className="h-8 min-w-0 font-mono text-[11px]"
+      aria-label={`Mesh object name ${value}`}
+    />
+  );
+}
+
 type NumdlbMaterialMappingEditorProps = {
   rows: NumdlbMappingRow[];
   /** numatb-sourced material labels (maya+nust union) offered as combobox suggestions. */
   availableMaterialLabels?: string[];
+  onChangeMeshObjectName: (rowIndex: number, nextName: string) => void;
   onChangeMaterialLabel: (rowIndex: number, nextLabel: string) => void;
   onReplaceAll: (nextLabel: string, rowIndices: number[]) => void;
   /**
@@ -22,20 +55,28 @@ type NumdlbMaterialMappingEditorProps = {
    * The "Auto apply" button is rendered only when this handler is provided.
    */
   onAutoApply?: () => void;
+  onRemoveRow?: (rowIndex: number) => void;
   /** When true, table body is not in a nested ScrollArea (parent provides scroll). */
   embedTableWithoutInnerScroll?: boolean;
   themeVariant?: SsbhEditorThemeVariant;
+  disabled?: boolean;
 };
 
 export function NumdlbMaterialMappingEditor({
   rows,
   availableMaterialLabels = [],
+  onChangeMeshObjectName,
   onChangeMaterialLabel,
   onReplaceAll,
   onAutoApply,
+  onRemoveRow,
   embedTableWithoutInnerScroll = false,
   themeVariant = "default",
+  disabled = false,
 }: NumdlbMaterialMappingEditorProps) {
+  const mappingGridCols = onRemoveRow
+    ? "grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)_auto]"
+    : "grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)]";
   const [filter, setFilter] = useState("");
   const [replaceAllValue, setReplaceAllValue] = useState("");
   const deferredFilter = useDeferredValue(filter);
@@ -118,18 +159,37 @@ export function NumdlbMaterialMappingEditor({
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
               >
-                <div className="grid grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] gap-2">
+                <div className={`grid ${mappingGridCols} items-center gap-2`}>
                   <div className="min-w-0">
-                    <div className="truncate font-mono text-[11px]" title={row.meshObjectName}>
-                      {row.meshObjectName}
-                    </div>
+                    <MeshObjectNameInput
+                      value={row.meshObjectName}
+                      disabled={disabled}
+                      onCommit={(next) => onChangeMeshObjectName(rowIndex, next)}
+                    />
                   </div>
-                  <div className="font-mono text-[11px] text-muted-foreground">{row.meshObjectSubindex}</div>
+                  <div className="font-mono text-[11px] tabular-nums text-muted-foreground">{row.meshObjectSubindex}</div>
                   <MaterialLabelCombobox
                     value={row.materialLabel}
                     options={comboboxOptions}
+                    disabled={disabled}
                     onChange={(next) => onChangeMaterialLabel(rowIndex, next)}
                   />
+                  {onRemoveRow ? (
+                    <div className="flex w-8 shrink-0 justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 px-0 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                        aria-label={`Remove ${row.meshObjectName}`}
+                        title={`Remove ${row.meshObjectName}`}
+                        disabled={disabled}
+                        onClick={() => onRemoveRow(rowIndex)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             );
@@ -212,10 +272,13 @@ export function NumdlbMaterialMappingEditor({
         </div>
 
         <div className="rounded-md border">
-          <div className="grid grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] gap-2 border-b bg-muted/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <div
+            className={`grid ${mappingGridCols} items-center gap-2 border-b bg-muted/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground`}
+          >
             <span>Mesh Object</span>
             <span>Subindex</span>
             <span>Material Label</span>
+            {onRemoveRow ? <span className="w-8 shrink-0" aria-hidden /> : null}
           </div>
           {tableBody}
         </div>

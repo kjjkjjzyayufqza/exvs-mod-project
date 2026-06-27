@@ -225,6 +225,7 @@ mod tests {
             materials: vec![],
             bones: vec![],
             up_axis: UpAxisConversion::YUp,
+            fbx_import_source: None,
         };
         let mesh = bake_and_merge_collision_mesh(&scene, &CollisionMeshOptions::default()).unwrap();
         assert_eq!(mesh.vertices.len(), 3);
@@ -242,6 +243,7 @@ mod tests {
             materials: vec![],
             bones: vec![],
             up_axis: UpAxisConversion::YUp,
+            fbx_import_source: None,
         };
         let mesh = bake_and_merge_collision_mesh(&scene, &CollisionMeshOptions::default()).unwrap();
         assert_eq!(mesh.vertices.len(), 6);

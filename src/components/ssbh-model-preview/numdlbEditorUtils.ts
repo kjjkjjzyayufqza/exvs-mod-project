@@ -21,6 +21,14 @@ export function applyMeshNameAsMaterialLabel(entries: NumdlbMappingRow[]): Numdl
   });
 }
 
+/** Remove one mesh/material mapping row by index. Returns a new array. */
+export function removeMappingRow(entries: NumdlbMappingRow[], rowIndex: number): NumdlbMappingRow[] {
+  if (rowIndex < 0 || rowIndex >= entries.length) {
+    throw new Error(`removeMappingRow: rowIndex ${rowIndex} is out of range (length ${entries.length})`);
+  }
+  return entries.filter((_, index) => index !== rowIndex);
+}
+
 /**
  * Resolve the numatb file a numdlb references, as a forward-slash path next to the numdlb.
  * Picks the first `.numatb` among the numdlb's material file names; returns null when none.
@@ -95,6 +103,9 @@ export function assertNumdlbValidForSave(data: NumdlbReadResult): void {
     throw new Error("Skeleton file name must not be empty.");
   }
   for (let i = 0; i < data.entries.length; i++) {
+    if (!data.entries[i].meshObjectName.trim()) {
+      throw new Error(`Mesh object name must not be empty (row ${i + 1}).`);
+    }
     if (!data.entries[i].materialLabel.trim()) {
       throw new Error(`Material label must not be empty (row ${i + 1}).`);
     }

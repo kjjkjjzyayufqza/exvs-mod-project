@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::path::Path;
 
 use super::dae_parse::{parse_dae_file, validate_dae_scene, DaeMesh, UpAxisConversion};
-use super::import_scene::ImportScene;
+use super::import_scene::{FbxImportSource, ImportScene};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -130,6 +130,12 @@ pub fn analysis_report_for_import_scene(source_path: String, scene: &ImportScene
             ));
         }
         mesh_rows.push(row);
+    }
+
+    if scene.fbx_import_source == Some(FbxImportSource::Blender) {
+        warnings.push(
+            "Blender FBX detected: mesh positions and bone translations will be scaled by 0.1 during conversion (cm to EXVS2 dm).".to_string(),
+        );
     }
 
     let bone_names: Vec<String> = scene.bones.iter().map(|b| b.name.clone()).collect();

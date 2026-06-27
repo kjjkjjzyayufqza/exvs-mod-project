@@ -3,6 +3,7 @@ import type { NumdlbMappingRow } from "./daeSsbhTypes";
 import {
   applyMeshNameAsMaterialLabel,
   numatbPathForNumdlb,
+  removeMappingRow,
   stripPartSuffix,
 } from "./numdlbEditorUtils";
 
@@ -89,5 +90,29 @@ describe("applyMeshNameAsMaterialLabel", () => {
     const snapshot = input[0].materialLabel;
     applyMeshNameAsMaterialLabel(input);
     expect(input[0].materialLabel).toBe(snapshot);
+  });
+});
+
+describe("removeMappingRow", () => {
+  const row = (meshObjectName: string, materialLabel: string): NumdlbMappingRow => ({
+    meshObjectName,
+    meshObjectSubindex: 0,
+    materialLabel,
+  });
+
+  it("removes the row at the given index", () => {
+    const input = [row("a", "ma"), row("b", "mb"), row("c", "mc")];
+    expect(removeMappingRow(input, 1)).toEqual([row("a", "ma"), row("c", "mc")]);
+  });
+
+  it("does not mutate the input array", () => {
+    const input = [row("a", "ma"), row("b", "mb")];
+    removeMappingRow(input, 0);
+    expect(input).toHaveLength(2);
+  });
+
+  it("throws when rowIndex is out of range", () => {
+    expect(() => removeMappingRow([row("a", "ma")], 1)).toThrow(/out of range/i);
+    expect(() => removeMappingRow([], 0)).toThrow(/out of range/i);
   });
 });

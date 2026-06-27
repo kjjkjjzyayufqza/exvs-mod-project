@@ -22,10 +22,7 @@ import {
   collectTexturePathSlotRefsForExportSession,
   missingTexturePathSlotKey,
 } from "@/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
-import {
-  detectStaticMeshImportFormat,
-  UNIT_MODEL_BLENDER_FBX_SCALE_FACTOR_TEXT,
-} from "./daeImportDefaults";
+import { detectStaticMeshImportFormat } from "./daeImportDefaults";
 import type { DaeAnalysisResult } from "./daeImportTypes";
 import { DaeImportPanelSection } from "./daeImportUi";
 
@@ -74,7 +71,6 @@ export function DaeImportSsbhFullPanel({
     const fileName = sourcePath.split(/[/\\]/).pop() ?? "";
     if (detectStaticMeshImportFormat(fileName) === "fbx") {
       state.setImportKind("fbx");
-      state.setScaleFactorText(UNIT_MODEL_BLENDER_FBX_SCALE_FACTOR_TEXT);
       state.setFlipUv(true);
     }
   }, [sourcePath, unitModelMode]);
@@ -318,8 +314,10 @@ export function DaeImportSsbhFullPanel({
       <DaeImportPanelSection title="NUMDLB Mapping">
         <NumdlbMaterialMappingEditor
           rows={session.numdlbEntries}
+          onChangeMeshObjectName={session.setMeshObjectName}
           onChangeMaterialLabel={session.setMaterialLabel}
           onReplaceAll={session.replaceAllMaterialLabels}
+          onRemoveRow={session.removeNumdlbEntry}
           embedTableWithoutInnerScroll
         />
       </DaeImportPanelSection>

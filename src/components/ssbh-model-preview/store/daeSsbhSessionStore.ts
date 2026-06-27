@@ -56,7 +56,9 @@ type DaeSsbhSessionActions = {
   setWriteMayaProfile: (value: boolean) => void;
   setMirrorTexturePathsAcrossProfiles: (value: boolean) => void;
   setMaterialLabel: (rowIndex: number, nextLabel: string) => void;
+  setMeshObjectName: (rowIndex: number, nextName: string) => void;
   replaceAllMaterialLabels: (nextLabel: string, rowIndices: number[]) => void;
+  removeNumdlbEntry: (rowIndex: number) => void;
   updateProfileMaterialLabel: (profile: NumatbProfileKind, materialIndex: number, nextLabel: string) => void;
   updateProfileShaderLabel: (profile: NumatbProfileKind, materialIndex: number, nextShaderLabel: string) => void;
   updateProfileAttribute: (
@@ -337,6 +339,14 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
         });
       },
 
+      setMeshObjectName: (rowIndex, nextName) => {
+        set((state) => ({
+          numdlbEntries: state.numdlbEntries.map((row, index) =>
+            index === rowIndex ? { ...row, meshObjectName: nextName } : row,
+          ),
+        }));
+      },
+
       replaceAllMaterialLabels: (nextLabel, rowIndices) => {
         const trimmed = nextLabel.trim();
         if (!trimmed) {
@@ -355,6 +365,19 @@ export const useDaeSsbhSessionStore = create<DaeSsbhSessionStoreState>()(
             numdlbEntries: rows,
             mayaFile: ensured.mayaFile,
             nustFile: ensured.nustFile,
+          };
+        });
+      },
+
+      removeNumdlbEntry: (rowIndex) => {
+        set((state) => {
+          if (rowIndex < 0 || rowIndex >= state.numdlbEntries.length) {
+            throw new Error(
+              `removeNumdlbEntry: rowIndex ${rowIndex} is out of range (length ${state.numdlbEntries.length})`,
+            );
+          }
+          return {
+            numdlbEntries: state.numdlbEntries.filter((_, index) => index !== rowIndex),
           };
         });
       },

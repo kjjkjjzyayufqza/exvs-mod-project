@@ -111,7 +111,7 @@ describe("DaeImportSsbhFullPanel", () => {
     await waitFor(() => {
       const state = useDaeSsbhSessionStore.getState();
       expect(state.importKind).toBe("fbx");
-      expect(state.scaleFactorText).toBe("0.1");
+      expect(state.scaleFactorText).toBe("1");
       expect(state.flipUv).toBe(true);
     });
   });

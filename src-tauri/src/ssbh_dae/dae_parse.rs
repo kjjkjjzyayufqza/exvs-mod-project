@@ -83,6 +83,7 @@ pub fn parse_dae_file(file_path: &Path) -> Result<ImportScene> {
         materials: Vec::new(),
         bones: Vec::new(),
         up_axis: UpAxisConversion::YUp,
+        fbx_import_source: None,
     };
 
     if let Some(asset) = find_child(&root, "asset") {
@@ -1128,6 +1129,19 @@ pub fn convert_dae_bone_influences_to_ssbh(
     }
     
     ssbh_influences
+}
+
+/// Scale only the translation column of a bone local transform (row 3 in our column layout).
+pub fn scale_bone_transform_translation(
+    mut transform: [[f32; 4]; 4],
+    scale_factor: f32,
+) -> [[f32; 4]; 4] {
+    if scale_factor != 1.0 {
+        transform[3][0] *= scale_factor;
+        transform[3][1] *= scale_factor;
+        transform[3][2] *= scale_factor;
+    }
+    transform
 }
 
 // Helper functions for coordinate and data transformations

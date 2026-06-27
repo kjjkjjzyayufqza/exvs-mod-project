@@ -4,11 +4,19 @@ use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 
 /// Up axis hint from source file (DAE asset / FBX load options).
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpAxisConversion {
     YUp,
     ZUp,
     NoConversion,
+}
+
+/// DCC application detected from FBX metadata (`None` for DAE and other sources).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FbxImportSource {
+    Blender,
+    Maya,
+    Unknown,
 }
 
 /// Parsed scene: meshes, optional materials, bone hierarchy, and source up-axis hint.
@@ -18,6 +26,7 @@ pub struct ImportScene {
     pub materials: Vec<ImportMaterial>,
     pub bones: Vec<ImportBone>,
     pub up_axis: UpAxisConversion,
+    pub fbx_import_source: Option<FbxImportSource>,
 }
 
 #[derive(Debug)]

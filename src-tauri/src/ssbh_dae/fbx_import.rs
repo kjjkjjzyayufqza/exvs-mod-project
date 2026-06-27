@@ -5,7 +5,7 @@ use glam::{Mat4, Vec3, Vec4};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use ufbx::{
-    AllocatorOpts, LoadOpts, Matrix, Mesh, Node, Real, Scene, SkinCluster, SkinDeformer,
+    AllocatorOpts, Application, LoadOpts, Matrix, Mesh, Node, Real, Scene, SkinCluster, SkinDeformer,
     VertexStream,
 };
 
@@ -14,10 +14,70 @@ use super::dae_parse::{ConvertedFiles, DaeConvertConfig};
 use super::dae_to_ssbh::{convert_import_scene_file, SsbhConvertStats};
 use super::import_scene::{
     ImportBone, ImportBoneInfluence, ImportMesh, ImportScene, ImportVertexWeight, UpAxisConversion,
+    FbxImportSource,
 };
 
 const DEFAULT_NORMAL: [f32; 3] = [0.0, 0.0, 1.0];
 const DEFAULT_UV: [f32; 2] = [0.0, 0.0];
+
+/// Blender FBX exports mesh positions in centimeters; EXVS2 unit-model meshes use decimeters.
+pub const BLENDER_FBX_TO_EXVS2_MESH_SCALE: f32 = 0.1;
+
+fn application_text_indicates_blender(app: &Application) -> bool {
+    text_indicates_blender(&app.name, &app.vendor)
+}
+
+fn application_text_indicates_maya(app: &Application) -> bool {
+    app.name.to_ascii_lowercase().contains("maya")
+}
+
+fn text_indicates_blender(name: &str, vendor: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    let vendor = vendor.to_ascii_lowercase();
+    name.contains("blender") || vendor.contains("blender")
+}
+
+fn creator_text_indicates_blender(creator: &str) -> bool {
+    creator.to_ascii_lowercase().contains("blender")
+}
+
+fn creator_text_indicates_maya(creator: &str) -> bool {
+    creator.to_ascii_lowercase().contains("maya")
+}
+
+/// Detect the DCC that produced an FBX file from ufbx metadata.
+pub fn detect_fbx_import_source(scene: &Scene) -> FbxImportSource {
+    let metadata = &scene.metadata;
+    if application_text_indicates_blender(&metadata.original_application)
+        || application_text_indicates_blender(&metadata.latest_application)
+        || creator_text_indicates_blender(&metadata.creator)
+    {
+        return FbxImportSource::Blender;
+    }
+    if application_text_indicates_maya(&metadata.original_application)
+        || application_text_indicates_maya(&metadata.latest_application)
+        || creator_text_indicates_maya(&metadata.creator)
+    {
+        return FbxImportSource::Maya;
+    }
+    FbxImportSource::Unknown
+}
+
+/// Automatic mesh scale applied on top of the user `scale_factor` during FBX conversion.
+pub fn fbx_source_mesh_scale(source: FbxImportSource) -> f32 {
+    match source {
+        FbxImportSource::Blender => BLENDER_FBX_TO_EXVS2_MESH_SCALE,
+        FbxImportSource::Maya | FbxImportSource::Unknown => 1.0,
+    }
+}
+
+fn load_fbx_scene(path: &Path) -> Result<ufbx::SceneRoot> {
+    let path_str = path
+        .to_str()
+        .ok_or_else(|| anyhow!("FBX path must be valid UTF-8: {}", path.display()))?;
+    ufbx::load_file(path_str, LoadOpts::default())
+        .map_err(|e| anyhow!("ufbx failed to load FBX: {} — {}", e.description, e.info()))
+}
 
 fn rf32(v: Real) -> f32 {
     v as f32
@@ -785,15 +845,8 @@ fn import_uninstanced_mesh(
     import_one_mesh(mesh, disambiguate_mesh_name(&base, mesh_name_counts))
 }
 
-/// Load an FBX file and build an `ImportScene` (same downstream path as COLLADA).
-pub fn parse_fbx_file(path: &Path) -> Result<ImportScene> {
-    let path_str = path
-        .to_str()
-        .ok_or_else(|| anyhow!("FBX path must be valid UTF-8: {}", path.display()))?;
-    let root = ufbx::load_file(path_str, LoadOpts::default())
-        .map_err(|e| anyhow!("ufbx failed to load FBX: {} — {}", e.description, e.info()))?;
-    let scene: &Scene = &root;
-
+/// Build an `ImportScene` from a loaded ufbx scene.
+fn build_import_scene_from_fbx(scene: &Scene, fbx_import_source: FbxImportSource) -> Result<ImportScene> {
     let up_axis = up_axis_from_scene(scene);
     let skin_bone_names = collect_skin_bone_names(scene);
     let inverse_by_bone = first_inverse_bind_per_bone(scene);
@@ -822,7 +875,15 @@ pub fn parse_fbx_file(path: &Path) -> Result<ImportScene> {
         materials: Vec::new(),
         bones,
         up_axis,
+        fbx_import_source: Some(fbx_import_source),
     })
+}
+
+/// Load an FBX file and build an `ImportScene` (same downstream path as COLLADA).
+pub fn parse_fbx_file(path: &Path) -> Result<ImportScene> {
+    let root = load_fbx_scene(path)?;
+    let fbx_import_source = detect_fbx_import_source(&root);
+    build_import_scene_from_fbx(&root, fbx_import_source)
 }
 
 /// Preflight an FBX file (same JSON shape as `analyze_dae_path`).
@@ -839,8 +900,12 @@ pub fn convert_fbx_file(
     fbx_file_path: &Path,
     config: &DaeConvertConfig,
 ) -> Result<(ConvertedFiles, SsbhConvertStats)> {
-    let scene = parse_fbx_file(fbx_file_path)?;
-    convert_import_scene_file(scene, config)
+    let root = load_fbx_scene(fbx_file_path)?;
+    let fbx_import_source = detect_fbx_import_source(&root);
+    let scene = build_import_scene_from_fbx(&root, fbx_import_source)?;
+    let mut effective_config = config.clone();
+    effective_config.scale_factor *= fbx_source_mesh_scale(fbx_import_source);
+    convert_import_scene_file(scene, &effective_config)
 }
 
 #[cfg(test)]
@@ -860,6 +925,35 @@ mod tests {
                 "expected {expected}, got {actual}"
             );
         }
+    }
+
+    #[test]
+    fn blender_fbx_to_exvs2_mesh_scale_is_one_tenth() {
+        assert_eq!(BLENDER_FBX_TO_EXVS2_MESH_SCALE, 0.1);
+        assert_eq!(fbx_source_mesh_scale(FbxImportSource::Blender), 0.1);
+        assert_eq!(fbx_source_mesh_scale(FbxImportSource::Maya), 1.0);
+        assert_eq!(fbx_source_mesh_scale(FbxImportSource::Unknown), 1.0);
+    }
+
+    #[test]
+    fn fbx_source_text_detection_helpers() {
+        assert!(text_indicates_blender("Blender", "Blender Foundation"));
+        assert!(creator_text_indicates_blender("Blender 4.2.0"));
+        assert!(!text_indicates_blender("Maya", "Autodesk"));
+        assert!(creator_text_indicates_maya("Maya 2024"));
+    }
+
+    #[test]
+    fn detect_blender_fbx_sample_file_when_present() {
+        let path = Path::new(MINECRAFT_BLENDER_FBX);
+        if !path.is_file() {
+            eprintln!("SKIP: {MINECRAFT_BLENDER_FBX} not found");
+            return;
+        }
+        let scene = load_fbx_scene(path).expect("sample Blender FBX should load");
+        assert_eq!(detect_fbx_import_source(&scene), FbxImportSource::Blender);
+        let import_scene = parse_fbx_file(path).expect("sample Blender FBX should parse");
+        assert_eq!(import_scene.fbx_import_source, Some(FbxImportSource::Blender));
     }
 
     #[test]

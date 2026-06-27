@@ -6,7 +6,6 @@ import {
   detectStaticMeshImportFormat,
   isHktGenerationAvailable,
   syncDaeImportConfigUpAxisFromAnalysis,
-  UNIT_MODEL_BLENDER_FBX_SCALE_FACTOR,
 } from "./daeImportDefaults";
 
 describe("daeImportDefaults", () => {
@@ -69,7 +68,7 @@ describe("daeImportDefaults", () => {
     expect(unchanged.ssbhConfig.flipUv).toBe(false);
 
     const fbxConfig = applyUnitModelFbxImportDefaults(daeConfig, "fbx");
-    expect(fbxConfig.ssbhConfig.scaleFactor).toBe(UNIT_MODEL_BLENDER_FBX_SCALE_FACTOR);
+    expect(fbxConfig.ssbhConfig.scaleFactor).toBe(1);
     expect(fbxConfig.ssbhConfig.flipUv).toBe(true);
     expect(daeConfig.ssbhConfig.scaleFactor).toBe(1);
   });

@@ -353,8 +353,10 @@ export function DaeSsbhSessionLayout() {
         <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">NUMDLB Mapping</p>
         <NumdlbMaterialMappingEditor
           rows={session.numdlbEntries}
+          onChangeMeshObjectName={session.setMeshObjectName}
           onChangeMaterialLabel={session.setMaterialLabel}
           onReplaceAll={session.replaceAllMaterialLabels}
+          onRemoveRow={session.removeNumdlbEntry}
         />
       </div>
 

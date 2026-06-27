@@ -2,7 +2,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { NumdlbReadResult } from "./ssbhDaeIoService";
 import { NumdlbMaterialMappingEditor } from "./components/NumdlbMaterialMappingEditor";
-import { applyMeshNameAsMaterialLabel } from "./numdlbEditorUtils";
+import { applyMeshNameAsMaterialLabel, removeMappingRow } from "./numdlbEditorUtils";
 
 type NumdlbMappingEditorBodyProps = {
   data: NumdlbReadResult;
@@ -84,7 +84,16 @@ export function NumdlbMappingEditorBody({
         embedTableWithoutInnerScroll={embedTableWithoutInnerScroll}
         rows={data.entries}
         availableMaterialLabels={availableMaterialLabels}
+        disabled={disabled}
         onAutoApply={() => onChange({ ...data, entries: applyMeshNameAsMaterialLabel(data.entries) })}
+        onChangeMeshObjectName={(rowIndex, nextName) =>
+          onChange({
+            ...data,
+            entries: data.entries.map((row, index) =>
+              index === rowIndex ? { ...row, meshObjectName: nextName } : row,
+            ),
+          })
+        }
         onChangeMaterialLabel={(rowIndex, nextLabel) =>
           onChange({
             ...data,
@@ -109,6 +118,12 @@ export function NumdlbMappingEditorBody({
             ),
           });
         }}
+        onRemoveRow={(rowIndex) =>
+          onChange({
+            ...data,
+            entries: removeMappingRow(data.entries, rowIndex),
+          })
+        }
       />
     </div>
   );

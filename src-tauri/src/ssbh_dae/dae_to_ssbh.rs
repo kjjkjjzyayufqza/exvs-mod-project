@@ -9,8 +9,8 @@ use std::path::Path;
 
 use super::dae_parse::{
     apply_normal_transforms, apply_transforms, convert_dae_bone_influences_to_ssbh, parse_dae_file,
-    validate_converted_files, validate_dae_scene, ConvertedFiles, DaeBone, DaeConvertConfig, DaeMesh,
-    DaeScene,
+    scale_bone_transform_translation, validate_converted_files, validate_dae_scene, ConvertedFiles,
+    DaeBone, DaeConvertConfig, DaeMesh, DaeScene,
 };
 use super::import_scene::ImportScene;
 
@@ -627,7 +627,7 @@ fn convert_prepared_model_to_ssbh(meshes: &[Vs2PreparedMesh], config: &DaeConver
 fn convert_skeleton_from_dae(
     dae_bones: &[DaeBone],
     meshes: &[DaeMesh],
-    _config: &DaeConvertConfig,
+    config: &DaeConvertConfig,
 ) -> Result<SkelData> {
     let mut bones = Vec::new();
 
@@ -635,7 +635,10 @@ fn convert_skeleton_from_dae(
         for dae_bone in dae_bones {
             bones.push(BoneData {
                 name: dae_bone.name.clone(),
-                transform: dae_bone.transform,
+                transform: scale_bone_transform_translation(
+                    dae_bone.transform,
+                    config.scale_factor,
+                ),
                 parent_index: dae_bone.parent_index,
                 billboard_type: BillboardType::Disabled,
             });
@@ -869,6 +872,7 @@ mod tests {
             materials: Vec::new(),
             bones: Vec::new(),
             up_axis: super::super::import_scene::UpAxisConversion::NoConversion,
+            fbx_import_source: None,
         };
         let config = DaeConvertConfig {
             output_directory: output.path().to_path_buf(),
@@ -920,6 +924,7 @@ mod tests {
             materials: Vec::new(),
             bones: Vec::new(),
             up_axis: super::super::import_scene::UpAxisConversion::NoConversion,
+            fbx_import_source: None,
         };
         let config = DaeConvertConfig {
             output_directory: output.path().to_path_buf(),

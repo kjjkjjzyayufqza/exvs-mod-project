@@ -31,15 +31,16 @@ describe("NumdlbMaterialMappingEditor", () => {
       <NumdlbMaterialMappingEditor
         rows={rows}
         availableMaterialLabels={[]}
+        onChangeMeshObjectName={() => {}}
         onChangeMaterialLabel={onChangeMaterialLabel}
         onReplaceAll={() => {}}
         onAutoApply={() => {}}
       />,
     );
 
-    expect(screen.getByText("mesh-0")).toBeInTheDocument();
-    expect(screen.getByText("mesh-3")).toBeInTheDocument();
-    expect(screen.queryByText("mesh-20")).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue("mesh-0")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("mesh-3")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("mesh-20")).not.toBeInTheDocument();
 
     const rowInput = screen.getByDisplayValue("material-2");
     fireEvent.change(rowInput, { target: { value: "material-edited" } });
@@ -52,6 +53,7 @@ describe("NumdlbMaterialMappingEditor", () => {
       <NumdlbMaterialMappingEditor
         rows={makeRows(2)}
         availableMaterialLabels={["external-mtl"]}
+        onChangeMeshObjectName={() => {}}
         onChangeMaterialLabel={() => {}}
         onReplaceAll={() => {}}
         onAutoApply={() => {}}
@@ -67,6 +69,7 @@ describe("NumdlbMaterialMappingEditor", () => {
       <NumdlbMaterialMappingEditor
         rows={makeRows(3)}
         availableMaterialLabels={[]}
+        onChangeMeshObjectName={() => {}}
         onChangeMaterialLabel={() => {}}
         onReplaceAll={() => {}}
         onAutoApply={onAutoApply}
@@ -81,11 +84,48 @@ describe("NumdlbMaterialMappingEditor", () => {
       <NumdlbMaterialMappingEditor
         rows={[]}
         availableMaterialLabels={[]}
+        onChangeMeshObjectName={() => {}}
         onChangeMaterialLabel={() => {}}
         onReplaceAll={() => {}}
         onAutoApply={() => {}}
       />,
     );
     expect(screen.getByRole("button", { name: /auto apply/i })).toBeDisabled();
+  });
+
+  it("invokes onRemoveRow with the original row index when the remove button is clicked", () => {
+    const onRemoveRow = vi.fn();
+    render(
+      <NumdlbMaterialMappingEditor
+        rows={makeRows(3)}
+        availableMaterialLabels={[]}
+        onChangeMeshObjectName={() => {}}
+        onChangeMaterialLabel={() => {}}
+        onReplaceAll={() => {}}
+        onRemoveRow={onRemoveRow}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /remove mesh-1/i }));
+    expect(onRemoveRow).toHaveBeenCalledTimes(1);
+    expect(onRemoveRow).toHaveBeenCalledWith(1);
+  });
+
+  it("invokes onChangeMeshObjectName with the original row index on blur", () => {
+    const onChangeMeshObjectName = vi.fn();
+    render(
+      <NumdlbMaterialMappingEditor
+        rows={makeRows(3)}
+        availableMaterialLabels={[]}
+        onChangeMeshObjectName={onChangeMeshObjectName}
+        onChangeMaterialLabel={() => {}}
+        onReplaceAll={() => {}}
+      />,
+    );
+
+    const meshInput = screen.getByDisplayValue("mesh-1");
+    fireEvent.change(meshInput, { target: { value: "mesh-renamed" } });
+    fireEvent.blur(meshInput);
+    expect(onChangeMeshObjectName).toHaveBeenCalledTimes(1);
+    expect(onChangeMeshObjectName).toHaveBeenCalledWith(1, "mesh-renamed");
   });
 });

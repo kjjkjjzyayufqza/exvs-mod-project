@@ -37,7 +37,6 @@ import {
   detectStaticMeshImportFormat,
   sanitizeBaseFilename,
   syncDaeImportConfigUpAxisFromAnalysis,
-  UNIT_MODEL_BLENDER_FBX_SCALE_FACTOR_TEXT,
 } from "@/page/SceneEdit/components/dae-import/daeImportDefaults";
 import type {
   DaeImportConfig,
@@ -438,7 +437,6 @@ export function UnitModelModelManagerPanel({
       session.setWriteMayaProfile(true);
       if (sourceFormat === "fbx") {
         session.setImportKind("fbx");
-        session.setScaleFactorText(UNIT_MODEL_BLENDER_FBX_SCALE_FACTOR_TEXT);
         session.setFlipUv(true);
       }
 
