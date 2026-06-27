@@ -14,18 +14,14 @@ import {
   SsbhModelPreviewViewport,
   useSsbhModelPreview,
 } from "@/components/ssbh-model-preview/SsbhModelPreviewPanel";
-import type { SsbhModelPreviewViewportHandle } from "@/components/ssbh-model-preview/SsbhModelPreviewViewport";
 import {
   DaeExportDialog,
   type DaeExportConfig,
   type DaeExportTarget,
 } from "@/page/SceneEdit/components/DaeExportDialog";
-import type { SceneExportObject } from "@/page/SceneEdit/components/MapViewport";
-import {
-  exportObjectsAsFBXToDirectory,
-} from "@/page/SceneEdit/utils/daeExportImport";
 import {
   buildUnitModelExportDialogState,
+  exportUnitModelsAsFbx,
   filterUnitModelInstancesByLabel,
   getUnitModelExportCapabilities,
 } from "./utils/unitModelExport";
@@ -92,13 +88,10 @@ function UnitModelEditWorkspace({
     clearScheduledPreviewReload: clearPreviewReloadTimer,
   });
   const preview = useSsbhModelPreview();
-  const viewportExportRef = useRef<SsbhModelPreviewViewportHandle | null>(null);
-  const [viewportExportObjectIds, setViewportExportObjectIds] = useState<string[]>([]);
   const [daeExportDialog, setDaeExportDialog] = useState<{
     open: boolean;
     targets: DaeExportTarget[];
-    threeObjects: SceneExportObject[];
-  }>({ open: false, targets: [], threeObjects: [] });
+  }>({ open: false, targets: [] });
   const [leftTab, setLeftTab] = useState<"structure" | "textures">("structure");
   const [textureCount, setTextureCount] = useState(0);
   // Package nutexb pool fed to the NUMATB texture-path picker (DAE/FBX to SSBH flows),
@@ -384,15 +377,10 @@ function UnitModelEditWorkspace({
   );
 
   const exportCapabilities = useMemo(
-    () => getUnitModelExportCapabilities(preview.previewInstances, new Set(viewportExportObjectIds)),
-    [preview.previewInstances, viewportExportObjectIds],
+    () => getUnitModelExportCapabilities(preview.previewInstances),
+    [preview.previewInstances],
   );
   const canExportModels = exportCapabilities.canExport;
-  const handleViewportExportObjectIdsChange = useCallback((ids: string[]) => {
-    setViewportExportObjectIds((prev) =>
-      prev.length === ids.length && prev.every((id, index) => id === ids[index]) ? prev : ids,
-    );
-  }, []);
 
   const daeExportDialogSubtitle = useMemo(() => {
     if (daeExportDialog.targets.length === 1) {
@@ -412,24 +400,22 @@ function UnitModelEditWorkspace({
 
   const openDaeExportDialogForInstances = useCallback(
     (instances: readonly SsbhModelPreviewInstance[]) => {
-      const exportObjects = viewportExportRef.current?.getExportObjectsByInstanceId() ?? new Map();
-      const payload = buildUnitModelExportDialogState(instances, exportObjects);
+      const payload = buildUnitModelExportDialogState(instances);
       if (!payload) {
-        toast.error("No loaded models can be exported");
+        toast.error("No disk-backed SSBH models can be exported");
         return;
       }
       if (payload.skipped.length > 0) {
         const labels = payload.skipped.map((entry) => entry.label).slice(0, 3);
         const suffix =
           payload.skipped.length > labels.length ? ` (+${payload.skipped.length - labels.length} more)` : "";
-        toast.message(`Skipping ${payload.skipped.length} instance(s) without viewport export data`, {
+        toast.message(`Skipping ${payload.skipped.length} non-disk instance(s)`, {
           description: `${labels.join(", ")}${suffix}`,
         });
       }
       setDaeExportDialog({
         open: true,
         targets: payload.targets,
-        threeObjects: payload.threeObjects,
       });
     },
     [],
@@ -453,31 +439,33 @@ function UnitModelEditWorkspace({
 
   const handleDaeExport = useCallback(
     async (config: DaeExportConfig) => {
-      const { targets, threeObjects } = daeExportDialog;
+      const { targets } = daeExportDialog;
       setDaeExportDialog((prev) => ({ ...prev, open: false }));
       toast.loading("Exporting loaded models...", { id: "unit-model-export" });
 
       try {
-        const wantsFbx = config.formats.includes("fbx");
         const outputDir = config.outputDirectory;
-
-        const selectedExportObjects = targets
-          .map((t) => {
-            const found = threeObjects.find((o) => o.name === t.nodeId);
-            return found ? { object: found.object, name: t.name } : null;
-          })
-          .filter((o): o is SceneExportObject => o !== null);
-
-        if (wantsFbx) {
-          if (selectedExportObjects.length === 0) {
-            toast.warning("FBX export needs loaded models to be visible in the viewport");
-          } else {
-            const exported = await exportObjectsAsFBXToDirectory(selectedExportObjects, outputDir, {
-              exportTextures: config.exportTextures,
-              upAxis: config.upAxis,
-            });
-            toast.success(`Exported ${exported.length} FBX file${exported.length === 1 ? "" : "s"}`);
-          }
+        const entries = targets.flatMap((target) =>
+          target.rootPath
+            ? [{ rootPath: target.rootPath, outputName: target.name }]
+            : [],
+        );
+        if (entries.length === 0) {
+          throw new Error("No disk-backed SSBH models are available for FBX export");
+        }
+        const result = await exportUnitModelsAsFbx(entries, outputDir, {
+          scaleFactor: config.scaleFactor,
+          upAxis: config.upAxis,
+          exportTextures: config.exportTextures,
+        });
+        if (result.totalFailed > 0) {
+          toast.warning(`Exported ${result.totalExported}, failed ${result.totalFailed}`, {
+            description: result.errors.slice(0, 3).join("\n"),
+          });
+        } else {
+          toast.success(
+            `Exported ${result.totalExported} FBX file${result.totalExported === 1 ? "" : "s"}`,
+          );
         }
 
         await rememberStoredDialogSelection(
@@ -594,10 +582,7 @@ function UnitModelEditWorkspace({
           className="relative z-0 min-w-0"
         >
           <div className="relative h-full min-h-0 min-w-0 overflow-hidden bg-muted/20">
-            <SsbhModelPreviewViewport
-              ref={viewportExportRef}
-              onExportObjectIdsChange={handleViewportExportObjectIdsChange}
-            />
+            <SsbhModelPreviewViewport />
           </div>
         </ResizablePanel>
 
@@ -629,8 +614,9 @@ function UnitModelEditWorkspace({
         outputDialogPathKey={UNIT_MODEL_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY}
         subtitle={daeExportDialogSubtitle}
         summaryContent={daeExportDialogSummary}
-        formatHint="FBX uses the current viewport object transform."
+        formatHint="FBX is exported directly from disk SSBH data in bind pose."
         availableFormats={["fbx"]}
+        defaultExportTextures
         onExport={(config) => void handleDaeExport(config)}
         onCancel={() => setDaeExportDialog((prev) => ({ ...prev, open: false }))}
       />

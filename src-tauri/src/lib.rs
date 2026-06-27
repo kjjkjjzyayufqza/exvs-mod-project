@@ -19,6 +19,7 @@ mod scene_memory_session;
 mod scene_session_commands;
 pub mod ssbh_dae;
 mod ssbh_dae_cmd;
+mod ssbh_fbx;
 mod ssbh_mesh_binary;
 mod ssbh_motion;
 pub mod ssbh_preview;
@@ -84,6 +85,7 @@ pub fn run() {
             ssbh_dae_cmd::ssbh_template_write_numatb,
             ssbh_dae_cmd::stage_batch_export_dae,
             ssbh_dae_cmd::stage_export_single_dae,
+            ssbh_fbx::unit_model_batch_export_fbx,
             jnttbl_cmd::jnttbl_read_file,
             jnttbl_cmd::jnttbl_write_file,
             jnttbl_cmd::ssbh_read_nusktb_bone_names,

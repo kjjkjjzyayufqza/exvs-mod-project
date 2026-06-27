@@ -1,10 +1,9 @@
-import type { Object3D } from "three";
+import { invoke } from "@tauri-apps/api/core";
 
 import type { DaeExportTarget } from "@/page/SceneEdit/components/DaeExportDialog";
-import type { SceneExportObject } from "@/page/SceneEdit/components/MapViewport";
 import type { SsbhModelPreviewInstance } from "@/components/ssbh-model-preview/types";
 
-export type UnitModelExportSkipReason = "no_viewport_object";
+export type UnitModelExportSkipReason = "memory_source" | "missing_modl_path";
 
 export type UnitModelExportSkippedInstance = {
   instanceId: string;
@@ -14,14 +13,32 @@ export type UnitModelExportSkippedInstance = {
 
 export type UnitModelExportDialogState = {
   targets: DaeExportTarget[];
-  threeObjects: SceneExportObject[];
   skipped: UnitModelExportSkippedInstance[];
 };
 
 export type UnitModelExportCapabilities = {
-  daeCount: number;
   fbxCount: number;
   canExport: boolean;
+};
+
+export type UnitModelFbxExportEntry = {
+  rootPath: string;
+  outputName: string;
+};
+
+export type UnitModelFbxExportedFile = {
+  name: string;
+  path: string;
+  meshCount: number;
+  vertexCount: number;
+  textureCount: number;
+};
+
+export type UnitModelFbxExportResult = {
+  exported: UnitModelFbxExportedFile[];
+  errors: string[];
+  totalExported: number;
+  totalFailed: number;
 };
 
 function sanitizeExportBaseName(value: string): string {
@@ -67,26 +84,15 @@ export function resolveUnitModelInstanceLabel(inst: SsbhModelPreviewInstance): s
   return inst.id;
 }
 
-export function isUnitModelInstanceDaeExportable(inst: SsbhModelPreviewInstance): boolean {
-  return inst.bundle.sourceKind === "disk" && Boolean(inst.bundle.rootFolder?.trim());
+export function isUnitModelInstanceFbxExportable(inst: SsbhModelPreviewInstance): boolean {
+  return inst.bundle.sourceKind === "disk" && Boolean(inst.modlPath.trim());
 }
 
 export function getUnitModelExportCapabilities(
   instances: readonly SsbhModelPreviewInstance[],
-  exportObjectIds: ReadonlySet<string>,
 ): UnitModelExportCapabilities {
-  let daeCount = 0;
-  let fbxCount = 0;
-  for (const inst of instances) {
-    if (isUnitModelInstanceDaeExportable(inst)) {
-      daeCount += 1;
-    }
-    if (exportObjectIds.has(inst.id)) {
-      fbxCount += 1;
-    }
-  }
+  const fbxCount = instances.filter(isUnitModelInstanceFbxExportable).length;
   return {
-    daeCount,
     fbxCount,
     canExport: fbxCount > 0,
   };
@@ -94,41 +100,48 @@ export function getUnitModelExportCapabilities(
 
 export function buildUnitModelExportDialogState(
   instances: readonly SsbhModelPreviewInstance[],
-  exportObjectsByInstanceId: ReadonlyMap<string, { object: Object3D }>,
 ): UnitModelExportDialogState | null {
   const targets: DaeExportTarget[] = [];
-  const threeObjects: SceneExportObject[] = [];
   const skipped: UnitModelExportSkippedInstance[] = [];
   const usedNames = new Set<string>();
 
   for (const inst of instances) {
     const label = resolveUnitModelInstanceLabel(inst);
-    const viewportObject = exportObjectsByInstanceId.get(inst.id)?.object ?? null;
-
-    if (!viewportObject) {
-      skipped.push({
-        instanceId: inst.id,
-        label,
-        reason: "no_viewport_object",
-      });
+    if (inst.bundle.sourceKind !== "disk") {
+      skipped.push({ instanceId: inst.id, label, reason: "memory_source" });
+      continue;
+    }
+    const modlPath = inst.modlPath.trim();
+    if (!modlPath) {
+      skipped.push({ instanceId: inst.id, label, reason: "missing_modl_path" });
       continue;
     }
 
-    const exportName = nextUniqueExportName(label, usedNames);
-    const rootPath = isUnitModelInstanceDaeExportable(inst) ? inst.bundle.rootFolder : null;
-
     targets.push({
       nodeId: inst.id,
-      name: exportName,
-      rootPath,
+      name: nextUniqueExportName(label, usedNames),
+      rootPath: modlPath,
       type: "ssbh",
     });
-    threeObjects.push({ object: viewportObject, name: inst.id });
   }
 
-  if (targets.length === 0 && threeObjects.length === 0) {
-    return null;
-  }
+  return targets.length > 0 ? { targets, skipped } : null;
+}
 
-  return { targets, threeObjects, skipped };
+export async function exportUnitModelsAsFbx(
+  entries: UnitModelFbxExportEntry[],
+  outputDir: string,
+  options: {
+    scaleFactor: number;
+    upAxis: "y_up" | "z_up";
+    exportTextures: boolean;
+  },
+): Promise<UnitModelFbxExportResult> {
+  return invoke<UnitModelFbxExportResult>("unit_model_batch_export_fbx", {
+    outputDir,
+    entries,
+    scaleFactor: options.scaleFactor,
+    upAxis: options.upAxis,
+    exportTextures: options.exportTextures,
+  });
 }

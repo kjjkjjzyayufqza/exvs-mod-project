@@ -58,6 +58,8 @@ interface DaeExportDialogProps {
   defaultFormats?: ModelExportFormat[];
   /** Limit the selectable export formats for callers that only support a subset. */
   availableFormats?: ModelExportFormat[];
+  /** Initial texture export checkbox state whenever the dialog opens. */
+  defaultExportTextures?: boolean;
 }
 
 export function DaeExportDialog({
@@ -71,6 +73,7 @@ export function DaeExportDialog({
   formatHint,
   defaultFormats,
   availableFormats,
+  defaultExportTextures = false,
 }: DaeExportDialogProps) {
   const [scaleFactor, setScaleFactor] = useState(1.0);
   const [upAxis, setUpAxis] = useState<"y_up" | "z_up">("y_up");
@@ -93,7 +96,8 @@ export function DaeExportDialog({
     const defaults = resolveDaeExportFormatDefaults(defaultFormats, enabledFormats);
     setExportDae(defaults.exportDae);
     setExportFbx(defaults.exportFbx);
-  }, [open, defaultFormats, enabledFormats]);
+    setExportTextures(defaultExportTextures);
+  }, [open, defaultFormats, enabledFormats, defaultExportTextures]);
 
   const ssbhCount = targets.filter((t) => t.type === "ssbh").length;
   const daeCount = targets.filter((t) => t.type === "imported-dae").length;

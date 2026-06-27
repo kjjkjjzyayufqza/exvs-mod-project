@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { Object3D } from "three";
 
 import type { SsbhModelPreviewInstance } from "@/components/ssbh-model-preview/types";
 import {
   buildUnitModelExportDialogState,
   filterUnitModelInstancesByLabel,
   getUnitModelExportCapabilities,
-  isUnitModelInstanceDaeExportable,
+  isUnitModelInstanceFbxExportable,
   nextUniqueExportName,
   resolveUnitModelInstanceLabel,
 } from "./unitModelExport";
@@ -17,13 +16,14 @@ function createInstance(
     sourceKind?: "disk" | "memory";
     rootFolder?: string;
     displayLabel?: string;
+    modlPath?: string;
   } = {},
 ): SsbhModelPreviewInstance {
   const sourceKind = overrides.sourceKind ?? "disk";
   const rootFolder = overrides.rootFolder ?? `E:/unit/models/${id}`;
   return {
     id,
-    modlPath: `${rootFolder}/body.numdlb`,
+    modlPath: overrides.modlPath ?? `${rootFolder}/body.numdlb`,
     displayLabel: overrides.displayLabel ?? id,
     bundle: {
       rootFolder,
@@ -44,10 +44,6 @@ function createInstance(
   };
 }
 
-function fakeObject(): Object3D {
-  return { isObject3D: true } as Object3D;
-}
-
 describe("nextUniqueExportName", () => {
   it("deduplicates colliding base names", () => {
     const used = new Set<string>();
@@ -62,14 +58,14 @@ describe("nextUniqueExportName", () => {
   });
 });
 
-describe("isUnitModelInstanceDaeExportable", () => {
-  it("accepts disk instances with a root folder", () => {
-    expect(isUnitModelInstanceDaeExportable(createInstance("a"))).toBe(true);
+describe("isUnitModelInstanceFbxExportable", () => {
+  it("accepts disk instances with a NUMDLB path", () => {
+    expect(isUnitModelInstanceFbxExportable(createInstance("a"))).toBe(true);
   });
 
   it("rejects memory-only instances", () => {
     expect(
-      isUnitModelInstanceDaeExportable(
+      isUnitModelInstanceFbxExportable(
         createInstance("mem", { sourceKind: "memory", rootFolder: "/virtual/mem" }),
       ),
     ).toBe(false);
@@ -82,16 +78,11 @@ describe("buildUnitModelExportDialogState", () => {
       createInstance("inst-a", { displayLabel: "Alpha" }),
       createInstance("inst-b", { displayLabel: "Beta" }),
     ];
-    const viewport = new Map([
-      ["inst-a", { object: fakeObject() }],
-      ["inst-b", { object: fakeObject() }],
-    ]);
-
-    const state = buildUnitModelExportDialogState(instances, viewport);
+    const state = buildUnitModelExportDialogState(instances);
     expect(state).not.toBeNull();
     expect(state!.targets).toHaveLength(2);
     expect(state!.targets.map((t) => t.name)).toEqual(["Alpha", "Beta"]);
-    expect(state!.threeObjects).toHaveLength(2);
+    expect(state!.targets.every((target) => target.rootPath?.endsWith("body.numdlb"))).toBe(true);
     expect(state!.skipped).toHaveLength(0);
   });
 
@@ -100,76 +91,45 @@ describe("buildUnitModelExportDialogState", () => {
       createInstance("inst-a", { displayLabel: "body" }),
       createInstance("inst-b", { displayLabel: "body" }),
     ];
-    const viewport = new Map([
-      ["inst-a", { object: fakeObject() }],
-      ["inst-b", { object: fakeObject() }],
-    ]);
-
-    const state = buildUnitModelExportDialogState(instances, viewport);
+    const state = buildUnitModelExportDialogState(instances);
     expect(state!.targets.map((t) => t.name)).toEqual(["body", "body_1"]);
   });
 
-  it("includes only viewport-backed instances in FBX-only export mode", () => {
+  it("includes disk instances and skips memory instances", () => {
     const instances = [
       createInstance("disk", { displayLabel: "Disk" }),
       createInstance("memory", { sourceKind: "memory", displayLabel: "Memory" }),
     ];
-    const viewport = new Map([
-      ["disk", { object: fakeObject() }],
-      ["memory", { object: fakeObject() }],
+    const state = buildUnitModelExportDialogState(instances);
+    expect(state!.targets.map((target) => target.nodeId)).toEqual(["disk"]);
+    expect(state!.skipped).toEqual([
+      { instanceId: "memory", label: "Memory", reason: "memory_source" },
     ]);
-
-    const state = buildUnitModelExportDialogState(instances, viewport);
-    expect(state!.targets.map((target) => target.nodeId)).toEqual(["disk", "memory"]);
-    expect(state!.threeObjects).toHaveLength(2);
-    expect(state!.skipped).toHaveLength(0);
   });
 
-  it("includes FBX-only memory instances when a viewport object exists", () => {
+  it("returns null for memory-only instances", () => {
     const instances = [createInstance("memory", { sourceKind: "memory", displayLabel: "Mem" })];
-    const viewport = new Map([["memory", { object: fakeObject() }]]);
-
-    const state = buildUnitModelExportDialogState(instances, viewport);
-    expect(state!.targets).toHaveLength(1);
-    expect(state!.targets[0]!.rootPath).toBeNull();
-    expect(state!.threeObjects).toHaveLength(1);
-    expect(state!.skipped).toHaveLength(0);
+    expect(buildUnitModelExportDialogState(instances)).toBeNull();
   });
 
-  it("returns null when loaded instances have no viewport export object", () => {
-    const instances = [createInstance("hidden-disk", { displayLabel: "Hidden" })];
-    expect(buildUnitModelExportDialogState(instances, new Map())).toBeNull();
-  });
-
-  it("returns null when nothing can be exported", () => {
-    const instances = [createInstance("memory", { sourceKind: "memory" })];
-    expect(buildUnitModelExportDialogState(instances, new Map())).toBeNull();
+  it("returns null when a disk instance has no NUMDLB path", () => {
+    const instances = [createInstance("missing", { modlPath: "" })];
+    expect(buildUnitModelExportDialogState(instances)).toBeNull();
   });
 });
 
 describe("getUnitModelExportCapabilities", () => {
-  it("does not enable export before viewport FBX objects are ready", () => {
+  it("enables export for disk-backed SSBH models", () => {
     const instances = [createInstance("disk-a"), createInstance("disk-b")];
-    expect(getUnitModelExportCapabilities(instances, new Set())).toEqual({
-      daeCount: 2,
-      fbxCount: 0,
-      canExport: false,
-    });
-  });
-
-  it("enables export for memory-only models when viewport FBX objects exist", () => {
-    const instances = [createInstance("memory-a", { sourceKind: "memory" })];
-    expect(getUnitModelExportCapabilities(instances, new Set(["memory-a"]))).toEqual({
-      daeCount: 0,
-      fbxCount: 1,
+    expect(getUnitModelExportCapabilities(instances)).toEqual({
+      fbxCount: 2,
       canExport: true,
     });
   });
 
-  it("disables export when neither DAE nor FBX is available", () => {
+  it("disables export for memory-only models", () => {
     const instances = [createInstance("memory-a", { sourceKind: "memory" })];
-    expect(getUnitModelExportCapabilities(instances, new Set())).toEqual({
-      daeCount: 0,
+    expect(getUnitModelExportCapabilities(instances)).toEqual({
       fbxCount: 0,
       canExport: false,
     });
