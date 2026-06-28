@@ -103,8 +103,14 @@ impl PreviewCollectionStore {
             .iter()
             .filter(|item| {
                 self.query.is_empty()
-                    || item.display_label.to_ascii_lowercase().contains(self.query.as_str())
-                    || item.modl_path.to_ascii_lowercase().contains(self.query.as_str())
+                    || item
+                        .display_label
+                        .to_ascii_lowercase()
+                        .contains(self.query.as_str())
+                    || item
+                        .modl_path
+                        .to_ascii_lowercase()
+                        .contains(self.query.as_str())
             })
             .map(|item| PreviewCollectionItem {
                 id: item.id.clone(),
@@ -147,7 +153,10 @@ impl PreviewCollectionStore {
         }
     }
 
-    pub fn replace_items(&mut self, source_items: Vec<PreviewCollectionSourceItem>) -> Result<PreviewCollectionSnapshot, String> {
+    pub fn replace_items(
+        &mut self,
+        source_items: Vec<PreviewCollectionSourceItem>,
+    ) -> Result<PreviewCollectionSnapshot, String> {
         self.items = source_items
             .into_iter()
             .map(|item| PreviewCollectionEntry {
@@ -162,7 +171,10 @@ impl PreviewCollectionStore {
         Ok(self.snapshot())
     }
 
-    pub fn append_items(&mut self, source_items: Vec<PreviewCollectionSourceItem>) -> Result<PreviewCollectionSnapshot, String> {
+    pub fn append_items(
+        &mut self,
+        source_items: Vec<PreviewCollectionSourceItem>,
+    ) -> Result<PreviewCollectionSnapshot, String> {
         for item in source_items {
             if self.items.iter().any(|existing| existing.id == item.id) {
                 continue;
@@ -184,7 +196,10 @@ impl PreviewCollectionStore {
         Ok(self.snapshot())
     }
 
-    pub fn toggle_item_visibility(&mut self, id: String) -> Result<PreviewCollectionSnapshot, String> {
+    pub fn toggle_item_visibility(
+        &mut self,
+        id: String,
+    ) -> Result<PreviewCollectionSnapshot, String> {
         let item = self
             .items
             .iter_mut()
@@ -202,7 +217,10 @@ impl PreviewCollectionStore {
         Ok(self.snapshot())
     }
 
-    pub fn toggle_item_selected(&mut self, id: String) -> Result<PreviewCollectionSnapshot, String> {
+    pub fn toggle_item_selected(
+        &mut self,
+        id: String,
+    ) -> Result<PreviewCollectionSnapshot, String> {
         let item = self
             .items
             .iter_mut()
@@ -234,13 +252,20 @@ impl PreviewCollectionStore {
         Ok(self.snapshot())
     }
 
-    pub fn set_control_range(&mut self, value: String) -> Result<PreviewCollectionSnapshot, String> {
+    pub fn set_control_range(
+        &mut self,
+        value: String,
+    ) -> Result<PreviewCollectionSnapshot, String> {
         self.control_range = PreviewCollectionRange::parse(value.as_str(), "controlRange")?;
         Ok(self.snapshot())
     }
 
-    pub fn remove_missing_ids(&mut self, valid_ids: Vec<String>) -> Result<PreviewCollectionSnapshot, String> {
-        self.items.retain(|item| valid_ids.iter().any(|id| id == &item.id));
+    pub fn remove_missing_ids(
+        &mut self,
+        valid_ids: Vec<String>,
+    ) -> Result<PreviewCollectionSnapshot, String> {
+        self.items
+            .retain(|item| valid_ids.iter().any(|id| id == &item.id));
         Ok(self.snapshot())
     }
 }
@@ -413,7 +438,9 @@ mod tests {
     #[test]
     fn collection_replace_keeps_no_active_item() {
         let mut store = PreviewCollectionStore::default();
-        let snapshot = store.replace_items(sample_items()).expect("replace should succeed");
+        let snapshot = store
+            .replace_items(sample_items())
+            .expect("replace should succeed");
         assert_eq!(snapshot.active_item_id, None);
         assert!(!snapshot.items.iter().any(|item| item.active));
     }
@@ -421,7 +448,9 @@ mod tests {
     #[test]
     fn collection_replace_empty_has_no_active_item() {
         let mut store = PreviewCollectionStore::default();
-        let snapshot = store.replace_items(Vec::new()).expect("replace should succeed");
+        let snapshot = store
+            .replace_items(Vec::new())
+            .expect("replace should succeed");
         assert_eq!(snapshot.active_item_id, None);
     }
 
@@ -441,8 +470,12 @@ mod tests {
     #[test]
     fn collection_clear_active_clears_active_item_id() {
         let mut store = PreviewCollectionStore::default();
-        let _ = store.replace_items(sample_items()).expect("replace should succeed");
-        let _ = store.set_active(String::from("inst-b")).expect("set active should succeed");
+        let _ = store
+            .replace_items(sample_items())
+            .expect("replace should succeed");
+        let _ = store
+            .set_active(String::from("inst-b"))
+            .expect("set active should succeed");
         let snapshot = store.clear_active().expect("clear active should succeed");
         assert_eq!(snapshot.active_item_id, None);
         assert!(!snapshot.items.iter().any(|item| item.active));
@@ -451,8 +484,12 @@ mod tests {
     #[test]
     fn collection_toggle_selected_keeps_active_unchanged_when_deselected() {
         let mut store = PreviewCollectionStore::default();
-        let _ = store.replace_items(sample_items()).expect("replace should succeed");
-        let _ = store.set_active(String::from("inst-b")).expect("set active should succeed");
+        let _ = store
+            .replace_items(sample_items())
+            .expect("replace should succeed");
+        let _ = store
+            .set_active(String::from("inst-b"))
+            .expect("set active should succeed");
         let _ = store
             .toggle_item_selected(String::from("inst-b"))
             .expect("select should succeed");
@@ -467,7 +504,9 @@ mod tests {
     #[test]
     fn collection_toggle_all_visibility_switches_between_hide_all_and_show_all() {
         let mut store = PreviewCollectionStore::default();
-        let _ = store.replace_items(sample_items()).expect("replace should succeed");
+        let _ = store
+            .replace_items(sample_items())
+            .expect("replace should succeed");
 
         let hidden = store
             .toggle_all_visibility()
@@ -485,7 +524,9 @@ mod tests {
     #[test]
     fn collection_search_filters_items_but_preserves_full_selected_and_hidden_sets() {
         let mut store = PreviewCollectionStore::default();
-        let _ = store.replace_items(sample_items()).expect("replace should succeed");
+        let _ = store
+            .replace_items(sample_items())
+            .expect("replace should succeed");
         let _ = store
             .toggle_item_selected(String::from("inst-c"))
             .expect("select should succeed");

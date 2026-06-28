@@ -137,7 +137,11 @@ fn validate_field_specs(field_specs: &[ParamFieldSpec]) -> Result<(), String> {
     validate_file_specs_kind_match_pool(SPEEDPARAM_COMMAND_POOL, field_specs)
 }
 
-fn parse_entry_from_raw(raw: &[u8], field_specs: &[ParamFieldSpec], entry_id: u32) -> SpeedParamEntry {
+fn parse_entry_from_raw(
+    raw: &[u8],
+    field_specs: &[ParamFieldSpec],
+    entry_id: u32,
+) -> SpeedParamEntry {
     let commands = parse_commands_map_from_entry_row(raw, field_specs);
     SpeedParamEntry { entry_id, commands }
 }
@@ -182,7 +186,9 @@ pub fn build_speedparam(b: &SpeedParamData) -> Result<Vec<u8>, String> {
 
     let mut entries_raw: Vec<Vec<u8>> = Vec::with_capacity(b.entries.len());
     for (entry_index, entry) in b.entries.iter().enumerate() {
-        if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+        if entry_index < b.source_entries_raw.len()
+            && b.source_entries_raw[entry_index].len() == entry_size
+        {
             let r = &b.source_entries_raw[entry_index];
             if entry_matches_raw(entry, r, &field_specs) {
                 entries_raw.push(b.source_entries_raw[entry_index].clone());
@@ -190,7 +196,9 @@ pub fn build_speedparam(b: &SpeedParamData) -> Result<Vec<u8>, String> {
             }
         }
 
-        let mut raw = if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+        let mut raw = if entry_index < b.source_entries_raw.len()
+            && b.source_entries_raw[entry_index].len() == entry_size
+        {
             b.source_entries_raw[entry_index].clone()
         } else {
             vec![0u8; entry_size]
@@ -227,8 +235,7 @@ pub fn build_speedparam(b: &SpeedParamData) -> Result<Vec<u8>, String> {
 mod tests {
     use super::*;
 
-    const SAMPLE_PATH: &str =
-        "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\0x08248A8D\\speedparam.bin";
+    const SAMPLE_PATH: &str = "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\0x08248A8D\\speedparam.bin";
 
     #[test]
     fn speedparam_read_write_crud() {
@@ -238,7 +245,10 @@ mod tests {
         let rebuilt = build_speedparam(&parsed).expect("failed to rebuild speedparam sample file");
         assert_eq!(rebuilt, source);
 
-        assert!(!parsed.entries.is_empty(), "speedparam sample has no entries");
+        assert!(
+            !parsed.entries.is_empty(),
+            "speedparam sample has no entries"
+        );
 
         let mut with_added = parsed.clone();
         let mut added = with_added.entries[0].clone();
@@ -256,7 +266,10 @@ mod tests {
         let added_parsed =
             parse_speedparam(&added_bytes).expect("failed to parse speedparam after add");
         assert_eq!(added_parsed.entries.len(), parsed.entries.len() + 1);
-        assert_eq!(added_parsed.entries.last().map(|entry| entry.entry_id), Some(next_id));
+        assert_eq!(
+            added_parsed.entries.last().map(|entry| entry.entry_id),
+            Some(next_id)
+        );
 
         let mut with_updated = added_parsed.clone();
         let updated_id = with_updated.entries[0].entry_id.wrapping_add(99);

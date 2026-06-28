@@ -63,7 +63,9 @@ fn print_report(label: &str, r: &DiffReport) {
     } else {
         println!(
             "     RESULT        : DIFFERS  (first diff @ {}, {} differing byte(s))",
-            r.first_diff.map(|o| format!("0x{o:X}")).unwrap_or_else(|| "n/a".into()),
+            r.first_diff
+                .map(|o| format!("0x{o:X}"))
+                .unwrap_or_else(|| "n/a".into()),
             r.diff_bytes
         );
     }
@@ -87,7 +89,9 @@ fn read_tree(root: &Path) -> BTreeMap<String, Vec<u8>> {
     let mut out = BTreeMap::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(d) = stack.pop() {
-        let Ok(entries) = fs::read_dir(&d) else { continue };
+        let Ok(entries) = fs::read_dir(&d) else {
+            continue;
+        };
         for e in entries.filter_map(|e| e.ok()) {
             let p = e.path();
             if p.is_dir() {
@@ -113,11 +117,19 @@ fn compare_trees(a: &Path, b: &Path) -> (bool, Vec<String>) {
     let only_b: Vec<&String> = tb.keys().filter(|k| !ta.contains_key(*k)).collect();
     if !only_a.is_empty() {
         equal = false;
-        lines.push(format!("     only in first  ({}): {:?}", only_a.len(), &only_a[..only_a.len().min(5)]));
+        lines.push(format!(
+            "     only in first  ({}): {:?}",
+            only_a.len(),
+            &only_a[..only_a.len().min(5)]
+        ));
     }
     if !only_b.is_empty() {
         equal = false;
-        lines.push(format!("     only in second ({}): {:?}", only_b.len(), &only_b[..only_b.len().min(5)]));
+        lines.push(format!(
+            "     only in second ({}): {:?}",
+            only_b.len(),
+            &only_b[..only_b.len().min(5)]
+        ));
     }
     let mut diff_content = Vec::new();
     for (k, va) in &ta {
@@ -135,7 +147,11 @@ fn compare_trees(a: &Path, b: &Path) -> (bool, Vec<String>) {
             &diff_content[..diff_content.len().min(5)]
         ));
     }
-    lines.push(format!("     files compared : {} (first) / {} (second)", ta.len(), tb.len()));
+    lines.push(format!(
+        "     files compared : {} (first) / {} (second)",
+        ta.len(),
+        tb.len()
+    ));
     (equal, lines)
 }
 
@@ -143,7 +159,9 @@ fn count_ext(dir: &Path, ext: &str) -> usize {
     let mut n = 0;
     let mut stack = vec![dir.to_path_buf()];
     while let Some(d) = stack.pop() {
-        let Ok(entries) = fs::read_dir(&d) else { continue };
+        let Ok(entries) = fs::read_dir(&d) else {
+            continue;
+        };
         for e in entries.filter_map(|e| e.ok()) {
             let p = e.path();
             if p.is_dir() {
@@ -193,12 +211,9 @@ fn main() {
     let unit_dir = PathBuf::from(&workdir).join("unit");
     fs::create_dir_all(&unit_dir).expect("create unit dir");
     let unit_out_root = unit_dir.join(&stem);
-    let unit_ext = extract_unit_model_fhm2d_to_folder_impl(
-        &input,
-        unit_out_root.to_str().unwrap(),
-        false,
-    )
-    .expect("unit-model extract failed");
+    let unit_ext =
+        extract_unit_model_fhm2d_to_folder_impl(&input, unit_out_root.to_str().unwrap(), false)
+            .expect("unit-model extract failed");
     println!(
         "  extracted: {} files, {} models -> {}",
         unit_ext.total_files, unit_ext.model_count, unit_ext.model_root
@@ -221,7 +236,10 @@ fn main() {
         None,
     )
     .expect("unit-model repack failed");
-    println!("  repacked : {} files -> {}", unit_pack.total_files, unit_pack.output_path);
+    println!(
+        "  repacked : {} files -> {}",
+        unit_pack.total_files, unit_pack.output_path
+    );
     let unit_bytes = fs::read(&unit_repacked).expect("read unit repacked");
     let rep_a = compare(&original, &unit_bytes);
     print_report("Path A (unit) vs original", &rep_a);
@@ -257,7 +275,10 @@ fn main() {
         None,
     )
     .expect("traditional repack failed");
-    println!("  repacked : {} files -> {}", trad_pack.total_files, trad_pack.output_path);
+    println!(
+        "  repacked : {} files -> {}",
+        trad_pack.total_files, trad_pack.output_path
+    );
     let trad_bytes = fs::read(&trad_repacked).expect("read trad repacked");
     let rep_b = compare(&original, &trad_bytes);
     print_report("Path B (traditional) vs original", &rep_b);
@@ -288,16 +309,26 @@ fn main() {
     let structure_equal = s1 == s2;
     println!(
         "  structure.json (re-extract) : {}",
-        if structure_equal { "BYTE-IDENTICAL" } else { "DIFFERS" }
+        if structure_equal {
+            "BYTE-IDENTICAL"
+        } else {
+            "DIFFERS"
+        }
     );
-    let (trees_equal, tree_lines) =
-        compare_trees(Path::new(&unit_ext.model_root), Path::new(&unit2_ext.model_root));
+    let (trees_equal, tree_lines) = compare_trees(
+        Path::new(&unit_ext.model_root),
+        Path::new(&unit2_ext.model_root),
+    );
     for l in &tree_lines {
         println!("{l}");
     }
     println!(
         "  extracted sub-files         : {}",
-        if trees_equal { "ALL BYTE-IDENTICAL" } else { "SOME DIFFER" }
+        if trees_equal {
+            "ALL BYTE-IDENTICAL"
+        } else {
+            "SOME DIFFER"
+        }
     );
     let check2 = structure_equal && trees_equal;
 

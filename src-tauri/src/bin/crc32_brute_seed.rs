@@ -57,7 +57,9 @@ fn parse_args() -> Result<Args, String> {
             }
             "--target" => {
                 let raw = args.next().ok_or("--target requires a value")?;
-                target = raw.parse::<u32>().map_err(|_| format!("Invalid --target: {raw}"))?;
+                target = raw
+                    .parse::<u32>()
+                    .map_err(|_| format!("Invalid --target: {raw}"))?;
             }
             "--length" => {
                 let raw = args.next().ok_or("--length requires a value")?;

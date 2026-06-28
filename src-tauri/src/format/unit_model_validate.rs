@@ -1424,7 +1424,12 @@ mod tests {
         fs::create_dir_all(&model_dir).unwrap();
         fs::create_dir_all(&textures_dir).unwrap();
 
-        for name in ["alpha.nusktb", "alpha.numshb", "alpha.numdlb", "alpha.jnttbl"] {
+        for name in [
+            "alpha.nusktb",
+            "alpha.numshb",
+            "alpha.numdlb",
+            "alpha.jnttbl",
+        ] {
             fs::write(model_dir.join(name), b"stub").unwrap();
         }
         HlpbData {
@@ -1765,6 +1770,9 @@ mod tests {
 
         assert!(result.valid);
         let after = fs::read_to_string(&structure).unwrap();
-        assert_eq!(after, before, "validate should not rewrite the source structure");
+        assert_eq!(
+            after, before,
+            "validate should not rewrite the source structure"
+        );
     }
 }

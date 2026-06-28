@@ -47,8 +47,7 @@ pub fn parse_jnttbl_bytes(data: &[u8]) -> Result<JnttblDocument, String> {
     if &header.magic != JNTT_MAGIC {
         return Err(format!(
             "Invalid JNTT magic (expected {:?}, got {:?})",
-            JNTT_MAGIC,
-            header.magic
+            JNTT_MAGIC, header.magic
         ));
     }
     let payload = &data[16..];
@@ -76,9 +75,11 @@ pub fn parse_jnttbl_bytes(data: &[u8]) -> Result<JnttblDocument, String> {
 }
 
 pub fn serialize_jnttbl(doc: &JnttblDocument) -> Result<Vec<u8>, String> {
-    let pairs_bytes = doc.entries.len().checked_mul(8).ok_or_else(|| {
-        "JNTT entry list is too large".to_string()
-    })?;
+    let pairs_bytes = doc
+        .entries
+        .len()
+        .checked_mul(8)
+        .ok_or_else(|| "JNTT entry list is too large".to_string())?;
     let total = 16usize
         .checked_add(pairs_bytes)
         .ok_or_else(|| "JNTT output size overflow".to_string())?;

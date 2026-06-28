@@ -280,22 +280,22 @@ fn find_all_children<'a>(element: &'a Element, name: &str) -> Vec<&'a Element> {
         .children
         .iter()
         .filter_map(|node| {
-        if let xmltree::XMLNode::Element(child) = node {
-            if child.name == name {
-                Some(child)
+            if let xmltree::XMLNode::Element(child) = node {
+                if child.name == name {
+                    Some(child)
+                } else {
+                    None
+                }
             } else {
                 None
             }
-        } else {
-            None
-        }
         })
         .collect()
 }
 
 fn parse_materials_from_xml(lib_materials: &Element) -> Result<Vec<DaeMaterial>> {
     let mut materials = Vec::new();
-    
+
     for material_elem in find_all_children(lib_materials, "material") {
         if let Some(id) = material_elem.attributes.get("id") {
             let dae_material = DaeMaterial {
@@ -308,7 +308,7 @@ fn parse_materials_from_xml(lib_materials: &Element) -> Result<Vec<DaeMaterial>>
             materials.push(dae_material);
         }
     }
-    
+
     Ok(materials)
 }
 
@@ -583,7 +583,7 @@ fn parse_vertex_weights_data(
                 .collect();
         }
     }
-    
+
     // Parse v (joint indices and weight indices)
     let mut v_data = Vec::new();
     if let Some(v_elem) = find_child(vertex_weights_elem, "v") {
@@ -594,25 +594,25 @@ fn parse_vertex_weights_data(
                 .collect();
         }
     }
-    
+
     if vcounts.len() != vertex_count {
         return Ok(());
     }
-    
+
     // Group weights by bone
     let mut bone_influences: HashMap<String, Vec<DaeVertexWeight>> = HashMap::new();
-    
+
     let mut v_index = 0;
     for (vertex_idx, &weight_count) in vcounts.iter().enumerate() {
         for _ in 0..weight_count {
             if v_index + 1 < v_data.len() {
                 let joint_idx = v_data[v_index];
                 let weight_idx = v_data[v_index + 1];
-                
+
                 if joint_idx < joint_names.len() && weight_idx < weights.len() {
                     let bone_name = &joint_names[joint_idx];
                     let weight = weights[weight_idx];
-                    
+
                     // Only include non-zero weights
                     if weight > 0.0 {
                         bone_influences
@@ -628,7 +628,7 @@ fn parse_vertex_weights_data(
             }
         }
     }
-    
+
     // Convert to mesh bone influences
     mesh.bone_influences = bone_influences
         .into_iter()
@@ -637,14 +637,14 @@ fn parse_vertex_weights_data(
             vertex_weights,
         })
         .collect();
-    
+
     Ok(())
 }
 
 // Helper functions for extracting specific data from XML mesh structures
 fn extract_vertices_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 3]>> {
     let mut vertices = Vec::new();
-    
+
     // Find vertices element and position source
     if let Some(vertices_elem) = find_child(mesh_elem, "vertices") {
         if let Some(input_elem) = find_child(vertices_elem, "input") {
@@ -652,7 +652,7 @@ fn extract_vertices_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 3]>> 
                 if semantic == "POSITION" {
                     if let Some(source_ref) = input_elem.attributes.get("source") {
                         let source_id = source_ref.trim_start_matches('#');
-                        
+
                         // Find the corresponding source
                         for source_elem in find_all_children(mesh_elem, "source") {
                             if let Some(id) = source_elem.attributes.get("id") {
@@ -666,7 +666,7 @@ fn extract_vertices_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 3]>> 
                                                 .split_whitespace()
                                                 .map(|s| s.parse())
                                                 .collect();
-                                            
+
                                             if let Ok(values) = values {
                                                 for chunk in values.chunks(3) {
                                                     if chunk.len() >= 3 {
@@ -686,13 +686,13 @@ fn extract_vertices_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 3]>> 
             }
         }
     }
-    
+
     Ok(vertices)
 }
 
 fn extract_normals_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 3]>> {
     let mut normals = Vec::new();
-    
+
     // First try to find normal data through triangles/input references
     for triangles_elem in find_all_children(mesh_elem, "triangles") {
         for input_elem in find_all_children(triangles_elem, "input") {
@@ -700,7 +700,7 @@ fn extract_normals_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 3]>> {
                 if semantic == "NORMAL" {
                     if let Some(source_ref) = input_elem.attributes.get("source") {
                         let source_id = source_ref.trim_start_matches('#');
-                        
+
                         // Find the corresponding source
                         for source_elem in find_all_children(mesh_elem, "source") {
                             if let Some(id) = source_elem.attributes.get("id") {
@@ -714,7 +714,7 @@ fn extract_normals_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 3]>> {
                                                 .split_whitespace()
                                                 .map(|s| s.parse())
                                                 .collect();
-                                            
+
                                             if let Ok(values) = values {
                                                 for chunk in values.chunks(3) {
                                                     if chunk.len() >= 3 {
@@ -738,7 +738,7 @@ fn extract_normals_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 3]>> {
             break;
         }
     }
-    
+
     // If no normals found through triangles, search for source names containing "Nrm" or "Normal"
     if normals.is_empty() {
         for source_elem in find_all_children(mesh_elem, "source") {
@@ -749,7 +749,7 @@ fn extract_normals_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 3]>> {
                         if let Some(data_text) = get_element_text(float_array_elem) {
                             let values: Result<Vec<f32>, _> =
                                 data_text.split_whitespace().map(|s| s.parse()).collect();
-                            
+
                             if let Ok(values) = values {
                                 // Check if stride is 3 from technique_common/accessor
                                 let mut stride = 3; // Default to 3 for normals
@@ -769,7 +769,7 @@ fn extract_normals_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 3]>> {
                                         }
                                     }
                                 }
-                                
+
                                 if stride == 3 {
                                     for chunk in values.chunks(3) {
                                         if chunk.len() >= 3 {
@@ -785,13 +785,13 @@ fn extract_normals_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 3]>> {
             }
         }
     }
-    
+
     Ok(normals)
 }
 
 fn extract_uvs_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 2]>> {
     let mut uvs = Vec::new();
-    
+
     // First try to find UV data through triangles/input references
     for triangles_elem in find_all_children(mesh_elem, "triangles") {
         for input_elem in find_all_children(triangles_elem, "input") {
@@ -799,7 +799,7 @@ fn extract_uvs_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 2]>> {
                 if semantic == "TEXCOORD" {
                     if let Some(source_ref) = input_elem.attributes.get("source") {
                         let source_id = source_ref.trim_start_matches('#');
-                        
+
                         // Find the corresponding source
                         for source_elem in find_all_children(mesh_elem, "source") {
                             if let Some(id) = source_elem.attributes.get("id") {
@@ -813,7 +813,7 @@ fn extract_uvs_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 2]>> {
                                                 .split_whitespace()
                                                 .map(|s| s.parse())
                                                 .collect();
-                                            
+
                                             if let Ok(values) = values {
                                                 for chunk in values.chunks(2) {
                                                     if chunk.len() >= 2 {
@@ -836,7 +836,7 @@ fn extract_uvs_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 2]>> {
             break;
         }
     }
-    
+
     // If no UVs found through triangles, search for source names containing "UV" or "TexCoord"
     if uvs.is_empty() {
         for source_elem in find_all_children(mesh_elem, "source") {
@@ -851,7 +851,7 @@ fn extract_uvs_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 2]>> {
                         if let Some(data_text) = get_element_text(float_array_elem) {
                             let values: Result<Vec<f32>, _> =
                                 data_text.split_whitespace().map(|s| s.parse()).collect();
-                            
+
                             if let Ok(values) = values {
                                 // Check if stride is 2 from technique_common/accessor
                                 let mut stride = 2; // Default to 2 for UVs
@@ -871,7 +871,7 @@ fn extract_uvs_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 2]>> {
                                         }
                                     }
                                 }
-                                
+
                                 if stride == 2 {
                                     for chunk in values.chunks(2) {
                                         if chunk.len() >= 2 {
@@ -887,18 +887,18 @@ fn extract_uvs_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<[f32; 2]>> {
             }
         }
     }
-    
+
     Ok(uvs)
 }
 
 fn extract_indices_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<u32>> {
     let mut indices = Vec::new();
-    
+
     for triangles_elem in find_all_children(mesh_elem, "triangles") {
         // Get the stride (number of indices per vertex)
         let input_elements = find_all_children(triangles_elem, "input");
         let stride = input_elements.len();
-        
+
         // Find the position input offset
         let mut position_offset = 0;
         for input_elem in &input_elements {
@@ -911,12 +911,12 @@ fn extract_indices_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<u32>> {
                 }
             }
         }
-        
+
         if let Some(p_elem) = find_child(triangles_elem, "p") {
             if let Some(data_text) = get_element_text(p_elem) {
                 let values: Result<Vec<u32>, _> =
                     data_text.split_whitespace().map(|s| s.parse()).collect();
-                
+
                 if let Ok(values) = values {
                     if stride > 0 {
                         // Extract only the position indices using the correct offset and stride
@@ -931,7 +931,7 @@ fn extract_indices_from_xml_mesh(mesh_elem: &Element) -> Result<Vec<u32>> {
             }
         }
     }
-    
+
     Ok(indices)
 }
 
@@ -1076,13 +1076,13 @@ fn optimize_mesh_data(mesh: &mut DaeMesh) {
 /// Align attribute data to ensure all arrays have the same length as vertices
 fn align_attribute_data(mesh: &mut DaeMesh) {
     let vertex_count = mesh.vertices.len();
-    
+
     if vertex_count == 0 {
         mesh.normals.clear();
         mesh.uvs.clear();
         return;
     }
-    
+
     // Align normals
     if !mesh.normals.is_empty() {
         if mesh.normals.len() < vertex_count {
@@ -1092,7 +1092,7 @@ fn align_attribute_data(mesh: &mut DaeMesh) {
             mesh.normals.truncate(vertex_count);
         }
     }
-    
+
     // Align UVs
     if !mesh.uvs.is_empty() {
         if mesh.uvs.len() < vertex_count {
@@ -1109,7 +1109,7 @@ pub fn convert_dae_bone_influences_to_ssbh(
     dae_influences: &[DaeBoneInfluence],
 ) -> Vec<BoneInfluence> {
     let mut ssbh_influences = Vec::new();
-    
+
     for dae_influence in dae_influences {
         let vertex_weights: Vec<VertexWeight> = dae_influence
             .vertex_weights
@@ -1119,7 +1119,7 @@ pub fn convert_dae_bone_influences_to_ssbh(
                 vertex_weight: dae_weight.weight,
             })
             .collect();
-        
+
         if !vertex_weights.is_empty() {
             ssbh_influences.push(BoneInfluence {
                 bone_name: dae_influence.bone_name.clone(),
@@ -1127,7 +1127,7 @@ pub fn convert_dae_bone_influences_to_ssbh(
             });
         }
     }
-    
+
     ssbh_influences
 }
 
@@ -1149,27 +1149,27 @@ pub fn apply_transforms(vertices: &[[f32; 3]], config: &DaeConvertConfig) -> Vec
     vertices
         .iter()
         .map(|v| {
-        let mut transformed = *v;
-        
-        // Apply scale factor
-        transformed[0] *= config.scale_factor;
-        transformed[1] *= config.scale_factor;
-        transformed[2] *= config.scale_factor;
-        
-        // Apply coordinate system conversion
-        match config.up_axis_conversion {
-            UpAxisConversion::ZUp => {
-                // Convert Z-up to Y-up: swap Y and Z, negate new Z
-                let temp = transformed[1];
-                transformed[1] = transformed[2];
-                transformed[2] = -temp;
+            let mut transformed = *v;
+
+            // Apply scale factor
+            transformed[0] *= config.scale_factor;
+            transformed[1] *= config.scale_factor;
+            transformed[2] *= config.scale_factor;
+
+            // Apply coordinate system conversion
+            match config.up_axis_conversion {
+                UpAxisConversion::ZUp => {
+                    // Convert Z-up to Y-up: swap Y and Z, negate new Z
+                    let temp = transformed[1];
+                    transformed[1] = transformed[2];
+                    transformed[2] = -temp;
                 }
-            UpAxisConversion::YUp | UpAxisConversion::NoConversion => {
-                // No conversion needed
+                UpAxisConversion::YUp | UpAxisConversion::NoConversion => {
+                    // No conversion needed
                 }
-        }
-        
-        transformed
+            }
+
+            transformed
         })
         .collect()
 }
@@ -1178,19 +1178,19 @@ pub fn apply_normal_transforms(normals: &[[f32; 3]], config: &DaeConvertConfig) 
     normals
         .iter()
         .map(|n| {
-        let mut transformed = *n;
-        
-        // Apply coordinate system conversion (no scaling for normals)
-        match config.up_axis_conversion {
-            UpAxisConversion::ZUp => {
-                let temp = transformed[1];
-                transformed[1] = transformed[2];
-                transformed[2] = -temp;
+            let mut transformed = *n;
+
+            // Apply coordinate system conversion (no scaling for normals)
+            match config.up_axis_conversion {
+                UpAxisConversion::ZUp => {
+                    let temp = transformed[1];
+                    transformed[1] = transformed[2];
+                    transformed[2] = -temp;
                 }
                 UpAxisConversion::YUp | UpAxisConversion::NoConversion => {}
-        }
-        
-        transformed
+            }
+
+            transformed
         })
         .collect()
 }
@@ -1198,13 +1198,13 @@ pub fn apply_normal_transforms(normals: &[[f32; 3]], config: &DaeConvertConfig) 
 /// Parse bone hierarchy from library_visual_scenes
 fn parse_bone_hierarchy_from_visual_scenes(lib_visual_scenes: &Element) -> Result<Vec<DaeBone>> {
     let mut bones = Vec::new();
-    
+
     for visual_scene in find_all_children(lib_visual_scenes, "visual_scene") {
         for node in find_all_children(visual_scene, "node") {
             parse_node_hierarchy(node, None, &mut bones)?;
         }
     }
-    
+
     Ok(bones)
 }
 
@@ -1234,7 +1234,7 @@ fn parse_node_hierarchy(
             .unwrap_or("");
         let node_name = node.attributes.get("name").unwrap_or(node_id);
         let node_sid = node.attributes.get("sid").map(|s| s.as_str()).unwrap_or("");
-        
+
         let is_bone = node_type == "JOINT"
             || node_id.to_lowercase().contains("bone")
             || node_id.to_lowercase().contains("joint")
@@ -1242,7 +1242,7 @@ fn parse_node_hierarchy(
             || node_name.to_lowercase().contains("joint")
             || node_sid.to_lowercase().contains("bone")
             || node_sid.to_lowercase().contains("joint");
-        
+
         if is_bone || parent_index.is_some() {
             // Use 'name' attribute if available, otherwise fall back to 'id'
             let bone_name = node
@@ -1251,20 +1251,20 @@ fn parse_node_hierarchy(
                 .or_else(|| node.attributes.get("sid"))
                 .unwrap_or(node_id)
                 .clone();
-            
+
             // Parse transformation matrix
             let transform = parse_node_transform(node);
-            
+
             let bone = DaeBone {
                 name: bone_name.clone(),
                 parent_index,
                 transform,
                 inverse_bind_matrix: None,
             };
-            
+
             let current_index = bones.len();
             bones.push(bone);
-            
+
             // Recursively parse child nodes
             for child_node in find_all_children(node, "node") {
                 parse_node_hierarchy(child_node, Some(current_index), bones)?;
@@ -1276,7 +1276,7 @@ fn parse_node_hierarchy(
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -1291,16 +1291,16 @@ fn parse_node_transform(node: &Element) -> [[f32; 4]; 4] {
                     // DAE stores matrices in row-major order: [m00, m01, m02, m03, m10, m11, m12, m13, ...]
                     // Target format expects column-major order: [[col0], [col1], [col2], [col3]]
                     return [
-                        [values[0], values[4], values[8], values[12]],   // Column 0
-                        [values[1], values[5], values[9], values[13]],   // Column 1
-                        [values[2], values[6], values[10], values[14]],  // Column 2
-                        [values[3], values[7], values[11], values[15]],  // Column 3
+                        [values[0], values[4], values[8], values[12]], // Column 0
+                        [values[1], values[5], values[9], values[13]], // Column 1
+                        [values[2], values[6], values[10], values[14]], // Column 2
+                        [values[3], values[7], values[11], values[15]], // Column 3
                     ];
                 }
             }
         }
     }
-    
+
     // If no matrix, try to build from translate, rotate, scale
     let mut transform = [
         [1.0, 0.0, 0.0, 0.0],
@@ -1308,24 +1308,24 @@ fn parse_node_transform(node: &Element) -> [[f32; 4]; 4] {
         [0.0, 0.0, 1.0, 0.0],
         [0.0, 0.0, 0.0, 1.0],
     ];
-    
+
     // Apply translation (using column-major format)
     if let Some(translate_elem) = find_child(node, "translate") {
         if let Some(translate_text) = get_element_text(translate_elem) {
             if let Ok(values) = parse_matrix_values(&translate_text) {
                 if values.len() >= 3 {
                     // Store translation in the last column (column-major format)
-                    transform[3][0] = values[0];  // X translation
-                    transform[3][1] = values[1];  // Y translation
-                    transform[3][2] = values[2];  // Z translation
+                    transform[3][0] = values[0]; // X translation
+                    transform[3][1] = values[1]; // Y translation
+                    transform[3][2] = values[2]; // Z translation
                 }
             }
         }
     }
-    
+
     // Note: For full accuracy, we should also handle rotation and scale,
     // but identity matrix is sufficient for basic skeleton structure
-    
+
     transform
 }
 

@@ -12,7 +12,9 @@ use std::collections::HashMap;
 
 use serde_json::{json, Map as JsonMap, Value};
 
-use crate::format::obf_string::{obf_decode_to_string, obf_encode_from_string, read_null_terminated};
+use crate::format::obf_string::{
+    obf_decode_to_string, obf_encode_from_string, read_null_terminated,
+};
 use crate::format::param_bin_format::{
     build_param_binary, read_param_binary, ParamBinaryFile, ParamBinaryHeader, ParamFieldSpec,
 };
@@ -300,7 +302,11 @@ fn build_without_string_rewrite(
     for (entry_index, entry) in b.entries.iter().enumerate() {
         if entry_index < b.source_entries_raw.len()
             && b.source_entries_raw[entry_index].len() == entry_size
-            && entry_row_matches_command_map(&entry.commands, &b.source_entries_raw[entry_index], field_specs)
+            && entry_row_matches_command_map(
+                &entry.commands,
+                &b.source_entries_raw[entry_index],
+                field_specs,
+            )
         {
             entries_raw.push(b.source_entries_raw[entry_index].clone());
             continue;
@@ -417,7 +423,11 @@ pub fn list_data_from_json(v: &Value, pool: ParamCommandPool) -> Result<ListData
     let trailing_data = match obj.get("trailingData").and_then(|t| t.as_array()) {
         Some(arr) => arr
             .iter()
-            .map(|b| b.as_u64().map(|u| u as u8).ok_or("trailingData: expected u8"))
+            .map(|b| {
+                b.as_u64()
+                    .map(|u| u as u8)
+                    .ok_or("trailingData: expected u8")
+            })
             .collect::<Result<Vec<_>, _>>()?,
         None => Vec::new(),
     };

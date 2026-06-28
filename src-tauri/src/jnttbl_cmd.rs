@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 use ssbh_data::prelude::*;
 use std::path::{Path, PathBuf};
 
-use crate::jnttbl_format::{bytes_to_hex_upper_spaced, parse_jnttbl_bytes, serialize_jnttbl, JnttblDocument, JnttblEntry};
+use crate::jnttbl_format::{
+    bytes_to_hex_upper_spaced, parse_jnttbl_bytes, serialize_jnttbl, JnttblDocument, JnttblEntry,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,8 +48,12 @@ pub struct JnttblWritePayload {
 
 fn ensure_parent_dir(path: &Path) -> Result<(), String> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create parent directory {}: {e}", parent.display()))?;
+        std::fs::create_dir_all(parent).map_err(|e| {
+            format!(
+                "Failed to create parent directory {}: {e}",
+                parent.display()
+            )
+        })?;
     }
     Ok(())
 }
@@ -111,7 +117,8 @@ fn probe_nusktb(jnttbl_path: &Path) -> JnttblNusktbProbe {
 #[tauri::command]
 pub fn jnttbl_read_file(file_path: String) -> Result<JnttblReadResult, String> {
     let path = PathBuf::from(file_path.trim());
-    let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
+    let bytes =
+        std::fs::read(&path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
     let doc = parse_jnttbl_bytes(&bytes)?;
     let hex_dump = bytes_to_hex_upper_spaced(&bytes);
     let nusktb = probe_nusktb(&path);
@@ -152,7 +159,8 @@ pub fn jnttbl_write_file(payload: JnttblWritePayload) -> Result<(), String> {
             .collect(),
     };
     let bytes = serialize_jnttbl(&doc)?;
-    std::fs::write(&path, &bytes).map_err(|e| format!("Failed to write {}: {e}", path.display()))?;
+    std::fs::write(&path, &bytes)
+        .map_err(|e| format!("Failed to write {}: {e}", path.display()))?;
     Ok(())
 }
 

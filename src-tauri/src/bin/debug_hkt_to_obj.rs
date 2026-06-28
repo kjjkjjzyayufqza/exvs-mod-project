@@ -14,8 +14,8 @@
 //!     and writes <stem>_collision_packed_roundtrip.obj to check encoding fidelity
 //!  6. Prints per-file stats (vertex count, triangle count, AABB, encoding errors)
 
-use std::path::{Path, PathBuf};
 use std::io::Write;
+use std::path::{Path, PathBuf};
 
 // Re-use the project library.
 use app_lib::collision_mesh::{
@@ -181,9 +181,7 @@ fn process_file(path: &Path) -> Result<(), String> {
 }
 
 fn print_mesh_stats(label: &str, mesh: &CollisionTriMesh) {
-    let (min, max) = mesh
-        .compute_aabb()
-        .unwrap_or(([0.0; 3], [0.0; 3]));
+    let (min, max) = mesh.compute_aabb().unwrap_or(([0.0; 3], [0.0; 3]));
     let span = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
     eprintln!(
         "  [{label}] verts={} tris={} AABB min=[{:.4}, {:.4}, {:.4}] max=[{:.4}, {:.4}, {:.4}] span=[{:.4}, {:.4}, {:.4}]",
@@ -196,12 +194,16 @@ fn print_mesh_stats(label: &str, mesh: &CollisionTriMesh) {
 }
 
 fn write_obj(path: &Path, mesh: &CollisionTriMesh) -> Result<(), String> {
-    let mut f =
-        std::fs::File::create(path).map_err(|e| format!("Cannot create {}: {e}", path.display()))?;
+    let mut f = std::fs::File::create(path)
+        .map_err(|e| format!("Cannot create {}: {e}", path.display()))?;
 
-    writeln!(f, "# debug_hkt_to_obj — {} vertices, {} triangles",
-        mesh.vertices.len(), mesh.triangle_count())
-        .map_err(|e| format!("Write error: {e}"))?;
+    writeln!(
+        f,
+        "# debug_hkt_to_obj — {} vertices, {} triangles",
+        mesh.vertices.len(),
+        mesh.triangle_count()
+    )
+    .map_err(|e| format!("Write error: {e}"))?;
 
     for v in &mesh.vertices {
         writeln!(f, "v {:.8} {:.8} {:.8}", v[0], v[1], v[2])
@@ -322,9 +324,9 @@ fn decode_packed_mesh_from_xml(xml: &str) -> Result<CollisionTriMesh, String> {
 fn decode_packed_vertex(packed: u32, codec: &[f64; 6]) -> [f64; 3] {
     // codec = [offX, offY, offZ, sX, sY, sZ]
     // bit layout: Z[31:22] Y[21:11] X[10:0]
-    let xi = packed & 0x7FF;          // 11 bits
-    let yi = (packed >> 11) & 0x7FF;  // 11 bits
-    let zi = (packed >> 22) & 0x3FF;  // 10 bits
+    let xi = packed & 0x7FF; // 11 bits
+    let yi = (packed >> 11) & 0x7FF; // 11 bits
+    let zi = (packed >> 22) & 0x3FF; // 10 bits
 
     let x = codec[0] + (xi as f64) * codec[3];
     let y = codec[1] + (yi as f64) * codec[4];
@@ -347,9 +349,7 @@ fn extract_integer_array(xml: &str, field_name: &str) -> Result<Vec<i64>, String
         .find(&marker)
         .ok_or(format!("Field '{field_name}' not found"))?;
     let field_body = &xml[field_start..];
-    let field_end = field_body
-        .find("</field>")
-        .unwrap_or(field_body.len());
+    let field_end = field_body.find("</field>").unwrap_or(field_body.len());
     let field_slice = &field_body[..field_end];
 
     let mut values = Vec::new();
@@ -573,8 +573,7 @@ fn report_encoding_error(original: &CollisionTriMesh, decoded: &CollisionTriMesh
     );
 
     // Also check AABB comparison
-    if let (Ok((omin, omax)), Ok((dmin, dmax))) =
-        (original.compute_aabb(), decoded.compute_aabb())
+    if let (Ok((omin, omax)), Ok((dmin, dmax))) = (original.compute_aabb(), decoded.compute_aabb())
     {
         let aabb_err_min = [
             (omin[0] - dmin[0]).abs(),

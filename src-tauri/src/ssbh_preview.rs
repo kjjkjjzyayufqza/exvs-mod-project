@@ -128,7 +128,10 @@ fn normal_path_component_count(path: &Path) -> usize {
 
 /// Game matl paths often use `../../textures/...` relative to the `.numdlb` directory. Resolve from
 /// `model_folder_canon` allowing `..` up to the filesystem root, with a hard cap on `..` steps.
-fn resolve_relative_from_model_folder(model_folder_canon: &Path, raw: &str) -> Result<PathBuf, String> {
+fn resolve_relative_from_model_folder(
+    model_folder_canon: &Path,
+    raw: &str,
+) -> Result<PathBuf, String> {
     let s = raw.trim();
     if s.is_empty() {
         return Err("Model reference path is empty".to_string());
@@ -157,9 +160,7 @@ fn resolve_relative_from_model_folder(model_folder_canon: &Path, raw: &str) -> R
             }
             other => {
                 if other.contains(':') {
-                    return Err(format!(
-                        "Invalid path segment in model reference: {other}"
-                    ));
+                    return Err(format!("Invalid path segment in model reference: {other}"));
                 }
                 cur.push(other);
             }
@@ -176,9 +177,7 @@ fn win_normalize_path_for_tree_compare(p: &Path) -> PathBuf {
     let s = p.to_string_lossy();
     let without = s.strip_prefix(r"\\?\");
     match without {
-        Some(rest) if rest.starts_with("UNC\\") => {
-            PathBuf::from(format!(r"\\{}", &rest[4..]))
-        }
+        Some(rest) if rest.starts_with("UNC\\") => PathBuf::from(format!(r"\\{}", &rest[4..])),
         Some(rest) => PathBuf::from(rest.to_string()),
         None => p.to_path_buf(),
     }
@@ -212,12 +211,8 @@ fn verify_preview_path_under_model_tree(
     model_folder_canon: &Path,
     candidate: &Path,
 ) -> Result<PathBuf, String> {
-    let canon = fs::canonicalize(candidate).map_err(|e| {
-        format!(
-            "Failed to canonicalize {}: {e}",
-            candidate.display()
-        )
-    })?;
+    let canon = fs::canonicalize(candidate)
+        .map_err(|e| format!("Failed to canonicalize {}: {e}", candidate.display()))?;
     if !resolved_stays_under_unpack_tree(model_folder_canon, &canon) {
         return Err(format!(
             "Resolved path is outside the allowed unpack tree for this model: {}",
@@ -453,20 +448,15 @@ fn merge_additional_numatb_in_model_folder(
             seen.insert(c);
         }
     }
-    let rd =
-        fs::read_dir(root_canon).map_err(|e| format!("Failed to read model folder: {e}"))?;
+    let rd = fs::read_dir(root_canon).map_err(|e| format!("Failed to read model folder: {e}"))?;
     for ent in rd.flatten() {
         let p = ent.path();
         let ext = p.extension().and_then(|x| x.to_str()).unwrap_or("");
         if !ext.eq_ignore_ascii_case("numatb") {
             continue;
         }
-        let canon = fs::canonicalize(&p).map_err(|e| {
-            format!(
-                "Failed to canonicalize {}: {e}",
-                p.display()
-            )
-        })?;
+        let canon = fs::canonicalize(&p)
+            .map_err(|e| format!("Failed to canonicalize {}: {e}", p.display()))?;
         if seen.contains(&canon) {
             continue;
         }
@@ -641,7 +631,11 @@ fn normalized_matl_texture_filename_only(normalized_rel: &str) -> Option<String>
     while parts.first() == Some(&"..") {
         parts.remove(0);
     }
-    while parts.first().map(|p| p.eq_ignore_ascii_case("textures")).unwrap_or(false) {
+    while parts
+        .first()
+        .map(|p| p.eq_ignore_ascii_case("textures"))
+        .unwrap_or(false)
+    {
         parts.remove(0);
     }
     if parts.len() >= 2
@@ -799,7 +793,10 @@ fn find_nutexb_by_basename_near_textures(
     Ok(None)
 }
 
-pub fn resolve_nutexb_path(root_canon: &Path, texture_ref: &str) -> Result<Option<PathBuf>, String> {
+pub fn resolve_nutexb_path(
+    root_canon: &Path,
+    texture_ref: &str,
+) -> Result<Option<PathBuf>, String> {
     let trimmed = texture_ref.trim();
     if trimmed.is_empty() {
         return Ok(None);
@@ -836,13 +833,17 @@ pub fn resolve_nutexb_path(root_canon: &Path, texture_ref: &str) -> Result<Optio
     // 2) Path relative to the folder that contains the `.numdlb` (legacy).
     if let Ok(base) = resolve_relative_from_model_folder(root_canon, &normalized) {
         if base.is_file() {
-            return Ok(Some(verify_preview_path_under_model_tree(root_canon, &base)?));
+            return Ok(Some(verify_preview_path_under_model_tree(
+                root_canon, &base,
+            )?));
         }
         if !normalized.to_ascii_lowercase().ends_with(".nutexb") {
             let with_ext = format!("{normalized}.nutexb");
             if let Ok(alt) = resolve_relative_from_model_folder(root_canon, &with_ext) {
                 if alt.is_file() {
-                    return Ok(Some(verify_preview_path_under_model_tree(root_canon, &alt)?));
+                    return Ok(Some(verify_preview_path_under_model_tree(
+                        root_canon, &alt,
+                    )?));
                 }
             }
         }
@@ -911,9 +912,7 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
                 }
                 Ok((None, expected)) => (None, None, expected),
                 Err(e) => {
-                    warnings.push(format!(
-                        "Skeleton reference invalid ({skel_ref}): {e}"
-                    ));
+                    warnings.push(format!("Skeleton reference invalid ({skel_ref}): {e}"));
                     (None, None, String::new())
                 }
             }
@@ -1015,7 +1014,9 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
                 (Some(mut nust), Some(maya)) => {
                     for entry in &mut nust.entries {
                         if entry.textures.is_empty() {
-                            if let Some(maya_entry) = maya.entries.iter()
+                            if let Some(maya_entry) = maya
+                                .entries
+                                .iter()
                                 .find(|e| e.material_label == entry.material_label)
                             {
                                 entry.textures = maya_entry.textures.clone();
@@ -1034,41 +1035,42 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
         matl_combined = load_and_merge_matl_paths(&matl_paths, &mut warnings);
     }
 
-    let (texture_refs, resolved_nutexb_paths, texture_resolve, matl_value) =
-        if let Some(ref m) = matl_combined {
-            let refs = collect_texture_refs(m);
-            let mut resolved: Vec<String> = Vec::new();
-            let mut resolve_rows: Vec<TextureRefResolve> = Vec::new();
-            for r in &refs {
-                let nutexb_path = resolve_nutexb_path(&root_canon, r)?
-                    .map(|x| preview_path_to_frontend(&x));
-                if let Some(ref s) = nutexb_path {
-                    if !resolved.contains(s) {
-                        resolved.push(s.clone());
-                    }
-                } else {
-                    warnings.push(format!(
-                        "Texture reference could not be resolved to a .nutexb on disk: {r}"
-                    ));
+    let (texture_refs, resolved_nutexb_paths, texture_resolve, matl_value) = if let Some(ref m) =
+        matl_combined
+    {
+        let refs = collect_texture_refs(m);
+        let mut resolved: Vec<String> = Vec::new();
+        let mut resolve_rows: Vec<TextureRefResolve> = Vec::new();
+        for r in &refs {
+            let nutexb_path =
+                resolve_nutexb_path(&root_canon, r)?.map(|x| preview_path_to_frontend(&x));
+            if let Some(ref s) = nutexb_path {
+                if !resolved.contains(s) {
+                    resolved.push(s.clone());
                 }
-                resolve_rows.push(TextureRefResolve {
-                    reference: r.clone(),
-                    nutexb_path,
-                });
+            } else {
+                warnings.push(format!(
+                    "Texture reference could not be resolved to a .nutexb on disk: {r}"
+                ));
             }
-            let v =
-                serde_json::to_value(m).map_err(|e| format!("Failed to serialize Matl: {e}"))?;
-            (refs, resolved, resolve_rows, Some(v))
-        } else {
-            if !modl.material_file_names.is_empty() {
-                warnings.push(
-                    "No material files could be loaded; meshes render with a neutral material.".into(),
-                );
-            }
-            (Vec::new(), Vec::new(), Vec::new(), None)
-        };
+            resolve_rows.push(TextureRefResolve {
+                reference: r.clone(),
+                nutexb_path,
+            });
+        }
+        let v = serde_json::to_value(m).map_err(|e| format!("Failed to serialize Matl: {e}"))?;
+        (refs, resolved, resolve_rows, Some(v))
+    } else {
+        if !modl.material_file_names.is_empty() {
+            warnings.push(
+                "No material files could be loaded; meshes render with a neutral material.".into(),
+            );
+        }
+        (Vec::new(), Vec::new(), Vec::new(), None)
+    };
 
-    let modl_json = serde_json::to_value(&modl).map_err(|e| format!("Failed to serialize Modl: {e}"))?;
+    let modl_json =
+        serde_json::to_value(&modl).map_err(|e| format!("Failed to serialize Modl: {e}"))?;
     // Geometry travels as a binary side-channel (registered blob fetched by the frontend),
     // never as a JSON Value — large meshes otherwise blow memory up and abort the host.
     let mesh_json = serde_json::to_value(crate::ssbh_mesh_binary::pack_and_register(&mesh))
@@ -1162,9 +1164,7 @@ pub fn ssbh_load_ssbh_file_as_json(path: String) -> Result<Value, String> {
             serde_json::to_value(&d).map_err(|e| e.to_string())?
         }
         other => {
-            return Err(format!(
-                "Unsupported extension for JSON preview: {other}"
-            ));
+            return Err(format!("Unsupported extension for JSON preview: {other}"));
         }
     };
     Ok(json!({
@@ -1263,11 +1263,7 @@ mod numatb_folder_tests {
         for p in &files {
             match MatlData::from_file(p) {
                 Ok(m) => {
-                    eprintln!(
-                        "OK  {}  ({} entries)",
-                        p.display(),
-                        m.entries.len()
-                    );
+                    eprintln!("OK  {}  ({} entries)", p.display(), m.entries.len());
                 }
                 Err(e) => {
                     let msg = format!("{}: {}", p.display(), e);
@@ -1318,7 +1314,10 @@ mod numatb_folder_tests {
             "expected preview bundle to load at least one __nust__.numatb"
         );
         assert!(
-            bundle.texture_refs.iter().any(|r| r.contains("pbr1_basecolor")),
+            bundle
+                .texture_refs
+                .iter()
+                .any(|r| r.contains("pbr1_basecolor")),
             "expected EXVS base color texture reference in preview bundle"
         );
         assert!(

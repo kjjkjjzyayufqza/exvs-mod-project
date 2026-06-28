@@ -73,7 +73,10 @@ pub fn add_unit_model_nutexb(
     let mut doc = read_structure_document(&model_root_path, structure_json_path)?;
     let source = PathBuf::from(source_path.trim());
     if !source.is_file() {
-        return Err(format!("Texture source is not a file: {}", source.display()));
+        return Err(format!(
+            "Texture source is not a file: {}",
+            source.display()
+        ));
     }
     let filename = sanitize_nutexb_filename(target_filename)?;
     ensure_texture_filename_available(&doc.sub_file_data, &filename)?;
@@ -81,11 +84,18 @@ pub fn add_unit_model_nutexb(
     // Place added textures in the shared, deduped `textures/` pool that the folder layout uses.
     // fileUrl is derived from the physical path, so the repack tree stays consistent.
     let textures_dir = model_root_path.join("textures");
-    fs::create_dir_all(&textures_dir)
-        .map_err(|e| format!("Failed to create textures dir {}: {e}", textures_dir.display()))?;
+    fs::create_dir_all(&textures_dir).map_err(|e| {
+        format!(
+            "Failed to create textures dir {}: {e}",
+            textures_dir.display()
+        )
+    })?;
     let target = textures_dir.join(&filename);
     if target.exists() {
-        return Err(format!("Target texture already exists on disk: {}", target.display()));
+        return Err(format!(
+            "Target texture already exists on disk: {}",
+            target.display()
+        ));
     }
     fs::copy(&source, &target).map_err(|e| {
         format!(
@@ -129,7 +139,9 @@ pub fn remove_unit_model_nutexb(
         .iter()
         .find(|entry| entry.file_index == file_index)
     else {
-        return Err(format!("Texture fileIndex {file_index} was not found in SubFileData."));
+        return Err(format!(
+            "Texture fileIndex {file_index} was not found in SubFileData."
+        ));
     };
     if !texture.can_remove {
         return Err(format!(
@@ -140,7 +152,8 @@ pub fn remove_unit_model_nutexb(
 
     let remove_path = PathBuf::from(&texture.path);
     remove_texture_file_if_safe(&model_root_path, &remove_path)?;
-    doc.sub_file_data.retain(|entry| entry.file_index != file_index);
+    doc.sub_file_data
+        .retain(|entry| entry.file_index != file_index);
     reindex_sub_file_data(&mut doc.sub_file_data);
     write_sub_file_data(&mut doc)?;
     Ok(build_inventory(&model_root_path, doc))
@@ -164,23 +177,37 @@ fn validate_model_root(model_root: &str) -> Result<PathBuf, String> {
     }
     let path = PathBuf::from(trimmed);
     if !path.is_dir() {
-        return Err(format!("Unit model root is not a directory: {}", path.display()));
+        return Err(format!(
+            "Unit model root is not a directory: {}",
+            path.display()
+        ));
     }
     Ok(path)
 }
 
-fn resolve_structure_json_path(model_root: &Path, explicit: Option<&str>) -> Result<PathBuf, String> {
+fn resolve_structure_json_path(
+    model_root: &Path,
+    explicit: Option<&str>,
+) -> Result<PathBuf, String> {
     let trimmed = explicit.unwrap_or_default().trim();
     if !trimmed.is_empty() {
         return Ok(PathBuf::from(trimmed));
     }
-    let parent = model_root
-        .parent()
-        .ok_or_else(|| format!("Cannot infer structure JSON path from {}", model_root.display()))?;
+    let parent = model_root.parent().ok_or_else(|| {
+        format!(
+            "Cannot infer structure JSON path from {}",
+            model_root.display()
+        )
+    })?;
     let name = model_root
         .file_name()
         .and_then(|n| n.to_str())
-        .ok_or_else(|| format!("Cannot infer structure JSON path from {}", model_root.display()))?;
+        .ok_or_else(|| {
+            format!(
+                "Cannot infer structure JSON path from {}",
+                model_root.display()
+            )
+        })?;
     Ok(parent.join(format!("{name}_structure.json")))
 }
 
@@ -199,7 +226,10 @@ fn read_structure_document(
         .ok_or_else(|| format!("Structure JSON is missing SubFileData: {}", path.display()))?;
     let sub_file_data: Vec<InputSubFileData> = serde_json::from_value(sub_value)
         .map_err(|e| format!("Failed to parse SubFileData from {}: {e}", path.display()))?;
-    let json_dir = path.parent().unwrap_or_else(|| Path::new(".")).to_path_buf();
+    let json_dir = path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .to_path_buf();
     Ok(StructureDocument {
         path,
         json_dir,
@@ -245,7 +275,10 @@ fn build_inventory(model_root: &Path, doc: StructureDocument) -> UnitModelTextur
                 match crate::nutexb_lib::read_nutexb_info(&path.to_string_lossy()) {
                     Ok(info) => Some(info),
                     Err(e) => {
-                        warnings.push(format!("Failed to read nutexb info for {}: {e}", path.display()));
+                        warnings.push(format!(
+                            "Failed to read nutexb info for {}: {e}",
+                            path.display()
+                        ));
                         None
                     }
                 }
@@ -316,7 +349,11 @@ fn collect_numatb_references(
     warnings: &mut Vec<String>,
 ) -> HashMap<String, Vec<String>> {
     let mut out: HashMap<String, Vec<String>> = HashMap::new();
-    for entry in doc.sub_file_data.iter().filter(|entry| entry_is_ext(entry, ".numatb")) {
+    for entry in doc
+        .sub_file_data
+        .iter()
+        .filter(|entry| entry_is_ext(entry, ".numatb"))
+    {
         let path = resolve_file_path(&doc.json_dir, &entry.file_url);
         let label = file_basename(&entry.file_url);
         let bytes = match fs::read(&path) {
@@ -386,8 +423,7 @@ fn entry_is_nutexb(entry: &InputSubFileData) -> bool {
 
 fn entry_is_ext(entry: &InputSubFileData, ext: &str) -> bool {
     let filename = file_basename(&entry.file_url);
-    filename.to_ascii_lowercase().ends_with(ext)
-        || entry.file_type.eq_ignore_ascii_case(ext)
+    filename.to_ascii_lowercase().ends_with(ext) || entry.file_type.eq_ignore_ascii_case(ext)
 }
 
 fn resolve_file_path(json_dir: &Path, file_url: &str) -> PathBuf {
@@ -450,7 +486,9 @@ fn ensure_texture_filename_available(
         .filter(|entry| entry_is_nutexb(entry))
         .any(|entry| normalize_filename_key(&entry.file_url) == key)
     {
-        return Err(format!("A texture named {filename} already exists in SubFileData."));
+        return Err(format!(
+            "A texture named {filename} already exists in SubFileData."
+        ));
     }
     Ok(())
 }
@@ -465,8 +503,12 @@ fn remove_texture_file_if_safe(model_root: &Path, path: &Path) -> Result<(), Str
     if !path.exists() {
         return Ok(());
     }
-    let root = fs::canonicalize(model_root)
-        .map_err(|e| format!("Failed to canonicalize model root {}: {e}", model_root.display()))?;
+    let root = fs::canonicalize(model_root).map_err(|e| {
+        format!(
+            "Failed to canonicalize model root {}: {e}",
+            model_root.display()
+        )
+    })?;
     let target = fs::canonicalize(path)
         .map_err(|e| format!("Failed to canonicalize texture {}: {e}", path.display()))?;
     if !target.starts_with(&root) {
@@ -485,7 +527,10 @@ mod tests {
 
     #[test]
     fn sanitize_requires_plain_nutexb_filename() {
-        assert_eq!(sanitize_nutexb_filename("foo.nutexb").unwrap(), "foo.nutexb");
+        assert_eq!(
+            sanitize_nutexb_filename("foo.nutexb").unwrap(),
+            "foo.nutexb"
+        );
         assert!(sanitize_nutexb_filename("folder\\foo.nutexb").is_err());
         assert!(sanitize_nutexb_filename("foo.png").is_err());
         assert!(sanitize_nutexb_filename("").is_err());

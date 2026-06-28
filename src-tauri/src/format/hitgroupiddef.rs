@@ -17,21 +17,21 @@ use crate::format::param_entry_schema::{
 // CRITICAL: 0xD32D39ED was "is_enabled" but has 141 unique hash values — renamed to parent_bone_hash.
 //           Same hash is "bone_hash" in vernier_table.rs, confirming it's a bone reference.
 pub const HITGROUPIDDEF_COMMAND_POOL: ParamCommandPool = &[
-    (0x11E501D5, 1, "hit_type"),           // [D:0~3] enum, 4 types
-    (0x3284A82D, 5, "offset_x"),           // [D:always 0] unused
-    (0x42EE5CA2, 5, "offset_y"),           // [D:always 0] unused
-    (0x458398BB, 5, "offset_z"),           // [D:-5~6] 6 unique, mostly 0
-    (0x6514C413, 5, "radius"),             // [D:-54~700] 146 unique
-    (0x7395D184, 1, "enable_state"),       // [D:0~1] boolean
-    (0x8B1AA53F, 5, "scale_x"),            // [D:-2000~2700] 306 unique
-    (0xACE03D8E, 5, "scale_y"),            // [D:always 0] unused
-    (0xC3656A99, 1, "bone_hash"),          // [D:HASH] 5856 unique
-    (0xD32D39ED, 1, "parent_bone_hash"),   // [D:HASH] 141 unique. was "is_enabled" — NOT boolean!
-    (0xDBE70D18, 5, "scale_z"),            // [D:always 0] unused
-    (0xDC8AC901, 5, "group_id"),           // [D:-12~150] float, 59 unique
-    (0xEDD1C108, 1, "model_hash"),         // [D:HASH] 587 unique
-    (0xF89A41E1, 1, "collision_flags"),    // [D:0~2] enum, 3 types
-    (0xFC1D95A9, 5, "joint_offset"),       // [D:-40~85] 86 unique
+    (0x11E501D5, 1, "hit_type"),         // [D:0~3] enum, 4 types
+    (0x3284A82D, 5, "offset_x"),         // [D:always 0] unused
+    (0x42EE5CA2, 5, "offset_y"),         // [D:always 0] unused
+    (0x458398BB, 5, "offset_z"),         // [D:-5~6] 6 unique, mostly 0
+    (0x6514C413, 5, "radius"),           // [D:-54~700] 146 unique
+    (0x7395D184, 1, "enable_state"),     // [D:0~1] boolean
+    (0x8B1AA53F, 5, "scale_x"),          // [D:-2000~2700] 306 unique
+    (0xACE03D8E, 5, "scale_y"),          // [D:always 0] unused
+    (0xC3656A99, 1, "bone_hash"),        // [D:HASH] 5856 unique
+    (0xD32D39ED, 1, "parent_bone_hash"), // [D:HASH] 141 unique. was "is_enabled" — NOT boolean!
+    (0xDBE70D18, 5, "scale_z"),          // [D:always 0] unused
+    (0xDC8AC901, 5, "group_id"),         // [D:-12~150] float, 59 unique
+    (0xEDD1C108, 1, "model_hash"),       // [D:HASH] 587 unique
+    (0xF89A41E1, 1, "collision_flags"),  // [D:0~2] enum, 3 types
+    (0xFC1D95A9, 5, "joint_offset"),     // [D:-40~85] 86 unique
 ];
 
 pub fn hitgroupiddef_entry_to_json_value(entry: &HitGroupIdDefEntry) -> Value {
@@ -82,12 +82,20 @@ fn validate_field_specs(field_specs: &[ParamFieldSpec]) -> Result<(), String> {
     validate_file_specs_kind_match_pool(HITGROUPIDDEF_COMMAND_POOL, field_specs)
 }
 
-fn parse_entry_from_raw(raw: &[u8], field_specs: &[ParamFieldSpec], entry_id: u32) -> HitGroupIdDefEntry {
+fn parse_entry_from_raw(
+    raw: &[u8],
+    field_specs: &[ParamFieldSpec],
+    entry_id: u32,
+) -> HitGroupIdDefEntry {
     let commands = parse_commands_map_from_entry_row(raw, field_specs);
     HitGroupIdDefEntry { entry_id, commands }
 }
 
-fn entry_matches_raw(entry: &HitGroupIdDefEntry, raw: &[u8], field_specs: &[ParamFieldSpec]) -> bool {
+fn entry_matches_raw(
+    entry: &HitGroupIdDefEntry,
+    raw: &[u8],
+    field_specs: &[ParamFieldSpec],
+) -> bool {
     entry_row_matches_command_map(&entry.commands, raw, field_specs)
 }
 
@@ -127,7 +135,9 @@ pub fn build_hitgroupiddef(b: &HitGroupIdDefData) -> Result<Vec<u8>, String> {
 
     let mut entries_raw: Vec<Vec<u8>> = Vec::with_capacity(b.entries.len());
     for (entry_index, entry) in b.entries.iter().enumerate() {
-        if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+        if entry_index < b.source_entries_raw.len()
+            && b.source_entries_raw[entry_index].len() == entry_size
+        {
             let r = &b.source_entries_raw[entry_index];
             if entry_matches_raw(entry, r, &field_specs) {
                 entries_raw.push(b.source_entries_raw[entry_index].clone());
@@ -135,7 +145,9 @@ pub fn build_hitgroupiddef(b: &HitGroupIdDefData) -> Result<Vec<u8>, String> {
             }
         }
 
-        let mut raw = if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+        let mut raw = if entry_index < b.source_entries_raw.len()
+            && b.source_entries_raw[entry_index].len() == entry_size
+        {
             b.source_entries_raw[entry_index].clone()
         } else {
             vec![0u8; entry_size]
@@ -144,7 +156,9 @@ pub fn build_hitgroupiddef(b: &HitGroupIdDefData) -> Result<Vec<u8>, String> {
         for spec in &field_specs {
             let o = spec.entry_offset as usize;
             if o + 4 > raw.len() {
-                return Err("hitgroupiddef entry field offset out of range for entry_size".to_string());
+                return Err(
+                    "hitgroupiddef entry field offset out of range for entry_size".to_string(),
+                );
             }
             if let Some(v) = entry.commands.get(&spec.hash) {
                 raw[o..o + 4].copy_from_slice(&v.to_le_bytes());
@@ -172,8 +186,7 @@ pub fn build_hitgroupiddef(b: &HitGroupIdDefData) -> Result<Vec<u8>, String> {
 mod tests {
     use super::*;
 
-    const SAMPLE_PATH: &str =
-        "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\0x08248A8D\\hitgroupiddef.bin";
+    const SAMPLE_PATH: &str = "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\0x08248A8D\\hitgroupiddef.bin";
 
     #[test]
     fn hitgroupiddef_read_write_crud() {
@@ -185,7 +198,10 @@ mod tests {
             build_hitgroupiddef(&parsed).expect("failed to rebuild hitgroupiddef sample file");
         assert_eq!(rebuilt, source);
 
-        assert!(!parsed.entries.is_empty(), "hitgroupiddef sample has no entries");
+        assert!(
+            !parsed.entries.is_empty(),
+            "hitgroupiddef sample has no entries"
+        );
 
         let mut with_added = parsed.clone();
         let mut added = with_added.entries[0].clone();
@@ -203,21 +219,24 @@ mod tests {
         let added_parsed =
             parse_hitgroupiddef(&added_bytes).expect("failed to parse hitgroupiddef after add");
         assert_eq!(added_parsed.entries.len(), parsed.entries.len() + 1);
-        assert_eq!(added_parsed.entries.last().map(|entry| entry.entry_id), Some(next_id));
+        assert_eq!(
+            added_parsed.entries.last().map(|entry| entry.entry_id),
+            Some(next_id)
+        );
 
         let mut with_updated = added_parsed.clone();
         let updated_id = with_updated.entries[0].entry_id.wrapping_add(99);
         with_updated.entries[0].entry_id = updated_id;
-        let updated_bytes = build_hitgroupiddef(&with_updated)
-            .expect("failed to build hitgroupiddef after update");
+        let updated_bytes =
+            build_hitgroupiddef(&with_updated).expect("failed to build hitgroupiddef after update");
         let updated_parsed = parse_hitgroupiddef(&updated_bytes)
             .expect("failed to parse hitgroupiddef after update");
         assert_eq!(updated_parsed.entries[0].entry_id, updated_id);
 
         let mut with_deleted = updated_parsed.clone();
         with_deleted.entries.pop();
-        let deleted_bytes = build_hitgroupiddef(&with_deleted)
-            .expect("failed to build hitgroupiddef after delete");
+        let deleted_bytes =
+            build_hitgroupiddef(&with_deleted).expect("failed to build hitgroupiddef after delete");
         let deleted_parsed = parse_hitgroupiddef(&deleted_bytes)
             .expect("failed to parse hitgroupiddef after delete");
         assert_eq!(deleted_parsed.entries.len(), parsed.entries.len());

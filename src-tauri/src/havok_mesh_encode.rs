@@ -1103,10 +1103,7 @@ fn validate_encoded_mesh_geometry(
             for local_index in primitive {
                 let local_index = *local_index as usize;
                 let point = if local_index < section.packed_vertices.len() {
-                    decode_packed_vertex(
-                        section.packed_vertices[local_index],
-                        section.codec_parms,
-                    )
+                    decode_packed_vertex(section.packed_vertices[local_index], section.codec_parms)
                 } else {
                     let shared_local_index = local_index - section.packed_vertices.len();
                     let shared_index = *section

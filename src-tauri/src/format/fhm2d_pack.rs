@@ -524,8 +524,8 @@ fn build_meta_blob(
     // Offset 0x20: unk_count
     push_u32_le(&mut meta, magic);
     meta.extend_from_slice(&[0u8; 12]); // offset 0x04..0x0F
-    push_u32_le(&mut meta, 0);          // offset 0x10: placeholder for structure offset
-    push_u32_le(&mut meta, 0);          // offset 0x14
+    push_u32_le(&mut meta, 0); // offset 0x10: placeholder for structure offset
+    push_u32_le(&mut meta, 0); // offset 0x14
     push_u32_le(&mut meta, file_type_count);
     push_u32_le(&mut meta, file_count);
     push_u32_le(&mut meta, unk_count);
@@ -919,13 +919,12 @@ mod tests {
     #[test]
     fn test_incompressible_small_payload_forces_compressed_chunk() {
         let data = [
-            0x4A, 0x4E, 0x54, 0x54, 0x01, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x90,
-            0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
-            0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x57, 0xD8, 0xA3, 0x43, 0x02, 0x00, 0x00,
-            0x00, 0x90, 0x27, 0xFB, 0x6C, 0x03, 0x00, 0x00, 0x00, 0x55, 0x0D, 0xDB, 0xD7,
-            0x04, 0x00, 0x00, 0x00, 0x7B, 0xC0, 0x03, 0x01, 0x05, 0x00, 0x00, 0x00, 0x36,
-            0x30, 0xD4, 0x2D, 0x06, 0x00, 0x00, 0x00, 0xA4, 0xFF, 0x42, 0xD5, 0x07, 0x00,
-            0x00, 0x00,
+            0x4A, 0x4E, 0x54, 0x54, 0x01, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x90, 0x01,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+            0x01, 0x00, 0x00, 0x00, 0x57, 0xD8, 0xA3, 0x43, 0x02, 0x00, 0x00, 0x00, 0x90, 0x27,
+            0xFB, 0x6C, 0x03, 0x00, 0x00, 0x00, 0x55, 0x0D, 0xDB, 0xD7, 0x04, 0x00, 0x00, 0x00,
+            0x7B, 0xC0, 0x03, 0x01, 0x05, 0x00, 0x00, 0x00, 0x36, 0x30, 0xD4, 0x2D, 0x06, 0x00,
+            0x00, 0x00, 0xA4, 0xFF, 0x42, 0xD5, 0x07, 0x00, 0x00, 0x00,
         ];
         let body = compress_file_body(&data).unwrap();
         assert_eq!(body.is_need_decomp, 1);
@@ -1257,18 +1256,18 @@ mod tests {
             .iter()
             .enumerate()
             .map(|(i, (rel, ext))| {
-            let file_url = format!("{}/{}", pack_folder_name, rel);
+                let file_url = format!("{}/{}", pack_folder_name, rel);
                 let base_name = Path::new(rel)
                     .file_stem()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_default();
-            serde_json::json!({
-                "index": i,
-                "fileType": ext,
-                "fileIndex": i,
-                "fileUrl": file_url,
-                "fileBaseName": base_name,
-            })
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                serde_json::json!({
+                    "index": i,
+                    "fileType": ext,
+                    "fileIndex": i,
+                    "fileUrl": file_url,
+                    "fileBaseName": base_name,
+                })
             })
             .collect();
 
@@ -1285,7 +1284,7 @@ mod tests {
             };
             for (idx, parts) in files {
                 let file_name = parts.last().unwrap().clone();
-                let dirs = &parts[..parts.len()-1];
+                let dirs = &parts[..parts.len() - 1];
                 let mut cursor = &mut root;
                 for d in dirs {
                     cursor = cursor.folders.entry(d.clone()).or_insert_with(|| TreeNode {
@@ -1438,9 +1437,9 @@ mod tests {
                         "(expected)"
                     } else {
                         "(UNEXPECTED)"
-            }
+                    }
                 );
-        }
+            }
         }
         eprintln!(
             "  Verified: {} files extracted, total decompressed data: {} bytes",
@@ -1575,7 +1574,7 @@ mod tests {
         let repack_bytes = fs::read(output_path).unwrap();
 
         fn read_u32(b: &[u8], off: usize) -> u32 {
-            u32::from_le_bytes(b[off..off+4].try_into().unwrap())
+            u32::from_le_bytes(b[off..off + 4].try_into().unwrap())
         }
 
         let orig_meta_comp_size = read_u32(&orig_bytes, 0x20) as usize;
@@ -1590,8 +1589,8 @@ mod tests {
             out
         }
 
-        let orig_meta = decompress(&orig_bytes[0x30..0x30+orig_meta_comp_size]);
-        let repack_meta = decompress(&repack_bytes[0x30..0x30+repack_meta_comp_size]);
+        let orig_meta = decompress(&orig_bytes[0x30..0x30 + orig_meta_comp_size]);
+        let repack_meta = decompress(&repack_bytes[0x30..0x30 + repack_meta_comp_size]);
 
         assert_eq!(
             orig_meta.len(),

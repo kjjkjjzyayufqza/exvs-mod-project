@@ -3,7 +3,9 @@ use std::collections::HashMap;
 
 use serde_json::{json, Map as JsonMap, Value};
 
-use crate::format::obf_string::{obf_decode_to_string, obf_encode_from_string, read_null_terminated};
+use crate::format::obf_string::{
+    obf_decode_to_string, obf_encode_from_string, read_null_terminated,
+};
 use crate::format::param_bin_format::{
     build_param_binary, read_param_binary, ParamBinaryFile, ParamBinaryHeader, ParamFieldSpec,
 };
@@ -338,10 +340,8 @@ pub fn build_characterlist(b: &CharacterListData) -> Result<Vec<u8>, String> {
         return build_without_string_rewrite(b, &field_specs, entry_size);
     }
 
-    let entries_base_offset = 0x20
-        + field_specs.len() * 4
-        + field_specs.len() * 12
-        + b.entries.len() * 4;
+    let entries_base_offset =
+        0x20 + field_specs.len() * 4 + field_specs.len() * 12 + b.entries.len() * 4;
     let string_pool_start = entries_base_offset + b.entries.len() * entry_size;
 
     let mut string_pool: Vec<u8> = Vec::new();
@@ -470,8 +470,7 @@ fn build_without_string_rewrite(
 mod tests {
     use super::*;
 
-    const SAMPLE_PATH: &str =
-        "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\0xDFD38C70\\character_list.bin";
+    const SAMPLE_PATH: &str = "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\0xDFD38C70\\character_list.bin";
 
     #[test]
     fn characterlist_parse_basic() {

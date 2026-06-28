@@ -1,6 +1,4 @@
-use crate::format::fhm2d::{
-    extract_fhm2d_to_memory_impl, Fhm2dFormat, InMemoryFhm2dExtraction,
-};
+use crate::format::fhm2d::{extract_fhm2d_to_memory_impl, Fhm2dFormat, InMemoryFhm2dExtraction};
 use crate::nutexb_lib::{
     nutexb_file_crc32, nutexb_to_png_bytes_from_bytes, NutexbPreviewFileIdentity,
 };
@@ -146,7 +144,9 @@ fn normalize_virtual_rel_path(raw: &str) -> Result<String, String> {
             return Err(format!("Virtual path must not contain '..': {raw}"));
         }
         if part.contains(':') {
-            return Err(format!("Virtual path contains an invalid ':' segment: {raw}"));
+            return Err(format!(
+                "Virtual path contains an invalid ':' segment: {raw}"
+            ));
         }
         out.push(part.to_string());
     }
@@ -483,7 +483,8 @@ fn build_preview_candidates_for_files(
                 ) {
                     Ok(Some(mesh_id)) => {
                         if let Some(mesh) = files_by_id.get(mesh_id.as_str()) {
-                            mesh_virtual_path = Some(public_virtual_path(session_id, &mesh.relative_path));
+                            mesh_virtual_path =
+                                Some(public_virtual_path(session_id, &mesh.relative_path));
                         } else {
                             complete = false;
                             issues.push("Mesh file id resolved but record missing.".to_string());
@@ -507,7 +508,8 @@ fn build_preview_candidates_for_files(
                 ) {
                     Ok(Some(skel_id)) => {
                         if let Some(skel) = files_by_id.get(skel_id.as_str()) {
-                            skel_virtual_path = Some(public_virtual_path(session_id, &skel.relative_path));
+                            skel_virtual_path =
+                                Some(public_virtual_path(session_id, &skel.relative_path));
                         }
                     }
                     Ok(None) => {}
@@ -568,7 +570,8 @@ fn build_preview_candidates_for_files(
                 let mut parsed_matl_files: Vec<&MemoryFileRecord> = Vec::new();
                 for matl_id in &preferred_matl_ids {
                     if let Some(record) = files_by_id.get(matl_id.as_str()) {
-                        matl_virtual_paths.push(public_virtual_path(session_id, &record.relative_path));
+                        matl_virtual_paths
+                            .push(public_virtual_path(session_id, &record.relative_path));
                         parsed_matl_files.push(record);
                     }
                 }
@@ -690,7 +693,10 @@ fn build_virtual_tree(
         .preview_candidates
         .iter()
         .filter(|candidate| !candidate.complete || !candidate.issues.is_empty())
-        .map(|candidate| parse_public_or_relative_path(&session.session_id, &candidate.modl_virtual_path).unwrap_or_default())
+        .map(|candidate| {
+            parse_public_or_relative_path(&session.session_id, &candidate.modl_virtual_path)
+                .unwrap_or_default()
+        })
         .collect();
     let selected_candidates: BTreeSet<String> =
         session.selected_candidate_ids.iter().cloned().collect();
@@ -699,7 +705,10 @@ fn build_virtual_tree(
     for (folder_path, name) in &folder_names {
         let folder_id = format!("folder:{folder_path}");
         let parent = parent_relative_path(folder_path);
-        let child_count = folder_children.get(folder_path).map(|items| items.len()).unwrap_or(0);
+        let child_count = folder_children
+            .get(folder_path)
+            .map(|items| items.len())
+            .unwrap_or(0);
         entries_by_id.insert(
             folder_id.clone(),
             Fhm2dVirtualEntry {
@@ -806,7 +815,9 @@ impl Fhm2dMemorySession {
             let relative_path = normalize_virtual_rel_path(file.file_url.as_str())?;
             let key = relative_path.to_ascii_lowercase();
             if relative_path_to_id.contains_key(&key) {
-                return Err(format!("Duplicate virtual path in memory session: {relative_path}"));
+                return Err(format!(
+                    "Duplicate virtual path in memory session: {relative_path}"
+                ));
             }
             let file_id = format!("file:{}", file.file_index);
             relative_path_to_id.insert(key, file_id.clone());
@@ -821,7 +832,8 @@ impl Fhm2dMemorySession {
                 },
             );
         }
-        let preview_candidates = build_preview_candidates_for_files(session_id.as_str(), &files_by_id);
+        let preview_candidates =
+            build_preview_candidates_for_files(session_id.as_str(), &files_by_id);
         Ok(Self {
             session_id,
             source_name,
@@ -859,7 +871,11 @@ fn snapshot_preview_bundle_build_input(
     session: &Fhm2dMemorySession,
     candidate: &Fhm2dPreviewCandidate,
 ) -> Result<PreviewBundleBuildInput, String> {
-    let Some(modl_file) = session.files_by_id.get(candidate.modl_entry_id.as_str()).cloned() else {
+    let Some(modl_file) = session
+        .files_by_id
+        .get(candidate.modl_entry_id.as_str())
+        .cloned()
+    else {
         return Err("Selected memory .numdlb entry no longer exists.".to_string());
     };
     let mesh_file = candidate
@@ -932,7 +948,10 @@ fn build_preview_bundle_from_snapshot(
         ) {
             Ok(Some(relative_path)) => {
                 let public_path = public_virtual_path(&input.session_id, relative_path.as_str());
-                if !resolved_nutexb_paths.iter().any(|path| path == &public_path) {
+                if !resolved_nutexb_paths
+                    .iter()
+                    .any(|path| path == &public_path)
+                {
                     resolved_nutexb_paths.push(public_path.clone());
                 }
                 texture_resolve.push(TextureRefResolve {
@@ -973,7 +992,10 @@ fn build_preview_bundle_from_snapshot(
             .map_err(|e| format!("Failed to serialize in-memory Mesh header: {e}"))?,
         skel: skel_value,
         matl: matl_combined
-            .map(|matl| serde_json::to_value(&matl).map_err(|e| format!("Failed to serialize in-memory Matl: {e}")))
+            .map(|matl| {
+                serde_json::to_value(&matl)
+                    .map_err(|e| format!("Failed to serialize in-memory Matl: {e}"))
+            })
             .transpose()?,
         matl_profiles: None,
         texture_refs,
@@ -1041,8 +1063,11 @@ pub async fn create_fhm2d_memory_session_from_path(
     let (session, summary) = tauri::async_runtime::spawn_blocking(move || {
         let bytes = std::fs::read(path_owned.as_str())
             .map_err(|e| format!("Failed to read FHM2D file: {e}"))?;
-        let extraction =
-            extract_fhm2d_to_memory_impl(bytes.as_slice(), virtual_root_name.as_str(), parsed_format)?;
+        let extraction = extract_fhm2d_to_memory_impl(
+            bytes.as_slice(),
+            virtual_root_name.as_str(),
+            parsed_format,
+        )?;
         create_session_and_summary(session_id_for_build, safe_source_name_for_build, extraction)
     })
     .await
@@ -1159,7 +1184,9 @@ pub async fn rename_fhm2d_memory_entry(
         let target = session
             .files_by_id
             .get_mut(entry_id_for_work.as_str())
-            .ok_or_else(|| format!("Virtual entry is not a file in this session: {entry_id_for_work}"))?;
+            .ok_or_else(|| {
+                format!("Virtual entry is not a file in this session: {entry_id_for_work}")
+            })?;
         target.relative_path = resolved_relative_path.clone();
         session
             .relative_path_to_id
@@ -1228,16 +1255,22 @@ pub async fn build_ssbh_preview_bundle_from_memory(
         let relative_modl_path =
             parse_public_or_relative_path(&session.session_id, modl_virtual_path.as_str())?;
         let cache_key = format!("{relative_modl_path}|{}", session.rename_revision);
-        if let Some(bundle) = session.derived_preview_bundles_cache.get(cache_key.as_str()) {
+        if let Some(bundle) = session
+            .derived_preview_bundles_cache
+            .get(cache_key.as_str())
+        {
             return Ok(bundle.clone());
         }
         let candidate = session
             .preview_candidates
             .iter()
             .find(|candidate| {
-                parse_public_or_relative_path(&session.session_id, candidate.modl_virtual_path.as_str())
-                    .ok()
-                    .as_deref()
+                parse_public_or_relative_path(
+                    &session.session_id,
+                    candidate.modl_virtual_path.as_str(),
+                )
+                .ok()
+                .as_deref()
                     == Some(relative_modl_path.as_str())
             })
             .cloned()
@@ -1292,7 +1325,8 @@ pub async fn fhm2d_memory_nutexb_preview_identity(
         let session = sessions
             .get_mut(session_id.as_str())
             .ok_or_else(|| format!("FHM2D memory session not found: {session_id}"))?;
-        let relative_path = parse_public_or_relative_path(&session.session_id, virtual_path.as_str())?;
+        let relative_path =
+            parse_public_or_relative_path(&session.session_id, virtual_path.as_str())?;
         let cache_key = normalize_name_for_lookup(relative_path.as_str());
         if let Some(identity) = session.nutexb_identity_cache.get(cache_key.as_str()) {
             return Ok(identity.clone());
@@ -1301,7 +1335,9 @@ pub async fn fhm2d_memory_nutexb_preview_identity(
             .file_by_relative_path(relative_path.as_str())
             .ok_or_else(|| format!("Memory texture not found at {relative_path}"))?;
         if !file.file_type.eq_ignore_ascii_case(".nutexb") {
-            return Err(format!("Virtual entry is not a .nutexb file: {relative_path}"));
+            return Err(format!(
+                "Virtual entry is not a .nutexb file: {relative_path}"
+            ));
         }
         (relative_path, file.data.clone())
     };
@@ -1318,9 +1354,10 @@ pub async fn fhm2d_memory_nutexb_preview_identity(
         .lock()
         .map_err(|_| "Failed to lock FHM2D memory sessions.".to_string())?;
     if let Some(session) = sessions.get_mut(session_id.as_str()) {
-        session
-            .nutexb_identity_cache
-            .insert(normalize_name_for_lookup(relative_path.as_str()), identity.clone());
+        session.nutexb_identity_cache.insert(
+            normalize_name_for_lookup(relative_path.as_str()),
+            identity.clone(),
+        );
     }
     Ok(identity)
 }
@@ -1339,12 +1376,15 @@ pub async fn fhm2d_memory_nutexb_png_bytes(
         let session = sessions
             .get(session_id.as_str())
             .ok_or_else(|| format!("FHM2D memory session not found: {session_id}"))?;
-        let relative_path = parse_public_or_relative_path(&session.session_id, virtual_path.as_str())?;
+        let relative_path =
+            parse_public_or_relative_path(&session.session_id, virtual_path.as_str())?;
         let file = session
             .file_by_relative_path(relative_path.as_str())
             .ok_or_else(|| format!("Memory texture not found at {relative_path}"))?;
         if !file.file_type.eq_ignore_ascii_case(".nutexb") {
-            return Err(format!("Virtual entry is not a .nutexb file: {relative_path}"));
+            return Err(format!(
+                "Virtual entry is not a .nutexb file: {relative_path}"
+            ));
         }
         file.data.clone()
     };
@@ -1373,12 +1413,15 @@ pub async fn fhm2d_memory_nutexb_rgba_bytes(
         let session = sessions
             .get(session_id.as_str())
             .ok_or_else(|| format!("FHM2D memory session not found: {session_id}"))?;
-        let relative_path = parse_public_or_relative_path(&session.session_id, virtual_path.as_str())?;
+        let relative_path =
+            parse_public_or_relative_path(&session.session_id, virtual_path.as_str())?;
         let file = session
             .file_by_relative_path(relative_path.as_str())
             .ok_or_else(|| format!("Memory texture not found at {relative_path}"))?;
         if !file.file_type.eq_ignore_ascii_case(".nutexb") {
-            return Err(format!("Virtual entry is not a .nutexb file: {relative_path}"));
+            return Err(format!(
+                "Virtual entry is not a .nutexb file: {relative_path}"
+            ));
         }
         file.data.clone()
     };
@@ -1449,8 +1492,8 @@ pub async fn fhm2d_memory_convert_hkt_to_xml(
         return Ok(Vec::new());
     }
 
-    let config = crate::havok_cli::HavokCliConfig::detect()
-        .ok_or("Havok Content Tools not found")?;
+    let config =
+        crate::havok_cli::HavokCliConfig::detect().ok_or("Havok Content Tools not found")?;
     if !std::path::Path::new(&config.filter_manager_path).exists() {
         return Err("hctStandAloneFilterManager.exe not found".to_string());
     }
@@ -1462,7 +1505,10 @@ pub async fn fhm2d_memory_convert_hkt_to_xml(
             match crate::havok_cli::convert_hkt_bytes_to_xml(&filter_path, &bytes) {
                 Ok(xml) => {
                     eprintln!("[fhm2d_memory_convert_hkt] converted: {source_id}");
-                    results.push(MemoryHktEntry { source_id, hkt_xml: xml });
+                    results.push(MemoryHktEntry {
+                        source_id,
+                        hkt_xml: xml,
+                    });
                 }
                 Err(e) => {
                     eprintln!("[fhm2d_memory_convert_hkt] failed {source_id}: {e}");
@@ -1475,25 +1521,29 @@ pub async fn fhm2d_memory_convert_hkt_to_xml(
     .map_err(|e| format!("Task join error: {e}"))?
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn normalize_virtual_rel_path_rejects_parent_segments() {
-        let err = normalize_virtual_rel_path("../bad/file.numdlb").expect_err(".. must be rejected");
+        let err =
+            normalize_virtual_rel_path("../bad/file.numdlb").expect_err(".. must be rejected");
         assert!(err.contains("must not contain '..'"));
     }
 
     #[test]
     fn normalize_virtual_rel_path_strips_leading_dot_segments() {
-        let normalized = normalize_virtual_rel_path(".\\pkg\\body_model.numdlb").expect("path should normalize");
+        let normalized =
+            normalize_virtual_rel_path(".\\pkg\\body_model.numdlb").expect("path should normalize");
         assert_eq!(normalized, "pkg/body_model.numdlb");
     }
 
     #[test]
     fn safe_virtual_root_name_uses_file_stem() {
-        assert_eq!(safe_virtual_root_name("E:/tmp/0x12345678.fhm2d"), "0x12345678");
+        assert_eq!(
+            safe_virtual_root_name("E:/tmp/0x12345678.fhm2d"),
+            "0x12345678"
+        );
     }
 }

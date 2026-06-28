@@ -15,16 +15,15 @@ pub fn repack_unit_model_from_structure(
     progress_callback: Option<&dyn Fn(RepackProgress)>,
 ) -> Result<RepackResult, String> {
     let structure_path = Path::new(structure_json_path);
-    let model_root = crate::format::unit_model_models::infer_model_root_from_structure_path(
-        structure_path,
-    )?;
+    let model_root =
+        crate::format::unit_model_models::infer_model_root_from_structure_path(structure_path)?;
     let json_dir = structure_path
         .parent()
         .ok_or_else(|| "Cannot determine parent directory of structure json".to_string())?;
     let original_raw = fs::read_to_string(structure_path)
         .map_err(|e| format!("Failed to read structure json: {e}"))?;
-    let original_root: Value =
-        serde_json::from_str(&original_raw).map_err(|e| format!("Failed to parse structure json: {e}"))?;
+    let original_root: Value = serde_json::from_str(&original_raw)
+        .map_err(|e| format!("Failed to parse structure json: {e}"))?;
     let should_sync = original_root
         .get("SubFileStructure")
         .and_then(Value::as_array)
@@ -32,9 +31,7 @@ pub fn repack_unit_model_from_structure(
         && original_root
             .get("SubFileData")
             .and_then(Value::as_array)
-            .is_some_and(|entries| {
-                entries.iter().any(entry_is_numatb)
-            });
+            .is_some_and(|entries| entries.iter().any(entry_is_numatb));
     let working = Builder::new()
         .prefix(".unit-model-repack-working-")
         .suffix("_structure.json")
@@ -313,7 +310,12 @@ mod tests {
         fs::create_dir_all(&model_dir).unwrap();
         fs::create_dir_all(&textures_dir).unwrap();
 
-        for name in ["alpha.nusktb", "alpha.numshb", "alpha.numdlb", "alpha.jnttbl"] {
+        for name in [
+            "alpha.nusktb",
+            "alpha.numshb",
+            "alpha.numdlb",
+            "alpha.jnttbl",
+        ] {
             fs::write(model_dir.join(name), b"stub").unwrap();
         }
         HlpbData {
@@ -505,14 +507,18 @@ mod tests {
 
         assert!(result.total_files > 0);
         let after = fs::read_to_string(&structure).unwrap();
-        assert_eq!(after, before, "repack should not rewrite the source structure");
+        assert_eq!(
+            after, before,
+            "repack should not rewrite the source structure"
+        );
     }
 
     #[test]
     fn repack_sync_still_runs_when_numatb_file_type_is_stale_but_url_is_correct() {
         let tmp = tempfile::tempdir().unwrap();
         let (_model_root, structure) = write_sync_fixture(tmp.path(), "0xSYNC");
-        let mut value: Value = serde_json::from_str(&fs::read_to_string(&structure).unwrap()).unwrap();
+        let mut value: Value =
+            serde_json::from_str(&fs::read_to_string(&structure).unwrap()).unwrap();
         if let Some(entries) = value.get_mut("SubFileData").and_then(Value::as_array_mut) {
             for entry in entries.iter_mut() {
                 let is_numatb = entry

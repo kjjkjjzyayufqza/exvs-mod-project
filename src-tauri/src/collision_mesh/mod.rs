@@ -11,7 +11,6 @@ pub use import::{parse_import_scene_from_bytes, parse_import_scene_from_path};
 pub use simplify::{author_collision_shapes, simplify_collision_mesh};
 pub use skin_bake::bake_and_merge_collision_mesh;
 pub use types::{
-    cos_planarity_from_angle_deg, AuthoredCollisionSet, CollisionMeshOptions,
-    CollisionPrimitive, CollisionPrimitiveMesh, CollisionSimplifyMode, CollisionSimplifyOptions,
-    CollisionTriMesh,
+    cos_planarity_from_angle_deg, AuthoredCollisionSet, CollisionMeshOptions, CollisionPrimitive,
+    CollisionPrimitiveMesh, CollisionSimplifyMode, CollisionSimplifyOptions, CollisionTriMesh,
 };

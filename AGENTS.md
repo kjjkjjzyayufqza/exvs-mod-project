@@ -74,6 +74,8 @@ Use `docs/` as the first source of project truth:
   texture: use `FeRendererMovableVertexColor` → `vstgStandard_VertexColor`, strip
   unused PBR slots (avoids in-game overexposure).
 - `docs/gvs-numatb-step2-migration-changes.md` — GVS→EXVS2 numatb migration rules.
+- `docs/exvs2-json-cli.md` — `exvs2-json` CLI for read-only EXVS2 binary
+  resource inspection and correlation JSON (implementation in `src-tauri/`).
 
 When adding new research findings, write them under `docs/` as standalone
 specifications or research notes.

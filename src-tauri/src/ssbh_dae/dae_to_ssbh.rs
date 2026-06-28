@@ -1,9 +1,9 @@
 use anyhow::{anyhow, Result};
-use std::collections::HashMap;
 use serde::Serialize;
 use ssbh_data::mesh_data::{AttributeData, MeshData, MeshObjectData, VectorData};
 use ssbh_data::modl_data::{ModlData, ModlEntryData};
 use ssbh_data::skel_data::{BillboardType, BoneData, SkelData};
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -45,13 +45,17 @@ pub fn convert_import_scene_to_ssbh_files(
 ) -> Result<(ConvertedFiles, SsbhConvertStats)> {
     eprintln!(
         "[dae_to_ssbh] converting scene: {} meshes, {} bones, base_filename={}",
-        scene.meshes.len(), scene.bones.len(), config.base_filename
+        scene.meshes.len(),
+        scene.bones.len(),
+        config.base_filename
     );
     let mut converted_files = ConvertedFiles::default();
 
     if !config.write_numdlb && !config.write_numshb && !config.write_nusktb {
         eprintln!("[dae_to_ssbh] no output format selected");
-        return Err(anyhow!("Select at least one SSBH output (.numdlb / .numshb / .nusktb)"));
+        return Err(anyhow!(
+            "Select at least one SSBH output (.numdlb / .numshb / .nusktb)"
+        ));
     }
     if config.write_numdlb && (!config.write_numshb || !config.write_nusktb) {
         eprintln!("[dae_to_ssbh] numdlb requires numshb + nusktb");
@@ -132,14 +136,26 @@ pub fn convert_dae_file(
     dae_file_path: &Path,
     config: &DaeConvertConfig,
 ) -> Result<(ConvertedFiles, SsbhConvertStats)> {
-    eprintln!("[dae_to_ssbh] convert_dae_file: {}", dae_file_path.display());
+    eprintln!(
+        "[dae_to_ssbh] convert_dae_file: {}",
+        dae_file_path.display()
+    );
     let mut scene = parse_dae_file(dae_file_path)?;
     if !config.include_geometry_names.is_empty() {
-        eprintln!("[dae_to_ssbh] filtering by include_geometry_names: {:?}", config.include_geometry_names);
+        eprintln!(
+            "[dae_to_ssbh] filtering by include_geometry_names: {:?}",
+            config.include_geometry_names
+        );
         let allowed: HashSet<String> = config.include_geometry_names.iter().cloned().collect();
         let before = scene.meshes.len();
-        scene.meshes.retain(|m| !m.vertices.is_empty() && allowed.contains(&m.name));
-        eprintln!("[dae_to_ssbh] geometry filter: {} -> {} meshes", before, scene.meshes.len());
+        scene
+            .meshes
+            .retain(|m| !m.vertices.is_empty() && allowed.contains(&m.name));
+        eprintln!(
+            "[dae_to_ssbh] geometry filter: {} -> {} meshes",
+            before,
+            scene.meshes.len()
+        );
         if scene.meshes.is_empty() {
             eprintln!("[dae_to_ssbh] include_geometry_names filter left no geometries");
             return Err(anyhow!(
@@ -170,7 +186,9 @@ pub fn convert_import_scene_file(
 ) -> Result<(ConvertedFiles, SsbhConvertStats)> {
     if !config.include_geometry_names.is_empty() {
         let allowed: HashSet<String> = config.include_geometry_names.iter().cloned().collect();
-        scene.meshes.retain(|m| !m.vertices.is_empty() && allowed.contains(&m.name));
+        scene
+            .meshes
+            .retain(|m| !m.vertices.is_empty() && allowed.contains(&m.name));
         if scene.meshes.is_empty() {
             return Err(anyhow!(
                 "include_geometry_names left no geometries (check exact mesh names)"
@@ -298,7 +316,9 @@ fn split_mesh_for_vs2_with_reserved_names(
             .filter(|&&index| !remap.contains_key(&index))
             .count();
 
-        if !local_indices.is_empty() && vertex_order.len() + additional_vertices > VS2_MAX_VERTEX_COUNT {
+        if !local_indices.is_empty()
+            && vertex_order.len() + additional_vertices > VS2_MAX_VERTEX_COUNT
+        {
             parts.push(build_vs2_split_part(
                 mesh,
                 parts.len(),
@@ -353,7 +373,13 @@ fn build_vs2_split_part(
             mesh.vertices
                 .get(source_index as usize)
                 .copied()
-                .ok_or_else(|| anyhow!("Mesh '{}' split vertex index {} out of bounds", mesh.name, source_index))
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Mesh '{}' split vertex index {} out of bounds",
+                        mesh.name,
+                        source_index
+                    )
+                })
         })
         .collect::<Result<Vec<_>>>()?;
 
@@ -366,7 +392,13 @@ fn build_vs2_split_part(
                 mesh.normals
                     .get(source_index as usize)
                     .copied()
-                    .ok_or_else(|| anyhow!("Mesh '{}' split normal index {} out of bounds", mesh.name, source_index))
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "Mesh '{}' split normal index {} out of bounds",
+                            mesh.name,
+                            source_index
+                        )
+                    })
             })
             .collect::<Result<Vec<_>>>()?
     };
@@ -377,10 +409,13 @@ fn build_vs2_split_part(
         vertex_order
             .iter()
             .map(|&source_index| {
-                mesh.uvs
-                    .get(source_index as usize)
-                    .copied()
-                    .ok_or_else(|| anyhow!("Mesh '{}' split uv index {} out of bounds", mesh.name, source_index))
+                mesh.uvs.get(source_index as usize).copied().ok_or_else(|| {
+                    anyhow!(
+                        "Mesh '{}' split uv index {} out of bounds",
+                        mesh.name,
+                        source_index
+                    )
+                })
             })
             .collect::<Result<Vec<_>>>()?
     };
@@ -393,9 +428,11 @@ fn build_vs2_split_part(
                 .vertex_weights
                 .iter()
                 .filter_map(|weight| {
-                    remap.get(&weight.vertex_index).map(|&local_index| super::dae_parse::DaeVertexWeight {
-                        vertex_index: local_index,
-                        weight: weight.weight,
+                    remap.get(&weight.vertex_index).map(|&local_index| {
+                        super::dae_parse::DaeVertexWeight {
+                            vertex_index: local_index,
+                            weight: weight.weight,
+                        }
                     })
                 })
                 .collect();
@@ -444,7 +481,10 @@ fn convert_meshes_to_ssbh(meshes: &[DaeMesh], config: &DaeConvertConfig) -> Resu
     convert_prepared_meshes_to_ssbh(&prepared, config)
 }
 
-fn convert_prepared_meshes_to_ssbh(meshes: &[Vs2PreparedMesh], config: &DaeConvertConfig) -> Result<MeshData> {
+fn convert_prepared_meshes_to_ssbh(
+    meshes: &[Vs2PreparedMesh],
+    config: &DaeConvertConfig,
+) -> Result<MeshData> {
     let mut mesh_objects = Vec::new();
 
     for dae_mesh in meshes {
@@ -455,7 +495,10 @@ fn convert_prepared_meshes_to_ssbh(meshes: &[Vs2PreparedMesh], config: &DaeConve
 
         eprintln!(
             "[dae_to_ssbh] converting mesh '{}': {} verts, {} indices, {} bone_influences",
-            dae_mesh.name, dae_mesh.vertices.len(), dae_mesh.indices.len(), dae_mesh.bone_influences.len()
+            dae_mesh.name,
+            dae_mesh.vertices.len(),
+            dae_mesh.indices.len(),
+            dae_mesh.bone_influences.len()
         );
 
         let vertices = apply_transforms(&dae_mesh.vertices, config);
@@ -570,7 +613,10 @@ fn convert_prepared_meshes_to_ssbh(meshes: &[Vs2PreparedMesh], config: &DaeConve
     })
 }
 
-fn convert_prepared_model_to_ssbh(meshes: &[Vs2PreparedMesh], config: &DaeConvertConfig) -> Result<ModlData> {
+fn convert_prepared_model_to_ssbh(
+    meshes: &[Vs2PreparedMesh],
+    config: &DaeConvertConfig,
+) -> Result<ModlData> {
     let mut entries = Vec::new();
     let configured_entries: HashMap<(&str, u64), &str> = config
         .modl_entries
@@ -799,13 +845,15 @@ mod tests {
         let huge = make_mesh_with_unique_triangle_vertices("HugeMesh", 25_000);
         let existing_part = make_mesh_with_unique_triangle_vertices("HugeMesh__part0", 1);
 
-        let mesh_data = convert_meshes_to_ssbh(
-            &[huge, existing_part],
-            &DaeConvertConfig::default(),
-        )
-        .expect("mesh conversion");
+        let mesh_data =
+            convert_meshes_to_ssbh(&[huge, existing_part], &DaeConvertConfig::default())
+                .expect("mesh conversion");
 
-        let names: Vec<&str> = mesh_data.objects.iter().map(|object| object.name.as_str()).collect();
+        let names: Vec<&str> = mesh_data
+            .objects
+            .iter()
+            .map(|object| object.name.as_str())
+            .collect();
         let unique_names: std::collections::HashSet<&str> = names.iter().copied().collect();
 
         assert_eq!(
@@ -845,7 +893,10 @@ mod tests {
                     .sum::<usize>()
             })
             .sum();
-        assert_eq!(total_weights, 2, "split parts should preserve both source weights");
+        assert_eq!(
+            total_weights, 2,
+            "split parts should preserve both source weights"
+        );
 
         for part in &parts {
             for influence in &part.bone_influences {
@@ -955,7 +1006,11 @@ mod tests {
             assert_eq!(32, object.stride2);
             assert_eq!(object.vertex_buffer1_offset, object.vertex_buffer2_offset);
             assert!(
-                object.attributes.elements.iter().all(|a| a.buffer_index < 2),
+                object
+                    .attributes
+                    .elements
+                    .iter()
+                    .all(|a| a.buffer_index < 2),
                 "no attribute may reference the omitted buffer"
             );
         }

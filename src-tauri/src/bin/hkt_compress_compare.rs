@@ -255,7 +255,8 @@ fn run_variant(
     // [3] XML -> HKT via the Havok standalone filter manager (subprocess stage).
     let hkt_path = out_dir.join(format!("{}.hkt", variant.label));
     let t = Instant::now();
-    if let Err(e) = run_filter_manager_with_hko(filter_manager_exe, HKO_WRITE_HKT, &xml_path, &hkt_path)
+    if let Err(e) =
+        run_filter_manager_with_hko(filter_manager_exe, HKO_WRITE_HKT, &xml_path, &hkt_path)
     {
         return fail(row, "havok", e);
     }
@@ -287,8 +288,17 @@ fn format_size(bytes: u64) -> String {
 
 fn print_table(rows: &[Row]) {
     let headers = [
-        "Variant", "Mode", "Tris", "Verts", "Shapes", "Simpl(ms)", "XML(ms)", "Havok(ms)",
-        "Total(ms)", "HKT Size", "Status",
+        "Variant",
+        "Mode",
+        "Tris",
+        "Verts",
+        "Shapes",
+        "Simpl(ms)",
+        "XML(ms)",
+        "Havok(ms)",
+        "Total(ms)",
+        "HKT Size",
+        "Status",
     ];
     let mut cells: Vec<Vec<String>> = vec![headers.iter().map(|h| h.to_string()).collect()];
     for r in rows {
@@ -368,7 +378,10 @@ fn write_csv(path: &Path, rows: &[Row]) -> Result<(), String> {
 
 fn write_markdown(path: &Path, source: &SourceInfo, rows: &[Row]) -> Result<(), String> {
     let mut out = String::new();
-    out.push_str(&format!("# HKT Compression Comparison — {}\n\n", source.stem));
+    out.push_str(&format!(
+        "# HKT Compression Comparison — {}\n\n",
+        source.stem
+    ));
     out.push_str(&format!(
         "- Source FBX: `{}`\n- SSBH intermediate: `{}` ({})\n- Collision trimesh: {} verts, {} tris\n- FBX -> SSBH: {} ms\n\n",
         source.fbx.display(),
@@ -510,10 +523,7 @@ fn main() {
     for variant in &variants {
         let row = run_variant(variant, &trimesh, &config.filter_manager_path, &out_dir);
         match &row.error {
-            Some(err) => println!(
-                "  {:<16} FAIL  ({err})",
-                variant.label
-            ),
+            Some(err) => println!("  {:<16} FAIL  ({err})", variant.label),
             None => println!(
                 "  {:<16} {:>7} tris -> {:>9}  ({} ms total)",
                 variant.label,

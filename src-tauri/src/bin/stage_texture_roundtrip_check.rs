@@ -91,7 +91,10 @@ fn main() {
         rebuild_structure_json_for_stage_forced(&pack_root).expect("rebuild (forced) failed");
     println!(
         "models_processed={}, textures_copied={}, shared_removed={}; structure -> {}",
-        redist.models_processed, redist.textures_copied, redist.textures_folder_removed, structure_path_b
+        redist.models_processed,
+        redist.textures_copied,
+        redist.textures_folder_removed,
+        structure_path_b
     );
 
     let textures_b = find_dirs_named(&stage_root, "textures");
@@ -107,7 +110,11 @@ fn main() {
             rel(&stage_root, mf),
             if m0.is_dir() { count_nutexb(&m0) } else { 0 },
             if m1.is_dir() { count_nutexb(&m1) } else { 0 },
-            if two { "" } else { "  <-- MISSING a texture folder" }
+            if two {
+                ""
+            } else {
+                "  <-- MISSING a texture folder"
+            }
         );
         if !two {
             ok = false;
@@ -308,7 +315,9 @@ fn collect_strings(v: &serde_json::Value, out: &mut Vec<String>) {
 }
 
 fn url_is_shared(url: &str) -> bool {
-    url.to_ascii_lowercase().replace('\\', "/").contains("/textures/")
+    url.to_ascii_lowercase()
+        .replace('\\', "/")
+        .contains("/textures/")
 }
 
 fn url_resolves(workdir: &str, url: &str) -> bool {

@@ -102,13 +102,15 @@ struct MaterialNodeDef {
     image_init_from_uri: String,
 }
 
-fn matl_entry_for_label<'a>(matl: &'a MatlData, label: &str) -> Option<&'a ssbh_data::matl_data::MatlEntryData> {
+fn matl_entry_for_label<'a>(
+    matl: &'a MatlData,
+    label: &str,
+) -> Option<&'a ssbh_data::matl_data::MatlEntryData> {
     matl.entries.iter().find(|e| e.material_label == label)
 }
 
 fn modl_material_label(modl: &ModlData, mesh_name: &str, subindex: u64) -> Result<String> {
-    modl
-        .entries
+    modl.entries
         .iter()
         .find(|e| e.mesh_object_name == mesh_name && e.mesh_object_subindex == subindex)
         .map(|e| e.material_label.clone())
@@ -328,11 +330,21 @@ fn run_texture_export_plan(
         let mat_label = modl_material_label(ctx.modl, &mesh.original_name, mesh.original_subindex)?;
         let entry = matl_entry_for_label(ctx.matl, &mat_label)
             .ok_or_else(|| anyhow!("No numatb entry for material label '{}'", mat_label))?;
-        let tex_ref = pick_base_color_texture_ref(entry)
-            .ok_or_else(|| anyhow!("No usable diffuse texture in numatb for material '{}'", mat_label))?;
+        let tex_ref = pick_base_color_texture_ref(entry).ok_or_else(|| {
+            anyhow!(
+                "No usable diffuse texture in numatb for material '{}'",
+                mat_label
+            )
+        })?;
         let nutexb_abs = resolve_nutexb_path(ctx.root_canon, tex_ref)
             .map_err(|e| anyhow!(e))?
-            .ok_or_else(|| anyhow!("Could not resolve nutexb on disk for material '{}': {}", mat_label, tex_ref))?;
+            .ok_or_else(|| {
+                anyhow!(
+                    "Could not resolve nutexb on disk for material '{}': {}",
+                    mat_label,
+                    tex_ref
+                )
+            })?;
 
         let rel_png = nutexb_to_rel_png
             .entry(nutexb_abs.clone())
@@ -385,9 +397,13 @@ fn run_texture_export_plan(
 /// Absolute `file:///...` URI for COLLADA `<image><init_from>`. Maya's importer often fails on
 /// relative paths when the scene is imported from a different working directory.
 fn collada_absolute_file_uri(path: &Path) -> Result<String> {
-    let abs = path
-        .canonicalize()
-        .map_err(|e| anyhow!("Could not canonicalize texture path {}: {}", path.display(), e))?;
+    let abs = path.canonicalize().map_err(|e| {
+        anyhow!(
+            "Could not canonicalize texture path {}: {}",
+            path.display(),
+            e
+        )
+    })?;
     let mut s = abs
         .to_str()
         .ok_or_else(|| anyhow!("Texture path is not valid UTF-8: {}", abs.display()))?
@@ -413,7 +429,8 @@ fn collada_color_element(r: f32, g: f32, b: f32, a: f32) -> Element {
 
 fn collada_profile_color_child(name: &str, r: f32, g: f32, b: f32, a: f32) -> Element {
     let mut e = Element::new(name);
-    e.children.push(XMLNode::Element(collada_color_element(r, g, b, a)));
+    e.children
+        .push(XMLNode::Element(collada_color_element(r, g, b, a)));
     e
 }
 
@@ -432,8 +449,7 @@ fn build_library_images(nodes: &[MaterialNodeDef]) -> Element {
         img.attributes.insert("id".to_string(), n.image_id.clone());
         img.attributes.insert("name".to_string(), n.png_rel.clone());
         let mut init = Element::new("init_from");
-        init
-            .children
+        init.children
             .push(XMLNode::Text(n.image_init_from_uri.clone()));
         img.children.push(XMLNode::Element(init));
         lib.children.push(XMLNode::Element(img));
@@ -445,7 +461,9 @@ fn build_library_images(nodes: &[MaterialNodeDef]) -> Element {
 /// WRAP sampler, and `TEX0` bound to mesh `TEXCOORD` set 0 via `bind_vertex_input`.
 fn build_maya_lambert_effect(effect_id: &str, image_id: &str) -> Element {
     let mut effect = Element::new("effect");
-    effect.attributes.insert("id".to_string(), effect_id.to_string());
+    effect
+        .attributes
+        .insert("id".to_string(), effect_id.to_string());
     let mut profile = Element::new("profile_COMMON");
     let mut newparam_surf = Element::new("newparam");
     newparam_surf
@@ -457,9 +475,7 @@ fn build_maya_lambert_effect(effect_id: &str, image_id: &str) -> Element {
         .insert("type".to_string(), "2D".to_string());
     let mut init_from = Element::new("init_from");
     // Maya sample files use the image id without a leading `#` in surface init_from.
-    init_from
-        .children
-        .push(XMLNode::Text(image_id.to_string()));
+    init_from.children.push(XMLNode::Text(image_id.to_string()));
     surface.children.push(XMLNode::Element(init_from));
     newparam_surf.children.push(XMLNode::Element(surface));
     profile.children.push(XMLNode::Element(newparam_surf));
@@ -488,31 +504,57 @@ fn build_maya_lambert_effect(effect_id: &str, image_id: &str) -> Element {
     profile.children.push(XMLNode::Element(newparam_samp));
 
     let mut technique = Element::new("technique");
-    technique.attributes.insert("sid".to_string(), "common".to_string());
+    technique
+        .attributes
+        .insert("sid".to_string(), "common".to_string());
     let mut lambert = Element::new("lambert");
-    lambert.children.push(XMLNode::Element(collada_profile_color_child(
-        "emission", 0.0, 0.0, 0.0, 1.0,
-    )));
-    lambert.children.push(XMLNode::Element(collada_profile_color_child(
-        "ambient", 1.0, 1.0, 1.0, 1.0,
-    )));
+    lambert
+        .children
+        .push(XMLNode::Element(collada_profile_color_child(
+            "emission", 0.0, 0.0, 0.0, 1.0,
+        )));
+    lambert
+        .children
+        .push(XMLNode::Element(collada_profile_color_child(
+            "ambient", 1.0, 1.0, 1.0, 1.0,
+        )));
     let mut diffuse = Element::new("diffuse");
     let mut tex = Element::new("texture");
-    tex.attributes.insert("texture".to_string(), "sampler0".to_string());
-    tex.attributes.insert("texcoord".to_string(), "TEX0".to_string());
+    tex.attributes
+        .insert("texture".to_string(), "sampler0".to_string());
+    tex.attributes
+        .insert("texcoord".to_string(), "TEX0".to_string());
     diffuse.children.push(XMLNode::Element(tex));
     lambert.children.push(XMLNode::Element(diffuse));
-    lambert.children.push(XMLNode::Element(collada_profile_color_child(
-        "reflective", 0.0, 0.0, 0.0, 1.0,
-    )));
-    lambert.children.push(XMLNode::Element(collada_profile_float_child("reflectivity", 0.0)));
+    lambert
+        .children
+        .push(XMLNode::Element(collada_profile_color_child(
+            "reflective",
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+        )));
+    lambert
+        .children
+        .push(XMLNode::Element(collada_profile_float_child(
+            "reflectivity",
+            0.0,
+        )));
     let mut transparent = Element::new("transparent");
     transparent
         .attributes
         .insert("opaque".to_string(), "A_ONE".to_string());
-    transparent.children.push(XMLNode::Element(collada_color_element(1.0, 1.0, 1.0, 1.0)));
+    transparent
+        .children
+        .push(XMLNode::Element(collada_color_element(1.0, 1.0, 1.0, 1.0)));
     lambert.children.push(XMLNode::Element(transparent));
-    lambert.children.push(XMLNode::Element(collada_profile_float_child("transparency", 0.0)));
+    lambert
+        .children
+        .push(XMLNode::Element(collada_profile_float_child(
+            "transparency",
+            0.0,
+        )));
     technique.children.push(XMLNode::Element(lambert));
     profile.children.push(XMLNode::Element(technique));
     effect.children.push(XMLNode::Element(profile));
@@ -523,7 +565,10 @@ fn build_library_effects(nodes: &[MaterialNodeDef]) -> Element {
     let mut lib = Element::new("library_effects");
     for n in nodes {
         lib.children
-            .push(XMLNode::Element(build_maya_lambert_effect(&n.effect_id, &n.image_id)));
+            .push(XMLNode::Element(build_maya_lambert_effect(
+                &n.effect_id,
+                &n.image_id,
+            )));
     }
     lib
 }
@@ -533,10 +578,10 @@ fn build_library_materials(nodes: &[MaterialNodeDef]) -> Element {
     for n in nodes {
         let mut m = Element::new("material");
         m.attributes.insert("id".to_string(), n.material_id.clone());
-        m.attributes.insert("name".to_string(), n.material_id.clone());
+        m.attributes
+            .insert("name".to_string(), n.material_id.clone());
         let mut inst = Element::new("instance_effect");
-        inst
-            .attributes
+        inst.attributes
             .insert("url".to_string(), format!("#{}", n.effect_id));
         m.children.push(XMLNode::Element(inst));
         let mut extra = Element::new("extra");
@@ -567,7 +612,8 @@ fn build_bind_material(mat_symbol: &str, material_id: &str) -> Element {
         .insert("semantic".to_string(), "TEX0".to_string());
     bvi.attributes
         .insert("input_semantic".to_string(), "TEXCOORD".to_string());
-    bvi.attributes.insert("input_set".to_string(), "0".to_string());
+    bvi.attributes
+        .insert("input_set".to_string(), "0".to_string());
     im.children.push(XMLNode::Element(bvi));
     tc.children.push(XMLNode::Element(im));
     bm.children.push(XMLNode::Element(tc));
@@ -591,8 +637,13 @@ fn build_json_scene_from_ssbh(
                 continue;
             }
         }
-        let mut positions = get_first_vec3(&obj.positions)
-            .ok_or_else(|| anyhow!("Mesh '{}' subindex {} has no positions", obj.name, obj.subindex))?;
+        let mut positions = get_first_vec3(&obj.positions).ok_or_else(|| {
+            anyhow!(
+                "Mesh '{}' subindex {} has no positions",
+                obj.name,
+                obj.subindex
+            )
+        })?;
         if config.scale_factor != 1.0 {
             for p in &mut positions {
                 p[0] *= config.scale_factor;
@@ -643,7 +694,10 @@ fn build_json_scene_from_ssbh(
             influences.push(JsonBoneInfluence {
                 bone_name: obj.parent_bone_name.clone(),
                 vertex_weights: (0..vertex_count)
-                    .map(|i| JsonVertexWeight { vertex_index: i, vertex_weight: 1.0 })
+                    .map(|i| JsonVertexWeight {
+                        vertex_index: i,
+                        vertex_weight: 1.0,
+                    })
                     .collect(),
             });
         }
@@ -723,8 +777,13 @@ pub fn export_ssbh_bundle_to_dae(
 
     // Build DOM
     let mut collada = Element::new("COLLADA");
-    collada.attributes.insert("xmlns".to_string(), "http://www.collada.org/2005/11/COLLADASchema".to_string());
-    collada.attributes.insert("version".to_string(), "1.4.1".to_string());
+    collada.attributes.insert(
+        "xmlns".to_string(),
+        "http://www.collada.org/2005/11/COLLADASchema".to_string(),
+    );
+    collada
+        .attributes
+        .insert("version".to_string(), "1.4.1".to_string());
 
     // <asset>
     collada.children.push(XMLNode::Element(build_asset(config)));
@@ -777,7 +836,9 @@ pub fn export_ssbh_bundle_to_dae(
                 &bone_name_to_index,
                 &inverse_bind_matrices,
             )?;
-            library_controllers.children.push(XMLNode::Element(controller));
+            library_controllers
+                .children
+                .push(XMLNode::Element(controller));
         }
     }
     collada.children.push(XMLNode::Element(library_controllers));
@@ -785,8 +846,12 @@ pub fn export_ssbh_bundle_to_dae(
     // <library_visual_scenes>
     let mut library_visual_scenes = Element::new("library_visual_scenes");
     let mut visual_scene = Element::new("visual_scene");
-    visual_scene.attributes.insert("id".to_string(), "Scene".to_string());
-    visual_scene.attributes.insert("name".to_string(), "Scene".to_string());
+    visual_scene
+        .attributes
+        .insert("id".to_string(), "Scene".to_string());
+    visual_scene
+        .attributes
+        .insert("name".to_string(), "Scene".to_string());
 
     // Skeleton nodes from JSON intermediate
     if !json_scene.bones.is_empty() {
@@ -797,7 +862,11 @@ pub fn export_ssbh_bundle_to_dae(
 
         if let Some(root_children) = children_map.get(&None) {
             for &root_index in root_children {
-                let node = build_skeleton_node_recursive_json(&json_scene.bones, root_index, &children_map);
+                let node = build_skeleton_node_recursive_json(
+                    &json_scene.bones,
+                    root_index,
+                    &children_map,
+                );
                 visual_scene.children.push(XMLNode::Element(node));
             }
         }
@@ -823,7 +892,11 @@ pub fn export_ssbh_bundle_to_dae(
                 .attributes
                 .insert("url".to_string(), format!("#{}", controller_id));
 
-            if let Some(root_index) = json_scene.bones.iter().position(|b| b.parent_index.is_none()) {
+            if let Some(root_index) = json_scene
+                .bones
+                .iter()
+                .position(|b| b.parent_index.is_none())
+            {
                 let root_id = sanitize_id(&json_scene.bones[root_index].name);
                 let mut skeleton_elem = Element::new("skeleton");
                 skeleton_elem
@@ -866,8 +939,12 @@ pub fn export_ssbh_bundle_to_dae(
         }
     }
 
-    library_visual_scenes.children.push(XMLNode::Element(visual_scene));
-    collada.children.push(XMLNode::Element(library_visual_scenes));
+    library_visual_scenes
+        .children
+        .push(XMLNode::Element(visual_scene));
+    collada
+        .children
+        .push(XMLNode::Element(library_visual_scenes));
 
     // <scene>
     let mut scene_elem = Element::new("scene");
@@ -913,16 +990,25 @@ fn build_geometry_element_json(
     let mut mesh = Element::new("mesh");
 
     let pos_source_id = format!("{}-positions", geom_id);
-    mesh.children.push(XMLNode::Element(build_source_float_vec3(&pos_source_id, positions)));
+    mesh.children.push(XMLNode::Element(build_source_float_vec3(
+        &pos_source_id,
+        positions,
+    )));
 
     let normal_source_id = format!("{}-normals", geom_id);
     if let Some(norms) = normals {
-        mesh.children.push(XMLNode::Element(build_source_float_vec3(&normal_source_id, norms)));
+        mesh.children.push(XMLNode::Element(build_source_float_vec3(
+            &normal_source_id,
+            norms,
+        )));
     }
 
     let texcoord_source_id = format!("{}-texcoord0", geom_id);
     if let Some(uvs) = texcoords {
-        mesh.children.push(XMLNode::Element(build_source_float_vec2(&texcoord_source_id, uvs)));
+        mesh.children.push(XMLNode::Element(build_source_float_vec2(
+            &texcoord_source_id,
+            uvs,
+        )));
     }
 
     // <vertices>
@@ -942,9 +1028,8 @@ fn build_geometry_element_json(
     mesh.children.push(XMLNode::Element(vertices));
 
     // <triangles>
-    let input_count = 1
-        + if normals.is_some() { 1 } else { 0 }
-        + if texcoords.is_some() { 1 } else { 0 };
+    let input_count =
+        1 + if normals.is_some() { 1 } else { 0 } + if texcoords.is_some() { 1 } else { 0 };
     let mut triangles = Element::new("triangles");
     triangles
         .attributes
@@ -962,20 +1047,19 @@ fn build_geometry_element_json(
     in_vtx
         .attributes
         .insert("source".to_string(), format!("#{}", vertices_id));
-    in_vtx.attributes.insert("offset".to_string(), "0".to_string());
+    in_vtx
+        .attributes
+        .insert("offset".to_string(), "0".to_string());
     triangles.children.push(XMLNode::Element(in_vtx));
 
     let mut current_offset = 1;
     if normals.is_some() {
         let mut in_n = Element::new("input");
-        in_n
-            .attributes
+        in_n.attributes
             .insert("semantic".to_string(), "NORMAL".to_string());
-        in_n
-            .attributes
+        in_n.attributes
             .insert("source".to_string(), format!("#{}", normal_source_id));
-        in_n
-            .attributes
+        in_n.attributes
             .insert("offset".to_string(), current_offset.to_string());
         triangles.children.push(XMLNode::Element(in_n));
         current_offset += 1;
@@ -983,14 +1067,11 @@ fn build_geometry_element_json(
 
     if texcoords.is_some() {
         let mut in_t = Element::new("input");
-        in_t
-            .attributes
+        in_t.attributes
             .insert("semantic".to_string(), "TEXCOORD".to_string());
-        in_t
-            .attributes
+        in_t.attributes
             .insert("source".to_string(), format!("#{}", texcoord_source_id));
-        in_t
-            .attributes
+        in_t.attributes
             .insert("offset".to_string(), current_offset.to_string());
         in_t.attributes.insert("set".to_string(), "0".to_string());
         triangles.children.push(XMLNode::Element(in_t));
@@ -1041,26 +1122,30 @@ fn build_controller_element_json(
         .insert("id".to_string(), ctrl_id.clone());
 
     let mut skin = Element::new("skin");
-    skin
-        .attributes
+    skin.attributes
         .insert("source".to_string(), format!("#{}", geom_id));
 
     // bind_shape_matrix (identity)
     let mut bsm = Element::new("bind_shape_matrix");
-    bsm.children.push(XMLNode::Text(matrix_to_string(&[1.0, 0.0, 0.0, 0.0,
-                                                       0.0, 1.0, 0.0, 0.0,
-                                                       0.0, 0.0, 1.0, 0.0,
-                                                       0.0, 0.0, 0.0, 1.0])));
+    bsm.children.push(XMLNode::Text(matrix_to_string(&[
+        1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+    ])));
     skin.children.push(XMLNode::Element(bsm));
 
     // JOINTS source (names). Use bone "sid" strings (original names) to align with node SIDs.
     let joint_names: Vec<String> = bones.iter().map(|b| b.name.clone()).collect();
     let joint_source_id = format!("{}-joints", ctrl_id);
-    skin.children.push(XMLNode::Element(build_source_name_array(&joint_source_id, &joint_names)));
+    skin.children.push(XMLNode::Element(build_source_name_array(
+        &joint_source_id,
+        &joint_names,
+    )));
 
     // INV_BIND_MATRIX source
     let bind_pose_source_id = format!("{}-bind_poses", ctrl_id);
-    skin.children.push(XMLNode::Element(build_source_mat4_array(&bind_pose_source_id, inverse_bind_matrices)));
+    skin.children.push(XMLNode::Element(build_source_mat4_array(
+        &bind_pose_source_id,
+        inverse_bind_matrices,
+    )));
 
     // WEIGHTS source
     let weights_source_id = format!("{}-weights", ctrl_id);
@@ -1121,16 +1206,19 @@ fn build_controller_element_json(
         }
     }
 
-    skin.children.push(XMLNode::Element(build_source_float_array(&weights_source_id, &weights, 1)));
+    skin.children
+        .push(XMLNode::Element(build_source_float_array(
+            &weights_source_id,
+            &weights,
+            1,
+        )));
 
     // <joints>
     let mut joints = Element::new("joints");
     let mut j_in = Element::new("input");
-    j_in
-        .attributes
+    j_in.attributes
         .insert("semantic".to_string(), "JOINT".to_string());
-    j_in
-        .attributes
+    j_in.attributes
         .insert("source".to_string(), format!("#{}", joint_source_id));
     joints.children.push(XMLNode::Element(j_in));
     let mut ibm_in = Element::new("input");
@@ -1214,9 +1302,11 @@ fn build_skeleton_node_recursive_json(
     let mut node = Element::new("node");
     let id = sanitize_id(&bone.name);
     node.attributes.insert("id".to_string(), id.clone());
-    node.attributes.insert("name".to_string(), bone.name.clone());
+    node.attributes
+        .insert("name".to_string(), bone.name.clone());
     node.attributes.insert("sid".to_string(), bone.name.clone());
-    node.attributes.insert("type".to_string(), "JOINT".to_string());
+    node.attributes
+        .insert("type".to_string(), "JOINT".to_string());
 
     // Prefer SRT decomposition to ensure DCCs like Maya populate translate/rotate/scale channels.
     let m = glam::Mat4::from_cols_array_2d(&bone.transform);
@@ -1274,7 +1364,9 @@ fn compute_inverse_bind_matrices_from_json(bones: &[JsonBone]) -> Vec<[f32; 16]>
     let mut calculated = vec![false; bones.len()];
 
     fn calc(idx: usize, bones: &[JsonBone], world: &mut [glam::Mat4], calculated: &mut [bool]) {
-        if calculated[idx] { return; }
+        if calculated[idx] {
+            return;
+        }
         let local = glam::Mat4::from_cols_array_2d(&bones[idx].transform);
         if let Some(parent) = bones[idx].parent_index {
             calc(parent, bones, world, calculated);
@@ -1293,10 +1385,8 @@ fn compute_inverse_bind_matrices_from_json(bones: &[JsonBone]) -> Vec<[f32; 16]>
     // Convert each inverse bind matrix to row-major ordering when flattening.
     fn col_major_to_row_major(c: &[f32; 16]) -> [f32; 16] {
         [
-            c[0], c[4], c[8],  c[12],
-            c[1], c[5], c[9],  c[13],
-            c[2], c[6], c[10], c[14],
-            c[3], c[7], c[11], c[15],
+            c[0], c[4], c[8], c[12], c[1], c[5], c[9], c[13], c[2], c[6], c[10], c[14], c[3], c[7],
+            c[11], c[15],
         ]
     }
 
@@ -1321,10 +1411,6 @@ fn build_asset(config: &DaeExportConfig) -> Element {
 
     asset
 }
-
-
-
-
 
 fn append_format_float(out: &mut String, v: f32) {
     if v == 0.0 {
@@ -1400,9 +1486,7 @@ fn build_source_float_array_text(
     float_array
         .attributes
         .insert("count".to_string(), float_count.to_string());
-    float_array
-        .children
-        .push(XMLNode::Text(float_text));
+    float_array.children.push(XMLNode::Text(float_text));
     source.children.push(XMLNode::Element(float_array));
 
     let mut tech = Element::new("technique_common");
@@ -1422,28 +1506,33 @@ fn build_source_float_array_text(
         2 => {
             let mut p0 = Element::new("param");
             p0.attributes.insert("name".to_string(), "S".to_string());
-            p0.attributes.insert("type".to_string(), "float".to_string());
+            p0.attributes
+                .insert("type".to_string(), "float".to_string());
             accessor.children.push(XMLNode::Element(p0));
 
             let mut p1 = Element::new("param");
             p1.attributes.insert("name".to_string(), "T".to_string());
-            p1.attributes.insert("type".to_string(), "float".to_string());
+            p1.attributes
+                .insert("type".to_string(), "float".to_string());
             accessor.children.push(XMLNode::Element(p1));
         }
         3 => {
             let mut p0 = Element::new("param");
             p0.attributes.insert("name".to_string(), "X".to_string());
-            p0.attributes.insert("type".to_string(), "float".to_string());
+            p0.attributes
+                .insert("type".to_string(), "float".to_string());
             accessor.children.push(XMLNode::Element(p0));
 
             let mut p1 = Element::new("param");
             p1.attributes.insert("name".to_string(), "Y".to_string());
-            p1.attributes.insert("type".to_string(), "float".to_string());
+            p1.attributes
+                .insert("type".to_string(), "float".to_string());
             accessor.children.push(XMLNode::Element(p1));
 
             let mut p2 = Element::new("param");
             p2.attributes.insert("name".to_string(), "Z".to_string());
-            p2.attributes.insert("type".to_string(), "float".to_string());
+            p2.attributes
+                .insert("type".to_string(), "float".to_string());
             accessor.children.push(XMLNode::Element(p2));
         }
         16 => {
@@ -1468,9 +1557,7 @@ fn build_source_name_array(id: &str, names: &[String]) -> Element {
     name_array
         .attributes
         .insert("count".to_string(), names.len().to_string());
-    name_array
-        .children
-        .push(XMLNode::Text(names.join(" ")));
+    name_array.children.push(XMLNode::Text(names.join(" ")));
     source.children.push(XMLNode::Element(name_array));
 
     let mut tech = Element::new("technique_common");
@@ -1485,8 +1572,12 @@ fn build_source_name_array(id: &str, names: &[String]) -> Element {
         .attributes
         .insert("stride".to_string(), "1".to_string());
     let mut param = Element::new("param");
-    param.attributes.insert("name".to_string(), "JOINT".to_string());
-    param.attributes.insert("type".to_string(), "name".to_string());
+    param
+        .attributes
+        .insert("name".to_string(), "JOINT".to_string());
+    param
+        .attributes
+        .insert("type".to_string(), "name".to_string());
     accessor.children.push(XMLNode::Element(param));
     tech.children.push(XMLNode::Element(accessor));
     source.children.push(XMLNode::Element(tech));
@@ -1554,7 +1645,6 @@ fn vector_data_to_vec2(data: &VectorData) -> Result<Vec<[f32; 2]>> {
     }
 }
 
-
 // Removed unused row/column-major conversion helpers after switching to column-major output.
 
 fn matrix_to_string(m: &[f32; 16]) -> String {
@@ -1579,8 +1669,15 @@ fn format_float(v: f32) -> String {
 fn sanitize_id(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for ch in s.chars() {
-        if ch.is_alphanumeric() || ch == '_' || ch == '-' { out.push(ch); } else { out.push('_'); }
+        if ch.is_alphanumeric() || ch == '_' || ch == '-' {
+            out.push(ch);
+        } else {
+            out.push('_');
+        }
     }
-    if out.is_empty() { "id".to_string() } else { out }
+    if out.is_empty() {
+        "id".to_string()
+    } else {
+        out
+    }
 }
-

@@ -1,17 +1,17 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use ssbh_data::prelude::*;
-use ssbh_data::hlpb_data::{HlpbData, AimConstraintData, OrientConstraintData};
+use ssbh_data::hlpb_data::{AimConstraintData, HlpbData, OrientConstraintData};
 use ssbh_data::modl_data::{ModlData, ModlEntryData};
+use ssbh_data::prelude::*;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::AppHandle;
 
 use crate::ssbh_dae::{
-    analyze_dae_path, analyze_fbx_path, convert_dae_file, convert_fbx_file, export_ssbh_bundle_to_dae,
-    ConvertedFiles, DaeAnalysisReport, DaeConvertConfig, DaeExportConfig, DaeMaterialTextureExport,
-    ModlEntryConfig, UpAxisConversion,
+    analyze_dae_path, analyze_fbx_path, convert_dae_file, convert_fbx_file,
+    export_ssbh_bundle_to_dae, ConvertedFiles, DaeAnalysisReport, DaeConvertConfig,
+    DaeExportConfig, DaeMaterialTextureExport, ModlEntryConfig, UpAxisConversion,
 };
 use crate::ssbh_preview::load_model_preview_bundle;
 
@@ -95,8 +95,12 @@ pub struct NumdlbWritePayload {
 
 fn ensure_parent_dir(path: &Path) -> Result<(), String> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create parent directory {}: {e}", parent.display()))?;
+        std::fs::create_dir_all(parent).map_err(|e| {
+            format!(
+                "Failed to create parent directory {}: {e}",
+                parent.display()
+            )
+        })?;
     }
     Ok(())
 }
@@ -156,9 +160,7 @@ pub(crate) fn build_session_numatb_artifacts(
     let numatb = serialize_numatb_from_json_value(nust_payload)?;
     let maya_numatb = if write_maya_profile {
         let maya_payload = maya_file.ok_or_else(|| {
-            format!(
-                "write_maya_profile is true but no maya profile was provided for base '{base}'"
-            )
+            format!("write_maya_profile is true but no maya profile was provided for base '{base}'")
         })?;
         Some(serialize_numatb_from_json_value(maya_payload)?)
     } else {
@@ -176,7 +178,11 @@ pub fn ssbh_analyze_dae(dae_path: String) -> Result<DaeAnalysisReport, String> {
     match &result {
         Ok(r) => eprintln!(
             "[ssbh_analyze_dae] done: can_convert={} meshes={} bones={} warnings={} errors={}",
-            r.can_convert, r.mesh_rows.len(), r.bone_count, r.warnings.len(), r.blocking_errors.len()
+            r.can_convert,
+            r.mesh_rows.len(),
+            r.bone_count,
+            r.warnings.len(),
+            r.blocking_errors.len()
         ),
         Err(e) => eprintln!("[ssbh_analyze_dae] failed: {}", e),
     }
@@ -246,8 +252,8 @@ pub fn ssbh_export_folder_to_dae(
         let matl_json = bundle.matl.clone().ok_or_else(|| {
             "matl data is missing from the model bundle; cannot export numatb textures".to_string()
         })?;
-        let modl: ModlData =
-            serde_json::from_value(bundle.modl.clone()).map_err(|e| format!("Failed to parse modl: {e}"))?;
+        let modl: ModlData = serde_json::from_value(bundle.modl.clone())
+            .map_err(|e| format!("Failed to parse modl: {e}"))?;
         let matl: MatlData =
             serde_json::from_value(matl_json).map_err(|e| format!("Failed to parse matl: {e}"))?;
         let root_canon = PathBuf::from(bundle.root_folder.trim());
@@ -309,7 +315,10 @@ pub fn ssbh_convert_dae_to_ssbh(
         dae_path, output_dir, base_filename, scale_factor, up_axis, flip_uv, include_geometry_names
     );
     if !scale_factor.is_finite() || scale_factor <= 0.0 {
-        eprintln!("[ssbh_convert_dae_to_ssbh] invalid scale_factor: {}", scale_factor);
+        eprintln!(
+            "[ssbh_convert_dae_to_ssbh] invalid scale_factor: {}",
+            scale_factor
+        );
         return Err("scale_factor must be a finite positive number".to_string());
     }
     let base = base_filename.trim();
@@ -356,17 +365,17 @@ pub fn ssbh_convert_dae_to_ssbh(
     let mut maya_written_path: Option<String> = None;
     let mut nust_written_path: Option<String> = None;
     if write_numatb {
-        let nust_payload = nust_file
-            .as_ref()
-            .ok_or_else(|| "writeNumatb is true but no nustFile payload was provided".to_string())?;
+        let nust_payload = nust_file.as_ref().ok_or_else(|| {
+            "writeNumatb is true but no nustFile payload was provided".to_string()
+        })?;
         write_numatb_from_json_value(nust_payload, &nust_numatb_path)?;
         converted.numatb_path = Some(nust_numatb_path.clone());
         nust_written_path = Some(nust_numatb_path.to_string_lossy().to_string());
 
         if write_maya_profile {
-            let payload = maya_file
-                .as_ref()
-                .ok_or_else(|| "writeMayaProfile is true but no mayaFile payload was provided".to_string())?;
+            let payload = maya_file.as_ref().ok_or_else(|| {
+                "writeMayaProfile is true but no mayaFile payload was provided".to_string()
+            })?;
             write_numatb_from_json_value(payload, &maya_numatb_path)?;
             maya_written_path = Some(maya_numatb_path.to_string_lossy().to_string());
         }
@@ -475,17 +484,17 @@ pub fn ssbh_convert_fbx_to_ssbh(
     let mut maya_written_path: Option<String> = None;
     let mut nust_written_path: Option<String> = None;
     if write_numatb {
-        let nust_payload = nust_file
-            .as_ref()
-            .ok_or_else(|| "writeNumatb is true but no nustFile payload was provided".to_string())?;
+        let nust_payload = nust_file.as_ref().ok_or_else(|| {
+            "writeNumatb is true but no nustFile payload was provided".to_string()
+        })?;
         write_numatb_from_json_value(nust_payload, &nust_numatb_path)?;
         converted.numatb_path = Some(nust_numatb_path.clone());
         nust_written_path = Some(nust_numatb_path.to_string_lossy().to_string());
 
         if write_maya_profile {
-            let payload = maya_file
-                .as_ref()
-                .ok_or_else(|| "writeMayaProfile is true but no mayaFile payload was provided".to_string())?;
+            let payload = maya_file.as_ref().ok_or_else(|| {
+                "writeMayaProfile is true but no mayaFile payload was provided".to_string()
+            })?;
             write_numatb_from_json_value(payload, &maya_numatb_path)?;
             maya_written_path = Some(maya_numatb_path.to_string_lossy().to_string());
         }
@@ -529,8 +538,8 @@ pub fn ssbh_convert_fbx_to_ssbh(
 #[tauri::command]
 pub fn ssbh_read_numdlb_mapping(file_path: String) -> Result<NumdlbReadResult, String> {
     let path = PathBuf::from(file_path.trim());
-    let modl =
-        ModlData::from_file(&path).map_err(|e| format!("Failed to read numdlb {}: {e}", path.display()))?;
+    let modl = ModlData::from_file(&path)
+        .map_err(|e| format!("Failed to read numdlb {}: {e}", path.display()))?;
     Ok(NumdlbReadResult {
         model_name: modl.model_name,
         skeleton_file_name: modl.skeleton_file_name,
@@ -597,8 +606,8 @@ pub struct NuhlpbWritePayload {
 #[tauri::command]
 pub fn ssbh_read_nuhlpb(file_path: String) -> Result<NuhlpbReadResult, String> {
     let path = PathBuf::from(file_path.trim());
-    let hlpb =
-        HlpbData::from_file(&path).map_err(|e| format!("Failed to read nuhlpb {}: {e}", path.display()))?;
+    let hlpb = HlpbData::from_file(&path)
+        .map_err(|e| format!("Failed to read nuhlpb {}: {e}", path.display()))?;
     let aim_constraints: Vec<serde_json::Value> = hlpb
         .aim_constraints
         .iter()
@@ -719,9 +728,7 @@ pub async fn stage_batch_export_dae(
             return Err("scale_factor must be a finite positive number".to_string());
         }
 
-        let axis = up_axis
-            .as_deref()
-            .unwrap_or("y_up");
+        let axis = up_axis.as_deref().unwrap_or("y_up");
         let axis_conv = parse_up_axis(axis)?;
         let with_textures = export_textures.unwrap_or(false);
 
@@ -781,20 +788,18 @@ fn export_single_to_dae(
         None
     };
 
-    let safe_name = output_name
-        .replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
+    let safe_name = output_name.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
     let dae_path = out_dir.join(format!("{safe_name}.dae"));
 
     let stats = if export_textures {
-        let matl_json = bundle.matl.clone().ok_or_else(|| {
-            "matl data is missing; cannot export textures".to_string()
-        })?;
-        let modl: ssbh_data::modl_data::ModlData =
-            serde_json::from_value(bundle.modl.clone())
-                .map_err(|e| format!("Failed to parse modl: {e}"))?;
+        let matl_json = bundle
+            .matl
+            .clone()
+            .ok_or_else(|| "matl data is missing; cannot export textures".to_string())?;
+        let modl: ssbh_data::modl_data::ModlData = serde_json::from_value(bundle.modl.clone())
+            .map_err(|e| format!("Failed to parse modl: {e}"))?;
         let matl: ssbh_data::matl_data::MatlData =
-            serde_json::from_value(matl_json)
-                .map_err(|e| format!("Failed to parse matl: {e}"))?;
+            serde_json::from_value(matl_json).map_err(|e| format!("Failed to parse matl: {e}"))?;
         let root_canon = PathBuf::from(bundle.root_folder.trim());
         let material_export = DaeMaterialTextureExport {
             root_canon: &root_canon,
@@ -859,9 +864,9 @@ pub async fn stage_export_single_dae(
         };
 
         let out_path = PathBuf::from(&out);
-        let out_dir = out_path.parent().ok_or_else(|| {
-            "output_path must have a parent directory".to_string()
-        })?;
+        let out_dir = out_path
+            .parent()
+            .ok_or_else(|| "output_path must have a parent directory".to_string())?;
         std::fs::create_dir_all(out_dir)
             .map_err(|e| format!("Failed to create output directory: {e}"))?;
 

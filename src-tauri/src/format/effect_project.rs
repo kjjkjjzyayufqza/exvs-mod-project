@@ -318,12 +318,20 @@ fn validate_field_specs(field_specs: &[ParamFieldSpec]) -> Result<(), String> {
     validate_file_specs_kind_match_pool(EFFECT_PROJECT_COMMAND_POOL, field_specs)
 }
 
-fn parse_entry_from_raw(raw: &[u8], field_specs: &[ParamFieldSpec], entry_id: u32) -> EffectProjectEntry {
+fn parse_entry_from_raw(
+    raw: &[u8],
+    field_specs: &[ParamFieldSpec],
+    entry_id: u32,
+) -> EffectProjectEntry {
     let commands = parse_commands_map_from_entry_row(raw, field_specs);
     EffectProjectEntry { entry_id, commands }
 }
 
-fn entry_matches_raw(entry: &EffectProjectEntry, raw: &[u8], field_specs: &[ParamFieldSpec]) -> bool {
+fn entry_matches_raw(
+    entry: &EffectProjectEntry,
+    raw: &[u8],
+    field_specs: &[ParamFieldSpec],
+) -> bool {
     entry_row_matches_command_map(&entry.commands, raw, field_specs)
 }
 
@@ -363,7 +371,9 @@ pub fn build_effect_project(b: &EffectProjectData) -> Result<Vec<u8>, String> {
 
     let mut entries_raw: Vec<Vec<u8>> = Vec::with_capacity(b.entries.len());
     for (entry_index, entry) in b.entries.iter().enumerate() {
-        if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+        if entry_index < b.source_entries_raw.len()
+            && b.source_entries_raw[entry_index].len() == entry_size
+        {
             let r = &b.source_entries_raw[entry_index];
             if entry_matches_raw(entry, r, &field_specs) {
                 entries_raw.push(b.source_entries_raw[entry_index].clone());
@@ -371,7 +381,9 @@ pub fn build_effect_project(b: &EffectProjectData) -> Result<Vec<u8>, String> {
             }
         }
 
-        let mut raw = if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+        let mut raw = if entry_index < b.source_entries_raw.len()
+            && b.source_entries_raw[entry_index].len() == entry_size
+        {
             b.source_entries_raw[entry_index].clone()
         } else {
             vec![0u8; entry_size]
@@ -380,7 +392,9 @@ pub fn build_effect_project(b: &EffectProjectData) -> Result<Vec<u8>, String> {
         for spec in &field_specs {
             let o = spec.entry_offset as usize;
             if o + 4 > raw.len() {
-                return Err("effect_project entry field offset out of range for entry_size".to_string());
+                return Err(
+                    "effect_project entry field offset out of range for entry_size".to_string(),
+                );
             }
             if let Some(v) = entry.commands.get(&spec.hash) {
                 raw[o..o + 4].copy_from_slice(&v.to_le_bytes());
@@ -408,8 +422,7 @@ pub fn build_effect_project(b: &EffectProjectData) -> Result<Vec<u8>, String> {
 mod tests {
     use super::*;
 
-    const SAMPLE_DIR: &str =
-        "E:\\XB\\\u{89e3}\u{5305}\\vs2\\x64\\006effect\\effect_project";
+    const SAMPLE_DIR: &str = "E:\\XB\\\u{89e3}\u{5305}\\vs2\\x64\\006effect\\effect_project";
 
     fn collect_candidates(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
         if let Ok(entries) = std::fs::read_dir(dir) {
@@ -443,13 +456,17 @@ mod tests {
                 }
             }
         }
-        panic!("no parseable effect_project sample file found in {}", SAMPLE_DIR);
+        panic!(
+            "no parseable effect_project sample file found in {}",
+            SAMPLE_DIR
+        );
     }
 
     #[test]
     fn effect_project_read_write_crud() {
         let sample_path = resolve_sample_path();
-        let source = std::fs::read(&sample_path).expect("failed to read effect_project sample file");
+        let source =
+            std::fs::read(&sample_path).expect("failed to read effect_project sample file");
 
         let parsed =
             parse_effect_project(&source).expect("failed to parse effect_project sample file");
@@ -457,7 +474,10 @@ mod tests {
             build_effect_project(&parsed).expect("failed to rebuild effect_project sample file");
         assert_eq!(rebuilt, source);
 
-        assert!(!parsed.entries.is_empty(), "effect_project sample has no entries");
+        assert!(
+            !parsed.entries.is_empty(),
+            "effect_project sample has no entries"
+        );
 
         let mut with_added = parsed.clone();
         let mut added = with_added.entries[0].clone();
@@ -475,23 +495,26 @@ mod tests {
         let added_parsed =
             parse_effect_project(&added_bytes).expect("failed to parse effect_project after add");
         assert_eq!(added_parsed.entries.len(), parsed.entries.len() + 1);
-        assert_eq!(added_parsed.entries.last().map(|entry| entry.entry_id), Some(next_id));
+        assert_eq!(
+            added_parsed.entries.last().map(|entry| entry.entry_id),
+            Some(next_id)
+        );
 
         let mut with_updated = added_parsed.clone();
         let updated_id = with_updated.entries[0].entry_id.wrapping_add(99);
         with_updated.entries[0].entry_id = updated_id;
-        let updated_bytes =
-            build_effect_project(&with_updated).expect("failed to build effect_project after update");
-        let updated_parsed =
-            parse_effect_project(&updated_bytes).expect("failed to parse effect_project after update");
+        let updated_bytes = build_effect_project(&with_updated)
+            .expect("failed to build effect_project after update");
+        let updated_parsed = parse_effect_project(&updated_bytes)
+            .expect("failed to parse effect_project after update");
         assert_eq!(updated_parsed.entries[0].entry_id, updated_id);
 
         let mut with_deleted = updated_parsed.clone();
         with_deleted.entries.pop();
-        let deleted_bytes =
-            build_effect_project(&with_deleted).expect("failed to build effect_project after delete");
-        let deleted_parsed =
-            parse_effect_project(&deleted_bytes).expect("failed to parse effect_project after delete");
+        let deleted_bytes = build_effect_project(&with_deleted)
+            .expect("failed to build effect_project after delete");
+        let deleted_parsed = parse_effect_project(&deleted_bytes)
+            .expect("failed to parse effect_project after delete");
         assert_eq!(deleted_parsed.entries.len(), parsed.entries.len());
     }
 }

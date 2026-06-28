@@ -14,9 +14,9 @@ use std::{
 
 use std::str::FromStr;
 
+use crc32fast::Hasher as Crc32Hasher;
 use image_dds::image::RgbaImage;
 use image_dds::{dds_from_image, ImageFormat as DdsImageFormat, Mipmaps, Quality};
-use crc32fast::Hasher as Crc32Hasher;
 use nutexb::NutexbFile;
 use nutexb::NutexbFormat;
 
@@ -92,11 +92,8 @@ pub fn export_nutexb_to_png(input_path: &str, output_path: &str) -> Result<(), S
     ensure_parent_dir(output_path)?;
     let out = File::create(output_path).map_err(|e| e.to_string())?;
     let mut writer = BufWriter::new(out);
-    let encoder = PngEncoder::new_with_quality(
-        &mut writer,
-        CompressionType::Fast,
-        FilterType::NoFilter,
-    );
+    let encoder =
+        PngEncoder::new_with_quality(&mut writer, CompressionType::Fast, FilterType::NoFilter);
     encoder
         .write_image(
             image.as_raw(),
@@ -179,11 +176,8 @@ pub fn nutexb_to_png_bytes_from_bytes(nutexb_bytes: &[u8]) -> Result<Vec<u8>, St
     let mut buf = Vec::new();
     {
         let mut out = Cursor::new(&mut buf);
-        let encoder = PngEncoder::new_with_quality(
-            &mut out,
-            CompressionType::Fast,
-            FilterType::NoFilter,
-        );
+        let encoder =
+            PngEncoder::new_with_quality(&mut out, CompressionType::Fast, FilterType::NoFilter);
         encoder
             .write_image(
                 image.as_raw(),
@@ -225,11 +219,8 @@ fn nutexb_to_png_base64_at_max_dim(input_path: &str, max_dim: u32) -> Result<Str
     let mut buf = Vec::new();
     {
         let mut cursor = Cursor::new(&mut buf);
-        let encoder = PngEncoder::new_with_quality(
-            &mut cursor,
-            CompressionType::Fast,
-            FilterType::NoFilter,
-        );
+        let encoder =
+            PngEncoder::new_with_quality(&mut cursor, CompressionType::Fast, FilterType::NoFilter);
         encoder
             .write_image(img.as_raw(), w, h, ExtendedColorType::Rgba8)
             .map_err(|e| e.to_string())?;
@@ -457,14 +448,18 @@ fn format_series_ms_index(icon_file_index: i32) -> Result<String, String> {
 /// Returns raw GPU-compressed texture data from a nutexb file without CPU decode.
 /// Response format: [u32 width][u32 height][u8 format_id][compressed_data...]
 /// format_id: 1=BC1, 2=BC2, 3=BC3, 4=BC4, 5=BC5, 6=BC6H, 7=BC7, 0=uncompressed RGBA
-pub fn nutexb_compressed_data_from_path(input_path: &str) -> Result<(u32, u32, u8, Vec<u8>), String> {
+pub fn nutexb_compressed_data_from_path(
+    input_path: &str,
+) -> Result<(u32, u32, u8, Vec<u8>), String> {
     let bytes = fs::read(input_path).map_err(|e| e.to_string())?;
     nutexb_compressed_data_from_bytes(&bytes)
 }
 
 /// Single-read: computes CRC32 identity AND extracts compressed texture data from one file read.
 /// Returns (nutexb_size, crc32, width, height, format_id, data).
-pub fn nutexb_identity_and_compressed_from_path(input_path: &str) -> Result<(u64, u32, u32, u32, u8, Vec<u8>), String> {
+pub fn nutexb_identity_and_compressed_from_path(
+    input_path: &str,
+) -> Result<(u64, u32, u32, u32, u8, Vec<u8>), String> {
     let bytes = fs::read(input_path).map_err(|e| e.to_string())?;
     let nutexb_size = bytes.len() as u64;
     let crc32 = nutexb_file_crc32(&bytes);
@@ -472,7 +467,9 @@ pub fn nutexb_identity_and_compressed_from_path(input_path: &str) -> Result<(u64
     Ok((nutexb_size, crc32, w, h, fmt, data))
 }
 
-pub fn nutexb_compressed_data_from_bytes(nutexb_bytes: &[u8]) -> Result<(u32, u32, u8, Vec<u8>), String> {
+pub fn nutexb_compressed_data_from_bytes(
+    nutexb_bytes: &[u8],
+) -> Result<(u32, u32, u8, Vec<u8>), String> {
     let mut cursor = Cursor::new(nutexb_bytes.to_vec());
     let nutexb = NutexbFile::read(&mut cursor).map_err(|e| e.to_string())?;
     let w = nutexb.footer.width;
@@ -502,8 +499,8 @@ pub fn nutexb_compressed_data_from_bytes(nutexb_bytes: &[u8]) -> Result<(u32, u3
 
     // DDS data contains all mip levels; we only need mip 0
     let block_size: usize = match format_id {
-        1 | 4 => 8,  // BC1, BC4: 8 bytes per 4x4 block
-        _ => 16,     // BC2, BC3, BC5, BC6H, BC7: 16 bytes per 4x4 block
+        1 | 4 => 8, // BC1, BC4: 8 bytes per 4x4 block
+        _ => 16,    // BC2, BC3, BC5, BC6H, BC7: 16 bytes per 4x4 block
     };
     let blocks_x = ((w as usize) + 3) / 4;
     let blocks_y = ((h as usize) + 3) / 4;
@@ -873,7 +870,8 @@ pub fn card_icon_batch_replace_with_dds_format(
                 let mipmaps = if nutexb.footer.mipmap_count <= 1 {
                     Mipmaps::Disabled
                 } else {
-                    let max_mips = max_mipmap_count_for_size(rgba.width().max(1), rgba.height().max(1));
+                    let max_mips =
+                        max_mipmap_count_for_size(rgba.width().max(1), rgba.height().max(1));
                     let requested = nutexb.footer.mipmap_count.min(max_mips);
                     Mipmaps::GeneratedExact(requested)
                 };
@@ -971,48 +969,70 @@ mod nutexb_read_stage_tests {
     #[test]
     fn test_read_stage_diffuse_info() {
         let path = format!(r"{STAGE_TEXTURES}\stage001_panel_01_diffuse.nutexb");
-        if skip_if_missing(&path) { return; }
+        if skip_if_missing(&path) {
+            return;
+        }
         let info = read_nutexb_info(&path).unwrap();
         assert!(info.width > 0);
         assert!(info.height > 0);
         assert!(!info.name.is_empty());
-        eprintln!("stage diffuse: {}x{} fmt={} mips={} name={}", info.width, info.height, info.image_format, info.mipmap_count, info.name);
+        eprintln!(
+            "stage diffuse: {}x{} fmt={} mips={} name={}",
+            info.width, info.height, info.image_format, info.mipmap_count, info.name
+        );
     }
 
     #[test]
     fn test_read_stage_normal_info() {
         let path = format!(r"{STAGE_TEXTURES}\stage001_panel_01_normal.nutexb");
-        if skip_if_missing(&path) { return; }
+        if skip_if_missing(&path) {
+            return;
+        }
         let info = read_nutexb_info(&path).unwrap();
         assert!(info.width > 0);
         assert!(info.height > 0);
         // Normal maps typically use BC5 or BC7
-        eprintln!("stage normal: {}x{} fmt={}", info.width, info.height, info.image_format);
+        eprintln!(
+            "stage normal: {}x{} fmt={}",
+            info.width, info.height, info.image_format
+        );
     }
 
     #[test]
     fn test_read_stage_roughness_info() {
         let path = format!(r"{STAGE_TEXTURES}\stage001_panel_01_roughness.nutexb");
-        if skip_if_missing(&path) { return; }
+        if skip_if_missing(&path) {
+            return;
+        }
         let info = read_nutexb_info(&path).unwrap();
         assert!(info.width > 0);
-        eprintln!("stage roughness: {}x{} fmt={}", info.width, info.height, info.image_format);
+        eprintln!(
+            "stage roughness: {}x{} fmt={}",
+            info.width, info.height, info.image_format
+        );
     }
 
     #[test]
     fn test_read_ibl_specular_info() {
         let path = format!(r"{STAGE_FOG}\900default_ibl_specular.nutexb");
-        if skip_if_missing(&path) { return; }
+        if skip_if_missing(&path) {
+            return;
+        }
         let info = read_nutexb_info(&path).unwrap();
         assert!(info.width > 0);
         // IBL cubemaps may have layer_count > 1
-        eprintln!("ibl specular: {}x{} fmt={} layers={} depth={}", info.width, info.height, info.image_format, info.layer_count, info.depth);
+        eprintln!(
+            "ibl specular: {}x{} fmt={} layers={} depth={}",
+            info.width, info.height, info.image_format, info.layer_count, info.depth
+        );
     }
 
     #[test]
     fn test_decode_stage_diffuse_to_rgba() {
         let path = format!(r"{STAGE_TEXTURES}\stage001_panel_01_diffuse.nutexb");
-        if skip_if_missing(&path) { return; }
+        if skip_if_missing(&path) {
+            return;
+        }
         let (w, h, rgba) = nutexb_to_rgba_from_path(&path, None).unwrap();
         assert!(w > 0);
         assert!(h > 0);
@@ -1023,7 +1043,9 @@ mod nutexb_read_stage_tests {
     #[test]
     fn test_decode_stage_diffuse_downsampled() {
         let path = format!(r"{STAGE_TEXTURES}\stage001_panel_01_diffuse.nutexb");
-        if skip_if_missing(&path) { return; }
+        if skip_if_missing(&path) {
+            return;
+        }
         let (w, h, rgba) = nutexb_to_rgba_from_path(&path, Some(64)).unwrap();
         assert!(w <= 64);
         assert!(h <= 64);
@@ -1034,13 +1056,18 @@ mod nutexb_read_stage_tests {
     #[test]
     fn test_file_identity_crc32() {
         let path = format!(r"{STAGE_TEXTURES}\stage001_panel_01_diffuse.nutexb");
-        if skip_if_missing(&path) { return; }
+        if skip_if_missing(&path) {
+            return;
+        }
         let id1 = nutexb_preview_file_identity(&path).unwrap();
         let id2 = nutexb_preview_file_identity(&path).unwrap();
         assert_eq!(id1.crc32, id2.crc32);
         assert_eq!(id1.nutexb_size, id2.nutexb_size);
         assert!(id1.nutexb_size > 0);
-        eprintln!("identity: size={} crc32=0x{:08X}", id1.nutexb_size, id1.crc32);
+        eprintln!(
+            "identity: size={} crc32=0x{:08X}",
+            id1.nutexb_size, id1.crc32
+        );
     }
 
     #[test]
@@ -1054,7 +1081,10 @@ mod nutexb_read_stage_tests {
             .filter_map(|e| e.ok())
             .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("nutexb"))
             .collect();
-        assert!(!entries.is_empty(), "Should find nutexb files in stage textures");
+        assert!(
+            !entries.is_empty(),
+            "Should find nutexb files in stage textures"
+        );
         let mut success = 0;
         let mut fail = 0;
         for entry in &entries {
@@ -1070,11 +1100,15 @@ mod nutexb_read_stage_tests {
                 }
             }
         }
-        eprintln!("Batch read: {} success, {} failed out of {} files", success, fail, entries.len());
+        eprintln!(
+            "Batch read: {} success, {} failed out of {} files",
+            success,
+            fail,
+            entries.len()
+        );
         assert!(success > 0);
     }
 }
-
 
 #[cfg(test)]
 mod nutexb_conversion_tests {
@@ -1082,9 +1116,12 @@ mod nutexb_conversion_tests {
     use std::path::Path;
     use tempfile::tempdir;
 
-    const TEST_PNG_DIFFUSE: &str = r"D:\output\exvs2\full armor unicorn gundam\015gndmuc_008faunig_001_pbr1_basecolor.png";
-    const TEST_PNG_NORMAL: &str = r"D:\output\christmas-hat-with-bones\standardSurface1_Normal_OpenGL.png";
-    const TEST_PNG_SMALL: &str = r"D:\output\christmas-hat-with-bones\standardSurface1_Base_color.png";
+    const TEST_PNG_DIFFUSE: &str =
+        r"D:\output\exvs2\full armor unicorn gundam\015gndmuc_008faunig_001_pbr1_basecolor.png";
+    const TEST_PNG_NORMAL: &str =
+        r"D:\output\christmas-hat-with-bones\standardSurface1_Normal_OpenGL.png";
+    const TEST_PNG_SMALL: &str =
+        r"D:\output\christmas-hat-with-bones\standardSurface1_Base_color.png";
 
     fn skip_if_missing(path: &str) -> bool {
         if !Path::new(path).exists() {
@@ -1097,7 +1134,9 @@ mod nutexb_conversion_tests {
 
     #[test]
     fn test_png_to_nutexb_bc7_unorm() {
-        if skip_if_missing(TEST_PNG_DIFFUSE) { return; }
+        if skip_if_missing(TEST_PNG_DIFFUSE) {
+            return;
+        }
         let tmp = tempdir().unwrap();
         let out_path = tmp.path().join("output.nutexb");
         let result = card_icon_replace_from_png_with_dds_format(
@@ -1115,7 +1154,9 @@ mod nutexb_conversion_tests {
 
     #[test]
     fn test_png_to_nutexb_bc7_srgb() {
-        if skip_if_missing(TEST_PNG_DIFFUSE) { return; }
+        if skip_if_missing(TEST_PNG_DIFFUSE) {
+            return;
+        }
         let tmp = tempdir().unwrap();
         let out_path = tmp.path().join("diffuse.nutexb");
         let result = card_icon_replace_from_png_with_dds_format(
@@ -1124,12 +1165,18 @@ mod nutexb_conversion_tests {
             TEST_PNG_DIFFUSE,
             "BC7RgbaUnormSrgb",
         );
-        assert!(result.is_ok(), "BC7 sRGB conversion failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "BC7 sRGB conversion failed: {:?}",
+            result.err()
+        );
     }
 
     #[test]
     fn test_png_to_nutexb_bc5_normal() {
-        if skip_if_missing(TEST_PNG_NORMAL) { return; }
+        if skip_if_missing(TEST_PNG_NORMAL) {
+            return;
+        }
         let tmp = tempdir().unwrap();
         let out_path = tmp.path().join("normal.nutexb");
         let result = card_icon_replace_from_png_with_dds_format(
@@ -1143,7 +1190,9 @@ mod nutexb_conversion_tests {
 
     #[test]
     fn test_png_to_nutexb_bc1() {
-        if skip_if_missing(TEST_PNG_SMALL) { return; }
+        if skip_if_missing(TEST_PNG_SMALL) {
+            return;
+        }
         let tmp = tempdir().unwrap();
         let out_path = tmp.path().join("small.nutexb");
         let result = card_icon_replace_from_png_with_dds_format(
@@ -1157,7 +1206,9 @@ mod nutexb_conversion_tests {
 
     #[test]
     fn test_roundtrip_png_to_nutexb_to_png() {
-        if skip_if_missing(TEST_PNG_DIFFUSE) { return; }
+        if skip_if_missing(TEST_PNG_DIFFUSE) {
+            return;
+        }
         let tmp = tempdir().unwrap();
         let nutexb_path = tmp.path().join("roundtrip.nutexb");
         let result = card_icon_replace_from_png_with_dds_format(
@@ -1175,8 +1226,15 @@ mod nutexb_conversion_tests {
         assert!(info.width > 0);
         assert!(info.height > 0);
         let fmt_lower = info.image_format.to_lowercase();
-        assert!(fmt_lower.contains("bc7") || fmt_lower.contains("rgba"), "Expected BC7 format, got: {}", info.image_format);
-        eprintln!("Roundtrip nutexb: {}x{} format={}", info.width, info.height, info.image_format);
+        assert!(
+            fmt_lower.contains("bc7") || fmt_lower.contains("rgba"),
+            "Expected BC7 format, got: {}",
+            info.image_format
+        );
+        eprintln!(
+            "Roundtrip nutexb: {}x{} format={}",
+            info.width, info.height, info.image_format
+        );
 
         // Export back to PNG
         let re_exported_png = tmp.path().join("re_exported.png");
@@ -1192,7 +1250,9 @@ mod nutexb_conversion_tests {
 
     #[test]
     fn test_nutexb_to_rgba_decode() {
-        if skip_if_missing(TEST_PNG_DIFFUSE) { return; }
+        if skip_if_missing(TEST_PNG_DIFFUSE) {
+            return;
+        }
         let tmp = tempdir().unwrap();
         let nutexb_path = tmp.path().join("decode_test.nutexb");
         card_icon_replace_from_png_with_dds_format(
@@ -1200,12 +1260,11 @@ mod nutexb_conversion_tests {
             tmp.path().to_str().unwrap(),
             TEST_PNG_DIFFUSE,
             "BC7RgbaUnorm",
-        ).unwrap();
+        )
+        .unwrap();
 
-        let (w, h, rgba) = nutexb_to_rgba_from_path(
-            nutexb_path.to_str().unwrap(),
-            Some(256),
-        ).unwrap();
+        let (w, h, rgba) =
+            nutexb_to_rgba_from_path(nutexb_path.to_str().unwrap(), Some(256)).unwrap();
         assert!(w <= 256);
         assert!(h <= 256);
         assert_eq!(rgba.len(), (w * h * 4) as usize);

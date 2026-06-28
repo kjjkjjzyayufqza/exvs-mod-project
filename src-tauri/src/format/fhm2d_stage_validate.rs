@@ -47,8 +47,7 @@ const EXVS_STAGE_VALIDATION_FLOW: &[ExvsValidationStep] = &[
 /// existence check (`exvs_stage_check_numatb_textures`) is intentionally NOT part
 /// of this flow — it assumes the per-model `0//1/` layout and is reused as-is via
 /// `exvs_stage_validate_for_repack` after `redistribute_stage_textures`.
-const EXVS_STAGE_PREFLIGHT_FLOW: &[ExvsValidationStep] =
-    &[exvs_stage_check_numatb_empty_params];
+const EXVS_STAGE_PREFLIGHT_FLOW: &[ExvsValidationStep] = &[exvs_stage_check_numatb_empty_params];
 
 // ── Entry point ─────────────────────────────────────────────────────────────
 
@@ -61,7 +60,10 @@ pub fn exvs_stage_validate_for_repack(stage_root: &str) -> ExvsStageValidationRe
     for step in EXVS_STAGE_VALIDATION_FLOW {
         step(&content_root, &mut errors);
         // base and info are prerequisites — stop early if they fail
-        if errors.iter().any(|e| e.phase == "base" || e.phase == "info") {
+        if errors
+            .iter()
+            .any(|e| e.phase == "base" || e.phase == "info")
+        {
             break;
         }
     }
@@ -194,10 +196,7 @@ fn exvs_stage_check_content_order(
 
 // ── Step 4: sub models must have required SSBH files ─────────────────────────
 
-fn exvs_stage_check_sub_models(
-    content_root: &Path,
-    errors: &mut Vec<ExvsStageValidationError>,
-) {
+fn exvs_stage_check_sub_models(content_root: &Path, errors: &mut Vec<ExvsStageValidationError>) {
     let skip_names: &[&str] = &[STAGE_BASE_NAME, STAGE_INFO_NAME, "textures"];
 
     let entries = match fs::read_dir(content_root) {
@@ -227,11 +226,7 @@ fn exvs_stage_check_sub_models(
     }
 
     for model_dir in &model_dirs {
-        let dir_name = model_dir
-            .file_name()
-            .unwrap()
-            .to_string_lossy()
-            .to_string();
+        let dir_name = model_dir.file_name().unwrap().to_string_lossy().to_string();
         let mut warnings = Vec::new();
         let ssbh_folders = find_ssbh_folders(model_dir, &mut warnings).unwrap_or_default();
 
@@ -291,19 +286,29 @@ fn exvs_stage_check_ssbh_folder(
     }
 
     // Check maya/nust naming
-    let has_maya = entries.iter().any(|f| f.contains("__maya__") && f.ends_with(".numatb"));
-    let has_nust = entries.iter().any(|f| f.contains("__nust__") && f.ends_with(".numatb"));
+    let has_maya = entries
+        .iter()
+        .any(|f| f.contains("__maya__") && f.ends_with(".numatb"));
+    let has_nust = entries
+        .iter()
+        .any(|f| f.contains("__nust__") && f.ends_with(".numatb"));
     if !has_maya {
         errors.push(ExvsStageValidationError {
             phase: "sub_models".into(),
-            message: format!("Model '{}': missing __maya__.numatb material file.", model_name),
+            message: format!(
+                "Model '{}': missing __maya__.numatb material file.",
+                model_name
+            ),
             path: Some(ssbh_folder.to_string_lossy().into()),
         });
     }
     if !has_nust {
         errors.push(ExvsStageValidationError {
             phase: "sub_models".into(),
-            message: format!("Model '{}': missing __nust__.numatb material file.", model_name),
+            message: format!(
+                "Model '{}': missing __nust__.numatb material file.",
+                model_name
+            ),
             path: Some(ssbh_folder.to_string_lossy().into()),
         });
     }
@@ -327,7 +332,10 @@ fn exvs_stage_check_ssbh_folder(
     if !has_ext(".jnttbl") {
         errors.push(ExvsStageValidationError {
             phase: "sub_models".into(),
-            message: format!("Model '{}': missing .jnttbl (joint table) file.", model_name),
+            message: format!(
+                "Model '{}': missing .jnttbl (joint table) file.",
+                model_name
+            ),
             path: Some(ssbh_folder.to_string_lossy().into()),
         });
     }
@@ -424,7 +432,10 @@ fn exvs_stage_check_numatb_empty_params(
             let data = match fs::read(&numatb_path) {
                 Ok(d) => d,
                 Err(e) => {
-                    warnings.push(format!("Failed to read numatb '{}': {e}", numatb_path.display()));
+                    warnings.push(format!(
+                        "Failed to read numatb '{}': {e}",
+                        numatb_path.display()
+                    ));
                     continue;
                 }
             };

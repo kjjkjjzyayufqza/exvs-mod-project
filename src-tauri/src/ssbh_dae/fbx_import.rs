@@ -5,16 +5,16 @@ use glam::{Mat4, Vec3, Vec4};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use ufbx::{
-    AllocatorOpts, Application, LoadOpts, Matrix, Mesh, Node, Real, Scene, SkinCluster, SkinDeformer,
-    VertexStream,
+    AllocatorOpts, Application, LoadOpts, Matrix, Mesh, Node, Real, Scene, SkinCluster,
+    SkinDeformer, VertexStream,
 };
 
 use super::dae_analyze::{analysis_report_for_import_scene, DaeAnalysisReport};
 use super::dae_parse::{ConvertedFiles, DaeConvertConfig};
 use super::dae_to_ssbh::{convert_import_scene_file, SsbhConvertStats};
 use super::import_scene::{
-    ImportBone, ImportBoneInfluence, ImportMesh, ImportScene, ImportVertexWeight, UpAxisConversion,
-    FbxImportSource,
+    FbxImportSource, ImportBone, ImportBoneInfluence, ImportMesh, ImportScene, ImportVertexWeight,
+    UpAxisConversion,
 };
 
 const DEFAULT_NORMAL: [f32; 3] = [0.0, 0.0, 1.0];
@@ -76,9 +76,7 @@ fn apply_y180_axis_convention_correction(scene: &mut ImportScene) {
     let rot = Mat4::from_rotation_y(std::f32::consts::PI);
     for mesh in &mut scene.meshes {
         for vertex in &mut mesh.vertices {
-            *vertex = rot
-                .transform_point3(Vec3::from_array(*vertex))
-                .to_array();
+            *vertex = rot.transform_point3(Vec3::from_array(*vertex)).to_array();
         }
         for normal in &mut mesh.normals {
             let transformed = rot.transform_vector3(Vec3::from_array(*normal));
@@ -872,7 +870,10 @@ fn import_uninstanced_mesh(
 }
 
 /// Build an `ImportScene` from a loaded ufbx scene.
-fn build_import_scene_from_fbx(scene: &Scene, fbx_import_source: FbxImportSource) -> Result<ImportScene> {
+fn build_import_scene_from_fbx(
+    scene: &Scene,
+    fbx_import_source: FbxImportSource,
+) -> Result<ImportScene> {
     let up_axis = up_axis_from_scene(scene);
     let skin_bone_names = collect_skin_bone_names(scene);
     let inverse_by_bone = first_inverse_bind_per_bone(scene);
@@ -973,7 +974,10 @@ mod tests {
         let scene = load_fbx_scene(path).expect("sample Blender FBX should load");
         assert_eq!(detect_fbx_import_source(&scene), FbxImportSource::Blender);
         let import_scene = parse_fbx_file(path).expect("sample Blender FBX should parse");
-        assert_eq!(import_scene.fbx_import_source, Some(FbxImportSource::Blender));
+        assert_eq!(
+            import_scene.fbx_import_source,
+            Some(FbxImportSource::Blender)
+        );
     }
 
     #[test]
@@ -1280,7 +1284,11 @@ mod tests {
                     max[i] = max[i].max(v[i]);
                 }
             }
-            eprintln!("[original mesh '{}'] verts={} bbox min={min:?} max={max:?}", mesh.name, mesh.vertices.len());
+            eprintln!(
+                "[original mesh '{}'] verts={} bbox min={min:?} max={max:?}",
+                mesh.name,
+                mesh.vertices.len()
+            );
         }
         for mesh in &blender_scene.meshes {
             if mesh.vertices.is_empty() {
@@ -1294,13 +1302,20 @@ mod tests {
                     max[i] = max[i].max(v[i]);
                 }
             }
-            eprintln!("[blender mesh '{}'] verts={} bbox min={min:?} max={max:?}", mesh.name, mesh.vertices.len());
+            eprintln!(
+                "[blender mesh '{}'] verts={} bbox min={min:?} max={max:?}",
+                mesh.name,
+                mesh.vertices.len()
+            );
         }
 
         for (label, scene) in [("original", &original_scene), ("blender", &blender_scene)] {
             for bone in &scene.bones {
                 let t = bone.transform[3];
-                eprintln!("[{label} bone '{}'] parent={:?} translation={t:?}", bone.name, bone.parent_index);
+                eprintln!(
+                    "[{label} bone '{}'] parent={:?} translation={t:?}",
+                    bone.name, bone.parent_index
+                );
             }
         }
 
@@ -1328,10 +1343,8 @@ mod tests {
             }
         }
 
-        if let (Some(om), Some(bm)) = (
-            original_scene.meshes.first(),
-            blender_scene.meshes.first(),
-        ) {
+        if let (Some(om), Some(bm)) = (original_scene.meshes.first(), blender_scene.meshes.first())
+        {
             assert_eq!(om.vertices.len(), bm.vertices.len());
             let mut matched = 0usize;
             for (ov, bv) in om.vertices.iter().zip(bm.vertices.iter()) {

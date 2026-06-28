@@ -1,7 +1,8 @@
 # EXVS2 Binary JSON CLI Design
 
-> **For agentic workers:** This is a design/specification note only. Do not
-> implement this CLI unless the user explicitly asks for development.
+> **Status (2026-06-28):** Implemented in the Tauri crate. Operational reference:
+> `docs/exvs2-json-cli.md`. Cross-repo pickup for :
+> `docs\EXVS2JsonCli.md`.
 
 **Goal:** define the CLI an AI agent needs to quickly convert known EXVS2
 binary/resource files into structured JSON and correlate them with unit,
@@ -67,6 +68,7 @@ The CLI should support:
 - `--pretty` for readable JSON.
 - `--summary` for compact AI pickup.
 - `--xref` to emit known Tauri/IDA/atwiki correlation fields if available.
+  (Not implemented yet; use `correlate` optional IDA flags instead.)
 - `--raw-fields` to include unknown command hashes and original offsets.
 - `--roundtrip-check` to parse and rebuild files that support lossless rebuilds.
 
@@ -263,16 +265,20 @@ Then the AI should read one JSON report instead of manually repeating:
 - Tauri resource lookup;
 - manual table-vs-hardcoded effect comparison.
 
-## First Implementation Boundary
+## Implementation Status
 
-When the user asks to build the CLI, start with read-only conversion:
+Shipped in `src-tauri/src/exvs2_json_cli.rs` + `src-tauri/src/bin/exvs2_json.rs`:
 
-- `inspect` for `jnttbl`;
-- `inspect` for `vernier_table`;
-- `inspect` for `armsparam`;
-- common JSON envelope;
-- summary for enabled follow-bone rows;
-- roundtrip check for formats that already have builders.
+- `inspect` for `jnttbl`, `character_id_table`, `vernier_table`, `armsparam`,
+  `bulletparam`, `projectile_depiction_table`
+- Common JSON envelope and LE hash metadata
+- `--summary`, `--raw-fields`, `--roundtrip-check`
+- `correlate` skeleton with manual IDA field injection
 
-Do not start with mutation/repacking or IDA integration. Those are later steps.
+Still deferred:
+
+- `--xref` automatic lookup
+- Auto resource join inside `correlate`
+- IDA JSON/CSV import
+- Mutation/repack commands
 

@@ -4,6 +4,7 @@ mod character_id_preview;
 pub mod collision_mesh;
 mod commands;
 mod console_color;
+pub mod exvs2_json_cli;
 mod fhm2d_memory_preview;
 pub mod format;
 pub mod havok_cli;
@@ -142,6 +143,14 @@ pub fn run() {
             stage_commands::extract_stage_fhm2d_to_folder,
             stage_commands::repack_fhm2d,
             stage_commands::repack_unit_model_fhm2d,
+            stage_commands::inspect_effect_folder,
+            stage_commands::parse_effect_efxbn_file,
+            stage_commands::validate_effect_folder_for_repack,
+            stage_commands::repack_effect_folder_fhm2d,
+            stage_commands::import_effect_folder_file,
+            stage_commands::import_effect_folder_model,
+            stage_commands::delete_effect_folder_entries,
+            stage_commands::copy_effect_folder_selection,
             stage_commands::repack_stage_fhm2d_preserving_shared_textures,
             stage_commands::redistribute_stage_textures,
             stage_commands::restore_shared_textures,

@@ -107,8 +107,7 @@ pub fn build_chrsysparam(file: &ChrSysParamFile) -> Result<Vec<u8>, String> {
 mod tests {
     use super::*;
 
-    const SAMPLE_PATH: &str =
-        "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\0x08248A8D\\chrsysparam.csyspm";
+    const SAMPLE_PATH: &str = "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\0x08248A8D\\chrsysparam.csyspm";
 
     #[test]
     fn chrsysparam_read_write_crud() {
@@ -119,7 +118,10 @@ mod tests {
             build_chrsysparam(&parsed).expect("failed to rebuild chrsysparam sample file");
         assert_eq!(rebuilt, source);
 
-        assert!(!parsed.entries.is_empty(), "chrsysparam sample has no entries");
+        assert!(
+            !parsed.entries.is_empty(),
+            "chrsysparam sample has no entries"
+        );
 
         let mut with_added = parsed.clone();
         let mut added = with_added.entries[0].clone();

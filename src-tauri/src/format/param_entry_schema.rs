@@ -32,9 +32,7 @@ pub fn snake_to_camel(name: &str) -> String {
 }
 
 pub fn pool_kind_by_hash(pool: ParamCommandPool, hash: u32) -> Option<u32> {
-    pool.iter()
-        .find(|(h, _, _)| *h == hash)
-        .map(|(_, k, _)| *k)
+    pool.iter().find(|(h, _, _)| *h == hash).map(|(_, k, _)| *k)
 }
 
 pub fn is_hash_in_pool(pool: ParamCommandPool, hash: u32) -> bool {
@@ -151,8 +149,7 @@ fn json_to_raw_u32_for_kind(kind: u32, v: &Value) -> Result<u32, String> {
                 let x = n
                     .as_i64()
                     .ok_or_else(|| "expected i32 (kind 2)".to_string())?;
-                let i = i32::try_from(x)
-                    .map_err(|_| "i32 out of range (kind 2)".to_string())?;
+                let i = i32::try_from(x).map_err(|_| "i32 out of range (kind 2)".to_string())?;
                 Ok(i as u32)
             }
             _ => Err("expected i32 (kind 2)".to_string()),
@@ -161,7 +158,8 @@ fn json_to_raw_u32_for_kind(kind: u32, v: &Value) -> Result<u32, String> {
             let f = match v {
                 Value::Number(n) => n
                     .as_f64()
-                    .ok_or_else(|| "expected f32 (kind 5)".to_string())? as f32,
+                    .ok_or_else(|| "expected f32 (kind 5)".to_string())?
+                    as f32,
                 _ => return Err("expected f32 (kind 5)".to_string()),
             };
             Ok(f32::to_bits(f))
@@ -205,9 +203,7 @@ pub fn entry_commands_from_named_json(
     v: &Value,
     pool: ParamCommandPool,
 ) -> Result<(u32, HashMap<u32, u32>), String> {
-    let obj = v
-        .as_object()
-        .ok_or("param entry: expected JSON object")?;
+    let obj = v.as_object().ok_or("param entry: expected JSON object")?;
     let entry_id: u32 = if let Some(e) = obj.get("entryId") {
         if let Some(n) = e.as_u64() {
             n as u32
@@ -263,7 +259,8 @@ mod tests {
     fn kind_u32_accepts_signed_json_for_hash_bit_pattern() {
         let expected: u32 = 0xD8F283FB;
         let signed = expected as i32;
-        let raw = json_to_raw_u32_for_kind(KIND_U32, &json!(signed)).expect("signed hash should save");
+        let raw =
+            json_to_raw_u32_for_kind(KIND_U32, &json!(signed)).expect("signed hash should save");
         assert_eq!(raw, expected);
     }
 

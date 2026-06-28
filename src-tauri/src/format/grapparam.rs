@@ -16,22 +16,22 @@ use crate::format::param_entry_schema::{
 // Data-verified: 432 files, 3105 entries. cmd_count={15,16}. No IDA immediates found.
 // Note: down_value/stun_value/reach/down_value_last have max near u32::MAX → likely signed i32.
 pub const GRAPPARAM_COMMAND_POOL: ParamCommandPool = &[
-    (0x17A9E2E1, 2, "down_value"),         // [D:signed] max=0xFFFFFFFF, 45 unique
-    (0x2272E3D6, 2, "charge_frame"),       // [D:0~440] frames
-    (0x35857659, 2, "grap_total_frame"),   // [D:0~700] frames
-    (0x465D80C6, 2, "stun_value"),         // [D:signed] max=0xFFFFFFFF, 47 unique
-    (0x534643A2, 2, "grap_priority"),      // [D:0~90] 16 unique
-    (0x550BCFAD, 2, "startup_frame"),      // [D:0~900] frames
-    (0x55B8FC51, 2, "tracking_frame"),     // [D:0~700] frames
-    (0x6906F0F4, 2, "damage"),             // [D:0~2000] 60 unique
-    (0x7755981E, 2, "correction_pct"),     // [D:0~100] percentage
-    (0x83E900CD, 2, "reach"),              // [D:signed] max=0xFFFFFFFB(-5), 32 unique
-    (0x976F9803, 2, "cancel_frame"),       // [D:0~60] frames
-    (0x99D42DBB, 2, "recovery_frame"),     // [D:0~300] frames
-    (0xA89F3A61, 2, "is_multi_hit"),       // [D:0~1] boolean
-    (0xB084851E, 2, "damage_2nd"),         // [D:0~2000]
-    (0xBEC81A41, 2, "damage_last"),        // [D:0~2000]
-    (0xC21ED1D8, 2, "down_value_last"),  // [D:signed] max=0xFFFFFFFF, 49 unique
+    (0x17A9E2E1, 2, "down_value"),   // [D:signed] max=0xFFFFFFFF, 45 unique
+    (0x2272E3D6, 2, "charge_frame"), // [D:0~440] frames
+    (0x35857659, 2, "grap_total_frame"), // [D:0~700] frames
+    (0x465D80C6, 2, "stun_value"),   // [D:signed] max=0xFFFFFFFF, 47 unique
+    (0x534643A2, 2, "grap_priority"), // [D:0~90] 16 unique
+    (0x550BCFAD, 2, "startup_frame"), // [D:0~900] frames
+    (0x55B8FC51, 2, "tracking_frame"), // [D:0~700] frames
+    (0x6906F0F4, 2, "damage"),       // [D:0~2000] 60 unique
+    (0x7755981E, 2, "correction_pct"), // [D:0~100] percentage
+    (0x83E900CD, 2, "reach"),        // [D:signed] max=0xFFFFFFFB(-5), 32 unique
+    (0x976F9803, 2, "cancel_frame"), // [D:0~60] frames
+    (0x99D42DBB, 2, "recovery_frame"), // [D:0~300] frames
+    (0xA89F3A61, 2, "is_multi_hit"), // [D:0~1] boolean
+    (0xB084851E, 2, "damage_2nd"),   // [D:0~2000]
+    (0xBEC81A41, 2, "damage_last"),  // [D:0~2000]
+    (0xC21ED1D8, 2, "down_value_last"), // [D:signed] max=0xFFFFFFFF, 49 unique
 ];
 
 pub fn grapparam_entry_to_json_value(entry: &GrapParamEntry) -> Value {
@@ -82,7 +82,11 @@ fn validate_field_specs(field_specs: &[ParamFieldSpec]) -> Result<(), String> {
     validate_file_specs_kind_match_pool(GRAPPARAM_COMMAND_POOL, field_specs)
 }
 
-fn parse_entry_from_raw(raw: &[u8], field_specs: &[ParamFieldSpec], entry_id: u32) -> GrapParamEntry {
+fn parse_entry_from_raw(
+    raw: &[u8],
+    field_specs: &[ParamFieldSpec],
+    entry_id: u32,
+) -> GrapParamEntry {
     let commands = parse_commands_map_from_entry_row(raw, field_specs);
     GrapParamEntry { entry_id, commands }
 }
@@ -127,7 +131,9 @@ pub fn build_grapparam(b: &GrapParamData) -> Result<Vec<u8>, String> {
 
     let mut entries_raw: Vec<Vec<u8>> = Vec::with_capacity(b.entries.len());
     for (entry_index, entry) in b.entries.iter().enumerate() {
-        if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+        if entry_index < b.source_entries_raw.len()
+            && b.source_entries_raw[entry_index].len() == entry_size
+        {
             let r = &b.source_entries_raw[entry_index];
             if entry_matches_raw(entry, r, &field_specs) {
                 entries_raw.push(b.source_entries_raw[entry_index].clone());
@@ -135,7 +141,9 @@ pub fn build_grapparam(b: &GrapParamData) -> Result<Vec<u8>, String> {
             }
         }
 
-        let mut raw = if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+        let mut raw = if entry_index < b.source_entries_raw.len()
+            && b.source_entries_raw[entry_index].len() == entry_size
+        {
             b.source_entries_raw[entry_index].clone()
         } else {
             vec![0u8; entry_size]
@@ -172,8 +180,7 @@ pub fn build_grapparam(b: &GrapParamData) -> Result<Vec<u8>, String> {
 mod tests {
     use super::*;
 
-    const SAMPLE_PATH: &str =
-        "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\0x08248A8D\\grapparam.bin";
+    const SAMPLE_PATH: &str = "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\0x08248A8D\\grapparam.bin";
 
     #[test]
     fn grapparam_read_write_crud() {
@@ -183,7 +190,10 @@ mod tests {
         let rebuilt = build_grapparam(&parsed).expect("failed to rebuild grapparam sample file");
         assert_eq!(rebuilt, source);
 
-        assert!(!parsed.entries.is_empty(), "grapparam sample has no entries");
+        assert!(
+            !parsed.entries.is_empty(),
+            "grapparam sample has no entries"
+        );
 
         let mut with_added = parsed.clone();
         let mut added = with_added.entries[0].clone();
@@ -201,7 +211,10 @@ mod tests {
         let added_parsed =
             parse_grapparam(&added_bytes).expect("failed to parse grapparam after add");
         assert_eq!(added_parsed.entries.len(), parsed.entries.len() + 1);
-        assert_eq!(added_parsed.entries.last().map(|entry| entry.entry_id), Some(next_id));
+        assert_eq!(
+            added_parsed.entries.last().map(|entry| entry.entry_id),
+            Some(next_id)
+        );
 
         let mut with_updated = added_parsed.clone();
         let updated_id = with_updated.entries[0].entry_id.wrapping_add(99);

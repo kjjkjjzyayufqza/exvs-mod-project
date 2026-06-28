@@ -185,15 +185,13 @@ pub fn collect_missing_texture_paths_for_entry(
     // actually required (Use* toggle true, implicit base-color slot, Texture1 declared, etc.).
     // If the enabling boolean key is absent or false, an empty map path is ignored.
     for row in &entry.textures {
-        if row.data.trim().is_empty()
-            && is_texture_map_path_required(entry, row.param_id, profile)
+        if row.data.trim().is_empty() && is_texture_map_path_required(entry, row.param_id, profile)
         {
             push_missing(&mut missing, entry, row.param_id, false);
         }
     }
     for row in &entry.textures2 {
-        if row.data.trim().is_empty()
-            && is_texture_map_path_required(entry, row.param_id, profile)
+        if row.data.trim().is_empty() && is_texture_map_path_required(entry, row.param_id, profile)
         {
             push_missing(&mut missing, entry, row.param_id, true);
         }
@@ -406,7 +404,9 @@ mod tests {
         let mut entry = empty_entry("pbr1Mtl");
         entry.booleans.push(boolean(ParamId::UseMetallicMap, true));
         entry.booleans.push(boolean(ParamId::UseRoughnessMap, true));
-        entry.booleans.push(boolean(ParamId::UseAmbientOcclusionMap, true));
+        entry
+            .booleans
+            .push(boolean(ParamId::UseAmbientOcclusionMap, true));
         entry.booleans.push(boolean(ParamId::UseNormalMap, true));
         entry.booleans.push(boolean(ParamId::UseEmissiveMap, true));
 

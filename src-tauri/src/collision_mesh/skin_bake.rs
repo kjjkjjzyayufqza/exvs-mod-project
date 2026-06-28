@@ -59,12 +59,7 @@ pub fn bake_mesh_vertices(
 
     Ok(baked
         .into_iter()
-        .map(|v| {
-            apply_collision_axis_scale(
-                [v[0] as f64, v[1] as f64, v[2] as f64],
-                options,
-            )
-        })
+        .map(|v| apply_collision_axis_scale([v[0] as f64, v[1] as f64, v[2] as f64], options))
         .collect())
 }
 
@@ -288,6 +283,9 @@ mod tests {
 
         let bones = vec![bone];
         let baked = bake_mesh_vertices(&mesh, &bones, &CollisionMeshOptions::default()).unwrap();
-        assert!((baked[0][0] - 3.0).abs() < 1e-4, "bone translate +2 on X applied to vertex at x=1");
+        assert!(
+            (baked[0][0] - 3.0).abs() < 1e-4,
+            "bone translate +2 on X applied to vertex at x=1"
+        );
     }
 }

@@ -24,91 +24,91 @@ use crate::format::param_entry_schema::{
 //   is_penetrating    -> penetrate_type_hash  (17 unique, max ~4B, not boolean)
 //   inherit_speed_flag -> inherit_speed_hash  (34 unique, max ~4B, not a flag)
 pub const BULLETPARAM_COMMAND_POOL: ParamCommandPool = &[
-    (0x0594D6D4, 5, "initial_angle"),             // [V:sub_1405C4400] angular offset, 143 unique
-    (0x05D5D30D, 5, "max_range"),                 // [D:0~10000] distance, 112 unique
-    (0x06E90346, 1, "move_type"),                 // [D:0~255] enum, 9 unique
-    (0x0D6A5CD5, 1, "hit_effect_hash"),           // [V:sub_140606BB0] 815 unique hash refs
-    (0x130D4C0B, 5, "spread_angle"),              // [D:-320~320] degrees, 151 unique
-    (0x13662C98, 5, "hitbox_width"),              // [D:0~25]
-    (0x138B3675, 5, "hitbox_height"),             // [D:0~360]
-    (0x13C6C469, 5, "hitbox_depth"),              // [D:-40~80]
-    (0x14AB0070, 5, "aim_offset_vertical"),       // [D:-135~400]
-    (0x20FEDE31, 5, "homing_range"),              // [D:0~10000] distance
-    (0x28BA5665, 5, "visual_scale"),              // [D:0~1000]
-    (0x2E1E75E5, 5, "hit_effect_scale"),          // [D:0~50]
-    (0x2F446A4F, 5, "spawn_offset_forward"),      // [V:sub_1405C4400] converted deg->rad; angular, not distance. [D:-175~210]
-    (0x319126CE, 1, "inherit_speed_hash"),         // [D:HASH] 34 unique. was "inherit_speed_flag"
-    (0x32ACABFB, 2, "lifetime"),                  // [D:0~100000] frames
-    (0x36FCE2D7, 1, "child_bullet_hash"),         // [D:HASH] 204 unique
-    (0x397CE80D, 1, "collision_type"),            // [D:0~2] enum, 3 types
-    (0x3B52DAAB, 5, "rotation_angle"),            // [D:-180~360] degrees
-    (0x3C3F1EB2, 5, "elevation_angle"),           // [D:-135~1200] degrees
-    (0x3CDF1516, 1, "homing_type"),               // [D:0~3] enum, 4 types
-    (0x3F8653B3, 5, "reserved_050"),              // PHANTOM — not in any file
-    (0x41435BE6, 1, "bullet_effect_hash"),        // [D:HASH] 832 unique
-    (0x41FBD241, 1, "trail_effect_hash"),         // [D:HASH] 260 unique
-    (0x46961658, 1, "muzzle_flash_hash"),         // [D:HASH] 59 unique
-    (0x48816325, 5, "reserved_060"),              // PHANTOM — not in any file
-    (0x4B382E24, 5, "target_height_offset"),      // [D:-300~1000]
-    (0x4B492895, 2, "pierce_count"),              // [D:0~30] 27 unique
-    (0x4C55EA3D, 5, "acceleration_value"),        // [D:-360~3000]
-    (0x4D6BF281, 1, "bullet_action_hash"),        // [D:HASH] 1474 unique — most diverse action ref
-    (0x52CA3B01, 5, "homing_start_distance"),     // [D:0~5000]
-    (0x55C77696, 5, "vertical_launch_angle"),     // [V:sub_1405C4400] used as positional offset along source axes
-    (0x58435AD9, 5, "horizontal_aim_angle"),      // [V:sub_1405C4400] converted deg->rad for spawn rotation
-    (0x59332F69, 2, "hit_interval_frame"),        // [D:0~130] frames
-    (0x63AC30E6, 5, "max_altitude"),              // [D:-700~250]
-    (0x640A7C9D, 5, "spawn_offset_vertical"),     // [D:-350~300]
-    (0x6481E0F7, 2, "speed_internal"),            // [D:0~2147483646] 18 unique — possibly hash/special encoding
-    (0x64C1F4FF, 5, "collision_height"),          // [D:-10~90]
-    (0x67921CDD, 2, "homing_duration"),           // [D:0~10000] frames
-    (0x68CD7942, 1, "on_expire_hash"),            // [D:HASH] 985 unique
-    (0x6A62D65E, 2, "delay_frame"),               // [D:0~1000] frames, 9 unique
-    (0x74F469FA, 5, "gravity_rate"),              // [V:sub_140606BB0,sub_1405B5040] ballistic trajectory param. [D:0~0.5]
-    (0x7696F452, 5, "speed_scale"),               // [D:0~2.0] multiplier
-    (0x7B4AA25E, 5, "effective_range"),           // [D:0~360]
-    (0x81A816EB, 1, "bullet_shape"),              // [D:0~8] enum, 9 shapes
-    (0x8379D9F8, 5, "model_scale"),               // [D:0~17]
-    (0x846DDC39, 5, "max_distance"),              // [D:0~9000]
-    (0x89BE0F56, 1, "bullet_resource_hash"),      // [D:HASH] 3547 unique — most diverse resource ref
-    (0x8ACF95D3, 5, "blast_radius"),              // [D:-110~150]
-    (0x8DA251CA, 5, "offset_angle_vertical"),     // [D:-150~300]
-    (0x8DBD5433, 5, "homing_strength"),           // [D:0~1.0] multiplier
-    (0x90423264, 5, "turn_rate"),                 // [V:sub_140606BB0,sub_1405B5040] projectile turning speed. [D:0~1000]
-    (0x9375A247, 5, "homing_angle"),              // [D:0~180] degrees
-    (0x9C9D876E, 5, "offset_angle_horizontal"),   // [V:sub_1405C4400] used as positional offset along source axes
-    (0xA12E3B5F, 1, "beam_type_hash"),            // [D:HASH] 19 unique, max ~4B. was "is_beam"
-    (0xA1E2C610, 5, "reserved_0d8"),              // PHANTOM — not in any file
-    (0xA25B8B11, 5, "target_distance"),           // [D:-180~1200]
-    (0xA36593AD, 1, "behavior_type"),             // [D:HASH-like] 69 unique, max ~4B — behavior definition ref
-    (0xA5364F08, 5, "aim_correction_angle"),      // [D:-300~440]
-    (0xA68F0209, 5, "reserved_0e8"),              // PHANTOM — not in any file
-    (0xA8987774, 1, "ammo_type_hash"),            // [D:HASH] 153 unique
-    (0xAB606D9E, 5, "initial_speed"),             // [D:0~640]
-    (0xABEDC73A, 5, "launch_angle_horizontal"),   // [D:-140~500]
-    (0xAF2B7098, 5, "tracking_angle"),            // [D:0~180] degrees
-    (0xB306BEE8, 5, "min_homing_distance"),       // [D:0~360]
-    (0xBA9B8F5D, 5, "turn_acceleration"),         // [D:0~15]
-    (0xD188329F, 5, "reserved_f4"),               // [D:0~500] 5 unique, mostly 0
-    (0xD32D39ED, 1, "hitgroup_hash"),             // [D:HASH] 2371 unique
-    (0xD462A33B, 1, "spawn_pattern_hash"),        // [D:HASH] 107 unique
-    (0xD55CBB87, 5, "aim_limit_angle"),           // [D:-160~240]
-    (0xD6290BC9, 1, "penetrate_type_hash"),       // [D:HASH] 17 unique. was "is_penetrating"
-    (0xD6E5F686, 5, "reserved_118"),              // PHANTOM — not in any file
-    (0xD8F283FB, 1, "secondary_effect_hash"),     // [D:HASH] 1091 unique
+    (0x0594D6D4, 5, "initial_angle"), // [V:sub_1405C4400] angular offset, 143 unique
+    (0x05D5D30D, 5, "max_range"),     // [D:0~10000] distance, 112 unique
+    (0x06E90346, 1, "move_type"),     // [D:0~255] enum, 9 unique
+    (0x0D6A5CD5, 1, "hit_effect_hash"), // [V:sub_140606BB0] 815 unique hash refs
+    (0x130D4C0B, 5, "spread_angle"),  // [D:-320~320] degrees, 151 unique
+    (0x13662C98, 5, "hitbox_width"),  // [D:0~25]
+    (0x138B3675, 5, "hitbox_height"), // [D:0~360]
+    (0x13C6C469, 5, "hitbox_depth"),  // [D:-40~80]
+    (0x14AB0070, 5, "aim_offset_vertical"), // [D:-135~400]
+    (0x20FEDE31, 5, "homing_range"),  // [D:0~10000] distance
+    (0x28BA5665, 5, "visual_scale"),  // [D:0~1000]
+    (0x2E1E75E5, 5, "hit_effect_scale"), // [D:0~50]
+    (0x2F446A4F, 5, "spawn_offset_forward"), // [V:sub_1405C4400] converted deg->rad; angular, not distance. [D:-175~210]
+    (0x319126CE, 1, "inherit_speed_hash"),   // [D:HASH] 34 unique. was "inherit_speed_flag"
+    (0x32ACABFB, 2, "lifetime"),             // [D:0~100000] frames
+    (0x36FCE2D7, 1, "child_bullet_hash"),    // [D:HASH] 204 unique
+    (0x397CE80D, 1, "collision_type"),       // [D:0~2] enum, 3 types
+    (0x3B52DAAB, 5, "rotation_angle"),       // [D:-180~360] degrees
+    (0x3C3F1EB2, 5, "elevation_angle"),      // [D:-135~1200] degrees
+    (0x3CDF1516, 1, "homing_type"),          // [D:0~3] enum, 4 types
+    (0x3F8653B3, 5, "reserved_050"),         // PHANTOM — not in any file
+    (0x41435BE6, 1, "bullet_effect_hash"),   // [D:HASH] 832 unique
+    (0x41FBD241, 1, "trail_effect_hash"),    // [D:HASH] 260 unique
+    (0x46961658, 1, "muzzle_flash_hash"),    // [D:HASH] 59 unique
+    (0x48816325, 5, "reserved_060"),         // PHANTOM — not in any file
+    (0x4B382E24, 5, "target_height_offset"), // [D:-300~1000]
+    (0x4B492895, 2, "pierce_count"),         // [D:0~30] 27 unique
+    (0x4C55EA3D, 5, "acceleration_value"),   // [D:-360~3000]
+    (0x4D6BF281, 1, "bullet_action_hash"),   // [D:HASH] 1474 unique — most diverse action ref
+    (0x52CA3B01, 5, "homing_start_distance"), // [D:0~5000]
+    (0x55C77696, 5, "vertical_launch_angle"), // [V:sub_1405C4400] used as positional offset along source axes
+    (0x58435AD9, 5, "horizontal_aim_angle"), // [V:sub_1405C4400] converted deg->rad for spawn rotation
+    (0x59332F69, 2, "hit_interval_frame"),   // [D:0~130] frames
+    (0x63AC30E6, 5, "max_altitude"),         // [D:-700~250]
+    (0x640A7C9D, 5, "spawn_offset_vertical"), // [D:-350~300]
+    (0x6481E0F7, 2, "speed_internal"), // [D:0~2147483646] 18 unique — possibly hash/special encoding
+    (0x64C1F4FF, 5, "collision_height"), // [D:-10~90]
+    (0x67921CDD, 2, "homing_duration"), // [D:0~10000] frames
+    (0x68CD7942, 1, "on_expire_hash"), // [D:HASH] 985 unique
+    (0x6A62D65E, 2, "delay_frame"),    // [D:0~1000] frames, 9 unique
+    (0x74F469FA, 5, "gravity_rate"), // [V:sub_140606BB0,sub_1405B5040] ballistic trajectory param. [D:0~0.5]
+    (0x7696F452, 5, "speed_scale"),  // [D:0~2.0] multiplier
+    (0x7B4AA25E, 5, "effective_range"), // [D:0~360]
+    (0x81A816EB, 1, "bullet_shape"), // [D:0~8] enum, 9 shapes
+    (0x8379D9F8, 5, "model_scale"),  // [D:0~17]
+    (0x846DDC39, 5, "max_distance"), // [D:0~9000]
+    (0x89BE0F56, 1, "bullet_resource_hash"), // [D:HASH] 3547 unique — most diverse resource ref
+    (0x8ACF95D3, 5, "blast_radius"), // [D:-110~150]
+    (0x8DA251CA, 5, "offset_angle_vertical"), // [D:-150~300]
+    (0x8DBD5433, 5, "homing_strength"), // [D:0~1.0] multiplier
+    (0x90423264, 5, "turn_rate"), // [V:sub_140606BB0,sub_1405B5040] projectile turning speed. [D:0~1000]
+    (0x9375A247, 5, "homing_angle"), // [D:0~180] degrees
+    (0x9C9D876E, 5, "offset_angle_horizontal"), // [V:sub_1405C4400] used as positional offset along source axes
+    (0xA12E3B5F, 1, "beam_type_hash"),          // [D:HASH] 19 unique, max ~4B. was "is_beam"
+    (0xA1E2C610, 5, "reserved_0d8"),            // PHANTOM — not in any file
+    (0xA25B8B11, 5, "target_distance"),         // [D:-180~1200]
+    (0xA36593AD, 1, "behavior_type"), // [D:HASH-like] 69 unique, max ~4B — behavior definition ref
+    (0xA5364F08, 5, "aim_correction_angle"), // [D:-300~440]
+    (0xA68F0209, 5, "reserved_0e8"),  // PHANTOM — not in any file
+    (0xA8987774, 1, "ammo_type_hash"), // [D:HASH] 153 unique
+    (0xAB606D9E, 5, "initial_speed"), // [D:0~640]
+    (0xABEDC73A, 5, "launch_angle_horizontal"), // [D:-140~500]
+    (0xAF2B7098, 5, "tracking_angle"), // [D:0~180] degrees
+    (0xB306BEE8, 5, "min_homing_distance"), // [D:0~360]
+    (0xBA9B8F5D, 5, "turn_acceleration"), // [D:0~15]
+    (0xD188329F, 5, "reserved_f4"),   // [D:0~500] 5 unique, mostly 0
+    (0xD32D39ED, 1, "hitgroup_hash"), // [D:HASH] 2371 unique
+    (0xD462A33B, 1, "spawn_pattern_hash"), // [D:HASH] 107 unique
+    (0xD55CBB87, 5, "aim_limit_angle"), // [D:-160~240]
+    (0xD6290BC9, 1, "penetrate_type_hash"), // [D:HASH] 17 unique. was "is_penetrating"
+    (0xD6E5F686, 5, "reserved_118"),  // PHANTOM — not in any file
+    (0xD8F283FB, 1, "secondary_effect_hash"), // [D:HASH] 1091 unique
     (0xDCEAF7AC, 5, "homing_effective_distance"), // [D:-360~820]
-    (0xDE6C0636, 1, "reserved_flag_110"),         // [D:0~0xFFFFFFF6] 3 unique, 10652 zeros
-    (0xDF9F47E2, 1, "explosion_effect_hash"),     // [D:HASH] 106 unique
-    (0xEDD1C108, 1, "interaction_hash"),          // [D:HASH] 1670 unique
-    (0xEF44FC6B, 5, "speed_acceleration"),        // [D:-2~30]
-    (0xF33F8630, 2, "duration_frame"),            // [D:0~1000] frames
-    (0xF47EE96E, 5, "reserved_124"),              // [D:-5~1200] 13 unique, mostly 0
-    (0xF647567F, 1, "sound_effect_hash"),         // [D:HASH] 341 unique
-    (0xFAA5615C, 5, "muzzle_offset_horizontal"),  // [D:-360~87011]
-    (0xFD032D27, 5, "muzzle_offset_vertical"),    // [D:-100~300]
-    (0xFD855759, 5, "induction_angle"),           // [D:0~360]
-    (0xFDC8A545, 5, "spread_distance"),           // [D:-140~250]
-    (0xFF51E424, 5, "tracking_start_distance"),   // [D:0~1000]
+    (0xDE6C0636, 1, "reserved_flag_110"), // [D:0~0xFFFFFFF6] 3 unique, 10652 zeros
+    (0xDF9F47E2, 1, "explosion_effect_hash"), // [D:HASH] 106 unique
+    (0xEDD1C108, 1, "interaction_hash"), // [D:HASH] 1670 unique
+    (0xEF44FC6B, 5, "speed_acceleration"), // [D:-2~30]
+    (0xF33F8630, 2, "duration_frame"), // [D:0~1000] frames
+    (0xF47EE96E, 5, "reserved_124"),  // [D:-5~1200] 13 unique, mostly 0
+    (0xF647567F, 1, "sound_effect_hash"), // [D:HASH] 341 unique
+    (0xFAA5615C, 5, "muzzle_offset_horizontal"), // [D:-360~87011]
+    (0xFD032D27, 5, "muzzle_offset_vertical"), // [D:-100~300]
+    (0xFD855759, 5, "induction_angle"), // [D:0~360]
+    (0xFDC8A545, 5, "spread_distance"), // [D:-140~250]
+    (0xFF51E424, 5, "tracking_start_distance"), // [D:0~1000]
 ];
 
 #[cfg(test)]
@@ -230,7 +230,9 @@ pub fn build_bulletparam(b: &BulletParamData) -> Result<Vec<u8>, String> {
         for spec in &field_specs {
             let o = spec.entry_offset as usize;
             if o + 4 > raw.len() {
-                return Err("bulletparam entry field offset out of range for entry_size".to_string());
+                return Err(
+                    "bulletparam entry field offset out of range for entry_size".to_string()
+                );
             }
             if let Some(v) = entry.commands.get(&spec.hash) {
                 raw[o..o + 4].copy_from_slice(&v.to_le_bytes());
@@ -260,8 +262,7 @@ mod tests {
     use crate::format::param_entry_schema::snake_to_camel;
     use std::collections::HashSet;
 
-    const SAMPLE_PATH: &str =
-        "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\0x08248A8D\\bulletparam.bin";
+    const SAMPLE_PATH: &str = "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\0x08248A8D\\bulletparam.bin";
     const SHIFTED_SAMPLE_PATH: &str = "E:/XB/解包/com/file/0xA3D57845/bulletparam.bin";
     const SAMPLE_OUT_PATH: &str = "E:/XB/解包/com/file/0x08248A8D/bulletparam_1.bin";
     const SHIFTED_OUT_PATH: &str = "E:/XB/解包/com/file/0xA3D57845/bulletparam_1.bin";
@@ -281,14 +282,24 @@ mod tests {
         let source = std::fs::read(sample_path).expect("failed to read bulletparam sample file");
         let parsed = parse_bulletparam(&source).expect("failed to parse bulletparam sample file");
         let original_bin = read_param_binary(&source).expect("failed to parse original binary");
-        assert!(!parsed.entries.is_empty(), "bulletparam sample has no entries");
+        assert!(
+            !parsed.entries.is_empty(),
+            "bulletparam sample has no entries"
+        );
 
-        let rebuilt = build_bulletparam(&parsed).expect("failed to rebuild bulletparam sample file");
+        let rebuilt =
+            build_bulletparam(&parsed).expect("failed to rebuild bulletparam sample file");
         std::fs::write(output_path, &rebuilt).expect("failed to write rebuilt bulletparam file");
         let rebuilt_bin = read_param_binary(&rebuilt).expect("failed to parse rebuilt binary");
         assert_specs_equal(&original_bin.field_specs, &rebuilt_bin.field_specs);
-        assert_eq!(original_bin.header.commands_count, rebuilt_bin.header.commands_count);
-        assert_eq!(original_bin.header.entry_size, rebuilt_bin.header.entry_size);
+        assert_eq!(
+            original_bin.header.commands_count,
+            rebuilt_bin.header.commands_count
+        );
+        assert_eq!(
+            original_bin.header.entry_size,
+            rebuilt_bin.header.entry_size
+        );
         assert_eq!(original_bin.entries_raw, rebuilt_bin.entries_raw);
 
         let mut known_hashes = HashSet::with_capacity(BULLETPARAM_COMMAND_POOL.len());
@@ -321,9 +332,15 @@ mod tests {
             build_bulletparam(&with_added).expect("failed to build bulletparam after add");
         let added_bin = read_param_binary(&added_bytes).expect("failed to parse added binary");
         assert_specs_equal(&original_bin.field_specs, &added_bin.field_specs);
-        assert_eq!(original_bin.header.commands_count, added_bin.header.commands_count);
+        assert_eq!(
+            original_bin.header.commands_count,
+            added_bin.header.commands_count
+        );
         assert_eq!(original_bin.header.entry_size, added_bin.header.entry_size);
-        assert_eq!(added_bin.entries_raw.len(), original_bin.entries_raw.len() + 1);
+        assert_eq!(
+            added_bin.entries_raw.len(),
+            original_bin.entries_raw.len() + 1
+        );
         for i in 0..original_bin.entries_raw.len() {
             assert_eq!(original_bin.entries_raw[i], added_bin.entries_raw[i]);
         }
@@ -342,11 +359,21 @@ mod tests {
         with_deleted.entries.pop();
         let deleted_bytes =
             build_bulletparam(&with_deleted).expect("failed to build bulletparam after delete");
-        let deleted_bin = read_param_binary(&deleted_bytes).expect("failed to parse deleted binary");
+        let deleted_bin =
+            read_param_binary(&deleted_bytes).expect("failed to parse deleted binary");
         assert_specs_equal(&original_bin.field_specs, &deleted_bin.field_specs);
-        assert_eq!(original_bin.header.commands_count, deleted_bin.header.commands_count);
-        assert_eq!(original_bin.header.entry_size, deleted_bin.header.entry_size);
-        assert_eq!(deleted_bin.entries_raw.len(), original_bin.entries_raw.len() - 1);
+        assert_eq!(
+            original_bin.header.commands_count,
+            deleted_bin.header.commands_count
+        );
+        assert_eq!(
+            original_bin.header.entry_size,
+            deleted_bin.header.entry_size
+        );
+        assert_eq!(
+            deleted_bin.entries_raw.len(),
+            original_bin.entries_raw.len() - 1
+        );
         for i in 0..deleted_bin.entries_raw.len() {
             assert_eq!(deleted_bin.entries_raw[i], original_bin.entries_raw[i]);
         }
@@ -361,11 +388,21 @@ mod tests {
             .insert(H_INITIAL_ANGLE, before_value.wrapping_add(1));
         let updated_bytes =
             build_bulletparam(&with_updated).expect("failed to build bulletparam after update");
-        let updated_bin = read_param_binary(&updated_bytes).expect("failed to parse updated binary");
+        let updated_bin =
+            read_param_binary(&updated_bytes).expect("failed to parse updated binary");
         assert_specs_equal(&original_bin.field_specs, &updated_bin.field_specs);
-        assert_eq!(original_bin.header.commands_count, updated_bin.header.commands_count);
-        assert_eq!(original_bin.header.entry_size, updated_bin.header.entry_size);
-        assert_eq!(original_bin.entries_raw.len(), updated_bin.entries_raw.len());
+        assert_eq!(
+            original_bin.header.commands_count,
+            updated_bin.header.commands_count
+        );
+        assert_eq!(
+            original_bin.header.entry_size,
+            updated_bin.header.entry_size
+        );
+        assert_eq!(
+            original_bin.entries_raw.len(),
+            updated_bin.entries_raw.len()
+        );
         for i in 1..original_bin.entries_raw.len() {
             assert_eq!(original_bin.entries_raw[i], updated_bin.entries_raw[i]);
         }
@@ -386,7 +423,10 @@ mod tests {
         let e = parse_entry_from_raw(&[0u8; 64], &expected_field_specs(), 1);
         let mut c = e.commands.clone();
         c.insert(0x0594D6D4, f32::to_bits(1.5));
-        let e2 = BulletParamEntry { entry_id: 1, commands: c };
+        let e2 = BulletParamEntry {
+            entry_id: 1,
+            commands: c,
+        };
         let v = bulletparam_entry_to_json_value(&e2);
         let e3 = bulletparam_entry_from_json_value(&v).expect("from json");
         assert!((f32::from_bits(*e3.commands.get(&0x0594D6D4).unwrap()) - 1.5).abs() < 1e-5);
@@ -407,7 +447,10 @@ mod tests {
             build_bulletparam(&parsed).expect("failed to rebuild bulletparam sample file");
         assert_eq!(rebuilt, source);
 
-        assert!(!parsed.entries.is_empty(), "bulletparam sample has no entries");
+        assert!(
+            !parsed.entries.is_empty(),
+            "bulletparam sample has no entries"
+        );
         let j = serde_json::to_string(&parsed.entries[0]).expect("to json");
         assert!(j.contains("entryId") && (j.contains("initialAngle") || j.contains("entryId")));
 
@@ -427,7 +470,10 @@ mod tests {
         let added_parsed =
             parse_bulletparam(&added_bytes).expect("failed to parse bulletparam after add");
         assert_eq!(added_parsed.entries.len(), parsed.entries.len() + 1);
-        assert_eq!(added_parsed.entries.last().map(|e| e.entry_id), Some(next_id));
+        assert_eq!(
+            added_parsed.entries.last().map(|e| e.entry_id),
+            Some(next_id)
+        );
 
         let mut with_updated = added_parsed.clone();
         let updated_id = with_updated.entries[0].entry_id.wrapping_add(99);
@@ -467,8 +513,8 @@ mod tests {
         with_extra_commands.header.entry_size = BULLETPARAM_ENTRY_SIZE + 4;
         let extra_bytes =
             build_param_binary(&with_extra_commands).expect("failed to build extra command binary");
-        let parsed_extra =
-            parse_bulletparam(&extra_bytes).expect("failed to parse bulletparam with extra commands");
+        let parsed_extra = parse_bulletparam(&extra_bytes)
+            .expect("failed to parse bulletparam with extra commands");
         assert_eq!(
             parsed_extra.field_specs.len(),
             with_extra_commands.field_specs.len()
@@ -484,8 +530,8 @@ mod tests {
             .truncate(BULLETPARAM_COMMAND_POOL.len() - 3);
         let fewer_bytes =
             build_param_binary(&with_fewer_commands).expect("failed to build fewer command binary");
-        let parsed_fewer =
-            parse_bulletparam(&fewer_bytes).expect("failed to parse bulletparam with fewer commands");
+        let parsed_fewer = parse_bulletparam(&fewer_bytes)
+            .expect("failed to parse bulletparam with fewer commands");
         assert_eq!(
             parsed_fewer.field_specs.len(),
             with_fewer_commands.field_specs.len()
@@ -510,7 +556,10 @@ mod tests {
             .expect("failed to read shifted bulletparam sample file");
         let parsed =
             parse_bulletparam(&source).expect("failed to parse shifted bulletparam sample file");
-        assert!(!parsed.entries.is_empty(), "shifted bulletparam has no entries");
+        assert!(
+            !parsed.entries.is_empty(),
+            "shifted bulletparam has no entries"
+        );
         assert_eq!(parsed.header.commands_count, 85);
     }
 
@@ -545,7 +594,10 @@ mod tests {
         let original_bin = read_param_binary(&source).expect("failed to parse original binary");
         let rebuilt_bin = read_param_binary(&rebuilt).expect("failed to parse rebuilt binary");
 
-        assert_eq!(original_bin.field_specs.len(), rebuilt_bin.field_specs.len());
+        assert_eq!(
+            original_bin.field_specs.len(),
+            rebuilt_bin.field_specs.len()
+        );
         for (before_spec, after_spec) in original_bin
             .field_specs
             .iter()
@@ -556,7 +608,10 @@ mod tests {
             assert_eq!(before_spec.flags, after_spec.flags);
             assert_eq!(before_spec.kind, after_spec.kind);
         }
-        assert_eq!(original_bin.entries_raw.len(), rebuilt_bin.entries_raw.len());
+        assert_eq!(
+            original_bin.entries_raw.len(),
+            rebuilt_bin.entries_raw.len()
+        );
         for (before_row, after_row) in original_bin
             .entries_raw
             .iter()
@@ -568,7 +623,10 @@ mod tests {
                 .filter(|spec| spec.hash != H_INITIAL_ANGLE)
             {
                 let offset = spec.entry_offset as usize;
-                assert_eq!(&before_row[offset..offset + 4], &after_row[offset..offset + 4]);
+                assert_eq!(
+                    &before_row[offset..offset + 4],
+                    &after_row[offset..offset + 4]
+                );
             }
         }
     }

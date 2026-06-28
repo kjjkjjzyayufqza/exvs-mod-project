@@ -1866,7 +1866,6 @@ fn count_files_recursive(dir: &Path) -> usize {
     count
 }
 
-
 // ── Blackbox tests ───────────────────────────────────────────────────
 
 #[test]
@@ -1895,21 +1894,37 @@ fn test_blackbox_t1_extract_and_verify_structure() {
     let placement_csv = content_root.join("info").join("placement.csv");
     assert!(placement_csv.exists(), "placement.csv missing");
     let placement_text = fs::read_to_string(&placement_csv).unwrap();
-    assert!(placement_text.contains("VDK_TYPE"), "placement.csv missing VDK_TYPE");
+    assert!(
+        placement_text.contains("VDK_TYPE"),
+        "placement.csv missing VDK_TYPE"
+    );
 
     let graphic_csv = content_root.join("info").join("graphic_param.csv");
     assert!(graphic_csv.exists(), "graphic_param.csv missing");
     let graphic_text = fs::read_to_string(&graphic_csv).unwrap();
-    assert!(graphic_text.contains("directional_lighting"), "graphic_param.csv missing directional_lighting");
+    assert!(
+        graphic_text.contains("directional_lighting"),
+        "graphic_param.csv missing directional_lighting"
+    );
 
-    let hkt = content_root.join("001stage001_object_box01").join("map_hit.hkt");
+    let hkt = content_root
+        .join("001stage001_object_box01")
+        .join("map_hit.hkt");
     assert!(hkt.exists(), "map_hit.hkt missing");
     eprintln!("T1: files verified");
 
     let bundle = load_stage_bundle_impl(&content_root.to_string_lossy()).unwrap();
     assert!(bundle.sub_models.len() >= 1, "sub_models should be >= 1");
-    assert_eq!(bundle.placement_entries.len(), 5, "placement_entries should be 5");
-    eprintln!("T1: bundle sub_models={}, placement_entries={}", bundle.sub_models.len(), bundle.placement_entries.len());
+    assert_eq!(
+        bundle.placement_entries.len(),
+        5,
+        "placement_entries should be 5"
+    );
+    eprintln!(
+        "T1: bundle sub_models={}, placement_entries={}",
+        bundle.sub_models.len(),
+        bundle.placement_entries.len()
+    );
     eprintln!("PASS: test_blackbox_t1_extract_and_verify_structure");
 }
 
@@ -1923,8 +1938,14 @@ fn test_blackbox_t2_restore_shared_textures() {
 
     eprintln!("T2: calling restore_shared_textures...");
     let restore = restore_shared_textures(&pack_root.to_string_lossy()).unwrap();
-    eprintln!("T2: textures_collected={}, subdirs_removed={}", restore.textures_collected, restore.subdirs_removed);
-    assert!(restore.textures_collected > 0, "textures_collected should be > 0");
+    eprintln!(
+        "T2: textures_collected={}, subdirs_removed={}",
+        restore.textures_collected, restore.subdirs_removed
+    );
+    assert!(
+        restore.textures_collected > 0,
+        "textures_collected should be > 0"
+    );
 
     let textures_dir = pack_root.join("textures");
     assert!(textures_dir.is_dir(), "textures/ dir should exist");
@@ -1932,7 +1953,12 @@ fn test_blackbox_t2_restore_shared_textures() {
     let has_nutexb = fs::read_dir(&textures_dir)
         .unwrap()
         .filter_map(|e| e.ok())
-        .any(|e| e.path().extension().map(|x| x.eq_ignore_ascii_case("nutexb")).unwrap_or(false));
+        .any(|e| {
+            e.path()
+                .extension()
+                .map(|x| x.eq_ignore_ascii_case("nutexb"))
+                .unwrap_or(false)
+        });
     assert!(has_nutexb, "textures/ should contain .nutexb files");
     eprintln!("T2: textures/ has .nutexb files");
 
@@ -1942,23 +1968,36 @@ fn test_blackbox_t2_restore_shared_textures() {
         let has_numeric_subdir = fs::read_dir(&model_ssbh_dir)
             .unwrap()
             .filter_map(|e| e.ok())
-            .any(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false)
-                && e.file_name().to_string_lossy().chars().all(|c| c.is_ascii_digit()));
-        assert!(!has_numeric_subdir, "numeric texture subdirs should be removed after restore");
+            .any(|e| {
+                e.file_type().map(|t| t.is_dir()).unwrap_or(false)
+                    && e.file_name()
+                        .to_string_lossy()
+                        .chars()
+                        .all(|c| c.is_ascii_digit())
+            });
+        assert!(
+            !has_numeric_subdir,
+            "numeric texture subdirs should be removed after restore"
+        );
         eprintln!("T2: numeric subdirs removed from model dir");
     }
 
     let bundle = load_stage_bundle_impl(&content_root.to_string_lossy()).unwrap();
-    assert!(!bundle.sub_models.is_empty(), "bundle should still load after restore");
-    eprintln!("T2: bundle still loads, sub_models={}", bundle.sub_models.len());
+    assert!(
+        !bundle.sub_models.is_empty(),
+        "bundle should still load after restore"
+    );
+    eprintln!(
+        "T2: bundle still loads, sub_models={}",
+        bundle.sub_models.len()
+    );
     eprintln!("PASS: test_blackbox_t2_restore_shared_textures");
 }
 
-
 #[test]
 fn test_blackbox_t3_dae_to_ssbh_conversion() {
-    use crate::ssbh_dae::{convert_dae_file, DaeConvertConfig};
     use crate::ssbh_dae::UpAxisConversion;
+    use crate::ssbh_dae::{convert_dae_file, DaeConvertConfig};
 
     let dae_path = Path::new(r"D:\output\exvs2\zabanya\body.dae");
     if !dae_path.exists() {
@@ -1985,24 +2024,61 @@ fn test_blackbox_t3_dae_to_ssbh_conversion() {
     };
 
     let (converted, stats) = convert_dae_file(dae_path, &config).unwrap();
-    eprintln!("T3: mesh_objects={}, total_vertices={}, bones={}", stats.mesh_objects, stats.total_vertices, stats.bones);
+    eprintln!(
+        "T3: mesh_objects={}, total_vertices={}, bones={}",
+        stats.mesh_objects, stats.total_vertices, stats.bones
+    );
 
-    let numdlb = converted.numdlb_path.as_ref().expect("numdlb_path should be Some");
-    let numshb = converted.numshb_path.as_ref().expect("numshb_path should be Some");
-    let nusktb = converted.nusktb_path.as_ref().expect("nusktb_path should be Some");
+    let numdlb = converted
+        .numdlb_path
+        .as_ref()
+        .expect("numdlb_path should be Some");
+    let numshb = converted
+        .numshb_path
+        .as_ref()
+        .expect("numshb_path should be Some");
+    let nusktb = converted
+        .nusktb_path
+        .as_ref()
+        .expect("nusktb_path should be Some");
 
-    assert!(numdlb.exists(), "numdlb file should exist: {}", numdlb.display());
-    assert!(numshb.exists(), "numshb file should exist: {}", numshb.display());
-    assert!(nusktb.exists(), "nusktb file should exist: {}", nusktb.display());
+    assert!(
+        numdlb.exists(),
+        "numdlb file should exist: {}",
+        numdlb.display()
+    );
+    assert!(
+        numshb.exists(),
+        "numshb file should exist: {}",
+        numshb.display()
+    );
+    assert!(
+        nusktb.exists(),
+        "nusktb file should exist: {}",
+        nusktb.display()
+    );
 
-    assert!(fs::metadata(numdlb).unwrap().len() > 0, "numdlb should be non-empty");
-    assert!(fs::metadata(numshb).unwrap().len() > 0, "numshb should be non-empty");
-    assert!(fs::metadata(nusktb).unwrap().len() > 0, "nusktb should be non-empty");
+    assert!(
+        fs::metadata(numdlb).unwrap().len() > 0,
+        "numdlb should be non-empty"
+    );
+    assert!(
+        fs::metadata(numshb).unwrap().len() > 0,
+        "numshb should be non-empty"
+    );
+    assert!(
+        fs::metadata(nusktb).unwrap().len() > 0,
+        "nusktb should be non-empty"
+    );
 
-    eprintln!("T3: numdlb={}, numshb={}, nusktb={}", numdlb.display(), numshb.display(), nusktb.display());
+    eprintln!(
+        "T3: numdlb={}, numshb={}, nusktb={}",
+        numdlb.display(),
+        numshb.display(),
+        nusktb.display()
+    );
     eprintln!("PASS: test_blackbox_t3_dae_to_ssbh_conversion");
 }
-
 
 #[test]
 fn test_blackbox_t4_add_new_object_repack_verify() {
@@ -2017,7 +2093,8 @@ fn test_blackbox_t4_add_new_object_repack_verify() {
     let result = extract_stage_fhm2d_to_folder_impl(
         &fhm2d.to_string_lossy(),
         &extract_dir.to_string_lossy(),
-    ).unwrap();
+    )
+    .unwrap();
     let pack_root = PathBuf::from(&result.output_dir);
     let content_root = pack_root.join("0").join("0");
     let original_file_count = result.total_files;
@@ -2049,14 +2126,18 @@ fn test_blackbox_t4_add_new_object_repack_verify() {
     }
 
     // Copy map_hit.hkt
-    let src_hkt = content_root.join("001stage001_object_box01").join("map_hit.hkt");
+    let src_hkt = content_root
+        .join("001stage001_object_box01")
+        .join("map_hit.hkt");
     let dst_hkt = content_root.join("zabanya_body").join("map_hit.hkt");
     fs::copy(&src_hkt, &dst_hkt).unwrap();
     eprintln!("T4: copied map_hit.hkt");
 
     // Load bundle to get new object index
     let bundle = load_stage_bundle_impl(&content_root.to_string_lossy()).unwrap();
-    let new_obj_index = bundle.sub_models.iter()
+    let new_obj_index = bundle
+        .sub_models
+        .iter()
         .find(|m| m.folder_name == "zabanya_body")
         .map(|m| m.object_index)
         .expect("zabanya_body should appear in sub_models");
@@ -2074,7 +2155,10 @@ fn test_blackbox_t4_add_new_object_repack_verify() {
     }
     placement_text.push_str(&new_row);
     fs::write(&placement_path, &placement_text).unwrap();
-    eprintln!("T4: appended new OBJECT row with VDK_OBJECTNUMBER={}", new_obj_index);
+    eprintln!(
+        "T4: appended new OBJECT row with VDK_OBJECTNUMBER={}",
+        new_obj_index
+    );
 
     eprintln!("T4: redistribute_stage_textures...");
     redistribute_stage_textures(&pack_root.to_string_lossy()).unwrap();
@@ -2089,7 +2173,8 @@ fn test_blackbox_t4_add_new_object_repack_verify() {
         &repack_out.to_string_lossy(),
         false,
         None,
-    ).unwrap();
+    )
+    .unwrap();
 
     eprintln!("T4: re-extract...");
     let re_dir = tmp.path().join("t4_re_extract");
@@ -2097,10 +2182,17 @@ fn test_blackbox_t4_add_new_object_repack_verify() {
     let re_extract = extract_stage_fhm2d_to_folder_impl(
         &repack_out.to_string_lossy(),
         &re_dir.to_string_lossy(),
-    ).unwrap();
-    eprintln!("T4: re_extract.total_files={}, original={}", re_extract.total_files, original_file_count);
+    )
+    .unwrap();
+    eprintln!(
+        "T4: re_extract.total_files={}, original={}",
+        re_extract.total_files, original_file_count
+    );
     // New object files may be linked (shared fileIndex) so total_files may equal original
-    assert!(re_extract.total_files >= original_file_count, "re-extracted should have at least as many files as original");
+    assert!(
+        re_extract.total_files >= original_file_count,
+        "re-extracted should have at least as many files as original"
+    );
 
     let re_content = PathBuf::from(&re_extract.output_dir).join("0").join("0");
     let re_bundle = load_stage_bundle_impl(&re_content.to_string_lossy()).unwrap();
@@ -2109,12 +2201,21 @@ fn test_blackbox_t4_add_new_object_repack_verify() {
     eprintln!("T4: re_bundle sub_models={}", re_bundle.sub_models.len());
 
     let re_placement = fs::read_to_string(re_content.join("info").join("placement.csv")).unwrap();
-    assert!(re_placement.contains(&format!("VDK_OBJECTNUMBER,{}", new_obj_index)), "placement.csv should contain new OBJECT row");
-    let re_obj_count = re_bundle.placement_entries.iter().filter(|e| e.vdk_type == "OBJECT").count();
-    assert_eq!(re_obj_count, 5, "re-extracted bundle should have 5 OBJECT entries (4 original + 1 new), got {re_obj_count}");
+    assert!(
+        re_placement.contains(&format!("VDK_OBJECTNUMBER,{}", new_obj_index)),
+        "placement.csv should contain new OBJECT row"
+    );
+    let re_obj_count = re_bundle
+        .placement_entries
+        .iter()
+        .filter(|e| e.vdk_type == "OBJECT")
+        .count();
+    assert_eq!(
+        re_obj_count, 5,
+        "re-extracted bundle should have 5 OBJECT entries (4 original + 1 new), got {re_obj_count}"
+    );
     eprintln!("PASS: test_blackbox_t4_add_new_object_repack_verify");
 }
-
 
 #[test]
 fn test_blackbox_t5_delete_object_repack_verify() {
@@ -2129,7 +2230,8 @@ fn test_blackbox_t5_delete_object_repack_verify() {
     let result = extract_stage_fhm2d_to_folder_impl(
         &fhm2d.to_string_lossy(),
         &extract_dir.to_string_lossy(),
-    ).unwrap();
+    )
+    .unwrap();
     let pack_root = PathBuf::from(&result.output_dir);
     let content_root = pack_root.join("0").join("0");
     let original_file_count = result.total_files;
@@ -2146,14 +2248,20 @@ fn test_blackbox_t5_delete_object_repack_verify() {
     // Remove VDK_OBJECTNUMBER=0 OBJECT rows from placement.csv
     let placement_path = content_root.join("info").join("placement.csv");
     let placement_text = fs::read_to_string(&placement_path).unwrap();
-    let filtered: Vec<&str> = placement_text.lines().filter(|line| {
-        // Keep line unless it's an OBJECT row with VDK_OBJECTNUMBER,0
-        let is_object = line.contains("VDK_TYPE,OBJECT");
-        let has_obj0 = line.contains("VDK_OBJECTNUMBER,0");
-        !(is_object && has_obj0)
-    }).collect();
+    let filtered: Vec<&str> = placement_text
+        .lines()
+        .filter(|line| {
+            // Keep line unless it's an OBJECT row with VDK_OBJECTNUMBER,0
+            let is_object = line.contains("VDK_TYPE,OBJECT");
+            let has_obj0 = line.contains("VDK_OBJECTNUMBER,0");
+            !(is_object && has_obj0)
+        })
+        .collect();
     fs::write(&placement_path, filtered.join("\n")).unwrap();
-    eprintln!("T5: filtered placement.csv, {} lines remain", filtered.len());
+    eprintln!(
+        "T5: filtered placement.csv, {} lines remain",
+        filtered.len()
+    );
 
     eprintln!("T5: redistribute_stage_textures...");
     redistribute_stage_textures(&pack_root.to_string_lossy()).unwrap();
@@ -2168,7 +2276,8 @@ fn test_blackbox_t5_delete_object_repack_verify() {
         &repack_out.to_string_lossy(),
         false,
         None,
-    ).unwrap();
+    )
+    .unwrap();
 
     eprintln!("T5: re-extract...");
     let re_dir = tmp.path().join("t5_re_extract");
@@ -2176,25 +2285,37 @@ fn test_blackbox_t5_delete_object_repack_verify() {
     let re_extract = extract_stage_fhm2d_to_folder_impl(
         &repack_out.to_string_lossy(),
         &re_dir.to_string_lossy(),
-    ).unwrap();
-    eprintln!("T5: re_extract.total_files={}, original={}", re_extract.total_files, original_file_count);
-    assert!(re_extract.total_files < original_file_count, "re-extracted should have fewer files after deletion");
+    )
+    .unwrap();
+    eprintln!(
+        "T5: re_extract.total_files={}, original={}",
+        re_extract.total_files, original_file_count
+    );
+    assert!(
+        re_extract.total_files < original_file_count,
+        "re-extracted should have fewer files after deletion"
+    );
 
     let re_content = PathBuf::from(&re_extract.output_dir).join("0").join("0");
     let re_bundle = load_stage_bundle_impl(&re_content.to_string_lossy()).unwrap();
     assert!(
-        !re_bundle.sub_models.iter().any(|m| m.folder_name.contains("object_box01")),
+        !re_bundle
+            .sub_models
+            .iter()
+            .any(|m| m.folder_name.contains("object_box01")),
         "re-extracted bundle should not contain object_box01"
     );
 
     let re_placement = fs::read_to_string(re_content.join("info").join("placement.csv")).unwrap();
-    let has_obj0_row = re_placement.lines().any(|line| {
-        line.contains("VDK_TYPE,OBJECT") && line.contains("VDK_OBJECTNUMBER,0")
-    });
-    assert!(!has_obj0_row, "placement.csv should not contain VDK_OBJECTNUMBER=0 OBJECT rows");
+    let has_obj0_row = re_placement
+        .lines()
+        .any(|line| line.contains("VDK_TYPE,OBJECT") && line.contains("VDK_OBJECTNUMBER,0"));
+    assert!(
+        !has_obj0_row,
+        "placement.csv should not contain VDK_OBJECTNUMBER=0 OBJECT rows"
+    );
     eprintln!("PASS: test_blackbox_t5_delete_object_repack_verify");
 }
-
 
 #[test]
 fn test_blackbox_t6_move_transform_repack_verify() {
@@ -2209,7 +2330,8 @@ fn test_blackbox_t6_move_transform_repack_verify() {
     let result = extract_stage_fhm2d_to_folder_impl(
         &fhm2d.to_string_lossy(),
         &extract_dir.to_string_lossy(),
-    ).unwrap();
+    )
+    .unwrap();
     let pack_root = PathBuf::from(&result.output_dir);
     let content_root = pack_root.join("0").join("0");
     let original_file_count = result.total_files;
@@ -2220,7 +2342,9 @@ fn test_blackbox_t6_move_transform_repack_verify() {
     // Load bundle and modify first OBJECT entry
     let bundle = load_stage_bundle_impl(&content_root.to_string_lossy()).unwrap();
     let mut entries = bundle.placement_entries.clone();
-    let obj_idx = entries.iter().position(|e| e.vdk_type == "OBJECT")
+    let obj_idx = entries
+        .iter()
+        .position(|e| e.vdk_type == "OBJECT")
         .expect("should have at least one OBJECT entry");
 
     let raw = &mut entries[obj_idx].raw_fields;
@@ -2240,7 +2364,11 @@ fn test_blackbox_t6_move_transform_repack_verify() {
     eprintln!("T6: modified first OBJECT pos to (9999.0, 100.0, -9999.0), rot_y=45.0");
 
     let placement_path = content_root.join("info").join("placement.csv");
-    let csv = entries.iter().map(|e| e.raw_fields.join(",")).collect::<Vec<_>>().join("\n");
+    let csv = entries
+        .iter()
+        .map(|e| e.raw_fields.join(","))
+        .collect::<Vec<_>>()
+        .join("\n");
     fs::write(&placement_path, &csv).unwrap();
 
     eprintln!("T6: redistribute_stage_textures...");
@@ -2256,7 +2384,8 @@ fn test_blackbox_t6_move_transform_repack_verify() {
         &repack_out.to_string_lossy(),
         false,
         None,
-    ).unwrap();
+    )
+    .unwrap();
 
     eprintln!("T6: re-extract...");
     let re_dir = tmp.path().join("t6_re_extract");
@@ -2264,25 +2393,45 @@ fn test_blackbox_t6_move_transform_repack_verify() {
     let re_extract = extract_stage_fhm2d_to_folder_impl(
         &repack_out.to_string_lossy(),
         &re_dir.to_string_lossy(),
-    ).unwrap();
+    )
+    .unwrap();
     eprintln!("T6: re_extract.total_files={}", re_extract.total_files);
-    assert_eq!(re_extract.total_files, original_file_count, "file count should be unchanged");
+    assert_eq!(
+        re_extract.total_files, original_file_count,
+        "file count should be unchanged"
+    );
 
     let re_content = PathBuf::from(&re_extract.output_dir).join("0").join("0");
-    let re_placement_text = fs::read_to_string(re_content.join("info").join("placement.csv")).unwrap();
-    assert!(re_placement_text.contains("9999.0"), "placement.csv should contain 9999.0");
-    assert!(re_placement_text.contains("100.0"), "placement.csv should contain 100.0");
-    assert!(re_placement_text.contains("-9999.0"), "placement.csv should contain -9999.0");
+    let re_placement_text =
+        fs::read_to_string(re_content.join("info").join("placement.csv")).unwrap();
+    assert!(
+        re_placement_text.contains("9999.0"),
+        "placement.csv should contain 9999.0"
+    );
+    assert!(
+        re_placement_text.contains("100.0"),
+        "placement.csv should contain 100.0"
+    );
+    assert!(
+        re_placement_text.contains("-9999.0"),
+        "placement.csv should contain -9999.0"
+    );
     eprintln!("T6: placement.csv contains expected values");
 
     let re_bundle = load_stage_bundle_impl(&re_content.to_string_lossy()).unwrap();
-    let first_obj = re_bundle.placement_entries.iter().find(|e| e.vdk_type == "OBJECT")
+    let first_obj = re_bundle
+        .placement_entries
+        .iter()
+        .find(|e| e.vdk_type == "OBJECT")
         .expect("should have OBJECT entry");
-    assert!((first_obj.pos_x - 9999.0).abs() < 0.1, "pos_x should be ~9999.0, got {}", first_obj.pos_x);
+    assert!(
+        (first_obj.pos_x - 9999.0).abs() < 0.1,
+        "pos_x should be ~9999.0, got {}",
+        first_obj.pos_x
+    );
     eprintln!("T6: first OBJECT pos_x={}", first_obj.pos_x);
     eprintln!("PASS: test_blackbox_t6_move_transform_repack_verify");
 }
-
 
 #[test]
 fn test_blackbox_t7_xyz_multi_object_transform_repack_verify() {
@@ -2297,7 +2446,8 @@ fn test_blackbox_t7_xyz_multi_object_transform_repack_verify() {
     let result = extract_stage_fhm2d_to_folder_impl(
         &fhm2d.to_string_lossy(),
         &extract_dir.to_string_lossy(),
-    ).unwrap();
+    )
+    .unwrap();
     let pack_root = PathBuf::from(&result.output_dir);
     let content_root = pack_root.join("0").join("0");
     let original_file_count = result.total_files;
@@ -2348,7 +2498,11 @@ fn test_blackbox_t7_xyz_multi_object_transform_repack_verify() {
     assert_eq!(obj_count, 4, "should have modified 4 OBJECT entries");
 
     let placement_path = content_root.join("info").join("placement.csv");
-    let csv = entries.iter().map(|e| e.raw_fields.join(",")).collect::<Vec<_>>().join("\n");
+    let csv = entries
+        .iter()
+        .map(|e| e.raw_fields.join(","))
+        .collect::<Vec<_>>()
+        .join("\n");
     fs::write(&placement_path, &csv).unwrap();
 
     eprintln!("T7: redistribute_stage_textures...");
@@ -2364,7 +2518,8 @@ fn test_blackbox_t7_xyz_multi_object_transform_repack_verify() {
         &repack_out.to_string_lossy(),
         false,
         None,
-    ).unwrap();
+    )
+    .unwrap();
 
     eprintln!("T7: re-extract...");
     let re_dir = tmp.path().join("t7_re_extract");
@@ -2372,24 +2527,45 @@ fn test_blackbox_t7_xyz_multi_object_transform_repack_verify() {
     let re_extract = extract_stage_fhm2d_to_folder_impl(
         &repack_out.to_string_lossy(),
         &re_dir.to_string_lossy(),
-    ).unwrap();
+    )
+    .unwrap();
     eprintln!("T7: re_extract.total_files={}", re_extract.total_files);
-    assert_eq!(re_extract.total_files, original_file_count, "file count should be unchanged");
+    assert_eq!(
+        re_extract.total_files, original_file_count,
+        "file count should be unchanged"
+    );
 
     let re_content = PathBuf::from(&re_extract.output_dir).join("0").join("0");
-    let re_placement_text = fs::read_to_string(re_content.join("info").join("placement.csv")).unwrap();
+    let re_placement_text =
+        fs::read_to_string(re_content.join("info").join("placement.csv")).unwrap();
 
     // Verify all modified coordinate values appear in the CSV
     for (x, y, z) in &positions {
-        assert!(re_placement_text.contains(&x.to_string()), "placement.csv should contain {x}");
-        assert!(re_placement_text.contains(&y.to_string()), "placement.csv should contain {y}");
-        assert!(re_placement_text.contains(&z.to_string()), "placement.csv should contain {z}");
+        assert!(
+            re_placement_text.contains(&x.to_string()),
+            "placement.csv should contain {x}"
+        );
+        assert!(
+            re_placement_text.contains(&y.to_string()),
+            "placement.csv should contain {y}"
+        );
+        assert!(
+            re_placement_text.contains(&z.to_string()),
+            "placement.csv should contain {z}"
+        );
     }
     eprintln!("T7: all coordinate values present in placement.csv");
 
     let re_bundle = load_stage_bundle_impl(&re_content.to_string_lossy()).unwrap();
-    let re_obj_count = re_bundle.placement_entries.iter().filter(|e| e.vdk_type == "OBJECT").count();
-    assert_eq!(re_obj_count, 4, "re-extracted bundle should have 4 OBJECT entries, got {re_obj_count}");
+    let re_obj_count = re_bundle
+        .placement_entries
+        .iter()
+        .filter(|e| e.vdk_type == "OBJECT")
+        .count();
+    assert_eq!(
+        re_obj_count, 4,
+        "re-extracted bundle should have 4 OBJECT entries, got {re_obj_count}"
+    );
     eprintln!("T7: OBJECT count={}", re_obj_count);
     eprintln!("PASS: test_blackbox_t7_xyz_multi_object_transform_repack_verify");
 }
@@ -2414,7 +2590,10 @@ fn test_rebuild_with_shared_textures_no_file_movement() {
         .map(|e| e.file_name().to_string_lossy().to_string())
         .filter(|n| n.to_ascii_lowercase().ends_with(".nutexb"))
         .collect();
-    assert!(!nutexb_in_textures_before.is_empty(), "textures/ must have nutexb files");
+    assert!(
+        !nutexb_in_textures_before.is_empty(),
+        "textures/ must have nutexb files"
+    );
 
     // Step 2: rebuild_structure_json_for_stage_with_shared_textures
     let structure_path =
@@ -2454,7 +2633,10 @@ fn test_rebuild_with_shared_textures_no_file_movement() {
             model_nutexb_count += 1;
         }
     }
-    assert!(model_nutexb_count > 0, "should have patched at least one model nutexb URL to textures/");
+    assert!(
+        model_nutexb_count > 0,
+        "should have patched at least one model nutexb URL to textures/"
+    );
     eprintln!("[test] {model_nutexb_count} model nutexb URLs point to textures/");
 
     // Step 3: repack using the rebuilt structure
@@ -2532,36 +2714,53 @@ fn test_disk_scene_editor_add_delete_repack_verify() {
 
     // Clean previous runs
     for p in [&edit_root, &verify_root] {
-        if p.exists() { fs::remove_dir_all(p).unwrap(); }
+        if p.exists() {
+            fs::remove_dir_all(p).unwrap();
+        }
     }
-    if edit_fhm2d.exists() { fs::remove_file(&edit_fhm2d).unwrap(); }
+    if edit_fhm2d.exists() {
+        fs::remove_file(&edit_fhm2d).unwrap();
+    }
 
     // ── Step 1: Extract to scene_edit_test/ ──────────────────────────────────
     eprintln!("=== Step 1: Extract 16F73C97.fhm2d → scene_edit_test/ ===");
     let extract_result = extract_stage_fhm2d_to_folder_impl(
         &fhm2d_src.to_string_lossy(),
         &test_dir.to_string_lossy(),
-    ).unwrap();
+    )
+    .unwrap();
     // extract writes to a folder named after the stem; rename to scene_edit_test
     let extracted = PathBuf::from(&extract_result.output_dir);
     fs::rename(&extracted, &edit_root).unwrap();
     // Also rename the structure JSON
     let orig_sj = test_dir.join("16F73C97_structure.json");
     let edit_sj = test_dir.join("scene_edit_test_structure.json");
-    if orig_sj.exists() { fs::rename(&orig_sj, &edit_sj).unwrap(); }
+    if orig_sj.exists() {
+        fs::rename(&orig_sj, &edit_sj).unwrap();
+    }
 
     let content_root = edit_root.join("0").join("0");
-    eprintln!("  Extracted {} files → {}", extract_result.total_files, edit_root.display());
+    eprintln!(
+        "  Extracted {} files → {}",
+        extract_result.total_files,
+        edit_root.display()
+    );
     assert_eq!(extract_result.total_files, 65);
 
     // ── Step 2a: restore_shared_textures ─────────────────────────────────────
     eprintln!("=== Step 2a: restore_shared_textures ===");
     let restore = restore_shared_textures(&content_root.to_string_lossy()).unwrap();
-    eprintln!("  Collected {} nutexb → textures/", restore.textures_collected);
+    eprintln!(
+        "  Collected {} nutexb → textures/",
+        restore.textures_collected
+    );
     assert!(restore.textures_collected > 0);
     // textures/ is now under content_root (0/0/textures/)
     let edit_textures = content_root.join("textures");
-    assert!(edit_textures.is_dir(), "textures/ must exist under content_root");
+    assert!(
+        edit_textures.is_dir(),
+        "textures/ must exist under content_root"
+    );
 
     // ── Step 2b: Simulate scene editor — ADD zabanya_body ────────────────────
     eprintln!("=== Step 2b: Add zabanya_body object ===");
@@ -2575,14 +2774,22 @@ fn test_disk_scene_editor_add_delete_repack_verify() {
         let fname = entry.file_name().to_string_lossy().to_string();
         let ext = fname.rfind('.').map(|i| &fname[i..]).unwrap_or("");
         // Skip numbered texture subdirs (0/, 1/) — textures are now in textures/
-        if entry.file_type().unwrap().is_dir() { continue; }
+        if entry.file_type().unwrap().is_dir() {
+            continue;
+        }
         let new_name = format!("zabanya_body{ext}");
         fs::copy(&src, new_obj_ssbh.join(&new_name)).unwrap();
     }
     // Copy HKT
-    let hkt_src = content_root.join("001stage001_object_box01").join("map_hit.hkt");
+    let hkt_src = content_root
+        .join("001stage001_object_box01")
+        .join("map_hit.hkt");
     if hkt_src.exists() {
-        fs::copy(&hkt_src, content_root.join("zabanya_body").join("map_hit.hkt")).unwrap();
+        fs::copy(
+            &hkt_src,
+            content_root.join("zabanya_body").join("map_hit.hkt"),
+        )
+        .unwrap();
     }
     eprintln!("  Created zabanya_body/ with SSBH files");
 
@@ -2594,7 +2801,9 @@ fn test_disk_scene_editor_add_delete_repack_verify() {
     eprintln!("=== Step 2d: Update placement.csv ===");
     let bundle = load_stage_bundle_impl(&content_root.to_string_lossy()).unwrap();
     // Find new object index for zabanya_body
-    let zabanya_idx = bundle.sub_models.iter()
+    let zabanya_idx = bundle
+        .sub_models
+        .iter()
         .find(|m| m.folder_name == "zabanya_body")
         .map(|m| m.object_index as i32)
         .unwrap_or(0);
@@ -2605,47 +2814,83 @@ fn test_disk_scene_editor_add_delete_repack_verify() {
     entries.retain(|e| !(e.vdk_type == "OBJECT" && e.object_number == Some(0)));
     // Add new OBJECT entry for zabanya_body at a new position
     let new_entry_raw = vec![
-        "VDK_TYPE".to_string(), "OBJECT".to_string(),
-        "VDK_INITIAL_SPAWN".to_string(), "TRUE".to_string(),
-        "VDK_POSITION_X".to_string(), "0.0".to_string(),
-        "VDK_POSITION_Y".to_string(), "0.0".to_string(),
-        "VDK_POSITION_Z".to_string(), "0.0".to_string(),
-        "VDK_ROTATION_X".to_string(), "0.0".to_string(),
-        "VDK_ROTATION_Y".to_string(), "0.0".to_string(),
-        "VDK_ROTATION_Z".to_string(), "0.0".to_string(),
-        "VDK_PLACEMENT_NAME".to_string(), String::new(),
-        "VDK_OBJECTNUMBER".to_string(), zabanya_idx.to_string(),
-        "VDK_PROGRAMID".to_string(), "0".to_string(),
-        "VDK_HITPOINT".to_string(), "UNBREAKABLE".to_string(),
-        "VDK_SHADOW_CAST".to_string(), "TRUE".to_string(),
+        "VDK_TYPE".to_string(),
+        "OBJECT".to_string(),
+        "VDK_INITIAL_SPAWN".to_string(),
+        "TRUE".to_string(),
+        "VDK_POSITION_X".to_string(),
+        "0.0".to_string(),
+        "VDK_POSITION_Y".to_string(),
+        "0.0".to_string(),
+        "VDK_POSITION_Z".to_string(),
+        "0.0".to_string(),
+        "VDK_ROTATION_X".to_string(),
+        "0.0".to_string(),
+        "VDK_ROTATION_Y".to_string(),
+        "0.0".to_string(),
+        "VDK_ROTATION_Z".to_string(),
+        "0.0".to_string(),
+        "VDK_PLACEMENT_NAME".to_string(),
+        String::new(),
+        "VDK_OBJECTNUMBER".to_string(),
+        zabanya_idx.to_string(),
+        "VDK_PROGRAMID".to_string(),
+        "0".to_string(),
+        "VDK_HITPOINT".to_string(),
+        "UNBREAKABLE".to_string(),
+        "VDK_SHADOW_CAST".to_string(),
+        "TRUE".to_string(),
     ];
     entries.push(crate::format::fhm2d_stage::PlacementEntry {
         vdk_type: "OBJECT".to_string(),
         object_number: Some(zabanya_idx),
-        pos_x: 0.0, pos_y: 0.0, pos_z: 0.0,
-        rot_x: 0.0, rot_y: 0.0, rot_z: 0.0,
-        scale_x: 1.0, scale_y: 1.0, scale_z: 1.0,
+        pos_x: 0.0,
+        pos_y: 0.0,
+        pos_z: 0.0,
+        rot_x: 0.0,
+        rot_y: 0.0,
+        rot_z: 0.0,
+        scale_x: 1.0,
+        scale_y: 1.0,
+        scale_z: 1.0,
         raw_fields: new_entry_raw,
     });
 
-    let csv = entries.iter().map(|e| e.raw_fields.join(",")).collect::<Vec<_>>().join("\n");
+    let csv = entries
+        .iter()
+        .map(|e| e.raw_fields.join(","))
+        .collect::<Vec<_>>()
+        .join("\n");
     fs::write(content_root.join("info").join("placement.csv"), &csv).unwrap();
     eprintln!("  placement.csv updated: {} entries", entries.len());
 
     // ── Step 3: rebuild structure JSON with shared textures ───────────────────
     eprintln!("=== Step 3: rebuild_structure_json_with_shared_textures ===");
     // Pass pack root (edit_root) so structure JSON is placed correctly next to it
-    let sj_path = rebuild_structure_json_for_stage_with_shared_textures(
-        &edit_root.to_string_lossy()
-    ).unwrap();
+    let sj_path =
+        rebuild_structure_json_for_stage_with_shared_textures(&edit_root.to_string_lossy())
+            .unwrap();
     eprintln!("  Structure JSON: {sj_path}");
 
     // Verify nutexb URLs point to textures/
-    let sj_doc: serde_json::Value = serde_json::from_str(&fs::read_to_string(&sj_path).unwrap()).unwrap();
-    let model_nutexb_in_textures = sj_doc["SubFileData"].as_array().unwrap().iter()
-        .filter(|e| e["fileType"].as_str().unwrap_or("").eq_ignore_ascii_case(".nutexb"))
+    let sj_doc: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&sj_path).unwrap()).unwrap();
+    let model_nutexb_in_textures = sj_doc["SubFileData"]
+        .as_array()
+        .unwrap()
+        .iter()
         .filter(|e| {
-            let url = e["fileUrl"].as_str().unwrap_or("").to_ascii_lowercase().replace('\\', "/");
+            e["fileType"]
+                .as_str()
+                .unwrap_or("")
+                .eq_ignore_ascii_case(".nutexb")
+        })
+        .filter(|e| {
+            let url = e["fileUrl"]
+                .as_str()
+                .unwrap_or("")
+                .to_ascii_lowercase()
+                .replace('\\', "/");
             !url.contains("/info/") && url.contains("/textures/")
         })
         .count();
@@ -2659,25 +2904,38 @@ fn test_disk_scene_editor_add_delete_repack_verify() {
         &edit_fhm2d.to_string_lossy(),
         false,
         None,
-    ).unwrap();
-    eprintln!("  Repacked: {} files, {} bytes", repack.total_files, repack.output_size);
+    )
+    .unwrap();
+    eprintln!(
+        "  Repacked: {} files, {} bytes",
+        repack.total_files, repack.output_size
+    );
     assert!(repack.output_size > 0);
 
     // ── Step 5: Re-extract → scene_edit_verify/ ──────────────────────────────
     eprintln!("=== Step 5: Re-extract scene_edit_test.fhm2d → scene_edit_verify/ ===");
     // Extract to a separate temp dir to avoid overwriting scene_edit_test/
     let verify_extract_dir = test_dir.join("scene_edit_verify_raw");
-    if verify_extract_dir.exists() { fs::remove_dir_all(&verify_extract_dir).unwrap(); }
+    if verify_extract_dir.exists() {
+        fs::remove_dir_all(&verify_extract_dir).unwrap();
+    }
     fs::create_dir_all(&verify_extract_dir).unwrap();
     let verify_result = extract_stage_fhm2d_to_folder_impl(
         &edit_fhm2d.to_string_lossy(),
         &verify_extract_dir.to_string_lossy(),
-    ).unwrap();
+    )
+    .unwrap();
     let extracted_verify = PathBuf::from(&verify_result.output_dir);
-    if verify_root.exists() { fs::remove_dir_all(&verify_root).unwrap(); }
+    if verify_root.exists() {
+        fs::remove_dir_all(&verify_root).unwrap();
+    }
     fs::rename(&extracted_verify, &verify_root).unwrap();
     fs::remove_dir_all(&verify_extract_dir).ok();
-    eprintln!("  Re-extracted {} files → {}", verify_result.total_files, verify_root.display());
+    eprintln!(
+        "  Re-extracted {} files → {}",
+        verify_result.total_files,
+        verify_root.display()
+    );
 
     // restore shared textures in verify dir too (for fair comparison)
     restore_shared_textures(&verify_root.to_string_lossy()).unwrap();
@@ -2688,32 +2946,63 @@ fn test_disk_scene_editor_add_delete_repack_verify() {
     eprintln!("=== Step 6: Verify ===");
 
     // 6a: re-extracted file count matches repacked count
-    assert_eq!(verify_result.total_files, repack.total_files,
-        "re-extracted file count must match repacked count");
+    assert_eq!(
+        verify_result.total_files, repack.total_files,
+        "re-extracted file count must match repacked count"
+    );
     eprintln!("  ✓ file count: {}", verify_result.total_files);
 
     // 6b: textures/ exists in edit (under content_root: 0/0/textures/)
     assert!(edit_textures.is_dir(), "edit textures/ must exist");
-    let edit_tex_count = fs::read_dir(&edit_textures).unwrap().filter_map(|e| e.ok())
-        .filter(|e| e.file_name().to_string_lossy().to_ascii_lowercase().ends_with(".nutexb"))
+    let edit_tex_count = fs::read_dir(&edit_textures)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .to_ascii_lowercase()
+                .ends_with(".nutexb")
+        })
         .count();
     assert_eq!(edit_tex_count, 13, "edit textures/ must have 13 nutexb");
     eprintln!("  ✓ edit textures/ has {edit_tex_count} nutexb");
 
     // 6c: placement.csv in verify has OBJECT entry (new object)
-    let verify_placement_path = verify_root.join("0").join("0").join("info").join("placement.csv");
-    assert!(verify_placement_path.exists(), "verify placement.csv must exist");
+    let verify_placement_path = verify_root
+        .join("0")
+        .join("0")
+        .join("info")
+        .join("placement.csv");
+    assert!(
+        verify_placement_path.exists(),
+        "verify placement.csv must exist"
+    );
     let verify_placement = fs::read_to_string(&verify_placement_path).unwrap();
-    assert!(verify_placement.contains("VDK_TYPE,OBJECT"),
-        "verify placement must have OBJECT entry");
-    assert!(!verify_placement.contains("VDK_POSITION_X,250.0"),
-        "original box01 placement entries (pos_x=250) must be gone");
+    assert!(
+        verify_placement.contains("VDK_TYPE,OBJECT"),
+        "verify placement must have OBJECT entry"
+    );
+    assert!(
+        !verify_placement.contains("VDK_POSITION_X,250.0"),
+        "original box01 placement entries (pos_x=250) must be gone"
+    );
     eprintln!("  ✓ placement.csv has OBJECT entry, box01 entries removed");
 
     // 6d: graphic_param.csv unchanged
     let edit_gp = fs::read_to_string(content_root.join("info").join("graphic_param.csv")).unwrap();
-    let verify_gp = fs::read_to_string(verify_root.join("0").join("0").join("info").join("graphic_param.csv")).unwrap();
-    assert_eq!(edit_gp.trim(), verify_gp.trim(), "graphic_param.csv must be identical");
+    let verify_gp = fs::read_to_string(
+        verify_root
+            .join("0")
+            .join("0")
+            .join("info")
+            .join("graphic_param.csv"),
+    )
+    .unwrap();
+    assert_eq!(
+        edit_gp.trim(),
+        verify_gp.trim(),
+        "graphic_param.csv must be identical"
+    );
     eprintln!("  ✓ graphic_param.csv identical");
 
     eprintln!("\n=== Summary ===");
@@ -2752,14 +3041,11 @@ fn repack_then_extract_folder_tree_is_correct() {
     .unwrap();
 
     let bytes = fs::read(&repacked).unwrap();
-    let extraction = crate::format::fhm2d::extract_fhm2d_to_memory_impl(&bytes, "test", None)
-        .unwrap();
+    let extraction =
+        crate::format::fhm2d::extract_fhm2d_to_memory_impl(&bytes, "test", None).unwrap();
 
-    let (tree, warnings) = stage_rename_in_memory(
-        &extraction.files,
-        &extraction.sub_file_structure,
-    )
-    .unwrap();
+    let (tree, warnings) =
+        stage_rename_in_memory(&extraction.files, &extraction.sub_file_structure).unwrap();
 
     eprintln!("warnings ({}):", warnings.len());
     for w in &warnings {
@@ -2770,7 +3056,10 @@ fn repack_then_extract_folder_tree_is_correct() {
         let pad = "  ".repeat(indent);
         eprintln!("{pad}{}/", node.name);
         for f in &node.files {
-            eprintln!("{pad}  {} (idx={}, {}b)", f.file_name, f.file_index, f.size_bytes);
+            eprintln!(
+                "{pad}  {} (idx={}, {}b)",
+                f.file_name, f.file_index, f.size_bytes
+            );
         }
         for c in &node.children {
             dump_tree(c, indent + 1);
@@ -2786,12 +3075,28 @@ fn repack_then_extract_folder_tree_is_correct() {
 
     let names: Vec<&str> = content.children.iter().map(|c| c.name.as_str()).collect();
 
-    assert!(names.contains(&"base"), "must have 'base' folder, got: {:?}", names);
-    assert!(names.contains(&"info"), "must have 'info' folder, got: {:?}", names);
-    assert!(names.contains(&"sky"), "must have 'sky' folder, got: {:?}", names);
+    assert!(
+        names.contains(&"base"),
+        "must have 'base' folder, got: {:?}",
+        names
+    );
+    assert!(
+        names.contains(&"info"),
+        "must have 'info' folder, got: {:?}",
+        names
+    );
+    assert!(
+        names.contains(&"sky"),
+        "must have 'sky' folder, got: {:?}",
+        names
+    );
 
     let bad_subs: Vec<_> = names.iter().filter(|n| n.starts_with("sub_")).collect();
-    assert!(bad_subs.is_empty(), "no folders should fall back to sub_N naming: {:?}", bad_subs);
+    assert!(
+        bad_subs.is_empty(),
+        "no folders should fall back to sub_N naming: {:?}",
+        bad_subs
+    );
 
     let no_infer_warnings: Vec<_> = warnings
         .iter()
@@ -2831,7 +3136,11 @@ fn repacked_stage_preserves_named_subfolders() {
 
     let re_content = PathBuf::from(&re_result.output_dir).join("0").join("0");
     let bundle = load_stage_bundle_impl(&re_content.to_string_lossy()).unwrap();
-    let names: Vec<String> = bundle.sub_models.iter().map(|m| m.folder_name.clone()).collect();
+    let names: Vec<String> = bundle
+        .sub_models
+        .iter()
+        .map(|m| m.folder_name.clone())
+        .collect();
 
     assert!(
         names.iter().any(|n| n == "sky"),
@@ -2856,13 +3165,22 @@ fn test_redistribute_creates_maya_0_nust_1_subdirs() {
     let restore = restore_shared_textures(&pack_root.to_string_lossy()).unwrap();
     assert!(restore.textures_collected > 0, "should collect textures");
     let textures_dir = pack_root.join("textures");
-    assert!(textures_dir.is_dir(), "textures/ should exist after restore");
+    assert!(
+        textures_dir.is_dir(),
+        "textures/ should exist after restore"
+    );
 
     // Now redistribute back to per-model subdirs
     let redist = redistribute_stage_textures(&pack_root.to_string_lossy()).unwrap();
-    assert!(redist.models_processed > 0, "should process at least 1 model");
+    assert!(
+        redist.models_processed > 0,
+        "should process at least 1 model"
+    );
     assert!(redist.textures_copied > 0, "should copy textures");
-    assert!(redist.textures_folder_removed, "textures/ should be removed");
+    assert!(
+        redist.textures_folder_removed,
+        "textures/ should be removed"
+    );
 
     // Verify the original extract_tools structure: each SSBH folder should have 0/ and 1/
     // matching the original game layout (maya→0/, nust→1/)
@@ -2921,7 +3239,6 @@ fn find_ssbh_folders_in_dir(root: &Path) -> Vec<PathBuf> {
     result
 }
 
-
 #[test]
 fn test_dump_user_fhm2d_tree() {
     let path = r"E:\XB\解包\com\test\0x16F73C97.fhm2d";
@@ -2938,7 +3255,12 @@ fn test_dump_user_fhm2d_tree() {
 
     fn dump(node: &StageVirtualTreeFolder, indent: usize) {
         let pad = "  ".repeat(indent);
-        eprintln!("{pad}{}/  ({} folders, {} files)", node.name, node.children.len(), node.files.len());
+        eprintln!(
+            "{pad}{}/  ({} folders, {} files)",
+            node.name,
+            node.children.len(),
+            node.files.len()
+        );
         for f in &node.files {
             let size = f.size_bytes;
             let kb = size as f64 / 1024.0;
@@ -3021,8 +3343,7 @@ fn apply_scene_texture_edits_copies_added_into_shared_textures() {
         filename: "added_diffuse.nutexb".to_string(),
         nutexb_path: src.to_string_lossy().to_string(),
     }];
-    let result =
-        apply_scene_texture_edits(&stage_root.to_string_lossy(), &added, &[]).unwrap();
+    let result = apply_scene_texture_edits(&stage_root.to_string_lossy(), &added, &[]).unwrap();
 
     assert_eq!(result.copied, 1);
     assert_eq!(result.deleted, 0);
@@ -3043,8 +3364,7 @@ fn apply_scene_texture_edits_deletes_removed_from_shared_textures() {
     let removed = vec![RemovedTextureEdit {
         filename: "stale.nutexb".to_string(),
     }];
-    let result =
-        apply_scene_texture_edits(&stage_root.to_string_lossy(), &[], &removed).unwrap();
+    let result = apply_scene_texture_edits(&stage_root.to_string_lossy(), &[], &removed).unwrap();
 
     assert_eq!(result.deleted, 1);
     assert!(!victim.exists(), "removed texture must be deleted");
@@ -3056,8 +3376,7 @@ fn apply_scene_texture_edits_warns_when_removed_missing() {
     let removed = vec![RemovedTextureEdit {
         filename: "ghost.nutexb".to_string(),
     }];
-    let result =
-        apply_scene_texture_edits(&tmp.path().to_string_lossy(), &[], &removed).unwrap();
+    let result = apply_scene_texture_edits(&tmp.path().to_string_lossy(), &[], &removed).unwrap();
 
     assert_eq!(result.deleted, 0);
     assert_eq!(result.warnings.len(), 1);
@@ -3068,7 +3387,11 @@ fn apply_scene_texture_edits_errors_when_added_source_missing() {
     let tmp = tempfile::tempdir().unwrap();
     let added = vec![AddedTextureEdit {
         filename: "missing.nutexb".to_string(),
-        nutexb_path: tmp.path().join("does_not_exist.nutexb").to_string_lossy().to_string(),
+        nutexb_path: tmp
+            .path()
+            .join("does_not_exist.nutexb")
+            .to_string_lossy()
+            .to_string(),
     }];
     let result = apply_scene_texture_edits(&tmp.path().to_string_lossy(), &added, &[]);
     assert!(result.is_err());
@@ -3096,7 +3419,10 @@ fn repack_preserving_shared_textures_does_not_mutate_source_layout() {
     restore_shared_textures(&pack_root.to_string_lossy()).unwrap();
 
     let textures_dir = content_root.join("textures");
-    assert!(textures_dir.is_dir(), "source shared textures/ should exist before repack");
+    assert!(
+        textures_dir.is_dir(),
+        "source shared textures/ should exist before repack"
+    );
     assert!(
         directory_has_nutexb(&textures_dir),
         "source shared textures/ should contain nutexb before repack"
@@ -3126,7 +3452,10 @@ fn repack_preserving_shared_textures_does_not_mutate_source_layout() {
         "isolated workspace should still use the existing redistribute logic"
     );
 
-    assert!(textures_dir.is_dir(), "source shared textures/ must remain after repack");
+    assert!(
+        textures_dir.is_dir(),
+        "source shared textures/ must remain after repack"
+    );
     assert!(
         directory_has_nutexb(&textures_dir),
         "source shared textures/ files must remain after repack"

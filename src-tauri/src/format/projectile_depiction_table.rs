@@ -15,29 +15,38 @@ use crate::format::param_entry_schema::{
 // Please keep comments for analysis.
 // Data-verified: 344 files, 1086 entries. cmd_count={14,15}.
 pub const PROJECTILE_DEPICTION_TABLE_COMMAND_POOL: ParamCommandPool = &[
-    (0x049A712B, 1, "depiction_type"),       // [D:HASH-like] 7 unique, mostly 0 (1076/1086)
-    (0x057E839D, 1, "main_effect_hash"),     // [D:HASH] 262 unique
-    (0x08B05EA9, 1, "sub_effect_hash"),      // [D:HASH] 17 unique, mostly 0
-    (0x1B12E734, 5, "scale"),                // [D:-1~3] 21 unique, never 0
-    (0x49672094, 1, "model_hash"),           // [D:HASH] 640 unique
-    (0x5896D450, 1, "trail_effect_hash"),    // [D:HASH] 4 unique, mostly 0
-    (0x5EF964EC, 1, "has_hit_effect"),       // [D:0~1] boolean. was "hit_effect_hash" — NOT a hash
-    (0x8F49B2DA, 5, "trail_length"),         // [D:0~600] 29 unique
-    (0x996BA1AC, 1, "sound_effect_hash"),    // [D:HASH] 23 unique
-    (0xBA4BBA9D, 1, "render_mode"),          // [D:1~18] enum, 15 types, never 0
-    (0xC19F85EA, 1, "material_hash"),        // [D:HASH] 138 unique
-    (0xD1097B21, 5, "z_offset"),             // [D:-13~200] 58 unique
-    (0xD9EF5A79, 1, "spawn_effect_hash"),    // [D:HASH] 63 unique
-    (0xDABB1A5C, 2, "behavior_flags"),       // [D:always 0] unused
-    (0xE9DE0A15, 1, "destroy_effect_hash"),  // [D:HASH] 53 unique
+    (0x049A712B, 1, "depiction_type"), // [D:HASH-like] 7 unique, mostly 0 (1076/1086)
+    (0x057E839D, 1, "main_effect_hash"), // [D:HASH] 262 unique
+    (0x08B05EA9, 1, "sub_effect_hash"), // [D:HASH] 17 unique, mostly 0
+    (0x1B12E734, 5, "scale"),          // [D:-1~3] 21 unique, never 0
+    (0x49672094, 1, "model_hash"),     // [D:HASH] 640 unique
+    (0x5896D450, 1, "trail_effect_hash"), // [D:HASH] 4 unique, mostly 0
+    (0x5EF964EC, 1, "has_hit_effect"), // [D:0~1] boolean. was "hit_effect_hash" — NOT a hash
+    (0x8F49B2DA, 5, "trail_length"),   // [D:0~600] 29 unique
+    (0x996BA1AC, 1, "sound_effect_hash"), // [D:HASH] 23 unique
+    (0xBA4BBA9D, 1, "render_mode"),    // [D:1~18] enum, 15 types, never 0
+    (0xC19F85EA, 1, "material_hash"),  // [D:HASH] 138 unique
+    (0xD1097B21, 5, "z_offset"),       // [D:-13~200] 58 unique
+    (0xD9EF5A79, 1, "spawn_effect_hash"), // [D:HASH] 63 unique
+    (0xDABB1A5C, 2, "behavior_flags"), // [D:always 0] unused
+    (0xE9DE0A15, 1, "destroy_effect_hash"), // [D:HASH] 53 unique
 ];
 
-pub fn projectile_depiction_table_entry_to_json_value(entry: &ProjectileDepictionTableEntry) -> Value {
-    entry_commands_to_named_json(entry.entry_id, &entry.commands, PROJECTILE_DEPICTION_TABLE_COMMAND_POOL)
+pub fn projectile_depiction_table_entry_to_json_value(
+    entry: &ProjectileDepictionTableEntry,
+) -> Value {
+    entry_commands_to_named_json(
+        entry.entry_id,
+        &entry.commands,
+        PROJECTILE_DEPICTION_TABLE_COMMAND_POOL,
+    )
 }
 
-pub fn projectile_depiction_table_entry_from_json_value(v: &Value) -> Result<ProjectileDepictionTableEntry, String> {
-    let (entry_id, commands) = entry_commands_from_named_json(v, PROJECTILE_DEPICTION_TABLE_COMMAND_POOL)?;
+pub fn projectile_depiction_table_entry_from_json_value(
+    v: &Value,
+) -> Result<ProjectileDepictionTableEntry, String> {
+    let (entry_id, commands) =
+        entry_commands_from_named_json(v, PROJECTILE_DEPICTION_TABLE_COMMAND_POOL)?;
     Ok(ProjectileDepictionTableEntry { entry_id, commands })
 }
 
@@ -80,16 +89,26 @@ fn validate_field_specs(field_specs: &[ParamFieldSpec]) -> Result<(), String> {
     validate_file_specs_kind_match_pool(PROJECTILE_DEPICTION_TABLE_COMMAND_POOL, field_specs)
 }
 
-fn parse_entry_from_raw(raw: &[u8], field_specs: &[ParamFieldSpec], entry_id: u32) -> ProjectileDepictionTableEntry {
+fn parse_entry_from_raw(
+    raw: &[u8],
+    field_specs: &[ParamFieldSpec],
+    entry_id: u32,
+) -> ProjectileDepictionTableEntry {
     let commands = parse_commands_map_from_entry_row(raw, field_specs);
     ProjectileDepictionTableEntry { entry_id, commands }
 }
 
-fn entry_matches_raw(entry: &ProjectileDepictionTableEntry, raw: &[u8], field_specs: &[ParamFieldSpec]) -> bool {
+fn entry_matches_raw(
+    entry: &ProjectileDepictionTableEntry,
+    raw: &[u8],
+    field_specs: &[ParamFieldSpec],
+) -> bool {
     entry_row_matches_command_map(&entry.commands, raw, field_specs)
 }
 
-pub fn parse_projectile_depiction_table(data: &[u8]) -> Result<ProjectileDepictionTableData, String> {
+pub fn parse_projectile_depiction_table(
+    data: &[u8],
+) -> Result<ProjectileDepictionTableData, String> {
     let file = read_param_binary(data)?;
     validate_field_specs(&file.field_specs)?;
 
@@ -109,7 +128,9 @@ pub fn parse_projectile_depiction_table(data: &[u8]) -> Result<ProjectileDepicti
     })
 }
 
-pub fn build_projectile_depiction_table(b: &ProjectileDepictionTableData) -> Result<Vec<u8>, String> {
+pub fn build_projectile_depiction_table(
+    b: &ProjectileDepictionTableData,
+) -> Result<Vec<u8>, String> {
     if !b.field_specs.is_empty() {
         validate_field_specs(&b.field_specs)?;
     }
@@ -125,7 +146,9 @@ pub fn build_projectile_depiction_table(b: &ProjectileDepictionTableData) -> Res
 
     let mut entries_raw: Vec<Vec<u8>> = Vec::with_capacity(b.entries.len());
     for (entry_index, entry) in b.entries.iter().enumerate() {
-        if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+        if entry_index < b.source_entries_raw.len()
+            && b.source_entries_raw[entry_index].len() == entry_size
+        {
             let r = &b.source_entries_raw[entry_index];
             if entry_matches_raw(entry, r, &field_specs) {
                 entries_raw.push(b.source_entries_raw[entry_index].clone());
@@ -133,7 +156,9 @@ pub fn build_projectile_depiction_table(b: &ProjectileDepictionTableData) -> Res
             }
         }
 
-        let mut raw = if entry_index < b.source_entries_raw.len() && b.source_entries_raw[entry_index].len() == entry_size {
+        let mut raw = if entry_index < b.source_entries_raw.len()
+            && b.source_entries_raw[entry_index].len() == entry_size
+        {
             b.source_entries_raw[entry_index].clone()
         } else {
             vec![0u8; entry_size]
@@ -142,7 +167,10 @@ pub fn build_projectile_depiction_table(b: &ProjectileDepictionTableData) -> Res
         for spec in &field_specs {
             let o = spec.entry_offset as usize;
             if o + 4 > raw.len() {
-                return Err("projectile_depiction_table entry field offset out of range for entry_size".to_string());
+                return Err(
+                    "projectile_depiction_table entry field offset out of range for entry_size"
+                        .to_string(),
+                );
             }
             if let Some(v) = entry.commands.get(&spec.hash) {
                 raw[o..o + 4].copy_from_slice(&v.to_le_bytes());
@@ -204,7 +232,8 @@ mod tests {
     }
 
     fn assert_crud(path: &str) {
-        let source = std::fs::read(path).expect("failed to read projectile_depiction_table sample file");
+        let source =
+            std::fs::read(path).expect("failed to read projectile_depiction_table sample file");
 
         let parsed = parse_projectile_depiction_table(&source)
             .expect("failed to parse projectile_depiction_table sample file");
@@ -233,7 +262,10 @@ mod tests {
         let added_parsed = parse_projectile_depiction_table(&added_bytes)
             .expect("failed to parse projectile_depiction_table after add");
         assert_eq!(added_parsed.entries.len(), parsed.entries.len() + 1);
-        assert_eq!(added_parsed.entries.last().map(|entry| entry.entry_id), Some(next_id));
+        assert_eq!(
+            added_parsed.entries.last().map(|entry| entry.entry_id),
+            Some(next_id)
+        );
 
         let mut with_updated = added_parsed.clone();
         let updated_id = with_updated.entries[0].entry_id.wrapping_add(99);

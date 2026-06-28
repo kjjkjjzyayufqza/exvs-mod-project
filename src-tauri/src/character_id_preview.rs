@@ -114,7 +114,11 @@ fn expected_upper_source_path(base_dir: &str, hash_hex: &str) -> String {
         .to_string()
 }
 
-fn resolve_disabled_reason(model_value: i32, ob_dpl_cache_path: &str, source_exists: bool) -> Option<String> {
+fn resolve_disabled_reason(
+    model_value: i32,
+    ob_dpl_cache_path: &str,
+    source_exists: bool,
+) -> Option<String> {
     if model_value == 0 {
         return Some("Model is 0, so this row cannot map to an FHM2D package.".to_string());
     }
@@ -194,7 +198,8 @@ fn resolve_source_path_on_disk(ob_dpl_cache_path: &str, hash_hex: &str) -> Optio
     if upper.is_file() {
         return Some(upper.display().to_string());
     }
-    let lower = Path::new(ob_dpl_cache_path).join(format!("{}.fhm2d", hash_hex.to_ascii_lowercase()));
+    let lower =
+        Path::new(ob_dpl_cache_path).join(format!("{}.fhm2d", hash_hex.to_ascii_lowercase()));
     if lower.is_file() {
         return Some(lower.display().to_string());
     }
@@ -217,8 +222,12 @@ pub async fn character_id_memory_preview_rows(
     let file_path_string = file_path.display().to_string();
     let ob_dpl_cache_path_owned = ob_dpl_cache_path.trim().to_string();
     tauri::async_runtime::spawn_blocking(move || {
-        let bytes = std::fs::read(file_path.as_path())
-            .map_err(|e| format!("Could not load character_id_table.bin at {}: {e}", file_path_string))?;
+        let bytes = std::fs::read(file_path.as_path()).map_err(|e| {
+            format!(
+                "Could not load character_id_table.bin at {}: {e}",
+                file_path_string
+            )
+        })?;
         build_character_id_preview_response_from_bytes(
             bytes.as_slice(),
             file_path_string,
@@ -272,7 +281,11 @@ mod tests {
 
         assert_eq!(result.available_count, 2);
         assert_eq!(
-            result.rows.iter().map(|row| row.character_id).collect::<Vec<_>>(),
+            result
+                .rows
+                .iter()
+                .map(|row| row.character_id)
+                .collect::<Vec<_>>(),
             vec![100, 200]
         );
     }

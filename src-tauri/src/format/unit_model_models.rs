@@ -385,7 +385,10 @@ fn numatb_item_info(node: &Node, ext_by_index: &HashMap<i32, String>) -> Option<
     }
 }
 
-fn resolved_container_variant(existing_container: Option<&SubFileStructureEntry>, numatb_unk3: i32) -> i32 {
+fn resolved_container_variant(
+    existing_container: Option<&SubFileStructureEntry>,
+    numatb_unk3: i32,
+) -> i32 {
     if numatb_unk3 >= 1 {
         return numatb_unk3;
     }
@@ -434,7 +437,8 @@ fn build_texture_pool_index(sub_file_data: &[Value]) -> HashMap<String, i32> {
         {
             continue;
         }
-        let key = normalize_texture_filename(entry.get("fileUrl").and_then(Value::as_str).unwrap_or(""));
+        let key =
+            normalize_texture_filename(entry.get("fileUrl").and_then(Value::as_str).unwrap_or(""));
         if !key.is_empty() {
             out.insert(key, file_index as i32);
         }
@@ -488,9 +492,10 @@ fn maybe_repair_texture_pool_path(
     file_index: i32,
     filename: &str,
 ) -> bool {
-    let Some(entry) = sub_file_data.iter_mut().find(|entry| {
-        entry.get("fileIndex").and_then(Value::as_i64) == Some(file_index as i64)
-    }) else {
+    let Some(entry) = sub_file_data
+        .iter_mut()
+        .find(|entry| entry.get("fileIndex").and_then(Value::as_i64) == Some(file_index as i64))
+    else {
         return false;
     };
     let Some(file_url) = entry.get("fileUrl").and_then(Value::as_str) else {
@@ -587,7 +592,9 @@ fn nodes_equal(left: &Node, right: &Node) -> bool {
     serde_json::to_value(&left_entries).ok() == serde_json::to_value(&right_entries).ok()
 }
 
-pub(crate) fn infer_model_root_from_structure_path(structure_path: &Path) -> Result<PathBuf, String> {
+pub(crate) fn infer_model_root_from_structure_path(
+    structure_path: &Path,
+) -> Result<PathBuf, String> {
     let parent = structure_path.parent().ok_or_else(|| {
         format!(
             "Cannot infer unit model root from structure JSON {}",

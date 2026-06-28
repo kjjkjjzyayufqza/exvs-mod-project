@@ -7,7 +7,9 @@
 
 use serde_json::Value;
 
-use crate::format::list_command_pool::{build_list, list_data_from_json, list_data_to_json, parse_list};
+use crate::format::list_command_pool::{
+    build_list, list_data_from_json, list_data_to_json, parse_list,
+};
 use crate::format::param_entry_schema::ParamCommandPool;
 
 // entrySize = 0x1C, commandsCount = 6. Entry layout (offsets from field specs):

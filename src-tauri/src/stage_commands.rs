@@ -7,6 +7,7 @@ use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::fhm2d_memory_preview::Fhm2dMemorySessionState;
+use crate::format::effect_folder;
 use crate::format::fhm2d::{extract_fhm2d_to_memory_impl, InMemoryFhm2dExtraction};
 use crate::format::fhm2d_stage;
 use crate::format::fhm2d_stage_validate;
@@ -621,6 +622,169 @@ pub async fn repack_unit_model_fhm2d(
         ),
     }
     result
+}
+
+#[tauri::command]
+pub async fn inspect_effect_folder(
+    effect_root: String,
+    structure_json_path: Option<String>,
+) -> Result<effect_folder::EffectFolderInventory, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        effect_folder::inspect_effect_folder(&effect_root, structure_json_path.as_deref())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+#[tauri::command]
+pub async fn parse_effect_efxbn_file(path: String) -> Result<effect_folder::EfxbnSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || effect_folder::parse_efxbn_file(&path))
+        .await
+        .map_err(|e| format!("Task join error: {e}"))?
+}
+
+#[tauri::command]
+pub async fn validate_effect_folder_for_repack(
+    effect_root: String,
+    structure_json_path: Option<String>,
+) -> Result<effect_folder::EffectFolderValidationResult, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        effect_folder::validate_effect_folder_for_repack(
+            &effect_root,
+            structure_json_path.as_deref(),
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn repack_effect_folder_fhm2d(
+    app: AppHandle,
+    structure_json_path: String,
+    output_path: String,
+    atomic_write: Option<bool>,
+) -> Result<crate::format::fhm2d_pack::RepackResult, String> {
+    let atomic = atomic_write.unwrap_or(true);
+    let app_clone = app.clone();
+
+    crate::console_color::eprint_info(
+        "repack_effect_folder_fhm2d",
+        &format!("Starting — structure: {structure_json_path}, output: {output_path}"),
+    );
+    let t = Instant::now();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        effect_folder::repack_effect_folder_from_structure(
+            &structure_json_path,
+            &output_path,
+            atomic,
+            Some(&|progress| {
+                let _ = app_clone.emit("repack-fhm2d-progress", progress.clone());
+            }),
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?;
+    match &result {
+        Ok(r) => crate::console_color::eprint_success(
+            "repack_effect_folder_fhm2d",
+            &format!(
+                "Done in {}ms — {} bytes",
+                t.elapsed().as_millis(),
+                r.output_size
+            ),
+        ),
+        Err(e) => crate::console_color::eprint_error(
+            "repack_effect_folder_fhm2d",
+            &format!("Failed in {}ms — {e}", t.elapsed().as_millis()),
+        ),
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn import_effect_folder_file(
+    effect_root: String,
+    structure_json_path: Option<String>,
+    source_path: Option<String>,
+    kind: String,
+    hash_id: i32,
+    target_filename: Option<String>,
+) -> Result<effect_folder::EffectFolderMutationResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        effect_folder::import_effect_file(
+            &effect_root,
+            structure_json_path.as_deref(),
+            source_path.as_deref(),
+            &kind,
+            hash_id,
+            target_filename.as_deref(),
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+#[tauri::command]
+pub async fn import_effect_folder_model(
+    effect_root: String,
+    structure_json_path: Option<String>,
+    source_dir: Option<String>,
+    model_hash_id: i32,
+    target_folder_name: Option<String>,
+) -> Result<effect_folder::EffectFolderMutationResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        effect_folder::import_effect_model_folder(
+            &effect_root,
+            structure_json_path.as_deref(),
+            source_dir.as_deref(),
+            model_hash_id,
+            target_folder_name.as_deref(),
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+#[tauri::command]
+pub async fn delete_effect_folder_entries(
+    effect_root: String,
+    structure_json_path: Option<String>,
+    selections: Vec<effect_folder::EffectFolderSelection>,
+    delete_files: Option<bool>,
+) -> Result<effect_folder::EffectFolderMutationResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        effect_folder::delete_effect_folder_entries(
+            &effect_root,
+            structure_json_path.as_deref(),
+            &selections,
+            delete_files.unwrap_or(false),
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+#[tauri::command]
+pub async fn copy_effect_folder_selection(
+    source_effect_root: String,
+    source_structure_json_path: Option<String>,
+    destination_effect_root: String,
+    destination_structure_json_path: Option<String>,
+    selections: Vec<effect_folder::EffectFolderSelection>,
+) -> Result<effect_folder::EffectFolderCopyResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        effect_folder::copy_effect_folder_selection(
+            &source_effect_root,
+            source_structure_json_path.as_deref(),
+            &destination_effect_root,
+            destination_structure_json_path.as_deref(),
+            &selections,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 #[tauri::command]

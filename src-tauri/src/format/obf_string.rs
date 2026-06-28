@@ -46,7 +46,10 @@ pub fn obf_encrypt(data: &[u8]) -> Vec<u8> {
 
 pub fn obf_decode_to_string(data: &[u8]) -> String {
     let decrypted = obf_decrypt(data);
-    let end = decrypted.iter().position(|&b| b == 0).unwrap_or(decrypted.len());
+    let end = decrypted
+        .iter()
+        .position(|&b| b == 0)
+        .unwrap_or(decrypted.len());
     String::from_utf8_lossy(&decrypted[..end]).into_owned()
 }
 

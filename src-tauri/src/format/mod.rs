@@ -3,6 +3,7 @@ pub mod bulletparam;
 pub mod characterlist;
 pub mod characterparam;
 pub mod chrsysparam;
+pub mod effect_folder;
 pub mod effect_project;
 pub mod fhm2d;
 pub mod fhm2d_pack;

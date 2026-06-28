@@ -19,7 +19,11 @@ pub fn numshb_bytes_to_collision_trimesh(numshb_bytes: &[u8]) -> Result<Collisio
             .ok_or_else(|| format!("Mesh object '{}' has no position data", obj.name))?;
 
         let base_idx = all_vertices.len() as u32;
-        all_vertices.extend(positions.iter().map(|p| [p[0] as f64, p[1] as f64, p[2] as f64]));
+        all_vertices.extend(
+            positions
+                .iter()
+                .map(|p| [p[0] as f64, p[1] as f64, p[2] as f64]),
+        );
         all_indices.extend(obj.vertex_indices.iter().map(|&i| i + base_idx));
     }
 

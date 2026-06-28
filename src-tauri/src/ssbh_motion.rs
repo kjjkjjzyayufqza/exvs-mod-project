@@ -5,9 +5,7 @@ use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use ssbh_data::{
-    anim_data::{
-        AnimData, GroupType, TrackValues, Transform, TransformFlags, UvTransform,
-    },
+    anim_data::{AnimData, GroupType, TrackValues, Transform, TransformFlags, UvTransform},
     hlpb_data::{AimConstraintData, HlpbData, OrientConstraintData},
     prelude::*,
     skel_data::BoneData,
@@ -18,8 +16,8 @@ use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Instant, UNIX_EPOCH};
-use topological_sort::TopologicalSort;
 use tauri::State;
+use topological_sort::TopologicalSort;
 
 use crate::ssbh_preview::{
     collect_paths_recursive, dir_name_should_skip, normalize_preview_path_for_frontend,
@@ -57,7 +55,8 @@ struct FileStamp {
 }
 
 fn file_stamp(path: &str) -> Result<FileStamp, String> {
-    let meta = fs::metadata(path).map_err(|e| format!("Failed to read metadata for {path}: {e}"))?;
+    let meta =
+        fs::metadata(path).map_err(|e| format!("Failed to read metadata for {path}: {e}"))?;
     let modified = meta
         .modified()
         .map_err(|e| format!("Failed to read modified time for {path}: {e}"))?;
@@ -476,7 +475,6 @@ impl<'a> AnimatedBone<'a> {
             })
             .unwrap_or_else(|| glam::Mat4::from_cols_array_2d(&self.bone.transform))
     }
-
 }
 
 struct AnimationTransforms {
@@ -491,11 +489,7 @@ impl AnimationTransforms {
     }
 }
 
-fn apply_transforms<'a>(
-    bones: &mut [(usize, AnimatedBone)],
-    anim: &AnimData,
-    frame: f32,
-) {
+fn apply_transforms<'a>(bones: &mut [(usize, AnimatedBone)], anim: &AnimData, frame: f32) {
     // NUANMB node names can be namespaced (e.g. "rig:Bone" or "path|Bone"),
     // while skeleton names are often plain. Canonical fallback keeps mapping stable.
     fn canonical_bone_name(name: &str) -> &str {
@@ -859,9 +853,7 @@ fn collect_material_tracks(anim: &AnimData, frame: f32) -> Vec<MaterialTrackSamp
                                     material_label: node.name.clone(),
                                     track_name: track.name.clone(),
                                     kind: "vector4".to_string(),
-                                    value: json!([
-                                        t.x, t.y, t.z, t.w
-                                    ]),
+                                    value: json!([t.x, t.y, t.z, t.w]),
                                 });
                             }
                         }
@@ -994,7 +986,9 @@ fn light_from_node(node: &ssbh_data::anim_data::NodeData, frame: f32) -> LightSa
         .iter()
         .find(|t| t.name == "Transform")
         .and_then(|t| match &t.values {
-            TrackValues::Transform(values) if !values.is_empty() => Some(frame_value(values, frame)),
+            TrackValues::Transform(values) if !values.is_empty() => {
+                Some(frame_value(values, frame))
+            }
             _ => None,
         });
 
@@ -1167,16 +1161,12 @@ pub fn ssbh_nuanmb_manifest(path: String) -> Result<NuanmbManifest, String> {
     if !p.is_file() {
         return Err(format!("Not a file: {}", p.display()));
     }
-    let ext = p
-        .extension()
-        .and_then(|s| s.to_str())
-        .unwrap_or("");
+    let ext = p.extension().and_then(|s| s.to_str()).unwrap_or("");
     if !ext.eq_ignore_ascii_case("nuanmb") {
         return Err("Expected a .nuanmb file".to_string());
     }
     preview_log(&format!("nuanmb manifest: {}", p.display()));
-    let anim: AnimData =
-        AnimData::from_file(p).map_err(|e| format!("Failed to read Anim: {e}"))?;
+    let anim: AnimData = AnimData::from_file(p).map_err(|e| format!("Failed to read Anim: {e}"))?;
     let manifest = build_manifest(p, &anim);
     preview_log(&format!(
         "nuanmb manifest done: {} elapsed_ms={}",
@@ -1269,7 +1259,10 @@ pub fn ssbh_load_motion_clip(
 mod normalize_frame_tests {
     use super::{animate_skel_cpu, normalize_frame, sampled_frame_count_for_clip};
     use ssbh_data::{
-        anim_data::{AnimData, GroupData, GroupType, NodeData, TrackData, TrackValues, Transform, TransformFlags},
+        anim_data::{
+            AnimData, GroupData, GroupType, NodeData, TrackData, TrackValues, Transform,
+            TransformFlags,
+        },
         hlpb_data::{HlpbData, OrientConstraintData},
         skel_data::{BillboardType, BoneData, SkelData},
         Vector3, Vector4,
@@ -1378,8 +1371,14 @@ mod normalize_frame_tests {
 
         let locals = animate_skel_cpu(&skel, &anim, Some(&hlpb), 0.0);
         let b = locals.get(1).expect("expected constrained bone sample");
-        assert!(b.rotation[2].abs() > 0.7, "expected constrained rotation on B");
-        assert!(b.rotation[3].abs() > 0.7, "expected constrained rotation on B");
+        assert!(
+            b.rotation[2].abs() > 0.7,
+            "expected constrained rotation on B"
+        );
+        assert!(
+            b.rotation[3].abs() > 0.7,
+            "expected constrained rotation on B"
+        );
     }
 
     #[test]
