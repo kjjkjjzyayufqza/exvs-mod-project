@@ -9,6 +9,7 @@ pub mod fhm2d;
 pub mod fhm2d_pack;
 pub mod fhm2d_stage;
 pub mod fhm2d_stage_validate;
+pub mod fhm2d_structure_metadata;
 pub mod grapparam;
 pub mod hitgroupiddef;
 pub mod interactionid;

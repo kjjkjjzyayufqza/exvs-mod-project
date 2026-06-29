@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { FilePathInput } from "@/components/ui/filePathInput";
+import { Fhm2dMetadataSummary, Fhm2dNameField } from "@/components/fhm2d-metadata";
 import { useConfigStore } from "@/store/configStore";
 import {
   UNIT_MODEL_EXTRACT_OUTPUT_DIALOG_PATH_KEY,
@@ -30,6 +31,10 @@ import {
   resolveUnitModelOutputDirectory,
   type UnitModelExtractResult,
 } from "../utils/unitModelExtractService";
+import {
+  normalizeFhm2dHashName,
+  sanitizeFhm2dStructureName,
+} from "@/utils/fhm2dStructureMetadata";
 
 const UNIT_MODEL_EXTRACT_DIMENSIONS = {
   width: 620,
@@ -50,6 +55,7 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
   const setSetting = useConfigStore((state) => state.setSetting);
 
   const [sourcePath, setSourcePath] = useState("");
+  const [extractName, setExtractName] = useState("");
   const [outputDirectory, setOutputDirectory] = useState("");
   const [collisionOutRoot, setCollisionOutRoot] = useState<string | null>(null);
   const [folderExists, setFolderExists] = useState(false);
@@ -63,15 +69,21 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
   );
 
   const stem = useMemo(() => (sourcePath.trim() ? inferFhm2dStem(sourcePath) : ""), [sourcePath]);
+  const sanitizedExtractName = useMemo(
+    () => sanitizeFhm2dStructureName(extractName || stem),
+    [extractName, stem],
+  );
 
   const previewOutRoot = useMemo(() => {
-    if (!outputDirectory.trim() || !stem) return null;
+    if (!outputDirectory.trim() || !sanitizedExtractName) return null;
     try {
-      return buildUnitModelExtractOutRoot(outputDirectory, stem);
+      return buildUnitModelExtractOutRoot(outputDirectory, sanitizedExtractName);
     } catch {
       return null;
     }
-  }, [outputDirectory, stem]);
+  }, [outputDirectory, sanitizedExtractName]);
+  const previewStructureJson = previewOutRoot ? `${previewOutRoot}_structure.json` : null;
+  const previewHashName = useMemo(() => normalizeFhm2dHashName(sourcePath), [sourcePath]);
 
   const refreshCollision = useCallback(async (nextSource: string, nextOutput: string) => {
     const trimmedSource = nextSource.trim();
@@ -83,7 +95,7 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
     }
     setIsCheckingCollision(true);
     try {
-      const info = await getUnitModelExtractCollisionInfo(trimmedOutput, trimmedSource);
+      const info = await getUnitModelExtractCollisionInfo(trimmedOutput, trimmedSource, sanitizedExtractName);
       setCollisionOutRoot(info.outRoot);
       setFolderExists(info.folderExists);
     } catch (error) {
@@ -93,11 +105,12 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
     } finally {
       setIsCheckingCollision(false);
     }
-  }, []);
+  }, [sanitizedExtractName]);
 
   useEffect(() => {
     if (!open) return;
     setSourcePath("");
+    setExtractName("");
     setOutputDirectory(resolvedDefaultOutput);
     setCollisionOutRoot(null);
     setFolderExists(false);
@@ -110,7 +123,7 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
   }, [open, outputDirectory, refreshCollision, sourcePath]);
 
   const canExtract =
-    Boolean(sourcePath.trim() && outputDirectory.trim() && stem) && !isExtracting && !isCheckingCollision;
+    Boolean(sourcePath.trim() && outputDirectory.trim() && sanitizedExtractName) && !isExtracting && !isCheckingCollision;
 
   const runExtract = async () => {
     const trimmedSource = sourcePath.trim();
@@ -122,7 +135,7 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
 
     setIsExtracting(true);
     try {
-      const outRoot = buildUnitModelExtractOutRoot(trimmedOutput, inferFhm2dStem(trimmedSource));
+      const outRoot = buildUnitModelExtractOutRoot(trimmedOutput, sanitizedExtractName);
       const result = await extractUnitModelToFolder(trimmedSource, outRoot);
       await onExtracted(result);
       onOpenChange(false);
@@ -192,6 +205,7 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
                 onPickedValue={(value) => {
                   const next = Array.isArray(value) ? value[0] ?? "" : value;
                   setSourcePath(next);
+                  setExtractName(sanitizeFhm2dStructureName(inferFhm2dStem(next)));
                 }}
                 readOnly
                 placeholder="Select a .fhm2d file..."
@@ -203,6 +217,16 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
                 }}
               />
             </div>
+
+            <Fhm2dNameField
+                id="unit-model-extract-name"
+                value={extractName}
+                onChange={setExtractName}
+                sourceNameOrPath={sourcePath}
+                folderPath={previewOutRoot}
+                structureJsonPath={previewStructureJson}
+                description="Use a readable name for this unit-model workspace."
+              />
 
             <div className="space-y-2">
               <Label htmlFor="unit-model-extract-output">Output directory</Label>
@@ -228,14 +252,13 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
               </p>
             </div>
 
-            {previewOutRoot ? (
-              <div className="rounded-md border bg-muted/20 p-2.5 text-sm">
-                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Extract target folder
-                </div>
-                <div className="mt-1 break-all font-mono text-xs">{previewOutRoot}</div>
-              </div>
-            ) : null}
+            <Fhm2dMetadataSummary
+              compact
+              name={sanitizedExtractName}
+              hashName={previewHashName}
+              folderPath={previewOutRoot}
+              structureJsonPath={previewStructureJson}
+            />
 
             {folderExists ? (
               <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-sm text-amber-900 dark:text-amber-100">

@@ -306,6 +306,8 @@ export default function RepackFolderStructureView({
 
           // Store complete project data
           setCompleteProjectData({
+            Name: typeof parsedData.Name === "string" ? parsedData.Name : undefined,
+            HashName: typeof parsedData.HashName === "string" ? parsedData.HashName : undefined,
             Magic: parsedData.Magic,
             Fhm2dTotalCount: parsedData.Fhm2dTotalCount,
             UnkCount: parsedData.UnkCount,
@@ -1105,5 +1107,4 @@ export default function RepackFolderStructureView({
     </div>
   );
 }
-
 

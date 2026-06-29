@@ -22,4 +22,10 @@ describe("unitModelExtractService path helpers", () => {
       "E:\\XB\\extract\\0xABE08869",
     );
   });
+
+  it("builds extract out root with a custom sanitized name", () => {
+    expect(buildUnitModelExtractOutRoot("E:\\XB\\extract", "Gyan_model")).toBe(
+      "E:\\XB\\extract\\Gyan_model",
+    );
+  });
 });

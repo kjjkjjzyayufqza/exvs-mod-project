@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
 import { repackFolderUsingStructureToModFolder } from "@/utils/repackRunner";
+import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
 import { removeMatchingModVgsht2 } from "../utils/modVgsht2";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import {
@@ -228,7 +229,18 @@ function FileTreePaneImpl({
         toast.error(`Missing structure JSON: ${target.structureJsonPath}`);
         return;
       }
-      beginRepackFlow(target);
+      const metadataMigration = await promptAndMigrateFhm2dStructureIfNeeded({
+        structureJsonPath: target.structureJsonPath,
+      });
+      beginRepackFlow(
+        metadataMigration
+          ? {
+              ...target,
+              folderPath: metadataMigration.rootPath ?? target.folderPath,
+              structureJsonPath: metadataMigration.structureJsonPath,
+            }
+          : target,
+      );
     },
     [beginRepackFlow, currentDir, structureJsonPathKeys, workspaceDocument]
   );

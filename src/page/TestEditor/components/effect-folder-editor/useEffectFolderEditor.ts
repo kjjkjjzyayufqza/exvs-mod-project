@@ -28,6 +28,7 @@ import {
   sanitizeEffectFolderPackSelection,
   type EffectFolderPackSelectionState,
 } from "./effectFolderEditorSettings";
+import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
 
 export type EffectFolderEditorLoadState =
   | { status: "idle" }
@@ -87,8 +88,10 @@ export function useEffectFolderEditor({
   onPackMutated,
   onPackRepacked,
 }: UseEffectFolderEditorParams) {
-  const effectRoot = pack.folderPath;
-  const structureJsonPath = pack.structureJsonPath;
+  const [metadataPack, setMetadataPack] = useState<WorkspacePackIdentity | null>(null);
+  const activePack = metadataPack ?? pack;
+  const effectRoot = activePack.folderPath;
+  const structureJsonPath = activePack.structureJsonPath;
   const [loadState, setLoadState] = useState<EffectFolderEditorLoadState>({ status: "idle" });
   const [category, setCategoryState] = useState<EffectInventoryCategory | "all">("all");
   const [searchQuery, setSearchQueryState] = useState("");
@@ -111,6 +114,10 @@ export function useEffectFolderEditor({
     },
     [pack.packKey, workspaceRoot],
   );
+
+  useEffect(() => {
+    setMetadataPack(null);
+  }, [pack.folderPath, pack.packKey, pack.structureJsonPath]);
 
   const applyPersistedSelection = useCallback(
     (inventory: EffectFolderInventory, persisted: EffectFolderPackSelectionState) => {
@@ -169,15 +176,31 @@ export function useEffectFolderEditor({
       }
 
       try {
-        const inventory = await inspectEffectFolder(effectRoot, structureJsonPath);
-        setLoadState({ status: "ready", inventory, pack });
+        let nextPack = activePack;
+        const migration = await promptAndMigrateFhm2dStructureIfNeeded({
+          structureJsonPath,
+          title: "Migrate Effect FHM2D structure",
+        });
+        if (migration) {
+          nextPack = {
+            ...activePack,
+            packKey: activePack.prefix ? `${activePack.prefix}/${migration.name}` : migration.name,
+            hashFolderName: migration.name,
+            folderPath: migration.rootPath ?? activePack.folderPath,
+            structureJsonPath: migration.structureJsonPath,
+          };
+          setMetadataPack(nextPack);
+        }
+
+        const inventory = await inspectEffectFolder(nextPack.folderPath, nextPack.structureJsonPath);
+        setLoadState({ status: "ready", inventory, pack: nextPack });
         setValidation(null);
 
         if (preserveSelection) {
           setSelectedKeys(selectedSnapshot);
           setFocusedKeyState(focusedSnapshot);
         } else if (restoreSelection && workspaceRoot.trim()) {
-          const persisted = await getEffectFolderPackSelection(workspaceRoot, pack.packKey);
+          const persisted = await getEffectFolderPackSelection(workspaceRoot, nextPack.packKey);
           if (persisted) {
             applyPersistedSelection(inventory, persisted);
           } else {
@@ -194,10 +217,10 @@ export function useEffectFolderEditor({
       }
     },
     [
+      activePack,
       applyPersistedSelection,
       effectRoot,
       focusedKey,
-      pack,
       selectedKeys,
       structureJsonPath,
       workspaceRoot,

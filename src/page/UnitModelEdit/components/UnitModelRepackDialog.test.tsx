@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { UnitModelRepackDialog } from "./UnitModelRepackDialog";
 import type { UnitModelValidationResult } from "../utils/unitModelRepackService";
 
-const { repackMock, toastErrorMock, validateMock } = vi.hoisted(() => ({
+const { buildPathMock, repackMock, toastErrorMock, validateMock } = vi.hoisted(() => ({
+  buildPathMock: vi.fn(),
   repackMock: vi.fn(),
   toastErrorMock: vi.fn(),
   validateMock: vi.fn(),
@@ -41,6 +42,10 @@ vi.mock("../utils/unitModelRepackService", () => ({
   }),
   repackValidatedUnitModelFolderToModFolder: repackMock,
   validateUnitModelForRepack: validateMock,
+}));
+
+vi.mock("@/utils/repackRunner", () => ({
+  buildRepackOutputPathFromMetadata: buildPathMock,
 }));
 
 const validValidation: UnitModelValidationResult = {
@@ -92,6 +97,8 @@ function renderDialog(validation: UnitModelValidationResult | null, overrides = 
 
 describe("UnitModelRepackDialog", () => {
   beforeEach(() => {
+    buildPathMock.mockReset();
+    buildPathMock.mockImplementation(async (_structurePath: string, outputDir: string) => `${outputDir}\\0xTEST.fhm2d`);
     validateMock.mockReset();
     repackMock.mockReset();
     toastErrorMock.mockReset();
@@ -121,4 +128,3 @@ describe("UnitModelRepackDialog", () => {
     );
   });
 });
-

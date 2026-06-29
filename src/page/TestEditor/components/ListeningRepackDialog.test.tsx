@@ -43,6 +43,10 @@ vi.mock("@/utils/repackRunner", () => ({
   repackFolderUsingStructureToModFolder: vi.fn(),
 }));
 
+vi.mock("@/utils/fhm2dStructureMetadata", () => ({
+  promptAndMigrateFhm2dStructureIfNeeded: vi.fn(async () => null),
+}));
+
 vi.mock("../utils/modVgsht2", () => ({
   removeMatchingModVgsht2: vi.fn(),
 }));

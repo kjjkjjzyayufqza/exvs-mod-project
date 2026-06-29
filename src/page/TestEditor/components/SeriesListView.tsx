@@ -14,6 +14,7 @@ import {
   resolveWorkspaceContent,
   type WorkspaceContentId,
 } from "@/services/testEditorWorkspace/contentCatalog";
+import { promptAndMigrateWorkspaceContentIfNeeded } from "@/services/testEditorWorkspace/contentMigration";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 import { SeriesEditor } from "./series-list/SeriesEditor";
 import { extractA0253FirstFolderSeriesBaseNameOrder } from "./series-list/seriesImage";
@@ -81,7 +82,9 @@ export default function SeriesListView({
 
   const resolveContent = useCallback(
     async (id: WorkspaceContentId) => {
-      return await resolveWorkspaceContent(folderPath, workspaceDocument, id);
+      return await promptAndMigrateWorkspaceContentIfNeeded(
+        await resolveWorkspaceContent(folderPath, workspaceDocument, id),
+      );
     },
     [folderPath, workspaceDocument],
   );

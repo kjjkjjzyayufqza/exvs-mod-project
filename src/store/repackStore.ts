@@ -37,6 +37,8 @@ interface SubFileStructureItem {
 }
 
 interface CompleteProjectData extends RepackClipboardProjectData<SubFileDataItem> {
+  Name?: string
+  HashName?: string
   Magic: number
   Fhm2dTotalCount: number
   UnkCount: number

@@ -43,7 +43,8 @@ function joinDisplayPath(rootPath: string, segments: string[]): string {
 }
 
 function isPackFolderName(name: string): boolean {
-  return HASH_FOLDER_PATTERN.test(name.trim());
+  const trimmed = name.trim();
+  return Boolean(trimmed) && !trimmed.includes("/") && !trimmed.includes("\\");
 }
 
 function normalizePackFolderDisplayName(name: string): string {
@@ -79,6 +80,18 @@ function getRoutePrefixEntries(document: TestEditorWorkspaceDocument): RoutePref
       routeId: routeIds.length === 1 ? routeIds[0] : null,
     }))
     .sort((a, b) => b.segments.length - a.segments.length || b.prefix.length - a.prefix.length);
+}
+
+function isConfiguredRouteRootSegment(
+  segment: string,
+  document: TestEditorWorkspaceDocument,
+): boolean {
+  const lower = segment.toLowerCase();
+  return Object.values(document.assetRoutes).some((route) => {
+    if (route.kind !== "fhm2d-pack") return false;
+    const first = normalizeWorkspacePrefix(route.prefix).split("/").filter(Boolean)[0];
+    return first?.toLowerCase() === lower;
+  });
 }
 
 function relativePathFromRoot(nodePath: string, workspaceRoot: string): string | null {
@@ -174,6 +187,13 @@ function classifyLegacyPath(params: {
       : null;
   const hashFolderName = structureBase ?? firstSegment;
   if (!isPackFolderName(hashFolderName)) return null;
+  if (
+    params.nodeIsDirectory === true &&
+    relativeSegments.length === 1 &&
+    isConfiguredRouteRootSegment(hashFolderName, params.document)
+  ) {
+    return null;
+  }
 
   if (params.nodeIsDirectory === false && relativeSegments.length === 1 && !structureBase) {
     return null;

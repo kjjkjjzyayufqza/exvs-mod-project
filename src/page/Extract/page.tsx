@@ -35,10 +35,22 @@ import { Checkbox } from '../../components/ui/checkbox';
 import { ToggleGroup, ToggleGroupItem } from '../../components/ui/toggle-group';
 import { vscodeTheme } from '@uiw/react-json-view/vscode';
 import { Loader2 } from "lucide-react";
+import {
+  Fhm2dMetadataSummary,
+  Fhm2dNameField,
+  basenameFromPath,
+  joinPreviewPath,
+  parentFromPath,
+} from "@/components/fhm2d-metadata";
+import {
+  normalizeFhm2dHashName,
+  sanitizeFhm2dStructureName,
+} from "@/utils/fhm2dStructureMetadata";
 
 const formSchema = z.object({
   inputFilePath: z.string(),
   outputFolderPath: z.string(),
+  structureName: z.string().optional(),
 })
 
 
@@ -50,6 +62,7 @@ export default function ExtractFilePage() {
     defaultValues: {
       inputFilePath: "",
       outputFolderPath: "",
+      structureName: "",
     },
   })
 
@@ -62,6 +75,34 @@ export default function ExtractFilePage() {
   const [isExportMeta, setIsExportMeta] = useState(false);
   const [extractType, setExtractType] = useState<ExtractType>(ExtractType.SingleFolder);
   const [createSubfolder, setCreateSubfolder] = useState(true);
+  const watchedInputPath = form.watch("inputFilePath");
+  const watchedOutputFolderPath = form.watch("outputFolderPath");
+  const watchedStructureName = form.watch("structureName") ?? "";
+
+  const watchedInputStem = watchedInputPath
+    .split(/[/\\]/)
+    .pop()
+    ?.split(".")
+    .slice(0, -1)
+    .join(".") ?? "";
+  const requestedName = sanitizeFhm2dStructureName(watchedStructureName || watchedInputStem);
+  const selectedOutputFolderName = sanitizeFhm2dStructureName(
+    basenameFromPath(watchedOutputFolderPath) || requestedName,
+  );
+  const effectiveName = createSubfolder ? requestedName : selectedOutputFolderName;
+  const effectiveOutputFolderPath = watchedOutputFolderPath
+    ? createSubfolder
+      ? joinPreviewPath(watchedOutputFolderPath, effectiveName)
+      : watchedOutputFolderPath
+    : "";
+  const effectiveStructureJsonPath = effectiveOutputFolderPath
+    ? `${effectiveOutputFolderPath}_structure.json`
+    : "";
+  const hashPreview = normalizeFhm2dHashName(watchedInputPath);
+  const repackOutputPreview =
+    hashPreview && effectiveOutputFolderPath
+      ? joinPreviewPath(parentFromPath(effectiveOutputFolderPath), `${hashPreview}.fhm2d`)
+      : null;
 
   useEffect(() => {
     if (!isExtracting) return;
@@ -146,6 +187,10 @@ export default function ExtractFilePage() {
 
   const tryReadFHM2DFile = async (filePath: string) => {
     const fileBuffer = await IOReadFile(filePath); // return the array buffer
+    const fileName = filePath.split(/[/\\]/).pop()?.split('.').slice(0, -1).join('.');
+    if (fileName && !form.getValues("structureName")) {
+      form.setValue("structureName", sanitizeFhm2dStructureName(fileName));
+    }
     createFileInfo(Buffer.from(fileBuffer));
   }
 
@@ -153,6 +198,10 @@ export default function ExtractFilePage() {
     const inputFilePath: any = await store?.get("inputFilePath")
     if (inputFilePath) {
       form.setValue("inputFilePath", inputFilePath);
+      const fileName = inputFilePath.split(/[/\\]/).pop()?.split('.').slice(0, -1).join('.');
+      if (fileName) {
+        form.setValue("structureName", sanitizeFhm2dStructureName(fileName));
+      }
       tryReadFHM2DFile(inputFilePath);
     }
     
@@ -164,14 +213,13 @@ export default function ExtractFilePage() {
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     if (isExtracting) return;
 
-    // update output path if createSubfolder
-    if(createSubfolder) {
-      const inputPath = form.getValues("inputFilePath");
-      if (inputPath) {
-        const fileName = inputPath.split(/[/\\]/).pop()?.split('.').slice(0, -1).join('.');
-        if (fileName) {
-          data.outputFolderPath = `${data.outputFolderPath}/${fileName}`;
-        }
+    const inputPath = form.getValues("inputFilePath");
+    const inputStem = inputPath.split(/[/\\]/).pop()?.split('.').slice(0, -1).join('.') ?? "";
+    const outputName = sanitizeFhm2dStructureName(form.getValues("structureName") || inputStem);
+
+    if (createSubfolder) {
+      if (outputName) {
+        data.outputFolderPath = joinPreviewPath(data.outputFolderPath, outputName);
       }
     }
 
@@ -265,6 +313,29 @@ export default function ExtractFilePage() {
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="structureName"
+                render={({ field }) => (
+                  <FormItem>
+                    <Fhm2dNameField
+                      id="extract-structure-name"
+                      label="Extract Name"
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      sourceNameOrPath={watchedInputPath}
+                      folderPath={effectiveOutputFolderPath || null}
+                      structureJsonPath={effectiveStructureJsonPath || null}
+                      description={
+                        createSubfolder
+                          ? "Used for the output folder and structure JSON name."
+                          : "Subfolder creation is off, so the selected output folder name becomes Name."
+                      }
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <div>
                 <p className='py-1 font-medium'>Options</p>
                 <div className='space-y-2'>
@@ -294,34 +365,25 @@ export default function ExtractFilePage() {
                   <div className="flex items-center space-x-2">
                     <Checkbox 
                       checked={createSubfolder}
-                      onClick={() => {
-                        const newValue = !createSubfolder;
-                        setCreateSubfolder(newValue);
-                        // Update output path display
-                        const currentPath = form.getValues("outputFolderPath");
-                        if (currentPath) {
-                          const inputPath = form.getValues("inputFilePath");
-                          if (inputPath) {
-                            const fileName = inputPath.split(/[/\\]/).pop()?.split('.').slice(0, -1).join('.');
-                            if (fileName) {
-                              const newPath = newValue 
-                                ? `${currentPath}/${fileName}`
-                                : currentPath.split('/').slice(0, -1).join('/');
-                              form.setValue("outputFolderPath", newPath);
-                            }
-                          }
-                        }
-                      }}
+                      onClick={() => setCreateSubfolder(!createSubfolder)}
                     />
                     <label
                       htmlFor="terms"
                       className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                     >
-                      Create subfolder using input filename
+                      Create subfolder using Name
                     </label>
                   </div>
                 </div>
               </div>
+              <Fhm2dMetadataSummary
+                name={effectiveName}
+                hashName={hashPreview}
+                folderPath={effectiveOutputFolderPath || null}
+                structureJsonPath={effectiveStructureJsonPath || null}
+                repackOutputPath={repackOutputPreview}
+                compact
+              />
               <Button type="submit" disabled={isExtracting}>
                 {isExtracting ? (
                   <>
@@ -336,13 +398,27 @@ export default function ExtractFilePage() {
             </form>
           </Form>
         </div>
-        <div className='mt-2 rounded-md p-4 overflow-auto'>
-          <JsonView
-            style={vscodeTheme}
-            value={previewData}
-            displayDataTypes={false}
-            collapsed={true}
-          />
+        <div className='mt-2 min-h-0 overflow-hidden rounded-lg border bg-muted/10'>
+          <div className="flex items-center justify-between border-b px-4 py-3">
+            <div>
+              <h2 className="text-sm font-semibold">Archive preview</h2>
+              <p className="text-xs text-muted-foreground">Header and structure data from the selected FHM2D.</p>
+            </div>
+          </div>
+          <div className="h-full overflow-auto p-4">
+            {Object.keys(previewData).length > 0 ? (
+              <JsonView
+                style={vscodeTheme}
+                value={previewData}
+                displayDataTypes={false}
+                collapsed={true}
+              />
+            ) : (
+              <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
+                Select a FHM2D file to preview its archive metadata.
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

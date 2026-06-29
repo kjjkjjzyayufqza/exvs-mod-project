@@ -29,6 +29,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -48,6 +56,15 @@ import {
   type ResolvedFhm2dPackPaths,
 } from "@/services/testEditorWorkspace/paths";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
+import {
+  normalizeFhm2dHashName,
+  sanitizeFhm2dStructureName,
+} from "@/utils/fhm2dStructureMetadata";
+import {
+  Fhm2dMetadataSummary,
+  Fhm2dNameField,
+  joinPreviewPath,
+} from "@/components/fhm2d-metadata";
 
 const COPY_AS_NEW_MODAL_DIMENSIONS = {
   width: 520,
@@ -103,6 +120,8 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   const [extractOverwriteOpen, setExtractOverwriteOpen] = useState(false);
   const [extractCollisionPath, setExtractCollisionPath] = useState("");
   const [pendingExtractTarget, setPendingExtractTarget] = useState<ResolvedFhm2dPackPaths | null>(null);
+  const [extractNameDialogOpen, setExtractNameDialogOpen] = useState(false);
+  const [extractName, setExtractName] = useState("");
   const workspaceAssetRootPath =
     asset.workspacePack.existing?.routeRootPath ?? asset.workspacePack.configured.routeRootPath;
   const trimmedSeed = copySeed.trim();
@@ -119,6 +138,18 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     canRemoveWorkspace &&
     canRemoveExtract &&
     normalizePathKey(extractOutputPath) === normalizePathKey(projectRootDir);
+  const sanitizedExtractName = sanitizeFhm2dStructureName(extractName);
+  const extractRouteRootPreview = extractOutputPath.trim()
+    ? asset.workspacePack.configured.prefix
+      ? joinPreviewPath(extractOutputPath, asset.workspacePack.configured.prefix)
+      : extractOutputPath
+    : "";
+  const namedExtractFolderPreview = extractOutputPath.trim()
+    ? joinPreviewPath(extractRouteRootPreview, sanitizedExtractName)
+    : null;
+  const namedExtractStructurePreview = namedExtractFolderPreview
+    ? `${namedExtractFolderPreview}_structure.json`
+    : null;
 
   useEffect(() => {
     if (!removeDialogOpen) return;
@@ -150,7 +181,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     checkExists();
   }, [asset.sourceFilePath, asset.workspaceFolderPath, asset.modFilePath]);
 
-  const resolveExtractTarget = async () => {
+  const resolveExtractTarget = async (packName?: string) => {
     if (!extractOutputPath.trim()) {
       throw new Error("Extract output path not configured");
     }
@@ -159,6 +190,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
       workspaceDocument,
       asset.routeId,
       asset.hashHex,
+      packName,
     );
   };
 
@@ -191,7 +223,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
       }
       if (
         result.path &&
-        normalizePathKey(result.path) === normalizePathKey(asset.workspacePack.configured.folderPath)
+        normalizePathKey(result.path) === normalizePathKey(target.folderPath)
       ) {
         setWorkspaceExists(true);
       }
@@ -204,9 +236,21 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     if (isExtracting) {
       return;
     }
+    const defaultName = sanitizeFhm2dStructureName(
+      `${asset.fieldKey}_${asset.hashHex.replace(/^0x/i, "")}`,
+    );
+    setExtractName(defaultName);
+    setExtractNameDialogOpen(true);
+  };
+
+  const handleConfirmNamedExtract = async () => {
+    if (isExtracting) {
+      return;
+    }
+    setExtractNameDialogOpen(false);
     let target: ResolvedFhm2dPackPaths;
     try {
-      target = await resolveExtractTarget();
+      target = await resolveExtractTarget(sanitizeFhm2dStructureName(extractName));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
       return;
@@ -556,7 +600,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-left text-sm text-muted-foreground">
                 <p>
-                  <span className="font-mono text-foreground">{asset.hashHex}</span> — choose what to delete.
+                  Choose what to delete for <span className="font-mono text-foreground">{asset.hashHex}</span>.
                   Clearing the Test Editor workspace field or the same path as extract output sets this table
                   column to 0 (None).
                 </p>
@@ -658,6 +702,47 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={extractNameDialogOpen} onOpenChange={setExtractNameDialogOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Name extracted asset</DialogTitle>
+            <DialogDescription>
+              Choose a readable workspace name for this asset. The game hash remains the HashName.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-md border bg-muted/20 p-3 text-sm">
+              <div className="font-medium">{asset.fieldKey}</div>
+              <div className="mt-1 font-mono text-xs text-muted-foreground">{asset.hashHex}</div>
+            </div>
+            <Fhm2dNameField
+              id={`extract-name-${asset.fieldKey}`}
+              value={extractName}
+              onChange={setExtractName}
+              sourceNameOrPath={asset.hashHex}
+              description="This name is used for the extracted folder and structure JSON under the selected output route."
+            />
+            <Fhm2dMetadataSummary
+              compact
+              name={sanitizedExtractName}
+              hashName={normalizeFhm2dHashName(asset.hashHex)}
+              folderPath={namedExtractFolderPreview}
+              structureJsonPath={namedExtractStructurePreview}
+              repackOutputPath={asset.modFilePath}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExtractNameDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void handleConfirmNamedExtract()} disabled={isExtracting || !extractOutputPath.trim()}>
+              <Download className="mr-2 h-4 w-4" />
+              Extract
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {copyDialogOpen ? (
         <AppRndModalShell

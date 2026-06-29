@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, CheckCircle2, Loader2, PackageCheck } from "lucide-react";
 import { toast } from "sonner";
+import { Fhm2dMetadataSummary } from "@/components/fhm2d-metadata";
 import {
   inferUnitModelModOutputPath,
   repackValidatedUnitModelFolderToModFolder,
@@ -10,6 +11,8 @@ import {
   type UnitModelRepackResult,
   type UnitModelValidationResult,
 } from "../utils/unitModelRepackService";
+import { buildRepackOutputPathFromMetadata } from "@/utils/repackRunner";
+import { normalizeFhm2dHashName } from "@/utils/fhm2dStructureMetadata";
 
 const UNIT_MODEL_REPACK_DIMENSIONS = {
   width: 560,
@@ -49,9 +52,10 @@ export function UnitModelRepackDialog({
   onRepacked,
 }: UnitModelRepackDialogProps) {
   const [isRunning, setIsRunning] = useState(false);
+  const [metadataDestination, setMetadataDestination] = useState<string | null>(null);
 
   const modFolderConfigured = modFolder.trim().length > 0;
-  const destination = useMemo(() => {
+  const fallbackDestination = useMemo(() => {
     if (!modFolderConfigured || !structurePath) return null;
     try {
       return inferUnitModelModOutputPath(modFolder, structurePath);
@@ -59,6 +63,25 @@ export function UnitModelRepackDialog({
       return null;
     }
   }, [modFolderConfigured, modFolder, structurePath]);
+  useEffect(() => {
+    let cancelled = false;
+    setMetadataDestination(null);
+    if (!modFolderConfigured || !structurePath) return () => {
+      cancelled = true;
+    };
+    void buildRepackOutputPathFromMetadata(structurePath, modFolder)
+      .then((nextDestination) => {
+        if (!cancelled) setMetadataDestination(nextDestination);
+      })
+      .catch(() => {
+        if (!cancelled) setMetadataDestination(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [modFolderConfigured, modFolder, structurePath]);
+  const destination = metadataDestination ?? fallbackDestination;
+  const hashNamePreview = normalizeFhm2dHashName(destination ?? structurePath);
 
   const canRepack =
     Boolean(modelRoot && structurePath && destination && validation?.valid) && !isRunning && !isValidating;
@@ -121,29 +144,24 @@ export function UnitModelRepackDialog({
       }
     >
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-        <div className="rounded-md border p-2.5 text-sm">
-          <div className="font-medium">{folderName || "Unit model"}</div>
-          <div className="mt-1 break-all font-mono text-xs text-muted-foreground">
-            {structurePath ?? "No structure JSON resolved"}
-          </div>
-        </div>
+        <Fhm2dMetadataSummary
+          compact
+          name={folderName || "Unit model"}
+          hashName={hashNamePreview}
+          folderPath={modelRoot}
+          structureJsonPath={structurePath}
+          repackOutputPath={destination}
+        />
 
-        <div className="rounded-md border p-2.5 text-sm">
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Destination (OB Mod folder)
+        {modFolderConfigured && destination ? null : (
+          <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2.5 text-xs text-destructive">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              OB Mod path is not configured. Open <span className="font-medium">Config</span> and set the OB Mod
+              folder before repacking.
+            </span>
           </div>
-          {modFolderConfigured && destination ? (
-            <div className="mt-1 break-all font-mono text-xs">{destination}</div>
-          ) : (
-            <div className="mt-1 flex items-start gap-2 text-xs text-destructive">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>
-                OB Mod path is not configured. Open <span className="font-medium">Config</span> and set the OB Mod
-                folder before repacking.
-              </span>
-            </div>
-          )}
-        </div>
+        )}
 
         <ValidationGate validation={validation} isValidating={isValidating} />
       </div>

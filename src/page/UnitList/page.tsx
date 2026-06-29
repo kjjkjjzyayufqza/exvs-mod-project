@@ -9,6 +9,7 @@ import { ExtractFHMData, ExtractType, Fhm2d_type_format } from "../../models/fhm
 import { toast } from "sonner";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
+import { sanitizeFhm2dStructureName } from "@/utils/fhm2dStructureMetadata";
 
 // Define the UnitData interface based on the sample provided
 interface UnitData {
@@ -88,14 +89,18 @@ export default function UnitList() {
   const handleExtract = async (fileType: string, fileName: string) => {
     const filePath = `${obDplCachePath}\\${fileName}.fhm2d`;
     console.log(filePath);
+
+    const defaultName = sanitizeFhm2dStructureName(`${selectedUnit?.unitId ?? "unit"}_${fileType}`);
+    const requestedName = window.prompt("Name for extracted FHM2D pack", defaultName);
+    if (requestedName == null) return;
+    const outputName = sanitizeFhm2dStructureName(requestedName);
+    const outputPath = `${extractOutputPath}\\${outputName}`;
     
     // Create backup file
     const backupFilePath = `${obDplCachePath}\\${fileName}_bak.fhm2d`;
     const fileBuffer = await readFile(filePath);
     await writeFile(backupFilePath, fileBuffer);
-    
-    const upperCaseHashName = fileName.split('0x')[1].toUpperCase();
-    const outputPath = `${extractOutputPath}\\0x${upperCaseHashName}`;
+
     void (async () => {
       try {
         const extractResult = await ExtractFHMData(

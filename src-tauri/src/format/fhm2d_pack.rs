@@ -2,6 +2,7 @@
 //! Rebuilds `.fhm2d` files from an extracted `_structure.json` and its referenced sub-files.
 
 use crate::format::fhm2d::SubFileStructureEntry;
+use crate::format::fhm2d_structure_metadata::{effective_repack_output_path, normalize_hash_name};
 use flate2::write::DeflateEncoder;
 use flate2::Compression;
 use rayon::prelude::*;
@@ -78,10 +79,11 @@ pub fn repack_fhm2d_from_structure(
 
     let output_bytes = assemble_outer_container(&meta_uncompressed, &meta_compressed, &body_data);
 
-    write_output(output_path, &output_bytes, atomic_write)?;
+    let effective_output_path = effective_repack_output_path(structure_json_path, output_path);
+    write_output(&effective_output_path, &output_bytes, atomic_write)?;
 
     Ok(RepackResult {
-        output_path: output_path.to_string(),
+        output_path: effective_output_path,
         total_files,
         output_size: output_bytes.len(),
     })
@@ -177,6 +179,16 @@ where
 
 #[derive(Deserialize)]
 struct InputStructure {
+    #[serde(rename = "Name")]
+    #[allow(dead_code)]
+    name: Option<String>,
+    #[serde(
+        rename = "HashName",
+        deserialize_with = "deserialize_optional_hash_name",
+        default
+    )]
+    #[allow(dead_code)]
+    hash_name: Option<String>,
     #[serde(rename = "Magic", deserialize_with = "deserialize_magic_u32")]
     magic: u32,
     #[serde(rename = "UnkCount")]
@@ -185,6 +197,14 @@ struct InputStructure {
     sub_file_data: Vec<InputSubFileData>,
     #[serde(rename = "SubFileStructure")]
     sub_file_structure: Vec<SubFileStructureEntry>,
+}
+
+fn deserialize_optional_hash_name<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    Ok(value.and_then(|s| normalize_hash_name(&s)))
 }
 
 #[derive(Deserialize)]

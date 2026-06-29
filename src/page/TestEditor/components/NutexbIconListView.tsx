@@ -14,6 +14,7 @@ import {
   resolveWorkspaceContent,
   type WorkspaceContentId,
 } from "@/services/testEditorWorkspace/contentCatalog";
+import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 import { CardIconList } from "./card-icon-list/CardIconList";
 import { CardIconAddDialog } from "./card-icon-list/CardIconAddDialog";
@@ -127,12 +128,22 @@ export function NutexbIconListView({
         ? getItemStableKey(loadState.items.find((it) => it.itemIndex === selectedIndex) ?? null)
         : null;
 
-    const { content, pack, convertDirPath } = await resolveContentPack(contentId);
-    const filePath = pack.structureJsonPath;
+    const { content, pack } = await resolveContentPack(contentId);
+    let filePath = pack.structureJsonPath;
+    let rootDirPath = pack.folderPath;
     if (!options?.silent) {
       setLoadState({ status: "loading" });
     }
     try {
+      const migration = await promptAndMigrateFhm2dStructureIfNeeded({
+        structureJsonPath: filePath,
+        title: `Migrate ${title} FHM2D structure`,
+      });
+      if (migration) {
+        filePath = migration.structureJsonPath;
+        rootDirPath = migration.rootPath ?? rootDirPath;
+      }
+      const convertDirPath = await join(rootDirPath, "__convert");
       const raw = await readTextFile(filePath);
       const json = JSON.parse(raw);
       const items = extractCardIconItems(json);
@@ -154,7 +165,7 @@ export function NutexbIconListView({
         filePath,
         configuredFilePath: content.configured.structureJsonPath,
         routeRootPath: pack.routeRootPath,
-        rootDirPath: pack.folderPath,
+        rootDirPath,
         items: enrichedItems,
         convertDirPath,
         sourceLayout: content.sourceLayout,
@@ -171,7 +182,7 @@ export function NutexbIconListView({
       console.error(error);
       setLoadState({ status: "error", filePath, message: error instanceof Error ? error.message : "Unknown error" });
     }
-  }, [contentId, folderPath, getItemStableKey, loadState, onUnsavedChanges, resolveContentPack, selectedIndex]);
+  }, [contentId, folderPath, getItemStableKey, loadState, onUnsavedChanges, resolveContentPack, selectedIndex, title]);
 
   const loadSecondary = useCallback(async (options?: LoadOptions) => {
     if (!folderPath || !normalizedSecondaryHash || !secondaryContentId) return;
@@ -184,12 +195,22 @@ export function NutexbIconListView({
           )
         : null;
 
-    const { content, pack, convertDirPath } = await resolveContentPack(secondaryContentId);
-    const filePath = pack.structureJsonPath;
+    const { content, pack } = await resolveContentPack(secondaryContentId);
+    let filePath = pack.structureJsonPath;
+    let rootDirPath = pack.folderPath;
     if (!options?.silent) {
       setSecondaryLoadState({ status: "loading" });
     }
     try {
+      const migration = await promptAndMigrateFhm2dStructureIfNeeded({
+        structureJsonPath: filePath,
+        title: `Migrate ${secondaryDescriptor?.label ?? "FHM2D"} structure`,
+      });
+      if (migration) {
+        filePath = migration.structureJsonPath;
+        rootDirPath = migration.rootPath ?? rootDirPath;
+      }
+      const convertDirPath = await join(rootDirPath, "__convert");
       const raw = await readTextFile(filePath);
       const json = JSON.parse(raw);
       const items = extractCardIconItems(json);
@@ -211,7 +232,7 @@ export function NutexbIconListView({
         filePath,
         configuredFilePath: content.configured.structureJsonPath,
         routeRootPath: pack.routeRootPath,
-        rootDirPath: pack.folderPath,
+        rootDirPath,
         items: enrichedItems,
         convertDirPath,
         sourceLayout: content.sourceLayout,
@@ -237,6 +258,7 @@ export function NutexbIconListView({
     normalizedSecondaryHash,
     resolveContentPack,
     secondaryContentId,
+    secondaryDescriptor?.label,
     secondaryLoadState,
     secondarySelectedIndex,
   ]);

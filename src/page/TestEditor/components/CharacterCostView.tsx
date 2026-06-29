@@ -37,6 +37,7 @@ import {
   type CharacterCostImportPreview,
 } from "./character-cost/CharacterCostJson";
 import { resolveWorkspaceContent } from "@/services/testEditorWorkspace/contentCatalog";
+import { promptAndMigrateWorkspaceContentIfNeeded } from "@/services/testEditorWorkspace/contentMigration";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
 
@@ -154,7 +155,9 @@ export default function CharacterCostView({
 
   const resolveFilePath = useCallback(
     async (tab: CharacterCostSubTab) => {
-      const content = await resolveWorkspaceContent(folderPath, workspaceDocument, "character-cost");
+      const content = await promptAndMigrateWorkspaceContentIfNeeded(
+        await resolveWorkspaceContent(folderPath, workspaceDocument, "character-cost"),
+      );
       const pack = content.existing ?? content.configured;
       return {
         content,

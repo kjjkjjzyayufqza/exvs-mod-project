@@ -39,8 +39,10 @@ import { filterCharacterIdTableRows } from "./character-id-table/characterIdTabl
 import { extractAsset } from "./character-id-table/extractFhm2d";
 import { resolveFhm2dPackPaths } from "@/services/testEditorWorkspace/paths";
 import { resolveWorkspaceContent } from "@/services/testEditorWorkspace/contentCatalog";
+import { promptAndMigrateWorkspaceContentIfNeeded } from "@/services/testEditorWorkspace/contentMigration";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
+import { sanitizeFhm2dStructureName } from "@/utils/fhm2dStructureMetadata";
 
 interface CharacterIdTableViewProps {
     folderPath: string;
@@ -165,10 +167,12 @@ export default function CharacterIdTableView({
     }, [onUnsavedChanges]);
 
     const resolveTableContent = useCallback(async () => {
-        return await resolveWorkspaceContent(
-            folderPath,
-            workspaceDocument,
-            "character-id-table",
+        return await promptAndMigrateWorkspaceContentIfNeeded(
+            await resolveWorkspaceContent(
+                folderPath,
+                workspaceDocument,
+                "character-id-table",
+            ),
         );
     }, [folderPath, workspaceDocument]);
 
@@ -302,6 +306,7 @@ export default function CharacterIdTableView({
                         workspaceDocument,
                         asset.routeId,
                         asset.hashHex,
+                        sanitizeFhm2dStructureName(`${asset.fieldKey}_${asset.hashHex.replace(/^0x/i, "")}`),
                     );
                     results.push(await extractAsset(asset, target));
                 }

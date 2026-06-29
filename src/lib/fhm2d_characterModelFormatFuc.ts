@@ -1,6 +1,7 @@
 import { basename } from "@tauri-apps/api/path";
 import { Buffer } from "buffer";
 import { getFileType } from "@/models/fhm2d";
+import { normalizeFhm2dHashName, sanitizeFhm2dStructureName } from "@/utils/fhm2dStructureMetadata";
 
 import { readCStringUtf8, readRelPtr64AsOffset, readU64LE } from "@/lib/fhm2d_bufferUtf8";
 import {
@@ -888,6 +889,16 @@ function buildTypeListFromFileTypeData(fileTypeData: Array<{ FileType: number; F
   return typeList;
 }
 
+function deriveFhm2dHashName(sourceNameOrPath: string | undefined, outputName: string): string {
+  const hashName = normalizeFhm2dHashName(sourceNameOrPath) ?? normalizeFhm2dHashName(outputName);
+  if (!hashName) {
+    throw new Error(
+      `Cannot derive HashName from source "${sourceNameOrPath ?? ""}" or output "${outputName}"; expected an 8-digit game hash.`,
+    );
+  }
+  return hashName;
+}
+
 /**
  * Create an in-memory structure object equivalent to the extractor's output JSON,
  * without reading any `*_structure.json` files.
@@ -897,9 +908,12 @@ function buildTypeListFromFileTypeData(fileTypeData: Array<{ FileType: number; F
  */
 export async function buildStructureObjectFromFhm2dData(
   fhm2dData: MinimalFhm2dLike,
-  outDir: string
+  outDir: string,
+  sourceNameOrPath?: string,
 ): Promise<Fhm2dStructureObject> {
   const fileNameNoExt = await basename(outDir);
+  const name = sanitizeFhm2dStructureName(fileNameNoExt);
+  const hashName = deriveFhm2dHashName(sourceNameOrPath, fileNameNoExt);
   const typeList = buildTypeListFromFileTypeData(fhm2dData.FileTypeData ?? []);
   const count = fhm2dData.FileCount ?? typeList.length ?? 0;
 
@@ -916,6 +930,8 @@ export async function buildStructureObjectFromFhm2dData(
   }
 
   return {
+    Name: name,
+    HashName: hashName,
     Magic: fhm2dData.MetaHeader ?? 0,
     Fhm2dTotalCount: count,
     UnkCount: fhm2dData.UnkCount ?? 0,
@@ -923,4 +939,3 @@ export async function buildStructureObjectFromFhm2dData(
     SubFileStructure: (fhm2dData.SubFileStructure as any) ?? [],
   };
 }
-

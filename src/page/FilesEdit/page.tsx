@@ -16,6 +16,7 @@ import { resourceDir, dirname, join } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { findNutexbString } from "../../module/commonFunc";
 import { Command } from '@tauri-apps/plugin-shell';
+import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
 
 
 // Extend FileInfo to include possible properties
@@ -346,8 +347,17 @@ export default function FilesEdit() {
   const handleTestRepack = async () => {
     try {
       setHandleDebugRepack(true);
-      const normalized = folderPath.replace(/\//g, "\\");
-      const structurePath = normalized + "_structure.json";
+      let normalized = folderPath.replace(/\//g, "\\");
+      let structurePath = normalized + "_structure.json";
+      const migration = await promptAndMigrateFhm2dStructureIfNeeded({
+        structureJsonPath: structurePath,
+        title: "Migrate FilesEdit FHM2D structure",
+      });
+      if (migration) {
+        normalized = (migration.rootPath ?? normalized).replace(/\//g, "\\");
+        structurePath = migration.structureJsonPath.replace(/\//g, "\\");
+        setFolderPath(normalized);
+      }
       const parentDir = normalized.split("\\").slice(0, -1).join("\\");
       const folderName = normalized.split("\\").pop() ?? "";
       const outputPath = `${parentDir}\\${folderName}.fhm2d`;

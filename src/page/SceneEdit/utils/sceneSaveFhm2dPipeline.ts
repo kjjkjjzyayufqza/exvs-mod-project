@@ -108,7 +108,7 @@ export async function executeSaveFhm2dPipeline(params: SaveFhm2dParams): Promise
     fhm2dLog("Pipeline complete");
     return {
       ...folderResult,
-      fhm2dPath: outputFhm2dPath,
+      fhm2dPath: repackResult.outputPath,
       fhm2dSizeBytes: repackResult.outputSize,
     };
   } catch (err) {

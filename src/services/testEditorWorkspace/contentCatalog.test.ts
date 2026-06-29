@@ -5,8 +5,10 @@ import {
   resolveWorkspaceContent,
 } from "./contentCatalog";
 
-const { existsMock } = vi.hoisted(() => ({
+const { existsMock, readDirMock, readTextFileMock } = vi.hoisted(() => ({
   existsMock: vi.fn(),
+  readDirMock: vi.fn(),
+  readTextFileMock: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/path", () => ({
@@ -15,6 +17,8 @@ vi.mock("@tauri-apps/api/path", () => ({
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
   exists: existsMock,
+  readDir: readDirMock,
+  readTextFile: readTextFileMock,
 }));
 
 function withExistingPaths(paths: string[]) {
@@ -25,6 +29,10 @@ function withExistingPaths(paths: string[]) {
 describe("workspace content catalog", () => {
   beforeEach(() => {
     existsMock.mockReset();
+    readDirMock.mockReset();
+    readTextFileMock.mockReset();
+    readDirMock.mockResolvedValue([]);
+    readTextFileMock.mockRejectedValue(new Error("Missing mock file"));
   });
 
   it.each([

@@ -35,11 +35,28 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Progress } from "@/components/ui/progress";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
+import {
+    Fhm2dMetadataSummary,
+    Fhm2dNameField,
+    joinPreviewPath,
+} from "@/components/fhm2d-metadata";
 import { useConfigStore } from "@/store/configStore";
 import { IOReadFile } from "@/IO/fileSystem";
 import { ExtractFHMData, ExtractType, Fhm2d_type_format } from "@/models/fhm2d";
 import { cn } from "@/lib/utils";
+import {
+    normalizeFhm2dHashName,
+    sanitizeFhm2dStructureName,
+} from "@/utils/fhm2dStructureMetadata";
 
 interface Fhm2dInitModalProps {
     isOpen: boolean;
@@ -103,6 +120,10 @@ function buildHashFileName(hash: string): string {
     const trimmed = hash.trim();
     if (!trimmed) return "";
     return trimmed.toLowerCase().startsWith("0x") ? trimmed : `0x${trimmed}`;
+}
+
+function defaultExtractName(item: InitListItem): string {
+    return sanitizeFhm2dStructureName(item.name || item.id || buildHashFileName(item.hash));
 }
 
 function getFhm2dFullPath(sourceFolder: string, hash: string): string {
@@ -193,6 +214,8 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
     // UI states
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [pendingNameItem, setPendingNameItem] = useState<InitListItem | null>(null);
+    const [pendingExtractName, setPendingExtractName] = useState("");
 
     const obDplCachePath = useConfigStore((s) => s.obDplCachePath);
     const extractOutputPath = useConfigStore((s) => s.extractOutputPath);
@@ -345,8 +368,18 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
         }
     }
 
-    async function handleExtract(item: InitListItem) {
+    function openExtractNameDialog(item: InitListItem) {
+        setPendingNameItem(item);
+        setPendingExtractName(defaultExtractName(item));
+    }
+
+    async function handleExtract(item: InitListItem, nameOverride?: string) {
         if (isExtracting) return;
+
+        if (nameOverride === undefined) {
+            openExtractNameDialog(item);
+            return;
+        }
 
         const outBase = (extractOutputPath ?? "").trim();
         if (!outBase) {
@@ -372,6 +405,8 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
             return;
         }
 
+        const outputName = sanitizeFhm2dStructureName(nameOverride);
+
         setExtractingId(item.id);
         setLastExtractedId(null);
         setExtractionProgress(0);
@@ -382,7 +417,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
 
         try {
             await assertFhm2dMagic(inputPath);
-            const outDir = `${outBase}\\${buildHashFileName(item.hash)}`;
+            const outDir = `${outBase}\\${outputName}`;
             const listOutputFileName =
                 item.format === Fhm2d_type_format.fhm2d_stage_list ? `${item.id}.bin` : undefined;
 
@@ -458,7 +493,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
             setBatchProgress({ current: i + 1, total: items.length });
 
             try {
-                await handleExtract(item);
+                await handleExtract(item, defaultExtractName(item));
                 successCount++;
             } catch {
                 failCount++;
@@ -981,6 +1016,91 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                             </div>
                         </CardContent>
             </AppRndModalShell>
+            <ExtractNameDialog
+                item={pendingNameItem}
+                value={pendingExtractName}
+                outputRoot={extractOutputPath ?? ""}
+                onChange={setPendingExtractName}
+                onCancel={() => {
+                    setPendingNameItem(null);
+                    setPendingExtractName("");
+                }}
+                onConfirm={() => {
+                    const item = pendingNameItem;
+                    const name = pendingExtractName;
+                    setPendingNameItem(null);
+                    setPendingExtractName("");
+                    if (item) void handleExtract(item, name);
+                }}
+            />
         </TooltipProvider>
+    );
+}
+
+function ExtractNameDialog({
+    item,
+    value,
+    outputRoot,
+    onChange,
+    onCancel,
+    onConfirm,
+}: {
+    item: InitListItem | null;
+    value: string;
+    outputRoot: string;
+    onChange: (value: string) => void;
+    onCancel: () => void;
+    onConfirm: () => void;
+}) {
+    const sanitizedName = sanitizeFhm2dStructureName(value || (item ? defaultExtractName(item) : ""));
+    const folderPath = outputRoot.trim() ? joinPreviewPath(outputRoot, sanitizedName) : null;
+    const structureJsonPath = folderPath ? `${folderPath}_structure.json` : null;
+    const hashName = normalizeFhm2dHashName(item?.hash);
+    const repackOutputPath = outputRoot.trim() && hashName ? joinPreviewPath(outputRoot, `${hashName}.fhm2d`) : null;
+
+    return (
+        <Dialog open={Boolean(item)} onOpenChange={(open) => (!open ? onCancel() : undefined)}>
+            <DialogContent className="max-w-xl">
+                <DialogHeader>
+                    <DialogTitle>Name extracted FHM2D pack</DialogTitle>
+                    <DialogDescription>
+                        Pick a readable workspace name. The game hash is kept in HashName for repack output.
+                    </DialogDescription>
+                </DialogHeader>
+                {item ? (
+                    <div className="space-y-4">
+                        <div className="rounded-md border bg-muted/20 p-3 text-sm">
+                            <div className="font-medium">{item.name}</div>
+                            <div className="mt-1 font-mono text-xs text-muted-foreground">{item.hash}</div>
+                        </div>
+                        <Fhm2dNameField
+                            id="fhm2d-init-extract-name"
+                            value={value}
+                            onChange={onChange}
+                            sourceNameOrPath={item.hash}
+                            folderPath={folderPath}
+                            structureJsonPath={structureJsonPath}
+                        />
+                        <Fhm2dMetadataSummary
+                            compact
+                            name={sanitizedName}
+                            hashName={hashName}
+                            folderPath={folderPath}
+                            structureJsonPath={structureJsonPath}
+                            repackOutputPath={repackOutputPath}
+                        />
+                    </div>
+                ) : null}
+                <DialogFooter>
+                    <Button variant="outline" onClick={onCancel}>
+                        Cancel
+                    </Button>
+                    <Button disabled={!outputRoot.trim()} onClick={onConfirm}>
+                        <FolderOutput className="mr-2 h-4 w-4" />
+                        Extract
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }

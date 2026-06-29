@@ -55,6 +55,7 @@ import {
 } from "./mscPipeline";
 import { MscPipelineBar } from "./MscPipelineBar";
 import { MscFileRow, type MscFileActionDescriptor } from "./MscFileRow";
+import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
 
 interface MscWorkspaceViewProps {
   workspaceRoot: string;
@@ -245,11 +246,22 @@ export default function MscWorkspaceView({
     if (!mscFolderPath) return;
     try {
       setIsFolderRepacking(true);
-      const normalized = mscFolderPath.replace(/\//g, "\\");
+      let normalized = mscFolderPath.replace(/\//g, "\\");
       const folderName = normalized.split("\\").filter(Boolean).pop() ?? "";
       const parentDir = normalized.split("\\").slice(0, -1).join("\\");
-      const structurePath = `${parentDir}\\${folderName}_structure.json`;
-      const outputPath = `${parentDir}\\${folderName}.fhm2d`;
+      let structurePath = `${parentDir}\\${folderName}_structure.json`;
+      const migration = await promptAndMigrateFhm2dStructureIfNeeded({
+        structureJsonPath: structurePath,
+        title: "Migrate MSC FHM2D structure",
+      });
+      if (migration) {
+        normalized = (migration.rootPath ?? normalized).replace(/\//g, "\\");
+        structurePath = migration.structureJsonPath.replace(/\//g, "\\");
+        onMscFolderChange?.(normalized);
+      }
+      const migratedParentDir = normalized.split("\\").slice(0, -1).join("\\");
+      const migratedFolderName = normalized.split("\\").filter(Boolean).pop() ?? "";
+      const outputPath = `${migratedParentDir}\\${migratedFolderName}.fhm2d`;
       await invoke("repack_fhm2d", { structureJsonPath: structurePath, outputPath, atomicWrite: true });
       toast.success("Repack Folder completed successfully");
     } catch (error) {

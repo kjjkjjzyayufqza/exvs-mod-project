@@ -91,6 +91,7 @@ pub async fn extract_stage_fhm2d_to_folder(
     app: AppHandle,
     source_path: String,
     output_dir: String,
+    output_name: Option<String>,
 ) -> Result<fhm2d_stage::StageExtractResult, String> {
     let src = source_path.trim().to_string();
     let out = output_dir.trim().to_string();
@@ -111,7 +112,11 @@ pub async fn extract_stage_fhm2d_to_folder(
             None,
         );
         let t0 = Instant::now();
-        let mut result = fhm2d_stage::extract_stage_fhm2d_to_folder_impl(&src, &out)?;
+        let mut result = fhm2d_stage::extract_stage_fhm2d_to_folder_impl_with_name(
+            &src,
+            &out,
+            output_name.as_deref(),
+        )?;
         let extract_ms = t0.elapsed().as_millis();
         emit_extract_step(
             &app_clone,

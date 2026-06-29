@@ -15,6 +15,10 @@ use std::path::{Path, PathBuf};
 
 use crate::fhm2d_memory_preview;
 use crate::format::fhm2d::{InMemoryFhm2dFile, SubFileStructureEntry};
+use crate::format::fhm2d_structure_metadata::{
+    metadata_from_source_strict, normalize_hash_name, read_metadata, sanitize_structure_name,
+    structure_stem,
+};
 use crate::ssbh_preview::{self, SsbhModelPreviewBundle, TextureRefResolve};
 
 const NUMDLB_MAGIC: &[u8; 4] = b"HBSS";
@@ -1609,6 +1613,14 @@ pub fn extract_stage_fhm2d_to_folder_impl(
     source_path: &str,
     output_dir: &str,
 ) -> Result<StageExtractResult, String> {
+    extract_stage_fhm2d_to_folder_impl_with_name(source_path, output_dir, None)
+}
+
+pub fn extract_stage_fhm2d_to_folder_impl_with_name(
+    source_path: &str,
+    output_dir: &str,
+    output_name: Option<&str>,
+) -> Result<StageExtractResult, String> {
     let bytes = fs::read(source_path).map_err(|e| format!("Failed to read FHM2D file: {e}"))?;
 
     let source_name = Path::new(source_path)
@@ -1616,6 +1628,10 @@ pub fn extract_stage_fhm2d_to_folder_impl(
         .and_then(|n| n.to_str())
         .unwrap_or("stage")
         .to_string();
+    let dest_name = output_name
+        .map(sanitize_structure_name)
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or_else(|| sanitize_structure_name(&source_name));
 
     let extraction =
         crate::format::fhm2d::extract_fhm2d_to_memory_impl(&bytes, &source_name, None)?;
@@ -1623,7 +1639,7 @@ pub fn extract_stage_fhm2d_to_folder_impl(
     let (tree, warnings) =
         stage_rename_in_memory_numatb_based(&extraction.files, &extraction.sub_file_structure)?;
 
-    let dest = Path::new(output_dir).join(&source_name);
+    let dest = Path::new(output_dir).join(&dest_name);
     if dest.exists() {
         fs::remove_dir_all(&dest)
             .map_err(|e| format!("Failed to clean existing output dir: {e}"))?;
@@ -1677,6 +1693,10 @@ fn write_stage_structure_json(
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
     struct StageStructureOutput {
+        #[serde(rename = "Name")]
+        name: String,
+        #[serde(rename = "HashName")]
+        hash_name: String,
         #[serde(rename = "Magic")]
         magic: i32,
         #[serde(rename = "Fhm2dTotalCount")]
@@ -1700,6 +1720,8 @@ fn write_stage_structure_json(
     }
 
     let dest_name = dest.file_name().and_then(|n| n.to_str()).unwrap_or("stage");
+    let (structure_name, hash_name) =
+        metadata_from_source_strict(&extraction.source_name, dest_name)?;
 
     let sub_file_data: Vec<StageSubFileDataOutput> = extraction
         .files
@@ -1731,6 +1753,8 @@ fn write_stage_structure_json(
         .collect();
 
     let output = StageStructureOutput {
+        name: structure_name,
+        hash_name,
         magic: extraction.meta_header as i32,
         fhm2d_total_count: extraction.files.len(),
         unk_count: extraction.unk_count,
@@ -2967,6 +2991,48 @@ fn find_structure_json_path(stage_root: &Path) -> Option<PathBuf> {
     }
 }
 
+fn stage_structure_metadata_for_root(
+    stage_root: &Path,
+    fallback_name: &str,
+) -> Result<(String, String), String> {
+    let existing_path = find_structure_json_path(stage_root);
+    if let Some(path) = existing_path.as_ref() {
+        if let Ok(raw) = fs::read_to_string(path) {
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) {
+                let metadata = read_metadata(&value);
+                let name = metadata
+                    .name
+                    .as_deref()
+                    .map(sanitize_structure_name)
+                    .unwrap_or_else(|| sanitize_structure_name(fallback_name));
+                let hash_name = metadata
+                    .hash_name
+                    .or_else(|| {
+                        structure_stem(path)
+                            .as_deref()
+                            .and_then(normalize_hash_name)
+                    })
+                    .or_else(|| normalize_hash_name(fallback_name))
+                    .ok_or_else(|| {
+                        format!(
+                            "Cannot derive HashName from stage structure JSON {} or folder {}",
+                            path.display(),
+                            fallback_name
+                        )
+                    })?;
+                return Ok((name, hash_name));
+            }
+        }
+        if let Some(hash_name) = structure_stem(path)
+            .as_deref()
+            .and_then(normalize_hash_name)
+        {
+            return Ok((sanitize_structure_name(fallback_name), hash_name));
+        }
+    }
+    metadata_from_source_strict(fallback_name, fallback_name)
+}
+
 /// Batch-replace `fileUrl` values in an existing `_structure.json`.
 /// `url_map` maps `old_relative_suffix` → `new_relative_suffix` (backslash-separated).
 fn patch_structure_json_urls(
@@ -3026,6 +3092,10 @@ const STAGE_PACK_EXTENSIONS: &[&str] = &[
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RebuildStructureOutput {
+    #[serde(rename = "Name")]
+    name: String,
+    #[serde(rename = "HashName")]
+    hash_name: String,
     #[serde(rename = "Magic")]
     magic: i32,
     #[serde(rename = "Fhm2dTotalCount")]
@@ -3971,7 +4041,10 @@ fn rebuild_structure_from_scratch(
         .filter(|e| matches!(e, SubFileStructureEntry::Item { .. }))
         .count();
 
+    let (structure_name, hash_name) = stage_structure_metadata_for_root(root, folder_name)?;
     let output = RebuildStructureOutput {
+        name: structure_name,
+        hash_name,
         magic: existing_magic,
         fhm2d_total_count: sub_file_data.len(),
         unk_count: existing_unk_count,
@@ -4054,7 +4127,10 @@ fn rebuild_structure_from_scratch_with_shared_textures(
         .filter(|e| matches!(e, SubFileStructureEntry::Item { .. }))
         .count();
 
+    let (structure_name, hash_name) = stage_structure_metadata_for_root(root, folder_name)?;
     let output = RebuildStructureOutput {
+        name: structure_name,
+        hash_name,
         magic: existing_magic,
         fhm2d_total_count: sub_file_data.len(),
         unk_count: existing_unk_count,

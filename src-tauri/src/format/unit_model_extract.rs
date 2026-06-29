@@ -18,6 +18,7 @@ use serde_json::json;
 use crate::format::fhm2d::{
     extract_fhm2d_to_memory_impl, Fhm2dFormat, InMemoryFhm2dExtraction, SubFileStructureEntry,
 };
+use crate::format::fhm2d_structure_metadata::metadata_from_source_strict;
 
 /// Result of a unit-model folder extraction.
 #[derive(Clone, serde::Serialize)]
@@ -115,7 +116,10 @@ pub fn extract_unit_model_fhm2d_to_folder_impl(
         }));
     }
 
+    let (structure_name, hash_name) = metadata_from_source_strict(source_path, &out_name)?;
     let structure_value = json!({
+        "Name": structure_name,
+        "HashName": hash_name,
         "Magic": ext.meta_header,
         "Fhm2dTotalCount": ext.files.len(),
         "UnkCount": ext.unk_count,

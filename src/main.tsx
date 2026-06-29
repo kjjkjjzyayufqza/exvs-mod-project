@@ -4,6 +4,7 @@ import "./styles.css";
 // Side-effect import: install BVH-accelerated raycasting before any 3D view mounts.
 import "@/utils/threeMeshBvh";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Fhm2dStructureMigrationProvider } from "@/components/fhm2d-metadata";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <ThemeProvider
@@ -13,6 +14,8 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     disableTransitionOnChange
     storageKey="tauri-app-theme"
   >
-    <App />
+    <Fhm2dStructureMigrationProvider>
+      <App />
+    </Fhm2dStructureMigrationProvider>
   </ThemeProvider>
 );

@@ -100,6 +100,8 @@ pub fn run() {
             commands::move_legacy_workspace_content,
             commands::write_files_batch_base64,
             commands::extract_fhm2d_to_folder,
+            commands::analyze_fhm2d_structure_migration,
+            commands::migrate_fhm2d_structure_metadata,
             character_id_preview::character_id_memory_preview_rows,
             fhm2d_memory_preview::create_fhm2d_memory_session,
             fhm2d_memory_preview::create_fhm2d_memory_session_from_path,

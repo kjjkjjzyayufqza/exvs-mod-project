@@ -1,4 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
+import { readTextFile } from "@tauri-apps/plugin-fs";
+import { normalizeFhm2dHashName } from "@/utils/fhm2dStructureMetadata";
 
 export interface RepackResult {
   outputPath: string;
@@ -50,13 +52,28 @@ export function buildRepackOutputPath(structurePath: string, outputDir: string):
   return `${normalizedOutputDir}\\${packStem}.fhm2d`;
 }
 
+export async function buildRepackOutputPathFromMetadata(structurePath: string, outputDir: string): Promise<string> {
+  const normalizedOutputDir = trimTrailingSeparators(toWindowsPath(outputDir));
+  try {
+    const raw = await readTextFile(structurePath);
+    const parsed = JSON.parse(raw) as { HashName?: unknown };
+    const hashName = typeof parsed.HashName === "string" ? normalizeFhm2dHashName(parsed.HashName) : null;
+    if (hashName) {
+      return `${normalizedOutputDir}\\${hashName}.fhm2d`;
+    }
+  } catch {
+    // Fall back to the legacy structure filename rule.
+  }
+  return buildRepackOutputPath(structurePath, outputDir);
+}
+
 export async function repackFolderUsingStructure({
   structurePath,
   inputFolderPath,
 }: RepackParams): Promise<RepackResult> {
   const normalizedInput = toWindowsPath(inputFolderPath);
   const parentDir = getParentDir(normalizedInput);
-  const outputPath = buildRepackOutputPath(structurePath, parentDir);
+  const outputPath = await buildRepackOutputPathFromMetadata(structurePath, parentDir);
 
   return await invoke<RepackResult>("repack_fhm2d", {
     structureJsonPath: toWindowsPath(structurePath),
@@ -70,7 +87,7 @@ export async function repackFolderUsingStructureToDir({
   inputFolderPath,
   outputDir,
 }: RepackToDirParams): Promise<RepackResult> {
-  const outputPath = buildRepackOutputPath(structurePath, outputDir);
+  const outputPath = await buildRepackOutputPathFromMetadata(structurePath, outputDir);
 
   return await invoke<RepackResult>("repack_fhm2d", {
     structureJsonPath: toWindowsPath(structurePath),

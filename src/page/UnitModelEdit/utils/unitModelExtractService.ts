@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { getBaseName, toWindowsPath, trimTrailingSeparators } from "./unitModelRepackService";
+import { sanitizeFhm2dStructureName } from "@/utils/fhm2dStructureMetadata";
 
 export interface UnitModelExtractResult {
   modelRoot: string;
@@ -46,8 +47,9 @@ export function buildUnitModelExtractOutRoot(outputDirectory: string, stem: stri
 export async function getUnitModelExtractCollisionInfo(
   outputDirectory: string,
   sourcePath: string,
+  outputName?: string,
 ): Promise<UnitModelExtractCollisionInfo> {
-  const stem = inferFhm2dStem(sourcePath);
+  const stem = outputName?.trim() ? sanitizeFhm2dStructureName(outputName) : inferFhm2dStem(sourcePath);
   const outRoot = buildUnitModelExtractOutRoot(outputDirectory, stem);
   if (!outputDirectory.trim()) {
     return { outRoot, folderExists: false };

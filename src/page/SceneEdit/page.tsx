@@ -175,6 +175,10 @@ import {
   resolveHavokFolderName,
 } from "./utils/havokOverlayCleanup";
 import {
+  promptAndMigrateFhm2dStructureIfNeeded,
+  sanitizeFhm2dStructureName,
+} from "@/utils/fhm2dStructureMetadata";
+import {
   buildSaveChangePreview,
   buildSaveResultSummary,
   type SaveChangePreview,
@@ -459,6 +463,45 @@ const SCENE_HIERARCHY_TABS_LIST =
   "shrink-0 grid h-8 w-full grid-cols-3 gap-0 rounded-none border-b bg-muted/30 p-0";
 const SCENE_HIERARCHY_TAB_TRIGGER =
   "h-8 rounded-none border-b-2 border-transparent px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-none";
+
+function splitNativePath(path: string): string[] {
+  return path.replace(/\\/g, "/").replace(/\/+$/g, "").split("/").filter(Boolean);
+}
+
+function parentOfNativePath(path: string): string {
+  const normalized = path.replace(/\\/g, "/").replace(/\/+$/g, "");
+  const index = normalized.lastIndexOf("/");
+  return index >= 0 ? normalized.slice(0, index) : "";
+}
+
+function stageStructureCandidatesForPackRoot(packRoot: string): string[] {
+  const parts = splitNativePath(packRoot);
+  const folderName = parts[parts.length - 1] ?? "";
+  const parent = parentOfNativePath(packRoot);
+  if (!folderName || !parent) return [];
+  const candidates = [`${parent}/${folderName}_structure.json`];
+  const hash = /^(?:0x)?([0-9a-fA-F]{8})/.exec(folderName);
+  if (hash) {
+    candidates.push(`${parent}/0x${hash[1].toUpperCase()}_structure.json`);
+    candidates.push(`${parent}/${hash[1].toUpperCase()}_structure.json`);
+  }
+  return [...new Set(candidates)];
+}
+
+async function promptStagePackMetadataMigration(packRoot: string): Promise<string> {
+  for (const structureJsonPath of stageStructureCandidatesForPackRoot(packRoot)) {
+    try {
+      const result = await promptAndMigrateFhm2dStructureIfNeeded({
+        structureJsonPath,
+        title: "Migrate Stage FHM2D structure",
+      });
+      return result?.rootPath ?? packRoot;
+    } catch {
+      // Try the next legacy naming candidate.
+    }
+  }
+  return packRoot;
+}
 
 function nearlyEqual(a: number, b: number): boolean {
   return Math.abs(a - b) <= 1e-6;
@@ -1438,7 +1481,8 @@ export default function SceneEdit() {
       if (!selected || typeof selected !== "string") return;
       await rememberStoredDialogSelection(SCENE_OPEN_FOLDER_DIALOG_PATH_KEY, selected, "directory");
 
-      const stageRoot = `${selected}\\0\\0`;
+      const packRoot = await promptStagePackMetadataMigration(selected);
+      const stageRoot = `${packRoot}\\0\\0`;
 
       // Guard against re-entrant loads of the same stage (the heavy bundle load was
       // observed running twice). Skip if an identical load is already in flight.
@@ -1669,6 +1713,18 @@ export default function SceneEdit() {
       if (!outputDir || typeof outputDir !== "string") return;
       await rememberStoredDialogSelection(SCENE_EXTRACT_FHM2D_OUTPUT_DIALOG_PATH_KEY, outputDir, "directory");
 
+      const sourceStem = sourcePath
+        .split(/[/\\]/)
+        .filter(Boolean)
+        .pop()
+        ?.replace(/\.fhm2d$/i, "") ?? "stage";
+      const enteredName = window.prompt(
+        "Name for extracted FHM2D folder",
+        sanitizeFhm2dStructureName(sourceStem),
+      );
+      if (enteredName == null) return;
+      const outputName = sanitizeFhm2dStructureName(enteredName);
+
       const extractSteps: SaveStepInfo[] = [
         { id: "extract", label: "Extract FHM2D binary", status: "running" },
         { id: "textures", label: "Consolidate textures to shared folder", status: "pending" },
@@ -1707,6 +1763,7 @@ export default function SceneEdit() {
         }>("extract_stage_fhm2d_to_folder", {
           sourcePath,
           outputDir,
+          outputName,
         });
 
         setSaveProgressState((prev) => ({

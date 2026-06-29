@@ -28,6 +28,7 @@ import {
   analyzeUnitModelFolderMigration,
   migrateUnitModelFolderLayout,
 } from "../utils/unitModelMigrationService";
+import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
 
 export type UnitModelWorkspaceBusy = "pick" | "extract" | "migrate" | "validate" | "copy" | null;
 
@@ -200,7 +201,22 @@ export function useUnitModelWorkspace(
         "directory",
       );
       let rootToLoad = trimmedSelected;
-      const migration = await analyzeUnitModelFolderMigration(trimmedSelected);
+      try {
+        const metadataStructurePath = inferUnitModelStructurePath(rootToLoad);
+        const metadataMigration = await promptAndMigrateFhm2dStructureIfNeeded({
+          structureJsonPath: metadataStructurePath,
+          title: "Migrate Unit Model FHM2D structure",
+        });
+        if (metadataMigration) {
+          rootToLoad = metadataMigration.rootPath ?? rootToLoad;
+          toast.success("FHM2D structure metadata migrated", {
+            description: `${metadataMigration.name} -> ${metadataMigration.hashName}`,
+          });
+        }
+      } catch (error) {
+        console.warn("FHM2D metadata migration check failed", error);
+      }
+      const migration = await analyzeUnitModelFolderMigration(rootToLoad);
       if (migration.canMigrate && migration.state === "legacy") {
         const ok = await confirm(
           [
@@ -218,7 +234,7 @@ export function useUnitModelWorkspace(
         );
         if (ok) {
           setBusy("migrate");
-          const result = await migrateUnitModelFolderLayout(trimmedSelected, migration.structureJsonPath);
+          const result = await migrateUnitModelFolderLayout(rootToLoad, migration.structureJsonPath);
           rootToLoad = result.modelRoot;
           toast.success("Unit model folder migrated", {
             description: `${result.updatedFileUrls} fileUrl(s) updated. Backup: ${

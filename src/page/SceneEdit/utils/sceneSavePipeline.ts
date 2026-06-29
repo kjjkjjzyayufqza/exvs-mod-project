@@ -1,4 +1,4 @@
-import { mkdir, readDir, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { mkdir, readDir, readTextFile, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { invoke } from "@tauri-apps/api/core";
 import * as THREE from "three";
 
@@ -23,6 +23,7 @@ import {
   type StagePackFileEntry,
 } from "./sceneStageStructure";
 import { repackFolderUsingStructure } from "@/utils/repackRunner";
+import { normalizeFhm2dHashName, sanitizeFhm2dStructureName } from "@/utils/fhm2dStructureMetadata";
 import { resolveOrCreateInfoFolder } from "./sceneInfoFolder";
 
 function joinTauriPath(...parts: string[]): string {
@@ -116,13 +117,41 @@ async function collectStagePackFiles(root: string, relativeDir = ""): Promise<St
   return collected.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 }
 
+async function readExistingStageStructureMetadata(
+  target: ReturnType<typeof resolveStagePackStructureTarget>,
+): Promise<{ name: string; hashName: string | null }> {
+  let name = sanitizeFhm2dStructureName(target.packFolderName);
+  let hashName = target.hashHex;
+
+  for (const structurePath of target.structurePathCandidates) {
+    try {
+      const raw = await readTextFile(structurePath);
+      const parsed = JSON.parse(raw) as { Name?: unknown; HashName?: unknown };
+      if (typeof parsed.Name === "string" && parsed.Name.trim()) {
+        name = sanitizeFhm2dStructureName(parsed.Name);
+      }
+      if (typeof parsed.HashName === "string") {
+        hashName = normalizeFhm2dHashName(parsed.HashName) ?? hashName;
+      }
+      break;
+    } catch {
+      // Try the next legacy candidate.
+    }
+  }
+
+  return { name, hashName };
+}
+
 async function writeStagePackStructureJson(
   root: string,
 ): Promise<{ structurePath: string; packRoot: string }> {
   const target = resolveStagePackStructureTarget(root);
   const files = await collectStagePackFiles(target.packRoot);
+  const metadata = await readExistingStageStructureMetadata(target);
   const structureJson = buildStageStructureJsonFromFiles({
     packFolderName: target.packFolderName,
+    name: metadata.name,
+    hashName: metadata.hashName,
     files,
   });
   await writeTextFile(target.structurePath, JSON.stringify(structureJson, null, 2));

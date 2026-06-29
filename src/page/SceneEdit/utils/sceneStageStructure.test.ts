@@ -43,6 +43,18 @@ describe("sceneStageStructure", () => {
     );
   });
 
+  it("resolves migrated custom-named stage pack roots from their 0/0 content folder", () => {
+    const target = resolveStagePackStructureTarget("E:/XB/解包/com/test/Minecraft_world_1/0/0");
+
+    expect(target.packRoot).toBe("E:/XB/解包/com/test/Minecraft_world_1");
+    expect(target.structurePath).toBe("E:/XB/解包/com/test/Minecraft_world_1_structure.json");
+    expect(target.structurePathCandidates).toEqual([
+      "E:/XB/解包/com/test/Minecraft_world_1_structure.json",
+    ]);
+    expect(target.packFolderName).toBe("Minecraft_world_1");
+    expect(target.hashHex).toBeNull();
+  });
+
   it("builds a repack structure json from game-ready files and excludes editor intermediates", () => {
     const files: StagePackFileEntry[] = [
       { relativePath: "0/0/base/model.numdlb", fileType: ".numdlb" },
@@ -60,6 +72,8 @@ describe("sceneStageStructure", () => {
       files,
     });
 
+    expect(json.Name).toBe("16F73C97");
+    expect(json.HashName).toBe("0x16F73C97");
     expect(json.Magic).toBe(-843925575);
     expect(json.Fhm2dTotalCount).toBe(6);
     expect(json.SubFileData?.map((entry) => entry.fileUrl)).toEqual([
@@ -71,5 +85,18 @@ describe("sceneStageStructure", () => {
       "16F73C97/0/0/base/model.jnttbl",
     ]);
     expect(json.SubFileStructure?.filter((entry) => entry.type === "Item")).toHaveLength(6);
+  });
+
+  it("builds custom-named structure json with an explicit HashName", () => {
+    const json = buildStageStructureJsonFromFiles({
+      packFolderName: "Minecraft_world_1",
+      name: "Minecraft world 1",
+      hashName: "0x16f73c97",
+      files: [{ relativePath: "0/0/base/model.numdlb", fileType: ".numdlb" }],
+    });
+
+    expect(json.Name).toBe("Minecraft_world_1");
+    expect(json.HashName).toBe("0x16F73C97");
+    expect(json.SubFileData?.[0]?.fileUrl).toBe("Minecraft_world_1/0/0/base/model.numdlb");
   });
 });

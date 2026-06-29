@@ -1,3 +1,4 @@
+use crate::format::fhm2d_structure_metadata::with_top_metadata;
 use crate::format::param_bin_format::{
     build_param_binary, read_param_binary, ParamBinaryFile, ParamBinaryHeader, ParamFieldSpec,
 };
@@ -599,6 +600,7 @@ fn copy_asset_as_new_impl(
         &new_hash_hex,
         &mut updated_file_url_count,
     );
+    struct_value = with_top_metadata(struct_value, &new_hash_hex, &new_hash_hex)?;
 
     let serialized = serde_json::to_string_pretty(&struct_value)
         .map_err(|e| format!("Failed to serialize new structure JSON: {e}"))?;
@@ -878,6 +880,34 @@ pub async fn move_legacy_workspace_content(
             &PathBuf::from(legacy_asset_root_dir),
             &PathBuf::from(configured_asset_root_dir),
             &hash_hex,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn analyze_fhm2d_structure_migration(
+    structure_json_path: String,
+) -> Result<crate::format::fhm2d_structure_metadata::Fhm2dStructureMigrationAnalysis, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::format::fhm2d_structure_metadata::analyze_structure_json(Path::new(
+            &structure_json_path,
+        ))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn migrate_fhm2d_structure_metadata(
+    structure_json_path: String,
+    name: String,
+) -> Result<crate::format::fhm2d_structure_metadata::Fhm2dStructureMigrationResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::format::fhm2d_structure_metadata::migrate_structure_json(
+            Path::new(&structure_json_path),
+            &name,
         )
     })
     .await
@@ -1824,6 +1854,10 @@ mod character_asset_command_tests {
             .path()
             .join(format!("{}_structure.json", result.new_hash_hex))
             .is_file());
+        let structure_raw = fs::read_to_string(&result.new_structure_json_path).unwrap();
+        let structure_value: Value = serde_json::from_str(&structure_raw).unwrap();
+        assert_eq!(structure_value["Name"], result.new_hash_hex);
+        assert_eq!(structure_value["HashName"], result.new_hash_hex);
         assert!(!legacy.path().join(&result.new_hash_hex).exists());
     }
 

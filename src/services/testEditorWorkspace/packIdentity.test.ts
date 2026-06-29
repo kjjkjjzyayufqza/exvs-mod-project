@@ -39,6 +39,28 @@ describe("classifyWorkspacePackPath", () => {
     );
   });
 
+  it("classifies custom-named packs under configured prefixes", () => {
+    expect(classify("E:/workspace/002chara/Gyan_model/body.numdlb")).toEqual({
+      packKey: "002chara/Gyan_model",
+      routeId: "unit.model",
+      prefix: "002chara",
+      hashFolderName: "Gyan_model",
+      folderPath: "E:/workspace/002chara/Gyan_model",
+      structureJsonPath: "E:/workspace/002chara/Gyan_model_structure.json",
+      sourceLayout: "configured",
+    });
+  });
+
+  it("classifies custom-named structure JSON files under configured prefixes", () => {
+    expect(
+      classify("E:/workspace/002chara/Gyan_model_structure.json", DEFAULT_TEST_EDITOR_WORKSPACE, false),
+    )?.toMatchObject({
+      packKey: "002chara/Gyan_model",
+      hashFolderName: "Gyan_model",
+      structureJsonPath: "E:/workspace/002chara/Gyan_model_structure.json",
+    });
+  });
+
   it("uses the longest configured prefix", () => {
     const document: TestEditorWorkspaceDocument = {
       ...DEFAULT_TEST_EDITOR_WORKSPACE,

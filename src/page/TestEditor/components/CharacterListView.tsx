@@ -41,6 +41,7 @@ import {
   resolveWorkspaceContent,
   type WorkspaceContentId,
 } from "@/services/testEditorWorkspace/contentCatalog";
+import { promptAndMigrateWorkspaceContentIfNeeded } from "@/services/testEditorWorkspace/contentMigration";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
 
@@ -131,7 +132,9 @@ export default function CharacterListView({
 
   const resolveContent = useCallback(
     async (id: WorkspaceContentId) => {
-      return await resolveWorkspaceContent(folderPath, workspaceDocument, id);
+      return await promptAndMigrateWorkspaceContentIfNeeded(
+        await resolveWorkspaceContent(folderPath, workspaceDocument, id),
+      );
     },
     [folderPath, workspaceDocument],
   );

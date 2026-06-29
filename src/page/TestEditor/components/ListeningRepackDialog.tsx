@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { repackFolderUsingStructureToModFolder } from "@/utils/repackRunner";
 import { removeMatchingModVgsht2 } from "../utils/modVgsht2";
+import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
 
 type ListeningRepackDialogProps = {
   open: boolean;
@@ -68,19 +69,31 @@ export default function ListeningRepackDialog({
           seen.add(pack.packKey);
           packs.push(pack);
         }
-        const next = await Promise.all(
-          packs.map(async (pack): Promise<PackEntry> => {
-            const structureExists = await exists(pack.structureJsonPath);
-            return {
-              packKey: pack.packKey,
-              hashFolderName: pack.hashFolderName,
-              folderPath: pack.folderPath,
-              structurePath: pack.structureJsonPath,
-              exists: structureExists,
-              selected: structureExists,
-            };
-          }),
-        );
+        const next: PackEntry[] = [];
+        for (const pack of packs) {
+          let folderPath = pack.folderPath;
+          let structurePath = pack.structureJsonPath;
+          let structureExists = await exists(structurePath);
+          if (structureExists) {
+            const migration = await promptAndMigrateFhm2dStructureIfNeeded({
+              structureJsonPath: structurePath,
+              title: "Migrate listening repack structure",
+            });
+            if (migration) {
+              folderPath = migration.rootPath ?? folderPath;
+              structurePath = migration.structureJsonPath;
+              structureExists = await exists(structurePath);
+            }
+          }
+          next.push({
+            packKey: pack.packKey,
+            hashFolderName: pack.hashFolderName,
+            folderPath,
+            structurePath,
+            exists: structureExists,
+            selected: structureExists,
+          });
+        }
         if (!cancelled) setEntries(next);
       } catch (error) {
         console.error("Failed to prepare repack list", error);

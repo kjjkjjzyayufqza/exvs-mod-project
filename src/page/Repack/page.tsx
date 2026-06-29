@@ -21,6 +21,7 @@ import {
 } from "@/lib/utils";
 import { useRepackStore } from "@/store/repackStore";
 import { repackTemplates, updateRepackTemplates, type RepackTemplate } from "@/models/repackTemplateJson";
+import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
 
 const REPACK_TEMPLATE_MODAL_DIMENSIONS = {
   width: 920,
@@ -89,11 +90,22 @@ export default function RepackPage() {
         return;
       }
 
+      let selectedJsonPath = selected as string;
+      if (selectedJsonPath.toLowerCase().endsWith("_structure.json")) {
+        const migration = await promptAndMigrateFhm2dStructureIfNeeded({
+          structureJsonPath: selectedJsonPath,
+          title: "Migrate FHM2D structure",
+        });
+        if (migration) {
+          selectedJsonPath = migration.structureJsonPath;
+        }
+      }
+
       // Update selected file path
-      setSelectedFilePath(selected as string);
+      setSelectedFilePath(selectedJsonPath);
 
       // Read and import the JSON file content directly
-      const jsonContent = await readTextFile(selected as string);
+      const jsonContent = await readTextFile(selectedJsonPath);
       const parsedData = JSON.parse(jsonContent);
 
       let convertedData: TreeDataItem[] = [];
@@ -117,6 +129,8 @@ export default function RepackPage() {
 
         // Store complete project data
         setCompleteProjectData({
+          Name: typeof parsedData.Name === "string" ? parsedData.Name : undefined,
+          HashName: typeof parsedData.HashName === "string" ? parsedData.HashName : undefined,
           Magic: parsedData.Magic,
           Fhm2dTotalCount: parsedData.Fhm2dTotalCount,
           UnkCount: parsedData.UnkCount,
@@ -777,11 +791,22 @@ export default function RepackPage() {
         return;
       }
 
+      let selectedJsonPath = selectedFile as string;
+      if (selectedJsonPath.toLowerCase().endsWith("_structure.json")) {
+        const migration = await promptAndMigrateFhm2dStructureIfNeeded({
+          structureJsonPath: selectedJsonPath,
+          title: "Migrate FHM2D structure",
+        });
+        if (migration) {
+          selectedJsonPath = migration.structureJsonPath;
+        }
+      }
+
       // Update selected file path
-      setSelectedFilePath(selectedFile as string);
+      setSelectedFilePath(selectedJsonPath);
 
       // Read the JSON file content
-      const jsonContent = await readTextFile(selectedFile as string);
+      const jsonContent = await readTextFile(selectedJsonPath);
       const parsedData = JSON.parse(jsonContent);
 
       let convertedData: TreeDataItem[] = [];
@@ -806,6 +831,8 @@ export default function RepackPage() {
 
         // Store complete project data
         setCompleteProjectData({
+          Name: typeof parsedData.Name === "string" ? parsedData.Name : undefined,
+          HashName: typeof parsedData.HashName === "string" ? parsedData.HashName : undefined,
           Magic: parsedData.Magic,
           Fhm2dTotalCount: parsedData.Fhm2dTotalCount,
           UnkCount: parsedData.UnkCount,

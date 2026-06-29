@@ -2,6 +2,7 @@ import {
   buildStagePackStructureJsonCandidates,
   parseStagePackFolderName,
 } from "@/lib/stagePackNaming";
+import { normalizeFhm2dHashName, sanitizeFhm2dStructureName } from "@/utils/fhm2dStructureMetadata";
 
 export type StagePackFileEntry = {
   relativePath: string;
@@ -9,6 +10,8 @@ export type StagePackFileEntry = {
 };
 
 type StageStructureJson = {
+  Name: string;
+  HashName: string;
   Magic: number;
   Fhm2dTotalCount: number;
   UnkCount: number;
@@ -21,7 +24,7 @@ export type StagePackStructureTarget = {
   structurePath: string;
   structurePathCandidates: string[];
   packFolderName: string;
-  hashHex: string;
+  hashHex: string | null;
 };
 
 const STAGE_FHM2D_MAGIC_OB_SIGNED = -843925575;
@@ -73,29 +76,32 @@ export function resolveStagePackStructureTarget(stageRoot: string): StagePackStr
   let packIndex = -1;
   let parsed: ReturnType<typeof parseStagePackFolderName> = null;
 
-  for (let index = parts.length - 1; index >= 0; index -= 1) {
-    const candidate = parseStagePackFolderName(parts[index]);
-    if (candidate) {
-      packIndex = index;
-      parsed = candidate;
-      break;
+  if (parts.length >= 3 && parts.at(-1) === "0" && parts.at(-2) === "0") {
+    packIndex = parts.length - 3;
+    parsed = parseStagePackFolderName(parts[packIndex]);
+  } else {
+    for (let index = parts.length - 1; index >= 0; index -= 1) {
+      const candidate = parseStagePackFolderName(parts[index]);
+      if (candidate) {
+        packIndex = index;
+        parsed = candidate;
+        break;
+      }
     }
   }
 
-  if (packIndex < 0 || !parsed) {
+  if (packIndex < 0) {
     throw new Error(`Unable to resolve stage pack root from '${stageRoot}'`);
   }
 
-  const packFolderName = parsed.folderName;
-  const hashHex = parsed.assetHashHex;
+  const packFolderName = parsed?.folderName ?? parts[packIndex];
+  const hashHex = parsed?.assetHashHex ?? null;
   const parentParts = parts.slice(0, packIndex);
   const packRoot = joinPath(...parts.slice(0, packIndex + 1));
   const parentDir = joinPath(...parentParts);
-  const structurePathCandidates = buildStagePackStructureJsonCandidates(
-    parentDir,
-    packFolderName,
-    hashHex,
-  );
+  const structurePathCandidates = hashHex
+    ? buildStagePackStructureJsonCandidates(parentDir, packFolderName, hashHex)
+    : [`${parentDir}/${packFolderName}_structure.json`];
   const structurePath = structurePathCandidates[0];
 
   return {
@@ -179,8 +185,16 @@ function appendStructureForFolder(node: FileTreeNode, out: Array<Record<string, 
 
 export function buildStageStructureJsonFromFiles(params: {
   packFolderName: string;
+  name?: string;
+  hashName?: string | null;
   files: readonly StagePackFileEntry[];
 }): StageStructureJson {
+  const name = sanitizeFhm2dStructureName(params.name ?? params.packFolderName);
+  const hashName = normalizeFhm2dHashName(params.hashName ?? params.packFolderName);
+  if (!hashName) {
+    throw new Error(`Unable to determine HashName for stage pack '${params.packFolderName}'`);
+  }
+
   const entries = params.files
     .filter((file) => isGameReadyStageFile(file.fileType))
     .map((file) => ({
@@ -209,6 +223,8 @@ export function buildStageStructureJsonFromFiles(params: {
   }
 
   return {
+    Name: name,
+    HashName: hashName,
     Magic: STAGE_FHM2D_MAGIC_OB_SIGNED,
     Fhm2dTotalCount: subFileData.length,
     UnkCount: 0,

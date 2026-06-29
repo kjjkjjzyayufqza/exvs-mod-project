@@ -9,6 +9,10 @@ use std::fs;
 use std::io::{Cursor, Read};
 use std::path::{Component, Path, PathBuf};
 
+use crate::format::fhm2d_structure_metadata::{
+    metadata_from_source, metadata_from_source_strict, sanitize_structure_name,
+};
+
 const MAGIC_OB: [u8; 4] = [0xB9, 0xB7, 0xB2, 0xCD];
 const MAGIC_GVS: [u8; 4] = [0x99, 0x92, 0xCD, 0x90];
 const PAGE_SIZE: usize = 0x10000;
@@ -154,6 +158,10 @@ struct ParseNode {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct OutputStructure {
+    #[serde(rename = "Name")]
+    name: String,
+    #[serde(rename = "HashName")]
+    hash_name: String,
     #[serde(rename = "Magic")]
     magic: u32,
     #[serde(rename = "Fhm2dTotalCount")]
@@ -248,6 +256,8 @@ impl<'a> Fhm2dExtractor<'a> {
             .and_then(|s| s.to_str())
             .ok_or_else(|| format!("Invalid output directory: {}", self.out_dir))?
             .to_string();
+        let (structure_name, hash_name) =
+            metadata_from_source_strict(self.source_path, out_name.as_str())?;
         fs::create_dir_all(self.out_dir)
             .map_err(|e| format!("Failed to create output directory: {e}"))?;
 
@@ -273,6 +283,8 @@ impl<'a> Fhm2dExtractor<'a> {
             parsed.sub_file_structure,
             parsed.sub_file_parse_structure,
             out_name.as_str(),
+            structure_name.as_str(),
+            hash_name.as_str(),
             self.format,
         )?;
 
@@ -360,6 +372,8 @@ pub fn extract_fhm2d_to_memory_impl(
         parsed.sub_file_structure,
         parsed.sub_file_parse_structure,
         source_name,
+        sanitize_structure_name(source_name).as_str(),
+        metadata_from_source(source_name, source_name).1.as_str(),
         format,
     )?;
 
@@ -485,6 +499,8 @@ fn build_output_structure(
     sub_file_structure: Vec<SubFileStructureEntry>,
     sub_file_parse_structure: ParseNode,
     out_name: &str,
+    structure_name: &str,
+    hash_name: &str,
     format: Option<Fhm2dFormat>,
 ) -> Result<OutputStructure, String> {
     if type_list.len() != files.len() {
@@ -520,6 +536,8 @@ fn build_output_structure(
         });
     }
     Ok(OutputStructure {
+        name: structure_name.to_string(),
+        hash_name: hash_name.to_string(),
         magic: meta_header,
         fhm2d_total_count: files.len(),
         unk_count,
