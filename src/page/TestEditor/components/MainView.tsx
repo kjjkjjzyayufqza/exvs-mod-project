@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { MainViewTabNav } from "./main-view/MainViewTabNav";
 import RepackFolderStructureView from "./RepackFolderStructureView";
 import CharacterIdTableView from "./CharacterIdTableView";
 import CharacterCostView from "./CharacterCostView";
@@ -22,7 +21,9 @@ import { GrapEditorView } from "./param-editors/grap-editor/GrapEditorView";
 import { DepictionEditorView } from "./param-editors/depiction-editor/DepictionEditorView";
 import { HitGroupEditorView } from "./param-editors/hitgroup-editor/HitGroupEditorView";
 import { InteractionEditorView } from "./param-editors/interaction-editor/InteractionEditorView";
-import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
+import EffectFolderEditorView from "./effect-folder-editor/EffectFolderEditorView";
+import { resolveEffectPackFromStructureJson } from "./effect-folder-editor/effectFolderEditorUtils";
+import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 
 type StageTab = {
   name: string;
@@ -41,9 +42,11 @@ interface MainViewProps {
   onRevealTreeFolder?: (path: string) => void;
   workspaceDocument: TestEditorWorkspaceDocument;
   workspaceRouteRoots: Record<string, string>;
+  modFolderPath?: string;
+  onPackMutated?: (pack: WorkspacePackIdentity) => void;
+  onPackRepacked?: (packKey: string) => void;
+  onOpenAsEffectProject?: (filePath: string) => void;
 }
-
-const TAB_STRIP_SCROLL_EPSILON_px = 2;
 
 const tabs: StageTab[] = [
   {
@@ -254,6 +257,22 @@ const tabs: StageTab[] = [
       />
     ),
   },
+  {
+    name: "Effect Folder",
+    value: "effect-folder",
+    render: (props: MainViewProps) => (
+      <EffectFolderEditorView
+        workspaceRoot={props.folderPath ?? ""}
+        structureJsonPath={props.jsonFilePath ?? null}
+        workspaceDocument={props.workspaceDocument}
+        modFolderPath={props.modFolderPath ?? ""}
+        isActive={false}
+        onPackMutated={props.onPackMutated}
+        onPackRepacked={props.onPackRepacked}
+        onOpenAsEffectProject={props.onOpenAsEffectProject}
+      />
+    ),
+  },
 ];
 
 const MainView = ({
@@ -265,9 +284,22 @@ const MainView = ({
   onRevealTreeFolder,
   workspaceDocument,
   workspaceRouteRoots,
+  modFolderPath,
+  onPackMutated,
+  onPackRepacked,
+  onOpenAsEffectProject,
 }: MainViewProps) => {
   const initialTab = tabs[0]?.value ?? "folder-structure";
   const [activeTab, setActiveTab] = useState<string>(initialTab);
+  const effectPackForSelection = useMemo(
+    () =>
+      resolveEffectPackFromStructureJson(
+        folderPath ?? "",
+        jsonFilePath ?? null,
+        workspaceDocument,
+      ),
+    [folderPath, jsonFilePath, workspaceDocument],
+  );
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set([initialTab]));
   const [pendingCharacterIdTableSelection, setPendingCharacterIdTableSelection] = useState<number | null>(null);
   const [folderStructureHasUnsaved, setFolderStructureHasUnsaved] = useState(false);
@@ -279,46 +311,16 @@ const MainView = ({
   const [stageIconListHasUnsaved, setStageIconListHasUnsaved] = useState(false);
   const [mscWorkspaceHasUnsaved, setMscWorkspaceHasUnsaved] = useState(false);
 
-  const tabStripRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-
-  const syncTabStripScrollEdges = useCallback(() => {
-    const el = tabStripRef.current;
-    if (!el) {
-      return;
-    }
-    const { scrollLeft, scrollWidth, clientWidth } = el;
-    setCanScrollLeft(scrollLeft > TAB_STRIP_SCROLL_EPSILON_px);
-    setCanScrollRight(
-      scrollLeft + clientWidth < scrollWidth - TAB_STRIP_SCROLL_EPSILON_px,
-    );
-  }, []);
-
-  const scrollTabStrip = (direction: -1 | 1) => {
-    const el = tabStripRef.current;
-    if (!el) {
-      throw new Error("MainView: tab strip scroll container is not mounted");
-    }
-    const delta = Math.max(80, Math.round(el.clientWidth * 0.45));
-    el.scrollBy({ left: direction * delta, behavior: "smooth" });
-  };
-
   useEffect(() => {
-    const el = tabStripRef.current;
-    if (!el) {
-      return;
-    }
-    syncTabStripScrollEdges();
-    const onScroll = () => syncTabStripScrollEdges();
-    const ro = new ResizeObserver(() => syncTabStripScrollEdges());
-    ro.observe(el);
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      ro.disconnect();
-      el.removeEventListener("scroll", onScroll);
-    };
-  }, [syncTabStripScrollEdges]);
+    if (!effectPackForSelection) return;
+    setActiveTab("effect-folder");
+    setVisitedTabs((prev) => {
+      if (prev.has("effect-folder")) return prev;
+      const next = new Set(prev);
+      next.add("effect-folder");
+      return next;
+    });
+  }, [effectPackForSelection?.structureJsonPath]);
 
   const handleUnsavedChanges = useCallback((hasChanges: boolean) => {
     setFolderStructureHasUnsaved(hasChanges);
@@ -543,6 +545,24 @@ const MainView = ({
         };
       }
 
+      if (tab.value === "effect-folder") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <EffectFolderEditorView
+              workspaceRoot={props.folderPath ?? ""}
+              structureJsonPath={props.jsonFilePath ?? null}
+              workspaceDocument={props.workspaceDocument}
+              modFolderPath={props.modFolderPath ?? ""}
+              isActive={activeTab === "effect-folder"}
+              onPackMutated={props.onPackMutated}
+              onPackRepacked={props.onPackRepacked}
+              onOpenAsEffectProject={props.onOpenAsEffectProject}
+            />
+          ),
+        };
+      }
+
       return tab;
     });
   }, [
@@ -562,11 +582,6 @@ const MainView = ({
     onMscWorkspaceFolderChange,
     pendingCharacterIdTableSelection,
   ]);
-
-  useLayoutEffect(() => {
-    const id = requestAnimationFrame(() => syncTabStripScrollEdges());
-    return () => cancelAnimationFrame(id);
-  }, [activeTab, syncTabStripScrollEdges]);
 
   const handleTabChange = useCallback((value: string) => {
     setActiveTab(value);
@@ -588,6 +603,10 @@ const MainView = ({
       onRevealTreeFolder,
       workspaceDocument,
       workspaceRouteRoots,
+      modFolderPath,
+      onPackMutated,
+      onPackRepacked,
+      onOpenAsEffectProject,
     };
     if (tab.render) return tab.render(props);
     return tab.content ?? null;
@@ -596,112 +615,7 @@ const MainView = ({
   return (
     <div className="flex h-full w-full min-h-0 bg-background">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex h-full w-full min-h-0 flex-col rounded-none p-0 m-0">
-        <div className="flex min-h-10 w-full shrink-0 items-stretch gap-1 border-b bg-muted/50 px-1 py-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-auto min-h-8 w-8 shrink-0 self-center"
-            onClick={() => scrollTabStrip(-1)}
-            disabled={!canScrollLeft}
-            aria-label="Scroll tabs left"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div
-            ref={tabStripRef}
-            className="min-h-8 min-w-0 flex-1 overflow-x-auto scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-          >
-            <TabsList className="inline-flex h-8 min-w-min flex-nowrap items-center justify-start gap-1 border-0 bg-transparent p-0 shadow-none">
-              {resolvedTabs.map((tab) => (
-                <TabsTrigger
-                  key={tab.value}
-                  id={`mainview-tab-${tab.value}`}
-                  value={tab.value}
-                  className="h-8 shrink-0 rounded-md px-3 text-xs font-medium transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <span>{tab.name}</span>
-                    {tab.value === "folder-structure" && folderStructureHasUnsaved && (
-                      <span
-                        className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
-                        aria-label="Unsaved changes"
-                        title="Unsaved changes"
-                      />
-                    )}
-                    {tab.value === "character-id-table" && characterIdTableHasUnsaved && (
-                      <span
-                        className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
-                        aria-label="Unsaved changes"
-                        title="Unsaved changes"
-                      />
-                    )}
-                    {tab.value === "character-cost" && characterCostHasUnsaved && (
-                      <span
-                        className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
-                        aria-label="Unsaved changes"
-                        title="Unsaved changes"
-                      />
-                    )}
-                    {tab.value === "character-list" && characterListHasUnsaved && (
-                      <span
-                        className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
-                        aria-label="Unsaved changes"
-                        title="Unsaved changes"
-                      />
-                    )}
-                    {tab.value === "series-list" && seriesListHasUnsaved && (
-                      <span
-                        className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
-                        aria-label="Unsaved changes"
-                        title="Unsaved changes"
-                      />
-                    )}
-                    {tab.value === "stage-icon-list" && stageIconListHasUnsaved && (
-                      <span
-                        className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
-                        aria-label="Unsaved changes"
-                        title="Unsaved changes"
-                      />
-                    )}
-                    {tab.value === "stage-list" && stageListHasUnsaved && (
-                      <span
-                        className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
-                        aria-label="Unsaved changes"
-                        title="Unsaved changes"
-                      />
-                    )}
-                    {tab.value === "msc-workspace" && mscWorkspaceHasUnsaved && (
-                      <span
-                        className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
-                        aria-label="Unsaved changes"
-                        title="Unsaved changes"
-                      />
-                    )}
-                    {tab.value === "param-editor" && paramEditorHasUnsaved && (
-                      <span
-                        className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"
-                        aria-label="Unsaved changes"
-                        title="Unsaved changes"
-                      />
-                    )}
-                  </span>
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-auto min-h-8 w-8 shrink-0 self-center"
-            onClick={() => scrollTabStrip(1)}
-            disabled={!canScrollRight}
-            aria-label="Scroll tabs right"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+        <MainViewTabNav activeTab={activeTab} unsavedTabMap={unsavedTabMap} />
         <div className="relative flex min-h-0 flex-1 flex-col">
           {resolvedTabs.map((tab) => {
             if (!visitedTabs.has(tab.value)) return null;

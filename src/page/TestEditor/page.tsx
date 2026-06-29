@@ -358,6 +358,17 @@ const TestEditorPage = () => {
     });
   }, []);
 
+  const handlePackMutated = useCallback(
+    (pack: WorkspacePackIdentity) => {
+      setDirtyPacks((prev) => {
+        const next = new Map(prev);
+        next.set(pack.packKey, pack);
+        return next;
+      });
+    },
+    [],
+  );
+
   const handleRepackComplete = useCallback(() => {
     setIsRepackDialogOpen(false);
   }, []);
@@ -1513,6 +1524,7 @@ const TestEditorPage = () => {
           dirtyPacks={dirtyPackList}
           obModPath={obModPath}
           onPackRepacked={handleRepackSuccess}
+          onPackMutated={handlePackMutated}
           starredPathSet={starredPathSet}
           onToggleStar={toggleStar}
           viewOptions={viewOptions}

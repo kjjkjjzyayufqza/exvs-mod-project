@@ -24,6 +24,7 @@ type Props = {
   dirtyPacks: WorkspacePackIdentity[];
   obModPath: string;
   onPackRepacked: (packKey: string) => void;
+  onPackMutated?: (pack: WorkspacePackIdentity) => void;
   starredPathSet: Set<string>;
   onToggleStar: (path: string) => void;
   viewOptions: FileTreeViewOptions;
@@ -55,6 +56,7 @@ export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
   dirtyPacks,
   obModPath,
   onPackRepacked,
+  onPackMutated,
   starredPathSet,
   onToggleStar,
   viewOptions,
@@ -106,6 +108,10 @@ export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
           onRevealTreeFolder={onRevealTreeFolder}
           workspaceDocument={workspaceDocument}
           workspaceRouteRoots={workspaceRouteRoots}
+          modFolderPath={obModPath}
+          onPackMutated={onPackMutated}
+          onPackRepacked={onPackRepacked}
+          onOpenAsEffectProject={onOpenAsEffectProject}
         />
       }
       right={<InfoPanel selected={selectedNode} />}
