@@ -58,6 +58,22 @@ describe("fhm2dNameMapping", () => {
     expect(entry?.sourcePathCount).toBe(49);
   });
 
+  it("uses source file stems for generic EXVS2 sound metadata folders", () => {
+    const entry = findFhm2dNameMapping("0x01CB0F8E", { routePrefix: "090sound" });
+
+    expect(entry?.name).toBe("vo_0010_p41_0_01");
+    expect(entry?.confidence).toBe("exact-meta-path");
+    expect(entry?.packagePath).toBe("090sound/voicetable");
+  });
+
+  it("uses concrete GUI flash bundle folders from metadata source paths", () => {
+    const entry = findFhm2dNameMapping("0x00C36166", { routePrefix: "009gui" });
+
+    expect(entry?.name).toBe("navi_bt_021_o01");
+    expect(entry?.confidence).toBe("exact-meta-path");
+    expect(entry?.packagePath).toBe("009gui/flash/navi/battle");
+  });
+
   it("maps newer OB unit hashes from the unit hash table", () => {
     const mscEntry = findFhm2dNameMapping("0x19CE466D", { routeId: "unit.msc" });
     const paramEntry = findFhm2dNameMapping("0x48357C75", { routeId: "unit.param" });
@@ -83,5 +99,28 @@ describe("fhm2dNameMapping", () => {
     expect(entry?.name).toBe("gundam_005gyan00_modified");
     expect(entry?.confidence).toBe("manual-research-note");
     expect(entry?.character?.characterId).toBe(1005001);
+  });
+
+  it("maps real OB dplcache hashes from internal FHM2D names", () => {
+    const entry = findFhm2dNameMapping("0x002AB482", { routePrefix: "009gui" });
+
+    expect(entry?.name).toBe("vs_p_r_059_003_c04");
+    expect(entry?.confidence).toBe("ob-dplcache-internal");
+    expect(entry?.packagePath).toBe("009gui/vs_p_r_059_003_c04");
+  });
+
+  it("names large OB dplcache model packages from decoded unit stems", () => {
+    const entry = findFhm2dNameMapping("0x00DB34FD", { routePrefix: "002chara" });
+
+    expect(entry?.name).toBe("749orphn2_005rgnjla_001");
+    expect(entry?.confidence).toBe("ob-dplcache-internal");
+    expect(entry?.packagePath).toBe("002chara/749orphn2_005rgnjla_001");
+  });
+
+  it("keeps low-confidence fallback entries for real OB hashes without internal names", () => {
+    const entry = findFhm2dNameMapping("0x002C2FDA");
+
+    expect(entry?.name).toBe("ob_002c2fda");
+    expect(entry?.confidence).toBe("ob-dplcache-fallback");
   });
 });

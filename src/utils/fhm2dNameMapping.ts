@@ -11,6 +11,8 @@ export type Fhm2dNameMappingConfidence =
   | "ob-param-unit-id"
   | "manual-research-note"
   | "manual-override"
+  | "ob-dplcache-internal"
+  | "ob-dplcache-fallback"
   | "inferred-ob-ai-string";
 
 export interface Fhm2dNameMappingEntry {
@@ -110,7 +112,9 @@ function confidenceScore(entry: Fhm2dNameMappingEntry): number {
   if (entry.confidence === "ob-unit-list") return 4;
   if (entry.confidence === "ob-param-unit-id") return 3;
   if (entry.confidence === "manual-research-note" || entry.confidence === "manual-override") return 3;
+  if (entry.confidence === "ob-dplcache-internal") return 2;
   if (entry.confidence === "inferred-ob-ai-string") return 1;
+  if (entry.confidence === "ob-dplcache-fallback") return 0;
   return 0;
 }
 

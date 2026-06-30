@@ -11,6 +11,7 @@ hash-to-readable-name dictionary for extracted FHM2D workspaces.
 - `ai_string_v1.txt`
 - `ai_string_v14.txt`
 - `E:\XB\解包\com\file\012list\0xDFD38C70\character_list.json`
+- `E:\OBHK0.3_v27\data\x64\dplcache_release`
 - `tools\ob_unit.json`
 - `tools\fhm2d_name_mapping_overrides.json`
 
@@ -20,7 +21,11 @@ payload names plus `ai_string_*.txt`; those are marked
 `inferred-ob-ai-string`. OB unit asset hashes from `tools\ob_unit.json` are
 marked `ob-unit-list`. OB param workspaces that expose a character ID in
 `chrsysparam.csyspm` are marked `ob-param-unit-id`. Research-backed local
-overrides are kept in `tools\fhm2d_name_mapping_overrides.json`.
+overrides are kept in `tools\fhm2d_name_mapping_overrides.json`. Real OB
+dplcache packages that are not covered by the higher-confidence sources are
+read directly from `.fhm2d`; entries with internal file names are marked
+`ob-dplcache-internal`, and entries with no usable internal name are marked
+`ob-dplcache-fallback`.
 
 ## Naming policy
 
@@ -36,6 +41,14 @@ overrides are kept in `tools\fhm2d_name_mapping_overrides.json`.
   deepest common folder, and small same-folder subsets include their file stems.
   For example, `0xA0253AA0` maps to `009gui/image/ser/ser_ms` and uses
   `ser_ms`, not `image_a0253aa0`.
+- Generic metadata folders such as `090sound/voicetable`,
+  `060navi/voicetable`, and `091waveform/voice/pilot` use the concrete source
+  file stem when the folder name itself is too generic.
+- GUI flash packs under `009gui/flash/*` use concrete bundle folders from the
+  metadata source paths, such as `navi_bt_021_o01`, instead of generic
+  `flash_navi_battle_<hash>` names.
+- Motion metadata that mixes `000common` and unit-specific folders prefers the
+  unit-specific package path when available.
 - OB AI string names use lower-snake style and drop the leading numeric series
   and default `_001` variant: `ai_CHR_014GNDM00_007REBONS_001` becomes
   `gndm00_007rebons`.
@@ -66,6 +79,7 @@ python tools\build_fhm2d_name_mapping.py `
   --reference-root "E:\XB\解包\vs2\bak" `
   --meta-root "E:\XB\解包\vs2\meta" `
   --ob-file-root "E:\XB\解包\com\file" `
+  --ob-dplcache-root "E:\OBHK0.3_v27\data\x64\dplcache_release" `
   --ai-string "ai_string_v1.txt" `
   --ai-string "ai_string_v14.txt" `
   --character-list "E:\XB\解包\com\file\012list\0xDFD38C70\character_list.json" `
@@ -74,20 +88,76 @@ python tools\build_fhm2d_name_mapping.py `
   --output "src\assets\fhm2d-name-map.generated.json"
 ```
 
+## Validate Against Real OB Files
+
+Use the validation tool after regenerating the mapping. It scans the actual OB
+flat dplcache directory and reports coverage, unresolved hashes, hash-suffix
+names, duplicate names, and optional metadata source-path coverage.
+
+```powershell
+python tools\validate_fhm2d_name_mapping.py `
+  --ob-root "E:\OBHK0.3_v27\data\x64\dplcache_release" `
+  --meta-root "E:\XB\解包\vs2\meta" `
+  --sample-limit 20 `
+  --max-missing 0 `
+  --max-generic-gui 0 `
+  --max-invalid-names 0 `
+  --verify-ob-parse `
+  --max-ob-parse-failures 0
+```
+
+Useful stricter gates:
+
+- `--fail-on-missing` fails when any real OB `.fhm2d` hash has no mapping.
+- `--fail-on-hash-suffix` fails when any mapped name still ends in `_XXXXXXXX`.
+- `--max-missing N` and `--max-hash-suffix N` can lock a known baseline while
+  allowing the current incomplete corpus to remain inspectable.
+- `--verify-ob-parse` parses every real OB `.fhm2d` metadata/record table with
+  the same parser used by the generator.
+- `--verify-ob-record-data` also decompresses/copies every parsed subfile
+  payload. This is intentionally opt-in because it performs much heavier I/O.
+- `--max-ob-parse-failures N` and `--max-ob-record-data-failures N` can turn
+  those parser audits into gates.
+- `--report-json <path>` writes the full machine-readable report.
+
 Current generated stats:
 
-- `13384` total entries
+- `20740` total entries
 - `10135` `exact-meta-path` entries
 - `3246` `ob-unit-list` entries
+- `6098` `ob-dplcache-internal` entries
+- `1258` `ob-dplcache-fallback` entries
 - `1` `ob-param-unit-id` entry
 - `1` `manual-research-note` entry
 - `1` `inferred-ob-ai-string` entry
-- `4018` entries matched to `character_list.json` character evidence
+- `4241` entries matched to `character_list.json` character evidence
 - `42` current formal `E:\XB\解包\com\file\*\*_structure.json` structure hashes checked
 - `42` current formal OB structure hashes mapped
 - `0` current OB structure hashes remain unresolved
 - `0` generic GUI names of the form `image_<hash>`, `flash_<hash>`, or `font_<hash>`
 - `0` duplicate route/name pairs
+
+Current real OB validation baseline against
+`E:\OBHK0.3_v27\data\x64\dplcache_release`:
+
+- `19119` real OB `.fhm2d` files scanned
+- `19119` OB hashes mapped (`100.0%`)
+- `0` OB hashes still missing from the mapping
+- `3502` mapped OB entries still end in a hash suffix and need better naming
+  evidence/rules
+- `0` generic GUI names of the form `image_<hash>`, `flash_<hash>`, or
+  `font_<hash>`
+- `0` invalid mapped names
+- `0` duplicate route/name pairs
+
+Current `ob-dplcache-fallback` reason breakdown:
+
+- `1044` empty packages (`fileCount = 0`)
+- `146` single-file pure `.bin` packages
+- `55` two-file pure `.bin` packages
+- `9` four-file pure `.bin` packages
+- `4` other pure `.bin` package sizes (`3`, `5`, `9`, and `17` files)
+- `0` parser-error fallbacks
 
 Metadata audit:
 
@@ -95,6 +165,32 @@ Metadata audit:
 - `21778` metadata files contain source paths under `app\data`/`x64`.
 - `1112` metadata files do not contain usable source paths and cannot produce a
   path-backed `exact-meta-path` entry.
+- `618770` metadata source-path strings were inspected.
+- `209474` unique metadata source paths were observed.
+- `0` metadata files with source paths are missing from the generated mapping.
+- `1546` metadata files with source paths are mapped by a non-exact source
+  such as the OB unit hash table because that source produces a less generic
+  unit-facing name.
+
+Real OB FHM2D parse audit with `--verify-ob-parse`:
+
+- `19119` real OB `.fhm2d` files parsed
+- `0` parser failures
+- `383025` total subfile records
+- `346929` non-`.bin` subfile records
+- Full payload verification with `--verify-ob-record-data` also passed:
+  `0` record data failures across the same `383025` records.
+- Top parsed record types:
+  - `183227` `.nuanmb`
+  - `107834` `.nutexb`
+  - `36096` `.bin`
+  - `15615` `.numatb`
+  - `10796` `.nusktb`
+  - `10795` `.numdlb`
+  - `10795` `.numshb`
+  - `6399` `.nuhlpb`
+  - `769` `.nus3bank`
+  - `646` `.nudnbb`
 
 `character_list.json` does not currently contain the observed FHM2D pack hashes
 from `E:\XB\解包\com\file`; it is used as character evidence after a package

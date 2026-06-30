@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import re
+import zlib
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,6 +16,34 @@ ASCII_RE = re.compile(rb"[\x20-\x7e]{4,}")
 META_HASH_RE = re.compile(r"^(0x[0-9a-fA-F]{8})(?:_meta\.bin|\.fhm2d_metabody\.bin)$")
 AI_CHR_RE = re.compile(r"^ai_CHR_([0-9]{3})([A-Z0-9]+)_([0-9]{3})([A-Z0-9]+)_([0-9]{3})\s*\|\s*(true|false)", re.I)
 UNIT_ID_RE = re.compile(r"(?:^|/)([0-9]{3})([a-z0-9]+)_([0-9]{3})([a-z0-9]+)_([0-9]{3})(?:$|/)", re.I)
+INTERNAL_UNIT_STEM_RE = re.compile(
+    r"(?i)([0-9]{3}[a-z][a-z0-9]*_[0-9]{3}[a-z][a-z0-9]*_[0-9]{3})(?:_|$)"
+)
+FHM2D_FILE_RE = re.compile(r"^(0x[0-9a-fA-F]{8})\.fhm2d$", re.I)
+FHM2D_MAGIC_OB = b"\xB9\xB7\xB2\xCD"
+FHM2D_PAGE_SIZE = 0x10000
+NUTEXB_GENERIC_BASES = {"img", "image", "tex", "texture"}
+GUI_FLASH_GENERIC_FOLDER_NAMES = {
+    "009gui",
+    "base",
+    "battle",
+    "common",
+    "custom",
+    "flash",
+    "font",
+    "image",
+    "ingamehud",
+    "layout",
+    "lm",
+    "navi",
+    "pilot",
+    "player",
+    "ser",
+    "source",
+    "texture",
+    "textures",
+    "window",
+}
 
 
 ROUTE_BY_DOMAIN = {
@@ -59,6 +88,22 @@ GENERIC_EXACT_NAMES_BY_ROUTE = {
     },
     "090sound": {"voicetable", "se_chara", "sound", "table"},
     "091waveform": {"chara", "pilot", "navi", "voice", "se"},
+    "060navi": {"acttable", "lipsync", "subtitles", "voicetable"},
+}
+
+FHM2D_FILE_TYPE_BY_ID = {
+    0x0A: ".nushdb",
+    0x0B: ".nutexb",
+    0x0C: ".nusktb",
+    0x0D: ".numatb",
+    0x0E: ".numshb",
+    0x0F: ".numdlb",
+    0x11: ".nuanmb",
+    0x13: ".nuhlpb",
+    0x14: ".nus3bank",
+    0x17: ".nudnbb",
+    0x18: ".nufxlb",
+    0x19: ".nurpdb",
 }
 
 
@@ -217,6 +262,16 @@ def infer_package_path(paths: list[str], reference_dirs: dict[str, str]) -> tupl
             common_parent = common_reference_parent(unique_files, reference_dirs)
             if common_parent and len(common_parent.split("/")) > 2:
                 return common_parent, len(unique_files)
+        if first_domain == "003motion" and counts:
+            specific_counts = Counter(
+                {
+                    package: count
+                    for package, count in counts.items()
+                    if "/000common/000common_000common_001" not in package.lower()
+                }
+            )
+            if specific_counts:
+                counts = specific_counts
 
     source = counts if counts else fallback_counts
     if not source:
@@ -250,9 +305,65 @@ def source_stems_for_package(source_paths: list[str], package_path: str) -> list
     return sorted(stems)
 
 
+def gui_flash_bundle_name_from_source_paths(source_paths: list[str]) -> str | None:
+    counts: Counter[str] = Counter()
+    for raw in source_paths:
+        game_rel = game_relative_path(raw)
+        if not game_rel:
+            continue
+        domain_rel = domain_relative_path(game_rel)
+        parts = normalize_slashes(domain_rel).split("/")
+        if len(parts) < 4 or parts[0].lower() != "009gui" or parts[1].lower() != "flash":
+            continue
+        for folder in reversed(parts[2:-1]):
+            name = sanitize_name(folder.lower().replace("-", "_"))
+            if name in GUI_FLASH_GENERIC_FOLDER_NAMES:
+                continue
+            if name.startswith(("font_", "img_", "tex_")):
+                continue
+            if not any(char.isdigit() for char in name):
+                continue
+            counts[name] += 1
+            break
+    if not counts:
+        return None
+    name, _count = max(counts.items(), key=lambda item: (item[1], len(item[0]), item[0]))
+    return name
+
+
+def source_stem_specific_name(stems: list[str]) -> str | None:
+    unique = sorted({sanitize_name(stem.lower()) for stem in stems if stem})
+    if not unique:
+        return None
+    if len(unique) == 1:
+        return unique[0]
+    prefix = os.path.commonprefix(unique).rstrip("_-")
+    if prefix and len(prefix) >= 4 and prefix not in NUTEXB_GENERIC_BASES:
+        return sanitize_name(prefix)
+    if len(unique) <= 4:
+        return sanitize_name("_".join(unique))
+    return sanitize_name(f"{unique[0]}_{unique[-1]}_{len(unique)}files")
+
+
 def entry_name_from_source_paths(package_path: str, source_paths: list[str]) -> str:
     base_name = entry_name_from_package(package_path)
     package_parts = normalize_slashes(package_path).split("/")
+    if (
+        domain_from_package(package_path) == "009gui"
+        and len(package_parts) >= 2
+        and package_parts[1].lower() == "flash"
+    ):
+        flash_bundle_name = gui_flash_bundle_name_from_source_paths(source_paths)
+        if flash_bundle_name:
+            return flash_bundle_name
+
+    stems = source_stems_for_package(source_paths, package_path)
+    generic_names = GENERIC_EXACT_NAMES_BY_ROUTE.get(domain_from_package(package_path), set())
+    if base_name.lower() in generic_names or any(base_name.lower().startswith(f"{name}_") for name in generic_names):
+        specific_name = source_stem_specific_name(stems)
+        if specific_name:
+            return specific_name
+
     if (
         domain_from_package(package_path) != "009gui"
         or len(package_parts) < 2
@@ -260,7 +371,6 @@ def entry_name_from_source_paths(package_path: str, source_paths: list[str]) -> 
     ):
         return base_name
 
-    stems = source_stems_for_package(source_paths, package_path)
     if len(stems) <= 1:
         return base_name
 
@@ -599,6 +709,356 @@ def build_manual_override_entries(
     return entries
 
 
+def read_u32_le(data: bytes, offset: int) -> int:
+    if offset < 0 or offset + 4 > len(data):
+        raise ValueError(f"read_u32 out of range at 0x{offset:X}")
+    return int.from_bytes(data[offset : offset + 4], "little", signed=False)
+
+
+def read_i32_le(data: bytes, offset: int) -> int:
+    if offset < 0 or offset + 4 > len(data):
+        raise ValueError(f"read_i32 out of range at 0x{offset:X}")
+    return int.from_bytes(data[offset : offset + 4], "little", signed=True)
+
+
+def read_i16_le(data: bytes, offset: int) -> int:
+    if offset < 0 or offset + 2 > len(data):
+        raise ValueError(f"read_i16 out of range at 0x{offset:X}")
+    return int.from_bytes(data[offset : offset + 2], "little", signed=True)
+
+
+def read_c_string_utf8(data: bytes, offset: int, max_len: int = 4096) -> str:
+    if offset < 0 or offset >= len(data):
+        raise ValueError(f"CString offset out of range at 0x{offset:X}")
+    end = offset
+    end_limit = min(len(data), offset + max_len)
+    while end < end_limit and data[end] != 0:
+        end += 1
+    return data[offset:end].decode("utf-8", errors="ignore")
+
+
+def strip_extension(value: str) -> str:
+    return value.rsplit(".", 1)[0] if "." in value else value
+
+
+def clean_internal_stem(value: str) -> str:
+    basename = normalize_slashes(value).rsplit("/", 1)[-1]
+    stem = strip_extension(basename)
+    return sanitize_name(stem.replace("-", "_").lower())
+
+
+def parse_nutexb_internal_name(data: bytes) -> str | None:
+    size = len(data)
+    if size < 8 or data[size - 8 : size - 4] != b" XET":
+        return None
+    major = read_i16_le(data, size - 4)
+    minor = read_i16_le(data, size - 2)
+    if (major, minor) == (1, 1):
+        name_offset = size - 0x86C
+    elif (major, minor) in {(2, 0), (1, 2)}:
+        name_offset = size - 0x70
+    else:
+        return None
+    if name_offset < 0 or data[name_offset : name_offset + 4] != b"46XT":
+        return None
+    raw = read_c_string_utf8(data, name_offset + 4)
+    return clean_internal_stem(raw)
+
+
+def parse_nus3bank_internal_name(data: bytes) -> str | None:
+    if len(data) <= 0x7D:
+        return None
+    raw = read_c_string_utf8(data, 0x7D)
+    return clean_internal_stem(raw)
+
+
+def parse_nuanmb_internal_name(data: bytes) -> str | None:
+    if len(data) <= 0x50:
+        return None
+    raw = read_c_string_utf8(data, 0x50)
+    if raw.lower().endswith(".nuanmx.scaled"):
+        raw = f"{raw[:-len('.nuanmx.scaled')]}.nuanmb"
+    return clean_internal_stem(raw)
+
+
+def parse_numdlb_internal_name(data: bytes) -> str | None:
+    strings = [match.group(0).decode("ascii", errors="ignore") for match in ASCII_RE.finditer(data)]
+    candidates: list[str] = []
+    for value in strings:
+        normalized = normalize_slashes(value)
+        lower = normalized.lower()
+        if lower.endswith((".numdlb", ".numdlx")):
+            candidates.append(clean_internal_stem(normalized))
+    candidates = [candidate for candidate in candidates if candidate]
+    return max(candidates, key=len) if candidates else None
+
+
+def unit_stem_from_internal_names(stems: list[str]) -> str | None:
+    counts: Counter[str] = Counter()
+    for stem in stems:
+        match = INTERNAL_UNIT_STEM_RE.search(stem)
+        if match:
+            counts[sanitize_name(match.group(1).lower())] += 1
+    if not counts:
+        return None
+    name, _count = max(counts.items(), key=lambda item: (item[1], len(item[0]), item[0]))
+    return name
+
+
+def common_internal_name(stems: list[str]) -> str | None:
+    unit_stem = unit_stem_from_internal_names(stems)
+    if unit_stem:
+        return unit_stem
+
+    unique = sorted({sanitize_name(stem.replace("-", "_").lower()) for stem in stems if stem})
+    if not unique:
+        return None
+    if len(unique) == 1:
+        return unique[0]
+
+    prefix = os.path.commonprefix(unique).rstrip("_-")
+    if "_" in prefix:
+        prefix = prefix.rsplit("_", 1)[0].rstrip("_-")
+    if prefix and len(prefix) >= 4 and prefix not in NUTEXB_GENERIC_BASES:
+        return sanitize_name(prefix)
+
+    if len(unique) <= 4:
+        if prefix and prefix in NUTEXB_GENERIC_BASES:
+            suffixes = [name[len(prefix) :].strip("_-") or name for name in unique]
+            return sanitize_name(f"{prefix}_{'_'.join(suffixes)}")
+        return sanitize_name("_".join(unique))
+
+    first = unique[0]
+    last = unique[-1]
+    if prefix:
+        return sanitize_name(f"{prefix}_{first}_{last}_{len(unique)}files")
+    return sanitize_name(f"{first}_{last}_{len(unique)}files")
+
+
+def parse_ob_fhm2d_records(path: Path) -> tuple[list[str], list[dict[str, Any]], bytes]:
+    data = path.read_bytes()
+    if data[:4] != FHM2D_MAGIC_OB:
+        raise ValueError("Unsupported FHM2D magic")
+    meta_comp_size = read_u32_le(data, 0x20)
+    meta_start = 0x30
+    meta_end = meta_start + meta_comp_size
+    if meta_end > len(data):
+        raise ValueError("Meta compressed range out of bounds")
+    meta = zlib.decompress(data[meta_start:meta_end], -15)
+    body = data[meta_end:]
+    file_type_count = read_u32_le(meta, 0x18)
+    file_count = read_u32_le(meta, 0x1C)
+    type_list: list[str] = []
+    type_cursor = 0x24
+    for index in range(file_type_count):
+        offset = type_cursor + index * 0x20
+        file_type = read_u32_le(meta, offset)
+        count = read_u32_le(meta, offset + 0x1C)
+        type_list.extend([FHM2D_FILE_TYPE_BY_ID.get(file_type, ".bin")] * count)
+
+    sub_cursor = 0x24 + file_type_count * 0x20 + file_count * 0x0C
+    records: list[dict[str, Any]] = []
+    for index in range(file_count):
+        file_size = read_u32_le(meta, sub_cursor + 0x08)
+        chunk_count = read_u32_le(meta, sub_cursor + 0x1C)
+        start_offset = read_u32_le(meta, sub_cursor + 0x20)
+        file_index = read_u32_le(meta, sub_cursor + 0x28)
+        page_count = (file_size + FHM2D_PAGE_SIZE - 1) // FHM2D_PAGE_SIZE if file_size else 0
+        bitmap = b""
+        bitmap_len = 0
+        chunk_sizes: list[int] = []
+        if chunk_count:
+            bitmap_len = (page_count + 7) // 8 if page_count else 0
+            bitmap_start = sub_cursor + 0x2C
+            bitmap_end = bitmap_start + bitmap_len
+            if bitmap_end > len(meta):
+                raise ValueError("Bitmap range out of bounds")
+            bitmap = meta[bitmap_start:bitmap_end]
+            table_start = bitmap_end
+            table_end = table_start + chunk_count * 0x08
+            if table_end > len(meta):
+                raise ValueError("Chunk size table out of bounds")
+            for chunk_index in range(chunk_count):
+                chunk_sizes.append(read_i32_le(meta, table_start + chunk_index * 0x08))
+        used_len = 0x2C + bitmap_len + chunk_count * 0x08
+        records.append(
+            {
+                "index": index,
+                "fileType": type_list[index] if index < len(type_list) else ".bin",
+                "fileSize": file_size,
+                "chunkCount": chunk_count,
+                "startOffset": start_offset,
+                "fileIndex": file_index,
+                "pageCount": page_count,
+                "bitmap": bitmap,
+                "chunkSizes": chunk_sizes,
+            }
+        )
+        sub_cursor += used_len
+    return type_list, records, body
+
+
+def extract_ob_record_data(record: dict[str, Any], body: bytes) -> bytes:
+    file_size = int(record["fileSize"])
+    chunk_count = int(record["chunkCount"])
+    start_offset = int(record["startOffset"])
+    if chunk_count == 0:
+        end = start_offset + file_size
+        if end > len(body):
+            raise ValueError("Raw file range out of body")
+        return body[start_offset:end]
+
+    output = bytearray()
+    data_cursor = start_offset
+    compressed_index = 0
+    bitmap = record["bitmap"]
+    chunk_sizes = record["chunkSizes"]
+    page_count = int(record["pageCount"])
+    for page_index in range(page_count):
+        flag = bitmap[page_index >> 3]
+        is_compressed = ((flag >> (page_index & 7)) & 1) == 1
+        if is_compressed:
+            compressed_size = chunk_sizes[compressed_index]
+            if compressed_size <= 0:
+                raise ValueError("Invalid compressed chunk size")
+            end = data_cursor + compressed_size
+            if end > len(body):
+                raise ValueError("Compressed chunk range out of body")
+            output.extend(zlib.decompress(body[data_cursor:end], -15))
+            data_cursor = end
+            compressed_index += 1
+        else:
+            raw_size = min(FHM2D_PAGE_SIZE, file_size - page_index * FHM2D_PAGE_SIZE)
+            end = data_cursor + raw_size
+            if end > len(body):
+                raise ValueError("Raw chunk range out of body")
+            output.extend(body[data_cursor:end])
+            data_cursor = end
+    return bytes(output[:file_size])
+
+
+def internal_name_for_record(record: dict[str, Any], body: bytes) -> str | None:
+    file_type = str(record.get("fileType") or "").lower()
+    if file_type not in {".nutexb", ".nus3bank", ".nuanmb", ".numdlb"}:
+        return None
+    data = extract_ob_record_data(record, body)
+    if file_type == ".nutexb":
+        return parse_nutexb_internal_name(data)
+    if file_type == ".nus3bank":
+        return parse_nus3bank_internal_name(data)
+    if file_type == ".nuanmb":
+        return parse_nuanmb_internal_name(data)
+    if file_type == ".numdlb":
+        return parse_numdlb_internal_name(data)
+    return None
+
+
+def infer_dplcache_route(type_counts: Counter[str]) -> tuple[str | None, str | None]:
+    if type_counts.get(".numdlb") or type_counts.get(".numshb") or type_counts.get(".nusktb"):
+        return "002chara", "unit.model"
+    if type_counts.get(".nuanmb"):
+        return "003motion", "unit.motion"
+    if type_counts.get(".nus3bank"):
+        return "090sound", "unit.sound"
+    if type_counts.get(".nutexb"):
+        return "009gui", None
+    return None, None
+
+
+def inspect_ob_dplcache_file(path: Path, max_name_records: int = 24) -> dict[str, Any]:
+    type_list, records, body = parse_ob_fhm2d_records(path)
+    type_counts = Counter(type_list)
+    internal_names: list[str] = []
+    for record in records:
+        if len(internal_names) >= max_name_records:
+            break
+        try:
+            name = internal_name_for_record(record, body)
+        except Exception:
+            continue
+        if name:
+            internal_names.append(name)
+    name = common_internal_name(internal_names)
+    route_prefix, route_id = infer_dplcache_route(type_counts)
+    return {
+        "name": name,
+        "routePrefix": route_prefix,
+        "routeId": route_id,
+        "typeCounts": dict(sorted(type_counts.items())),
+        "fileCount": len(records),
+        "internalNames": sorted(set(internal_names)),
+    }
+
+
+def build_ob_dplcache_entries(
+    ob_dplcache_root: Path | None,
+    existing_hashes: set[str],
+) -> list[dict[str, Any]]:
+    if not ob_dplcache_root or not ob_dplcache_root.exists():
+        return []
+    entries: list[dict[str, Any]] = []
+    for path in sorted(ob_dplcache_root.glob("0x*.fhm2d"), key=lambda item: item.name.lower()):
+        if not path.is_file():
+            continue
+        match = FHM2D_FILE_RE.match(path.name)
+        if not match:
+            continue
+        hash_name = normalize_hash_name(match.group(1))
+        if not hash_name or hash_name in existing_hashes:
+            continue
+        try:
+            info = inspect_ob_dplcache_file(path)
+            name = info["name"]
+            confidence = "ob-dplcache-internal" if name else "ob-dplcache-fallback"
+            source = "ob-dplcache-internal" if name else "ob-dplcache-fallback"
+            error = None
+        except Exception as exc:
+            info = {
+                "routePrefix": None,
+                "routeId": None,
+                "typeCounts": {},
+                "fileCount": None,
+                "internalNames": [],
+            }
+            name = None
+            confidence = "ob-dplcache-fallback"
+            source = "ob-dplcache-fallback"
+            error = str(exc)
+
+        if not name:
+            name = f"ob_{hash_name[2:].lower()}"
+        route_prefix = info.get("routePrefix")
+        package_path = f"{route_prefix}/{name}" if route_prefix else name
+        evidence = {
+            "path": str(path),
+            "sizeBytes": path.stat().st_size,
+            "fileCount": info.get("fileCount"),
+            "typeCounts": info.get("typeCounts", {}),
+            "internalNames": info.get("internalNames", [])[:24],
+        }
+        if error:
+            evidence["error"] = error
+        entries.append(
+            {
+                "hashName": hash_name,
+                "name": sanitize_name(name),
+                "routeId": info.get("routeId"),
+                "routePrefix": route_prefix,
+                "source": source,
+                "confidence": confidence,
+                "packagePath": package_path,
+                "gameRelativePath": None,
+                "categoryPath": route_prefix,
+                "aliases": sorted({sanitize_name(name), hash_name}),
+                "sourcePathCount": 1,
+                "matchedPathCount": len(info.get("internalNames", [])),
+                "character": None,
+                "evidence": evidence,
+            }
+        )
+    return entries
+
+
 def build_ob_structure_entries(
     ob_file_root: Path | None,
     ai_names: dict[str, dict[str, Any]],
@@ -689,7 +1149,9 @@ def dedupe_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
         "ob-param-unit-id": 3,
         "manual-override": 3,
         "manual-research-note": 3,
+        "ob-dplcache-internal": 2,
         "inferred-ob-ai-string": 1,
+        "ob-dplcache-fallback": 0,
     }
     for entry in entries:
         key = (entry["hashName"], entry.get("routeId") or entry.get("routePrefix"))
@@ -800,8 +1262,13 @@ def build_mapping(args: argparse.Namespace) -> dict[str, Any]:
         ai_names,
         {entry["hashName"] for entry in meta_entries},
     )
+    pre_dplcache_entries = [*meta_entries, *ob_unit_entries, *ob_param_entries, *manual_entries, *ob_entries]
+    ob_dplcache_entries = build_ob_dplcache_entries(
+        Path(args.ob_dplcache_root) if args.ob_dplcache_root else None,
+        {entry["hashName"] for entry in pre_dplcache_entries},
+    )
     entries = make_route_names_unique(
-        dedupe_entries([*meta_entries, *ob_unit_entries, *ob_param_entries, *manual_entries, *ob_entries])
+        dedupe_entries([*pre_dplcache_entries, *ob_dplcache_entries])
     )
     apply_character_list(entries, character_rows)
     ob_structures = collect_ob_structure_hashes(ob_file_root)
@@ -827,6 +1294,7 @@ def build_mapping(args: argparse.Namespace) -> dict[str, Any]:
             "referenceRoots": [str(root) for root in reference_roots],
             "metaRoot": args.meta_root,
             "obFileRoot": args.ob_file_root,
+            "obDplcacheRoot": args.ob_dplcache_root,
             "aiString": [str(path) for path in ai_string_paths],
             "obUnit": args.ob_unit,
             "manualOverrides": args.manual_overrides,
@@ -853,6 +1321,7 @@ def main() -> int:
     parser.add_argument("--reference-root", action="append", required=True, help="EXVS2 unpacked root, e.g. vs2/x64 or vs2/bak.")
     parser.add_argument("--meta-root", required=True, help="EXVS2 meta directory containing 0xHASH_meta.bin files.")
     parser.add_argument("--ob-file-root", help="Optional OB extracted file root, e.g. com/file.")
+    parser.add_argument("--ob-dplcache-root", help="Optional real OB dplcache_release root containing 0xHASH.fhm2d files.")
     parser.add_argument("--ai-string", action="append", help="Optional ai_string_*.txt path for OB-only name inference.")
     parser.add_argument("--character-list", help="Optional character_list.json path recorded in mapping sources.")
     parser.add_argument("--ob-unit", help="Optional OB unit hash table JSON, e.g. tools/ob_unit.json.")
