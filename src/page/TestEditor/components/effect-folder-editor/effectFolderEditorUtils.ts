@@ -7,6 +7,7 @@ import type {
   EffectFolderHash,
 } from "@/services/effectFolder/effectFolderService";
 import { inferEffectFolderStructurePath } from "@/services/effectFolder/effectFolderService";
+import { resolveMigratedFhm2dFolderPath } from "@/utils/fhm2dFolderPathResolution";
 import { STRUCTURE_JSON_SUFFIX } from "../fileTreeNodeRowUtils";
 
 export type EffectInventoryCategory = "efxbn" | "models" | "textures" | "other";
@@ -73,7 +74,13 @@ export function resolveEffectPackFromFolderPath(
     nodeIsDirectory: true,
     document,
   });
-  if (identity?.routeId === "unit.effect") return identity;
+  if (identity?.routeId === "unit.effect") {
+    return {
+      ...identity,
+      folderPath: trimmed,
+      structureJsonPath: inferEffectFolderStructurePath(trimmed),
+    };
+  }
 
   const normalized = trimmed.replace(/[\\/]+$/, "");
   const hashFolderName = normalized.split(/[\\/]/).filter(Boolean).pop() ?? normalized;
@@ -88,6 +95,15 @@ export function resolveEffectPackFromFolderPath(
     structureJsonPath: inferEffectFolderStructurePath(trimmed),
     sourceLayout: "configured",
   };
+}
+
+export async function resolveEffectPackFromFolderPathAsync(
+  workspaceRoot: string,
+  folderPath: string,
+  document: TestEditorWorkspaceDocument,
+): Promise<WorkspacePackIdentity | null> {
+  const remappedFolderPath = await resolveMigratedFhm2dFolderPath(folderPath);
+  return resolveEffectPackFromFolderPath(workspaceRoot, remappedFolderPath, document);
 }
 
 export function formatEffectFolderHash(hash: EffectFolderHash): string {

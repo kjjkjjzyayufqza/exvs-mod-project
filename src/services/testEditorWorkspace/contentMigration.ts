@@ -1,6 +1,7 @@
 import { join } from "@tauri-apps/api/path";
 
 import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
+import { applyFhm2dStructureMigrationToPack, resolveMigratedFhm2dPackPaths } from "@/utils/fhm2dFolderPathResolution";
 import type {
   ResolvedWorkspaceContentLocation,
   ResolvedWorkspaceContentPack,
@@ -25,26 +26,28 @@ export async function promptAndMigrateWorkspaceContentIfNeeded(
 ): Promise<ResolvedWorkspaceContentLocation> {
   if (!content.existing) return content;
 
+  const remappedExisting = await resolveMigratedFhm2dPackPaths(content.existing);
+  const baseContent =
+    remappedExisting === content.existing
+      ? content
+      : {
+          ...content,
+          existing: remappedExisting,
+        };
+
   const migration = await promptAndMigrateFhm2dStructureIfNeeded({
-    structureJsonPath: content.existing.structureJsonPath,
-    title: title ?? `Migrate ${content.descriptor.label} FHM2D structure`,
+    structureJsonPath: baseContent.existing!.structureJsonPath,
+    title: title ?? `Migrate ${baseContent.descriptor.label} FHM2D structure`,
   });
-  if (!migration) return content;
+  if (!migration) return baseContent;
 
   const migratedExisting = await withMigratedFilePath(
-    {
-      ...content.existing,
-      folderPath: migration.rootPath ?? content.existing.folderPath,
-      structureJsonPath: migration.structureJsonPath,
-      packKey: content.existing.prefix
-        ? `${content.existing.prefix}/${migration.name}`
-        : migration.name,
-    },
-    content.descriptor.relativeFilePath,
+    applyFhm2dStructureMigrationToPack(baseContent.existing!, migration),
+    baseContent.descriptor.relativeFilePath,
   );
 
   return {
-    ...content,
+    ...baseContent,
     existing: migratedExisting,
   };
 }

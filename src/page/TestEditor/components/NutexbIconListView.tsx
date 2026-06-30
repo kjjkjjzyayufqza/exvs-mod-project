@@ -15,6 +15,11 @@ import {
   type WorkspaceContentId,
 } from "@/services/testEditorWorkspace/contentCatalog";
 import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
+import {
+  applyFhm2dStructureMigrationToPack,
+  resolveMigratedFhm2dFolderPath,
+  resolveMigratedFhm2dPackPaths,
+} from "@/utils/fhm2dFolderPathResolution";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 import { CardIconList } from "./card-icon-list/CardIconList";
 import { CardIconAddDialog } from "./card-icon-list/CardIconAddDialog";
@@ -129,8 +134,9 @@ export function NutexbIconListView({
         : null;
 
     const { content, pack } = await resolveContentPack(contentId);
-    let filePath = pack.structureJsonPath;
-    let rootDirPath = pack.folderPath;
+    const remappedPack = await resolveMigratedFhm2dPackPaths(pack);
+    let filePath = remappedPack.structureJsonPath;
+    let rootDirPath = remappedPack.folderPath;
     if (!options?.silent) {
       setLoadState({ status: "loading" });
     }
@@ -140,8 +146,9 @@ export function NutexbIconListView({
         title: `Migrate ${title} FHM2D structure`,
       });
       if (migration) {
-        filePath = migration.structureJsonPath;
-        rootDirPath = migration.rootPath ?? rootDirPath;
+        const migratedPack = applyFhm2dStructureMigrationToPack(remappedPack, migration);
+        filePath = migratedPack.structureJsonPath;
+        rootDirPath = migratedPack.folderPath;
       }
       const convertDirPath = await join(rootDirPath, "__convert");
       const raw = await readTextFile(filePath);
@@ -196,8 +203,9 @@ export function NutexbIconListView({
         : null;
 
     const { content, pack } = await resolveContentPack(secondaryContentId);
-    let filePath = pack.structureJsonPath;
-    let rootDirPath = pack.folderPath;
+    const remappedPack = await resolveMigratedFhm2dPackPaths(pack);
+    let filePath = remappedPack.structureJsonPath;
+    let rootDirPath = remappedPack.folderPath;
     if (!options?.silent) {
       setSecondaryLoadState({ status: "loading" });
     }
@@ -207,8 +215,9 @@ export function NutexbIconListView({
         title: `Migrate ${secondaryDescriptor?.label ?? "FHM2D"} structure`,
       });
       if (migration) {
-        filePath = migration.structureJsonPath;
-        rootDirPath = migration.rootPath ?? rootDirPath;
+        const migratedPack = applyFhm2dStructureMigrationToPack(remappedPack, migration);
+        filePath = migratedPack.structureJsonPath;
+        rootDirPath = migratedPack.folderPath;
       }
       const convertDirPath = await join(rootDirPath, "__convert");
       const raw = await readTextFile(filePath);

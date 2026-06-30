@@ -31,6 +31,11 @@ overrides are kept in `tools\fhm2d_name_mapping_overrides.json`.
 - High-level route/category folders such as `006effect/chara/001gundam` are
   preserved as evidence in `packagePath` and `categoryPath`, but are not included
   in `name` unless needed to avoid collisions.
+- GUI image packs use the full metadata path instead of stopping at
+  `009gui/image`: single-file packs use the file stem, multi-file packs use the
+  deepest common folder, and small same-folder subsets include their file stems.
+  For example, `0xA0253AA0` maps to `009gui/image/ser/ser_ms` and uses
+  `ser_ms`, not `image_a0253aa0`.
 - OB AI string names use lower-snake style and drop the leading numeric series
   and default `_001` variant: `ai_CHR_014GNDM00_007REBONS_001` becomes
   `gndm00_007rebons`.
@@ -47,7 +52,7 @@ overrides are kept in `tools\fhm2d_name_mapping_overrides.json`.
 | `003motion` | `003motion/<motion-group>/<series>/<unit>` |
 | `004ragdoll` | `004ragdoll/<unit>` |
 | `006effect` | `006effect/chara/<series>/<unit>` or category fallback |
-| `009gui` | single-file packs use file stem; multi-file packs use category plus collision suffix |
+| `009gui` | image packs use file stem or deepest common folder; flash packs use deepest common folder |
 | `012list` | `012list/<list-kind>` |
 | `040msc` | `040msc/<unit>` |
 | `041cpm` | `041cpm/<param-kind>/<unit-or-table>` when present |
@@ -71,17 +76,25 @@ python tools\build_fhm2d_name_mapping.py `
 
 Current generated stats:
 
-- `13385` total entries
+- `13384` total entries
 - `10135` `exact-meta-path` entries
 - `3246` `ob-unit-list` entries
 - `1` `ob-param-unit-id` entry
 - `1` `manual-research-note` entry
-- `2` `inferred-ob-ai-string` entries
-- `4019` entries matched to `character_list.json` character evidence
-- `48` current `E:\XB\解包\com\file` structure hashes checked
-- `48` current OB structure hashes mapped
+- `1` `inferred-ob-ai-string` entry
+- `4018` entries matched to `character_list.json` character evidence
+- `42` current formal `E:\XB\解包\com\file\*\*_structure.json` structure hashes checked
+- `42` current formal OB structure hashes mapped
 - `0` current OB structure hashes remain unresolved
+- `0` generic GUI names of the form `image_<hash>`, `flash_<hash>`, or `font_<hash>`
 - `0` duplicate route/name pairs
+
+Metadata audit:
+
+- `22890` metadata files were scanned under `E:\XB\解包\vs2\meta`.
+- `21778` metadata files contain source paths under `app\data`/`x64`.
+- `1112` metadata files do not contain usable source paths and cannot produce a
+  path-backed `exact-meta-path` entry.
 
 `character_list.json` does not currently contain the observed FHM2D pack hashes
 from `E:\XB\解包\com\file`; it is used as character evidence after a package

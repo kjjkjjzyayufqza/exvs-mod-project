@@ -164,6 +164,27 @@ def fallback_package_candidate(domain_rel_file: str, reference_dirs: dict[str, s
     return max(candidates, key=lambda item: (len(item.split("/")), item))
 
 
+def common_reference_parent(domain_rel_paths: list[str], reference_dirs: dict[str, str]) -> str | None:
+    parent_parts = [normalize_slashes(path).split("/")[:-1] for path in domain_rel_paths]
+    parent_parts = [parts for parts in parent_parts if parts]
+    if not parent_parts:
+        return None
+
+    common: list[str] = []
+    for segments in zip(*parent_parts):
+        if len({segment.lower() for segment in segments}) != 1:
+            break
+        common.append(segments[0])
+
+    while common:
+        candidate = "/".join(common)
+        resolved = reference_dirs.get(candidate.lower())
+        if resolved:
+            return resolved
+        common.pop()
+    return None
+
+
 def infer_package_path(paths: list[str], reference_dirs: dict[str, str]) -> tuple[str | None, int]:
     domain_rel_paths: list[str] = []
     counts: Counter[str] = Counter()
@@ -190,6 +211,13 @@ def infer_package_path(paths: list[str], reference_dirs: dict[str, str]) -> tupl
         if parent and parent != "." and stem:
             return f"{parent}/{stem}", 1
 
+    if unique_files:
+        first_domain = unique_files[0].split("/", 1)[0].lower()
+        if first_domain == "009gui":
+            common_parent = common_reference_parent(unique_files, reference_dirs)
+            if common_parent and len(common_parent.split("/")) > 2:
+                return common_parent, len(unique_files)
+
     source = counts if counts else fallback_counts
     if not source:
         return None, 0
@@ -203,6 +231,51 @@ def domain_from_package(package_path: str) -> str:
 
 def entry_name_from_package(package_path: str) -> str:
     return sanitize_name(package_path.rsplit("/", 1)[-1].lower())
+
+
+def source_stems_for_package(source_paths: list[str], package_path: str) -> list[str]:
+    stems: set[str] = set()
+    normalized_package = normalize_slashes(package_path).lower()
+    for raw in source_paths:
+        game_rel = game_relative_path(raw)
+        if not game_rel:
+            continue
+        domain_rel = domain_relative_path(game_rel)
+        normalized_domain_rel = normalize_slashes(domain_rel)
+        if not normalized_domain_rel.lower().startswith(f"{normalized_package}/"):
+            continue
+        stem = Path(normalized_domain_rel).stem
+        if stem:
+            stems.add(sanitize_name(stem.lower()))
+    return sorted(stems)
+
+
+def entry_name_from_source_paths(package_path: str, source_paths: list[str]) -> str:
+    base_name = entry_name_from_package(package_path)
+    package_parts = normalize_slashes(package_path).split("/")
+    if (
+        domain_from_package(package_path) != "009gui"
+        or len(package_parts) < 2
+        or package_parts[1].lower() != "image"
+    ):
+        return base_name
+
+    stems = source_stems_for_package(source_paths, package_path)
+    if len(stems) <= 1:
+        return base_name
+
+    prefix = f"{base_name}_"
+    if all(stem.startswith(prefix) for stem in stems):
+        suffixes = [stem[len(prefix) :] for stem in stems]
+        if len(stems) >= 8:
+            return base_name
+        if len(stems) <= 4:
+            return sanitize_name(f"{base_name}_{'_'.join(suffixes)}")
+        return sanitize_name(f"{base_name}_{suffixes[0]}_{suffixes[-1]}_{len(stems)}files")
+
+    if len(stems) <= 4:
+        return sanitize_name(f"{base_name}_{'_'.join(stems)}")
+    return sanitize_name(f"{base_name}_{stems[0]}_{stems[-1]}_{len(stems)}files")
 
 
 def category_path_from_package(package_path: str) -> str | None:
@@ -237,10 +310,11 @@ def build_meta_entries(meta_root: Path, reference_dirs: dict[str, str]) -> list[
 
         domain = domain_from_package(package_path)
         game_path = f"x64/{package_path}"
+        entry_name = entry_name_from_source_paths(package_path, source_paths)
         entries.append(
             {
                 "hashName": hash_name,
-                "name": entry_name_from_package(package_path),
+                "name": entry_name,
                 "routeId": ROUTE_BY_DOMAIN.get(domain),
                 "routePrefix": domain,
                 "source": "exvs2-meta",
@@ -248,7 +322,7 @@ def build_meta_entries(meta_root: Path, reference_dirs: dict[str, str]) -> list[
                 "packagePath": package_path,
                 "gameRelativePath": game_path,
                 "categoryPath": category_path_from_package(package_path),
-                "aliases": sorted({package_path.rsplit("/", 1)[-1], entry_name_from_package(package_path)}),
+                "aliases": sorted({package_path.rsplit("/", 1)[-1], entry_name_from_package(package_path), entry_name}),
                 "sourcePathCount": len(source_paths),
                 "matchedPathCount": matched_count,
                 "character": None,
@@ -570,7 +644,7 @@ def collect_ob_structure_hashes(ob_file_root: Path | None) -> list[dict[str, str
     if not ob_file_root or not ob_file_root.exists():
         return []
     structures: dict[tuple[str, str], dict[str, str]] = {}
-    for structure_path in sorted(ob_file_root.glob("*/*_structure*.json")):
+    for structure_path in sorted(ob_file_root.glob("*/*_structure.json")):
         hash_name = normalize_hash_name(structure_path.name)
         if not hash_name:
             continue

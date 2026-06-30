@@ -28,6 +28,7 @@ import {
   analyzeUnitModelFolderMigration,
   migrateUnitModelFolderLayout,
 } from "../utils/unitModelMigrationService";
+import { resolveMigratedFhm2dFolderPath } from "@/utils/fhm2dFolderPathResolution";
 import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
 
 export type UnitModelWorkspaceBusy = "pick" | "extract" | "migrate" | "validate" | "copy" | null;
@@ -200,7 +201,7 @@ export function useUnitModelWorkspace(
         trimmedSelected,
         "directory",
       );
-      let rootToLoad = trimmedSelected;
+      let rootToLoad = await resolveMigratedFhm2dFolderPath(trimmedSelected);
       try {
         const metadataStructurePath = inferUnitModelStructurePath(rootToLoad);
         const metadataMigration = await promptAndMigrateFhm2dStructureIfNeeded({

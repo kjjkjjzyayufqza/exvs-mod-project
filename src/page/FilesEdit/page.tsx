@@ -17,6 +17,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { findNutexbString } from "../../module/commonFunc";
 import { Command } from '@tauri-apps/plugin-shell';
 import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
+import { resolveMigratedFhm2dFolderPath } from "@/utils/fhm2dFolderPathResolution";
 
 
 // Extend FileInfo to include possible properties
@@ -203,11 +204,12 @@ export default function FilesEdit() {
     });
 
     if (selected && !Array.isArray(selected)) {
-      setFolderPath(selected);
+      const resolvedFolder = await resolveMigratedFhm2dFolderPath(selected);
+      setFolderPath(resolvedFolder);
       setIsLoading(true);
       
       try {
-        const entries = await readDir(selected);
+        const entries = await readDir(resolvedFolder);
         const filteredEntries: any[] = entries
           .filter((entry) => entry.isFile)
           .filter((entry) => {
@@ -220,7 +222,7 @@ export default function FilesEdit() {
           })
           .map(entry => ({
             name: entry.name || "",
-            path: selected + "/" + entry.name
+            path: resolvedFolder + "/" + entry.name
           })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
         // PHASE 1: Immediately show basic file list to user

@@ -9,6 +9,10 @@ import { openPath } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
 import { repackFolderUsingStructureToModFolder } from "@/utils/repackRunner";
 import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
+import {
+  applyFhm2dStructureMigrationToPack,
+  resolveMigratedFhm2dPackPaths,
+} from "@/utils/fhm2dFolderPathResolution";
 import { removeMatchingModVgsht2 } from "../utils/modVgsht2";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import {
@@ -219,27 +223,24 @@ function FileTreePaneImpl({
         toast.error("Cannot resolve workspace pack target");
         return;
       }
-      const structurePathKey = normalizeStructureJsonPathKey(target.structureJsonPath);
+      const remappedTarget = await resolveMigratedFhm2dPackPaths(target);
+      const structurePathKey = normalizeStructureJsonPathKey(remappedTarget.structureJsonPath);
       if (node.isDir && !structureJsonPathKeys.has(structurePathKey)) {
-        toast.error(`Missing structure JSON: ${target.structureJsonPath}`);
+        toast.error(`Missing structure JSON: ${remappedTarget.structureJsonPath}`);
         return;
       }
-      const structureOk = await exists(target.structureJsonPath);
+      const structureOk = await exists(remappedTarget.structureJsonPath);
       if (!structureOk) {
-        toast.error(`Missing structure JSON: ${target.structureJsonPath}`);
+        toast.error(`Missing structure JSON: ${remappedTarget.structureJsonPath}`);
         return;
       }
       const metadataMigration = await promptAndMigrateFhm2dStructureIfNeeded({
-        structureJsonPath: target.structureJsonPath,
+        structureJsonPath: remappedTarget.structureJsonPath,
       });
       beginRepackFlow(
         metadataMigration
-          ? {
-              ...target,
-              folderPath: metadataMigration.rootPath ?? target.folderPath,
-              structureJsonPath: metadataMigration.structureJsonPath,
-            }
-          : target,
+          ? applyFhm2dStructureMigrationToPack(remappedTarget, metadataMigration)
+          : remappedTarget,
       );
     },
     [beginRepackFlow, currentDir, structureJsonPathKeys, workspaceDocument]

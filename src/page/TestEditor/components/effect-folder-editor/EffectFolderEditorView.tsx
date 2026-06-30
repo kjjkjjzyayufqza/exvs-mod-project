@@ -20,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import {
-  resolveEffectPackFromFolderPath,
+  resolveEffectPackFromFolderPathAsync,
   resolveEffectPackFromStructureJson,
   type EffectInventoryCategory,
 } from "./effectFolderEditorUtils";
@@ -83,6 +83,18 @@ export default function EffectFolderEditorView({
   const hydratedRef = useRef(false);
   const lastSuggestedPathRef = useRef<string | null>(null);
 
+  const activatePack = useCallback(
+    (pack: WorkspacePackIdentity, options?: { remember?: boolean }) => {
+      setFolderInput(pack.folderPath);
+      setActivePack(pack);
+      setLoadError(null);
+      if (options?.remember !== false && workspaceRoot.trim()) {
+        void rememberEffectFolderPath(workspaceRoot, pack.folderPath);
+      }
+    },
+    [workspaceRoot],
+  );
+
   const editor = useEffectFolderEditor({
     workspaceRoot,
     pack: activePack ?? EMPTY_PACK,
@@ -90,6 +102,7 @@ export default function EffectFolderEditorView({
     modFolderPath,
     onPackMutated,
     onPackRepacked,
+    onActivePackChange: activatePack,
   });
 
   const categoryCounts = useMemo(() => {
@@ -108,18 +121,6 @@ export default function EffectFolderEditorView({
 
   const inventory = editor.loadState.status === "ready" ? editor.loadState.inventory : null;
   const busy = editor.busyAction != null;
-
-  const activatePack = useCallback(
-    (pack: WorkspacePackIdentity, options?: { remember?: boolean }) => {
-      setFolderInput(pack.folderPath);
-      setActivePack(pack);
-      setLoadError(null);
-      if (options?.remember !== false && workspaceRoot.trim()) {
-        void rememberEffectFolderPath(workspaceRoot, pack.folderPath);
-      }
-    },
-    [workspaceRoot],
-  );
 
   useEffect(() => {
     hydratedRef.current = false;
@@ -140,15 +141,28 @@ export default function EffectFolderEditorView({
       hydratedRef.current = true;
 
       if (saved?.folderPath) {
-        const pack = resolveEffectPackFromFolderPath(workspaceRoot, saved.folderPath, workspaceDocument);
+        const pack = await resolveEffectPackFromFolderPathAsync(
+          workspaceRoot,
+          saved.folderPath,
+          workspaceDocument,
+        );
         if (pack) {
-          activatePack(pack, { remember: false });
+          activatePack(pack);
           return;
         }
         setFolderInput(saved.folderPath);
       }
 
       if (suggestedPack) {
+        const remappedSuggested = await resolveEffectPackFromFolderPathAsync(
+          workspaceRoot,
+          suggestedPack.folderPath,
+          workspaceDocument,
+        );
+        if (remappedSuggested) {
+          activatePack(remappedSuggested);
+          return;
+        }
         setFolderInput(suggestedPack.folderPath);
       }
     })();
@@ -163,8 +177,22 @@ export default function EffectFolderEditorView({
     const suggestedPath = suggestedPack.folderPath;
     if (lastSuggestedPathRef.current === suggestedPath) return;
     lastSuggestedPathRef.current = suggestedPath;
-    activatePack(suggestedPack);
-  }, [activatePack, isActive, suggestedPack]);
+
+    let cancelled = false;
+    void (async () => {
+      const pack = await resolveEffectPackFromFolderPathAsync(
+        workspaceRoot,
+        suggestedPath,
+        workspaceDocument,
+      );
+      if (cancelled || !pack) return;
+      activatePack(pack);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activatePack, isActive, suggestedPack, workspaceDocument, workspaceRoot]);
 
   const pickFolder = useCallback(async () => {
     const selected = await open({ directory: true, multiple: false });
@@ -175,12 +203,18 @@ export default function EffectFolderEditorView({
   }, []);
 
   const loadFolder = useCallback(() => {
-    const pack = resolveEffectPackFromFolderPath(workspaceRoot, folderInput, workspaceDocument);
-    if (!pack) {
-      setLoadError("Enter a valid effect folder path.");
-      return;
-    }
-    activatePack(pack);
+    void (async () => {
+      const pack = await resolveEffectPackFromFolderPathAsync(
+        workspaceRoot,
+        folderInput,
+        workspaceDocument,
+      );
+      if (!pack) {
+        setLoadError("Enter a valid effect folder path.");
+        return;
+      }
+      activatePack(pack);
+    })();
   }, [activatePack, folderInput, workspaceDocument, workspaceRoot]);
 
   const headerPath = activePack?.folderPath ?? folderInput.trim();

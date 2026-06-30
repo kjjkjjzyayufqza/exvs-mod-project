@@ -42,11 +42,20 @@ describe("fhm2dNameMapping", () => {
   });
 
   it("keeps OB ai-string inferred mappings available", () => {
-    const entry = findFhm2dNameMapping("0xB0476F04", { routeId: "unit.effect" });
+    const entry = findFhm2dNameMapping("0x46DE9B9C", { routeId: "unit.model" });
 
-    expect(entry?.name).toBe("gundam_002chrgel");
+    expect(entry?.name).toBe("gundam_005gyan00");
     expect(entry?.confidence).toBe("inferred-ob-ai-string");
-    expect(entry?.character?.characterId).toBe(1002001);
+    expect(entry?.character?.characterId).toBe(1005001);
+  });
+
+  it("uses deep GUI image folders from EXVS2 metadata", () => {
+    const entry = findFhm2dNameMapping("0xA0253AA0", { routeId: "gui.series-icons" });
+
+    expect(entry?.name).toBe("ser_ms");
+    expect(entry?.confidence).toBe("exact-meta-path");
+    expect(entry?.packagePath).toBe("009gui/image/ser/ser_ms");
+    expect(entry?.sourcePathCount).toBe(49);
   });
 
   it("maps newer OB unit hashes from the unit hash table", () => {

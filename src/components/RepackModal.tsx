@@ -17,6 +17,7 @@ import {
   joinPreviewPath,
 } from "@/components/fhm2d-metadata";
 import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
+import { applyFhm2dStructureMigrationToPack, resolveMigratedFhm2dFolderPath } from "@/utils/fhm2dFolderPathResolution";
 import {
   normalizeFhm2dHashName,
   sanitizeFhm2dStructureName,
@@ -199,13 +200,20 @@ export default function RepackModal({ isOpen, onClose }: RepackModalProps) {
       }
 
       let jsonFilePath = `${parentDir}/${selectedJsonFile.name}`;
-      let inputFolderPath = repackInputPath;
+      let inputFolderPath = await resolveMigratedFhm2dFolderPath(repackInputPath);
       const metadataMigration = await promptAndMigrateFhm2dStructureIfNeeded({
         structureJsonPath: jsonFilePath,
       });
       if (metadataMigration) {
-        jsonFilePath = metadataMigration.structureJsonPath;
-        inputFolderPath = metadataMigration.rootPath ?? inputFolderPath;
+        const migratedPaths = applyFhm2dStructureMigrationToPack(
+          {
+            folderPath: inputFolderPath,
+            structureJsonPath: jsonFilePath,
+          },
+          metadataMigration,
+        );
+        jsonFilePath = migratedPaths.structureJsonPath;
+        inputFolderPath = migratedPaths.folderPath;
       }
 
       // Read and import the JSON file content directly

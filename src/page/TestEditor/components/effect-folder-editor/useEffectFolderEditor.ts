@@ -21,14 +21,16 @@ import {
   type EffectInventoryCategory,
   type EffectListItem,
 } from "./effectFolderEditorUtils";
+import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
+import { applyFhm2dStructureMigrationToPack } from "@/utils/fhm2dFolderPathResolution";
 import {
   DEFAULT_EFFECT_FOLDER_PACK_SELECTION,
   getEffectFolderPackSelection,
   rememberEffectFolderPackSelection,
+  rememberEffectFolderPath,
   sanitizeEffectFolderPackSelection,
   type EffectFolderPackSelectionState,
 } from "./effectFolderEditorSettings";
-import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
 
 export type EffectFolderEditorLoadState =
   | { status: "idle" }
@@ -47,6 +49,7 @@ type UseEffectFolderEditorParams = {
   modFolderPath: string;
   onPackMutated?: (pack: WorkspacePackIdentity) => void;
   onPackRepacked?: (packKey: string) => void;
+  onActivePackChange?: (pack: WorkspacePackIdentity) => void;
 };
 
 function inventoryToListItems(inventory: EffectFolderInventory): EffectListItem[] {
@@ -87,6 +90,7 @@ export function useEffectFolderEditor({
   modFolderPath,
   onPackMutated,
   onPackRepacked,
+  onActivePackChange,
 }: UseEffectFolderEditorParams) {
   const [metadataPack, setMetadataPack] = useState<WorkspacePackIdentity | null>(null);
   const activePack = metadataPack ?? pack;
@@ -182,14 +186,12 @@ export function useEffectFolderEditor({
           title: "Migrate Effect FHM2D structure",
         });
         if (migration) {
-          nextPack = {
-            ...activePack,
-            packKey: activePack.prefix ? `${activePack.prefix}/${migration.name}` : migration.name,
-            hashFolderName: migration.name,
-            folderPath: migration.rootPath ?? activePack.folderPath,
-            structureJsonPath: migration.structureJsonPath,
-          };
+          nextPack = applyFhm2dStructureMigrationToPack(activePack, migration);
           setMetadataPack(nextPack);
+          onActivePackChange?.(nextPack);
+          if (workspaceRoot.trim()) {
+            void rememberEffectFolderPath(workspaceRoot, nextPack.folderPath);
+          }
         }
 
         const inventory = await inspectEffectFolder(nextPack.folderPath, nextPack.structureJsonPath);
@@ -224,6 +226,7 @@ export function useEffectFolderEditor({
       selectedKeys,
       structureJsonPath,
       workspaceRoot,
+      onActivePackChange,
     ],
   );
 

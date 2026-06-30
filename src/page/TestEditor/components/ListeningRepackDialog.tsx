@@ -10,6 +10,10 @@ import { toast } from "sonner";
 import { repackFolderUsingStructureToModFolder } from "@/utils/repackRunner";
 import { removeMatchingModVgsht2 } from "../utils/modVgsht2";
 import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
+import {
+  applyFhm2dStructureMigrationToPack,
+  resolveMigratedFhm2dPackPaths,
+} from "@/utils/fhm2dFolderPathResolution";
 
 type ListeningRepackDialogProps = {
   open: boolean;
@@ -71,8 +75,9 @@ export default function ListeningRepackDialog({
         }
         const next: PackEntry[] = [];
         for (const pack of packs) {
-          let folderPath = pack.folderPath;
-          let structurePath = pack.structureJsonPath;
+          const remappedPack = await resolveMigratedFhm2dPackPaths(pack);
+          let folderPath = remappedPack.folderPath;
+          let structurePath = remappedPack.structureJsonPath;
           let structureExists = await exists(structurePath);
           if (structureExists) {
             const migration = await promptAndMigrateFhm2dStructureIfNeeded({
@@ -80,8 +85,9 @@ export default function ListeningRepackDialog({
               title: "Migrate listening repack structure",
             });
             if (migration) {
-              folderPath = migration.rootPath ?? folderPath;
-              structurePath = migration.structureJsonPath;
+              const migratedPack = applyFhm2dStructureMigrationToPack(remappedPack, migration);
+              folderPath = migratedPack.folderPath;
+              structurePath = migratedPack.structureJsonPath;
               structureExists = await exists(structurePath);
             }
           }
