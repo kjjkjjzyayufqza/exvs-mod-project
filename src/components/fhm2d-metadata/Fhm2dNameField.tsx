@@ -7,6 +7,7 @@ import {
   normalizeFhm2dHashName,
   sanitizeFhm2dStructureName,
 } from "@/utils/fhm2dStructureMetadata";
+import { findFhm2dNameMapping } from "@/utils/fhm2dNameMapping";
 
 type Fhm2dNameFieldProps = {
   id: string;
@@ -14,6 +15,8 @@ type Fhm2dNameFieldProps = {
   value: string;
   onChange: (value: string) => void;
   sourceNameOrPath?: string | null;
+  routeId?: string | null;
+  routePrefix?: string | null;
   folderPath?: string | null;
   structureJsonPath?: string | null;
   disabled?: boolean;
@@ -27,6 +30,8 @@ export function Fhm2dNameField({
   value,
   onChange,
   sourceNameOrPath,
+  routeId,
+  routePrefix,
   folderPath,
   structureJsonPath,
   disabled = false,
@@ -35,6 +40,11 @@ export function Fhm2dNameField({
 }: Fhm2dNameFieldProps) {
   const sanitizedName = sanitizeFhm2dStructureName(value);
   const hashName = normalizeFhm2dHashName(sourceNameOrPath);
+  const mappingEntry = findFhm2dNameMapping(hashName ?? sourceNameOrPath, {
+    routeId,
+    routePrefix,
+    structureJsonPath,
+  });
 
   return (
     <div className={cn("space-y-2", className)}>
@@ -66,6 +76,18 @@ export function Fhm2dNameField({
             {hashName ?? "Needs 8-digit hash from source"}
           </span>
         </div>
+        {mappingEntry ? (
+          <div className="flex items-start justify-between gap-3">
+            <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
+              <FolderOpen className="h-3.5 w-3.5" />
+              Dictionary
+            </span>
+            <span className="min-w-0 break-all text-right font-mono">
+              {mappingEntry.name}
+              <span className="ml-1 text-muted-foreground">({mappingEntry.confidence})</span>
+            </span>
+          </div>
+        ) : null}
         {folderPath ? (
           <div className="flex items-start justify-between gap-3">
             <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
@@ -88,4 +110,3 @@ export function Fhm2dNameField({
     </div>
   );
 }
-

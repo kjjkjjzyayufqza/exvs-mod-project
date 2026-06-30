@@ -18,6 +18,10 @@ import {
   setFhm2dStructureMigrationPromptHandler,
   type Fhm2dStructureMigrationPromptRequest,
 } from "@/utils/fhm2dStructureMetadata";
+import {
+  findFhm2dNameMapping,
+  suggestFhm2dStructureName,
+} from "@/utils/fhm2dNameMapping";
 import { Fhm2dMetadataSummary } from "./Fhm2dMetadataSummary";
 import { joinPreviewPath, parentFromPath } from "./pathPreview";
 
@@ -46,7 +50,12 @@ export function Fhm2dStructureMigrationProvider({
       resolverRef.current?.(null);
       return new Promise<string | null>((resolve) => {
         resolverRef.current = resolve;
-        setName(request.analysis.suggestedName);
+        setName(
+          suggestFhm2dStructureName(request.analysis.suggestedHashName, {
+            structureJsonPath: request.analysis.structureJsonPath,
+            fallbackName: request.analysis.suggestedName,
+          }) ?? request.analysis.suggestedName,
+        );
         setPending(request);
       });
     });
@@ -64,6 +73,11 @@ export function Fhm2dStructureMigrationProvider({
     ? joinPreviewPath(parent, `${sanitizedName}_structure.json`)
     : `${sanitizedName}_structure.json`;
   const hashName = pending?.analysis.suggestedHashName ?? null;
+  const mappingEntry = pending
+    ? findFhm2dNameMapping(hashName, {
+        structureJsonPath: pending.analysis.structureJsonPath,
+      })
+    : null;
   const canMigrate = Boolean(pending && hashName && sanitizedName);
 
   const title = pending?.title ?? "Migrate FHM2D structure";
@@ -158,6 +172,11 @@ export function Fhm2dStructureMigrationProvider({
                         ? "Repack will still output the game-facing hash file. The readable Name only changes the extracted workspace."
                         : "This JSON needs a structure filename or fileUrl root that contains an 8-digit hash."}
                     </p>
+                    {mappingEntry ? (
+                      <p className="font-mono text-[11px] leading-relaxed opacity-80">
+                        Dictionary: {mappingEntry.name} ({mappingEntry.confidence})
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -214,4 +233,3 @@ function PathPreview({
     </div>
   );
 }
-

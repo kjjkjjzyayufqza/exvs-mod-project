@@ -57,6 +57,7 @@ import {
     normalizeFhm2dHashName,
     sanitizeFhm2dStructureName,
 } from "@/utils/fhm2dStructureMetadata";
+import { suggestFhm2dStructureName } from "@/utils/fhm2dNameMapping";
 
 interface Fhm2dInitModalProps {
     isOpen: boolean;
@@ -123,7 +124,11 @@ function buildHashFileName(hash: string): string {
 }
 
 function defaultExtractName(item: InitListItem): string {
-    return sanitizeFhm2dStructureName(item.name || item.id || buildHashFileName(item.hash));
+    return (
+        suggestFhm2dStructureName(item.hash, {
+            fallbackName: item.name || item.id || buildHashFileName(item.hash),
+        }) ?? sanitizeFhm2dStructureName(item.name || item.id || buildHashFileName(item.hash))
+    );
 }
 
 function getFhm2dFullPath(sourceFolder: string, hash: string): string {

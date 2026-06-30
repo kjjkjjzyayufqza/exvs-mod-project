@@ -46,6 +46,7 @@ import {
   normalizeFhm2dHashName,
   sanitizeFhm2dStructureName,
 } from "@/utils/fhm2dStructureMetadata";
+import { suggestFhm2dStructureName } from "@/utils/fhm2dNameMapping";
 
 const formSchema = z.object({
   inputFilePath: z.string(),
@@ -189,7 +190,10 @@ export default function ExtractFilePage() {
     const fileBuffer = await IOReadFile(filePath); // return the array buffer
     const fileName = filePath.split(/[/\\]/).pop()?.split('.').slice(0, -1).join('.');
     if (fileName && !form.getValues("structureName")) {
-      form.setValue("structureName", sanitizeFhm2dStructureName(fileName));
+      form.setValue(
+        "structureName",
+        suggestFhm2dStructureName(filePath, { fallbackName: fileName }) ?? sanitizeFhm2dStructureName(fileName),
+      );
     }
     createFileInfo(Buffer.from(fileBuffer));
   }
@@ -200,7 +204,10 @@ export default function ExtractFilePage() {
       form.setValue("inputFilePath", inputFilePath);
       const fileName = inputFilePath.split(/[/\\]/).pop()?.split('.').slice(0, -1).join('.');
       if (fileName) {
-        form.setValue("structureName", sanitizeFhm2dStructureName(fileName));
+        form.setValue(
+          "structureName",
+          suggestFhm2dStructureName(inputFilePath, { fallbackName: fileName }) ?? sanitizeFhm2dStructureName(fileName),
+        );
       }
       tryReadFHM2DFile(inputFilePath);
     }

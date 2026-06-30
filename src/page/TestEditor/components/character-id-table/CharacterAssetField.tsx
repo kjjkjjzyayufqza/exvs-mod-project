@@ -60,6 +60,7 @@ import {
   normalizeFhm2dHashName,
   sanitizeFhm2dStructureName,
 } from "@/utils/fhm2dStructureMetadata";
+import { suggestFhm2dStructureName } from "@/utils/fhm2dNameMapping";
 import {
   Fhm2dMetadataSummary,
   Fhm2dNameField,
@@ -239,7 +240,12 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     const defaultName = sanitizeFhm2dStructureName(
       `${asset.fieldKey}_${asset.hashHex.replace(/^0x/i, "")}`,
     );
-    setExtractName(defaultName);
+    setExtractName(
+      suggestFhm2dStructureName(asset.hashHex, {
+        routeId: asset.routeId,
+        fallbackName: defaultName,
+      }) ?? defaultName,
+    );
     setExtractNameDialogOpen(true);
   };
 
@@ -721,6 +727,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
               value={extractName}
               onChange={setExtractName}
               sourceNameOrPath={asset.hashHex}
+              routeId={asset.routeId}
               description="This name is used for the extracted folder and structure JSON under the selected output route."
             />
             <Fhm2dMetadataSummary

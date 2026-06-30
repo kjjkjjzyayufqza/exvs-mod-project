@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "hashName": "0xFEEA714A",
+      "name": "gundam_005gyan00_modified",
+      "routePrefix": "040msc",
+      "routeId": "unit.msc",
+      "characterId": 1005001,
+      "source": "manual-research-note",
+      "confidence": "manual-research-note",
+      "aliases": [
+        "001gundam_005gyan00_001",
+        "gundam_005gyan00"
+      ],
+      "notes": "Current modified Gyan MSC workspace derived from original Gyan MSC 0x18AF7533.",
+      "references": [
+        "docs/superpowers/specs/2026-06-27-gyan-hyaku-shiki-flight-porting-notes.md",
+        "docs/superpowers/specs/2026-06-26-msc-toolchain-session-repair-record.md"
+      ]
+    }
+  ]
+}

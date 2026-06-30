@@ -35,6 +35,7 @@ import {
   normalizeFhm2dHashName,
   sanitizeFhm2dStructureName,
 } from "@/utils/fhm2dStructureMetadata";
+import { suggestFhm2dStructureName } from "@/utils/fhm2dNameMapping";
 
 const UNIT_MODEL_EXTRACT_DIMENSIONS = {
   width: 620,
@@ -69,9 +70,17 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
   );
 
   const stem = useMemo(() => (sourcePath.trim() ? inferFhm2dStem(sourcePath) : ""), [sourcePath]);
+  const suggestedExtractName = useMemo(
+    () =>
+      suggestFhm2dStructureName(sourcePath, {
+        routeId: "unit.model",
+        fallbackName: stem,
+      }) ?? stem,
+    [sourcePath, stem],
+  );
   const sanitizedExtractName = useMemo(
-    () => sanitizeFhm2dStructureName(extractName || stem),
-    [extractName, stem],
+    () => sanitizeFhm2dStructureName(extractName || suggestedExtractName),
+    [extractName, suggestedExtractName],
   );
 
   const previewOutRoot = useMemo(() => {
@@ -205,7 +214,13 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
                 onPickedValue={(value) => {
                   const next = Array.isArray(value) ? value[0] ?? "" : value;
                   setSourcePath(next);
-                  setExtractName(sanitizeFhm2dStructureName(inferFhm2dStem(next)));
+                  const nextStem = inferFhm2dStem(next);
+                  setExtractName(
+                    suggestFhm2dStructureName(next, {
+                      routeId: "unit.model",
+                      fallbackName: nextStem,
+                    }) ?? sanitizeFhm2dStructureName(nextStem),
+                  );
                 }}
                 readOnly
                 placeholder="Select a .fhm2d file..."
@@ -223,6 +238,7 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
                 value={extractName}
                 onChange={setExtractName}
                 sourceNameOrPath={sourcePath}
+                routeId="unit.model"
                 folderPath={previewOutRoot}
                 structureJsonPath={previewStructureJson}
                 description="Use a readable name for this unit-model workspace."
