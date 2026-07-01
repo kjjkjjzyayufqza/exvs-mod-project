@@ -56,7 +56,7 @@ def preferred_bone_name(context: Context | None, armature: Object | None) -> str
     return bones[0].name if bones else NO_BONE_VALUE
 
 
-def bone_items(self: "BatchRigidSkinSettings", context: Context):
+def bone_items(self: "Exvs2EasyToolsSettings", context: Context):
     armature = self.armature_object
     if armature is None or armature.type != "ARMATURE":
         return [(NO_BONE_VALUE, "No Bone", "Select an armature first")]
@@ -70,18 +70,15 @@ def bone_items(self: "BatchRigidSkinSettings", context: Context):
     if not bones:
         items = ((NO_BONE_VALUE, "No Bones", "The armature has no bones"),)
     else:
-        items = tuple((bone.name, bone.name, "") for bone in bones)
-
-    if self.bone_name and self.bone_name != NO_BONE_VALUE:
-        known = {item[0] for item in items}
-        if self.bone_name not in known:
-            items = ((self.bone_name, self.bone_name, "Current value"),) + items
+        items = ((NO_BONE_VALUE, "No Bone", "Select a target bone"),) + tuple(
+            (bone.name, bone.name, "") for bone in bones
+        )
 
     _BONE_ENUM_CACHE[cache_key] = items
     return items
 
 
-def on_armature_updated(self: "BatchRigidSkinSettings", context: Context) -> None:
+def on_armature_updated(self: "Exvs2EasyToolsSettings", context: Context) -> None:
     _BONE_ENUM_CACHE.clear()
     if self.armature_object is None:
         return
@@ -89,11 +86,11 @@ def on_armature_updated(self: "BatchRigidSkinSettings", context: Context) -> Non
         self.bone_name = preferred_bone_name(context, self.armature_object)
 
 
-def get_settings(context: Context) -> "BatchRigidSkinSettings":
-    return context.scene.batch_rigid_skin_settings
+def get_settings(context: Context) -> "Exvs2EasyToolsSettings":
+    return context.scene.exvs2_easy_tools_settings
 
 
-def init_settings_for_bind(context: Context) -> "BatchRigidSkinSettings":
+def init_settings_for_bind(context: Context) -> "Exvs2EasyToolsSettings":
     settings = get_settings(context)
     if settings.armature_object is None or settings.armature_object.type != "ARMATURE":
         auto_armature = preferred_scene_armature(context, settings.armature_object)
@@ -104,7 +101,7 @@ def init_settings_for_bind(context: Context) -> "BatchRigidSkinSettings":
     return settings
 
 
-class BatchRigidSkinSettings(PropertyGroup):
+class Exvs2EasyToolsSettings(PropertyGroup):
     armature_object: PointerProperty(
         name="Armature",
         type=bpy.types.Object,
@@ -128,30 +125,59 @@ class BatchRigidSkinSettings(PropertyGroup):
     remove_other_groups: BoolProperty(
         name="Remove Other Groups",
         default=True,
-        description="Recommended for EXVS2 rigid export to keep one influence",
+        description="Keep only the target bone vertex group on bound meshes",
     )
     add_armature_modifier: BoolProperty(
         name="Add Armature Modifier",
         default=True,
         description="Add an Armature modifier when the mesh has none",
     )
+    retarget_existing_modifiers: BoolProperty(
+        name="Retarget Existing Modifiers",
+        default=True,
+        description="Point existing Armature modifiers at the chosen armature",
+    )
+    parent_to_armature: BoolProperty(
+        name="Parent Meshes to Armature",
+        default=False,
+        description="Set the armature as the object parent after binding",
+    )
+    keep_parent_transform: BoolProperty(
+        name="Keep Transform When Parenting",
+        default=True,
+        description="Preserve mesh world transforms when assigning the parent",
+    )
     normalize: BoolProperty(
         name="Normalize After Bind",
         default=False,
         description="Run Blender vertex group normalization after binding",
     )
+    selection_scope: EnumProperty(
+        name="Selection Scope",
+        items=(
+            ("SCENE", "Scene", "Search every mesh object in the scene"),
+            ("SELECTED", "Selected", "Search only the current mesh selection"),
+        ),
+        default="SCENE",
+        description="Mesh scope used by selection helper actions",
+    )
+    include_hidden: BoolProperty(
+        name="Include Hidden",
+        default=False,
+        description="Allow selection helper actions to include hidden objects",
+    )
 
 
 def register_properties() -> None:
-    bpy.types.Scene.batch_rigid_skin_settings = PointerProperty(
-        type=BatchRigidSkinSettings
+    bpy.types.Scene.exvs2_easy_tools_settings = PointerProperty(
+        type=Exvs2EasyToolsSettings
     )
 
 
 def unregister_properties() -> None:
     _BONE_ENUM_CACHE.clear()
-    if hasattr(bpy.types.Scene, "batch_rigid_skin_settings"):
-        del bpy.types.Scene.batch_rigid_skin_settings
+    if hasattr(bpy.types.Scene, "exvs2_easy_tools_settings"):
+        del bpy.types.Scene.exvs2_easy_tools_settings
 
 
-CLASSES = (BatchRigidSkinSettings,)
+CLASSES = (Exvs2EasyToolsSettings,)

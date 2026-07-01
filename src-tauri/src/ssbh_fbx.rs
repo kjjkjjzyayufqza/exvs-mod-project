@@ -10,6 +10,10 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Seek, Write};
 use std::path::{Path, PathBuf};
 
+/// Display size hint for skeleton nodes. This must not change joint transforms.
+const DEFAULT_BONE_DISPLAY_SIZE: f64 = 1.0;
+const BONE_DIRECTION_EPSILON: f32 = 1e-5;
+
 use crate::format::numatb_format::param_texture_path;
 use crate::nutexb_lib;
 use crate::ssbh_preview::resolve_nutexb_path;
@@ -515,7 +519,7 @@ fn build_export_bones(skel: Option<&SkelData>, scale_factor: f32) -> Result<Vec<
         )?;
     }
 
-    Ok(skel
+    let mut bones: Vec<ExportBone> = skel
         .bones
         .iter()
         .enumerate()
@@ -525,7 +529,119 @@ fn build_export_bones(skel: Option<&SkelData>, scale_factor: f32) -> Result<Vec<
             local_transform: local_transforms[index],
             world_transform: world_transforms[index],
         })
-        .collect())
+        .collect();
+    apply_blender_bone_orientations(&mut bones)?;
+    Ok(bones)
+}
+
+fn apply_blender_bone_orientations(bones: &mut [ExportBone]) -> Result<()> {
+    if bones.is_empty() {
+        return Ok(());
+    }
+
+    let mut children_by_parent: HashMap<usize, Vec<usize>> = HashMap::new();
+    for (index, bone) in bones.iter().enumerate() {
+        if let Some(parent_index) = bone.parent_index {
+            if parent_index >= bones.len() {
+                return Err(anyhow!(
+                    "Bone '{}' has invalid parent index {}",
+                    bone.name,
+                    parent_index
+                ));
+            }
+            children_by_parent
+                .entry(parent_index)
+                .or_default()
+                .push(index);
+        }
+    }
+
+    let source_worlds: Vec<glam::Mat4> = bones.iter().map(|bone| bone.world_transform).collect();
+    let mut display_worlds = Vec::with_capacity(bones.len());
+    for index in 0..bones.len() {
+        let position = source_worlds[index].transform_point3(glam::Vec3::ZERO);
+        let direction = bone_display_direction(
+            index,
+            &source_worlds,
+            &children_by_parent,
+            bones[index].parent_index,
+        );
+        let rotation = glam::Quat::from_rotation_arc(glam::Vec3::Y, direction);
+        display_worlds.push(glam::Mat4::from_scale_rotation_translation(
+            glam::Vec3::ONE,
+            rotation,
+            position,
+        ));
+    }
+
+    for index in 0..bones.len() {
+        let local_transform = if let Some(parent_index) = bones[index].parent_index {
+            let parent_inverse = display_worlds[parent_index].inverse();
+            if !parent_inverse.is_finite() {
+                return Err(anyhow!(
+                    "Bone '{}' has a non-invertible Blender display parent transform",
+                    bones[index].name
+                ));
+            }
+            parent_inverse * display_worlds[index]
+        } else {
+            display_worlds[index]
+        };
+        if !local_transform.is_finite() {
+            return Err(anyhow!(
+                "Bone '{}' has a non-finite Blender display local transform",
+                bones[index].name
+            ));
+        }
+        bones[index].local_transform = local_transform;
+        bones[index].world_transform = display_worlds[index];
+    }
+    Ok(())
+}
+
+fn bone_display_direction(
+    index: usize,
+    source_worlds: &[glam::Mat4],
+    children_by_parent: &HashMap<usize, Vec<usize>>,
+    parent_index: Option<usize>,
+) -> glam::Vec3 {
+    let position = source_worlds[index].transform_point3(glam::Vec3::ZERO);
+    if let Some(children) = children_by_parent.get(&index) {
+        let mut direction_sum = glam::Vec3::ZERO;
+        let mut first_direction = None;
+        for &child_index in children {
+            let child_position = source_worlds[child_index].transform_point3(glam::Vec3::ZERO);
+            if let Some(direction) = normalize_direction(child_position - position) {
+                direction_sum += direction;
+                first_direction.get_or_insert(direction);
+            }
+        }
+        if let Some(direction) = normalize_direction(direction_sum) {
+            return direction;
+        }
+        if let Some(direction) = first_direction {
+            return direction;
+        }
+    }
+
+    if let Some(parent_index) = parent_index {
+        let parent_position = source_worlds[parent_index].transform_point3(glam::Vec3::ZERO);
+        if let Some(direction) = normalize_direction(position - parent_position) {
+            return direction;
+        }
+    }
+
+    normalize_direction(source_worlds[index].transform_vector3(glam::Vec3::Y))
+        .unwrap_or(glam::Vec3::Y)
+}
+
+fn normalize_direction(value: glam::Vec3) -> Option<glam::Vec3> {
+    if value.is_finite() && value.length_squared() > BONE_DIRECTION_EPSILON * BONE_DIRECTION_EPSILON
+    {
+        Some(value.normalize())
+    } else {
+        None
+    }
 }
 
 fn resolve_bone_world_transform(
@@ -829,8 +945,11 @@ fn write_scene_fbx(path: &Path, scene: &ExportScene, up_axis: FbxUpAxis) -> Resu
     let has_skin = mesh_ids.iter().any(|mesh| mesh.skin.is_some());
     let pose_id = has_skin.then(|| ids.next());
 
+    // This lightweight fbxcel writer targets Blender-compatible binary FBX.
+    // Autodesk Maya's importer is stricter about FBX scene metadata and is not
+    // a supported target for this exporter.
     let mut writer =
-        Writer::new(std::io::Cursor::new(Vec::new()), FbxVersion::V7_5).map_err(io_error)?;
+        Writer::new(std::io::Cursor::new(Vec::new()), FbxVersion::V7_4).map_err(io_error)?;
     write_header(&mut writer, up_axis)?;
     write_definitions(&mut writer, scene, &mesh_ids, has_skin)?;
 
@@ -881,7 +1000,7 @@ fn write_scene_fbx(path: &Path, scene: &ExportScene, up_axis: FbxUpAxis) -> Resu
 fn write_header<W: Write + Seek>(writer: &mut Writer<W>, up_axis: FbxUpAxis) -> Result<()> {
     writer.new_node("FBXHeaderExtension").map_err(io_error)?;
     write_i32_node(writer, "FBXHeaderVersion", 1003)?;
-    write_i32_node(writer, "FBXVersion", 7500)?;
+    write_i32_node(writer, "FBXVersion", 7400)?;
     write_string_node(writer, "Creator", "EXVS2 Model Editor")?;
     writer.close_node().map_err(io_error)?;
 
@@ -1004,7 +1123,7 @@ fn write_geometry<W: Write + Seek>(
     write_i32_array_node(writer, "PolygonVertexIndex", polygon_indices, compression())?;
 
     if let Some(normals) = mesh.normals.as_ref() {
-        writer.new_node("LayerElementNormal").map_err(io_error)?;
+        write_begin_i32_attributed_node(writer, "LayerElementNormal", 0)?;
         write_i32_node(writer, "Version", 101)?;
         write_string_node(writer, "Name", "")?;
         write_string_node(writer, "MappingInformationType", "ByPolygonVertex")?;
@@ -1022,7 +1141,7 @@ fn write_geometry<W: Write + Seek>(
     }
 
     if let Some(texcoords) = mesh.texcoords.as_ref() {
-        writer.new_node("LayerElementUV").map_err(io_error)?;
+        write_begin_i32_attributed_node(writer, "LayerElementUV", 0)?;
         write_i32_node(writer, "Version", 101)?;
         write_string_node(writer, "Name", "UVMap")?;
         write_string_node(writer, "MappingInformationType", "ByPolygonVertex")?;
@@ -1038,7 +1157,7 @@ fn write_geometry<W: Write + Seek>(
         writer.close_node().map_err(io_error)?;
     }
 
-    writer.new_node("LayerElementMaterial").map_err(io_error)?;
+    write_begin_i32_attributed_node(writer, "LayerElementMaterial", 0)?;
     write_i32_node(writer, "Version", 101)?;
     write_string_node(writer, "Name", "")?;
     write_string_node(writer, "MappingInformationType", "AllSame")?;
@@ -1046,7 +1165,7 @@ fn write_geometry<W: Write + Seek>(
     write_i32_array_node(writer, "Materials", [0], None)?;
     writer.close_node().map_err(io_error)?;
 
-    writer.new_node("Layer").map_err(io_error)?;
+    write_begin_i32_attributed_node(writer, "Layer", 0)?;
     write_i32_node(writer, "Version", 100)?;
     if mesh.normals.is_some() {
         write_layer_element(writer, "LayerElementNormal")?;
@@ -1075,6 +1194,8 @@ fn write_mesh_model<W: Write + Seek>(
     }
     write_i32_node(writer, "Version", 232)?;
     writer.new_node("Properties70").map_err(io_error)?;
+    write_prop_enum_int(writer, "InheritType", 1)?;
+    write_prop_bool(writer, "Visibility", true)?;
     write_prop_int(writer, "DefaultAttributeIndex", 0)?;
     write_prop_lcl(writer, "Lcl Translation", [0.0, 0.0, 0.0])?;
     write_prop_lcl(writer, "Lcl Rotation", [0.0, 0.0, 0.0])?;
@@ -1179,8 +1300,14 @@ fn write_bone<W: Write + Seek>(
             .map_err(io_error)?;
     }
     write_string_node(writer, "TypeFlags", "Skeleton")?;
+    writer.new_node("Properties70").map_err(io_error)?;
+    write_prop_double(writer, "Size", DEFAULT_BONE_DISPLAY_SIZE)?;
+    writer.close_node().map_err(io_error)?;
     writer.close_node().map_err(io_error)?;
 
+    // This is the Blender-friendly rest transform. Cluster and bind-pose matrices
+    // use the same converted hierarchy, so the mesh remains in bind pose while
+    // Blender can draw connected bones along its local +Y convention.
     let (translation, rotation, scale) = decompose_fbx_trs(bone.local_transform)?;
     {
         let mut attributes = writer.new_node("Model").map_err(io_error)?;
@@ -1194,6 +1321,8 @@ fn write_bone<W: Write + Seek>(
     }
     write_i32_node(writer, "Version", 232)?;
     writer.new_node("Properties70").map_err(io_error)?;
+    write_prop_enum_int(writer, "InheritType", 1)?;
+    write_prop_bool(writer, "Visibility", true)?;
     write_prop_lcl(writer, "Lcl Translation", translation)?;
     write_prop_lcl(writer, "Lcl Rotation", rotation)?;
     write_prop_lcl(writer, "Lcl Scaling", scale)?;
@@ -1352,6 +1481,17 @@ fn write_connections<W: Write + Seek>(
     Ok(())
 }
 
+fn write_begin_i32_attributed_node<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    name: &str,
+    value: i32,
+) -> Result<()> {
+    let mut attributes = writer.new_node(name).map_err(io_error)?;
+    attributes.append_i32(value).map_err(io_error)?;
+    drop(attributes);
+    Ok(())
+}
+
 fn write_definition<W: Write + Seek>(writer: &mut Writer<W>, name: &str, count: i32) -> Result<()> {
     {
         let mut attributes = writer.new_node("ObjectType").map_err(io_error)?;
@@ -1412,6 +1552,34 @@ fn write_prop_int<W: Write + Seek>(writer: &mut Writer<W>, name: &str, value: i3
     attributes
         .append_string_direct("Integer")
         .map_err(io_error)?;
+    attributes.append_string_direct("").map_err(io_error)?;
+    attributes.append_i32(value).map_err(io_error)?;
+    drop(attributes);
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
+fn write_prop_bool<W: Write + Seek>(writer: &mut Writer<W>, name: &str, value: bool) -> Result<()> {
+    let mut attributes = writer.new_node("P").map_err(io_error)?;
+    attributes.append_string_direct(name).map_err(io_error)?;
+    attributes.append_string_direct("bool").map_err(io_error)?;
+    attributes.append_string_direct("").map_err(io_error)?;
+    attributes.append_string_direct("").map_err(io_error)?;
+    attributes.append_i32(i32::from(value)).map_err(io_error)?;
+    drop(attributes);
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
+fn write_prop_enum_int<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    name: &str,
+    value: i32,
+) -> Result<()> {
+    let mut attributes = writer.new_node("P").map_err(io_error)?;
+    attributes.append_string_direct(name).map_err(io_error)?;
+    attributes.append_string_direct("enum").map_err(io_error)?;
+    attributes.append_string_direct("").map_err(io_error)?;
     attributes.append_string_direct("").map_err(io_error)?;
     attributes.append_i32(value).map_err(io_error)?;
     drop(attributes);
@@ -1664,6 +1832,9 @@ fn sanitize_fbx_name(value: &str) -> String {
 }
 
 fn fbx_name_class(name: &str, class: &str) -> String {
+    // Keep the visible FBX object name identical to the source asset name.
+    // Keep class namespaces out of visible FBX object names; only the internal
+    // FBX class marker after the NUL separator is preserved for Blender's parser.
     format!("{name}\0\u{1}{class}")
 }
 
@@ -1690,4 +1861,211 @@ fn next_unique_texture_name(stem: &str, used_names: &mut HashSet<String>) -> Str
 
 fn io_error(error: impl std::fmt::Display) -> std::io::Error {
     std::io::Error::other(error.to_string())
+}
+
+#[cfg(test)]
+mod bone_transform_tests {
+    use super::*;
+    use glam::{Mat4, Quat, Vec3};
+
+    fn assert_close(actual: f64, expected: f64) {
+        assert!(
+            (actual - expected).abs() < 1e-5,
+            "expected {expected}, got {actual}"
+        );
+    }
+
+    #[test]
+    fn decompose_fbx_trs_preserves_local_translation_rotation_and_scale() {
+        let matrix = Mat4::from_scale_rotation_translation(
+            Vec3::new(2.0, 3.0, 4.0),
+            Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
+            Vec3::new(5.0, 6.0, 7.0),
+        );
+
+        let (translation, rotation, scale) = decompose_fbx_trs(matrix).unwrap();
+
+        assert_close(translation[0], 5.0);
+        assert_close(translation[1], 6.0);
+        assert_close(translation[2], 7.0);
+        assert_close(rotation[0], 0.0);
+        assert_close(rotation[1], 0.0);
+        assert_close(rotation[2], 90.0);
+        assert_close(scale[0], 2.0);
+        assert_close(scale[1], 3.0);
+        assert_close(scale[2], 4.0);
+    }
+
+    fn assert_vec3_close(actual: Vec3, expected: Vec3) {
+        assert!(
+            actual.abs_diff_eq(expected, 1e-5),
+            "expected {expected:?}, got {actual:?}"
+        );
+    }
+
+    #[test]
+    fn blender_bone_orientation_aligns_single_child_to_parent_y_axis() {
+        let mut bones = vec![
+            ExportBone {
+                name: "parent".to_string(),
+                parent_index: None,
+                local_transform: Mat4::IDENTITY,
+                world_transform: Mat4::IDENTITY,
+            },
+            ExportBone {
+                name: "child".to_string(),
+                parent_index: Some(0),
+                local_transform: Mat4::from_translation(Vec3::new(2.0, 0.0, 0.0)),
+                world_transform: Mat4::from_translation(Vec3::new(2.0, 0.0, 0.0)),
+            },
+        ];
+
+        apply_blender_bone_orientations(&mut bones).unwrap();
+
+        let parent_y = bones[0]
+            .world_transform
+            .transform_vector3(Vec3::Y)
+            .normalize();
+        let (_, _, child_local_translation) =
+            bones[1].local_transform.to_scale_rotation_translation();
+        let (_, _, child_world_translation) =
+            bones[1].world_transform.to_scale_rotation_translation();
+
+        assert_vec3_close(parent_y, Vec3::X);
+        assert_vec3_close(child_local_translation, Vec3::new(0.0, 2.0, 0.0));
+        assert_vec3_close(child_world_translation, Vec3::new(2.0, 0.0, 0.0));
+    }
+
+    fn single_child_y_alignment_counts(bones: &[ExportBone]) -> (usize, usize) {
+        let mut children_by_parent: HashMap<usize, Vec<usize>> = HashMap::new();
+        for (index, bone) in bones.iter().enumerate() {
+            if let Some(parent_index) = bone.parent_index {
+                children_by_parent
+                    .entry(parent_index)
+                    .or_default()
+                    .push(index);
+            }
+        }
+
+        let mut aligned = 0usize;
+        let mut total = 0usize;
+        for children in children_by_parent.values() {
+            if children.len() != 1 {
+                continue;
+            }
+            let (_, _, translation) = bones[children[0]]
+                .local_transform
+                .to_scale_rotation_translation();
+            if translation.length() <= 1e-4 {
+                continue;
+            }
+            total += 1;
+            if translation.x.abs() <= 1e-3 && translation.z.abs() <= 1e-3 && translation.y > 0.0 {
+                aligned += 1;
+            }
+        }
+        (aligned, total)
+    }
+
+    fn resolve_real_export_numdlb_path(path: PathBuf) -> Result<PathBuf> {
+        if path.is_file() {
+            return Ok(path);
+        }
+        if !path.is_dir() {
+            return Err(anyhow!(
+                "Real export root is not a file or directory: {}",
+                path.display()
+            ));
+        }
+
+        let mut candidates = std::fs::read_dir(&path)
+            .with_context(|| format!("Failed to read {}", path.display()))?
+            .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+            .filter(|candidate| {
+                candidate
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("numdlb"))
+            })
+            .collect::<Vec<_>>();
+        candidates.sort();
+        candidates.into_iter().next().ok_or_else(|| {
+            anyhow!(
+                "Real export root directory contains no .numdlb file: {}",
+                path.display()
+            )
+        })
+    }
+
+    #[test]
+    fn export_real_unit_model_fbx_when_env_is_set() -> Result<()> {
+        let Some(root_path) = std::env::var_os("SSBH_FBX_REAL_EXPORT_ROOT").map(PathBuf::from)
+        else {
+            eprintln!("SKIP: SSBH_FBX_REAL_EXPORT_ROOT is not set");
+            return Ok(());
+        };
+        let Some(output_path) = std::env::var_os("SSBH_FBX_REAL_EXPORT_PATH").map(PathBuf::from)
+        else {
+            eprintln!("SKIP: SSBH_FBX_REAL_EXPORT_PATH is not set");
+            return Ok(());
+        };
+        let root_path = resolve_real_export_numdlb_path(root_path)?;
+
+        let output_dir = output_path
+            .parent()
+            .ok_or_else(|| anyhow!("Output path has no parent: {}", output_path.display()))?;
+        std::fs::create_dir_all(output_dir)
+            .with_context(|| format!("Failed to create {}", output_dir.display()))?;
+        let output_name = output_path
+            .file_stem()
+            .ok_or_else(|| anyhow!("Output path has no file stem: {}", output_path.display()))?
+            .to_string_lossy()
+            .to_string();
+        let config = ExportConfig {
+            scale_factor: 1.0,
+            up_axis: FbxUpAxis::YUp,
+            export_textures: false,
+        };
+        let model = load_ssbh_model(root_path.to_string_lossy().as_ref())?;
+        let mut texture_state = BatchTextureExportState::default();
+        let (scene, _) = build_export_scene(&model, output_dir, &config, &mut texture_state)?;
+        let (aligned, total) = single_child_y_alignment_counts(&scene.bones);
+        assert!(
+            total > 0,
+            "real export should contain single-child bone chains"
+        );
+        assert_eq!(
+            aligned, total,
+            "all single-child bone chains should point child translation along Blender +Y"
+        );
+
+        write_scene_fbx(&output_path, &scene, config.up_axis)?;
+        let loaded = ufbx::load_file(
+            output_path.to_string_lossy().as_ref(),
+            ufbx::LoadOpts::default(),
+        )
+        .map_err(|e| {
+            anyhow!(
+                "ufbx failed to load exported FBX: {} - {}",
+                e.description,
+                e.info()
+            )
+        })?;
+        assert!(
+            !loaded.meshes.is_empty(),
+            "exported FBX should contain meshes"
+        );
+        assert!(
+            !loaded.nodes.is_empty(),
+            "exported FBX should contain nodes"
+        );
+        eprintln!(
+            "exported {} as {} with {}/{} single-child bones aligned",
+            output_name,
+            output_path.display(),
+            aligned,
+            total
+        );
+        Ok(())
+    }
 }

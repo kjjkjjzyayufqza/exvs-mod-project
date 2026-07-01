@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 bl_info = {
-    "name": "Batch Rigid Skin",
+    "name": "EXVS2-Easy-Blender-Tools",
     "author": "OpenAI",
-    "version": (1, 0, 2),
+    "version": (1, 1, 0),
     "blender": (5, 1, 0),
-    "location": "View3D > Sidebar > Rigid Skin",
-    "description": "Batch rigid skin bind selected meshes to one armature bone",
+    "location": "View3D > Sidebar > EXVS2 Tools",
+    "description": "Small EXVS2-focused mesh, armature, and rigid skin workflow helpers",
     "warning": "",
     "category": "Rigging",
 }
