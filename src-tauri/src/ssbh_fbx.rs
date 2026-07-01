@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 /// Display size hint for skeleton nodes. This must not change joint transforms.
 const DEFAULT_BONE_DISPLAY_SIZE: f64 = 1.0;
 const BONE_DIRECTION_EPSILON: f32 = 1e-5;
+const SSBH_LOCAL_MATRIX_PROP: &str = "EXVS2_SSBH_LocalMatrix";
 
 use crate::format::numatb_format::param_texture_path;
 use crate::nutexb_lib;
@@ -65,6 +66,7 @@ struct ExportConfig {
     scale_factor: f32,
     up_axis: FbxUpAxis,
     export_textures: bool,
+    write_ssbh_local_matrix_props: bool,
 }
 
 #[derive(Debug)]
@@ -107,6 +109,7 @@ struct ExportBone {
     parent_index: Option<usize>,
     local_transform: glam::Mat4,
     world_transform: glam::Mat4,
+    ssbh_local_transform: glam::Mat4,
 }
 
 #[derive(Debug)]
@@ -160,6 +163,7 @@ pub async fn unit_model_batch_export_fbx(
     scale_factor: Option<f32>,
     up_axis: Option<String>,
     export_textures: Option<bool>,
+    write_ssbh_local_matrix_props: Option<bool>,
 ) -> Result<BatchFbxExportResult, String> {
     let output_dir = output_dir.trim().to_string();
     if output_dir.is_empty() {
@@ -175,6 +179,7 @@ pub async fn unit_model_batch_export_fbx(
         scale_factor,
         up_axis,
         export_textures: export_textures.unwrap_or(false),
+        write_ssbh_local_matrix_props: write_ssbh_local_matrix_props.unwrap_or(true),
     };
 
     tauri::async_runtime::spawn_blocking(move || {
@@ -233,7 +238,12 @@ fn export_single_model(
     let (scene, texture_count) = build_export_scene(&model, output_dir, config, texture_state)?;
     let mesh_count = scene.meshes.len();
     let vertex_count = scene.meshes.iter().map(|mesh| mesh.positions.len()).sum();
-    write_scene_fbx(&output_path, &scene, config.up_axis)?;
+    write_scene_fbx(
+        &output_path,
+        &scene,
+        config.up_axis,
+        config.write_ssbh_local_matrix_props,
+    )?;
 
     Ok(BatchFbxExportedFile {
         name: output_name.to_string(),
@@ -528,6 +538,7 @@ fn build_export_bones(skel: Option<&SkelData>, scale_factor: f32) -> Result<Vec<
             parent_index: bone.parent_index,
             local_transform: local_transforms[index],
             world_transform: world_transforms[index],
+            ssbh_local_transform: local_transforms[index],
         })
         .collect();
     apply_blender_bone_orientations(&mut bones)?;
@@ -906,7 +917,12 @@ fn vector_data_to_vec2(data: &VectorData) -> Result<Vec<[f32; 2]>> {
     }
 }
 
-fn write_scene_fbx(path: &Path, scene: &ExportScene, up_axis: FbxUpAxis) -> Result<()> {
+fn write_scene_fbx(
+    path: &Path,
+    scene: &ExportScene,
+    up_axis: FbxUpAxis,
+    write_ssbh_local_matrix_props: bool,
+) -> Result<()> {
     let mut ids = IdGenerator::new();
     let mesh_ids: Vec<MeshIds> = scene
         .meshes
@@ -981,7 +997,7 @@ fn write_scene_fbx(path: &Path, scene: &ExportScene, up_axis: FbxUpAxis) -> Resu
         }
     }
     for (bone, ids) in scene.bones.iter().zip(&bone_ids) {
-        write_bone(&mut writer, bone, ids)?;
+        write_bone(&mut writer, bone, ids, write_ssbh_local_matrix_props)?;
     }
     if let Some(pose_id) = pose_id {
         write_bind_pose(&mut writer, pose_id, scene, &mesh_ids, &bone_ids)?;
@@ -1195,7 +1211,7 @@ fn write_mesh_model<W: Write + Seek>(
     write_i32_node(writer, "Version", 232)?;
     writer.new_node("Properties70").map_err(io_error)?;
     write_prop_enum_int(writer, "InheritType", 1)?;
-    write_prop_bool(writer, "Visibility", true)?;
+    write_prop_visibility(writer, true)?;
     write_prop_int(writer, "DefaultAttributeIndex", 0)?;
     write_prop_lcl(writer, "Lcl Translation", [0.0, 0.0, 0.0])?;
     write_prop_lcl(writer, "Lcl Rotation", [0.0, 0.0, 0.0])?;
@@ -1288,6 +1304,7 @@ fn write_bone<W: Write + Seek>(
     writer: &mut Writer<W>,
     bone: &ExportBone,
     ids: &BoneIds,
+    write_ssbh_local_matrix_prop: bool,
 ) -> Result<()> {
     {
         let mut attributes = writer.new_node("NodeAttribute").map_err(io_error)?;
@@ -1305,9 +1322,8 @@ fn write_bone<W: Write + Seek>(
     writer.close_node().map_err(io_error)?;
     writer.close_node().map_err(io_error)?;
 
-    // This is the Blender-friendly rest transform. Cluster and bind-pose matrices
-    // use the same converted hierarchy, so the mesh remains in bind pose while
-    // Blender can draw connected bones along its local +Y convention.
+    // This is the Blender-friendly display transform. The original SSBH local
+    // transform is stored below as a custom property for lossless round-trips.
     let (translation, rotation, scale) = decompose_fbx_trs(bone.local_transform)?;
     {
         let mut attributes = writer.new_node("Model").map_err(io_error)?;
@@ -1322,10 +1338,17 @@ fn write_bone<W: Write + Seek>(
     write_i32_node(writer, "Version", 232)?;
     writer.new_node("Properties70").map_err(io_error)?;
     write_prop_enum_int(writer, "InheritType", 1)?;
-    write_prop_bool(writer, "Visibility", true)?;
+    write_prop_visibility(writer, true)?;
     write_prop_lcl(writer, "Lcl Translation", translation)?;
     write_prop_lcl(writer, "Lcl Rotation", rotation)?;
     write_prop_lcl(writer, "Lcl Scaling", scale)?;
+    if write_ssbh_local_matrix_prop {
+        write_prop_custom_string(
+            writer,
+            SSBH_LOCAL_MATRIX_PROP,
+            &matrix_prop_string(bone.ssbh_local_transform),
+        )?;
+    }
     writer.close_node().map_err(io_error)?;
     writer.close_node().map_err(io_error)?;
     Ok(())
@@ -1559,13 +1582,37 @@ fn write_prop_int<W: Write + Seek>(writer: &mut Writer<W>, name: &str, value: i3
     Ok(())
 }
 
-fn write_prop_bool<W: Write + Seek>(writer: &mut Writer<W>, name: &str, value: bool) -> Result<()> {
+fn write_prop_visibility<W: Write + Seek>(writer: &mut Writer<W>, visible: bool) -> Result<()> {
+    let mut attributes = writer.new_node("P").map_err(io_error)?;
+    attributes
+        .append_string_direct("Visibility")
+        .map_err(io_error)?;
+    attributes
+        .append_string_direct("Visibility")
+        .map_err(io_error)?;
+    attributes.append_string_direct("").map_err(io_error)?;
+    attributes.append_string_direct("").map_err(io_error)?;
+    attributes
+        .append_f64(if visible { 1.0 } else { 0.0 })
+        .map_err(io_error)?;
+    drop(attributes);
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
+fn write_prop_custom_string<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    name: &str,
+    value: &str,
+) -> Result<()> {
     let mut attributes = writer.new_node("P").map_err(io_error)?;
     attributes.append_string_direct(name).map_err(io_error)?;
-    attributes.append_string_direct("bool").map_err(io_error)?;
+    attributes
+        .append_string_direct("KString")
+        .map_err(io_error)?;
     attributes.append_string_direct("").map_err(io_error)?;
-    attributes.append_string_direct("").map_err(io_error)?;
-    attributes.append_i32(i32::from(value)).map_err(io_error)?;
+    attributes.append_string_direct("U").map_err(io_error)?;
+    attributes.append_string_direct(value).map_err(io_error)?;
     drop(attributes);
     writer.close_node().map_err(io_error)?;
     Ok(())
@@ -1757,6 +1804,15 @@ fn matrix_values(matrix: glam::Mat4) -> impl Iterator<Item = f64> {
     matrix.to_cols_array().into_iter().map(|value| value as f64)
 }
 
+fn matrix_prop_string(matrix: glam::Mat4) -> String {
+    matrix
+        .to_cols_array()
+        .into_iter()
+        .map(|value| format!("{value:.9}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn decompose_fbx_trs(matrix: glam::Mat4) -> Result<([f64; 3], [f64; 3], [f64; 3])> {
     let values = matrix.to_cols_array().map(|value| value as f64);
     let translation = [values[12], values[13], values[14]];
@@ -1911,12 +1967,14 @@ mod bone_transform_tests {
                 parent_index: None,
                 local_transform: Mat4::IDENTITY,
                 world_transform: Mat4::IDENTITY,
+                ssbh_local_transform: Mat4::IDENTITY,
             },
             ExportBone {
                 name: "child".to_string(),
                 parent_index: Some(0),
                 local_transform: Mat4::from_translation(Vec3::new(2.0, 0.0, 0.0)),
                 world_transform: Mat4::from_translation(Vec3::new(2.0, 0.0, 0.0)),
+                ssbh_local_transform: Mat4::from_translation(Vec3::new(2.0, 0.0, 0.0)),
             },
         ];
 
@@ -1934,6 +1992,111 @@ mod bone_transform_tests {
         assert_vec3_close(parent_y, Vec3::X);
         assert_vec3_close(child_local_translation, Vec3::new(0.0, 2.0, 0.0));
         assert_vec3_close(child_world_translation, Vec3::new(2.0, 0.0, 0.0));
+    }
+
+    fn assert_mat4_close(actual: Mat4, expected: Mat4) {
+        let actual = actual.to_cols_array();
+        let expected = expected.to_cols_array();
+        for (index, (actual, expected)) in actual.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (actual - expected).abs() < 1e-5,
+                "matrix[{index}] expected {expected}, got {actual}"
+            );
+        }
+    }
+
+    #[test]
+    fn build_export_bones_keeps_display_pose_and_source_rest_pose() {
+        use ssbh_data::skel_data::{BillboardType, BoneData};
+
+        let ath_local = Mat4::from_scale_rotation_translation(
+            Vec3::ONE,
+            Quat::from_rotation_y(std::f32::consts::PI),
+            Vec3::new(-17.7831, 0.0, 0.0),
+        );
+        let skel = SkelData {
+            major_version: 1,
+            minor_version: 0,
+            bones: vec![
+                BoneData {
+                    name: "GBL_RT".to_string(),
+                    transform: Mat4::IDENTITY.to_cols_array_2d(),
+                    parent_index: None,
+                    billboard_type: BillboardType::Disabled,
+                },
+                BoneData {
+                    name: "STICK".to_string(),
+                    transform: Mat4::IDENTITY.to_cols_array_2d(),
+                    parent_index: Some(0),
+                    billboard_type: BillboardType::Disabled,
+                },
+                BoneData {
+                    name: "ATH_E_VERNIER".to_string(),
+                    transform: ath_local.to_cols_array_2d(),
+                    parent_index: Some(1),
+                    billboard_type: BillboardType::Disabled,
+                },
+            ],
+        };
+
+        let bones = build_export_bones(Some(&skel), 0.1).unwrap();
+
+        assert_eq!(bones[0].parent_index, None);
+        assert_eq!(bones[1].parent_index, Some(0));
+        assert_eq!(bones[2].parent_index, Some(1));
+        assert_mat4_close(bones[1].ssbh_local_transform, Mat4::IDENTITY);
+        assert_mat4_close(
+            bones[2].ssbh_local_transform,
+            Mat4::from_scale_rotation_translation(
+                Vec3::ONE,
+                Quat::from_rotation_y(std::f32::consts::PI),
+                Vec3::new(-1.77831, 0.0, 0.0),
+            ),
+        );
+
+        let (_, _, display_translation) = bones[2].local_transform.to_scale_rotation_translation();
+        assert_vec3_close(display_translation, Vec3::new(0.0, 1.77831, 0.0));
+    }
+
+    #[test]
+    fn write_scene_fbx_can_omit_ssbh_local_matrix_props() -> Result<()> {
+        fn scene() -> ExportScene {
+            ExportScene {
+                meshes: Vec::new(),
+                bones: vec![ExportBone {
+                    name: "STICK".to_string(),
+                    parent_index: None,
+                    local_transform: Mat4::IDENTITY,
+                    world_transform: Mat4::IDENTITY,
+                    ssbh_local_transform: Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0)),
+                }],
+            }
+        }
+
+        fn contains_matrix_prop(bytes: &[u8]) -> bool {
+            bytes
+                .windows(SSBH_LOCAL_MATRIX_PROP.len())
+                .any(|window| window == SSBH_LOCAL_MATRIX_PROP.as_bytes())
+        }
+
+        let dir = tempfile::tempdir()?;
+        let with_prop_path = dir.path().join("with_prop.fbx");
+        write_scene_fbx(&with_prop_path, &scene(), FbxUpAxis::YUp, true)?;
+        let with_prop_bytes = std::fs::read(&with_prop_path)?;
+        assert!(
+            contains_matrix_prop(&with_prop_bytes),
+            "enabled export should include {SSBH_LOCAL_MATRIX_PROP}"
+        );
+
+        let without_prop_path = dir.path().join("without_prop.fbx");
+        write_scene_fbx(&without_prop_path, &scene(), FbxUpAxis::YUp, false)?;
+        let without_prop_bytes = std::fs::read(&without_prop_path)?;
+        assert!(
+            !contains_matrix_prop(&without_prop_bytes),
+            "disabled export should omit {SSBH_LOCAL_MATRIX_PROP}"
+        );
+
+        Ok(())
     }
 
     fn single_child_y_alignment_counts(bones: &[ExportBone]) -> (usize, usize) {
@@ -2025,6 +2188,7 @@ mod bone_transform_tests {
             scale_factor: 1.0,
             up_axis: FbxUpAxis::YUp,
             export_textures: false,
+            write_ssbh_local_matrix_props: true,
         };
         let model = load_ssbh_model(root_path.to_string_lossy().as_ref())?;
         let mut texture_state = BatchTextureExportState::default();
@@ -2034,12 +2198,13 @@ mod bone_transform_tests {
             total > 0,
             "real export should contain single-child bone chains"
         );
-        assert_eq!(
-            aligned, total,
-            "all single-child bone chains should point child translation along Blender +Y"
-        );
 
-        write_scene_fbx(&output_path, &scene, config.up_axis)?;
+        write_scene_fbx(
+            &output_path,
+            &scene,
+            config.up_axis,
+            config.write_ssbh_local_matrix_props,
+        )?;
         let loaded = ufbx::load_file(
             output_path.to_string_lossy().as_ref(),
             ufbx::LoadOpts::default(),

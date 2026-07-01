@@ -33,6 +33,7 @@ export interface DaeExportConfig {
   scaleFactor: number;
   upAxis: "y_up" | "z_up";
   exportTextures: boolean;
+  writeSsbhLocalMatrixProps?: boolean;
   formats: ModelExportFormat[];
   outputDirectory: string;
 }
@@ -60,6 +61,10 @@ interface DaeExportDialogProps {
   availableFormats?: ModelExportFormat[];
   /** Initial texture export checkbox state whenever the dialog opens. */
   defaultExportTextures?: boolean;
+  /** Show the temporary SSBH FBX skeleton matrix custom property toggle. */
+  showSsbhLocalMatrixOption?: boolean;
+  /** Initial SSBH local matrix custom property state whenever the dialog opens. */
+  defaultWriteSsbhLocalMatrixProps?: boolean;
 }
 
 export function DaeExportDialog({
@@ -74,10 +79,13 @@ export function DaeExportDialog({
   defaultFormats,
   availableFormats,
   defaultExportTextures = false,
+  showSsbhLocalMatrixOption = false,
+  defaultWriteSsbhLocalMatrixProps = true,
 }: DaeExportDialogProps) {
   const [scaleFactor, setScaleFactor] = useState(1.0);
   const [upAxis, setUpAxis] = useState<"y_up" | "z_up">("y_up");
   const [exportTextures, setExportTextures] = useState(false);
+  const [writeSsbhLocalMatrixProps, setWriteSsbhLocalMatrixProps] = useState(true);
   const [exportDae, setExportDae] = useState(true);
   const [exportFbx, setExportFbx] = useState(true);
   const [outputDirectory, setOutputDirectory] = useState("");
@@ -97,7 +105,14 @@ export function DaeExportDialog({
     setExportDae(defaults.exportDae);
     setExportFbx(defaults.exportFbx);
     setExportTextures(defaultExportTextures);
-  }, [open, defaultFormats, enabledFormats, defaultExportTextures]);
+    setWriteSsbhLocalMatrixProps(defaultWriteSsbhLocalMatrixProps);
+  }, [
+    open,
+    defaultFormats,
+    enabledFormats,
+    defaultExportTextures,
+    defaultWriteSsbhLocalMatrixProps,
+  ]);
 
   const ssbhCount = targets.filter((t) => t.type === "ssbh").length;
   const daeCount = targets.filter((t) => t.type === "imported-dae").length;
@@ -130,7 +145,7 @@ export function DaeExportDialog({
 
   const submit = () => {
     if (!canExport) return;
-    onExport({
+    const config: DaeExportConfig = {
       scaleFactor,
       upAxis,
       exportTextures,
@@ -139,7 +154,11 @@ export function DaeExportDialog({
         ...(supportsFbx && exportFbx ? ["fbx" as const] : []),
       ],
       outputDirectory: outputDirectory.trim(),
-    });
+    };
+    if (showSsbhLocalMatrixOption) {
+      config.writeSsbhLocalMatrixProps = writeSsbhLocalMatrixProps;
+    }
+    onExport(config);
   };
 
   if (!open) return null;
@@ -267,20 +286,33 @@ export function DaeExportDialog({
           </div>
         </div>
 
-          {formatHint ? <p className="text-[11px] text-muted-foreground">{formatHint}</p> : null}
+        {formatHint ? <p className="text-[11px] text-muted-foreground">{formatHint}</p> : null}
 
-          {targets.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="export-textures"
-                checked={exportTextures}
-                onCheckedChange={(v) => setExportTextures(v === true)}
-              />
-              <Label htmlFor="export-textures" className="text-xs cursor-pointer">
-                Export referenced textures
-              </Label>
-            </div>
-          )}
+        {showSsbhLocalMatrixOption && supportsFbx ? (
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="write-ssbh-local-matrix-props"
+              checked={writeSsbhLocalMatrixProps}
+              onCheckedChange={(v) => setWriteSsbhLocalMatrixProps(v === true)}
+            />
+            <Label htmlFor="write-ssbh-local-matrix-props" className="text-xs cursor-pointer">
+              Write EXVS2_SSBH_LocalMatrix
+            </Label>
+          </div>
+        ) : null}
+
+        {targets.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="export-textures"
+              checked={exportTextures}
+              onCheckedChange={(v) => setExportTextures(v === true)}
+            />
+            <Label htmlFor="export-textures" className="text-xs cursor-pointer">
+              Export referenced textures
+            </Label>
+          </div>
+        )}
       </div>
     </AppRndModalShell>
   );

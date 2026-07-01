@@ -22,6 +22,7 @@ Parser reuse:
 - `.jnttbl` → `src-tauri/src/jnttbl_format.rs`
 - `character_id_table.bin` → same layout as `src/models/characterIdTable.ts`
 - Typed param tables → `src-tauri/src/format/{vernier_table,armsparam,bulletparam,projectile_depiction_table}.rs`
+- SSBH model files → `ssbh_data` (`SkelData`, `MeshData`, `ModlData`) via the same parsers as UnitEdit / FBX round-trip
 
 ## How To Run
 
@@ -47,10 +48,13 @@ exvs2-json inspect "<known-exvs2-file-path>" [--type <type>] [--pretty] [--summa
 - Auto-detects type from magic bytes and filename when possible.
 - Use `--type` when param-bin magic is present but the filename is ambiguous.
 - `--summary` returns compact AI pickup (recommended for large files such as
-  `character_id_table.bin`).
+  `character_id_table.bin` and `.numshb`).
 - `--raw-fields` adds per-entry hash/name/offset dumps for typed param tables.
+  For `.numshb`, `--raw-fields` includes full vertex attribute buffers.
 - `--roundtrip-check` parses and rebuilds formats that already have lossless
-  builders (`jnttbl`, typed param tables, `character_id_table`).
+  builders (`jnttbl`, typed param tables, `character_id_table`). For SSBH
+  files (`nusktb`, `numshb`, `numdlb`) it reports rebuild size and warns when
+  the rewrite is not byte-identical (expected for Skel/Mesh/Modl).
 
 ### `correlate`
 
@@ -75,6 +79,17 @@ evidence with the optional flags.
 | `armsparam` | `armsparam` | filename |
 | `bulletparam` | `bulletparam` | filename |
 | `projectile-depiction-table` | `projectile_depiction_table` | filename |
+| `nusktb` | `nusktb` | `.nusktb`, or `HBSS` + `LEKS` tag at `0x10` |
+| `numshb` | `numshb` | `.numshb`, or `HBSS` + `HSEM` tag at `0x10` |
+| `numdlb` | `numdlb` | `.numdlb` / `.nusrcmdlb`, or `HBSS` + `LDOM` tag at `0x10` |
+
+### SSBH inspect notes
+
+- Default `numshb` output omits vertex buffers; use `--raw-fields` only when you
+  explicitly need full geometry JSON.
+- `nusktb` full output includes bone transforms; `--summary` keeps names and
+  parent indices only.
+- `numdlb` links sibling `.nusktb`, `.numshb`, and `.numatb` filenames.
 
 ## JSON Envelope
 

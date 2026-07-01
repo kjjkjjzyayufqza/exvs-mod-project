@@ -1,4 +1,81 @@
+use std::io::Cursor;
+
 use app_lib::exvs2_json_cli::{inspect_bytes, InspectOptions, InspectType};
+use ssbh_data::mesh_data::{AttributeData, MeshData, MeshObjectData, VectorData};
+use ssbh_data::modl_data::{ModlData, ModlEntryData};
+use ssbh_data::prelude::SsbhData;
+use ssbh_data::skel_data::{BillboardType, BoneData, SkelData};
+
+fn write_ssbh_fixture<T: SsbhData>(value: &T) -> Vec<u8> {
+    let mut cursor = Cursor::new(Vec::new());
+    value.write(&mut cursor).expect("write ssbh fixture");
+    cursor.into_inner()
+}
+
+fn identity_transform() -> [[f32; 4]; 4] {
+    [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+}
+
+fn sample_nusktb_bytes() -> Vec<u8> {
+    write_ssbh_fixture(&SkelData {
+        major_version: 1,
+        minor_version: 0,
+        bones: vec![
+            BoneData {
+                name: "Root".to_string(),
+                transform: identity_transform(),
+                parent_index: None,
+                billboard_type: BillboardType::Disabled,
+            },
+            BoneData {
+                name: "Child".to_string(),
+                transform: identity_transform(),
+                parent_index: Some(0),
+                billboard_type: BillboardType::Disabled,
+            },
+        ],
+    })
+}
+
+fn sample_numdlb_bytes() -> Vec<u8> {
+    write_ssbh_fixture(&ModlData {
+        major_version: 1,
+        minor_version: 7,
+        model_name: "test_model".to_string(),
+        skeleton_file_name: "test.nusktb".to_string(),
+        material_file_names: vec!["test.numatb".to_string()],
+        animation_file_name: None,
+        mesh_file_name: "test.numshb".to_string(),
+        entries: vec![ModlEntryData {
+            mesh_object_name: "body".to_string(),
+            mesh_object_subindex: 0,
+            material_label: "Mat1".to_string(),
+        }],
+    })
+}
+
+fn sample_numshb_bytes() -> Vec<u8> {
+    write_ssbh_fixture(&MeshData {
+        major_version: 1,
+        minor_version: 8,
+        is_vs2: true,
+        objects: vec![MeshObjectData {
+            name: "body".to_string(),
+            subindex: 0,
+            positions: vec![AttributeData {
+                name: "Position0".to_string(),
+                data: VectorData::Vector3(vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]),
+            }],
+            vertex_indices: vec![0, 1, 2],
+            ..Default::default()
+        }],
+    })
+}
 
 fn jnttbl_fixture_bytes() -> Vec<u8> {
     let mut bytes = Vec::new();
@@ -128,4 +205,79 @@ fn inspect_unknown_file_type_returns_actionable_error() {
     assert!(err.contains("--type"));
     assert!(err.contains("jnttbl"));
     assert!(err.contains("vernier-table"));
+    assert!(err.contains("nusktb"));
+}
+
+#[test]
+fn inspect_nusktb_auto_detects_and_summarizes_bones() {
+    let report = inspect_bytes(
+        r"E:\fixture\test.nusktb",
+        &sample_nusktb_bytes(),
+        InspectOptions {
+            inspect_type: None,
+            pretty: false,
+            summary: true,
+            raw_fields: false,
+            roundtrip_check: true,
+        },
+    )
+    .expect("nusktb fixture should parse");
+
+    assert_eq!(report["detectedType"], "nusktb");
+    assert_eq!(report["data"]["boneCount"], 2);
+    assert_eq!(report["data"]["boneNames"][0], "Root");
+    assert_eq!(report["data"]["bones"][1]["parentIndex"], 0);
+    assert!(
+        report["data"]["roundtripCheck"]["rebuiltByteLength"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+}
+
+#[test]
+fn inspect_numdlb_emits_model_links() {
+    let report = inspect_bytes(
+        r"E:\fixture\test.numdlb",
+        &sample_numdlb_bytes(),
+        InspectOptions {
+            inspect_type: None,
+            pretty: false,
+            summary: true,
+            raw_fields: false,
+            roundtrip_check: false,
+        },
+    )
+    .expect("numdlb fixture should parse");
+
+    assert_eq!(report["detectedType"], "numdlb");
+    assert_eq!(report["data"]["modelName"], "test_model");
+    assert_eq!(report["data"]["skeletonFileName"], "test.nusktb");
+    assert_eq!(report["data"]["entries"][0]["materialLabel"], "Mat1");
+}
+
+#[test]
+fn inspect_numshb_emits_object_stats_without_raw_fields() {
+    let report = inspect_bytes(
+        r"E:\fixture\test.numshb",
+        &sample_numshb_bytes(),
+        InspectOptions {
+            inspect_type: None,
+            pretty: false,
+            summary: false,
+            raw_fields: false,
+            roundtrip_check: false,
+        },
+    )
+    .expect("numshb fixture should parse");
+
+    assert_eq!(report["detectedType"], "numshb");
+    assert_eq!(report["data"]["objectCount"], 1);
+    assert_eq!(report["data"]["objects"][0]["vertexCount"], 3);
+    assert_eq!(report["data"]["objects"][0]["indexCount"], 3);
+    assert!(report["data"]["objects"][0]["attributeNames"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|name| name == "Position0"));
 }

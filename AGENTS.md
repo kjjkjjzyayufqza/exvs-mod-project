@@ -13,9 +13,10 @@ cross-agent hub for Cursor, Claude, Codex, Copilot, and other coding agents.
 - **Key subsystems**:
   - `tools/` — Python-based MSC bytecode toolchain (`mscdec.py`, `msclang.py`,
     `disasmlib.py`, `msc_core.py`, `msc_cfg.py`).
+  - `src-tauri/` — Tauri Rust backend, including the agent-facing `exvs2-json`
+    CLI (`exvs2_json` binary; see [CLI Tools](#cli-tools-agent-facing)).
   - `src/page/` — React page components (TestEditor with MSC workspace, UnitEdit,
     FilesEdit, SceneEdit, etc.).
-  - `src-tauri/` — Tauri Rust backend.
   - `docs/` — Format specifications and research notes.
 
 ## Mandatory Task Startup Protocol
@@ -116,6 +117,44 @@ Key design decisions:
   pushBit, eliminating the need for binary patching (0x2E→0xAE).
 - `msc_cfg.py` builds control flow graphs per script and performs per-basic-block
   stack simulation to resolve script references.
+
+## CLI Tools (Agent-Facing)
+
+### `exvs2-json` (Cargo binary: `exvs2_json`)
+
+Read-only CLI for converting known EXVS2 binary/resource files into structured
+JSON. There is **no** tool named `exvs2-cli`; use `exvs2-json` / `exvs2_json`.
+
+| Item | Path |
+|------|------|
+| Full spec | `docs/exvs2-json-cli.md` |
+| Design background | `docs/superpowers/specs/2026-06-28-exvs2-binary-json-cli-design.md` |
+| CLI core | `src-tauri/src/exvs2_json_cli.rs` |
+| Binary entry | `src-tauri/src/bin/exvs2_json.rs` |
+| Integration tests | `src-tauri/tests/exvs2_json_cli_test.rs` |
+| Release executable | `src-tauri/target/release/exvs2_json.exe` |
+
+**Commands**
+
+- `inspect` — parse `.jnttbl`, `character_id_table.bin`, `vernier_table`,
+  `armsparam`, `bulletparam`, `projectile_depiction_table`, and SSBH model files
+  (`.nusktb`, `.numshb`, `.numdlb`; auto-detect or `--type`). Prefer
+  `--summary --pretty` for large files; for `.numshb` use `--raw-fields` only
+  when full vertex buffers are required.
+- `correlate` — emit a JSON skeleton joining unit/weapon/dispatcher/IDA evidence
+  (paste IDA symbols via optional flags; does not call IDA automatically).
+
+**Run** (from `src-tauri/`):
+
+```powershell
+cargo run --bin exvs2_json -- --help
+cargo run --bin exvs2_json -- inspect "<path>" --summary --pretty
+cargo run --bin exvs2_json -- correlate --unit 001GUNDAM/005GYAN00/001 --weapon SuibakuMissile --id 10050102 --pretty
+```
+
+JSON output envelope always sets `"tool": "exvs2-json"`. Reuses the same Rust
+parsers as the desktop editor backend. Cross-repo pickup for  hook
+research: `docs\EXVS2JsonCli.md`.
 
 ## Rule And Skill Link Map
 

@@ -19,6 +19,7 @@ use super::import_scene::{
 
 const DEFAULT_NORMAL: [f32; 3] = [0.0, 0.0, 1.0];
 const DEFAULT_UV: [f32; 2] = [0.0, 0.0];
+const SSBH_LOCAL_MATRIX_PROP: &str = "EXVS2_SSBH_LocalMatrix";
 
 fn application_text_indicates_blender(app: &Application) -> bool {
     text_indicates_blender(&app.name, &app.vendor)
@@ -83,14 +84,6 @@ fn apply_y180_axis_convention_correction(scene: &mut ImportScene) {
             if let Some(normalized) = normalized_vec3(transformed) {
                 *normal = normalized;
             }
-        }
-    }
-    for bone in &mut scene.bones {
-        let local = Mat4::from_cols_array_2d(&bone.transform);
-        bone.transform = glam_to_import_columns(rot * local * rot);
-        if let Some(inverse_bind_matrix) = bone.inverse_bind_matrix.as_mut() {
-            let inverse = Mat4::from_cols_array_2d(inverse_bind_matrix);
-            *inverse_bind_matrix = glam_to_import_columns(inverse * rot);
         }
     }
 }
@@ -307,17 +300,48 @@ fn local_transform_upto_ancestor(child: &Node, ancestor: &Node) -> Result<Mat4> 
     Ok(m)
 }
 
+fn root_bone_local_transform(node: &Node) -> Mat4 {
+    if node.parent.is_some() {
+        ufbx_matrix3x4_to_glam(&node.node_to_parent)
+    } else {
+        ufbx_matrix3x4_to_glam(&node.node_to_world)
+    }
+}
+
+fn parse_matrix_prop(value: &str) -> Option<Mat4> {
+    let mut values = [0.0f32; 16];
+    let mut count = 0usize;
+    for part in value
+        .split(|character: char| character.is_ascii_whitespace() || character == ',')
+        .filter(|part| !part.is_empty())
+    {
+        if count >= values.len() {
+            return None;
+        }
+        values[count] = part.parse().ok()?;
+        count += 1;
+    }
+    (count == values.len()).then(|| Mat4::from_cols_array(&values))
+}
+
+fn ssbh_local_transform_prop(node: &Node) -> Option<Mat4> {
+    let prop = ufbx::find_prop(&node.element.props, SSBH_LOCAL_MATRIX_PROP)?;
+    (prop.type_ == ufbx::PropType::String)
+        .then(|| parse_matrix_prop(prop.value_str.as_ref()))
+        .flatten()
+        .filter(Mat4::is_finite)
+}
+
 fn ancestor_bone_parent_index(
     mut node: Option<&Node>,
     name_to_index: &HashMap<String, usize>,
 ) -> Option<usize> {
     while let Some(n) = node {
-        if let Some(p) = n.parent.as_ref() {
-            let parent = p.as_ref();
-            if let Some(&idx) = name_to_index.get(parent.element.name.as_ref()) {
-                return Some(idx);
-            }
-            node = Some(parent);
+        if let Some(&idx) = name_to_index.get(n.element.name.as_ref()) {
+            return Some(idx);
+        }
+        if let Some(parent) = n.parent.as_ref() {
+            node = Some(parent.as_ref());
         } else {
             break;
         }
@@ -459,17 +483,29 @@ fn build_bones_preorder(
                         d.name
                     )
                 })?;
-                let parent_name = drafts[p].name.as_str();
-                let parent_node = find_scene_node_by_name(scene, parent_name).ok_or_else(|| {
-                    anyhow!(
-                        "FBX skeleton: parent bone '{}' has no scene node",
-                        parent_name
-                    )
-                })?;
-                local_transform_upto_ancestor(child_node, parent_node)
-                    .map_err(|e| anyhow!("FBX skeleton: bone '{}': {}", d.name, e))?
+                if let Some(source_local) = ssbh_local_transform_prop(child_node) {
+                    source_local
+                } else {
+                    let parent_name = drafts[p].name.as_str();
+                    let parent_node =
+                        find_scene_node_by_name(scene, parent_name).ok_or_else(|| {
+                            anyhow!(
+                                "FBX skeleton: parent bone '{}' has no scene node",
+                                parent_name
+                            )
+                        })?;
+                    local_transform_upto_ancestor(child_node, parent_node)
+                        .map_err(|e| anyhow!("FBX skeleton: bone '{}': {}", d.name, e))?
+                }
             }
-            None => d.world,
+            None => {
+                if let Some(child_node) = find_scene_node_by_name(scene, &d.name) {
+                    ssbh_local_transform_prop(child_node)
+                        .unwrap_or_else(|| root_bone_local_transform(child_node))
+                } else {
+                    d.world
+                }
+            }
         };
         bones.push(ImportBone {
             name: d.name.clone(),
@@ -940,12 +976,14 @@ pub fn convert_fbx_file(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
+    use ssbh_data::prelude::SkelData;
+    use std::path::{Path, PathBuf};
 
     const BIGZAM_AKENO: &str = r"D:\output\bigzam\Akeno.fbx";
     const BIGZAM_AKENO_BODY: &str = r"D:\output\bigzam\Akeno_body.fbx";
     const MINECRAFT_BLENDER_FBX: &str = r"D:\output\minecraft\test.fbx";
     const MINECRAFT_LARGE_BLENDER_FBX: &str = r"D:\output\minecraft\test3.fbx";
+    const GYAN_STICK_SKIN_BLENDER_FBX: &str = r"D:\output\N1_rocket\N2_not_boom_mix_ship.fbx";
 
     fn assert_close3(actual: [f32; 3], expected: [f32; 3]) {
         for (actual, expected) in actual.iter().zip(expected.iter()) {
@@ -953,6 +991,19 @@ mod tests {
                 (actual - expected).abs() < 1e-5,
                 "expected {expected}, got {actual}"
             );
+        }
+    }
+
+    fn assert_close_matrix(actual: [[f32; 4]; 4], expected: [[f32; 4]; 4]) {
+        for row in 0..4 {
+            for col in 0..4 {
+                assert!(
+                    (actual[row][col] - expected[row][col]).abs() < 1e-5,
+                    "matrix[{row}][{col}] expected {}, got {}",
+                    expected[row][col],
+                    actual[row][col]
+                );
+            }
         }
     }
 
@@ -977,6 +1028,78 @@ mod tests {
         assert_eq!(
             import_scene.fbx_import_source,
             Some(FbxImportSource::Blender)
+        );
+    }
+
+    #[test]
+    fn parse_blender_fbx_preserves_direct_bone_parents_when_present() {
+        use ssbh_data::prelude::*;
+
+        let path = Path::new(GYAN_STICK_SKIN_BLENDER_FBX);
+        if !path.is_file() {
+            eprintln!("SKIP: {GYAN_STICK_SKIN_BLENDER_FBX} not found");
+            return;
+        }
+
+        let scene = parse_fbx_file(path).expect("Gyan Blender FBX should parse");
+        let names: Vec<&str> = scene.bones.iter().map(|b| b.name.as_str()).collect();
+        let gbl_rt = names
+            .iter()
+            .position(|name| *name == "GBL_RT")
+            .expect("GBL_RT should be present");
+        let stick = names
+            .iter()
+            .position(|name| *name == "STICK")
+            .expect("STICK should be present");
+        let ath = names
+            .iter()
+            .position(|name| *name == "ATH_E_VERNIER")
+            .expect("ATH_E_VERNIER should be present");
+        assert_eq!(scene.bones[gbl_rt].parent_index, None);
+        assert_eq!(scene.bones[stick].parent_index, Some(gbl_rt));
+        assert_eq!(scene.bones[ath].parent_index, Some(stick));
+        assert_close_matrix(
+            scene.bones[gbl_rt].transform,
+            Mat4::IDENTITY.to_cols_array_2d(),
+        );
+
+        let output = tempfile::tempdir().expect("temp conversion dir");
+        let config = DaeConvertConfig {
+            output_directory: output.path().to_path_buf(),
+            base_filename: "gyan_stick_skin".to_string(),
+            scale_factor: 0.05,
+            up_axis_conversion: UpAxisConversion::NoConversion,
+            flip_uv: false,
+            include_geometry_names: Vec::new(),
+            write_numdlb: false,
+            write_numshb: false,
+            write_nusktb: true,
+            modl_entries: Vec::new(),
+        };
+        let (files, _) = convert_fbx_file(path, &config).expect("Gyan Blender FBX should convert");
+        let skel = SkelData::from_file(files.nusktb_path.as_ref().unwrap())
+            .expect("converted nusktb should parse");
+        let gbl_rt = skel
+            .bones
+            .iter()
+            .position(|bone| bone.name == "GBL_RT")
+            .expect("GBL_RT should be present");
+        let stick = skel
+            .bones
+            .iter()
+            .position(|bone| bone.name == "STICK")
+            .expect("STICK should be present");
+        let ath = skel
+            .bones
+            .iter()
+            .position(|bone| bone.name == "ATH_E_VERNIER")
+            .expect("ATH_E_VERNIER should be present");
+        assert_eq!(skel.bones[gbl_rt].parent_index, None);
+        assert_eq!(skel.bones[stick].parent_index, Some(gbl_rt));
+        assert_eq!(skel.bones[ath].parent_index, Some(stick));
+        assert_close_matrix(
+            skel.bones[gbl_rt].transform,
+            Mat4::IDENTITY.to_cols_array_2d(),
         );
     }
 
@@ -1214,6 +1337,84 @@ mod tests {
             eprintln!(
                 "[large_test3] biggest object='{}' vertex_count={} index_count={}",
                 name, vertex_count, index_count
+            );
+        }
+    }
+
+    #[test]
+    fn convert_env_fbx_to_nusktb_matrix_check_when_set() {
+        let Some(path) = std::env::var_os("SSBH_FBX_MATRIX_CHECK").map(PathBuf::from) else {
+            eprintln!("SKIP: SSBH_FBX_MATRIX_CHECK is not set");
+            return;
+        };
+        if !path.is_file() {
+            eprintln!(
+                "SKIP: SSBH_FBX_MATRIX_CHECK file not found: {}",
+                path.display()
+            );
+            return;
+        }
+        let scale_factor = std::env::var("SSBH_FBX_MATRIX_CHECK_SCALE")
+            .ok()
+            .and_then(|value| value.parse::<f32>().ok())
+            .unwrap_or(0.1);
+        let output = tempfile::tempdir().expect("temp conversion dir");
+        let config = DaeConvertConfig {
+            output_directory: output.path().to_path_buf(),
+            base_filename: "matrix_check".to_string(),
+            scale_factor,
+            up_axis_conversion: UpAxisConversion::NoConversion,
+            flip_uv: false,
+            include_geometry_names: Vec::new(),
+            write_numdlb: false,
+            write_numshb: false,
+            write_nusktb: true,
+            modl_entries: Vec::new(),
+        };
+
+        let (files, stats) = convert_fbx_file(&path, &config).expect("FBX should convert");
+        eprintln!(
+            "[matrix_check] converted {} bones={} meshes={}",
+            path.display(),
+            stats.bones,
+            stats.mesh_objects
+        );
+        let skel = SkelData::from_file(files.nusktb_path.as_ref().unwrap())
+            .expect("converted nusktb should parse");
+        for (index, bone) in skel.bones.iter().enumerate() {
+            let local = Mat4::from_cols_array_2d(&bone.transform);
+            let (_, _, translation) = local.to_scale_rotation_translation();
+            eprintln!(
+                "[matrix_check] bone {index:02} '{}' parent={:?} translation={translation:?} matrix={:?}",
+                bone.name, bone.parent_index, bone.transform
+            );
+        }
+
+        if std::env::var("SSBH_FBX_MATRIX_EXPECT_GYAN").as_deref() == Ok("1") {
+            let stick_index = skel
+                .bones
+                .iter()
+                .position(|bone| bone.name == "STICK")
+                .expect("expected STICK bone");
+            let ath_index = skel
+                .bones
+                .iter()
+                .position(|bone| bone.name == "ATH_E_VERNIER")
+                .expect("expected ATH_E_VERNIER bone");
+            assert_eq!(skel.bones[stick_index].parent_index, Some(0));
+            assert_eq!(skel.bones[ath_index].parent_index, Some(stick_index));
+            assert_close_matrix(
+                skel.bones[stick_index].transform,
+                Mat4::IDENTITY.to_cols_array_2d(),
+            );
+            assert_close_matrix(
+                skel.bones[ath_index].transform,
+                Mat4::from_scale_rotation_translation(
+                    Vec3::ONE,
+                    glam::Quat::from_rotation_y(std::f32::consts::PI),
+                    Vec3::new(-17.7831 * scale_factor, 0.0, 0.0),
+                )
+                .to_cols_array_2d(),
             );
         }
     }
