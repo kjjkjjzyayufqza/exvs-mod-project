@@ -156,6 +156,10 @@ impl IdGenerator {
     }
 }
 
+fn resolve_write_ssbh_local_matrix_props(value: Option<bool>) -> bool {
+    value.unwrap_or(false)
+}
+
 #[tauri::command]
 pub async fn unit_model_batch_export_fbx(
     output_dir: String,
@@ -179,7 +183,9 @@ pub async fn unit_model_batch_export_fbx(
         scale_factor,
         up_axis,
         export_textures: export_textures.unwrap_or(false),
-        write_ssbh_local_matrix_props: write_ssbh_local_matrix_props.unwrap_or(true),
+        write_ssbh_local_matrix_props: resolve_write_ssbh_local_matrix_props(
+            write_ssbh_local_matrix_props,
+        ),
     };
 
     tauri::async_runtime::spawn_blocking(move || {
@@ -395,7 +401,11 @@ fn build_export_scene(
         return Err(anyhow!("NUMSHB contains no mesh objects"));
     }
 
-    let bones = build_export_bones(model.skel.as_ref(), config.scale_factor)?;
+    let bones = build_export_bones(
+        model.skel.as_ref(),
+        config.scale_factor,
+        config.write_ssbh_local_matrix_props,
+    )?;
     let bone_indices: HashMap<&str, usize> = bones
         .iter()
         .enumerate()
@@ -496,23 +506,24 @@ fn build_export_scene(
     Ok((ExportScene { meshes, bones }, textures_exported))
 }
 
-fn build_export_bones(skel: Option<&SkelData>, scale_factor: f32) -> Result<Vec<ExportBone>> {
+fn build_export_bones(
+    skel: Option<&SkelData>,
+    scale_factor: f32,
+    use_blender_display_bones: bool,
+) -> Result<Vec<ExportBone>> {
     let Some(skel) = skel else {
         return Ok(Vec::new());
     };
     let mut local_transforms = Vec::with_capacity(skel.bones.len());
     for bone in &skel.bones {
-        let local = glam::Mat4::from_cols_array_2d(&bone.transform);
+        let mut local = glam::Mat4::from_cols_array_2d(&bone.transform);
         if !local.is_finite() {
             return Err(anyhow!("Bone '{}' has a non-finite transform", bone.name));
         }
-        let (scale, rotation, mut translation) = local.to_scale_rotation_translation();
-        translation *= scale_factor;
-        local_transforms.push(glam::Mat4::from_scale_rotation_translation(
-            scale,
-            rotation,
-            translation,
-        ));
+        local.w_axis.x *= scale_factor;
+        local.w_axis.y *= scale_factor;
+        local.w_axis.z *= scale_factor;
+        local_transforms.push(local);
     }
 
     let mut world_transforms = vec![glam::Mat4::IDENTITY; skel.bones.len()];
@@ -541,7 +552,9 @@ fn build_export_bones(skel: Option<&SkelData>, scale_factor: f32) -> Result<Vec<
             ssbh_local_transform: local_transforms[index],
         })
         .collect();
-    apply_blender_bone_orientations(&mut bones)?;
+    if use_blender_display_bones {
+        apply_blender_bone_orientations(&mut bones)?;
+    }
     Ok(bones)
 }
 
@@ -1322,9 +1335,9 @@ fn write_bone<W: Write + Seek>(
     writer.close_node().map_err(io_error)?;
     writer.close_node().map_err(io_error)?;
 
-    // This is the Blender-friendly display transform. The original SSBH local
-    // transform is stored below as a custom property for lossless round-trips.
-    let (translation, rotation, scale) = decompose_fbx_trs(bone.local_transform)?;
+    // Standard exports use the source rest transform directly. Legacy display-bone
+    // exports store the source rest transform in the optional custom property.
+    let (translation, rotation, scale, rotation_order) = decompose_fbx_trs(bone.local_transform)?;
     {
         let mut attributes = writer.new_node("Model").map_err(io_error)?;
         attributes.append_i64(ids.model).map_err(io_error)?;
@@ -1338,6 +1351,8 @@ fn write_bone<W: Write + Seek>(
     write_i32_node(writer, "Version", 232)?;
     writer.new_node("Properties70").map_err(io_error)?;
     write_prop_enum_int(writer, "InheritType", 1)?;
+    write_prop_enum_int(writer, "RotationOrder", rotation_order)?;
+    write_prop_bool(writer, "RotationActive", true)?;
     write_prop_visibility(writer, true)?;
     write_prop_lcl(writer, "Lcl Translation", translation)?;
     write_prop_lcl(writer, "Lcl Rotation", rotation)?;
@@ -1634,6 +1649,20 @@ fn write_prop_enum_int<W: Write + Seek>(
     Ok(())
 }
 
+fn write_prop_bool<W: Write + Seek>(writer: &mut Writer<W>, name: &str, value: bool) -> Result<()> {
+    let mut attributes = writer.new_node("P").map_err(io_error)?;
+    attributes.append_string_direct(name).map_err(io_error)?;
+    attributes.append_string_direct("bool").map_err(io_error)?;
+    attributes.append_string_direct("").map_err(io_error)?;
+    attributes.append_string_direct("").map_err(io_error)?;
+    attributes
+        .append_i32(if value { 1 } else { 0 })
+        .map_err(io_error)?;
+    drop(attributes);
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
 fn write_prop_double<W: Write + Seek>(
     writer: &mut Writer<W>,
     name: &str,
@@ -1813,40 +1842,60 @@ fn matrix_prop_string(matrix: glam::Mat4) -> String {
         .join(" ")
 }
 
-fn decompose_fbx_trs(matrix: glam::Mat4) -> Result<([f64; 3], [f64; 3], [f64; 3])> {
+fn decompose_fbx_trs(matrix: glam::Mat4) -> Result<([f64; 3], [f64; 3], [f64; 3], i32)> {
     let values = matrix.to_cols_array().map(|value| value as f64);
-    let translation = [values[12], values[13], values[14]];
-    let scale_x = (values[0].powi(2) + values[1].powi(2) + values[2].powi(2)).sqrt();
-    let scale_y = (values[4].powi(2) + values[5].powi(2) + values[6].powi(2)).sqrt();
-    let scale_z = (values[8].powi(2) + values[9].powi(2) + values[10].powi(2)).sqrt();
-    if scale_x <= 1e-10 || scale_y <= 1e-10 || scale_z <= 1e-10 {
+    let transform = ufbx::matrix_to_transform(&ufbx::Matrix {
+        m00: values[0],
+        m10: values[1],
+        m20: values[2],
+        m01: values[4],
+        m11: values[5],
+        m21: values[6],
+        m02: values[8],
+        m12: values[9],
+        m22: values[10],
+        m03: values[12],
+        m13: values[13],
+        m23: values[14],
+    });
+    let translation = [
+        transform.translation.x,
+        transform.translation.y,
+        transform.translation.z,
+    ];
+    let scale = [transform.scale.x, transform.scale.y, transform.scale.z];
+    let rotation_orders = [
+        (ufbx::RotationOrder::Xyz, 1usize),
+        (ufbx::RotationOrder::Xzy, 2usize),
+        (ufbx::RotationOrder::Yzx, 2usize),
+        (ufbx::RotationOrder::Yxz, 0usize),
+        (ufbx::RotationOrder::Zxy, 0usize),
+        (ufbx::RotationOrder::Zyx, 1usize),
+    ];
+    let (rotation_order, rotation) = rotation_orders
+        .into_iter()
+        .map(|(order, middle_axis)| {
+            let euler = ufbx::quat_to_euler(transform.rotation, order);
+            let rotation = [euler.x, euler.y, euler.z];
+            let gimbal_margin = rotation[middle_axis].to_radians().cos().abs();
+            (order, rotation, gimbal_margin)
+        })
+        .max_by(|left, right| left.2.total_cmp(&right.2))
+        .map(|(order, rotation, _)| (order as i32, rotation))
+        .ok_or_else(|| anyhow!("FBX rotation order list is empty"))?;
+    if translation
+        .iter()
+        .chain(rotation.iter())
+        .chain(scale.iter())
+        .any(|value| !value.is_finite())
+    {
+        return Err(anyhow!("Bone local transform decomposition is non-finite"));
+    }
+    if scale.iter().any(|value| value.abs() <= 1e-10) {
         return Err(anyhow!("Bone local transform has a zero scale axis"));
     }
 
-    let r00 = values[0] / scale_x;
-    let r01 = values[1] / scale_x;
-    let r02 = values[2] / scale_x;
-    let r12 = values[6] / scale_y;
-    let r22 = values[10] / scale_z;
-    let y = (-r02).clamp(-1.0, 1.0).asin();
-    let (x, z) = if y.cos().abs() > 1e-6 {
-        (r12.atan2(r22), r01.atan2(r00))
-    } else {
-        let r10 = values[4] / scale_y;
-        let r11 = values[5] / scale_y;
-        let x = if y.is_sign_positive() {
-            r10.atan2(r11)
-        } else {
-            (-r10).atan2(r11)
-        };
-        (x, 0.0)
-    };
-
-    Ok((
-        translation,
-        [x.to_degrees(), y.to_degrees(), z.to_degrees()],
-        [scale_x, scale_y, scale_z],
-    ))
+    Ok((translation, rotation, scale, rotation_order))
 }
 
 fn identity_matrix() -> impl Iterator<Item = f64> {
@@ -1932,6 +1981,13 @@ mod bone_transform_tests {
     }
 
     #[test]
+    fn standard_fbx_skeleton_path_is_the_default() {
+        assert!(!resolve_write_ssbh_local_matrix_props(None));
+        assert!(resolve_write_ssbh_local_matrix_props(Some(true)));
+        assert!(!resolve_write_ssbh_local_matrix_props(Some(false)));
+    }
+
+    #[test]
     fn decompose_fbx_trs_preserves_local_translation_rotation_and_scale() {
         let matrix = Mat4::from_scale_rotation_translation(
             Vec3::new(2.0, 3.0, 4.0),
@@ -1939,7 +1995,7 @@ mod bone_transform_tests {
             Vec3::new(5.0, 6.0, 7.0),
         );
 
-        let (translation, rotation, scale) = decompose_fbx_trs(matrix).unwrap();
+        let (translation, rotation, scale, _) = decompose_fbx_trs(matrix).unwrap();
 
         assert_close(translation[0], 5.0);
         assert_close(translation[1], 6.0);
@@ -2039,7 +2095,7 @@ mod bone_transform_tests {
             ],
         };
 
-        let bones = build_export_bones(Some(&skel), 0.1).unwrap();
+        let bones = build_export_bones(Some(&skel), 0.1, true).unwrap();
 
         assert_eq!(bones[0].parent_index, None);
         assert_eq!(bones[1].parent_index, Some(0));
@@ -2056,6 +2112,80 @@ mod bone_transform_tests {
 
         let (_, _, display_translation) = bones[2].local_transform.to_scale_rotation_translation();
         assert_vec3_close(display_translation, Vec3::new(0.0, 1.77831, 0.0));
+    }
+
+    #[test]
+    fn build_export_bones_can_keep_source_local_pose_without_sidecar_matrix() {
+        use ssbh_data::skel_data::{BillboardType, BoneData};
+
+        let child_local = Mat4::from_scale_rotation_translation(
+            Vec3::ONE,
+            Quat::from_rotation_y(std::f32::consts::PI),
+            Vec3::new(-17.7831, 0.0, 0.0),
+        );
+        let skel = SkelData {
+            major_version: 1,
+            minor_version: 0,
+            bones: vec![
+                BoneData {
+                    name: "GBL_RT".to_string(),
+                    transform: Mat4::IDENTITY.to_cols_array_2d(),
+                    parent_index: None,
+                    billboard_type: BillboardType::Disabled,
+                },
+                BoneData {
+                    name: "ATH_E_VERNIER".to_string(),
+                    transform: child_local.to_cols_array_2d(),
+                    parent_index: Some(0),
+                    billboard_type: BillboardType::Disabled,
+                },
+            ],
+        };
+
+        let bones = build_export_bones(Some(&skel), 0.1, false).unwrap();
+
+        assert_mat4_close(
+            bones[1].local_transform,
+            Mat4::from_scale_rotation_translation(
+                Vec3::ONE,
+                Quat::from_rotation_y(std::f32::consts::PI),
+                Vec3::new(-1.77831, 0.0, 0.0),
+            ),
+        );
+        assert_mat4_close(bones[1].local_transform, bones[1].ssbh_local_transform);
+    }
+
+    #[test]
+    fn build_export_bones_scales_translation_without_recomposing_rotation() {
+        use ssbh_data::skel_data::{BillboardType, BoneData};
+
+        let source = Mat4::from_cols_array_2d(&[
+            [0.0, -0.00000819905, 1.0, 0.0],
+            [-0.34202000, 0.93969297, 0.00000770459, 0.0],
+            [-0.93969297, -0.34202000, -0.00000280424, 0.0],
+            [0.9, 0.3, 0.2, 1.0],
+        ]);
+        let skel = SkelData {
+            major_version: 1,
+            minor_version: 0,
+            bones: vec![BoneData {
+                name: "ATH_TE_R90".to_string(),
+                transform: source.to_cols_array_2d(),
+                parent_index: None,
+                billboard_type: BillboardType::Disabled,
+            }],
+        };
+        let mut expected = source;
+        expected.w_axis.x *= 0.1;
+        expected.w_axis.y *= 0.1;
+        expected.w_axis.z *= 0.1;
+
+        let bones = build_export_bones(Some(&skel), 0.1, false).unwrap();
+
+        assert!(
+            bones[0].local_transform.abs_diff_eq(expected, 1e-7),
+            "translation scaling must not alter the source 3x3 transform"
+        );
     }
 
     #[test]
@@ -2094,6 +2224,210 @@ mod bone_transform_tests {
         assert!(
             !contains_matrix_prop(&without_prop_bytes),
             "disabled export should omit {SSBH_LOCAL_MATRIX_PROP}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn source_local_fbx_roundtrips_without_ssbh_local_matrix_props() -> Result<()> {
+        let child_local = Mat4::from_scale_rotation_translation(
+            Vec3::ONE,
+            Quat::from_rotation_y(std::f32::consts::PI),
+            Vec3::new(-1.77831, 0.0, 0.0),
+        );
+        let scene = ExportScene {
+            meshes: Vec::new(),
+            bones: vec![
+                ExportBone {
+                    name: "GBL_RT".to_string(),
+                    parent_index: None,
+                    local_transform: Mat4::IDENTITY,
+                    world_transform: Mat4::IDENTITY,
+                    ssbh_local_transform: Mat4::IDENTITY,
+                },
+                ExportBone {
+                    name: "ATH_E_VERNIER".to_string(),
+                    parent_index: Some(0),
+                    local_transform: child_local,
+                    world_transform: child_local,
+                    ssbh_local_transform: child_local,
+                },
+            ],
+        };
+
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("source_local_no_props.fbx");
+        write_scene_fbx(&path, &scene, FbxUpAxis::YUp, false)?;
+
+        let imported = crate::ssbh_dae::parse_fbx_file(&path)?;
+        assert_eq!(imported.bones.len(), 2);
+        assert_eq!(imported.bones[0].name, "GBL_RT");
+        assert_eq!(imported.bones[0].parent_index, None);
+        assert_eq!(imported.bones[1].name, "ATH_E_VERNIER");
+        assert_eq!(imported.bones[1].parent_index, Some(0));
+        assert_mat4_close(
+            Mat4::from_cols_array_2d(&imported.bones[1].transform),
+            child_local,
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn source_local_fbx_roundtrips_near_xyz_gimbal_without_sidecar_matrix() -> Result<()> {
+        let local_transform = Mat4::from_cols_array_2d(&[
+            [0.0, -0.00000819905, 1.0, 0.0],
+            [-0.34202000, 0.93969297, 0.00000770459, 0.0],
+            [-0.93969297, -0.34202000, -0.00000280424, 0.0],
+            [0.9, 0.3, 0.2, 1.0],
+        ]);
+        let scene = ExportScene {
+            meshes: Vec::new(),
+            bones: vec![ExportBone {
+                name: "ATH_TE_R90".to_string(),
+                parent_index: None,
+                local_transform,
+                world_transform: local_transform,
+                ssbh_local_transform: local_transform,
+            }],
+        };
+
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("near_xyz_gimbal_no_props.fbx");
+        write_scene_fbx(&path, &scene, FbxUpAxis::YUp, false)?;
+
+        let imported = crate::ssbh_dae::parse_fbx_file(&path)?;
+        assert_eq!(imported.bones.len(), 1);
+        assert!(
+            Mat4::from_cols_array_2d(&imported.bones[0].transform)
+                .abs_diff_eq(local_transform, 1e-5),
+            "FBX XYZ Euler decomposition changed the source local transform"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn source_local_fbx_roundtrips_numerically_near_xyz_gimbal() -> Result<()> {
+        let local_transform = Mat4::from_cols_array_2d(&[
+            [0.0, -0.00000821054, 1.0, 0.0],
+            [-0.34202000, 0.93969297, 0.00000771880, 0.0],
+            [-0.93969297, -0.34201998, -0.00000274181, 0.0],
+            [0.9, 0.3, 0.2, 1.0],
+        ]);
+        let scene = ExportScene {
+            meshes: Vec::new(),
+            bones: vec![ExportBone {
+                name: "ATH_TE_R90".to_string(),
+                parent_index: None,
+                local_transform,
+                world_transform: local_transform,
+                ssbh_local_transform: local_transform,
+            }],
+        };
+
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("numerically_near_xyz_gimbal.fbx");
+        write_scene_fbx(&path, &scene, FbxUpAxis::YUp, false)?;
+
+        let imported = crate::ssbh_dae::parse_fbx_file(&path)?;
+        assert_eq!(imported.bones.len(), 1);
+        let imported_transform = Mat4::from_cols_array_2d(&imported.bones[0].transform);
+        let decomposition = decompose_fbx_trs(local_transform)?;
+        assert!(
+            imported_transform.abs_diff_eq(local_transform, 1e-5),
+            "FBX Euler decomposition must be stable near XYZ gimbal lock: decomposition={decomposition:?}, expected={:?}, actual={:?}",
+            local_transform.to_cols_array_2d(),
+            imported_transform.to_cols_array_2d()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn source_skel_pipeline_roundtrips_near_xyz_gimbal_without_sidecar_matrix() -> Result<()> {
+        use ssbh_data::skel_data::{BillboardType, BoneData};
+
+        let source = Mat4::from_cols_array_2d(&[
+            [0.0, -0.00000819905, 1.0, 0.0],
+            [-0.34202000, 0.93969297, 0.00000770459, 0.0],
+            [-0.93969297, -0.34202000, -0.00000280424, 0.0],
+            [0.9, 0.3, 0.2, 1.0],
+        ]);
+        let skel = SkelData {
+            major_version: 1,
+            minor_version: 0,
+            bones: vec![BoneData {
+                name: "ATH_TE_R90".to_string(),
+                transform: source.to_cols_array_2d(),
+                parent_index: None,
+                billboard_type: BillboardType::Disabled,
+            }],
+        };
+        let scene = ExportScene {
+            meshes: Vec::new(),
+            bones: build_export_bones(Some(&skel), 1.0, false)?,
+        };
+
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("source_skel_near_xyz_gimbal_no_props.fbx");
+        write_scene_fbx(&path, &scene, FbxUpAxis::YUp, false)?;
+
+        let imported = crate::ssbh_dae::parse_fbx_file(&path)?;
+        assert_eq!(imported.bones.len(), 1);
+        assert!(
+            Mat4::from_cols_array_2d(&imported.bones[0].transform).abs_diff_eq(source, 1e-5),
+            "the SSBH-to-FBX pipeline changed the near-gimbal local transform"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn source_local_fbx_preserves_child_local_rotation_under_rotated_parent() -> Result<()> {
+        let parent_local = Mat4::from_cols_array_2d(&[
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, -1.0, 0.0, 0.0],
+            [2.4, 0.0, 0.0, 1.0],
+        ]);
+        let child_local = Mat4::from_cols_array_2d(&[
+            [0.0, -0.00000819905, 1.0, 0.0],
+            [-0.34202000, 0.93969297, 0.00000770459, 0.0],
+            [-0.93969297, -0.34202000, -0.00000280424, 0.0],
+            [0.9, 0.3, 0.2, 1.0],
+        ]);
+        let scene = ExportScene {
+            meshes: Vec::new(),
+            bones: vec![
+                ExportBone {
+                    name: "TE_R".to_string(),
+                    parent_index: None,
+                    local_transform: parent_local,
+                    world_transform: parent_local,
+                    ssbh_local_transform: parent_local,
+                },
+                ExportBone {
+                    name: "ATH_TE_R90".to_string(),
+                    parent_index: Some(0),
+                    local_transform: child_local,
+                    world_transform: parent_local * child_local,
+                    ssbh_local_transform: child_local,
+                },
+            ],
+        };
+
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("rotated_parent_no_props.fbx");
+        write_scene_fbx(&path, &scene, FbxUpAxis::YUp, false)?;
+
+        let imported = crate::ssbh_dae::parse_fbx_file(&path)?;
+        assert_eq!(imported.bones.len(), 2);
+        assert_eq!(imported.bones[1].parent_index, Some(0));
+        assert!(
+            Mat4::from_cols_array_2d(&imported.bones[1].transform).abs_diff_eq(child_local, 1e-5),
+            "the parent transform must not alter the child's FBX local transform"
         );
 
         Ok(())
@@ -2184,11 +2518,16 @@ mod bone_transform_tests {
             .ok_or_else(|| anyhow!("Output path has no file stem: {}", output_path.display()))?
             .to_string_lossy()
             .to_string();
+        let write_ssbh_local_matrix_props =
+            std::env::var("SSBH_FBX_REAL_EXPORT_WRITE_SSBH_LOCAL_MATRIX_PROPS")
+                .ok()
+                .and_then(|value| value.parse::<bool>().ok())
+                .unwrap_or(false);
         let config = ExportConfig {
             scale_factor: 1.0,
             up_axis: FbxUpAxis::YUp,
             export_textures: false,
-            write_ssbh_local_matrix_props: true,
+            write_ssbh_local_matrix_props,
         };
         let model = load_ssbh_model(root_path.to_string_lossy().as_ref())?;
         let mut texture_state = BatchTextureExportState::default();

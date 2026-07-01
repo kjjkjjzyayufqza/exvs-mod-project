@@ -89,6 +89,16 @@ export async function addUnitModelNutexb(params: {
   });
 }
 
+export async function registerUnitModelPoolOrphans(params: {
+  modelRoot: string;
+  structureJsonPath: string;
+}): Promise<UnitModelTextureInventory> {
+  return await invoke<UnitModelTextureInventory>("register_unit_model_pool_orphans", {
+    modelRoot: toWindowsPath(params.modelRoot),
+    structureJsonPath: toWindowsPath(params.structureJsonPath),
+  });
+}
+
 export async function removeUnitModelNutexb(params: {
   modelRoot: string;
   structureJsonPath: string;

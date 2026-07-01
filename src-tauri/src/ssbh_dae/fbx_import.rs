@@ -5,8 +5,8 @@ use glam::{Mat4, Vec3, Vec4};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use ufbx::{
-    AllocatorOpts, Application, LoadOpts, Matrix, Mesh, Node, Real, Scene, SkinCluster,
-    SkinDeformer, VertexStream,
+    AllocatorOpts, Application, ElementType, LoadOpts, Matrix, Mesh, Node, Real, Scene,
+    SkinCluster, SkinDeformer, VertexStream,
 };
 
 use super::dae_analyze::{analysis_report_for_import_scene, DaeAnalysisReport};
@@ -252,6 +252,46 @@ fn collect_skin_bone_names(scene: &Scene) -> HashSet<String> {
             }
         }
     }
+    names
+}
+
+fn is_fbx_bone_node(node: &Node) -> bool {
+    node.bone.is_some() || node.attrib_type == ElementType::Bone
+}
+
+fn is_blender_generated_leaf_end_bone(node: &Node, skin_bone_names: &HashSet<String>) -> bool {
+    let name = node.element.name.as_ref();
+    if !skin_bone_names.is_empty() && skin_bone_names.contains(name) {
+        return false;
+    }
+    if !node.children.is_empty() {
+        return false;
+    }
+    let Some(parent) = node.parent.as_ref().map(|parent| parent.as_ref()) else {
+        return false;
+    };
+    if !is_fbx_bone_node(parent) {
+        return false;
+    }
+    let parent_name = parent.element.name.as_ref();
+    name == format!("{parent_name}_end") || name == format!("{parent_name}.end")
+}
+
+fn collect_scene_bone_names(scene: &Scene, skin_bone_names: &HashSet<String>) -> HashSet<String> {
+    fn visit(node: &Node, skin_bone_names: &HashSet<String>, names: &mut HashSet<String>) {
+        if is_fbx_bone_node(node) && !is_blender_generated_leaf_end_bone(node, skin_bone_names) {
+            let name = node.element.name.as_ref();
+            if !name.is_empty() {
+                names.insert(name.to_string());
+            }
+        }
+        for child in node.children.iter() {
+            visit(child.as_ref(), skin_bone_names, names);
+        }
+    }
+
+    let mut names = HashSet::new();
+    visit(scene.root_node.as_ref(), skin_bone_names, &mut names);
     names
 }
 
@@ -912,8 +952,14 @@ fn build_import_scene_from_fbx(
 ) -> Result<ImportScene> {
     let up_axis = up_axis_from_scene(scene);
     let skin_bone_names = collect_skin_bone_names(scene);
+    let mut bone_names = collect_scene_bone_names(scene, &skin_bone_names);
+    if bone_names.is_empty() {
+        bone_names = skin_bone_names.clone();
+    } else {
+        bone_names.extend(skin_bone_names.iter().cloned());
+    }
     let inverse_by_bone = first_inverse_bind_per_bone(scene);
-    let bones = build_bones_preorder(scene, &skin_bone_names, &inverse_by_bone)?;
+    let bones = build_bones_preorder(scene, &bone_names, &inverse_by_bone)?;
 
     let mut meshes = Vec::new();
     let mut mesh_name_counts: HashMap<String, u32> = HashMap::new();
@@ -984,6 +1030,8 @@ mod tests {
     const MINECRAFT_BLENDER_FBX: &str = r"D:\output\minecraft\test.fbx";
     const MINECRAFT_LARGE_BLENDER_FBX: &str = r"D:\output\minecraft\test3.fbx";
     const GYAN_STICK_SKIN_BLENDER_FBX: &str = r"D:\output\N1_rocket\N2_not_boom_mix_ship.fbx";
+    const GYAN_BODY_NORMAL_FBX: &str =
+        r"D:\output\exvs2\Gyan\001gundam_005gyan00_001_body_normal.fbx";
 
     fn assert_close3(actual: [f32; 3], expected: [f32; 3]) {
         for (actual, expected) in actual.iter().zip(expected.iter()) {
@@ -995,10 +1043,14 @@ mod tests {
     }
 
     fn assert_close_matrix(actual: [[f32; 4]; 4], expected: [[f32; 4]; 4]) {
+        assert_close_matrix_epsilon(actual, expected, 1e-5);
+    }
+
+    fn assert_close_matrix_epsilon(actual: [[f32; 4]; 4], expected: [[f32; 4]; 4], epsilon: f32) {
         for row in 0..4 {
             for col in 0..4 {
                 assert!(
-                    (actual[row][col] - expected[row][col]).abs() < 1e-5,
+                    (actual[row][col] - expected[row][col]).abs() < epsilon,
                     "matrix[{row}][{col}] expected {}, got {}",
                     expected[row][col],
                     actual[row][col]
@@ -1101,6 +1153,55 @@ mod tests {
             skel.bones[gbl_rt].transform,
             Mat4::IDENTITY.to_cols_array_2d(),
         );
+    }
+
+    #[test]
+    fn parse_fbx_preserves_full_armature_bones_not_only_skin_clusters_when_present() {
+        let path = Path::new(GYAN_BODY_NORMAL_FBX);
+        if !path.is_file() {
+            eprintln!("SKIP: {GYAN_BODY_NORMAL_FBX} not found");
+            return;
+        }
+
+        let root = load_fbx_scene(path).expect("Gyan body FBX should load");
+        let skin_bone_names = collect_skin_bone_names(&root);
+        let scene = build_import_scene_from_fbx(&root, detect_fbx_import_source(&root))
+            .expect("Gyan body FBX should parse");
+        let names: Vec<&str> = scene.bones.iter().map(|bone| bone.name.as_str()).collect();
+
+        assert!(
+            skin_bone_names.len() < names.len(),
+            "fixture should contain unweighted skeleton bones"
+        );
+        assert_eq!(names.len(), 44);
+        assert_eq!(names.first().copied(), Some("GBL_RT"));
+        assert!(names.contains(&"CENTER_RT"));
+        assert!(names.contains(&"SAKOTSU_L"));
+        assert!(names.contains(&"ATH_TE_R90"));
+    }
+
+    #[test]
+    fn parse_blender_fbx_keeps_added_unskinned_bones_and_omits_leaf_end_bones_when_present() {
+        let path = Path::new(GYAN_STICK_SKIN_BLENDER_FBX);
+        if !path.is_file() {
+            eprintln!("SKIP: {GYAN_STICK_SKIN_BLENDER_FBX} not found");
+            return;
+        }
+
+        let scene = parse_fbx_file(path).expect("Gyan Blender FBX should parse");
+        let names: Vec<&str> = scene.bones.iter().map(|bone| bone.name.as_str()).collect();
+        let stick_index = names
+            .iter()
+            .position(|name| *name == "STICK")
+            .expect("fixture should contain STICK");
+        let added_index = names
+            .iter()
+            .position(|name| *name == "STICK.001")
+            .expect("fixture should contain STICK.001");
+
+        assert_eq!(scene.bones[added_index].parent_index, Some(stick_index));
+        assert!(!names.contains(&"ATH_E_VERNIER_end"));
+        assert!(!names.contains(&"STICK.001_end"));
     }
 
     #[test]
@@ -1388,6 +1489,32 @@ mod tests {
                 "[matrix_check] bone {index:02} '{}' parent={:?} translation={translation:?} matrix={:?}",
                 bone.name, bone.parent_index, bone.transform
             );
+        }
+
+        if let Some(reference_path) =
+            std::env::var_os("SSBH_FBX_MATRIX_REFERENCE_NUSKTB").map(PathBuf::from)
+        {
+            let reference = SkelData::from_file(&reference_path)
+                .expect("reference nusktb should parse for matrix comparison");
+            assert_eq!(
+                skel.bones.len(),
+                reference.bones.len(),
+                "converted skeleton bone count should match reference"
+            );
+            for (index, (actual, expected)) in
+                skel.bones.iter().zip(reference.bones.iter()).enumerate()
+            {
+                assert_eq!(
+                    actual.name, expected.name,
+                    "bone[{index}] name should match reference"
+                );
+                assert_eq!(
+                    actual.parent_index, expected.parent_index,
+                    "bone[{index}] '{}' parent should match reference",
+                    actual.name
+                );
+                assert_close_matrix_epsilon(actual.transform, expected.transform, 1e-4);
+            }
         }
 
         if std::env::var("SSBH_FBX_MATRIX_EXPECT_GYAN").as_deref() == Ok("1") {

@@ -61,7 +61,7 @@ interface DaeExportDialogProps {
   availableFormats?: ModelExportFormat[];
   /** Initial texture export checkbox state whenever the dialog opens. */
   defaultExportTextures?: boolean;
-  /** Show the temporary SSBH FBX skeleton matrix custom property toggle. */
+  /** Show the legacy SSBH FBX skeleton matrix custom property toggle. */
   showSsbhLocalMatrixOption?: boolean;
   /** Initial SSBH local matrix custom property state whenever the dialog opens. */
   defaultWriteSsbhLocalMatrixProps?: boolean;
@@ -80,12 +80,12 @@ export function DaeExportDialog({
   availableFormats,
   defaultExportTextures = false,
   showSsbhLocalMatrixOption = false,
-  defaultWriteSsbhLocalMatrixProps = true,
+  defaultWriteSsbhLocalMatrixProps = false,
 }: DaeExportDialogProps) {
   const [scaleFactor, setScaleFactor] = useState(1.0);
   const [upAxis, setUpAxis] = useState<"y_up" | "z_up">("y_up");
   const [exportTextures, setExportTextures] = useState(false);
-  const [writeSsbhLocalMatrixProps, setWriteSsbhLocalMatrixProps] = useState(true);
+  const [writeSsbhLocalMatrixProps, setWriteSsbhLocalMatrixProps] = useState(false);
   const [exportDae, setExportDae] = useState(true);
   const [exportFbx, setExportFbx] = useState(true);
   const [outputDirectory, setOutputDirectory] = useState("");

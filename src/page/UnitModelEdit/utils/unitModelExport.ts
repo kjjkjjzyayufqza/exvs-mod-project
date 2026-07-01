@@ -144,6 +144,6 @@ export async function exportUnitModelsAsFbx(
     scaleFactor: options.scaleFactor,
     upAxis: options.upAxis,
     exportTextures: options.exportTextures,
-    writeSsbhLocalMatrixProps: options.writeSsbhLocalMatrixProps ?? true,
+    writeSsbhLocalMatrixProps: options.writeSsbhLocalMatrixProps ?? false,
   });
 }

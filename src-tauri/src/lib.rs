@@ -166,6 +166,7 @@ pub fn run() {
             stage_commands::list_unit_model_textures,
             stage_commands::sync_unit_model_texture_containers,
             stage_commands::add_unit_model_nutexb,
+            stage_commands::register_unit_model_pool_orphans,
             stage_commands::remove_unit_model_nutexb,
             stage_commands::extract_unit_model_fhm2d_to_folder,
             stage_commands::analyze_unit_model_folder_migration,

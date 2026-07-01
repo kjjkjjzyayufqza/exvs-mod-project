@@ -1180,6 +1180,22 @@ pub async fn add_unit_model_nutexb(
 }
 
 #[tauri::command]
+pub async fn register_unit_model_pool_orphans(
+    model_root: String,
+    structure_json_path: Option<String>,
+) -> Result<unit_model_textures::UnitModelTextureInventory, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_textures::register_unit_model_pool_orphans(
+            &model_root,
+            structure_json_path.as_deref(),
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
+#[tauri::command]
 pub async fn remove_unit_model_nutexb(
     model_root: String,
     structure_json_path: Option<String>,

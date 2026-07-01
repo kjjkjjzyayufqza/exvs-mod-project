@@ -472,8 +472,8 @@ fn ensure_texture_pool_entry(
             model_root.display()
         )
     })?;
-    let file_index = *next_file_index;
     *next_file_index += 1;
+    let file_index = *next_file_index;
     sub_file_data.push(json!({
         "index": sub_file_data.len(),
         "fileType": ".nutexb",
@@ -529,6 +529,62 @@ fn find_texture_source_path(model_root: &Path, filename: &str) -> Option<PathBuf
         return Some(legacy);
     }
     None
+}
+
+fn import_texture_into_pool(
+    tex_name: &str,
+    source_dir: &Path,
+    model_root: &Path,
+    json_dir: &Path,
+    texture_pool: &mut HashMap<String, i32>,
+    sub_file_data: &mut Vec<Value>,
+    copies: &mut Vec<(PathBuf, PathBuf)>,
+    next_file_index: &mut i32,
+    make_url: &impl Fn(&str) -> String,
+) -> Result<i32, String> {
+    let key = normalize_texture_filename(tex_name);
+    if let Some(&existing) = texture_pool.get(&key) {
+        return Ok(existing);
+    }
+    if find_texture_source_path(model_root, &key).is_some() {
+        let (file_index, _) = ensure_texture_pool_entry(
+            sub_file_data,
+            json_dir,
+            model_root,
+            texture_pool,
+            next_file_index,
+            tex_name,
+        )?;
+        return Ok(file_index);
+    }
+
+    let src_tex = source_dir.join(tex_name);
+    if !src_tex.is_file() {
+        return Err(format!(
+            "Texture '{key}' was not found in SubFileData, under {}, or in the source folder.",
+            model_root.join("textures").display()
+        ));
+    }
+
+    let filename = src_tex
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| format!("Invalid source texture: {}", src_tex.display()))?
+        .to_string();
+    *next_file_index += 1;
+    let file_index = *next_file_index;
+    let url = make_url(&format!("textures/{filename}"));
+    let dst = model_root.join("textures").join(&filename);
+    copies.push((src_tex, dst));
+    sub_file_data.push(json!({
+        "index": sub_file_data.len(),
+        "fileType": ".nutexb",
+        "fileIndex": file_index,
+        "fileUrl": url,
+        "fileBaseName": stem(&filename),
+    }));
+    texture_pool.insert(key, file_index);
+    Ok(file_index)
 }
 
 fn file_path_for_index(
@@ -1459,20 +1515,11 @@ pub fn add_unit_model_model(
         .max()
         .unwrap_or(-1) as i32;
     let mut copies: Vec<(PathBuf, PathBuf)> = Vec::new();
-    let mut tex_index: HashMap<String, i32> = sub_file_data
-        .iter()
-        .filter(|e| {
-            e.get("fileUrl")
-                .and_then(Value::as_str)
-                .map(|u| file_basename(u).to_ascii_lowercase().ends_with(".nutexb"))
-                .unwrap_or(false)
-        })
-        .filter_map(|e| {
-            let idx = e.get("fileIndex").and_then(Value::as_i64)? as i32;
-            let url = e.get("fileUrl").and_then(Value::as_str)?;
-            Some((file_basename(url).to_ascii_lowercase(), idx))
-        })
-        .collect();
+    let mut tex_index = build_texture_pool_index(&sub_file_data);
+    let json_dir = structure_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .to_path_buf();
 
     let make_url = |rel: &str| format!(".\\{out_name}\\{}", rel.replace('/', "\\"));
     let model_rel_dir = format!("models\\{}", source.model_name);
@@ -1550,29 +1597,17 @@ pub fn add_unit_model_model(
         let refs = numatb_texture_refs(numatb_path)?;
         let mut container_children = Vec::new();
         for tex_name in &refs {
-            let key = tex_name.to_ascii_lowercase();
-            let fi = if let Some(existing) = tex_index.get(&key) {
-                *existing
-            } else {
-                let src_tex = Path::new(source_dir.trim()).join(tex_name);
-                if !src_tex.is_file() {
-                    return Err(format!(
-                        "numatb '{}' references texture '{}' which is not in the pool or source folder.",
-                        numatb_path.display(),
-                        tex_name
-                    ));
-                }
-                let fi = add_pool_file(
-                    &src_tex,
-                    "textures",
-                    ".nutexb",
-                    &mut sub_file_data,
-                    &mut copies,
-                    &mut next_file_index,
-                )?;
-                tex_index.insert(key, fi);
-                fi
-            };
+            let fi = import_texture_into_pool(
+                tex_name,
+                Path::new(source_dir.trim()),
+                &root_path,
+                &json_dir,
+                &mut tex_index,
+                &mut sub_file_data,
+                &mut copies,
+                &mut next_file_index,
+                &make_url,
+            )?;
             container_children.push(Node::Item {
                 entry: make_item(fi, "00000000", 0, &stem(tex_name)),
                 file_index: fi,
@@ -1818,20 +1853,7 @@ pub fn replace_unit_model_model(
         .max()
         .unwrap_or(-1) as i32;
     let mut copies: Vec<(PathBuf, PathBuf)> = Vec::new();
-    let mut tex_index: HashMap<String, i32> = sub_file_data
-        .iter()
-        .filter(|e| {
-            e.get("fileUrl")
-                .and_then(Value::as_str)
-                .map(|u| file_basename(u).to_ascii_lowercase().ends_with(".nutexb"))
-                .unwrap_or(false)
-        })
-        .filter_map(|e| {
-            let idx = e.get("fileIndex").and_then(Value::as_i64)? as i32;
-            let url = e.get("fileUrl").and_then(Value::as_str)?;
-            Some((file_basename(url).to_ascii_lowercase(), idx))
-        })
-        .collect();
+    let mut tex_index = build_texture_pool_index(&sub_file_data);
 
     let make_url = |rel: &str| format!(".\\{out_name}\\{}", rel.replace('/', "\\"));
     let model_rel_dir = format!("models\\{old_name}");
@@ -1907,29 +1929,17 @@ pub fn replace_unit_model_model(
         let refs = numatb_texture_refs(numatb_path)?;
         let mut container_children = Vec::new();
         for tex_name in &refs {
-            let key = tex_name.to_ascii_lowercase();
-            let fi = if let Some(existing) = tex_index.get(&key) {
-                *existing
-            } else {
-                let src_tex = Path::new(source_dir.trim()).join(tex_name);
-                if !src_tex.is_file() {
-                    return Err(format!(
-                        "numatb '{}' references texture '{}' which is not in the pool or source folder.",
-                        numatb_path.display(),
-                        tex_name
-                    ));
-                }
-                let fi = add_pool_file(
-                    &src_tex,
-                    "textures",
-                    ".nutexb",
-                    &mut sub_file_data,
-                    &mut copies,
-                    &mut next_file_index,
-                )?;
-                tex_index.insert(key, fi);
-                fi
-            };
+            let fi = import_texture_into_pool(
+                tex_name,
+                Path::new(source_dir.trim()),
+                &root_path,
+                &json_dir,
+                &mut tex_index,
+                &mut sub_file_data,
+                &mut copies,
+                &mut next_file_index,
+                &make_url,
+            )?;
             container_children.push(Node::Item {
                 entry: make_item(fi, "00000000", 0, &stem(tex_name)),
                 file_index: fi,
@@ -2958,6 +2968,37 @@ mod tests {
         fs::write(dir.join(format!("{base}.jnttbl")), jnttbl).unwrap();
     }
 
+    fn write_min_source_with_texture(dir: &Path, base: &str, texture_name: &str) {
+        use ssbh_data::matl_data::{MatlEntryData, ParamId, TextureParam};
+        write_min_source(dir, base);
+        for profile in ["maya", "nust"] {
+            let matl = MatlData {
+                major_version: 1,
+                minor_version: 6,
+                entries: vec![MatlEntryData {
+                    material_label: "m1".to_string(),
+                    shader_label: String::new(),
+                    blend_states: Vec::new(),
+                    floats: Vec::new(),
+                    float1s: Vec::new(),
+                    booleans: Vec::new(),
+                    vectors: Vec::new(),
+                    colors: Vec::new(),
+                    rasterizer_states: Vec::new(),
+                    samplers: Vec::new(),
+                    textures: vec![TextureParam::new(ParamId::Texture1, texture_name.to_string())],
+                    textures2: Vec::new(),
+                    type4_v16: Vec::new(),
+                    type4_v15: Vec::new(),
+                    uv_transforms: Vec::new(),
+                }],
+            };
+            matl.write_to_file(dir.join(format!("{base}__{profile}__.numatb")))
+                .unwrap();
+        }
+        fs::write(dir.join(texture_name), b"pool-texture").unwrap();
+    }
+
     struct ReplaceFixture {
         root: PathBuf,
         structure_path: PathBuf,
@@ -3170,6 +3211,56 @@ mod tests {
             vec![(1, 1), (1, 1)],
             "maya and base nust material pairs both use base profile variant"
         );
+    }
+
+    #[test]
+    fn add_reuses_orphan_pool_texture_on_disk_without_overwriting() {
+        let parent = tempfile::tempdir().unwrap();
+        let fixture = write_replace_fixture(parent.path());
+        let textures_dir = fixture.root.join("textures");
+        fs::create_dir_all(&textures_dir).unwrap();
+        let orphan_path = textures_dir.join("n1_back.nutexb");
+        fs::write(&orphan_path, b"orphan-pool-texture").unwrap();
+
+        let gamma = tempfile::tempdir().unwrap();
+        write_min_source_with_texture(gamma.path(), "gamma", "n1_back.nutexb");
+
+        add_unit_model_model(
+            fixture.root.to_string_lossy().as_ref(),
+            Some(fixture.structure_path.to_string_lossy().as_ref()),
+            gamma.path().to_string_lossy().as_ref(),
+        )
+        .expect("add should reuse orphan pool texture");
+
+        assert_eq!(
+            fs::read(&orphan_path).unwrap(),
+            b"orphan-pool-texture",
+            "existing pool texture must not be overwritten"
+        );
+        let raw = fs::read_to_string(&fixture.structure_path).unwrap();
+        let value: Value = serde_json::from_str(&raw).unwrap();
+        let pool_index = build_texture_pool_index(
+            value.get("SubFileData").and_then(Value::as_array).unwrap(),
+        );
+        assert!(
+            pool_index.contains_key("n1_back.nutexb"),
+            "orphan pool texture should be registered in SubFileData"
+        );
+        let sub_file_data = value
+            .get("SubFileData")
+            .and_then(Value::as_array)
+            .unwrap();
+        let mut seen = HashSet::new();
+        for entry in sub_file_data {
+            let file_index = entry
+                .get("fileIndex")
+                .and_then(Value::as_i64)
+                .expect("fileIndex");
+            assert!(
+                seen.insert(file_index),
+                "duplicate fileIndex {file_index} in SubFileData"
+            );
+        }
     }
 
     #[test]

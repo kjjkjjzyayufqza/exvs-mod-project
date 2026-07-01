@@ -457,7 +457,7 @@ function UnitModelEditWorkspace({
           scaleFactor: config.scaleFactor,
           upAxis: config.upAxis,
           exportTextures: config.exportTextures,
-          writeSsbhLocalMatrixProps: config.writeSsbhLocalMatrixProps ?? true,
+          writeSsbhLocalMatrixProps: config.writeSsbhLocalMatrixProps ?? false,
         });
         if (result.totalFailed > 0) {
           toast.warning(`Exported ${result.totalExported}, failed ${result.totalFailed}`, {
@@ -619,7 +619,6 @@ function UnitModelEditWorkspace({
         availableFormats={["fbx"]}
         defaultExportTextures
         showSsbhLocalMatrixOption
-        defaultWriteSsbhLocalMatrixProps
         onExport={(config) => void handleDaeExport(config)}
         onCancel={() => setDaeExportDialog((prev) => ({ ...prev, open: false }))}
       />

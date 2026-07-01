@@ -92,18 +92,26 @@ pub fn add_unit_model_nutexb(
     })?;
     let target = textures_dir.join(&filename);
     if target.exists() {
-        return Err(format!(
-            "Target texture already exists on disk: {}",
-            target.display()
-        ));
+        let register_existing = fs::canonicalize(&source)
+            .ok()
+            .zip(fs::canonicalize(&target).ok())
+            .map(|(left, right)| left == right)
+            .unwrap_or(false);
+        if !register_existing {
+            return Err(format!(
+                "Target texture already exists on disk: {}",
+                target.display()
+            ));
+        }
+    } else {
+        fs::copy(&source, &target).map_err(|e| {
+            format!(
+                "Failed to copy texture {} -> {}: {e}",
+                source.display(),
+                target.display()
+            )
+        })?;
     }
-    fs::copy(&source, &target).map_err(|e| {
-        format!(
-            "Failed to copy texture {} -> {}: {e}",
-            source.display(),
-            target.display()
-        )
-    })?;
 
     let next_index = doc.sub_file_data.len();
     let next_file_index = doc
@@ -124,6 +132,87 @@ pub fn add_unit_model_nutexb(
     reindex_sub_file_data(&mut doc.sub_file_data);
     write_sub_file_data(&mut doc)?;
     Ok(build_inventory(&model_root_path, doc))
+}
+
+pub fn register_unit_model_pool_orphans(
+    model_root: &str,
+    structure_json_path: Option<&str>,
+) -> Result<UnitModelTextureInventory, String> {
+    let model_root_path = validate_model_root(model_root)?;
+    let mut doc = read_structure_document(&model_root_path, structure_json_path)?;
+    let textures_dir = model_root_path.join("textures");
+    if !textures_dir.is_dir() {
+        return Ok(build_inventory(&model_root_path, doc));
+    }
+
+    let registered_keys: HashSet<String> = doc
+        .sub_file_data
+        .iter()
+        .filter(|entry| entry_is_nutexb(entry))
+        .map(|entry| normalize_filename_key(&entry.file_url))
+        .collect();
+
+    let mut registered_count = 0usize;
+    let mut entries: Vec<(String, PathBuf)> = Vec::new();
+    for entry in fs::read_dir(&textures_dir).map_err(|e| {
+        format!(
+            "Failed to read textures directory {}: {e}",
+            textures_dir.display()
+        )
+    })? {
+        let entry = entry.map_err(|e| {
+            format!(
+                "Failed to read textures directory entry in {}: {e}",
+                textures_dir.display()
+            )
+        })?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let filename = normalize_filename_key(&path.to_string_lossy());
+        if filename.is_empty() || filename == ".nutexb" || !filename.ends_with(".nutexb") {
+            continue;
+        }
+        if registered_keys.contains(&filename) {
+            continue;
+        }
+        entries.push((filename, path));
+    }
+    entries.sort_by(|left, right| left.0.cmp(&right.0));
+
+    for (filename, path) in entries {
+        let next_index = doc.sub_file_data.len();
+        let next_file_index = doc
+            .sub_file_data
+            .iter()
+            .map(|entry| entry.file_index)
+            .max()
+            .unwrap_or(-1)
+            + 1;
+        doc.sub_file_data.push(InputSubFileData {
+            index: next_index,
+            file_type: ".nutexb".to_string(),
+            file_index: next_file_index,
+            file_url: file_url_for_target(&doc.json_dir, &path),
+            file_base_name: Some(strip_nutexb_extension(&filename).to_string()),
+        });
+        registered_count += 1;
+    }
+
+    if registered_count > 0 {
+        reindex_sub_file_data(&mut doc.sub_file_data);
+        write_sub_file_data(&mut doc)?;
+    }
+
+    let mut inventory = build_inventory(&model_root_path, doc);
+    if registered_count > 0 {
+        inventory.warnings.insert(
+            0,
+            format!("Registered {registered_count} orphan pool texture(s) from disk."),
+        );
+    }
+    Ok(inventory)
 }
 
 pub fn remove_unit_model_nutexb(
@@ -320,6 +409,32 @@ fn build_inventory(model_root: &Path, doc: StructureDocument) -> UnitModelTextur
             .cmp(&b.filename.to_ascii_lowercase())
             .then(a.file_index.cmp(&b.file_index))
     });
+
+    let registered_keys: HashSet<String> = textures
+        .iter()
+        .map(|texture| normalize_filename_key(&texture.filename))
+        .collect();
+    let textures_dir = model_root.join("textures");
+    if textures_dir.is_dir() {
+        if let Ok(entries) = fs::read_dir(&textures_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_file() {
+                    continue;
+                }
+                let filename = normalize_filename_key(&path.to_string_lossy());
+                if filename.is_empty() || filename == ".nutexb" || !filename.ends_with(".nutexb") {
+                    continue;
+                }
+                if !registered_keys.contains(&filename) {
+                    warnings.push(format!(
+                        "Orphan pool texture on disk (not in SubFileData): {}",
+                        path.display()
+                    ));
+                }
+            }
+        }
+    }
 
     UnitModelTextureInventory {
         model_root: model_root.to_string_lossy().to_string(),
@@ -543,6 +658,43 @@ mod tests {
         assert_eq!(
             file_url_for_target(json_dir, target),
             r".\0xAF73362C\foo.nutexb"
+        );
+    }
+
+    #[test]
+    fn register_pool_orphans_adds_missing_sub_file_data_entries() {
+        let temp = tempfile::tempdir().unwrap();
+        let model_root = temp.path().join("PKG");
+        let textures_dir = model_root.join("textures");
+        fs::create_dir_all(&textures_dir).unwrap();
+        fs::write(textures_dir.join("n1_back.nutexb"), b"orphan").unwrap();
+        let structure_path = temp.path().join("PKG_structure.json");
+        fs::write(
+            &structure_path,
+            serde_json::to_string_pretty(&serde_json::json!({
+                "Magic": 10,
+                "Fhm2dTotalCount": 0,
+                "SubFileData": [],
+                "SubFileStructure": [],
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let inventory = register_unit_model_pool_orphans(
+            model_root.to_string_lossy().as_ref(),
+            Some(structure_path.to_string_lossy().as_ref()),
+        )
+        .unwrap();
+
+        assert_eq!(inventory.textures.len(), 1);
+        assert_eq!(inventory.textures[0].filename, "n1_back.nutexb");
+        assert!(
+            inventory
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("Registered 1 orphan")),
+            "expected registration warning"
         );
     }
 }

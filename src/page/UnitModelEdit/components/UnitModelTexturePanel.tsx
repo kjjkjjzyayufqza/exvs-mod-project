@@ -18,6 +18,7 @@ import {
   Download,
   Eye,
   Image as ImageIcon,
+  Link2,
   Loader2,
   Plus,
   RefreshCw,
@@ -69,6 +70,7 @@ import type { NutexbTextureDataMap } from "@/page/SceneEdit/hooks/useSceneTextur
 import {
   addUnitModelNutexb,
   listUnitModelTextures,
+  registerUnitModelPoolOrphans,
   removeUnitModelNutexb,
   unitTextureToManagerEntry,
   type UnitModelTextureEntry,
@@ -150,7 +152,7 @@ export function UnitModelTexturePanel({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState<"add" | "replace" | "remove" | "export" | "batchExport" | "format" | null>(null);
+  const [busy, setBusy] = useState<"add" | "register" | "replace" | "remove" | "export" | "batchExport" | "format" | null>(null);
   const [previewEntry, setPreviewEntry] = useState<TextureManagerEntry | null>(null);
   const [replaceTarget, setReplaceTarget] = useState<TextureManagerEntry | null>(null);
   const [addCandidates, setAddCandidates] = useState<AnalyzedAddCandidate[] | null>(null);
@@ -344,6 +346,32 @@ export function UnitModelTexturePanel({
       setAddAnalyzing(false);
     }
   }, [activeRoot, structurePath, managerEntries]);
+
+  const handleRegisterPoolOrphans = useCallback(async () => {
+    if (!activeRoot || !structurePath) return;
+    setBusy("register");
+    try {
+      const next = await registerUnitModelPoolOrphans({
+        modelRoot: activeRoot,
+        structureJsonPath: structurePath,
+      });
+      setInventory(next);
+      emitUnitTexturesChanged();
+      const registeredWarning = next.warnings.find((warning) =>
+        warning.startsWith("Registered "),
+      );
+      if (registeredWarning) {
+        toast.success(registeredWarning);
+      } else {
+        toast.message("No orphan pool textures found on disk");
+      }
+    } catch (error) {
+      toast.error("Failed to register pool textures", { description: String(error) });
+      await refreshInventory();
+    } finally {
+      setBusy(null);
+    }
+  }, [activeRoot, structurePath, refreshInventory]);
 
   const handleBatchConfirm = useCallback(
     async (selections: TextureAddSelection[]) => {
@@ -625,6 +653,17 @@ export function UnitModelTexturePanel({
           }
         >
           {busy === "batchExport" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="icon"
+          className="h-8 w-8 shrink-0"
+          onClick={() => void handleRegisterPoolOrphans()}
+          disabled={noRoot || busy !== null}
+          title="Register orphan textures already on disk in textures/"
+        >
+          {busy === "register" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
         </Button>
         <Button
           type="button"

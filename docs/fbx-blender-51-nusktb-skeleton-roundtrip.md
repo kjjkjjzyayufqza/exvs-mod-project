@@ -2,134 +2,129 @@
 
 ## Scope
 
-This note documents why a Blender 5.1 FBX round-trip can produce large
-`.nusktb` skeleton differences even when the user did not intentionally edit the
-armature.
+This note documents the standard-FBX skeleton path used for SSBH to FBX to
+SSBH round-trips with Blender 5.1. The path does not depend on
+`EXVS2_SSBH_LocalMatrix` or any other private property.
 
-The diagnosed sample was:
+Diagnosed samples:
 
-- FBX: `D:\output\N1_rocket\N2_not_boom_mix_ship.fbx`
-- Converted skeleton:
-  `E:\XB\解包\com\file\002chara\gundam_005gyan00\models\N2_not_boom_mix_ship\N2_not_boom_mix_ship.nusktb`
-- Reference skeleton:
-  `E:\XB\解包\com\file\002chara\gundam_005gyan00\models\001gundam_005gyan00_001_wep_suibaku00\001gundam_005gyan00_001_wep_suibaku00__maya__.nusktb`
+- Body FBX: `D:\output\exvs2\Gyan\001gundam_005gyan00_001_body_normal.fbx`
+- Edited weapon FBX: `D:\output\N1_rocket\N2_not_boom_mix_ship.fbx`
+- Body skeleton: `001gundam_005gyan00_001_body_normal__maya__.nusktb`
+- Weapon skeleton: `001gundam_005gyan00_001_wep_suibaku00__maya__.nusktb`
 
-## Findings
+## Root Causes
 
-Blender 5.1.2 and `ufbx` both read the sample FBX hierarchy as:
+### Skin clusters are not the complete armature
 
-```text
-GBL_RT
-  STICK
-    ATH_E_VERNIER
-      ATH_E_VERNIER_end
-```
+The old FBX importer built the NUSKTB bone list only from skin clusters. This
+dropped valid armature bones with no vertex weights, including newly added
+bones. The importer now traverses FBX skeleton `Model`/`LimbNode` nodes and uses
+skin clusters only as an additional source.
 
-The direct hierarchy is valid in the FBX. The old importer broke it by starting
-the parent search at the direct parent but checking each node's parent first.
-This skipped one level:
+Blender-generated leaf bones named `{parent}_end` or `{parent}.end` are omitted
+when they are unskinned leaves. Exporting from Blender with
+`add_leaf_bones=False` remains the unambiguous option.
 
-```text
-STICK parent: expected GBL_RT, imported None
-ATH_E_VERNIER parent: expected STICK, imported GBL_RT
-```
+### Display orientation is not source rest orientation
 
-The importer also used `node_to_world` for root bones. In Blender exports, root
-bones are children of an Armature object, so this incorrectly baked the Armature
-object transform into the game skeleton root. Root bones should use
-`node_to_parent` when they have a scene parent, preserving the bone transform
-relative to the Armature object.
+Blender edit bones use local `+Y` as the head-to-tail direction. An SSBH parent
+can have a child joint in another local direction. For example, the source
+weapon skeleton has an identity `STICK` rotation while `ATH_E_VERNIER` is
+translated along local `-X`.
 
-## Blender 5.1 Behavior
+Those facts cannot produce a visually connected Blender bone cone without
+changing the evaluated rest rotation. A connected cone is display geometry; it
+is not evidence that the FBX parent relation or joint position is correct.
 
-Blender armatures are edit-bone based: each bone has a head, tail, and local
-`+Y` direction. The project FBX exporter already converts SSBH joint matrices to
-a Blender-friendly display hierarchy in `apply_blender_bone_orientations()`:
+The former exporter changed rest rotations to point `+Y` at child joints and
+stored the source matrices in `EXVS2_SSBH_LocalMatrix`. That made the skeleton
+look connected but made correctness depend on a private property that Blender
+does not export by default and that newly created bones do not have.
 
-1. Compute the source SSBH world matrix for each bone.
-2. Keep the joint position.
-3. Replace the bone rotation with a display rotation that points local `+Y`
-   toward the child joint or parent direction.
-4. Write Model `Lcl`, cluster `TransformLink`, and bind pose matrices using the
-   display hierarchy.
+The standard path now writes source local rest transforms directly. The legacy
+display-bone/property path remains opt-in for old workflows, but it is disabled
+by default and is not required by the importer.
 
-This makes Blender editing usable, but it means the FBX no longer contains the
-original SSBH local rotations unless they are stored separately. The diagnosed
-`.blend` had no Armature, Bone, or PoseBone custom properties carrying original
-matrices, and pose basis matrices were identity.
+### Translation scaling perturbed rotations
 
-Blender 5.1's FBX add-on defaults are also relevant:
+The exporter previously scaled translation by decomposing every local matrix
+into scale/rotation/translation and composing it again. This changed rotation
+terms even though only translation needed scaling. Near XYZ gimbal lock, a
+change around `1e-8` was enough to send the handwritten Euler decomposition
+through an unstable branch. On `ATH_TE_R90`, one matrix term changed from about
+`-0.342020` to `-0.334723`.
 
-- Import custom properties: enabled by default.
-- Import automatic bone orientation: disabled by default.
-- Import primary/secondary bone axis: `Y` / `X`.
-- Export custom properties: disabled by default.
-- Export leaf bones: enabled in the operator UI by default.
+The exporter now scales only the translation column and leaves the source 3x3
+transform untouched.
 
-The `_end` bone seen after Blender import/export is a leaf/display bone, not a
-skinned game bone.
+### Fixed XYZ Euler output was numerically fragile
 
-## Repair Applied
+FBX `Lcl Rotation` is Euler-based. The exporter now uses ufbx's transform and
+quaternion conversion, evaluates all six standard FBX rotation orders, and
+chooses the order whose middle axis is farthest from gimbal lock. It writes the
+standard `RotationOrder` and `RotationActive` properties. Blender 5.1 imports
+these properties and bakes them to its own XYZ export representation without
+requiring private metadata.
 
-`src-tauri/src/ssbh_dae/fbx_import.rs` now:
+## Import Rules
 
-- Treats the current ancestor candidate as a possible bone parent before
-  climbing, preserving direct bone parents.
-- Uses a root bone's `node_to_parent` when it has a scene parent, preventing the
-  Blender Armature object transform from becoming `GBL_RT`'s local transform.
-- Limits Blender FBX axis-convention correction to mesh positions/normals. The
-  importer no longer applies the Y180 correction to skeleton local rest matrices
-  or inverse bind matrices, since that flips preserved SSBH local translations
-  such as `ATH_E_VERNIER` from `-X` to `+X`.
-- Adds a regression test using the Gyan Blender FBX sample. The test asserts the
-  imported chain `GBL_RT -> STICK -> ATH_E_VERNIER`, converts the FBX to a
-  temporary `.nusktb`, and verifies the written parent indices and identity
-  `GBL_RT` matrix.
+The FBX importer now:
 
-`src-tauri/src/ssbh_fbx.rs` now:
+- Preserves all skeleton nodes, including unweighted added bones.
+- Preserves direct bone parents instead of skipping one ancestor level.
+- Uses a root bone's transform relative to its Armature object rather than
+  baking the Armature object transform into the NUSKTB root.
+- Uses evaluated standard FBX local transforms when no legacy property exists.
+- Keeps legacy property reading only to recover older files that still contain
+  it.
 
-- Exports Blender-friendly connected/display bones for editing.
-- Stores the original SSBH local rest matrix on each FBX bone `Model` as the
-  custom property `EXVS2_SSBH_LocalMatrix`.
-- Keeps `apply_blender_bone_orientations()` in the production export path so
-  Blender displays the chain as connected bones, but no longer treats those
-  display transforms as authoritative when converting back to `.nusktb`.
-- Writes FBX `Visibility` properties using Blender 5.1's expected
-  `Visibility`/float64 signature instead of a generic bool property.
+## Blender 5.1 Export Settings
 
-Blender 5.1 imports custom properties by default, and the property lands on the
-pose bone. Blender does **not** export custom properties by default. When
-exporting the edited FBX from Blender, enable `Custom Properties`
-(`use_custom_props=True`) or the source SSBH rest matrices will be lost and the
-fallback path will again see Blender display-bone transforms.
+For the standard path:
 
-Verification on the Gyan sample:
+- Import `Use Pre/Post Rotation`: enabled.
+- Import `Automatic Bone Orientation`: disabled.
+- Export `Add Leaf Bones`: disabled.
+- Export `Only Deform Bones`: disabled when unweighted authored bones must be
+  retained.
+- Custom properties are not required.
 
-1. Exported
-   `001gundam_005gyan00_001_wep_suibaku00.numdlb` to
-   `D:\output\N1_rocket\codex_display_props_export_check.fbx`.
-2. Imported and exported that file through Blender 5.1.2 headlessly with
-   `use_custom_props=True` to
-   `D:\output\N1_rocket\codex_display_props_blender_roundtrip.fbx`.
-3. Converted the Blender round-trip FBX back to a temporary `.nusktb` with
-   scale `0.1`.
+Enabling Blender's automatic bone orientation prioritizes edit-bone appearance
+over rest-axis preservation and is unsuitable for a loss-minimized round-trip.
 
-The resulting skeleton matrix check passed:
+## Verification
 
-```text
-GBL_RT        parent=None    local=identity
-STICK         parent=GBL_RT  local=identity
-ATH_E_VERNIER parent=STICK   translation=(-1.7783101, 0, 0), rotation ~= diag(-1, 1, -1)
-```
+Verification used Blender 5.1.2 and no `EXVS2_SSBH_LocalMatrix` properties.
 
-The same Blender export with `use_custom_props=False` loses
-`EXVS2_SSBH_LocalMatrix`; `ATH_E_VERNIER` then falls back to display local
-translation near `(0, 1.77831, 0)`, which is the original corruption mode.
+### Gyan body
 
-## Remaining Limitation
+- Source: 44 bones.
+- Direct SSBH to FBX to NUSKTB: 44 bones; names and parent indices match.
+- Blender 5.1 import/export to NUSKTB: 44 bones; names and parent indices match.
+- Near-gimbal hand bones, including `ATH_TE_L90` and `ATH_TE_R90`, remain within
+  the matrix comparison tolerance.
 
-Existing FBX files exported before this repair do not contain
-`EXVS2_SSBH_LocalMatrix`. They may already have lost arbitrary SSBH bone
-roll/local rotation data because Blender only saw display-bone matrices. Those
-files cannot be fully reconstructed from Blender head/tail data alone. Re-export
-the model with the repaired exporter before doing another Blender round-trip.
+### Gyan weapon
+
+- Source chain: `GBL_RT -> STICK -> ATH_E_VERNIER`.
+- Blender 5.1 import/export preserves all three source local transforms.
+- Adding unweighted `STICK.001` as a child of `STICK` produces four NUSKTB bones
+  and preserves `STICK.001.parent_index = STICK`.
+- Deleting `ATH_E_VERNIER` produces only `GBL_RT -> STICK`; the deleted bone is
+  not recreated from stale skin data.
+
+## Legacy Edited FBX Limitation
+
+`D:\output\N1_rocket\N2_not_boom_mix_ship.fbx` contains no
+`EXVS2_SSBH_LocalMatrix`, but its original three bones already use the former
+Blender display orientation: `STICK` is rotated about 90 degrees and
+`ATH_E_VERNIER` is translated along local `+Y`. The file correctly contains the
+added `STICK.001` under `STICK`, but the original source rest rotations are no
+longer present in the FBX.
+
+No generic importer can infer overwritten rest roll/rotation from that FBX
+alone. Re-export the source weapon with the standard path and repeat the bone
+edit. The repaired exporter output
+`D:\output\N1_rocket\codex_suibaku_standard_no_props.fbx` is a verified clean
+starting point.
