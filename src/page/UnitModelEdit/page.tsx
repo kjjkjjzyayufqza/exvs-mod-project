@@ -457,7 +457,6 @@ function UnitModelEditWorkspace({
           scaleFactor: config.scaleFactor,
           upAxis: config.upAxis,
           exportTextures: config.exportTextures,
-          writeSsbhLocalMatrixProps: config.writeSsbhLocalMatrixProps ?? false,
         });
         if (result.totalFailed > 0) {
           toast.warning(`Exported ${result.totalExported}, failed ${result.totalFailed}`, {
@@ -618,7 +617,6 @@ function UnitModelEditWorkspace({
         formatHint="FBX is exported directly from disk SSBH data in bind pose."
         availableFormats={["fbx"]}
         defaultExportTextures
-        showSsbhLocalMatrixOption
         onExport={(config) => void handleDaeExport(config)}
         onCancel={() => setDaeExportDialog((prev) => ({ ...prev, open: false }))}
       />

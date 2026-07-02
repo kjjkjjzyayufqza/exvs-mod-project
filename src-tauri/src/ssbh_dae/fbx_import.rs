@@ -19,7 +19,6 @@ use super::import_scene::{
 
 const DEFAULT_NORMAL: [f32; 3] = [0.0, 0.0, 1.0];
 const DEFAULT_UV: [f32; 2] = [0.0, 0.0];
-const SSBH_LOCAL_MATRIX_PROP: &str = "EXVS2_SSBH_LocalMatrix";
 
 fn application_text_indicates_blender(app: &Application) -> bool {
     text_indicates_blender(&app.name, &app.vendor)
@@ -348,30 +347,6 @@ fn root_bone_local_transform(node: &Node) -> Mat4 {
     }
 }
 
-fn parse_matrix_prop(value: &str) -> Option<Mat4> {
-    let mut values = [0.0f32; 16];
-    let mut count = 0usize;
-    for part in value
-        .split(|character: char| character.is_ascii_whitespace() || character == ',')
-        .filter(|part| !part.is_empty())
-    {
-        if count >= values.len() {
-            return None;
-        }
-        values[count] = part.parse().ok()?;
-        count += 1;
-    }
-    (count == values.len()).then(|| Mat4::from_cols_array(&values))
-}
-
-fn ssbh_local_transform_prop(node: &Node) -> Option<Mat4> {
-    let prop = ufbx::find_prop(&node.element.props, SSBH_LOCAL_MATRIX_PROP)?;
-    (prop.type_ == ufbx::PropType::String)
-        .then(|| parse_matrix_prop(prop.value_str.as_ref()))
-        .flatten()
-        .filter(Mat4::is_finite)
-}
-
 fn ancestor_bone_parent_index(
     mut node: Option<&Node>,
     name_to_index: &HashMap<String, usize>,
@@ -523,25 +498,20 @@ fn build_bones_preorder(
                         d.name
                     )
                 })?;
-                if let Some(source_local) = ssbh_local_transform_prop(child_node) {
-                    source_local
-                } else {
-                    let parent_name = drafts[p].name.as_str();
-                    let parent_node =
-                        find_scene_node_by_name(scene, parent_name).ok_or_else(|| {
-                            anyhow!(
-                                "FBX skeleton: parent bone '{}' has no scene node",
-                                parent_name
-                            )
-                        })?;
-                    local_transform_upto_ancestor(child_node, parent_node)
-                        .map_err(|e| anyhow!("FBX skeleton: bone '{}': {}", d.name, e))?
-                }
+                let parent_name = drafts[p].name.as_str();
+                let parent_node =
+                    find_scene_node_by_name(scene, parent_name).ok_or_else(|| {
+                        anyhow!(
+                            "FBX skeleton: parent bone '{}' has no scene node",
+                            parent_name
+                        )
+                    })?;
+                local_transform_upto_ancestor(child_node, parent_node)
+                    .map_err(|e| anyhow!("FBX skeleton: bone '{}': {}", d.name, e))?
             }
             None => {
                 if let Some(child_node) = find_scene_node_by_name(scene, &d.name) {
-                    ssbh_local_transform_prop(child_node)
-                        .unwrap_or_else(|| root_bone_local_transform(child_node))
+                    root_bone_local_transform(child_node)
                 } else {
                     d.world
                 }

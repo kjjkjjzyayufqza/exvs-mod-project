@@ -135,7 +135,6 @@ export async function exportUnitModelsAsFbx(
     scaleFactor: number;
     upAxis: "y_up" | "z_up";
     exportTextures: boolean;
-    writeSsbhLocalMatrixProps?: boolean;
   },
 ): Promise<UnitModelFbxExportResult> {
   return invoke<UnitModelFbxExportResult>("unit_model_batch_export_fbx", {
@@ -144,6 +143,5 @@ export async function exportUnitModelsAsFbx(
     scaleFactor: options.scaleFactor,
     upAxis: options.upAxis,
     exportTextures: options.exportTextures,
-    writeSsbhLocalMatrixProps: options.writeSsbhLocalMatrixProps ?? false,
   });
 }

@@ -33,7 +33,6 @@ export interface DaeExportConfig {
   scaleFactor: number;
   upAxis: "y_up" | "z_up";
   exportTextures: boolean;
-  writeSsbhLocalMatrixProps?: boolean;
   formats: ModelExportFormat[];
   outputDirectory: string;
 }
@@ -61,10 +60,6 @@ interface DaeExportDialogProps {
   availableFormats?: ModelExportFormat[];
   /** Initial texture export checkbox state whenever the dialog opens. */
   defaultExportTextures?: boolean;
-  /** Show the legacy SSBH FBX skeleton matrix custom property toggle. */
-  showSsbhLocalMatrixOption?: boolean;
-  /** Initial SSBH local matrix custom property state whenever the dialog opens. */
-  defaultWriteSsbhLocalMatrixProps?: boolean;
 }
 
 export function DaeExportDialog({
@@ -79,13 +74,10 @@ export function DaeExportDialog({
   defaultFormats,
   availableFormats,
   defaultExportTextures = false,
-  showSsbhLocalMatrixOption = false,
-  defaultWriteSsbhLocalMatrixProps = false,
 }: DaeExportDialogProps) {
   const [scaleFactor, setScaleFactor] = useState(1.0);
   const [upAxis, setUpAxis] = useState<"y_up" | "z_up">("y_up");
   const [exportTextures, setExportTextures] = useState(false);
-  const [writeSsbhLocalMatrixProps, setWriteSsbhLocalMatrixProps] = useState(false);
   const [exportDae, setExportDae] = useState(true);
   const [exportFbx, setExportFbx] = useState(true);
   const [outputDirectory, setOutputDirectory] = useState("");
@@ -105,13 +97,11 @@ export function DaeExportDialog({
     setExportDae(defaults.exportDae);
     setExportFbx(defaults.exportFbx);
     setExportTextures(defaultExportTextures);
-    setWriteSsbhLocalMatrixProps(defaultWriteSsbhLocalMatrixProps);
   }, [
     open,
     defaultFormats,
     enabledFormats,
     defaultExportTextures,
-    defaultWriteSsbhLocalMatrixProps,
   ]);
 
   const ssbhCount = targets.filter((t) => t.type === "ssbh").length;
@@ -155,9 +145,6 @@ export function DaeExportDialog({
       ],
       outputDirectory: outputDirectory.trim(),
     };
-    if (showSsbhLocalMatrixOption) {
-      config.writeSsbhLocalMatrixProps = writeSsbhLocalMatrixProps;
-    }
     onExport(config);
   };
 
@@ -287,19 +274,6 @@ export function DaeExportDialog({
         </div>
 
         {formatHint ? <p className="text-[11px] text-muted-foreground">{formatHint}</p> : null}
-
-        {showSsbhLocalMatrixOption && supportsFbx ? (
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="write-ssbh-local-matrix-props"
-              checked={writeSsbhLocalMatrixProps}
-              onCheckedChange={(v) => setWriteSsbhLocalMatrixProps(v === true)}
-            />
-            <Label htmlFor="write-ssbh-local-matrix-props" className="text-xs cursor-pointer">
-              Write EXVS2_SSBH_LocalMatrix
-            </Label>
-          </div>
-        ) : null}
 
         {targets.length > 0 && (
           <div className="flex items-center gap-2">
