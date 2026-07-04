@@ -43,7 +43,7 @@
 | 落地硬直 | `speed_param.landing_recovery_frame` | `character_param.landing_recovery_rate` | 主循环 `func_4` |
 | 主射伤害 | `arms_param.damage` 或 `character_param.main_shot_damage` | `2.c func_915` 只定位 weapon hash | 只改 action hash |
 | 主射弹速 | `bullet_param.speed_internal`、`speed_scale`、`arms_param.bullet_speed_rate` | `arms_param.range` | ammo slot |
-| 弹体 hitbox | 普通弹体可先看 `bullet_param` 旧标签字段；长模型/特殊 task 必须追 native collision handler | `91000003` 已证明要走 `CShellCollision` 多球方向 | 只凭 `hitbox_width/height/depth` |
+| 弹体 hitbox | 普通弹体可先看 `bullet_param` 旧标签字段；长模型/特殊 task 必须追 native collision handler | `900300001` 已证明要走 `CShellCollision` 多球方向 | 只凭 `hitbox_width/height/depth` |
 | 弹数 / reload | `arms_param.ammo_count`、`reload_time_total`、`reload_type`、`reload_per_shot_frame` | `0.c func_143` 空弹分支、`2.c sys_4F(0x7)` | 只改 `sys_4F(0,...)` |
 | 援护类型 | `2.c sys_51(index,type)` | `arms_param` / assist resource | `speed_param` |
 | 格斗伤害 | `character_param.melee_damage`、`special_melee_damage`、相关 damage multiplier | hit handler / hitgroup 仍需深化 | `func_536` |
@@ -174,7 +174,7 @@
 来源：`bullet_param (041cpm, cmd=80, entry_size=320)`。
 
 注意：这里的 `hitbox_*` 是旧 parser 标签。对 Gyan Suibaku/custom
-`91000003`，IDA 已证明其中至少宽/高字段被当作角度/姿态输入消费，不是
+`900300001`，IDA 已证明其中至少宽/高字段被当作角度/姿态输入消费，不是
 长船物理碰撞体积控制；长模型碰撞要追 native `CShellCollision`。
 
 | 字段 | Hash | Offset | 用途 |

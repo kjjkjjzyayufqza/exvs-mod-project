@@ -269,3 +269,13 @@ sub_140240440                         # AnimationNodePlugLayout 驱动
 - 游戏对 MINA 的使用路径清晰：`sub_140115FC0 → sub_140233570 → sub_14024C680`，运行时经 `sub_140234CB0 → sub_140233C00` 按属性名采样。
 - `sub_140239FE0` 的 `/60.0` 为 EXVS2 v1.2 头字段解读提供了**直接机器码证据**，与 `anim.rs` / `anim_data.rs` 注释一致。
 - 本轮 IDA **未在代码段找到 `0x3409` 立即数比较**；曲线 magic 更可能通过 `sub_14024F870` 函数表或 `sub_14117DF10` 全局类型表间接分发 — ssbh_data 的专用解码器仍必要，且需持续用真实资产校验。
+## EFXBN Animation Resource Bridge (2026-07-04)
+
+`sub_140146A00` reads the copied EFXBN field at runtime `+0x290`, which maps
+to raw `meta+0x288`, and passes it as the animation ID to
+`sub_14016C1B0(manager+0x30, out, instanceId, animationId)`. Corpus evidence
+confirms this ID is the IEEE CRC32 of the `.nuanmb` filename stem: all 54
+nonzero references in 4201 EFXBN files resolve to local animation resources
+with no collisions. After lookup, the helper iterates resolved model node
+names and binds each against the literal `"Transform"` through
+`sub_1402370B0`.

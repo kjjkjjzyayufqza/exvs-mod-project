@@ -88,9 +88,9 @@ Collision-field caution: several names in this table are legacy parser labels,
 not proven physical-collider controls for every projectile family. In the
 checked Gyan Suibaku path, `0x13662C98` and `0x138B3675` are consumed by
 transform/orientation logic rather than as collider extents, and custom id
-`91000003` has the same collision-looking field values as native Suibaku
+`900300001` has the same collision-looking field values as native Suibaku
 `10050102`. Do not use these labels alone to design a long ship collider; see
-`docs\EXVS2ProjectileCollision91000003.md`.
+`docs\EXVS2ProjectileCollision900300001.md`.
 
 | Hash | Offset | Kind | Field Name | Notes |
 |------|--------|------|------------|-------|
@@ -101,7 +101,7 @@ transform/orientation logic rather than as collider extents, and custom id
 | 0x130D4C0B | 0x010 | float | spread_angle | [-80,80] cone spread |
 | 0x13662C98 | 0x014 | float | hitbox_width | legacy label; Gyan Suibaku consumer treats it as orientation/spread input, not proven collider width |
 | 0x138B3675 | 0x018 | float | hitbox_height | legacy label; Gyan Suibaku consumer treats it as orientation/spread input, not proven collider height |
-| 0x13C6C469 | 0x01C | float | hitbox_depth | legacy inferred label; not validated as the physical collider depth for Suibaku/custom `91000003` |
+| 0x13C6C469 | 0x01C | float | hitbox_depth | legacy inferred label; not validated as the physical collider depth for Suibaku/custom `900300001` |
 | 0x14AB0070 | 0x020 | float | aim_offset_vertical | [-120,60] vertical aim bias |
 | 0x20FEDE31 | 0x024 | float | homing_range | [0,1000] homing activation range |
 | 0x28BA5665 | 0x028 | float | visual_scale | [0,7.5] projectile visual size |
@@ -128,7 +128,7 @@ transform/orientation logic rather than as collider extents, and custom id
 | 0x63AC30E6 | 0x07C | float | max_altitude | [0,150] altitude cap |
 | 0x640A7C9D | 0x080 | float | spawn_offset_vertical | [-20,20] vertical spawn pos |
 | 0x6481E0F7 | 0x084 | int | speed_internal | [0,100000] internal speed value |
-| 0x64C1F4FF | 0x088 | float | collision_height | legacy inferred label; not proven to resize Suibaku/custom `91000003` physical collider |
+| 0x64C1F4FF | 0x088 | float | collision_height | legacy inferred label; not proven to resize Suibaku/custom `900300001` physical collider |
 | 0x67921CDD | 0x08C | int | homing_duration | [0,10000] homing active frames |
 | 0x68CD7942 | 0x090 | u32 | on_expire_hash | 114 unique; expiry action hash |
 | 0x6A62D65E | 0x094 | int | delay_frame | [0,1000] spawn delay frames |
@@ -139,7 +139,7 @@ transform/orientation logic rather than as collider extents, and custom id
 | 0x8379D9F8 | 0x0A8 | float | model_scale | [0,8] 3D model scale |
 | 0x846DDC39 | 0x0AC | float | max_distance | [0,3000] max travel distance |
 | 0x89BE0F56 | 0x0B0 | u32 | bullet_resource_hash | 381 unique; bullet resource ref |
-| 0x8ACF95D3 | 0x0B4 | float | blast_radius | legacy inferred label; custom `91000003` matches native Suibaku here and still needs native collision patch |
+| 0x8ACF95D3 | 0x0B4 | float | blast_radius | legacy inferred label; custom `900300001` matches native Suibaku here and still needs native collision patch |
 | 0x8DA251CA | 0x0B8 | float | offset_angle_vertical | [-20,80] vertical offset angle |
 | 0x8DBD5433 | 0x0BC | float | homing_strength | [0,1] tracking strength |
 | 0x90423264 | 0x0C0 | float | turn_rate | [0,20] turning speed |

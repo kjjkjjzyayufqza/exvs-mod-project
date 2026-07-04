@@ -160,10 +160,10 @@ Use `rawLeBytes` for IDA byte search. Use `hex` for human-readable correlation.
   `hitboxWidth`, `hitboxHeight`, `hitboxDepth`, `collisionHeight`, or
   `blastRadius` as proven physical-collider controls without checking the
   native consumer path.
-- For custom Gyan ship id `91000003`, those collision-looking fields match
+- For custom Gyan ship id `900300001`, those collision-looking fields match
   native Suibaku `10050102`; the proven direction is a scoped native
   `CShellCollision` multi-sphere patch, not a data-only bulletparam edit. See
-  `docs\EXVS2ProjectileCollision91000003.md`.
+  `docs\EXVS2ProjectileCollision900300001.md`.
 
 ## Guardrails
 

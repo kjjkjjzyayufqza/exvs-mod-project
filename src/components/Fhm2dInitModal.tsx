@@ -35,14 +35,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Progress } from "@/components/ui/progress";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import {
     Fhm2dMetadataSummary,
@@ -115,6 +107,13 @@ const FHM2D_INIT_MODAL_DIMENSIONS = {
     height: 680,
     minWidth: 600,
     minHeight: 540,
+};
+
+const FHM2D_EXTRACT_NAME_DIMENSIONS = {
+    width: 560,
+    height: 480,
+    minWidth: 440,
+    minHeight: 360,
 };
 
 function buildHashFileName(hash: string): string {
@@ -1063,40 +1062,19 @@ function ExtractNameDialog({
     const hashName = normalizeFhm2dHashName(item?.hash);
     const repackOutputPath = outputRoot.trim() && hashName ? joinPreviewPath(outputRoot, `${hashName}.fhm2d`) : null;
 
+    if (!item) return null;
+
     return (
-        <Dialog open={Boolean(item)} onOpenChange={(open) => (!open ? onCancel() : undefined)}>
-            <DialogContent className="max-w-xl">
-                <DialogHeader>
-                    <DialogTitle>Name extracted FHM2D pack</DialogTitle>
-                    <DialogDescription>
-                        Pick a readable workspace name. The game hash is kept in HashName for repack output.
-                    </DialogDescription>
-                </DialogHeader>
-                {item ? (
-                    <div className="space-y-4">
-                        <div className="rounded-md border bg-muted/20 p-3 text-sm">
-                            <div className="font-medium">{item.name}</div>
-                            <div className="mt-1 font-mono text-xs text-muted-foreground">{item.hash}</div>
-                        </div>
-                        <Fhm2dNameField
-                            id="fhm2d-init-extract-name"
-                            value={value}
-                            onChange={onChange}
-                            sourceNameOrPath={item.hash}
-                            folderPath={folderPath}
-                            structureJsonPath={structureJsonPath}
-                        />
-                        <Fhm2dMetadataSummary
-                            compact
-                            name={sanitizedName}
-                            hashName={hashName}
-                            folderPath={folderPath}
-                            structureJsonPath={structureJsonPath}
-                            repackOutputPath={repackOutputPath}
-                        />
-                    </div>
-                ) : null}
-                <DialogFooter>
+        <AppRndModalShell
+            titleId="fhm2d-init-extract-name-title"
+            title="Name extracted FHM2D pack"
+            subtitle="Pick a readable workspace name. The game hash is kept in HashName for repack output."
+            headerIcon={<FolderOutput className="h-5 w-5 text-primary" />}
+            dimensions={FHM2D_EXTRACT_NAME_DIMENSIONS}
+            storageKey="app.rnd-size.fhm2d-init-extract-name"
+            onClose={onCancel}
+            footer={
+                <div className="flex justify-end gap-2 p-3">
                     <Button variant="outline" onClick={onCancel}>
                         Cancel
                     </Button>
@@ -1104,8 +1082,31 @@ function ExtractNameDialog({
                         <FolderOutput className="mr-2 h-4 w-4" />
                         Extract
                     </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                </div>
+            }
+        >
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+                <div className="rounded-md border bg-muted/20 p-3 text-sm">
+                    <div className="font-medium">{item.name}</div>
+                    <div className="mt-1 font-mono text-xs text-muted-foreground">{item.hash}</div>
+                </div>
+                <Fhm2dNameField
+                    id="fhm2d-init-extract-name"
+                    value={value}
+                    onChange={onChange}
+                    sourceNameOrPath={item.hash}
+                    folderPath={folderPath}
+                    structureJsonPath={structureJsonPath}
+                />
+                <Fhm2dMetadataSummary
+                    compact
+                    name={sanitizedName}
+                    hashName={hashName}
+                    folderPath={folderPath}
+                    structureJsonPath={structureJsonPath}
+                    repackOutputPath={repackOutputPath}
+                />
+            </div>
+        </AppRndModalShell>
     );
 }

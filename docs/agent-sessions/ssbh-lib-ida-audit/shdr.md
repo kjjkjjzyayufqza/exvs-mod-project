@@ -275,6 +275,134 @@ No first-class `.nushdb` editor UI in TAURI today; format is pack/extract preser
 
 ---
 
+## 2026-07-04 PC DXBC / EFX Reflection Addendum
+
+This addendum supersedes the earlier assumption that the fixed inner
+`ShaderBinary` offsets in `ssbh_data::ShdrData` describe the local EXVS2 PC
+assets.
+
+Examined resource:
+
+```text
+E:\XB\解包\vs2\x64\005renderinfo\shader\efx\vsng_shader_efx_list_draw_3rd.nushdb
+```
+
+Results:
+
+- `ssbh_lib::Shdr::V12` parses the outer file and exposes the expected
+  `efxDrawModel*` shader entries.
+- Each examined PC shader blob starts with `DXBC`, not the NVN-oriented inner
+  representation assumed by the current `ShdrData` fixed seeks.
+- `ShdrData::from_file` fails while parsing the first inner `BufferEntry`.
+  Offsets `288/2504/2848/2896` must not be applied to this PC blob.
+- A temporary read-only probe parsed the DXBC RDEF chunk directly and was
+  removed after the run; `Cargo.toml` was restored without a diff.
+- `efxDrawModelPS` has one 160-byte `drawConstantBuffer`. Its sole variable is
+  a 160-byte `modelCBuffer` struct of type `SEfxModelConstantBuffer`.
+
+RDEF provides the complete 160-byte layout:
+
+| Member | Byte offset |
+| --- | ---: |
+| `distortionU` | `0` |
+| `distortionV` | `4` |
+| `distortionUPass2` | `8` |
+| `distortionVPass2` | `12` |
+| `drawSchemeFlag` | `16` |
+| `useInstancingOffsetSB` | `20` |
+| `softParticleRange` | `24` |
+| `blurEnableRange` | `28` |
+| `blurFadePower` | `32` |
+| `reflectionPower` | `36` |
+| `pass2BlendType` | `40` |
+| `depthEmissionRange` | `44` |
+| `depthEmissionPower` | `48` |
+| `highlightPower` | `52` |
+| `padding1` | `56` |
+| `padding2` | `60` |
+| `blurStartColor` | `64` |
+| `blurEndColor` | `80` |
+| `poseMatrix` | `96` |
+
+IDA independently identifies the CPU owner as
+`CShaderResourceConstantBuffer<SEfxModelConstantBuffer>` and binds it at
+constant-buffer slot `7` for stages `0` and `4`. This reflection closes EFXBN
+model-control `+0x70/+0x74`: slot2 supplies the first-pass distortion U/V and
+slot3 supplies the pass-2 distortion U/V.
+
+### Compute structured-buffer reflection
+
+The companion PC resource
+`vsng_shader_efx_list_3rd.nushdb` closes the complete EFXBN `0xB8`
+model-control record:
+
+- IDA names the CPU table `CEfxTextureParameterTable3rd` and the GPU mirror
+  `CEfxTextureParameterTableShaderResource3rd`.
+- The structured buffer is created with element size `184` and count `0x4000`.
+- Both `efxSpawnParticleCommon3rd` and `efxKineticParticleModel3rd` expose the
+  same RDEF `$Element` type, `SEfxTextureParameter`.
+- The type has 29 members and covers all 184 bytes. RDEF kind `19` is uint and
+  kind `3` is float.
+
+| Offset | Member | Type |
+| ---: | --- | --- |
+| `0x00` | `input_source_type` | `uint` |
+| `0x04` | `color_map_hash` | `uint` |
+| `0x08` | `addressing_mode` | `uint` |
+| `0x0C` | `reverse_u` | `uint` |
+| `0x10` | `reverse_v` | `uint` |
+| `0x14` | `texture_width` | `uint` |
+| `0x18` | `texture_height` | `uint` |
+| `0x1C` | `uv_pattern_type` | `uint` |
+| `0x20` | `uv_u` | `float[4]` |
+| `0x30` | `uv_v` | `float[4]` |
+| `0x40` | `uv_scroll_speed` | `float` |
+| `0x44` | `uv_scroll_limit` | `float` |
+| `0x48` | `uv_scroll_direction` | `float` |
+| `0x4C` | `uv_animation_random` | `uint` |
+| `0x50` | `uv_animation_frame_num` | `uint` |
+| `0x54` | `uv_animation_frame_width` | `uint` |
+| `0x58` | `uv_animation_frame_height` | `uint` |
+| `0x5C` | `uv_animation_frame_num_by_line` | `uint` |
+| `0x60` | `uv_animation_frame_time` | `uint` |
+| `0x64` | `uv_animation_3d_texture` | `uint` |
+| `0x68` | `uv_scroll_model_speed_u` | `float` |
+| `0x6C` | `uv_scroll_model_speed_v` | `float` |
+| `0x70` | `uv_distortion_power_U` | `float` |
+| `0x74` | `uv_distortion_power_V` | `float` |
+| `0x78` | `texture_setting_flags` | `uint` |
+| `0x7C` | `uv_animation_start_frame` | `uint` |
+| `0x80` | `uv_random_offset_u` | `float` |
+| `0x84` | `uv_random_offset_v` | `float` |
+| `0x88` | `reserve_area` | `uint[12]` |
+
+This supersedes the CPU-only provisional `sampler_filter_mode` label for
+offset `0x08`: the authored field is `addressing_mode`. Offsets `0x0C/0x10`
+are `reverse_u/reverse_v`, even though they do not need separate CPU readers
+because the record is uploaded wholesale.
+
+The current OB `006effect` corpus constrains the numeric domains but does not
+fully name every authoring enum:
+
+| Field | Observed values |
+| --- | --- |
+| `input_source_type` | `0`: 22653, `1`: 366, `2`: 80 |
+| `addressing_mode` | `0`: 17133, `1`: 4027, `2`: 747, `3`: 1192 |
+| `uv_pattern_type` | `0`: 13914, `1`: 7408, `2`: 1662, `3`: 115 |
+| `texture_setting_flags` | `0`: 22558, `1`: 141, `2`: 21, `3`: 379 |
+
+IDA confirms two behaviors: `input_source_type == 1` feeds
+`sub_1401470F0` tail-bit production, while `addressing_mode` feeds the first
+three sampler descriptor address-mode fields through `sub_1401777A0`. The UI
+and JSON summaries should keep the numeric values visible unless later shader
+or authoring evidence proves friendly enum labels.
+
+Tooling implication: retain `ShdrData` for the platform/layout it currently
+supports, but add a distinct DXBC/RDEF path before claiming EXVS2 PC `.nushdb`
+metadata coverage.
+
+---
+
 ## References
 
 - ssbh_lib: `E:/research/ssbh_lib/ssbh_lib/src/formats/shdr.rs`

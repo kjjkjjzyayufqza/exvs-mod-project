@@ -505,7 +505,7 @@ ACTION_* segment
 实际改点：
 
 - 如果只换弹体，优先替换 fire segment 的 `weaponHash`。
-- 如果要改伤害、down value、弹速，优先改 `arms_param` / `bullet_param`。如果要改 hitbox，`bullet_param` 只是入口，必须追 native hit/collision handler；`91000003` 长船已证明不是 data-only。
+- 如果要改伤害、down value、弹速，优先改 `arms_param` / `bullet_param`。如果要改 hitbox，`bullet_param` 只是入口，必须追 native hit/collision handler；`900300001` 长船已证明不是 data-only。
 - 如果要改弹数或消耗，必须同时看 weapon slot 检查和主动扣 ammo。
 
 必测：

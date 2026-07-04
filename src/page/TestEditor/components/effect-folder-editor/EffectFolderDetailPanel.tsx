@@ -190,7 +190,7 @@ function EfxbnDetail({
           <h4 className="text-xs font-medium">Effect resource</h4>
           {file.hash ? <HashBadge hash={file.hash} /> : null}
         </div>
-        <div className="grid grid-cols-2 gap-2 text-[11px]">
+        <div className="grid grid-cols-2 gap-2 text-[11px] md:grid-cols-4">
           <div className="rounded-md bg-muted/50 p-2">
             <div className="text-muted-foreground">Effects</div>
             <div className="font-mono text-sm">{summary?.effectCount ?? "-"}</div>
@@ -199,6 +199,14 @@ function EfxbnDetail({
             <div className="text-muted-foreground">Model refs</div>
             <div className="font-mono text-sm">{summary?.modelIds.filter((hash) => hash.signed !== 0).length ?? "-"}</div>
           </div>
+          <div className="rounded-md bg-muted/50 p-2">
+            <div className="text-muted-foreground">Texture params</div>
+            <div className="font-mono text-sm">{summary?.textureParameters.length ?? "-"}</div>
+          </div>
+          <div className="rounded-md bg-muted/50 p-2">
+            <div className="text-muted-foreground">Unknowns</div>
+            <div className="font-mono text-sm">{summary?.todo.unknowns.length ?? "-"}</div>
+          </div>
         </div>
       </div>
       <FileDetail item={item} onOpenAsEffectProject={onOpenAsEffectProject} />
@@ -206,7 +214,12 @@ function EfxbnDetail({
         <div className="space-y-2 rounded-md border p-3">
           <h4 className="text-xs font-medium">EFXBN parse</h4>
           <MetadataRow label="Magic" value={summary.magic} />
+          <MetadataRow label="Version/flags" value={String(summary.versionOrFlags)} />
           <MetadataRow label="Effect count" value={String(summary.effectCount)} />
+          <MetadataRow label="unk0x18" value={String(summary.unk0x18)} />
+          <MetadataRow label="unk0x1C" value={String(summary.unk0x1C)} />
+          <MetadataRow label="Control lookup" value={`${summary.controlLookupEntries.length} entries`} />
+          <MetadataRow label="Texture parameters" value={String(summary.textureParameters.length)} />
           <div className="space-y-2">
             <h5 className="text-[11px] font-medium text-muted-foreground">Model IDs</h5>
             <ModelIdTable hashes={summary.modelIds} />
@@ -217,9 +230,10 @@ function EfxbnDetail({
                 <TableHeader>
                   <TableRow>
                     <TableHead className="h-8 text-[10px]">#</TableHead>
-                    <TableHead className="h-8 text-[10px]">Hex</TableHead>
-                    <TableHead className="h-8 text-[10px]">Int32</TableHead>
-                    <TableHead className="h-8 text-[10px]">ID table slots</TableHead>
+                    <TableHead className="h-8 text-[10px]">Model</TableHead>
+                    <TableHead className="h-8 text-[10px]">Animation</TableHead>
+                    <TableHead className="h-8 text-[10px]">Control refs</TableHead>
+                    <TableHead className="h-8 text-[10px]">unk32</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -227,14 +241,62 @@ function EfxbnDetail({
                     <TableRow key={effect.index}>
                       <TableCell className="py-1 font-mono text-[10px]">{effect.index}</TableCell>
                       <TableCell className="py-1 font-mono text-[10px]">{effect.modelHash.hex}</TableCell>
-                      <TableCell className="py-1 font-mono text-[10px] tabular-nums">{effect.modelHash.signed}</TableCell>
+                      <TableCell className="py-1 font-mono text-[10px]">{effect.animationHash.hex}</TableCell>
                       <TableCell className="py-1 font-mono text-[10px]">
-                        {effect.idTable.filter((pair) => pair.id !== 0 || pair.flag !== 0).length} active
+                        {effect.controlReferences.filter((ref) => ref.selector !== 0 || ref.lookupIndex !== 0).length} active
                       </TableCell>
+                      <TableCell className="py-1 font-mono text-[10px] tabular-nums">{effect.metaParsed.unk32}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+            </div>
+          ) : null}
+          {summary.textureParameters.length > 0 ? (
+            <div className="space-y-2">
+              <h5 className="text-[11px] font-medium text-muted-foreground">Texture parameters</h5>
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="h-8 text-[10px]">#</TableHead>
+                      <TableHead className="h-8 text-[10px]">Texture</TableHead>
+                      <TableHead className="h-8 text-[10px]">Addressing</TableHead>
+                      <TableHead className="h-8 text-[10px]">UV pattern</TableHead>
+                      <TableHead className="h-8 text-[10px]">Flags</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {summary.textureParameters.map((parameter) => (
+                      <TableRow key={parameter.index}>
+                        <TableCell className="py-1 font-mono text-[10px]">{parameter.index}</TableCell>
+                        <TableCell className="py-1 font-mono text-[10px]">{parameter.colorMapHash.hex}</TableCell>
+                        <TableCell className="py-1 font-mono text-[10px] tabular-nums">{parameter.addressingMode}</TableCell>
+                        <TableCell className="py-1 font-mono text-[10px] tabular-nums">{parameter.uvPatternType}</TableCell>
+                        <TableCell className="py-1 font-mono text-[10px]">0x{parameter.textureSettingFlags.toString(16).toUpperCase()}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ) : null}
+          {summary.todo.unknowns.length > 0 ? (
+            <div className="space-y-2">
+              <h5 className="text-[11px] font-medium text-muted-foreground">Unknown follow-up</h5>
+              <div className="rounded-md border">
+                {summary.todo.unknowns.slice(0, 6).map((item) => (
+                  <div key={item.field} className="border-b px-2 py-1.5 text-[11px] last:border-b-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono">{item.field}</span>
+                      <Badge variant="outline" className="text-[10px]">
+                        {item.status}
+                      </Badge>
+                    </div>
+                    <div className="mt-1 text-muted-foreground">{item.reason}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
         </div>

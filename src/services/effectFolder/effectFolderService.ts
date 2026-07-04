@@ -11,11 +11,100 @@ export interface EfxbnIdPair {
   id: number;
 }
 
+export interface EfxbnControlLookupEntry {
+  index: number;
+  keyF32Bits: number;
+  key: number;
+  valueF32Bits: number;
+  value: number;
+}
+
+export interface EfxbnControlReferenceSummary {
+  index: number;
+  name: string;
+  rawOffset: number;
+  runtimeOffset: number;
+  selector: number;
+  lookupIndex: number;
+}
+
+export interface EfxbnMetaConfigHeaderSummary {
+  number: number;
+  unkFloatA: number;
+  unkIntA: number;
+  unkFloatB: number;
+  unkIntB: number;
+  unkBytes12: number[];
+  unkFloats4: [number, number, number, number];
+}
+
+export interface EfxbnMetaParsedSummary {
+  unkConfigInfo: number[];
+  configHeader: EfxbnMetaConfigHeaderSummary;
+  idTablePairs: EfxbnIdPair[];
+  controlReferences: EfxbnControlReferenceSummary[];
+  modelId: number;
+  modelHash: EffectFolderHash;
+  animationId: number;
+  animationHash: EffectFolderHash;
+  unk32: number;
+  unkConfigInfo2: number[];
+}
+
 export interface EfxbnEffectSummary {
   index: number;
   modelId: number;
   modelHash: EffectFolderHash;
+  animationId: number;
+  animationHash: EffectFolderHash;
   idTable: EfxbnIdPair[];
+  controlReferences: EfxbnControlReferenceSummary[];
+  metaParsed: EfxbnMetaParsedSummary;
+}
+
+export interface EfxbnModelControlSummary {
+  index: number;
+  inputSourceType: number;
+  colorMapId: number;
+  colorMapHash: EffectFolderHash;
+  addressingMode: number;
+  reverseU: number;
+  reverseV: number;
+  textureWidth: number;
+  textureHeight: number;
+  uvPatternType: number;
+  uvU: [number, number, number, number];
+  uvV: [number, number, number, number];
+  uvScrollSpeed: number;
+  uvScrollLimit: number;
+  uvScrollDirection: number;
+  uvAnimationRandom: number;
+  uvAnimationFrameNum: number;
+  uvAnimationFrameWidth: number;
+  uvAnimationFrameHeight: number;
+  uvAnimationFrameNumByLine: number;
+  uvAnimationFrameTime: number;
+  uvAnimation3dTexture: number;
+  uvScrollModelSpeedU: number;
+  uvScrollModelSpeedV: number;
+  uvDistortionPowerU: number;
+  uvDistortionPowerV: number;
+  textureSettingFlags: number;
+  uvAnimationStartFrame: number;
+  uvRandomOffsetU: number;
+  uvRandomOffsetV: number;
+  reserveArea: number[];
+}
+
+export interface EfxbnUnknownTodo {
+  field: string;
+  status: string;
+  reason: string;
+  followUp: string;
+}
+
+export interface EfxbnTodo {
+  unknowns: EfxbnUnknownTodo[];
 }
 
 export interface EfxbnSummary {
@@ -26,15 +115,27 @@ export interface EfxbnSummary {
   actualSize: number;
   effectCount: number;
   controlConfigRegionParam: number;
+  controlLookupRegionOffset: number;
+  controlLookupRegionSize: number;
+  controlLookupRegionEnd: number;
   controlBlockSize: number | null;
+  controlRemainderSize: number;
   modelControlConfigCount: number;
   modelControlRegionOffset: number;
   modelControlRegionSize: number;
   trailingOffset: number;
+  unk0x18: number;
+  unk0x1C: number;
   unknown18: number;
   unknown1c: number;
   modelIds: EffectFolderHash[];
+  animationIds: EffectFolderHash[];
+  modelControlTextureIds: EffectFolderHash[];
+  controlLookupEntries: EfxbnControlLookupEntry[];
   effects: EfxbnEffectSummary[];
+  modelControls: EfxbnModelControlSummary[];
+  textureParameters: EfxbnModelControlSummary[];
+  todo: EfxbnTodo;
 }
 
 export interface EffectFolderFileItem {

@@ -241,6 +241,43 @@ flowchart TD
 
 ## Field Mapping
 
+### Confirmed top-level bounding-sphere lineage (2026-07-04)
+
+Small sequential IDA passes now anchor the first `BoundingInfo` field for both
+the v1.7 and v1.8 game parsers:
+
+```text
+sub_1402980A0
+  file+0x10 -> HSEM header
+  HSEM version 1.7 -> sub_14029B410
+  HSEM version 1.8 -> sub_14029FD90
+
+sub_14029FD90
+  HSEM+0x10 -> temporary mesh DTO+0x28
+
+sub_140291C30
+  DTO+0x28 -> nu::Mesh+0x60
+
+sub_140146870
+  nu::Mesh+0x60,+0x64,+0x68,+0x6C
+  -> EFX runtime slot+0x2A0 as (x,y,z,radius)
+```
+
+The same `HSEM+0x10 -> DTO+0x28` copy appears in the v1.7 parser
+`sub_14029B410`. This matches the `ssbh_lib` wire declaration exactly:
+`MeshInner.model_name` occupies `HSEM+0x08`, followed by
+`MeshInner.bounding_info` at `HSEM+0x10`, whose first 16 bytes are
+`BoundingSphere { center: Vector3, radius: f32 }`.
+
+For the EXVS2 v1.8 barrier sample
+`eff_051buildf_004wgfenc_001_barrier_001__maya__.numshb`, file `+0x20`
+(`HSEM+0x10`) decodes to center `(-3.76357, -0.005, -0.000001)` and radius
+`10.7244`. `exvs2-json --summary` independently parses the same file as
+v1.8, one object, 1219 vertices, and 6720 indices.
+
+This resolves the top-level `bounding_info.bounding_sphere` row. It does not
+resolve the separate per-object `MeshObject.bounding_info` consumer.
+
 ### `MeshInner` — game vs ssbh_lib
 
 | ssbh_lib field | Wire role | IDA symbol (pending) |

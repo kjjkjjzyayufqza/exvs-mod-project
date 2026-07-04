@@ -29,14 +29,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -72,6 +64,13 @@ const COPY_AS_NEW_MODAL_DIMENSIONS = {
   height: 420,
   minWidth: 440,
   minHeight: 320,
+};
+
+const EXTRACT_NAME_MODAL_DIMENSIONS = {
+  width: 560,
+  height: 480,
+  minWidth: 440,
+  minHeight: 360,
 };
 
 function normalizePathKey(s: string): string {
@@ -709,15 +708,29 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={extractNameDialogOpen} onOpenChange={setExtractNameDialogOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Name extracted asset</DialogTitle>
-            <DialogDescription>
-              Choose a readable workspace name for this asset. The game hash remains the HashName.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
+      {extractNameDialogOpen ? (
+        <AppRndModalShell
+          titleId={`extract-name-${asset.fieldKey}-title`}
+          title="Name extracted asset"
+          subtitle="Choose a readable workspace name for this asset. The game hash remains the HashName."
+          headerIcon={<Download className="h-5 w-5 text-primary" />}
+          dimensions={EXTRACT_NAME_MODAL_DIMENSIONS}
+          storageKey="app.rnd-size.character-asset-extract-name"
+          onClose={() => setExtractNameDialogOpen(false)}
+          closeDisabled={isExtracting}
+          footer={
+            <div className="flex justify-end gap-2 bg-background px-6 py-4">
+              <Button variant="outline" onClick={() => setExtractNameDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={() => void handleConfirmNamedExtract()} disabled={isExtracting || !extractOutputPath.trim()}>
+                <Download className="mr-2 h-4 w-4" />
+                Extract
+              </Button>
+            </div>
+          }
+        >
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
             <div className="rounded-md border bg-muted/20 p-3 text-sm">
               <div className="font-medium">{asset.fieldKey}</div>
               <div className="mt-1 font-mono text-xs text-muted-foreground">{asset.hashHex}</div>
@@ -739,17 +752,8 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
               repackOutputPath={asset.modFilePath}
             />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setExtractNameDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={() => void handleConfirmNamedExtract()} disabled={isExtracting || !extractOutputPath.trim()}>
-              <Download className="mr-2 h-4 w-4" />
-              Extract
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </AppRndModalShell>
+      ) : null}
 
       {copyDialogOpen ? (
         <AppRndModalShell

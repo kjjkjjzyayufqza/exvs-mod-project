@@ -401,6 +401,38 @@ sub_1402EDCF0 → sub_140114D60 (SSBH ingest) → sub_140288EC0 (LTAM)
 
 **Next:** Trace archive unpack for `.nushdb`; verify fixed offsets against real stage asset.
 
+### shdr PC DXBC addendum - 2026-07-04
+
+- Real asset inspected:
+  `E:\XB\解包\vs2\x64\005renderinfo\shader\efx\vsng_shader_efx_list_draw_3rd.nushdb`.
+- Outer `Shdr::V12` parsing succeeds; `ShdrData` inner parsing fails at
+  `BufferEntry` because this EXVS2 PC asset stores DXBC blobs rather than the
+  fixed NVN-oriented layout documented in the original audit.
+- DXBC RDEF for `efxDrawModelPS` reports a 160-byte `drawConstantBuffer` with
+  one `SEfxModelConstantBuffer` struct variable.
+- The first members are `distortionU/V` at bytes `0/4` and
+  `distortionUPass2/VPass2` at bytes `8/12`. IDA maps EFXBN model-control
+  slot2/slot3 `+0x70/+0x74` directly to these four offsets.
+- Temporary probe source and its Cargo target were removed after capture; no
+  manifest change remains.
+- Report updated: [`shdr.md`](shdr.md).
+- Follow-up RDEF work on `vsng_shader_efx_list_3rd.nushdb` resolved the full
+  184-byte `SEfxTextureParameter` structured-buffer element in two independent
+  compute shaders. This corrects EFXBN `+0x08` to `addressing_mode`, resolves
+  `+0x0C/+0x10` as `reverse_u/reverse_v`, and names all remaining UV,
+  animation, flag, random-offset, and reserve fields.
+- Follow-up corpus work over `4201` OB `.efxbn` files constrains the remaining
+  enum/flag domains: `input_source_type` uses `0..2`, `addressing_mode` uses
+  `0..3`, `uv_pattern_type` uses `0..3`, and `texture_setting_flags` only uses
+  bits `0` and `1`. IDA confirms `input_source_type == 1` as a
+  `sub_1401470F0` tail-bit gate and `addressing_mode` as direct sampler
+  address-mode input; higher-level authoring labels remain unproven.
+- Control-lookup follow-up closed the structural parser surface for
+  `sub_1401466E0` / `sub_14016C9D0`: EFXBN summaries now expose
+  `controlLookupEntries[]` and per-effect `controlReferences[]`, while keeping
+  legacy `idTable` for compatibility. Selector `1` copies only the lookup
+  high/value dword; selector `>1` interns float-pair sequences.
+
 ### adj (.adjb) — 2026-06-14
 
 **Report:** [`adj.md`](adj.md)
