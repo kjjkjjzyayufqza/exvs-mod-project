@@ -156,6 +156,14 @@ Use `rawLeBytes` for IDA byte search. Use `hex` for human-readable correlation.
 
 - Named fields from command pools; do not infer gameplay move names without
   explicit local or atwiki mapping.
+- `bulletparam` names include legacy inferred labels. Do not treat
+  `hitboxWidth`, `hitboxHeight`, `hitboxDepth`, `collisionHeight`, or
+  `blastRadius` as proven physical-collider controls without checking the
+  native consumer path.
+- For custom Gyan ship id `91000003`, those collision-looking fields match
+  native Suibaku `10050102`; the proven direction is a scoped native
+  `CShellCollision` multi-sphere patch, not a data-only bulletparam edit. See
+  `docs\EXVS2ProjectileCollision91000003.md`.
 
 ## Guardrails
 
@@ -167,6 +175,8 @@ The CLI avoids overclaiming:
 - ATWiki names are player-facing vocabulary, not binary evidence.
 - Effect id alone is not behavior identity; require hitgroup, bone, gate, and
   model availability.
+- Parser field names are not runtime proof. For projectile collision changes,
+  confirm the native task/vtable consumer before relying on a field label.
 
 ## Testing
 

@@ -84,6 +84,14 @@ _Entry IDs = weapon/arms action hash IDs_
 ## bullet_param (041cpm, cmd=80, entry_size=320)
 _Projectile/bullet parameter fields. RTTI: BulletParam@GAM@VDK_
 
+Collision-field caution: several names in this table are legacy parser labels,
+not proven physical-collider controls for every projectile family. In the
+checked Gyan Suibaku path, `0x13662C98` and `0x138B3675` are consumed by
+transform/orientation logic rather than as collider extents, and custom id
+`91000003` has the same collision-looking field values as native Suibaku
+`10050102`. Do not use these labels alone to design a long ship collider; see
+`docs\EXVS2ProjectileCollision91000003.md`.
+
 | Hash | Offset | Kind | Field Name | Notes |
 |------|--------|------|------------|-------|
 | 0x0594D6D4 | 0x000 | float | initial_angle | [-25,130] launch elevation |
@@ -91,9 +99,9 @@ _Projectile/bullet parameter fields. RTTI: BulletParam@GAM@VDK_
 | 0x06E90346 | 0x008 | u32 | move_type | {0..8} projectile movement pattern |
 | 0x0D6A5CD5 | 0x00C | u32 | hit_effect_hash | 105 unique; on-hit VFX hash ref |
 | 0x130D4C0B | 0x010 | float | spread_angle | [-80,80] cone spread |
-| 0x13662C98 | 0x014 | float | hitbox_width | [0,20] collision width |
-| 0x138B3675 | 0x018 | float | hitbox_height | [0,40] collision height |
-| 0x13C6C469 | 0x01C | float | hitbox_depth | [0,28] collision depth |
+| 0x13662C98 | 0x014 | float | hitbox_width | legacy label; Gyan Suibaku consumer treats it as orientation/spread input, not proven collider width |
+| 0x138B3675 | 0x018 | float | hitbox_height | legacy label; Gyan Suibaku consumer treats it as orientation/spread input, not proven collider height |
+| 0x13C6C469 | 0x01C | float | hitbox_depth | legacy inferred label; not validated as the physical collider depth for Suibaku/custom `91000003` |
 | 0x14AB0070 | 0x020 | float | aim_offset_vertical | [-120,60] vertical aim bias |
 | 0x20FEDE31 | 0x024 | float | homing_range | [0,1000] homing activation range |
 | 0x28BA5665 | 0x028 | float | visual_scale | [0,7.5] projectile visual size |
@@ -102,7 +110,7 @@ _Projectile/bullet parameter fields. RTTI: BulletParam@GAM@VDK_
 | 0x319126CE | 0x034 | u32 | inherit_speed_flag | {0,1} inherit parent velocity |
 | 0x32ACABFB | 0x038 | int | lifetime | [0,10000] frames alive |
 | 0x36FCE2D7 | 0x03C | u32 | child_bullet_hash | 26 unique; sub-bullet ref |
-| 0x397CE80D | 0x040 | u32 | collision_type | {0..2} collision behavior |
+| 0x397CE80D | 0x040 | u32 | collision_type | legacy label; inspected consumer selects aiming/trajectory branches, not a proven collider selector |
 | 0x3B52DAAB | 0x044 | float | rotation_angle | [-180,360] spin angle |
 | 0x3C3F1EB2 | 0x048 | float | elevation_angle | [-60,120] vertical angle |
 | 0x3CDF1516 | 0x04C | u32 | homing_type | {0..3} homing behavior enum |
@@ -120,7 +128,7 @@ _Projectile/bullet parameter fields. RTTI: BulletParam@GAM@VDK_
 | 0x63AC30E6 | 0x07C | float | max_altitude | [0,150] altitude cap |
 | 0x640A7C9D | 0x080 | float | spawn_offset_vertical | [-20,20] vertical spawn pos |
 | 0x6481E0F7 | 0x084 | int | speed_internal | [0,100000] internal speed value |
-| 0x64C1F4FF | 0x088 | float | collision_height | [0,28] collision box height |
+| 0x64C1F4FF | 0x088 | float | collision_height | legacy inferred label; not proven to resize Suibaku/custom `91000003` physical collider |
 | 0x67921CDD | 0x08C | int | homing_duration | [0,10000] homing active frames |
 | 0x68CD7942 | 0x090 | u32 | on_expire_hash | 114 unique; expiry action hash |
 | 0x6A62D65E | 0x094 | int | delay_frame | [0,1000] spawn delay frames |
@@ -131,7 +139,7 @@ _Projectile/bullet parameter fields. RTTI: BulletParam@GAM@VDK_
 | 0x8379D9F8 | 0x0A8 | float | model_scale | [0,8] 3D model scale |
 | 0x846DDC39 | 0x0AC | float | max_distance | [0,3000] max travel distance |
 | 0x89BE0F56 | 0x0B0 | u32 | bullet_resource_hash | 381 unique; bullet resource ref |
-| 0x8ACF95D3 | 0x0B4 | float | blast_radius | [0,150] explosion radius |
+| 0x8ACF95D3 | 0x0B4 | float | blast_radius | legacy inferred label; custom `91000003` matches native Suibaku here and still needs native collision patch |
 | 0x8DA251CA | 0x0B8 | float | offset_angle_vertical | [-20,80] vertical offset angle |
 | 0x8DBD5433 | 0x0BC | float | homing_strength | [0,1] tracking strength |
 | 0x90423264 | 0x0C0 | float | turn_rate | [0,20] turning speed |
@@ -148,7 +156,7 @@ _Projectile/bullet parameter fields. RTTI: BulletParam@GAM@VDK_
 | 0xB306BEE8 | 0x0EC | float | min_homing_distance | [0,200] min homing engage |
 | 0xBA9B8F5D | 0x0F0 | float | turn_acceleration | [0,15] turn accel rate |
 | 0xD188329F | 0x0F4 | float | reserved_f4 | always 0 |
-| 0xD32D39ED | 0x0F8 | u32 | hitgroup_hash | 181 unique; hitgroup ref (shared) |
+| 0xD32D39ED | 0x0F8 | u32 | hitgroup_hash | legacy label; inspected spawn path passes it into transform/model resolver, not direct local hitgroup entry id |
 | 0xD462A33B | 0x0FC | u32 | spawn_pattern_hash | 14 unique; spawn pattern ref |
 | 0xD55CBB87 | 0x100 | float | aim_limit_angle | [-120,140] aim limit arc |
 | 0xD6290BC9 | 0x104 | u32 | is_penetrating | {0,1} penetration flag |
@@ -156,7 +164,7 @@ _Projectile/bullet parameter fields. RTTI: BulletParam@GAM@VDK_
 | 0xDCEAF7AC | 0x10C | float | homing_effective_distance | [0,820] homing falloff |
 | 0xDE6C0636 | 0x110 | u32 | reserved_flag_110 | always same value |
 | 0xDF9F47E2 | 0x114 | u32 | explosion_effect_hash | 13 unique; explosion VFX |
-| 0xEDD1C108 | 0x118 | u32 | interaction_hash | 158 unique; interaction ref (shared) |
+| 0xEDD1C108 | 0x118 | u32 | interaction_hash | legacy label; inspected spawn path passes it into transform/model resolver, not direct local interaction entry id |
 | 0xEF44FC6B | 0x11C | float | speed_acceleration | [-1,5] speed accel over time |
 | 0xF33F8630 | 0x120 | int | duration_frame | [0,600] active duration |
 | 0xF47EE96E | 0x124 | float | reserved_124 | always 0 |
@@ -1052,8 +1060,8 @@ _Known command action registration strings found in vsac27_Release.exe_
 ## Cross-Family Shared Hashes
 | Hash | Families | Likely Purpose |
 |------|----------|----------------|
-| 0xD32D39ED | bullet_param, hitgroup | Shared resource hash reference |
-| 0xEDD1C108 | bullet_param, hitgroup | Shared resource hash reference |
+| 0xD32D39ED | bullet_param, hitgroup | Shared hash; in checked Gyan file not a direct hitgroup entry ref from bullet_param |
+| 0xEDD1C108 | bullet_param, hitgroup | Shared hash; in checked Gyan file not a direct interaction entry ref from bullet_param |
 | 0xE6213731 | arms_param, character_param, speed_param | Blob/string reference (kind=7) |
 | 0xF3C4CAE9 | arms_param, character_param, speed_param | Blob/string reference (kind=7) |
 | 0x00000000..0x00000008 | commandlist (unique) | Sequential indices, not VDK hashes |

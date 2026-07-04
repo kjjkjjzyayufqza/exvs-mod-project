@@ -43,7 +43,7 @@
 | 落地硬直 | `speed_param.landing_recovery_frame` | `character_param.landing_recovery_rate` | 主循环 `func_4` |
 | 主射伤害 | `arms_param.damage` 或 `character_param.main_shot_damage` | `2.c func_915` 只定位 weapon hash | 只改 action hash |
 | 主射弹速 | `bullet_param.speed_internal`、`speed_scale`、`arms_param.bullet_speed_rate` | `arms_param.range` | ammo slot |
-| 弹体 hitbox | `bullet_param.hitbox_width/height/depth`、`collision_height` | native hit handler 仍需验证 | `func_123` |
+| 弹体 hitbox | 普通弹体可先看 `bullet_param` 旧标签字段；长模型/特殊 task 必须追 native collision handler | `91000003` 已证明要走 `CShellCollision` 多球方向 | 只凭 `hitbox_width/height/depth` |
 | 弹数 / reload | `arms_param.ammo_count`、`reload_time_total`、`reload_type`、`reload_per_shot_frame` | `0.c func_143` 空弹分支、`2.c sys_4F(0x7)` | 只改 `sys_4F(0,...)` |
 | 援护类型 | `2.c sys_51(index,type)` | `arms_param` / assist resource | `speed_param` |
 | 格斗伤害 | `character_param.melee_damage`、`special_melee_damage`、相关 damage multiplier | hit handler / hitgroup 仍需深化 | `func_536` |
@@ -173,13 +173,17 @@
 
 来源：`bullet_param (041cpm, cmd=80, entry_size=320)`。
 
+注意：这里的 `hitbox_*` 是旧 parser 标签。对 Gyan Suibaku/custom
+`91000003`，IDA 已证明其中至少宽/高字段被当作角度/姿态输入消费，不是
+长船物理碰撞体积控制；长模型碰撞要追 native `CShellCollision`。
+
 | 字段 | Hash | Offset | 用途 |
 |---|---|---:|---|
 | `max_range` | `0x05D5D30D` | `0x004` | 最大射程 |
 | `move_type` | `0x06E90346` | `0x008` | 弹体移动类型 |
-| `hitbox_width` | `0x13662C98` | `0x014` | 判定宽 |
-| `hitbox_height` | `0x138B3675` | `0x018` | 判定高 |
-| `hitbox_depth` | `0x13C6C469` | `0x01C` | 判定深 |
+| `hitbox_width` | `0x13662C98` | `0x014` | 旧标签；Suibaku 路径不是已证明碰撞宽 |
+| `hitbox_height` | `0x138B3675` | `0x018` | 旧标签；Suibaku 路径不是已证明碰撞高 |
+| `hitbox_depth` | `0x13C6C469` | `0x01C` | 旧标签；特殊 projectile 需追 native consumer |
 | `homing_range` | `0x20FEDE31` | `0x024` | 诱导距离 |
 | `visual_scale` | `0x28BA5665` | `0x028` | 视觉大小 |
 | `spawn_offset_forward` | `0x2F446A4F` | `0x030` | 前向生成位置 |
@@ -202,7 +206,7 @@
 | 主射换弹体 | `2.c sys_4F(0,slot,weaponHash)` |
 | 主射伤害 | `arms_param.damage`，再看 `character_param.main_shot_damage` |
 | 主射弹速 | `bullet_param.speed_internal/speed_scale`，再看 `arms_param.bullet_speed_rate` |
-| 主射 hitbox | `bullet_param.hitbox_width/height/depth` |
+| 主射 hitbox | 普通弹体可先看 `bullet_param` 旧标签字段；先确认 native consumer |
 | 主射 reload | `arms_param.reload_*` 和 `ammo_count` |
 | 主射空弹分支 | `0.c func_143` 的 `sys_0(0x90000,0)` |
 | 主射扣弹 | `2.c sys_4F(0x7,slot,1)`，如果存在 |
@@ -325,7 +329,7 @@ commandlist 帮你把玩家语义和资源条目分类；
 2. 用 2.c func_1043 确认进入 ACTION_A_SHOT。
 3. 用 2.c func_915 确认 weapon hash：sys_4F(0,0,0xcc9f6df0)。
 4. 在 arms_param 查对应 weapon entry，改 damage / ammo / reload / bullet_speed_rate。
-5. 在 bullet_param 查弹体 entry，改 speed_internal / speed_scale / hitbox_width/height/depth。
+5. 在 bullet_param 查弹体 entry，普通弹体可先改 speed_internal / speed_scale；hitbox 字段必须先确认 native consumer。
 6. 实机测命中、盾、BDC、空弹、reload、绿锁、红锁。
 ```
 
@@ -333,7 +337,7 @@ commandlist 帮你把玩家语义和资源条目分类；
 
 - 单发正常但 BDC 异常：回到 `func_123` / `func_11`。
 - 弹数 UI 异常：回到 `arms_param.ammo_count`、`0.c func_143` 空弹检查、`2.c sys_4F(0x7)`。
-- 弹体太大或多段异常：回到 `bullet_param` hitbox 和 hit interval。
+- 弹体太大或多段异常：回到 native hit handler、`bullet_param` 旧 hitbox 标签和 hit interval 一起验证。
 
 ### 7.3 改特格横移更远
 
@@ -388,4 +392,3 @@ commandlist 帮你把玩家语义和资源条目分类；
 - BD / 移动工作簿：[movement-bd-modding-workbook.md](./movement-bd-modding-workbook.md)
 - `sys_46` 参数地图：[sys46-script-parameter-atlas.md](./sys46-script-parameter-atlas.md)
 - 资源字段总表：[../command_mapping.md](../command_mapping.md)
-

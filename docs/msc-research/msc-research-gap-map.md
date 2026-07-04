@@ -58,7 +58,7 @@ main
 - 新增的系统控制面矩阵把 BD、移动、镜头、动作、射击、格斗、shell 拆成玩家语义、`2.c` 控制面、资源层、syscall 层、patch 点和验证点，适合回答“这个系统到底该改哪一层”。
 - 新增的源码证据走读页直接引用当前 `2.c` 的行号和代码形状，证明 `func_1`、`func_4`、`func_44`、`func_1043` 的职责，并追到主射 `sys_4F`、特射 `sys_51`、特格 `sys_46`、格斗 `func_532/535/536`、镜头 `sys_53` 的实际 patch 入口。
 - 新增的 `0.c -> 2.c` 边界页把上游 input bit、action selector、pending action writer 和 `2.c` depiction output 串起来，证明玩家按键不是直接进入 `2.c ACTION_*`，而是先经 `0.c func_143 -> func_95(actionHash,...)` 选择 action。
-- 新增的资源层 patch 指南把 `speed_param`、`arms_param`、`bullet_param`、`character_param`、`commandlist` 和 `0.c/2.c` 调用链对齐，解决普通 BD / step、boost、射击伤害、弹体 hitbox、格斗追踪到底改资源还是改脚本的问题。
+- 新增的资源层 patch 指南把 `speed_param`、`arms_param`、`bullet_param`、`character_param`、`commandlist` 和 `0.c/2.c` 调用链对齐，解决普通 BD / step、boost、射击伤害、普通弹体 hitbox、格斗追踪到底改资源还是改脚本的问题。
 - 新增的关键函数职责表把 `main/func_1/func_4/func_11/func_44/func_52/func_1043/ACTION_*` 和核心 segment 标成 A/B/C/D/N 可改性，适合打开 `2.c` 时直接判断眼前函数是不是 patch 点。
 
 ### 2. 射击和援护

@@ -215,7 +215,7 @@ ACTION callback
 - Notion 记录里 `sys_4F(0, slot, hash)` 是射击 / ammo id 请求。
 - Notion 记录里 `sys_4F(0x7, index, 1)` 是主动 ammo decrement 候选。
 - `command_mapping.md` 的 `arms_param` 包含 `ammo_count`、`damage`、`down_value`、`startup_frame`、`active_frame`、`recovery_frame`、`boost_consumption_rate`、`range`、`bullet_type`、`bullet_speed_rate` 等字段。
-- `command_mapping.md` 的 `bullet_param` 包含 `hitbox_width/height/depth`、`speed_internal`、`initial_speed`、`duration_frame`、`hitgroup_hash` 等字段。
+- `command_mapping.md` 的 `bullet_param` 包含旧标签 `hitbox_width/height/depth`、`speed_internal`、`initial_speed`、`duration_frame`、`hitgroup_hash` 等字段；`hitbox_*` 不能脱离 native consumer 直接当作物理碰撞事实。
 
 控制面：
 
@@ -505,7 +505,7 @@ ACTION_* segment
 实际改点：
 
 - 如果只换弹体，优先替换 fire segment 的 `weaponHash`。
-- 如果要改伤害、down value、弹速、hitbox，优先改 `arms_param` / `bullet_param`。
+- 如果要改伤害、down value、弹速，优先改 `arms_param` / `bullet_param`。如果要改 hitbox，`bullet_param` 只是入口，必须追 native hit/collision handler；`91000003` 长船已证明不是 data-only。
 - 如果要改弹数或消耗，必须同时看 weapon slot 检查和主动扣 ammo。
 
 必测：
