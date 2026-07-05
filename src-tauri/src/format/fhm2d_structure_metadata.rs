@@ -277,6 +277,82 @@ fn read_structure_value(path: &Path) -> Result<Value, String> {
         .map_err(|e| format!("Failed to parse structure JSON {}: {e}", path.display()))
 }
 
+pub fn prepare_copied_structure_json(
+    mut value: Value,
+    source_folder_stem: &str,
+    old_hash_hex: &str,
+    new_pack_name: &str,
+    new_hash_hex: &str,
+) -> Result<(Value, usize), String> {
+    let normalized_old_hash = normalize_hash_name(old_hash_hex)
+        .unwrap_or_else(|| old_hash_hex.trim().to_ascii_uppercase());
+    let mut updated_file_url_count = 0usize;
+    replace_hash_in_file_urls(
+        &mut value,
+        &normalized_old_hash,
+        new_hash_hex,
+        &mut updated_file_url_count,
+    );
+    let old_roots = old_root_candidates(&value, source_folder_stem, &normalized_old_hash);
+    updated_file_url_count += update_sub_file_data_roots(&mut value, &old_roots, new_pack_name);
+    let next = with_top_metadata(value, new_pack_name, new_hash_hex)?;
+    Ok((next, updated_file_url_count))
+}
+
+fn replace_hash_in_file_urls(
+    value: &mut Value,
+    old_hash_hex: &str,
+    new_hash_hex: &str,
+    updated_count: &mut usize,
+) {
+    match value {
+        Value::Object(map) => {
+            for (key, child) in map.iter_mut() {
+                if key == "fileUrl" {
+                    if let Value::String(original) = child {
+                        let replaced =
+                            replace_ascii_case_insensitive(original, old_hash_hex, new_hash_hex);
+                        if replaced != *original {
+                            *original = replaced;
+                            *updated_count += 1;
+                        }
+                    }
+                } else {
+                    replace_hash_in_file_urls(child, old_hash_hex, new_hash_hex, updated_count);
+                }
+            }
+        }
+        Value::Array(items) => {
+            for child in items.iter_mut() {
+                replace_hash_in_file_urls(child, old_hash_hex, new_hash_hex, updated_count);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn replace_ascii_case_insensitive(input: &str, from: &str, to: &str) -> String {
+    let input_lower = input.to_ascii_lowercase();
+    let from_lower = from.to_ascii_lowercase();
+    if from_lower.is_empty() {
+        return input.to_string();
+    }
+
+    let mut result = String::with_capacity(input.len());
+    let mut cursor = 0usize;
+
+    while let Some(rel_idx) = input_lower[cursor..].find(&from_lower) {
+        let start = cursor + rel_idx;
+        let end = start + from_lower.len();
+        result.push_str(&input[cursor..start]);
+        result.push_str(to);
+        cursor = end;
+    }
+
+    result.push_str(&input[cursor..]);
+    result
+}
+
 pub fn with_top_metadata(mut value: Value, name: &str, hash_name: &str) -> Result<Value, String> {
     let obj = value
         .as_object_mut()
@@ -517,6 +593,36 @@ mod tests {
         assert_eq!(
             migrated["SubFileData"][0]["fileUrl"],
             ".\\Gyan_model\\asset.bin"
+        );
+    }
+
+    #[test]
+    fn prepare_copied_structure_json_rewrites_named_roots_and_hash_metadata() {
+        let structure = json!({
+            "Name": "001gundam_005gyan00_001",
+            "HashName": "0xB802FAA1",
+            "SubFileData": [
+                {
+                    "fileUrl": ".\\001gundam_005gyan00_001\\asset.bin"
+                }
+            ]
+        });
+
+        let (next, updated_count) = prepare_copied_structure_json(
+            structure,
+            "001gundam_005gyan00_001",
+            "0xB802FAA1",
+            "001gundam_005gyan00_001_mod_n1_rocket",
+            "0xD1EA9D62",
+        )
+        .unwrap();
+
+        assert_eq!(updated_count, 1);
+        assert_eq!(next["Name"], "001gundam_005gyan00_001_mod_n1_rocket");
+        assert_eq!(next["HashName"], "0xD1EA9D62");
+        assert_eq!(
+            next["SubFileData"][0]["fileUrl"],
+            ".\\001gundam_005gyan00_001_mod_n1_rocket\\asset.bin"
         );
     }
 

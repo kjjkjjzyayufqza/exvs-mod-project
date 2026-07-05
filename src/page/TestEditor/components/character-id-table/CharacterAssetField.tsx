@@ -120,8 +120,11 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   const [extractOverwriteOpen, setExtractOverwriteOpen] = useState(false);
   const [extractCollisionPath, setExtractCollisionPath] = useState("");
   const [pendingExtractTarget, setPendingExtractTarget] = useState<ResolvedFhm2dPackPaths | null>(null);
+  const [actionsPopoverOpen, setActionsPopoverOpen] = useState(false);
   const [extractNameDialogOpen, setExtractNameDialogOpen] = useState(false);
   const [extractName, setExtractName] = useState("");
+
+  const closeActionsPopover = () => setActionsPopoverOpen(false);
   const workspaceAssetRootPath =
     asset.workspacePack.existing?.routeRootPath ?? asset.workspacePack.configured.routeRootPath;
   const trimmedSeed = copySeed.trim();
@@ -245,7 +248,18 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
         fallbackName: defaultName,
       }) ?? defaultName,
     );
+    closeActionsPopover();
     setExtractNameDialogOpen(true);
+  };
+
+  const openCopyDialog = () => {
+    closeActionsPopover();
+    setCopyDialogOpen(true);
+  };
+
+  const openRemoveDialog = () => {
+    closeActionsPopover();
+    setRemoveDialogOpen(true);
   };
 
   const handleConfirmNamedExtract = async () => {
@@ -323,7 +337,8 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     setIsCopyingAsNew(true);
     try {
       const result = await copyAssetAsNew({
-        sourceAssetRootDir: asset.workspacePack.existing.routeRootPath,
+        sourceFolderPath: asset.workspacePack.existing.folderPath,
+        sourceStructureJsonPath: asset.workspacePack.existing.structureJsonPath,
         destinationAssetRootDir: asset.workspacePack.configured.routeRootPath,
         oldHashHex: asset.hashHex,
         seed: trimmedSeed,
@@ -454,7 +469,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
       </div>
 
       {/* More Actions */}
-      <Popover>
+      <Popover open={actionsPopoverOpen} onOpenChange={setActionsPopoverOpen}>
         <PopoverTrigger asChild>
           <Button variant="ghost" size="icon" className="h-6 w-6">
             <MoreHorizontal className="h-3.5 w-3.5" />
@@ -573,7 +588,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
                 variant="outline"
                 size="sm"
                 className="w-full justify-start gap-2"
-                onClick={() => setCopyDialogOpen(true)}
+                onClick={openCopyDialog}
                 disabled={!workspaceExists || !canCopyAsNew}
               >
                 <Copy className="h-3.5 w-3.5" />
@@ -584,7 +599,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
                 variant="outline"
                 size="sm"
                 className="w-full justify-start gap-2 text-destructive hover:text-destructive border-destructive/40 hover:bg-destructive/10"
-                onClick={() => setRemoveDialogOpen(true)}
+                onClick={openRemoveDialog}
                 disabled={
                   isRemoving ||
                   (!canRemoveWorkspace && !canRemoveExtract && !canRemoveMod)

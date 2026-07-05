@@ -43,6 +43,9 @@ File size == 0x10 + record_count * 0x20  (exact, no trailing data in samples)
   - `1` unknown (not yet observed in samples).
   - `2` assist / support (援护) type.
   - `3` part (部件) type; attaches onto a `0` body.
+  - This field is not the runtime `sys_4B(0x2, model_id, bone_hash, ...)`
+    attach bone. The `bone_hash` argument must come from the target model's
+    own `.jnttbl`, or be `0` when no model-specific mount bone is proven.
 - **`folder_index` (0x08)** — index of the model in the package's **structure-JSON model
   folder order** (the order our extractor emits), NOT the OS/Windows alphabetical sort.
   Critical: in `0xEE39E2DD` Windows lists `..._assist_flat00` first, but SHL record 0 is
@@ -102,6 +105,19 @@ shell_015gndmuc_004deltpl_001.shl  size=560  count=17
   0030: 86 55 B0 0C | 00 | 01 | 01 | 01            type0, folder1, unk1, slot1
   0050: 59 99 0C 22 | 03 | 02 | 02 | 02            type3, folder2, unk2, slot2
 ```
+
+Gyan transform experiment note (2026-07-05):
+
+```
+shell_001gundam_005gyan00_001.shl  record 9
+  0130: D5 12 96 A5 | 03 00 00 00 | 09 00 00 00 | 01 00 00 00 | 09 00 00 00
+        raw model id | model_type=3 | folder_index=9 | unk1=1 | slot_index=9
+```
+
+The raw model-id bytes `D5 12 96 A5` decode as LE `0xA59612D5`, which is the
+integer form used by MSC shell calls. A copied Hyaku Shiki Dodai bone hash
+`0x8CCFAE67` is not valid evidence for this model; it belongs to Hyaku Shiki's
+`0x7AD84955` Dodai `.jnttbl`.
 
 ## IDA findings (`vsac27_Release.exe`)
 

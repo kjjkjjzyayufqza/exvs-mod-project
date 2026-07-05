@@ -23,6 +23,8 @@ import { HitGroupEditorView } from "./param-editors/hitgroup-editor/HitGroupEdit
 import { InteractionEditorView } from "./param-editors/interaction-editor/InteractionEditorView";
 import EffectFolderEditorView from "./effect-folder-editor/EffectFolderEditorView";
 import { resolveEffectPackFromStructureJson } from "./effect-folder-editor/effectFolderEditorUtils";
+import MotionFolderEditorView from "./motion-folder-editor/MotionFolderEditorView";
+import { resolveMotionPackFromStructureJson } from "./motion-folder-editor/motionFolderEditorUtils";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import { shouldAutoActivateMscWorkspaceTab } from "../utils/mscWorkspaceUtils";
 
@@ -274,6 +276,20 @@ const tabs: StageTab[] = [
       />
     ),
   },
+  {
+    name: "Motion Folder",
+    value: "motion-folder",
+    render: (props: MainViewProps) => (
+      <MotionFolderEditorView
+        workspaceRoot={props.folderPath ?? ""}
+        structureJsonPath={props.jsonFilePath ?? null}
+        workspaceDocument={props.workspaceDocument}
+        isActive={false}
+        onUnsavedChanges={props.onUnsavedChanges}
+        onPackMutated={props.onPackMutated}
+      />
+    ),
+  },
 ];
 
 const MainView = ({
@@ -301,6 +317,15 @@ const MainView = ({
       ),
     [folderPath, jsonFilePath, workspaceDocument],
   );
+  const motionPackForSelection = useMemo(
+    () =>
+      resolveMotionPackFromStructureJson(
+        folderPath ?? "",
+        jsonFilePath ?? null,
+        workspaceDocument,
+      ),
+    [folderPath, jsonFilePath, workspaceDocument],
+  );
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set([initialTab]));
   const [pendingCharacterIdTableSelection, setPendingCharacterIdTableSelection] = useState<number | null>(null);
   const [folderStructureHasUnsaved, setFolderStructureHasUnsaved] = useState(false);
@@ -311,6 +336,7 @@ const MainView = ({
   const [stageListHasUnsaved, setStageListHasUnsaved] = useState(false);
   const [stageIconListHasUnsaved, setStageIconListHasUnsaved] = useState(false);
   const [mscWorkspaceHasUnsaved, setMscWorkspaceHasUnsaved] = useState(false);
+  const [motionFolderHasUnsaved, setMotionFolderHasUnsaved] = useState(false);
   const lastAutoActivatedMscFolderRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -323,6 +349,17 @@ const MainView = ({
       return next;
     });
   }, [effectPackForSelection?.structureJsonPath]);
+
+  useEffect(() => {
+    if (!motionPackForSelection) return;
+    setActiveTab("motion-folder");
+    setVisitedTabs((prev) => {
+      if (prev.has("motion-folder")) return prev;
+      const next = new Set(prev);
+      next.add("motion-folder");
+      return next;
+    });
+  }, [motionPackForSelection?.structureJsonPath]);
 
   useEffect(() => {
     if (!mscWorkspaceFolderPath) {
@@ -382,6 +419,10 @@ const MainView = ({
     setMscWorkspaceHasUnsaved(hasChanges);
   }, []);
 
+  const handleMotionFolderUnsaved = useCallback((hasChanges: boolean) => {
+    setMotionFolderHasUnsaved(hasChanges);
+  }, []);
+
   const [paramEditorHasUnsaved, setParamEditorHasUnsaved] = useState(false);
   const handleParamEditorUnsaved = useCallback((hasChanges: boolean) => {
     setParamEditorHasUnsaved(hasChanges);
@@ -397,6 +438,7 @@ const MainView = ({
       "stage-icon-list": stageIconListHasUnsaved,
       "stage-list": stageListHasUnsaved,
       "msc-workspace": mscWorkspaceHasUnsaved,
+      "motion-folder": motionFolderHasUnsaved,
       "param-editor": paramEditorHasUnsaved,
     }),
     [
@@ -408,6 +450,7 @@ const MainView = ({
       stageIconListHasUnsaved,
       stageListHasUnsaved,
       mscWorkspaceHasUnsaved,
+      motionFolderHasUnsaved,
       paramEditorHasUnsaved,
     ],
   );
@@ -590,6 +633,22 @@ const MainView = ({
         };
       }
 
+      if (tab.value === "motion-folder") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <MotionFolderEditorView
+              workspaceRoot={props.folderPath ?? ""}
+              structureJsonPath={props.jsonFilePath ?? null}
+              workspaceDocument={props.workspaceDocument}
+              isActive={activeTab === "motion-folder"}
+              onUnsavedChanges={handleMotionFolderUnsaved}
+              onPackMutated={props.onPackMutated}
+            />
+          ),
+        };
+      }
+
       return tab;
     });
   }, [
@@ -603,6 +662,7 @@ const MainView = ({
     handleStageIconListUnsaved,
     handleStageListUnsaved,
     handleMscWorkspaceUnsaved,
+    handleMotionFolderUnsaved,
     handleParamEditorUnsaved,
     handleUnsavedChanges,
     mscWorkspaceFolderPath,

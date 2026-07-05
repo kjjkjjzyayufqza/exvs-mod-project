@@ -38,6 +38,11 @@ main
 | `sys_4B(3, entry_id)` | 清空指定 shell entry |
 | `sys_4B(4, entry_id)` | 判断 shell entry 是否存在 |
 
+2026-07-05 修正：`sys_4B(0x2, model_id, bone_hash, action_hash[, parent])`
+中的 `bone_hash` 是目标模型自身 `.jnttbl` 里的 bone / joint hash，不是 `.shl`
+record 的 `model_type`。跨机体移植 shell 时不能直接搬另一个模型的 bone hash；若目标
+模型没有已确认的挂点，先用 `0` 或重新从目标模型 `.jnttbl` 取值。
+
 因此 `func_889..895` 中的核心模式可以读成：
 
 ```text
@@ -311,4 +316,3 @@ ACTION_* callback
 2. 确认 `0x10B0AAAA`、`0x11B0AAAA` 是原始 entry id 还是改造时引入的 funnel connector id。
 3. 逐个定位 `func_888(2..6)` 的调用 action，给每个 loadout 对上游戏内动作。
 4. 用运行时测试确认 `global143` 是否只表示 alternate shell，还是还包含 ride / deploy 状态。
-

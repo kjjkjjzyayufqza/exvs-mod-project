@@ -139,14 +139,19 @@
  * single source of truth for layer ordering; modals reference these tokens
  * instead of ad-hoc z-index values so nothing can outrank the top bar.
  *
- * Order: page content < sidebar < modal < nested editor < popover < toast < topbar
+ * Order: page content < sidebar < page-popover < modal < floating-window < elevated-popover < toast < topbar
+ *
+ * Page popovers (asset action menus, etc.) use --z-popover so they stay below dialogs and
+ * floating Rnd windows. Portaled selects/dropdowns use --z-popover-elevated so they still
+ * paint above --z-modal and --z-modal-nested hosts.
  */
 :root {
   --layout-topbar-height: 2rem; /* matches the legacy h-8 top bar */
   --z-sidebar: 10;
+  --z-popover: 50;
   --z-modal: 100;
-  --z-modal-nested: 110;
-  --z-popover: 200;
+  --z-modal-nested: 210;
+  --z-popover-elevated: 250;
   --z-toast: 300;
   --z-topbar: 1000;
 }

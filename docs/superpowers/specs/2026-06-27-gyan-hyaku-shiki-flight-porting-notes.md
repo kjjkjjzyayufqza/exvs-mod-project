@@ -321,6 +321,9 @@ func_453
    - 强人当前确认的 chara 资源包是 `E:\XB\解包\com\file\002chara\0x46DE9B9C`，来自 registry seed `Gyan_eva_mod_model`。
    - 当前强人 model 子目录能看到 `body_normal`、shield、bomb、azleader、assist_adzam 等资源，但没有已确认的 Dodai / flight board 模型。
    - 如果飞行模式需要“站上飞行器”的视觉，必须补模型、shell、vernier/effect、必要的 `sys_4A/sys_4B/sys_4F` 资源切换。
+   - 2026-07-05 correction：`E:\XB\解包\com\file\002chara\gundam_005gyan00\shell_001gundam_005gyan00_001.shl` record 9 是 raw `D5 12 96 A5`，LE model id `0xA59612D5`，`model_type=3`，`folder_index=9`。MSC 中引用该模型应使用 `0xA59612D5`。
+   - `sys_4B(0x2, model, arg3, action)` 的 `arg3` 是目标模型自己的 `.jnttbl` bone hash，不是 `.shl model_type`。百式 `sys_4B(0x2, 0x7AD84955, 0x8CCFAE67, 0x4094B0F4)` 里的 `0x8CCFAE67` 只对百式 Dodai `0x7AD84955` 成立。
+   - 强人 `0xA59612D5` 没有已确认的 `0x8CCFAE67` bone。实测把 `0x8CCFAE67` 搬过来会让模型黏在地面；当前应使用 `0`，或换成从 `0xA59612D5` 自己 `.jnttbl` 证明存在的 bone hash。
 
 7. Speed / movement Param：
    - 百式飞行 controller 读 `speedparam[global142]` 的字段，例如 `0x5E8CAF43`、`0xFF7A9C8B`、`0x459455EA`、`0x6F6F1BF6`、`0x4D4B65EA` 等。
@@ -363,6 +366,7 @@ func_453
 ```text
 补 Dodai/飞行器模型或强人自定义飞行器模型
 补 shell / effect / vernier
+sys_4B attach bone 参数使用目标模型 jnttbl；无证据时用 0，不搬百式 0x8CCFAE67
 补 bulletparam projectile row
 补 release callback
 ```

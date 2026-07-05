@@ -227,6 +227,11 @@ export function AppRndModalShell({
 
   useLayoutEffect(() => {
     bringToFront(titleId);
+    // Page-level Radix popovers use --z-popover (below this layer). Dismiss any that remain
+    // open so they cannot paint above a newly mounted floating window.
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true }),
+    );
     return () => release(titleId);
   }, [titleId, bringToFront, release]);
 

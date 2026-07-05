@@ -10,7 +10,7 @@ hash-to-readable-name dictionary for extracted FHM2D workspaces.
 - `E:\XB\解包\vs2\meta`
 - `ai_string_v1.txt`
 - `ai_string_v14.txt`
-- `E:\XB\解包\com\file\012list\0xDFD38C70\character_list.json`
+- `E:\XB\解包\com\file\012list\character_list\character_list.json`
 - `E:\OBHK0.3_v27\data\x64\dplcache_release`
 - `tools\ob_unit.json`
 - `tools\fhm2d_name_mapping_overrides.json`
@@ -49,9 +49,18 @@ read directly from `.fhm2d`; entries with internal file names are marked
   `flash_navi_battle_<hash>` names.
 - Motion metadata that mixes `000common` and unit-specific folders prefers the
   unit-specific package path when available.
+- Motion package-name collisions use the concrete `.nuanmb` file prefix shape
+  `<motion-group>_<unit>` instead of the full route context
+  `<motion-group>_<series>_<unit>`. For example,
+  `003motion/001hito/002zgundm/002zgundm_005gunmk2_001` becomes
+  `001hito_002zgundm_005gunmk2_001_<hash>`, not
+  `001hito_002zgundm_002zgundm_005gunmk2_001_<hash>`.
 - OB AI string names use lower-snake style and drop the leading numeric series
   and default `_001` variant: `ai_CHR_014GNDM00_007REBONS_001` becomes
   `gndm00_007rebons`.
+- OB structure JSON files use the hash from the file name when present, and
+  fall back to the internal `HashName` field for semantic paths such as
+  `002chara/gundam_005gyan00_structure.json`.
 - Names are unique within each route. If two entries would produce the same
   `name`, the generator first adds category path context, then appends the hash
   suffix only when still necessary.
@@ -82,7 +91,7 @@ python tools\build_fhm2d_name_mapping.py `
   --ob-dplcache-root "E:\OBHK0.3_v27\data\x64\dplcache_release" `
   --ai-string "ai_string_v1.txt" `
   --ai-string "ai_string_v14.txt" `
-  --character-list "E:\XB\解包\com\file\012list\0xDFD38C70\character_list.json" `
+  --character-list "E:\XB\解包\com\file\012list\character_list\character_list.json" `
   --ob-unit "tools\ob_unit.json" `
   --manual-overrides "tools\fhm2d_name_mapping_overrides.json" `
   --output "src\assets\fhm2d-name-map.generated.json"
@@ -122,17 +131,17 @@ Useful stricter gates:
 
 Current generated stats:
 
-- `20740` total entries
+- `20742` total entries
 - `10135` `exact-meta-path` entries
 - `3246` `ob-unit-list` entries
 - `6098` `ob-dplcache-internal` entries
 - `1258` `ob-dplcache-fallback` entries
 - `1` `ob-param-unit-id` entry
+- `3` `inferred-ob-ai-string` entries
 - `1` `manual-research-note` entry
-- `1` `inferred-ob-ai-string` entry
-- `4241` entries matched to `character_list.json` character evidence
-- `42` current formal `E:\XB\解包\com\file\*\*_structure.json` structure hashes checked
-- `42` current formal OB structure hashes mapped
+- `4243` entries matched to `character_list.json` character evidence
+- `51` current formal `E:\XB\解包\com\file\*\*_structure.json` structure hashes checked
+- `51` current formal OB structure hashes mapped
 - `0` current OB structure hashes remain unresolved
 - `0` generic GUI names of the form `image_<hash>`, `flash_<hash>`, or `font_<hash>`
 - `0` duplicate route/name pairs

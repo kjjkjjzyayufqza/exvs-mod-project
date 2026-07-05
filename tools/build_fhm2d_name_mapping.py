@@ -116,6 +116,26 @@ def normalize_hash_name(value: str) -> str | None:
     return f"0x{match.group(1).upper()}" if match else None
 
 
+def read_json_object(path: Path) -> dict[str, Any] | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def structure_hash_name(path: Path, data: dict[str, Any] | None = None) -> str | None:
+    hash_name = normalize_hash_name(path.name)
+    if hash_name:
+        return hash_name
+    if data is None:
+        data = read_json_object(path)
+    if not data:
+        return None
+    value = data.get("HashName")
+    return normalize_hash_name(str(value)) if isinstance(value, str) else None
+
+
 def sanitize_name(value: str) -> str:
     normalized = re.sub(r"\s+", "_", value.strip())
     normalized = re.sub(r"[.()[\]]+", "_", normalized)
@@ -644,10 +664,16 @@ def build_ob_param_csyspm_entries(
     entries: list[dict[str, Any]] = []
     route_prefix = "041cpm"
     route_id = "unit.param"
-    for param_dir in sorted((ob_file_root / route_prefix).glob("0x*")):
+    param_root = ob_file_root / route_prefix
+    if not param_root.exists():
+        return []
+    for param_dir in sorted(param_root.iterdir(), key=lambda path: path.name.lower()):
         if not param_dir.is_dir():
             continue
         hash_name = normalize_hash_name(param_dir.name)
+        if not hash_name:
+            structure_path = param_root / f"{param_dir.name}_structure.json"
+            hash_name = structure_hash_name(structure_path) if structure_path.exists() else None
         if not hash_name:
             continue
         csyspm_path = param_dir / "chrsysparam.csyspm"
@@ -1068,18 +1094,18 @@ def build_ob_structure_entries(
         return []
     entries: list[dict[str, Any]] = []
     for structure_path in sorted(ob_file_root.glob("*/*_structure.json")):
-        hash_name = normalize_hash_name(structure_path.name)
+        data = read_json_object(structure_path)
+        hash_name = structure_hash_name(structure_path, data)
         if not hash_name or hash_name in existing_hashes:
             continue
         route_prefix = structure_path.parent.name.lower()
-        try:
-            text = structure_path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
+        text = json.dumps(data, ensure_ascii=False) if data else ""
         ai_match = best_ai_name_from_text(text, ai_names)
         if not ai_match:
             continue
-        name = sanitize_name(ai_match["name"])
+        raw_name = data.get("Name") if data else None
+        name = sanitize_name(raw_name if isinstance(raw_name, str) else ai_match["name"])
+        aliases = {ai_match["fullId"], ai_match["name"], name}
         entries.append(
             {
                 "hashName": hash_name,
@@ -1091,7 +1117,7 @@ def build_ob_structure_entries(
                 "packagePath": f"{route_prefix}/{name}",
                 "gameRelativePath": None,
                 "categoryPath": None,
-                "aliases": sorted({ai_match["fullId"], name}),
+                "aliases": sorted(aliases),
                 "sourcePathCount": 0,
                 "matchedPathCount": 0,
                 "character": {"characterId": ai_match["characterId"]},
@@ -1105,7 +1131,8 @@ def collect_ob_structure_hashes(ob_file_root: Path | None) -> list[dict[str, str
         return []
     structures: dict[tuple[str, str], dict[str, str]] = {}
     for structure_path in sorted(ob_file_root.glob("*/*_structure.json")):
-        hash_name = normalize_hash_name(structure_path.name)
+        data = read_json_object(structure_path)
+        hash_name = structure_hash_name(structure_path, data)
         if not hash_name:
             continue
         route_prefix = structure_path.parent.name.lower()
@@ -1192,7 +1219,11 @@ def route_name_key(entry: dict[str, Any]) -> tuple[str, str]:
 def unique_name_from_package(entry: dict[str, Any]) -> str:
     package_path = entry.get("packagePath")
     if isinstance(package_path, str) and "/" in package_path:
-        parts = package_path.split("/")[1:]
+        package_parts = package_path.split("/")
+        if package_parts[0].lower() == "003motion" and len(package_parts) >= 4:
+            parts = [package_parts[1], package_parts[3]]
+        else:
+            parts = package_parts[1:]
         candidate = sanitize_name("_".join(parts).lower())
         if candidate:
             return candidate

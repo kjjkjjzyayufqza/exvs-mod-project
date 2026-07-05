@@ -149,12 +149,12 @@ export function MaterialLabelCombobox({
       ? createPortal(
           <>
             <div
-              className="fixed inset-0 z-[var(--z-popover)]"
+              className="fixed inset-0 z-[var(--z-popover-elevated)]"
               aria-hidden
               onMouseDown={() => setOpen(false)}
             />
             <div
-              className="fixed z-[var(--z-popover)] overflow-y-auto overscroll-contain rounded-md border bg-popover text-popover-foreground shadow-md"
+              className="fixed z-[var(--z-popover-elevated)] overflow-y-auto overscroll-contain rounded-md border bg-popover text-popover-foreground shadow-md"
               style={{
                 top: menuPosition.top,
                 left: menuPosition.left,

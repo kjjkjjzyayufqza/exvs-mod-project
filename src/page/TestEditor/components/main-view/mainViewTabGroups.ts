@@ -26,6 +26,7 @@ export type MainViewTabMeta = {
 export const MAIN_VIEW_TAB_META: MainViewTabMeta[] = [
   { value: "folder-structure", name: "Folder structure", shortName: "Structure", group: "pack" },
   { value: "effect-folder", name: "Effect Folder", shortName: "Effect", group: "pack" },
+  { value: "motion-folder", name: "Motion Folder", shortName: "Motion", group: "pack" },
   { value: "character-id-table", name: "Character ID Table", shortName: "ID table", group: "character" },
   { value: "character-cost", name: "Character Cost", shortName: "Cost", group: "character" },
   { value: "character-list", name: "Character list", shortName: "List", group: "character" },

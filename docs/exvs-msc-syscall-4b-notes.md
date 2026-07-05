@@ -47,6 +47,24 @@ entry.
 
 Current conservative semantic label: `configure_shell_entry`.
 
+Common attach form observed in decompiled MSC:
+
+```text
+sys_4B(0x2, model_id, bone_hash, action_hash[, parent_model_id])
+```
+
+The third argument is a bone / joint hash resolved against the spawned or
+referenced model's own `.jnttbl`. It is not the `.shl` record `model_type`.
+Do not port this value across different models unless the target model's
+`.jnttbl` contains the same bone hash.
+
+2026-07-05 correction from the Hyaku Shiki -> Gyan transform experiment:
+Hyaku Shiki's Dodai uses `sys_4B(0x2, 0x7AD84955, 0x8CCFAE67, 0x4094B0F4)`,
+where `0x8CCFAE67` is a bone hash for the `0x7AD84955` Dodai model. Gyan's
+reserved mount model `0xA59612D5` does not have that known bone entry; using
+`0x8CCFAE67` pins the model to the ground. For that model, use `0` or a
+bone hash proven from its own `.jnttbl`.
+
 ### `sys_4B(3, optional_entry_id)`
 
 Clears either a specific shell entry or the shell entry collection, depending on

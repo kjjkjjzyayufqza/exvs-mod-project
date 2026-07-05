@@ -8,7 +8,7 @@ export const daeImportSectionTitleClass =
   "text-[10px] font-semibold uppercase tracking-wide text-muted-foreground";
 
 /** Radix Select portal must render above the import modal shell (`--z-modal-nested`). */
-export const daeImportModalSelectContentClass = "z-[var(--z-popover)]";
+export const daeImportModalSelectContentClass = "z-[var(--z-popover-elevated)]";
 
 export function DaeImportSection({
   title,

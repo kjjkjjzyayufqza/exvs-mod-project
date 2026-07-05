@@ -96,6 +96,9 @@ export function SceneEditRndModalShell({
 
   useLayoutEffect(() => {
     bringToFront(resolvedWindowId);
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true }),
+    );
     return () => release(resolvedWindowId);
   }, [resolvedWindowId, bringToFront, release]);
 

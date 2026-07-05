@@ -48,6 +48,7 @@ pub fn run() {
             commands::my_custom_command,
             commands::read_file,
             commands::path_exists,
+            commands::copy_file_to_path,
             commands::exec_shell_command,
             commands::exec_shell_command_with_output,
             commands::exec_process_with_output,

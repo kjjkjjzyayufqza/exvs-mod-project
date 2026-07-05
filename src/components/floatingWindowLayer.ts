@@ -5,8 +5,9 @@
  * context. The former per-kind host wrappers each set `z-[var(--z-modal-nested)]`, so each was its
  * own stacking context and windows of different kinds could never be ordered relative to each
  * other by focus. Portaling every window into ONE layer makes the global z from floatingWindowStore
- * authoritative. The layer sits at `--z-modal-nested` (below `--z-popover`/`--z-toast`), so window
- * internal z values (1, 2, 3, ...) never escape above dropdowns/toasts no matter how high they climb.
+ * authoritative. The layer sits at `--z-modal-nested` (above page `--z-popover`, below
+ * `--z-popover-elevated`/`--z-toast`), so in-window dropdowns stay usable while page popovers do not
+ * cover floating windows.
  */
 let layerElement: HTMLElement | null = null;
 

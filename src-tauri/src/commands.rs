@@ -1,4 +1,6 @@
-use crate::format::fhm2d_structure_metadata::with_top_metadata;
+use crate::format::fhm2d_structure_metadata::{
+    prepare_copied_structure_json, sanitize_structure_name,
+};
 use crate::format::param_bin_format::{
     build_param_binary, read_param_binary, ParamBinaryFile, ParamBinaryHeader, ParamFieldSpec,
 };
@@ -31,6 +33,72 @@ pub fn my_custom_command() {
 #[tauri::command]
 pub fn path_exists(path: String) -> bool {
     Path::new(&path).exists()
+}
+
+fn paths_refer_to_same_file(left: &Path, right: &Path) -> bool {
+    match (fs::canonicalize(left), fs::canonicalize(right)) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => false,
+    }
+}
+
+fn copy_file_to_path_impl(
+    source_path: &Path,
+    target_path: &Path,
+    overwrite: bool,
+) -> Result<(), String> {
+    if !source_path.is_file() {
+        return Err(format!("Source file not found: {}", source_path.display()));
+    }
+    if target_path.is_dir() {
+        return Err(format!("Target is a directory: {}", target_path.display()));
+    }
+    if target_path.exists() {
+        if !overwrite {
+            return Err(format!("Target already exists: {}", target_path.display()));
+        }
+        if paths_refer_to_same_file(source_path, target_path) {
+            return Ok(());
+        }
+    }
+    if let Some(parent) = target_path
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent).map_err(|e| {
+            format!(
+                "Failed to create target directory {}: {}",
+                parent.display(),
+                e
+            )
+        })?;
+    }
+    fs::copy(source_path, target_path).map_err(|e| {
+        format!(
+            "Failed to copy file {} -> {}: {}",
+            source_path.display(),
+            target_path.display(),
+            e
+        )
+    })?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn copy_file_to_path(
+    source_path: String,
+    target_path: String,
+    overwrite: Option<bool>,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        copy_file_to_path_impl(
+            &PathBuf::from(source_path),
+            &PathBuf::from(target_path),
+            overwrite.unwrap_or(false),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -533,17 +601,12 @@ pub struct CopyAssetAsNewResult {
 }
 
 fn copy_asset_as_new_impl(
-    source_asset_root_dir: &Path,
+    source_folder_path: &Path,
+    source_structure_json_path: &Path,
     destination_asset_root_dir: &Path,
     old_hash_hex: &str,
     seed: &str,
 ) -> Result<CopyAssetAsNewResult, String> {
-    if !source_asset_root_dir.is_dir() {
-        return Err(format!(
-            "Source asset root directory does not exist: {}",
-            source_asset_root_dir.display()
-        ));
-    }
     if !destination_asset_root_dir.is_dir() {
         return Err(format!(
             "Destination asset root directory does not exist: {}",
@@ -555,52 +618,64 @@ fn copy_asset_as_new_impl(
     let new_crc_u32 = crc32_ieee(seed.as_bytes());
     let new_hash_hex = format!("0x{:08X}", new_crc_u32);
     let new_raw_value = new_crc_u32 as i32;
+    let new_pack_name = sanitize_structure_name(seed);
 
     if new_hash_hex.eq_ignore_ascii_case(&normalized_old_hash) {
         return Err("Computed hash equals the source hash; use a different seed".to_string());
     }
 
-    let old_folder = source_asset_root_dir.join(&normalized_old_hash);
-    let old_struct = source_asset_root_dir.join(format!("{normalized_old_hash}_structure.json"));
-    let new_folder = destination_asset_root_dir.join(&new_hash_hex);
-    let new_struct = destination_asset_root_dir.join(format!("{new_hash_hex}_structure.json"));
-
-    if !old_folder.is_dir() {
-        return Err(format!("Source folder not found: {}", old_folder.display()));
-    }
-    if !old_struct.is_file() {
+    if !source_folder_path.is_dir() {
         return Err(format!(
-            "Source structure JSON not found: {}",
-            old_struct.display()
+            "Source folder not found: {}",
+            source_folder_path.display()
         ));
     }
-    if new_folder.exists() || new_struct.exists() {
-        return Err(format!("Target already exists: {}", new_hash_hex));
+    if !source_structure_json_path.is_file() {
+        return Err(format!(
+            "Source structure JSON not found: {}",
+            source_structure_json_path.display()
+        ));
     }
 
-    let old_struct_text = fs::read_to_string(&old_struct).map_err(|e| {
+    let source_folder_stem = source_folder_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| {
+            format!(
+                "Source folder name is invalid: {}",
+                source_folder_path.display()
+            )
+        })?;
+
+    let new_folder = destination_asset_root_dir.join(&new_pack_name);
+    let new_struct = destination_asset_root_dir.join(format!("{new_pack_name}_structure.json"));
+
+    if new_folder.exists() || new_struct.exists() {
+        return Err(format!("Target already exists: {}", new_pack_name));
+    }
+
+    let old_struct_text = fs::read_to_string(source_structure_json_path).map_err(|e| {
         format!(
             "Failed to read source structure JSON {}: {}",
-            old_struct.display(),
+            source_structure_json_path.display(),
             e
         )
     })?;
-    let mut struct_value: Value = serde_json::from_str(&old_struct_text).map_err(|e| {
+    let struct_value: Value = serde_json::from_str(&old_struct_text).map_err(|e| {
         format!(
             "Failed to parse source structure JSON {}: {}",
-            old_struct.display(),
+            source_structure_json_path.display(),
             e
         )
     })?;
 
-    let mut updated_file_url_count = 0usize;
-    replace_file_url_hash(
-        &mut struct_value,
+    let (struct_value, updated_file_url_count) = prepare_copied_structure_json(
+        struct_value,
+        source_folder_stem,
         &normalized_old_hash,
+        &new_pack_name,
         &new_hash_hex,
-        &mut updated_file_url_count,
-    );
-    struct_value = with_top_metadata(struct_value, &new_hash_hex, &new_hash_hex)?;
+    )?;
 
     let serialized = serde_json::to_string_pretty(&struct_value)
         .map_err(|e| format!("Failed to serialize new structure JSON: {e}"))?;
@@ -612,11 +687,11 @@ fn copy_asset_as_new_impl(
         )
     })?;
 
-    if let Err(copy_err) = copy_dir_recursive(&old_folder, &new_folder) {
+    if let Err(copy_err) = copy_dir_recursive(source_folder_path, &new_folder) {
         let _ = cleanup_artifacts(&new_struct, &new_folder);
         return Err(format!(
             "Failed to copy source folder {} -> {}: {}",
-            old_folder.display(),
+            source_folder_path.display(),
             new_folder.display(),
             copy_err
         ));
@@ -633,7 +708,8 @@ fn copy_asset_as_new_impl(
 
 #[tauri::command]
 pub async fn copy_asset_as_new(
-    source_asset_root_dir: String,
+    source_folder_path: String,
+    source_structure_json_path: String,
     destination_asset_root_dir: String,
     old_hash_hex: String,
     seed: String,
@@ -641,7 +717,8 @@ pub async fn copy_asset_as_new(
 ) -> Result<CopyAssetAsNewResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
         copy_asset_as_new_impl(
-            &PathBuf::from(source_asset_root_dir),
+            &PathBuf::from(source_folder_path),
+            &PathBuf::from(source_structure_json_path),
             &PathBuf::from(destination_asset_root_dir),
             &old_hash_hex,
             &seed,
@@ -1301,63 +1378,6 @@ fn crc32_ieee(bytes: &[u8]) -> u32 {
     !crc
 }
 
-fn replace_file_url_hash(
-    value: &mut Value,
-    old_hash_hex: &str,
-    new_hash_hex: &str,
-    updated_count: &mut usize,
-) {
-    match value {
-        Value::Object(map) => {
-            for (key, child) in map.iter_mut() {
-                if key == "fileUrl" {
-                    if let Value::String(original) = child {
-                        let replaced = replace_ascii_case_insensitive(
-                            original.as_str(),
-                            old_hash_hex,
-                            new_hash_hex,
-                        );
-                        if replaced != *original {
-                            *original = replaced;
-                            *updated_count += 1;
-                        }
-                    }
-                } else {
-                    replace_file_url_hash(child, old_hash_hex, new_hash_hex, updated_count);
-                }
-            }
-        }
-        Value::Array(items) => {
-            for child in items.iter_mut() {
-                replace_file_url_hash(child, old_hash_hex, new_hash_hex, updated_count);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn replace_ascii_case_insensitive(input: &str, from: &str, to: &str) -> String {
-    let input_lower = input.to_ascii_lowercase();
-    let from_lower = from.to_ascii_lowercase();
-    if from_lower.is_empty() {
-        return input.to_string();
-    }
-
-    let mut result = String::with_capacity(input.len());
-    let mut cursor = 0usize;
-
-    while let Some(rel_idx) = input_lower[cursor..].find(&from_lower) {
-        let start = cursor + rel_idx;
-        let end = start + from_lower.len();
-        result.push_str(&input[cursor..start]);
-        result.push_str(to);
-        cursor = end;
-    }
-
-    result.push_str(&input[cursor..]);
-    result
-}
-
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), std::io::Error> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
@@ -1821,6 +1841,50 @@ pub fn build_shl_file(file_json: Value, output_path: &str) -> Result<(), String>
 }
 
 #[cfg(test)]
+mod file_copy_command_tests {
+    use super::*;
+
+    #[test]
+    fn copy_file_to_path_creates_parent_directory() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source.nuanmb");
+        let target = temp.path().join("nested").join("target.nuanmb");
+        fs::write(&source, b"motion").unwrap();
+
+        copy_file_to_path_impl(&source, &target, false).unwrap();
+
+        assert_eq!(fs::read(&target).unwrap(), b"motion");
+    }
+
+    #[test]
+    fn copy_file_to_path_rejects_existing_target_without_overwrite() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source.nuanmb");
+        let target = temp.path().join("target.nuanmb");
+        fs::write(&source, b"new").unwrap();
+        fs::write(&target, b"old").unwrap();
+
+        let error = copy_file_to_path_impl(&source, &target, false).unwrap_err();
+
+        assert!(error.contains("Target already exists"));
+        assert_eq!(fs::read(&target).unwrap(), b"old");
+    }
+
+    #[test]
+    fn copy_file_to_path_overwrites_existing_target_when_requested() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source.nuanmb");
+        let target = temp.path().join("target.nuanmb");
+        fs::write(&source, b"new").unwrap();
+        fs::write(&target, b"old").unwrap();
+
+        copy_file_to_path_impl(&source, &target, true).unwrap();
+
+        assert_eq!(fs::read(&target).unwrap(), b"new");
+    }
+}
+
+#[cfg(test)]
 mod character_asset_command_tests {
     use super::*;
 
@@ -1842,23 +1906,66 @@ mod character_asset_command_tests {
         seed_pack_pair(legacy.path(), "0xBDBE6FEA");
 
         let result = copy_asset_as_new_impl(
-            legacy.path(),
+            &legacy.path().join("0xBDBE6FEA"),
+            &legacy.path().join("0xBDBE6FEA_structure.json"),
             configured.path(),
             "0xBDBE6FEA",
             "custom_seed",
         )
         .unwrap();
 
-        assert!(configured.path().join(&result.new_hash_hex).is_dir());
+        assert!(configured.path().join("custom_seed").is_dir());
         assert!(configured
             .path()
-            .join(format!("{}_structure.json", result.new_hash_hex))
+            .join("custom_seed_structure.json")
             .is_file());
         let structure_raw = fs::read_to_string(&result.new_structure_json_path).unwrap();
         let structure_value: Value = serde_json::from_str(&structure_raw).unwrap();
-        assert_eq!(structure_value["Name"], result.new_hash_hex);
+        assert_eq!(structure_value["Name"], "custom_seed");
         assert_eq!(structure_value["HashName"], result.new_hash_hex);
         assert!(!legacy.path().join(&result.new_hash_hex).exists());
+    }
+
+    #[test]
+    fn copy_asset_as_new_reads_named_workspace_pack() {
+        let source_root = tempfile::tempdir().unwrap();
+        let destination_root = tempfile::tempdir().unwrap();
+        let pack_name = "001gundam_005gyan00_001";
+        let folder = source_root.path().join(pack_name);
+        fs::create_dir_all(&folder).unwrap();
+        fs::write(folder.join("asset.bin"), b"asset").unwrap();
+        fs::write(
+            source_root.path().join(format!("{pack_name}_structure.json")),
+            format!(
+                r#"{{"Name":"{pack_name}","HashName":"0xB802FAA1","SubFileData":[{{"fileUrl":".\\{pack_name}\\asset.bin"}}]}}"#
+            ),
+        )
+        .unwrap();
+
+        let result = copy_asset_as_new_impl(
+            &folder,
+            &source_root.path().join(format!("{pack_name}_structure.json")),
+            destination_root.path(),
+            "0xB802FAA1",
+            "001gundam_005gyan00_001_mod_n1_rocket",
+        )
+        .unwrap();
+
+        assert!(destination_root
+            .path()
+            .join("001gundam_005gyan00_001_mod_n1_rocket")
+            .is_dir());
+        let structure_raw = fs::read_to_string(&result.new_structure_json_path).unwrap();
+        let structure_value: Value = serde_json::from_str(&structure_raw).unwrap();
+        assert_eq!(
+            structure_value["Name"],
+            "001gundam_005gyan00_001_mod_n1_rocket"
+        );
+        assert_eq!(structure_value["HashName"], result.new_hash_hex);
+        assert_eq!(
+            structure_value["SubFileData"][0]["fileUrl"],
+            ".\\001gundam_005gyan00_001_mod_n1_rocket\\asset.bin"
+        );
     }
 
     #[test]

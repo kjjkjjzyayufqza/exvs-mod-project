@@ -192,6 +192,20 @@ slot3 = 0x0C205B60
 
 这就是 Dodai flying loadout 的入口。
 
+### Dodai shell mount argument
+
+百式 Dodai 的 shell 生成 / 挂接不是只有模型 id。相关调用形态是：
+
+```text
+sys_4B(0x2, 0x7AD84955, 0x8CCFAE67, 0x4094B0F4)
+```
+
+这里 `0x7AD84955` 是百式 Dodai 模型 / shell entry，`0x8CCFAE67` 是该 Dodai
+模型自己的 `.jnttbl` bone hash。这个第三参数不是 `.shl model_type`，也不是
+跨机体通用挂点。移植到其他模型时必须使用目标模型自己的 `.jnttbl` hash；如果目标
+模型没有对应 bone，实测应使用 `0`。2026-07-05 强人移植中，把 `0x8CCFAE67`
+直接用于强人 `0xA59612D5` 模型会让模型黏在地面。
+
 ## 持续飞行：`func_452 -> func_453`
 
 `func_452` 初始化 sustained flight：
@@ -422,3 +436,10 @@ loadout、`global20&0x4000` 的 riding branch、`func_1084` 的 Dodai release pr
 - 拆 `func_989/991` 的急速变形派生，与 wiki “格斗命中与否都可派生”核对。
 - 追 `func_1087..1096` 的 per-frame visual / ammo display 维护，确认 `global771` 与
   slot 3 conditional row 的完整语义。
+
+## Motion resource notes
+
+- `motion-folder-bundle-structure.md` records why Hyaku Shiki motion resources use
+  both direct `.nuanmb` items and numbered folder bundles. In short, direct items
+  store the motion key on the item; folder bundles store the motion key on the
+  folder and use child item `unk2` as clip channel / participant key.

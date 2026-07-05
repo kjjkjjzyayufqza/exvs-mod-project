@@ -108,6 +108,11 @@ applyShellLoadout
 | `sys_4B(3, entry_id)` | 清空指定 shell entry |
 | `sys_4B(4, entry_id)` | 判断 shell entry 是否存在 |
 
+2026-07-05 修正：`sys_4B(0x2, model_id, bone_hash, action_hash[, parent])`
+里的 `bone_hash` 来自目标模型自己的 `.jnttbl`，不是 `.shl` 的 `model_type`。跨机体
+移植时不能直接复用另一个模型的 bone hash；目标模型没有对应 bone 证据时，先用 `0`
+或重新从目标模型 `.jnttbl` 取值。
+
 因此 `func_889` 到 `func_895` 中反复出现的模式：
 
 ```c

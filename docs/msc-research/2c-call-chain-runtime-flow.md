@@ -501,7 +501,8 @@ func_888(arg0)
 
 Notion 解释：
 
-- `sys_4B(0x2, model, bone, resource, target)` 接模型。
+- `sys_4B(0x2, model, bone, resource, target)` 接模型；`bone` 是目标模型自身
+  `.jnttbl` 的 bone / joint hash，不能直接复用其他模型的挂点 hash。
 - `sys_4B(0x3)` 解除全部装备。
 - `sys_47(0x10/0x11/0x12)` 对模型/bone 做 rotate/translate/scale。
 
