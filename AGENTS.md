@@ -75,8 +75,9 @@ Use `docs/` as the first source of project truth:
   texture: use `FeRendererMovableVertexColor` → `vstgStandard_VertexColor`, strip
   unused PBR slots (avoids in-game overexposure).
 - `docs/gvs-numatb-step2-migration-changes.md` — GVS→EXVS2 numatb migration rules.
-- `docs/exvs2-json-cli.md` — `exvs2-json` CLI for read-only EXVS2 binary
-  resource inspection and correlation JSON (implementation in `src-tauri/`).
+- `docs/exvs2-json-cli.md` — `exvs2-json` CLI for EXVS2 binary resource
+  inspection, scoped JSON-driven editing, and correlation JSON (implementation
+  in `src-tauri/`).
 
 When adding new research findings, write them under `docs/` as standalone
 specifications or research notes.
@@ -129,7 +130,7 @@ JSON. There is **no** tool named `exvs2-cli`; use `exvs2-json` / `exvs2_json`.
 |------|------|
 | Full spec | `docs/exvs2-json-cli.md` |
 | Design background | `docs/superpowers/specs/2026-06-28-exvs2-binary-json-cli-design.md` |
-| CLI core | `src-tauri/src/exvs2_json_cli.rs` |
+| CLI core | `src-tauri/src/exvs2_json_cli/` |
 | Binary entry | `src-tauri/src/bin/exvs2_json.rs` |
 | Integration tests | `src-tauri/tests/exvs2_json_cli_test.rs` |
 | Release executable | `src-tauri/target/release/exvs2_json.exe` |
@@ -141,6 +142,11 @@ JSON. There is **no** tool named `exvs2-cli`; use `exvs2-json` / `exvs2_json`.
   (`.nusktb`, `.numshb`, `.numdlb`; auto-detect or `--type`). Prefer
   `--summary --pretty` for large files; for `.numshb` use `--raw-fields` only
   when full vertex buffers are required.
+- `edit` — apply AI-facing JSON edit requests to lossless builder-backed file
+  types (`jnttbl`, `character_id_table`, `vernier_table`, `armsparam`,
+  `bulletparam`, `speedparam`, `projectile_depiction_table`). Use `--dry-run`
+  for preview-only output; SSBH files remain inspect-only because their rewrite
+  is not byte-identical.
 - `correlate` — emit a JSON skeleton joining unit/weapon/dispatcher/IDA evidence
   (paste IDA symbols via optional flags; does not call IDA automatically).
 
@@ -149,6 +155,7 @@ JSON. There is **no** tool named `exvs2-cli`; use `exvs2-json` / `exvs2_json`.
 ```powershell
 cargo run --bin exvs2_json -- --help
 cargo run --bin exvs2_json -- inspect "<path>" --summary --pretty
+cargo run --bin exvs2_json -- edit "<path>" --request "<edit.json>" --output "<new-path>" --pretty
 cargo run --bin exvs2_json -- correlate --unit 001GUNDAM/005GYAN00/001 --weapon SuibakuMissile --id 10050102 --pretty
 ```
 

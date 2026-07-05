@@ -1,8 +1,9 @@
 # EXVS2 JSON CLI (`exvs2-json`)
 
-AI-facing read-only CLI for converting known EXVS2 binary/resource files into
-structured JSON. It lives in the Tauri Rust crate and reuses the same parsers as
-the desktop editor backend.
+AI-facing CLI for converting known EXVS2 binary/resource files into structured
+JSON and applying scoped JSON edit requests to formats with lossless builders.
+It lives in the Tauri Rust crate and reuses the same parsers as the desktop
+editor backend.
 
 Design background: `docs/superpowers/specs/2026-06-28-exvs2-binary-json-cli-design.md`
 
@@ -13,7 +14,7 @@ Cross-repo pickup note for projectile hook work:
 
 | Path | Role |
 |------|------|
-| `src-tauri/src/exvs2_json_cli.rs` | Shared CLI core (`inspect`, `correlate`, JSON envelope) |
+| `src-tauri/src/exvs2_json_cli/` | Shared CLI core (`inspect`, `edit`, `correlate`, JSON envelope) |
 | `src-tauri/src/bin/exvs2_json.rs` | Binary entry point |
 | `src-tauri/tests/exvs2_json_cli_test.rs` | Integration tests (default `cargo test` target) |
 
@@ -31,6 +32,7 @@ From `src-tauri/`:
 ```powershell
 cargo run --bin exvs2_json -- --help
 cargo run --bin exvs2_json -- inspect "<path>" --summary --pretty
+cargo run --bin exvs2_json -- edit "<path>" --request "<edit.json>" --output "<new-path>" --pretty
 cargo run --bin exvs2_json -- correlate --unit 001GUNDAM/005GYAN00/001 --weapon SuibakuMissile --id 10050102 --pretty
 ```
 
@@ -68,6 +70,56 @@ exvs2-json correlate --unit <bucket> --weapon <task-name> --id <dispatcher-id> [
 Produces one JSON skeleton for joining unit/weapon/IDA/resource/runtime evidence.
 It does **not** call IDA or scan resource folders automatically yet; paste IDA
 evidence with the optional flags.
+
+### `edit`
+
+```powershell
+exvs2-json edit "<known-exvs2-file-path>" --request "<edit.json>" --output "<new-file>" [--type <type>] [--pretty] [--dry-run]
+exvs2-json edit "<known-exvs2-file-path>" --request-json "<json>" --output "<new-file>" [--type <type>] [--pretty] [--dry-run]
+```
+
+Applies an AI-facing JSON edit request and returns a JSON report with
+`reportType: "edit"`, `operationsApplied`, byte lengths, warnings, and a compact
+post-edit preview. `--dry-run` returns the report and rebuilt bytes in memory
+for tests/API callers but does not write `--output`.
+
+Supported edit types are intentionally limited to formats with byte-identical
+builders:
+
+- `jnttbl`
+- `character-id-table`
+- `vernier-table`
+- `armsparam`
+- `bulletparam`
+- `speedparam`
+- `projectile-depiction-table`
+
+SSBH files (`nusktb`, `numshb`, `numdlb`) remain inspect-only because their
+rewrite path may be semantically valid but not byte-identical.
+
+Example request:
+
+```json
+{
+  "type": "bulletparam",
+  "operations": [
+    {
+      "op": "setParamField",
+      "entryId": 10,
+      "field": "initialAngle",
+      "value": 2.5
+    }
+  ]
+}
+```
+
+Supported operations:
+
+- `jnttbl`: `addJnttblEntry`, `setJnttblEntry`, `deleteJnttblEntry`
+- `character_id_table`: `setCharacterResource`, `upsertCharacterRow`,
+  `deleteCharacterRow`
+- typed param tables: `setParamField`, `copyParamEntry`, `upsertParamEntry`,
+  `deleteParamEntry`
 
 ## Supported Inspect Types
 
@@ -196,4 +248,4 @@ under the `legacy-cli-tools` Cargo feature when explicitly needed.
 - `--xref` automatic Tauri/atwiki lookup
 - Automatic resource-folder join inside `correlate`
 - IDA JSON/CSV import
-- Mutation/repack CLI commands
+- SSBH mutation/repack commands

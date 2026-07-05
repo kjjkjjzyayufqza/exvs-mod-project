@@ -2184,11 +2184,7 @@ mod bone_transform_tests {
             !loaded.nodes.is_empty(),
             "exported FBX should contain nodes"
         );
-        eprintln!(
-            "exported {} as {}",
-            output_name,
-            output_path.display(),
-        );
+        eprintln!("exported {} as {}", output_name, output_path.display(),);
         Ok(())
     }
 }

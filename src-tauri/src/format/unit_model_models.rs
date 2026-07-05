@@ -2986,7 +2986,10 @@ mod tests {
                     colors: Vec::new(),
                     rasterizer_states: Vec::new(),
                     samplers: Vec::new(),
-                    textures: vec![TextureParam::new(ParamId::Texture1, texture_name.to_string())],
+                    textures: vec![TextureParam::new(
+                        ParamId::Texture1,
+                        texture_name.to_string(),
+                    )],
                     textures2: Vec::new(),
                     type4_v16: Vec::new(),
                     type4_v15: Vec::new(),
@@ -3239,17 +3242,13 @@ mod tests {
         );
         let raw = fs::read_to_string(&fixture.structure_path).unwrap();
         let value: Value = serde_json::from_str(&raw).unwrap();
-        let pool_index = build_texture_pool_index(
-            value.get("SubFileData").and_then(Value::as_array).unwrap(),
-        );
+        let pool_index =
+            build_texture_pool_index(value.get("SubFileData").and_then(Value::as_array).unwrap());
         assert!(
             pool_index.contains_key("n1_back.nutexb"),
             "orphan pool texture should be registered in SubFileData"
         );
-        let sub_file_data = value
-            .get("SubFileData")
-            .and_then(Value::as_array)
-            .unwrap();
+        let sub_file_data = value.get("SubFileData").and_then(Value::as_array).unwrap();
         let mut seen = HashSet::new();
         for entry in sub_file_data {
             let file_index = entry

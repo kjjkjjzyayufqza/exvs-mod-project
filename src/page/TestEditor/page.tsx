@@ -29,7 +29,7 @@ import { TestEditorWorkspaceArea } from "./components/TestEditorWorkspaceArea";
 import { useConfigStore } from "@/store/configStore";
 import { TestEditorToolbar } from "./components/TestEditorToolbar";
 import ListeningRepackDialog from "./components/ListeningRepackDialog";
-import { folderContainsMscScriptFiles } from "./utils/mscWorkspaceUtils";
+import { resolveMscWorkspaceFolderPathForSelection } from "./utils/mscWorkspaceUtils";
 import { applyFileTreeViewSort } from "./utils/fileTreeViewSort";
 import { sortTreeByStarOrder, useFileTreeStarOrder } from "./utils/fileTreeStars";
 import { useFileTreeViewOptions } from "./hooks/useFileTreeViewOptions";
@@ -294,17 +294,14 @@ const TestEditorPage = () => {
   useEffect(() => {
     let cancelled = false;
     const sync = async () => {
-      if (!selectedNode) {
-        if (!cancelled) setMscWorkspaceFolderPath(null);
-        return;
-      }
       try {
-        const dirPath = selectedNode.isDir
-          ? selectedNode.path
-          : await dirname(selectedNode.path);
-        const ok = await folderContainsMscScriptFiles(dirPath);
+        const next = await resolveMscWorkspaceFolderPathForSelection({
+          currentDir,
+          selectedNode,
+          dirnameOfFile: dirname,
+        });
         if (!cancelled) {
-          setMscWorkspaceFolderPath(ok ? dirPath : null);
+          setMscWorkspaceFolderPath(next);
         }
       } catch {
         if (!cancelled) setMscWorkspaceFolderPath(null);
@@ -314,7 +311,7 @@ const TestEditorPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedNode]);
+  }, [currentDir, selectedNode]);
   const hasDirtyFolders = dirtyPackList.length > 0;
 
   const handleDiscardChanges = useCallback(() => {

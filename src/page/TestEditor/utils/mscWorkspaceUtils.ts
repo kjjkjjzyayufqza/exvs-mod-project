@@ -1,4 +1,5 @@
 import { readDir } from "@tauri-apps/plugin-fs";
+import type { TestTreeNode } from "../types";
 
 const MSC_FOLDER_MARKERS = [".bscex", ".cscex", ".dscex"] as const;
 const MSC_SCRIPT_EXTENSION_BY_C_FILE_BASENAME = {
@@ -85,4 +86,69 @@ export async function folderContainsMscScriptFiles(dirPath: string): Promise<boo
   }
   const entries = await readDir(trimmed);
   return entries.some((e) => e.isFile && e.name && isMscFolderMarkerFile(e.name));
+}
+
+type MscWorkspaceSelectionNode = Pick<TestTreeNode, "path" | "isDir">;
+
+function normalizeCandidateKey(path: string): string {
+  return path.trim().replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+}
+
+export async function resolveMscWorkspaceFolderPathForSelection({
+  currentDir,
+  selectedNode,
+  dirnameOfFile,
+  containsMscScriptFiles = folderContainsMscScriptFiles,
+}: {
+  currentDir?: string | null;
+  selectedNode?: MscWorkspaceSelectionNode | null;
+  dirnameOfFile: (path: string) => Promise<string>;
+  containsMscScriptFiles?: (path: string) => Promise<boolean>;
+}): Promise<string | null> {
+  const candidates: string[] = [];
+
+  if (selectedNode) {
+    try {
+      candidates.push(selectedNode.isDir ? selectedNode.path : await dirnameOfFile(selectedNode.path));
+    } catch {
+      // Fall through to the current folder candidate below.
+    }
+  }
+
+  if (currentDir?.trim()) {
+    candidates.push(currentDir);
+  }
+
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    const key = normalizeCandidateKey(candidate);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+
+    try {
+      if (await containsMscScriptFiles(candidate)) {
+        return candidate;
+      }
+    } catch {
+      // Ignore stale or inaccessible candidates and keep trying lower-priority paths.
+    }
+  }
+
+  return null;
+}
+
+export function shouldAutoActivateMscWorkspaceTab({
+  activeTab,
+  mscWorkspaceFolderPath,
+  lastAutoActivatedFolderPath,
+}: {
+  activeTab: string;
+  mscWorkspaceFolderPath: string | null | undefined;
+  lastAutoActivatedFolderPath: string | null;
+}): boolean {
+  return (
+    activeTab === "folder-structure" &&
+    Boolean(mscWorkspaceFolderPath) &&
+    mscWorkspaceFolderPath !== lastAutoActivatedFolderPath
+  );
 }

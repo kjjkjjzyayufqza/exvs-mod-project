@@ -1,7 +1,8 @@
 # EXVS2 Binary JSON CLI Design
 
-> **Status (2026-06-28):** Implemented in the Tauri crate. Operational reference:
-> `docs/exvs2-json-cli.md`. Cross-repo pickup for :
+> **Status (2026-07-05):** Implemented in the Tauri crate. Operational reference:
+> `docs/exvs2-json-cli.md`. The CLI now has `inspect`, scoped JSON `edit`, and
+> `correlate` commands. Cross-repo pickup for :
 > `docs\EXVS2JsonCli.md`.
 
 **Goal:** define the CLI an AI agent needs to quickly convert known EXVS2
@@ -267,12 +268,15 @@ Then the AI should read one JSON report instead of manually repeating:
 
 ## Implementation Status
 
-Shipped in `src-tauri/src/exvs2_json_cli.rs` + `src-tauri/src/bin/exvs2_json.rs`:
+Shipped in `src-tauri/src/exvs2_json_cli/` + `src-tauri/src/bin/exvs2_json.rs`:
 
 - `inspect` for `jnttbl`, `character_id_table`, `vernier_table`, `armsparam`,
   `bulletparam`, `projectile_depiction_table`
 - Common JSON envelope and LE hash metadata
 - `--summary`, `--raw-fields`, `--roundtrip-check`
+- `edit` for lossless builder-backed formats: `jnttbl`, `character_id_table`,
+  `vernier_table`, `armsparam`, `bulletparam`, `speedparam`,
+  `projectile_depiction_table`
 - `correlate` skeleton with manual IDA field injection
 
 Still deferred:
@@ -280,5 +284,4 @@ Still deferred:
 - `--xref` automatic lookup
 - Auto resource join inside `correlate`
 - IDA JSON/CSV import
-- Mutation/repack commands
-
+- SSBH mutation/repack commands

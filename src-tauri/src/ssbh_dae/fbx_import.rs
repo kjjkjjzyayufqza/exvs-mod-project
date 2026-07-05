@@ -499,13 +499,12 @@ fn build_bones_preorder(
                     )
                 })?;
                 let parent_name = drafts[p].name.as_str();
-                let parent_node =
-                    find_scene_node_by_name(scene, parent_name).ok_or_else(|| {
-                        anyhow!(
-                            "FBX skeleton: parent bone '{}' has no scene node",
-                            parent_name
-                        )
-                    })?;
+                let parent_node = find_scene_node_by_name(scene, parent_name).ok_or_else(|| {
+                    anyhow!(
+                        "FBX skeleton: parent bone '{}' has no scene node",
+                        parent_name
+                    )
+                })?;
                 local_transform_upto_ancestor(child_node, parent_node)
                     .map_err(|e| anyhow!("FBX skeleton: bone '{}': {}", d.name, e))?
             }

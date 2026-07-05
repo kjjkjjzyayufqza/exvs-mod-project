@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { MainViewTabNav } from "./main-view/MainViewTabNav";
@@ -24,6 +24,7 @@ import { InteractionEditorView } from "./param-editors/interaction-editor/Intera
 import EffectFolderEditorView from "./effect-folder-editor/EffectFolderEditorView";
 import { resolveEffectPackFromStructureJson } from "./effect-folder-editor/effectFolderEditorUtils";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
+import { shouldAutoActivateMscWorkspaceTab } from "../utils/mscWorkspaceUtils";
 
 type StageTab = {
   name: string;
@@ -310,6 +311,7 @@ const MainView = ({
   const [stageListHasUnsaved, setStageListHasUnsaved] = useState(false);
   const [stageIconListHasUnsaved, setStageIconListHasUnsaved] = useState(false);
   const [mscWorkspaceHasUnsaved, setMscWorkspaceHasUnsaved] = useState(false);
+  const lastAutoActivatedMscFolderRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!effectPackForSelection) return;
@@ -321,6 +323,31 @@ const MainView = ({
       return next;
     });
   }, [effectPackForSelection?.structureJsonPath]);
+
+  useEffect(() => {
+    if (!mscWorkspaceFolderPath) {
+      lastAutoActivatedMscFolderRef.current = null;
+      return;
+    }
+    if (
+      !shouldAutoActivateMscWorkspaceTab({
+        activeTab,
+        mscWorkspaceFolderPath,
+        lastAutoActivatedFolderPath: lastAutoActivatedMscFolderRef.current,
+      })
+    ) {
+      return;
+    }
+
+    lastAutoActivatedMscFolderRef.current = mscWorkspaceFolderPath;
+    setActiveTab("msc-workspace");
+    setVisitedTabs((prev) => {
+      if (prev.has("msc-workspace")) return prev;
+      const next = new Set(prev);
+      next.add("msc-workspace");
+      return next;
+    });
+  }, [activeTab, mscWorkspaceFolderPath]);
 
   const handleUnsavedChanges = useCallback((hasChanges: boolean) => {
     setFolderStructureHasUnsaved(hasChanges);

@@ -1,6 +1,14 @@
+use std::collections::HashMap;
 use std::io::Cursor;
 
-use app_lib::exvs2_json_cli::{inspect_bytes, InspectOptions, InspectType};
+use app_lib::exvs2_json_cli::{
+    edit_bytes, inspect_bytes, EditBytesOptions, InspectOptions, InspectType,
+};
+use app_lib::format::bulletparam::{
+    build_bulletparam, parse_bulletparam, BulletParamData, BulletParamEntry,
+};
+use app_lib::format::param_bin_format::{ParamBinaryHeader, ParamFieldSpec, PARAM_BIN_MAGIC};
+use serde_json::json;
 use ssbh_data::mesh_data::{AttributeData, MeshData, MeshObjectData, VectorData};
 use ssbh_data::modl_data::{ModlData, ModlEntryData};
 use ssbh_data::prelude::SsbhData;
@@ -121,6 +129,38 @@ fn character_id_table_fixture_bytes() -> Vec<u8> {
         }
     }
     bytes
+}
+
+fn bulletparam_fixture_bytes() -> Vec<u8> {
+    let initial_angle_hash = 0x0594_D6D4;
+    let mut commands = HashMap::new();
+    commands.insert(initial_angle_hash, f32::to_bits(1.0));
+    build_bulletparam(&BulletParamData {
+        header: ParamBinaryHeader {
+            magic: PARAM_BIN_MAGIC,
+            unk_04: 0,
+            file_size: 0,
+            unk_0c: 0,
+            entry_count: 1,
+            commands_count: 1,
+            entry_size: 4,
+            unk_1c: 0,
+        },
+        field_specs: vec![ParamFieldSpec {
+            hash: initial_angle_hash,
+            entry_offset: 0,
+            flags: 0,
+            kind: 5,
+        }],
+        entry_ids: vec![10],
+        entries: vec![BulletParamEntry {
+            entry_id: 10,
+            commands,
+        }],
+        trailing_data: Vec::new(),
+        source_entries_raw: Vec::new(),
+    })
+    .expect("build bulletparam fixture")
 }
 
 #[test]
@@ -280,4 +320,126 @@ fn inspect_numshb_emits_object_stats_without_raw_fields() {
         .unwrap()
         .iter()
         .any(|name| name == "Position0"));
+}
+
+#[test]
+fn edit_jnttbl_adds_entry_from_json_request() {
+    let request = json!({
+        "type": "jnttbl",
+        "operations": [
+            {
+                "op": "addJnttblEntry",
+                "boneHash": "0x11112222",
+                "boneIndex": 9
+            }
+        ]
+    });
+
+    let outcome = edit_bytes(
+        r"E:\fixture\test.jnttbl",
+        &jnttbl_fixture_bytes(),
+        &request,
+        EditBytesOptions {
+            inspect_type: Some(InspectType::Jnttbl),
+            output_path: Some(r"E:\fixture\test.edited.jnttbl".to_string()),
+            dry_run: true,
+        },
+    )
+    .expect("JNTT edit should apply");
+
+    assert_eq!(outcome.report["reportType"], "edit");
+    assert_eq!(outcome.report["detectedType"], "jnttbl");
+    assert_eq!(outcome.report["operationCount"], 1);
+
+    let report = inspect_bytes(
+        r"E:\fixture\test.edited.jnttbl",
+        &outcome.bytes,
+        InspectOptions {
+            inspect_type: Some(InspectType::Jnttbl),
+            pretty: false,
+            summary: false,
+            raw_fields: false,
+            roundtrip_check: false,
+        },
+    )
+    .expect("edited JNTT should parse");
+    assert_eq!(report["data"]["bones"][2]["boneHash"]["hex"], "0x11112222");
+    assert_eq!(report["data"]["bones"][2]["boneIndex"], 9);
+}
+
+#[test]
+fn edit_character_id_table_sets_resource_column() {
+    let request = json!({
+        "type": "character-id-table",
+        "operations": [
+            {
+                "op": "setCharacterResource",
+                "characterId": 100501,
+                "column": "model",
+                "value": "0x01020304"
+            }
+        ]
+    });
+
+    let outcome = edit_bytes(
+        r"E:\fixture\character_id_table.bin",
+        &character_id_table_fixture_bytes(),
+        &request,
+        EditBytesOptions {
+            inspect_type: Some(InspectType::CharacterIdTable),
+            output_path: None,
+            dry_run: true,
+        },
+    )
+    .expect("character table edit should apply");
+
+    let report = inspect_bytes(
+        r"E:\fixture\character_id_table.edited.bin",
+        &outcome.bytes,
+        InspectOptions {
+            inspect_type: Some(InspectType::CharacterIdTable),
+            pretty: false,
+            summary: false,
+            raw_fields: false,
+            roundtrip_check: false,
+        },
+    )
+    .expect("edited character table should parse");
+    assert_eq!(report["data"]["rows"][0]["model"]["hex"], "0x01020304");
+}
+
+#[test]
+fn edit_bulletparam_sets_named_f32_field() {
+    let request = json!({
+        "type": "bulletparam",
+        "operations": [
+            {
+                "op": "setParamField",
+                "entryId": 10,
+                "field": "initialAngle",
+                "value": 2.5
+            }
+        ]
+    });
+
+    let outcome = edit_bytes(
+        r"E:\fixture\bulletparam.bin",
+        &bulletparam_fixture_bytes(),
+        &request,
+        EditBytesOptions {
+            inspect_type: Some(InspectType::BulletParam),
+            output_path: None,
+            dry_run: true,
+        },
+    )
+    .expect("bulletparam edit should apply");
+
+    let parsed = parse_bulletparam(&outcome.bytes).expect("edited bulletparam should parse");
+    let raw = parsed.entries[0]
+        .commands
+        .get(&0x0594_D6D4)
+        .copied()
+        .expect("initialAngle command");
+    assert!((f32::from_bits(raw) - 2.5).abs() < f32::EPSILON);
+    assert_eq!(outcome.report["operationsApplied"][0]["after"], 2.5);
 }
