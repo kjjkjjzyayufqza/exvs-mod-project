@@ -11,7 +11,7 @@ use ssbh_data::{
     skel_data::BoneData,
     Vector3, Vector4,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -39,6 +39,7 @@ pub(crate) struct MotionSampleCache {
     skel: Arc<SkelData>,
     anim: Arc<AnimData>,
     hlpb: Option<Arc<HlpbData>>,
+    compatibility: MotionSkeletonCompatibility,
     skel_stamp: FileStamp,
     nuanmb_stamp: FileStamp,
     matl_stamp: Option<FileStamp>,
@@ -73,7 +74,15 @@ fn file_stamp(path: &str) -> Result<FileStamp, String> {
 fn motion_cache_get_or_load(
     state: &MotionSampleCacheState,
     request: &MotionSampleRequest,
-) -> Result<(Arc<SkelData>, Arc<AnimData>, Option<Arc<HlpbData>>), String> {
+) -> Result<
+    (
+        Arc<SkelData>,
+        Arc<AnimData>,
+        Option<Arc<HlpbData>>,
+        MotionSkeletonCompatibility,
+    ),
+    String,
+> {
     let skel_path = request.skel_path.trim().to_string();
     let nuanmb_path = request.nuanmb_path.trim().to_string();
     let matl_path = request.matl_path.as_ref().map(|s| s.trim().to_string());
@@ -122,6 +131,7 @@ fn motion_cache_get_or_load(
             SkelData::from_file(skel_p).map_err(|e| format!("Failed to read Skel: {e}"))?;
         let anim: AnimData =
             AnimData::from_file(anim_p).map_err(|e| format!("Failed to read Anim: {e}"))?;
+        let compatibility = validate_motion_skeleton_compatibility(&skel, &anim)?;
         let hlpb = if let Some(ref hp) = hlpb_path {
             Some(Arc::new(
                 HlpbData::from_file(Path::new(hp))
@@ -144,6 +154,7 @@ fn motion_cache_get_or_load(
             skel: Arc::new(skel),
             anim: Arc::new(anim),
             hlpb,
+            compatibility,
             skel_stamp,
             nuanmb_stamp,
             matl_stamp,
@@ -158,7 +169,12 @@ fn motion_cache_get_or_load(
     let c = guard
         .as_ref()
         .ok_or_else(|| "Motion sample cache is empty after load".to_string())?;
-    Ok((c.skel.clone(), c.anim.clone(), c.hlpb.clone()))
+    Ok((
+        c.skel.clone(),
+        c.anim.clone(),
+        c.hlpb.clone(),
+        c.compatibility.clone(),
+    ))
 }
 
 fn find_default_hlpb_path_for_skel(skel_path: &str) -> Result<Option<String>, String> {
@@ -205,6 +221,14 @@ pub struct NuanmbManifest {
     pub minor_version: u16,
     pub final_frame_index: f32,
     pub group_summaries: Vec<GroupSummary>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MotionSkeletonCompatibility {
+    pub skeleton_bone_count: usize,
+    pub animation_transform_node_count: usize,
+    pub matched_bone_count: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -320,6 +344,7 @@ pub struct MotionClip {
     pub final_frame_index: f32,
     pub sampled_frame_count: usize,
     pub frames: Vec<MotionFrameSample>,
+    pub compatibility: MotionSkeletonCompatibility,
 }
 
 // --- Interpolation (matches ssbh_wgpu::animation) ---
@@ -489,14 +514,102 @@ impl AnimationTransforms {
     }
 }
 
-fn apply_transforms<'a>(bones: &mut [(usize, AnimatedBone)], anim: &AnimData, frame: f32) {
-    // NUANMB node names can be namespaced (e.g. "rig:Bone" or "path|Bone"),
-    // while skeleton names are often plain. Canonical fallback keeps mapping stable.
-    fn canonical_bone_name(name: &str) -> &str {
-        let path_trimmed = name.rsplit('|').next().unwrap_or(name);
-        path_trimmed.rsplit(':').next().unwrap_or(path_trimmed)
+fn canonical_bone_name(name: &str) -> &str {
+    let path_trimmed = name.rsplit('|').next().unwrap_or(name);
+    path_trimmed.rsplit(':').next().unwrap_or(path_trimmed)
+}
+
+fn is_non_skeleton_transform_node(name: &str) -> bool {
+    matches!(
+        canonical_bone_name(name),
+        "gya_camera" | "camera_stage" | "LightChr"
+    ) || canonical_bone_name(name).starts_with("LightStg")
+}
+
+fn validate_motion_skeleton_compatibility(
+    skel: &SkelData,
+    anim: &AnimData,
+) -> Result<MotionSkeletonCompatibility, String> {
+    let mut exact_bones_by_name: HashMap<String, Vec<usize>> = HashMap::new();
+    let mut canonical_bones_by_name: HashMap<String, Vec<usize>> = HashMap::new();
+    for (index, bone) in skel.bones.iter().enumerate() {
+        exact_bones_by_name
+            .entry(bone.name.clone())
+            .or_default()
+            .push(index);
+        canonical_bones_by_name
+            .entry(canonical_bone_name(&bone.name).to_string())
+            .or_default()
+            .push(index);
     }
 
+    let mut used_bone_indices = HashSet::new();
+    let mut animation_transform_node_count = 0usize;
+    let mut matched_bone_count = 0usize;
+    let mut incompatible_nodes = Vec::new();
+
+    for node in anim
+        .groups
+        .iter()
+        .filter(|group| group.group_type == GroupType::Transform)
+        .flat_map(|group| group.nodes.iter())
+    {
+        let has_transform_track = node
+            .tracks
+            .iter()
+            .any(|track| matches!(track.values, TrackValues::Transform(_)));
+        if !has_transform_track || is_non_skeleton_transform_node(&node.name) {
+            continue;
+        }
+        animation_transform_node_count += 1;
+
+        let exact_match = exact_bones_by_name.get(&node.name).and_then(|indices| {
+            if indices.len() != 1 {
+                return None;
+            }
+            indices
+                .iter()
+                .copied()
+                .find(|index| !used_bone_indices.contains(index))
+        });
+        let mapped_index = exact_match.or_else(|| {
+            let canonical = canonical_bone_name(&node.name);
+            let candidates = canonical_bones_by_name.get(canonical)?;
+            if candidates.len() != 1 {
+                return None;
+            }
+            candidates
+                .iter()
+                .copied()
+                .find(|index| !used_bone_indices.contains(index))
+        });
+
+        if let Some(index) = mapped_index {
+            used_bone_indices.insert(index);
+            matched_bone_count += 1;
+        } else {
+            incompatible_nodes.push(node.name.clone());
+        }
+    }
+
+    if !incompatible_nodes.is_empty() {
+        incompatible_nodes.sort();
+        incompatible_nodes.dedup();
+        return Err(format!(
+            "NUANMB skeleton mismatch: {} Transform node(s) do not map uniquely to nusktb bones: {}. Playback blocked.",
+            incompatible_nodes.len(),
+            incompatible_nodes.join(", ")
+        ));
+    }
+
+    Ok(MotionSkeletonCompatibility {
+        skeleton_bone_count: skel.bones.len(),
+        animation_transform_node_count,
+        matched_bone_count,
+    })
+}
+
+fn apply_transforms<'a>(bones: &mut [(usize, AnimatedBone)], anim: &AnimData, frame: f32) {
     let mut exact_bones_by_name: HashMap<String, Vec<usize>> = HashMap::new();
     let mut canonical_bones_by_name: HashMap<String, Vec<usize>> = HashMap::new();
     for (i, (_, animated)) in bones.iter().enumerate() {
@@ -1182,7 +1295,7 @@ pub fn ssbh_sample_motion_frame(
     request: MotionSampleRequest,
 ) -> Result<MotionSample, String> {
     let t0 = Instant::now();
-    let (skel, anim, hlpb) = motion_cache_get_or_load(&state, &request)?;
+    let (skel, anim, hlpb, _) = motion_cache_get_or_load(&state, &request)?;
 
     let max_f = anim.final_frame_index.max(0.0);
     let frame = normalize_frame(request.frame, max_f, request.loop_animation);
@@ -1208,7 +1321,7 @@ pub fn ssbh_load_motion_clip(
     request: MotionClipRequest,
 ) -> Result<MotionClip, String> {
     let t0 = Instant::now();
-    let (skel, anim, hlpb) = motion_cache_get_or_load(
+    let (skel, anim, hlpb, compatibility) = motion_cache_get_or_load(
         &state,
         &MotionSampleRequest {
             skel_path: request.skel_path,
@@ -1252,12 +1365,16 @@ pub fn ssbh_load_motion_clip(
         final_frame_index: anim.final_frame_index,
         sampled_frame_count,
         frames,
+        compatibility,
     })
 }
 
 #[cfg(test)]
 mod normalize_frame_tests {
-    use super::{animate_skel_cpu, normalize_frame, sampled_frame_count_for_clip};
+    use super::{
+        animate_skel_cpu, motion_cache_get_or_load, normalize_frame, sampled_frame_count_for_clip,
+        validate_motion_skeleton_compatibility, MotionSampleCacheState, MotionSampleRequest,
+    };
     use ssbh_data::{
         anim_data::{
             AnimData, GroupData, GroupType, NodeData, TrackData, TrackValues, Transform,
@@ -1267,6 +1384,7 @@ mod normalize_frame_tests {
         skel_data::{BillboardType, BoneData, SkelData},
         Vector3, Vector4,
     };
+    use std::path::Path;
 
     fn identity_bone(name: &str, parent_index: Option<usize>) -> BoneData {
         BoneData {
@@ -1280,6 +1398,191 @@ mod normalize_frame_tests {
             parent_index,
             billboard_type: BillboardType::Disabled,
         }
+    }
+
+    fn transform_anim(node_name: &str) -> AnimData {
+        AnimData {
+            major_version: 2,
+            minor_version: 0,
+            final_frame_index: 0.0,
+            groups: vec![GroupData {
+                group_type: GroupType::Transform,
+                nodes: vec![NodeData {
+                    name: node_name.to_string(),
+                    tracks: vec![TrackData {
+                        name: "Transform".to_string(),
+                        compensate_scale: false,
+                        values: TrackValues::Transform(vec![Transform {
+                            translation: Vector3::new(0.0, 0.0, 0.0),
+                            rotation: Vector4::new(0.0, 0.0, 0.0, 1.0),
+                            scale: Vector3::new(1.0, 1.0, 1.0),
+                        }]),
+                        transform_flags: TransformFlags::default(),
+                    }],
+                }],
+            }],
+        }
+    }
+
+    #[test]
+    fn rejects_motion_with_transform_node_missing_from_skeleton() {
+        let skel = SkelData {
+            major_version: 1,
+            minor_version: 0,
+            bones: vec![identity_bone("Hip", None)],
+        };
+        let anim = transform_anim("UnknownBone");
+
+        let error = validate_motion_skeleton_compatibility(&skel, &anim)
+            .expect_err("unknown animation bones must block playback");
+
+        assert!(error.contains("UnknownBone"));
+        assert!(error.contains("nusktb"));
+    }
+
+    #[test]
+    fn accepts_partial_motion_when_every_transform_node_matches() {
+        let skel = SkelData {
+            major_version: 1,
+            minor_version: 0,
+            bones: vec![identity_bone("Hip", None), identity_bone("Spine", Some(0))],
+        };
+        let anim = transform_anim("Hip");
+
+        let compatibility = validate_motion_skeleton_compatibility(&skel, &anim)
+            .expect("partial motions are valid when all animated bones exist");
+
+        assert_eq!(compatibility.skeleton_bone_count, 2);
+        assert_eq!(compatibility.animation_transform_node_count, 1);
+        assert_eq!(compatibility.matched_bone_count, 1);
+    }
+
+    #[test]
+    fn accepts_unique_namespaced_motion_bone_mapping() {
+        let skel = SkelData {
+            major_version: 1,
+            minor_version: 0,
+            bones: vec![identity_bone("Hip", None)],
+        };
+        let anim = transform_anim("rigA:Hip");
+
+        validate_motion_skeleton_compatibility(&skel, &anim)
+            .expect("a unique canonical bone name should match");
+    }
+
+    #[test]
+    fn ignores_camera_transform_nodes_for_skeleton_compatibility() {
+        let skel = SkelData {
+            major_version: 1,
+            minor_version: 0,
+            bones: vec![],
+        };
+        let anim = transform_anim("gya_camera");
+
+        let compatibility = validate_motion_skeleton_compatibility(&skel, &anim)
+            .expect("camera transforms are not skeleton bones");
+
+        assert_eq!(compatibility.animation_transform_node_count, 0);
+        assert_eq!(compatibility.matched_bone_count, 0);
+    }
+
+    #[test]
+    fn rejects_ambiguous_canonical_bone_mapping() {
+        let skel = SkelData {
+            major_version: 1,
+            minor_version: 0,
+            bones: vec![
+                identity_bone("rigA:Hip", None),
+                identity_bone("rigB:Hip", None),
+            ],
+        };
+        let anim = transform_anim("Hip");
+
+        let error = validate_motion_skeleton_compatibility(&skel, &anim)
+            .expect_err("ambiguous canonical names must block playback");
+
+        assert!(error.contains("Hip"));
+        assert!(error.contains("Playback blocked"));
+    }
+
+    #[test]
+    fn rejects_ambiguous_exact_bone_mapping() {
+        let skel = SkelData {
+            major_version: 1,
+            minor_version: 0,
+            bones: vec![identity_bone("Hip", None), identity_bone("Hip", None)],
+        };
+        let anim = transform_anim("Hip");
+
+        let error = validate_motion_skeleton_compatibility(&skel, &anim)
+            .expect_err("duplicate exact skeleton names must be ambiguous");
+
+        assert!(error.contains("Hip"));
+        assert!(error.contains("Playback blocked"));
+    }
+
+    #[test]
+    fn validates_real_humanoid_motion_against_matching_body_skeleton_when_available() {
+        let skel_path = Path::new(
+            r"E:\XB\解包\com\file\0xAF73362C\026gnbelt_002nitngl_001_body_normal__maya__.nusktb",
+        );
+        let anim_path = Path::new(
+            r"E:\XB\解包\com\file\003motion\001hito_002zgundm_002hyaksk_001_e316088b\0\0\3\001hito_002zgundm_002hyaksk_001_kamaesht2ddy_sht_gnd_fr.nuanmb",
+        );
+        if !skel_path.is_file() || !anim_path.is_file() {
+            return;
+        }
+
+        let skel = SkelData::from_file(skel_path).expect("real body nusktb should parse");
+        let anim = AnimData::from_file(anim_path).expect("real common nuanmb should parse");
+        validate_motion_skeleton_compatibility(&skel, &anim)
+            .expect("common humanoid motion should match the humanoid body skeleton");
+    }
+
+    #[test]
+    fn rejects_real_humanoid_motion_for_weapon_skeleton_when_available() {
+        let skel_path = Path::new(
+            r"E:\XB\解包\com\file\0xAF73362C\026gnbelt_002nitngl_001_wep_brifle00__maya__.nusktb",
+        );
+        let anim_path = Path::new(
+            r"E:\XB\解包\com\file\003motion\001hito_002zgundm_002hyaksk_001_e316088b\0\0\3\001hito_002zgundm_002hyaksk_001_kamaesht2ddy_sht_gnd_fr.nuanmb",
+        );
+        if !skel_path.is_file() || !anim_path.is_file() {
+            return;
+        }
+
+        let skel = SkelData::from_file(skel_path).expect("real weapon nusktb should parse");
+        let anim = AnimData::from_file(anim_path).expect("real common nuanmb should parse");
+        let error = validate_motion_skeleton_compatibility(&skel, &anim)
+            .expect_err("body motion must not play on a weapon skeleton");
+
+        assert!(error.contains("Playback blocked"));
+    }
+
+    #[test]
+    fn real_motion_cache_load_blocks_mismatched_skeleton_when_available() {
+        let skel_path = Path::new(
+            r"E:\XB\解包\com\file\0xAF73362C\026gnbelt_002nitngl_001_wep_brifle00__maya__.nusktb",
+        );
+        let anim_path = Path::new(
+            r"E:\XB\解包\com\file\003motion\001hito_002zgundm_002hyaksk_001_e316088b\0\0\3\001hito_002zgundm_002hyaksk_001_kamaesht2ddy_sht_gnd_fr.nuanmb",
+        );
+        if !skel_path.is_file() || !anim_path.is_file() {
+            return;
+        }
+
+        let state = MotionSampleCacheState::default();
+        let request = MotionSampleRequest {
+            skel_path: skel_path.to_string_lossy().into_owned(),
+            nuanmb_path: anim_path.to_string_lossy().into_owned(),
+            matl_path: None,
+            frame: 0.0,
+            loop_animation: false,
+        };
+        let error = motion_cache_get_or_load(&state, &request)
+            .expect_err("the real motion loading path must reject mismatched skeletons");
+
+        assert!(error.contains("Playback blocked"));
     }
 
     #[test]

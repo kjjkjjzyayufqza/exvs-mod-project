@@ -31,6 +31,11 @@ describe("sampleMotionClipFrame", () => {
   const clip: MotionClip = {
     finalFrameIndex: 2,
     sampledFrameCount: 3,
+    compatibility: {
+      skeletonBoneCount: 1,
+      animationTransformNodeCount: 1,
+      matchedBoneCount: 1,
+    },
     frames: [
       {
         boneLocals: [{ translation: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] }],
@@ -82,6 +87,11 @@ describe("sampleMotionClipFrame", () => {
     const loopClip: MotionClip = {
       finalFrameIndex: 1.5,
       sampledFrameCount: 3,
+      compatibility: {
+        skeletonBoneCount: 1,
+        animationTransformNodeCount: 1,
+        matchedBoneCount: 1,
+      },
       frames: [
         {
           boneLocals: [{ translation: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] }],

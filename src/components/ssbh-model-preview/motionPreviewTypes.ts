@@ -60,6 +60,11 @@ export type MotionClip = {
   finalFrameIndex: number;
   sampledFrameCount: number;
   frames: MotionFrameSample[];
+  compatibility: {
+    skeletonBoneCount: number;
+    animationTransformNodeCount: number;
+    matchedBoneCount: number;
+  };
 };
 
 export type NuanmbManifest = {

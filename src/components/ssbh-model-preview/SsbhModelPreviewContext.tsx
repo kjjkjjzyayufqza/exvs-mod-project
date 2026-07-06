@@ -35,6 +35,7 @@ import {
   type TexturePreviewSlotKey,
 } from "./meshFromSsbh";
 import { clearMeshGeometryRegistry, hydrateBundleGeometry } from "./meshGeometryHydrate";
+import { shouldStartMotionClipLoad } from "./motionClipLoadPolicy";
 import type { NutexbTextureData, NutexbTextureDataMap } from "./ssbhTextureUpload";
 import { decodeSceneNutexbRgba } from "@/page/SceneEdit/utils/sceneTextureDecode";
 import {
@@ -121,6 +122,7 @@ export type PreviewInstanceMotionState = {
   nuanmbPaths: readonly string[];
   selectedNuanmbPath: string | null;
   manifest: NuanmbManifest | null;
+  poseEnabled: boolean;
   playing: boolean;
   loop: boolean;
   speed: number;
@@ -377,6 +379,7 @@ export type SsbhModelPreviewContextValue = {
   pickMotionNuanmbFile: () => Promise<void>;
   pickMotionFolder: () => Promise<void>;
   reloadMotionClip: () => void;
+  resetMotionPose: () => void;
   clearMotion: () => void;
   modelAttachments: readonly PreviewModelAttachment[];
   setModelAttachments: (next: PreviewModelAttachment[]) => void;
@@ -405,6 +408,7 @@ type InternalPreviewInstanceMotionState = {
   nuanmbPaths: string[];
   selectedNuanmbPath: string | null;
   manifest: NuanmbManifest | null;
+  poseEnabled: boolean;
   playing: boolean;
   loop: boolean;
   speed: number;
@@ -414,7 +418,8 @@ type InternalPreviewInstanceMotionState = {
   sampling: boolean;
   sampleError: string | null;
   reloadNonce: number;
-  loadedClipKey: string | null;
+  attemptedManifestPath: string | null;
+  attemptedClipKey: string | null;
 };
 
 function createDefaultMotionState(): InternalPreviewInstanceMotionState {
@@ -422,6 +427,7 @@ function createDefaultMotionState(): InternalPreviewInstanceMotionState {
     nuanmbPaths: [],
     selectedNuanmbPath: null,
     manifest: null,
+    poseEnabled: false,
     playing: false,
     loop: true,
     speed: 1,
@@ -431,7 +437,8 @@ function createDefaultMotionState(): InternalPreviewInstanceMotionState {
     sampling: false,
     sampleError: null,
     reloadNonce: 0,
-    loadedClipKey: null,
+    attemptedManifestPath: null,
+    attemptedClipKey: null,
   };
 }
 
@@ -692,7 +699,7 @@ export function SsbhModelPreviewProvider({
     }
   }, []);
 
-  const clearMotion = useCallback(() => {
+  const clearAllMotion = useCallback(() => {
     setMotionByInstanceId((prev) => {
       const next: Record<string, InternalPreviewInstanceMotionState> = {};
       for (const key of Object.keys(prev)) {
@@ -701,6 +708,36 @@ export function SsbhModelPreviewProvider({
       return next;
     });
     setBonePoseResetNonce((n) => n + 1);
+  }, []);
+
+  const clearMotionForInstance = useCallback((instanceId: string) => {
+    setMotionByInstanceId((prev) => {
+      if (!prev[instanceId]) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [instanceId]: createDefaultMotionState(),
+      };
+    });
+  }, []);
+
+  const resetMotionPoseForInstance = useCallback((instanceId: string) => {
+    setMotionByInstanceId((prev) => {
+      const current = prev[instanceId] ?? createDefaultMotionState();
+      if (!current.poseEnabled && !current.playing && current.frame === 0) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [instanceId]: {
+          ...current,
+          poseEnabled: false,
+          playing: false,
+          frame: 0,
+        },
+      };
+    });
   }, []);
 
   const loadGenerationRef = useRef(0);
@@ -714,9 +751,9 @@ export function SsbhModelPreviewProvider({
     setTextureDataMap(new Map());
     setDrawMaterialBindingsByDrawKey(new Map());
     setTextureDecodeProgressBatched(null);
-    clearMotion();
+    clearAllMotion();
     void clearMeshGeometryRegistry();
-  }, [clearMotion, setTextureDecodeProgressBatched]);
+  }, [clearAllMotion, setTextureDecodeProgressBatched]);
 
   const bumpLoadGeneration = useCallback(() => {
     const gen = loadGenerationRef.current + 1;
@@ -775,7 +812,8 @@ export function SsbhModelPreviewProvider({
           frame: 0,
           playing: false,
           sampleError: null,
-          loadedClipKey: null,
+          attemptedManifestPath: null,
+          attemptedClipKey: null,
           reloadNonce: current.reloadNonce + 1,
         },
       };
@@ -788,7 +826,10 @@ export function SsbhModelPreviewProvider({
     }
     setMotionByInstanceId((prev) => {
       const current = prev[instanceId] ?? createDefaultMotionState();
-      if (Math.abs(current.frame - frame) < 1e-6) {
+      if (
+        Math.abs(current.frame - frame) < 1e-6 &&
+        (current.poseEnabled || current.clip === null)
+      ) {
         return prev;
       }
       return {
@@ -796,6 +837,7 @@ export function SsbhModelPreviewProvider({
         [instanceId]: {
           ...current,
           frame,
+          poseEnabled: current.clip !== null,
           sample: current.clip
             ? {
                 frame,
@@ -812,6 +854,9 @@ export function SsbhModelPreviewProvider({
   const setMotionPlayingForInstance = useCallback((instanceId: string, playing: boolean) => {
     setMotionByInstanceId((prev) => {
       const current = prev[instanceId] ?? createDefaultMotionState();
+      if (playing && (!current.clip || current.sampling || current.sampleError !== null)) {
+        return prev;
+      }
       if (current.playing === playing) {
         return prev;
       }
@@ -820,6 +865,7 @@ export function SsbhModelPreviewProvider({
         [instanceId]: {
           ...current,
           playing,
+          poseEnabled: playing ? true : current.poseEnabled,
         },
       };
     });
@@ -844,12 +890,14 @@ export function SsbhModelPreviewProvider({
         ...(prev[activeId] ?? createDefaultMotionState()),
         nuanmbPaths: [selected],
         selectedNuanmbPath: selected,
+        poseEnabled: false,
         frame: 0,
         playing: false,
         clip: null,
         sample: null,
         sampleError: null,
-        loadedClipKey: null,
+        attemptedManifestPath: null,
+        attemptedClipKey: null,
       },
     }));
   }, [resolvedActivePreviewInstanceId, root]);
@@ -878,12 +926,14 @@ export function SsbhModelPreviewProvider({
         ...(prev[activeId] ?? createDefaultMotionState()),
         nuanmbPaths: listed,
         selectedNuanmbPath: listed[0] ?? null,
+        poseEnabled: false,
         frame: 0,
         playing: false,
         clip: null,
         sample: null,
         sampleError: null,
-        loadedClipKey: null,
+        attemptedManifestPath: null,
+        attemptedClipKey: null,
       },
     }));
   }, [resolvedActivePreviewInstanceId, root]);
@@ -1099,7 +1149,6 @@ export function SsbhModelPreviewProvider({
     if (previewBusy) {
       return;
     }
-    let cancelled = false;
     for (const inst of previewInstances) {
       const current = motionByInstanceId[inst.id] ?? createDefaultMotionState();
       const selectedPath = current.selectedNuanmbPath;
@@ -1109,7 +1158,8 @@ export function SsbhModelPreviewProvider({
           current.clip !== null ||
           current.sample !== null ||
           current.sampleError !== null ||
-          current.loadedClipKey !== null ||
+          current.attemptedManifestPath !== null ||
+          current.attemptedClipKey !== null ||
           current.sampling
         ) {
           setMotionByInstanceId((prev) => ({
@@ -1124,33 +1174,57 @@ export function SsbhModelPreviewProvider({
         continue;
       }
 
-      if (!current.manifest || current.manifest.filePath !== selectedPath) {
+      if (
+        (!current.manifest || current.manifest.filePath !== selectedPath) &&
+        current.attemptedManifestPath !== selectedPath
+      ) {
+        setMotionByInstanceId((prev) => {
+          const p = prev[inst.id];
+          if (!p || p.selectedNuanmbPath !== selectedPath) return prev;
+          return {
+            ...prev,
+            [inst.id]: {
+              ...p,
+              attemptedManifestPath: selectedPath,
+            },
+          };
+        });
         void (async () => {
           try {
             const manifest = await invoke<NuanmbManifest>("ssbh_nuanmb_manifest", { path: selectedPath });
-            if (cancelled) return;
             setMotionByInstanceId((prev) => {
               const p = prev[inst.id];
-              if (!p || p.selectedNuanmbPath !== selectedPath) return prev;
+              if (
+                !p ||
+                p.selectedNuanmbPath !== selectedPath ||
+                p.attemptedManifestPath !== selectedPath
+              ) {
+                return prev;
+              }
               return {
                 ...prev,
                 [inst.id]: { ...p, manifest },
               };
             });
           } catch (e) {
-            if (cancelled) return;
             setMotionByInstanceId((prev) => {
               const p = prev[inst.id];
-              if (!p || p.selectedNuanmbPath !== selectedPath) return prev;
+              if (
+                !p ||
+                p.selectedNuanmbPath !== selectedPath ||
+                p.attemptedManifestPath !== selectedPath
+              ) {
+                return prev;
+              }
               return {
                 ...prev,
                 [inst.id]: {
                   ...p,
                   manifest: null,
-                  sampleError: String(e),
                 },
               };
             });
+            toast.error("Motion metadata unavailable", { description: String(e) });
           }
         })();
       }
@@ -1161,14 +1235,27 @@ export function SsbhModelPreviewProvider({
         setMotionByInstanceId((prev) => {
           const p = prev[inst.id];
           if (!p || p.selectedNuanmbPath !== selectedPath) return prev;
+          const message = "Active instance has no skeleton path for motion sampling.";
+          if (
+            !p.poseEnabled &&
+            !p.playing &&
+            p.clip === null &&
+            p.sample === null &&
+            p.attemptedClipKey === null &&
+            p.sampleError === message
+          ) {
+            return prev;
+          }
           return {
             ...prev,
             [inst.id]: {
               ...p,
+              poseEnabled: false,
+              playing: false,
               clip: null,
               sample: null,
-              loadedClipKey: null,
-              sampleError: "Active instance has no skeleton path for motion sampling.",
+              attemptedClipKey: null,
+              sampleError: message,
             },
           };
         });
@@ -1176,10 +1263,15 @@ export function SsbhModelPreviewProvider({
       }
 
       const loadKey = `${skelPath}\n${selectedPath}\n${matlPath ?? ""}\n${current.reloadNonce}`;
-      if (current.loadedClipKey === loadKey && current.clip !== null) {
-        continue;
-      }
-      if (current.sampling) {
+      if (
+        !shouldStartMotionClipLoad({
+          loadKey,
+          attemptedLoadKey: current.attemptedClipKey,
+          hasClip: current.clip !== null,
+          sampling: current.sampling,
+          sampleError: current.sampleError,
+        })
+      ) {
         continue;
       }
       setMotionByInstanceId((prev) => {
@@ -1191,6 +1283,7 @@ export function SsbhModelPreviewProvider({
             ...p,
             sampling: true,
             sampleError: null,
+            attemptedClipKey: loadKey,
           },
         };
       });
@@ -1203,14 +1296,20 @@ export function SsbhModelPreviewProvider({
               matlPath,
             },
           });
-          if (cancelled) return;
           setMotionByInstanceId((prev) => {
             const p = prev[inst.id];
-            if (!p || p.selectedNuanmbPath !== selectedPath) return prev;
+            if (
+              !p ||
+              p.selectedNuanmbPath !== selectedPath ||
+              p.attemptedClipKey !== loadKey
+            ) {
+              return prev;
+            }
             return {
               ...prev,
               [inst.id]: {
                 ...p,
+                poseEnabled: true,
                 clip,
                 sample:
                   clip.frames.length > 0
@@ -1221,34 +1320,38 @@ export function SsbhModelPreviewProvider({
                         elapsedMs: 0,
                       }
                     : null,
-                loadedClipKey: loadKey,
                 sampling: false,
               },
             };
           });
         } catch (e) {
-          if (cancelled) return;
+          const message = String(e);
           setMotionByInstanceId((prev) => {
             const p = prev[inst.id];
-            if (!p || p.selectedNuanmbPath !== selectedPath) return prev;
+            if (
+              !p ||
+              p.selectedNuanmbPath !== selectedPath ||
+              p.attemptedClipKey !== loadKey
+            ) {
+              return prev;
+            }
             return {
               ...prev,
               [inst.id]: {
                 ...p,
+                poseEnabled: false,
+                playing: false,
                 clip: null,
                 sample: null,
-                loadedClipKey: null,
                 sampling: false,
-                sampleError: String(e),
+                sampleError: message,
               },
             };
           });
+          toast.error("Motion cannot play", { description: message });
         }
       })();
     }
-    return () => {
-      cancelled = true;
-    };
   }, [previewInstances, motionByInstanceId, previewBusy]);
 
   const activeMotionState = useMemo(() => {
@@ -1295,13 +1398,15 @@ export function SsbhModelPreviewProvider({
         [instanceId]: {
           ...current,
           selectedNuanmbPath: path,
+          poseEnabled: false,
           frame: 0,
           playing: false,
           clip: null,
           sample: null,
           manifest: null,
           sampleError: null,
-          loadedClipKey: null,
+          attemptedManifestPath: null,
+          attemptedClipKey: null,
         },
       };
     });
@@ -1355,6 +1460,18 @@ export function SsbhModelPreviewProvider({
     reloadMotionClipForInstance(instanceId);
   }, [resolvedActivePreviewInstanceId, reloadMotionClipForInstance]);
 
+  const resetMotionPose = useCallback(() => {
+    const instanceId = resolvedActivePreviewInstanceId;
+    if (!instanceId) return;
+    resetMotionPoseForInstance(instanceId);
+  }, [resolvedActivePreviewInstanceId, resetMotionPoseForInstance]);
+
+  const clearMotion = useCallback(() => {
+    const instanceId = resolvedActivePreviewInstanceId;
+    if (!instanceId) return;
+    clearMotionForInstance(instanceId);
+  }, [clearMotionForInstance, resolvedActivePreviewInstanceId]);
+
   const motionStatesByInstanceId = useMemo<ReadonlyMap<string, PreviewInstanceMotionState>>(() => {
     const map = new Map<string, PreviewInstanceMotionState>();
     for (const inst of previewInstances) {
@@ -1363,6 +1480,7 @@ export function SsbhModelPreviewProvider({
         nuanmbPaths: current.nuanmbPaths,
         selectedNuanmbPath: current.selectedNuanmbPath,
         manifest: current.manifest,
+        poseEnabled: current.poseEnabled,
         playing: current.playing,
         loop: current.loop,
         speed: current.speed,
@@ -1765,13 +1883,13 @@ export function SsbhModelPreviewProvider({
     setHiddenPreviewInstanceIds(new Set());
     setLoadError(null);
     setDrawError(null);
-    clearMotion();
+    clearAllMotion();
     clearMemoryWorkspaceIfDisposed(memorySessionIds);
     void disposeMemorySessions(memorySessionIds);
   }, [
     loading,
     textureDecodeProgress,
-    clearMotion,
+    clearAllMotion,
     clearMemoryWorkspaceIfDisposed,
     disposeMemorySessions,
     previewInstances,
@@ -1832,8 +1950,8 @@ export function SsbhModelPreviewProvider({
     setBoneTransformMode("translate");
     setBonePoseHistory({ undoStack: [], redoStack: [], applyNonce: 0, applyData: null });
     setFitRequestId((r) => r + 1);
-    clearMotion();
-  }, [clearMotion]);
+    clearAllMotion();
+  }, [clearAllMotion]);
 
   const clearRecentModelPaths = useCallback(() => {
     writeRecentModelPathsToStorage([]);
@@ -2349,6 +2467,7 @@ export function SsbhModelPreviewProvider({
       pickMotionNuanmbFile,
       pickMotionFolder,
       reloadMotionClip,
+      resetMotionPose,
       clearMotion,
       modelAttachments,
       setModelAttachments,
@@ -2475,6 +2594,7 @@ export function SsbhModelPreviewProvider({
       pickMotionNuanmbFile,
       pickMotionFolder,
       reloadMotionClip,
+      resetMotionPose,
       clearMotion,
       modelAttachments,
       setModelAttachments,

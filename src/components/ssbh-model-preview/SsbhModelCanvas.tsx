@@ -29,6 +29,11 @@ import type {
   MotionVisibilityRow,
 } from "./motionPreviewTypes";
 import { filterDrawsForMotionSkinning, resolveDrawVisibility } from "./motionVisibility";
+import {
+  resolveMotionInstanceRenderState,
+  shouldSyncPlaybackFrame,
+  type MotionPlaybackFrameObservation,
+} from "./motionInstancePipeline";
 import { advanceMotionFrame } from "./motionPlaybackMath";
 import {
   Bone,
@@ -1076,6 +1081,7 @@ const Scene = memo(function Scene({
   const regress = useThree((s) => s.performance.regress);
   const invalidate = useThree((s) => s.invalidate);
   const playbackFrameRef = useRef<Map<string, number>>(new Map());
+  const playbackObservationRef = useRef<Map<string, MotionPlaybackFrameObservation>>(new Map());
   const lastSlowFrameLogMsRef = useRef(0);
   const lastAppliedScrubFrameRef = useRef<number | null>(null);
   const activeMotionState =
@@ -1104,11 +1110,26 @@ const Scene = memo(function Scene({
   });
 
   useEffect(() => {
-    if (!motionControlInstanceId || !activeMotionState) {
-      return;
+    const instanceIds = new Set(motionStatesByInstanceId.keys());
+    for (const [instanceId, state] of motionStatesByInstanceId) {
+      const nextObservation: MotionPlaybackFrameObservation = {
+        frame: state.frame,
+        clip: state.clip,
+        poseEnabled: state.poseEnabled,
+      };
+      const previousObservation = playbackObservationRef.current.get(instanceId) ?? null;
+      if (shouldSyncPlaybackFrame(previousObservation, nextObservation)) {
+        playbackFrameRef.current.set(instanceId, state.frame);
+      }
+      playbackObservationRef.current.set(instanceId, nextObservation);
     }
-    playbackFrameRef.current.set(motionControlInstanceId, activeMotionState.frame);
-  }, [motionControlInstanceId, activeMotionState]);
+    for (const instanceId of playbackObservationRef.current.keys()) {
+      if (!instanceIds.has(instanceId)) {
+        playbackObservationRef.current.delete(instanceId);
+        playbackFrameRef.current.delete(instanceId);
+      }
+    }
+  }, [motionStatesByInstanceId]);
 
   const handlePerformanceInteraction = useCallback(() => {
     regress();
@@ -1213,12 +1234,14 @@ const Scene = memo(function Scene({
       }
       const motionState = motionStatesByInstanceId.get(inst.id) ?? null;
       const isScrubTarget = motionScrubbing && motionControlInstanceId === inst.id;
-      const isPlaying = Boolean(motionState?.playing && motionState.clip);
+      const isPlaying = Boolean(motionState?.poseEnabled && motionState.playing && motionState.clip);
       if (isScrubTarget || isPlaying) {
         continue;
       }
       const sampledLocals =
-        motionState?.sample && motionState.sample.boneLocals.length === runtime.bones.length
+        motionState?.poseEnabled &&
+        motionState.sample &&
+        motionState.sample.boneLocals.length === runtime.bones.length
           ? motionState.sample.boneLocals
           : null;
       if (sampledLocals) {
@@ -1261,6 +1284,7 @@ const Scene = memo(function Scene({
       } else if (f > maxIndex) {
         f = maxIndex;
       }
+      playbackFrameRef.current.set(motionControlInstanceId, f);
       const currentIndex = Math.floor(f);
       const nextIndex = activeLoop ? (currentIndex + 1) % frameCount : Math.min(currentIndex + 1, maxIndex);
       const factor = f - currentIndex;
@@ -1343,7 +1367,7 @@ const Scene = memo(function Scene({
     let cameraFactor = 0;
     let cameraHasData = false;
     for (const [instanceId, motionState] of motionStatesByInstanceId.entries()) {
-      if (!motionState.playing || !motionState.clip) {
+      if (!motionState.poseEnabled || !motionState.playing || !motionState.clip) {
         continue;
       }
       const runtime = gpuRuntimeByInstance.get(instanceId);
@@ -1551,8 +1575,6 @@ const Scene = memo(function Scene({
     return new Vector3(directionalX, directionalY, directionalZ);
   }, [motionApplyLighting, activeMotionSample, directionalX, directionalY, directionalZ]);
 
-  const motionDriving = anyMotionPlaying;
-
   return (
     <>
       <color attach="background" args={[background]} />
@@ -1585,7 +1607,7 @@ const Scene = memo(function Scene({
           const isInteractionTarget = isActive;
           const instSkel = inst.bundle.skel ? (inst.bundle.skel as SkelDataJson) : null;
           const instMotionState = motionStatesByInstanceId.get(inst.id) ?? null;
-          const instMotionSample = instMotionState?.sample ?? null;
+          const instMotionSample = instMotionState?.poseEnabled ? (instMotionState.sample ?? null) : null;
           const instMotionLocals =
             instMotionSample && instSkel?.bones?.length === instMotionSample.boneLocals.length
               ? instMotionSample.boneLocals
@@ -1593,9 +1615,17 @@ const Scene = memo(function Scene({
           const skelHasBones = instSkel !== null && instSkel.bones.length > 0;
           const showStaticSkeleton =
             showSkeleton && !skelHasBones && Boolean(skeletonGeometry) && isInteractionTarget;
-          const motionPoseActive = isActive && (Boolean(instMotionState?.playing) || motionScrubbing || Boolean(instMotionLocals?.length));
           const gpuRuntime = gpuRuntimeByInstance.get(inst.id) ?? null;
-          const gpuSkinningActive = isActive && motionPoseActive && gpuRuntime !== null;
+          const renderState = resolveMotionInstanceRenderState({
+            isActive,
+            hasRuntime: gpuRuntime !== null,
+            poseEnabled: Boolean(instMotionState?.poseEnabled) || (motionScrubbing && isActive),
+            playing: Boolean(instMotionState?.playing) || (motionScrubbing && isActive),
+            hasMotionSample: Boolean(instMotionLocals),
+            skeletonBoneCount: instSkel?.bones.length ?? 0,
+            sampledBoneCount: instMotionLocals?.length ?? 0,
+          });
+          const { motionPoseActive, gpuSkinningActive } = renderState;
           const gpuSkeleton = gpuSkinningActive ? gpuRuntime!.skeleton : null;
           const skinningDraws = filterDrawsForMotionSkinning(
             instDraws,
@@ -1641,13 +1671,15 @@ const Scene = memo(function Scene({
                   onBonePoseApplyConsumed={onBonePoseApplyConsumed}
                   onBonePoseCommit={onBonePoseCommit}
                   motionBoneLocals={
-                    isActive && instMotionLocals && instMotionLocals.length === instSkel!.bones.length
+                    renderState.boneEditingEnabled &&
+                    instMotionLocals &&
+                    instMotionLocals.length === instSkel!.bones.length
                       ? instMotionLocals
                       : null
                   }
                   motionPoseActive={motionPoseActive}
                   gpuSkinningActive={gpuSkinningActive}
-                  motionDriving={motionDriving}
+                  motionDriving={Boolean(instMotionState?.playing)}
                 />
               ) : null}
               <DrawMeshes
@@ -1660,11 +1692,21 @@ const Scene = memo(function Scene({
                 normalMapEnabled={normalMapEnabled}
                 visibleKeys={visibleKeys}
                 wireframe={wireframe}
-                ignoreMeshRaycastForBonePicking={anyMotionPlaying || motionScrubbing || (skelHasBones && isActive)}
+                ignoreMeshRaycastForBonePicking={
+                  Boolean(instMotionState?.playing) ||
+                  (motionScrubbing && isActive) ||
+                  (skelHasBones && isActive)
+                }
                 previewRenderStyle={previewRenderStyle}
                 animeKeyLightDir={animeKeyLightDir}
                 selectionOutline={isActive}
-                motionVisibilityRows={anyMotionPlaying || motionScrubbing ? null : isActive ? (instMotionSample?.visibility ?? null) : null}
+                motionVisibilityRows={
+                  instMotionState?.playing || (motionScrubbing && isActive)
+                    ? null
+                    : isActive
+                      ? (instMotionSample?.visibility ?? null)
+                      : null
+                }
                 skeleton={gpuSkeleton}
                 motionForceVisibleDuringPlayback={motionForceVisibleDuringPlayback}
               />
@@ -1715,7 +1757,7 @@ const Scene = memo(function Scene({
       )}
 
       <MotionCameraController
-        enabled={!anyMotionPlaying && motionApplyCamera && Boolean(activeMotionSample?.camera)}
+        enabled={!activeMotionState?.playing && motionApplyCamera && Boolean(activeMotionSample?.camera)}
         sample={activeMotionSample?.camera ?? null}
         controlsRef={controlsRef}
       />

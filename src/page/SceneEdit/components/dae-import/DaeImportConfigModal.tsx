@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { DaeImportAnalysisPanel } from "./DaeImportAnalysisPanel";
+import { DaeImportConfigProfileSelector } from "./DaeImportConfigProfileSelector";
 import { DaeImportSsbhFullPanel } from "./DaeImportSsbhFullPanel";
 import { DaeImportHktConfigPanel } from "./DaeImportHktConfigPanel";
 import type {
@@ -35,6 +36,11 @@ import {
 import { SCENE_EDIT_RND_SIZE_KEYS } from "../sceneEditRndSizePersistence";
 import { SceneEditRndModalShell } from "../SceneEditRndModalShell";
 import type { ModalViewportSuspendInteraction } from "../SceneEditRndModalShell";
+import {
+  applyDaeImportConfigProfileSnapshot,
+  captureDaeImportConfigProfileSnapshot,
+  type DaeImportConfigProfileSnapshot,
+} from "./daeImportConfigProfiles";
 
 export type DaeImportPrimaryMode = "preview" | "ssbh";
 export type DaeImportWorkflowMode = "standard" | "batchDisk" | "unitModel";
@@ -249,6 +255,29 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
     onConfigChange(entry.importId, { ...config, ...partial });
   };
 
+  const captureImportConfigProfile = useCallback(
+    () =>
+      captureDaeImportConfigProfileSnapshot(
+        config,
+        useDaeSsbhSessionStore.getState(),
+      ),
+    [config],
+  );
+
+  const applyImportConfigProfile = useCallback(
+    (snapshot: DaeImportConfigProfileSnapshot) => {
+      const applied = applyDaeImportConfigProfileSnapshot(
+        config,
+        useDaeSsbhSessionStore.getState(),
+        snapshot,
+        unitModelMode,
+      );
+      useDaeSsbhSessionStore.setState(applied.sessionPatch);
+      onConfigChange(entry.importId, applied.config);
+    },
+    [config, entry.importId, onConfigChange, unitModelMode],
+  );
+
   const setPrimaryMode = (mode: DaeImportPrimaryMode) => {
     updateConfig({
       loadToScene: mode === "preview",
@@ -281,6 +310,13 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
   return (
     <div className="flex h-full min-h-0 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto">
+          {unitModelMode ? (
+            <DaeImportConfigProfileSelector
+              captureSnapshot={captureImportConfigProfile}
+              onApply={applyImportConfigProfile}
+            />
+          ) : null}
+
           <DaeImportAnalysisPanel
             analysis={entry.analysis}
             analyzing={entry.analyzing}
