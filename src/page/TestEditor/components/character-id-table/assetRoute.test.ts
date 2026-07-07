@@ -48,4 +48,23 @@ describe("character asset routes", () => {
       `E:/workspace/${prefix}/0xBDBE6FEA_structure.json`,
     );
   });
+
+  it("does not probe filesystem paths for empty asset values", async () => {
+    existsMock.mockClear();
+
+    const ref = await getAssetRefInfo({
+      fieldKey: "Model",
+      value: 0,
+      obDplCachePath: "E:/OB/dplcache",
+      obModPath: "E:/OB/mod",
+      workspaceRoot: "E:/workspace",
+      workspaceDocument: DEFAULT_TEST_EDITOR_WORKSPACE,
+    });
+
+    expect(ref.hashHex).toBe("0x00000000");
+    expect(ref.sourceExists).toBe(false);
+    expect(ref.modExists).toBe(false);
+    expect(ref.workspaceExists).toBe(false);
+    expect(existsMock).not.toHaveBeenCalled();
+  });
 });

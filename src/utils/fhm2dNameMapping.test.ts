@@ -10,7 +10,7 @@ describe("fhm2dNameMapping", () => {
   it("maps the EXVS2 effect hash from meta evidence", () => {
     const entry = findFhm2dNameMapping("0xF6954689", { routeId: "unit.effect" });
 
-    expect(entry?.name).toBe("001gundam_002chrgel_001");
+    expect(entry?.name).toBe("chara_001gundam_001gundam_002chrgel_001");
     expect(entry?.confidence).toBe("exact-meta-path");
     expect(entry?.packagePath).toBe("006effect/chara/001gundam/001gundam_002chrgel_001");
     expect(entry?.character?.characterId).toBe(1002001);
@@ -29,7 +29,7 @@ describe("fhm2dNameMapping", () => {
         routePrefix: "006effect",
         fallbackName: "Effect_F6954689",
       }),
-    ).toBe("001gundam_002chrgel_001");
+    ).toBe("chara_001gundam_001gundam_002chrgel_001");
   });
 
   it("returns a sanitized fallback when no mapping exists", () => {
@@ -44,7 +44,7 @@ describe("fhm2dNameMapping", () => {
   it("keeps OB ai-string inferred mappings available", () => {
     const entry = findFhm2dNameMapping("0x46DE9B9C", { routeId: "unit.model" });
 
-    expect(entry?.name).toBe("gundam_005gyan00");
+    expect(entry?.name).toBe("001gundam_005gyan00_001_46de9b9c");
     expect(entry?.confidence).toBe("inferred-ob-ai-string");
     expect(entry?.character?.characterId).toBe(1005001);
   });
@@ -78,17 +78,17 @@ describe("fhm2dNameMapping", () => {
     const mscEntry = findFhm2dNameMapping("0x19CE466D", { routeId: "unit.msc" });
     const paramEntry = findFhm2dNameMapping("0x48357C75", { routeId: "unit.param" });
 
-    expect(mscEntry?.name).toBe("suisei_001aerial");
+    expect(mscEntry?.name).toBe("066suisei_001aerial_001");
     expect(mscEntry?.confidence).toBe("ob-unit-list");
     expect(mscEntry?.character?.characterId).toBe(66001001);
-    expect(paramEntry?.name).toBe("suisei_001aerial");
+    expect(paramEntry?.name).toBe("066suisei_001aerial_001");
     expect(paramEntry?.confidence).toBe("ob-unit-list");
   });
 
   it("maps OB param workspaces from chrsysparam unit IDs", () => {
     const entry = findFhm2dNameMapping("0x35B195CC", { routeId: "unit.param" });
 
-    expect(entry?.name).toBe("gundam_005gyan00_35b195cc");
+    expect(entry?.name).toBe("001gundam_005gyan00_001_35b195cc");
     expect(entry?.confidence).toBe("ob-param-unit-id");
     expect(entry?.character?.characterId).toBe(1005001);
   });

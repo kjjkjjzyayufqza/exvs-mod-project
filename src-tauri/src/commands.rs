@@ -881,6 +881,20 @@ fn move_legacy_workspace_content_impl(
     let configured_struct =
         configured_asset_root_dir.join(format!("{normalized_hash}_structure.json"));
 
+    move_legacy_workspace_content_paths_impl(
+        &source_folder,
+        &source_struct,
+        &configured_folder,
+        &configured_struct,
+    )
+}
+
+fn move_legacy_workspace_content_paths_impl(
+    source_folder: &Path,
+    source_struct: &Path,
+    configured_folder: &Path,
+    configured_struct: &Path,
+) -> Result<MoveLegacyWorkspaceContentResult, String> {
     if source_folder == configured_folder || source_struct == configured_struct {
         return Err("Legacy and configured workspace paths are identical".to_string());
     }
@@ -908,6 +922,13 @@ fn move_legacy_workspace_content_impl(
             configured_struct.display()
         ));
     }
+
+    let configured_asset_root_dir = configured_folder.parent().ok_or_else(|| {
+        format!(
+            "Configured pack folder has no parent directory: {}",
+            configured_folder.display()
+        )
+    })?;
 
     fs::create_dir_all(configured_asset_root_dir).map_err(|e| {
         format!(
@@ -948,15 +969,17 @@ fn move_legacy_workspace_content_impl(
 
 #[tauri::command]
 pub async fn move_legacy_workspace_content(
-    legacy_asset_root_dir: String,
-    configured_asset_root_dir: String,
-    hash_hex: String,
+    source_folder_path: String,
+    source_structure_json_path: String,
+    configured_folder_path: String,
+    configured_structure_json_path: String,
 ) -> Result<MoveLegacyWorkspaceContentResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        move_legacy_workspace_content_impl(
-            &PathBuf::from(legacy_asset_root_dir),
-            &PathBuf::from(configured_asset_root_dir),
-            &hash_hex,
+        move_legacy_workspace_content_paths_impl(
+            &PathBuf::from(source_folder_path),
+            &PathBuf::from(source_structure_json_path),
+            &PathBuf::from(configured_folder_path),
+            &PathBuf::from(configured_structure_json_path),
         )
     })
     .await
@@ -2047,6 +2070,41 @@ mod character_asset_command_tests {
         assert_eq!(
             result.configured_folder_path,
             normalize_path(&configured_root.join("0x036B9E67"))
+        );
+    }
+
+    #[test]
+    fn move_legacy_workspace_content_moves_to_resolved_named_configured_paths() {
+        let workspace = tempfile::tempdir().unwrap();
+        let legacy_root = workspace.path();
+        seed_pack_pair(legacy_root, "0xFF832E7F");
+
+        let source_folder = legacy_root.join("0xFF832E7F");
+        let source_struct = legacy_root.join("0xFF832E7F_structure.json");
+        let configured_root = workspace.path().join("041cpm");
+        let configured_folder = configured_root.join("for_outgame");
+        let configured_struct = configured_root.join("for_outgame_structure.json");
+
+        let result = move_legacy_workspace_content_paths_impl(
+            &source_folder,
+            &source_struct,
+            &configured_folder,
+            &configured_struct,
+        )
+        .unwrap();
+
+        assert!(!source_folder.exists());
+        assert!(!source_struct.exists());
+        assert!(configured_folder.is_dir());
+        assert!(configured_struct.is_file());
+        assert!(configured_folder.join("asset.bin").is_file());
+        assert_eq!(
+            result.configured_folder_path,
+            normalize_path(&configured_folder)
+        );
+        assert_eq!(
+            result.configured_structure_json_path,
+            normalize_path(&configured_struct)
         );
     }
 

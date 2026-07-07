@@ -18,10 +18,10 @@ function legacyCharacterIdContent(): ResolvedWorkspaceContentLocation {
       prefix: "012list",
       routeRootPath: "E:/workspace/012list",
       hashHex: "0x036B9E67",
-      folderPath: "E:/workspace/012list/0x036B9E67",
-      structureJsonPath: "E:/workspace/012list/0x036B9E67_structure.json",
-      packKey: "012list/0x036B9E67",
-      filePath: "E:/workspace/012list/0x036B9E67/character_id_table.bin",
+      folderPath: "E:/workspace/012list/characteridtable",
+      structureJsonPath: "E:/workspace/012list/characteridtable_structure.json",
+      packKey: "012list/characteridtable",
+      filePath: "E:/workspace/012list/characteridtable/character_id_table.bin",
     },
     existing: {
       routeId: "list.character",
@@ -48,18 +48,19 @@ describe("moveLegacyWorkspaceContentToConfigured", () => {
     invokeMock.mockResolvedValue({
       sourceFolderPath: "E:/workspace/0x036B9E67",
       sourceStructureJsonPath: "E:/workspace/0x036B9E67_structure.json",
-      configuredFolderPath: "E:/workspace/012list/0x036B9E67",
-      configuredStructureJsonPath: "E:/workspace/012list/0x036B9E67_structure.json",
+      configuredFolderPath: "E:/workspace/012list/characteridtable",
+      configuredStructureJsonPath: "E:/workspace/012list/characteridtable_structure.json",
     });
 
     const result = await moveLegacyWorkspaceContentToConfigured(legacyCharacterIdContent());
 
     expect(invokeMock).toHaveBeenCalledWith("move_legacy_workspace_content", {
-      legacyAssetRootDir: "E:/workspace",
-      configuredAssetRootDir: "E:/workspace/012list",
-      hashHex: "0x036B9E67",
+      sourceFolderPath: "E:/workspace/0x036B9E67",
+      sourceStructureJsonPath: "E:/workspace/0x036B9E67_structure.json",
+      configuredFolderPath: "E:/workspace/012list/characteridtable",
+      configuredStructureJsonPath: "E:/workspace/012list/characteridtable_structure.json",
     });
-    expect(result.configuredFolderPath).toBe("E:/workspace/012list/0x036B9E67");
+    expect(result.configuredFolderPath).toBe("E:/workspace/012list/characteridtable");
   });
 
   it("rejects content that is already using the configured route", async () => {

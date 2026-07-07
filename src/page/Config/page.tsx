@@ -13,14 +13,15 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useForm } from 'react-hook-form';
 import { FilePathInput } from '../../components/ui/filePathInput';
-import { useConfigStore } from '../../store/configStore';
+import { CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY, useConfigStore } from '../../store/configStore';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 
 const formSchema = z.object({
   obDplCachePath: z.string(),
   obModPath: z.string(),
-  extractOutputPath: z.string()
+  extractOutputPath: z.string(),
+  characterIdDebugMscOutputPath: z.string(),
 })
 
 export default function ConfigPage() {
@@ -32,6 +33,7 @@ export default function ConfigPage() {
       obDplCachePath: "",
       obModPath: "",
       extractOutputPath: "",
+      characterIdDebugMscOutputPath: "",
     },
   })
 
@@ -45,6 +47,9 @@ export default function ConfigPage() {
       
       const extractOutputPath: string = await store.get("extractOutputPath") || "";
       form.setValue("extractOutputPath", extractOutputPath);
+
+      const characterIdDebugMscOutputPath: string = await store.get(CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY) || "";
+      form.setValue("characterIdDebugMscOutputPath", characterIdDebugMscOutputPath);
     }
   }
 
@@ -57,6 +62,7 @@ export default function ConfigPage() {
     await setSetting("obDplCachePath", data.obDplCachePath);
     await setSetting("obModPath", data.obModPath);
     await setSetting("extractOutputPath", data.extractOutputPath);
+    await setSetting(CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY, data.characterIdDebugMscOutputPath);
     toast("Configuration saved successfully");
   }
 
@@ -146,6 +152,31 @@ export default function ConfigPage() {
                       </FormControl>
                       <FormDescription>
                         Default directory for extracted files
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="characterIdDebugMscOutputPath"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Character ID Debug MSC Output Root</FormLabel>
+                      <FormControl>
+                        <FilePathInput
+                          placeholder="Select MSC debug output root..."
+                          {...field}
+                          storeKey={CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY}
+                          picker={{
+                            kind: "folder",
+                            multiple: false,
+                          }}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Root folder for Debug Extract All MSC; the 040msc route folder is appended automatically
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

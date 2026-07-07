@@ -27,6 +27,9 @@ export interface AssetRefInfo {
   hashHex: string;
   sourceFilePath: string; // Expected path in OB dplcache
   modFilePath: string; // Expected path in OB mod directory
+  sourceExists: boolean;
+  modExists: boolean;
+  workspaceExists: boolean;
   workspacePack: ExistingFhm2dPackResolution;
   workspaceFolderPath: string; // Compatibility alias for the existing or configured workspace folder.
   isModel: boolean;
@@ -47,13 +50,21 @@ export interface GetAssetRefInfoParams {
   workspaceDocument: TestEditorWorkspaceDocument;
 }
 
-async function resolveFhm2dPath(baseDir: string, hashHex: string): Promise<string> {
-  if (!baseDir) return '';
+async function resolveFhm2dPath(baseDir: string, hashHex: string): Promise<{
+  filePath: string;
+  exists: boolean;
+}> {
+  if (!baseDir) return { filePath: "", exists: false };
   const sourceUpper = await join(baseDir, `${hashHex}.fhm2d`);
   const sourceLower = await join(baseDir, `${hashHex.toLowerCase()}.fhm2d`);
-  if (await exists(sourceUpper)) return sourceUpper;
-  if (await exists(sourceLower)) return sourceLower;
-  return sourceUpper;
+  if (await exists(sourceUpper)) return { filePath: sourceUpper, exists: true };
+  if (await exists(sourceLower)) return { filePath: sourceLower, exists: true };
+  return { filePath: sourceUpper, exists: false };
+}
+
+async function buildDefaultFhm2dPath(baseDir: string, hashHex: string): Promise<string> {
+  if (!baseDir) return "";
+  return join(baseDir, `${hashHex}.fhm2d`);
 }
 
 export function getCharacterAssetRouteId(fieldKey: string): string {
@@ -106,27 +117,61 @@ export async function getAssetRefInfo(
   const isMotionAsset = lower === "motion";
   const isSoundAsset = lower === "sound";
 
-  // Construct paths
-  // Source: {obDplCachePath}\0x{HEX}.fhm2d
-  // Read paths should tolerate existing lowercase file names.
-  const sourceFilePath = await resolveFhm2dPath(params.obDplCachePath, hashHex);
-  const modFilePath = await resolveFhm2dPath(params.obModPath, hashHex);
-  
-  const workspacePack = workspaceRoot
-    ? await resolveExistingFhm2dPack(workspaceRoot, workspaceDocument, routeId, hashHex)
-    : {
-        configured: await resolveFhm2dPackPaths(
+  if (params.value === 0) {
+    const [sourceFilePath, modFilePath, configured] = await Promise.all([
+      buildDefaultFhm2dPath(params.obDplCachePath, hashHex),
+      buildDefaultFhm2dPath(params.obModPath, hashHex),
+      resolveFhm2dPackPaths(workspaceRoot, workspaceDocument, routeId, hashHex),
+    ]);
+    const workspacePack: ExistingFhm2dPackResolution = {
+      configured,
+      existing: null,
+      sourceLayout: "missing",
+      folderExists: false,
+      structureJsonExists: false,
+      duplicateLayout: false,
+    };
+
+    return {
+      fieldKey,
+      routeId,
+      rawValue: params.value,
+      hashHex,
+      sourceFilePath,
+      modFilePath,
+      sourceExists: false,
+      modExists: false,
+      workspaceExists: false,
+      workspacePack,
+      workspaceFolderPath: configured.folderPath,
+      isModel,
+      isEffectAsset,
+      isParamAsset,
+      isMscAsset,
+      isMotionAsset,
+      isSoundAsset,
+    };
+  }
+
+  const [sourceFile, modFile, workspacePack] = await Promise.all([
+    resolveFhm2dPath(params.obDplCachePath, hashHex),
+    resolveFhm2dPath(params.obModPath, hashHex),
+    workspaceRoot
+      ? resolveExistingFhm2dPack(workspaceRoot, workspaceDocument, routeId, hashHex)
+      : resolveFhm2dPackPaths(
           "",
           workspaceDocument,
           routeId,
           hashHex,
-        ),
-        existing: null,
-        sourceLayout: "missing" as const,
-        folderExists: false,
-        structureJsonExists: false,
-        duplicateLayout: false,
-      };
+        ).then((configured) => ({
+          configured,
+          existing: null,
+          sourceLayout: "missing" as const,
+          folderExists: false,
+          structureJsonExists: false,
+          duplicateLayout: false,
+        })),
+  ]);
   const workspaceFolderPath =
     workspacePack.existing?.folderPath ?? workspacePack.configured.folderPath;
 
@@ -135,8 +180,11 @@ export async function getAssetRefInfo(
     routeId,
     rawValue: params.value,
     hashHex,
-    sourceFilePath,
-    modFilePath,
+    sourceFilePath: sourceFile.filePath,
+    modFilePath: modFile.filePath,
+    sourceExists: sourceFile.exists,
+    modExists: modFile.exists,
+    workspaceExists: Boolean(workspacePack.existing),
     workspacePack,
     workspaceFolderPath,
     isModel,

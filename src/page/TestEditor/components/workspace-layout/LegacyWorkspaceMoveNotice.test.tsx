@@ -59,9 +59,9 @@ describe("LegacyWorkspaceMoveNotice", () => {
         prefix: "041cpm",
         routeRootPath: "E:/workspace/041cpm",
         hashHex: "0xFF832E7F",
-        folderPath: "E:/workspace/041cpm/0xFF832E7F",
-        structureJsonPath: "E:/workspace/041cpm/0xFF832E7F_structure.json",
-        packKey: "041cpm/0xFF832E7F",
+        folderPath: "E:/workspace/041cpm/for_outgame",
+        structureJsonPath: "E:/workspace/041cpm/for_outgame_structure.json",
+        packKey: "041cpm/for_outgame",
         filePath: null,
       },
       existing: {
@@ -83,8 +83,8 @@ describe("LegacyWorkspaceMoveNotice", () => {
     moveLegacyWorkspaceContentMock.mockResolvedValue({
       sourceFolderPath: "E:/workspace/0xFF832E7F",
       sourceStructureJsonPath: "E:/workspace/0xFF832E7F_structure.json",
-      configuredFolderPath: "E:/workspace/041cpm/0xFF832E7F",
-      configuredStructureJsonPath: "E:/workspace/041cpm/0xFF832E7F_structure.json",
+      configuredFolderPath: "E:/workspace/041cpm/for_outgame",
+      configuredStructureJsonPath: "E:/workspace/041cpm/for_outgame_structure.json",
     });
 
     render(
@@ -93,7 +93,7 @@ describe("LegacyWorkspaceMoveNotice", () => {
         workspaceDocument={DEFAULT_TEST_EDITOR_WORKSPACE}
         contentId="character-cost"
         sourceLayout="legacy"
-        configuredPath="E:/workspace/041cpm/0xFF832E7F"
+        configuredPath="E:/workspace/041cpm/for_outgame"
         onMoved={onMoved}
       />,
     );

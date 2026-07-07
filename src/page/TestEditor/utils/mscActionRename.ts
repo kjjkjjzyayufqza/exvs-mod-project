@@ -70,9 +70,60 @@ function readFunctionBody(source: string, signatureRegex: RegExp): string {
   throw new Error("MSC action rename: unterminated func_143 body");
 }
 
-function extractMaskFromConditions(conditions: string[]): string | null {
+function inferActionMaskGlobal(script0Content: string, body: string): string | null {
+  const candidates = new Map<string, { masks: Set<string>; occurrenceCount: number }>();
+  const maskConditionRegex = /\b(global\d+)\s*&\s*(0x[0-9a-fA-F]+)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = maskConditionRegex.exec(body)) !== null) {
+    const globalName = match[1];
+    const maskHex = match[2].toLowerCase();
+    if (!ACTION_BY_MASK[maskHex]) {
+      continue;
+    }
+
+    const candidate = candidates.get(globalName) ?? {
+      masks: new Set<string>(),
+      occurrenceCount: 0,
+    };
+    candidate.masks.add(maskHex);
+    candidate.occurrenceCount += 1;
+    candidates.set(globalName, candidate);
+  }
+
+  const inputMaskGlobals = new Set<string>();
+  const inputAssignmentRegex = /\b(global\d+)\s*=\s*func_81\s*\(/g;
+  while ((match = inputAssignmentRegex.exec(script0Content)) !== null) {
+    inputMaskGlobals.add(match[1]);
+  }
+
+  const candidatesWithInputDataFlow = [...candidates.entries()].filter(([globalName]) =>
+    inputMaskGlobals.has(globalName),
+  );
+  const candidatesToRank =
+    candidatesWithInputDataFlow.length > 0 ? candidatesWithInputDataFlow : [...candidates.entries()];
+  const rankedCandidates = candidatesToRank.sort((left, right) => {
+    const maskCoverageDifference = right[1].masks.size - left[1].masks.size;
+    if (maskCoverageDifference !== 0) {
+      return maskCoverageDifference;
+    }
+    return right[1].occurrenceCount - left[1].occurrenceCount;
+  });
+
+  return rankedCandidates[0]?.[0] ?? null;
+}
+
+function extractMaskFromConditions(
+  conditions: string[],
+  actionMaskGlobal: string | null,
+): string | null {
+  if (!actionMaskGlobal) {
+    return null;
+  }
+
+  const maskRegex = new RegExp(`\\b${escapeRegex(actionMaskGlobal)}\\s*&\\s*(0x[0-9a-fA-F]+)`);
   for (let index = conditions.length - 1; index >= 0; index -= 1) {
-    const match = conditions[index].match(/global48\s*&\s*(0x[0-9a-fA-F]+)/);
+    const match = conditions[index].match(maskRegex);
     if (match) {
       return match[1].toLowerCase();
     }
@@ -87,9 +138,10 @@ function hasCondition(conditions: string[], pattern: RegExp): boolean {
 function buildActionDescriptor(
   hashHex: string,
   conditions: string[],
+  actionMaskGlobal: string | null,
   duplicateCountByStem: Map<string, number>,
 ): ActionDescriptor {
-  const maskHex = extractMaskFromConditions(conditions);
+  const maskHex = extractMaskFromConditions(conditions, actionMaskGlobal);
   const semantic = maskHex ? ACTION_BY_MASK[maskHex] : undefined;
   const maskStem = semantic ? semantic.nameStem : `MASK_${maskHex ? maskHex.slice(2).toUpperCase() : "UNKNOWN"}`;
   const maskComment = semantic ? semantic.comment : `动作掩码${maskHex ?? "未知"}`;
@@ -137,6 +189,7 @@ function extractActionDescriptorsFrom0(script0Content: string): Map<string, Acti
   let pendingCondition: string | null = null;
   const descriptors = new Map<string, ActionDescriptor>();
   const duplicateCountByStem = new Map<string, number>();
+  const actionMaskGlobal = inferActionMaskGlobal(script0Content, body);
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -149,7 +202,10 @@ function extractActionDescriptorsFrom0(script0Content: string): Map<string, Acti
     if (func95Match) {
       const hashHex = canonicalMscHashHex(func95Match[1]);
       if (!descriptors.has(hashHex)) {
-        descriptors.set(hashHex, buildActionDescriptor(hashHex, conditionStack, duplicateCountByStem));
+        descriptors.set(
+          hashHex,
+          buildActionDescriptor(hashHex, conditionStack, actionMaskGlobal, duplicateCountByStem),
+        );
       }
     }
 

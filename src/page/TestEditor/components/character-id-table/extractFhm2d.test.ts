@@ -52,6 +52,9 @@ function modelAssetFixture(): AssetRefInfo {
     hashHex: "0xBDBE6FEA",
     sourceFilePath: "E:/OB/dplcache/0xBDBE6FEA.fhm2d",
     modFilePath: "E:/OB/mod/0xBDBE6FEA.fhm2d",
+    sourceExists: true,
+    modExists: false,
+    workspaceExists: false,
     workspacePack: {
       configured: {
         routeId: "unit.model",

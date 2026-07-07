@@ -13,6 +13,7 @@ import {
 // while the async store loads.
 const SIDEBAR_OPEN_STORE_KEY = "sidebarOpen";
 const SIDEBAR_OPEN_MIRROR_KEY = "sidebar:open";
+export const CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY = "characterIdDebugMscOutputPath";
 
 export function readSidebarOpenMirror(): boolean {
   try {
@@ -35,6 +36,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   obDplCachePath: "",
   obModPath: "",
   extractOutputPath: "",
+  characterIdDebugMscOutputPath: "",
   unitModelOutputPath: "",
   imgToNutexbOutputPath: "",
   repackInputPath: "",
@@ -50,6 +52,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     const obDplCachePath = await _store.get("obDplCachePath") || "";
     const obModPath = await _store.get("obModPath") || "";
     const extractOutputPath = await _store.get("extractOutputPath") || "";
+    const characterIdDebugMscOutputPath = await _store.get(CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY) || "";
     const unitModelOutputPath = await _store.get("unitModelOutputPath") || "";
     const imgToNutexbOutputPath = await _store.get("imgToNutexbOutputPath") || "";
     const repackInputPath = await _store.get("repackInputPath") || "";
@@ -65,6 +68,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       obDplCachePath: obDplCachePath as string,
       obModPath: obModPath as string,
       extractOutputPath: extractOutputPath as string,
+      characterIdDebugMscOutputPath: characterIdDebugMscOutputPath as string,
       unitModelOutputPath: unitModelOutputPath as string,
       imgToNutexbOutputPath: imgToNutexbOutputPath as string,
       repackInputPath: repackInputPath as string,
@@ -94,6 +98,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     if (key === "obDplCachePath") set({ obDplCachePath: String(value ?? "") });
     if (key === "obModPath") set({ obModPath: String(value ?? "") });
     if (key === "extractOutputPath") set({ extractOutputPath: String(value ?? "") });
+    if (key === CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY) set({ characterIdDebugMscOutputPath: String(value ?? "") });
     if (key === "unitModelOutputPath") set({ unitModelOutputPath: String(value ?? "") });
     if (key === "imgToNutexbOutputPath") set({ imgToNutexbOutputPath: String(value ?? "") });
     if (key === "repackInputPath") set({ repackInputPath: String(value ?? "") });

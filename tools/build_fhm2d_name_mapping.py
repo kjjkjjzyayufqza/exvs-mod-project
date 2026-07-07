@@ -561,6 +561,15 @@ def fallback_unit_name(character_id: int, character_rows: dict[int, dict[str, An
     return f"unit_{character_id}"
 
 
+def ai_unit_name_and_aliases(ai_match: dict[str, Any]) -> tuple[str, list[str]]:
+    full_name = sanitize_name(str(ai_match["fullId"]))
+    short_name = sanitize_name(str(ai_match["name"]))
+    aliases = [full_name]
+    if short_name and short_name != full_name:
+        aliases.append(short_name)
+    return full_name, aliases
+
+
 def unit_name_for_character_id(
     character_id: int,
     ai_by_character_id: dict[int, dict[str, Any]],
@@ -568,7 +577,7 @@ def unit_name_for_character_id(
 ) -> tuple[str, list[str]]:
     ai_match = ai_by_character_id.get(character_id)
     if ai_match:
-        return sanitize_name(ai_match["name"]), [ai_match["fullId"], sanitize_name(ai_match["name"])]
+        return ai_unit_name_and_aliases(ai_match)
     name = fallback_unit_name(character_id, character_rows)
     return sanitize_name(name), [name]
 
@@ -1104,8 +1113,10 @@ def build_ob_structure_entries(
         if not ai_match:
             continue
         raw_name = data.get("Name") if data else None
-        name = sanitize_name(raw_name if isinstance(raw_name, str) else ai_match["name"])
-        aliases = {ai_match["fullId"], ai_match["name"], name}
+        name, ai_aliases = ai_unit_name_and_aliases(ai_match)
+        aliases = set(ai_aliases)
+        if isinstance(raw_name, str):
+            aliases.add(sanitize_name(raw_name))
         entries.append(
             {
                 "hashName": hash_name,

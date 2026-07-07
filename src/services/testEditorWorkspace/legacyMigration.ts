@@ -28,8 +28,9 @@ export async function moveLegacyWorkspaceContentToConfigured(
   }
 
   return await invoke<MoveLegacyWorkspaceContentResult>("move_legacy_workspace_content", {
-    legacyAssetRootDir: content.existing.routeRootPath,
-    configuredAssetRootDir: content.configured.routeRootPath,
-    hashHex: content.configured.hashHex,
+    sourceFolderPath,
+    sourceStructureJsonPath,
+    configuredFolderPath,
+    configuredStructureJsonPath,
   });
 }

@@ -54,10 +54,10 @@ describe("workspace content catalog", () => {
     });
   });
 
-  it("resolves Character ID table under the configured 012list route", async () => {
+  it("resolves Character ID table under its mapped configured 012list folder", async () => {
     withExistingPaths([
-      "E:/workspace/012list/0x036B9E67",
-      "E:/workspace/012list/0x036B9E67_structure.json",
+      "E:/workspace/012list/characteridtable",
+      "E:/workspace/012list/characteridtable_structure.json",
     ]);
 
     const result = await resolveWorkspaceContent(
@@ -67,13 +67,31 @@ describe("workspace content catalog", () => {
     );
 
     expect(result.configured.filePath).toBe(
-      "E:/workspace/012list/0x036B9E67/character_id_table.bin",
+      "E:/workspace/012list/characteridtable/character_id_table.bin",
     );
     expect(result.existing?.filePath).toBe(
-      "E:/workspace/012list/0x036B9E67/character_id_table.bin",
+      "E:/workspace/012list/characteridtable/character_id_table.bin",
     );
     expect(result.sourceLayout).toBe("configured");
     expect(result.writable).toBe(true);
+  });
+
+  it("uses the generated FHM2D name map for fixed content write targets", async () => {
+    withExistingPaths([]);
+
+    const result = await resolveWorkspaceContent(
+      "E:/workspace",
+      DEFAULT_TEST_EDITOR_WORKSPACE,
+      "character-cost",
+    );
+
+    expect(result.configured.folderPath).toBe("E:/workspace/041cpm/for_outgame");
+    expect(result.configured.structureJsonPath).toBe(
+      "E:/workspace/041cpm/for_outgame_structure.json",
+    );
+    expect(result.configured.packKey).toBe("041cpm/for_outgame");
+    expect(result.existing).toBeNull();
+    expect(result.sourceLayout).toBe("missing");
   });
 
   it("reads a complete legacy flat fixed package but keeps the configured write target", async () => {
@@ -88,9 +106,9 @@ describe("workspace content catalog", () => {
       "character-id-table",
     );
 
-    expect(result.configured.folderPath).toBe("E:/workspace/012list/0x036B9E67");
+    expect(result.configured.folderPath).toBe("E:/workspace/012list/characteridtable");
     expect(result.configured.filePath).toBe(
-      "E:/workspace/012list/0x036B9E67/character_id_table.bin",
+      "E:/workspace/012list/characteridtable/character_id_table.bin",
     );
     expect(result.existing?.folderPath).toBe("E:/workspace/0x036B9E67");
     expect(result.existing?.filePath).toBe(

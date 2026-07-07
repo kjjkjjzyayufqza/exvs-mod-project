@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_TEST_EDITOR_WORKSPACE } from "./defaults";
-import { resolveExistingFhm2dPack, resolveFhm2dPackPaths } from "./paths";
+import {
+  clearFhm2dPackResolutionCache,
+  resolveExistingFhm2dPack,
+  resolveFhm2dPackPaths,
+} from "./paths";
 import type { TestEditorWorkspaceDocument } from "./types";
 
 const { existsMock, readDirMock, readTextFileMock } = vi.hoisted(() => ({
@@ -50,6 +54,7 @@ function withoutLegacyFallback(): TestEditorWorkspaceDocument {
 
 describe("testEditorWorkspace paths", () => {
   beforeEach(() => {
+    clearFhm2dPackResolutionCache();
     existsMock.mockReset();
     readDirMock.mockReset();
     readTextFileMock.mockReset();
@@ -156,6 +161,42 @@ describe("testEditorWorkspace paths", () => {
     );
     expect(resolution.existing?.hashHex).toBe("0xBDBE6FEA");
     expect(resolution.existing?.packKey).toBe("002chara/Gyan_model");
+  });
+
+  it("reuses the named pack index for repeated lookups in the same route root", async () => {
+    const document = withoutLegacyFallback();
+    withExistingPaths([
+      "E:/workspace/002chara/Gyan_model",
+      "E:/workspace/002chara/Zaku_model",
+    ]);
+    withDirectoryEntries({
+      "E:/workspace/002chara": [
+        "Gyan_model",
+        "Gyan_model_structure.json",
+        "Zaku_model",
+        "Zaku_model_structure.json",
+      ],
+    });
+    withTextFiles({
+      "E:/workspace/002chara/Gyan_model_structure.json": JSON.stringify({
+        Name: "Gyan_model",
+        HashName: "0xBDBE6FEA",
+      }),
+      "E:/workspace/002chara/Zaku_model_structure.json": JSON.stringify({
+        Name: "Zaku_model",
+        HashName: "0x036B9E67",
+      }),
+    });
+
+    const [gyan, zaku] = await Promise.all([
+      resolveExistingFhm2dPack("E:/workspace", document, "unit.model", "0xBDBE6FEA"),
+      resolveExistingFhm2dPack("E:/workspace", document, "unit.model", "0x036B9E67"),
+    ]);
+
+    expect(gyan.existing?.folderPath).toBe("E:/workspace/002chara/Gyan_model");
+    expect(zaku.existing?.folderPath).toBe("E:/workspace/002chara/Zaku_model");
+    expect(readDirMock).toHaveBeenCalledTimes(1);
+    expect(readTextFileMock).toHaveBeenCalledTimes(2);
   });
 
   it("resolves a legacy custom-named pack by HashName metadata", async () => {

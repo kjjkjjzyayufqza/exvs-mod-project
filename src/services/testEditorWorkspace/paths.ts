@@ -23,6 +23,16 @@ export interface ExistingFhm2dPackResolution {
   duplicateLayout: boolean;
 }
 
+interface NamedFhm2dPackCandidate {
+  stem: string;
+  folderPath: string;
+  structureJsonPath: string;
+}
+
+type NamedFhm2dPackIndex = Map<string, NamedFhm2dPackCandidate[]>;
+
+const namedPackIndexCache = new Map<string, Promise<NamedFhm2dPackIndex | null>>();
+
 function normalizeHashHex(hashHex: string): string {
   const trimmed = hashHex.trim();
   const body = trimmed.replace(/^0x/i, "");
@@ -41,6 +51,18 @@ function stripStructureJsonSuffix(fileName: string): string | null {
   if (!fileName.toLowerCase().endsWith(suffix)) return null;
   const stem = fileName.slice(0, fileName.length - suffix.length);
   return stem || null;
+}
+
+function normalizeCachePath(path: string): string {
+  return path.trim().replace(/\\/g, "/").toLowerCase();
+}
+
+export function clearFhm2dPackResolutionCache(routeRootPath?: string): void {
+  if (!routeRootPath) {
+    namedPackIndexCache.clear();
+    return;
+  }
+  namedPackIndexCache.delete(normalizeCachePath(routeRootPath));
 }
 
 async function joinPrefix(rootPath: string, prefix: string): Promise<string> {
@@ -133,13 +155,7 @@ async function probePack(paths: ResolvedFhm2dPackPaths): Promise<{
   };
 }
 
-async function resolveNamedFhm2dPackPaths(
-  routeRootPath: string,
-  routeId: WorkspaceAssetRouteId,
-  prefix: string,
-  hashHex: string,
-): Promise<ResolvedFhm2dPackPaths | null> {
-  const normalizedHashHex = normalizeHashHex(hashHex);
+async function readNamedFhm2dPackIndex(routeRootPath: string): Promise<NamedFhm2dPackIndex | null> {
   let entries: Awaited<ReturnType<typeof readDir>>;
   try {
     entries = await readDir(routeRootPath);
@@ -153,6 +169,7 @@ async function resolveNamedFhm2dPackPaths(
     .filter((name) => Boolean(stripStructureJsonSuffix(name)))
     .sort((a, b) => a.localeCompare(b));
 
+  const index: NamedFhm2dPackIndex = new Map();
   for (const structureName of structureNames) {
     const stem = stripStructureJsonSuffix(structureName);
     if (!stem) continue;
@@ -168,19 +185,59 @@ async function resolveNamedFhm2dPackPaths(
     } catch {
       continue;
     }
-    if (hashName !== normalizedHashHex) continue;
+    if (!hashName) continue;
 
     const folderPath = await join(routeRootPath, stem);
-    if (!(await exists(folderPath))) continue;
+    const candidate: NamedFhm2dPackCandidate = {
+      stem,
+      folderPath,
+      structureJsonPath,
+    };
+    const candidates = index.get(hashName);
+    if (candidates) {
+      candidates.push(candidate);
+    } else {
+      index.set(hashName, [candidate]);
+    }
+  }
+
+  return index;
+}
+
+function getNamedFhm2dPackIndex(routeRootPath: string): Promise<NamedFhm2dPackIndex | null> {
+  const cacheKey = normalizeCachePath(routeRootPath);
+  const cached = namedPackIndexCache.get(cacheKey);
+  if (cached) return cached;
+
+  const pending = readNamedFhm2dPackIndex(routeRootPath).catch((error) => {
+    namedPackIndexCache.delete(cacheKey);
+    throw error;
+  });
+  namedPackIndexCache.set(cacheKey, pending);
+  return pending;
+}
+
+async function resolveNamedFhm2dPackPaths(
+  routeRootPath: string,
+  routeId: WorkspaceAssetRouteId,
+  prefix: string,
+  hashHex: string,
+): Promise<ResolvedFhm2dPackPaths | null> {
+  const normalizedHashHex = normalizeHashHex(hashHex);
+  const index = await getNamedFhm2dPackIndex(routeRootPath);
+  const candidates = index?.get(normalizedHashHex) ?? [];
+
+  for (const candidate of candidates) {
+    if (!(await exists(candidate.folderPath))) continue;
 
     return {
       routeId,
       prefix,
       routeRootPath,
       hashHex: normalizedHashHex,
-      folderPath,
-      structureJsonPath,
-      packKey: packKey(prefix, stem),
+      folderPath: candidate.folderPath,
+      structureJsonPath: candidate.structureJsonPath,
+      packKey: packKey(prefix, candidate.stem),
     };
   }
 
@@ -192,9 +249,22 @@ export async function resolveExistingFhm2dPack(
   document: TestEditorWorkspaceDocument,
   routeId: WorkspaceAssetRouteId,
   hashHex: string,
+  packName?: string,
 ): Promise<ExistingFhm2dPackResolution> {
-  const configured = await resolveFhm2dPackPaths(workspaceRoot, document, routeId, hashHex);
+  const configured = await resolveFhm2dPackPaths(
+    workspaceRoot,
+    document,
+    routeId,
+    hashHex,
+    packName,
+  );
   const configuredProbe = await probePack(configured);
+  const hashConfigured = packName?.trim()
+    ? await resolveFhm2dPackPaths(workspaceRoot, document, routeId, hashHex)
+    : configured;
+  const hashConfiguredProbe = hashConfigured === configured
+    ? configuredProbe
+    : await probePack(hashConfigured);
 
   if (configuredProbe.complete) {
     let duplicateLayout = false;
@@ -208,6 +278,22 @@ export async function resolveExistingFhm2dPack(
       sourceLayout: "configured",
       folderExists: configuredProbe.folderExists,
       structureJsonExists: configuredProbe.structureJsonExists,
+      duplicateLayout,
+    };
+  }
+
+  if (hashConfigured !== configured && hashConfiguredProbe.complete) {
+    let duplicateLayout = false;
+    if (document.legacyReadFallback) {
+      const legacy = await resolveLegacyFhm2dPackPaths(workspaceRoot, routeId, hashHex);
+      duplicateLayout = (await probePack(legacy)).complete;
+    }
+    return {
+      configured,
+      existing: hashConfigured,
+      sourceLayout: "configured",
+      folderExists: hashConfiguredProbe.folderExists,
+      structureJsonExists: hashConfiguredProbe.structureJsonExists,
       duplicateLayout,
     };
   }

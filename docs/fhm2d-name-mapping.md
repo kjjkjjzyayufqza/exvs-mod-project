@@ -55,9 +55,11 @@ read directly from `.fhm2d`; entries with internal file names are marked
   `003motion/001hito/002zgundm/002zgundm_005gunmk2_001` becomes
   `001hito_002zgundm_005gunmk2_001_<hash>`, not
   `001hito_002zgundm_002zgundm_005gunmk2_001_<hash>`.
-- OB AI string names use lower-snake style and drop the leading numeric series
-  and default `_001` variant: `ai_CHR_014GNDM00_007REBONS_001` becomes
-  `gndm00_007rebons`.
+- OB AI string and character-ID-backed unit names use the full lower-snake unit
+  ID, preserving the leading numeric series and variant:
+  `ai_CHR_014GNDM00_007REBONS_001` becomes
+  `014gndm00_007rebons_001`. The older short form, such as
+  `gndm00_007rebons`, is retained only as an alias.
 - OB structure JSON files use the hash from the file name when present, and
   fall back to the internal `HashName` field for semantic paths such as
   `002chara/gundam_005gyan00_structure.json`.
@@ -140,8 +142,8 @@ Current generated stats:
 - `3` `inferred-ob-ai-string` entries
 - `1` `manual-research-note` entry
 - `4243` entries matched to `character_list.json` character evidence
-- `51` current formal `E:\XB\解包\com\file\*\*_structure.json` structure hashes checked
-- `51` current formal OB structure hashes mapped
+- `52` current formal `E:\XB\解包\com\file\*\*_structure.json` structure hashes checked
+- `52` current formal OB structure hashes mapped
 - `0` current OB structure hashes remain unresolved
 - `0` generic GUI names of the form `image_<hash>`, `flash_<hash>`, or `font_<hash>`
 - `0` duplicate route/name pairs
@@ -152,7 +154,7 @@ Current real OB validation baseline against
 - `19119` real OB `.fhm2d` files scanned
 - `19119` OB hashes mapped (`100.0%`)
 - `0` OB hashes still missing from the mapping
-- `3502` mapped OB entries still end in a hash suffix and need better naming
+- `3508` mapped OB entries still end in a hash suffix and need better naming
   evidence/rules
 - `0` generic GUI names of the form `image_<hash>`, `flash_<hash>`, or
   `font_<hash>`

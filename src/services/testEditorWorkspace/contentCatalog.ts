@@ -1,4 +1,5 @@
 import { join } from "@tauri-apps/api/path";
+import { suggestFhm2dStructureName } from "@/utils/fhm2dNameMapping";
 import { resolveExistingFhm2dPack, type ResolvedFhm2dPackPaths } from "./paths";
 import type { TestEditorWorkspaceDocument, WorkspaceAssetRouteId } from "./types";
 
@@ -116,11 +117,15 @@ export async function resolveWorkspaceContent(
   id: WorkspaceContentId,
 ): Promise<ResolvedWorkspaceContentLocation> {
   const descriptor = getWorkspaceContentDescriptor(id);
+  const packName = suggestFhm2dStructureName(descriptor.hashHex, {
+    routeId: descriptor.routeId,
+  }) ?? undefined;
   const pack = await resolveExistingFhm2dPack(
     workspaceRoot,
     document,
     descriptor.routeId,
     descriptor.hashHex,
+    packName,
   );
 
   const configured = await withFilePath(

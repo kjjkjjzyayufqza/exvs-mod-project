@@ -61,12 +61,13 @@ export async function probeResourcePaths(params: {
           obModPath,
           workspacePath,
         );
-    const [obExists, modExists, workspaceExists] = await Promise.all([
-      info.sourceFilePath ? exists(info.sourceFilePath) : Promise.resolve(false),
-      info.modFilePath ? exists(info.modFilePath) : Promise.resolve(false),
-      info.workspaceFolderPath ? exists(info.workspaceFolderPath) : Promise.resolve(false),
-    ]);
-    return { hashInt32, hashHex: info.hashHex, obExists, modExists, workspaceExists };
+    return {
+      hashInt32,
+      hashHex: info.hashHex,
+      obExists: info.sourceExists,
+      modExists: info.modExists,
+      workspaceExists: info.workspaceExists,
+    };
   }
 
   const hashHex = int32ToHashHex(hashInt32);

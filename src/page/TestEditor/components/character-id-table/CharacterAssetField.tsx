@@ -43,6 +43,7 @@ import type { UseResourceRegistryResult } from "@/hooks/useResourceRegistry";
 import { UNIT_FIELD_KEY_TO_SLOT } from "@/services/resourceRegistry/types";
 import { ResourceSeedField } from "../resource-registry/ResourceSeedField";
 import {
+  clearFhm2dPackResolutionCache,
   resolveFhm2dPackPaths,
   resolveWorkspaceRouteRoot,
   type ResolvedFhm2dPackPaths,
@@ -104,9 +105,9 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   onReveal,
   onFieldUpdate,
 }) => {
-  const [sourceExists, setSourceExists] = useState<boolean | null>(null);
-  const [modExists, setModExists] = useState<boolean | null>(null);
-  const [workspaceExists, setWorkspaceExists] = useState<boolean | null>(null);
+  const [sourceExists, setSourceExists] = useState<boolean | null>(asset.sourceExists);
+  const [modExists, setModExists] = useState<boolean | null>(asset.modExists);
+  const [workspaceExists, setWorkspaceExists] = useState<boolean | null>(asset.workspaceExists);
   const [isExtracting, setIsExtracting] = useState(false);
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [copySeed, setCopySeed] = useState("");
@@ -162,27 +163,10 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   }, [removeDialogOpen, canRemoveWorkspace, canRemoveExtract, canRemoveMod, extractOutputSameAsWorkspace]);
 
   useEffect(() => {
-    const checkExists = async () => {
-      if (asset.sourceFilePath) {
-        setSourceExists(await exists(asset.sourceFilePath));
-      } else {
-        setSourceExists(false);
-      }
-
-      if (asset.workspaceFolderPath) {
-        setWorkspaceExists(await exists(asset.workspaceFolderPath));
-      } else {
-        setWorkspaceExists(false);
-      }
-
-      if (asset.modFilePath) {
-        setModExists(await exists(asset.modFilePath));
-      } else {
-        setModExists(false);
-      }
-    };
-    checkExists();
-  }, [asset.sourceFilePath, asset.workspaceFolderPath, asset.modFilePath]);
+    setSourceExists(asset.sourceExists);
+    setWorkspaceExists(asset.workspaceExists);
+    setModExists(asset.modExists);
+  }, [asset.sourceExists, asset.workspaceExists, asset.modExists]);
 
   const resolveExtractTarget = async (packName?: string) => {
     if (!extractOutputPath.trim()) {
@@ -203,6 +187,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     setIsExtracting(false);
 
     if (result.success) {
+      clearFhm2dPackResolutionCache(target.routeRootPath);
       if (result.namingWarning) {
         toast.error(`Extracted ${asset.fieldKey} but FHM naming failed`, {
           description: result.namingWarning,
@@ -344,6 +329,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
         seed: trimmedSeed,
         fieldKey: asset.fieldKey,
       });
+      clearFhm2dPackResolutionCache(asset.workspacePack.configured.routeRootPath);
 
       const unitSlot = UNIT_FIELD_KEY_TO_SLOT[asset.fieldKey] ?? asset.fieldKey.toLowerCase();
       let registrySaved = false;
@@ -413,6 +399,12 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
           modDirectory: takeMod ? obModPath : undefined,
         },
       });
+      if (takeWorkspace) {
+        clearFhm2dPackResolutionCache(workspaceAssetRootPath);
+      }
+      if (extractOutputAssetRoot) {
+        clearFhm2dPackResolutionCache(extractOutputAssetRoot);
+      }
 
       const clearedWorkspaceRow =
         takeWorkspace || (takeExtract && extractOutputSameAsWorkspace);
