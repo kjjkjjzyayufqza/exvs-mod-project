@@ -98,7 +98,18 @@ class ScriptRefStr(str):
 EXVS_SYS1_SCRIPT_CALLBACK_SIGNATURES = {
     (0x10001, 0x02): (3,),
     (0x10001, 0x0A): (3,),
+    (0x10002, 0x00): (3,),
     (0x10002, 0x02): (3,),
+}
+
+
+EXVS_SYS2_SCRIPT_CALLBACK_SIGNATURES = {
+    (0x00, 0x02): (2,),
+    (0x00, 0x03): (2,),
+    (0x00, 0x04): (2,),
+    (0x00, 0x06): (2,),
+    (0x00, 0x07): (2,),
+    (0x00, 0x08): (2,),
 }
 
 
@@ -127,18 +138,75 @@ def _source_arg_int(popped, source_arg_index):
     return _constant_int_from_command(popped[index])
 
 
+def _local_var_index_from_command(cmd_obj):
+    if not _is_command_like(cmd_obj):
+        return None
+    if cmd_obj.command != 0x0B:
+        return None
+    if len(cmd_obj.parameters) < 2:
+        return None
+    if cmd_obj.parameters[0] != 0:
+        return None
+    return cmd_obj.parameters[1]
+
+
+def _remember_script_ref_local(script_called_vars, script_name, local_var_index):
+    if script_name not in script_called_vars:
+        script_called_vars[script_name] = []
+    if local_var_index not in script_called_vars[script_name]:
+        script_called_vars[script_name].append(local_var_index)
+
+
+def _resolve_script_ref_source(
+    cmd_obj,
+    valid_offsets,
+    offset_to_name,
+    script_name,
+    script_called_vars,
+    local_defs=None,
+):
+    if cmd_obj is None:
+        return
+    if not _is_command_like(cmd_obj):
+        return
+
+    if cmd_obj.command in (0x0A, 0x0D):
+        _try_resolve_ref(cmd_obj, valid_offsets, offset_to_name)
+        return
+
+    local_var_index = _local_var_index_from_command(cmd_obj)
+    if local_var_index is None:
+        return
+
+    if local_defs is not None and local_var_index in local_defs:
+        _try_resolve_ref(local_defs[local_var_index], valid_offsets, offset_to_name)
+        return
+
+    _remember_script_ref_local(script_called_vars, script_name, local_var_index)
+
+
 def resolve_exvs_syscall_script_refs(cmd, popped, resolve_popped_index):
     if not _is_command_like(cmd):
         return
-    if cmd.command != 0x2D or cmd.parameters[1] != 0x01:
+    if cmd.command != 0x2D:
         return
 
-    table_id = _source_arg_int(popped, 0)
-    method_id = _source_arg_int(popped, 1)
-    if table_id is None or method_id is None:
-        return
+    callback_arg_indices = None
+    if cmd.parameters[1] == 0x01:
+        table_id = _source_arg_int(popped, 0)
+        method_id = _source_arg_int(popped, 1)
+        if table_id is None or method_id is None:
+            return
 
-    callback_arg_indices = EXVS_SYS1_SCRIPT_CALLBACK_SIGNATURES.get((table_id, method_id))
+        callback_arg_indices = EXVS_SYS1_SCRIPT_CALLBACK_SIGNATURES.get((table_id, method_id))
+    elif cmd.parameters[1] == 0x02:
+        receiver_id = _source_arg_int(popped, 0)
+        slot_id = _source_arg_int(popped, 1)
+        if receiver_id is None or slot_id is None:
+            return
+
+        callback_arg_indices = EXVS_SYS2_SCRIPT_CALLBACK_SIGNATURES.get((receiver_id, slot_id))
+
     if callback_arg_indices is None:
         return
 
@@ -167,6 +235,7 @@ def resolve_script_refs_cfg(
 
     for bb in blocks:
         stack = []
+        local_defs = {}
         for idx in range(bb.start_idx, bb.end_idx + 1):
             item = cmds[idx]
             if not _is_command_like(item):
@@ -183,12 +252,14 @@ def resolve_script_refs_cfg(
 
             if cmd.command in (0x2f, 0x30, 0x31):
                 if popped and popped[0] is not None:
-                    _try_resolve_ref(popped[0], valid_offsets, script_offset_to_name)
-                for p in popped:
-                    if p is not None and _is_command_like(p) and p.command in (0x0A, 0x0D):
-                        val = p.parameters[0]
-                        if isinstance(val, int) and val > 0x50 and val in valid_offsets:
-                            p.parameters[0] = ScriptRefStr(script_offset_to_name[val])
+                    _resolve_script_ref_source(
+                        popped[0],
+                        valid_offsets,
+                        script_offset_to_name,
+                        script_name,
+                        script_called_vars,
+                        local_defs,
+                    )
 
             if cmd.command == 0x2c and popped:
                 last_pop = popped[-1]
@@ -199,27 +270,32 @@ def resolve_script_refs_cfg(
 
             if cmd.command in (0x1C, 0x41) and cmd.parameters[0] == 0x1:
                 if popped and popped[0] is not None:
-                    _try_resolve_ref(popped[0], valid_offsets, script_offset_to_name)
+                    _resolve_script_ref_source(
+                        popped[0],
+                        valid_offsets,
+                        script_offset_to_name,
+                        script_name,
+                        script_called_vars,
+                        local_defs,
+                    )
 
             if cmd.command in (0x1C, 0x41) and cmd.parameters[0] == 0x0:
-                if popped and popped[0] is not None:
-                    p = popped[0]
-                    if _is_command_like(p) and p.command in (0x0A, 0x0D):
-                        val = p.parameters[0]
-                        if isinstance(val, int) and val in valid_offsets:
-                            if script_name not in script_called_vars:
-                                script_called_vars[script_name] = []
-                            var_idx = cmd.parameters[1]
-                            if var_idx not in script_called_vars[script_name]:
-                                script_called_vars[script_name].append(var_idx)
+                local_var_index = cmd.parameters[1]
+                if popped and popped[0] is not None and _is_command_like(popped[0]) and popped[0].command in (0x0A, 0x0D):
+                    local_defs[local_var_index] = popped[0]
+                else:
+                    local_defs.pop(local_var_index, None)
 
             resolve_exvs_syscall_script_refs(
                 cmd,
                 popped,
-                lambda popped_index: _try_resolve_ref(
+                lambda popped_index: _resolve_script_ref_source(
                     popped[popped_index],
                     valid_offsets,
                     script_offset_to_name,
+                    script_name,
+                    script_called_vars,
+                    local_defs,
                 ),
             )
 

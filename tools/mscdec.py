@@ -1396,6 +1396,7 @@ def generate_switch_case_function_lines(func_name, switch_cases):
     lines.append("            break;\n")
     lines.append("    }\n")
     lines.append("    return var1;\n")
+    lines.append("}\n")
     
     return lines
 

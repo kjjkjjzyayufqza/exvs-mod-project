@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
-import type { MscResolvedOverlayBuildResult } from "../../utils/mscResolvedOverlay";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { MscResolvedScript2ApplyResult } from "../../utils/mscResolvedOverlay";
 import MscWorkspaceView from "./MscWorkspaceView";
 
 type MockDirEntry = {
@@ -17,7 +17,7 @@ const {
   readDirMock,
   readTextFileMock,
   writeTextFileMock,
-  buildMscResolvedOverlayMock,
+  applyMscResolvedOverlayToScript2Mock,
 } = vi.hoisted(() => ({
   openMock: vi.fn(),
   folderContainsMscScriptFilesMock: vi.fn(),
@@ -25,7 +25,7 @@ const {
   readDirMock: vi.fn<() => Promise<MockDirEntry[]>>(async () => []),
   readTextFileMock: vi.fn(async () => ""),
   writeTextFileMock: vi.fn(async () => undefined),
-  buildMscResolvedOverlayMock: vi.fn<() => MscResolvedOverlayBuildResult>(() => ({
+  applyMscResolvedOverlayToScript2Mock: vi.fn<() => MscResolvedScript2ApplyResult>(() => ({
     status: "skipped",
     evidence: {
       actions: [],
@@ -35,11 +35,12 @@ const {
       orphanActionFunctions: [],
     },
     legacyAliasCount: 0,
-    markdown: null,
+    updatedScript2Content: null,
+    renamedCallbackCount: 0,
   })),
 }));
 
-const resolvedOverlayResult: MscResolvedOverlayBuildResult = {
+const resolvedOverlayResult: MscResolvedScript2ApplyResult = {
   status: "resolved",
   evidence: {
     actions: [
@@ -56,7 +57,8 @@ const resolvedOverlayResult: MscResolvedOverlayBuildResult = {
     orphanActionFunctions: [],
   },
   legacyAliasCount: 0,
-  markdown: "# MSC Resolved Overlay\n",
+  updatedScript2Content: "func_241(0xf48d2d49, ACTION_A_SHOT);\n",
+  renamedCallbackCount: 1,
 };
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
@@ -105,10 +107,44 @@ vi.mock("../../utils/mscWorkspaceUtils", () => ({
 }));
 
 vi.mock("../../utils/mscResolvedOverlay", () => ({
-  buildMscResolvedOverlay: buildMscResolvedOverlayMock,
+  applyMscResolvedOverlayToScript2: applyMscResolvedOverlayToScript2Mock,
 }));
 
 describe("MscWorkspaceView", () => {
+  beforeEach(() => {
+    const elementPrototype = Element.prototype as Element & {
+      hasPointerCapture?: (pointerId: number) => boolean;
+      setPointerCapture?: (pointerId: number) => void;
+      releasePointerCapture?: (pointerId: number) => void;
+      scrollIntoView?: () => void;
+    };
+    elementPrototype.hasPointerCapture ??= () => false;
+    elementPrototype.setPointerCapture ??= () => undefined;
+    elementPrototype.releasePointerCapture ??= () => undefined;
+    elementPrototype.scrollIntoView ??= () => undefined;
+
+    vi.clearAllMocks();
+    openMock.mockResolvedValue(null);
+    folderContainsMscScriptFilesMock.mockResolvedValue(false);
+    existsMock.mockImplementation(async (_path: string) => false);
+    readDirMock.mockResolvedValue([]);
+    readTextFileMock.mockResolvedValue("");
+    writeTextFileMock.mockResolvedValue(undefined);
+    applyMscResolvedOverlayToScript2Mock.mockReturnValue({
+      status: "skipped",
+      evidence: {
+        actions: [],
+        slotCallbacks: [],
+        weaponBindings: [],
+        resourceBindings: [],
+        orphanActionFunctions: [],
+      },
+      legacyAliasCount: 0,
+      updatedScript2Content: null,
+      renamedCallbackCount: 0,
+    });
+  });
+
   it("opens the folder picker from the workspace MSC route root", async () => {
     const user = userEvent.setup();
     openMock.mockResolvedValue("E:/workspace/040msc/0x12345678");
@@ -174,7 +210,7 @@ describe("MscWorkspaceView", () => {
     expect(await screen.findByRole("button", { name: /^open$/i })).toBeInTheDocument();
   });
 
-  it("writes stable registry evidence to 2.resolved.md on Resolve Overlay", async () => {
+  it("writes resolved callback names directly into 2.c on Resolve Overlay", async () => {
     const user = userEvent.setup();
     readDirMock.mockResolvedValueOnce([
       { isFile: true, name: "0.c" },
@@ -191,7 +227,7 @@ describe("MscWorkspaceView", () => {
     readTextFileMock
       .mockResolvedValueOnce("void func_143() { func_95(0xf48d2d49, 0, 0); }")
       .mockResolvedValueOnce("func_241(0xf48d2d49, func_912);\n");
-    buildMscResolvedOverlayMock.mockReturnValueOnce(resolvedOverlayResult);
+    applyMscResolvedOverlayToScript2Mock.mockReturnValueOnce(resolvedOverlayResult);
 
     render(
       <MscWorkspaceView
@@ -207,13 +243,57 @@ describe("MscWorkspaceView", () => {
 
     await waitFor(() => {
       expect(writeTextFileMock).toHaveBeenCalledWith(
-        "E:/workspace/040msc/0x12345678/2.resolved.md",
-        "# MSC Resolved Overlay\n",
+        "E:/workspace/040msc/0x12345678/2.c",
+        "func_241(0xf48d2d49, ACTION_A_SHOT);\n",
       );
       expect(writeTextFileMock).not.toHaveBeenCalledWith(
-        "E:/workspace/040msc/0x12345678/2.c",
+        "E:/workspace/040msc/0x12345678/2.resolved.md",
         expect.any(String),
       );
+    });
+  });
+
+  it("keeps the decompiled C view visible after Resolve Overlay", async () => {
+    const user = userEvent.setup();
+    readDirMock
+      .mockResolvedValueOnce([
+        { isFile: true, name: "0.c" },
+        { isFile: true, name: "2.c" },
+      ])
+      .mockResolvedValueOnce([
+        { isFile: true, name: "0.c" },
+        { isFile: true, name: "2.c" },
+      ]);
+
+    existsMock.mockImplementation(async (path: string) => {
+      return [
+        "E:/workspace/040msc/0x12345678/0.c",
+        "E:/workspace/040msc/0x12345678/2.c",
+      ].includes(path);
+    });
+
+    readTextFileMock
+      .mockResolvedValueOnce("void func_143() { func_95(0xf48d2d49, 0, 0); }")
+      .mockResolvedValueOnce("func_241(0xf48d2d49, func_912);\n");
+    applyMscResolvedOverlayToScript2Mock.mockReturnValueOnce(resolvedOverlayResult);
+
+    render(
+      <MscWorkspaceView
+        workspaceRoot="E:/workspace"
+        workspaceDefaultPath="E:/workspace/040msc"
+        mscFolderPath="E:/workspace/040msc/0x12345678"
+        onMscFolderChange={() => {}}
+        isActive
+      />,
+    );
+
+    await user.click(await screen.findByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: ".c" }));
+    await user.click(await screen.findByRole("button", { name: /resolve overlay/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Decompiled C")).toBeInTheDocument();
+      expect(screen.getByText("2.c")).toBeInTheDocument();
     });
   });
 });

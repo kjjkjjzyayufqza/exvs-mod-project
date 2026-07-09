@@ -408,7 +408,7 @@ export function MscSourceBatchDecompileView({
                   ...current,
                   failedOverlays: current.failedOverlays + 1,
                 }));
-                appendError(`${folder.name}/2.c overlay: ${toErrorMessage(error)}`);
+                appendError(`${folder.name}/2.c resolve: ${toErrorMessage(error)}`);
               }
             } else if (!watcherSuppressionFailedRef.current) {
               mutateStats((current) => ({
@@ -449,14 +449,14 @@ export function MscSourceBatchDecompileView({
         );
       } else if (action === "overlay" && finalStats.failedOverlays > 0) {
         toast.warning(
-          `Resolved ${finalStats.resolvedOverlays} overlay folder(s), ${finalStats.partialOverlays} partial; ` +
-          `${finalStats.failedOverlays} overlay error(s)`,
+          `Resolved ${finalStats.resolvedOverlays} folder(s), ${finalStats.partialOverlays} partial; ` +
+          `${finalStats.failedOverlays} resolve error(s)`,
         );
       } else if (action === "decompile") {
         toast.success(`Decompiled ${activePlan.totalScripts} MSC script file(s)`);
       } else {
         toast.success(
-          `Resolved ${finalStats.resolvedOverlays} overlay(s); ` +
+          `Resolved ${finalStats.resolvedOverlays} folder(s); ` +
           `${finalStats.partialOverlays} partial; skipped ${finalStats.skippedOverlays} folder(s)`,
         );
       }
@@ -505,7 +505,7 @@ export function MscSourceBatchDecompileView({
           <div className="space-y-1">
             <div className="text-base font-semibold">Batch decompile MSC sources</div>
             <div className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
-              Select the extracted 040msc folder or one MSC source folder, then run Decompile C first and Resolve Overlay only when you want the 2.resolved.md sidecar.
+              Select the extracted 040msc folder or one MSC source folder, then run Decompile C first and Resolve Overlay when you want resolved callback names written back into 2.c.
               TestEditor file-tree watching is paused while this job writes outputs; use the tree refresh action after the run if you need the new files visible there.
             </div>
           </div>
@@ -649,10 +649,10 @@ export function MscSourceBatchDecompileView({
             </div>
             <Progress value={progressPercent} />
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-              <Metric label="Overlay OK" value={runStats.resolvedOverlays} tone="success" icon={<Wand2 className="h-4 w-4" />} />
-              <Metric label="Overlay partial" value={runStats.partialOverlays} tone={runStats.partialOverlays > 0 ? "warning" : "neutral"} />
-              <Metric label="Overlay skipped" value={runStats.skippedOverlays} tone={runStats.skippedOverlays > 0 ? "warning" : "neutral"} />
-              <Metric label="Overlay errors" value={runStats.failedOverlays} tone={runStats.failedOverlays > 0 ? "danger" : "neutral"} />
+              <Metric label="Resolve OK" value={runStats.resolvedOverlays} tone="success" icon={<Wand2 className="h-4 w-4" />} />
+              <Metric label="Resolve partial" value={runStats.partialOverlays} tone={runStats.partialOverlays > 0 ? "warning" : "neutral"} />
+              <Metric label="Resolve skipped" value={runStats.skippedOverlays} tone={runStats.skippedOverlays > 0 ? "warning" : "neutral"} />
+              <Metric label="Resolve errors" value={runStats.failedOverlays} tone={runStats.failedOverlays > 0 ? "danger" : "neutral"} />
               <Metric label="Progress" value={`${progressPercent}%`} />
             </div>
             {runStats.currentLabel ? (

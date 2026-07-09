@@ -85,6 +85,7 @@ type ConfirmState =
 const FILE_TYPES = [
   { value: "all", label: "All Files" },
   { value: "c", label: ".c" },
+  { value: "resolved", label: "Resolved" },
   { value: "txt", label: ".txt" },
   { value: "bscex", label: ".bscex" },
   { value: "cscex", label: ".cscex" },
@@ -94,6 +95,7 @@ const FILE_TYPES = [
 function matchesFileType(fileName: string, type: string): boolean {
   const lower = fileName.toLowerCase();
   if (type === "all") return true;
+  if (type === "resolved") return lower.endsWith(".resolved.md");
   return lower.endsWith(`.${type}`);
 }
 
@@ -304,10 +306,12 @@ export default function MscWorkspaceView({
         if (result.status === "skipped") {
           toast.warning(`No stable MSC registry evidence found for ${file.name}`);
         } else {
-          const message =
-            `Wrote ${result.actionCount} action(s), ${result.slotCallbackCount} slot callback(s), ` +
-            `${result.weaponBindingCount} weapon binding(s), and ${result.resourceBindingCount} resource binding(s) ` +
-            `to ${result.overlayPath}`;
+          const evidenceSummary =
+            `${result.actionCount} action(s), ${result.slotCallbackCount} slot callback(s), ` +
+            `${result.weaponBindingCount} weapon binding(s), and ${result.resourceBindingCount} resource binding(s)`;
+          const message = result.updatedPath
+            ? `Updated ${result.updatedPath} with ${result.renamedCallbackCount} callback rename(s) from ${evidenceSummary}`
+            : `Found ${evidenceSummary}, but no unresolved func_N callback names needed rewriting`;
           if (result.status === "partial") {
             toast.warning(message);
           } else {

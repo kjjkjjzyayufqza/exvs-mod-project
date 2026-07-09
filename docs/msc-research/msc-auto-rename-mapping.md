@@ -8,10 +8,10 @@
 func_241(0xf48d2d49, ACTION_A_SHOT); //射击
 ```
 
-当前默认目标不是修改原始游戏符号，也不是给 `mscdec.py` 增加外部开关，而是让
-TestEditor 生成并维护 `2.resolved.md` sidecar：`2.c` 保持 raw 反编译结果，
-overlay 再按可验证证据把 `func_N`、action hash、slot、arms entry hash
-叠加显示成更可读的 action / slot 信息。
+当前默认目标不是给 `mscdec.py` 增加外部开关，而是在 TestEditor 的
+Resolve Overlay 中用 stable registry evidence 直接写回 `2.c` 的 callback
+符号名。写回规则不依赖固定 `func_N` 或 offset：优先使用 legacy alias，
+缺少 alias 时使用 action index / hash / slot 组成的 evidence-based 名字。
 
 ## 文档边界
 
@@ -30,11 +30,11 @@ native-truth 辅助层；TestEditor 的 Auto Rename 应该在编辑器自己的 
 
 | 入口 | 角色 |
 |---|---|
-| `src/page/TestEditor/utils/mscActionRename.ts` | legacy alias helper；只从旧 route 提取兼容提示，不再负责改写 raw `2.c`。 |
+| `src/page/TestEditor/utils/mscActionRename.ts` | legacy alias helper；从旧 route 提取兼容提示。 |
 | `collectLegacyActionAliases(script0Content, script2Content)` | 从 `0.c func_143` 的旧 mask 路由提取 `ACTION_*` working alias。 |
 | `src/page/TestEditor/utils/mscStableEvidence.ts` | 从 `0.c` / `2.c` 提取 stable registry evidence。 |
 | `src/page/TestEditor/utils/mscParamLabelResolver.ts` | 从 `armsparam.bin` / `characterparam.bin` 解 label， enrich overlay。 |
-| `src/page/TestEditor/utils/mscResolvedOverlay.ts` | 把 stable evidence 渲染成 `2.resolved.md`。 |
+| `src/page/TestEditor/utils/mscResolvedOverlay.ts` | 从 stable evidence 生成 callback rename，并写回 `2.c`。 |
 | `docs/msc-research/2c-function-role-map-for-modders.md` | 解释为什么不能持久绑定 `func_N`，以及怎样用 `.c` evidence shape 建立工作名。 |
 | `docs/msc-research/func1044-simulated-renames.md` | `func_1044` slot callback 的 Auto Rename 期望输出。 |
 
@@ -82,7 +82,7 @@ src/utils/obfString.ts
 2. 在当前 unit param 包的 `armsparam.bin` 中用 `entry_id == armsEntryHash` 查 row。
 3. 读取 `0xE6213731` / `0xF3C4CAE9` 的绝对文件 offset。
 4. 用 obfuscated string codec 解出 action/resource label。
-5. 在 TestEditor 的 `2.resolved.md` sidecar 里显示 slot 注释或 overlay 名称。
+5. 在 TestEditor 的 Resolve Overlay 写回流程里生成 callback / slot 相关的稳定名字。
 
 示例输出风格：
 
@@ -323,13 +323,13 @@ weapon 和 resource registry evidence，可以生成 partial overlay。
 ```
 
 因此只扩大 `func_143` 正则不是修复：它会把第一类错误转换成第二类错误，仍无法处理
-变量驱动的 action route。继续直接重命名 callback 还会把不稳定的 `func_N` 工作名写入
-raw `2.c`，使反编译原文失真，并给后续 repack、diff 和跨版本研究制造错误身份。
+变量驱动的 action route。直接写回 `2.c` 时不能写入不稳定的 `func_N` 身份，必须写入
+由 action index、action hash、slot 或 legacy alias 生成的稳定名字。
 
 TestEditor 从此遵循以下边界：
 
-- `2.c` 始终保持反编译原文，不由 Resolve Overlay 写回。
-- Resolve Overlay 写入独立的 `2.resolved.md`。
+- Resolve Overlay 直接写回 `2.c`，只做符号级 callback rename。
+- 写回名字必须来自 stable evidence 或 legacy alias，不得绑定固定 `func_N` / offset。
 - `collectLegacyActionAliases` 仅提供 best-effort 显示提示；失败时使用空 alias map，
   不得阻止稳定 evidence 提取。
 - `resolved` 表示存在 action registry evidence。
@@ -337,11 +337,9 @@ TestEditor 从此遵循以下边界：
 - `skipped` 表示没有任何可显示的稳定 evidence。
 - 只有文件读取、文件写入或稳定解析本身异常才记为 `failed`。
 
-旧的 raw mutation API 已移除：
+当前 raw mutation 入口：
 
-- `renameScript2CallbacksByActionMask`
-- `MscActionRenameResult`
-- `applyResolvedOverlayToScript2`
+- `applyMscResolvedOverlayToScript2`
 
 ## 相关文档
 

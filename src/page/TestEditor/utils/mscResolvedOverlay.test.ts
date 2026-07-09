@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyMscResolvedOverlayToScript2,
   buildMscResolvedOverlay,
   renderResolvedOverlayMarkdown,
 } from "./mscResolvedOverlay";
@@ -133,5 +134,187 @@ void func_838()
 
     expect(result.status).toBe("skipped");
     expect(result.markdown).toBeNull();
+  });
+});
+
+describe("applyMscResolvedOverlayToScript2", () => {
+  it("renames script2 action callbacks using legacy aliases when available", () => {
+    const result = applyMscResolvedOverlayToScript2({
+      script0Content: `
+void func_81() {}
+void func_143()
+{
+    if ((global48 & 0x1) != 0)
+    {
+        func_95(0xf48d2d49, 0, 0);
+    }
+}
+`,
+      script2Content: `
+void func_912()
+{
+    func_69(0x1);
+}
+
+void func_241(int arg0, int arg1)
+{
+}
+
+void func_1052()
+{
+    func_241(0xf48d2d49, func_912);
+}
+`,
+    });
+
+    expect(result.status).toBe("resolved");
+    expect(result.renamedCallbackCount).toBe(1);
+    expect(result.updatedScript2Content).toContain("void ACTION_A_SHOT()");
+    expect(result.updatedScript2Content).toContain("func_241(0xf48d2d49, ACTION_A_SHOT); //  射击");
+    expect(result.updatedScript2Content).not.toContain("func_912");
+  });
+
+  it("does not write ACTION_HASH fallback names without a 0.c legacy alias", () => {
+    const result = applyMscResolvedOverlayToScript2({
+      script0Content: "sys_1(0x10000, 0x1, 0x2, 0x6d00aeaa);",
+      script2Content: `
+void func_390()
+{
+    func_69(0x1);
+}
+
+void func_241(int arg0, int arg1)
+{
+}
+
+void func_1052()
+{
+    func_241(0x6d00aeaa, func_390);
+}
+`,
+    });
+
+    expect(result.status).toBe("resolved");
+    expect(result.renamedCallbackCount).toBe(0);
+    expect(result.updatedScript2Content).toBeNull();
+  });
+
+  it("prefers 0.c legacy aliases over earlier unaliased func_241 bindings for the same callback", () => {
+    const result = applyMscResolvedOverlayToScript2({
+      script0Content: `
+int func_143()
+{
+    if (global48 & 0x1)
+    {
+        func_95(0x7158fa47, 0, 0);
+        func_95(0xf48d2d49, 0, 0);
+    }
+}
+`,
+      script2Content: `
+void func_58()
+{
+    func_69(0x1);
+}
+
+void func_241(int arg0, int arg1)
+{
+}
+
+void func_1052()
+{
+    func_241(0x613494c8, func_58);
+    func_241(0xf48d2d49, func_58);
+}
+`,
+    });
+
+    expect(result.status).toBe("resolved");
+    expect(result.renamedCallbackCount).toBe(1);
+    expect(result.updatedScript2Content).not.toContain("ACTION_HASH_613494C8");
+    expect(result.updatedScript2Content).toContain("void ACTION_A_SHOT_ALT_2()");
+    expect(result.updatedScript2Content).toContain("func_241(0xf48d2d49, ACTION_A_SHOT_ALT_2); //  射击");
+  });
+
+  it("repairs previously generated ACTION_HASH callback names when 0.c provides the alias", () => {
+    const result = applyMscResolvedOverlayToScript2({
+      script0Content: `
+int func_143()
+{
+    if (global48 & 0x1)
+    {
+        func_95(0x7158fa47, 0, 0);
+        func_95(0xf48d2d49, 0, 0);
+    }
+}
+`,
+      script2Content: `
+void ACTION_HASH_613494C8()
+{
+    func_69(0x1);
+}
+
+void func_241(int arg0, int arg1)
+{
+}
+
+void func_1052()
+{
+    func_241(0x613494c8, ACTION_HASH_613494C8);
+    func_241(0xf48d2d49, ACTION_HASH_613494C8);
+}
+`,
+    });
+
+    expect(result.status).toBe("resolved");
+    expect(result.renamedCallbackCount).toBe(1);
+    expect(result.updatedScript2Content).not.toContain("ACTION_HASH_613494C8");
+    expect(result.updatedScript2Content).toContain("void ACTION_A_SHOT_ALT_2()");
+    expect(result.updatedScript2Content).toContain("func_241(0xf48d2d49, ACTION_A_SHOT_ALT_2); //  射击");
+  });
+
+  it("adds legacy comments when the callback name is already resolved", () => {
+    const result = applyMscResolvedOverlayToScript2({
+      script0Content: `
+int func_143()
+{
+    if (global48 & 0x1)
+    {
+        func_95(0x7158fa47, 0, 0);
+        func_95(0xf48d2d49, 0, 0);
+    }
+}
+`,
+      script2Content: `
+void ACTION_A_SHOT_ALT_2()
+{
+    func_69(0x1);
+}
+
+void func_241(int arg0, int arg1)
+{
+}
+
+void func_1052()
+{
+    func_241(0xf48d2d49, ACTION_A_SHOT_ALT_2);
+}
+`,
+    });
+
+    expect(result.status).toBe("resolved");
+    expect(result.renamedCallbackCount).toBe(0);
+    expect(result.updatedScript2Content).toContain("func_241(0xf48d2d49, ACTION_A_SHOT_ALT_2); //  射击");
+  });
+
+  it("skips writing when no stable evidence exists", () => {
+    const result = applyMscResolvedOverlayToScript2({
+      script0Content: "",
+      script2Content: "void func_1() {}",
+    });
+
+    expect(result.status).toBe("skipped");
+    expect(result.updatedScript2Content).toBeNull();
+    expect(result.renamedCallbackCount).toBe(0);
   });
 });

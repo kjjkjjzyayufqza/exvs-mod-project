@@ -64,6 +64,36 @@ function readFunctionBody(source: string, signatureRegex: RegExp): string {
   throw new Error("MSC action rename: unterminated func_143 body");
 }
 
+function readFunctionBodies(source: string): Map<string, string> {
+  const bodies = new Map<string, string>();
+  const headerRegex = /(?:^|\n)\s*[A-Za-z_][A-Za-z0-9_*\t ]*\s+(func_\d+)\s*\([^)]*\)\s*\{/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = headerRegex.exec(source)) !== null) {
+    const functionName = match[1];
+    const braceStart = source.indexOf("{", match.index);
+    if (braceStart < 0) {
+      continue;
+    }
+
+    let depth = 0;
+    for (let index = braceStart; index < source.length; index += 1) {
+      const char = source[index];
+      if (char === "{") {
+        depth += 1;
+      } else if (char === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          bodies.set(functionName, source.slice(braceStart + 1, index));
+          break;
+        }
+      }
+    }
+  }
+
+  return bodies;
+}
+
 function inferActionMaskGlobal(script0Content: string, body: string): string | null {
   const candidates = new Map<string, { masks: Set<string>; occurrenceCount: number }>();
   const maskConditionRegex = /\b(global\d+)\s*&\s*(0x[0-9a-fA-F]+)/g;
@@ -176,8 +206,10 @@ function buildActionDescriptor(
   };
 }
 
-function extractActionDescriptorsFrom0(script0Content: string): Map<string, ActionDescriptor> {
-  const body = readFunctionBody(script0Content, /void\s+func_143\s*\(\s*\)\s*/);
+function extractActionDescriptorsFromBody(
+  script0Content: string,
+  body: string,
+): Map<string, ActionDescriptor> {
   const lines = body.split(/\r?\n/);
   const conditionStack: string[] = [];
   let pendingCondition: string | null = null;
@@ -212,6 +244,31 @@ function extractActionDescriptorsFrom0(script0Content: string): Map<string, Acti
     const closeBraceCount = (line.match(/\}/g) ?? []).length;
     for (let index = 0; index < closeBraceCount; index += 1) {
       conditionStack.pop();
+    }
+  }
+
+  return descriptors;
+}
+
+function extractActionDescriptorsFrom0(script0Content: string): Map<string, ActionDescriptor> {
+  const func143Body = readFunctionBody(
+    script0Content,
+    /(?:^|\n)\s*[A-Za-z_][A-Za-z0-9_*\t ]*\s+func_143\s*\([^)]*\)\s*/,
+  );
+  const func143Descriptors = extractActionDescriptorsFromBody(script0Content, func143Body);
+  if (func143Descriptors.size > 0) {
+    return func143Descriptors;
+  }
+
+  const descriptors = new Map<string, ActionDescriptor>();
+  for (const body of readFunctionBodies(script0Content).values()) {
+    if (!/func_95\(\s*0x[0-9a-fA-F]+/.test(body)) {
+      continue;
+    }
+    for (const [hashHex, descriptor] of extractActionDescriptorsFromBody(script0Content, body)) {
+      if (!descriptors.has(hashHex)) {
+        descriptors.set(hashHex, descriptor);
+      }
     }
   }
 
