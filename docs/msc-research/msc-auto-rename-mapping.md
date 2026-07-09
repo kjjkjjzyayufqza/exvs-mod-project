@@ -296,6 +296,53 @@ func_241(0x9475130e, 0); //disabled: 变形突入 / 飞机模式入口
 - 不用 `--exvsMapping` 承担 TestEditor rename 职责。
 - 不因为某个 hash 有一个猜测名，就跳过输入、handler、slot、resource 的闭环验证。
 
+## 2026-07-09：移除 raw `2.c` callback 重命名路径
+
+TestEditor 批量 Resolve Overlay 曾直接调用旧的 callback 重命名器。该路径要求：
+
+1. `0.c` 必须存在精确签名 `void func_143()`。
+2. 目标函数体内必须存在 `func_95(0x固定Hash, ...)`。
+3. `2.c` 必须存在两参数 `func_241(actionHash, callback)`。
+
+对 372 个真实 MSC 文件运行后，全部被记录为失败：
+
+| 错误 | 数量 | 实际原因 |
+|---|---:|---|
+| `cannot find func_143 in 0.c` | 151 | 文件存在，但当前函数是 `int func_143()`；`func_N` 编号和签名不是稳定身份。 |
+| `no func_241 bindings matched legacy action routes` | 221 | `void func_143()` 存在，但 action hash 通过 `sys_41` 和局部变量传入 `func_95(var3, ...)`，没有可供旧正则读取的固定 hash。 |
+
+这些文件的 `0.c` 和 `2.c` 都存在且内容完整。371 个目录可以通过下面的稳定关系
+直接连接 action hash；剩余一个目录虽然没有两参数 action registry，但仍有 slot、
+weapon 和 resource registry evidence，可以生成 partial overlay。
+
+```text
+0.c sys_1(0x10000, 0x1, actionIndex, actionHash)
+  -> stable key: actionHash
+2.c func_241(actionHash, callback)
+  -> current callback
+```
+
+因此只扩大 `func_143` 正则不是修复：它会把第一类错误转换成第二类错误，仍无法处理
+变量驱动的 action route。继续直接重命名 callback 还会把不稳定的 `func_N` 工作名写入
+raw `2.c`，使反编译原文失真，并给后续 repack、diff 和跨版本研究制造错误身份。
+
+TestEditor 从此遵循以下边界：
+
+- `2.c` 始终保持反编译原文，不由 Resolve Overlay 写回。
+- Resolve Overlay 写入独立的 `2.resolved.md`。
+- `collectLegacyActionAliases` 仅提供 best-effort 显示提示；失败时使用空 alias map，
+  不得阻止稳定 evidence 提取。
+- `resolved` 表示存在 action registry evidence。
+- `partial` 表示没有 action binding，但存在 slot、weapon、resource 或 orphan evidence。
+- `skipped` 表示没有任何可显示的稳定 evidence。
+- 只有文件读取、文件写入或稳定解析本身异常才记为 `failed`。
+
+旧的 raw mutation API 已移除：
+
+- `renameScript2CallbacksByActionMask`
+- `MscActionRenameResult`
+- `applyResolvedOverlayToScript2`
+
 ## 相关文档
 
 - [MSC Research 阅读入口](./README.md)

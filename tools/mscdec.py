@@ -18,6 +18,10 @@ class DecompilerError(Exception):
         Exception.__init__(self,*args,**kwargs)
 
 
+class MissingArgumentsError(DecompilerError):
+    pass
+
+
 exvs_native_truth_mapping = None
 exvs_script_ranges = []
 
@@ -41,6 +45,7 @@ class WhileIntermediate:
     def __init__(self, isDowWhile, commands, isIfNot):
         self.isDoWhile = isDowWhile
         self.isIfNot = isIfNot
+        self.pushBit = False
         self.commands = commands
 
 FLOAT_RETURN_SYSCALLS = [0x08, 0x0a, 0x0f, 0x11, 0x13, 0x15, 0x17, 0x1b, 0x25, 0x28, 0x2b, 0x2c, 0x2f, 0x32, 0x34, 0x35, 0x3d, 0x3f, 0x40, 0x45]
@@ -377,6 +382,13 @@ def decompileCmd(cmd):
                 return globalVars[cmd.parameters[1]]
         elif c in [0xe, 0xf, 0x10, 0x11, 0x12, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x3a, 0x3b, 0x3c, 0x3d, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b]:
             other, args = getArgs(2)
+            if len(args) < 2:
+                raise MissingArgumentsError(
+                    "Binary opcode 0x{:02X} at 0x{:X} is missing stack operands".format(
+                        c,
+                        cmd.commandPosition,
+                    )
+                )
             return other + [c_ast.BinaryOp(BINARY_OPERATIONS[c], args[1], args[0])]
         elif c in [0x13, 0x18, 0x2b, 0x3e]: # Negation, bit not, logic not, etc. (Unary Op not applied to variable)
             other, args = getArgs(1)
@@ -449,9 +461,18 @@ def decompileCmd(cmd):
         other, args = getArgs(1)
         return other + [c_ast.Cast(cmd.type, args[0])]
     elif type(cmd) == IfElseIntermediate:
-        beforeIf, args = getArgs(1)
+        conditionFunc = currentFunc
+        conditionIndex = index
+        try:
+            beforeIf, args = getArgs(1)
+        except MissingArgumentsError:
+            currentFunc = conditionFunc
+            index = conditionIndex
+            return None
         if len(args) == 0:
-            return beforeIf
+            currentFunc = conditionFunc
+            index = conditionIndex
+            return None
         ifCondition = args[0]
         oldFunc = currentFunc
         oldIndex = index
@@ -897,7 +918,7 @@ def main(args):
         exvs_native_truth_mapping = ExvsNativeTruthMapping.from_path(args.exvsMapping)
 
     logging.info("Analyzing...")
-    mscFile = mscsb_disasm(args.file)
+    mscFile = mscsb_disasm(args.file, use_cfg=True)
     logging.info("Decompiling...")
 
     globalVarDecls = getGlobalVars(mscFile)

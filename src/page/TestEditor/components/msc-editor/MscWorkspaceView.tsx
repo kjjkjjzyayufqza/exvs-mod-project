@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
-import { dirname, join, resourceDir } from "@tauri-apps/api/path";
+import { join } from "@tauri-apps/api/path";
 import {
   ExternalLink,
   FileCode,
@@ -35,16 +35,13 @@ import { Command } from "@tauri-apps/plugin-shell";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { exists, readDir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { exists, readDir } from "@tauri-apps/plugin-fs";
 import {
   folderContainsMscScriptFiles,
   getMscConvertLogPath,
   getMscConvertOutputPath,
   getMscRepackOutputPath,
 } from "../../utils/mscWorkspaceUtils";
-import {
-  renameScript2CallbacksByActionMask,
-} from "../../utils/mscActionRename";
 import {
   compareByLeadingIndex,
   computeMscSlotStatuses,
@@ -57,6 +54,11 @@ import { MscPipelineBar } from "./MscPipelineBar";
 import { MscFileRow, type MscFileActionDescriptor } from "./MscFileRow";
 import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
 import { applyFhm2dStructureMigrationToPack, resolveMigratedFhm2dFolderPath } from "@/utils/fhm2dFolderPathResolution";
+import {
+  decompileMscScript,
+  repackMscScript,
+  resolveMscActionOverlayForFolder,
+} from "./mscWorkspaceActions";
 
 interface MscWorkspaceViewProps {
   workspaceRoot: string;
@@ -88,22 +90,6 @@ const FILE_TYPES = [
   { value: "cscex", label: ".cscex" },
   { value: "dscex", label: ".dscex" },
 ] as const;
-
-const EXVS_MAPPING_FILE_ID_PATTERN = /^0x[0-9a-fA-F]{8}$/;
-
-function getMscScriptFileIdFromFolderPath(folderPath: string | null): string | null {
-  if (!folderPath) return null;
-  const normalizedPath = folderPath.replace(/\\/g, "/").replace(/\/+$/, "");
-  const folderName = normalizedPath.split("/").pop();
-  if (!folderName || !EXVS_MAPPING_FILE_ID_PATTERN.test(folderName)) return null;
-  return `0x${folderName.slice(2).toUpperCase()}`;
-}
-
-function buildOptionalExvsMappingArgs(mappingPath: string | null): string[] {
-  // --exvsMapping is still an experimental native-truth symbol/relocation layer.
-  // Most MSC repacks can compile without it, so a missing per-script mapping must not block repack.
-  return mappingPath ? ["--exvsMapping", mappingPath] : [];
-}
 
 function matchesFileType(fileName: string, type: string): boolean {
   const lower = fileName.toLowerCase();
@@ -142,36 +128,6 @@ export default function MscWorkspaceView({
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
   const isBusy = processingFile !== null || batch !== null || isFolderRepacking;
-
-  const resolveTauriExeDir = useCallback(async () => {
-    const resourcePath = await resourceDir();
-    const normalized = resourcePath.replace(/\\/g, "/").replace(/\/+$/, "");
-    if (normalized.toLowerCase().endsWith("/resources")) {
-      return await dirname(resourcePath);
-    }
-    return resourcePath;
-  }, []);
-
-  const resolveOptionalExvsMappingPath = useCallback(async () => {
-    const scriptFileId = getMscScriptFileIdFromFolderPath(mscFolderPath);
-    if (!scriptFileId) return null;
-
-    const resourcePath = await resourceDir();
-    const exeDir = await resolveTauriExeDir();
-    const mappingFileName = `exvs_${scriptFileId}.native_truth.json`;
-    const candidatePaths = [
-      await join(resourcePath, "tools", "mappings", mappingFileName),
-      await join(exeDir, "tools", "mappings", mappingFileName),
-      await join(resourcePath, "tools", mappingFileName),
-      await join(exeDir, "tools", mappingFileName),
-    ];
-
-    for (const mappingPath of Array.from(new Set(candidatePaths))) {
-      if (await exists(mappingPath)) return mappingPath;
-    }
-
-    return null;
-  }, [mscFolderPath, resolveTauriExeDir]);
 
   const fetchFiles = useCallback(async () => {
     if (!mscFolderPath) return;
@@ -286,26 +242,16 @@ export default function MscWorkspaceView({
       const inputPath = file.path;
       const outputPath = getMscConvertOutputPath(inputPath);
       const logPath = getMscConvertLogPath(inputPath);
-      const resourcePath = await resourceDir();
-      const exvsMappingPath = await resolveOptionalExvsMappingPath();
-
-      const command = await Command.create("exec-python", [
-        resourcePath + "/tools/mscdec.py",
+      await decompileMscScript({
         inputPath,
-        "-o",
         outputPath,
-        "-log",
         logPath,
-        ...buildOptionalExvsMappingArgs(exvsMappingPath),
-      ]).execute();
-
-      if (command.code !== 0) {
-        throw new Error(command.stderr || `mscdec failed for ${file.name}`);
-      }
+        mscFolderPath,
+      });
 
       return `${file.name} converted to raw C`;
     },
-    [resolveOptionalExvsMappingPath],
+    [mscFolderPath],
   );
 
   /** Recompile one C file back to its source pack extension. Throws on tool failure. */
@@ -313,28 +259,10 @@ export default function MscWorkspaceView({
     async (file: MscFileInfo): Promise<string> => {
       const inputPath = file.path;
       const outputPath = getMscRepackOutputPath(inputPath);
-      const resourcePath = await resourceDir();
-      const exvsMappingPath = await resolveOptionalExvsMappingPath();
-
-      const command = await Command.create(
-        "exec-python",
-        [
-          resourcePath + "/tools/msclang.py",
-          inputPath,
-          "-o",
-          outputPath,
-          "-i",
-          ...buildOptionalExvsMappingArgs(exvsMappingPath),
-        ],
-        { encoding: "utf-8" },
-      ).execute();
-
-      if (command.code !== 0) {
-        throw new Error(command.stderr || `msclang failed for ${file.name}`);
-      }
+      await repackMscScript({ inputPath, outputPath, mscFolderPath });
       return `${file.name} to ${outputPath.replace(/^.*[\\/]/, "")}`;
     },
-    [resolveOptionalExvsMappingPath],
+    [mscFolderPath],
   );
 
   const handleConvertOne = useCallback(
@@ -371,19 +299,21 @@ export default function MscWorkspaceView({
     async (file: MscFileInfo) => {
       try {
         setProcessingFile(file.name);
-        const scriptFolder = await dirname(file.path);
-        const script0Path = await join(scriptFolder, "0.c");
-        if (!(await exists(script0Path))) {
-          throw new Error("MSC workspace: 0.c not found, cannot write ACTION aliases");
+        const scriptFolder = file.path.replace(/[\\/][^\\/]+$/, "");
+        const result = await resolveMscActionOverlayForFolder(scriptFolder);
+        if (result.status === "skipped") {
+          toast.warning(`No stable MSC registry evidence found for ${file.name}`);
+        } else {
+          const message =
+            `Wrote ${result.actionCount} action(s), ${result.slotCallbackCount} slot callback(s), ` +
+            `${result.weaponBindingCount} weapon binding(s), and ${result.resourceBindingCount} resource binding(s) ` +
+            `to ${result.overlayPath}`;
+          if (result.status === "partial") {
+            toast.warning(message);
+          } else {
+            toast.success(message);
+          }
         }
-
-        const script0Content = await readTextFile(script0Path);
-        const script2Content = await readTextFile(file.path);
-        const result = renameScript2CallbacksByActionMask(script0Content, script2Content);
-        await writeTextFile(file.path, result.updatedScript2);
-        toast.success(
-          `Wrote ${result.renamedCallbackCount} ACTION aliases and ${result.bindingCommentCount} binding comments into ${file.name}`,
-        );
         await fetchFiles();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : `Error resolving overlay for ${file.name}`);

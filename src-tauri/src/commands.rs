@@ -9,11 +9,12 @@ use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watche
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
+    collections::{HashMap, VecDeque},
     fs,
     path::{Component, Path, PathBuf},
     process::Command,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         mpsc::{channel, Receiver},
         Arc, Mutex,
     },
@@ -590,6 +591,310 @@ pub async fn extract_fhm2d_to_folder(
     .map_err(|e| e.to_string())?
 }
 
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkMscExtractTask {
+    pub hash_hex: String,
+    pub pack_name: String,
+    #[serde(default)]
+    pub character_ids: Vec<i32>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkMscExtractItemResult {
+    pub hash_hex: String,
+    pub pack_name: String,
+    pub character_ids: Vec<i32>,
+    pub source_path: String,
+    pub out_dir: String,
+    pub status: String,
+    pub naming_error: Option<String>,
+    pub error: Option<String>,
+    pub elapsed_ms: f64,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkMscExtractProgress {
+    pub current: usize,
+    pub total: usize,
+    pub item: BulkMscExtractItemResult,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkMscExtractSummary {
+    pub total: usize,
+    pub success_count: usize,
+    pub source_missing_count: usize,
+    pub extraction_failure_count: usize,
+    pub naming_warning_count: usize,
+    pub elapsed_ms: f64,
+    pub items: Vec<BulkMscExtractItemResult>,
+}
+
+fn join_relative_path(base: &Path, relative_path: &str) -> Result<PathBuf, String> {
+    let trimmed = relative_path.trim();
+    if trimmed.is_empty() {
+        return Ok(base.to_path_buf());
+    }
+    validate_relative_path_under_base(trimmed)?;
+    let mut out = base.to_path_buf();
+    for component in Path::new(trimmed).components() {
+        match component {
+            Component::Normal(part) => out.push(part),
+            Component::CurDir => {}
+            Component::ParentDir | Component::Prefix(_) | Component::RootDir => {
+                return Err(format!("Invalid relative path: {trimmed}"));
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn build_fhm2d_source_index(source_root: &Path) -> Result<HashMap<String, PathBuf>, String> {
+    if !source_root.is_dir() {
+        return Err(format!(
+            "Source root is not a directory: {}",
+            source_root.display()
+        ));
+    }
+
+    let mut index = HashMap::new();
+    let entries = fs::read_dir(source_root)
+        .map_err(|e| format!("Failed to read source root {}: {e}", source_root.display()))?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let is_fhm2d = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext.eq_ignore_ascii_case("fhm2d"))
+            .unwrap_or(false);
+        if !is_fhm2d {
+            continue;
+        }
+        let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
+            continue;
+        };
+        index.entry(stem.to_ascii_lowercase()).or_insert(path);
+    }
+    Ok(index)
+}
+
+fn process_bulk_msc_extract_task(
+    task: BulkMscExtractTask,
+    source_root: &Path,
+    source_index: &HashMap<String, PathBuf>,
+    output_route_root: &Path,
+) -> BulkMscExtractItemResult {
+    let started = Instant::now();
+    let hash_hex = normalize_hash_hex(&task.hash_hex).unwrap_or_else(|_| task.hash_hex.clone());
+    let hash_key = hash_hex.to_ascii_lowercase();
+    let default_source_path = source_root.join(format!("{hash_hex}.fhm2d"));
+    let pack_name = sanitize_structure_name(&task.pack_name);
+    let Some(source_path) = source_index.get(&hash_key).cloned() else {
+        let out_dir = output_route_root.join(&pack_name);
+        return BulkMscExtractItemResult {
+            hash_hex,
+            pack_name,
+            character_ids: task.character_ids,
+            source_path: normalize_path(&default_source_path),
+            out_dir: normalize_path(&out_dir),
+            status: "source_missing".to_string(),
+            naming_error: None,
+            error: Some("Source file not found".to_string()),
+            elapsed_ms: started.elapsed().as_secs_f64() * 1000.0,
+        };
+    };
+
+    let out_dir = output_route_root.join(&pack_name);
+    let source_path_string = normalize_path(&source_path);
+    let out_dir_string = normalize_path(&out_dir);
+
+    match crate::format::fhm2d::extract_fhm2d_to_folder_impl(
+        source_path_string.as_str(),
+        out_dir_string.as_str(),
+        Some(crate::format::fhm2d::Fhm2dFormat::Msc),
+        None,
+        false,
+    ) {
+        Ok(result) => BulkMscExtractItemResult {
+            hash_hex,
+            pack_name,
+            character_ids: task.character_ids,
+            source_path: source_path_string,
+            out_dir: out_dir_string,
+            status: "extracted".to_string(),
+            naming_error: result.naming_error,
+            error: None,
+            elapsed_ms: started.elapsed().as_secs_f64() * 1000.0,
+        },
+        Err(error) => BulkMscExtractItemResult {
+            hash_hex,
+            pack_name,
+            character_ids: task.character_ids,
+            source_path: source_path_string,
+            out_dir: out_dir_string,
+            status: "extract_error".to_string(),
+            naming_error: None,
+            error: Some(error),
+            elapsed_ms: started.elapsed().as_secs_f64() * 1000.0,
+        },
+    }
+}
+
+fn summarize_bulk_msc_extract(
+    total: usize,
+    started: Instant,
+    items: Vec<BulkMscExtractItemResult>,
+) -> BulkMscExtractSummary {
+    let success_count = items
+        .iter()
+        .filter(|item| item.status == "extracted")
+        .count();
+    let source_missing_count = items
+        .iter()
+        .filter(|item| item.status == "source_missing")
+        .count();
+    let extraction_failure_count = items
+        .iter()
+        .filter(|item| item.status == "extract_error")
+        .count();
+    let naming_warning_count = items
+        .iter()
+        .filter(|item| item.naming_error.is_some())
+        .count();
+
+    BulkMscExtractSummary {
+        total,
+        success_count,
+        source_missing_count,
+        extraction_failure_count,
+        naming_warning_count,
+        elapsed_ms: started.elapsed().as_secs_f64() * 1000.0,
+        items,
+    }
+}
+
+fn bulk_extract_msc_fhm2d_to_folder_impl(
+    source_root: String,
+    output_root: String,
+    route_prefix: String,
+    tasks: Vec<BulkMscExtractTask>,
+    concurrency: Option<usize>,
+    on_progress: Channel<BulkMscExtractProgress>,
+) -> Result<BulkMscExtractSummary, String> {
+    let started = Instant::now();
+    let total = tasks.len();
+    if total == 0 {
+        return Ok(summarize_bulk_msc_extract(total, started, Vec::new()));
+    }
+
+    let source_root_path = PathBuf::from(source_root);
+    let output_root_path = PathBuf::from(output_root);
+    if source_root_path.as_os_str().is_empty() {
+        return Err("Source root is not configured".to_string());
+    }
+    if output_root_path.as_os_str().is_empty() {
+        return Err("Output root is not configured".to_string());
+    }
+    fs::create_dir_all(&output_root_path).map_err(|e| {
+        format!(
+            "Failed to create output root {}: {e}",
+            output_root_path.display()
+        )
+    })?;
+    let output_route_root = join_relative_path(&output_root_path, &route_prefix)?;
+    let source_index = Arc::new(build_fhm2d_source_index(&source_root_path)?);
+    let queue = Arc::new(Mutex::new(VecDeque::from(tasks)));
+    let (result_tx, result_rx) = channel::<BulkMscExtractItemResult>();
+    let worker_count = concurrency.unwrap_or(4).clamp(1, 8).min(total.max(1));
+    let mut handles = Vec::with_capacity(worker_count);
+
+    for _ in 0..worker_count {
+        let queue = queue.clone();
+        let result_tx = result_tx.clone();
+        let source_root_path = source_root_path.clone();
+        let output_route_root = output_route_root.clone();
+        let source_index = source_index.clone();
+        handles.push(thread::spawn(move || loop {
+            let next_task = {
+                let mut guard = queue.lock().expect("bulk MSC queue lock poisoned");
+                guard.pop_front()
+            };
+            let Some(task) = next_task else {
+                break;
+            };
+            let result = process_bulk_msc_extract_task(
+                task,
+                &source_root_path,
+                source_index.as_ref(),
+                &output_route_root,
+            );
+            if result_tx.send(result).is_err() {
+                break;
+            }
+        }));
+    }
+    drop(result_tx);
+
+    let mut items = Vec::with_capacity(total);
+    for result in result_rx {
+        let current = items.len() + 1;
+        let _ = on_progress.send(BulkMscExtractProgress {
+            current,
+            total,
+            item: result.clone(),
+        });
+        items.push(result);
+    }
+
+    for handle in handles {
+        handle
+            .join()
+            .map_err(|_| "Bulk MSC extract worker panicked".to_string())?;
+    }
+
+    if items.len() != total {
+        return Err(format!(
+            "Bulk MSC extract finished with {} result(s), expected {total}",
+            items.len()
+        ));
+    }
+
+    Ok(summarize_bulk_msc_extract(total, started, items))
+}
+
+#[tauri::command]
+pub async fn bulk_extract_msc_fhm2d_to_folder(
+    state: State<'_, WatcherState>,
+    source_root: String,
+    output_root: String,
+    route_prefix: String,
+    tasks: Vec<BulkMscExtractTask>,
+    concurrency: Option<usize>,
+    on_progress: Channel<BulkMscExtractProgress>,
+) -> Result<BulkMscExtractSummary, String> {
+    let _watcher_guard =
+        WatcherSuppressGuard::new(state.suppress_count.clone(), state.suppress_until.clone());
+    tauri::async_runtime::spawn_blocking(move || {
+        bulk_extract_msc_fhm2d_to_folder_impl(
+            source_root,
+            output_root,
+            route_prefix,
+            tasks,
+            concurrency,
+            on_progress,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CopyAssetAsNewResult {
@@ -1050,6 +1355,80 @@ pub struct FolderChangePayload {
 #[derive(Default)]
 pub struct WatcherState {
     pub active: Mutex<Option<ActiveWatcher>>,
+    pub suppress_count: Arc<AtomicUsize>,
+    pub suppress_until: Arc<Mutex<Option<Instant>>>,
+}
+
+struct WatcherSuppressGuard {
+    suppress_count: Arc<AtomicUsize>,
+    suppress_until: Arc<Mutex<Option<Instant>>>,
+}
+
+impl WatcherSuppressGuard {
+    fn new(suppress_count: Arc<AtomicUsize>, suppress_until: Arc<Mutex<Option<Instant>>>) -> Self {
+        suppress_count.fetch_add(1, Ordering::Relaxed);
+        Self {
+            suppress_count,
+            suppress_until,
+        }
+    }
+}
+
+impl Drop for WatcherSuppressGuard {
+    fn drop(&mut self) {
+        self.suppress_count.fetch_sub(1, Ordering::Relaxed);
+        let _ = extend_watcher_suppression_until(
+            self.suppress_until.as_ref(),
+            Instant::now() + Duration::from_millis(1_500),
+        );
+    }
+}
+
+fn extend_watcher_suppression_until(
+    suppress_until: &Mutex<Option<Instant>>,
+    next_until: Instant,
+) -> Result<(), String> {
+    let mut suppress_until = suppress_until
+        .lock()
+        .map_err(|_| "Watcher suppression lock poisoned".to_string())?;
+    if suppress_until
+        .map(|current_until| current_until < next_until)
+        .unwrap_or(true)
+    {
+        *suppress_until = Some(next_until);
+    }
+    Ok(())
+}
+
+fn watcher_is_suppressed(
+    suppress_count: &AtomicUsize,
+    suppress_until: &Mutex<Option<Instant>>,
+) -> bool {
+    if suppress_count.load(Ordering::Relaxed) > 0 {
+        return true;
+    }
+    let Ok(mut suppress_until) = suppress_until.lock() else {
+        return false;
+    };
+    if let Some(until) = *suppress_until {
+        if Instant::now() < until {
+            return true;
+        }
+        *suppress_until = None;
+    }
+    false
+}
+
+#[tauri::command]
+pub fn suppress_test_editor_watcher(
+    state: State<'_, WatcherState>,
+    duration_ms: Option<u64>,
+) -> Result<(), String> {
+    let duration_ms = duration_ms.unwrap_or(8_000).clamp(500, 60_000);
+    extend_watcher_suppression_until(
+        state.suppress_until.as_ref(),
+        Instant::now() + Duration::from_millis(duration_ms),
+    )
 }
 
 pub struct ActiveWatcher {
@@ -1082,6 +1461,8 @@ pub async fn watch_folder(
     let stop_flag = Arc::new(AtomicBool::new(false));
     let stop_flag_clone = stop_flag.clone();
     let app_handle = app.clone();
+    let suppress_count = state.suppress_count.clone();
+    let suppress_until = state.suppress_until.clone();
 
     let mut watcher = RecommendedWatcher::new(
         move |res| {
@@ -1096,8 +1477,16 @@ pub async fn watch_folder(
         .map_err(|e| e.to_string())?;
 
     let canonical_for_loop = canonical.clone();
-    let handle =
-        thread::spawn(move || watch_loop(app_handle, rx, stop_flag_clone, canonical_for_loop));
+    let handle = thread::spawn(move || {
+        watch_loop(
+            app_handle,
+            rx,
+            stop_flag_clone,
+            canonical_for_loop,
+            suppress_count,
+            suppress_until,
+        )
+    });
 
     let active = ActiveWatcher {
         _watcher: watcher,
@@ -1115,6 +1504,8 @@ fn watch_loop(
     rx: Receiver<notify::Result<Event>>,
     stop: Arc<AtomicBool>,
     root: PathBuf,
+    suppress_count: Arc<AtomicUsize>,
+    suppress_until: Arc<Mutex<Option<Instant>>>,
 ) {
     // Debounced full-tree rebuild: see `docs/test-editor-watcher-backend.md` for cost on huge workspaces.
     // Debounce window: emit a full tree rebuild this long after the last change.
@@ -1128,6 +1519,10 @@ fn watch_loop(
 
         match rx.recv_timeout(Duration::from_millis(50)) {
             Ok(Ok(event)) => {
+                if watcher_is_suppressed(suppress_count.as_ref(), suppress_until.as_ref()) {
+                    last_change = None;
+                    continue;
+                }
                 // Emit incremental op immediately so dirty-folder tracking stays responsive.
                 if let Some(payload) = convert_event(&event) {
                     let _ = app.emit("test-editor:folder-change", payload);
@@ -1138,6 +1533,10 @@ fn watch_loop(
                 eprintln!("watch error: {err}");
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                if watcher_is_suppressed(suppress_count.as_ref(), suppress_until.as_ref()) {
+                    last_change = None;
+                    continue;
+                }
                 // After the debounce window has elapsed without a new event, emit a
                 // full tree so the frontend always ends up with an accurate view.
                 if let Some(t) = last_change {
@@ -1353,6 +1752,37 @@ fn build_tree(path: &Path) -> Result<Vec<TestTreeNode>, String> {
     });
 
     Ok(children)
+}
+
+#[cfg(test)]
+mod watcher_suppression_tests {
+    use super::*;
+
+    #[test]
+    fn extend_watcher_suppression_until_keeps_longer_existing_lease() {
+        let suppress_until =
+            Mutex::new(Some(Instant::now() + Duration::from_millis(5_000)));
+        let original_until = suppress_until.lock().unwrap().unwrap();
+
+        extend_watcher_suppression_until(
+            &suppress_until,
+            Instant::now() + Duration::from_millis(100),
+        )
+        .unwrap();
+
+        let actual_until = suppress_until.lock().unwrap().unwrap();
+        assert!(actual_until >= original_until);
+    }
+
+    #[test]
+    fn watcher_is_suppressed_clears_expired_lease() {
+        let suppress_count = AtomicUsize::new(0);
+        let suppress_until =
+            Mutex::new(Some(Instant::now() - Duration::from_millis(1)));
+
+        assert!(!watcher_is_suppressed(&suppress_count, &suppress_until));
+        assert!(suppress_until.lock().unwrap().is_none());
+    }
 }
 
 fn to_id(path: &Path) -> String {
@@ -1967,7 +2397,9 @@ mod character_asset_command_tests {
 
         let result = copy_asset_as_new_impl(
             &folder,
-            &source_root.path().join(format!("{pack_name}_structure.json")),
+            &source_root
+                .path()
+                .join(format!("{pack_name}_structure.json")),
             destination_root.path(),
             "0xB802FAA1",
             "001gundam_005gyan00_001_mod_n1_rocket",

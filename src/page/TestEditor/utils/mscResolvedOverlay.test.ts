@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  applyResolvedOverlayToScript2,
+  buildMscResolvedOverlay,
   renderResolvedOverlayMarkdown,
 } from "./mscResolvedOverlay";
 
@@ -59,19 +59,79 @@ describe("renderResolvedOverlayMarkdown", () => {
     expect(markdown).toContain("Function: `func_450`");
     expect(markdown).toContain("Requested slots: `0x23`");
   });
+});
 
-  it("writes overlay back into 2.c as replaceable comment block", () => {
-    const rawScript2 = "func_241(0x9475130e, 0);\nvoid func_450()\n{\n    func_69(0x23);\n}\n";
-    const markdown = "# MSC Resolved Overlay\n\n- Stable key: `0x9475130e`\n";
+describe("buildMscResolvedOverlay", () => {
+  it("resolves stable action evidence when func_143 has a non-legacy signature", () => {
+    const result = buildMscResolvedOverlay({
+      script0Content: `
+sys_1(0x10000, 0x1, 0x2, 0x6d00aeaa);
+int func_143()
+{
+    return 0x6d00aeaa;
+}
+`,
+      script2Content: `
+func_241(0x6d00aeaa, func_390);
+void func_390()
+{
+    func_69(0x2);
+}
+`,
+    });
 
-    const firstPass = applyResolvedOverlayToScript2(rawScript2, markdown);
-    expect(firstPass).toContain("func_241(0x9475130e, 0);");
-    expect(firstPass).toContain("/* MSC RESOLVED OVERLAY START");
-    expect(firstPass).toContain("# MSC Resolved Overlay");
+    expect(result.status).toBe("resolved");
+    expect(result.legacyAliasCount).toBe(0);
+    expect(result.evidence.actions).toHaveLength(1);
+    expect(result.markdown).toContain("Stable key: `0x6d00aeaa`");
+  });
 
-    const secondPass = applyResolvedOverlayToScript2(firstPass, "# MSC Resolved Overlay\n\n- Stable key: `0x77b100ff`\n");
-    expect(secondPass).toContain("Stable key: `0x77b100ff`");
-    expect(secondPass).not.toContain("Stable key: `0x9475130e`");
-    expect(secondPass.match(/MSC RESOLVED OVERLAY START/g)).toHaveLength(1);
+  it("resolves stable action evidence when func_95 receives a variable hash", () => {
+    const result = buildMscResolvedOverlay({
+      script0Content: `
+sys_1(0x10000, 0x1, 0x2, 0x6d00aeaa);
+void func_143()
+{
+    func_95(var3, var6, var7, arg1);
+}
+`,
+      script2Content: "func_241(0x6d00aeaa, func_390);",
+    });
+
+    expect(result.status).toBe("resolved");
+    expect(result.legacyAliasCount).toBe(0);
+    expect(result.evidence.actions[0]?.callbackName).toBe("func_390");
+  });
+
+  it("returns partial when non-action stable registries are available", () => {
+    const result = buildMscResolvedOverlay({
+      script0Content: "sys_1(0x10000, 0x1, 0x2, 0x6d00aeaa);",
+      script2Content: `
+int func_241(int arg0, int arg1, int arg2, int arg3)
+{
+    return 0;
+}
+sys_1(0x10001, 0x2, 0x1, func_838);
+void func_838()
+{
+    sys_4F(0xb, 0x1, 0xa8e202bf);
+}
+`,
+    });
+
+    expect(result.status).toBe("partial");
+    expect(result.evidence.actions).toHaveLength(0);
+    expect(result.evidence.slotCallbacks).toHaveLength(1);
+    expect(result.markdown).toContain("Slot callback: `func_838`");
+  });
+
+  it("returns skipped when no stable registry evidence is available", () => {
+    const result = buildMscResolvedOverlay({
+      script0Content: "int func_143() { return 0; }",
+      script2Content: "void func_1() {}",
+    });
+
+    expect(result.status).toBe("skipped");
+    expect(result.markdown).toBeNull();
   });
 });

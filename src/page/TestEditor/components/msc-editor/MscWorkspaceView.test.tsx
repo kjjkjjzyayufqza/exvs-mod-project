@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import type { MscResolvedOverlayBuildResult } from "../../utils/mscResolvedOverlay";
 import MscWorkspaceView from "./MscWorkspaceView";
 
 type MockDirEntry = {
@@ -16,12 +17,7 @@ const {
   readDirMock,
   readTextFileMock,
   writeTextFileMock,
-  collectLegacyActionAliasesMock,
-  renameScript2CallbacksByActionMaskMock,
-  buildStableMscEvidenceMock,
-  loadBestEffortParamLabelsMock,
-  renderResolvedOverlayMarkdownMock,
-  applyResolvedOverlayToScript2Mock,
+  buildMscResolvedOverlayMock,
 } = vi.hoisted(() => ({
   openMock: vi.fn(),
   folderContainsMscScriptFilesMock: vi.fn(),
@@ -29,23 +25,39 @@ const {
   readDirMock: vi.fn<() => Promise<MockDirEntry[]>>(async () => []),
   readTextFileMock: vi.fn(async () => ""),
   writeTextFileMock: vi.fn(async () => undefined),
-  collectLegacyActionAliasesMock: vi.fn(() => new Map()),
-  renameScript2CallbacksByActionMaskMock: vi.fn(() => ({
-    updatedScript2: "func_241(0xf48d2d49, ACTION_A_SHOT); //射击\n",
-    renamedCallbackCount: 1,
-    bindingCommentCount: 1,
+  buildMscResolvedOverlayMock: vi.fn<() => MscResolvedOverlayBuildResult>(() => ({
+    status: "skipped",
+    evidence: {
+      actions: [],
+      slotCallbacks: [],
+      weaponBindings: [],
+      resourceBindings: [],
+      orphanActionFunctions: [],
+    },
+    legacyAliasCount: 0,
+    markdown: null,
   })),
-  buildStableMscEvidenceMock: vi.fn(() => ({
-    actions: [],
+}));
+
+const resolvedOverlayResult: MscResolvedOverlayBuildResult = {
+  status: "resolved",
+  evidence: {
+    actions: [
+      {
+        actionHashHex: "0xf48d2d49",
+        actionIndexHex: "0x1",
+        callbackName: "func_912",
+        requestedSlots: [],
+      },
+    ],
     slotCallbacks: [],
     weaponBindings: [],
     resourceBindings: [],
     orphanActionFunctions: [],
-  })),
-  loadBestEffortParamLabelsMock: vi.fn(async () => new Map()),
-  renderResolvedOverlayMarkdownMock: vi.fn(() => "# MSC Resolved Overlay\n"),
-  applyResolvedOverlayToScript2Mock: vi.fn((source: string, markdown: string) => `${source}\n/* MSC RESOLVED OVERLAY START\n${markdown}MSC RESOLVED OVERLAY END */\n`),
-}));
+  },
+  legacyAliasCount: 0,
+  markdown: "# MSC Resolved Overlay\n",
+};
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: openMock,
@@ -92,22 +104,8 @@ vi.mock("../../utils/mscWorkspaceUtils", () => ({
   getMscResolvedOverlayPath: (path: string) => path.replace(/\.c$/i, ".resolved.md"),
 }));
 
-vi.mock("../../utils/mscActionRename", () => ({
-  collectLegacyActionAliases: collectLegacyActionAliasesMock,
-  renameScript2CallbacksByActionMask: renameScript2CallbacksByActionMaskMock,
-}));
-
-vi.mock("../../utils/mscStableEvidence", () => ({
-  buildStableMscEvidence: buildStableMscEvidenceMock,
-}));
-
-vi.mock("../../utils/mscParamLabelResolver", () => ({
-  loadBestEffortParamLabels: loadBestEffortParamLabelsMock,
-}));
-
 vi.mock("../../utils/mscResolvedOverlay", () => ({
-  renderResolvedOverlayMarkdown: renderResolvedOverlayMarkdownMock,
-  applyResolvedOverlayToScript2: applyResolvedOverlayToScript2Mock,
+  buildMscResolvedOverlay: buildMscResolvedOverlayMock,
 }));
 
 describe("MscWorkspaceView", () => {
@@ -176,7 +174,7 @@ describe("MscWorkspaceView", () => {
     expect(await screen.findByRole("button", { name: /^open$/i })).toBeInTheDocument();
   });
 
-  it("writes direct ACTION aliases back into 2.c on Resolve Overlay", async () => {
+  it("writes stable registry evidence to 2.resolved.md on Resolve Overlay", async () => {
     const user = userEvent.setup();
     readDirMock.mockResolvedValueOnce([
       { isFile: true, name: "0.c" },
@@ -184,12 +182,16 @@ describe("MscWorkspaceView", () => {
     ]);
 
     existsMock.mockImplementation(async (path: string) => {
-      return ["E:/workspace/040msc/0x12345678/0.c"].includes(path);
+      return [
+        "E:/workspace/040msc/0x12345678/0.c",
+        "E:/workspace/040msc/0x12345678/2.c",
+      ].includes(path);
     });
 
     readTextFileMock
       .mockResolvedValueOnce("void func_143() { func_95(0xf48d2d49, 0, 0); }")
       .mockResolvedValueOnce("func_241(0xf48d2d49, func_912);\n");
+    buildMscResolvedOverlayMock.mockReturnValueOnce(resolvedOverlayResult);
 
     render(
       <MscWorkspaceView
@@ -204,13 +206,13 @@ describe("MscWorkspaceView", () => {
     await user.click(await screen.findByRole("button", { name: /resolve overlay/i }));
 
     await waitFor(() => {
-      expect(renameScript2CallbacksByActionMaskMock).toHaveBeenCalledWith(
-        "void func_143() { func_95(0xf48d2d49, 0, 0); }",
-        "func_241(0xf48d2d49, func_912);\n",
-      );
       expect(writeTextFileMock).toHaveBeenCalledWith(
+        "E:/workspace/040msc/0x12345678/2.resolved.md",
+        "# MSC Resolved Overlay\n",
+      );
+      expect(writeTextFileMock).not.toHaveBeenCalledWith(
         "E:/workspace/040msc/0x12345678/2.c",
-        "func_241(0xf48d2d49, ACTION_A_SHOT); //射击\n",
+        expect.any(String),
       );
     });
   });

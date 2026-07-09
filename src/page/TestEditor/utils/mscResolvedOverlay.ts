@@ -1,14 +1,55 @@
+import { collectLegacyActionAliases } from "./mscActionRename";
+import { buildStableMscEvidence } from "./mscStableEvidence";
 import type { MscStableOverlayEvidence } from "./mscStableOverlayTypes";
-
-const OVERLAY_START_MARKER = "/* MSC RESOLVED OVERLAY START";
-const OVERLAY_END_MARKER = "MSC RESOLVED OVERLAY END */";
 
 function bullet(lines: string[], value: string): void {
   lines.push(`- ${value}`);
 }
 
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+export type MscResolvedOverlayStatus = "resolved" | "partial" | "skipped";
+
+export interface MscResolvedOverlayBuildResult {
+  status: MscResolvedOverlayStatus;
+  evidence: MscStableOverlayEvidence;
+  legacyAliasCount: number;
+  markdown: string | null;
+}
+
+export function buildMscResolvedOverlay(params: {
+  script0Content: string;
+  script2Content: string;
+}): MscResolvedOverlayBuildResult {
+  const { script0Content, script2Content } = params;
+  let legacyAliases: ReturnType<typeof collectLegacyActionAliases>;
+  try {
+    legacyAliases = collectLegacyActionAliases(script0Content, script2Content);
+  } catch {
+    legacyAliases = new Map();
+  }
+
+  const evidence = buildStableMscEvidence({
+    script0Content,
+    script2Content,
+    legacyAliases,
+  });
+  const nonActionEvidenceCount =
+    evidence.slotCallbacks.length +
+    evidence.weaponBindings.length +
+    evidence.resourceBindings.length +
+    evidence.orphanActionFunctions.length;
+  const status: MscResolvedOverlayStatus =
+    evidence.actions.length > 0
+      ? "resolved"
+      : nonActionEvidenceCount > 0
+        ? "partial"
+        : "skipped";
+
+  return {
+    status,
+    evidence,
+    legacyAliasCount: legacyAliases.size,
+    markdown: status === "skipped" ? null : renderResolvedOverlayMarkdown(evidence),
+  };
 }
 
 export function renderResolvedOverlayMarkdown(
@@ -17,7 +58,7 @@ export function renderResolvedOverlayMarkdown(
   const lines: string[] = [];
   lines.push("# MSC Resolved Overlay");
   lines.push("");
-  lines.push("This block is generated from stable registry evidence. Existing `2.c` code stays below.");
+  lines.push("This sidecar is generated from stable registry evidence. Raw `2.c` remains unchanged.");
   lines.push("");
   lines.push("## Action Registry");
 
@@ -120,19 +161,4 @@ export function renderResolvedOverlayMarkdown(
   }
 
   return `${lines.join("\n").trim()}\n`;
-}
-
-export function applyResolvedOverlayToScript2(
-  script2Content: string,
-  overlayMarkdown: string,
-): string {
-  const normalizedSource = script2Content
-    .replace(new RegExp(`${escapeRegex(OVERLAY_START_MARKER)}[\\s\\S]*?${escapeRegex(OVERLAY_END_MARKER)}\\s*`, "g"), "")
-    .trimEnd();
-
-  const commentBlock = `${OVERLAY_START_MARKER}
-${overlayMarkdown}${OVERLAY_END_MARKER}
-`;
-
-  return `${normalizedSource}\n\n${commentBlock}`;
 }

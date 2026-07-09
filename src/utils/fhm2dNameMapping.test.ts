@@ -85,6 +85,24 @@ describe("fhm2dNameMapping", () => {
     expect(paramEntry?.confidence).toBe("ob-unit-list");
   });
 
+  it("uses newer character_list fields for Over.on unit hashes", () => {
+    const entry = findFhm2dNameMapping("0xB6BBF2D9", { routeId: "unit.model" });
+
+    expect(entry?.name).toBe("058vlprgs_001overon_001");
+    expect(entry?.confidence).toBe("ob-unit-list");
+    expect(entry?.character?.characterId).toBe(58001001);
+    expect(entry?.character?.characterName).toBe("オーヴェロン");
+  });
+
+  it("uses internal unit stems when OB unit IDs lack direct character rows", () => {
+    const entry = findFhm2dNameMapping("0xAF626F7A", { routeId: "unit.model" });
+
+    expect(entry?.name).toBe("768freedm_001imojus_001_af626f7a");
+    expect(entry?.aliases).toContain("unit_568701001");
+    expect(entry?.character?.characterId).toBe(768001005);
+    expect(entry?.character?.characterName).toBe("不朽正義高達");
+  });
+
   it("maps OB param workspaces from chrsysparam unit IDs", () => {
     const entry = findFhm2dNameMapping("0x35B195CC", { routeId: "unit.param" });
 

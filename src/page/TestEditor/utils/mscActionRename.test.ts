@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  collectLegacyActionAliases,
-  renameScript2CallbacksByActionMask,
-} from "./mscActionRename";
+import { collectLegacyActionAliases } from "./mscActionRename";
 
 const SCRIPT0 = `
 void func_143()
@@ -109,13 +106,5 @@ void func_143()
       workingName: "ACTION_AB_SUB",
       comment: "副射",
     });
-  });
-});
-
-describe("renameScript2CallbacksByActionMask", () => {
-  it("keeps old mutation path working as compatibility wrapper", () => {
-    const result = renameScript2CallbacksByActionMask(SCRIPT0, SCRIPT2);
-    expect(result.updatedScript2).toContain("func_241(0xf48d2d49, ACTION_A_SHOT); //射击");
-    expect(result.updatedScript2).toContain("func_241(0x31f61d6c, ACTION_AB_SUB); //副射");
   });
 });

@@ -18,7 +18,7 @@ def build_cfg(script):
 
     block_starts = {0}
     for i, cmd in enumerate(cmds):
-        if not isinstance(cmd, Command):
+        if not _is_command_like(cmd):
             continue
         if cmd.command in (0x04, 0x05, 0x36):
             target = cmd.parameters[0]
@@ -53,7 +53,7 @@ def build_cfg(script):
     for bb in blocks:
         last_cmd = None
         for idx in range(bb.end_idx, bb.start_idx - 1, -1):
-            if isinstance(cmds[idx], Command):
+            if _is_command_like(cmds[idx]):
                 last_cmd = cmds[idx]
                 break
 
@@ -148,7 +148,12 @@ def resolve_exvs_syscall_script_refs(cmd, popped, resolve_popped_index):
             resolve_popped_index(popped_index)
 
 
-def resolve_script_refs_cfg(script, script_offset_to_name, script_called_vars=None):
+def resolve_script_refs_cfg(
+    script,
+    script_offset_to_name,
+    script_called_vars=None,
+    stack_pops=COMMAND_STACKPOPS,
+):
     cmds = script.cmds
     if not cmds:
         return
@@ -164,11 +169,11 @@ def resolve_script_refs_cfg(script, script_offset_to_name, script_called_vars=No
         stack = []
         for idx in range(bb.start_idx, bb.end_idx + 1):
             item = cmds[idx]
-            if not isinstance(item, Command):
+            if not _is_command_like(item):
                 continue
             cmd = item
 
-            pop_count = COMMAND_STACKPOPS[cmd.command](cmd.parameters)
+            pop_count = stack_pops[cmd.command](cmd.parameters)
             popped = []
             for _ in range(pop_count):
                 if stack:
@@ -180,14 +185,14 @@ def resolve_script_refs_cfg(script, script_offset_to_name, script_called_vars=No
                 if popped and popped[0] is not None:
                     _try_resolve_ref(popped[0], valid_offsets, script_offset_to_name)
                 for p in popped:
-                    if p is not None and isinstance(p, Command) and p.command in (0x0A, 0x0D):
+                    if p is not None and _is_command_like(p) and p.command in (0x0A, 0x0D):
                         val = p.parameters[0]
                         if isinstance(val, int) and val > 0x50 and val in valid_offsets:
                             p.parameters[0] = ScriptRefStr(script_offset_to_name[val])
 
             if cmd.command == 0x2c and popped:
                 last_pop = popped[-1]
-                if last_pop is not None and isinstance(last_pop, Command) and last_pop.command in (0x0A, 0x0D):
+                if last_pop is not None and _is_command_like(last_pop) and last_pop.command in (0x0A, 0x0D):
                     val = last_pop.parameters[0]
                     if isinstance(val, int) and not isinstance(val, str):
                         pass
@@ -199,7 +204,7 @@ def resolve_script_refs_cfg(script, script_offset_to_name, script_called_vars=No
             if cmd.command in (0x1C, 0x41) and cmd.parameters[0] == 0x0:
                 if popped and popped[0] is not None:
                     p = popped[0]
-                    if isinstance(p, Command) and p.command in (0x0A, 0x0D):
+                    if _is_command_like(p) and p.command in (0x0A, 0x0D):
                         val = p.parameters[0]
                         if isinstance(val, int) and val in valid_offsets:
                             if script_name not in script_called_vars:
@@ -219,7 +224,7 @@ def resolve_script_refs_cfg(script, script_offset_to_name, script_called_vars=No
             )
 
             if cmd.command == 0x32:
-                if idx > 0 and isinstance(cmds[idx - 1], Command):
+                if idx > 0 and _is_command_like(cmds[idx - 1]):
                     stack.append(cmds[idx - 1])
 
             if cmd.pushBit:
@@ -229,7 +234,7 @@ def resolve_script_refs_cfg(script, script_offset_to_name, script_called_vars=No
 def _try_resolve_ref(cmd_obj, valid_offsets, offset_to_name):
     if cmd_obj is None:
         return
-    if not isinstance(cmd_obj, Command):
+    if not _is_command_like(cmd_obj):
         return
     if cmd_obj.command not in (0x0A, 0x0D):
         return
@@ -238,7 +243,12 @@ def _try_resolve_ref(cmd_obj, valid_offsets, offset_to_name):
         cmd_obj.parameters[0] = ScriptRefStr(offset_to_name[val])
 
 
-def resolve_cross_script_refs(msc_file, script_offset_to_name, script_called_vars):
+def resolve_cross_script_refs(
+    msc_file,
+    script_offset_to_name,
+    script_called_vars,
+    stack_pops=COMMAND_STACKPOPS,
+):
     valid_offsets = set(script_offset_to_name.keys())
 
     for script in msc_file.scripts:
@@ -250,11 +260,11 @@ def resolve_cross_script_refs(msc_file, script_offset_to_name, script_called_var
             stack = []
             for idx in range(bb.start_idx, bb.end_idx + 1):
                 item = cmds[idx]
-                if not isinstance(item, Command):
+                if not _is_command_like(item):
                     continue
                 cmd = item
 
-                pop_count = COMMAND_STACKPOPS[cmd.command](cmd.parameters)
+                pop_count = stack_pops[cmd.command](cmd.parameters)
                 popped = []
                 for _ in range(pop_count):
                     if stack:
@@ -271,7 +281,7 @@ def resolve_cross_script_refs(msc_file, script_offset_to_name, script_called_var
                     if popped and popped[0] is not None:
                         p0 = popped[0]
                         jump_name = None
-                        if isinstance(p0, Command) and p0.command in (0x0A, 0x0D):
+                        if _is_command_like(p0) and p0.command in (0x0A, 0x0D):
                             val = p0.parameters[0]
                             if isinstance(val, int) and val in script_offset_to_name:
                                 jump_name = script_offset_to_name[val]
@@ -284,7 +294,7 @@ def resolve_cross_script_refs(msc_file, script_offset_to_name, script_called_var
                                     _try_resolve_ref(popped[arg_idx], valid_offsets, script_offset_to_name)
 
                 if cmd.command == 0x32:
-                    if idx > 0 and isinstance(cmds[idx - 1], Command):
+                    if idx > 0 and _is_command_like(cmds[idx - 1]):
                         stack.append(cmds[idx - 1])
                 if cmd.pushBit:
                     stack.append(cmd)

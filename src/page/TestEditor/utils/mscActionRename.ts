@@ -18,12 +18,6 @@ export interface MscLegacyActionAlias {
   comment: string;
 }
 
-export interface MscActionRenameResult {
-  updatedScript2: string;
-  renamedCallbackCount: number;
-  bindingCommentCount: number;
-}
-
 const ACTION_BY_MASK: Record<string, ActionSemantic> = {
   "0x1": { maskHex: "0x1", nameStem: "A_SHOT", comment: "射击" },
   "0x2": { maskHex: "0x2", nameStem: "B_MELEE", comment: "近战" },
@@ -248,65 +242,4 @@ export function collectLegacyActionAliases(
   }
 
   return aliases;
-}
-
-export function renameScript2CallbacksByActionMask(
-  script0Content: string,
-  script2Content: string,
-): MscActionRenameResult {
-  const aliases = collectLegacyActionAliases(script0Content, script2Content);
-  const bindingRegex = /func_241\(\s*(0x[0-9a-fA-F]+)\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*\);/g;
-  const callbackRenameMap = new Map<string, string>();
-  const commentByHash = new Map<string, string>();
-  const usedNames = new Set<string>();
-
-  let bindingMatch: RegExpExecArray | null;
-  while ((bindingMatch = bindingRegex.exec(script2Content)) !== null) {
-    const hashHex = canonicalMscHashHex(bindingMatch[1]);
-    const callbackName = bindingMatch[2];
-    const alias = aliases.get(hashHex);
-    if (!alias) {
-      continue;
-    }
-
-    let targetFunctionName = alias.workingName;
-    if (usedNames.has(targetFunctionName) && callbackRenameMap.get(callbackName) !== targetFunctionName) {
-      let suffix = 2;
-      while (usedNames.has(`${targetFunctionName}_${suffix}`)) {
-        suffix += 1;
-      }
-      targetFunctionName = `${targetFunctionName}_${suffix}`;
-    }
-
-    usedNames.add(targetFunctionName);
-    callbackRenameMap.set(callbackName, targetFunctionName);
-    commentByHash.set(hashHex, alias.comment);
-  }
-
-  if (callbackRenameMap.size === 0) {
-    throw new Error("MSC action rename: no func_241 bindings matched legacy action routes");
-  }
-
-  let updatedScript2 = script2Content;
-  const callbackRenames = Array.from(callbackRenameMap.entries()).sort((a, b) => b[0].length - a[0].length);
-  for (const [oldName, newName] of callbackRenames) {
-    const callbackRegex = new RegExp(`\\b${escapeRegex(oldName)}\\b`, "g");
-    updatedScript2 = updatedScript2.replace(callbackRegex, newName);
-  }
-
-  for (const [hashHex, comment] of commentByHash.entries()) {
-    const updatedBindingRegex = new RegExp(
-      `(func_241\\(\\s*${escapeRegex(hashHex)}\\s*,\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*\\);)(?:\\s*//.*)?`,
-      "g",
-    );
-    updatedScript2 = updatedScript2.replace(updatedBindingRegex, (_match, bindingPrefix: string) => {
-      return `${bindingPrefix} //${comment}`;
-    });
-  }
-
-  return {
-    updatedScript2,
-    renamedCallbackCount: callbackRenameMap.size,
-    bindingCommentCount: commentByHash.size,
-  };
 }

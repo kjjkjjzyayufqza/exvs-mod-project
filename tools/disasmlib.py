@@ -233,9 +233,6 @@ def pickTypes(script):
 def disasm(fname, use_cfg=False):
     global clearedPaths,scriptCalledVars,mscFile,charAcmdNames
 
-    if use_cfg:
-        return disasm_cfg_ref_only(fname, use_cfg=True)
-
     mscFile = MscFile()
 
     with open(fname, 'rb') as f:
@@ -248,17 +245,54 @@ def disasm(fname, use_cfg=False):
 
     scriptCalledVars = {}
 
-    # 2 = number of passes for script offset analysis
-    for i in range(2):
-        for script in mscFile:
-            clearedPaths = []
-            emuScript(script, 0, [], i)
+    if use_cfg:
+        from msc_cfg import (
+            ScriptRefStr,
+            resolve_cross_script_refs,
+            resolve_script_refs_cfg,
+        )
 
-    for i,script in enumerate(mscFile):
-        clearedPaths = []
-        emuScript(script, 0, [], 2)
+        offset_to_name = dict(scriptNames)
+        cfg_called_vars = {}
+        for script in mscFile.scripts:
+            resolve_script_refs_cfg(
+                script,
+                offset_to_name,
+                cfg_called_vars,
+                stack_pops=COMMAND_STACKPOPS,
+            )
+
+        resolve_cross_script_refs(
+            mscFile,
+            offset_to_name,
+            cfg_called_vars,
+            stack_pops=COMMAND_STACKPOPS,
+        )
+        resolve_cross_script_refs(
+            mscFile,
+            offset_to_name,
+            cfg_called_vars,
+            stack_pops=COMMAND_STACKPOPS,
+        )
+
+        for script in mscFile.scripts:
+            for cmd in script.cmds:
+                if isinstance(cmd, Command) and cmd.command in (0x0A, 0x0D):
+                    if isinstance(cmd.parameters[0], ScriptRefStr):
+                        cmd.parameters[0] = ScriptRef(str(cmd.parameters[0]))
+    else:
+        # 2 = number of passes for script offset analysis
+        for i in range(2):
+            for script in mscFile:
+                clearedPaths = []
+                emuScript(script, 0, [], i)
+
+        for i,script in enumerate(mscFile):
+            clearedPaths = []
+            emuScript(script, 0, [], 2)
         #pickTypes(script)
 
+    for i,script in enumerate(mscFile):
         jumpPositions = {}
         for cmd in script:
             if cmd.command in [0x4, 0x5, 0x2e, 0x34, 0x35, 0x36]:

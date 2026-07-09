@@ -1,7 +1,8 @@
-import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { exists, readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { dirname } from "@tauri-apps/api/path";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { Buffer } from "buffer";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
@@ -10,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -21,7 +23,7 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Save, RefreshCw, Plus, Trash2, Search, Copy, Clipboard, Download, Upload, FolderOpen, PackageOpen, Bug } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleSlash, Info, Save, RefreshCw, Plus, Trash2, Search, Copy, Clipboard, Download, Upload, FolderOpen, PackageOpen, Bug, XCircle } from "lucide-react";
 import { CharacterIdTable, CharacterIdTableData, buildCharacterIdTableBuffer } from "@/models/characterIdTable";
 import { cn } from "@/lib/utils";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -45,6 +47,7 @@ import { promptAndMigrateWorkspaceContentIfNeeded } from "@/services/testEditorW
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
 import { sanitizeFhm2dStructureName } from "@/utils/fhm2dStructureMetadata";
+import { MscSourceBatchDecompileView } from "./character-id-table/MscSourceBatchDecompileView";
 
 interface CharacterIdTableViewProps {
     folderPath: string;
@@ -79,10 +82,10 @@ const CHARACTER_ID_IMPORT_MODAL_DIMENSIONS = {
 };
 
 const CHARACTER_ID_DEBUG_MODAL_DIMENSIONS = {
-    width: 720,
-    height: 540,
-    minWidth: 560,
-    minHeight: 420,
+    width: 900,
+    height: 680,
+    minWidth: 720,
+    minHeight: 520,
 };
 
 type ClipboardPayload = {
@@ -95,16 +98,196 @@ type BulkMscExtractProgress = {
     current: number;
     total: number;
     successCount: number;
-    failureCount: number;
+    sourceMissingCount: number;
+    extractionFailureCount: number;
     namingWarningCount: number;
     skippedZeroRows: number;
     duplicateRows: number;
     currentLabel: string | null;
     lastOutputPath: string | null;
-    failures: string[];
+    missingSources: string[];
+    extractionErrors: string[];
     namingWarnings: string[];
     completed: boolean;
 };
+
+type BulkMscBackendTask = {
+    hashHex: string;
+    packName: string;
+    characterIds: number[];
+};
+
+type BulkMscBackendItemStatus = "extracted" | "source_missing" | "extract_error";
+
+type BulkMscBackendItemResult = {
+    hashHex: string;
+    packName: string;
+    characterIds: number[];
+    sourcePath: string;
+    outDir: string;
+    status: BulkMscBackendItemStatus;
+    namingError?: string | null;
+    error?: string | null;
+    elapsedMs: number;
+};
+
+type BulkMscBackendProgress = {
+    current: number;
+    total: number;
+    item: BulkMscBackendItemResult;
+};
+
+type BulkMscBackendSummary = {
+    total: number;
+    successCount: number;
+    sourceMissingCount: number;
+    extractionFailureCount: number;
+    namingWarningCount: number;
+    elapsedMs: number;
+    items: BulkMscBackendItemResult[];
+};
+
+type DebugMetricTone = "neutral" | "success" | "warning" | "danger" | "info";
+
+const debugMetricToneClass: Record<DebugMetricTone, string> = {
+    neutral: "border-border bg-muted/20 text-foreground",
+    success: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    warning: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    danger: "border-destructive/40 bg-destructive/10 text-destructive",
+    info: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+};
+
+function DebugMetric({
+    label,
+    value,
+    detail,
+    tone = "neutral",
+    icon,
+}: {
+    label: string;
+    value: ReactNode;
+    detail?: ReactNode;
+    tone?: DebugMetricTone;
+    icon?: ReactNode;
+}) {
+    return (
+        <div className={cn("min-w-0 rounded-md border p-3", debugMetricToneClass[tone])}>
+            <div className="flex items-center justify-between gap-2 text-xs font-medium">
+                <span className="truncate">{label}</span>
+                {icon ? <span className="shrink-0 opacity-80">{icon}</span> : null}
+            </div>
+            <div className="mt-2 font-mono text-2xl leading-none text-foreground">{value}</div>
+            {detail ? (
+                <div className="mt-2 text-xs leading-snug text-muted-foreground">{detail}</div>
+            ) : null}
+        </div>
+    );
+}
+
+function DebugPathRow({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="grid gap-1 border-t py-2 first:border-t-0 sm:grid-cols-[150px_minmax(0,1fr)]">
+            <div className="text-xs font-medium text-muted-foreground">{label}</div>
+            <div className="min-w-0 break-all font-mono text-xs">
+                {value || <span className="font-sans text-muted-foreground">Not configured</span>}
+            </div>
+        </div>
+    );
+}
+
+function DebugLogBlock({
+    title,
+    count,
+    items,
+    tone,
+    emptyText,
+}: {
+    title: string;
+    count: number;
+    items: string[];
+    tone: DebugMetricTone;
+    emptyText: string;
+}) {
+    const visibleItems = items.slice(0, 30);
+    const hiddenCount = items.length - visibleItems.length;
+    return (
+        <div className={cn("space-y-2 rounded-md border p-3", debugMetricToneClass[tone])}>
+            <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-medium text-foreground">{title}</div>
+                <div className="font-mono text-xs text-muted-foreground">{count}</div>
+            </div>
+            {items.length > 0 ? (
+                <div className="max-h-40 overflow-auto whitespace-pre-wrap rounded border bg-background/70 p-2 font-mono text-xs text-foreground">
+                    {visibleItems.join("\n")}
+                    {hiddenCount > 0 ? `\n... and ${hiddenCount} more` : ""}
+                </div>
+            ) : (
+                <div className="rounded border bg-background/70 p-2 text-xs text-muted-foreground">
+                    {emptyText}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function formatCharacterIdList(ids: readonly number[], limit = 6): string {
+    const visible = ids.slice(0, limit).join(", ");
+    const hidden = ids.length - Math.min(ids.length, limit);
+    return hidden > 0 ? `${visible}, and ${hidden} more` : visible || "none";
+}
+
+function formatBackendMissingSource(item: BulkMscBackendItemResult): string {
+    return [
+        `${item.packName} (${item.hashHex})`,
+        `  Character ID(s): ${formatCharacterIdList(item.characterIds)}`,
+        `  No source file: ${item.sourcePath || "source path not configured"}`,
+    ].join("\n");
+}
+
+function formatBackendExtractionError(item: BulkMscBackendItemResult): string {
+    return [
+        `${item.packName} (${item.hashHex})`,
+        `  Character ID(s): ${formatCharacterIdList(item.characterIds)}`,
+        `  Extract error: ${item.error ?? "Extraction failed"}`,
+    ].join("\n");
+}
+
+function formatBackendNamingWarning(item: BulkMscBackendItemResult): string {
+    return [
+        `${item.packName} (${item.hashHex})`,
+        `  Character ID(s): ${formatCharacterIdList(item.characterIds)}`,
+        `  Naming warning: ${item.namingError ?? "Unknown naming warning"}`,
+    ].join("\n");
+}
+
+function buildProgressFromBackendSummary(
+    summary: BulkMscBackendSummary,
+    plan: ReturnType<typeof buildBulkMscExtractPlan>,
+): BulkMscExtractProgress {
+    const lastExtracted = [...summary.items].reverse().find((item) => item.status === "extracted");
+    return {
+        current: summary.total,
+        total: summary.total,
+        successCount: summary.successCount,
+        sourceMissingCount: summary.sourceMissingCount,
+        extractionFailureCount: summary.extractionFailureCount,
+        namingWarningCount: summary.namingWarningCount,
+        skippedZeroRows: plan.skippedZeroRows,
+        duplicateRows: plan.duplicateRows,
+        currentLabel: null,
+        lastOutputPath: lastExtracted?.outDir ?? null,
+        missingSources: summary.items
+            .filter((item) => item.status === "source_missing")
+            .map(formatBackendMissingSource),
+        extractionErrors: summary.items
+            .filter((item) => item.status === "extract_error")
+            .map(formatBackendExtractionError),
+        namingWarnings: summary.items
+            .filter((item) => item.namingError)
+            .map(formatBackendNamingWarning),
+        completed: true,
+    };
+}
 
 const isValidNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 
@@ -172,6 +355,7 @@ export default function CharacterIdTableView({
     const [importPreview, setImportPreview] = useState<CharacterIdTableImportPreview | null>(null);
     const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
     const [isDebugDialogOpen, setIsDebugDialogOpen] = useState(false);
+    const [isBatchDecompilingMscSource, setIsBatchDecompilingMscSource] = useState(false);
     const [isExtractingAllMsc, setIsExtractingAllMsc] = useState(false);
     const [bulkMscProgress, setBulkMscProgress] = useState<BulkMscExtractProgress | null>(null);
     const [isExtractConfirmOpen, setIsExtractConfirmOpen] = useState(false);
@@ -376,11 +560,12 @@ export default function CharacterIdTableView({
     const handleExtractAllMsc = useCallback(async () => {
         if (isExtractingAllMsc) return;
         const outputRoot = debugMscOutputPath.trim();
+        const sourceRoot = obDplCachePath.trim();
         if (!outputRoot) {
             toast.error("Debug MSC output path not configured");
             return;
         }
-        if (!obDplCachePath.trim()) {
+        if (!sourceRoot) {
             toast.error("OB dplcache path not configured");
             return;
         }
@@ -389,132 +574,151 @@ export default function CharacterIdTableView({
             return;
         }
 
+        const routePrefix = workspaceDocument.assetRoutes["unit.msc"]?.prefix ?? "040msc";
+        const tasks: BulkMscBackendTask[] = bulkMscPlan.candidates.map((candidate) => ({
+            hashHex: candidate.hashHex,
+            packName: candidate.packName,
+            characterIds: candidate.characterIds,
+        }));
+
         setIsExtractingAllMsc(true);
         let successCount = 0;
-        let failureCount = 0;
-        const failures: string[] = [];
+        let sourceMissingCount = 0;
+        let extractionFailureCount = 0;
+        let current = 0;
+        let currentLabel: string | null = null;
+        const missingSources: string[] = [];
+        const extractionErrors: string[] = [];
         const namingWarnings: string[] = [];
         let lastOutputPath: string | null = null;
+        let acceptingProgress = true;
+        let lastProgressCommitMs = 0;
 
-        const updateProgress = (next: Partial<BulkMscExtractProgress>) => {
-            setBulkMscProgress((prev) => ({
-                current: 0,
-                total: bulkMscPlan.candidates.length,
-                successCount,
-                failureCount,
-                namingWarningCount: namingWarnings.length,
-                skippedZeroRows: bulkMscPlan.skippedZeroRows,
-                duplicateRows: bulkMscPlan.duplicateRows,
-                currentLabel: null,
-                lastOutputPath,
-                failures: [...failures],
-                namingWarnings: [...namingWarnings],
-                completed: false,
-                ...prev,
-                ...next,
-            }));
-        };
-
-        updateProgress({
-            current: 0,
-            total: bulkMscPlan.candidates.length,
-            successCount: 0,
-            failureCount: 0,
-            namingWarningCount: 0,
-            currentLabel: null,
-            failures: [],
-            namingWarnings: [],
+        const makeProgress = (next: Partial<BulkMscExtractProgress> = {}): BulkMscExtractProgress => ({
+            current,
+            total: tasks.length,
+            successCount,
+            sourceMissingCount,
+            extractionFailureCount,
+            namingWarningCount: namingWarnings.length,
+            skippedZeroRows: bulkMscPlan.skippedZeroRows,
+            duplicateRows: bulkMscPlan.duplicateRows,
+            currentLabel,
+            lastOutputPath,
+            missingSources: [...missingSources],
+            extractionErrors: [...extractionErrors],
+            namingWarnings: [...namingWarnings],
             completed: false,
+            ...next,
         });
 
-        try {
-            for (let index = 0; index < bulkMscPlan.candidates.length; index += 1) {
-                const candidate = bulkMscPlan.candidates[index];
-                updateProgress({
-                    current: index + 1,
-                    currentLabel: `${candidate.packName} (${candidate.hashHex})`,
-                });
+        setBulkMscProgress(makeProgress({
+            current: 0,
+            total: tasks.length,
+            successCount: 0,
+            sourceMissingCount: 0,
+            extractionFailureCount: 0,
+            namingWarningCount: 0,
+            currentLabel: null,
+            missingSources: [],
+            extractionErrors: [],
+            namingWarnings: [],
+            completed: false,
+        }));
 
-                try {
-                    const asset = await getAssetRefInfo({
-                        fieldKey: "Msc",
-                        value: candidate.rawValue,
-                        obDplCachePath,
-                        obModPath,
-                        workspaceRoot: folderPath,
-                        workspaceDocument,
-                    });
-                    const target = await resolveFhm2dPackPaths(
-                        outputRoot,
-                        workspaceDocument,
-                        asset.routeId,
-                        asset.hashHex,
-                        candidate.packName,
-                    );
-                    const result = await extractAsset(asset, target);
-                    if (result.success) {
-                        successCount += 1;
-                        lastOutputPath = result.path ?? target.folderPath;
-                        clearFhm2dPackResolutionCache(target.routeRootPath);
-                        if (result.namingWarning) {
-                            namingWarnings.push(`${candidate.packName}: ${result.namingWarning}`);
-                        }
-                    } else {
-                        failureCount += 1;
-                        failures.push(`${candidate.packName}: ${result.error ?? "Extraction failed"}`);
-                    }
-                } catch (error) {
-                    failureCount += 1;
-                    failures.push(`${candidate.packName}: ${error instanceof Error ? error.message : String(error)}`);
-                }
-
-                updateProgress({
-                    current: index + 1,
-                    successCount,
-                    failureCount,
-                    namingWarningCount: namingWarnings.length,
-                    lastOutputPath,
-                    failures: [...failures],
-                    namingWarnings: [...namingWarnings],
-                });
+        const publishProgress = (force = false) => {
+            const now = Date.now();
+            if (!force && current < tasks.length && now - lastProgressCommitMs < 100) {
+                return;
             }
+            lastProgressCommitMs = now;
+            setBulkMscProgress(makeProgress());
+        };
+
+        const progressChannel = new Channel<BulkMscBackendProgress>();
+        progressChannel.onmessage = (progress) => {
+            if (!acceptingProgress) return;
+            const item = progress.item;
+            current = progress.current;
+            currentLabel = `${item.packName} (${item.hashHex})`;
+
+            if (item.status === "extracted") {
+                successCount += 1;
+                lastOutputPath = item.outDir;
+                if (item.namingError) {
+                    namingWarnings.push(formatBackendNamingWarning(item));
+                }
+            } else if (item.status === "source_missing") {
+                sourceMissingCount += 1;
+                missingSources.push(formatBackendMissingSource(item));
+            } else {
+                extractionFailureCount += 1;
+                extractionErrors.push(formatBackendExtractionError(item));
+            }
+
+            publishProgress(current >= tasks.length);
+        };
+
+        try {
+            const summary = await invoke<BulkMscBackendSummary>("bulk_extract_msc_fhm2d_to_folder", {
+                sourceRoot,
+                outputRoot,
+                routePrefix,
+                tasks,
+                concurrency: 4,
+                onProgress: progressChannel,
+            });
+            acceptingProgress = false;
+            const finalProgress = buildProgressFromBackendSummary(summary, bulkMscPlan);
+            setBulkMscProgress(finalProgress);
+            if (summary.successCount > 0) {
+                clearFhm2dPackResolutionCache();
+            }
+
+            if (summary.extractionFailureCount > 0) {
+                toast.error(`Extracted ${summary.successCount} MSC package(s); ${summary.sourceMissingCount} no source file; ${summary.extractionFailureCount} extract error(s)`, {
+                    description: finalProgress.extractionErrors.slice(0, 3).join("\n"),
+                    duration: 25_000,
+                });
+                return;
+            }
+            if (summary.sourceMissingCount > 0) {
+                toast.warning(`Extracted ${summary.successCount} MSC package(s); ${summary.sourceMissingCount} source file(s) not found`, {
+                    description: finalProgress.missingSources.slice(0, 3).join("\n"),
+                    duration: 25_000,
+                });
+                return;
+            }
+            if (summary.namingWarningCount > 0) {
+                toast.warning(`Extracted ${summary.successCount} MSC package(s); ${summary.namingWarningCount} naming warning(s)`, {
+                    description: finalProgress.namingWarnings.slice(0, 5).join("\n"),
+                    duration: 25_000,
+                });
+                return;
+            }
+            toast.success(`Extracted ${summary.successCount} MSC package(s)`);
+        } catch (error) {
+            acceptingProgress = false;
+            extractionFailureCount += 1;
+            extractionErrors.push(error instanceof Error ? error.message : String(error));
+            setBulkMscProgress(makeProgress({
+                currentLabel: null,
+                extractionFailureCount,
+                extractionErrors: [...extractionErrors],
+                completed: true,
+            }));
+            toast.error("Bulk MSC extract failed", {
+                description: extractionErrors[0],
+                duration: 25_000,
+            });
         } finally {
             setIsExtractingAllMsc(false);
         }
-
-        updateProgress({
-            currentLabel: null,
-            successCount,
-            failureCount,
-            namingWarningCount: namingWarnings.length,
-            lastOutputPath,
-            failures: [...failures],
-            namingWarnings: [...namingWarnings],
-            completed: true,
-        });
-
-        if (failureCount > 0) {
-            toast.error(`Extracted ${successCount} MSC package(s); ${failureCount} failed`, {
-                description: failures.slice(0, 5).join("\n"),
-                duration: 25_000,
-            });
-            return;
-        }
-        if (namingWarnings.length > 0) {
-            toast.error(`Extracted ${successCount} MSC package(s); ${namingWarnings.length} naming warning(s)`, {
-                description: namingWarnings.slice(0, 5).join("\n"),
-                duration: 25_000,
-            });
-            return;
-        }
-        toast.success(`Extracted ${successCount} MSC package(s)`);
     }, [
         bulkMscPlan,
         debugMscOutputPath,
-        folderPath,
         isExtractingAllMsc,
         obDplCachePath,
-        obModPath,
         workspaceDocument,
     ]);
 
@@ -969,6 +1173,22 @@ export default function CharacterIdTableView({
     const bulkMscProgressPercent = bulkMscProgress && bulkMscProgress.total > 0
         ? Math.round((bulkMscProgress.current / bulkMscProgress.total) * 100)
         : 0;
+    const bulkMscHandledCount = bulkMscProgress
+        ? bulkMscProgress.successCount + bulkMscProgress.sourceMissingCount + bulkMscProgress.extractionFailureCount
+        : 0;
+    const bulkMscReadyToRun = Boolean(
+        obDplCachePath.trim() &&
+        debugMscOutputPath.trim() &&
+        bulkMscPlan.candidates.length > 0,
+    );
+    const bulkMscOutputRoute = debugMscOutputPath.trim()
+        ? `${debugMscOutputPath.trim().replace(/[\\/]+$/, "")}\\${workspaceDocument.assetRoutes["unit.msc"]?.prefix ?? "040msc"}`
+        : "";
+    const debugRunStatus = !bulkMscProgress
+        ? "Not run yet"
+        : bulkMscProgress.completed
+            ? "Completed"
+            : "Running";
 
     if (!isActive) {
         return <div className="h-full w-full" />;
@@ -1616,8 +1836,8 @@ export default function CharacterIdTableView({
                                 <div className="space-y-1 text-sm text-muted-foreground">
                                     <div className="break-all">File: {importPreview.filePath}</div>
                                     <div>
-                                        Total: {importPreview.totalCount} · Valid: {importPreview.validCount} · Invalid: {importPreview.invalidCount}
-                                        {importPreview.duplicateIds.length > 0 ? ` · Duplicates: ${importPreview.duplicateIds.length}` : ""}
+                                        Total: {importPreview.totalCount} | Valid: {importPreview.validCount} | Invalid: {importPreview.invalidCount}
+                                        {importPreview.duplicateIds.length > 0 ? ` | Duplicates: ${importPreview.duplicateIds.length}` : ""}
                                     </div>
                                 </div>
                                 <div className="space-y-2">
@@ -1644,161 +1864,272 @@ export default function CharacterIdTableView({
             {isDebugDialogOpen ? (
                 <AppRndModalShell
                     titleId="character-id-debug-title"
-                    title="Character ID Debug"
-                    subtitle={`${bulkMscPlan.candidates.length} unique MSC package(s)`}
+                    title="MSC Source Debug"
+                    subtitle={`Scan ${bulkMscPlan.candidates.length} unique MSC package(s) from character_id_table.bin`}
                     headerIcon={<Bug className="h-5 w-5 text-primary" />}
                     dimensions={CHARACTER_ID_DEBUG_MODAL_DIMENSIONS}
                     storageKey="app.rnd-size.character-id-debug"
                     onClose={() => setIsDebugDialogOpen(false)}
-                    closeDisabled={isExtractingAllMsc}
+                    closeDisabled={isExtractingAllMsc || isBatchDecompilingMscSource}
                     footer={
                         <div className="flex justify-between gap-2 bg-background px-6 py-4">
-                            <Button
-                                variant="outline"
-                                onClick={() => void openPath(debugMscOutputPath)}
-                                disabled={!debugMscOutputPath.trim()}
-                            >
-                                <FolderOpen className="mr-2 h-4 w-4" />
-                                Open Output
-                            </Button>
+                            <div className="flex flex-wrap gap-2">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => void handleOpenPath(obDplCachePath)}
+                                    disabled={!obDplCachePath.trim()}
+                                >
+                                    <FolderOpen className="mr-2 h-4 w-4" />
+                                    Open Source Root
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => void handleOpenPath(debugMscOutputPath)}
+                                    disabled={!debugMscOutputPath.trim()}
+                                >
+                                    <FolderOpen className="mr-2 h-4 w-4" />
+                                    Open Output Root
+                                </Button>
+                            </div>
                             <Button
                                 variant="outline"
                                 onClick={() => setIsDebugDialogOpen(false)}
-                                disabled={isExtractingAllMsc}
+                                disabled={isExtractingAllMsc || isBatchDecompilingMscSource}
                             >
                                 Close
                             </Button>
                         </div>
                     }
                 >
-                    <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
-                        <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-5">
-                            <div className="rounded-md border bg-muted/20 p-3">
-                                <div className="text-xs text-muted-foreground">Rows</div>
-                                <div className="mt-1 font-mono text-lg">{bulkMscPlan.totalRows}</div>
-                            </div>
-                            <div className="rounded-md border bg-muted/20 p-3">
-                                <div className="text-xs text-muted-foreground">MSC rows</div>
-                                <div className="mt-1 font-mono text-lg">{bulkMscPlan.nonZeroRows}</div>
-                            </div>
-                            <div className="rounded-md border bg-muted/20 p-3">
-                                <div className="text-xs text-muted-foreground">Unique</div>
-                                <div className="mt-1 font-mono text-lg">{bulkMscPlan.candidates.length}</div>
-                            </div>
-                            <div className="rounded-md border bg-muted/20 p-3">
-                                <div className="text-xs text-muted-foreground">Duplicates</div>
-                                <div className="mt-1 font-mono text-lg">{bulkMscPlan.duplicateRows}</div>
-                            </div>
-                            <div className="rounded-md border bg-muted/20 p-3">
-                                <div className="text-xs text-muted-foreground">Skipped</div>
-                                <div className="mt-1 font-mono text-lg">{bulkMscPlan.skippedZeroRows}</div>
-                            </div>
-                        </div>
-
-                        <div className="space-y-2 rounded-md border p-3">
-                            <div className="text-sm font-medium">MSC Output Root</div>
-                            <FilePathInput
-                                value={debugMscOutputPath}
-                                onChange={(event) => setDebugMscOutputPath(event.target.value)}
-                                storeKey={CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY}
-                                placeholder="Select MSC debug output root..."
-                                disabled={isExtractingAllMsc}
-                                picker={{
-                                    kind: "folder",
-                                    multiple: false,
-                                    title: "Select MSC debug output root",
-                                }}
-                            />
-                        </div>
-
-                        <div className="space-y-2 rounded-md border p-3 text-sm">
-                            <div className="flex items-start justify-between gap-3">
-                                <span className="shrink-0 text-muted-foreground">OB dplcache</span>
-                                <span className="break-all text-right font-mono text-xs">{obDplCachePath || "Not configured"}</span>
-                            </div>
-                            <div className="flex items-start justify-between gap-3">
-                                <span className="shrink-0 text-muted-foreground">MSC output root</span>
-                                <span className="break-all text-right font-mono text-xs">{debugMscOutputPath || "Not configured"}</span>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                                onClick={() => void handleExtractAllMsc()}
-                                disabled={
-                                    isExtractingAllMsc ||
-                                    !obDplCachePath.trim() ||
-                                    !debugMscOutputPath.trim() ||
-                                    bulkMscPlan.candidates.length === 0
-                                }
-                            >
-                                <PackageOpen className="mr-2 h-4 w-4" />
-                                {isExtractingAllMsc ? "Extracting MSC..." : "Extract All MSC"}
-                            </Button>
-                            {bulkMscProgress?.lastOutputPath ? (
-                                <Button
-                                    variant="outline"
-                                    onClick={() => void openPath(bulkMscProgress.lastOutputPath!)}
-                                >
-                                    <FolderOpen className="mr-2 h-4 w-4" />
-                                    Open Last
-                                </Button>
-                            ) : null}
-                        </div>
-
-                        {bulkMscProgress ? (
-                            <div className="space-y-3 rounded-md border p-3">
-                                <div className="flex items-center justify-between gap-3 text-sm">
-                                    <span>
-                                        {bulkMscProgress.completed ? "Completed" : "Running"} · {bulkMscProgress.current}/{bulkMscProgress.total}
-                                    </span>
-                                    <span className="font-mono text-xs">{bulkMscProgressPercent}%</span>
+                    <div className="min-h-0 flex-1 overflow-y-auto p-6">
+                        <Tabs defaultValue="extract" className="space-y-4">
+                            <TabsList className="h-auto justify-start rounded-md">
+                                <TabsTrigger value="extract">Extract MSC</TabsTrigger>
+                                <TabsTrigger value="decompile">Decompile C</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="extract" className="mt-0">
+                                <div className="space-y-5">
+                            <section className="rounded-md border bg-muted/10 p-4">
+                                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                    <div className="space-y-1">
+                                        <div className="text-base font-semibold">Bulk MSC source check</div>
+                                        <div className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
+                                            Scans unique non-zero MSC hashes from the loaded table. If the source .fhm2d is absent under the configured OB dplcache root, it is reported as No source file and skipped.
+                                        </div>
+                                    </div>
+                                    <div className="inline-flex w-fit items-center gap-2 rounded-md border bg-background px-3 py-2 text-xs font-medium">
+                                        <Info className="h-4 w-4 text-primary" />
+                                        {debugRunStatus}
+                                    </div>
                                 </div>
-                                <div className="h-2 overflow-hidden rounded-full bg-muted">
-                                    <div
-                                        className="h-full bg-primary transition-[width] duration-200"
-                                        style={{ width: `${bulkMscProgressPercent}%` }}
+                            </section>
+
+                            <section className="space-y-3">
+                                <div className="text-sm font-semibold">Scan plan</div>
+                                <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+                                    <DebugMetric
+                                        label="Table rows"
+                                        value={bulkMscPlan.totalRows}
+                                        detail="Rows loaded from character_id_table.bin"
+                                    />
+                                    <DebugMetric
+                                        label="MSC rows"
+                                        value={bulkMscPlan.nonZeroRows}
+                                        detail="Rows with a non-zero MSC value"
+                                    />
+                                    <DebugMetric
+                                        label="Unique packages"
+                                        value={bulkMscPlan.candidates.length}
+                                        detail="Deduplicated by MSC hash"
+                                        tone="info"
+                                    />
+                                    <DebugMetric
+                                        label="Repeated refs"
+                                        value={bulkMscPlan.duplicateRows}
+                                        detail="Extra rows pointing to an already scanned hash"
+                                    />
+                                    <DebugMetric
+                                        label="Zero MSC rows"
+                                        value={bulkMscPlan.skippedZeroRows}
+                                        detail="Skipped before source lookup"
                                     />
                                 </div>
-                                {bulkMscProgress.currentLabel ? (
-                                    <div className="break-all font-mono text-xs text-muted-foreground">
-                                        {bulkMscProgress.currentLabel}
-                                    </div>
-                                ) : null}
-                                <div className="grid grid-cols-3 gap-2 text-xs">
-                                    <div className="rounded border bg-muted/20 p-2">
-                                        <div className="text-muted-foreground">Success</div>
-                                        <div className="font-mono text-base">{bulkMscProgress.successCount}</div>
-                                    </div>
-                                    <div className="rounded border bg-muted/20 p-2">
-                                        <div className="text-muted-foreground">Failed</div>
-                                        <div className="font-mono text-base">{bulkMscProgress.failureCount}</div>
-                                    </div>
-                                    <div className="rounded border bg-muted/20 p-2">
-                                        <div className="text-muted-foreground">Warnings</div>
-                                        <div className="font-mono text-base">{bulkMscProgress.namingWarningCount}</div>
+                            </section>
+
+                            <section className="space-y-3 rounded-md border p-4">
+                                <div className="flex flex-col gap-1">
+                                    <div className="text-sm font-semibold">Paths</div>
+                                    <div className="text-xs text-muted-foreground">
+                                        Output root is the workspace root for this debug export. The 040msc route folder is appended automatically.
                                     </div>
                                 </div>
-                                {bulkMscProgress.failures.length > 0 ? (
+                                <FilePathInput
+                                    value={debugMscOutputPath}
+                                    onChange={(event) => setDebugMscOutputPath(event.target.value)}
+                                    storeKey={CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY}
+                                    placeholder="Select MSC debug output root..."
+                                    disabled={isExtractingAllMsc}
+                                    picker={{
+                                        kind: "folder",
+                                        multiple: false,
+                                        title: "Select MSC debug output root",
+                                    }}
+                                />
+                                <div className="rounded-md border bg-background/60 px-3">
+                                    <DebugPathRow label="Source root" value={obDplCachePath} />
+                                    <DebugPathRow label="Output root" value={debugMscOutputPath} />
+                                    <DebugPathRow label="Actual MSC output" value={bulkMscOutputRoute} />
+                                </div>
+                            </section>
+
+                            <section className="space-y-3 rounded-md border p-4">
+                                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                                     <div className="space-y-1">
-                                        <div className="text-xs font-medium">Failures</div>
-                                        <div className="max-h-32 overflow-auto whitespace-pre-wrap rounded border bg-destructive/5 p-2 font-mono text-xs text-destructive">
-                                            {bulkMscProgress.failures.slice(0, 30).join("\n")}
-                                            {bulkMscProgress.failures.length > 30 ? `\n... and ${bulkMscProgress.failures.length - 30} more` : ""}
+                                        <div className="text-sm font-semibold">Run extraction</div>
+                                        <div className="text-xs text-muted-foreground">
+                                            Existing sources are extracted. Missing sources are listed without creating empty output folders.
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button
+                                            onClick={() => void handleExtractAllMsc()}
+                                            disabled={isExtractingAllMsc || !bulkMscReadyToRun}
+                                        >
+                                            <PackageOpen className="mr-2 h-4 w-4" />
+                                            {isExtractingAllMsc ? "Extracting MSC..." : "Extract All MSC"}
+                                        </Button>
+                                        {bulkMscProgress?.lastOutputPath ? (
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => void handleOpenPath(bulkMscProgress.lastOutputPath!)}
+                                            >
+                                                <FolderOpen className="mr-2 h-4 w-4" />
+                                                Open Last Extracted
+                                            </Button>
+                                        ) : null}
+                                    </div>
+                                </div>
+                                {!bulkMscReadyToRun ? (
+                                    <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+                                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                                        <div className="space-y-1">
+                                            {!obDplCachePath.trim() ? <div>OB dplcache path is not configured.</div> : null}
+                                            {!debugMscOutputPath.trim() ? <div>MSC output root is not configured.</div> : null}
+                                            {bulkMscPlan.candidates.length === 0 ? <div>No non-zero MSC values were found in the table.</div> : null}
                                         </div>
                                     </div>
                                 ) : null}
-                                {bulkMscProgress.namingWarnings.length > 0 ? (
-                                    <div className="space-y-1">
-                                        <div className="text-xs font-medium">Naming warnings</div>
-                                        <div className="max-h-32 overflow-auto whitespace-pre-wrap rounded border bg-amber-500/5 p-2 font-mono text-xs text-amber-700 dark:text-amber-300">
-                                            {bulkMscProgress.namingWarnings.slice(0, 30).join("\n")}
-                                            {bulkMscProgress.namingWarnings.length > 30 ? `\n... and ${bulkMscProgress.namingWarnings.length - 30} more` : ""}
+                            </section>
+
+                            {bulkMscProgress ? (
+                                <section className="space-y-4 rounded-md border p-4">
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between gap-3 text-sm">
+                                            <span className="font-semibold">{debugRunStatus}</span>
+                                            <span className="font-mono text-xs text-muted-foreground">
+                                                {bulkMscProgress.current}/{bulkMscProgress.total} scanned, {bulkMscHandledCount} classified
+                                            </span>
                                         </div>
+                                        <div className="h-2 overflow-hidden rounded-full bg-muted">
+                                            <div
+                                                className="h-full bg-primary transition-[width] duration-200"
+                                                style={{ width: `${bulkMscProgressPercent}%` }}
+                                            />
+                                        </div>
+                                        {bulkMscProgress.currentLabel ? (
+                                            <div className="break-all rounded border bg-muted/20 p-2 font-mono text-xs text-muted-foreground">
+                                                {bulkMscProgress.currentLabel}
+                                            </div>
+                                        ) : null}
                                     </div>
-                                ) : null}
-                            </div>
-                        ) : null}
+
+                                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                                        <DebugMetric
+                                            label="Extracted"
+                                            value={bulkMscProgress.successCount}
+                                            detail="Source existed and extraction completed"
+                                            tone="success"
+                                            icon={<CheckCircle2 className="h-4 w-4" />}
+                                        />
+                                        <DebugMetric
+                                            label="No source file"
+                                            value={bulkMscProgress.sourceMissingCount}
+                                            detail="No .fhm2d under the configured source root"
+                                            tone={bulkMscProgress.sourceMissingCount > 0 ? "warning" : "neutral"}
+                                            icon={<CircleSlash className="h-4 w-4" />}
+                                        />
+                                        <DebugMetric
+                                            label="Extract errors"
+                                            value={bulkMscProgress.extractionFailureCount}
+                                            detail="Source existed, but extraction failed"
+                                            tone={bulkMscProgress.extractionFailureCount > 0 ? "danger" : "neutral"}
+                                            icon={<XCircle className="h-4 w-4" />}
+                                        />
+                                        <DebugMetric
+                                            label="Naming warnings"
+                                            value={bulkMscProgress.namingWarningCount}
+                                            detail="Extraction finished, naming metadata warned"
+                                            tone={bulkMscProgress.namingWarningCount > 0 ? "warning" : "neutral"}
+                                            icon={<AlertTriangle className="h-4 w-4" />}
+                                        />
+                                    </div>
+
+                                    {bulkMscProgress.completed ? (
+                                        <div className={cn(
+                                            "rounded-md border p-3 text-sm",
+                                            bulkMscProgress.extractionFailureCount > 0
+                                                ? "border-destructive/40 bg-destructive/10 text-destructive"
+                                                : bulkMscProgress.sourceMissingCount > 0
+                                                    ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                                                    : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+                                        )}>
+                                            {bulkMscProgress.extractionFailureCount > 0
+                                                ? "Some source files existed but failed during extraction. Check Extract errors below."
+                                                : bulkMscProgress.sourceMissingCount > 0
+                                                    ? "Some MSC references have no source file in the configured OB dplcache root. This means there is nothing to extract for those hashes from that source root."
+                                                    : "All scanned MSC source files existed and were extracted."}
+                                        </div>
+                                    ) : null}
+
+                                    <div className="grid gap-3 lg:grid-cols-2">
+                                        <DebugLogBlock
+                                            title="No source file"
+                                            count={bulkMscProgress.sourceMissingCount}
+                                            items={bulkMscProgress.missingSources}
+                                            tone="warning"
+                                            emptyText="No missing source files in this run."
+                                        />
+                                        <DebugLogBlock
+                                            title="Extract errors"
+                                            count={bulkMscProgress.extractionFailureCount}
+                                            items={bulkMscProgress.extractionErrors}
+                                            tone="danger"
+                                            emptyText="No extraction errors in this run."
+                                        />
+                                    </div>
+
+                                    <DebugLogBlock
+                                        title="Naming warnings"
+                                        count={bulkMscProgress.namingWarningCount}
+                                        items={bulkMscProgress.namingWarnings}
+                                        tone="info"
+                                        emptyText="No naming warnings in this run."
+                                    />
+                                </section>
+                            ) : (
+                                <section className="rounded-md border bg-muted/10 p-4 text-sm text-muted-foreground">
+                                    No scan result yet. Run Extract All MSC to classify every unique MSC as extracted, no source file, extract error, or naming warning.
+                                </section>
+                            )}
+                                </div>
+                            </TabsContent>
+                            <TabsContent value="decompile" className="mt-0">
+                                <MscSourceBatchDecompileView
+                                    defaultRootPath={bulkMscOutputRoute}
+                                    onBusyChange={setIsBatchDecompilingMscSource}
+                                />
+                            </TabsContent>
+                        </Tabs>
                     </div>
                 </AppRndModalShell>
             ) : null}

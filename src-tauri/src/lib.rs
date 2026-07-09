@@ -5,6 +5,8 @@ pub mod collision_mesh;
 mod commands;
 mod console_color;
 pub mod exvs2_json_cli;
+#[cfg(debug_assertions)]
+mod dev_tools_sync;
 mod fhm2d_memory_preview;
 pub mod format;
 pub mod havok_cli;
@@ -53,6 +55,7 @@ pub fn run() {
             commands::exec_shell_command_with_output,
             commands::exec_process_with_output,
             commands::watch_folder,
+            commands::suppress_test_editor_watcher,
             commands::nutexb_preview_file_identity,
             commands::nutexb_read_info,
             commands::nutexb_export_dds,
@@ -101,6 +104,7 @@ pub fn run() {
             commands::move_legacy_workspace_content,
             commands::write_files_batch_base64,
             commands::extract_fhm2d_to_folder,
+            commands::bulk_extract_msc_fhm2d_to_folder,
             commands::analyze_fhm2d_structure_migration,
             commands::migrate_fhm2d_structure_metadata,
             character_id_preview::character_id_memory_preview_rows,
@@ -230,6 +234,17 @@ pub fn run() {
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
+                match app.path().resource_dir() {
+                    Ok(resource_dir) => {
+                        if let Err(error) = dev_tools_sync::sync_debug_tools_to_resource_dir(&resource_dir) {
+                            eprintln!("failed to sync debug tools resources: {error}");
+                        }
+                    }
+                    Err(error) => {
+                        eprintln!("failed to resolve debug resource dir for tools sync: {error}");
+                    }
+                }
+
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.open_devtools();
                 }

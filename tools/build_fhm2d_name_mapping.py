@@ -508,29 +508,72 @@ def character_id_from_text(text: str) -> int | None:
     return character_id_from_parts(series_num, unit_num, variant)
 
 
+def first_int(row: dict[str, Any], keys: tuple[str, ...]) -> int | None:
+    for key in keys:
+        value = row.get(key)
+        if isinstance(value, int):
+            return value
+    return None
+
+
+def first_text(row: dict[str, Any], keys: tuple[str, ...]) -> str | None:
+    for key in keys:
+        value = row.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
+
+
 def load_character_list(character_list_path: Path | None) -> dict[int, dict[str, Any]]:
     if not character_list_path or not character_list_path.exists():
         return {}
     data = json.loads(character_list_path.read_text(encoding="utf-8"))
     rows: dict[int, dict[str, Any]] = {}
     for row in data:
-        character_id = row.get("CharacterId") or row.get("id")
+        if not isinstance(row, dict):
+            continue
+        character_id = first_int(row, ("CharacterId", "entryId", "id"))
         if not isinstance(character_id, int):
             continue
         rows[character_id] = {
             "characterId": character_id,
-            "characterName": row.get("CharacterNameOffset"),
-            "pilotName": row.get("UnkStringOffset6"),
-            "seriesId": to_unsigned_hash(row.get("SeriesId")),
+            "characterName": first_text(
+                row,
+                ("CharacterNameOffset", "characterName", "variantDisplayNameDefault"),
+            ),
+            "pilotName": first_text(
+                row,
+                ("UnkStringOffset6", "pilotNameShort", "UnkStringOffset8", "pilotNameFull"),
+            ),
+            "seriesId": to_unsigned_hash(first_int(row, ("SeriesId", "seriesId"))),
         }
     return rows
+
+
+def character_row_for_id(
+    character_id: int,
+    character_rows: dict[int, dict[str, Any]],
+) -> dict[str, Any] | None:
+    character = character_rows.get(character_id)
+    if character:
+        return character
+    if 601_001_001 <= character_id <= 768_001_001:
+        return character_rows.get(character_id + 4)
+    return None
 
 
 def apply_character_list(entries: list[dict[str, Any]], character_rows: dict[int, dict[str, Any]]) -> None:
     if not character_rows:
         return
     for entry in entries:
-        character_id = character_id_from_text(str(entry.get("packagePath") or ""))
+        entry_character = entry.get("character") if isinstance(entry.get("character"), dict) else {}
+        character_id = (
+            entry_character.get("characterId")
+            if isinstance(entry_character.get("characterId"), int)
+            else None
+        )
+        if character_id is None:
+            character_id = character_id_from_text(str(entry.get("packagePath") or ""))
         if character_id is None:
             for alias in entry.get("aliases") or []:
                 character_id = character_id_from_text(str(alias))
@@ -538,7 +581,7 @@ def apply_character_list(entries: list[dict[str, Any]], character_rows: dict[int
                     break
         if character_id is None:
             continue
-        character = character_rows.get(character_id)
+        character = character_row_for_id(character_id, character_rows)
         if character:
             entry["character"] = character
 
@@ -552,7 +595,7 @@ def best_ai_name_from_text(text: str, ai_names: dict[str, dict[str, Any]]) -> di
 
 
 def fallback_unit_name(character_id: int, character_rows: dict[int, dict[str, Any]]) -> str:
-    character = character_rows.get(character_id)
+    character = character_row_for_id(character_id, character_rows)
     if character:
         for key in ("characterName", "pilotName"):
             value = character.get(key)
@@ -583,7 +626,40 @@ def unit_name_for_character_id(
 
 
 def character_payload(character_id: int, character_rows: dict[int, dict[str, Any]]) -> dict[str, Any]:
-    return character_rows.get(character_id) or {"characterId": character_id}
+    return character_row_for_id(character_id, character_rows) or {"characterId": character_id}
+
+
+def is_fallback_unit_name(name: str, character_id: int) -> bool:
+    return name == f"unit_{character_id}"
+
+
+def ob_unit_internal_name(
+    row: dict[str, Any],
+    ob_dplcache_root: Path | None,
+    inspect_cache: dict[str, dict[str, Any]],
+) -> tuple[str | None, dict[str, Any] | None]:
+    if not ob_dplcache_root or not ob_dplcache_root.exists():
+        return None, None
+    hash_name = normalize_hash_name(str(row.get("modelFileName") or ""))
+    if not hash_name:
+        return None, None
+    path = ob_dplcache_root / f"{hash_name}.fhm2d"
+    if not path.exists():
+        return None, None
+    info = inspect_cache.get(hash_name)
+    if info is None:
+        info = inspect_ob_dplcache_file(path)
+        inspect_cache[hash_name] = info
+    name = info.get("name")
+    if not isinstance(name, str) or not name:
+        return None, None
+    if not INTERNAL_UNIT_STEM_RE.search(name):
+        return None, None
+    return sanitize_name(name), {
+        "path": str(path),
+        "hashName": hash_name,
+        "source": "modelFileNameInternalName",
+    }
 
 
 def ob_unit_entry(
@@ -622,32 +698,53 @@ def build_ob_unit_entries(
     ob_unit_path: Path | None,
     ai_by_character_id: dict[int, dict[str, Any]],
     character_rows: dict[int, dict[str, Any]],
+    ob_dplcache_root: Path | None,
 ) -> list[dict[str, Any]]:
     if not ob_unit_path or not ob_unit_path.exists():
         return []
     data = json.loads(ob_unit_path.read_text(encoding="utf-8"))
     entries: list[dict[str, Any]] = []
+    inspect_cache: dict[str, dict[str, Any]] = {}
     for row in data:
         character_id = row.get("unitId")
         if not isinstance(character_id, int):
             continue
         name, aliases = unit_name_for_character_id(character_id, ai_by_character_id, character_rows)
+        name_evidence = None
+        semantic_character_id = character_id
+        if is_fallback_unit_name(name, character_id):
+            internal_name, name_evidence = ob_unit_internal_name(
+                row,
+                ob_dplcache_root,
+                inspect_cache,
+            )
+            if internal_name:
+                aliases = [*aliases, name]
+                name = internal_name
+                internal_character_id = character_id_from_text(internal_name)
+                if internal_character_id and character_row_for_id(internal_character_id, character_rows):
+                    semantic_character_id = internal_character_id
         for field_name, (route_prefix, route_id) in OB_UNIT_FIELD_ROUTES.items():
             hash_name = normalize_hash_name(str(row.get(field_name) or ""))
             if not hash_name:
                 continue
+            evidence = {"path": str(ob_unit_path), "field": field_name}
+            if semantic_character_id != character_id:
+                evidence["unitId"] = character_id
+            if name_evidence:
+                evidence["nameEvidence"] = name_evidence
             entries.append(
                 ob_unit_entry(
                     hash_name=hash_name,
                     route_prefix=route_prefix,
                     route_id=route_id,
-                    character_id=character_id,
+                    character_id=semantic_character_id,
                     name=name,
                     aliases=aliases,
                     source="ob-unit-list",
                     confidence="ob-unit-list",
                     character_rows=character_rows,
-                    evidence={"path": str(ob_unit_path), "field": field_name},
+                    evidence=evidence,
                 )
             )
     return entries
@@ -1241,6 +1338,26 @@ def unique_name_from_package(entry: dict[str, Any]) -> str:
     return entry["name"]
 
 
+def duplicate_name_stability_score(entry: dict[str, Any]) -> tuple[int, int, int, int, str]:
+    source_rank = {
+        "exvs2-meta": 5,
+        "ob-dplcache-internal": 4,
+        "ob-unit-list": 3,
+        "ob-param-csyspm": 2,
+        "ob-structure-ai-string": 1,
+        "ob-dplcache-fallback": 0,
+    }
+    evidence = entry.get("evidence") if isinstance(entry.get("evidence"), dict) else {}
+    is_remapped_unit = 1 if "unitId" in evidence else 0
+    return (
+        int(entry.get("matchedPathCount") or 0),
+        int(entry.get("sourcePathCount") or 0),
+        1 - is_remapped_unit,
+        source_rank.get(str(entry.get("source") or ""), 0),
+        str(entry.get("hashName") or ""),
+    )
+
+
 def make_route_names_unique(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     grouped: defaultdict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for entry in entries:
@@ -1264,7 +1381,10 @@ def make_route_names_unique(entries: list[dict[str, Any]]) -> list[dict[str, Any
     for duplicates in grouped.values():
         if len(duplicates) <= 1:
             continue
+        primary = max(duplicates, key=duplicate_name_stability_score)
         for entry in duplicates:
+            if entry is primary:
+                continue
             base_name = entry["name"]
             hash_suffix = str(entry["hashName"]).replace("0x", "").lower()
             aliases = set(entry.get("aliases") or [])
@@ -1289,6 +1409,7 @@ def build_mapping(args: argparse.Namespace) -> dict[str, Any]:
         Path(args.ob_unit) if args.ob_unit else None,
         ai_by_character_id,
         character_rows,
+        Path(args.ob_dplcache_root) if args.ob_dplcache_root else None,
     )
     ob_param_entries = build_ob_param_csyspm_entries(
         ob_file_root,
