@@ -534,14 +534,21 @@ export default function CharacterListView({
       const importedEntries = importPreview.rows.map((row) => {
         const entry: Record<string, unknown> = { entryId: row.id };
         for (const [key, value] of Object.entries(row)) {
-          if (key === "id") continue;
+          // Skip id aliases; entryId is set from the normalized row id.
+          if (key === "id" || key === "CharacterId" || key === "entryId") continue;
           entry[key] = value;
         }
         return entry;
       });
+      const entryIds = importedEntries.map((e) => e.entryId as number);
       const nextList: CharacterListData = {
         ...loadState.list,
         entries: importedEntries as any,
+        entryIds,
+        header: {
+          ...loadState.list.header,
+          entryCount: importedEntries.length,
+        },
       };
       setLoadState((prev) => {
         if (prev.status !== "ready") return prev;

@@ -119,24 +119,25 @@ function coerceId(value: unknown): number | null {
   return null;
 }
 
+/**
+ * Accept id aliases used by different exporters:
+ * - entryId: Test Editor Character List export (CharacterListEntry)
+ * - id: legacy Chara JSON export
+ * - CharacterId: older CharacterDataOB export
+ */
 function normalizeImportRow(raw: unknown): CharaJsonRow | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const obj = raw as Record<string, unknown>;
-  const id = coerceId(obj.id) ?? coerceId(obj.CharacterId);
+  const id =
+    coerceId(obj.entryId) ?? coerceId(obj.id) ?? coerceId(obj.CharacterId);
   if (id === null) return null;
   return { ...obj, id } as CharaJsonRow;
 }
 
-export async function pickCharaJsonImportPreview(): Promise<CharaJsonImportPreview | null> {
-  const filePath = await open({
-    multiple: false,
-    directory: false,
-    filters: [{ name: "Chara JSON", extensions: ["json"] }],
-  });
-
-  if (!filePath) return null;
-
-  const text = await readTextFile(filePath);
+export function parseCharaJsonImportPreview(
+  text: string,
+  filePath = ""
+): CharaJsonImportPreview {
   const parsed: unknown = JSON.parse(text);
 
   if (!Array.isArray(parsed)) {
@@ -161,7 +162,7 @@ export async function pickCharaJsonImportPreview(): Promise<CharaJsonImportPrevi
     .sort((a, b) => a - b);
 
   return {
-    filePath: filePath as string,
+    filePath,
     totalCount,
     validCount: rows.length,
     invalidCount: totalCount - rows.length,
@@ -169,6 +170,19 @@ export async function pickCharaJsonImportPreview(): Promise<CharaJsonImportPrevi
     duplicateIds,
     rows,
   };
+}
+
+export async function pickCharaJsonImportPreview(): Promise<CharaJsonImportPreview | null> {
+  const filePath = await open({
+    multiple: false,
+    directory: false,
+    filters: [{ name: "Chara JSON", extensions: ["json"] }],
+  });
+
+  if (!filePath) return null;
+
+  const text = await readTextFile(filePath);
+  return parseCharaJsonImportPreview(text, filePath as string);
 }
 
 function buildStringFieldObject(value: string): { StringBufferData: Buffer; Utf8String: string } {
