@@ -5,7 +5,7 @@ import type { TypedParamFile } from "../../param-editor/typedParamTypes";
 interface CharacterPropertyPanelProps {
   entry: TypedParamEntry;
   fieldSpecs?: TypedParamFile["fieldSpecs"];
-  onFieldChange: (key: string, value: number) => void;
+  onFieldChange: (key: string, value: number | string) => void;
 }
 
 const CHARACTER_GROUPS: Record<string, string[]> = {
@@ -216,7 +216,7 @@ const CHARACTER_GROUPS: Record<string, string[]> = {
     "targetCorrectionOffset",
     "targetFovPct",
   ],
-  Labels: ["actionLabelOffset", "resourceLabelOffset"],
+  Labels: ["actionLabel", "resourceLabel", "actionLabelOffset", "resourceLabelOffset"],
 };
 
 export function CharacterPropertyPanel({

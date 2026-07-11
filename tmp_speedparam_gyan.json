@@ -1,0 +1,716 @@
+{
+  "tool": "exvs2-json",
+  "schemaVersion": 1,
+  "sourcePath": "E:\\XB\\mod\\041cpm\\001gundam_005gyan00_001_N2_rocket_mod\\speedparam.bin",
+  "detectedType": "speedparam",
+  "byteLength": 1913,
+  "endianness": {
+    "hashMatching": "little-endian",
+    "displayCanConvert": true
+  },
+  "warnings": [],
+  "data": {
+    "header": {
+      "magic": 3450583209,
+      "unk04": 0,
+      "fileSize": 1913,
+      "unk0c": 0,
+      "entryCount": 2,
+      "commandsCount": 74,
+      "entrySize": 304,
+      "unk1c": 0
+    },
+    "fieldSpecs": [
+      {
+        "hash": 114397741,
+        "entryOffset": 0,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 141248349,
+        "entryOffset": 4,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 191135957,
+        "entryOffset": 8,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 194952910,
+        "entryOffset": 12,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 217283287,
+        "entryOffset": 16,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 224113391,
+        "entryOffset": 20,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 241707944,
+        "entryOffset": 24,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 301981108,
+        "entryOffset": 28,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 397006893,
+        "entryOffset": 32,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 411654741,
+        "entryOffset": 36,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 699042308,
+        "entryOffset": 40,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 745984167,
+        "entryOffset": 44,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 757648459,
+        "entryOffset": 48,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 771207061,
+        "entryOffset": 52,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 783193131,
+        "entryOffset": 56,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 855449308,
+        "entryOffset": 60,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 936497238,
+        "entryOffset": 64,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 1006232094,
+        "entryOffset": 68,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 1077005188,
+        "entryOffset": 72,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 1104854725,
+        "entryOffset": 76,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 1167349226,
+        "entryOffset": 80,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 1296786922,
+        "entryOffset": 84,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 1298144853,
+        "entryOffset": 88,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 1332763565,
+        "entryOffset": 92,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 1417792756,
+        "entryOffset": 96,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 1455758983,
+        "entryOffset": 100,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 1479622391,
+        "entryOffset": 104,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 1586278211,
+        "entryOffset": 108,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 1593247159,
+        "entryOffset": 112,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 1618748860,
+        "entryOffset": 116,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 1818495127,
+        "entryOffset": 120,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 1869552630,
+        "entryOffset": 124,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 1916929642,
+        "entryOffset": 128,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 1937597684,
+        "entryOffset": 132,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2004131282,
+        "entryOffset": 136,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2079607361,
+        "entryOffset": 140,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2082828961,
+        "entryOffset": 144,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2084369629,
+        "entryOffset": 148,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2094245650,
+        "entryOffset": 152,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2105145082,
+        "entryOffset": 156,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2119727267,
+        "entryOffset": 160,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2171853337,
+        "entryOffset": 164,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2214869549,
+        "entryOffset": 168,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2366281795,
+        "entryOffset": 172,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2396818798,
+        "entryOffset": 176,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2459430772,
+        "entryOffset": 180,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2516200301,
+        "entryOffset": 184,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2545847804,
+        "entryOffset": 188,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2587329416,
+        "entryOffset": 192,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2661961366,
+        "entryOffset": 196,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2681233959,
+        "entryOffset": 200,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2761066425,
+        "entryOffset": 204,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2774363230,
+        "entryOffset": 208,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2815147015,
+        "entryOffset": 212,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 2987091913,
+        "entryOffset": 216,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 3154192353,
+        "entryOffset": 220,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 3323294593,
+        "entryOffset": 224,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 3334193991,
+        "entryOffset": 228,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 3445485948,
+        "entryOffset": 232,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 3477417305,
+        "entryOffset": 236,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 3598721956,
+        "entryOffset": 240,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 3715571947,
+        "entryOffset": 244,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 3726569818,
+        "entryOffset": 248,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 3808238587,
+        "entryOffset": 252,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 3851476962,
+        "entryOffset": 256,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 3860936497,
+        "entryOffset": 260,
+        "flags": 0,
+        "kind": 7
+      },
+      {
+        "hash": 3965193164,
+        "entryOffset": 268,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 4089032069,
+        "entryOffset": 272,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 4089760489,
+        "entryOffset": 276,
+        "flags": 0,
+        "kind": 7
+      },
+      {
+        "hash": 4098661710,
+        "entryOffset": 284,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 4116307185,
+        "entryOffset": 288,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 4172919918,
+        "entryOffset": 292,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 4274390687,
+        "entryOffset": 296,
+        "flags": 0,
+        "kind": 2
+      },
+      {
+        "hash": 4286225547,
+        "entryOffset": 300,
+        "flags": 0,
+        "kind": 2
+      }
+    ],
+    "entryIds": [
+      3070393790,
+      3266419986
+    ],
+    "entries": [
+      {
+        "entryId": 3070393790,
+        "walkSpeedForward": 0,
+        "walkSpeedBase": 40,
+        "walkSpeedBackward": 50,
+        "boostGaugeCapacity": 0,
+        "boostRecoveryDelayFrame": 0,
+        "boostRecoverySpeed": 303,
+        "groundRunSpeed": 140,
+        "boostDashInitialSpeed": 175,
+        "stepDistance": 7,
+        "jumpInitialVelocity": 0,
+        "gravityModifier": -2,
+        "movementClass": 7,
+        "airDashStartupFrame": 0,
+        "stepStartupFrame": 20,
+        "boostDashSustainedSpeed": 312,
+        "dashCancelType": 3,
+        "fallGravity": -10,
+        "maxGroundSpeed": 100,
+        "boostDashStartupFrame": 55,
+        "boostDashRecoveryFrame": 110,
+        "landingRecoveryFrame": 0,
+        "airBrakeSpeed": 0,
+        "stepSpeed": 30,
+        "stepRecoveryFrame": 25,
+        "boostDashDistance": 240,
+        "airDashEndSpeed": 92,
+        "stepType": 5,
+        "airDashDurationFrame": 0,
+        "boostDashType": 7,
+        "airSpeedBase": 265,
+        "fallSpeed": -5,
+        "guardMoveSpeed": 0,
+        "airDashDistance": 0,
+        "airSpeedMax": 50,
+        "speedDecayBase": 92,
+        "airSteerLimit": 0,
+        "rotationSpeed": 14,
+        "gaugeRecoveryRate": 30,
+        "boostConsumptionBase": 0,
+        "boostDashMaxSpeed": 360,
+        "turningSpeed": 80,
+        "jumpType": 4,
+        "fallType": 4,
+        "aerialCorrection": -20,
+        "airEfficiency": 92,
+        "airGravity": 0,
+        "airDashMaxDistance": 0,
+        "stepCancelFrame": 10,
+        "guardRecoveryFrame": 0,
+        "verticalMoveSpeed": 80,
+        "boostStartupFrame": 0,
+        "boostDashDurationFrame": 392,
+        "dashEndSpeed": 95,
+        "fixedStepDistance": 35,
+        "airBoostEfficiency": 70,
+        "guardSpeedRate": 80,
+        "airDashSpeed": 330,
+        "fallSpeedRate": 17,
+        "airDashType": 9,
+        "guardStepType": 12,
+        "dashRange": 30,
+        "speedDecayRate": 92,
+        "boostConsumptionType": 3,
+        "airDeceleration": 0,
+        "boostDashCount": 0,
+        "actionLabel": "SKL_MOVE_SHIELD",
+        "turnRate": 20,
+        "airSteerSpeed": 0,
+        "resourceLabel": "CHR_001GUNDAM_005GYAN00_001",
+        "boostEfficiencyAir": 85,
+        "boostExtensionRate": 300,
+        "boostCapRate": 0,
+        "boostDashDistanceMax": 95,
+        "gravityAirModifier": 0
+      },
+      {
+        "entryId": 3266419986,
+        "walkSpeedForward": 0,
+        "walkSpeedBase": 40,
+        "walkSpeedBackward": 50,
+        "boostGaugeCapacity": 0,
+        "boostRecoveryDelayFrame": 0,
+        "boostRecoverySpeed": 303,
+        "groundRunSpeed": 140,
+        "boostDashInitialSpeed": 175,
+        "stepDistance": 50,
+        "jumpInitialVelocity": 0,
+        "gravityModifier": -2,
+        "movementClass": 7,
+        "airDashStartupFrame": 0,
+        "stepStartupFrame": 20,
+        "boostDashSustainedSpeed": 312,
+        "dashCancelType": 3,
+        "fallGravity": -10,
+        "maxGroundSpeed": 100,
+        "boostDashStartupFrame": 55,
+        "boostDashRecoveryFrame": 110,
+        "landingRecoveryFrame": 0,
+        "airBrakeSpeed": 0,
+        "stepSpeed": 30,
+        "stepRecoveryFrame": 25,
+        "boostDashDistance": 240,
+        "airDashEndSpeed": 92,
+        "stepType": 5,
+        "airDashDurationFrame": 0,
+        "boostDashType": 8,
+        "airSpeedBase": 265,
+        "fallSpeed": -5,
+        "guardMoveSpeed": 0,
+        "airDashDistance": 0,
+        "airSpeedMax": 50,
+        "speedDecayBase": 92,
+        "airSteerLimit": 0,
+        "rotationSpeed": 14,
+        "gaugeRecoveryRate": 30,
+        "boostConsumptionBase": 0,
+        "boostDashMaxSpeed": 360,
+        "turningSpeed": 80,
+        "jumpType": 4,
+        "fallType": 4,
+        "aerialCorrection": -20,
+        "airEfficiency": 92,
+        "airGravity": 0,
+        "airDashMaxDistance": 0,
+        "stepCancelFrame": 10,
+        "guardRecoveryFrame": 0,
+        "verticalMoveSpeed": 80,
+        "boostStartupFrame": 0,
+        "boostDashDurationFrame": 392,
+        "dashEndSpeed": 95,
+        "fixedStepDistance": 35,
+        "airBoostEfficiency": 70,
+        "guardSpeedRate": 80,
+        "airDashSpeed": 330,
+        "fallSpeedRate": 17,
+        "airDashType": 10,
+        "guardStepType": 12,
+        "dashRange": 30,
+        "speedDecayRate": 92,
+        "boostConsumptionType": 3,
+        "airDeceleration": 0,
+        "boostDashCount": 0,
+        "actionLabel": "SKL_MOVE",
+        "turnRate": 20,
+        "airSteerSpeed": 0,
+        "resourceLabel": "CHR_001GUNDAM_005GYAN00_001",
+        "boostEfficiencyAir": 85,
+        "boostExtensionRate": 300,
+        "boostCapRate": 0,
+        "boostDashDistanceMax": 95,
+        "gravityAirModifier": 0
+      }
+    ],
+    "trailingData": [
+      163,
+      150,
+      50,
+      10,
+      232,
+      41,
+      106,
+      117,
+      125,
+      113,
+      129,
+      151,
+      84,
+      220,
+      136,
+      0,
+      131,
+      159,
+      134,
+      10,
+      3,
+      246,
+      140,
+      116,
+      85,
+      201,
+      17,
+      215,
+      86,
+      20,
+      48,
+      111,
+      232,
+      202,
+      106,
+      235,
+      99,
+      207,
+      144,
+      65,
+      66,
+      252,
+      25,
+      0,
+      163,
+      150,
+      50,
+      10,
+      232,
+      41,
+      106,
+      117,
+      0,
+      131,
+      159,
+      134,
+      10,
+      3,
+      246,
+      140,
+      116,
+      85,
+      201,
+      17,
+      215,
+      86,
+      20,
+      48,
+      111,
+      232,
+      202,
+      106,
+      235,
+      99,
+      207,
+      144,
+      65,
+      66,
+      252,
+      25,
+      0
+    ],
+    "fieldNotes": {
+      "runtimeLookup": "MSC reads movement rows with sys_0(0x60006, speedparamRow, fieldHash)."
+    }
+  }
+}

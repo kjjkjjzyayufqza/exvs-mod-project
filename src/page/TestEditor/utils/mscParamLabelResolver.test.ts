@@ -55,6 +55,28 @@ describe("buildParamLabelIndex", () => {
       resourceLabel: "RESOURCE_DELTA",
     });
   });
+
+  it("prefers already-decoded string fields from Rust", () => {
+    const parsed: TypedParamFile = {
+      header: {},
+      fieldSpecs: [],
+      entryIds: [0xc2b19d12],
+      entries: [
+        {
+          entryId: 0xc2b19d12,
+          actionLabel: "SKL_MOVE",
+          resourceLabel: "CHR_001GUNDAM_005GYAN00_001",
+        },
+      ],
+      trailingData: [],
+    };
+
+    const labels = buildParamLabelIndex(parsed, new Uint8Array(0));
+    expect(labels.get("0xc2b19d12")).toEqual({
+      actionLabel: "SKL_MOVE",
+      resourceLabel: "CHR_001GUNDAM_005GYAN00_001",
+    });
+  });
 });
 
 describe("loadParamLabelIndex", () => {

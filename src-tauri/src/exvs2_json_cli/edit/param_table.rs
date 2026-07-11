@@ -23,6 +23,15 @@ pub(super) trait ParamEntryAccess: Clone {
     fn commands(&self) -> &HashMap<u32, u32>;
     fn commands_mut(&mut self) -> &mut HashMap<u32, u32>;
     fn from_parts(entry_id: u32, commands: HashMap<u32, u32>) -> Self;
+
+    /// Optional kind-7 decoded string support (speedparam action/resource labels).
+    fn string_field(&self, _hash: u32) -> Option<&str> {
+        None
+    }
+
+    fn set_string_field(&mut self, _hash: u32, _value: String) -> Result<(), String> {
+        Err("string fields are not supported on this param entry type".to_string())
+    }
 }
 
 pub(super) trait ParamTableAccess {
@@ -78,8 +87,58 @@ macro_rules! impl_param_access {
 impl_param_access!(VernierTableData, VernierTableEntry);
 impl_param_access!(ArmsParamData, ArmsParamEntry);
 impl_param_access!(BulletParamData, BulletParamEntry);
-impl_param_access!(SpeedParamData, SpeedParamEntry);
 impl_param_access!(ProjectileDepictionTableData, ProjectileDepictionTableEntry);
+
+impl ParamEntryAccess for SpeedParamEntry {
+    fn entry_id(&self) -> u32 {
+        self.entry_id
+    }
+
+    fn set_entry_id(&mut self, entry_id: u32) {
+        self.entry_id = entry_id;
+    }
+
+    fn commands(&self) -> &HashMap<u32, u32> {
+        &self.commands
+    }
+
+    fn commands_mut(&mut self) -> &mut HashMap<u32, u32> {
+        &mut self.commands
+    }
+
+    fn from_parts(entry_id: u32, commands: HashMap<u32, u32>) -> Self {
+        Self {
+            entry_id,
+            commands,
+            strings: HashMap::new(),
+        }
+    }
+
+    fn string_field(&self, hash: u32) -> Option<&str> {
+        self.strings.get(&hash).map(String::as_str)
+    }
+
+    fn set_string_field(&mut self, hash: u32, value: String) -> Result<(), String> {
+        self.strings.insert(hash, value);
+        Ok(())
+    }
+}
+
+impl ParamTableAccess for SpeedParamData {
+    type Entry = SpeedParamEntry;
+
+    fn entries(&self) -> &Vec<Self::Entry> {
+        &self.entries
+    }
+
+    fn entries_mut(&mut self) -> &mut Vec<Self::Entry> {
+        &mut self.entries
+    }
+
+    fn field_specs(&self) -> &[ParamFieldSpec] {
+        &self.field_specs
+    }
+}
 
 pub(super) fn edit_param_table<T>(
     bytes: &[u8],
@@ -135,12 +194,34 @@ where
         "entryId",
     )?;
     let (hash, kind, field_label) = resolve_param_field(table.field_specs(), pool, operation)?;
-    let raw = parse_raw_value_for_kind(
-        kind,
-        object_field(operation, "value", "setParamField")?,
-        "value",
-    )?;
+    let value = object_field(operation, "value", "setParamField")?;
     let index = find_param_entry_index(table.entries(), entry_id)?;
+
+    // Kind 7 = trailing obfuscated C-string (speedparam actionLabel / resourceLabel).
+    const KIND_STRING: u32 = 7;
+    if kind == KIND_STRING {
+        if let Some(s) = value.as_str() {
+            let entry = &mut table.entries_mut()[index];
+            let before = entry
+                .string_field(hash)
+                .map(|v| v.to_string())
+                .unwrap_or_default();
+            entry.set_string_field(hash, s.to_string())?;
+            applied.push(json!({
+                "op": "setParamField",
+                "entryId": entry_id,
+                "field": field_label,
+                "commandHash": format_hex_u32(hash),
+                "before": before,
+                "after": s,
+                "valueType": "string"
+            }));
+            return Ok(());
+        }
+        // Numeric value still allowed: keeps absolute offset without string rewrite.
+    }
+
+    let raw = parse_raw_value_for_kind(kind, value, "value")?;
     let entry = &mut table.entries_mut()[index];
     let before = entry.commands().get(&hash).copied();
     entry.commands_mut().insert(hash, raw);
@@ -247,8 +328,17 @@ where
     };
     commands.extend(patch_commands);
 
+    // Merge kind-7 decoded labels when the entry JSON carries string fields
+    // (speedparam actionLabel / resourceLabel). Non-speed tables ignore these.
+    let label_strings = crate::format::speedparam::speedparam_entry_from_json_value(entry_value)
+        .map(|e| e.strings)
+        .unwrap_or_default();
+
     if let Some(index) = existing_index {
         *table.entries_mut()[index].commands_mut() = commands;
+        for (hash, value) in label_strings {
+            let _ = table.entries_mut()[index].set_string_field(hash, value);
+        }
         applied.push(json!({
             "op": "upsertParamEntry",
             "entryId": entry_id,
@@ -259,6 +349,11 @@ where
         table
             .entries_mut()
             .push(T::Entry::from_parts(entry_id, commands));
+        if let Some(last) = table.entries_mut().last_mut() {
+            for (hash, value) in label_strings {
+                let _ = last.set_string_field(hash, value);
+            }
+        }
         applied.push(json!({
             "op": "upsertParamEntry",
             "entryId": entry_id,

@@ -17,7 +17,7 @@ export interface PropertyGroupDef {
 export interface PropertyFieldDef {
   key: string;
   label: string;
-  type: "u32" | "i32" | "f32" | "hash" | "enum" | "bool" | "vec3";
+  type: "u32" | "i32" | "f32" | "hash" | "enum" | "bool" | "vec3" | "string";
   enumOptions?: { value: number; label: string }[];
   min?: number;
   max?: number;

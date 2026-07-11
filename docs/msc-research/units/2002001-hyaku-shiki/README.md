@@ -206,6 +206,34 @@ sys_4B(0x2, 0x7AD84955, 0x8CCFAE67, 0x4094B0F4)
 模型没有对应 bone，实测应使用 `0`。2026-07-05 强人移植中，把 `0x8CCFAE67`
 直接用于强人 `0xA59612D5` 模型会让模型黏在地面。
 
+### Dodai spawn presentation / “effect” (2026-07-11)
+
+挂载完整形态在 `func_915`（骑乘中 `func_914` 在 `global24 & 0x4000` 时重入）：
+
+```text
+func_915(1):
+  sys_4B(0x2, 0x7AD84955, 0x8CCFAE67, 0x4094B0F4)
+  sys_47(0x25, 0x7AD84955)     # model presentation on (pair: 0x26 off)
+
+func_915(0):
+  sys_4B(0x3, 0x7AD84955)
+  sys_47(0x26, 0x7AD84955)
+```
+
+Entry 定时 aleo/效果挂接（`func_874`，约 `0x5dc` 后）：
+
+```text
+sys_4A(0, 0x58F6D3B6, 0x7AD84955, 0x1, 0x7, 0)
+#      aleo/effect     Dodai model
+```
+
+`func_916` / `func_917` 的 `sys_47(0x12, 0x7AD84955, 0x12BCD15F / 0xE8B3EC3C, …)`
+是 **Dodai 骨骼缩放**（bone hash），不是可跨机体复用的 particle id。
+
+**移植到强人 N2 (`0xA59612D5`)：** 可抄 `0x25/0x26` 与 `sys_4A(0, …)` 的**调用形态**，
+必须换目标 model id；**不能**原样用百式 aleo `0x58F6D3B6` 或 Dodai bone hash，除非
+资源包一并迁移。详见 [gyan-session-2026-07-11-handoff.md](../gyan-session-2026-07-11-handoff.md) §5。
+
 ## 持续飞行：`func_452 -> func_453`
 
 `func_452` 初始化 sustained flight：

@@ -243,6 +243,11 @@ pub fn entry_commands_from_named_json(
             continue;
         }
         if let Some((h, knd)) = hash_and_kind_for_camel_key(pool, k) {
+            // Kind 7 is a file-absolute string offset; decoded text is handled by
+            // format-specific entry parsers (e.g. speedparam). Skip string values here.
+            if knd == 7 && val.is_string() {
+                continue;
+            }
             let raw = json_to_raw_u32_for_kind(knd, val)?;
             commands.insert(h, raw);
         }

@@ -21,6 +21,8 @@ async function copyEntryId(entryId: number) {
 export function ParamEntryListRow({
   entryIndex,
   entryId,
+  actionLabel,
+  resourceLabel,
   meta,
   isSelected,
   isHighlighted,
@@ -32,6 +34,8 @@ export function ParamEntryListRow({
 }: {
   entryIndex: number
   entryId: number
+  actionLabel?: string | null
+  resourceLabel?: string | null
   meta: TypedParamEntryEditorMeta | undefined
   isSelected: boolean
   isHighlighted: boolean
@@ -41,12 +45,14 @@ export function ParamEntryListRow({
   dataIndex: number
   style: CSSProperties
 }) {
+  const hasLabels = Boolean(actionLabel || resourceLabel)
+
   return (
     <div
       ref={measureRef}
       data-index={dataIndex}
       className={cn(
-        "absolute left-0 top-0 flex w-full gap-1.5 border-b border-border/40 px-2.5 py-2 text-left text-xs transition-[background-color,border-color,box-shadow] duration-200",
+        "absolute left-0 top-0 flex w-full gap-1.5 overflow-hidden border-b border-border/40 px-2.5 py-2 text-left text-xs transition-[background-color,border-color,box-shadow] duration-200",
         "border-l-[3px]",
         isSelected
           ? "border-l-primary bg-primary/10 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]"
@@ -59,15 +65,35 @@ export function ParamEntryListRow({
     >
       <button
         type="button"
-        className="min-w-0 flex-1 space-y-1 rounded-sm px-1 py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        className="min-w-0 flex-1 space-y-1 overflow-hidden rounded-sm px-1 py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         onClick={onSelect}
       >
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-start justify-between gap-2">
           <span className="min-w-0 truncate font-mono text-[11px] font-semibold tabular-nums tracking-tight">
             {formatHash(entryId)}
           </span>
           <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">#{entryIndex}</span>
         </div>
+        {hasLabels ? (
+          <div className="min-w-0 space-y-0.5 overflow-hidden">
+            {actionLabel ? (
+              <div
+                className="min-w-0 truncate font-mono text-[10px] leading-snug text-muted-foreground"
+                title={actionLabel}
+              >
+                {actionLabel}
+              </div>
+            ) : null}
+            {resourceLabel ? (
+              <div
+                className="min-w-0 truncate font-mono text-[10px] leading-snug text-muted-foreground/85"
+                title={resourceLabel}
+              >
+                {resourceLabel}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <ParamEntryListBadges meta={meta} />
       </button>
 

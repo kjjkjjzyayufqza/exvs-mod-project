@@ -32,7 +32,9 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x08218288, 5, "front_tracking_angle"),
     (0x0872029D, 2, "sub_shot_cost"), // [V:sub_1405F9180] case 3
     (0x08A0ADE8, 5, "rear_tracking_angle"),
-    (0x08ECF0BE, 5, "red_lock_distance"), // [V:sub_1405F8600] a2=0 — lock/engagement distance category
+    // Provisional name: IDA sub_1405F8600 a2=0. User in-game 2026-07-11: 红锁 is lock_on_distance_max (0xA223C183), not this field.
+    // See docs/characterparam-field-notes.md.
+    (0x08ECF0BE, 5, "red_lock_distance"),
     (0x0911077E, 2, "boost_recovery_speed"),
     (0x0ACCE031, 5, "dmg_multiplier_tier_a"),
     (0x0B25CB7F, 2, "unit_id_composite"),
@@ -145,6 +147,7 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x9B8BF864, 5, "hp_correction_pct_tier_02"), // [V:sub_1405F8E70] HP 40-45% band
     (0x9BED4726, 5, "sub_shot_correction_rate"),
     (0x9D8ADBDF, 2, "reserved_flag_1e4"),
+    // User in-game 2026-07-11: 红锁距离 (with alert_range_distance). See docs/characterparam-field-notes.md.
     (0xA223C183, 5, "lock_on_distance_max"), // [V:sub_1405F8720] a2=3
     (0xA60B0684, 1, "weapon_attribute_flags"),
     (0xA644CF59, 5, "wide_camera_angle"),
@@ -163,9 +166,11 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0xB4F17B6F, 5, "melee_lunge_offset"),
     (0xB58B705C, 2, "reserved_flag_228"),
     (0xB5FDC339, 2, "step_cancel_count"), // [V:data_14133F258] idx=5
+    // Misnamed in pool: user in-game 2026-07-11 verified this controls HP, not boost. See docs/characterparam-field-notes.md.
     (0xB7D5327E, 2, "boost_gauge_initial"),
     (0xB91793D4, 5, "fall_speed_base"),
     (0xBA900811, 5, "air_dash_speed_base"),
+    // User in-game 2026-07-11: also 红锁距离 (with lock_on_distance_max). See docs/characterparam-field-notes.md.
     (0xBAE8C388, 5, "alert_range_distance"), // [V:sub_1405F8720] default branch
     (0xBB19842F, 5, "hp_correction_pct_tier_04"), // [V:sub_1405F8E70] HP 30-35% band
     (0xBC427D55, 5, "radar_display_scale"),

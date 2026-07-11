@@ -124,6 +124,8 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   const [actionsPopoverOpen, setActionsPopoverOpen] = useState(false);
   const [extractNameDialogOpen, setExtractNameDialogOpen] = useState(false);
   const [extractName, setExtractName] = useState("");
+  /** Where the name dialog will extract: workspace (default) or extractOutputPath. */
+  const [extractDestination, setExtractDestination] = useState<"workspace" | "output">("workspace");
 
   const closeActionsPopover = () => setActionsPopoverOpen(false);
   const workspaceAssetRootPath =
@@ -138,17 +140,22 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   const canRemoveWorkspace = Boolean(projectRootDir?.trim() && workspaceAssetRootPath.trim());
   const canRemoveExtract = Boolean(extractOutputPath?.trim());
   const canRemoveMod = Boolean(obModPath?.trim());
+  const canExtractToWorkspace = Boolean(projectRootDir?.trim());
   const extractOutputSameAsWorkspace =
     canRemoveWorkspace &&
     canRemoveExtract &&
     normalizePathKey(extractOutputPath) === normalizePathKey(projectRootDir);
+  const canExtractToOutputFolder =
+    Boolean(extractOutputPath?.trim()) && !extractOutputSameAsWorkspace;
+  const activeExtractRoot =
+    extractDestination === "workspace" ? projectRootDir.trim() : extractOutputPath.trim();
   const sanitizedExtractName = sanitizeFhm2dStructureName(extractName);
-  const extractRouteRootPreview = extractOutputPath.trim()
+  const extractRouteRootPreview = activeExtractRoot
     ? asset.workspacePack.configured.prefix
-      ? joinPreviewPath(extractOutputPath, asset.workspacePack.configured.prefix)
-      : extractOutputPath
+      ? joinPreviewPath(activeExtractRoot, asset.workspacePack.configured.prefix)
+      : activeExtractRoot
     : "";
-  const namedExtractFolderPreview = extractOutputPath.trim()
+  const namedExtractFolderPreview = activeExtractRoot
     ? joinPreviewPath(extractRouteRootPreview, sanitizedExtractName)
     : null;
   const namedExtractStructurePreview = namedExtractFolderPreview
@@ -168,12 +175,21 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     setModExists(asset.modExists);
   }, [asset.sourceExists, asset.workspaceExists, asset.modExists]);
 
-  const resolveExtractTarget = async (packName?: string) => {
-    if (!extractOutputPath.trim()) {
-      throw new Error("Extract output path not configured");
+  const resolveExtractTarget = async (
+    destination: "workspace" | "output",
+    packName?: string,
+  ) => {
+    const root =
+      destination === "workspace" ? projectRootDir.trim() : extractOutputPath.trim();
+    if (!root) {
+      throw new Error(
+        destination === "workspace"
+          ? "Workspace path not configured"
+          : "Extract output path not configured",
+      );
     }
     return resolveFhm2dPackPaths(
-      extractOutputPath,
+      root,
       workspaceDocument,
       asset.routeId,
       asset.hashHex,
@@ -181,13 +197,18 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     );
   };
 
-  const runExtract = async (target: ResolvedFhm2dPackPaths) => {
+  const runExtract = async (
+    target: ResolvedFhm2dPackPaths,
+    destination: "workspace" | "output",
+  ) => {
     setIsExtracting(true);
     const result = await extractAsset(asset, target, { writeMetaBin });
     setIsExtracting(false);
 
     if (result.success) {
       clearFhm2dPackResolutionCache(target.routeRootPath);
+      const destinationLabel =
+        destination === "workspace" ? "workspace" : "output folder";
       if (result.namingWarning) {
         toast.error(`Extracted ${asset.fieldKey} but FHM naming failed`, {
           description: result.namingWarning,
@@ -202,7 +223,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
           result.modelCount != null && result.totalFiles != null
             ? ` (${result.modelCount} models, ${result.totalFiles} files)`
             : "";
-        toast.success(`Extracted ${asset.fieldKey} to output folder${modelSummary}`, {
+        toast.success(`Extracted ${asset.fieldKey} to ${destinationLabel}${modelSummary}`, {
           action: {
             label: "Open Folder",
             onClick: () => openPath(result.path!),
@@ -210,8 +231,15 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
         });
       }
       if (
+        destination === "workspace" &&
         result.path &&
         normalizePathKey(result.path) === normalizePathKey(target.folderPath)
+      ) {
+        setWorkspaceExists(true);
+      } else if (
+        destination === "output" &&
+        result.path &&
+        normalizePathKey(result.path) === normalizePathKey(asset.workspaceFolderPath)
       ) {
         setWorkspaceExists(true);
       }
@@ -220,13 +248,26 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     }
   };
 
-  const handleExtract = async () => {
+  const openExtractNameDialog = (destination: "workspace" | "output") => {
     if (isExtracting) {
+      return;
+    }
+    if (destination === "workspace" && !canExtractToWorkspace) {
+      toast.error("Workspace path not configured");
+      return;
+    }
+    if (destination === "output" && !canExtractToOutputFolder) {
+      toast.error(
+        extractOutputSameAsWorkspace
+          ? "Extract output path is the same as workspace; use Extract to Workspace"
+          : "Extract output path not configured",
+      );
       return;
     }
     const defaultName = sanitizeFhm2dStructureName(
       `${asset.fieldKey}_${asset.hashHex.replace(/^0x/i, "")}`,
     );
+    setExtractDestination(destination);
     setExtractName(
       suggestFhm2dStructureName(asset.hashHex, {
         routeId: asset.routeId,
@@ -254,7 +295,10 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     setExtractNameDialogOpen(false);
     let target: ResolvedFhm2dPackPaths;
     try {
-      target = await resolveExtractTarget(sanitizeFhm2dStructureName(extractName));
+      target = await resolveExtractTarget(
+        extractDestination,
+        sanitizeFhm2dStructureName(extractName),
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
       return;
@@ -266,7 +310,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
       setExtractOverwriteOpen(true);
       return;
     }
-    await runExtract(target);
+    await runExtract(target, extractDestination);
   };
 
   const handleConfirmExtractOverwrite = () => {
@@ -274,7 +318,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     const target = pendingExtractTarget;
     setPendingExtractTarget(null);
     if (target) {
-      void runExtract(target);
+      void runExtract(target, extractDestination);
     }
   };
 
@@ -543,16 +587,21 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
                 <Button
                   size="sm"
                   className="flex-1 min-w-0 justify-start gap-2"
-                  onClick={handleExtract}
-                  disabled={isExtracting || !sourceExists}
+                  onClick={() => openExtractNameDialog("workspace")}
+                  disabled={isExtracting || !sourceExists || !canExtractToWorkspace}
+                  title={
+                    canExtractToWorkspace
+                      ? `Extract under workspace: ${projectRootDir}`
+                      : "Workspace path not configured"
+                  }
                 >
                   <Download className="h-3.5 w-3.5 shrink-0" />
-                  {isExtracting ? "Extracting..." : "Extract to Output Folder"}
+                  {isExtracting ? "Extracting..." : "Extract to Workspace"}
                 </Button>
                 <label
                   htmlFor={`write-meta-bin-${asset.fieldKey}`}
                   className="flex flex-col items-center justify-center gap-0.5 shrink-0 w-[52px] cursor-pointer select-none rounded border border-border bg-muted/30 px-1 py-1 hover:bg-muted/50"
-                  title="Write decompressed FHM2D meta (inflate raw) to meta.bin in the output folder"
+                  title="Write decompressed FHM2D meta (inflate raw) to meta.bin in the extract folder"
                 >
                   <Checkbox
                     id={`write-meta-bin-${asset.fieldKey}`}
@@ -564,6 +613,20 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
                   <span className="text-[9px] leading-none text-center text-muted-foreground">meta.bin</span>
                 </label>
               </div>
+
+              {canExtractToOutputFolder ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start gap-2"
+                  onClick={() => openExtractNameDialog("output")}
+                  disabled={isExtracting || !sourceExists}
+                  title={`Extract under output path: ${extractOutputPath}`}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Extract to Output Folder
+                </Button>
+              ) : null}
               
               <Button 
                 variant="outline" 
@@ -718,8 +781,16 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
       {extractNameDialogOpen ? (
         <AppRndModalShell
           titleId={`extract-name-${asset.fieldKey}-title`}
-          title="Name extracted asset"
-          subtitle="Choose a readable workspace name for this asset. The game hash remains the HashName."
+          title={
+            extractDestination === "workspace"
+              ? "Extract to Workspace"
+              : "Extract to Output Folder"
+          }
+          subtitle={
+            extractDestination === "workspace"
+              ? "Extract into the Test Editor workspace. Choose a readable Name; HashName stays the game hash."
+              : "Extract into the configured Extract Output Path. Choose a readable Name; HashName stays the game hash."
+          }
           headerIcon={<Download className="h-5 w-5 text-primary" />}
           dimensions={EXTRACT_NAME_MODAL_DIMENSIONS}
           storageKey="app.rnd-size.character-asset-extract-name"
@@ -730,9 +801,12 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
               <Button variant="outline" onClick={() => setExtractNameDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={() => void handleConfirmNamedExtract()} disabled={isExtracting || !extractOutputPath.trim()}>
+              <Button
+                onClick={() => void handleConfirmNamedExtract()}
+                disabled={isExtracting || !activeExtractRoot}
+              >
                 <Download className="mr-2 h-4 w-4" />
-                Extract
+                {extractDestination === "workspace" ? "Extract to Workspace" : "Extract to Output"}
               </Button>
             </div>
           }
@@ -741,6 +815,12 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
             <div className="rounded-md border bg-muted/20 p-3 text-sm">
               <div className="font-medium">{asset.fieldKey}</div>
               <div className="mt-1 font-mono text-xs text-muted-foreground">{asset.hashHex}</div>
+              <div className="mt-2 text-[11px] text-muted-foreground">
+                Destination root:{" "}
+                <span className="font-mono break-all text-foreground">
+                  {activeExtractRoot || "(not configured)"}
+                </span>
+              </div>
             </div>
             <Fhm2dNameField
               id={`extract-name-${asset.fieldKey}`}
@@ -748,7 +828,11 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
               onChange={setExtractName}
               sourceNameOrPath={asset.hashHex}
               routeId={asset.routeId}
-              description="This name is used for the extracted folder and structure JSON under the selected output route."
+              description={
+                extractDestination === "workspace"
+                  ? "Folder and structure JSON name under the workspace route (e.g. 041cpm/<Name>)."
+                  : "Folder and structure JSON name under the extract output route."
+              }
             />
             <Fhm2dMetadataSummary
               compact

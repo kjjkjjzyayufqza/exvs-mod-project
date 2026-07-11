@@ -14,6 +14,7 @@ E:\XB\解包\com\file\0xBDBE6FEA\2.c
 - `2.c` 负责在动作运行时读 engine 给出的状态，决定当前动作能否被 boost / cancel gate 打断，并用 `sys_46(...)` 写入动作局部的移动、速度、惯性、追踪、转向类参数。
 - `func_11` 是全局 boost / cancel gate 候选，不是普通动作 callback。
 - `sys_46` 是动作局部运动控制总线候选，不是单一“BD 函数”。
+- **2026-07-11：** transform 飞行路径里没有把气槽消耗写成 `/2`；`boost_dash_initial_speed` 上的 `/2` 出现在其它 BD 动作（如 Gyan `func_407`）。见 [gyan-session-2026-07-11-handoff.md](./gyan-session-2026-07-11-handoff.md) §3。
 
 ## 玩家语义对照
 

@@ -518,8 +518,10 @@ export default function CharacterIdTableView({
 
     const handleExtractAll = useCallback(async () => {
         if (!selectedRow || isExtractingAll) return;
-        if (!extractOutputPath.trim()) {
-            toast.error("Extract output path not configured");
+        // Default: extract into Test Editor workspace (WS), not Extract Output Path.
+        const workspaceRoot = folderPath.trim();
+        if (!workspaceRoot) {
+            toast.error("Workspace path not configured");
             return;
         }
         setIsExtractingAll(true);
@@ -530,7 +532,7 @@ export default function CharacterIdTableView({
                 const asset = resolvedAssetRefs[key];
                 if (asset && asset.rawValue !== 0) {
                     const target = await resolveFhm2dPackPaths(
-                        extractOutputPath,
+                        workspaceRoot,
                         workspaceDocument,
                         asset.routeId,
                         asset.hashHex,
@@ -552,10 +554,10 @@ export default function CharacterIdTableView({
                     duration: 25_000,
                 });
             } else {
-                toast.success(`Successfully extracted ${successCount} assets`);
+                toast.success(`Successfully extracted ${successCount} assets to workspace`);
             }
         }
-    }, [selectedRow, isExtractingAll, resolvedAssetRefs, extractOutputPath, workspaceDocument]);
+    }, [selectedRow, isExtractingAll, resolvedAssetRefs, folderPath, workspaceDocument]);
 
     const handleExtractAllMsc = useCallback(async () => {
         if (isExtractingAllMsc) return;
@@ -1452,11 +1454,11 @@ export default function CharacterIdTableView({
                                             size="sm"
                                             variant="secondary"
                                             onClick={() => setIsExtractConfirmOpen(true)}
-                                            disabled={isExtractingAll || !obDplCachePath}
-                                            title="Extract all non-zero assets for this character"
+                                            disabled={isExtractingAll || !obDplCachePath || !folderPath.trim()}
+                                            title="Extract all non-zero assets into the Test Editor workspace"
                                         >
                                             <PackageOpen className="w-4 h-4 mr-2" />
-                                            {isExtractingAll ? "Extracting..." : "Extract All Assets"}
+                                            {isExtractingAll ? "Extracting..." : "Extract All to Workspace"}
                                         </Button>
                                     </div>
 
@@ -1680,9 +1682,17 @@ export default function CharacterIdTableView({
             >
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Extract All Assets</AlertDialogTitle>
+                        <AlertDialogTitle>Extract All to Workspace</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to extract all assets for Character ID {selectedRow?.CharacterId}?
+                            Extract all non-zero assets for Character ID {selectedRow?.CharacterId} into the
+                            Test Editor workspace
+                            {folderPath.trim() ? (
+                                <>
+                                    {" "}
+                                    (<span className="font-mono text-xs break-all">{folderPath}</span>)
+                                </>
+                            ) : null}
+                            . Config Extract Output Path is not used.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -1694,7 +1704,7 @@ export default function CharacterIdTableView({
                             }}
                             className="bg-black hover:bg-black/90 text-white"
                         >
-                            Extract all
+                            Extract to Workspace
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

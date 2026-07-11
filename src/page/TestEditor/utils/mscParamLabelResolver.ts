@@ -18,6 +18,11 @@ function readNumericField(entry: TypedParamEntry, key: string): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function readStringField(entry: TypedParamEntry, key: string): string | null {
+  const value: TypedFieldValue = entry[key];
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
 export function readObfLabelAtOffset(bytes: Uint8Array, offset: number): string | null {
   if (offset <= 0 || offset >= bytes.length) {
     return null;
@@ -36,11 +41,22 @@ export function buildParamLabelIndex(
     if (entryId == null) {
       continue;
     }
-    const actionOffset = readNumericField(entry, "actionLabelOffset");
-    const resourceOffset = readNumericField(entry, "resourceLabelOffset");
+    // Prefer already-decoded strings from Rust (actionLabel / resourceLabel).
+    const actionFromString =
+      readStringField(entry, "actionLabel") ?? readStringField(entry, "actionLabelOffset");
+    const resourceFromString =
+      readStringField(entry, "resourceLabel") ?? readStringField(entry, "resourceLabelOffset");
+    const actionOffset =
+      readNumericField(entry, "actionLabelOffset") ?? readNumericField(entry, "actionLabel");
+    const resourceOffset =
+      readNumericField(entry, "resourceLabelOffset") ?? readNumericField(entry, "resourceLabel");
     labels.set(canonicalMscHashHex(entryId), {
-      actionLabel: actionOffset == null ? null : readObfLabelAtOffset(bytes, actionOffset),
-      resourceLabel: resourceOffset == null ? null : readObfLabelAtOffset(bytes, resourceOffset),
+      actionLabel:
+        actionFromString ??
+        (actionOffset == null ? null : readObfLabelAtOffset(bytes, actionOffset)),
+      resourceLabel:
+        resourceFromString ??
+        (resourceOffset == null ? null : readObfLabelAtOffset(bytes, resourceOffset)),
     });
   }
   return labels;

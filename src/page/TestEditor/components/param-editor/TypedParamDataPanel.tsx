@@ -21,6 +21,7 @@ import {
   markEntryEditorMetaDirty,
   parseHexPreviewEditText,
   readTypedEntryId,
+  readTypedEntryLabels,
   removeEntryEditorMetaAt,
   shiftHighlightedEntryIndices,
   type TypedParamEntryEditorMeta,
@@ -32,8 +33,10 @@ import {
   copyTypedParamFileJsonToClipboard,
 } from "./typedParamClipboard"
 import { TypedParamImportDialog } from "./TypedParamImportDialog"
+import { readObfLabelAtOffset } from "../../utils/mscParamLabelResolver"
 
-const ENTRY_ROW_HEIGHT = 58
+/** Baseline estimate; measureElement adjusts when action/resource labels are present. */
+const ENTRY_ROW_HEIGHT = 72
 const FIELD_ROW_HEIGHT = 104
 const FIELDS_PER_ROW = 2
 const HEX_PREVIEW_ROW_HEIGHT = 24
@@ -73,19 +76,24 @@ function ParamFieldCell({
   onCommit,
 }: {
   fieldKey: string
-  value: number
+  value: number | string
   kind: number
   offset: number
-  onCommit: (nextValue: number) => void
+  onCommit: (nextValue: number | string) => void
 }) {
   const isFloat = kind === 5
+  const isString = kind === 7 || typeof value === "string"
   const offsetBadge =
-    offset !== -1 ? (
+    offset !== -1 && !isString ? (
       <span className="shrink-0 rounded border border-border/50 bg-muted/50 px-1 py-0.5 font-mono text-[9px] tabular-nums tracking-wide text-muted-foreground">
         {formatFieldOffset(offset)}
       </span>
     ) : null
-  const kindBadge = isFloat ? (
+  const kindBadge = isString ? (
+    <span className="shrink-0 rounded bg-emerald-500/15 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+      string
+    </span>
+  ) : isFloat ? (
     <span className="shrink-0 rounded bg-cyan-500/15 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-cyan-700 dark:text-cyan-300">
       f32
     </span>
@@ -94,6 +102,35 @@ function ParamFieldCell({
       i32
     </span>
   )
+
+  if (isString) {
+    const text = typeof value === "string" ? value : ""
+    return (
+      <div
+        className={cn(
+          "flex min-h-[5.5rem] flex-col gap-1.5 rounded-md border border-emerald-500/25 bg-emerald-950/[0.06] p-3 shadow-sm",
+          "transition-[border-color,box-shadow,background-color] duration-200",
+          "hover:border-emerald-500/40 hover:bg-emerald-950/[0.1] focus-within:border-emerald-500/50 focus-within:ring-1 focus-within:ring-emerald-500/20",
+        )}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-[11px] font-medium text-muted-foreground">{fieldKey}</span>
+          <div className="flex items-center gap-1">
+            {kindBadge}
+            {offsetBadge}
+          </div>
+        </div>
+        <input
+          className="h-8 w-full rounded-md border border-border/60 bg-background px-2 font-mono text-[11px] outline-none focus:border-primary/40"
+          value={text}
+          onChange={(e) => onCommit(e.target.value)}
+          placeholder="(empty string)"
+        />
+      </div>
+    )
+  }
+
+  const numericValue = typeof value === "number" && Number.isFinite(value) ? value : 0
 
   return (
     <DualValueProperty
@@ -104,7 +141,7 @@ function ParamFieldCell({
           {offsetBadge}
         </div>
       }
-      value={value}
+      value={numericValue}
       property={fieldKey}
       editable={true}
       editingProperty={null}
@@ -114,7 +151,7 @@ function ParamFieldCell({
       onSaveEdit={() => {}}
       onCancelEdit={() => {}}
       onValueChange={() => {}}
-      onCommit={onCommit}
+      onCommit={(next) => onCommit(next)}
       showHex={true}
       isFloat={isFloat}
       variant="compact"
@@ -253,17 +290,59 @@ export function TypedParamDataPanel({
     if (!entry || !data.fieldSpecs) return {}
     const map: Record<string, { kind: number; offset: number }> = {}
     const keys = Object.keys(entry).filter((k) => k !== "entryId" && !k.endsWith("Size"))
+    // Prefer hash-name alignment for known kind-7 labels; fall back to index for others.
+    const LABEL_HASH: Record<string, number> = {
+      actionLabel: 0xe6213731,
+      resourceLabel: 0xf3c4cae9,
+      actionLabelOffset: 0xe6213731,
+      resourceLabelOffset: 0xf3c4cae9,
+    }
     keys.forEach((key, index) => {
-      const spec = data.fieldSpecs[index]
-      if (spec) {
-        map[key] = {
-          kind: spec.kind ?? 1,
-          offset: spec.entryOffset ?? spec.offset ?? 0,
-        }
+      const value = entry[key]
+      const labelHash = LABEL_HASH[key]
+      const byHash =
+        labelHash != null
+          ? data.fieldSpecs.find((spec) => (spec.hash ?? 0) === labelHash)
+          : undefined
+      const spec = byHash ?? data.fieldSpecs[index]
+      const kindFromValue = typeof value === "string" ? 7 : undefined
+      map[key] = {
+        kind: kindFromValue ?? spec?.kind ?? 1,
+        offset: spec?.entryOffset ?? spec?.offset ?? index * 4,
       }
     })
     return map
   }, [entry, data.fieldSpecs])
+
+  /** Rebuild absolute file view so kind-7 numeric offsets can still be decoded client-side. */
+  const trailingFileBytes = useMemo(() => {
+    const trailing = data.trailingData
+    if (!trailing || trailing.length === 0) return null
+    const header = data.header ?? {}
+    const entryCount = data.entryIds?.length ?? data.entries.length
+    const commandsCount = data.fieldSpecs?.length ?? 0
+    const entrySize = header.entrySize ?? 0
+    const entriesEnd =
+      0x20 + commandsCount * 4 + commandsCount * 12 + entryCount * 4 + entryCount * entrySize
+    const bytes = new Uint8Array(entriesEnd + trailing.length)
+    for (let i = 0; i < trailing.length; i += 1) {
+      bytes[entriesEnd + i] = trailing[i] ?? 0
+    }
+    return bytes
+  }, [data.trailingData, data.header, data.entryIds, data.entries.length, data.fieldSpecs])
+
+  const resolveCellDisplayValue = useCallback(
+    (key: string, raw: number | string | boolean | null | undefined, kind: number): number | string => {
+      if (typeof raw === "string") return raw
+      if (kind === 7 && typeof raw === "number" && raw > 0 && trailingFileBytes) {
+        return readObfLabelAtOffset(trailingFileBytes, raw) ?? ""
+      }
+      if (typeof raw === "number" && Number.isFinite(raw)) return raw
+      if (typeof raw === "boolean") return raw ? 1 : 0
+      return 0
+    },
+    [trailingFileBytes],
+  )
 
   const appendEntry = (created: TypedParamEntry | null, meta: TypedParamEntryEditorMeta) => {
     if (!created) return
@@ -306,7 +385,7 @@ export function TypedParamDataPanel({
     onSelectEntry(nextIndex)
   }
 
-  const commitEntryFieldChange = (key: string, nextValue: number) => {
+  const commitEntryFieldChange = (key: string, nextValue: number | string) => {
     const nextEntries = data.entries.map((item, idx) =>
       idx === selectedEntryIndex ? { ...item, [key]: nextValue } : item,
     )
@@ -418,15 +497,21 @@ export function TypedParamDataPanel({
               {entryVirtualizer.getVirtualItems().map((virtualRow) => {
                 const row = filteredEntryRows[virtualRow.index]
                 if (!row) return null
-                const { index: i, entryId: id } = row
+                const { index: i, entryId: id, entry: listEntry } = row
                 const meta = entryEditorMeta[i]
                 const isSelected = selectedEntryIndex === i
                 const isHighlighted = highlightedEntryIndices.has(i)
+                const { actionLabel, resourceLabel } = readTypedEntryLabels(
+                  listEntry,
+                  trailingFileBytes,
+                )
                 return (
                   <ParamEntryListRow
                     key={`${i}-${id}`}
                     entryIndex={i}
                     entryId={id}
+                    actionLabel={actionLabel}
+                    resourceLabel={resourceLabel}
                     meta={meta}
                     isSelected={isSelected}
                     isHighlighted={isHighlighted}
@@ -591,16 +676,16 @@ export function TypedParamDataPanel({
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       {rowKeys.map((key) => {
                         const value = entry[key]
-                        const current = value === undefined ? null : value
                         const info = fieldInfoMap[key]
                         const kind = info?.kind || 1
                         const offset = info?.offset ?? -1
+                        const cellValue = resolveCellDisplayValue(key, value, kind)
 
                         return (
                           <ParamFieldCell
                             key={key}
                             fieldKey={key}
-                            value={typeof current === "number" ? current : 0}
+                            value={cellValue}
                             kind={kind}
                             offset={offset}
                             onCommit={(nextValue) => commitEntryFieldChange(key, nextValue)}

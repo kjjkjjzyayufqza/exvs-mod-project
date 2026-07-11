@@ -329,6 +329,13 @@ func_453
    - 百式飞行 controller 读 `speedparam[global142]` 的字段，例如 `0x5E8CAF43`、`0xFF7A9C8B`、`0x459455EA`、`0x6F6F1BF6`、`0x4D4B65EA` 等。
    - 百式普通和 Dodai flying 都使用 `0xC2B19D12` 行；复活态 `0xC67DA7B2` 会禁用 transform。
    - 强人如果用当前 `0xC2B19D12`，需要确认该 speed row 的飞行字段不为 0，且数值适合飞行。若不适合，应新增/选择飞行专用 speed row，并在进入/退出状态时恢复。
+   - **2026-07-11 实测/读码（N2 rocket mod `2.c`）：**
+     - `global142` 默认 / 恢复：`0xC2B19D12`。
+     - `func_998` 特殊态：`global142 = 0xB7027DBE`，`global143 = 1`，且 **禁用** 三段 transform action 绑定。
+     - 因此 **common transform 飞行（slot 0x23/24/25）走的是 `0xC2B19D12`**，不是 B7。
+     - 气槽「变成一半」**不是** transform MSC 里的 `/2`；`func_407` 的 `/2` 作用在 `boost_dash_initial_speed`，与飞行 controller 无关。耗气优先查 engine + speedparam。
+     - 飞行拉远镜头：用 `sys_53(0x2, …)`；推荐挂在 `GYAN_TRANSFORM_ENTRY/RELEASE_SLOT`，不要长期写在 `func_452/464`；不要默认塞进 `MOUNT_*`（Dodai 特射也会调 MOUNT）。
+     - 百式 Dodai spawn 表现：`sys_47(0x25/0x26, model)` + 可选 `sys_4A(0, aleo, model)`；强人 N2 模型 `0xA59612D5` 可抄**形态**，不能直接抄百式 model/aleo/bone hash。详见 `docs/msc-research/gyan-session-2026-07-11-handoff.md`。
 
 ## 推荐实现阶段
 

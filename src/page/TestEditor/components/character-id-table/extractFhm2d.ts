@@ -135,7 +135,7 @@ export async function extractAsset(
       ? await extractModelAsset(asset, targetDir, writeMetaBin, logExtractPhase)
       : await extractFlatAsset(asset, targetDir, writeMetaBin, logExtractPhase);
 
-    console.log(`[FHM2D Extract] total (Extract to Output Folder): ${(performance.now() - extractT0).toFixed(2)}ms`);
+    console.log(`[FHM2D Extract] total: ${(performance.now() - extractT0).toFixed(2)}ms`);
     return result;
   } catch (err: any) {
     console.error('Extraction failed:', err);

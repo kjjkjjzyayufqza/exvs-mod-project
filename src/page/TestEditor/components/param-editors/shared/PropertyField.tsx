@@ -14,11 +14,12 @@ import type { PropertyFieldDef } from "./types";
 interface PropertyFieldProps {
   def: PropertyFieldDef;
   value: number | string | boolean | null;
-  onChange: (key: string, value: number) => void;
+  onChange: (key: string, value: number | string) => void;
 }
 
 export function PropertyField({ def, value, onChange }: PropertyFieldProps) {
   const numValue = typeof value === "number" ? value : 0;
+  const stringValue = typeof value === "string" ? value : "";
 
   const handleNumberChange = useCallback(
     (raw: string) => {
@@ -29,6 +30,23 @@ export function PropertyField({ def, value, onChange }: PropertyFieldProps) {
     },
     [def, onChange],
   );
+
+  if (def.type === "string") {
+    return (
+      <div className="flex items-center justify-between gap-2">
+        <label className="min-w-0 shrink-0 text-[11px] text-muted-foreground">
+          {def.label}
+        </label>
+        <Input
+          type="text"
+          className="h-7 w-44 font-mono text-[11px]"
+          value={stringValue}
+          onChange={(e) => onChange(def.key, e.target.value)}
+          placeholder="(empty)"
+        />
+      </div>
+    );
+  }
 
   if (def.type === "enum" && def.enumOptions) {
     return (

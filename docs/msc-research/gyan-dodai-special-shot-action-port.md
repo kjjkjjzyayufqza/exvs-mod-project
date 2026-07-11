@@ -1,5 +1,16 @@
 # Gyan Dodai Special Shot Port
 
+> **Related later sessions:** aim/RELEASE handoff [gyan-dodai-session-2026-07-10-handoff.md](./gyan-dodai-session-2026-07-10-handoff.md); 2026-07-11 camera / mount effect / Param package notes [gyan-session-2026-07-11-handoff.md](./gyan-session-2026-07-11-handoff.md).
+
+## Follow-on (2026-07-10)
+
+Aim / pitch / inertia / RELEASE-stuck analysis and recipes:
+
+- **Session handoff (start here for next work):** [gyan-dodai-session-2026-07-10-handoff.md](./gyan-dodai-session-2026-07-10-handoff.md)
+- Aim field map: [gyan-dodai-throw-aim-at-enemy-analysis.md](./gyan-dodai-throw-aim-at-enemy-analysis.md)
+
+Critical later fix: RELEASE must not use `func_309(global20, func_14)` (`func_14` is not a frame threshold). Use `func_91()` or set `global252` after fire. DRIVER stays `func_599()` only.
+
 ## Scope
 
 This change ports Hyaku Shiki's flying Dodai special-shot route to Gyan while preserving Gyan's existing ground special shot.

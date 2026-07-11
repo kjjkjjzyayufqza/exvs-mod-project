@@ -32,4 +32,14 @@ float __fastcall sub_1405F8600(entry, int distType)
 | 4 | `0x0F8134A7` | 260125863 | greenLock | Green lock range (optimal) |
 | default | `0x55EECE85` | 1441070965 | defaultLock | Fallback distance |
 
-These distance thresholds define the concentric lock-on zones around a unit. The game UI typically shows different lock-on reticle colors based on which zone the target falls into (red = close, green = optimal range).
+These distance thresholds define concentric lock-on / engagement zones around a unit (IDA labels are provisional).
+
+**Empirical correction (2026-07-11):** in-game **红锁距离** responded to:
+
+- `characterparam.lock_on_distance_max` (`0xA223C183`, `sub_1405F8720` a2=3)
+- `characterparam.alert_range_distance` (`0xBAE8C388`, `sub_1405F8720` default branch)
+
+**not** to case-0 `0x08ECF0BE` in user testing. Case-0 may still be a related band, but do not treat it as the sole “red lock UI distance” without re-verification. Tune both verified floats together when modding 红锁.
+
+See `docs/characterparam-field-notes.md` and session log
+`docs/msc-research/gyan-session-2026-07-11-handoff.md` §2.

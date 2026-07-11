@@ -5,7 +5,7 @@ import type { TypedParamFile } from "../../param-editor/typedParamTypes";
 interface ArmsPropertyPanelProps {
   entry: TypedParamEntry;
   fieldSpecs?: TypedParamFile["fieldSpecs"];
-  onFieldChange: (key: string, value: number) => void;
+  onFieldChange: (key: string, value: number | string) => void;
 }
 
 // AI decision (2026-06-19): retain JSON keys for save compatibility, but mark
@@ -67,7 +67,7 @@ const ARMS_GROUPS: Record<string, string[]> = {
     "landingBehaviorType",
     "boostConsumptionRate",
   ],
-  Labels: ["actionLabelOffset", "resourceLabelOffset"],
+  Labels: ["actionLabel", "resourceLabel", "actionLabelOffset", "resourceLabelOffset"],
   Misc: ["unk04Reserved", "overheatFrame"],
 };
 

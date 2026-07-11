@@ -78,6 +78,14 @@ Use `docs/` as the first source of project truth:
 - `docs/exvs2-json-cli.md` — `exvs2-json` CLI for EXVS2 binary resource
   inspection, scoped JSON-driven editing, and correlation JSON (implementation
   in `src-tauri/`).
+- `docs/characterparam-field-notes.md` — characterparam empirical field
+  identity (`lockOnDistanceMax` + `alertRangeDistance` = 红锁,
+  `boostGaugeInitial` = HP); prefer over stale pool names when they conflict.
+- `docs/msc-research/gyan-session-2026-07-11-handoff.md` — Gyan/tooling session
+  (Param `0x35B195CC`, speed C2 vs B7, flight camera, Dodai spawn VFX vs N2,
+  Param Editor labels, Extract→Workspace).
+- `docs/param-editor-typed-labels-notes.md` — typed Param Editor list labels
+  (kind-7 string/offset) and Extract-to-Workspace behavior.
 
 When adding new research findings, write them under `docs/` as standalone
 specifications or research notes.
@@ -133,7 +141,12 @@ JSON. There is **no** tool named `exvs2-cli`; use `exvs2-json` / `exvs2_json`.
 | CLI core | `src-tauri/src/exvs2_json_cli/` |
 | Binary entry | `src-tauri/src/bin/exvs2_json.rs` |
 | Integration tests | `src-tauri/tests/exvs2_json_cli_test.rs` |
-| Release executable | `src-tauri/target/release/exvs2_json.exe` |
+| Debug executable (agent default) | `src-tauri/target/debug/exvs2_json.exe` |
+| Release executable | `src-tauri/target/release/exvs2_json.exe` (**only if user asks**) |
+
+**Agent build policy (mandatory):** Do **not** use `cargo … --release` for normal
+work. Prefer debug for speed. See `.cursor/rules/no-release-builds.mdc` and
+`.cursor/rules/custom-rules.mdc` §7a.
 
 **Commands**
 
@@ -150,13 +163,16 @@ JSON. There is **no** tool named `exvs2-cli`; use `exvs2-json` / `exvs2_json`.
 - `correlate` — emit a JSON skeleton joining unit/weapon/dispatcher/IDA evidence
   (paste IDA symbols via optional flags; does not call IDA automatically).
 
-**Run** (from `src-tauri/`):
+**Run** (from `src-tauri/`; **debug only** unless user requests release):
 
 ```powershell
 cargo run --bin exvs2_json -- --help
 cargo run --bin exvs2_json -- inspect "<path>" --summary --pretty
 cargo run --bin exvs2_json -- edit "<path>" --request "<edit.json>" --output "<new-path>" --pretty
 cargo run --bin exvs2_json -- correlate --unit 001GUNDAM/005GYAN00/001 --weapon SuibakuMissile --id 10050102 --pretty
+# Prefer after code change:
+cargo build --bin exvs2_json
+# then: .\target\debug\exvs2_json.exe inspect ...
 ```
 
 JSON output envelope always sets `"tool": "exvs2-json"`. Reuses the same Rust

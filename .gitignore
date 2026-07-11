@@ -37,3 +37,6 @@ __pycache__/
 .codegraph/*.db-shm
 .codegraph/*.log
 .codegraph/cache/
+
+# Agent-generated MCP tool schema dumps (not project source)
+mcps/

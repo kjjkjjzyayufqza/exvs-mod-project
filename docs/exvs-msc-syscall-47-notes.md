@@ -4,6 +4,8 @@
 
 这份文档记录当前针对 `sys_47` 的阶段性分析结果。
 
+**2026-07-11 交叉引用（百式 Dodai mount）：** 挂载时 `sys_47(0x25, modelId)` / 卸载 `0x26` 与模型表现相关；`sys_47(0x12, model, boneHash, …)` 在百式 Dodai 上用于 **骨骼缩放**（骨 hash 如 `0x12BCD15F`），不是可直接抄到强人的 particle id。强人 N2 移植见 `docs/msc-research/gyan-session-2026-07-11-handoff.md` §5 与 `units/2002001-hyaku-shiki/README.md`。
+
 建议结合以下文档一起阅读：
 
 - `docs/exvs-msc-analysis.md`

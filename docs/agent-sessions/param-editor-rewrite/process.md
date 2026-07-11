@@ -239,7 +239,7 @@ function gutsCorrection(entry: CharacterEntry, hpPercent: number): number {
 ```typescript
 function getLockDistance(entry: CharacterEntry, distType: number): number {
   const hashByType: Record<number, number> = {
-    0: 0x08ECF0BE, // red_lock_distance
+    0: 0x08ECF0BE, // red_lock_distance — PROVISIONAL; user 2026-07-11 红锁 is lockOnDistanceMax+alertRangeDistance (docs/characterparam-field-notes.md)
     1: 0x9271BEB4, // mid_lock_distance
     2: 0xE69AD372, // far_lock_distance
     3: 0x78903491, // max_lock_distance

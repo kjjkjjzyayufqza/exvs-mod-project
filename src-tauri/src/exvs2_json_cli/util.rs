@@ -121,9 +121,17 @@ pub(crate) fn pool_name(pool: ParamCommandPool, hash: u32) -> Option<&'static st
 
 pub(crate) fn pool_hash_by_field(pool: ParamCommandPool, field: &str) -> Option<u32> {
     let normalized = normalize_type_name(field);
+    // Accept legacy "*LabelOffset" names for kind-7 string fields renamed to "*Label".
+    let without_offset = field.strip_suffix("Offset").unwrap_or(field);
+    let normalized_no_offset = normalize_type_name(without_offset);
     pool.iter()
         .find(|(_, _, name)| {
-            *name == normalized || snake_to_camel(name) == field || name.eq_ignore_ascii_case(field)
+            *name == normalized
+                || *name == normalized_no_offset
+                || snake_to_camel(name) == field
+                || snake_to_camel(name) == without_offset
+                || name.eq_ignore_ascii_case(field)
+                || name.eq_ignore_ascii_case(without_offset)
         })
         .map(|(hash, _, _)| *hash)
 }

@@ -13,6 +13,7 @@ import {
   markEntryEditorMetaDirty,
   parseHexPreviewEditText,
   readTypedEntryId,
+  readTypedEntryLabels,
   removeEntryEditorMetaAt,
   shiftHighlightedEntryIndices,
 } from "./paramEntryUtils";
@@ -34,6 +35,72 @@ function createData(entries: TypedParamEntry[]): TypedParamFile {
 }
 
 describe("paramEntryUtils", () => {
+  it("reads actionLabel then resourceLabel strings for list subtitles", () => {
+    expect(
+      readTypedEntryLabels({
+        entryId: 0xb7027dbe,
+        actionLabel: "SKL_MOVE",
+        resourceLabel: "CHR_001GUNDAM_005GYAN00_001",
+      }),
+    ).toEqual({
+      actionLabel: "SKL_MOVE",
+      resourceLabel: "CHR_001GUNDAM_005GYAN00_001",
+    });
+
+    expect(
+      readTypedEntryLabels({
+        entryId: 1,
+        actionLabelOffset: "  ACTION_ONLY  ",
+        resourceLabelOffset: "",
+      }),
+    ).toEqual({
+      actionLabel: "ACTION_ONLY",
+      resourceLabel: null,
+    });
+
+    expect(readTypedEntryLabels({ entryId: 1, actionLabel: 0, resourceLabel: 0 })).toEqual({
+      actionLabel: null,
+      resourceLabel: null,
+    });
+  });
+
+  it("decodes characterparam-style kind-7 offsets when file bytes are provided", async () => {
+    const { obfEncodeFromUtf8String } = await import("@/utils/obfString");
+    const actionEnc = obfEncodeFromUtf8String("SKL_CHAR");
+    const resourceEnc = obfEncodeFromUtf8String("CHR_001GUNDAM_005GYAN00_001");
+    const actionOffset = 16;
+    const resourceOffset = 16 + actionEnc.length;
+    const fileBytes = new Uint8Array(resourceOffset + resourceEnc.length + 4);
+    fileBytes.set(actionEnc, actionOffset);
+    fileBytes.set(resourceEnc, resourceOffset);
+
+    expect(
+      readTypedEntryLabels(
+        {
+          entryId: 0x1b12ae7d,
+          actionLabelOffset: actionOffset,
+          resourceLabelOffset: resourceOffset,
+        },
+        fileBytes,
+      ),
+    ).toEqual({
+      actionLabel: "SKL_CHAR",
+      resourceLabel: "CHR_001GUNDAM_005GYAN00_001",
+    });
+
+    // Without file bytes, numeric offsets alone do not become labels.
+    expect(
+      readTypedEntryLabels({
+        entryId: 0x1b12ae7d,
+        actionLabelOffset: actionOffset,
+        resourceLabelOffset: resourceOffset,
+      }),
+    ).toEqual({
+      actionLabel: null,
+      resourceLabel: null,
+    });
+  });
+
   it("filters entries by index, id, field name, decimal value, and hex value", () => {
     const data = createData([
       { entryId: 0x100, ammoCount: 12, damage: 80, speedRate: 1.5 },

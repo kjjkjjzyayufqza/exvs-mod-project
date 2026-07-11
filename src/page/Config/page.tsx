@@ -151,7 +151,8 @@ export default function ConfigPage() {
                         />
                       </FormControl>
                       <FormDescription>
-                        Default directory for extracted files
+                        Optional secondary extract root (Character ID table: Extract to Output Folder).
+                        Extract to Workspace / Extract All use the Test Editor workspace path instead.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

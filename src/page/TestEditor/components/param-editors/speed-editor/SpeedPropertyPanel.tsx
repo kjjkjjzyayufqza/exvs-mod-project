@@ -5,7 +5,7 @@ import type { TypedParamFile } from "../../param-editor/typedParamTypes";
 interface SpeedPropertyPanelProps {
   entry: TypedParamEntry;
   fieldSpecs?: TypedParamFile["fieldSpecs"];
-  onFieldChange: (key: string, value: number) => void;
+  onFieldChange: (key: string, value: number | string) => void;
 }
 
 const SPEED_GROUPS: Record<string, string[]> = {
@@ -92,7 +92,8 @@ const SPEED_GROUPS: Record<string, string[]> = {
   ],
   Recovery: ["landingRecoveryFrame", "guardRecoveryFrame"],
   Class: ["movementClass", "speedDecayBase", "speedDecayRate"],
-  Labels: ["actionLabelOffset", "resourceLabelOffset"],
+  // Kind-7 obfuscated C-strings from trailing pool (decoded by Rust as plain text).
+  Labels: ["actionLabel", "resourceLabel", "actionLabelOffset", "resourceLabelOffset"],
 };
 
 export function SpeedPropertyPanel({

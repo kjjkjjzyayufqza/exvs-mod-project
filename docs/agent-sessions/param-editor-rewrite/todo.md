@@ -110,7 +110,7 @@ The editor must simulate the correct behavior for each move type.
   - Offense: melee_damage, ranged_damage, assist_damage
   - Defense: max_hp, guard_damage_rate, barrier_damage_rate
   - Mobility: movement_speed_base, boost_dash_speed_rate, step_speed_rate
-  - Range: red_lock_distance, green_lock_distance
+  - Range: red_lock_distance (provisional IDA), green_lock_distance; **in-game 红锁 (2026-07-11):** lock_on_distance_max + alert_range_distance — see docs/characterparam-field-notes.md
 - [ ] Unit cost breakdown (base + per-type costs)
 
 ---

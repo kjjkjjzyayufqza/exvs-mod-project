@@ -1,4 +1,5 @@
 import { formatHash } from "@/models/commandTable";
+import { readObfLabelAtOffset } from "../../utils/mscParamLabelResolver";
 import type { TypedFieldValue, TypedParamEntry, TypedParamFile } from "./typedParamTypes";
 
 export interface TypedParamEntryRow {
@@ -96,6 +97,66 @@ export function readTypedEntryId(entry: TypedParamEntry, index: number): number 
     return raw >>> 0;
   }
   return index >>> 0;
+}
+
+function readNonEmptyStringField(entry: TypedParamEntry, key: string): string | null {
+  const raw = entry[key];
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function readNumericField(entry: TypedParamEntry, key: string): number | null {
+  const raw = entry[key];
+  return typeof raw === "number" && Number.isFinite(raw) ? raw >>> 0 : null;
+}
+
+function decodeLabelFromEntry(
+  entry: TypedParamEntry,
+  stringKeys: string[],
+  offsetKeys: string[],
+  fileBytes?: Uint8Array | null,
+): string | null {
+  for (const key of stringKeys) {
+    const fromString = readNonEmptyStringField(entry, key);
+    if (fromString) return fromString;
+  }
+  if (!fileBytes) return null;
+  for (const key of offsetKeys) {
+    const offset = readNumericField(entry, key);
+    if (offset == null || offset === 0) continue;
+    const decoded = readObfLabelAtOffset(fileBytes, offset);
+    if (decoded) return decoded;
+  }
+  return null;
+}
+
+/**
+ * List-row subtitles: actionLabel then resourceLabel.
+ * Prefers already-decoded strings (speedparam); falls back to kind-7 absolute
+ * offsets via trailing-pool file bytes (characterparam actionLabelOffset / resourceLabelOffset).
+ */
+export function readTypedEntryLabels(
+  entry: TypedParamEntry,
+  fileBytes?: Uint8Array | null,
+): {
+  actionLabel: string | null;
+  resourceLabel: string | null;
+} {
+  return {
+    actionLabel: decodeLabelFromEntry(
+      entry,
+      ["actionLabel", "actionLabelOffset"],
+      ["actionLabelOffset", "actionLabel"],
+      fileBytes,
+    ),
+    resourceLabel: decodeLabelFromEntry(
+      entry,
+      ["resourceLabel", "resourceLabelOffset"],
+      ["resourceLabelOffset", "resourceLabel"],
+      fileBytes,
+    ),
+  };
 }
 
 export function nextTypedEntryId(entries: TypedParamEntry[]): number {
@@ -248,6 +309,13 @@ function formatHexPreviewRows(bytes: number[]): HexPreviewRow[] {
   return rows;
 }
 
+const LABEL_FIELD_HASH: Record<string, number> = {
+  actionLabel: 0xe6213731,
+  resourceLabel: 0xf3c4cae9,
+  actionLabelOffset: 0xe6213731,
+  resourceLabelOffset: 0xf3c4cae9,
+};
+
 export function buildTypedEntryFieldLayout(
   data: TypedParamFile,
   entryIndex: number,
@@ -256,11 +324,19 @@ export function buildTypedEntryFieldLayout(
   if (!entry) return null;
   const keys = Object.keys(entry).filter((key) => key !== "entryId" && !key.endsWith("Size"));
   return keys.map((key, index) => {
-    const spec = data.fieldSpecs[index];
+    const labelHash = LABEL_FIELD_HASH[key];
+    const byHash =
+      labelHash != null
+        ? data.fieldSpecs?.find((spec) => (spec.hash ?? 0) === labelHash)
+        : undefined;
+    const spec = byHash ?? data.fieldSpecs?.[index];
+    const value = entry[key];
+    const kind =
+      typeof value === "string" ? 7 : fieldSpecKind(spec);
     return {
       key,
       offset: fieldSpecOffset(spec, index * 4),
-      kind: fieldSpecKind(spec),
+      kind,
     };
   });
 }

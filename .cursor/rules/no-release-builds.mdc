@@ -1,0 +1,41 @@
+---
+description: Never use cargo/npm release builds for agent verification — prefer debug for speed
+alwaysApply: true
+---
+
+# No Release Builds (Efficiency First)
+
+**User preference (mandatory for all AI agents in this repo): prioritize iteration speed. Do not use release builds unless the user explicitly asks for a release/shipping binary.**
+
+## Forbidden by default
+
+Do **not** run any of the following for normal development, tests, inspect, or verification:
+
+- `cargo build --release`
+- `cargo run --release`
+- `cargo test --release`
+- `cargo build --bin <name> --release`
+- `npm run build` / production bundling when only a quick check is needed
+- Preferring `src-tauri/target/release/*.exe` when a debug binary exists or can be built faster
+
+## Required defaults
+
+| Task | Use this |
+|------|----------|
+| Unit / lib tests | `cargo test` (debug profile) |
+| Build CLI (`exvs2_json`) | `cargo build --bin exvs2_json` → `src-tauri/target/debug/exvs2_json.exe` |
+| Run CLI once | `cargo run --bin exvs2_json -- <args>` (debug; no `--release`) |
+| Incremental Rust check after small edits | `cargo test --lib <filter>` or `cargo build --bin <name>` |
+
+## Why
+
+Release optimizes the entire Tauri/Rust dependency graph and routinely takes minutes. Debug rebuilds after a small change are typically seconds to tens of seconds. Agent loops must not block on release.
+
+## Exception
+
+Only use `--release` / production builds when the user **explicitly** requests a release, shipping package, performance benchmark of optimized code, or a release artifact path.
+
+## Related
+
+- Project hub: `AGENTS.md` (CLI paths prefer debug for agent work)
+- Global always-on rules: `.cursor/rules/custom-rules.mdc`

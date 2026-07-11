@@ -260,6 +260,23 @@ native 行为：
 2. 再对同一个 `hash` 分别测试 `sys_53(0x4, hash, 0x7530)` / `0x2710` / `0x03E8`，观察强度或时间尺度变化。
 3. 最后测试 `sys_53(0x2, a, b, duration)`，仅改单一参数，确认三通道各自对应的视觉维度。
 
+## Gyan transform flight camera (2026-07-11)
+
+User-validated pull-back during flight:
+
+```text
+sys_53(0x2, 0x15e, 0x118, 0xbb8);   // pull farther
+sys_53(0x2, 0x64, 0x64, 0xbb8);     // restore
+```
+
+Placement recommendation for Gyan N2 rocket mod:
+
+- Prefer `GYAN_TRANSFORM_ENTRY_SLOT` / `GYAN_TRANSFORM_RELEASE_SLOT` (or `GYAN_TRANSFORM_CAMERA_PULL/RESTORE` helpers).
+- Avoid long-term patches on common `func_452` / `func_464` once validated.
+- Do not put zoom only in `GYAN_TRANSFORM_MOUNT_*` unless Dodai special-shot mount should share zoom (those helpers are also called from special-shot START/RELEASE).
+
+See `docs/msc-research/gyan-session-2026-07-11-handoff.md` §4.
+
 ---
 
 ## 仍待确认的问题

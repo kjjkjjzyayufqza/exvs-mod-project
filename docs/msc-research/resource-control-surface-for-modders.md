@@ -102,7 +102,11 @@
 | `landing_recovery_rate` | `0x25384033` | `0x090` | 落地硬直倍率 |
 | `step_speed_rate` | `0x26BC945D` | `0x098` | step 速度倍率 |
 | `step_cancel_count` | `0xB5FDC339` | `0x22C` | step cancel 限制 |
-| `boost_gauge_initial` | `0xB7D5327E` | `0x230` | 初始 boost |
+| `boost_gauge_initial` | `0xB7D5327E` | `0x230` | **误名**：用户实测 2026-07-11 为 **HP**，见 `docs/characterparam-field-notes.md` |
+| `lock_on_distance_max` | `0xA223C183` | `0x1E8` | **用户实测 2026-07-11：红锁**（与 `alert_range_distance` 一起改；不要只改 `red_lock_distance`） |
+| `alert_range_distance` | `0xBAE8C388` | `0x23C` | **用户实测 2026-07-11：红锁**（与 `lock_on_distance_max` 一起改） |
+
+**红锁 / HP 模组注意（2026-07-11）：** 先确认 `character_id_table` 的 Param hash 对应哪份 `041cpm` 包（同 HashName 可能有两套文件夹）。Gyan 样例 unit `900000003` → `0x35B195CC`。完整 session：[gyan-session-2026-07-11-handoff.md](./gyan-session-2026-07-11-handoff.md)。
 
 模组建议：
 
@@ -111,6 +115,10 @@
 想改全局角色倍率：再看 character_param。
 想改某个动作里的横移 / 突进：回到 2.c ACTION segment。
 ```
+
+**气槽 / 飞行耗气（2026-07-11）：** transform 飞行路径 MSC **没有** 把气槽消耗写成 `/2`。
+`2.c` 里对 `0x11FFDDB4` 的 `/ 0x2` 在 **BD 初速** 相关动作（如 `func_407`），不是 `func_450/452`。
+耗气优先改 speedparam 行（Gyan transform 飞行默认 `global142=0xC2B19D12`；`0xB7027DBE` 仅 `func_998` 特殊态），再查 engine。
 
 必测：
 

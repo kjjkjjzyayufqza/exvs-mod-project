@@ -190,7 +190,7 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0x08218288 | 0x01C | float | front_tracking_angle | forward tracking arc |
 | 0x0872029D | 0x020 | int | sub_shot_cost | IDA:case3; sub weapon cost |
 | 0x08A0ADE8 | 0x024 | float | rear_tracking_angle | rear tracking arc |
-| 0x08ECF0BE | 0x028 | float | red_lock_distance | red lock-on range |
+| 0x08ECF0BE | 0x028 | float | red_lock_distance | PROVISIONAL: IDA lock band; user 2026-07-11 红锁 is lock_on_distance_max + alert_range_distance — docs/characterparam-field-notes.md |
 | 0x0911077E | 0x02C | int | boost_recovery_speed | boost recovery rate |
 | 0x0ACCE031 | 0x030 | float | dmg_multiplier_tier_a | damage tier A multiplier |
 | 0x0B25CB7F | 0x034 | int | unit_id_composite | composite unit identifier |
@@ -302,7 +302,7 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0x9B8BF864 | 0x1DC | float | hp_correction_pct_tier_02 | HP guts correction tier 2 percentage |
 | 0x9BED4726 | 0x1E0 | float | sub_shot_correction_rate | sub shot correction rate |
 | 0x9D8ADBDF | 0x1E4 | int | reserved_flag_1e4 | reserved |
-| 0xA223C183 | 0x1E8 | float | lock_on_distance_max | max lock-on distance |
+| 0xA223C183 | 0x1E8 | float | lock_on_distance_max | USER-VERIFIED 2026-07-11: red lock (红锁); also set alert_range_distance — docs/characterparam-field-notes.md |
 | 0xA60B0684 | 0x1EC | u32 | weapon_attribute_flags | bitfield; weapon attributes |
 | 0xA644CF59 | 0x1F0 | float | wide_camera_angle | wide camera angle |
 | 0xA6C5E039 | 0x1F4 | float | narrow_camera_angle | narrow camera angle |
@@ -320,10 +320,10 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0xB4F17B6F | 0x224 | float | melee_lunge_offset | melee lunge distance |
 | 0xB58B705C | 0x228 | int | reserved_flag_228 | reserved |
 | 0xB5FDC339 | 0x22C | int | step_cancel_count | step cancel limit |
-| 0xB7D5327E | 0x230 | int | boost_gauge_initial | initial boost gauge |
+| 0xB7D5327E | 0x230 | int | boost_gauge_initial | USER-VERIFIED 2026-07-11: HP (name is wrong); see docs/characterparam-field-notes.md |
 | 0xB91793D4 | 0x234 | float | fall_speed_base | base fall speed |
 | 0xBA900811 | 0x238 | float | air_dash_speed_base | base air dash speed |
-| 0xBAE8C388 | 0x23C | float | alert_range_distance | alert range distance |
+| 0xBAE8C388 | 0x23C | float | alert_range_distance | USER-VERIFIED 2026-07-11: red lock (红锁); also set lock_on_distance_max — docs/characterparam-field-notes.md |
 | 0xBB19842F | 0x240 | float | hp_correction_pct_tier_04 | HP guts correction tier 4 percentage |
 | 0xBC427D55 | 0x244 | float | radar_display_scale | radar display scale |
 | 0xBE256E0C | 0x248 | float | dash_speed_base | base dash speed |

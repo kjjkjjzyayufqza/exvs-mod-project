@@ -11,7 +11,7 @@ import type {
 interface AutoPropertyPanelProps {
   entry: TypedParamEntry;
   fieldSpecs?: Array<Record<string, number>>;
-  onFieldChange: (key: string, value: number) => void;
+  onFieldChange: (key: string, value: number | string) => void;
   groupOverrides?: Record<string, string[]>;
 }
 
@@ -28,6 +28,7 @@ function inferFieldType(
   value: TypedFieldValue,
   kind?: number,
 ): PropertyFieldDef["type"] {
+  if (kind === 7 || typeof value === "string") return "string";
   if (kind === 5) return "f32";
   if (kind === 2) return "i32";
   if (kind === 1) {
@@ -41,18 +42,44 @@ function inferFieldType(
   return "u32";
 }
 
+const LABEL_FIELD_HASH: Record<string, number> = {
+  actionLabel: 0xe6213731,
+  resourceLabel: 0xf3c4cae9,
+  actionLabelOffset: 0xe6213731,
+  resourceLabelOffset: 0xf3c4cae9,
+};
+
 function buildKindMap(
   fieldSpecs: Array<Record<string, number>> | undefined,
   entry: TypedParamEntry,
 ): Map<string, number> {
   const map = new Map<string, number>();
-  if (!fieldSpecs || fieldSpecs.length === 0) return map;
-
   const entryKeys = Object.keys(entry).filter((k) => !EXCLUDED_KEYS.has(k));
-  for (let i = 0; i < entryKeys.length && i < fieldSpecs.length; i++) {
-    const spec = fieldSpecs[i];
-    if (spec && typeof spec.kind === "number") {
-      map.set(entryKeys[i]!, spec.kind);
+
+  for (const key of entryKeys) {
+    if (typeof entry[key] === "string") {
+      map.set(key, 7);
+      continue;
+    }
+    const labelHash = LABEL_FIELD_HASH[key];
+    if (labelHash != null && fieldSpecs) {
+      const byHash = fieldSpecs.find((spec) => (spec.hash ?? 0) === labelHash);
+      if (byHash && typeof byHash.kind === "number") {
+        map.set(key, byHash.kind);
+        continue;
+      }
+    }
+  }
+
+  // Index fallback for remaining numeric fields only.
+  if (fieldSpecs && fieldSpecs.length > 0) {
+    for (let i = 0; i < entryKeys.length && i < fieldSpecs.length; i++) {
+      const key = entryKeys[i]!;
+      if (map.has(key)) continue;
+      const spec = fieldSpecs[i];
+      if (spec && typeof spec.kind === "number") {
+        map.set(key, spec.kind);
+      }
     }
   }
   return map;

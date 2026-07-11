@@ -12,7 +12,7 @@ export interface SpeedEditorState {
 
   setData: (data: TypedParamFile, filePath: string) => void;
   selectEntry: (index: number) => void;
-  updateField: (key: string, value: number) => void;
+  updateField: (key: string, value: number | string) => void;
 }
 
 function validateSpeedEntry(entry: TypedParamEntry): ValidationMessage[] {

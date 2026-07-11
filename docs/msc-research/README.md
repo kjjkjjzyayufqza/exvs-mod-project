@@ -40,6 +40,12 @@ Delta Plus 当前 OB v27 的独立机体页见 [15004001 Delta Plus MSC 研究](
 
 Hyaku Shiki 当前 OB v27 的独立机体页见 [2002001 Hyaku Shiki MSC 研究](./units/2002001-hyaku-shiki/README.md)。该页直接读取 `0x43BB8719` 的 `0.c/1.c/2.c` 与 `0x1240BD01` raw Param，证明 classic selector 下 Dodai flight mode 的 `0.c` 进入 gate、common transform controller、百式 slot callback、Dodai loadout/release projectile 与复活态禁变形闭环；不使用 generated JSON。
 
+**Gyan 飞行 Dodai 特射移植（hash `0x7B65B9B7`）：** 先看 [2026-07-10 session handoff](./gyan-dodai-session-2026-07-10-handoff.md)（瞄准 yaw/pitch、惯性 `func_615`、RELEASE 卡死 `func_14` 门、DRIVER 只 `func_599`）。背景路由见 [gyan-dodai-special-shot-action-port.md](./gyan-dodai-special-shot-action-port.md)；瞄准字段对照见 [gyan-dodai-throw-aim-at-enemy-analysis.md](./gyan-dodai-throw-aim-at-enemy-analysis.md)。
+
+**Gyan 2026-07-11 扩展 session：** [gyan-session-2026-07-11-handoff.md](./gyan-session-2026-07-11-handoff.md) — characterparam 红锁/HP 实测、unit `900000003`→Param `0x35B195CC` 双文件夹陷阱、speedparam C2 vs B7 与 transform 飞行、气槽非 MSC `/2`、飞行镜头 `sys_53(0x2)` 落点、百式 Dodai spawn `0x25/sys_4A` vs 强人 N2、Param Editor 标签与 Extract→WS。characterparam 字段实证表：[../characterparam-field-notes.md](../characterparam-field-notes.md)。
+
+工作树：`E:\XB\mod\040msc\001gundam_005gyan00_001_N2_rocket_mod\`（及历史 `gundam_005gyan00_modified`）；百式对照：`E:\XB\mod\040msc\002zgundm_002hyaksk_001\`。
+
 RX-78-2 当前 OB v27 的独立机体页见 [1001001 RX-78-2 Gundam MSC 研究](./units/1001001-rx-78-2/README.md)。该页从 Character ID Table 定位 `0xF22E425D + 0xA3D57845`，重新抽取并直接读取三份 `.c`，把主射、CS、Bazooka、assist、Hammer、Beam Javelin 三段和 Last Shooting projectile 段连到原始 arms/bullet Param row。
 
 G-Self 当前 OB v27 的独立机体页见 [42001001 G-Self MSC 研究](./units/42001001-g-self/README.md)。该页直接读取 `0x72CD747F` 的 `0.c/1.c/2.c` 与 `0x23364E67` raw Param，证明 classic selector 下 Space / Reflector stored/deployed / Assault 四状态候选、主射、CS 与 Assault Pack 多段 projectile family；不使用 generated analysis JSON。
