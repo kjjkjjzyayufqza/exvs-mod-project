@@ -81,6 +81,13 @@ Use `docs/` as the first source of project truth:
 - `docs/characterparam-field-notes.md` — characterparam empirical field
   identity (`lockOnDistanceMax` + `alertRangeDistance` = 红锁,
   `boostGaugeInitial` = HP); prefer over stale pool names when they conflict.
+- `docs/msc-research/gyan-main-shot-no-auto-turn.md` — disable main-shot
+  auto-turn (`global693` / `func_592`); flight uses `global24 & 0x4000`.
+- `docs/msc-research/gyan-melee-direction-actions.md` — Gyan directional melee:
+  后格 = `ACTION_B_MELEE_DIR_4` (`0x58CC87CE`); 左右 = `DIR_2` / motion
+  `0xECE28FD9` (not 后格).
+- `docs/msc-research/gyan-back-melee-movement.md` — 后格位移: `func_495` +
+  `func_528`/`func_516` 追踪 + `func_964`/`func_965` → `sys_46(0x1,0x4,…)`.
 - `docs/msc-research/gyan-session-2026-07-11-handoff.md` — Gyan/tooling session
   (Param `0x35B195CC`, speed C2 vs B7, flight camera, Dodai spawn VFX vs N2,
   Param Editor labels, Extract→Workspace).

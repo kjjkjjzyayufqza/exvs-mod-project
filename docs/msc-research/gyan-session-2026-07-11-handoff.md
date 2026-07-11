@@ -14,6 +14,9 @@ This file is the **session entry** for 2026-07-11. Prefer it over chat memory fo
 | Topic | Doc |
 |-------|-----|
 | This session (all topics) | **This file** |
+| Main shot no auto-turn (flight) | [gyan-main-shot-no-auto-turn.md](./gyan-main-shot-no-auto-turn.md) |
+| Melee DIR map (后格 = DIR_4) | [gyan-melee-direction-actions.md](./gyan-melee-direction-actions.md) |
+| 后格位移 (DIR_4 movement) | [gyan-back-melee-movement.md](./gyan-back-melee-movement.md) |
 | Dodai throw aim / RELEASE stuck / DRIVER | [gyan-dodai-session-2026-07-10-handoff.md](./gyan-dodai-session-2026-07-10-handoff.md) |
 | characterparam 红锁 / HP empirical | [../characterparam-field-notes.md](../characterparam-field-notes.md) |
 | Hyaku flight / Dodai mount | [units/2002001-hyaku-shiki/README.md](./units/2002001-hyaku-shiki/README.md) |
@@ -146,6 +149,30 @@ Timing: ENTRY is slightly earlier than `func_452` (after `func_69(0x23)`).
 ### 4.3 Always pair enable + cleanup
 
 Cancel / death / BD interrupt may need extra `RESTORE` if release slot is skipped.
+
+---
+
+## 4.4 Main shot no auto-turn (flight)
+
+**Recipe doc:** [gyan-main-shot-no-auto-turn.md](./gyan-main-shot-no-auto-turn.md)
+
+- Main shot always `0x519D49CE` → `ACTION_A_SHOT` (no separate reverse-shot action).
+- Auto body turn is `func_587` → `func_592` when **`global693 == 1`**.
+- Flight/normal (no turn): after `func_586()`, if **`global24 & 0x4000`**, set **`global693 = 0`**.
+- Do **not** use `2.c` `global20 & 0x4000` (shell id). Do **not** use `global689` for main-shot (that is multi-phase / Dodai path).
+- If flight still turns: `func_167` may have cleared `0x4000` — re-assert in LOOP/`func_452` or use a dedicated flag.
+
+## 4.5 Melee directions (user-verified)
+
+**Doc:** [gyan-melee-direction-actions.md](./gyan-melee-direction-actions.md)
+
+| Player | Action | Hash | Start motion |
+|--------|--------|------|--------------|
+| **后格** | **`ACTION_B_MELEE_DIR_4`** | **`0x58CC87CE`** | `0x7674B668` (`func_954`) |
+| 左右格 | `ACTION_B_MELEE_DIR_2` | `0xE962048` | **`0xECE28FD9`** (`func_949`) — not 后格 |
+| 前格 | `ACTION_B_MELEE_DIR_1` | `0xA2236F44` | `0xFC08D30B` |
+
+Do **not** treat generic bit table “0x8 = 后” as Gyan `DIR_*` names.
 
 ---
 
