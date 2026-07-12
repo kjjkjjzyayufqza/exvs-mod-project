@@ -15,6 +15,7 @@ const DEFAULT_BONE_DISPLAY_SIZE: f64 = 1.0;
 
 use crate::format::numatb_format::param_texture_path;
 use crate::nutexb_lib;
+use crate::ssbh_motion_interchange::MotionClip;
 use crate::ssbh_preview::resolve_nutexb_path;
 
 #[derive(Debug, Clone, Copy)]
@@ -136,6 +137,33 @@ struct BoneIds {
     model: i64,
     attribute: i64,
 }
+
+#[derive(Debug)]
+struct MotionAnimationChannelIds {
+    translation_node: i64,
+    rotation_node: i64,
+    scale_node: i64,
+    translation_curves: [i64; 3],
+    rotation_curves: [i64; 3],
+    scale_curves: [i64; 3],
+}
+
+#[derive(Debug)]
+struct MotionAnimationIds {
+    stack: i64,
+    layer: i64,
+    channels: Vec<MotionAnimationChannelIds>,
+}
+
+#[derive(Debug)]
+struct MotionAnimationChannelData {
+    translation: [Vec<f32>; 3],
+    rotation: [Vec<f32>; 3],
+    scale: [Vec<f32>; 3],
+}
+
+const FBX_TICKS_PER_SECOND: i64 = 46_186_158_000;
+const FBX_LINEAR_KEY_FLAG: i32 = 24_836;
 
 struct IdGenerator {
     next: i64,
@@ -876,6 +904,204 @@ fn write_scene_fbx(path: &Path, scene: &ExportScene, up_axis: FbxUpAxis) -> Resu
     Ok(())
 }
 
+pub(crate) fn write_animation_only_fbx(output_path: &Path, clip: &MotionClip) -> Result<()> {
+    clip.validate().map_err(|error| anyhow!(error))?;
+    let bones = motion_export_bones(clip)?;
+    let animation_data = motion_animation_data(clip, &bones)?;
+    let mut ids = IdGenerator::new();
+    let bone_ids: Vec<BoneIds> = bones
+        .iter()
+        .map(|_| BoneIds {
+            model: ids.next(),
+            attribute: ids.next(),
+        })
+        .collect();
+    let animation_ids = MotionAnimationIds {
+        stack: ids.next(),
+        layer: ids.next(),
+        channels: bones
+            .iter()
+            .map(|_| MotionAnimationChannelIds {
+                translation_node: ids.next(),
+                rotation_node: ids.next(),
+                scale_node: ids.next(),
+                translation_curves: [ids.next(), ids.next(), ids.next()],
+                rotation_curves: [ids.next(), ids.next(), ids.next()],
+                scale_curves: [ids.next(), ids.next(), ids.next()],
+            })
+            .collect(),
+    };
+    let mut writer =
+        Writer::new(std::io::Cursor::new(Vec::new()), FbxVersion::V7_4).map_err(io_error)?;
+    write_header(&mut writer, FbxUpAxis::YUp)?;
+    write_motion_definitions(&mut writer, bones.len())?;
+
+    writer.new_node("Objects").map_err(io_error)?;
+    for (bone, ids) in bones.iter().zip(&bone_ids) {
+        write_bone(&mut writer, bone, ids)?;
+    }
+    write_motion_animation_stack(
+        &mut writer,
+        animation_ids.stack,
+        &clip.name,
+        clip.frames.len(),
+    )?;
+    write_motion_animation_layer(&mut writer, animation_ids.layer, &clip.name)?;
+    for ((bone, ids), data) in bones
+        .iter()
+        .zip(&animation_ids.channels)
+        .zip(&animation_data)
+    {
+        write_motion_curve_node(
+            &mut writer,
+            ids.translation_node,
+            &bone.name,
+            "Translation",
+            &data.translation,
+        )?;
+        write_motion_curve_node(
+            &mut writer,
+            ids.rotation_node,
+            &bone.name,
+            "Rotation",
+            &data.rotation,
+        )?;
+        write_motion_curve_node(
+            &mut writer,
+            ids.scale_node,
+            &bone.name,
+            "Scaling",
+            &data.scale,
+        )?;
+        for axis in 0..3 {
+            write_motion_curve(
+                &mut writer,
+                ids.translation_curves[axis],
+                &bone.name,
+                "Translation",
+                axis,
+                &data.translation[axis],
+            )?;
+            write_motion_curve(
+                &mut writer,
+                ids.rotation_curves[axis],
+                &bone.name,
+                "Rotation",
+                axis,
+                &data.rotation[axis],
+            )?;
+            write_motion_curve(
+                &mut writer,
+                ids.scale_curves[axis],
+                &bone.name,
+                "Scaling",
+                axis,
+                &data.scale[axis],
+            )?;
+        }
+    }
+    writer.close_node().map_err(io_error)?;
+
+    write_motion_connections(&mut writer, &bones, &bone_ids, &animation_ids)?;
+    let cursor = writer
+        .finalize_and_flush(&FbxFooter::default())
+        .map_err(io_error)?;
+    std::fs::write(output_path, cursor.into_inner())
+        .with_context(|| format!("Failed to write FBX: {}", output_path.display()))?;
+    Ok(())
+}
+
+fn motion_export_bones(clip: &MotionClip) -> Result<Vec<ExportBone>> {
+    clip.skeleton
+        .bones
+        .iter()
+        .map(|bone| {
+            let local_transform = glam::Mat4::from_scale_rotation_translation(
+                bone.rest_local.scale,
+                bone.rest_local.rotation,
+                bone.rest_local.translation,
+            );
+            if !local_transform.is_finite() {
+                return Err(anyhow!(
+                    "Bone '{}' has a non-finite rest transform",
+                    bone.name
+                ));
+            }
+            Ok(ExportBone {
+                name: motion_fbx_bone_name(&bone.name)?,
+                parent_index: bone.parent_index,
+                local_transform,
+                world_transform: local_transform,
+            })
+        })
+        .collect()
+}
+
+fn motion_animation_data(
+    clip: &MotionClip,
+    bones: &[ExportBone],
+) -> Result<Vec<MotionAnimationChannelData>> {
+    bones
+        .iter()
+        .enumerate()
+        .map(|(bone_index, bone)| {
+            let (_, _, _, order_value) = decompose_fbx_trs(bone.local_transform)?;
+            let rotation_order = rotation_order_from_value(order_value)?;
+            let mut translation = std::array::from_fn(|_| Vec::with_capacity(clip.frames.len()));
+            let mut rotation = std::array::from_fn(|_| Vec::with_capacity(clip.frames.len()));
+            let mut scale = std::array::from_fn(|_| Vec::with_capacity(clip.frames.len()));
+            for frame in &clip.frames {
+                let transform = frame.local_transforms[bone_index];
+                translation[0].push(transform.translation.x);
+                translation[1].push(transform.translation.y);
+                translation[2].push(transform.translation.z);
+                let euler = ufbx::quat_to_euler(
+                    ufbx::Quat {
+                        x: transform.rotation.x as f64,
+                        y: transform.rotation.y as f64,
+                        z: transform.rotation.z as f64,
+                        w: transform.rotation.w as f64,
+                    },
+                    rotation_order,
+                );
+                rotation[0].push(euler.x as f32);
+                rotation[1].push(euler.y as f32);
+                rotation[2].push(euler.z as f32);
+                scale[0].push(transform.scale.x);
+                scale[1].push(transform.scale.y);
+                scale[2].push(transform.scale.z);
+            }
+            for values in &mut rotation {
+                unwrap_euler_degrees(values);
+            }
+            Ok(MotionAnimationChannelData {
+                translation,
+                rotation,
+                scale,
+            })
+        })
+        .collect()
+}
+
+fn rotation_order_from_value(value: i32) -> Result<ufbx::RotationOrder> {
+    match value {
+        0 => Ok(ufbx::RotationOrder::Xyz),
+        1 => Ok(ufbx::RotationOrder::Xzy),
+        2 => Ok(ufbx::RotationOrder::Yzx),
+        3 => Ok(ufbx::RotationOrder::Yxz),
+        4 => Ok(ufbx::RotationOrder::Zxy),
+        5 => Ok(ufbx::RotationOrder::Zyx),
+        _ => Err(anyhow!("Unsupported FBX rotation order {value}")),
+    }
+}
+
+fn unwrap_euler_degrees(values: &mut [f32]) {
+    for index in 1..values.len() {
+        let delta = values[index] - values[index - 1];
+        values[index] -= (delta / 360.0).round() * 360.0;
+    }
+}
+
 fn write_header<W: Write + Seek>(writer: &mut Writer<W>, up_axis: FbxUpAxis) -> Result<()> {
     writer.new_node("FBXHeaderExtension").map_err(io_error)?;
     write_i32_node(writer, "FBXHeaderVersion", 1003)?;
@@ -965,6 +1191,217 @@ fn write_definitions<W: Write + Seek>(
     if texture_count > 0 {
         write_definition(writer, "Texture", texture_count as i32)?;
         write_definition(writer, "Video", texture_count as i32)?;
+    }
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
+fn write_motion_definitions<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    bone_count: usize,
+) -> Result<()> {
+    writer.new_node("Definitions").map_err(io_error)?;
+    write_i32_node(writer, "Version", 100)?;
+    write_definition(writer, "GlobalSettings", 1)?;
+    write_definition(writer, "Model", bone_count as i32)?;
+    write_definition(writer, "NodeAttribute", bone_count as i32)?;
+    write_definition(writer, "AnimationStack", 1)?;
+    write_definition(writer, "AnimationLayer", 1)?;
+    write_definition(writer, "AnimationCurveNode", (bone_count * 3) as i32)?;
+    write_definition(writer, "AnimationCurve", (bone_count * 9) as i32)?;
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
+fn write_motion_animation_stack<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    id: i64,
+    action_name: &str,
+    frame_count: usize,
+) -> Result<()> {
+    let end_time = ((frame_count.saturating_sub(1)) as i64)
+        .checked_mul(FBX_TICKS_PER_SECOND)
+        .ok_or_else(|| anyhow!("FBX animation duration overflows ticks"))?
+        / 60;
+    {
+        let mut attributes = writer.new_node("AnimationStack").map_err(io_error)?;
+        attributes.append_i64(id).map_err(io_error)?;
+        attributes
+            .append_string_direct(&fbx_name_class(action_name, "AnimStack"))
+            .map_err(io_error)?;
+        attributes.append_string_direct("").map_err(io_error)?;
+    }
+    writer.new_node("Properties70").map_err(io_error)?;
+    write_prop_time(writer, "LocalStart", 0)?;
+    write_prop_time(writer, "LocalStop", end_time)?;
+    write_prop_time(writer, "ReferenceStart", 0)?;
+    write_prop_time(writer, "ReferenceStop", end_time)?;
+    writer.close_node().map_err(io_error)?;
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
+fn write_motion_animation_layer<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    id: i64,
+    action_name: &str,
+) -> Result<()> {
+    {
+        let mut attributes = writer.new_node("AnimationLayer").map_err(io_error)?;
+        attributes.append_i64(id).map_err(io_error)?;
+        attributes
+            .append_string_direct(&fbx_name_class(action_name, "AnimLayer"))
+            .map_err(io_error)?;
+        attributes.append_string_direct("").map_err(io_error)?;
+    }
+    write_i32_node(writer, "Version", 100)?;
+    writer.new_node("Properties70").map_err(io_error)?;
+    write_prop_double(writer, "Weight", 100.0)?;
+    write_prop_bool(writer, "Mute", false)?;
+    writer.close_node().map_err(io_error)?;
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
+fn write_motion_curve_node<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    id: i64,
+    bone_name: &str,
+    property_name: &str,
+    values: &[Vec<f32>; 3],
+) -> Result<()> {
+    {
+        let mut attributes = writer.new_node("AnimationCurveNode").map_err(io_error)?;
+        attributes.append_i64(id).map_err(io_error)?;
+        attributes
+            .append_string_direct(&fbx_name_class(
+                &format!("{bone_name}_{property_name}"),
+                "AnimCurveNode",
+            ))
+            .map_err(io_error)?;
+        attributes.append_string_direct("").map_err(io_error)?;
+    }
+    writer.new_node("Properties70").map_err(io_error)?;
+    for (axis, value) in ['X', 'Y', 'Z'].into_iter().zip(values.iter()) {
+        write_prop_animation_component(writer, axis, value.first().copied().unwrap_or_default())?;
+    }
+    writer.close_node().map_err(io_error)?;
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
+fn write_motion_curve<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    id: i64,
+    bone_name: &str,
+    property_name: &str,
+    axis: usize,
+    values: &[f32],
+) -> Result<()> {
+    let axis_name = ['X', 'Y', 'Z']
+        .get(axis)
+        .ok_or_else(|| anyhow!("Invalid FBX animation axis {axis}"))?;
+    let key_times = (0..values.len()).map(|frame| {
+        (frame as i64)
+            .checked_mul(FBX_TICKS_PER_SECOND)
+            .ok_or_else(|| anyhow!("FBX animation key time overflows"))
+            .map(|ticks| ticks / 60)
+    });
+    {
+        let mut attributes = writer.new_node("AnimationCurve").map_err(io_error)?;
+        attributes.append_i64(id).map_err(io_error)?;
+        attributes
+            .append_string_direct(&fbx_name_class(
+                &format!("{bone_name}_{property_name}_{axis_name}"),
+                "AnimCurve",
+            ))
+            .map_err(io_error)?;
+        attributes.append_string_direct("").map_err(io_error)?;
+    }
+    write_f64_node(
+        writer,
+        "Default",
+        values.first().copied().unwrap_or_default() as f64,
+    )?;
+    write_i32_node(writer, "KeyVer", 4008)?;
+    write_i64_array_node(
+        writer,
+        "KeyTime",
+        key_times.collect::<Result<Vec<_>>>()?,
+        compression(),
+    )?;
+    write_f32_array_node(
+        writer,
+        "KeyValueFloat",
+        values.iter().copied(),
+        compression(),
+    )?;
+    write_f32_array_node(
+        writer,
+        "KeyAttrDataFloat",
+        std::iter::repeat(0.0).take(values.len() * 4),
+        compression(),
+    )?;
+    write_i32_array_node(
+        writer,
+        "KeyAttrFlags",
+        std::iter::repeat(FBX_LINEAR_KEY_FLAG).take(values.len()),
+        compression(),
+    )?;
+    write_i32_array_node(
+        writer,
+        "KeyAttrRefCount",
+        std::iter::repeat(1).take(values.len()),
+        compression(),
+    )?;
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
+fn write_motion_connections<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    bones: &[ExportBone],
+    bone_ids: &[BoneIds],
+    animation_ids: &MotionAnimationIds,
+) -> Result<()> {
+    writer.new_node("Connections").map_err(io_error)?;
+    for (bone, ids) in bones.iter().zip(bone_ids) {
+        write_connection(writer, "OO", ids.attribute, ids.model)?;
+        let parent = bone
+            .parent_index
+            .and_then(|index| bone_ids.get(index))
+            .map(|ids| ids.model)
+            .unwrap_or(0);
+        write_connection(writer, "OO", ids.model, parent)?;
+    }
+    write_connection(writer, "OO", animation_ids.layer, animation_ids.stack)?;
+    for (index, ids) in animation_ids.channels.iter().enumerate() {
+        let bone = bone_ids
+            .get(index)
+            .ok_or_else(|| anyhow!("Missing bone ID for animation channel {index}"))?;
+        for (node, property) in [
+            (ids.translation_node, "Lcl Translation"),
+            (ids.rotation_node, "Lcl Rotation"),
+            (ids.scale_node, "Lcl Scaling"),
+        ] {
+            write_connection(writer, "OO", node, animation_ids.layer)?;
+            write_property_connection(writer, node, bone.model, property)?;
+        }
+        for (node, curves) in [
+            (ids.translation_node, &ids.translation_curves),
+            (ids.rotation_node, &ids.rotation_curves),
+            (ids.scale_node, &ids.scale_curves),
+        ] {
+            for (axis, curve) in curves.iter().enumerate() {
+                let property = match axis {
+                    0 => "d|X",
+                    1 => "d|Y",
+                    2 => "d|Z",
+                    _ => unreachable!(),
+                };
+                write_property_connection(writer, *curve, node, property)?;
+            }
+        }
     }
     writer.close_node().map_err(io_error)?;
     Ok(())
@@ -1505,6 +1942,38 @@ fn write_prop_double<W: Write + Seek>(
     Ok(())
 }
 
+fn write_prop_time<W: Write + Seek>(writer: &mut Writer<W>, name: &str, value: i64) -> Result<()> {
+    let mut attributes = writer.new_node("P").map_err(io_error)?;
+    attributes.append_string_direct(name).map_err(io_error)?;
+    attributes.append_string_direct("KTime").map_err(io_error)?;
+    attributes.append_string_direct("Time").map_err(io_error)?;
+    attributes.append_string_direct("").map_err(io_error)?;
+    attributes.append_i64(value).map_err(io_error)?;
+    drop(attributes);
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
+fn write_prop_animation_component<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    axis: char,
+    value: f32,
+) -> Result<()> {
+    let mut attributes = writer.new_node("P").map_err(io_error)?;
+    attributes
+        .append_string_direct(&format!("d|{axis}"))
+        .map_err(io_error)?;
+    attributes
+        .append_string_direct("Number")
+        .map_err(io_error)?;
+    attributes.append_string_direct("").map_err(io_error)?;
+    attributes.append_string_direct("A").map_err(io_error)?;
+    attributes.append_f64(value as f64).map_err(io_error)?;
+    drop(attributes);
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
 fn write_prop_lcl<W: Write + Seek>(
     writer: &mut Writer<W>,
     name: &str,
@@ -1598,6 +2067,44 @@ where
     let mut attributes = writer.new_node(name).map_err(io_error)?;
     attributes
         .append_arr_i32_from_iter(encoding, values)
+        .map_err(io_error)?;
+    drop(attributes);
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
+fn write_i64_array_node<W, I>(
+    writer: &mut Writer<W>,
+    name: &str,
+    values: I,
+    encoding: Option<ArrayAttributeEncoding>,
+) -> Result<()>
+where
+    W: Write + Seek,
+    I: IntoIterator<Item = i64>,
+{
+    let mut attributes = writer.new_node(name).map_err(io_error)?;
+    attributes
+        .append_arr_i64_from_iter(encoding, values)
+        .map_err(io_error)?;
+    drop(attributes);
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
+fn write_f32_array_node<W, I>(
+    writer: &mut Writer<W>,
+    name: &str,
+    values: I,
+    encoding: Option<ArrayAttributeEncoding>,
+) -> Result<()>
+where
+    W: Write + Seek,
+    I: IntoIterator<Item = f32>,
+{
+    let mut attributes = writer.new_node(name).map_err(io_error)?;
+    attributes
+        .append_arr_f32_from_iter(encoding, values)
         .map_err(io_error)?;
     drop(attributes);
     writer.close_node().map_err(io_error)?;
@@ -1747,6 +2254,18 @@ fn sanitize_fbx_name(value: &str) -> String {
     } else {
         sanitized
     }
+}
+
+fn motion_fbx_bone_name(value: &str) -> Result<String> {
+    if value
+        .chars()
+        .any(|character| character == '\0' || character.is_control())
+    {
+        return Err(anyhow!(
+            "Bone name {value:?} contains a control character unsupported by FBX"
+        ));
+    }
+    Ok(value.to_string())
 }
 
 fn fbx_name_class(name: &str, class: &str) -> String {

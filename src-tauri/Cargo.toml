@@ -117,6 +117,10 @@ required-features = ["legacy-cli-tools"]
 name = "exvs2_json_cli_test"
 path = "tests/exvs2_json_cli_test.rs"
 
+[[test]]
+name = "ssbh_motion_interchange_test"
+path = "tests/ssbh_motion_interchange_test.rs"
+
 [build-dependencies]
 tauri-build = { version = "2.6.1", features = [] }
 
@@ -156,6 +160,7 @@ tempfile = "3"
 uuid = { version = "1", features = ["v4"] }
 rayon = "1.10"
 chull = "0.2.4"
+sha2 = "0.10"
 
 # --- Build profiles -------------------------------------------------------
 

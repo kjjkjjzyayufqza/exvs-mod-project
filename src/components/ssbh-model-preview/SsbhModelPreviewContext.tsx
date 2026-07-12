@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { registerMotionNuanmbPath } from "./motionNuanmbRegistry";
 import {
   DialogLastPathKey,
   getDialogDefaultPath,
@@ -357,6 +358,7 @@ export type SsbhModelPreviewContextValue = {
   motionNuanmbPaths: readonly string[];
   motionSelectedNuanmbPath: string | null;
   setMotionSelectedNuanmbPath: (path: string | null) => void;
+  registerMotionNuanmbPath: (path: string) => void;
   motionManifest: NuanmbManifest | null;
   motionPlaying: boolean;
   setMotionPlaying: (v: boolean) => void;
@@ -1412,6 +1414,32 @@ export function SsbhModelPreviewProvider({
     });
   }, [resolvedActivePreviewInstanceId]);
 
+  const registerMotionNuanmbPathForActiveInstance = useCallback((path: string) => {
+    const selectedPath = path.trim();
+    const instanceId = resolvedActivePreviewInstanceId;
+    if (!instanceId || !selectedPath) return;
+    setMotionByInstanceId((prev) => {
+      const current = prev[instanceId] ?? createDefaultMotionState();
+      return {
+        ...prev,
+        [instanceId]: {
+          ...current,
+          nuanmbPaths: registerMotionNuanmbPath(current.nuanmbPaths, selectedPath),
+          selectedNuanmbPath: selectedPath,
+          poseEnabled: false,
+          frame: 0,
+          playing: false,
+          clip: null,
+          sample: null,
+          manifest: null,
+          sampleError: null,
+          attemptedManifestPath: null,
+          attemptedClipKey: null,
+        },
+      };
+    });
+  }, [resolvedActivePreviewInstanceId]);
+
   const setMotionPlaying = useCallback((v: boolean) => {
     const instanceId = resolvedActivePreviewInstanceId;
     if (!instanceId) return;
@@ -2445,6 +2473,7 @@ export function SsbhModelPreviewProvider({
       motionNuanmbPaths,
       motionSelectedNuanmbPath,
       setMotionSelectedNuanmbPath,
+      registerMotionNuanmbPath: registerMotionNuanmbPathForActiveInstance,
       motionManifest,
       motionPlaying,
       setMotionPlaying,
@@ -2572,6 +2601,7 @@ export function SsbhModelPreviewProvider({
       motionNuanmbPaths,
       motionSelectedNuanmbPath,
       setMotionSelectedNuanmbPath,
+      registerMotionNuanmbPathForActiveInstance,
       motionManifest,
       motionPlaying,
       setMotionPlaying,

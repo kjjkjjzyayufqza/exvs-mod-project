@@ -25,6 +25,7 @@ mod ssbh_dae_cmd;
 mod ssbh_fbx;
 mod ssbh_mesh_binary;
 mod ssbh_motion;
+pub mod ssbh_motion_interchange;
 pub mod ssbh_preview;
 mod stage_commands;
 
@@ -77,6 +78,9 @@ pub fn run() {
             ssbh_motion::ssbh_nuanmb_manifest,
             ssbh_motion::ssbh_load_motion_clip,
             ssbh_motion::ssbh_sample_motion_frame,
+            ssbh_motion_interchange::ssbh_export_nuanmb_to_cascadeur_bridge,
+            ssbh_motion_interchange::ssbh_import_cascadeur_bridge_to_nuanmb,
+            ssbh_motion_interchange::ssbh_inspect_cascadeur_bridge,
             ssbh_dae_cmd::ssbh_analyze_dae,
             ssbh_dae_cmd::ssbh_analyze_fbx,
             ssbh_dae_cmd::ssbh_export_folder_to_dae,

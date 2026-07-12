@@ -156,6 +156,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "sha2",
  "ssbh_data",
  "ssbh_lib",
  "tauri",

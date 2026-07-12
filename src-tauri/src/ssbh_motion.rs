@@ -1164,7 +1164,7 @@ fn sampled_frame_count_for_clip(max_frame: f32) -> usize {
     (max_frame.ceil() as usize).saturating_add(1)
 }
 
-fn sample_motion_frame_data(
+pub(crate) fn sample_motion_frame_data(
     skel: &SkelData,
     anim: &AnimData,
     hlpb: Option<&HlpbData>,
