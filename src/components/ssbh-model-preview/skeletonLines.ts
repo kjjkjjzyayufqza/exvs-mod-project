@@ -1,25 +1,29 @@
 import { BufferAttribute, BufferGeometry, Matrix4, Quaternion, Vector3 } from "three";
-import type { BoneJson, SkelDataJson } from "./types";
+import type { BoneJson, SkelDataJson, SsbhMat4Json } from "./types";
 
-export function mat4FromSsbhColumns(transform: number[][]): Matrix4 {
+export function mat4FromSsbhColumns(transform: SsbhMat4Json): Matrix4 {
   const m = new Matrix4();
+  if (transform.length === 16 && transform.every((value) => typeof value === "number")) {
+    return m.fromArray(transform as number[]);
+  }
+  const columns = transform as number[][];
   const flat = [
-    transform[0]?.[0] ?? 0,
-    transform[0]?.[1] ?? 0,
-    transform[0]?.[2] ?? 0,
-    transform[0]?.[3] ?? 0,
-    transform[1]?.[0] ?? 0,
-    transform[1]?.[1] ?? 0,
-    transform[1]?.[2] ?? 0,
-    transform[1]?.[3] ?? 0,
-    transform[2]?.[0] ?? 0,
-    transform[2]?.[1] ?? 0,
-    transform[2]?.[2] ?? 0,
-    transform[2]?.[3] ?? 0,
-    transform[3]?.[0] ?? 0,
-    transform[3]?.[1] ?? 0,
-    transform[3]?.[2] ?? 0,
-    transform[3]?.[3] ?? 0,
+    columns[0]?.[0] ?? 0,
+    columns[0]?.[1] ?? 0,
+    columns[0]?.[2] ?? 0,
+    columns[0]?.[3] ?? 0,
+    columns[1]?.[0] ?? 0,
+    columns[1]?.[1] ?? 0,
+    columns[1]?.[2] ?? 0,
+    columns[1]?.[3] ?? 0,
+    columns[2]?.[0] ?? 0,
+    columns[2]?.[1] ?? 0,
+    columns[2]?.[2] ?? 0,
+    columns[2]?.[3] ?? 0,
+    columns[3]?.[0] ?? 0,
+    columns[3]?.[1] ?? 0,
+    columns[3]?.[2] ?? 0,
+    columns[3]?.[3] ?? 0,
   ];
   m.fromArray(flat);
   return m;

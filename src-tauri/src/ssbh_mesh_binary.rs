@@ -259,15 +259,27 @@ mod tests {
             subindex: 0,
             positions: vec![AttributeData {
                 name: "Position0".to_string(),
-                data: VectorData::Vector3(vec![[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]]),
+                data: VectorData::Vector3(vec![
+                    glam::Vec3::new(1.0, 2.0, 3.0),
+                    glam::Vec3::new(4.0, 5.0, 6.0),
+                    glam::Vec3::new(7.0, 8.0, 9.0),
+                ]),
             }],
             normals: vec![AttributeData {
                 name: "Normal0".to_string(),
-                data: VectorData::Vector3(vec![[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]),
+                data: VectorData::Vector3(vec![
+                    glam::Vec3::new(0.0, 0.0, 1.0),
+                    glam::Vec3::new(0.0, 1.0, 0.0),
+                    glam::Vec3::new(1.0, 0.0, 0.0),
+                ]),
             }],
             texture_coordinates: vec![AttributeData {
                 name: "map1".to_string(),
-                data: VectorData::Vector2(vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]]),
+                data: VectorData::Vector2(vec![
+                    glam::Vec2::new(0.0, 0.0),
+                    glam::Vec2::new(1.0, 0.0),
+                    glam::Vec2::new(1.0, 1.0),
+                ]),
             }],
             vertex_indices: vec![0, 1, 2],
             ..Default::default()

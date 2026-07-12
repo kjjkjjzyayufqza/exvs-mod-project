@@ -138,9 +138,11 @@ export type ModlDataJson = {
   entries: ModlEntryJson[];
 };
 
+export type SsbhMat4Json = number[] | number[][];
+
 export type BoneJson = {
   name: string;
-  transform: number[][];
+  transform: SsbhMat4Json;
   parent_index: number | null;
   billboard_type: unknown;
 };

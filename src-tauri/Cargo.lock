@@ -176,10 +176,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "approx"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab112f0a86d568ea0e627cc1d6be74a1e9cd55214684db5561995f6dad897c6"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
+
+[[package]]
+name = "arbitrary-int"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "993a810118f8f37e9c4411c86f1c4c940a09a7ab34b7bf2d88d06f50c553fab7"
 
 [[package]]
 name = "arboard"
@@ -460,6 +475,29 @@ name = "bcdec_rs"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f09c37bc0e9f0924b7dae9988265ef3c76c88538f41a3b06caf4bed07cee5226"
+
+[[package]]
+name = "bilge"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "279c74986684d5cc7bbbd079aa448e8f852992cd385d85bb3a37e374c087b065"
+dependencies = [
+ "arbitrary-int",
+ "bilge-impl",
+]
+
+[[package]]
+name = "bilge-impl"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1176e49f42fe135cd2b56465e4f7d07038d3728f5e9f27fb2f08ed3fef75339"
+dependencies = [
+ "itertools",
+ "proc-macro-error2",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
 
 [[package]]
 name = "bincode"
@@ -1902,7 +1940,9 @@ version = "0.30.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19fc433e8437a212d1b6f1e68c7824af3aed907da60afa994e7f542d18d12aa9"
 dependencies = [
+ "approx",
  "mint",
+ "serde_core",
 ]
 
 [[package]]
@@ -2855,27 +2895,6 @@ dependencies = [
  "log",
  "wasi",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "modular-bitfield"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be0d5274763b5572c8f29dadb5cd0bc59de64c805de433c1b556075f733b0a1a"
-dependencies = [
- "modular-bitfield-impl",
- "static_assertions",
-]
-
-[[package]]
-name = "modular-bitfield-impl"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8eec4327f127d4d18c54c8bfbf7b05d74cc9a1befdcc6283a241238ffbc84c6"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
 ]
 
 [[package]]
@@ -3879,6 +3898,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "proc-macro-error-attr2"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96de42df36bb9bba5542fe9f1a054b8cc87e172759a1868aa05c1f3acc89dfc5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+]
+
+[[package]]
+name = "proc-macro-error2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11ec05c52be0a07b08061f7dd003e7d7092e0472bc731b4af7bb1ef876109802"
+dependencies = [
+ "proc-macro-error-attr2",
+ "proc-macro2",
+ "quote",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4669,16 +4709,16 @@ dependencies = [
 [[package]]
 name = "ssbh_data"
 version = "0.19.0"
-source = "git+https://github.com/kjjkjjzyayufqza/ssbh_lib?branch=wmmt2#e242b195558b77634d7febd7a091f3983ada7936"
+source = "git+https://github.com/kjjkjjzyayufqza/ssbh_lib?branch=wmmt2-merge#0e2b85739c82c0f6260f298d81a9b429016002b3"
 dependencies = [
  "ahash",
+ "bilge",
  "binrw 0.15.1",
  "bitvec",
  "geometry_tools",
  "glam",
  "half",
  "itertools",
- "modular-bitfield",
  "serde",
  "ssbh_lib",
  "ssbh_write",
@@ -4688,10 +4728,11 @@ dependencies = [
 [[package]]
 name = "ssbh_lib"
 version = "0.19.0"
-source = "git+https://github.com/kjjkjjzyayufqza/ssbh_lib?branch=wmmt2#e242b195558b77634d7febd7a091f3983ada7936"
+source = "git+https://github.com/kjjkjjzyayufqza/ssbh_lib?branch=wmmt2-merge#0e2b85739c82c0f6260f298d81a9b429016002b3"
 dependencies = [
+ "bilge",
  "binrw 0.15.1",
- "modular-bitfield",
+ "glam",
  "serde",
  "serde_bytes",
  "ssbh_write",
@@ -4701,7 +4742,7 @@ dependencies = [
 [[package]]
 name = "ssbh_write"
 version = "0.19.0"
-source = "git+https://github.com/kjjkjjzyayufqza/ssbh_lib?branch=wmmt2#e242b195558b77634d7febd7a091f3983ada7936"
+source = "git+https://github.com/kjjkjjzyayufqza/ssbh_lib?branch=wmmt2-merge#0e2b85739c82c0f6260f298d81a9b429016002b3"
 dependencies = [
  "ssbh_write_derive",
 ]
@@ -4709,7 +4750,7 @@ dependencies = [
 [[package]]
 name = "ssbh_write_derive"
 version = "0.19.0"
-source = "git+https://github.com/kjjkjjzyayufqza/ssbh_lib?branch=wmmt2#e242b195558b77634d7febd7a091f3983ada7936"
+source = "git+https://github.com/kjjkjjzyayufqza/ssbh_lib?branch=wmmt2-merge#0e2b85739c82c0f6260f298d81a9b429016002b3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4721,12 +4762,6 @@ name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
-
-[[package]]
-name = "static_assertions"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "string_cache"

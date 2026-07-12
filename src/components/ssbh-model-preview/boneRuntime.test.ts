@@ -8,6 +8,29 @@ import {
 import type { SkelDataJson } from "./types";
 
 describe("createGpuSkeletonRuntime", () => {
+  it("reads flat glam Mat4 JSON emitted by wmmt2-merge", () => {
+    const skel: SkelDataJson = {
+      bones: [
+        {
+          name: "Root",
+          transform: [
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            3, 10, -2, 1,
+          ],
+          parent_index: null,
+          billboard_type: null,
+        },
+      ],
+    };
+
+    const runtime = createGpuSkeletonRuntime(skel);
+
+    expect(runtime.restLocals[0]?.translation).toEqual([3, 10, -2]);
+    expect(runtime.restLocals[0]?.scale).toEqual([1, 1, 1]);
+  });
+
   it("builds skeleton and inverses from a simple hierarchy", () => {
     const skel: SkelDataJson = {
       bones: [

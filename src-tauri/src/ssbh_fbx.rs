@@ -491,7 +491,7 @@ fn build_export_bones(skel: Option<&SkelData>, scale_factor: f32) -> Result<Vec<
     };
     let mut local_transforms = Vec::with_capacity(skel.bones.len());
     for bone in &skel.bones {
-        let mut local = glam::Mat4::from_cols_array_2d(&bone.transform);
+        let mut local = bone.transform;
         if !local.is_finite() {
             return Err(anyhow!("Bone '{}' has a non-finite transform", bone.name));
         }
@@ -766,27 +766,22 @@ fn resolve_material_base_texture_path(
 
 fn vector_data_to_vec3(data: &VectorData) -> Result<Vec<[f32; 3]>> {
     match data {
-        VectorData::Vector2(values) => Ok(values
-            .iter()
-            .map(|value| [value[0], value[1], 0.0])
-            .collect()),
-        VectorData::Vector3(values) => Ok(values.clone()),
+        VectorData::Vector2(values) => {
+            Ok(values.iter().map(|value| [value.x, value.y, 0.0]).collect())
+        }
+        VectorData::Vector3(values) => Ok(values.iter().map(|value| value.to_array()).collect()),
         VectorData::Vector4(values) => Ok(values
             .iter()
-            .map(|value| [value[0], value[1], value[2]])
+            .map(|value| [value.x, value.y, value.z])
             .collect()),
     }
 }
 
 fn vector_data_to_vec2(data: &VectorData) -> Result<Vec<[f32; 2]>> {
     match data {
-        VectorData::Vector2(values) => Ok(values.clone()),
-        VectorData::Vector3(values) => {
-            Ok(values.iter().map(|value| [value[0], value[1]]).collect())
-        }
-        VectorData::Vector4(values) => {
-            Ok(values.iter().map(|value| [value[0], value[1]]).collect())
-        }
+        VectorData::Vector2(values) => Ok(values.iter().map(|value| value.to_array()).collect()),
+        VectorData::Vector3(values) => Ok(values.iter().map(|value| [value.x, value.y]).collect()),
+        VectorData::Vector4(values) => Ok(values.iter().map(|value| [value.x, value.y]).collect()),
     }
 }
 
@@ -1845,13 +1840,13 @@ mod bone_transform_tests {
             bones: vec![
                 BoneData {
                     name: "GBL_RT".to_string(),
-                    transform: Mat4::IDENTITY.to_cols_array_2d(),
+                    transform: Mat4::IDENTITY,
                     parent_index: None,
                     billboard_type: BillboardType::Disabled,
                 },
                 BoneData {
                     name: "ATH_E_VERNIER".to_string(),
-                    transform: child_local.to_cols_array_2d(),
+                    transform: child_local,
                     parent_index: Some(0),
                     billboard_type: BillboardType::Disabled,
                 },
@@ -1885,7 +1880,7 @@ mod bone_transform_tests {
             minor_version: 0,
             bones: vec![BoneData {
                 name: "ATH_TE_R90".to_string(),
-                transform: source.to_cols_array_2d(),
+                transform: source,
                 parent_index: None,
                 billboard_type: BillboardType::Disabled,
             }],
@@ -2030,7 +2025,7 @@ mod bone_transform_tests {
             minor_version: 0,
             bones: vec![BoneData {
                 name: "ATH_TE_R90".to_string(),
-                transform: source.to_cols_array_2d(),
+                transform: source,
                 parent_index: None,
                 billboard_type: BillboardType::Disabled,
             }],

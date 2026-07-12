@@ -1,6 +1,6 @@
 //! NUANMB motion sampling for the web preview (logic derived from `ssbh_wgpu::animation`).
 
-use glam::Vec4Swizzles;
+use glam::{Quat, Vec3, Vec4, Vec4Swizzles};
 use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -9,7 +9,6 @@ use ssbh_data::{
     hlpb_data::{AimConstraintData, HlpbData, OrientConstraintData},
     prelude::*,
     skel_data::BoneData,
-    Vector3, Vector4,
 };
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -365,29 +364,20 @@ impl Interpolate for f32 {
     }
 }
 
-impl Interpolate for Vector3 {
+impl Interpolate for Vec3 {
     fn interpolate(&self, other: &Self, factor: f32) -> Self {
-        glam::Vec3::from(self.to_array())
-            .lerp(glam::Vec3::from(other.to_array()), factor)
-            .to_array()
-            .into()
+        self.lerp(*other, factor)
     }
 }
 
-impl Interpolate for Vector4 {
+impl Interpolate for Vec4 {
     fn interpolate(&self, other: &Self, factor: f32) -> Self {
-        glam::Vec4::from(self.to_array())
-            .lerp(glam::Vec4::from(other.to_array()), factor)
-            .to_array()
-            .into()
+        self.lerp(*other, factor)
     }
 }
 
-fn interpolate_quat(a: &Vector4, b: &Vector4, factor: f32) -> Vector4 {
-    glam::quat(a.x, a.y, a.z, a.w)
-        .lerp(glam::quat(b.x, b.y, b.z, b.w), factor)
-        .to_array()
-        .into()
+fn interpolate_quat(a: &Quat, b: &Quat, factor: f32) -> Quat {
+    a.lerp(*b, factor)
 }
 
 impl Interpolate for Transform {
@@ -442,9 +432,9 @@ struct AnimTransform {
 impl From<ssbh_data::anim_data::Transform> for AnimTransform {
     fn from(value: ssbh_data::anim_data::Transform) -> Self {
         Self {
-            translation: value.translation.to_array().into(),
-            rotation: glam::Quat::from_array(value.rotation.to_array()),
-            scale: value.scale.to_array().into(),
+            translation: value.translation,
+            rotation: value.rotation,
+            scale: value.scale,
         }
     }
 }
@@ -472,25 +462,28 @@ impl<'a> AnimatedBone<'a> {
             .as_ref()
             .map(|t| {
                 let (skel_scale, skel_rot, scale_trans) =
-                    glam::Mat4::from_cols_array_2d(&self.bone.transform)
-                        .to_scale_rotation_translation();
-                // Important pitfall:
-                // `override_* = false` means "keep skeleton/rest channel", not "use animated channel".
-                // Many NUANMB clips drive only rotation while leaving translation near zero.
-                // If translation always reads from the animation track, limb/head offsets collapse
-                // and parent-child chains appear disconnected in the viewport.
+                    self.bone.transform.to_scale_rotation_translation();
+                // SSBH / ssbh_lib TransformFlags (see formats::anim::TransformFlags):
+                //   override_* = true  -> replace that channel with skeleton rest pose
+                //   override_* = false -> use the animation channel
+                //
+                // VS2 nuanmb is property-sparse: limb tracks often only author Rotate.
+                // wmmt2-merge sets override_translation/scale=true when those properties are
+                // absent so rest bone lengths stay. Do NOT invert these flags (older preview
+                // code did for translation only, which made wmmt2's all-false flags look fine
+                // but broke merge once missing channels were flagged correctly).
                 let adjusted_transform = AnimTransform {
-                    translation: if self.flags.override_translation {
-                        t.translation
-                    } else {
+                    translation: if self.flags.uses_skeleton_translation() {
                         scale_trans
+                    } else {
+                        t.translation
                     },
-                    rotation: if self.flags.override_rotation {
+                    rotation: if self.flags.uses_skeleton_rotation() {
                         skel_rot
                     } else {
                         t.rotation
                     },
-                    scale: if self.flags.override_scale {
+                    scale: if self.flags.uses_skeleton_scale() {
                         skel_scale
                     } else {
                         t.scale
@@ -498,7 +491,7 @@ impl<'a> AnimatedBone<'a> {
                 };
                 adjusted_transform.to_mat4(scale_compensation)
             })
-            .unwrap_or_else(|| glam::Mat4::from_cols_array_2d(&self.bone.transform))
+            .unwrap_or(self.bone.transform)
     }
 }
 
@@ -1106,7 +1099,7 @@ fn light_from_node(node: &ssbh_data::anim_data::NodeData, frame: f32) -> LightSa
         });
 
     let rotation = transform
-        .map(|t| glam::Quat::from_array(t.rotation.to_array()))
+        .map(|t| t.rotation)
         .unwrap_or(glam::Quat::IDENTITY);
 
     let color = glam::Vec4::from_array(vector0.to_array()) * float0;
@@ -1375,6 +1368,7 @@ mod normalize_frame_tests {
         animate_skel_cpu, motion_cache_get_or_load, normalize_frame, sampled_frame_count_for_clip,
         validate_motion_skeleton_compatibility, MotionSampleCacheState, MotionSampleRequest,
     };
+    use glam::{Mat4, Quat, Vec3};
     use ssbh_data::{
         anim_data::{
             AnimData, GroupData, GroupType, NodeData, TrackData, TrackValues, Transform,
@@ -1382,19 +1376,14 @@ mod normalize_frame_tests {
         },
         hlpb_data::{HlpbData, OrientConstraintData},
         skel_data::{BillboardType, BoneData, SkelData},
-        Vector3, Vector4,
     };
+    use ssbh_lib::{Vector3, Vector4};
     use std::path::Path;
 
     fn identity_bone(name: &str, parent_index: Option<usize>) -> BoneData {
         BoneData {
             name: name.to_string(),
-            transform: [
-                [1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0],
-            ],
+            transform: Mat4::IDENTITY,
             parent_index,
             billboard_type: BillboardType::Disabled,
         }
@@ -1413,9 +1402,9 @@ mod normalize_frame_tests {
                         name: "Transform".to_string(),
                         compensate_scale: false,
                         values: TrackValues::Transform(vec![Transform {
-                            translation: Vector3::new(0.0, 0.0, 0.0),
-                            rotation: Vector4::new(0.0, 0.0, 0.0, 1.0),
-                            scale: Vector3::new(1.0, 1.0, 1.0),
+                            translation: Vec3::new(0.0, 0.0, 0.0),
+                            rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
+                            scale: Vec3::new(1.0, 1.0, 1.0),
                         }]),
                         transform_flags: TransformFlags::default(),
                     }],
@@ -1630,9 +1619,9 @@ mod normalize_frame_tests {
                             name: "Transform".to_string(),
                             compensate_scale: false,
                             values: TrackValues::Transform(vec![Transform {
-                                translation: Vector3::new(0.0, 0.0, 0.0),
-                                rotation: Vector4::new(0.0, 0.0, 0.70710677, 0.70710677),
-                                scale: Vector3::new(1.0, 1.0, 1.0),
+                                translation: Vec3::new(0.0, 0.0, 0.0),
+                                rotation: Quat::from_xyzw(0.0, 0.0, 0.70710677, 0.70710677),
+                                scale: Vec3::new(1.0, 1.0, 1.0),
                             }]),
                             transform_flags: TransformFlags::default(),
                         }],
@@ -1643,9 +1632,9 @@ mod normalize_frame_tests {
                             name: "Transform".to_string(),
                             compensate_scale: false,
                             values: TrackValues::Transform(vec![Transform {
-                                translation: Vector3::new(0.0, 0.0, 0.0),
-                                rotation: Vector4::new(0.0, 0.0, 0.0, 1.0),
-                                scale: Vector3::new(1.0, 1.0, 1.0),
+                                translation: Vec3::new(0.0, 0.0, 0.0),
+                                rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
+                                scale: Vec3::new(1.0, 1.0, 1.0),
                             }]),
                             transform_flags: TransformFlags::default(),
                         }],
@@ -1710,14 +1699,12 @@ mod normalize_frame_tests {
                             name: "Transform".to_string(),
                             compensate_scale: false,
                             values: TrackValues::Transform(vec![Transform {
-                                translation: Vector3::new(5.0, 0.0, 0.0),
-                                rotation: Vector4::new(0.0, 0.0, 0.0, 1.0),
-                                scale: Vector3::new(1.0, 1.0, 1.0),
+                                translation: Vec3::new(5.0, 0.0, 0.0),
+                                rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
+                                scale: Vec3::new(1.0, 1.0, 1.0),
                             }]),
-                            transform_flags: TransformFlags {
-                                override_translation: true,
-                                ..TransformFlags::default()
-                            },
+                            // override_translation=false → use animation channel
+                            transform_flags: TransformFlags::default(),
                         },
                     ],
                 }],
@@ -1746,14 +1733,11 @@ mod normalize_frame_tests {
                         name: "Transform".to_string(),
                         compensate_scale: false,
                         values: TrackValues::Transform(vec![Transform {
-                            translation: Vector3::new(3.0, 1.0, -2.0),
-                            rotation: Vector4::new(0.0, 0.0, 0.0, 1.0),
-                            scale: Vector3::new(1.0, 1.0, 1.0),
+                            translation: Vec3::new(3.0, 1.0, -2.0),
+                            rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
+                            scale: Vec3::new(1.0, 1.0, 1.0),
                         }]),
-                        transform_flags: TransformFlags {
-                            override_translation: true,
-                            ..TransformFlags::default()
-                        },
+                        transform_flags: TransformFlags::default(),
                     }],
                 }],
             }],
@@ -1767,13 +1751,14 @@ mod normalize_frame_tests {
     #[test]
     fn animate_skel_cpu_respects_override_flags_semantics() {
         let mut hip = identity_bone("Hip", None);
-        hip.transform[3][0] = 5.0;
+        hip.transform.w_axis.x = 5.0;
         let skel = SkelData {
             major_version: 1,
             minor_version: 0,
             bones: vec![hip],
         };
-        let anim_keep_rest = AnimData {
+        // override_translation=true → use skeleton rest (5,0,0), ignore anim zero.
+        let anim_use_skel = AnimData {
             major_version: 2,
             minor_version: 0,
             final_frame_index: 0.0,
@@ -1785,40 +1770,9 @@ mod normalize_frame_tests {
                         name: "Transform".to_string(),
                         compensate_scale: false,
                         values: TrackValues::Transform(vec![Transform {
-                            translation: Vector3::new(0.0, 0.0, 0.0),
-                            rotation: Vector4::new(0.0, 0.0, 0.0, 1.0),
-                            scale: Vector3::new(1.0, 1.0, 1.0),
-                        }]),
-                        transform_flags: TransformFlags {
-                            override_translation: false,
-                            override_rotation: false,
-                            override_scale: false,
-                            override_compensate_scale: false,
-                        },
-                    }],
-                }],
-            }],
-        };
-        let locals_keep = animate_skel_cpu(&skel, &anim_keep_rest, None, 0.0);
-        assert!((locals_keep[0].translation[0] - 5.0).abs() < 1e-6);
-        assert!((locals_keep[0].translation[1] - 0.0).abs() < 1e-6);
-        assert!((locals_keep[0].translation[2] - 0.0).abs() < 1e-6);
-
-        let anim_override = AnimData {
-            major_version: 2,
-            minor_version: 0,
-            final_frame_index: 0.0,
-            groups: vec![GroupData {
-                group_type: GroupType::Transform,
-                nodes: vec![NodeData {
-                    name: "Hip".to_string(),
-                    tracks: vec![TrackData {
-                        name: "Transform".to_string(),
-                        compensate_scale: false,
-                        values: TrackValues::Transform(vec![Transform {
-                            translation: Vector3::new(3.0, 1.0, -2.0),
-                            rotation: Vector4::new(0.0, 0.0, 0.0, 1.0),
-                            scale: Vector3::new(1.0, 1.0, 1.0),
+                            translation: Vec3::new(0.0, 0.0, 0.0),
+                            rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
+                            scale: Vec3::new(1.0, 1.0, 1.0),
                         }]),
                         transform_flags: TransformFlags {
                             override_translation: true,
@@ -1830,9 +1784,227 @@ mod normalize_frame_tests {
                 }],
             }],
         };
-        let locals_override = animate_skel_cpu(&skel, &anim_override, None, 0.0);
-        assert!((locals_override[0].translation[0] - 3.0).abs() < 1e-6);
-        assert!((locals_override[0].translation[1] - 1.0).abs() < 1e-6);
-        assert!((locals_override[0].translation[2] + 2.0).abs() < 1e-6);
+        let locals_skel = animate_skel_cpu(&skel, &anim_use_skel, None, 0.0);
+        assert!((locals_skel[0].translation[0] - 5.0).abs() < 1e-6);
+        assert!((locals_skel[0].translation[1] - 0.0).abs() < 1e-6);
+        assert!((locals_skel[0].translation[2] - 0.0).abs() < 1e-6);
+
+        // override_*=false → use animation channels.
+        let anim_use_clip = AnimData {
+            major_version: 2,
+            minor_version: 0,
+            final_frame_index: 0.0,
+            groups: vec![GroupData {
+                group_type: GroupType::Transform,
+                nodes: vec![NodeData {
+                    name: "Hip".to_string(),
+                    tracks: vec![TrackData {
+                        name: "Transform".to_string(),
+                        compensate_scale: false,
+                        values: TrackValues::Transform(vec![Transform {
+                            translation: Vec3::new(3.0, 1.0, -2.0),
+                            rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
+                            scale: Vec3::new(1.0, 1.0, 1.0),
+                        }]),
+                        transform_flags: TransformFlags::default(),
+                    }],
+                }],
+            }],
+        };
+        let locals_clip = animate_skel_cpu(&skel, &anim_use_clip, None, 0.0);
+        assert!((locals_clip[0].translation[0] - 3.0).abs() < 1e-6);
+        assert!((locals_clip[0].translation[1] - 1.0).abs() < 1e-6);
+        assert!((locals_clip[0].translation[2] + 2.0).abs() < 1e-6);
+    }
+
+    /// VS2 limb-like track: Rotate only (zero anim translation) with
+    /// override_translation/scale=true as set by wmmt2-merge property-sparse flags.
+    #[test]
+    fn animate_skel_cpu_vs2_limb_keeps_rest_translation() {
+        let mut hip = identity_bone("Hip", None);
+        let mut knee = identity_bone("HIZA_L", Some(0));
+        // Rest bone length along Y (column-major translation column).
+        hip.transform.w_axis = glam::Vec4::new(0.0, 1.5, 0.0, 1.0);
+        knee.transform.w_axis = glam::Vec4::new(0.0, 0.4, 0.0, 1.0);
+        let skel = SkelData {
+            major_version: 1,
+            minor_version: 0,
+            bones: vec![hip, knee],
+        };
+        let anim = AnimData {
+            major_version: 1,
+            minor_version: 2,
+            final_frame_index: 0.0,
+            groups: vec![GroupData {
+                group_type: GroupType::Transform,
+                nodes: vec![
+                    NodeData {
+                        name: "Hip".to_string(),
+                        tracks: vec![TrackData {
+                            name: "Transform".to_string(),
+                            compensate_scale: false,
+                            values: TrackValues::Transform(vec![Transform {
+                                translation: Vec3::ZERO,
+                                rotation: Quat::from_xyzw(0.0, 0.0, 0.0, 1.0),
+                                scale: Vec3::ONE,
+                            }]),
+                            transform_flags: TransformFlags {
+                                override_translation: true,
+                                override_rotation: false,
+                                override_scale: true,
+                                override_compensate_scale: false,
+                            },
+                        }],
+                    },
+                    NodeData {
+                        name: "HIZA_L".to_string(),
+                        tracks: vec![TrackData {
+                            name: "Transform".to_string(),
+                            compensate_scale: false,
+                            values: TrackValues::Transform(vec![Transform {
+                                // Authored anim translation is zero (no Translate property).
+                                translation: Vec3::ZERO,
+                                rotation: Quat::from_xyzw(0.0, 0.0, 0.70710677, 0.70710677),
+                                scale: Vec3::ONE,
+                            }]),
+                            transform_flags: TransformFlags {
+                                override_translation: true,
+                                override_rotation: false,
+                                override_scale: true,
+                                override_compensate_scale: false,
+                            },
+                        }],
+                    },
+                ],
+            }],
+        };
+        let locals = animate_skel_cpu(&skel, &anim, None, 0.0);
+        assert!(
+            (locals[0].translation[1] - 1.5).abs() < 1e-5,
+            "Hip must keep rest Y translation, got {:?}",
+            locals[0].translation
+        );
+        assert!(
+            (locals[1].translation[1] - 0.4).abs() < 1e-5,
+            "Limb must keep rest bone length, not collapse to origin; got {:?}",
+            locals[1].translation
+        );
+        // Rotation from clip must still apply.
+        assert!(
+            locals[1].rotation[2].abs() > 0.5,
+            "expected non-identity limb rotation from clip, got {:?}",
+            locals[1].rotation
+        );
+    }
+
+    /// Real gyan body skel + boostloop nuanmb (wmmt2-merge property-sparse flags).
+    /// Drives shipped `AnimData::from_file` + `animate_skel_cpu` (motion page path).
+    #[test]
+    fn gyan_boostloop_motion_compose_keeps_limb_rest_offsets() {
+        let skel_path = Path::new(
+            r"E:\XB\mod\002chara\0x96C4D222\001gundam_005gyan00_001_body_normal__maya__.nusktb",
+        );
+        let anim_path = Path::new(
+            r"E:\XB\解包\vs2\x64\003motion\001hito\001gundam\001gundam_005gyan00_001\001hito_001gundam_005gyan00_001_boostloop_stk_gnd_fr.nuanmb",
+        );
+        if !skel_path.is_file() || !anim_path.is_file() {
+            return;
+        }
+
+        let skel = SkelData::from_file(skel_path).expect("gyan body nusktb");
+        let anim =
+            AnimData::from_file(anim_path).expect("gyan boostloop nuanmb via shipped from_file");
+        assert!(
+            anim.groups
+                .iter()
+                .any(|g| g.group_type == GroupType::Transform),
+            "expected Transform group"
+        );
+
+        // Property-sparse flags: limbs without Translate must override translation.
+        let mut saw_limb_flag = false;
+        for g in &anim.groups {
+            if g.group_type != GroupType::Transform {
+                continue;
+            }
+            for n in &g.nodes {
+                if n.name == "HIZA_L" || n.name == "MOMO_L" || n.name == "UDE_L" {
+                    let t = n.tracks.first().expect("track");
+                    assert!(
+                        t.transform_flags.override_translation,
+                        "{} must override_translation (no Translate prop); flags={:?}",
+                        n.name, t.transform_flags
+                    );
+                    assert!(
+                        !t.transform_flags.override_rotation,
+                        "{} must use anim rotation; flags={:?}",
+                        n.name, t.transform_flags
+                    );
+                    saw_limb_flag = true;
+                    if let TrackValues::Transform(vs) = &t.values {
+                        assert!(!vs.is_empty());
+                        let tr = vs[0].translation;
+                        assert!(
+                            tr.length() < 1e-3,
+                            "{} anim translation should be ~0 when channel missing, got {:?}",
+                            n.name,
+                            tr
+                        );
+                    }
+                }
+            }
+        }
+        assert!(
+            saw_limb_flag,
+            "expected HIZA_L/MOMO_L/UDE_L transform tracks"
+        );
+
+        validate_motion_skeleton_compatibility(&skel, &anim)
+            .expect("gyan body motion should match body skeleton");
+
+        let locals = animate_skel_cpu(&skel, &anim, None, 0.0);
+        assert_eq!(locals.len(), skel.bones.len().min(super::MAX_BONE_COUNT));
+
+        // For each limb bone present in both skel and anim: composed local translation
+        // must match rest (override), not collapse to origin.
+        for (i, bone) in skel.bones.iter().enumerate().take(locals.len()) {
+            if !matches!(
+                bone.name.as_str(),
+                "HIZA_L" | "HIZA_R" | "MOMO_L" | "MOMO_R" | "UDE_L" | "UDE_R" | "ASHI_L" | "ASHI_R"
+            ) {
+                continue;
+            }
+            let (_, _, rest_t) = bone.transform.to_scale_rotation_translation();
+            let got = locals[i].translation;
+            let rest = rest_t.to_array();
+            println!(
+                "compose_limb {} rest_t={:?} local_t={:?} local_r={:?} finite={}",
+                bone.name,
+                rest,
+                got,
+                locals[i].rotation,
+                got.iter().all(|v| v.is_finite())
+            );
+            let err =
+                (got[0] - rest[0]).abs() + (got[1] - rest[1]).abs() + (got[2] - rest[2]).abs();
+            assert!(
+                err < 1e-3,
+                "bone {} local translation must keep rest offset (not zero collapse). rest={:?} got={:?}",
+                bone.name,
+                rest,
+                got
+            );
+            // Rest limb offsets are typically non-zero in a real skel.
+            let rest_len = (rest[0] * rest[0] + rest[1] * rest[1] + rest[2] * rest[2]).sqrt();
+            if rest_len > 1e-3 {
+                let got_len = (got[0] * got[0] + got[1] * got[1] + got[2] * got[2]).sqrt();
+                assert!(
+                    got_len > 1e-3,
+                    "bone {} collapsed to origin; rest_len={}",
+                    bone.name,
+                    rest_len
+                );
+            }
+        }
     }
 }

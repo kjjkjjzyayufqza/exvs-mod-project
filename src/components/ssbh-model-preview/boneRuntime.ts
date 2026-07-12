@@ -1,7 +1,7 @@
 import { Bone, Matrix4, Quaternion, Skeleton, Vector3, type Object3D } from "three";
 import type { MotionBoneLocal } from "./motionPreviewTypes";
 import { mat4FromSsbhColumns } from "./skeletonLines";
-import type { SkelDataJson } from "./types";
+import type { SkelDataJson, SsbhMat4Json } from "./types";
 
 type LocalPose = {
   translation: [number, number, number];
@@ -33,7 +33,7 @@ function matrixFromPose(pose: LocalPose): Matrix4 {
   );
 }
 
-export function localPoseFromSsbhTransform(transform: number[][]): LocalPose {
+export function localPoseFromSsbhTransform(transform: SsbhMat4Json): LocalPose {
   _localM.copy(mat4FromSsbhColumns(transform));
   _localM.decompose(_localP, _localQ, _localS);
   return {
@@ -107,7 +107,7 @@ export function updateGpuSkeletonWorld(runtime: GpuSkeletonRuntime): void {
 export function createGpuSkeletonRuntime(skel: SkelDataJson): GpuSkeletonRuntime {
   const bones = skel.bones.map(() => new Bone());
   const rootBones: Bone[] = [];
-  const restLocals = skel.bones.map((bone) => localPoseFromSsbhTransform(bone.transform as number[][]));
+  const restLocals = skel.bones.map((bone) => localPoseFromSsbhTransform(bone.transform));
   const boneCount = bones.length;
 
   for (let i = 0; i < bones.length; i++) {

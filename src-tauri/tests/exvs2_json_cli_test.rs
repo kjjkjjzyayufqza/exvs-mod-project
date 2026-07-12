@@ -8,6 +8,7 @@ use app_lib::format::bulletparam::{
     build_bulletparam, parse_bulletparam, BulletParamData, BulletParamEntry,
 };
 use app_lib::format::param_bin_format::{ParamBinaryHeader, ParamFieldSpec, PARAM_BIN_MAGIC};
+use glam::{Mat4, Vec3};
 use serde_json::json;
 use ssbh_data::mesh_data::{AttributeData, MeshData, MeshObjectData, VectorData};
 use ssbh_data::modl_data::{ModlData, ModlEntryData};
@@ -20,13 +21,8 @@ fn write_ssbh_fixture<T: SsbhData>(value: &T) -> Vec<u8> {
     cursor.into_inner()
 }
 
-fn identity_transform() -> [[f32; 4]; 4] {
-    [
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-        [0.0, 0.0, 0.0, 1.0],
-    ]
+fn identity_transform() -> Mat4 {
+    Mat4::IDENTITY
 }
 
 fn sample_nusktb_bytes() -> Vec<u8> {
@@ -77,7 +73,11 @@ fn sample_numshb_bytes() -> Vec<u8> {
             subindex: 0,
             positions: vec![AttributeData {
                 name: "Position0".to_string(),
-                data: VectorData::Vector3(vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]),
+                data: VectorData::Vector3(vec![
+                    Vec3::new(0.0, 0.0, 0.0),
+                    Vec3::new(1.0, 0.0, 0.0),
+                    Vec3::new(0.0, 1.0, 0.0),
+                ]),
             }],
             vertex_indices: vec![0, 1, 2],
             ..Default::default()

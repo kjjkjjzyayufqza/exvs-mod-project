@@ -136,8 +136,8 @@ tauri-plugin-opener = "2"
 tauri-plugin-mcp-bridge = "0.2"
 
 nutexb = { git = "https://github.com/kjjkjjzyayufqza/nutexb", features = ["ddsfile"] }
-ssbh_data = { git = "https://github.com/kjjkjjzyayufqza/ssbh_lib", branch = "wmmt2", package = "ssbh_data", features = ["serde"] }
-ssbh_lib = { git = "https://github.com/kjjkjjzyayufqza/ssbh_lib", branch = "wmmt2", package = "ssbh_lib" }
+ssbh_data = { git = "https://github.com/kjjkjjzyayufqza/ssbh_lib", branch = "wmmt2-merge", package = "ssbh_data", features = ["serde"] }
+ssbh_lib = { git = "https://github.com/kjjkjjzyayufqza/ssbh_lib", branch = "wmmt2-merge", package = "ssbh_lib" }
 base64 = "0.22"
 crc32fast = "1.4"
 image = "0.25.9"

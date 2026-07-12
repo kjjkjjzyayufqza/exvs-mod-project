@@ -732,7 +732,7 @@ fn build_json_scene_from_ssbh(
                 .iter()
                 .map(|b| JsonBone {
                     name: b.name.clone(),
-                    transform: b.transform,
+                    transform: b.transform.to_cols_array_2d(),
                     parent_index: b.parent_index,
                 })
                 .collect()
@@ -1631,17 +1631,17 @@ fn get_first_vec3(attrs: &[ssbh_data::mesh_data::AttributeData]) -> Option<Vec<[
 
 fn vector_data_to_vec3(data: &VectorData) -> Result<Vec<[f32; 3]>> {
     match data {
-        VectorData::Vector3(v) => Ok(v.clone()),
-        VectorData::Vector2(v) => Ok(v.iter().map(|x| [x[0], x[1], 0.0]).collect()),
-        VectorData::Vector4(v) => Ok(v.iter().map(|x| [x[0], x[1], x[2]]).collect()),
+        VectorData::Vector3(v) => Ok(v.iter().map(|x| x.to_array()).collect()),
+        VectorData::Vector2(v) => Ok(v.iter().map(|x| [x.x, x.y, 0.0]).collect()),
+        VectorData::Vector4(v) => Ok(v.iter().map(|x| [x.x, x.y, x.z]).collect()),
     }
 }
 
 fn vector_data_to_vec2(data: &VectorData) -> Result<Vec<[f32; 2]>> {
     match data {
-        VectorData::Vector2(v) => Ok(v.clone()),
-        VectorData::Vector3(v) => Ok(v.iter().map(|x| [x[0], x[1]]).collect()),
-        VectorData::Vector4(v) => Ok(v.iter().map(|x| [x[0], x[1]]).collect()),
+        VectorData::Vector2(v) => Ok(v.iter().map(|x| x.to_array()).collect()),
+        VectorData::Vector3(v) => Ok(v.iter().map(|x| [x.x, x.y]).collect()),
+        VectorData::Vector4(v) => Ok(v.iter().map(|x| [x.x, x.y]).collect()),
     }
 }
 

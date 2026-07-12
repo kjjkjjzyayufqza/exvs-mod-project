@@ -12,9 +12,15 @@ pub fn numshb_bytes_to_collision_trimesh(numshb_bytes: &[u8]) -> Result<Collisio
             .positions
             .first()
             .and_then(|a| match &a.data {
-                VectorData::Vector3(v) => Some(v.clone()),
-                VectorData::Vector4(v) => Some(v.iter().map(|x| [x[0], x[1], x[2]]).collect()),
-                VectorData::Vector2(v) => Some(v.iter().map(|x| [x[0], x[1], 0.0]).collect()),
+                VectorData::Vector3(v) => {
+                    Some(v.iter().map(|x| [x.x, x.y, x.z]).collect::<Vec<[f32; 3]>>())
+                }
+                VectorData::Vector4(v) => {
+                    Some(v.iter().map(|x| [x.x, x.y, x.z]).collect::<Vec<[f32; 3]>>())
+                }
+                VectorData::Vector2(v) => {
+                    Some(v.iter().map(|x| [x.x, x.y, 0.0]).collect::<Vec<[f32; 3]>>())
+                }
             })
             .ok_or_else(|| format!("Mesh object '{}' has no position data", obj.name))?;
 

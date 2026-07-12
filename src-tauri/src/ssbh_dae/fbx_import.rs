@@ -1011,18 +1011,20 @@ mod tests {
         }
     }
 
-    fn assert_close_matrix(actual: [[f32; 4]; 4], expected: [[f32; 4]; 4]) {
+    fn assert_close_matrix(actual: Mat4, expected: Mat4) {
         assert_close_matrix_epsilon(actual, expected, 1e-5);
     }
 
-    fn assert_close_matrix_epsilon(actual: [[f32; 4]; 4], expected: [[f32; 4]; 4], epsilon: f32) {
+    fn assert_close_matrix_epsilon(actual: Mat4, expected: Mat4, epsilon: f32) {
+        let a = actual.to_cols_array_2d();
+        let e = expected.to_cols_array_2d();
         for row in 0..4 {
             for col in 0..4 {
                 assert!(
-                    (actual[row][col] - expected[row][col]).abs() < epsilon,
+                    (a[row][col] - e[row][col]).abs() < epsilon,
                     "matrix[{row}][{col}] expected {}, got {}",
-                    expected[row][col],
-                    actual[row][col]
+                    e[row][col],
+                    a[row][col]
                 );
             }
         }
@@ -1080,8 +1082,8 @@ mod tests {
         assert_eq!(scene.bones[stick].parent_index, Some(gbl_rt));
         assert_eq!(scene.bones[ath].parent_index, Some(stick));
         assert_close_matrix(
-            scene.bones[gbl_rt].transform,
-            Mat4::IDENTITY.to_cols_array_2d(),
+            Mat4::from_cols_array_2d(&scene.bones[gbl_rt].transform),
+            Mat4::IDENTITY,
         );
 
         let output = tempfile::tempdir().expect("temp conversion dir");
@@ -1118,10 +1120,7 @@ mod tests {
         assert_eq!(skel.bones[gbl_rt].parent_index, None);
         assert_eq!(skel.bones[stick].parent_index, Some(gbl_rt));
         assert_eq!(skel.bones[ath].parent_index, Some(stick));
-        assert_close_matrix(
-            skel.bones[gbl_rt].transform,
-            Mat4::IDENTITY.to_cols_array_2d(),
-        );
+        assert_close_matrix(skel.bones[gbl_rt].transform, Mat4::IDENTITY);
     }
 
     #[test]
@@ -1452,7 +1451,7 @@ mod tests {
         let skel = SkelData::from_file(files.nusktb_path.as_ref().unwrap())
             .expect("converted nusktb should parse");
         for (index, bone) in skel.bones.iter().enumerate() {
-            let local = Mat4::from_cols_array_2d(&bone.transform);
+            let local = bone.transform;
             let (_, _, translation) = local.to_scale_rotation_translation();
             eprintln!(
                 "[matrix_check] bone {index:02} '{}' parent={:?} translation={translation:?} matrix={:?}",
@@ -1499,18 +1498,14 @@ mod tests {
                 .expect("expected ATH_E_VERNIER bone");
             assert_eq!(skel.bones[stick_index].parent_index, Some(0));
             assert_eq!(skel.bones[ath_index].parent_index, Some(stick_index));
-            assert_close_matrix(
-                skel.bones[stick_index].transform,
-                Mat4::IDENTITY.to_cols_array_2d(),
-            );
+            assert_close_matrix(skel.bones[stick_index].transform, Mat4::IDENTITY);
             assert_close_matrix(
                 skel.bones[ath_index].transform,
                 Mat4::from_scale_rotation_translation(
                     Vec3::ONE,
                     glam::Quat::from_rotation_y(std::f32::consts::PI),
                     Vec3::new(-17.7831 * scale_factor, 0.0, 0.0),
-                )
-                .to_cols_array_2d(),
+                ),
             );
         }
     }

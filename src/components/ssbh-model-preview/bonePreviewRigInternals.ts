@@ -11,7 +11,7 @@ export function applyRestLocalMatrices(refs: (Group | null)[], bones: BoneJson[]
   for (let i = 0; i < bones.length; i++) {
     const g = refs[i];
     if (!g) continue;
-    _restLocalM.copy(mat4FromSsbhColumns(bones[i]!.transform as number[][]));
+    _restLocalM.copy(mat4FromSsbhColumns(bones[i]!.transform));
     _restLocalM.decompose(_restPos, _restQuat, _restScl);
     g.position.copy(_restPos);
     g.quaternion.copy(_restQuat);

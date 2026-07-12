@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use glam::{Mat4, Vec2, Vec3, Vec4};
 use serde::Serialize;
 use ssbh_data::mesh_data::{AttributeData, MeshData, MeshObjectData, VectorData};
 use ssbh_data::modl_data::{ModlData, ModlEntryData};
@@ -547,50 +548,65 @@ fn convert_prepared_meshes_to_ssbh(
             subindex: 0,
             positions: vec![AttributeData {
                 name: String::new(),
-                data: VectorData::Vector3(vertices),
+                data: VectorData::Vector3(vertices.iter().copied().map(Vec3::from).collect()),
             }],
             normals: vec![AttributeData {
                 name: String::new(),
-                data: VectorData::Vector3(normals),
+                data: VectorData::Vector3(normals.iter().copied().map(Vec3::from).collect()),
             }],
             binormals: vec![
                 AttributeData {
                     name: String::new(),
-                    data: VectorData::Vector3(binormals.clone()),
+                    data: VectorData::Vector3(binormals.iter().copied().map(Vec3::from).collect()),
                 },
                 AttributeData {
                     name: String::new(),
-                    data: VectorData::Vector3(binormals),
+                    data: VectorData::Vector3(binormals.into_iter().map(Vec3::from).collect()),
                 },
             ],
             tangents: vec![
                 AttributeData {
                     name: String::new(),
-                    data: VectorData::Vector3(tangents.clone()),
+                    data: VectorData::Vector3(tangents.iter().copied().map(Vec3::from).collect()),
                 },
                 AttributeData {
                     name: String::new(),
-                    data: VectorData::Vector3(tangents),
+                    data: VectorData::Vector3(tangents.into_iter().map(Vec3::from).collect()),
                 },
             ],
             texture_coordinates: vec![
                 AttributeData {
                     name: String::new(),
-                    data: VectorData::Vector2(uvs),
+                    data: VectorData::Vector2(uvs.into_iter().map(Vec2::from).collect()),
                 },
                 AttributeData {
                     name: "HalfFloat2_0".to_string(),
-                    data: VectorData::Vector4(generate_half_float2_data(vertex_count)),
+                    data: VectorData::Vector4(
+                        generate_half_float2_data(vertex_count)
+                            .into_iter()
+                            .map(Vec4::from)
+                            .collect(),
+                    ),
                 },
             ],
             color_sets: vec![
                 AttributeData {
                     name: "colorSet0".to_string(),
-                    data: VectorData::Vector2(generate_default_colorset0_data(vertex_count)),
+                    data: VectorData::Vector2(
+                        generate_default_colorset0_data(vertex_count)
+                            .into_iter()
+                            .map(Vec2::from)
+                            .collect(),
+                    ),
                 },
                 AttributeData {
                     name: "colorSet1".to_string(),
-                    data: VectorData::Vector2(generate_default_colorset1_data(vertex_count)),
+                    data: VectorData::Vector2(
+                        generate_default_colorset1_data(vertex_count)
+                            .into_iter()
+                            .map(Vec2::from)
+                            .collect(),
+                    ),
                 },
             ],
             vertex_indices: dae_mesh.indices.clone(),
@@ -681,10 +697,10 @@ fn convert_skeleton_from_dae(
         for dae_bone in dae_bones {
             bones.push(BoneData {
                 name: dae_bone.name.clone(),
-                transform: scale_bone_transform_translation(
+                transform: Mat4::from_cols_array_2d(&scale_bone_transform_translation(
                     dae_bone.transform,
                     config.scale_factor,
-                ),
+                )),
                 parent_index: dae_bone.parent_index,
                 billboard_type: BillboardType::Disabled,
             });
@@ -702,12 +718,7 @@ fn convert_skeleton_from_dae(
         for (index, bone_name) in bone_names.iter().enumerate() {
             bones.push(BoneData {
                 name: bone_name.clone(),
-                transform: [
-                    [1.0, 0.0, 0.0, 0.0],
-                    [0.0, 1.0, 0.0, 0.0],
-                    [0.0, 0.0, 1.0, 0.0],
-                    [0.0, 0.0, 0.0, 1.0],
-                ],
+                transform: Mat4::IDENTITY,
                 parent_index: if index == 0 { None } else { Some(index - 1) },
                 billboard_type: BillboardType::Disabled,
             });
