@@ -11,9 +11,10 @@ export default defineConfig(async () => ({
   //
   // 1. prevent vite from obscuring rust errors
   clearScreen: false,
-  // 2. tauri expects a fixed port, fail if that port is not available
+  // 2. tauri expects a fixed port, fail if that port is not available.
+  // Avoid 3000: Windows often reserves 2951-3050 (excludedportrange) → EACCES.
   server: {
-    port: 3000,
+    port: 5173,
     strictPort: true,
     // Don't watch the Rust crate / build artifacts — avoids needless dev-server
     // churn and full reloads triggered by cargo writing into src-tauri/target.
