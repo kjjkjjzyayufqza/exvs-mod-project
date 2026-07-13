@@ -1167,6 +1167,7 @@ pub struct MoveLegacyWorkspaceContentResult {
     pub configured_structure_json_path: String,
 }
 
+#[cfg(test)]
 fn move_legacy_workspace_content_impl(
     legacy_asset_root_dir: &Path,
     configured_asset_root_dir: &Path,

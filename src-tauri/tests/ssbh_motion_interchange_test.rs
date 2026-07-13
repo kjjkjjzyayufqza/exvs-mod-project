@@ -307,15 +307,25 @@ fn cascadeur_bridge_writes_complete_fbx_scene_metadata() {
     let bytes = std::fs::read(&bridge.motion_fbx_path).unwrap();
 
     for required_node in [
+        b"FileId".as_slice(),
+        b"EncryptionType".as_slice(),
         b"CreationTimeStamp".as_slice(),
         b"SceneInfo".as_slice(),
         b"TimeMode".as_slice(),
         b"TimeSpanStart".as_slice(),
+        b"TimeSpanStop".as_slice(),
+        b"CustomFrameRate".as_slice(),
         b"Takes".as_slice(),
+        b"Current".as_slice(),
+        b"ActiveAnimStackName".as_slice(),
+        b"LocalTime".as_slice(),
+        b"ReferenceTime".as_slice(),
         b"edited_action".as_slice(),
     ] {
         assert!(
-            bytes.windows(required_node.len()).any(|window| window == required_node),
+            bytes
+                .windows(required_node.len())
+                .any(|window| window == required_node),
             "missing required FBX scene metadata node {:?}",
             String::from_utf8_lossy(required_node),
         );

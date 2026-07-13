@@ -3,9 +3,7 @@
 EXVS2-Easy-Blender-Tools is a Blender 5.1 addon for small EXVS2 model workflow
 fixes that Blender does not make convenient by default.
 
-The first focus is Maya-style rigid skin setup: select many mesh objects, choose
-one armature bone, and bind every selected mesh rigidly to that bone in one
-action.
+It includes one-click motion binding and Maya-style rigid skin setup.
 
 ## Install Locations
 
@@ -26,6 +24,51 @@ Blender displays the addon as `EXVS2-Easy-Blender-Tools`.
 4. Enable the addon.
 
 The tools appear in the 3D Viewport sidebar under the **EXVS2 Tools** tab.
+
+The sidebar uses separate collapsible groups:
+
+- **Motion** and **FBX Export** stay open for the main workflow.
+- **Rigid Skin**, **Selection**, **Cleanup**, and **Maintenance** start closed.
+
+## One-Click Motion Bind
+
+Use this when the model and motion FBX files were imported as separate but
+matching armatures.
+
+1. Open **EXVS2 Tools** in Object Mode.
+2. Set **A Model** to the armature already referenced by the model meshes.
+3. Set **B Motion** to the armature whose active Action supplies the animation.
+4. Click **Transfer and Delete B**.
+
+You can also Shift-select exactly two armatures, then click **Use Selected
+Pair**. Selection order does not matter because the addon identifies
+A from the model mesh parent and Armature modifiers. The panel displays the
+resolved A, B, Action, and skeleton validation state before binding.
+
+The addon verifies matching bone names, bone parents, and rest transforms. It
+then copies B's Action and Action Slot onto A, moves the copied animation to
+start at frame 0, sets the scene to 60 FPS, and selects A with its model meshes.
+After a successful copy, B is deleted. Its armature data and source Action are
+also removed when nothing else uses them.
+
+This command does not export FBX. Export manually after checking playback.
+
+## Safe Manual FBX Export
+
+Click **Select Export Set** before opening Blender's FBX exporter. The
+binding command has already deleted B; this button limits the selection to the
+finished A armature and its meshes.
+
+Use these FBX options:
+
+- **Include > Selected Objects**: on
+- **Object Types**: Mesh and Armature only
+- **Armature > Add Leaf Bones**: off
+- **Bake Animation > NLA Strips**: off
+- **Bake Animation > All Actions**: off
+
+Leaving **Selected Objects** off can export unrelated objects left in the scene.
+Leaving **Add Leaf Bones** on creates extra bones with names ending in `_end`.
 
 ## Rigid Bind Workflow
 

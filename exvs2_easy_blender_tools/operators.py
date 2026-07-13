@@ -19,6 +19,7 @@ from .properties import (
 
 _reload_pending = False
 _VERTEX_CHUNK_SIZE = 65536
+_REST_MATRIX_TOLERANCE = 1.0e-4
 
 
 @dataclass
@@ -66,8 +67,21 @@ class RetargetStats:
     modifiers_retargeted: int = 0
 
 
+@dataclass
+class MotionBindingSetup:
+    model_armature: Object
+    motion_armature: Object
+    model_meshes: list[Object]
+    source_action: bpy.types.Action
+    source_slot_handle: int
+
+
 def selected_mesh_objects(context: Context) -> list[Object]:
     return [obj for obj in context.selected_objects if obj.type == "MESH"]
+
+
+def selected_armature_objects(context: Context) -> list[Object]:
+    return [obj for obj in context.selected_objects if obj.type == "ARMATURE"]
 
 
 def scene_mesh_objects(context: Context) -> list[Object]:
@@ -203,6 +217,243 @@ def assign_full_weight(group: VertexGroup, mesh_object: Object, weight: float) -
 
 def armature_modifiers(mesh_object: Object) -> list[Modifier]:
     return [modifier for modifier in mesh_object.modifiers if modifier.type == "ARMATURE"]
+
+
+def meshes_directly_using_armature(context: Context, armature: Object) -> list[Object]:
+    return [
+        obj
+        for obj in context.scene.objects
+        if obj.type == "MESH"
+        and (
+            obj.parent == armature
+            or any(modifier.object == armature for modifier in armature_modifiers(obj))
+        )
+    ]
+
+
+def motion_binding_from_objects(
+    context: Context,
+    model_armature: Object | None,
+    motion_armature: Object | None,
+) -> tuple[MotionBindingSetup | None, str | None]:
+    if model_armature is None or motion_armature is None:
+        return None, "Choose both A Model and B Motion Armatures"
+    if model_armature == motion_armature:
+        return None, "A Model and B Motion must be different Armatures"
+    if model_armature.type != "ARMATURE" or motion_armature.type != "ARMATURE":
+        return None, "A Model and B Motion must both be Armatures"
+
+    model_meshes = meshes_directly_using_armature(context, model_armature)
+    if not model_meshes:
+        return None, "A Model Armature is not used by any model meshes"
+
+    animation_data = motion_armature.animation_data
+    source_action = animation_data.action if animation_data else None
+    if source_action is None:
+        return None, "B Motion Armature has no active Action"
+
+    source_slot_handle = getattr(animation_data, "action_slot_handle", 0)
+    if getattr(source_action, "slots", None) and source_slot_handle == 0:
+        return None, "B Motion Armature has no assigned Action Slot"
+
+    return (
+        MotionBindingSetup(
+            model_armature=model_armature,
+            motion_armature=motion_armature,
+            model_meshes=model_meshes,
+            source_action=source_action,
+            source_slot_handle=source_slot_handle,
+        ),
+        None,
+    )
+
+
+def detect_selected_motion_binding(
+    context: Context,
+) -> tuple[MotionBindingSetup | None, str | None]:
+    armatures = selected_armature_objects(context)
+    if len(armatures) != 2:
+        return None, "Shift-select exactly two Armatures"
+
+    mesh_links = {
+        armature.name: meshes_directly_using_armature(context, armature)
+        for armature in armatures
+    }
+    model_candidates = [armature for armature in armatures if mesh_links[armature.name]]
+    if len(model_candidates) != 1:
+        return None, "Cannot identify A: exactly one selected Armature must drive model meshes"
+
+    model_armature = model_candidates[0]
+    motion_armature = next(
+        armature for armature in armatures if armature != model_armature
+    )
+    return motion_binding_from_objects(
+        context,
+        model_armature,
+        motion_armature,
+    )
+
+
+def detect_motion_binding(context: Context) -> tuple[MotionBindingSetup | None, str | None]:
+    settings = get_settings(context)
+    model_armature = settings.motion_model_armature
+    motion_armature = settings.motion_source_armature
+    if model_armature is not None or motion_armature is not None:
+        return motion_binding_from_objects(context, model_armature, motion_armature)
+    return detect_selected_motion_binding(context)
+
+
+def validate_motion_skeletons(setup: MotionBindingSetup) -> tuple[str | None, float]:
+    model_bones = {bone.name: bone for bone in setup.model_armature.data.bones}
+    motion_bones = {bone.name: bone for bone in setup.motion_armature.data.bones}
+    if model_bones.keys() != motion_bones.keys():
+        missing_from_model = sorted(motion_bones.keys() - model_bones.keys())
+        missing_from_motion = sorted(model_bones.keys() - motion_bones.keys())
+        details: list[str] = []
+        if missing_from_model:
+            details.append(f"missing in A: {', '.join(missing_from_model[:3])}")
+        if missing_from_motion:
+            details.append(f"missing in B: {', '.join(missing_from_motion[:3])}")
+        return f"Bone names do not match ({'; '.join(details)})", math.inf
+
+    max_rest_delta = 0.0
+    for name, model_bone in model_bones.items():
+        motion_bone = motion_bones[name]
+        model_parent = model_bone.parent.name if model_bone.parent else None
+        motion_parent = motion_bone.parent.name if motion_bone.parent else None
+        if model_parent != motion_parent:
+            return f"Bone parent does not match: {name}", math.inf
+        for row in range(4):
+            for column in range(4):
+                delta = abs(
+                    model_bone.matrix_local[row][column]
+                    - motion_bone.matrix_local[row][column]
+                )
+                max_rest_delta = max(max_rest_delta, delta)
+
+    if max_rest_delta > _REST_MATRIX_TOLERANCE:
+        return (
+            f"Rest poses differ too much (max delta {max_rest_delta:.6g})",
+            max_rest_delta,
+        )
+    return None, max_rest_delta
+
+
+def action_fcurves(action: bpy.types.Action):
+    seen: set[int] = set()
+    for layer in getattr(action, "layers", []):
+        for strip in layer.strips:
+            for channelbag in getattr(strip, "channelbags", []):
+                for fcurve in channelbag.fcurves:
+                    pointer = fcurve.as_pointer()
+                    if pointer in seen:
+                        continue
+                    seen.add(pointer)
+                    yield fcurve
+    for fcurve in getattr(action, "fcurves", []):
+        pointer = fcurve.as_pointer()
+        if pointer in seen:
+            continue
+        seen.add(pointer)
+        yield fcurve
+
+
+def shift_action_frames(action: bpy.types.Action, offset: float) -> None:
+    if offset == 0.0:
+        return
+    for fcurve in action_fcurves(action):
+        for keyframe in fcurve.keyframe_points:
+            keyframe.co.x += offset
+            keyframe.handle_left.x += offset
+            keyframe.handle_right.x += offset
+        for sample in fcurve.sampled_points:
+            sample.co.x += offset
+        fcurve.update()
+
+
+def copied_action_slot(
+    source_action: bpy.types.Action,
+    copied_action: bpy.types.Action,
+    source_slot_handle: int,
+):
+    copied_slots = list(getattr(copied_action, "slots", []))
+    if not copied_slots:
+        return None
+    for slot in copied_slots:
+        if slot.handle == source_slot_handle:
+            return slot
+
+    source_slot = next(
+        (
+            slot
+            for slot in getattr(source_action, "slots", [])
+            if slot.handle == source_slot_handle
+        ),
+        None,
+    )
+    if source_slot is not None:
+        for slot in copied_slots:
+            if slot.identifier == source_slot.identifier:
+                return slot
+    return copied_slots[0] if len(copied_slots) == 1 else None
+
+
+def bind_copied_motion_action(
+    setup: MotionBindingSetup,
+) -> tuple[bpy.types.Action, float, float]:
+    source_start, source_end = setup.source_action.frame_range
+    copied_action = setup.source_action.copy()
+    copied_action.name = f"{setup.source_action.name}_BOUND_{setup.model_armature.name}"
+    copied_action["exvs2_source_action"] = setup.source_action.name
+    copied_action["exvs2_source_armature"] = setup.motion_armature.name
+
+    target_slot = copied_action_slot(
+        setup.source_action,
+        copied_action,
+        setup.source_slot_handle,
+    )
+    if getattr(copied_action, "slots", None) and target_slot is None:
+        bpy.data.actions.remove(copied_action)
+        raise RuntimeError("Cannot identify the copied Action Slot")
+    if target_slot is not None:
+        target_slot.name_display = setup.model_armature.name
+
+    shift_action_frames(copied_action, -source_start)
+    normalized_end = source_end - source_start
+    if hasattr(copied_action, "use_frame_range"):
+        copied_action.use_frame_range = True
+        copied_action.frame_start = 0.0
+        copied_action.frame_end = normalized_end
+
+    animation_data = setup.model_armature.animation_data_create()
+    animation_data.action = copied_action
+    if target_slot is not None:
+        animation_data.action_slot_handle = target_slot.handle
+    return copied_action, 0.0, normalized_end
+
+
+def remove_motion_source(setup: MotionBindingSetup) -> tuple[str, bool, bool]:
+    motion_name = setup.motion_armature.name
+    motion_data = setup.motion_armature.data
+    source_action = setup.source_action
+
+    if setup.motion_armature.animation_data is not None:
+        setup.motion_armature.animation_data_clear()
+    bpy.data.objects.remove(setup.motion_armature, do_unlink=True)
+
+    removed_armature_data = False
+    if motion_data.users == 0:
+        bpy.data.armatures.remove(motion_data)
+        removed_armature_data = True
+
+    removed_source_action = False
+    fake_user_count = 1 if source_action.use_fake_user else 0
+    if source_action.users <= fake_user_count:
+        source_action.use_fake_user = False
+        bpy.data.actions.remove(source_action)
+        removed_source_action = True
+
+    return motion_name, removed_armature_data, removed_source_action
 
 
 def ensure_armature_modifier(
@@ -418,6 +669,126 @@ def reload_addon_package(addon_name: str) -> None:
     finally:
         _reload_pending = False
     return None
+
+
+class EXVS2_EASY_TOOLS_OT_use_selected_motion_rigs(Operator):
+    bl_idname = "exvs2_easy_tools.use_selected_motion_rigs"
+    bl_label = "Use Shift Selection"
+    bl_description = "Fill A and B from exactly two Shift-selected Armatures"
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context: Context) -> bool:
+        return len(selected_armature_objects(context)) == 2
+
+    def execute(self, context: Context):
+        setup, error = detect_selected_motion_binding(context)
+        if setup is None:
+            self.report({"ERROR"}, error or "Cannot detect A and B from selection")
+            return {"CANCELLED"}
+        settings = get_settings(context)
+        settings.motion_model_armature = setup.model_armature
+        settings.motion_source_armature = setup.motion_armature
+        self.report(
+            {"INFO"},
+            f"A: {setup.model_armature.name}, B: {setup.motion_armature.name}",
+        )
+        return {"FINISHED"}
+
+
+class EXVS2_EASY_TOOLS_OT_prepare_motion_export_selection(Operator):
+    bl_idname = "exvs2_easy_tools.prepare_motion_export_selection"
+    bl_label = "Select A + Model Meshes"
+    bl_description = (
+        "Select only A and its model meshes before manually exporting Selected Objects"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context: Context):
+        settings = get_settings(context)
+        model_armature = settings.motion_model_armature
+        if model_armature is None:
+            setup, error = detect_motion_binding(context)
+            if setup is None:
+                self.report({"ERROR"}, error or "Cannot identify A Model")
+                return {"CANCELLED"}
+            model_armature = setup.model_armature
+        model_meshes = meshes_directly_using_armature(context, model_armature)
+        if not model_meshes:
+            self.report({"ERROR"}, "A Model Armature is not used by any model meshes")
+            return {"CANCELLED"}
+        selected_count = replace_selection(
+            context,
+            [model_armature, *model_meshes],
+        )
+        context.view_layer.objects.active = model_armature
+        self.report(
+            {"INFO"},
+            f"Selected {selected_count} export object(s); B is excluded",
+        )
+        return {"FINISHED"}
+
+
+class EXVS2_EASY_TOOLS_OT_bind_selected_motion(Operator):
+    bl_idname = "exvs2_easy_tools.bind_selected_motion"
+    bl_label = "Bind Selected Motion"
+    bl_description = (
+        "Copy B's active Action to A, then delete B and select the finished model"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context: Context) -> bool:
+        settings = get_settings(context)
+        has_configured_pair = bool(
+            settings.motion_model_armature and settings.motion_source_armature
+        )
+        return has_configured_pair or len(selected_armature_objects(context)) == 2
+
+    def execute(self, context: Context):
+        setup, error = detect_motion_binding(context)
+        if setup is None:
+            self.report({"ERROR"}, error or "Cannot detect motion binding")
+            return {"CANCELLED"}
+
+        error, max_rest_delta = validate_motion_skeletons(setup)
+        if error:
+            self.report({"ERROR"}, error)
+            return {"CANCELLED"}
+
+        settings = get_settings(context)
+        settings.motion_model_armature = setup.model_armature
+        settings.motion_source_armature = setup.motion_armature
+
+        ensure_object_mode(context)
+        try:
+            copied_action, frame_start, frame_end = bind_copied_motion_action(setup)
+        except Exception as exc:
+            self.report({"ERROR"}, f"Motion binding failed: {exc}")
+            return {"CANCELLED"}
+
+        scene = context.scene
+        scene.render.fps = 60
+        scene.render.fps_base = 1.0
+        scene.frame_start = int(round(frame_start))
+        scene.frame_end = int(round(frame_end))
+        scene.frame_set(scene.frame_start)
+
+        motion_name, removed_data, removed_action = remove_motion_source(setup)
+        settings.motion_source_armature = None
+        replace_selection(context, [setup.model_armature, *setup.model_meshes])
+        context.view_layer.objects.active = setup.model_armature
+
+        self.report(
+            {"INFO"},
+            (
+                f"Bound {copied_action.name} to {setup.model_armature.name}; "
+                f"deleted {motion_name}; frames {scene.frame_start}-{scene.frame_end}, "
+                f"rest delta {max_rest_delta:.3g}, "
+                f"data removed {removed_data}, source Action removed {removed_action}"
+            ),
+        )
+        return {"FINISHED"}
 
 
 class EXVS2_EASY_TOOLS_OT_bind(Operator):
@@ -650,6 +1021,9 @@ class EXVS2_EASY_TOOLS_OT_reload_addon(Operator):
 
 
 CLASSES = (
+    EXVS2_EASY_TOOLS_OT_use_selected_motion_rigs,
+    EXVS2_EASY_TOOLS_OT_prepare_motion_export_selection,
+    EXVS2_EASY_TOOLS_OT_bind_selected_motion,
     EXVS2_EASY_TOOLS_OT_bind,
     EXVS2_EASY_TOOLS_OT_bind_from_pose_bone,
     EXVS2_EASY_TOOLS_OT_select_unskinned_meshes,

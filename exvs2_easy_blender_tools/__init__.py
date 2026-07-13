@@ -3,10 +3,10 @@ from __future__ import annotations
 bl_info = {
     "name": "EXVS2-Easy-Blender-Tools",
     "author": "OpenAI",
-    "version": (1, 1, 0),
+    "version": (1, 5, 0),
     "blender": (5, 1, 0),
     "location": "View3D > Sidebar > EXVS2 Tools",
-    "description": "Small EXVS2-focused mesh, armature, and rigid skin workflow helpers",
+    "description": "EXVS2 motion binding, mesh, armature, and rigid skin workflow helpers",
     "warning": "",
     "category": "Rigging",
 }

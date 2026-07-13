@@ -2,6 +2,7 @@ use anyhow::{anyhow, Context, Result};
 use fbxcel::low::{v7400::ArrayAttributeEncoding, FbxVersion};
 use fbxcel::writer::v7400::binary::{FbxFooter, Writer};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use ssbh_data::matl_data::{MatlData, MatlEntryData, ParamId};
 use ssbh_data::mesh_data::{MeshData, VectorData};
 use ssbh_data::modl_data::ModlData;
@@ -164,6 +165,43 @@ struct MotionAnimationChannelData {
 
 const FBX_TICKS_PER_SECOND: i64 = 46_186_158_000;
 const FBX_LINEAR_KEY_FLAG: i32 = 24_836;
+const FBX_TIME_MODE_60_FPS: i32 = 3;
+
+struct MotionFbxSceneMetadata<'a> {
+    action_name: &'a str,
+    frame_count: usize,
+    file_id: [u8; 16],
+}
+
+impl<'a> MotionFbxSceneMetadata<'a> {
+    fn from_clip(clip: &'a MotionClip) -> Self {
+        let mut hasher = Sha256::new();
+        hasher.update(clip.name.as_bytes());
+        hasher.update(clip.sample_rate_hz.to_le_bytes());
+        hasher.update(clip.frames.len().to_le_bytes());
+        for bone in &clip.skeleton.bones {
+            hasher.update(bone.name.as_bytes());
+            hasher.update(
+                bone.parent_index
+                    .map(|index| index as u64)
+                    .unwrap_or(u64::MAX)
+                    .to_le_bytes(),
+            );
+        }
+        let digest = hasher.finalize();
+        let mut file_id = [0u8; 16];
+        file_id.copy_from_slice(&digest[..16]);
+        Self {
+            action_name: &clip.name,
+            frame_count: clip.frames.len(),
+            file_id,
+        }
+    }
+
+    fn end_time(&self) -> Result<i64> {
+        fbx_animation_end_time(self.frame_count)
+    }
+}
 
 struct IdGenerator {
     next: i64,
@@ -857,7 +895,7 @@ fn write_scene_fbx(path: &Path, scene: &ExportScene, up_axis: FbxUpAxis) -> Resu
     // a supported target for this exporter.
     let mut writer =
         Writer::new(std::io::Cursor::new(Vec::new()), FbxVersion::V7_4).map_err(io_error)?;
-    write_header(&mut writer, up_axis)?;
+    write_header(&mut writer, up_axis, None)?;
     write_definitions(&mut writer, scene, &mesh_ids, has_skin)?;
 
     writer.new_node("Objects").map_err(io_error)?;
@@ -908,6 +946,7 @@ pub(crate) fn write_animation_only_fbx(output_path: &Path, clip: &MotionClip) ->
     clip.validate().map_err(|error| anyhow!(error))?;
     let bones = motion_export_bones(clip)?;
     let animation_data = motion_animation_data(clip, &bones)?;
+    let scene_metadata = MotionFbxSceneMetadata::from_clip(clip);
     let mut ids = IdGenerator::new();
     let bone_ids: Vec<BoneIds> = bones
         .iter()
@@ -933,7 +972,7 @@ pub(crate) fn write_animation_only_fbx(output_path: &Path, clip: &MotionClip) ->
     };
     let mut writer =
         Writer::new(std::io::Cursor::new(Vec::new()), FbxVersion::V7_4).map_err(io_error)?;
-    write_header(&mut writer, FbxUpAxis::YUp)?;
+    write_header(&mut writer, FbxUpAxis::YUp, Some(&scene_metadata))?;
     write_motion_definitions(&mut writer, bones.len())?;
 
     writer.new_node("Objects").map_err(io_error)?;
@@ -1003,6 +1042,7 @@ pub(crate) fn write_animation_only_fbx(output_path: &Path, clip: &MotionClip) ->
     writer.close_node().map_err(io_error)?;
 
     write_motion_connections(&mut writer, &bones, &bone_ids, &animation_ids)?;
+    write_motion_takes(&mut writer, &scene_metadata)?;
     let cursor = writer
         .finalize_and_flush(&FbxFooter::default())
         .map_err(io_error)?;
@@ -1102,12 +1142,29 @@ fn unwrap_euler_degrees(values: &mut [f32]) {
     }
 }
 
-fn write_header<W: Write + Seek>(writer: &mut Writer<W>, up_axis: FbxUpAxis) -> Result<()> {
+fn write_header<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    up_axis: FbxUpAxis,
+    motion_metadata: Option<&MotionFbxSceneMetadata<'_>>,
+) -> Result<()> {
     writer.new_node("FBXHeaderExtension").map_err(io_error)?;
     write_i32_node(writer, "FBXHeaderVersion", 1003)?;
     write_i32_node(writer, "FBXVersion", 7400)?;
+    if motion_metadata.is_some() {
+        write_i32_node(writer, "EncryptionType", 0)?;
+        write_creation_timestamp(writer)?;
+    }
     write_string_node(writer, "Creator", "EXVS2 Model Editor")?;
+    if motion_metadata.is_some() {
+        write_scene_info(writer)?;
+    }
     writer.close_node().map_err(io_error)?;
+
+    if let Some(metadata) = motion_metadata {
+        write_binary_node(writer, "FileId", &metadata.file_id)?;
+        write_string_node(writer, "CreationTime", "2000-01-01 00:00:00:000")?;
+        write_string_node(writer, "Creator", "EXVS2 Model Editor")?;
+    }
 
     writer.new_node("GlobalSettings").map_err(io_error)?;
     write_i32_node(writer, "Version", 1000)?;
@@ -1135,6 +1192,14 @@ fn write_header<W: Write + Seek>(writer: &mut Writer<W>, up_axis: FbxUpAxis) -> 
     write_prop_int(writer, "OriginalUpAxisSign", 1)?;
     write_prop_double(writer, "UnitScaleFactor", 1.0)?;
     write_prop_double(writer, "OriginalUnitScaleFactor", 1.0)?;
+    if let Some(metadata) = motion_metadata {
+        write_prop_enum_int(writer, "TimeMode", FBX_TIME_MODE_60_FPS)?;
+        write_prop_enum_int(writer, "TimeProtocol", 2)?;
+        write_prop_enum_int(writer, "SnapOnFrameMode", 0)?;
+        write_prop_time(writer, "TimeSpanStart", 0)?;
+        write_prop_time(writer, "TimeSpanStop", metadata.end_time()?)?;
+        write_prop_double(writer, "CustomFrameRate", 60.0)?;
+    }
     writer.close_node().map_err(io_error)?;
     writer.close_node().map_err(io_error)?;
 
@@ -1147,12 +1212,55 @@ fn write_header<W: Write + Seek>(writer: &mut Writer<W>, up_axis: FbxUpAxis) -> 
         attributes.append_string_direct("Scene").map_err(io_error)?;
     }
     writer.new_node("Properties70").map_err(io_error)?;
+    if let Some(metadata) = motion_metadata {
+        write_prop_kstring(writer, "ActiveAnimStackName", metadata.action_name)?;
+    }
     writer.close_node().map_err(io_error)?;
     write_i64_node(writer, "RootNode", 0)?;
     writer.close_node().map_err(io_error)?;
     writer.close_node().map_err(io_error)?;
 
     writer.new_node("References").map_err(io_error)?;
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
+fn write_creation_timestamp<W: Write + Seek>(writer: &mut Writer<W>) -> Result<()> {
+    writer.new_node("CreationTimeStamp").map_err(io_error)?;
+    write_i32_node(writer, "Version", 1000)?;
+    write_i32_node(writer, "Year", 2000)?;
+    write_i32_node(writer, "Month", 1)?;
+    write_i32_node(writer, "Day", 1)?;
+    write_i32_node(writer, "Hour", 0)?;
+    write_i32_node(writer, "Minute", 0)?;
+    write_i32_node(writer, "Second", 0)?;
+    write_i32_node(writer, "Millisecond", 0)?;
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
+fn write_scene_info<W: Write + Seek>(writer: &mut Writer<W>) -> Result<()> {
+    {
+        let mut attributes = writer.new_node("SceneInfo").map_err(io_error)?;
+        attributes
+            .append_string_direct(&fbx_name_class("GlobalInfo", "SceneInfo"))
+            .map_err(io_error)?;
+        attributes
+            .append_string_direct("UserData")
+            .map_err(io_error)?;
+    }
+    write_string_node(writer, "Type", "UserData")?;
+    write_i32_node(writer, "Version", 100)?;
+    writer.new_node("MetaData").map_err(io_error)?;
+    write_i32_node(writer, "Version", 100)?;
+    for name in [
+        "Title", "Subject", "Author", "Keywords", "Revision", "Comment",
+    ] {
+        write_string_node(writer, name, "")?;
+    }
+    writer.close_node().map_err(io_error)?;
+    writer.new_node("Properties70").map_err(io_error)?;
+    writer.close_node().map_err(io_error)?;
     writer.close_node().map_err(io_error)?;
     Ok(())
 }
@@ -1200,8 +1308,17 @@ fn write_motion_definitions<W: Write + Seek>(
     writer: &mut Writer<W>,
     bone_count: usize,
 ) -> Result<()> {
+    let definition_count = bone_count
+        .checked_mul(14)
+        .and_then(|count| count.checked_add(3))
+        .ok_or_else(|| anyhow!("FBX motion definition count overflows"))?;
     writer.new_node("Definitions").map_err(io_error)?;
     write_i32_node(writer, "Version", 100)?;
+    write_i32_node(
+        writer,
+        "Count",
+        i32::try_from(definition_count).context("FBX motion definition count exceeds i32")?,
+    )?;
     write_definition(writer, "GlobalSettings", 1)?;
     write_definition(writer, "Model", bone_count as i32)?;
     write_definition(writer, "NodeAttribute", bone_count as i32)?;
@@ -1219,10 +1336,7 @@ fn write_motion_animation_stack<W: Write + Seek>(
     action_name: &str,
     frame_count: usize,
 ) -> Result<()> {
-    let end_time = ((frame_count.saturating_sub(1)) as i64)
-        .checked_mul(FBX_TICKS_PER_SECOND)
-        .ok_or_else(|| anyhow!("FBX animation duration overflows ticks"))?
-        / 60;
+    let end_time = fbx_animation_end_time(frame_count)?;
     {
         let mut attributes = writer.new_node("AnimationStack").map_err(io_error)?;
         attributes.append_i64(id).map_err(io_error)?;
@@ -1239,6 +1353,13 @@ fn write_motion_animation_stack<W: Write + Seek>(
     writer.close_node().map_err(io_error)?;
     writer.close_node().map_err(io_error)?;
     Ok(())
+}
+
+fn fbx_animation_end_time(frame_count: usize) -> Result<i64> {
+    ((frame_count.saturating_sub(1)) as i64)
+        .checked_mul(FBX_TICKS_PER_SECOND)
+        .ok_or_else(|| anyhow!("FBX animation duration overflows ticks"))
+        .map(|ticks| ticks / 60)
 }
 
 fn write_motion_animation_layer<W: Write + Seek>(
@@ -1403,6 +1524,27 @@ fn write_motion_connections<W: Write + Seek>(
             }
         }
     }
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
+fn write_motion_takes<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    metadata: &MotionFbxSceneMetadata<'_>,
+) -> Result<()> {
+    let end_time = metadata.end_time()?;
+    writer.new_node("Takes").map_err(io_error)?;
+    write_string_node(writer, "Current", metadata.action_name)?;
+    {
+        let mut attributes = writer.new_node("Take").map_err(io_error)?;
+        attributes
+            .append_string_direct(metadata.action_name)
+            .map_err(io_error)?;
+    }
+    write_string_node(writer, "FileName", &format!("{}.tak", metadata.action_name))?;
+    write_i64_values_node(writer, "LocalTime", [0, end_time])?;
+    write_i64_values_node(writer, "ReferenceTime", [0, end_time])?;
+    writer.close_node().map_err(io_error)?;
     writer.close_node().map_err(io_error)?;
     Ok(())
 }
@@ -1942,6 +2084,24 @@ fn write_prop_double<W: Write + Seek>(
     Ok(())
 }
 
+fn write_prop_kstring<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    name: &str,
+    value: &str,
+) -> Result<()> {
+    let mut attributes = writer.new_node("P").map_err(io_error)?;
+    attributes.append_string_direct(name).map_err(io_error)?;
+    attributes
+        .append_string_direct("KString")
+        .map_err(io_error)?;
+    attributes.append_string_direct("").map_err(io_error)?;
+    attributes.append_string_direct("").map_err(io_error)?;
+    attributes.append_string_direct(value).map_err(io_error)?;
+    drop(attributes);
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
 fn write_prop_time<W: Write + Seek>(writer: &mut Writer<W>, name: &str, value: i64) -> Result<()> {
     let mut attributes = writer.new_node("P").map_err(io_error)?;
     attributes.append_string_direct(name).map_err(io_error)?;
@@ -2021,6 +2181,32 @@ fn write_i32_node<W: Write + Seek>(writer: &mut Writer<W>, name: &str, value: i3
 fn write_i64_node<W: Write + Seek>(writer: &mut Writer<W>, name: &str, value: i64) -> Result<()> {
     let mut attributes = writer.new_node(name).map_err(io_error)?;
     attributes.append_i64(value).map_err(io_error)?;
+    drop(attributes);
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
+fn write_i64_values_node<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    name: &str,
+    values: impl IntoIterator<Item = i64>,
+) -> Result<()> {
+    let mut attributes = writer.new_node(name).map_err(io_error)?;
+    for value in values {
+        attributes.append_i64(value).map_err(io_error)?;
+    }
+    drop(attributes);
+    writer.close_node().map_err(io_error)?;
+    Ok(())
+}
+
+fn write_binary_node<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    name: &str,
+    value: &[u8],
+) -> Result<()> {
+    let mut attributes = writer.new_node(name).map_err(io_error)?;
+    attributes.append_binary_direct(value).map_err(io_error)?;
     drop(attributes);
     writer.close_node().map_err(io_error)?;
     Ok(())

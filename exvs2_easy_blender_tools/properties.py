@@ -102,6 +102,18 @@ def init_settings_for_bind(context: Context) -> "Exvs2EasyToolsSettings":
 
 
 class Exvs2EasyToolsSettings(PropertyGroup):
+    motion_model_armature: PointerProperty(
+        name="A Model Armature",
+        type=bpy.types.Object,
+        poll=is_armature_object,
+        description="Armature already used by the model meshes",
+    )
+    motion_source_armature: PointerProperty(
+        name="B Motion Armature",
+        type=bpy.types.Object,
+        poll=is_armature_object,
+        description="Armature whose active Action will be copied to A",
+    )
     armature_object: PointerProperty(
         name="Armature",
         type=bpy.types.Object,
