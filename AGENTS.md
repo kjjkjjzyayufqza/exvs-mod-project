@@ -27,31 +27,24 @@ Before doing any task, every AI agent must:
 2. Read the Cursor project rule: `.cursor/rules/custom-rules.mdc`.
 3. Search `docs/` for Markdown files relevant to the user's request, then read
    the most relevant specifications before touching code or assets.
-4. Run the **Superpowers skills** workflow in [AI Task Management](#ai-task-management-superpowers--mandatory)
-   — this is the required task manager for every agent session.
 
-## AI Task Management (Superpowers — Mandatory)
+## Lightweight Agent Sessions
 
-**Superpowers skills are this repository's primary AI task management system.**
-Agents must invoke relevant skills before responding or making changes. Skill
-discipline overrides default agent habits.
+Use a lightweight session note only for multi-step research, work that spans
+multiple turns, or work that may need a handoff. Simple questions and small,
+self-contained changes do not require a session file.
 
-Typical skill chain by task type:
+- Store new session notes as `docs/agent-sessions/YYYY-MM-DD-<topic>.md`.
+- Use the date-first `YYYY-MM-DD` naming convention and a short lowercase
+  kebab-case topic.
+- Keep one file per task. Do not create separate `todo.md` / `process.md` pairs.
+- Keep the note concise: goal, relevant context, current progress, verification
+  evidence, and remaining work are sufficient.
+- Update the note only when material findings or task state change. Platform
+  plans and checklists are optional, not mandatory phase gates.
+- For short tasks, the final response is the session record.
 
-| Situation | Skills (in order) |
-|-----------|-------------------|
-| Any new task | `using-superpowers` |
-| New feature, UI, or behavior change | `brainstorming` → `writing-plans` (if multi-step) |
-| Bug or unexpected failure | `systematic-debugging` |
-| Implementation | `test-driven-development` + domain/project skills |
-| Executing a written plan | `executing-plans` or `subagent-driven-development` |
-| Before claiming work is done | `verification-before-completion` |
-
-When a skill provides a checklist, track items with `TodoWrite` (or the
-platform-equivalent todo tool). Record verification commands and outcomes in
-your session response or plan artifact — not in a separate repo note tree.
-
-### Legacy auxiliary notes (not a task manager)
+### Legacy auxiliary notes
 
 The repo may contain older per-topic note folders under `docs/` (historically
 `todo.md` / `process.md` pairs). That layout is a **legacy, separate workflow**
@@ -62,8 +55,8 @@ from an earlier AI task manager. It is **auxiliary only**:
 - **Do not** create or update those folders unless the user explicitly asks.
 - **May** read existing notes when they contain useful historical context,
   research evidence, or prior decisions for the current task.
-- For current truth, prefer `docs/` specifications and Superpowers skill
-  outputs over stale session notes.
+- For current truth, prefer `docs/` specifications and current verification
+  evidence over stale session notes.
 
 ## Required Documentation Sources
 
@@ -144,7 +137,6 @@ JSON. There is **no** tool named `exvs2-cli`; use `exvs2-json` / `exvs2_json`.
 | Item | Path |
 |------|------|
 | Full spec | `docs/exvs2-json-cli.md` |
-| Design background | `docs/superpowers/specs/2026-06-28-exvs2-binary-json-cli-design.md` |
 | CLI core | `src-tauri/src/exvs2_json_cli/` |
 | Binary entry | `src-tauri/src/bin/exvs2_json.rs` |
 | Integration tests | `src-tauri/tests/exvs2_json_cli_test.rs` |
@@ -195,12 +187,6 @@ Current project rule entry points:
 - Cursor project rule: `.cursor/rules/custom-rules.mdc`
 - Cross-agent hub: `AGENTS.md`
 
-AI task management (primary):
-
-- Superpowers entry skill: `using-superpowers` (invoke before any task)
-- Process skills: `brainstorming`, `writing-plans`, `systematic-debugging`,
-  `test-driven-development`, `executing-plans`, `verification-before-completion`
-
 Project skills (domain):
 
 - FHM2D stage pack/extract: `.cursor/skills/fhm2d-format/SKILL.md`
@@ -229,11 +215,10 @@ Project skills (domain):
 
 ## Verification And Handoff
 
-- Invoke `verification-before-completion` before claiming any task is done.
 - Run the narrowest reliable verification for each change.
 - For MSC tool changes, test with real MSC files and verify:
   - Function pointer resolution (no raw hex pointers in .c output).
   - `try.` pushBit counts match between original and recompiled.
   - Header flags correctness.
 - Summarize what was done, what remains, and verification evidence in your
-  final response (or the active Superpowers plan artifact).
+  final response or active plan artifact.

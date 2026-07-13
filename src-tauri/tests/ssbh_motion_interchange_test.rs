@@ -301,6 +301,28 @@ fn cascadeur_bridge_writes_one_named_fbx_animation_stack() {
 }
 
 #[test]
+fn cascadeur_bridge_writes_complete_fbx_scene_metadata() {
+    let directory = tempfile::tempdir().unwrap();
+    let bridge = write_cascadeur_bridge(directory.path(), &test_motion_clip()).unwrap();
+    let bytes = std::fs::read(&bridge.motion_fbx_path).unwrap();
+
+    for required_node in [
+        b"CreationTimeStamp".as_slice(),
+        b"SceneInfo".as_slice(),
+        b"TimeMode".as_slice(),
+        b"TimeSpanStart".as_slice(),
+        b"Takes".as_slice(),
+        b"edited_action".as_slice(),
+    ] {
+        assert!(
+            bytes.windows(required_node.len()).any(|window| window == required_node),
+            "missing required FBX scene metadata node {:?}",
+            String::from_utf8_lossy(required_node),
+        );
+    }
+}
+
+#[test]
 fn cascadeur_bridge_reader_recovers_sampled_local_transforms() {
     let directory = tempfile::tempdir().unwrap();
     let source = test_motion_clip();
