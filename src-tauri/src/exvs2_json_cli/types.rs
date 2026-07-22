@@ -9,6 +9,8 @@ pub enum InspectType {
     BulletParam,
     SpeedParam,
     ProjectileDepictionTable,
+    NaviList,
+    PilotList,
     Nusktb,
     Numshb,
     Numdlb,
@@ -24,6 +26,8 @@ impl InspectType {
             InspectType::BulletParam => "bulletparam",
             InspectType::SpeedParam => "speedparam",
             InspectType::ProjectileDepictionTable => "projectile_depiction_table",
+            InspectType::NaviList => "navi_list",
+            InspectType::PilotList => "pilot_list",
             InspectType::Nusktb => "nusktb",
             InspectType::Numshb => "numshb",
             InspectType::Numdlb => "numdlb",
@@ -39,6 +43,8 @@ impl InspectType {
             "bulletparam" => Ok(InspectType::BulletParam),
             "speedparam" => Ok(InspectType::SpeedParam),
             "projectile_depiction_table" => Ok(InspectType::ProjectileDepictionTable),
+            "navi_list" | "navilist" => Ok(InspectType::NaviList),
+            "pilot_list" | "pilotlist" => Ok(InspectType::PilotList),
             "nusktb" | "skel" | "ssbh_skel" => Ok(InspectType::Nusktb),
             "numshb" | "mesh" | "ssbh_mesh" => Ok(InspectType::Numshb),
             "numdlb" | "modl" | "ssbh_modl" => Ok(InspectType::Numdlb),
@@ -59,6 +65,8 @@ impl InspectType {
                 | InspectType::BulletParam
                 | InspectType::SpeedParam
                 | InspectType::ProjectileDepictionTable
+                | InspectType::NaviList
+                | InspectType::PilotList
         )
     }
 }

@@ -13,8 +13,15 @@ use super::util::{
 use super::{SCHEMA_VERSION, TOOL_NAME};
 use crate::format::armsparam::{build_armsparam, parse_armsparam, ARMSPARAM_COMMAND_POOL};
 use crate::format::bulletparam::{build_bulletparam, parse_bulletparam, BULLETPARAM_COMMAND_POOL};
+use crate::format::list_command_pool::ListData;
+use crate::format::navilist::{
+    build_navilist_data, parse_navilist, parse_navilist_data, NAVILIST_COMMAND_POOL,
+};
 use crate::format::param_bin_format::ParamFieldSpec;
 use crate::format::param_entry_schema::{snake_to_camel, ParamCommandPool};
+use crate::format::pilotlist::{
+    build_pilotlist_data, parse_pilotlist, parse_pilotlist_data, PILOTLIST_COMMAND_POOL,
+};
 use crate::format::projectile_depiction_table::{
     build_projectile_depiction_table, parse_projectile_depiction_table,
     PROJECTILE_DEPICTION_TABLE_COMMAND_POOL,
@@ -49,6 +56,8 @@ pub fn inspect_bytes(
         InspectType::ProjectileDepictionTable => {
             inspect_projectile_depiction_table(bytes, &options)?
         }
+        InspectType::NaviList => inspect_navi_list(bytes, &options)?,
+        InspectType::PilotList => inspect_pilot_list(bytes, &options)?,
         InspectType::Nusktb => inspect_nusktb(bytes, &options, &mut warnings)?,
         InspectType::Numshb => inspect_numshb(bytes, &options, &mut warnings)?,
         InspectType::Numdlb => inspect_numdlb(bytes, &options, &mut warnings)?,
@@ -107,6 +116,16 @@ pub(crate) fn detect_type(
     }
     if lower.contains("projectile_depiction_table") {
         return Ok(InspectType::ProjectileDepictionTable);
+    }
+    if lower.contains("navi_list") || lower.ends_with("navi_list.bin") || lower.ends_with("navi_list.vgsht2")
+    {
+        return Ok(InspectType::NaviList);
+    }
+    if lower.contains("pilot_list")
+        || lower.ends_with("pilot_list.bin")
+        || lower.ends_with("pilot_list.vgsht2")
+    {
+        return Ok(InspectType::PilotList);
     }
     if let Some(kind) = detect_ssbh_type(bytes, source_path) {
         return Ok(kind);
@@ -377,6 +396,135 @@ fn inspect_projectile_depiction_table(
         PROJECTILE_DEPICTION_TABLE_COMMAND_POOL,
         || build_projectile_depiction_table(&parsed),
     )
+}
+
+fn inspect_navi_list(bytes: &[u8], options: &InspectOptions) -> Result<Value, String> {
+    let parsed = parse_navilist_data(bytes)?;
+    let mut data = if options.summary {
+        navi_list_summary(&parsed)
+    } else {
+        parse_navilist(bytes)?
+    };
+    insert_object_field(
+        &mut data,
+        "fieldNotes",
+        json!({
+            "role": "Support navi (プレイヤー/バトルナビ). Not the MS pilot costume table.",
+            "characterUniqueId": "Small navi id (ハロ=1). Multiple rows share one id for costumes.",
+            "costumeIndex": "0 = default outfit; 1+ = alternate costume rows.",
+            "seriesListEntryId": "Foreign key to series_list.entryIds.",
+            "displayName": "Obfuscated Japanese name decoded by the param_bin string pool."
+        }),
+    )?;
+    insert_raw_fields_and_roundtrip(
+        &mut data,
+        bytes,
+        options,
+        &parsed
+            .entries
+            .iter()
+            .map(|entry| (entry.entry_id, &entry.commands))
+            .collect::<Vec<_>>(),
+        &parsed.field_specs,
+        NAVILIST_COMMAND_POOL,
+        || build_navilist_data(&parsed),
+    )
+}
+
+fn inspect_pilot_list(bytes: &[u8], options: &InspectOptions) -> Result<Value, String> {
+    let parsed = parse_pilotlist_data(bytes)?;
+    let mut data = if options.summary {
+        pilot_list_summary(&parsed)
+    } else {
+        parse_pilotlist(bytes)?
+    };
+    insert_object_field(
+        &mut data,
+        "fieldNotes",
+        json!({
+            "role": "MS pilot presentation / costume resource keys. Not the left-side support navi.",
+            "pilotNameShortFull": "Internal codes like PS001A01 / P001A01; Japanese names live on character_list + localization.",
+            "seriesListEntryId": "Foreign key to series_list.entryIds.",
+            "msPilotLabel": "S_MS_PILOT_### keys; empty string on some unused rows."
+        }),
+    )?;
+    insert_raw_fields_and_roundtrip(
+        &mut data,
+        bytes,
+        options,
+        &parsed
+            .entries
+            .iter()
+            .map(|entry| (entry.entry_id, &entry.commands))
+            .collect::<Vec<_>>(),
+        &parsed.field_specs,
+        PILOTLIST_COMMAND_POOL,
+        || build_pilotlist_data(&parsed),
+    )
+}
+
+fn navi_list_summary(parsed: &ListData) -> Value {
+    let mut unique_navi = std::collections::BTreeSet::new();
+    let mut costume_rows = 0u32;
+    let rows: Vec<Value> = parsed
+        .entries
+        .iter()
+        .map(|entry| {
+            let uid = entry.commands.get(&0xA88E762A).copied().unwrap_or(0);
+            let costume = entry.commands.get(&0x692B6C6E).copied().unwrap_or(0);
+            unique_navi.insert(uid);
+            if costume != 0 {
+                costume_rows += 1;
+            }
+            json!({
+                "entryId": entry.entry_id,
+                "entryIdHex": format_hex_u32(entry.entry_id),
+                "characterUniqueId": uid,
+                "costumeIndex": costume,
+                "displayName": entry.strings.get(&0xAA6A29E5),
+                "seriesListEntryId": optional_hash_hex(entry.commands.get(&0xBF885105).copied()),
+                "enabledCode": entry.commands.get(&0xFE2E83D0).copied()
+            })
+        })
+        .collect();
+    json!({
+        "fileType": "navi_list",
+        "header": {
+            "entryCount": parsed.header.entry_count,
+            "commandsCount": parsed.header.commands_count,
+            "entrySize": parsed.header.entry_size
+        },
+        "uniqueNaviCount": unique_navi.len(),
+        "costumeVariantRows": costume_rows,
+        "entries": rows
+    })
+}
+
+fn pilot_list_summary(parsed: &ListData) -> Value {
+    let rows: Vec<Value> = parsed
+        .entries
+        .iter()
+        .map(|entry| {
+            json!({
+                "entryId": entry.entry_id,
+                "pilotNameShort": entry.strings.get(&0x44359307),
+                "pilotNameFull": entry.strings.get(&0x4F03C86C),
+                "msPilotLabel": entry.strings.get(&0x321F8B3F),
+                "pilotLabel": entry.strings.get(&0xBA0F2DED),
+                "seriesListEntryId": optional_hash_hex(entry.commands.get(&0xBF885105).copied())
+            })
+        })
+        .collect();
+    json!({
+        "fileType": "pilot_list",
+        "header": {
+            "entryCount": parsed.header.entry_count,
+            "commandsCount": parsed.header.commands_count,
+            "entrySize": parsed.header.entry_size
+        },
+        "entryCount": parsed.entries.len(),
+        "entries": rows
+    })
 }
 
 fn insert_raw_fields_and_roundtrip(

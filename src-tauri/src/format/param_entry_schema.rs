@@ -48,16 +48,19 @@ pub fn hash_and_kind_for_camel_key(pool: ParamCommandPool, key: &str) -> Option<
     None
 }
 
-pub fn expected_field_specs_ordered_index_times_four(
-    pool: ParamCommandPool,
-) -> Vec<ParamFieldSpec> {
+pub fn expected_field_specs_ordered(pool: ParamCommandPool) -> Vec<ParamFieldSpec> {
+    let mut entry_offset = 0u32;
     pool.iter()
-        .enumerate()
-        .map(|(index, (hash, kind, _))| ParamFieldSpec {
-            hash: *hash,
-            entry_offset: (index * 4) as u32,
-            flags: 0,
-            kind: *kind,
+        .map(|(hash, kind, _)| {
+            let spec = ParamFieldSpec {
+                hash: *hash,
+                entry_offset,
+                flags: 0,
+                kind: *kind,
+            };
+            // Kind 7 rows store a 32-bit absolute string offset plus 32 bits of padding.
+            entry_offset += if *kind == 7 { 8 } else { 4 };
+            spec
         })
         .collect()
 }

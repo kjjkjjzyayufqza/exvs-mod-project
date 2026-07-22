@@ -93,6 +93,8 @@ builders:
 - `bulletparam`
 - `speedparam`
 - `projectile-depiction-table`
+- `navi-list`
+- `pilot-list`
 
 SSBH files (`nusktb`, `numshb`, `numdlb`) remain inspect-only because their
 rewrite path may be semantically valid but not byte-identical.
@@ -131,6 +133,8 @@ Supported operations:
 | `armsparam` | `armsparam` | filename |
 | `bulletparam` | `bulletparam` | filename |
 | `projectile-depiction-table` | `projectile_depiction_table` | filename |
+| `navi-list` | `navi_list` | filename contains `navi_list` (`.vgsht2` / `.bin`) |
+| `pilot-list` | `pilot_list` | filename contains `pilot_list` (`.vgsht2` / `.bin`) |
 | `nusktb` | `nusktb` | `.nusktb`, or `HBSS` + `LEKS` tag at `0x10` |
 | `numshb` | `numshb` | `.numshb`, or `HBSS` + `HSEM` tag at `0x10` |
 | `numdlb` | `numdlb` | `.numdlb` / `.nusrcmdlb`, or `HBSS` + `LDOM` tag at `0x10` |
@@ -216,6 +220,37 @@ Use `rawLeBytes` for IDA byte search. Use `hex` for human-readable correlation.
   native Suibaku `10050102`; the proven direction is a scoped native
   `CShellCollision` multi-sphere patch, not a data-only bulletparam edit. See
   `docs\EXVS2ProjectileCollision900300001.md`.
+
+### `navi_list` / `pilot_list`
+
+Both are standard `param_bin` tables (magic `0xCDABB8A9`, same as
+`series_list` / `character_list`), not encrypted blobs. Strings use the shared
+obfuscated trailing string pool.
+
+| File | Role | Sample path |
+|------|------|-------------|
+| `navi_list` | Support navi (刷卡左边 + 战斗中说话) | `012list/navi_list/navi_list.vgsht2` |
+| `pilot_list` | MS pilot presentation codes / costume resource keys | `012list/pilot_list/pilot_list.vgsht2` |
+
+**navi_list** notable fields:
+
+- `characterUniqueId` — small navi id (ハロ=1, ララァ=2, …); multiple rows share
+  one id when costumes differ
+- `costumeIndex` — `0` default outfit, `1+` alternate
+- `displayName` — decoded Japanese name
+- `seriesListEntryId` — foreign key to `series_list.entryIds`
+
+**pilot_list** notable fields:
+
+- `pilotNameShort` / `pilotNameFull` — internal codes (`PS001A01`, `P001A01`),
+  not Japanese display names (those live on `character_list` + localization)
+- `msPilotLabel` / `pilotLabel` — `S_MS_PILOT_###` / `S_PILOT_###`
+- `seriesListEntryId` — foreign key to `series_list.entryIds`
+
+`--summary` lists compact name rows; full inspect dumps all named fields.
+`--roundtrip-check` uses the shared list builder (byte-identical when unedited).
+Edit ops: same typed-param set (`setParamField`, `copyParamEntry`,
+`upsertParamEntry`, `deleteParamEntry`), including kind-7 string rewrites.
 
 ## Guardrails
 

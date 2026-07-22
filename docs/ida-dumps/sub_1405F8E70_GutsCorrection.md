@@ -1,44 +1,68 @@
-# sub_1405F8E70 — GutsCorrection
+# `sub_1405F8E70`: low-durability incoming-damage multiplier
 
-- **Address**: `0x1405F8E70`
-- **Size**: Medium (nested if-else chain over 10 HP bands)
-- **Purpose**: Returns a damage correction multiplier based on the defender's current HP percentage. Below 50% HP, the multiplier decreases in 5% bands (the "guts" mechanic — taking less damage at low HP).
+Re-audited: 2026-07-15 against OB `vsac27_Release.exe`
+Status: Grade A native consumer proof
 
-## Pseudocode
+## Purpose
 
-```c
-float __fastcall sub_1405F8E70(entry, float hpPercent)
-{
-  if (hpPercent > 0.5) return 1.0;
-  // 10 HP bands, nested if-else chain:
-  // >0.45 → hash 0x6679A0B1
-  // >0.40 → hash 0x9B8F7954 (= -1685325724 unsigned)
-  // >0.35 → hash 0xE1EDDE72 (= -506321550 unsigned)
-  // >0.30 → hash 0xBB3C2E2F (= -1155955665 unsigned)
-  // >0.25 → hash 0xC1E4C2A9 (= -1052747463 unsigned)
-  // >0.20 → hash 0x3CB45DEC (= 1019170668)
-  // >0.15 → hash 0x46E5D07A (= 1189515898)
-  // >0.10 → hash 0x6F1F8D68 (= 1864701160)
-  // >0.05 → hash 0x157CC9FE (= 360499710)
-  // <=0.05 → hash 0xE8A1EF1B (= -394010709 unsigned → 3900956587)
-  return getFloatField(entry, selectedHash) * 0.01;
-}
+`sub_1405F8E70(characterparam, current_hp_ratio)` returns `1.0` above 50%
+durability. At or below 50%, it selects one of ten 5%-wide
+`characterparam` fields and returns the stored percentage multiplied by
+`0.01`.
+
+The result is not merely a generic "HP correction." The only caller,
+`sub_1405F89C0`, stores it at HP-state offset `+0x18`; `sub_1405F9480`
+multiplies that offset into incoming damage immediately before subtracting the
+integer result from current HP. It is therefore a low-durability incoming-
+damage multiplier (the usual VS-series guts mechanic).
+
+## Correct OB hashes
+
+| Durability ratio | Hash | Canonical JSON key |
+|---|---|---|
+| 45–50% | `0x6674EE31` | `lowDurabilityIncomingDamageMultiplierBand45To50` |
+| 40–45% | `0x9B8BF864` | `lowDurabilityIncomingDamageMultiplierBand40To45` |
+| 35–40% | `0xE1D22572` | `lowDurabilityIncomingDamageMultiplierBand35To40` |
+| 30–35% | `0xBB19842F` | `lowDurabilityIncomingDamageMultiplierBand30To35` |
+| 25–30% | `0xC1405939` | `lowDurabilityIncomingDamageMultiplierBand25To30` |
+| 20–25% | `0x3CBF4F6C` | `lowDurabilityIncomingDamageMultiplierBand20To25` |
+| 15–20% | `0x46E6927A` | `lowDurabilityIncomingDamageMultiplierBand15To20` |
+| 10–15% | `0x6F2514E8` | `lowDurabilityIncomingDamageMultiplierBand10To15` |
+| 5–10% | `0x157CC9FE` | `lowDurabilityIncomingDamageMultiplierBand05To10` |
+| 0–5% | `0xE883DFAB` | `lowDurabilityIncomingDamageMultiplierBand00To05` |
+
+Equivalent logic:
+
+```text
+if ratio > 0.50:
+    return 1.0
+
+hash = select_5_percent_band(ratio)
+return characterparam_float(hash) * 0.01
 ```
 
-## Analysis
+## Correction to the earlier dump
 
-| HP Range | Hash | Unsigned Value | Signed Value |
-|----------|------|---------------|-------------|
-| > 50% | — | — | Returns `1.0` (no correction) |
-| 45%–50% | `0x6679A0B1` | 1719574705 | 1719574705 |
-| 40%–45% | `0x9B8F7954` | 2609641572 | -1685325724 |
-| 35%–40% | `0xE1EDDE72` | 3788645746 | -506321550 |
-| 30%–35% | `0xBB3C2E2F` | 3139011375 | -1155955665 (sic, -1155955921) |
-| 25%–30% | `0xC1E4C2A9` | 3252219561 | -1042747735 (sic, -1052747463) |
-| 20%–25% | `0x3CB45DEC` | 1019170284 (sic, 1019170668) | 1019170668 |
-| 15%–20% | `0x46E5D07A` | 1189515898 | 1189515898 |
-| 10%–15% | `0x6F1F8D68` | 1864701160 | 1864701160 |
-| 5%–10% | `0x157CC9FE` | 360499710 | 360499710 |
-| ≤ 5% | `0xE8A1EF1B` | 3900956443 (sic, 3900956587) | -394010709 |
+The previous version of this note listed near-miss hashes such as
+`0x6679A0B1`, `0x9B8F7954`, and `0xE8A1EF1B`. Those values do not match the
+OB instructions in `sub_1405F8E70`. The table above is transcribed from the
+live OB function and agrees with the hashes already present in the binary
+parameter schema.
 
-Each hash reads a percentage value from the param entry. The `* 0.01` converts it from a whole-number percentage (e.g. `85`) to a multiplier (e.g. `0.85`). Lower HP bands typically yield lower multipliers, reducing incoming damage — this is the "guts" survival mechanic common in VS games.
+The old JSON names `hpCorrectionPctTier01..10` remain accepted only as input
+aliases. New output uses ratio-explicit incoming-damage names so band order and
+runtime effect are both visible.
+
+## Consumer chain
+
+```text
+sub_140601F90 (per-frame unit update)
+  -> sub_1405F89C0 (refresh HP-state multipliers)
+       -> sub_1405F8E70 (select ratio band)
+  -> later damage dispatch
+       -> sub_1405F9480 (multiply +0x18 and subtract HP)
+```
+
+See `docs/characterparam-burst-multiplier-audit.md` for the complete HP
+application formula and the two other incoming/final-damage multiplier
+families found during the same audit.

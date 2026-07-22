@@ -61,7 +61,7 @@
 | 字段 | Hash | Offset | 用途 |
 |---|---|---:|---|
 | `boost_gauge_capacity` | `0x0B9EBECE` | `0x00C` | boost gauge 上限 |
-| `boost_recovery_delay_frame` | `0x0CF37AD7` | `0x010` | boost 开始恢复前延迟 |
+| `alternate_free_flight_speed_delta` | `0x0CF37AD7` | `0x010` | 特殊自由飞行速度曲线的每次更新增量；旧“boost recovery delay”名已被跨机体 MSC 否定 |
 | `boost_recovery_speed` | `0x0D5BB2EF` | `0x014` | boost 恢复速度 |
 | `boost_dash_initial_speed` | `0x11FFDDB4` | `0x01C` | BD 初速 |
 | `boost_dash_sustained_speed` | `0x2EAE942B` | `0x038` | BD 持续速度 |

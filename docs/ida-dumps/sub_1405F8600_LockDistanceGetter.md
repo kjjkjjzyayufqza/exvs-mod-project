@@ -1,45 +1,77 @@
-# sub_1405F8600 — LockDistanceGetter
+# OB lock-distance threshold families
 
-- **Address**: `0x1405F8600`
-- **Size**: Small (switch dispatch returning a float)
-- **Purpose**: Returns the lock-on distance threshold for a given distance type. Used by the targeting system to determine lock-on range bands (red/mid/far/max/green).
+Date: 2026-07-15
+Binary: OB `vsac27_Release.exe`
+Safety: executable and IDB inspected read-only
 
-## Pseudocode
+## Result boundary
 
-```c
-float __fastcall sub_1405F8600(entry, int distType)
-{
-  switch (distType) {
-    case 0: hash = 0x08ECF0BE (= 149745854); break;  // redLock
-    case 1: hash = 0x9271BEB4 (= -1847222012 → 2447745284); break; // midLock
-    case 2: hash = 0xE69AD372 (= -421359214 → 3873608082); break; // farLock
-    case 3: hash = 0x78903491 (= 2022048817); break; // maxLock
-    case 4: hash = 0x0F8134A7 (= 260125863); break;  // greenLock
-    default: hash = 0x55EECE85 (= 1441070965); break; // default
-  }
-  return getFloatField(entry, hash);
-}
-```
+`sub_1405F8600` and `sub_1405F8720` are two six-way `characterparam` float
+getters used by the same target-distance classifier. Their selector order and
+hashes are proven. Names such as `redLock`, `midLock`, `farLock`, `maxLock`,
+and `greenLock` are not proven by either getter and must not be attached to
+individual slots from selector number or value magnitude alone.
 
-## Analysis
+## Family 1: `sub_1405F8600`
 
-| distType | Hash | Unsigned Value | Field Name | Description |
-|----------|------|---------------|-----------|-------------|
-| 0 | `0x08ECF0BE` | 149745854 | redLock | Closest lock range (red lock indicator) |
-| 1 | `0x9271BEB4` | 2447745284 | midLock | Medium lock range |
-| 2 | `0xE69AD372` | 3873608082 | farLock | Far lock range |
-| 3 | `0x78903491` | 2022048817 | maxLock | Maximum lock range |
-| 4 | `0x0F8134A7` | 260125863 | greenLock | Green lock range (optimal) |
-| default | `0x55EECE85` | 1441070965 | defaultLock | Fallback distance |
+| Selector | Exact OB hash |
+|---:|---|
+| 0 | `0x08ECF0BE` |
+| 1 | `0x91E5A104` |
+| 2 | `0xE6E29192` |
+| 3 | `0x78860431` |
+| 4 | `0x0F8134A7` |
+| default | `0x55E4FF75` |
 
-These distance thresholds define concentric lock-on / engagement zones around a unit (IDA labels are provisional).
+Earlier notes contained four near-miss hashes in this family
+(`9271BEB4`, `E69AD372`, `78903491`, and `55EECE85`). They are rejected; the
+table above comes from the live OB instructions at `0x1405F8625..0x1405F864D`
+and agrees with the current characterparam schema.
 
-**Empirical correction (2026-07-11):** in-game **红锁距离** responded to:
+## Family 2: `sub_1405F8720`
 
-- `characterparam.lock_on_distance_max` (`0xA223C183`, `sub_1405F8720` a2=3)
-- `characterparam.alert_range_distance` (`0xBAE8C388`, `sub_1405F8720` default branch)
+| Selector | Exact OB hash |
+|---:|---|
+| 0 | `0xD249350C` |
+| 1 | `0x4B4064B6` |
+| 2 | `0x3C475420` |
+| 3 | `0xA223C183` |
+| 4 | `0xD524F115` |
+| default | `0xBAE8C388` |
 
-**not** to case-0 `0x08ECF0BE` in user testing. Case-0 may still be a related band, but do not treat it as the sole “red lock UI distance” without re-verification. Tune both verified floats together when modding 红锁.
+`sub_1405F8290` computes target distance squared and compares it with values
+derived from both families through `sub_1405F86A0` and `sub_1405F8520`. The
+result is a three-band target-distance state. This proves a lock/target-distance
+threshold subsystem, but not a one-to-one UI color label for each hash.
 
-See `docs/characterparam-field-notes.md` and session log
-`docs/msc-research/gyan-session-2026-07-11-handoff.md` §2.
+## HUD color-state cross-check
+
+The user-provided local string dump exposes exact strings at:
+
+- `0x141516140`: `Lockon_Red`
+- `0x141516150`: `Lockon_Green`
+- `0x141516160`: `Lockon_Yellow`
+
+Their only xrefs are in `sub_140A2DBB0`, which selects animation states on
+`/Info_Bg_mc/BG_mc`. Its caller `sub_140A2BD90` receives a HUD state through a
+callback. Neither function directly reads either characterparam threshold
+family. Therefore the HUD strings confirm the color-state UI exists, but do
+not provide the missing dataflow from a particular threshold hash to a color.
+
+## Empirical editing evidence
+
+The user's in-game experiment found red-lock behavior when editing both:
+
+- `0xA223C183` (`lockOnDistanceMax` compatibility name)
+- `0xBAE8C388` (`alertRangeDistance` compatibility name)
+
+The deployed Gyan mod also changes three Family-1 fields, so it is not a clean
+two-field isolation test. For practical editing, change the two empirically
+verified Family-2 fields together in every selected row. For semantic naming,
+retain the broader lock/target-distance-threshold wording until a controlled
+single-field test or a native dataflow connects classifier output to the HUD
+color state.
+
+See `docs/characterparam-field-notes.md` and
+`docs/agent-sessions/2026-07-14-param-ida-audit.md` for real-file values and
+cross-version evidence.

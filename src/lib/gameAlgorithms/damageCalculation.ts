@@ -118,38 +118,84 @@ export function getCostForAttackType(
   return baseValue;
 }
 
-// --- Guts system from sub_1405F8E70 ---
+// --- Low-durability incoming-damage multiplier from sub_1405F8E70 ---
 
-const GUTS_BANDS: { threshold: number; hash: number; key: string }[] = [
-  { threshold: 0.45, hash: 0x6679A0B1, key: "hpCorrectionPctTier01" },
-  { threshold: 0.40, hash: 0x9B8F7954, key: "hpCorrectionPctTier02" },
-  { threshold: 0.35, hash: 0xE1EDDE72, key: "hpCorrectionPctTier03" },
-  { threshold: 0.30, hash: 0xBB3C2E2F, key: "hpCorrectionPctTier04" },
-  { threshold: 0.25, hash: 0xC1E4C2A9, key: "hpCorrectionPctTier05" },
-  { threshold: 0.20, hash: 0x3CB45DEC, key: "hpCorrectionPctTier06" },
-  { threshold: 0.15, hash: 0x46E5D07A, key: "hpCorrectionPctTier07" },
-  { threshold: 0.10, hash: 0x6F1F8D68, key: "hpCorrectionPctTier08" },
-  { threshold: 0.05, hash: 0x157CC9FE, key: "hpCorrectionPctTier09" },
+const LOW_DURABILITY_DAMAGE_BANDS: Array<{
+  threshold: number;
+  hash: number;
+  key: string;
+}> = [
+  {
+    threshold: 0.45,
+    hash: 0x6674EE31,
+    key: "lowDurabilityIncomingDamageMultiplierBand45To50",
+  },
+  {
+    threshold: 0.40,
+    hash: 0x9B8BF864,
+    key: "lowDurabilityIncomingDamageMultiplierBand40To45",
+  },
+  {
+    threshold: 0.35,
+    hash: 0xE1D22572,
+    key: "lowDurabilityIncomingDamageMultiplierBand35To40",
+  },
+  {
+    threshold: 0.30,
+    hash: 0xBB19842F,
+    key: "lowDurabilityIncomingDamageMultiplierBand30To35",
+  },
+  {
+    threshold: 0.25,
+    hash: 0xC1405939,
+    key: "lowDurabilityIncomingDamageMultiplierBand25To30",
+  },
+  {
+    threshold: 0.20,
+    hash: 0x3CBF4F6C,
+    key: "lowDurabilityIncomingDamageMultiplierBand20To25",
+  },
+  {
+    threshold: 0.15,
+    hash: 0x46E6927A,
+    key: "lowDurabilityIncomingDamageMultiplierBand15To20",
+  },
+  {
+    threshold: 0.10,
+    hash: 0x6F2514E8,
+    key: "lowDurabilityIncomingDamageMultiplierBand10To15",
+  },
+  {
+    threshold: 0.05,
+    hash: 0x157CC9FE,
+    key: "lowDurabilityIncomingDamageMultiplierBand05To10",
+  },
 ];
 
-const GUTS_LOWEST_BAND = { hash: 0xE8A1EF1B, key: "hpCorrectionPctTier10" };
+const LOW_DURABILITY_DAMAGE_LOWEST_BAND = {
+  hash: 0xE883DFAB,
+  key: "lowDurabilityIncomingDamageMultiplierBand00To05",
+};
 
 /**
- * Computes the guts damage reduction multiplier based on current HP percentage.
- * Game logic: sub_1405F8E70
+ * Resolves the incoming-damage multiplier selected by current durability ratio.
+ * Game logic: sub_1405F8E70 -> sub_1405F89C0 -> sub_1405F9480.
  *
  * When HP > 50%, returns 1.0 (no reduction).
  * Below 50%, checks 10 bands (each 5% wide) and returns the band's value * 0.01.
  *
  * @param entry - characterparam entry
  * @param hpPercent - current HP as fraction (0.0 to 1.0)
- * @returns damage multiplier (0.0 to 1.0)
+ * @returns incoming-damage multiplier
  */
-export function gutsCorrection(entry: TypedParamEntry, hpPercent: number): number {
+export function lowDurabilityIncomingDamageMultiplier(
+  entry: TypedParamEntry,
+  hpPercent: number,
+): number {
   if (hpPercent > 0.50) return 1.0;
 
-  let key = GUTS_LOWEST_BAND.key;
-  for (const band of GUTS_BANDS) {
+  let key = LOW_DURABILITY_DAMAGE_LOWEST_BAND.key;
+  for (const band of LOW_DURABILITY_DAMAGE_BANDS) {
     if (hpPercent > band.threshold) {
       key = band.key;
       break;
@@ -160,10 +206,10 @@ export function gutsCorrection(entry: TypedParamEntry, hpPercent: number): numbe
 }
 
 /**
- * Returns the full guts correction table for visualization.
+ * Returns the full low-durability incoming-damage table for visualization.
  * Each entry is { minHp, maxHp, multiplier }.
  */
-export function gutsTable(entry: TypedParamEntry): Array<{
+export function lowDurabilityIncomingDamageTable(entry: TypedParamEntry): Array<{
   minHp: number;
   maxHp: number;
   multiplier: number;
@@ -173,17 +219,10 @@ export function gutsTable(entry: TypedParamEntry): Array<{
 
   result.push({ minHp: 0.50, maxHp: 1.00, multiplier: 1.0, key: "(none)" });
 
-  const allBands = [
-    { threshold: 0.50, key: GUTS_BANDS[0]!.key },
-    ...GUTS_BANDS.map((b, i) => ({
-      threshold: b.threshold,
-      key: GUTS_BANDS[i]!.key,
-    })),
-  ];
-
-  for (let i = 0; i < GUTS_BANDS.length; i++) {
-    const band = GUTS_BANDS[i]!;
-    const upperThreshold = i === 0 ? 0.50 : GUTS_BANDS[i - 1]!.threshold;
+  for (let i = 0; i < LOW_DURABILITY_DAMAGE_BANDS.length; i++) {
+    const band = LOW_DURABILITY_DAMAGE_BANDS[i]!;
+    const upperThreshold =
+      i === 0 ? 0.50 : LOW_DURABILITY_DAMAGE_BANDS[i - 1]!.threshold;
     result.push({
       minHp: band.threshold,
       maxHp: upperThreshold,
@@ -195,12 +234,18 @@ export function gutsTable(entry: TypedParamEntry): Array<{
   result.push({
     minHp: 0.00,
     maxHp: 0.05,
-    multiplier: fieldFloat(entry, GUTS_LOWEST_BAND.key) * 0.01,
-    key: GUTS_LOWEST_BAND.key,
+    multiplier: fieldFloat(entry, LOW_DURABILITY_DAMAGE_LOWEST_BAND.key) * 0.01,
+    key: LOW_DURABILITY_DAMAGE_LOWEST_BAND.key,
   });
 
   return result;
 }
+
+/** @deprecated Use lowDurabilityIncomingDamageMultiplier. */
+export const gutsCorrection = lowDurabilityIncomingDamageMultiplier;
+
+/** @deprecated Use lowDurabilityIncomingDamageTable. */
+export const gutsTable = lowDurabilityIncomingDamageTable;
 
 // --- Lock distance from sub_1405F8600 ---
 

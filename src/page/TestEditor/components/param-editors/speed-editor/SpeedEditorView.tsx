@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { EntryListPanel } from "../shared/EntryListPanel";
 import { EditorStatusBar } from "../shared/EditorStatusBar";
-import { MovementRadiusCanvas } from "./MovementRadiusCanvas";
+import { SpeedConsumerMap } from "./SpeedConsumerMap";
 import { SpeedCurveGraph } from "./SpeedCurveGraph";
 import { SpeedPropertyPanel } from "./SpeedPropertyPanel";
 import { useSpeedEditorStore } from "./SpeedEditorStore";
@@ -121,7 +121,7 @@ export function SpeedEditorView({ onUnsavedChanges, workspaceDefaultPath }: Spee
         <div className="flex min-h-0 flex-col border-x">
           <div className="min-h-0 flex-1">
             {entry ? (
-              <MovementRadiusCanvas entry={entry} />
+              <SpeedConsumerMap entry={entry} />
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                 Click the file path input above to select a speedparam.bin

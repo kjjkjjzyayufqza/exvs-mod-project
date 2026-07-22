@@ -150,15 +150,15 @@ work. Prefer debug for speed. See `.cursor/rules/no-release-builds.mdc` and
 **Commands**
 
 - `inspect` — parse `.jnttbl`, `character_id_table.bin`, `vernier_table`,
-  `armsparam`, `bulletparam`, `projectile_depiction_table`, and SSBH model files
-  (`.nusktb`, `.numshb`, `.numdlb`; auto-detect or `--type`). Prefer
-  `--summary --pretty` for large files; for `.numshb` use `--raw-fields` only
-  when full vertex buffers are required.
+  `armsparam`, `bulletparam`, `projectile_depiction_table`, `navi_list`,
+  `pilot_list`, and SSBH model files (`.nusktb`, `.numshb`, `.numdlb`;
+  auto-detect or `--type`). Prefer `--summary --pretty` for large files; for
+  `.numshb` use `--raw-fields` only when full vertex buffers are required.
 - `edit` — apply AI-facing JSON edit requests to lossless builder-backed file
   types (`jnttbl`, `character_id_table`, `vernier_table`, `armsparam`,
-  `bulletparam`, `speedparam`, `projectile_depiction_table`). Use `--dry-run`
-  for preview-only output; SSBH files remain inspect-only because their rewrite
-  is not byte-identical.
+  `bulletparam`, `speedparam`, `projectile_depiction_table`, `navi_list`,
+  `pilot_list`). Use `--dry-run` for preview-only output; SSBH files remain
+  inspect-only because their rewrite is not byte-identical.
 - `correlate` — emit a JSON skeleton joining unit/weapon/dispatcher/IDA evidence
   (paste IDA symbols via optional flags; does not call IDA automatically).
 

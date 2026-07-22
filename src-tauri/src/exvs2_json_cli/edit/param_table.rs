@@ -9,6 +9,7 @@ use crate::exvs2_json_cli::util::{
 };
 use crate::format::armsparam::{ArmsParamData, ArmsParamEntry};
 use crate::format::bulletparam::{BulletParamData, BulletParamEntry};
+use crate::format::list_command_pool::{ListData, ListEntry};
 use crate::format::param_bin_format::ParamFieldSpec;
 use crate::format::param_entry_schema::{entry_commands_from_named_json, ParamCommandPool};
 use crate::format::projectile_depiction_table::{
@@ -126,6 +127,57 @@ impl ParamEntryAccess for SpeedParamEntry {
 
 impl ParamTableAccess for SpeedParamData {
     type Entry = SpeedParamEntry;
+
+    fn entries(&self) -> &Vec<Self::Entry> {
+        &self.entries
+    }
+
+    fn entries_mut(&mut self) -> &mut Vec<Self::Entry> {
+        &mut self.entries
+    }
+
+    fn field_specs(&self) -> &[ParamFieldSpec] {
+        &self.field_specs
+    }
+}
+
+impl ParamEntryAccess for ListEntry {
+    fn entry_id(&self) -> u32 {
+        self.entry_id
+    }
+
+    fn set_entry_id(&mut self, entry_id: u32) {
+        self.entry_id = entry_id;
+    }
+
+    fn commands(&self) -> &HashMap<u32, u32> {
+        &self.commands
+    }
+
+    fn commands_mut(&mut self) -> &mut HashMap<u32, u32> {
+        &mut self.commands
+    }
+
+    fn from_parts(entry_id: u32, commands: HashMap<u32, u32>) -> Self {
+        Self {
+            entry_id,
+            commands,
+            strings: HashMap::new(),
+        }
+    }
+
+    fn string_field(&self, hash: u32) -> Option<&str> {
+        self.strings.get(&hash).map(String::as_str)
+    }
+
+    fn set_string_field(&mut self, hash: u32, value: String) -> Result<(), String> {
+        self.strings.insert(hash, value);
+        Ok(())
+    }
+}
+
+impl ParamTableAccess for ListData {
+    type Entry = ListEntry;
 
     fn entries(&self) -> &Vec<Self::Entry> {
         &self.entries

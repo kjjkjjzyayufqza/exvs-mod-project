@@ -71,6 +71,14 @@ mod tests {
             InspectType::parse("speedparam").unwrap(),
             InspectType::SpeedParam
         );
+        assert_eq!(
+            InspectType::parse("navi-list").unwrap(),
+            InspectType::NaviList
+        );
+        assert_eq!(
+            InspectType::parse("pilot_list").unwrap(),
+            InspectType::PilotList
+        );
         assert_eq!(InspectType::parse("nusktb").unwrap(), InspectType::Nusktb);
         assert_eq!(InspectType::parse("numshb").unwrap(), InspectType::Numshb);
         assert_eq!(InspectType::parse("numdlb").unwrap(), InspectType::Numdlb);

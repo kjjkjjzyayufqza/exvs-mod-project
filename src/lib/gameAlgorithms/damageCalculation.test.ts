@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   getDamageForAttackType,
   getCostForAttackType,
-  gutsCorrection,
+  lowDurabilityIncomingDamageMultiplier,
   getLockDistance,
 } from "./damageCalculation";
 import type { TypedParamEntry } from "@/page/TestEditor/components/param-editor/typedParamTypes";
@@ -57,20 +57,24 @@ describe("getCostForAttackType", () => {
   });
 });
 
-describe("gutsCorrection", () => {
+describe("lowDurabilityIncomingDamageMultiplier", () => {
   it("returns 1.0 when HP > 50%", () => {
     const entry = makeEntry({});
-    expect(gutsCorrection(entry, 0.51)).toBe(1.0);
-    expect(gutsCorrection(entry, 1.0)).toBe(1.0);
+    expect(lowDurabilityIncomingDamageMultiplier(entry, 0.51)).toBe(1.0);
+    expect(lowDurabilityIncomingDamageMultiplier(entry, 1.0)).toBe(1.0);
   });
 
   it("returns band value * 0.01 when HP <= 50%", () => {
-    const entry = makeEntry({ hpCorrectionPctTier01: 80 });
-    expect(gutsCorrection(entry, 0.46)).toBeCloseTo(0.8);
+    const entry = makeEntry({
+      lowDurabilityIncomingDamageMultiplierBand45To50: 80,
+    });
+    expect(lowDurabilityIncomingDamageMultiplier(entry, 0.46)).toBeCloseTo(0.8);
   });
 
   it("selects lowest band when HP <= 5%", () => {
-    const entry = makeEntry({ hpCorrectionPctTier10: 50 });
-    expect(gutsCorrection(entry, 0.03)).toBeCloseTo(0.5);
+    const entry = makeEntry({
+      lowDurabilityIncomingDamageMultiplierBand00To05: 50,
+    });
+    expect(lowDurabilityIncomingDamageMultiplier(entry, 0.03)).toBeCloseTo(0.5);
   });
 });

@@ -42,6 +42,8 @@ export {
   ATTACK_TYPE_LABELS,
   getDamageForAttackType,
   getCostForAttackType,
+  lowDurabilityIncomingDamageMultiplier,
+  lowDurabilityIncomingDamageTable,
   gutsCorrection,
   gutsTable,
   LOCK_DISTANCE_TYPES,
@@ -65,30 +67,14 @@ export {
 } from "./reloadSystem";
 
 export {
-  type GroundMovement,
-  type AirMovement,
-  type BoostSystem,
-  type StepSystem,
-  type GravitySystem,
-  type MovementProfile,
-  MOVEMENT_CLASS_LABELS,
-  DASH_CANCEL_TYPE_LABELS,
-  BOOST_DASH_TYPE_LABELS,
-  STEP_TYPE_LABELS,
-  JUMP_TYPE_LABELS,
-  FALL_TYPE_LABELS,
-  getGroundMovement,
-  getAirMovement,
-  getBoostSystem,
-  getStepSystem,
-  getGravitySystem,
-  getMovementProfile,
-  boostDashRadius,
-  boostBudgetDashes,
-  boostBudgetSteps,
-  boostRecoveryTimeline,
-  simulateBoostDashCurve,
-} from "./movementPhysics";
+  type EvidenceGrade,
+  type MovementCurveParameters,
+  type BoostAscentParameters,
+  type TransformOrientationParameters,
+  getMovementCurves,
+  getBoostAscentParameters,
+  getTransformOrientationParameters,
+} from "./movementParamSemantics";
 
 export {
   type HitVolumeType,

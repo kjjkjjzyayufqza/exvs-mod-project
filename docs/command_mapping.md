@@ -180,8 +180,8 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 
 | Hash | Offset | Kind | Field Name | Notes |
 |------|--------|------|------------|-------|
-| 0x00D7CEDB | 0x000 | int | max_hp | IDA:case8; base hit points |
-| 0x00EC483C | 0x004 | float | hp_correction_rate | HP scaling factor |
+| 0x00D7CEDB | 0x000 | int | damage_dispatch_value_selector_8 | IDA:sub_1405F9010 case 8; not max HP |
+| 0x00EC483C | 0x004 | float | damage_calculation_multiplier_slot_4 | helper supports slot 4; sole OB caller supplies only slots 0-3 |
 | 0x01F15731 | 0x008 | float | boost_gauge_pct | boost gauge percentage |
 | 0x04371326 | 0x00C | int | base_unit_cost | IDA:case14,15,18; unit deployment cost |
 | 0x07B8E157 | 0x010 | int | ammo_count_main | main weapon ammo count |
@@ -190,15 +190,15 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0x08218288 | 0x01C | float | front_tracking_angle | forward tracking arc |
 | 0x0872029D | 0x020 | int | sub_shot_cost | IDA:case3; sub weapon cost |
 | 0x08A0ADE8 | 0x024 | float | rear_tracking_angle | rear tracking arc |
-| 0x08ECF0BE | 0x028 | float | red_lock_distance | PROVISIONAL: IDA lock band; user 2026-07-11 红锁 is lock_on_distance_max + alert_range_distance — docs/characterparam-field-notes.md |
+| 0x08ECF0BE | 0x028 | float | lock_distance_threshold_family_1_slot_0 | first native lock-distance threshold family, selector 0; HUD color unproven |
 | 0x0911077E | 0x02C | int | boost_recovery_speed | boost recovery rate |
 | 0x0ACCE031 | 0x030 | float | dmg_multiplier_tier_a | damage tier A multiplier |
 | 0x0B25CB7F | 0x034 | int | unit_id_composite | composite unit identifier |
-| 0x0F8134A7 | 0x038 | float | green_lock_distance | green lock-on range |
+| 0x0F8134A7 | 0x038 | float | lock_distance_threshold_family_1_slot_4 | first native lock-distance threshold family, selector 4 |
 | 0x104DFF9D | 0x03C | float | dmg_multiplier_tier_b | damage tier B multiplier |
 | 0x1113F30E | 0x040 | float | model_scale | 3D model scale factor |
 | 0x14F89980 | 0x044 | float | movement_speed_base | base movement speed |
-| 0x157CC9FE | 0x048 | float | hp_correction_pct_tier_09 | HP guts correction tier 9 percentage |
+| 0x157CC9FE | 0x048 | float | low_durability_incoming_damage_multiplier_band_05_to_10 | incoming-damage percentage at 5-10% durability |
 | 0x15B67A85 | 0x04C | float | gravity_offset | gravity offset value |
 | 0x1698E3D8 | 0x050 | float | body_collision_radius | body collision sphere radius |
 | 0x18415DC4 | 0x054 | int | is_transformable | transformation capability flag |
@@ -208,11 +208,11 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0x1BFADFD3 | 0x064 | float | lock_on_fov_angle | lock-on field of view |
 | 0x1C936B77 | 0x068 | float | down_value_threshold | down gauge threshold |
 | 0x1D6EA3F1 | 0x06C | int | assist_damage | IDA:case6,7; assist attack damage |
-| 0x1E61CF9F | 0x070 | float | assist_correction_rate | assist damage correction |
+| 0x1E61CF9F | 0x070 | float | burst_c_incoming_damage_multiplier | active C Burst incoming-damage multiplier |
 | 0x1EA3FAE1 | 0x074 | int | burst_cost | IDA:case9; EX burst gauge cost |
 | 0x21632B7A | 0x078 | float | step_tracking_angle_min | step tracking minimum arc |
 | 0x21E2041A | 0x07C | float | step_tracking_angle_max | step tracking maximum arc |
-| 0x22169CCE | 0x080 | float | boost_dash_speed_rate | boost dash speed ratio |
+| 0x22169CCE | 0x080 | float | damage_calculation_multiplier_slot_2 | selected by hit-record slot 2; enters final damage |
 | 0x22823596 | 0x084 | int | special_cost | IDA:case2; special weapon cost |
 | 0x24FA2A04 | 0x088 | float | special_gauge_start_rate | special gauge start ratio |
 | 0x25346DCD | 0x08C | int | reserved_flag_08c | reserved |
@@ -236,20 +236,20 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0x379D0C45 | 0x0D4 | float | melee_tracking_angle | melee tracking arc |
 | 0x38FDFC10 | 0x0D8 | float | melee_bonus_rate | melee bonus ratio |
 | 0x3AA41969 | 0x0DC | float | melee_reach_base | base melee reach |
-| 0x3C1E9E3B | 0x0E0 | int | hp_max_value | IDA:sub_1405F8E70; max HP value |
+| 0x3C1E9E3B | 0x0E0 | int | runtime_durability_upper_clamp | IDA:sub_1405F8C60/sub_1405F9500 runtime clamp |
 | 0x3C43A0D1 | 0x0E4 | float | charge_time_offset | charge time modifier |
-| 0x3C475420 | 0x0E8 | float | camera_distance_near | camera near distance |
-| 0x3CBF4F6C | 0x0EC | float | hp_correction_pct_tier_06 | HP guts correction tier 6 percentage |
+| 0x3C475420 | 0x0E8 | float | lock_distance_threshold_family_2_slot_2 | second native lock-distance threshold family, selector 2 |
+| 0x3CBF4F6C | 0x0EC | float | low_durability_incoming_damage_multiplier_band_20_to_25 | incoming-damage percentage at 20-25% durability |
 | 0x3D302D72 | 0x0F0 | float | dmg_multiplier_tier_e | damage tier E multiplier |
 | 0x3D501F3B | 0x0F4 | int | hp_regen_value | IDA:sub_1405F8E70; HP regen value |
 | 0x3F29DFF4 | 0x0F8 | int | reserved_flag_0f8 | reserved |
 | 0x432ADAA1 | 0x0FC | float | camera_offset_x | camera X offset |
 | 0x43DC9679 | 0x100 | float | dmg_multiplier_tier_f | damage tier F multiplier |
 | 0x45C84958 | 0x104 | int | respawn_invincibility_frame | i-frame duration on respawn |
-| 0x46E6927A | 0x108 | float | hp_correction_pct_tier_07 | HP guts correction tier 7 percentage |
+| 0x46E6927A | 0x108 | float | low_durability_incoming_damage_multiplier_band_15_to_20 | incoming-damage percentage at 15-20% durability |
 | 0x4769F064 | 0x10C | float | dmg_multiplier_tier_g | damage tier G multiplier |
 | 0x4778AB75 | 0x110 | u32 | movement_type | movement type enum |
-| 0x4B4064B6 | 0x114 | float | camera_distance_far | camera far distance |
+| 0x4B4064B6 | 0x114 | float | lock_distance_threshold_family_2_slot_1 | second native lock-distance threshold family, selector 1 |
 | 0x4B449047 | 0x118 | float | camera_offset_y | camera Y offset |
 | 0x4CF8985A | 0x11C | int | reserved_flag_11c | reserved |
 | 0x4D2405E0 | 0x120 | int | reserved_flag_120 | reserved |
@@ -262,7 +262,7 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0x5245EE3E | 0x13C | int | partner_cost_penalty_frame | partner cost penalty timer |
 | 0x539BC76D | 0x140 | int | charge_shot_damage | IDA:case10; charged shot dmg |
 | 0x53FD1A92 | 0x144 | float | charge_shot_correction_offset | charge correction offset |
-| 0x55E4FF75 | 0x148 | float | yellow_lock_distance | yellow lock-on range |
+| 0x55E4FF75 | 0x148 | float | lock_distance_threshold_family_1_default | first native lock-distance threshold family, default selector |
 | 0x5AC06BD2 | 0x14C | float | lock_on_range_min | minimum lock-on range |
 | 0x5B3AF66C | 0x150 | float | lock_on_angle_main | main lock-on angle |
 | 0x5B851170 | 0x154 | int | reserved_flag_154 | reserved |
@@ -271,16 +271,16 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0x5CE8D569 | 0x160 | int | reserved_flag_160 | reserved |
 | 0x5E0DDDD8 | 0x164 | int | special_melee_cost | IDA:case13; special melee cost |
 | 0x6133A20B | 0x168 | int | special_reload_frame | special weapon reload time |
-| 0x6674EE31 | 0x16C | float | hp_correction_pct_tier_01 | HP guts correction tier 1 percentage |
+| 0x6674EE31 | 0x16C | float | low_durability_incoming_damage_multiplier_band_45_to_50 | incoming-damage percentage at 45-50% durability |
 | 0x6A14228B | 0x170 | float | special_correction_base | special correction base |
-| 0x6AF92610 | 0x174 | float | special_correction_rate | special correction rate |
+| 0x6AF92610 | 0x174 | float | burst_v_incoming_damage_multiplier | active V Burst incoming-damage multiplier |
 | 0x6ED37B1F | 0x178 | float | burst_correction_base | EX burst correction base |
-| 0x6F2514E8 | 0x17C | float | hp_correction_pct_tier_08 | HP guts correction tier 8 percentage |
+| 0x6F2514E8 | 0x17C | float | low_durability_incoming_damage_multiplier_band_10_to_15 | incoming-damage percentage at 10-15% durability |
 | 0x71D35821 | 0x180 | u32 | burst_attribute_flags | bitfield; burst attributes |
 | 0x71D87C2C | 0x184 | float | burst_speed_multiplier | burst speed multiplier |
 | 0x72785F9E | 0x188 | float | burst_lock_on_angle | burst lock-on arc |
 | 0x776BBBE9 | 0x18C | int | burst_damage | IDA:case9; burst attack dmg |
-| 0x78860431 | 0x190 | float | engagement_range_near | near engagement range |
+| 0x78860431 | 0x190 | float | lock_distance_threshold_family_1_slot_3 | first native lock-distance threshold family, selector 3 |
 | 0x78C70D3F | 0x194 | float | hitbox_height | collision hitbox height |
 | 0x7B9D7024 | 0x198 | int | reserved_flag_198 | reserved |
 | 0x7BA88A27 | 0x19C | float | auto_aim_angle_limit | auto-aim angle cap |
@@ -289,18 +289,18 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0x8248401F | 0x1A8 | int | hp_regen_value_default | IDA:sub_1405F8E70; default HP regen value |
 | 0x82B967A9 | 0x1AC | float | walk_speed | walking speed |
 | 0x8381BE8A | 0x1B0 | int | team_cost_value | team cost contribution |
-| 0x85C483F0 | 0x1B4 | float | sub_damage_correction_rate | IDA:sub_1405F3E50; sub weapon damage correction rate |
+| 0x85C483F0 | 0x1B4 | float | burst_s_incoming_damage_multiplier | active S Burst incoming-damage multiplier |
 | 0x86579C72 | 0x1B8 | float | close_tracking_angle | close-range tracking arc |
-| 0x8A902D5F | 0x1BC | float | main_shot_correction_rate | main shot correction |
+| 0x8A902D5F | 0x1BC | float | damage_calculation_multiplier_slot_0 | selected by hit-record slot 0; enters final damage |
 | 0x8CBF2B3F | 0x1C0 | float | gravity_multiplier | gravity multiplier |
 | 0x8F0666AB | 0x1C4 | float | ranged_tracking_angle_min | ranged tracking min arc |
 | 0x8F8749CB | 0x1C8 | float | ranged_tracking_angle_max | ranged tracking max arc |
 | 0x904C7CF0 | 0x1CC | int | special_damage | IDA:case3,15,18; special dmg |
 | 0x91CDEF2B | 0x1D0 | float | dmg_multiplier_tier_h | damage tier H multiplier |
-| 0x91E5A104 | 0x1D4 | float | engagement_range_far | far engagement range |
+| 0x91E5A104 | 0x1D4 | float | lock_distance_threshold_family_1_slot_1 | first native lock-distance threshold family, selector 1 |
 | 0x9B20A527 | 0x1D8 | float | sub_shot_correction_base | sub shot correction base |
-| 0x9B8BF864 | 0x1DC | float | hp_correction_pct_tier_02 | HP guts correction tier 2 percentage |
-| 0x9BED4726 | 0x1E0 | float | sub_shot_correction_rate | sub shot correction rate |
+| 0x9B8BF864 | 0x1DC | float | low_durability_incoming_damage_multiplier_band_40_to_45 | incoming-damage percentage at 40-45% durability |
+| 0x9BED4726 | 0x1E0 | float | damage_calculation_multiplier_slot_1 | selected by hit-record slot 1; enters final damage |
 | 0x9D8ADBDF | 0x1E4 | int | reserved_flag_1e4 | reserved |
 | 0xA223C183 | 0x1E8 | float | lock_on_distance_max | USER-VERIFIED 2026-07-11: red lock (红锁); also set alert_range_distance — docs/characterparam-field-notes.md |
 | 0xA60B0684 | 0x1EC | u32 | weapon_attribute_flags | bitfield; weapon attributes |
@@ -320,15 +320,15 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0xB4F17B6F | 0x224 | float | melee_lunge_offset | melee lunge distance |
 | 0xB58B705C | 0x228 | int | reserved_flag_228 | reserved |
 | 0xB5FDC339 | 0x22C | int | step_cancel_count | step cancel limit |
-| 0xB7D5327E | 0x230 | int | boost_gauge_initial | USER-VERIFIED 2026-07-11: HP (name is wrong); see docs/characterparam-field-notes.md |
-| 0xB91793D4 | 0x234 | float | fall_speed_base | base fall speed |
+| 0xB7D5327E | 0x230 | int | base_max_durability | raw base maximum durability before runtime transform |
+| 0xB91793D4 | 0x234 | float | damage_calculation_multiplier_slot_3 | selected by hit-record slot 3; enters final damage |
 | 0xBA900811 | 0x238 | float | air_dash_speed_base | base air dash speed |
 | 0xBAE8C388 | 0x23C | float | alert_range_distance | USER-VERIFIED 2026-07-11: red lock (红锁); also set lock_on_distance_max — docs/characterparam-field-notes.md |
-| 0xBB19842F | 0x240 | float | hp_correction_pct_tier_04 | HP guts correction tier 4 percentage |
+| 0xBB19842F | 0x240 | float | low_durability_incoming_damage_multiplier_band_30_to_35 | incoming-damage percentage at 30-35% durability |
 | 0xBC427D55 | 0x244 | float | radar_display_scale | radar display scale |
 | 0xBE256E0C | 0x248 | float | dash_speed_base | base dash speed |
 | 0xBE8D97FB | 0x24C | int | reserved_flag_24c | reserved |
-| 0xC1405939 | 0x250 | float | hp_correction_pct_tier_05 | HP guts correction tier 5 percentage |
+| 0xC1405939 | 0x250 | float | low_durability_incoming_damage_multiplier_band_25_to_30 | incoming-damage percentage at 25-30% durability |
 | 0xC28C40CA | 0x254 | int | reserved_flag_254 | reserved |
 | 0xC2FAF3AF | 0x258 | int | ammo_reserve_count | ammo reserve count |
 | 0xC3F64BF9 | 0x25C | float | ammo_correction_offset | ammo correction offset |
@@ -341,10 +341,10 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0xCAF44B28 | 0x278 | float | charge_bonus_offset | charge bonus offset |
 | 0xCB36211F | 0x27C | float | charge_gauge_offset | charge gauge offset |
 | 0xD01D00DF | 0x280 | float | melee_lock_angle | melee lock-on angle |
-| 0xD249350C | 0x284 | float | target_range_distance | target range distance |
+| 0xD249350C | 0x284 | float | lock_distance_threshold_family_2_slot_0 | second native lock-distance threshold family, selector 0 |
 | 0xD24DC1FD | 0x288 | float | target_correction_offset | target correction offset |
 | 0xD2D0C774 | 0x28C | float | target_fov_pct | target FOV percentage |
-| 0xD524F115 | 0x290 | float | radar_range_distance | radar range distance |
+| 0xD524F115 | 0x290 | float | lock_distance_threshold_family_2_slot_4 | second native lock-distance threshold family, selector 4 |
 | 0xD54CE896 | 0x294 | float | radar_sweep_angle | radar sweep angle |
 | 0xD6F39D3C | 0x298 | float | radar_correction_offset | radar correction offset |
 | 0xD854F864 | 0x29C | float | radar_display_offset | radar display offset |
@@ -354,13 +354,13 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0xDD83290F | 0x2AC | float | melee_aim_correction_offset | melee aim correction |
 | 0xDE07FD61 | 0x2B0 | float | melee_range_offset | melee range offset |
 | 0xDF888E8B | 0x2B4 | int | rotation_speed_degrees | rotation speed (degrees) |
-| 0xE1D22572 | 0x2B8 | float | hp_correction_pct_tier_03 | HP guts correction tier 3 percentage |
+| 0xE1D22572 | 0x2B8 | float | low_durability_incoming_damage_multiplier_band_35_to_40 | incoming-damage percentage at 35-40% durability |
 | 0xE1D56972 | 0x2BC | float | melee_reach_distance | melee reach distance |
 | 0xE2C6FD16 | 0x2C0 | int | sub_shot_damage | IDA:case4,5,12,13; sub dmg |
 | 0xE3E5D41D | 0x2C4 | float | down_value_per_hit | down value per hit |
 | 0xE6213731 | 0x2C8 | string | action_label | action label string ref (shared) |
-| 0xE6E29192 | 0x2D0 | float | target_switch_distance | target switch distance |
-| 0xE883DFAB | 0x2D4 | float | hp_correction_pct_tier_10 | HP guts correction tier 10 percentage |
+| 0xE6E29192 | 0x2D0 | float | lock_distance_threshold_family_1_slot_2 | first native lock-distance threshold family, selector 2 |
+| 0xE883DFAB | 0x2D4 | float | low_durability_incoming_damage_multiplier_band_00_to_05 | incoming-damage percentage at 0-5% durability |
 | 0xE90161F5 | 0x2D8 | float | main_shot_speed_base | main shot base speed |
 | 0xE9F462F6 | 0x2DC | float | damage_proration_rate | damage proration rate |
 | 0xEB1219A4 | 0x2E0 | int | main_shot_damage | IDA:case0,1; main shot dmg |
@@ -368,8 +368,8 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0xED170E69 | 0x2E8 | int | reserved_flag_2e8 | reserved |
 | 0xEDB407E8 | 0x2EC | float | shot_velocity_base | shot velocity base |
 | 0xEE92BCAB | 0x2F0 | float | main_shot_damage_multiplier | main shot dmg multiplier |
-| 0xF15C6A7F | 0x2F4 | float | melee_damage_correction_rate | melee dmg correction rate |
-| 0xF25A5100 | 0x2F8 | float | ranged_damage_correction_rate | ranged dmg correction rate |
+| 0xF15C6A7F | 0x2F4 | float | burst_r_incoming_damage_multiplier | active R Burst incoming-damage multiplier |
+| 0xF25A5100 | 0x2F8 | float | burst_f_incoming_damage_multiplier | active F Burst incoming-damage multiplier |
 | 0xF3C4CAE9 | 0x2FC | string | resource_label | resource label string ref (shared) |
 | 0xF55FBBBD | 0x304 | float | projectile_tracking_angle_min | projectile tracking min |
 | 0xF5DE94DD | 0x308 | float | projectile_tracking_angle_max | projectile tracking max |
@@ -387,7 +387,7 @@ _Movement speed parameter fields. All kind=2 (int) except action_label and resou
 | 0x086B475D | 0x004 | int | walk_speed_base | [40,60] base walk speed |
 | 0x0B6480D5 | 0x008 | int | walk_speed_backward | [50,100] backward walk speed |
 | 0x0B9EBECE | 0x00C | int | boost_gauge_capacity | [0,500] boost gauge max |
-| 0x0CF37AD7 | 0x010 | int | boost_recovery_delay_frame | [0,320] recovery delay |
+| 0x0CF37AD7 | 0x010 | int | alternate_free_flight_speed_delta | special free-flight per-update speed delta; `320` in three real OB rows |
 | 0x0D5BB2EF | 0x014 | int | boost_recovery_speed | [198,303] recovery speed |
 | 0x0E682BA8 | 0x018 | int | ground_run_speed | [100,180] ground run speed |
 | 0x11FFDDB4 | 0x01C | int | boost_dash_initial_speed | [60,220] BD initial speed |
@@ -418,7 +418,7 @@ _Movement speed parameter fields. All kind=2 (int) except action_label and resou
 | 0x7242066A | 0x080 | int | air_dash_distance | [0,240] air dash distance |
 | 0x737D64F4 | 0x084 | int | air_speed_max | [50,70] max air speed |
 | 0x77749DD2 | 0x088 | int | speed_decay_base | always 92 |
-| 0x7BF44A41 | 0x08C | int | air_steer_limit | [0,30] air steer limit |
+| 0x7BF44A41 | 0x08C | int | alternate_free_flight_speed_initial | special free-flight initial speed; `30` in three real OB rows |
 | 0x7C2572A1 | 0x090 | int | rotation_speed | [12,80] turning rotation |
 | 0x7C3CF4DD | 0x094 | int | gauge_recovery_rate | OB-only |
 | 0x7CD3A712 | 0x098 | int | boost_consumption_base | [50,60] boost use rate |

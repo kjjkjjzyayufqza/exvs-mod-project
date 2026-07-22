@@ -18,12 +18,14 @@ export interface SpeedEditorState {
 function validateSpeedEntry(entry: TypedParamEntry): ValidationMessage[] {
   const messages: ValidationMessage[] = [];
   const dashSpeed =
-    typeof entry.boostDashMaxSpeed === "number" ? entry.boostDashMaxSpeed : 0;
+    typeof entry.boostDashSpeedTerminal === "number"
+      ? entry.boostDashSpeedTerminal
+      : 0;
   if (dashSpeed > 50) {
     messages.push({
-      field: "boostDashMaxSpeed",
+      field: "boostDashSpeedTerminal",
       level: "warning",
-      message: "Very high dash speed",
+      message: "Very high boost-dash terminal parameter",
     });
   }
   return messages;

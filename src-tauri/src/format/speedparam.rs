@@ -20,81 +20,146 @@ const KIND_STRING: u32 = 7;
 
 pub const SPEEDPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x06D1922D, 2, "walk_speed_forward"),
-    (0x086B475D, 2, "walk_speed_base"),
+    (0x086B475D, 2, "step_turn_mid_speed_threshold"),
     (0x0B6480D5, 2, "walk_speed_backward"),
     (0x0B9EBECE, 2, "boost_gauge_capacity"),
-    (0x0CF37AD7, 2, "boost_recovery_delay_frame"),
+    (0x0CF37AD7, 2, "alternate_free_flight_speed_delta"),
     (0x0D5BB2EF, 2, "boost_recovery_speed"),
-    (0x0E682BA8, 2, "ground_run_speed"),
-    (0x11FFDDB4, 2, "boost_dash_initial_speed"),
-    (0x17A9D82D, 2, "step_distance"),
-    (0x18895A55, 2, "jump_initial_velocity"),
+    (0x0E682BA8, 2, "air_step_speed_terminal"),
+    (0x11FFDDB4, 2, "boost_ascent_vertical_speed_initial"),
+    (0x17A9D82D, 2, "boost_ascent_horizontal_speed_delta"),
+    (0x18895A55, 2, "transform_roll_neutral_retention"),
     (0x29AA8A04, 2, "gravity_modifier"),
     (0x2C76D0A7, 2, "movement_class"),
-    (0x2D28CC4B, 2, "air_dash_startup_frame"),
-    (0x2DF7AF95, 2, "step_startup_frame"),
+    (0x2D28CC4B, 2, "transform_roll_response"),
+    (0x2DF7AF95, 2, "boost_dash_loop_timer"),
     (0x2EAE942B, 2, "boost_dash_sustained_speed"),
-    (0x32FD1EDC, 2, "dash_cancel_type"),
-    (0x37D1D056, 2, "fall_gravity"),
+    (0x32FD1EDC, 2, "boost_dash_yaw_response"),
+    (0x37D1D056, 2, "air_step_speed_delta"),
     (0x3BF9E21E, 2, "max_ground_speed"),
-    (0x4031CB84, 2, "boost_dash_startup_frame"),
-    (0x41DABEC5, 2, "boost_dash_recovery_frame"),
-    (0x459455EA, 2, "landing_recovery_frame"),
-    (0x4D4B65EA, 2, "air_brake_speed"),
-    (0x4D601E55, 2, "step_speed"),
-    (0x4F705BAD, 2, "step_recovery_frame"),
-    (0x5481CCF4, 2, "boost_dash_distance"),
+    (0x4031CB84, 2, "ground_step_secondary_timer"),
+    (0x41DABEC5, 2, "ground_step_speed_terminal"),
+    (0x459455EA, 2, "transform_forward_speed_terminal"),
+    (0x4D4B65EA, 2, "transform_roll_target_magnitude"),
+    (0x4D601E55, 2, "step_turn_high_speed_adjustment"),
+    (0x4F705BAD, 2, "air_step_primary_timer"),
+    (0x5481CCF4, 2, "boost_dash_speed_terminal"),
     (0x56C51E87, 2, "air_dash_end_speed"),
-    (0x58313EF7, 2, "step_type"),
-    (0x5E8CAF43, 2, "air_dash_duration_frame"),
-    (0x5EF705B7, 2, "boost_dash_type"),
-    (0x607C25BC, 2, "air_speed_base"),
-    (0x6C640897, 2, "fall_speed"),
-    (0x6F6F1BF6, 2, "guard_move_speed"),
+    (0x58313EF7, 2, "ground_walk_speed_delta"),
+    (0x5E8CAF43, 2, "transform_forward_speed_initial"),
+    (0x5EF705B7, 2, "boost_ascent_yaw_response"),
+    (0x607C25BC, 2, "boost_ascent_vertical_speed_terminal"),
+    (0x6C640897, 2, "boost_dash_speed_delta"),
+    (0x6F6F1BF6, 2, "transform_yaw_response"),
     (0x7242066A, 2, "air_dash_distance"),
-    (0x737D64F4, 2, "air_speed_max"),
+    (0x737D64F4, 2, "air_step_secondary_timer"),
     (0x77749DD2, 2, "speed_decay_base"),
-    (0x7BF44A41, 2, "air_steer_limit"),
-    (0x7C2572A1, 2, "rotation_speed"),
-    (0x7C3CF4DD, 2, "gauge_recovery_rate"),
+    (0x7BF44A41, 2, "alternate_free_flight_speed_initial"),
+    (0x7C2572A1, 2, "ground_walk_entry_turn_time_base"),
+    (0x7C3CF4DD, 2, "ground_step_primary_timer"),
     (0x7CD3A712, 2, "boost_consumption_base"),
-    (0x7D79F6FA, 2, "boost_dash_max_speed"),
-    (0x7E5878A3, 2, "turning_speed"),
+    (0x7D79F6FA, 2, "step_turn_high_speed_threshold"),
+    (0x7E5878A3, 2, "ground_walk_speed_initial"),
     (0x8173DA19, 2, "jump_type"),
-    (0x84043A2D, 2, "fall_type"),
-    (0x8D0A9843, 2, "aerial_correction"),
-    (0x8EDC8D6E, 2, "air_efficiency"),
+    (0x84043A2D, 2, "boost_dash_entry_turn_timer"),
+    (0x8D0A9843, 2, "ground_step_speed_delta"),
+    (0x8EDC8D6E, 2, "walk_stop_motion_retention"),
     (0x9297EF74, 2, "air_gravity"),
     (0x95FA2B6D, 2, "air_dash_max_distance"),
-    (0x97BE8DFC, 2, "step_cancel_frame"),
+    (0x97BE8DFC, 2, "ground_walk_entry_turn_time_angle_scale"),
     (0x9A378388, 2, "guard_recovery_frame"),
-    (0x9EAA4E96, 2, "vertical_move_speed"),
-    (0x9FD06227, 2, "boost_startup_frame"),
-    (0xA49287B9, 2, "boost_dash_duration_frame"),
+    (0x9EAA4E96, 2, "ground_walk_entry_speed"),
+    (0x9FD06227, 2, "transform_pitch_pose_scale"),
+    (0xA49287B9, 2, "boost_dash_speed_initial"),
     (0xA55D6C5E, 2, "dash_end_speed"),
     (0xA7CBBC07, 2, "fixed_step_distance"),
     (0xB20B67C9, 2, "air_boost_efficiency"),
     (0xBC0127E1, 2, "guard_speed_rate"),
-    (0xC6157381, 2, "air_dash_speed"),
-    (0xC6BBC347, 2, "fall_speed_rate"),
-    (0xCD5DF17C, 2, "air_dash_type"),
-    (0xCF452D59, 2, "guard_step_type"),
-    (0xD68023A4, 2, "dash_range"),
+    (0xC6157381, 2, "air_step_speed_initial"),
+    (0xC6BBC347, 2, "boost_ascent_turn_time_angle_scale"),
+    (0xCD5DF17C, 2, "boost_ascent_horizontal_speed_initial"),
+    (0xCF452D59, 2, "ground_walk_yaw_response"),
+    (0xD68023A4, 2, "residual_air_drift_speed_cap"),
     (0xDD7720EB, 2, "speed_decay_rate"),
-    (0xDE1EF15A, 2, "boost_consumption_type"),
+    (0xDE1EF15A, 2, "residual_air_drift_speed_delta"),
     (0xE2FD1BFB, 2, "air_deceleration"),
     (0xE590DFE2, 2, "boost_dash_count"),
     // Kind 7: entry stores absolute file offset into trailing obfuscated C-string pool.
     (0xE6213731, 7, "action_label"),
-    (0xEC580BCC, 2, "turn_rate"),
-    (0xF3B9AD85, 2, "air_steer_speed"),
+    (0xEC580BCC, 2, "step_turn_mid_speed_adjustment"),
+    (0xF3B9AD85, 2, "transform_pitch_response"),
     (0xF3C4CAE9, 7, "resource_label"),
-    (0xF44C9D4E, 2, "boost_efficiency_air"),
-    (0xF559DCF1, 2, "boost_extension_rate"),
-    (0xF8B9B46E, 2, "boost_cap_rate"),
-    (0xFEC6069F, 2, "boost_dash_distance_max"),
-    (0xFF7A9C8B, 2, "gravity_air_modifier"),
+    (0xF44C9D4E, 2, "boost_ascent_horizontal_speed_terminal"),
+    (0xF559DCF1, 2, "ground_step_speed_initial"),
+    (0xF8B9B46E, 2, "transform_pitch_neutral_retention"),
+    (0xFEC6069F, 2, "ground_walk_speed_terminal"),
+    (0xFF7A9C8B, 2, "transform_forward_speed_delta"),
 ];
+
+/// Input-only compatibility aliases for names published before the MSC consumer audit.
+/// Serialization always emits the evidence-based canonical key from the command pool.
+const SPEEDPARAM_LEGACY_KEY_ALIASES: &[(&str, u32)] = &[
+    ("boostRecoveryDelayFrame", 0x0CF37AD7),
+    ("airSteerLimit", 0x7BF44A41),
+    ("walkSpeedBase", 0x086B475D),
+    ("groundRunSpeed", 0x0E682BA8),
+    ("boostDashInitialSpeed", 0x11FFDDB4),
+    ("stepDistance", 0x17A9D82D),
+    ("jumpInitialVelocity", 0x18895A55),
+    ("airDashStartupFrame", 0x2D28CC4B),
+    ("stepStartupFrame", 0x2DF7AF95),
+    ("dashCancelType", 0x32FD1EDC),
+    ("fallGravity", 0x37D1D056),
+    ("boostDashStartupFrame", 0x4031CB84),
+    ("boostDashRecoveryFrame", 0x41DABEC5),
+    ("landingRecoveryFrame", 0x459455EA),
+    ("airBrakeSpeed", 0x4D4B65EA),
+    ("stepSpeed", 0x4D601E55),
+    ("stepRecoveryFrame", 0x4F705BAD),
+    ("boostDashDistance", 0x5481CCF4),
+    ("stepType", 0x58313EF7),
+    ("airDashDurationFrame", 0x5E8CAF43),
+    ("boostDashType", 0x5EF705B7),
+    ("airSpeedBase", 0x607C25BC),
+    ("fallSpeed", 0x6C640897),
+    ("guardMoveSpeed", 0x6F6F1BF6),
+    ("airSpeedMax", 0x737D64F4),
+    ("rotationSpeed", 0x7C2572A1),
+    ("gaugeRecoveryRate", 0x7C3CF4DD),
+    ("boostDashMaxSpeed", 0x7D79F6FA),
+    ("turningSpeed", 0x7E5878A3),
+    ("fallType", 0x84043A2D),
+    ("aerialCorrection", 0x8D0A9843),
+    ("airEfficiency", 0x8EDC8D6E),
+    ("stepCancelFrame", 0x97BE8DFC),
+    ("verticalMoveSpeed", 0x9EAA4E96),
+    ("boostStartupFrame", 0x9FD06227),
+    ("boostDashDurationFrame", 0xA49287B9),
+    ("airDashSpeed", 0xC6157381),
+    ("fallSpeedRate", 0xC6BBC347),
+    ("airDashType", 0xCD5DF17C),
+    ("guardStepType", 0xCF452D59),
+    ("dashRange", 0xD68023A4),
+    ("boostConsumptionType", 0xDE1EF15A),
+    ("turnRate", 0xEC580BCC),
+    ("airSteerSpeed", 0xF3B9AD85),
+    ("boostEfficiencyAir", 0xF44C9D4E),
+    ("boostExtensionRate", 0xF559DCF1),
+    ("boostCapRate", 0xF8B9B46E),
+    ("boostDashDistanceMax", 0xFEC6069F),
+    ("gravityAirModifier", 0xFF7A9C8B),
+];
+
+fn hash_and_kind_for_speed_key(key: &str) -> Option<(u32, u32)> {
+    hash_and_kind_for_camel_key(SPEEDPARAM_COMMAND_POOL, key).or_else(|| {
+        let hash = SPEEDPARAM_LEGACY_KEY_ALIASES
+            .iter()
+            .find_map(|(legacy_key, hash)| (*legacy_key == key).then_some(*hash))?;
+        SPEEDPARAM_COMMAND_POOL
+            .iter()
+            .find_map(|(pool_hash, kind, _)| (*pool_hash == hash).then_some((hash, *kind)))
+    })
+}
 
 fn pool_string_hashes() -> Vec<u32> {
     SPEEDPARAM_COMMAND_POOL
@@ -137,7 +202,9 @@ pub fn speedparam_entry_to_json_value(entry: &SpeedParamEntry) -> Value {
 }
 
 pub fn speedparam_entry_from_json_value(v: &Value) -> Result<SpeedParamEntry, String> {
-    let obj = v.as_object().ok_or("speedparam entry: expected JSON object")?;
+    let obj = v
+        .as_object()
+        .ok_or("speedparam entry: expected JSON object")?;
     let entry_id: u32 = obj
         .get("entryId")
         .and_then(|e| e.as_u64().or_else(|| e.as_i64().map(|i| i as u64)))
@@ -177,12 +244,11 @@ pub fn speedparam_entry_from_json_value(v: &Value) -> Result<SpeedParamEntry, St
         let lookup_key = k
             .strip_suffix("Offset")
             .filter(|base| {
-                hash_and_kind_for_camel_key(SPEEDPARAM_COMMAND_POOL, base)
-                    .is_some_and(|(_, kind)| kind == KIND_STRING)
+                hash_and_kind_for_speed_key(base).is_some_and(|(_, kind)| kind == KIND_STRING)
             })
             .unwrap_or(k.as_str());
 
-        if let Some((h, knd)) = hash_and_kind_for_camel_key(SPEEDPARAM_COMMAND_POOL, lookup_key) {
+        if let Some((h, knd)) = hash_and_kind_for_speed_key(lookup_key) {
             if knd == KIND_STRING {
                 if let Some(s) = val.as_str() {
                     strings.insert(h, s.to_string());
@@ -258,19 +324,21 @@ pub struct SpeedParamData {
 }
 
 fn expected_field_specs() -> Vec<ParamFieldSpec> {
-    expected_field_specs_ordered_index_times_four(SPEEDPARAM_COMMAND_POOL)
+    expected_field_specs_ordered(SPEEDPARAM_COMMAND_POOL)
 }
 
-fn expected_field_specs_ordered_index_times_four(
-    pool: ParamCommandPool,
-) -> Vec<ParamFieldSpec> {
+fn expected_field_specs_ordered(pool: ParamCommandPool) -> Vec<ParamFieldSpec> {
+    let mut entry_offset = 0u32;
     pool.iter()
-        .enumerate()
-        .map(|(index, (hash, kind, _))| ParamFieldSpec {
-            hash: *hash,
-            entry_offset: (index * 4) as u32,
-            flags: 0,
-            kind: *kind,
+        .map(|(hash, kind, _)| {
+            let spec = ParamFieldSpec {
+                hash: *hash,
+                entry_offset,
+                flags: 0,
+                kind: *kind,
+            };
+            entry_offset += if *kind == KIND_STRING { 8 } else { 4 };
+            spec
         })
         .collect()
 }
@@ -439,8 +507,11 @@ fn build_with_string_rewrite(
             } else if let Some(&raw_offset) = entry.commands.get(&h) {
                 // Keep prior absolute offset only when it still points into old trailing;
                 // otherwise write empty string.
-                let old_pool_start =
-                    string_pool_start(field_specs.len(), b.source_entries_raw.len().max(1), entry_size);
+                let old_pool_start = string_pool_start(
+                    field_specs.len(),
+                    b.source_entries_raw.len().max(1),
+                    entry_size,
+                );
                 if (raw_offset as usize) >= old_pool_start
                     && !b.trailing_data.is_empty()
                     && (raw_offset as usize) < old_pool_start + b.trailing_data.len()
@@ -534,6 +605,11 @@ mod tests {
     const SAMPLE_PATH: &str = "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\0x08248A8D\\speedparam.bin";
     const GYAN_PATH: &str =
         "e:\\XB\\mod\\041cpm\\001gundam_005gyan00_001_N2_rocket_mod\\speedparam.bin";
+    const ALTERNATE_FREE_FLIGHT_PATHS: [&str; 3] = [
+        "E:\\XB\\解包\\com\\file\\041cpm\\0x37F04F98\\speedparam.bin",
+        "E:\\XB\\解包\\com\\file\\041cpm\\0x62419441\\speedparam.bin",
+        "E:\\XB\\解包\\com\\file\\041cpm\\0x682678AF\\speedparam.bin",
+    ];
 
     #[test]
     fn speedparam_read_write_crud() {
@@ -640,5 +716,117 @@ mod tests {
                 .map(String::as_str),
             Some("CHR_TEST_EDIT")
         );
+    }
+
+    #[test]
+    fn default_speedparam_specs_preserve_kind_7_padding() {
+        let specs = expected_field_specs();
+        let offset_for = |hash| {
+            specs
+                .iter()
+                .find(|spec| spec.hash == hash)
+                .map(|spec| spec.entry_offset)
+                .expect("field spec")
+        };
+
+        assert_eq!(offset_for(0xE6213731), 0x104);
+        assert_eq!(offset_for(0xEC580BCC), 0x10C);
+        assert_eq!(offset_for(0xF3B9AD85), 0x110);
+        assert_eq!(offset_for(0xF3C4CAE9), 0x114);
+        assert_eq!(offset_for(0xF44C9D4E), 0x11C);
+        assert_eq!(offset_for(0xFF7A9C8B), 0x12C);
+        assert_eq!(min_entry_data_size_for_specs(&specs), 0x130);
+    }
+
+    #[test]
+    fn speedparam_uses_evidence_based_key_and_accepts_legacy_alias() {
+        let canonical = speedparam_entry_from_json_value(&json!({
+            "entryId": 1,
+            "boostAscentVerticalSpeedInitial": 42
+        }))
+        .expect("canonical speed key");
+        assert_eq!(canonical.commands.get(&0x11FFDDB4), Some(&42));
+
+        let legacy = speedparam_entry_from_json_value(&json!({
+            "entryId": 1,
+            "boostDashInitialSpeed": 42
+        }))
+        .expect("legacy speed key");
+        assert_eq!(legacy.commands.get(&0x11FFDDB4), Some(&42));
+
+        let output = speedparam_entry_to_json_value(&canonical);
+        assert_eq!(output["boostAscentVerticalSpeedInitial"], json!(42));
+        assert!(output.get("boostDashInitialSpeed").is_none());
+    }
+
+    #[test]
+    fn alternate_free_flight_curve_matches_real_ob_rows_and_legacy_aliases() {
+        for path in ALTERNATE_FREE_FLIGHT_PATHS {
+            let source = std::fs::read(path).expect("read alternate free-flight speedparam");
+            let parsed = parse_speedparam(&source).expect("parse alternate free-flight speedparam");
+            let rebuilt =
+                build_speedparam(&parsed).expect("rebuild alternate free-flight speedparam");
+            assert_eq!(rebuilt, source, "byte-exact rebuild for {path}");
+
+            let row = parsed
+                .entries
+                .iter()
+                .find(|entry| {
+                    entry.strings.get(&0xE6213731).map(String::as_str) == Some("SKL_MOVE")
+                })
+                .expect("SKL_MOVE row");
+            assert_eq!(
+                row.commands.get(&0x7BF44A41),
+                Some(&30),
+                "initial for {path}"
+            );
+            assert_eq!(
+                row.commands.get(&0x0CF37AD7),
+                Some(&320),
+                "delta for {path}"
+            );
+            assert_eq!(
+                row.commands.get(&0x95FA2B6D),
+                Some(&350),
+                "terminal for {path}"
+            );
+            assert_eq!(
+                row.commands[&0x7BF44A41] + row.commands[&0x0CF37AD7],
+                row.commands[&0x95FA2B6D],
+                "one-step curve closure for {path}"
+            );
+
+            let json = speedparam_entry_to_json_value(row);
+            assert_eq!(json["alternateFreeFlightSpeedInitial"], json!(30));
+            assert_eq!(json["alternateFreeFlightSpeedDelta"], json!(320));
+            assert!(json.get("airSteerLimit").is_none());
+            assert!(json.get("boostRecoveryDelayFrame").is_none());
+        }
+
+        let legacy = speedparam_entry_from_json_value(&json!({
+            "entryId": 1,
+            "airSteerLimit": 30,
+            "boostRecoveryDelayFrame": 320
+        }))
+        .expect("legacy alternate free-flight aliases");
+        assert_eq!(legacy.commands.get(&0x7BF44A41), Some(&30));
+        assert_eq!(legacy.commands.get(&0x0CF37AD7), Some(&320));
+    }
+
+    #[test]
+    fn every_speedparam_legacy_key_alias_remains_readable() {
+        for &(legacy_key, hash) in SPEEDPARAM_LEGACY_KEY_ALIASES {
+            let mut obj = JsonMap::new();
+            obj.insert("entryId".to_string(), json!(1));
+            obj.insert(legacy_key.to_string(), json!(42));
+
+            let parsed = speedparam_entry_from_json_value(&Value::Object(obj))
+                .unwrap_or_else(|error| panic!("legacy key {legacy_key}: {error}"));
+            assert_eq!(
+                parsed.commands.get(&hash),
+                Some(&42),
+                "legacy key {legacy_key}"
+            );
+        }
     }
 }

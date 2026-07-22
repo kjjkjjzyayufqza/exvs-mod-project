@@ -8,8 +8,8 @@ use crate::format::param_bin_format::{
 };
 use crate::format::param_entry_schema::{
     entry_commands_from_named_json, entry_commands_to_named_json, entry_row_matches_command_map,
-    expected_field_specs_ordered_index_times_four, min_entry_data_size_for_specs,
-    parse_commands_map_from_entry_row, validate_file_specs_kind_match_pool, ParamCommandPool,
+    expected_field_specs_ordered, min_entry_data_size_for_specs, parse_commands_map_from_entry_row,
+    validate_file_specs_kind_match_pool, ParamCommandPool,
 };
 
 // Please keep comments for analysis.
@@ -155,7 +155,7 @@ pub struct BulletParamData {
 }
 
 fn expected_field_specs() -> Vec<ParamFieldSpec> {
-    expected_field_specs_ordered_index_times_four(BULLETPARAM_COMMAND_POOL)
+    expected_field_specs_ordered(BULLETPARAM_COMMAND_POOL)
 }
 
 fn validate_field_specs(field_specs: &[ParamFieldSpec]) -> Result<(), String> {
