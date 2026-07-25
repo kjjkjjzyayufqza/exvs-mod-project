@@ -942,6 +942,29 @@ fn write_scene_fbx(path: &Path, scene: &ExportScene, up_axis: FbxUpAxis) -> Resu
     Ok(())
 }
 
+/// Write a model-only FBX (armature + skinned meshes) without textures.
+///
+/// Used as the model half of MotionFbxExport StagingFbxPair (BlenderCompose).
+/// Scale 1.0, Y-up, textures off — matches unit model export defaults for this flow.
+pub(crate) fn write_model_fbx_no_textures(numdlb_path: &Path, output_fbx: &Path) -> Result<()> {
+    let config = ExportConfig {
+        scale_factor: 1.0,
+        up_axis: FbxUpAxis::YUp,
+        export_textures: false,
+    };
+    let model = load_ssbh_model(numdlb_path.to_string_lossy().as_ref())?;
+    let output_dir = output_fbx.parent().ok_or_else(|| {
+        anyhow!(
+            "output FBX path has no parent directory: {}",
+            output_fbx.display()
+        )
+    })?;
+    let mut texture_state = BatchTextureExportState::default();
+    let (scene, _) = build_export_scene(&model, output_dir, &config, &mut texture_state)?;
+    write_scene_fbx(output_fbx, &scene, config.up_axis)?;
+    Ok(())
+}
+
 pub(crate) fn write_animation_only_fbx(output_path: &Path, clip: &MotionClip) -> Result<()> {
     clip.validate().map_err(|error| anyhow!(error))?;
     let bones = motion_export_bones(clip)?;

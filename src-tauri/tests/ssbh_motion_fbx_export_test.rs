@@ -1,5 +1,6 @@
 use app_lib::ssbh_motion_interchange::{
-    candidate_blender_51_paths, resolve_blender_51_executable,
+    candidate_blender_51_paths, export_complete_motion_fbx, parse_compose_success_from_stdout,
+    resolve_blender_51_executable, resolve_compose_script_path, CompleteMotionFbxExportRequest,
 };
 use std::path::{Path, PathBuf};
 
@@ -85,6 +86,124 @@ fn override_file_without_5_1_marker_is_rejected() {
         error.contains("Blender 5.1"),
         "error should mention Blender 5.1, got: {error}"
     );
+}
+
+#[test]
+fn complete_motion_export_rejects_empty_paths() {
+    let error = export_complete_motion_fbx(CompleteMotionFbxExportRequest {
+        nuanmb_path: String::new(),
+        nusktb_path: "skel.nusktb".into(),
+        numdlb_path: "model.numdlb".into(),
+        output_fbx_path: "out.fbx".into(),
+        blender_path: None,
+        action_name: None,
+    })
+    .expect_err("empty nuanmb_path must fail")
+    .to_string();
+    assert!(
+        error.contains("nuanmb_path") && error.to_ascii_lowercase().contains("empty"),
+        "unexpected error: {error}"
+    );
+
+    let error = export_complete_motion_fbx(CompleteMotionFbxExportRequest {
+        nuanmb_path: "anim.nuanmb".into(),
+        nusktb_path: "  ".into(),
+        numdlb_path: "model.numdlb".into(),
+        output_fbx_path: "out.fbx".into(),
+        blender_path: None,
+        action_name: None,
+    })
+    .expect_err("empty nusktb_path must fail")
+    .to_string();
+    assert!(
+        error.contains("nusktb_path"),
+        "unexpected error: {error}"
+    );
+}
+
+#[test]
+fn complete_motion_export_rejects_non_fbx_output() {
+    let error = export_complete_motion_fbx(CompleteMotionFbxExportRequest {
+        nuanmb_path: "anim.nuanmb".into(),
+        nusktb_path: "skel.nusktb".into(),
+        numdlb_path: "model.numdlb".into(),
+        output_fbx_path: "out.glb".into(),
+        blender_path: None,
+        action_name: None,
+    })
+    .expect_err("non-fbx output must fail")
+    .to_string();
+    assert!(
+        error.contains(".fbx"),
+        "error should require .fbx, got: {error}"
+    );
+}
+
+#[test]
+fn complete_motion_export_rejects_output_equal_to_input() {
+    let shared = r"E:\tmp\shared.fbx";
+    let error = export_complete_motion_fbx(CompleteMotionFbxExportRequest {
+        nuanmb_path: "anim.nuanmb".into(),
+        nusktb_path: "skel.nusktb".into(),
+        numdlb_path: shared.into(),
+        output_fbx_path: shared.into(),
+        blender_path: None,
+        action_name: None,
+    })
+    .expect_err("output equal input must fail")
+    .to_string();
+    assert!(
+        error.contains("must not equal"),
+        "unexpected error: {error}"
+    );
+}
+
+#[test]
+fn complete_motion_export_rejects_missing_blender_override() {
+    let missing = PathBuf::from(r"C:\definitely\missing\Blender 5.1\blender.exe");
+    let error = export_complete_motion_fbx(CompleteMotionFbxExportRequest {
+        nuanmb_path: "anim.nuanmb".into(),
+        nusktb_path: "skel.nusktb".into(),
+        numdlb_path: "model.numdlb".into(),
+        output_fbx_path: "out.fbx".into(),
+        blender_path: Some(missing.to_string_lossy().to_string()),
+        action_name: None,
+    })
+    .expect_err("missing blender override must fail")
+    .to_string();
+    assert!(
+        error.contains("Blender 5.1"),
+        "error should mention Blender 5.1, got: {error}"
+    );
+}
+
+#[test]
+fn compose_script_resolver_finds_cargo_manifest_script_when_present() {
+    let script = resolve_compose_script_path().expect("compose script should resolve in dev tree");
+    assert!(
+        script.is_file(),
+        "resolved script must exist: {}",
+        script.display()
+    );
+    assert_eq!(
+        script.file_name().and_then(|name| name.to_str()),
+        Some("motion_fbx_compose.py")
+    );
+}
+
+#[test]
+fn parse_compose_success_scans_noisy_stdout() {
+    let noisy = "\
+Blender 5.1.0 (hash abc)
+Read blend: C:\\Program Files\\Blender Foundation\\Blender 5.1\\...
+INFO: something
+{\"ok\":true,\"frame_start\":0,\"frame_end\":12,\"fps\":60}
+";
+    assert!(parse_compose_success_from_stdout(noisy));
+    assert!(!parse_compose_success_from_stdout("no json here\n"));
+    assert!(!parse_compose_success_from_stdout(
+        "{\"ok\":false,\"error\":\"x\"}\n"
+    ));
 }
 
 fn path_looks_like_51_for_test(path: &Path) -> bool {

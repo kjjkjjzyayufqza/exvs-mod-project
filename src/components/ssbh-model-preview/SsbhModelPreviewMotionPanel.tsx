@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MotionClipPathSearchSelect } from "./components/MotionClipPathSearchSelect";
-import { CascadeurBridgePanel } from "./components/CascadeurBridgePanel";
+import { MotionFbxExportPanel } from "./components/MotionFbxExportPanel";
 import { MayaSection } from "./MayaInspectorSection";
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
 
@@ -159,12 +159,12 @@ export function SsbhModelPreviewMotionPanel() {
         </div>
       </MayaSection>
 
-      <CascadeurBridgePanel
+      <MotionFbxExportPanel
         selectedNuanmbPath={p.motionSelectedNuanmbPath}
         skeletonPath={activeInstance?.bundle.skelPath ?? null}
+        numdlbPath={activeInstance?.bundle.modlPath ?? null}
         workspaceRoot={p.workspaceRoot}
         disabled={p.previewBusy}
-        onImportedNuanmb={p.registerMotionNuanmbPath}
       />
     </div>
   );

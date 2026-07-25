@@ -1,3 +1,4 @@
+mod blender_compose;
 mod blender_resolve;
 mod cascadeur;
 mod fbx;
@@ -10,6 +11,10 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+pub use blender_compose::{
+    export_complete_motion_fbx, parse_compose_success_from_stdout, resolve_compose_script_path,
+    CompleteMotionFbxExportReport, CompleteMotionFbxExportRequest,
+};
 pub use blender_resolve::{candidate_blender_51_paths, resolve_blender_51_executable};
 pub use motion_clip::{
     MotionBone, MotionClip, MotionFrame, MotionSkeleton, EXVS2_SAMPLE_RATE_HZ,
@@ -158,28 +163,10 @@ pub fn import_cascadeur_bridge_to_nuanmb(
 }
 
 #[tauri::command]
-pub async fn ssbh_export_nuanmb_to_cascadeur_bridge(
-    request: NuanmbToCascadeurRequest,
-) -> Result<MotionConversionReport, String> {
-    run_blocking(move || export_nuanmb_to_cascadeur_bridge(request)).await
-}
-
-#[tauri::command]
-pub async fn ssbh_import_cascadeur_bridge_to_nuanmb(
-    request: CascadeurToNuanmbRequest,
-) -> Result<MotionConversionReport, String> {
-    run_blocking(move || import_cascadeur_bridge_to_nuanmb(request)).await
-}
-
-#[tauri::command]
-pub async fn ssbh_inspect_cascadeur_bridge(
-    request: CascadeurBridgeInspectRequest,
-) -> Result<CascadeurBridgeManifest, String> {
-    run_blocking(move || {
-        let path = required_path(&request.bridge_manifest_path, "bridge_manifest_path")?;
-        read_cascadeur_bridge_manifest(&path)
-    })
-    .await
+pub async fn ssbh_export_complete_motion_fbx(
+    request: CompleteMotionFbxExportRequest,
+) -> Result<CompleteMotionFbxExportReport, String> {
+    run_blocking(move || export_complete_motion_fbx(request)).await
 }
 
 async fn run_blocking<T: Send + 'static>(
