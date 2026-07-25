@@ -1,3 +1,4 @@
+mod blender_resolve;
 mod cascadeur;
 mod fbx;
 mod motion_clip;
@@ -9,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+pub use blender_resolve::{candidate_blender_51_paths, resolve_blender_51_executable};
 pub use motion_clip::{
     MotionBone, MotionClip, MotionFrame, MotionSkeleton, EXVS2_SAMPLE_RATE_HZ,
     MAX_MOTION_FRAME_COUNT,
@@ -23,6 +25,8 @@ pub use validate::{validate_rig_binding, RigBindingPolicy, RigBindingReport};
 pub enum MotionInterchangeError {
     InvalidClip(String),
     Bridge(String),
+    /// MotionFbxExport / BlenderCompose failures (path resolve, process, staging).
+    Compose(String),
     Nuanmb(String),
     RigMismatch(String),
 }
@@ -32,6 +36,7 @@ impl fmt::Display for MotionInterchangeError {
         match self {
             Self::InvalidClip(message) => write!(f, "Invalid motion clip: {message}"),
             Self::Bridge(message) => write!(f, "Cascadeur bridge failed: {message}"),
+            Self::Compose(message) => write!(f, "Motion FBX export failed: {message}"),
             Self::Nuanmb(message) => write!(f, "NUANMB conversion failed: {message}"),
             Self::RigMismatch(message) => write!(f, "Rig mismatch: {message}"),
         }
