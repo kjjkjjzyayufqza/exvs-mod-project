@@ -1,5 +1,23 @@
 # EXVS2 Command Hash Mapping
 
+> **This file is a hypothesis list, not a source of truth — 2026-07-25.**
+>
+> The `game_name` column is a label list. It is the historical origin of most
+> `speedparam` and `characterparam` field names in this project, and a mechanical
+> audit found its labels wrong at a dimensional level in many cases: fields named
+> `*_frame` that are multipliers, `*_speed` or `*_distance` that are magnitude
+> accumulator seeds or floors, `*_type` that are never equality-tested, and
+> `*_rate` that are durations.
+>
+> Known contradicted entries include `0xF5DE94DD` / `0xF55FBBBD` labelled as
+> projectile tracking-angle bounds when they are rungs of ten-band float ladders,
+> and the burst F/S/C/V/R slot assignment for the `sub_1405F8D40` family, which
+> has no address-level basis.
+>
+> Authoritative name: the canonical key in `src-tauri/src/format/*param.rs`.
+> Authoritative evidence: `docs/param-evidence-registry.tsv`.
+> Guard: `python tools/check_param_name_evidence.py`.
+
 ## Format
 Each entry documents a command hash and its game logic meaning.
 ```

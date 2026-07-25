@@ -74,6 +74,21 @@ Use `docs/` as the first source of project truth:
 - `docs/characterparam-field-notes.md` — characterparam empirical field
   identity (`lockOnDistanceMax` + `alertRangeDistance` = 红锁,
   `boostGaugeInitial` = HP); prefer over stale pool names when they conflict.
+  **Superseded on the lock question** by
+  `docs/lock-on-range-native-resolution-ob.md`: the red-lock boundary is
+  `min(Family1, Family2*scale + offset - 1)`, so no single field owns it.
+- `docs/param-evidence-registry.tsv` — machine-readable evidence state for every
+  `speedparam` / `characterparam` field hash: grade, consumption mechanism, value
+  spread, citation. Generated; validated by `tools/check_param_name_evidence.py`.
+- `docs/lock-on-range-native-resolution-ob.md` — full decompiled lock-on chain
+  (band resolver, inner/outer radius formulas, slot-selection gate).
+- `docs/characterparam-native-consumer-map-ob.md` — all 197 characterparam fields
+  classified by consumption mechanism (128 code / 32 `.rdata` hash array / 37
+  absent), with the `find immediate` false-negative trap documented.
+- `docs/speedparam-msc-consumer-evidence.md` — per-hash MSC call-site arithmetic
+  for all 74 speedparam fields.
+- `docs/param-table-id-file-binding-proof.md` — proven `sys_0` table id → param
+  file bindings (`0x60006`=speedparam, `0x60002`=grapparam, `0x60007`=interactionid).
 - `docs/msc-research/gyan-main-shot-no-auto-turn.md` — disable main-shot
   auto-turn (`global693` / `func_592`); flight uses `global24 & 0x4000`.
 - `docs/msc-research/gyan-melee-direction-actions.md` — Gyan directional melee:
@@ -207,6 +222,20 @@ Project skills (domain):
   opaque names like `global777` / `var42` for AI-added state. Use semantic names
   grounded in proven evidence, and record uncertain meanings in the AI block
   origin or semantic overlay.
+- **Param field names are evidence-gated.** The canonical key for a param field
+  hash is the one in `src-tauri/src/format/*param.rs`; the evidence state lives in
+  `docs/param-evidence-registry.tsv`. `docs/command_mapping.md` and
+  `docs/speedparam-semantic-ledger.md` are **historical claim records, not sources
+  of truth** — both carry a superseded banner and both have been the direct cause
+  of an agent re-reporting an already-corrected field as wrong. After touching any
+  param pool, ledger, or field-note document, run:
+  `python .\tools\check_param_name_evidence.py`
+  It fails when a field the engine cannot reach claims a gameplay name, when the
+  registry and a pool disagree, or when a document asserts a name no pool
+  recognises. Regenerate the registry with
+  `python .\tools\param_evidence_registry.py --out docs\param-evidence-registry.tsv`.
+  Never rename a param key without adding the old name to that file's legacy alias
+  table in the same change.
 - Do not start dev servers unless the user explicitly asks.
 - Prefer reusing existing utility functions, components, and data models.
 - Each `page` component should have a corresponding `components/` directory.

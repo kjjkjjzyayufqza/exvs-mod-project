@@ -1,8 +1,24 @@
 # speedparam complete semantic ledger
 
+> **SUPERSEDED as a source of names — 2026-07-25.**
+>
+> The names in the tables below are **pre-audit historical claims**. Many of them
+> were inherited from the label list in `docs/command_mapping.md` and were
+> recorded here at grade A on the strength of an MSC *function number*, which
+> locates a read but does not prove a meaning. A mechanical audit over 1827
+> decompiled MSC files contradicted 46 of the 64 readable fields.
+>
+> The authoritative name for a hash is the canonical key in
+> `src-tauri/src/format/speedparam.rs`. The authoritative evidence state is
+> `docs/param-evidence-registry.tsv`. The arithmetic is in
+> `docs/speedparam-msc-consumer-evidence.md` and `docs/param-research/`.
+>
+> Do not quote a name from this file as current. Run
+> `python tools/check_param_name_evidence.py` after touching any of these files.
+
 Date: 2026-07-14  
 Scope: all 74 descriptors in the OB 304-byte `speedparam` row  
-Status: evidence ledger; grade-A roles are now canonical JSON/UI names
+Status: **historical** — pre-audit claim record, retained for provenance only
 
 ## Evidence model
 

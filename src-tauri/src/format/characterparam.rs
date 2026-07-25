@@ -22,6 +22,37 @@ use crate::format::param_entry_schema::{
 // Cross-version coverage and naming confidence are tracked in
 // docs/characterparam-native-coverage-ledger.md and docs/characterparam-field-notes.md.
 pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
+    // Three static hash arrays in .rdata select characterparam fields by index
+    // instead of by an inline immediate. Members are annotated `[V:data_<addr>
+    // idx=N]`. Verified 2026-07-25 against OB `vsac27_Release.exe`; see
+    // docs/characterparam-native-consumer-map-ob.md.
+    //
+    //   0x14133F258  8 entries, `sub_1405F8DF0(base, idx<8)`
+    //     -> sub_140682A30 case 8 -> sub_1405F9480, i.e. the operand of
+    //        HP -= value * burstIncoming * gutsBand * ratioBand
+    //
+    //   0x14134BD58  9 entries = three local-space 3D offset vectors,
+    //     `sub_140690480` reads x=[3i], y=[3i+1], z=[3i+2] with x sign-flipped
+    //     on the mirror flag -> sub_140690610 case 4 -> sub_1405FB520
+    //
+    //   0x141342D80  16 entries laid out as a 4x4 matrix of collision spheres.
+    //     `sub_140628FD0` builds one `vdkSpheref` per row:
+    //       radius   = array[4*r + 0]  (multiplied by field 0xFEADD5BE)
+    //       centre   = (array[4*r + 1], array[4*r + 2], array[4*r + 3])
+    //       attachId = caller table, default unk_141342DC4
+    //     and stops at the first row whose radius is <= 0.0. `sub_140628B70`
+    //     performs the same stride-4 walk of column 0 purely to count how many
+    //     spheres are active, maximised across every row in the file.
+    //     Corroboration: sphere 0's radius is > 0 in every sampled file
+    //     (7.0 / 32.0 / 40.0) while spheres 1-3 may be 0.0, which is exactly what
+    //     the counting loop needs; centre components are small signed offsets
+    //     (-60 .. +60); and 0xFEADD5BE is 1.0 .. 1.2, a scale just above unity.
+    //     0xFEADD5BE is additionally read by the trivial getter sub_140634FE0,
+    //     whose caller sub_1406394E0 computes
+    //       otherField * (scale * sphere0Radius / 7.0 * 10.0)
+    //     i.e. it normalises the scaled radius against the smallest observed
+    //     radius. Both of its consumers therefore treat it as a radius multiplier,
+    //     which is why the former name `final_damage_multiplier` was dropped.
     // ---- damage dispatcher: sub_1405F9010 switch(attack_type) ----
     (0x00D7CEDB, 2, "damage_dispatch_value_selector_8"), // [V:sub_1405F9010] case 8
     (0x00EC483C, 5, "damage_calculation_multiplier_slot_4"), // [V:sub_140625060] helper supports selector 4; sole observed caller sub_140622010 only supplies slots 0-3
@@ -47,11 +78,11 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
         5,
         "low_durability_incoming_damage_multiplier_band_05_to_10",
     ), // [V:sub_1405F8E70 -> sub_1405F9480] HP 5-10% band; value*0.01 multiplies incoming damage
-    (0x15B67A85, 5, "gravity_offset"),
-    (0x1698E3D8, 5, "body_collision_radius"),
+    (0x15B67A85, 5, "collision_sphere_0_center_z"), // [V:data_141342D80 r0c3 -> sub_140628FD0]
+    (0x1698E3D8, 5, "body_collision_radius"), // [D:4.0,4.4,4.8,60.0] absent from the OB image; name is a data-shape inference, not a proven consumer
     (0x18415DC4, 2, "is_transformable"),
     (0x1B2228B5, 1, "unit_attribute_flags"),
-    (0x1B8808F8, 2, "has_shield"),
+    (0x1B8808F8, 2, "reserved_05c"), // [D:0] constant across the sampled corpus and absent from the OB image; was "has_shield"
     (0x1BB18A48, 5, "burst_f_mobility_multiplier"),
     (0x1BFADFD3, 5, "lock_on_fov_angle"),
     (0x1C936B77, 5, "down_value_threshold"),
@@ -62,30 +93,30 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x21E2041A, 5, "hp_ratio_family_a_band_10_to_15"),
     (0x22169CCE, 5, "damage_calculation_multiplier_slot_2"), // [V:sub_140625060 <- sub_140622010] selected by hit-record slot 2 and multiplied into final damage
     (0x22823596, 2, "special_cost"),                         // [V:sub_1405F9180] case 2
-    (0x24FA2A04, 5, "special_gauge_start_rate"),
+    (0x24FA2A04, 5, "collision_sphere_3_center_y"), // [V:data_141342D80 r3c2 -> sub_140628FD0]
     (0x25346DCD, 2, "reserved_flag_08c"),
-    (0x25384033, 5, "landing_recovery_rate"),
+    (0x25384033, 5, "collision_sphere_3_center_x"), // [V:data_141342D80 r3c1 -> sub_140628FD0]
     (0x2698D841, 5, "damage_correction_base"),
-    (0x26BC945D, 5, "step_speed_rate"),
+    (0x26BC945D, 5, "collision_sphere_3_center_z"), // [V:data_141342D80 r3c3 -> sub_140628FD0]
     (0x27F7E08A, 5, "camera_pitch_down_angle"),
     (0x283634C3, 5, "burst_v_mobility_multiplier"),
     (0x28B3FEC3, 5, "hp_ratio_family_a_band_45_to_50"),
-    (0x2B99569A, 2, "main_ammo_reload_frame"), // [V:data_14133F258] idx=0 — static integer array read by sub_1405F8DF0
-    (0x2C6DC778, 5, "aerial_damage_rate"),
+    (0x2B99569A, 2, "self_hp_reduction_amount_slot_0"), // [V:data_14133F258 idx=0 -> sub_1405F8DF0 -> sub_1405F9480] HP -= value * burst * guts * ratio
+    (0x2C6DC778, 5, "reserved_0ac"), // [D:0.8] constant across the sampled corpus and absent from the OB image; was "aerial_damage_rate"
     (0x2C8221E6, 2, "reserved_flag_0b0"),
-    (0x2CF49283, 2, "melee_combo_limit"), // [V:data_14133F258] idx=4
+    (0x2CF49283, 2, "self_hp_reduction_amount_slot_4"), // [V:data_14133F258 idx=4 -> sub_1405F9480]
     (0x2DA8874F, 2, "special_melee_damage"), // [V:sub_1405F9010] case 11
     (0x2DF82AD5, 5, "special_melee_correction_rate"),
-    (0x30099C4D, 5, "guard_damage_rate"),
-    (0x324F2214, 5, "barrier_damage_rate"),
+    (0x30099C4D, 5, "target_position_offset_slot_0_z"), // [V:data_14134BD58 idx=2 -> sub_140690480] local-space Z of offset vector 0
+    (0x324F2214, 5, "target_position_offset_slot_0_y"), // [V:data_14134BD58 idx=1 -> sub_140690480] local-space Y of offset vector 0
     (0x32F4D4BE, 2, "reserved_flag_0c8"),
     (0x333722B6, 2, "melee_damage"), // [V:sub_1405F9010] case 2/14
-    (0x338D4823, 5, "melee_correction_offset"),
+    (0x338D4823, 5, "target_position_offset_slot_0_x"), // [V:data_14134BD58 idx=0 -> sub_140690480] local-space X, sign-flipped when the mirror flag is set
     (0x379D0C45, 5, "melee_tracking_angle"),
     (0x38FDFC10, 5, "melee_bonus_rate"),
-    (0x3AA41969, 5, "melee_reach_base"),
+    (0x3AA41969, 5, "collision_sphere_0_radius"), // [V:data_141342D80 r0c0 -> sub_140628FD0; also sub_140639530 -> sub_1406394E0 radius normalisation]
     (0x3C1E9E3B, 2, "runtime_durability_upper_clamp"), // [V:sub_1405F8C60, sub_1405F9500]
-    (0x3C43A0D1, 5, "charge_time_offset"),
+    (0x3C43A0D1, 5, "collision_sphere_3_radius"), // [V:data_141342D80 r3c0 -> sub_140628FD0]
     (0x3C475420, 5, "lock_distance_threshold_family_2_slot_2"), // [V:sub_1405F8720] selector 2
     (
         0x3CBF4F6C,
@@ -97,7 +128,7 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x3F29DFF4, 2, "reserved_flag_0f8"),
     (0x432ADAA1, 5, "camera_offset_x"),
     (0x43DC9679, 5, "burst_s_ranged_attack_multiplier"),
-    (0x45C84958, 2, "respawn_invincibility_frame"),
+    (0x45C84958, 2, "reserved_104"), // [D:1000] constant across the sampled corpus and absent from the OB image; was "respawn_invincibility_frame"
     (
         0x46E6927A,
         5,
@@ -106,27 +137,27 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x4769F064, 5, "burst_v_melee_attack_multiplier"),
     (0x4778AB75, 1, "movement_type"),
     (0x4B4064B6, 5, "lock_distance_threshold_family_2_slot_1"), // [V:sub_1405F8720] selector 1
-    (0x4B449047, 5, "camera_offset_y"),
+    (0x4B449047, 5, "collision_sphere_2_radius"), // [V:data_141342D80 r2c0 -> sub_140628FD0]
     (0x4CF8985A, 2, "reserved_flag_11c"),
     (0x4D2405E0, 2, "reserved_flag_120"),
     (0x4FFACC86, 5, "camera_offset_z"),
-    (0x5175F1DE, 5, "camera_offset_partner_x"),
-    (0x51BBA4CB, 5, "camera_offset_partner_y"),
+    (0x5175F1DE, 5, "reserved_128"), // [D:0.0] constant across the sampled corpus and absent from the OB image; was "camera_offset_partner_x"
+    (0x51BBA4CB, 5, "collision_sphere_2_center_z"), // [V:data_141342D80 r2c3 -> sub_140628FD0]
     (0x51DD39F0, 5, "body_height"),
     (0x52335D5B, 2, "reserved_flag_134"),
-    (0x523F70A5, 5, "body_offset_y"),
-    (0x5245EE3E, 2, "partner_cost_penalty_frame"), // [V:data_14133F258] idx=7
+    (0x523F70A5, 5, "collision_sphere_2_center_x"), // [V:data_141342D80 r2c1 -> sub_140628FD0]
+    (0x5245EE3E, 2, "self_hp_reduction_amount_slot_7"), // [V:data_14133F258 idx=7 -> sub_1405F9480]
     (0x539BC76D, 2, "charge_shot_damage"),         // [V:sub_1405F9010] case 10
-    (0x53FD1A92, 5, "charge_shot_correction_offset"),
+    (0x53FD1A92, 5, "collision_sphere_2_center_y"), // [V:data_141342D80 r2c2 -> sub_140628FD0]
     (0x55E4FF75, 5, "lock_distance_threshold_family_1_default"), // [V:sub_1405F8600] default branch
     (0x5AC06BD2, 5, "lock_on_range_min"),
     (0x5B3AF66C, 5, "hp_ratio_family_b_band_30_to_35"),
     (0x5B851170, 2, "reserved_flag_154"),
     (0x5BBBD90C, 5, "hp_ratio_family_a_band_05_to_10"),
-    (0x5BF3A215, 2, "sub_ammo_reload_frame"), // [V:data_14133F258] idx=3
+    (0x5BF3A215, 2, "self_hp_reduction_amount_slot_3"), // [V:data_14133F258 idx=3 -> sub_1405F9480]
     (0x5CE8D569, 2, "reserved_flag_160"),
     (0x5E0DDDD8, 2, "special_melee_cost"), // [V:sub_1405F9180] case 13
-    (0x6133A20B, 2, "special_reload_frame"),
+    (0x6133A20B, 2, "special_reload_frame"), // [D:0,1000] absent from the OB image; name is a data-shape inference, not a proven consumer
     (
         0x6674EE31,
         5,
@@ -157,13 +188,13 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x85C483F0, 5, "burst_s_incoming_damage_multiplier"), // [V:sub_1405F8D40 -> sub_1405F9480] active Burst type selector 1
     (0x86579C72, 5, "hp_ratio_family_b_band_45_to_50"),
     (0x8A902D5F, 5, "damage_calculation_multiplier_slot_0"), // [V:sub_140625060 <- sub_140622010] selected by hit-record slot 0 and multiplied into final damage
-    (0x8CBF2B3F, 5, "gravity_multiplier"),
+    (0x8CBF2B3F, 5, "collision_sphere_0_center_y"), // [V:data_141342D80 r0c2 -> sub_140628FD0]
     (0x8F0666AB, 5, "hp_ratio_family_b_band_10_to_15"),
     (0x8F8749CB, 5, "hp_ratio_family_a_band_25_to_30"),
     (0x904C7CF0, 2, "special_damage"), // [V:sub_1405F9010] case 3/15/18
     (0x91CDEF2B, 5, "burst_r_mobility_multiplier"),
     (0x91E5A104, 5, "lock_distance_threshold_family_1_slot_1"), // [V:sub_1405F8600] selector 1
-    (0x9B20A527, 5, "sub_shot_correction_base"),
+    (0x9B20A527, 5, "sub_shot_correction_base"), // [D:0.0,1.0] absent from the OB image; name is a data-shape inference, not a proven consumer
     (
         0x9B8BF864,
         5,
@@ -173,23 +204,23 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x9D8ADBDF, 2, "reserved_flag_1e4"),
     // User in-game 2026-07-11: 红锁距离 (with alert_range_distance). See docs/characterparam-field-notes.md.
     (0xA223C183, 5, "lock_on_distance_max"), // [V:sub_1405F8720] a2=3
-    (0xA60B0684, 1, "weapon_attribute_flags"),
+    (0xA60B0684, 1, "reserved_1ec"), // [D:0] constant across the sampled corpus and absent from the OB image; was "weapon_attribute_flags"
     (0xA644CF59, 5, "hp_ratio_family_a_band_00_to_05"),
     (0xA6C5E039, 5, "hp_ratio_family_b_band_15_to_20"),
     (0xA6DC5C53, 5, "burst_damage_multiplier"),
     (0xA83A8232, 5, "minimum_aim_angle"),
-    (0xA900CDF7, 5, "aim_correction_offset_x"),
-    (0xAA841999, 5, "aim_correction_offset_y"),
-    (0xAB4673AE, 5, "aim_correction_offset_z"),
+    (0xA900CDF7, 5, "target_position_offset_slot_1_z"), // [V:data_14134BD58 idx=5 -> sub_140690480] was "aim_correction_offset_x"; the array proves this is the Z component
+    (0xAA841999, 5, "target_position_offset_slot_1_x"), // [V:data_14134BD58 idx=3 -> sub_140690480] was "aim_correction_offset_y"; this is the mirrored X component
+    (0xAB4673AE, 5, "target_position_offset_slot_1_y"), // [V:data_14134BD58 idx=4 -> sub_140690480] was "aim_correction_offset_z"; the array proves this is the Y component
     (0xAE7FF94F, 2, "sub_shot_cost_scaled"), // [V:sub_1405F9180] case 4/5/12
     (0xAEAC01A7, 2, "reserved_flag_210"),
     (0xAF153580, 5, "hp_ratio_family_a_band_35_to_40"),
-    (0xB2900720, 2, "assist_reload_frame"), // [V:data_14133F258] idx=1
+    (0xB2900720, 2, "self_hp_reduction_amount_slot_1"), // [V:data_14133F258 idx=1 -> sub_1405F9480]
     (0xB2E6B445, 2, "reserved_flag_21c"),
     (0xB3373BD9, 5, "burst_c_mobility_multiplier"),
     (0xB4F17B6F, 5, "melee_lunge_offset"),
     (0xB58B705C, 2, "reserved_flag_228"),
-    (0xB5FDC339, 2, "step_cancel_count"), // [V:data_14133F258] idx=5
+    (0xB5FDC339, 2, "self_hp_reduction_amount_slot_5"), // [V:data_14133F258 idx=5 -> sub_1405F9480]
     // Raw base maximum durability before the runtime scale/offset transform.
     // Verified across native consumers and OB-matched Gyan/Hyaku corpus. See docs/characterparam-field-notes.md.
     (0xB7D5327E, 2, "base_max_durability"),
@@ -211,31 +242,31 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
         "low_durability_incoming_damage_multiplier_band_25_to_30",
     ), // [V:sub_1405F8E70 -> sub_1405F9480] HP 25-30% band
     (0xC28C40CA, 2, "reserved_flag_254"),
-    (0xC2FAF3AF, 2, "ammo_reserve_count"), // [V:data_14133F258] idx=6
+    (0xC2FAF3AF, 2, "self_hp_reduction_amount_slot_6"), // [V:data_14133F258 idx=6 -> sub_1405F9480]
     (0xC3F64BF9, 5, "ammo_correction_offset"),
     (0xC4852F00, 2, "reserved_flag_260"),
-    (0xC59737B6, 2, "charge_time_frame"), // [V:data_14133F258] idx=2
+    (0xC59737B6, 2, "self_hp_reduction_amount_slot_2"), // [V:data_14133F258 idx=2 -> sub_1405F9480]
     (0xC5E184D3, 2, "reserved_flag_268"),
     (0xC6A88D7F, 2, "charge_shot_cost"), // [V:sub_1405F9180] case 10
     (0xC6E2AD28, 5, "charge_damage_multiplier"),
-    (0xC8B2F571, 5, "charge_correction_offset"),
-    (0xCAF44B28, 5, "charge_bonus_offset"),
-    (0xCB36211F, 5, "charge_gauge_offset"),
+    (0xC8B2F571, 5, "collision_sphere_1_center_z"), // [V:data_141342D80 r1c3 -> sub_140628FD0]
+    (0xCAF44B28, 5, "collision_sphere_1_center_y"), // [V:data_141342D80 r1c2 -> sub_140628FD0]
+    (0xCB36211F, 5, "collision_sphere_1_center_x"), // [V:data_141342D80 r1c1 -> sub_140628FD0]
     (0xD01D00DF, 5, "melee_lock_angle"),
     // ---- range/radar distance dispatcher: sub_1405F8720 switch(category) ----
     (0xD249350C, 5, "lock_distance_threshold_family_2_slot_0"), // [V:sub_1405F8720] selector 0
-    (0xD24DC1FD, 5, "target_correction_offset"),
+    (0xD24DC1FD, 5, "collision_sphere_1_radius"), // [V:data_141342D80 r1c0 -> sub_140628FD0]
     (0xD2D0C774, 5, "target_fov_pct"),
     (0xD524F115, 5, "lock_distance_threshold_family_2_slot_4"), // [V:sub_1405F8720] selector 4
     (0xD54CE896, 5, "hp_ratio_family_a_band_40_to_45"),
     (0xD6F39D3C, 5, "radar_correction_offset"),
-    (0xD854F864, 5, "radar_display_offset"),
+    (0xD854F864, 5, "reserved_29c"), // [D:0.0] constant across the sampled corpus and absent from the OB image; was "radar_display_offset"
     (0xD8F4FBD2, 2, "melee_cost"), // [V:sub_1405F9180] case 1
-    (0xDC414338, 5, "melee_cost_correction_offset"),
+    (0xDC414338, 5, "target_position_offset_slot_2_y"), // [V:data_14134BD58 idx=7 -> sub_140690480]
     (0xDC9C3D2F, 5, "hp_ratio_family_b_band_20_to_25"),
-    (0xDD83290F, 5, "melee_aim_correction_offset"),
-    (0xDE07FD61, 5, "melee_range_offset"),
-    (0xDF888E8B, 2, "rotation_speed_degrees"),
+    (0xDD83290F, 5, "target_position_offset_slot_2_x"), // [V:data_14134BD58 idx=6 -> sub_140690480] mirrored X component
+    (0xDE07FD61, 5, "target_position_offset_slot_2_z"), // [V:data_14134BD58 idx=8 -> sub_140690480]
+    (0xDF888E8B, 2, "rotation_speed_degrees"), // [D:0,180] absent from the OB image; name is a data-shape inference, not a proven consumer
     (
         0xE1D22572,
         5,
@@ -254,7 +285,7 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0xE90161F5, 5, "burst_r_melee_attack_multiplier"),
     (0xE9F462F6, 5, "damage_proration_rate"),
     (0xEB1219A4, 2, "main_shot_damage"), // [V:sub_1405F9010] case 0/1
-    (0xECBC202D, 5, "combo_proration_rate"),
+    (0xECBC202D, 5, "reserved_2e4"), // [D:0.55] constant across the sampled corpus and absent from the OB image; was "combo_proration_rate"
     (0xED170E69, 2, "reserved_flag_2e8"),
     (0xEDB407E8, 5, "burst_c_ranged_attack_multiplier"),
     (0xEE92BCAB, 5, "main_shot_damage_multiplier"),
@@ -263,9 +294,9 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0xF3C4CAE9, 7, "resource_label_offset"),
     (0xF55FBBBD, 5, "hp_ratio_family_b_band_05_to_10"),
     (0xF5DE94DD, 5, "hp_ratio_family_a_band_30_to_35"),
-    (0xF73592C7, 5, "max_render_distance"),
-    (0xFBB81BA9, 5, "render_correction_offset"),
-    (0xFEADD5BE, 5, "final_damage_multiplier"),
+    (0xF73592C7, 5, "reserved_30c"), // [D:50000.0] constant across the sampled corpus and absent from the OB image; was "max_render_distance"
+    (0xFBB81BA9, 5, "collision_sphere_0_center_x"), // [V:data_141342D80 r0c1 -> sub_140628FD0]
+    (0xFEADD5BE, 5, "collision_sphere_radius_scale"), // [V:sub_140628FD0 scales every sphere radius; V:sub_140634FE0 -> sub_1406394E0 radius normalisation] [D:1.0..1.2]
     (0xFEE76495, 2, "assist_cost"), // [V:sub_1405F9180] case 6/7
 ];
 
@@ -274,8 +305,92 @@ pub fn characterparam_entry_to_json_value(entry: &CharacterParamEntry) -> Value 
 }
 
 const CHARACTERPARAM_LEGACY_KEY_ALIASES: &[(&str, &str)] = &[
-    ("redLockDistance", "lockDistanceThresholdFamily1Slot0"),
-    ("greenLockDistance", "lockDistanceThresholdFamily1Slot4"),
+    // The eight members of the static array at 0x14133F258 were named as reload
+    // frames, charge times and counters. Their single native reader is
+    // sub_1405F8DF0(base, idx<8), whose only consumer is sub_140682A30 case 8,
+    // which feeds the value straight into sub_1405F9480 as the operand of
+    //   HP -= value * burstIncoming * gutsBand * ratioBand
+    // A reload frame or a combo limit cannot be that operand, and three of the
+    // observed values (1000, 1200, 1500) exceed every unit's maximum durability
+    // (600-680), which only makes sense as self-destruct damage.
+    // Evidence: docs/characterparam-native-consumer-map-ob.md.
+    ("mainAmmoReloadFrame", "selfHpReductionAmountSlot0"),
+    ("assistReloadFrame", "selfHpReductionAmountSlot1"),
+    ("chargeTimeFrame", "selfHpReductionAmountSlot2"),
+    ("subAmmoReloadFrame", "selfHpReductionAmountSlot3"),
+    ("meleeComboLimit", "selfHpReductionAmountSlot4"),
+    ("stepCancelCount", "selfHpReductionAmountSlot5"),
+    ("ammoReserveCount", "selfHpReductionAmountSlot6"),
+    ("partnerCostPenaltyFrame", "selfHpReductionAmountSlot7"),
+    // The nine members of the static array at 0x14134BD58 are three local-space
+    // 3D offset vectors, not nine unrelated scalars. sub_140690480 reads them as
+    //   x = array[3*i + 0]  (sign-flipped when the mirror flag is set)
+    //   y = array[3*i + 1]
+    //   z = array[3*i + 2]
+    // and sub_140690610 case 4 feeds the vector to sub_1405FB520 to resolve a
+    // world position on a target actor. The previous names assigned x/y/z by row
+    // offset order, which is rotated one place from the real component order, so
+    // editing the field labelled `_x` moved the Z axis.
+    ("aimCorrectionOffsetX", "targetPositionOffsetSlot1Z"),
+    ("aimCorrectionOffsetY", "targetPositionOffsetSlot1X"),
+    ("aimCorrectionOffsetZ", "targetPositionOffsetSlot1Y"),
+    ("meleeCorrectionOffset", "targetPositionOffsetSlot0X"),
+    ("barrierDamageRate", "targetPositionOffsetSlot0Y"),
+    ("guardDamageRate", "targetPositionOffsetSlot0Z"),
+    ("meleeAimCorrectionOffset", "targetPositionOffsetSlot2X"),
+    ("meleeCostCorrectionOffset", "targetPositionOffsetSlot2Y"),
+    ("meleeRangeOffset", "targetPositionOffsetSlot2Z"),
+    // The sixteen members of the static array at 0x141342D80 are a 4x4 matrix of
+    // collision spheres, one per row: (radius, centreX, centreY, centreZ).
+    // sub_140628FD0 builds a vdkSpheref per row and stops at the first radius
+    // <= 0.0; sub_140628B70 counts the active spheres with the same stride-4 walk.
+    // The previous names were derived independently of that structure and were
+    // mutually incoherent under it. 0xFEADD5BE multiplies every sphere radius and
+    // is normalised against the smallest observed radius in sub_1406394E0, so it
+    // is a radius scale, not a damage multiplier.
+    ("meleeReachBase", "collisionSphere0Radius"),
+    ("renderCorrectionOffset", "collisionSphere0CenterX"),
+    ("gravityMultiplier", "collisionSphere0CenterY"),
+    ("gravityOffset", "collisionSphere0CenterZ"),
+    ("targetCorrectionOffset", "collisionSphere1Radius"),
+    ("chargeGaugeOffset", "collisionSphere1CenterX"),
+    ("chargeBonusOffset", "collisionSphere1CenterY"),
+    ("chargeCorrectionOffset", "collisionSphere1CenterZ"),
+    ("cameraOffsetY", "collisionSphere2Radius"),
+    ("bodyOffsetY", "collisionSphere2CenterX"),
+    ("chargeShotCorrectionOffset", "collisionSphere2CenterY"),
+    ("cameraOffsetPartnerY", "collisionSphere2CenterZ"),
+    ("chargeTimeOffset", "collisionSphere3Radius"),
+    ("landingRecoveryRate", "collisionSphere3CenterX"),
+    ("specialGaugeStartRate", "collisionSphere3CenterY"),
+    ("stepSpeedRate", "collisionSphere3CenterZ"),
+    ("finalDamageMultiplier", "collisionSphereRadiusScale"),
+    // Added by the 2026-07-25 mechanical audit. Each of these fields is constant
+    // across every sampled real file AND its hash occurs nowhere in the OB
+    // executable image, so no evidence can support a gameplay name. The keys were
+    // demoted to neutral offsets; the old names remain readable on input.
+    // Evidence: docs/characterparam-native-consumer-map-ob.md.
+    ("hasShield", "reserved05c"),
+    ("aerialDamageRate", "reserved0ac"),
+    ("respawnInvincibilityFrame", "reserved104"),
+    ("cameraOffsetPartnerX", "reserved128"),
+    ("weaponAttributeFlags", "reserved1ec"),
+    ("radarDisplayOffset", "reserved29c"),
+    ("comboProrationRate", "reserved2e4"),
+    ("maxRenderDistance", "reserved30c"),
+    // Lock-distance colour aliases, re-pointed 2026-07-25 after the whole chain
+    // was decompiled (docs/lock-on-range-native-resolution-ob.md):
+    //   outer radius  = Family2 * scale + offset, *0.9 under state 19
+    //   inner radius  = min(Family1, outer - 1)
+    //   band 3 = d < inner, band 2 = inner <= d < outer, band 1 = d >= outer
+    // The outer radius is produced by sub_1405F86A0, which reads Family-2 ONLY;
+    // sub_1405F8600 (Family-1) has exactly one caller, the inner radius. Pointing
+    // a green-lock alias at a Family-1 slot therefore wrote to a field the outer
+    // boundary never consults. Both aliases now target the DEFAULT slot of the
+    // correct family, because the selector falls back to default unless the
+    // attack record's type field is 2 or 3.
+    ("redLockDistance", "lockDistanceThresholdFamily1Default"),
+    ("greenLockDistance", "alertRangeDistance"),
     ("yellowLockDistance", "lockDistanceThresholdFamily1Default"),
     ("engagementRangeNear", "lockDistanceThresholdFamily1Slot3"),
     ("engagementRangeFar", "lockDistanceThresholdFamily1Slot1"),
@@ -767,13 +882,20 @@ mod tests {
             Some(&300.0_f32.to_bits())
         );
 
+        // Legacy colour labels target the DEFAULT slot of the family that actually
+        // produces the boundary they name. The engine reads the default slot unless
+        // the attack record's type field is 2 or 3, and the outer (green) boundary
+        // is produced by sub_1405F86A0, which reads Family-2 only.
+        // See docs/lock-on-range-native-resolution-ob.md.
         let legacy = characterparam_entry_from_json_value(&serde_json::json!({
             "entryId": 1,
             "redLockDistance": 130.0,
+            "greenLockDistance": 900.0,
             "cameraDistanceNear": 300.0
         }))
         .expect("legacy lock threshold labels");
-        assert_eq!(legacy.commands.get(&0x08ECF0BE), Some(&130.0_f32.to_bits()));
+        assert_eq!(legacy.commands.get(&0x55E4FF75), Some(&130.0_f32.to_bits()));
+        assert_eq!(legacy.commands.get(&0xBAE8C388), Some(&900.0_f32.to_bits()));
         assert_eq!(legacy.commands.get(&0x3C475420), Some(&300.0_f32.to_bits()));
 
         let output = characterparam_entry_to_json_value(&canonical);

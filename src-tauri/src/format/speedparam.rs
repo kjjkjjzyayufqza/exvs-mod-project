@@ -21,19 +21,19 @@ const KIND_STRING: u32 = 7;
 pub const SPEEDPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x06D1922D, 2, "walk_speed_forward"),
     (0x086B475D, 2, "step_turn_mid_speed_threshold"),
-    (0x0B6480D5, 2, "walk_speed_backward"),
-    (0x0B9EBECE, 2, "boost_gauge_capacity"),
+    (0x0B6480D5, 2, "reserved_008"), // [D:50] constant; no MSC reader in the 1827-file corpus
+    (0x0B9EBECE, 2, "decaying_move_magnitude_initial"), // [V:func_471] seeds global507; decays by 0x9297EF74, clamped at 0
     (0x0CF37AD7, 2, "alternate_free_flight_speed_delta"),
-    (0x0D5BB2EF, 2, "boost_recovery_speed"),
+    (0x0D5BB2EF, 2, "reserved_014"), // [D:250,303] no MSC reader in the corpus
     (0x0E682BA8, 2, "air_step_speed_terminal"),
     (0x11FFDDB4, 2, "boost_ascent_vertical_speed_initial"),
     (0x17A9D82D, 2, "boost_ascent_horizontal_speed_delta"),
     (0x18895A55, 2, "transform_roll_neutral_retention"),
-    (0x29AA8A04, 2, "gravity_modifier"),
-    (0x2C76D0A7, 2, "movement_class"),
+    (0x29AA8A04, 2, "reserved_028"), // [D:-2] constant; no MSC reader
+    (0x2C76D0A7, 2, "reserved_02c"), // [D:7] constant; no MSC reader
     (0x2D28CC4B, 2, "transform_roll_response"),
     (0x2DF7AF95, 2, "boost_dash_loop_timer"),
-    (0x2EAE942B, 2, "boost_dash_sustained_speed"),
+    (0x2EAE942B, 2, "reserved_038"), // [D:260,312] no MSC reader in the corpus
     (0x32FD1EDC, 2, "boost_dash_yaw_response"),
     (0x37D1D056, 2, "air_step_speed_delta"),
     (0x3BF9E21E, 2, "max_ground_speed"),
@@ -44,47 +44,52 @@ pub const SPEEDPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x4D601E55, 2, "step_turn_high_speed_adjustment"),
     (0x4F705BAD, 2, "air_step_primary_timer"),
     (0x5481CCF4, 2, "boost_dash_speed_terminal"),
-    (0x56C51E87, 2, "air_dash_end_speed"),
+    (0x56C51E87, 2, "reserved_064"), // [D:92] constant; no MSC reader
     (0x58313EF7, 2, "ground_walk_speed_delta"),
     (0x5E8CAF43, 2, "transform_forward_speed_initial"),
     (0x5EF705B7, 2, "boost_ascent_yaw_response"),
     (0x607C25BC, 2, "boost_ascent_vertical_speed_terminal"),
     (0x6C640897, 2, "boost_dash_speed_delta"),
     (0x6F6F1BF6, 2, "transform_yaw_response"),
-    (0x7242066A, 2, "air_dash_distance"),
+    (0x7242066A, 2, "free_flight_magnitude_floor"), // [V:func_467,func_469] global509 floor and re-seed threshold
     (0x737D64F4, 2, "air_step_secondary_timer"),
-    (0x77749DD2, 2, "speed_decay_base"),
+    (0x77749DD2, 2, "uniform_axis_motion_retention_ramp_end"), // [V:func_300 -> sys_46(3,4,V,V,V)] percent ramp end; larger value = less damping, so the former decay name had inverted polarity
     (0x7BF44A41, 2, "alternate_free_flight_speed_initial"),
     (0x7C2572A1, 2, "ground_walk_entry_turn_time_base"),
     (0x7C3CF4DD, 2, "ground_step_primary_timer"),
     (0x7CD3A712, 2, "boost_consumption_base"),
     (0x7D79F6FA, 2, "step_turn_high_speed_threshold"),
     (0x7E5878A3, 2, "ground_walk_speed_initial"),
-    (0x8173DA19, 2, "jump_type"),
+    (0x8173DA19, 2, "reserved_0a4"), // [D:4] constant; no MSC reader
     (0x84043A2D, 2, "boost_dash_entry_turn_timer"),
     (0x8D0A9843, 2, "ground_step_speed_delta"),
     (0x8EDC8D6E, 2, "walk_stop_motion_retention"),
-    (0x9297EF74, 2, "air_gravity"),
-    (0x95FA2B6D, 2, "air_dash_max_distance"),
+    (0x9297EF74, 2, "decaying_move_magnitude_delta"), // [V:func_471] per-update addend to the 0x0B9EBECE seed
+    (0x95FA2B6D, 2, "free_flight_magnitude_bound"), // [V:func_469,func_1074] dual role: re-seed value in one handler, floor in another
     (0x97BE8DFC, 2, "ground_walk_entry_turn_time_angle_scale"),
     (0x9A378388, 2, "guard_recovery_frame"),
     (0x9EAA4E96, 2, "ground_walk_entry_speed"),
     (0x9FD06227, 2, "transform_pitch_pose_scale"),
     (0xA49287B9, 2, "boost_dash_speed_initial"),
-    (0xA55D6C5E, 2, "dash_end_speed"),
-    (0xA7CBBC07, 2, "fixed_step_distance"),
+    (0xA55D6C5E, 2, "vertical_axis_motion_retention"), // [V:func_302] sys_46(3,4,0x64,V,0x64) percent ramp end
+    (0xA7CBBC07, 2, "reserved_0d4"), // [D:35] constant; no MSC reader
     (0xB20B67C9, 2, "air_boost_efficiency"),
-    (0xBC0127E1, 2, "guard_speed_rate"),
+    (0xBC0127E1, 2, "vertical_axis_motion_retention_base"), // [V:sys_46(0x3,0x4,...)] y-axis movement-scale percent; no gauge or guard arithmetic anywhere
     (0xC6157381, 2, "air_step_speed_initial"),
     (0xC6BBC347, 2, "boost_ascent_turn_time_angle_scale"),
     (0xCD5DF17C, 2, "boost_ascent_horizontal_speed_initial"),
     (0xCF452D59, 2, "ground_walk_yaw_response"),
     (0xD68023A4, 2, "residual_air_drift_speed_cap"),
-    (0xDD7720EB, 2, "speed_decay_rate"),
+    (0xDD7720EB, 2, "uniform_axis_motion_retention"), // [V:func_300] sys_46(3,4,V,V,V); [D:92] is the retained percent, so the former decay-rate name had inverted polarity
     (0xDE1EF15A, 2, "residual_air_drift_speed_delta"),
     (0xE2FD1BFB, 2, "air_deceleration"),
-    (0xE590DFE2, 2, "boost_dash_count"),
+    (0xE590DFE2, 2, "free_flight_vertical_magnitude"), // [V:sys_46 magnitude argument and summand] never equality-tested, so the former count name is unsupported
     // Kind 7: entry stores absolute file offset into trailing obfuscated C-string pool.
+    // Key spelling deliberately differs from characterparam.rs: speedparam JSON
+    // publishes the DECODED string under this key, while characterparam publishes
+    // the raw offset under `action_label_offset`. The names describe what each pool
+    // emits, so harmonising them would make one of the two misleading. The guard in
+    // tools/check_param_name_evidence.py accepts either spelling for these hashes.
     (0xE6213731, 7, "action_label"),
     (0xEC580BCC, 2, "step_turn_mid_speed_adjustment"),
     (0xF3B9AD85, 2, "transform_pitch_response"),
@@ -148,6 +153,33 @@ const SPEEDPARAM_LEGACY_KEY_ALIASES: &[(&str, u32)] = &[
     ("boostCapRate", 0xF8B9B46E),
     ("boostDashDistanceMax", 0xFEC6069F),
     ("gravityAirModifier", 0xFF7A9C8B),
+    // Added by the 2026-07-25 mechanical corpus audit. Each of these canonical
+    // names was contradicted by the arithmetic at its own call sites, or had no
+    // call site anywhere in the 1827-file MSC corpus. Evidence:
+    // docs/speedparam-msc-consumer-evidence.md and docs/param-research/.
+    ("walkSpeedBackward", 0x0B6480D5),
+    ("boostGaugeCapacity", 0x0B9EBECE),
+    ("boostRecoverySpeed", 0x0D5BB2EF),
+    ("gravityModifier", 0x29AA8A04),
+    ("movementClass", 0x2C76D0A7),
+    ("boostDashSustainedSpeed", 0x2EAE942B),
+    ("airDashEndSpeed", 0x56C51E87),
+    ("airDashDistance", 0x7242066A),
+    ("jumpType", 0x8173DA19),
+    ("airGravity", 0x9297EF74),
+    ("airDashMaxDistance", 0x95FA2B6D),
+    ("dashEndSpeed", 0xA55D6C5E),
+    ("fixedStepDistance", 0xA7CBBC07),
+    ("speedDecayRate", 0xDD7720EB),
+    // characterparam spells these two `*_label_offset`; accept both so a JSON file
+    // written against either pool loads here.
+    ("actionLabelOffset", 0xE6213731),
+    ("resourceLabelOffset", 0xF3C4CAE9),
+    // Added by the 2026-07-25 WP6 re-grade against the regenerated cross-function
+    // evidence. See docs/param-research/2026-07-25-speedparam-regrade-open14-*.md.
+    ("speedDecayBase", 0x77749DD2),
+    ("guardSpeedRate", 0xBC0127E1),
+    ("boostDashCount", 0xE590DFE2),
 ];
 
 fn hash_and_kind_for_speed_key(key: &str) -> Option<(u32, u32)> {
