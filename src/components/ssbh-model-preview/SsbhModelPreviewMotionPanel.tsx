@@ -3,6 +3,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MotionBatchExportPanel } from "./components/MotionBatchExportPanel";
+import { MotionClipOpsPanel } from "./components/MotionClipOpsPanel";
 import { MotionClipPathSearchSelect } from "./components/MotionClipPathSearchSelect";
 import { MotionFbxExportPanel } from "./components/MotionFbxExportPanel";
 import { MotionFbxImportPanel } from "./components/MotionFbxImportPanel";
@@ -174,6 +176,25 @@ export function SsbhModelPreviewMotionPanel() {
         workspaceRoot={p.workspaceRoot}
         disabled={p.previewBusy}
         onImported={p.loadMotionNuanmbPath}
+      />
+
+      {p.motionNuanmbPaths.length > 1 ? (
+        <MotionBatchExportPanel
+          nuanmbPaths={p.motionNuanmbPaths}
+          skeletonPath={activeInstance?.bundle.skelPath ?? null}
+          numdlbPath={activeInstance?.bundle.modlPath ?? null}
+          workspaceRoot={p.workspaceRoot}
+          disabled={p.previewBusy}
+        />
+      ) : null}
+
+      <MotionClipOpsPanel
+        selectedNuanmbPath={p.motionSelectedNuanmbPath}
+        skeletonPath={activeInstance?.bundle.skelPath ?? null}
+        finalFrameIndex={p.motionManifest?.finalFrameIndex ?? null}
+        workspaceRoot={p.workspaceRoot}
+        disabled={p.previewBusy}
+        onTransformed={p.loadMotionNuanmbPath}
       />
     </div>
   );

@@ -14,6 +14,8 @@ export const DialogLastPathKey = {
   ssbhMotionFbxExport: "ssbhMotionFbx.export",
   ssbhMotionFbxImportOpen: "ssbhMotionFbx.importOpen",
   ssbhMotionFbxImportSave: "ssbhMotionFbx.importSave",
+  ssbhMotionBatchExportDir: "ssbhMotionFbx.batchExportDir",
+  ssbhMotionClipOpsSave: "ssbhMotionFbx.clipOpsSave",
   ssbhBlender51Exe: "ssbhMotionFbx.blender51",
   /** @deprecated CascadeurBridge removed; keys kept only so old localStorage values are ignored safely */
   ssbhCascadeurExportBridge: "ssbhCascadeur.exportBridge",

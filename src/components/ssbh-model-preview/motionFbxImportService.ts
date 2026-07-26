@@ -43,3 +43,20 @@ export function importMotionFbx(
 ): Promise<MotionConversionReport> {
   return invoke<MotionConversionReport>("ssbh_import_motion_fbx", { request });
 }
+
+export type ClipOperationPayload =
+  | { kind: "trim"; startFrame: number; endFrame: number }
+  | { kind: "retime"; speedFactor: number };
+
+export type NuanmbClipTransformRequest = {
+  nuanmbPath: string;
+  nusktbPath: string;
+  outputNuanmbPath: string;
+  operation: ClipOperationPayload;
+};
+
+export function transformNuanmbClip(
+  request: NuanmbClipTransformRequest,
+): Promise<MotionConversionReport> {
+  return invoke<MotionConversionReport>("ssbh_transform_nuanmb_clip", { request });
+}
