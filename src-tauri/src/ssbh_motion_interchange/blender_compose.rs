@@ -1,7 +1,10 @@
-//! StagingFbxPair + BlenderCompose orchestrator for CompleteMotionFbx export.
+//! BlenderCompose orchestrator for CompleteMotionFbx export.
 //!
-//! Builds temp model-only and animation-only FBX, runs the shipped headless
-//! Blender 5.1 script, validates output, and cleans staging always.
+//! Builds temp staging inputs (model-only FBX + MotionJson pose-basis frames),
+//! runs the shipped headless Blender 5.1 script, validates output, and cleans
+//! staging always. Motion travels as JSON rather than an animation-only FBX
+//! because Blender's FBX importer drops all-constant animation curves, which
+//! silently reverted bones whose animated value differs from rest.
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -44,15 +47,15 @@ pub struct CompleteMotionFbxExportReport {
     pub warnings: Vec<String>,
 }
 
-/// Internal staging pair written under a temp directory (not user-facing).
+/// Internal staging inputs written under a temp directory (not user-facing).
 #[derive(Debug)]
-struct StagingFbxPair {
+struct StagingComposeInputs {
     temp_dir: PathBuf,
     model_fbx: PathBuf,
-    motion_fbx: PathBuf,
+    motion_json: PathBuf,
 }
 
-impl StagingFbxPair {
+impl StagingComposeInputs {
     fn create() -> Result<Self, MotionInterchangeError> {
         let temp_dir =
             std::env::temp_dir().join(format!("exvs2_motion_fbx_export_{}", uuid::Uuid::new_v4()));
@@ -64,23 +67,154 @@ impl StagingFbxPair {
         })?;
         Ok(Self {
             model_fbx: temp_dir.join("model.fbx"),
-            motion_fbx: temp_dir.join("motion.fbx"),
+            motion_json: temp_dir.join("motion.json"),
             temp_dir,
         })
     }
 
     fn cleanup(&self) {
+        // Debug affordance: keep staging inputs for inspection when set.
+        if std::env::var("EXVS2_MOTION_FBX_KEEP_STAGING")
+            .is_ok_and(|value| !value.trim().is_empty())
+        {
+            eprintln!("keeping compose staging at {}", self.temp_dir.display());
+            return;
+        }
         let _ = std::fs::remove_dir_all(&self.temp_dir);
     }
 }
 
-impl Drop for StagingFbxPair {
+impl Drop for StagingComposeInputs {
     fn drop(&mut self) {
         self.cleanup();
     }
 }
 
-/// Export CompleteMotionFbx via StagingFbxPair + Blender 5.1 headless compose.
+/// MotionJson staging payload consumed by the compose script: per-frame
+/// pose-basis TRS (basis = rest_local^-1 * animated_local) per bone, encoded
+/// as `[tx,ty,tz,qx,qy,qz,qw,sx,sy,sz]`. Motion travels as JSON rather than
+/// an animation-only FBX because Blender's FBX importer drops all-constant
+/// animation curves, silently reverting bones whose animated value differs
+/// from rest (e.g. a BASE offset bone) back to the rest pose.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MotionJsonPayload<'a> {
+    action_name: &'a str,
+    fps: u32,
+    frame_count: usize,
+    bone_names: Vec<&'a str>,
+    frames: Vec<Vec<[f32; 10]>>,
+}
+
+fn write_motion_basis_json(
+    path: &Path,
+    clip: &MotionClip,
+    action_name: &str,
+) -> Result<(), MotionInterchangeError> {
+    let mut rest_inverses = Vec::with_capacity(clip.skeleton.bones.len());
+    for bone in &clip.skeleton.bones {
+        let rest = glam::Mat4::from_scale_rotation_translation(
+            bone.rest_local.scale,
+            bone.rest_local.rotation,
+            bone.rest_local.translation,
+        );
+        let inverse = rest.inverse();
+        if !inverse.is_finite() {
+            return Err(MotionInterchangeError::Compose(format!(
+                "bone '{}' has a non-invertible rest transform",
+                bone.name
+            )));
+        }
+        rest_inverses.push(inverse);
+    }
+
+    let mut previous_rotations: Vec<Option<glam::Quat>> = vec![None; clip.skeleton.bones.len()];
+    let mut frames = Vec::with_capacity(clip.frames.len());
+    for frame in &clip.frames {
+        let mut bone_values = Vec::with_capacity(frame.local_transforms.len());
+        for (bone_index, transform) in frame.local_transforms.iter().enumerate() {
+            let animated = glam::Mat4::from_scale_rotation_translation(
+                transform.scale,
+                transform.rotation,
+                transform.translation,
+            );
+            let basis = rest_inverses[bone_index] * animated;
+            let (scale, rotation, translation) = basis.to_scale_rotation_translation();
+            let mut rotation = rotation.normalize();
+            if !scale.is_finite() || !rotation.is_finite() || !translation.is_finite() {
+                return Err(MotionInterchangeError::Compose(format!(
+                    "bone '{}' produced a non-finite pose basis",
+                    clip.skeleton.bones[bone_index].name
+                )));
+            }
+            if let Some(previous) = previous_rotations[bone_index] {
+                if previous.dot(rotation) < 0.0 {
+                    rotation = -rotation;
+                }
+            }
+            previous_rotations[bone_index] = Some(rotation);
+            bone_values.push([
+                translation.x,
+                translation.y,
+                translation.z,
+                rotation.x,
+                rotation.y,
+                rotation.z,
+                rotation.w,
+                scale.x,
+                scale.y,
+                scale.z,
+            ]);
+        }
+        frames.push(bone_values);
+    }
+
+    // Blender culls all-constant animation channels on both FBX import and
+    // export; a culled channel falls back to the bone's static rest value,
+    // corrupting bones whose animated value differs from rest (e.g. a BASE
+    // offset bone). Nudge the last frame of every constant component by a
+    // sub-tolerance epsilon so every channel survives both directions.
+    const CONSTANT_CHANNEL_EPSILON: f32 = 1.0e-3;
+    if frames.len() >= 2 {
+        let bone_count = clip.skeleton.bones.len();
+        let last = frames.len() - 1;
+        for bone_index in 0..bone_count {
+            for component in 0..10 {
+                let first = frames[0][bone_index][component];
+                let constant = frames
+                    .iter()
+                    .all(|frame| frame[bone_index][component] == first);
+                if constant {
+                    frames[last][bone_index][component] += CONSTANT_CHANNEL_EPSILON;
+                }
+            }
+        }
+    }
+
+    let payload = MotionJsonPayload {
+        action_name,
+        fps: clip.sample_rate_hz,
+        frame_count: clip.frames.len(),
+        bone_names: clip
+            .skeleton
+            .bones
+            .iter()
+            .map(|bone| bone.name.as_str())
+            .collect(),
+        frames,
+    };
+    let json = serde_json::to_vec(&payload).map_err(|error| {
+        MotionInterchangeError::Compose(format!("failed to serialize MotionJson: {error}"))
+    })?;
+    std::fs::write(path, json).map_err(|error| {
+        MotionInterchangeError::Compose(format!(
+            "failed to write MotionJson {}: {error}",
+            path.display()
+        ))
+    })
+}
+
+/// Export CompleteMotionFbx via staging inputs + Blender 5.1 headless compose.
 pub fn export_complete_motion_fbx(
     request: CompleteMotionFbxExportRequest,
 ) -> Result<CompleteMotionFbxExportReport, MotionInterchangeError> {
@@ -108,7 +242,7 @@ pub fn export_complete_motion_fbx(
         action_name.clone(),
     )?;
 
-    let staging = StagingFbxPair::create()?;
+    let staging = StagingComposeInputs::create()?;
     // Ensure cleanup on every exit path (Drop + explicit for clarity).
     let result = run_compose_with_staging(&validated, &clip, &blender_path, &staging, action_name);
     staging.cleanup();
@@ -119,7 +253,7 @@ fn run_compose_with_staging(
     validated: &ValidatedPaths,
     clip: &MotionClip,
     blender_path: &Path,
-    staging: &StagingFbxPair,
+    staging: &StagingComposeInputs,
     action_name: String,
 ) -> Result<CompleteMotionFbxExportReport, MotionInterchangeError> {
     crate::ssbh_fbx::write_model_fbx_no_textures(&validated.numdlb_path, &staging.model_fbx)
@@ -130,19 +264,14 @@ fn run_compose_with_staging(
             ))
         })?;
 
-    crate::ssbh_fbx::write_animation_only_fbx(&staging.motion_fbx, clip).map_err(|error| {
-        MotionInterchangeError::Compose(format!(
-            "failed to write motion staging FBX {}: {error:#}",
-            staging.motion_fbx.display()
-        ))
-    })?;
+    write_motion_basis_json(&staging.motion_json, clip, &action_name)?;
 
     let script_path = resolve_compose_script_path()?;
     let compose_output = run_blender_compose(
         blender_path,
         &script_path,
         &staging.model_fbx,
-        &staging.motion_fbx,
+        &staging.motion_json,
         &validated.output_fbx_path,
     )?;
 
@@ -301,7 +430,7 @@ fn run_blender_compose(
     blender_path: &Path,
     script_path: &Path,
     model_fbx: &Path,
-    motion_fbx: &Path,
+    motion_json: &Path,
     output_fbx: &Path,
 ) -> Result<ComposeProcessOutput, MotionInterchangeError> {
     if let Some(parent) = output_fbx.parent() {
@@ -322,8 +451,8 @@ fn run_blender_compose(
         .arg("--")
         .arg("--model-fbx")
         .arg(model_fbx)
-        .arg("--motion-fbx")
-        .arg(motion_fbx)
+        .arg("--motion-json")
+        .arg(motion_json)
         .arg("--output-fbx")
         .arg(output_fbx)
         .stdout(Stdio::piped())

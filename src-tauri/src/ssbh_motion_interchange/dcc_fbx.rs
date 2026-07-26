@@ -21,10 +21,12 @@ pub(crate) fn canonical_bone_name(raw: &str) -> &str {
 /// NUANMB bone locals are game space by definition, and our own FBX writer
 /// stores exactly those values while declaring non-standard GlobalSettings
 /// axis signs; asking ufbx for target axes would inject a spurious root
-/// conversion. DccSpaceNormalize is therefore implemented purely by
-/// `rebase_reference_locals`, which folds any helper-object transform chain
-/// (Blender Armature object, DCC unit/axis carriers) into root-bone locals.
-/// The gated Blender 5.1 round-trip test is the empirical ground truth.
+/// conversion. DccSpaceNormalize is instead implemented by
+/// `declared_axes_to_game_conversion` (rotating world transforms from the
+/// file's declared frame into the game frame) plus `rebase_reference_locals`
+/// (folding helper-object transform chains such as the Blender Armature
+/// object and unit carriers into root-bone locals). The gated Blender 5.1
+/// round-trip test is the empirical ground truth.
 pub(crate) fn load_dcc_fbx(path: &Path) -> Result<ufbx::SceneRoot, MotionInterchangeError> {
     let utf8 = path.to_str().ok_or_else(|| {
         MotionInterchangeError::Import(format!("FBX path is not valid UTF-8: {}", path.display()))
@@ -175,6 +177,58 @@ pub(crate) fn candidate_skeleton_canonical(
     Ok(MotionSkeleton { bones })
 }
 
+/// The game frame as ufbx parses our own writer's GlobalSettings declaration
+/// (UpAxis +Y, FrontAxisSign -1, CoordAxisSign -1): right = -X, up = +Y,
+/// front = -Z. NUANMB locals are expressed in this frame by definition.
+fn game_axis_basis() -> Mat4 {
+    Mat4::from_cols(
+        Vec4::new(-1.0, 0.0, 0.0, 0.0),
+        Vec4::new(0.0, 1.0, 0.0, 0.0),
+        Vec4::new(0.0, 0.0, -1.0, 0.0),
+        Vec4::W,
+    )
+}
+
+fn axis_vector(axis: ufbx::CoordinateAxis) -> Result<Vec3, MotionInterchangeError> {
+    use ufbx::CoordinateAxis as Axis;
+    Ok(match axis {
+        Axis::PositiveX => Vec3::X,
+        Axis::NegativeX => -Vec3::X,
+        Axis::PositiveY => Vec3::Y,
+        Axis::NegativeY => -Vec3::Y,
+        Axis::PositiveZ => Vec3::Z,
+        Axis::NegativeZ => -Vec3::Z,
+        Axis::Unknown => {
+            return Err(MotionInterchangeError::Import(
+                "FBX declares an unknown coordinate axis in GlobalSettings".to_string(),
+            ))
+        }
+    })
+}
+
+/// World-space rotation from the file's declared axis frame into the game
+/// frame. Identity for our own files; 180 degrees about Y for Blender
+/// exports (declared +X/+Y/+Z). Verified by the Blender round-trip test.
+pub(crate) fn declared_axes_to_game_conversion(
+    axes: &ufbx::CoordinateAxes,
+) -> Result<Mat4, MotionInterchangeError> {
+    let right = axis_vector(axes.right)?;
+    let up = axis_vector(axes.up)?;
+    let front = axis_vector(axes.front)?;
+    if right.cross(up).dot(front) < 0.5 {
+        return Err(MotionInterchangeError::Import(
+            "left-handed or degenerate FBX axis frame is not supported".to_string(),
+        ));
+    }
+    let file_basis = Mat4::from_cols(
+        right.extend(0.0),
+        up.extend(0.0),
+        front.extend(0.0),
+        Vec4::W,
+    );
+    Ok(game_axis_basis() * file_basis.transpose())
+}
+
 /// Convert per-reference-bone world matrices into reference-hierarchy locals.
 /// Root bones keep their world transform (folding helper/axis/unit transforms
 /// above them); children are rebased against their reference parent's world.
@@ -221,6 +275,7 @@ pub(crate) fn read_dcc_motion_clip(
     policy: RigBindingPolicy,
 ) -> Result<(MotionClip, RigBindingReport), MotionInterchangeError> {
     let scene = load_dcc_fbx(fbx_path)?;
+    let axis_conversion = declared_axes_to_game_conversion(&scene.settings.axes)?;
     let candidate = candidate_skeleton_canonical(&scene)?;
     let binding_report = super::validate_rig_binding(reference, &candidate, policy)?;
     let stack = select_stack(&scene, stack_name)?;
@@ -267,7 +322,9 @@ pub(crate) fn read_dcc_motion_clip(
                 })?;
         let worlds = reference_node_indices
             .iter()
-            .map(|&node_index| mat4_from_ufbx(&evaluated.nodes[node_index].node_to_world))
+            .map(|&node_index| {
+                axis_conversion * mat4_from_ufbx(&evaluated.nodes[node_index].node_to_world)
+            })
             .collect::<Vec<Mat4>>();
         let mut local_transforms = rebase_reference_locals(reference, &worlds)?;
         for (bone_index, transform) in local_transforms.iter_mut().enumerate() {
@@ -393,6 +450,55 @@ mod tests {
         assert!(locals[0]
             .translation
             .abs_diff_eq(Vec3::new(0.0, 0.0, 1.0), 1.0e-4));
+    }
+
+    #[test]
+    fn declared_axes_conversion_is_identity_for_game_frame() {
+        let game = ufbx::CoordinateAxes {
+            right: ufbx::CoordinateAxis::NegativeX,
+            up: ufbx::CoordinateAxis::PositiveY,
+            front: ufbx::CoordinateAxis::NegativeZ,
+        };
+        let conversion = declared_axes_to_game_conversion(&game).unwrap();
+        assert!(conversion.abs_diff_eq(Mat4::IDENTITY, 1.0e-6));
+    }
+
+    #[test]
+    fn declared_axes_conversion_rotates_blender_frame_180_about_y() {
+        let blender = ufbx::CoordinateAxes {
+            right: ufbx::CoordinateAxis::PositiveX,
+            up: ufbx::CoordinateAxis::PositiveY,
+            front: ufbx::CoordinateAxis::PositiveZ,
+        };
+        let conversion = declared_axes_to_game_conversion(&blender).unwrap();
+        let expected = Mat4::from_scale(Vec3::new(-1.0, 1.0, -1.0));
+        assert!(conversion.abs_diff_eq(expected, 1.0e-6));
+    }
+
+    #[test]
+    fn declared_axes_conversion_rejects_unknown_axis() {
+        let unknown = ufbx::CoordinateAxes {
+            right: ufbx::CoordinateAxis::Unknown,
+            up: ufbx::CoordinateAxis::PositiveY,
+            front: ufbx::CoordinateAxis::PositiveZ,
+        };
+        let error = declared_axes_to_game_conversion(&unknown)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("axis"), "unexpected error: {error}");
+    }
+
+    #[test]
+    fn declared_axes_conversion_rejects_left_handed_frame() {
+        let left_handed = ufbx::CoordinateAxes {
+            right: ufbx::CoordinateAxis::PositiveX,
+            up: ufbx::CoordinateAxis::PositiveY,
+            front: ufbx::CoordinateAxis::NegativeZ,
+        };
+        let error = declared_axes_to_game_conversion(&left_handed)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("handed"), "unexpected error: {error}");
     }
 
     #[test]

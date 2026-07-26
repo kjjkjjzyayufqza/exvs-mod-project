@@ -281,3 +281,126 @@ fn real_nuanmb_round_trips_through_manifest_free_import() {
         }
     }
 }
+
+#[test]
+#[ignore = "requires real data env vars and a local Blender 5.1 install"]
+fn blender_roundtrip_reimports_complete_motion_fbx() {
+    use app_lib::ssbh_motion_interchange::{
+        export_complete_motion_fbx, resolve_blender_51_executable, CompleteMotionFbxExportRequest,
+    };
+
+    let directory = tempfile::tempdir().unwrap();
+    let nuanmb_path = directory.path().join("real.nuanmb");
+    let nusktb_path = directory.path().join("real.nusktb");
+    std::fs::copy(
+        std::env::var("SSBH_MOTION_REAL_NUANMB").unwrap(),
+        &nuanmb_path,
+    )
+    .unwrap();
+    std::fs::copy(
+        std::env::var("SSBH_MOTION_REAL_NUSKTB").unwrap(),
+        &nusktb_path,
+    )
+    .unwrap();
+    // The model folder must stay intact (numdlb references neighbors), so the
+    // numdlb is used in place but strictly read-only for the export step.
+    let numdlb_path = std::env::var("SSBH_MOTION_REAL_NUMDLB").unwrap();
+
+    let complete_fbx = directory.path().join("complete.fbx");
+    export_complete_motion_fbx(CompleteMotionFbxExportRequest {
+        nuanmb_path: nuanmb_path.to_string_lossy().to_string(),
+        nusktb_path: nusktb_path.to_string_lossy().to_string(),
+        numdlb_path: numdlb_path.clone(),
+        output_fbx_path: complete_fbx.to_string_lossy().to_string(),
+        blender_path: None,
+        action_name: Some("roundtrip_action".to_string()),
+    })
+    .unwrap();
+
+    // Simulated modder edit: open + default re-export in Blender.
+    let blender = resolve_blender_51_executable(None).unwrap();
+    let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("scripts")
+        .join("motion_fbx_roundtrip_blender.py");
+    let reexported_fbx = directory.path().join("reexported.fbx");
+    let output = std::process::Command::new(&blender)
+        .arg("-b")
+        .arg("-P")
+        .arg(&script)
+        .arg("--")
+        .arg("--input-fbx")
+        .arg(&complete_fbx)
+        .arg("--output-fbx")
+        .arg(&reexported_fbx)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success() && reexported_fbx.is_file(),
+        "blender re-export failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let source =
+        read_nuanmb_as_motion_clip(&nuanmb_path, &nusktb_path, "roundtrip_source".to_string())
+            .unwrap();
+    let output_path = directory.path().join("roundtrip.nuanmb");
+    let report = import_motion_fbx(MotionFbxImportRequest {
+        fbx_path: reexported_fbx.to_string_lossy().to_string(),
+        nusktb_path: nusktb_path.to_string_lossy().to_string(),
+        output_nuanmb_path: output_path.to_string_lossy().to_string(),
+        template_nuanmb_path: Some(nuanmb_path.to_string_lossy().to_string()),
+        animation_stack_name: None,
+        rig_binding_policy: RigBindingPolicy::ExactHierarchy,
+    })
+    .unwrap();
+    assert_eq!(report.frame_count, source.frames.len());
+
+    let rebuilt =
+        read_nuanmb_as_motion_clip(&output_path, &nusktb_path, "roundtrip_rebuilt".to_string())
+            .unwrap();
+    // Collect the worst drift per bone so a failure names the offenders
+    // instead of stopping at the first bad sample.
+    let bone_count = source.skeleton.bones.len();
+    let mut worst_rotation_dot = vec![1.0_f32; bone_count];
+    let mut worst_translation = vec![0.0_f32; bone_count];
+    for (expected_frame, actual_frame) in source.frames.iter().zip(&rebuilt.frames) {
+        for (bone_index, (expected, actual)) in expected_frame
+            .local_transforms
+            .iter()
+            .zip(&actual_frame.local_transforms)
+            .enumerate()
+        {
+            let dot = expected.rotation.dot(actual.rotation).abs();
+            if dot < worst_rotation_dot[bone_index] {
+                worst_rotation_dot[bone_index] = dot;
+            }
+            let drift = (expected.translation - actual.translation).length();
+            if drift > worst_translation[bone_index] {
+                worst_translation[bone_index] = drift;
+            }
+        }
+    }
+    let mut offenders: Vec<String> = Vec::new();
+    for bone_index in 0..bone_count {
+        // Blender import/export applies its own float conversions; allow a
+        // looser tolerance than the pure-Rust round trip.
+        if worst_rotation_dot[bone_index] <= 0.999 || worst_translation[bone_index] >= 1.0e-2 {
+            offenders.push(format!(
+                "bone {bone_index} '{}': worst rotation dot {:.6}, worst translation drift {:.6} (frame0 src rot {:?} tr {:?} vs rebuilt rot {:?} tr {:?})",
+                source.skeleton.bones[bone_index].name,
+                worst_rotation_dot[bone_index],
+                worst_translation[bone_index],
+                source.frames[0].local_transforms[bone_index].rotation,
+                source.frames[0].local_transforms[bone_index].translation,
+                rebuilt.frames[0].local_transforms[bone_index].rotation,
+                rebuilt.frames[0].local_transforms[bone_index].translation,
+            ));
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "Blender round-trip drift on {} of {bone_count} bones:\n{}",
+        offenders.len(),
+        offenders.join("\n")
+    );
+}

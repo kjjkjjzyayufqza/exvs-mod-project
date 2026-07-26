@@ -33,12 +33,25 @@ editing transport.
 _Avoid_: FBX as a project storage format
 
 **DccFbxRead / DccSpaceNormalize**:
-The Rust ufbx import stage: FBX loaded with right-handed Y-up axes and
-`target_unit_meters = 0.01` (matching the writer's UnitScaleFactor 1.0), and
-every reference bone's local TRS rebased against its reference parent's world
-transform so helper objects (Blender Armature), axis conversions, and unit
-scaling fold into the root bone track instead of corrupting children.
-_Avoid_: raw node_to_parent trust for DCC files, per-DCC special cases
+The Rust ufbx import stage: FBX loaded in raw file space, world transforms
+rotated from the file's declared GlobalSettings axis frame into the game
+frame (right -X, up +Y, front -Z — identity for our own writer, 180° about Y
+for Blender exports), and every reference bone's local TRS rebased against
+its reference parent's world transform so helper objects (Blender Armature)
+and unit scaling fold into the root bone track instead of corrupting
+children. Verified by the Blender 5.1 round-trip test.
+_Avoid_: ufbx target-axes retargeting (fights our writer's declaration),
+raw node_to_parent trust for DCC files, per-DCC special cases
+
+**MotionJson**:
+The BlenderCompose motion staging format: per-frame pose-basis TRS
+(`rest_local⁻¹ × animated_local`) per bone, keyed directly onto the model
+armature by the compose script. Replaces the animation-only staging FBX
+because Blender culls all-constant FBX animation channels (reverting
+constant-but-not-rest bones like BASE to rest) and connected bones ignore
+location keys; the compose script disconnects all bones and the Rust side
+adds a sub-tolerance epsilon to still-constant channels.
+_Avoid_: animation-only FBX staging, action copy between armatures
 
 **CanonicalBoneName**:
 FBX candidate bone names are canonicalized by stripping `path|` and
