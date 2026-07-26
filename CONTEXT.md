@@ -16,9 +16,74 @@ two-file flow)
 
 **MotionFbxExport**:
 A one-way export that produces a **single CompleteMotionFbx** from the active
-unit model and a selected NUANMB. There is no FBX-to-NUANMB import in this
-product surface.
-_Avoid_: CascadeurBridge, bridge export, round-trip export
+unit model and a selected NUANMB. Importing motion back is a separate surface
+(MotionFbxImport); together they form RoundTripMotion.
+_Avoid_: CascadeurBridge, bridge export
+
+**MotionFbxImport**:
+The import surface that turns a DCC-edited FBX plus the active model's NUSKTB
+(and an optional template NUANMB) into one new NUANMB. Manifest-free: no
+bridge.json and no Blender install required on import.
+_Avoid_: bridge import, Cascadeur import, Blender-dependent import
+
+**RoundTripMotion**:
+The mod developer loop MotionFbxExport → edit in a DCC → MotionFbxImport →
+ImportPreview. NUANMB remains the game source of truth; FBX is only the
+editing transport.
+_Avoid_: FBX as a project storage format
+
+**DccFbxRead / DccSpaceNormalize**:
+The Rust ufbx import stage: FBX loaded with right-handed Y-up axes and
+`target_unit_meters = 0.01` (matching the writer's UnitScaleFactor 1.0), and
+every reference bone's local TRS rebased against its reference parent's world
+transform so helper objects (Blender Armature), axis conversions, and unit
+scaling fold into the root bone track instead of corrupting children.
+_Avoid_: raw node_to_parent trust for DCC files, per-DCC special cases
+
+**CanonicalBoneName**:
+FBX candidate bone names are canonicalized by stripping `path|` and
+`namespace:` prefixes before matching NUSKTB names. Collisions after
+canonicalization are errors; unmatched DCC helpers (`_end` leaf bones, IK,
+Armature object) are ignored and reported.
+_Avoid_: exact-string-only matching, silently dropping mismatches
+
+**TemplatePreserve**:
+MotionFbxImport defaults the template to the currently selected NUANMB and
+copies every non-Transform group (visibility, material, camera) from it
+unchanged; only the Transform group is rebuilt. Importing without a template
+produces a transform-only NUANMB with an explicit warning.
+_Avoid_: silent transform-only output, editing non-Transform groups on import
+
+**SaveAsNuanmb**:
+The import destination comes from a native save dialog (default
+`{fbx_stem}.nuanmb`) and must differ from every input path; inputs are never
+overwritten. Cancelling is a no-op.
+_Avoid_: in-place template overwrite, silent write next to the FBX
+
+**ImportPreview**:
+After a successful import the written NUANMB is appended to the motion clip
+list and selected, so the existing sampling, compatibility banner, and
+playback verify the result immediately.
+_Avoid_: import without immediate visual verification
+
+**MotionPanelImport**:
+MotionFbxImport lives in the Unit Model Editor Motion panel as an Import
+section under the export section. Required input is the active model's
+NUSKTB; multi-stack FBX files require an explicit stack choice.
+_Avoid_: separate tool page, importing without an active model
+
+**BatchMotionExport**:
+Batch CompleteMotionFbx export over the loaded motion folder's clip list: the
+frontend iterates the existing single-export command sequentially with
+per-clip progress and error collection. One Blender resolve failure aborts
+the batch.
+_Avoid_: new Rust batch surface, parallel Blender spawns
+
+**ClipOps**:
+Pure MotionClip operations (v1: trim frame range, retime by factor) exposed
+as NUANMB → new NUANMB commands with save dialogs. Sampling stays 60 Hz;
+outputs never overwrite inputs.
+_Avoid_: lossy in-place edits, DCC-dependent trimming
 
 **CompleteMotionFbx**:
 One FBX file that contains the skinned model (armature + meshes) and the
