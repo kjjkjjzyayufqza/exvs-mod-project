@@ -222,6 +222,34 @@ fn import_with_template_preserves_non_transform_groups() {
 }
 
 #[test]
+fn transform_nuanmb_clip_trims_and_writes_parseable_output() {
+    use app_lib::ssbh_motion_interchange::{
+        transform_nuanmb_clip, ClipOperation, NuanmbClipTransformRequest,
+    };
+
+    let (directory, skeleton_path, animation_path) = write_two_bone_fixture();
+    let output_path = directory.path().join("trimmed.nuanmb");
+    let report = transform_nuanmb_clip(NuanmbClipTransformRequest {
+        nuanmb_path: animation_path.to_string_lossy().to_string(),
+        nusktb_path: skeleton_path.to_string_lossy().to_string(),
+        output_nuanmb_path: output_path.to_string_lossy().to_string(),
+        operation: ClipOperation::Trim {
+            start_frame: 0,
+            end_frame: 1,
+        },
+    })
+    .unwrap();
+    assert_eq!(report.frame_count, 2);
+    assert!(report
+        .warnings
+        .iter()
+        .any(|warning| warning.contains("transform-only")));
+
+    let parsed = AnimData::from_file(&output_path).unwrap();
+    assert_eq!(parsed.final_frame_index, 1.0);
+}
+
+#[test]
 #[ignore = "requires SSBH_MOTION_REAL_NUANMB and SSBH_MOTION_REAL_NUSKTB"]
 fn real_nuanmb_round_trips_through_manifest_free_import() {
     let directory = tempfile::tempdir().unwrap();

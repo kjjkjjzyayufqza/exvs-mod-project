@@ -1,6 +1,7 @@
 mod blender_compose;
 mod blender_resolve;
 mod cascadeur;
+mod clip_ops;
 mod dcc_fbx;
 mod fbx;
 mod motion_clip;
@@ -18,6 +19,10 @@ pub use blender_compose::{
     CompleteMotionFbxExportReport, CompleteMotionFbxExportRequest,
 };
 pub use blender_resolve::{candidate_blender_51_paths, resolve_blender_51_executable};
+pub use clip_ops::{
+    retime_motion_clip, transform_nuanmb_clip, trim_motion_clip, ClipOperation,
+    NuanmbClipTransformRequest,
+};
 pub use dcc_fbx::{inspect_motion_fbx_file, MotionFbxInspectReport, MotionFbxStackSummary};
 pub use motion_clip::{
     MotionBone, MotionClip, MotionFrame, MotionSkeleton, EXVS2_SAMPLE_RATE_HZ,
@@ -186,6 +191,13 @@ pub async fn ssbh_import_motion_fbx(
     request: MotionFbxImportRequest,
 ) -> Result<MotionConversionReport, String> {
     run_blocking(move || import_motion_fbx(request)).await
+}
+
+#[tauri::command]
+pub async fn ssbh_transform_nuanmb_clip(
+    request: NuanmbClipTransformRequest,
+) -> Result<MotionConversionReport, String> {
+    run_blocking(move || transform_nuanmb_clip(request)).await
 }
 
 async fn run_blocking<T: Send + 'static>(

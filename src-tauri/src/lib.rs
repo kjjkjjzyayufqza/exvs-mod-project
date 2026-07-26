@@ -81,6 +81,7 @@ pub fn run() {
             ssbh_motion_interchange::ssbh_export_complete_motion_fbx,
             ssbh_motion_interchange::ssbh_inspect_motion_fbx,
             ssbh_motion_interchange::ssbh_import_motion_fbx,
+            ssbh_motion_interchange::ssbh_transform_nuanmb_clip,
             ssbh_dae_cmd::ssbh_analyze_dae,
             ssbh_dae_cmd::ssbh_analyze_fbx,
             ssbh_dae_cmd::ssbh_export_folder_to_dae,
