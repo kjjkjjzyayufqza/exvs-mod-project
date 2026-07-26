@@ -115,10 +115,7 @@ fn complete_motion_export_rejects_empty_paths() {
     })
     .expect_err("empty nusktb_path must fail")
     .to_string();
-    assert!(
-        error.contains("nusktb_path"),
-        "unexpected error: {error}"
-    );
+    assert!(error.contains("nusktb_path"), "unexpected error: {error}");
 }
 
 #[test]

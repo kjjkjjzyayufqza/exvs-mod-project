@@ -10,7 +10,10 @@ fn should_skip_tools_entry(path: &Path) -> bool {
         return true;
     }
 
-    matches!(path.extension().and_then(|value| value.to_str()), Some("pyc" | "pyo"))
+    matches!(
+        path.extension().and_then(|value| value.to_str()),
+        Some("pyc" | "pyo")
+    )
 }
 
 fn watch_tools_dir(path: &Path) {

@@ -117,7 +117,9 @@ pub(crate) fn detect_type(
     if lower.contains("projectile_depiction_table") {
         return Ok(InspectType::ProjectileDepictionTable);
     }
-    if lower.contains("navi_list") || lower.ends_with("navi_list.bin") || lower.ends_with("navi_list.vgsht2")
+    if lower.contains("navi_list")
+        || lower.ends_with("navi_list.bin")
+        || lower.ends_with("navi_list.vgsht2")
     {
         return Ok(InspectType::NaviList);
     }

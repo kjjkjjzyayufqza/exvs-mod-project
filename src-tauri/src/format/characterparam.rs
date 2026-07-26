@@ -105,7 +105,7 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x2C6DC778, 5, "reserved_0ac"), // [D:0.8] constant across the sampled corpus and absent from the OB image; was "aerial_damage_rate"
     (0x2C8221E6, 2, "reserved_flag_0b0"),
     (0x2CF49283, 2, "self_hp_reduction_amount_slot_4"), // [V:data_14133F258 idx=4 -> sub_1405F9480]
-    (0x2DA8874F, 2, "special_melee_damage"), // [V:sub_1405F9010] case 11
+    (0x2DA8874F, 2, "special_melee_damage"),            // [V:sub_1405F9010] case 11
     (0x2DF82AD5, 5, "special_melee_correction_rate"),
     (0x30099C4D, 5, "target_position_offset_slot_0_z"), // [V:data_14134BD58 idx=2 -> sub_140690480] local-space Z of offset vector 0
     (0x324F2214, 5, "target_position_offset_slot_0_y"), // [V:data_14134BD58 idx=1 -> sub_140690480] local-space Y of offset vector 0
@@ -147,7 +147,7 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x52335D5B, 2, "reserved_flag_134"),
     (0x523F70A5, 5, "collision_sphere_2_center_x"), // [V:data_141342D80 r2c1 -> sub_140628FD0]
     (0x5245EE3E, 2, "self_hp_reduction_amount_slot_7"), // [V:data_14133F258 idx=7 -> sub_1405F9480]
-    (0x539BC76D, 2, "charge_shot_damage"),         // [V:sub_1405F9010] case 10
+    (0x539BC76D, 2, "charge_shot_damage"),          // [V:sub_1405F9010] case 10
     (0x53FD1A92, 5, "collision_sphere_2_center_y"), // [V:data_141342D80 r2c2 -> sub_140628FD0]
     (0x55E4FF75, 5, "lock_distance_threshold_family_1_default"), // [V:sub_1405F8600] default branch
     (0x5AC06BD2, 5, "lock_on_range_min"),
@@ -212,7 +212,7 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0xA900CDF7, 5, "target_position_offset_slot_1_z"), // [V:data_14134BD58 idx=5 -> sub_140690480] was "aim_correction_offset_x"; the array proves this is the Z component
     (0xAA841999, 5, "target_position_offset_slot_1_x"), // [V:data_14134BD58 idx=3 -> sub_140690480] was "aim_correction_offset_y"; this is the mirrored X component
     (0xAB4673AE, 5, "target_position_offset_slot_1_y"), // [V:data_14134BD58 idx=4 -> sub_140690480] was "aim_correction_offset_z"; the array proves this is the Y component
-    (0xAE7FF94F, 2, "sub_shot_cost_scaled"), // [V:sub_1405F9180] case 4/5/12
+    (0xAE7FF94F, 2, "sub_shot_cost_scaled"),            // [V:sub_1405F9180] case 4/5/12
     (0xAEAC01A7, 2, "reserved_flag_210"),
     (0xAF153580, 5, "hp_ratio_family_a_band_35_to_40"),
     (0xB2900720, 2, "self_hp_reduction_amount_slot_1"), // [V:data_14133F258 idx=1 -> sub_1405F9480]
@@ -261,7 +261,7 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0xD54CE896, 5, "hp_ratio_family_a_band_40_to_45"),
     (0xD6F39D3C, 5, "radar_correction_offset"),
     (0xD854F864, 5, "reserved_29c"), // [D:0.0] constant across the sampled corpus and absent from the OB image; was "radar_display_offset"
-    (0xD8F4FBD2, 2, "melee_cost"), // [V:sub_1405F9180] case 1
+    (0xD8F4FBD2, 2, "melee_cost"),   // [V:sub_1405F9180] case 1
     (0xDC414338, 5, "target_position_offset_slot_2_y"), // [V:data_14134BD58 idx=7 -> sub_140690480]
     (0xDC9C3D2F, 5, "hp_ratio_family_b_band_20_to_25"),
     (0xDD83290F, 5, "target_position_offset_slot_2_x"), // [V:data_14134BD58 idx=6 -> sub_140690480] mirrored X component
@@ -297,7 +297,7 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0xF73592C7, 5, "reserved_30c"), // [D:50000.0] constant across the sampled corpus and absent from the OB image; was "max_render_distance"
     (0xFBB81BA9, 5, "collision_sphere_0_center_x"), // [V:data_141342D80 r0c1 -> sub_140628FD0]
     (0xFEADD5BE, 5, "collision_sphere_radius_scale"), // [V:sub_140628FD0 scales every sphere radius; V:sub_140634FE0 -> sub_1406394E0 radius normalisation] [D:1.0..1.2]
-    (0xFEE76495, 2, "assist_cost"), // [V:sub_1405F9180] case 6/7
+    (0xFEE76495, 2, "assist_cost"),                   // [V:sub_1405F9180] case 6/7
 ];
 
 pub fn characterparam_entry_to_json_value(entry: &CharacterParamEntry) -> Value {

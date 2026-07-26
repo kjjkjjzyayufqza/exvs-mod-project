@@ -72,7 +72,7 @@ pub const SPEEDPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x9FD06227, 2, "transform_pitch_pose_scale"),
     (0xA49287B9, 2, "boost_dash_speed_initial"),
     (0xA55D6C5E, 2, "vertical_axis_motion_retention"), // [V:func_302] sys_46(3,4,0x64,V,0x64) percent ramp end
-    (0xA7CBBC07, 2, "reserved_0d4"), // [D:35] constant; no MSC reader
+    (0xA7CBBC07, 2, "reserved_0d4"),                   // [D:35] constant; no MSC reader
     (0xB20B67C9, 2, "air_boost_efficiency"),
     (0xBC0127E1, 2, "vertical_axis_motion_retention_base"), // [V:sys_46(0x3,0x4,...)] y-axis movement-scale percent; no gauge or guard arithmetic anywhere
     (0xC6157381, 2, "air_step_speed_initial"),

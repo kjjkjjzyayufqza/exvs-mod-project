@@ -13,7 +13,9 @@ use super::{SCHEMA_VERSION, TOOL_NAME};
 use crate::format::armsparam::{build_armsparam, parse_armsparam, ARMSPARAM_COMMAND_POOL};
 use crate::format::bulletparam::{build_bulletparam, parse_bulletparam, BULLETPARAM_COMMAND_POOL};
 use crate::format::navilist::{build_navilist_data, parse_navilist_data, NAVILIST_COMMAND_POOL};
-use crate::format::pilotlist::{build_pilotlist_data, parse_pilotlist_data, PILOTLIST_COMMAND_POOL};
+use crate::format::pilotlist::{
+    build_pilotlist_data, parse_pilotlist_data, PILOTLIST_COMMAND_POOL,
+};
 use crate::format::projectile_depiction_table::{
     build_projectile_depiction_table, parse_projectile_depiction_table,
     PROJECTILE_DEPICTION_TABLE_COMMAND_POOL,

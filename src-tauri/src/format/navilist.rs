@@ -87,7 +87,10 @@ mod tests {
             .iter()
             .find(|e| e.commands.get(&0xA88E762A) == Some(&1))
             .expect("halo entry");
-        assert_eq!(halo.strings.get(&0xAA6A29E5).map(String::as_str), Some("ハロ"));
+        assert_eq!(
+            halo.strings.get(&0xAA6A29E5).map(String::as_str),
+            Some("ハロ")
+        );
     }
 
     #[test]
