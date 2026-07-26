@@ -1,8 +1,10 @@
 mod blender_compose;
 mod blender_resolve;
 mod cascadeur;
+mod dcc_fbx;
 mod fbx;
 mod motion_clip;
+mod motion_fbx_import;
 mod nuanmb;
 mod validate;
 
@@ -16,10 +18,12 @@ pub use blender_compose::{
     CompleteMotionFbxExportReport, CompleteMotionFbxExportRequest,
 };
 pub use blender_resolve::{candidate_blender_51_paths, resolve_blender_51_executable};
+pub use dcc_fbx::{inspect_motion_fbx_file, MotionFbxInspectReport, MotionFbxStackSummary};
 pub use motion_clip::{
     MotionBone, MotionClip, MotionFrame, MotionSkeleton, EXVS2_SAMPLE_RATE_HZ,
     MAX_MOTION_FRAME_COUNT,
 };
+pub use motion_fbx_import::{import_motion_fbx, MotionFbxImportRequest};
 pub use nuanmb::{
     read_motion_skeleton, read_nuanmb_as_motion_clip, write_motion_clip_as_nuanmb,
     NuanmbWriteReport,
@@ -32,6 +36,8 @@ pub enum MotionInterchangeError {
     Bridge(String),
     /// MotionFbxExport / BlenderCompose failures (path resolve, process, staging).
     Compose(String),
+    /// MotionFbxImport failures (FBX load, stack, sampling, output).
+    Import(String),
     Nuanmb(String),
     RigMismatch(String),
 }
@@ -42,6 +48,7 @@ impl fmt::Display for MotionInterchangeError {
             Self::InvalidClip(message) => write!(f, "Invalid motion clip: {message}"),
             Self::Bridge(message) => write!(f, "Cascadeur bridge failed: {message}"),
             Self::Compose(message) => write!(f, "Motion FBX export failed: {message}"),
+            Self::Import(message) => write!(f, "Motion FBX import failed: {message}"),
             Self::Nuanmb(message) => write!(f, "NUANMB conversion failed: {message}"),
             Self::RigMismatch(message) => write!(f, "Rig mismatch: {message}"),
         }
@@ -167,6 +174,18 @@ pub async fn ssbh_export_complete_motion_fbx(
     request: CompleteMotionFbxExportRequest,
 ) -> Result<CompleteMotionFbxExportReport, String> {
     run_blocking(move || export_complete_motion_fbx(request)).await
+}
+
+#[tauri::command]
+pub async fn ssbh_inspect_motion_fbx(fbx_path: String) -> Result<MotionFbxInspectReport, String> {
+    run_blocking(move || inspect_motion_fbx_file(Path::new(fbx_path.trim()))).await
+}
+
+#[tauri::command]
+pub async fn ssbh_import_motion_fbx(
+    request: MotionFbxImportRequest,
+) -> Result<MotionConversionReport, String> {
+    run_blocking(move || import_motion_fbx(request)).await
 }
 
 async fn run_blocking<T: Send + 'static>(

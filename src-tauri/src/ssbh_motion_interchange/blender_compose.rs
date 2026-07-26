@@ -54,10 +54,8 @@ struct StagingFbxPair {
 
 impl StagingFbxPair {
     fn create() -> Result<Self, MotionInterchangeError> {
-        let temp_dir = std::env::temp_dir().join(format!(
-            "exvs2_motion_fbx_export_{}",
-            uuid::Uuid::new_v4()
-        ));
+        let temp_dir =
+            std::env::temp_dir().join(format!("exvs2_motion_fbx_export_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&temp_dir).map_err(|error| {
             MotionInterchangeError::Compose(format!(
                 "failed to create staging directory {}: {error}",
@@ -112,13 +110,7 @@ pub fn export_complete_motion_fbx(
 
     let staging = StagingFbxPair::create()?;
     // Ensure cleanup on every exit path (Drop + explicit for clarity).
-    let result = run_compose_with_staging(
-        &validated,
-        &clip,
-        &blender_path,
-        &staging,
-        action_name,
-    );
+    let result = run_compose_with_staging(&validated, &clip, &blender_path, &staging, action_name);
     staging.cleanup();
     result
 }
@@ -178,6 +170,7 @@ fn run_compose_with_staging(
     })
 }
 
+#[derive(Debug)]
 struct ValidatedPaths {
     nuanmb_path: PathBuf,
     nusktb_path: PathBuf,
@@ -216,10 +209,7 @@ fn validate_export_request(
     })
 }
 
-fn required_compose_path(
-    value: &str,
-    field_name: &str,
-) -> Result<PathBuf, MotionInterchangeError> {
+fn required_compose_path(value: &str, field_name: &str) -> Result<PathBuf, MotionInterchangeError> {
     let value = value.trim();
     if value.is_empty() {
         return Err(MotionInterchangeError::Compose(format!(

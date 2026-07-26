@@ -125,6 +125,10 @@ path = "tests/ssbh_motion_interchange_test.rs"
 name = "ssbh_motion_fbx_export_test"
 path = "tests/ssbh_motion_fbx_export_test.rs"
 
+[[test]]
+name = "ssbh_motion_fbx_import_test"
+path = "tests/ssbh_motion_fbx_import_test.rs"
+
 [build-dependencies]
 tauri-build = { version = "2.6.1", features = [] }
 

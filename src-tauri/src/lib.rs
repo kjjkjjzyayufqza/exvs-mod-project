@@ -4,9 +4,9 @@ mod character_id_preview;
 pub mod collision_mesh;
 mod commands;
 mod console_color;
-pub mod exvs2_json_cli;
 #[cfg(debug_assertions)]
 mod dev_tools_sync;
+pub mod exvs2_json_cli;
 mod fhm2d_memory_preview;
 pub mod format;
 pub mod havok_cli;
@@ -79,6 +79,8 @@ pub fn run() {
             ssbh_motion::ssbh_load_motion_clip,
             ssbh_motion::ssbh_sample_motion_frame,
             ssbh_motion_interchange::ssbh_export_complete_motion_fbx,
+            ssbh_motion_interchange::ssbh_inspect_motion_fbx,
+            ssbh_motion_interchange::ssbh_import_motion_fbx,
             ssbh_dae_cmd::ssbh_analyze_dae,
             ssbh_dae_cmd::ssbh_analyze_fbx,
             ssbh_dae_cmd::ssbh_export_folder_to_dae,
@@ -238,7 +240,9 @@ pub fn run() {
             {
                 match app.path().resource_dir() {
                     Ok(resource_dir) => {
-                        if let Err(error) = dev_tools_sync::sync_debug_tools_to_resource_dir(&resource_dir) {
+                        if let Err(error) =
+                            dev_tools_sync::sync_debug_tools_to_resource_dir(&resource_dir)
+                        {
                             eprintln!("failed to sync debug tools resources: {error}");
                         }
                     }

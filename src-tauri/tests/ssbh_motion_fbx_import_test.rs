@@ -1,0 +1,283 @@
+use app_lib::ssbh_motion_interchange::{
+    import_motion_fbx, inspect_motion_fbx_file, read_nuanmb_as_motion_clip, write_cascadeur_bridge,
+    MotionFbxImportRequest, RigBindingPolicy,
+};
+use glam::{Mat4, Quat, Vec3};
+use ssbh_data::{
+    anim_data::{
+        AnimData, GroupData, GroupType, NodeData, TrackData, TrackValues, Transform, TransformFlags,
+    },
+    skel_data::{BillboardType, BoneData, SkelData},
+};
+
+fn write_two_bone_fixture() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
+    let directory = tempfile::tempdir().unwrap();
+    let skeleton_path = directory.path().join("fixture.nusktb");
+    let animation_path = directory.path().join("fixture.nuanmb");
+    let skeleton = SkelData {
+        major_version: 1,
+        minor_version: 0,
+        bones: vec![
+            BoneData {
+                name: "ROOT".to_string(),
+                transform: Mat4::IDENTITY,
+                parent_index: None,
+                billboard_type: BillboardType::Disabled,
+            },
+            BoneData {
+                name: "HAND".to_string(),
+                transform: Mat4::from_translation(Vec3::new(5.0, 0.0, 0.0)),
+                parent_index: Some(0),
+                billboard_type: BillboardType::Disabled,
+            },
+        ],
+    };
+    skeleton.write_to_file(&skeleton_path).unwrap();
+    let frames = vec![
+        Transform {
+            scale: Vec3::ONE,
+            rotation: Quat::IDENTITY,
+            translation: Vec3::new(0.0, 1.0, 0.0),
+        },
+        Transform {
+            scale: Vec3::ONE,
+            rotation: Quat::from_rotation_y(0.5),
+            translation: Vec3::new(0.0, 2.0, 0.5),
+        },
+        Transform {
+            scale: Vec3::ONE,
+            rotation: Quat::from_rotation_y(1.0),
+            translation: Vec3::new(0.0, 3.0, 1.0),
+        },
+    ];
+    let animation = AnimData {
+        major_version: 1,
+        minor_version: 2,
+        final_frame_index: (frames.len() - 1) as f32,
+        groups: vec![GroupData {
+            group_type: GroupType::Transform,
+            nodes: vec![NodeData {
+                name: "ROOT".to_string(),
+                tracks: vec![TrackData {
+                    name: "Transform".to_string(),
+                    compensate_scale: false,
+                    transform_flags: TransformFlags::default(),
+                    values: TrackValues::Transform(frames),
+                }],
+            }],
+        }],
+    };
+    animation.write_to_file(&animation_path).unwrap();
+    (directory, skeleton_path, animation_path)
+}
+
+/// Write a real animation-only FBX through the existing writer (bridge.json is
+/// ignored by the manifest-free reader; only motion.fbx matters).
+fn write_motion_fbx_fixture() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
+    let (directory, skeleton_path, animation_path) = write_two_bone_fixture();
+    let clip = read_nuanmb_as_motion_clip(
+        &animation_path,
+        &skeleton_path,
+        "fixture_action".to_string(),
+    )
+    .unwrap();
+    let bridge_dir = directory.path().join("bridge");
+    let bridge = write_cascadeur_bridge(&bridge_dir, &clip).unwrap();
+    (directory, skeleton_path, bridge.motion_fbx_path)
+}
+
+#[test]
+fn inspect_lists_single_stack_and_canonical_bones() {
+    let (_directory, _skeleton_path, motion_fbx_path) = write_motion_fbx_fixture();
+    let report = inspect_motion_fbx_file(&motion_fbx_path).unwrap();
+    assert_eq!(report.stacks.len(), 1);
+    assert_eq!(report.stacks[0].name, "fixture_action");
+    assert_eq!(report.stacks[0].frame_count, 3);
+    assert!(report.bone_names.contains(&"ROOT".to_string()));
+    assert!(report.bone_names.contains(&"HAND".to_string()));
+    assert_eq!(report.bone_count, 2);
+}
+
+#[test]
+fn import_rejects_output_equal_to_input() {
+    let error = import_motion_fbx(MotionFbxImportRequest {
+        fbx_path: "same.nuanmb".to_string(),
+        nusktb_path: "skeleton.nusktb".to_string(),
+        output_nuanmb_path: "same.nuanmb".to_string(),
+        template_nuanmb_path: None,
+        animation_stack_name: None,
+        rig_binding_policy: RigBindingPolicy::ExactHierarchy,
+    })
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("differ"), "unexpected error: {error}");
+}
+
+#[test]
+fn import_rejects_non_nuanmb_output() {
+    let error = import_motion_fbx(MotionFbxImportRequest {
+        fbx_path: "motion.fbx".to_string(),
+        nusktb_path: "skeleton.nusktb".to_string(),
+        output_nuanmb_path: "out.fbx".to_string(),
+        template_nuanmb_path: None,
+        animation_stack_name: None,
+        rig_binding_policy: RigBindingPolicy::ExactHierarchy,
+    })
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains(".nuanmb"), "unexpected error: {error}");
+}
+
+#[test]
+fn manifest_free_import_round_trips_synthetic_motion() {
+    let (directory, skeleton_path, motion_fbx_path) = write_motion_fbx_fixture();
+    let output_path = directory.path().join("imported.nuanmb");
+
+    let report = import_motion_fbx(MotionFbxImportRequest {
+        fbx_path: motion_fbx_path.to_string_lossy().to_string(),
+        nusktb_path: skeleton_path.to_string_lossy().to_string(),
+        output_nuanmb_path: output_path.to_string_lossy().to_string(),
+        template_nuanmb_path: None,
+        animation_stack_name: None,
+        rig_binding_policy: RigBindingPolicy::ExactHierarchy,
+    })
+    .unwrap();
+
+    assert_eq!(report.frame_count, 3);
+    assert!(report
+        .warnings
+        .iter()
+        .any(|warning| warning.contains("transform-only")));
+
+    let rebuilt =
+        read_nuanmb_as_motion_clip(&output_path, &skeleton_path, "rebuilt".to_string()).unwrap();
+    let source_animation_path = directory.path().join("fixture.nuanmb");
+    let source =
+        read_nuanmb_as_motion_clip(&source_animation_path, &skeleton_path, "source".to_string())
+            .unwrap();
+    assert_eq!(rebuilt.frames.len(), source.frames.len());
+    for (frame_index, (expected_frame, actual_frame)) in
+        source.frames.iter().zip(&rebuilt.frames).enumerate()
+    {
+        for (bone_index, (expected, actual)) in expected_frame
+            .local_transforms
+            .iter()
+            .zip(&actual_frame.local_transforms)
+            .enumerate()
+        {
+            assert!(
+                expected.translation.abs_diff_eq(actual.translation, 2.0e-3),
+                "frame {frame_index} bone {bone_index} translation drifted"
+            );
+            assert!(
+                expected.scale.abs_diff_eq(actual.scale, 2.0e-3),
+                "frame {frame_index} bone {bone_index} scale drifted"
+            );
+            assert!(
+                expected.rotation.dot(actual.rotation).abs() > 0.9999,
+                "frame {frame_index} bone {bone_index} rotation drifted"
+            );
+        }
+    }
+}
+
+#[test]
+fn import_with_template_preserves_non_transform_groups() {
+    let (directory, skeleton_path, motion_fbx_path) = write_motion_fbx_fixture();
+    // Template: fixture animation + one visibility group.
+    let template_path = directory.path().join("template.nuanmb");
+    let source_animation_path = directory.path().join("fixture.nuanmb");
+    let mut template = AnimData::from_file(&source_animation_path).unwrap();
+    template.groups.push(GroupData {
+        group_type: GroupType::Visibility,
+        nodes: vec![NodeData {
+            name: "MESH".to_string(),
+            tracks: vec![TrackData {
+                name: "Visibility".to_string(),
+                compensate_scale: false,
+                transform_flags: TransformFlags::default(),
+                values: TrackValues::Boolean(vec![true, false, true]),
+            }],
+        }],
+    });
+    template.write_to_file(&template_path).unwrap();
+
+    let output_path = directory.path().join("with_template.nuanmb");
+    let report = import_motion_fbx(MotionFbxImportRequest {
+        fbx_path: motion_fbx_path.to_string_lossy().to_string(),
+        nusktb_path: skeleton_path.to_string_lossy().to_string(),
+        output_nuanmb_path: output_path.to_string_lossy().to_string(),
+        template_nuanmb_path: Some(template_path.to_string_lossy().to_string()),
+        animation_stack_name: Some("fixture_action".to_string()),
+        rig_binding_policy: RigBindingPolicy::ExactHierarchy,
+    })
+    .unwrap();
+    assert_eq!(report.preserved_non_transform_group_count, 1);
+
+    let written = AnimData::from_file(&output_path).unwrap();
+    assert!(written
+        .groups
+        .iter()
+        .any(|group| group.group_type == GroupType::Visibility));
+}
+
+#[test]
+#[ignore = "requires SSBH_MOTION_REAL_NUANMB and SSBH_MOTION_REAL_NUSKTB"]
+fn real_nuanmb_round_trips_through_manifest_free_import() {
+    let directory = tempfile::tempdir().unwrap();
+    let nuanmb_path = directory.path().join("real.nuanmb");
+    let nusktb_path = directory.path().join("real.nusktb");
+    std::fs::copy(
+        std::env::var("SSBH_MOTION_REAL_NUANMB").unwrap(),
+        &nuanmb_path,
+    )
+    .unwrap();
+    std::fs::copy(
+        std::env::var("SSBH_MOTION_REAL_NUSKTB").unwrap(),
+        &nusktb_path,
+    )
+    .unwrap();
+
+    let source =
+        read_nuanmb_as_motion_clip(&nuanmb_path, &nusktb_path, "real_source".to_string()).unwrap();
+    let bridge = write_cascadeur_bridge(&directory.path().join("bridge"), &source).unwrap();
+
+    let output_path = directory.path().join("reimported.nuanmb");
+    let report = import_motion_fbx(MotionFbxImportRequest {
+        fbx_path: bridge.motion_fbx_path.to_string_lossy().to_string(),
+        nusktb_path: nusktb_path.to_string_lossy().to_string(),
+        output_nuanmb_path: output_path.to_string_lossy().to_string(),
+        template_nuanmb_path: Some(nuanmb_path.to_string_lossy().to_string()),
+        animation_stack_name: Some("real_source".to_string()),
+        rig_binding_policy: RigBindingPolicy::ExactHierarchy,
+    })
+    .unwrap();
+    assert_eq!(report.frame_count, source.frames.len());
+
+    let rebuilt =
+        read_nuanmb_as_motion_clip(&output_path, &nusktb_path, "real_rebuilt".to_string()).unwrap();
+    for (frame_index, (expected_frame, actual_frame)) in
+        source.frames.iter().zip(&rebuilt.frames).enumerate()
+    {
+        for (bone_index, (expected, actual)) in expected_frame
+            .local_transforms
+            .iter()
+            .zip(&actual_frame.local_transforms)
+            .enumerate()
+        {
+            assert!(
+                expected.translation.abs_diff_eq(actual.translation, 2.0e-3),
+                "frame {frame_index} bone {bone_index} '{}' translation drifted",
+                source.skeleton.bones[bone_index].name
+            );
+            assert!(
+                expected.scale.abs_diff_eq(actual.scale, 2.0e-3),
+                "frame {frame_index} bone {bone_index} scale drifted"
+            );
+            assert!(
+                expected.rotation.dot(actual.rotation).abs() > 0.9999,
+                "frame {frame_index} bone {bone_index} rotation drifted"
+            );
+        }
+    }
+}
