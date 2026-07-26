@@ -13,6 +13,7 @@ import {
   type MotionConversionReport,
 } from "../motionFbxImportService";
 import { MayaSection } from "../MayaInspectorSection";
+import { MotionReportCard } from "./MotionReportCard";
 
 type MotionClipOpsPanelProps = {
   selectedNuanmbPath: string | null;
@@ -205,18 +206,14 @@ export function MotionClipOpsPanel({
           </p>
         ) : null}
         {report ? (
-          <div className="rounded-sm border border-border/60 bg-muted/30 px-2 py-1.5">
-            <div className="font-medium">{report.actionName}</div>
-            <div className="font-mono text-muted-foreground">
-              {report.frameCount} frames, {report.durationSeconds.toFixed(3)}s @ 60 FPS
-            </div>
-            <div className="font-mono text-muted-foreground wrap-anywhere">{report.outputPath}</div>
-            {report.warnings.map((warning) => (
-              <div key={warning} className="mt-1 text-amber-700 dark:text-amber-400 wrap-anywhere">
-                {warning}
-              </div>
-            ))}
-          </div>
+          <MotionReportCard
+            title={report.actionName}
+            rows={[
+              `${report.frameCount} frames, ${report.durationSeconds.toFixed(3)}s @ 60 FPS`,
+              report.outputPath,
+            ]}
+            warnings={report.warnings}
+          />
         ) : null}
       </div>
     </MayaSection>

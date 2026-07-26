@@ -4,6 +4,7 @@ import { FileInput, Layers, LoaderCircle, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { DialogLastPathKey, getDialogDefaultPath, rememberDialogSelection } from "@/utils/dialogLastPath";
 import {
@@ -14,6 +15,7 @@ import {
   type RigBindingPolicyValue,
 } from "../motionFbxImportService";
 import { MayaSection } from "../MayaInspectorSection";
+import { MotionReportCard } from "./MotionReportCard";
 
 type MotionFbxImportPanelProps = {
   skeletonPath: string | null;
@@ -191,13 +193,12 @@ export function MotionFbxImportPanel({
           </div>
         ) : null}
         <div className="flex items-center gap-1.5">
-          <input
+          <Checkbox
             id="motion-fbx-import-preserve-groups"
-            type="checkbox"
-            className="h-3 w-3 accent-primary"
+            className="h-3 w-3 [&_svg]:h-2.5 [&_svg]:w-2.5"
             checked={preserveGroups}
             disabled={busy || disabled || !selectedNuanmbPath}
-            onChange={(event) => setPreserveGroups(event.target.checked)}
+            onCheckedChange={(checked) => setPreserveGroups(checked === true)}
           />
           <Label
             htmlFor="motion-fbx-import-preserve-groups"
@@ -244,20 +245,15 @@ export function MotionFbxImportPanel({
           </p>
         ) : null}
         {report ? (
-          <div className="rounded-sm border border-border/60 bg-muted/30 px-2 py-1.5">
-            <div className="font-medium">{report.actionName}</div>
-            <div className="font-mono text-muted-foreground">{reportSummary(report)}</div>
-            <div className="font-mono text-muted-foreground">
-              {report.matchedBones.length} bones matched, {report.ignoredBones.length} ignored,{" "}
-              {report.preservedNonTransformGroupCount} groups preserved
-            </div>
-            <div className="font-mono text-muted-foreground wrap-anywhere">{report.outputPath}</div>
-            {report.warnings.map((warning) => (
-              <div key={warning} className="mt-1 text-amber-700 dark:text-amber-400 wrap-anywhere">
-                {warning}
-              </div>
-            ))}
-          </div>
+          <MotionReportCard
+            title={report.actionName}
+            rows={[
+              reportSummary(report),
+              `${report.matchedBones.length} bones matched, ${report.ignoredBones.length} ignored, ${report.preservedNonTransformGroupCount} groups preserved`,
+              report.outputPath,
+            ]}
+            warnings={report.warnings}
+          />
         ) : null}
       </div>
     </MayaSection>

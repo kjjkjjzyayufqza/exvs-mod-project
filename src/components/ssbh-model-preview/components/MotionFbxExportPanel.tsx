@@ -13,6 +13,7 @@ import {
   type CompleteMotionFbxExportReport,
 } from "../motionFbxExportService";
 import { MayaSection } from "../MayaInspectorSection";
+import { MotionReportCard } from "./MotionReportCard";
 
 type MotionFbxExportPanelProps = {
   selectedNuanmbPath: string | null;
@@ -150,9 +151,11 @@ export function MotionFbxExportPanel({
             Export complete FBX
           </Button>
         </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-muted-foreground">Blender 5.1 path (optional override)</span>
-          <div className="flex gap-1">
+        <details className="group">
+          <summary className="cursor-pointer list-none rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+            <span className="select-none">Blender 5.1 path (optional override)</span>
+          </summary>
+          <div className="mt-1 flex gap-1">
             <Input
               className="h-7 text-[10px]"
               value={blenderPath}
@@ -171,7 +174,7 @@ export function MotionFbxExportPanel({
               <FolderSearch className="h-3.5 w-3.5" />
             </Button>
           </div>
-        </div>
+        </details>
         {!numdlbPath || !skeletonPath ? (
           <p className="text-destructive">Active model needs NUMDLB and NUSKTB for export.</p>
         ) : null}
@@ -185,17 +188,11 @@ export function MotionFbxExportPanel({
           </p>
         ) : null}
         {report ? (
-          <div className="rounded-sm border border-border/60 bg-muted/30 px-2 py-1.5">
-            <div className="font-medium">{report.actionName}</div>
-            <div className="font-mono text-muted-foreground">{reportSummary(report)}</div>
-            <div className="font-mono text-muted-foreground wrap-anywhere">{report.outputPath}</div>
-            <div className="font-mono text-muted-foreground wrap-anywhere">Blender: {report.blenderPath}</div>
-            {report.warnings.map((warning) => (
-              <div key={warning} className="mt-1 text-amber-700 dark:text-amber-400 wrap-anywhere">
-                {warning}
-              </div>
-            ))}
-          </div>
+          <MotionReportCard
+            title={report.actionName}
+            rows={[reportSummary(report), report.outputPath, `Blender: ${report.blenderPath}`]}
+            warnings={report.warnings}
+          />
         ) : null}
       </div>
     </MayaSection>

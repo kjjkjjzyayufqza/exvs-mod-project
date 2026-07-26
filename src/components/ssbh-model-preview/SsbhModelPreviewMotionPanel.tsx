@@ -189,6 +189,7 @@ export function SsbhModelPreviewMotionPanel() {
       ) : null}
 
       <MotionClipOpsPanel
+        key={p.motionSelectedNuanmbPath ?? "no-clip"}
         selectedNuanmbPath={p.motionSelectedNuanmbPath}
         skeletonPath={activeInstance?.bundle.skelPath ?? null}
         finalFrameIndex={p.motionManifest?.finalFrameIndex ?? null}
