@@ -132,7 +132,7 @@ export function MotionFbxExportPanel({
     <MayaSection title="Motion FBX export" icon={<FileOutput className="h-3.5 w-3.5 opacity-80" />} defaultOpen>
       <div className="flex flex-col gap-2 text-[10px]">
         <p className="text-muted-foreground">
-          Export one CompleteMotionFbx (model + bound action) via Blender 5.1 at 60 FPS. One-way only; no NUANMB import.
+          Export one CompleteMotionFbx (model + bound action) via Blender 5.1 at 60 FPS. Edit it in a DCC, then bring it back below via Import FBX.
         </p>
         <div className="flex flex-wrap gap-1.5">
           <Button

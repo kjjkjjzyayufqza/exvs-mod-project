@@ -379,6 +379,7 @@ export type SsbhModelPreviewContextValue = {
   motionForceVisibleDuringPlayback: boolean;
   setMotionForceVisibleDuringPlayback: (v: boolean) => void;
   pickMotionNuanmbFile: () => Promise<void>;
+  loadMotionNuanmbPath: (path: string) => void;
   pickMotionFolder: () => Promise<void>;
   reloadMotionClip: () => void;
   resetMotionPose: () => void;
@@ -903,6 +904,38 @@ export function SsbhModelPreviewProvider({
       },
     }));
   }, [resolvedActivePreviewInstanceId, root]);
+
+  const loadMotionNuanmbPath = useCallback(
+    (path: string) => {
+      const activeId = resolvedActivePreviewInstanceId;
+      if (!activeId) {
+        throw new Error("No active preview instance.");
+      }
+      setMotionByInstanceId((prev) => {
+        const current = prev[activeId] ?? createDefaultMotionState();
+        const nuanmbPaths = current.nuanmbPaths.includes(path)
+          ? current.nuanmbPaths
+          : [...current.nuanmbPaths, path];
+        return {
+          ...prev,
+          [activeId]: {
+            ...current,
+            nuanmbPaths,
+            selectedNuanmbPath: path,
+            poseEnabled: false,
+            frame: 0,
+            playing: false,
+            clip: null,
+            sample: null,
+            sampleError: null,
+            attemptedManifestPath: null,
+            attemptedClipKey: null,
+          },
+        };
+      });
+    },
+    [resolvedActivePreviewInstanceId],
+  );
 
   const pickMotionFolder = useCallback(async () => {
     const activeId = resolvedActivePreviewInstanceId;
@@ -2494,6 +2527,7 @@ export function SsbhModelPreviewProvider({
       motionForceVisibleDuringPlayback,
       setMotionForceVisibleDuringPlayback,
       pickMotionNuanmbFile,
+      loadMotionNuanmbPath,
       pickMotionFolder,
       reloadMotionClip,
       resetMotionPose,
@@ -2622,6 +2656,7 @@ export function SsbhModelPreviewProvider({
       motionForceVisibleDuringPlayback,
       setMotionForceVisibleDuringPlayback,
       pickMotionNuanmbFile,
+      loadMotionNuanmbPath,
       pickMotionFolder,
       reloadMotionClip,
       resetMotionPose,

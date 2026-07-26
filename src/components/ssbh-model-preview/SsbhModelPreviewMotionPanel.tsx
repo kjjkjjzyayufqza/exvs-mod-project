@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MotionClipPathSearchSelect } from "./components/MotionClipPathSearchSelect";
 import { MotionFbxExportPanel } from "./components/MotionFbxExportPanel";
+import { MotionFbxImportPanel } from "./components/MotionFbxImportPanel";
 import { MayaSection } from "./MayaInspectorSection";
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
 
@@ -165,6 +166,14 @@ export function SsbhModelPreviewMotionPanel() {
         numdlbPath={activeInstance?.bundle.modlPath ?? null}
         workspaceRoot={p.workspaceRoot}
         disabled={p.previewBusy}
+      />
+
+      <MotionFbxImportPanel
+        skeletonPath={activeInstance?.bundle.skelPath ?? null}
+        selectedNuanmbPath={p.motionSelectedNuanmbPath}
+        workspaceRoot={p.workspaceRoot}
+        disabled={p.previewBusy}
+        onImported={p.loadMotionNuanmbPath}
       />
     </div>
   );
