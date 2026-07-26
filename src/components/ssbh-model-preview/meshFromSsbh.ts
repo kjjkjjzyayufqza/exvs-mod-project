@@ -636,6 +636,7 @@ export function resolveMaterialTexturePaths(
   const aoRef =
     exvs.ao ?? textureRefForParam(entry, "AmbientOcclusionMap") ?? null;
   const cubeRef =
+    textureRefForParam(entry, "DiffuseCubeMap") ??
     textureRefForParam(entry, "Texture7") ??
     textureRefForParam(entry, "Texture8") ??
     iterTextureRefs(entry).find((x) => isLikelyCubeMapTextureRef(x.ref))?.ref ??

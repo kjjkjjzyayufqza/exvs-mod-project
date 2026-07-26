@@ -681,7 +681,11 @@ export default function UnitModelEdit() {
   const previewSuspended = !isPageActive || modelImportViewportSuspend;
 
   return (
-    <SsbhModelPreviewProvider workspaceRoot={unitRoot} previewSuspended={previewSuspended}>
+    <SsbhModelPreviewProvider
+      workspaceRoot={unitRoot}
+      previewSuspended={previewSuspended}
+      defaultLightingPreset="softCharacter"
+    >
       <TooltipProvider>
         <div className="flex h-full min-h-0 min-w-0 flex-col bg-background">
           <UnitModelEditWorkspace

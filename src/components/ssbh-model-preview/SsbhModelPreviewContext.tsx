@@ -37,6 +37,11 @@ import {
 } from "./meshFromSsbh";
 import { clearMeshGeometryRegistry, hydrateBundleGeometry } from "./meshGeometryHydrate";
 import { shouldStartMotionClipLoad } from "./motionClipLoadPolicy";
+import {
+  PREVIEW_LIGHTING_PRESETS,
+  type PreviewLightingPreset,
+  type PreviewLightingValues,
+} from "./previewLightingPresets";
 import type { NutexbTextureData, NutexbTextureDataMap } from "./ssbhTextureUpload";
 import { decodeSceneNutexbRgba } from "@/page/SceneEdit/utils/sceneTextureDecode";
 import {
@@ -103,6 +108,16 @@ export const DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY = 1.05;
 export const DEFAULT_PREVIEW_DIRECTIONAL_X = 8;
 export const DEFAULT_PREVIEW_DIRECTIONAL_Y = 14;
 export const DEFAULT_PREVIEW_DIRECTIONAL_Z = 6;
+
+export type {
+  PreviewLightingPreset,
+  PreviewLightingValues,
+} from "./previewLightingPresets";
+export {
+  PREVIEW_LIGHTING_PRESET_META,
+  PREVIEW_LIGHTING_PRESETS,
+  matchPreviewLightingPreset,
+} from "./previewLightingPresets";
 
 export type MaterialDebugViewMode =
   | "full"
@@ -268,6 +283,8 @@ export type SsbhModelPreviewContextValue = {
   setDirectionalY: (v: number) => void;
   directionalZ: number;
   setDirectionalZ: (v: number) => void;
+  /** Apply a named lighting preset (studio / softCharacter / harsh). */
+  applyLightingPreset: (preset: PreviewLightingPreset) => void;
   normalMapEnabled: boolean;
   setNormalMapEnabled: (v: boolean) => void;
   selectedDebugDrawKey: string | null;
@@ -404,6 +421,11 @@ type ProviderProps = {
   workspaceRoot: string | null | undefined;
   /** When true, pause the Three.js render loop while the Test Editor route stays mounted in the background. */
   previewSuspended?: boolean;
+  /**
+   * Initial lighting preset. Unit Model Editor uses `softCharacter` so low-poly
+   * mecha facets are less exaggerated than the default studio key light.
+   */
+  defaultLightingPreset?: PreviewLightingPreset;
   children: ReactNode;
 };
 
@@ -448,9 +470,12 @@ function createDefaultMotionState(): InternalPreviewInstanceMotionState {
 export function SsbhModelPreviewProvider({
   workspaceRoot,
   previewSuspended = false,
+  defaultLightingPreset = "studio",
   children,
 }: ProviderProps) {
   const root = workspaceRoot?.trim() ? workspaceRoot : null;
+  const initialLighting: PreviewLightingValues =
+    PREVIEW_LIGHTING_PRESETS[defaultLightingPreset] ?? PREVIEW_LIGHTING_PRESETS.studio;
 
   const [previewInstances, setPreviewInstances] = useState<SsbhModelPreviewInstance[]>([]);
   const [previewCollectionSnapshot, setPreviewCollectionSnapshot] = useState<PreviewCollectionSnapshot>(
@@ -473,11 +498,21 @@ export function SsbhModelPreviewProvider({
   const [showAxesGizmo, setShowAxesGizmo] = useState(true);
   const [showStats, setShowStats] = useState(false);
   const [background, setBackground] = useState(DEFAULT_PREVIEW_3D_BACKGROUND);
-  const [ambientIntensity, setAmbientIntensity] = useState(DEFAULT_PREVIEW_AMBIENT_INTENSITY);
-  const [directionalIntensity, setDirectionalIntensity] = useState(DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY);
-  const [directionalX, setDirectionalX] = useState(DEFAULT_PREVIEW_DIRECTIONAL_X);
-  const [directionalY, setDirectionalY] = useState(DEFAULT_PREVIEW_DIRECTIONAL_Y);
-  const [directionalZ, setDirectionalZ] = useState(DEFAULT_PREVIEW_DIRECTIONAL_Z);
+  const [ambientIntensity, setAmbientIntensity] = useState(initialLighting.ambientIntensity);
+  const [directionalIntensity, setDirectionalIntensity] = useState(
+    initialLighting.directionalIntensity,
+  );
+  const [directionalX, setDirectionalX] = useState(initialLighting.directionalX);
+  const [directionalY, setDirectionalY] = useState(initialLighting.directionalY);
+  const [directionalZ, setDirectionalZ] = useState(initialLighting.directionalZ);
+  const applyLightingPreset = useCallback((preset: PreviewLightingPreset) => {
+    const values = PREVIEW_LIGHTING_PRESETS[preset];
+    setAmbientIntensity(values.ambientIntensity);
+    setDirectionalIntensity(values.directionalIntensity);
+    setDirectionalX(values.directionalX);
+    setDirectionalY(values.directionalY);
+    setDirectionalZ(values.directionalZ);
+  }, []);
   const [normalMapEnabled, setNormalMapEnabled] = useState(true);
   const [selectedDebugDrawKey, setSelectedDebugDrawKey] = useState<string | null>(null);
   const [textureDataMap, setTextureDataMap] = useState<NutexbTextureDataMap>(() => new Map());
@@ -1995,11 +2030,7 @@ export function SsbhModelPreviewProvider({
     setShowAxesGizmo(true);
     setShowStats(false);
     setBackground(DEFAULT_PREVIEW_3D_BACKGROUND);
-    setAmbientIntensity(0.4);
-    setDirectionalIntensity(1.05);
-    setDirectionalX(8);
-    setDirectionalY(14);
-    setDirectionalZ(6);
+    applyLightingPreset(defaultLightingPreset);
     setNormalMapEnabled(true);
     setMaterialDebugViewMode("full");
     setTextureFlipY(false);
@@ -2012,7 +2043,7 @@ export function SsbhModelPreviewProvider({
     setBonePoseHistory({ undoStack: [], redoStack: [], applyNonce: 0, applyData: null });
     setFitRequestId((r) => r + 1);
     clearAllMotion();
-  }, [clearAllMotion]);
+  }, [applyLightingPreset, clearAllMotion, defaultLightingPreset]);
 
   const clearRecentModelPaths = useCallback(() => {
     writeRecentModelPathsToStorage([]);
@@ -2437,6 +2468,7 @@ export function SsbhModelPreviewProvider({
       setDirectionalY,
       directionalZ,
       setDirectionalZ,
+      applyLightingPreset,
       normalMapEnabled,
       setNormalMapEnabled,
       selectedDebugDrawKey,
@@ -2573,6 +2605,7 @@ export function SsbhModelPreviewProvider({
       directionalX,
       directionalY,
       directionalZ,
+      applyLightingPreset,
       normalMapEnabled,
       selectedDebugDrawKey,
       textureDataMap,
