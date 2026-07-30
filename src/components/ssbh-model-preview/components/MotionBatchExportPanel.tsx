@@ -13,7 +13,7 @@ import { MayaSection } from "../MayaInspectorSection";
 import { MotionReportCard } from "./MotionReportCard";
 
 type MotionBatchExportPanelProps = {
-  nuanmbPaths: string[];
+  nuanmbPaths: readonly string[];
   skeletonPath: string | null;
   numdlbPath: string | null;
   workspaceRoot: string | null;

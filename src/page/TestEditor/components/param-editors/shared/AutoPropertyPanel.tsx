@@ -11,7 +11,7 @@ import type {
 interface AutoPropertyPanelProps {
   entry: TypedParamEntry;
   fieldSpecs?: Array<Record<string, number>>;
-  onFieldChange: (key: string, value: number | string) => void;
+  onFieldChange: (key: string, value: number) => void;
   groupOverrides?: Record<string, string[]>;
 }
 
@@ -220,7 +220,11 @@ export function AutoPropertyPanel({
               key={def.key}
               def={def}
               value={entry[def.key] ?? 0}
-              onChange={onFieldChange}
+              onChange={(key, value) => {
+                if (typeof value === "number") {
+                  onFieldChange(key, value);
+                }
+              }}
             />
           ))}
         </PropertyGroup>

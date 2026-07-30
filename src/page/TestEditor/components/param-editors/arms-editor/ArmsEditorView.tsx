@@ -9,6 +9,7 @@ import { EditorStatusBar } from "../shared/EditorStatusBar";
 import { WeaponSlotDiagram } from "./WeaponSlotDiagram";
 import { ArmsPropertyPanel } from "./ArmsPropertyPanel";
 import { AmmoTimeline } from "./AmmoTimeline";
+import { ActionReloadTimelinePanel } from "./ActionReloadTimelinePanel";
 import { useArmsEditorStore } from "./ArmsEditorStore";
 import type { TypedParamFile } from "../../param-editor/typedParamTypes";
 
@@ -122,6 +123,7 @@ export function ArmsEditorView({ onUnsavedChanges, workspaceDefaultPath }: ArmsE
           {entry ? (
             <>
               <WeaponSlotDiagram entry={entry} />
+              <ActionReloadTimelinePanel entry={entry} />
               <AmmoTimeline entry={entry} />
             </>
           ) : (

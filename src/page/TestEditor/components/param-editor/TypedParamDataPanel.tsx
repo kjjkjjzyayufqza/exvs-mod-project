@@ -33,6 +33,10 @@ import {
   copyTypedParamFileJsonToClipboard,
 } from "./typedParamClipboard"
 import { TypedParamImportDialog } from "./TypedParamImportDialog"
+import {
+  HitboxParamAnalysisPanel,
+  isHitboxParamFileType,
+} from "./HitboxParamAnalysisPanel"
 import { readObfLabelAtOffset } from "../../utils/mscParamLabelResolver"
 
 /** Baseline estimate; measureElement adjusts when action/resource labels are present. */
@@ -171,12 +175,14 @@ export function TypedParamDataPanel({
   selectedEntryIndex,
   onSelectEntry,
   onChange,
+  workspaceDefaultPath,
 }: {
   fileType: string
   data: TypedParamFile
   selectedEntryIndex: number
   onSelectEntry: (i: number) => void
   onChange: (next: TypedParamFile) => void
+  workspaceDefaultPath?: string
 }) {
   const [fieldSearch, setFieldSearch] = useState("")
   const [entrySearchDraft, setEntrySearchDraft] = useState("")
@@ -648,6 +654,17 @@ export function TypedParamDataPanel({
             </div>
           </div>
         </div>
+        {entry && isHitboxParamFileType(fileType) ? (
+          <div className="max-h-[48%] shrink-0 overflow-y-auto border-b bg-muted/5 px-3 py-3">
+            <HitboxParamAnalysisPanel
+              key={fileType}
+              fileType={fileType}
+              data={data}
+              selectedEntryIndex={selectedEntryIndex}
+              workspaceDefaultPath={workspaceDefaultPath}
+            />
+          </div>
+        ) : null}
         <div
           ref={fieldListRef}
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.04),transparent_55%)] px-4 py-3 pr-3 dark:bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.03),transparent_55%)]"

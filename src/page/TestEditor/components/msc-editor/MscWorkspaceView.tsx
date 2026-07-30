@@ -3,7 +3,9 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { join } from "@tauri-apps/api/path";
 import {
+  Diff,
   ExternalLink,
+  Eye,
   FileCode,
   FileText,
   FolderOpen,
@@ -11,9 +13,12 @@ import {
   Loader2,
   Package,
   Play,
+  ShieldCheck,
   Wand2,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -31,11 +36,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Command } from "@tauri-apps/plugin-shell";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { exists, readDir } from "@tauri-apps/plugin-fs";
+import { exists, readDir, readTextFile } from "@tauri-apps/plugin-fs";
 import {
   folderContainsMscScriptFiles,
   getMscConvertLogPath,
@@ -46,18 +50,29 @@ import {
   compareByLeadingIndex,
   computeMscSlotStatuses,
   getMscFileRole,
+  getMscPackSlotIndexForCFile,
   groupMscFiles,
   isMscPackScriptCFile,
+  summarizeMscRoundtripReport,
+  verifyStateFromReport,
   type MscFileInfo,
+  type MscVerifyState,
 } from "./mscPipeline";
+import { diffTextLines } from "./mscTextDiff";
+import {
+  getMscExternalEditorCommand,
+  setMscExternalEditorCommand,
+} from "./mscEditorSettings";
 import { MscPipelineBar } from "./MscPipelineBar";
 import { MscFileRow, type MscFileActionDescriptor } from "./MscFileRow";
 import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
 import { applyFhm2dStructureMigrationToPack, resolveMigratedFhm2dFolderPath } from "@/utils/fhm2dFolderPathResolution";
 import {
   decompileMscScript,
+  openFileInExternalEditor,
   repackMscScript,
   resolveMscActionOverlayForFolder,
+  verifyMscRoundtrip,
 } from "./mscWorkspaceActions";
 
 interface MscWorkspaceViewProps {
@@ -81,6 +96,14 @@ type ConfirmState =
   | { mode: "convert-one"; file: MscFileInfo; outputPath: string; logPath: string; overwrite: string[] }
   | { mode: "decompile-all"; targets: MscFileInfo[]; overwrite: string[] }
   | { mode: "repack-all"; targets: MscFileInfo[]; overwrite: string[] };
+
+type PreviewMode = "content" | "diff";
+
+interface PreviewState {
+  file: MscFileInfo;
+  content: string;
+  mode: PreviewMode;
+}
 
 const FILE_TYPES = [
   { value: "all", label: "All Files" },
@@ -128,8 +151,26 @@ export default function MscWorkspaceView({
   const [isPickingFolder, setIsPickingFolder] = useState(false);
   const [batch, setBatch] = useState<BatchState | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const [verifyStates, setVerifyStates] = useState<Record<number, MscVerifyState>>({});
+  const [preview, setPreview] = useState<PreviewState | null>(null);
+  const [decompileSnapshots, setDecompileSnapshots] = useState<ReadonlyMap<string, string>>(
+    () => new Map(),
+  );
+  const [editorCommand, setEditorCommand] = useState<string>(() => getMscExternalEditorCommand());
 
   const isBusy = processingFile !== null || batch !== null || isFolderRepacking;
+
+  const setSlotVerifyState = useCallback((slotIndex: number, state: MscVerifyState | null) => {
+    setVerifyStates((prev) => {
+      const next = { ...prev };
+      if (state === null) {
+        delete next[slotIndex];
+      } else {
+        next[slotIndex] = state;
+      }
+      return next;
+    });
+  }, []);
 
   const fetchFiles = useCallback(async () => {
     if (!mscFolderPath) return;
@@ -156,6 +197,13 @@ export default function MscWorkspaceView({
       void fetchFiles();
     }
   }, [isActive, mscFolderPath, fetchFiles]);
+
+  // Verify results, snapshots, and preview belong to one folder only.
+  useEffect(() => {
+    setVerifyStates({});
+    setPreview(null);
+    setDecompileSnapshots(new Map());
+  }, [mscFolderPath]);
 
   const filteredFiles = useMemo(
     () =>
@@ -251,9 +299,25 @@ export default function MscWorkspaceView({
         mscFolderPath,
       });
 
+      // Snapshot the freshly decompiled C so later edits can be diffed, and
+      // drop any verify verdict that belonged to the previous C content.
+      try {
+        const decompiledContent = await readTextFile(outputPath);
+        setDecompileSnapshots((prev) => new Map(prev).set(outputPath, decompiledContent));
+      } catch (snapshotError) {
+        toast.warning(
+          `Decompiled ${file.name}, but could not snapshot ${outputPath} for diffing: ` +
+            (snapshotError instanceof Error ? snapshotError.message : String(snapshotError)),
+        );
+      }
+      const slotIndex = Number.parseInt(file.name, 10);
+      if (Number.isInteger(slotIndex)) {
+        setSlotVerifyState(slotIndex, null);
+      }
+
       return `${file.name} converted to raw C`;
     },
-    [mscFolderPath],
+    [mscFolderPath, setSlotVerifyState],
   );
 
   /** Recompile one C file back to its source pack extension. Throws on tool failure. */
@@ -262,9 +326,14 @@ export default function MscWorkspaceView({
       const inputPath = file.path;
       const outputPath = getMscRepackOutputPath(inputPath);
       await repackMscScript({ inputPath, outputPath, mscFolderPath });
+      // The original script changed, so any previous verify verdict is stale.
+      const slotIndex = Number.parseInt(file.name, 10);
+      if (Number.isInteger(slotIndex)) {
+        setSlotVerifyState(slotIndex, null);
+      }
       return `${file.name} to ${outputPath.replace(/^.*[\\/]/, "")}`;
     },
-    [mscFolderPath],
+    [mscFolderPath, setSlotVerifyState],
   );
 
   const handleConvertOne = useCallback(
@@ -328,19 +397,76 @@ export default function MscWorkspaceView({
     [fetchFiles],
   );
 
-  const handleOpenInEditor = useCallback(async (file: MscFileInfo) => {
-    try {
-      setProcessingFile(file.name);
-      const command = await Command.create("exec-cmd", ["/C", "cursor", file.path]).execute();
-      if (command.code !== 0) {
-        toast.error(`Failed to open ${file.name} in editor: ${command.stderr}`);
+  const handleOpenInEditor = useCallback(
+    async (file: MscFileInfo) => {
+      try {
+        setProcessingFile(file.name);
+        await openFileInExternalEditor({ filePath: file.path, editorCommand });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : `Error opening ${file.name} in editor`);
+      } finally {
+        setProcessingFile(null);
       }
-    } catch {
-      toast.error(`Error opening ${file.name} in editor`);
-    } finally {
-      setProcessingFile(null);
+    },
+    [editorCommand],
+  );
+
+  const handleEditorCommandChange = useCallback((nextCommand: string) => {
+    setEditorCommand(nextCommand);
+    setMscExternalEditorCommand(nextCommand);
+  }, []);
+
+  const handlePreview = useCallback(async (file: MscFileInfo) => {
+    try {
+      const content = await readTextFile(file.path);
+      setPreview({ file, content, mode: "content" });
+    } catch (error) {
+      toast.error(
+        `Failed to preview ${file.name}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }, []);
+
+  const handleTogglePreviewMode = useCallback(() => {
+    setPreview((prev) => {
+      if (!prev) return prev;
+      return { ...prev, mode: prev.mode === "content" ? "diff" : "content" };
+    });
+  }, []);
+
+  const handleVerifyRoundtrip = useCallback(
+    async (file: MscFileInfo) => {
+      const slotIndex = getMscPackSlotIndexForCFile(file.name);
+      try {
+        setProcessingFile(file.name);
+        setSlotVerifyState(slotIndex, { status: "verifying" });
+        const result = await verifyMscRoundtrip({ cFilePath: file.path, mscFolderPath });
+        setSlotVerifyState(slotIndex, verifyStateFromReport(result.report));
+        const summary = summarizeMscRoundtripReport(result.report);
+        if (result.report.isMatch) {
+          toast.success(`Round-trip verify ${file.name}: ${summary}`);
+        } else {
+          const context = result.report.originalContextHex
+            ? ` Original: ${result.report.originalContextHex} | Recompiled: ${result.report.recompiledContextHex ?? "(empty)"}`
+            : "";
+          toast.warning(`Round-trip verify ${file.name}: ${summary}.${context}`);
+        }
+        if (result.tempCleanupError) {
+          toast.warning(
+            `Verify temp file ${result.tempOutputPath} could not be removed: ${result.tempCleanupError}`,
+          );
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setSlotVerifyState(slotIndex, { status: "error", message });
+        toast.error(`Round-trip verify ${file.name} failed: ${message}`);
+      } finally {
+        setProcessingFile(null);
+        await fetchFiles();
+      }
+    },
+    [mscFolderPath, setSlotVerifyState, fetchFiles],
+  );
 
   const runBatch = useCallback(
     async (kind: BatchKind, targets: MscFileInfo[]) => {
@@ -436,6 +562,14 @@ export default function MscWorkspaceView({
       if (role === "c") {
         const actions: MscFileActionDescriptor[] = [
           {
+            key: "preview",
+            label: "Preview",
+            onClick: () => handlePreview(file),
+            variant: "ghost",
+            disabled,
+            icon: <Eye />,
+          },
+          {
             key: "open",
             label: "Open",
             onClick: () => handleOpenInEditor(file),
@@ -456,6 +590,14 @@ export default function MscWorkspaceView({
             });
           }
           actions.push({
+            key: "verify",
+            label: working ? "Verifying…" : "Verify",
+            onClick: () => handleVerifyRoundtrip(file),
+            variant: "outline",
+            disabled,
+            icon: working ? <Loader2 className="animate-spin" /> : <ShieldCheck />,
+          });
+          actions.push({
             key: "repack",
             label: working ? "Repacking…" : "Repack",
             onClick: () => handleRepackOne(file),
@@ -470,6 +612,14 @@ export default function MscWorkspaceView({
       if (role === "log" || role === "resolved") {
         return [
           {
+            key: "preview",
+            label: "Preview",
+            onClick: () => handlePreview(file),
+            variant: "ghost",
+            disabled,
+            icon: <Eye />,
+          },
+          {
             key: "open",
             label: "Open",
             onClick: () => handleOpenInEditor(file),
@@ -482,8 +632,24 @@ export default function MscWorkspaceView({
 
       return [];
     },
-    [processingFile, isBusy, openConvertOne, handleOpenInEditor, handleResolveOverlay, handleRepackOne],
+    [
+      processingFile,
+      isBusy,
+      openConvertOne,
+      handlePreview,
+      handleOpenInEditor,
+      handleResolveOverlay,
+      handleVerifyRoundtrip,
+      handleRepackOne,
+    ],
   );
+
+  const previewSnapshot = preview ? (decompileSnapshots.get(preview.file.path) ?? null) : null;
+  const previewSupportsDiff = preview !== null && getMscFileRole(preview.file.name) === "c";
+  const previewDiff = useMemo(() => {
+    if (!preview || preview.mode !== "diff" || previewSnapshot === null) return null;
+    return diffTextLines(previewSnapshot, preview.content);
+  }, [preview, previewSnapshot]);
 
   if (!mscFolderPath) {
     return (
@@ -540,7 +706,7 @@ export default function MscWorkspaceView({
             </div>
           </div>
 
-          <MscPipelineBar slots={slots} />
+          <MscPipelineBar slots={slots} verifyStates={verifyStates} />
 
           {batch ? (
             <div className="space-y-1.5">
@@ -573,8 +739,86 @@ export default function MscWorkspaceView({
                 ))}
               </SelectContent>
             </Select>
+            <Input
+              value={editorCommand}
+              onChange={(e) => handleEditorCommandChange(e.target.value)}
+              className="w-[150px] font-mono text-xs"
+              placeholder="cursor"
+              aria-label="External editor command"
+              title="External editor command used by Open (e.g. cursor, code, notepad)"
+            />
           </div>
         </div>
+
+        {preview ? (
+          <div className="flex max-h-[45%] min-h-0 shrink-0 flex-col overflow-hidden rounded-md border">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b bg-muted/40 px-3 py-1.5">
+              <div className="flex min-w-0 items-center gap-2">
+                <FileCode className="size-4 shrink-0 text-muted-foreground" />
+                <span className="truncate font-mono text-xs" title={preview.file.path}>
+                  {preview.file.name}
+                </span>
+                {preview.mode === "diff" && previewDiff ? (
+                  <span className="shrink-0 font-mono text-[11px] tabular-nums">
+                    <span className="text-emerald-600 dark:text-emerald-500">+{previewDiff.addedCount}</span>{" "}
+                    <span className="text-destructive">-{previewDiff.removedCount}</span>
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                {previewSupportsDiff ? (
+                  <Button
+                    type="button"
+                    variant={preview.mode === "diff" ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={handleTogglePreviewMode}
+                    disabled={previewSnapshot === null}
+                    title={
+                      previewSnapshot === null
+                        ? "Decompile this script in this session to capture a diff snapshot"
+                        : "Toggle diff vs the last-decompiled snapshot"
+                    }
+                  >
+                    <Diff className="mr-1" />
+                    Diff
+                  </Button>
+                ) : null}
+                <Button type="button" variant="ghost" size="sm" onClick={() => setPreview(null)} title="Close preview">
+                  <X />
+                </Button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto bg-card">
+              {preview.mode === "diff" && previewDiff ? (
+                previewDiff.isIdentical ? (
+                  <p className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                    No changes vs the last-decompiled snapshot.
+                  </p>
+                ) : (
+                  <pre className="py-2 font-mono text-xs leading-5">
+                    {previewDiff.lines.map((line, index) => (
+                      <div
+                        key={index}
+                        className={cn(
+                          "px-3",
+                          line.kind === "added" && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+                          line.kind === "removed" && "bg-destructive/10 text-destructive",
+                        )}
+                      >
+                        <span className="mr-2 select-none opacity-60">
+                          {line.kind === "added" ? "+" : line.kind === "removed" ? "-" : " "}
+                        </span>
+                        {line.text}
+                      </div>
+                    ))}
+                  </pre>
+                )
+              ) : (
+                <pre className="whitespace-pre px-3 py-2 font-mono text-xs leading-5">{preview.content}</pre>
+              )}
+            </div>
+          </div>
+        ) : null}
 
         <div className="flex-1 space-y-4 overflow-y-auto pr-2">
           {isLoading && allFiles.length === 0 ? (

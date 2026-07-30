@@ -16,7 +16,10 @@
       and treats `complete` as the reliable finish signal.
 - [x] Verify: streaming-open wiring type-checks with `npm exec tsc --noEmit`; `page.tsx` lints clean.
 - [ ] Manual: open `0x16F73C97` in the running app and confirm no crash + new_model renders.
-- [ ] Follow-up: `SceneDetailViewWindow` MeshReadonlyTab shows no arrays for binary mesh (display-only).
+- [x] Follow-up: `SceneDetailViewWindow` MeshReadonlyTab shows no arrays for binary mesh (display-only).
+      Fixed: `getMeshObjectStats` now reads `__bin` typed-array views first (vertices from the
+      positions view, triangles from indices/3, UV channels from uv0/uv1 presence; bones from the
+      bridged `bone_influences`, "-" when absent), legacy inline fallback kept + unit tests.
 - [x] Follow-up perf: `stage_stream_bundles` now streams sub-models as produced — rayon
       `for_each_with` sends each parsed bundle down an mpsc channel; a consumer task forwards to
       `on_chunk` and emits progress as they arrive. Peak memory drops from "all sub-models at once"

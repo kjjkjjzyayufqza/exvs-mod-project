@@ -1,5 +1,13 @@
 # MotionFbxExport BlenderCompose Implementation Plan
 
+> **STATUS: SHIPPED.** Delivered via commits a067301 (Blender 5.1 resolver),
+> 11cb27d (headless compose script), f0c80cd (CompleteMotionFbx export via
+> BlenderCompose), plus formatting in 91db7b0. Individual task checkboxes
+> below are intentionally left as written; this banner is the completion
+> record. Env-gated real-data/Blender tests live in
+> `src-tauri/tests/ssbh_motion_fbx_import_test.rs` (`#[ignore]`, run green
+> per b54d867).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (or executing-plans) to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace CascadeurBridge with one-way MotionFbxExport that produces a single CompleteMotionFbx (skinned model + bound action at 60 FPS) by orchestrating Blender 5.1 headless compose.

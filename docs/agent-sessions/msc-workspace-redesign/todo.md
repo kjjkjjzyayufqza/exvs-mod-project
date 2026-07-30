@@ -20,8 +20,15 @@ Status legend: [ ] pending, [~] in progress, [x] done, [-] dropped
 - [ ] W1.5 Generalize `mscActionRename` to discover the action-router function; complete the mask table.
 - [ ] W1.6 Design a dynamic action-mapping artifact/report for each MSC project.
       It should record traced evidence, not act as an `action_hash -> name` dictionary.
+      Note: largely satisfied by `tools/research_chrsysparam_action_report.py`,
+      `tools/research_msc_project_human_bundle.py`, and the `mscResolvedOverlay`
+      evidence renaming (4652de4); only formal closure/contract naming remains.
 - [ ] W1.7 Research where new-version action hashes are recorded, if anywhere.
       Current state: no complete action-hash name file has been found; user rejects dictionary fallback.
+      Note: largely satisfied by the same evidence tooling as W1.6
+      (`research_chrsysparam_action_report.py` / `research_msc_project_human_bundle.py` /
+      `mscResolvedOverlay` renaming, 4652de4): hashes come from `chrsysparam.csyspm` table0
+      field `0x2e` as row evidence, not from any name dictionary.
 - [ ] W1.8 Wire kind-7 label decoding into the parser/UI path for
       `action_label_offset` / `resource_label_offset` in
       `armsparam` / `characterparam` / `speedparam`.
@@ -33,12 +40,17 @@ Status legend: [ ] pending, [~] in progress, [x] done, [-] dropped
 - [x] W2.1 Folder persistence (already handled by parent `mscWorkspaceFolderPath` in MainView).
 - [x] W2.2 Batch "Decompile All" / "Repack All" with per-stage progress (frontend orchestration of
       existing `mscdec`/`msclang` commands; sequential 0 -> 1 -> 2 so 2.c sees 0.c).
-- [ ] W2.3 Round-trip verify: recompile then byte-compare vs original; report first divergence.
-      (Deferred: needs a backend compare command.)
+- [x] W2.3 Round-trip verify: recompile then byte-compare vs original; report first divergence.
+      Done: `compare_msc_roundtrip` command (`src-tauri/src/msc_roundtrip.rs`, registered in
+      `lib.rs`) + `verifyMscRoundtrip` frontend orchestration (recompile to `N.roundtrip.tmp`,
+      never overwrites the original) + per-slot VERIFY flag in `MscPipelineBar`.
 - [~] W2.4 Pipeline visualization: shipped `MscPipelineBar` (per-slot SRC/C state). Full
       Extract -> Decompile -> Name -> Edit -> Recompile -> Pack strip deferred (Edit/Recompile
       states are not filename-distinguishable without backend metadata).
-- [ ] W2.5 In-app `.c` preview + diff; make external editor optional/configurable (drop hard `cursor`).
+- [x] W2.5 In-app `.c` preview + diff; make external editor optional/configurable (drop hard `cursor`).
+      Done: read-only mono preview pane + line diff vs last-decompiled snapshot
+      (`mscTextDiff.ts`, no new deps) + editor command persisted in localStorage
+      (`mscEditorSettings.ts`, `exvs2.mscExternalEditorCommand`) with explicit error toasts.
 
 ### Workstream 3 - UI/UX redesign (Dark Industrial, design-taste principles)
 - [x] W3.1 Replaced flat gray `BUTTON_STYLES` with semantic Button variants (locked `primary`
@@ -58,10 +70,19 @@ Status legend: [ ] pending, [~] in progress, [x] done, [-] dropped
   `vitest run mscPipeline.test.ts` 7/7 pass; zero em-dashes.
 
 ### Workstream 4 - Cleanup / debt
-- [ ] W4.1 Remove dead `src/page/MSCEdit/*` after parity is reached.
+- [x] W4.1 Remove dead `src/page/MSCEdit/*` after parity is reached.
+      Done in commit 7d9a6a0 (directory deleted).
 - [ ] W4.2 Remove deprecated `tools/mscdec_msc.py` + `tools/msclang_msc.py`.
+      DO NOT EXECUTE AS WRITTEN: both are live imports (`mscdec.py` does
+      `from mscdec_msc import *`, `msclang.py` does `from msclang_msc import *`,
+      plus `disasmlib.py` and the tools tests depend on them). Removal would break
+      the active decompile/recompile path; retarget this item to a real dead-code audit first.
 - [ ] W4.3 Add round-trip regression tests for known-good scripts.
-- [ ] W4.4 Quiet/route debug output behind a verbosity flag.
+- [x] W4.4 Quiet/route debug output behind a verbosity flag.
+      Done: `mscdec.py` and `msclang.py` gained `-v/--verbose`; debug prints route through a
+      gated `debug_print`, and `mscdec.py` only mirrors the logging stream to the console in
+      verbose mode (log-file content unchanged). UI invocations pass no flag, so batch runs
+      are quiet by default.
 
 ## Next agent starts here
 Begin with Workstream 1 because auto-naming is the highest-value user-visible gap.

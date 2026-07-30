@@ -13,25 +13,31 @@ use crate::format::param_entry_schema::{
 };
 
 // Please keep comments for analysis.
-// Data-verified: 432 files, 3105 entries. cmd_count={15,16}. No IDA immediates found.
+// Data-verified: 432 files, 3105 entries. cmd_count={15,16}.
+// All 16 field hashes are BINARY-CONFIRMED by the MSC func_219 decompile, which reads every
+// field via sys_0(0x60002, entryId, fieldHash) (docs/hitbox-research/01-melee-hitbox-architecture.md §5.2).
+// CAUTION (03 §2.1): grapparam is the MOVE-LEVEL table (frames/behaviour). Its damage /
+// correction_pct / down_value / down_value_last are NOT the wiki-visible displayed damage,
+// correction, or down values — those live in interactionid. Do not edit grapparam damage
+// expecting displayed damage to change.
 // Note: down_value/stun_value/reach/down_value_last have max near u32::MAX → likely signed i32.
 pub const GRAPPARAM_COMMAND_POOL: ParamCommandPool = &[
-    (0x17A9E2E1, 2, "down_value"),   // [D:signed] max=0xFFFFFFFF, 45 unique
-    (0x2272E3D6, 2, "charge_frame"), // [D:0~440] frames
+    (0x17A9E2E1, 2, "down_value"), // [D:signed] max=0xFFFFFFFF, 45 unique. NOT the wiki down value (03 §2.1)
+    (0x2272E3D6, 2, "charge_frame"), // [D:0~440] frames; consumed only in charge states via func_538 (01 §5.2)
     (0x35857659, 2, "grap_total_frame"), // [D:0~700] frames
     (0x465D80C6, 2, "stun_value"),   // [D:signed] max=0xFFFFFFFF, 47 unique
-    (0x534643A2, 2, "grap_priority"), // [D:0~90] 16 unique
+    (0x534643A2, 2, "grap_priority"), // [D:0~90] 16 unique. Multiplied by 100 on load by func_219 (01 §5.2)
     (0x550BCFAD, 2, "startup_frame"), // [D:0~900] frames
     (0x55B8FC51, 2, "tracking_frame"), // [D:0~700] frames
-    (0x6906F0F4, 2, "damage"),       // [D:0~2000] 60 unique
-    (0x7755981E, 2, "correction_pct"), // [D:0~100] percentage
-    (0x83E900CD, 2, "reach"),        // [D:signed] max=0xFFFFFFFB(-5), 32 unique
+    (0x6906F0F4, 2, "damage"), // [D:0~2000] 60 unique. NOT the displayed damage — that is interactionid 0x00C57BA3 (03 §2.1)
+    (0x7755981E, 2, "correction_pct"), // [D:0~100] percentage. NOT the wiki correction value (03 §2.1)
+    (0x83E900CD, 2, "reach"), // [D:signed] max=0xFFFFFFFB(-5), 32 unique. Different coordinate system from hitgroupiddef sphere_radius; conversion UNPROVEN (01 §7)
     (0x976F9803, 2, "cancel_frame"), // [D:0~60] frames
     (0x99D42DBB, 2, "recovery_frame"), // [D:0~300] frames
     (0xA89F3A61, 2, "is_multi_hit"), // [D:0~1] boolean
-    (0xB084851E, 2, "damage_2nd"),   // [D:0~2000]
-    (0xBEC81A41, 2, "damage_last"),  // [D:0~2000]
-    (0xC21ED1D8, 2, "down_value_last"), // [D:signed] max=0xFFFFFFFF, 49 unique
+    (0xB084851E, 2, "damage_2nd"), // [D:0~2000]
+    (0xBEC81A41, 2, "damage_last"), // [D:0~2000]
+    (0xC21ED1D8, 2, "down_value_last"), // [D:signed] 49 unique. Multiplied by 100 on load by func_219 (01 §5.2)
 ];
 
 pub fn grapparam_entry_to_json_value(entry: &GrapParamEntry) -> Value {

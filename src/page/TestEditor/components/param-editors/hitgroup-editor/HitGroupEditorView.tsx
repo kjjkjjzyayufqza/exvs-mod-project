@@ -7,6 +7,7 @@ import { FilePathInput } from "@/components/ui/filePathInput";
 import { EntryListPanel } from "../shared/EntryListPanel";
 import { EditorStatusBar } from "../shared/EditorStatusBar";
 import { InteractionMatrix } from "./InteractionMatrix";
+import { SphereCoveragePanel } from "./SphereCoveragePanel";
 import { HitGroupPropertyPanel } from "./HitGroupPropertyPanel";
 import { useHitGroupEditorStore } from "./HitGroupEditorStore";
 import type { TypedParamFile } from "../../param-editor/typedParamTypes";
@@ -131,7 +132,10 @@ export function HitGroupEditorView({
 
         <div className="flex min-h-0 flex-col gap-3 overflow-y-auto border-x p-4">
           {entry ? (
-            <InteractionMatrix entry={entry} />
+            <>
+              <InteractionMatrix entry={entry} />
+              <SphereCoveragePanel entry={entry} />
+            </>
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
               Click the file path input above to select a hitgroupiddef.bin

@@ -42,6 +42,8 @@ export {
   ATTACK_TYPE_LABELS,
   getDamageForAttackType,
   getCostForAttackType,
+  getDamageFieldInfo,
+  getCostFieldInfo,
   lowDurabilityIncomingDamageMultiplier,
   lowDurabilityIncomingDamageTable,
   gutsCorrection,
@@ -77,17 +79,30 @@ export {
 } from "./movementParamSemantics";
 
 export {
-  type HitVolumeType,
   type HitVolume,
-  type HitVolumeGeometry,
-  HIT_TYPE_LABELS,
+  type ShapeMode,
+  type SweepCoverage,
+  SHAPE_MODE_LABELS,
   COLLISION_FLAG_LABELS,
   getHitVolume,
-  computeHitVolumeGeometry,
   boundingSphereRadius,
-  groupHitVolumes,
-  getBoneHierarchy,
+  groupVolumesByInteraction,
+  describeSweepCoverage,
+  verticalHitReach,
 } from "./collisionGeometry";
+
+export {
+  type HitEffectCategory,
+  type HitEffectFact,
+  type HitEffectClassification,
+  HIT_EFFECT_CATEGORY_LABELS,
+  KNOCKBACK_TYPE_WEIGHTS,
+  KNOCKBACK_TYPE_DEFAULT_WEIGHT,
+  KNOCKDOWN_BUDGET,
+  GRAB_VISUAL_EFFECT_CLASS,
+  knockbackWeight,
+  classifyHitEffect,
+} from "./hitEffectClassification";
 
 export {
   type ParamKind,

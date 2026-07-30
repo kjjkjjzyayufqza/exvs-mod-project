@@ -99,7 +99,11 @@ export function GameAccuratePropertyPanel({
               key={def.key}
               def={def}
               value={entry[def.key] ?? 0}
-              onChange={onFieldChange}
+              onChange={(key, value) => {
+                if (typeof value === "number") {
+                  onFieldChange(key, value);
+                }
+              }}
             />
           ))}
         </PropertyGroup>

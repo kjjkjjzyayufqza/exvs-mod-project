@@ -15,38 +15,40 @@ use crate::format::param_entry_schema::{
 // Please keep comments for analysis.
 // Data-verified: 433 files, 10214 entries. cmd_count={27} (4 pool entries are PHANTOM).
 // Note: hitstop_frame/knockback_distance/ground_bounce have max near u32::MAX → likely signed i32.
+// Field semantics per docs/hitbox-research/03-hit-effect-taxonomy.md §1 (binary-proven consumers).
+// Fields marked UNVERIFIED have no proven read site; their names are legacy guesses.
 pub const INTERACTIONID_COMMAND_POOL: ParamCommandPool = &[
-    (0x00C57BA3, 2, "damage"),               // [D:0~10000] 139 unique
-    (0x06A06715, 2, "correction_pct"),       // [D:0~1000] 21 unique
-    (0x08A3B0DC, 1, "interact_target_hash"), // [D:HASH] 68 unique
-    (0x148C8D49, 1, "receive_mode"), // [D:0~1] boolean. was "receive_mode_hash" — NOT a hash
-    (0x154EF1ED, 1, "interact_type"), // [D:0~40] enum, 37 unique
-    (0x161FBB4F, 5, "interact_range"), // [D:0~750] 31 unique
-    (0x18DC6CD1, 1, "priority"),     // [D:0~5] enum, 6 levels
-    (0x22C412CA, 2, "stun_value"),   // [D:0~50] 29 unique
-    (0x270D2FD5, 1, "hit_effect_id"), // [D:1~9] enum, 9 types, never 0
-    (0x2A6A7D8F, 2, "down_value"),   // [D:0~1000] 82 unique
-    (0x2EBC0DC3, 1, "guard_interact_hash"), // PHANTOM — not in any data file
-    (0x3626F732, 2, "stun_frame"),   // [D:0~50] 29 unique
-    (0x3D457926, 1, "se_hash"),      // [D:HASH] 184 unique
-    (0x477C2470, 2, "knockback_force"), // [D:0~1000] 22 unique
-    (0x50BC9332, 1, "unk_barrier_hash"), // [D:HASH] 44 unique, mostly 0
-    (0x55815B3B, 1, "guard_type"),   // [D:0~3] enum, 4 types
-    (0x5E1DC3E4, 5, "damage_rate"),  // [D:0~4.0] 28 unique
-    (0x66957C67, 1, "attack_property"), // [D:0~4] enum, 4 types
-    (0x6A0CCB8A, 1, "interact_id"),  // [D:1~705] enum, 47 unique
-    (0x720584BA, 1, "block_level"),  // [D:0~2] 3-value enum. was "is_blockable" — NOT boolean
-    (0x8029185D, 1, "wall_bounce_type"), // PHANTOM — not in any data file
-    (0x90E41A78, 1, "slide_type"),   // PHANTOM — not in any data file
-    (0xA1A98180, 2, "hitstop_frame"), // [D:signed] max=0xFFFFFFFE, 111 unique
-    (0xAD173242, 2, "knockback_distance"), // [D:signed] max=0xFFFFFFFF, 100 unique
-    (0xB69B7051, 2, "ground_bounce"), // [D:signed] max=0xFFFFFFFF, 64 unique
-    (0xBB0F3D7F, 1, "knockback_type"), // [D:0~4] enum, 5 types
-    (0xC1361D23, 2, "can_tech"),     // [D:0~48] 32 unique
-    (0xD5D4F8DB, 2, "hit_level"),    // [D:0~60] 36 unique
-    (0xEFEA436F, 2, "guard_break_level"), // [D:0~10000] 26 unique
-    (0xFA03CBDA, 2, "untechable_frame"), // PHANTOM — not in any data file
-    (0xFABCA946, 1, "interact_category"), // [D:0~203] enum, 9 unique
+    (0x00C57BA3, 2, "damage"), // PROVEN: displayed damage 1:1, subtracted from victim HP with truncation (03 §2)
+    (0x06A06715, 2, "correction_pct"), // PROVEN consumer: decrements victim damage-correction budget at slot+44, clamped >= 0 (03 §1). Constant 100 on melee rows; per-hit correction lives elsewhere
+    (0x08A3B0DC, 1, "interact_target_hash"), // UNVERIFIED name: subsystem selector (melee vs other), NOT a bone reference (01 §3.5)
+    (0x148C8D49, 1, "damage_mult_gate"), // PROVEN: gates a global damage multiplier (system param entry 0x58427419 field 0xE50C0C6F); NOT an attack/receive side flag (03 §1). was "receive_mode"
+    (0x154EF1ED, 1, "visual_effect_class"), // PROVEN: visual hit-effect class only, indexes the 28-byte-stride effect resource table at 0x141349F60; no gameplay effect (03 §1). was "interact_type"
+    (0x161FBB4F, 5, "victim_gauge_add"), // PROVEN: NOT a distance; added to a 0-100 clamped gauge at victim slot+56 (03 §1). was "interact_range"
+    (0x18DC6CD1, 1, "knockback_dir_mode_b"), // PROVEN: knockback direction mode (enum 0-5), second of two (03 §1). was "priority"
+    (0x22C412CA, 2, "stun_value"), // UNVERIFIED: no read site in the whole binary; cannot be the stun switch (03 §4.1)
+    (0x270D2FD5, 1, "hit_effect_id"), // UNVERIFIED: [D:1~9] enum, never 0
+    (0x2A6A7D8F, 2, "down_value"), // PROVEN: decrements victim knockdown budget at slot+24; value = wiki down value x100; exceeding the remaining budget forces knockdown (03 §3)
+    (0x2EBC0DC3, 1, "down_accum_quarter"), // PROVEN: engine reads it; scales knockdown accumulation to 1/4 (03 §1). PHANTOM in data files. was "guard_interact_hash"
+    (0x3626F732, 2, "stun_frame"),         // UNVERIFIED: no read site in the whole binary (03 §4.1)
+    (0x3D457926, 1, "se_hash"),            // UNVERIFIED: [D:HASH] 184 unique
+    (0x477C2470, 2, "rehit_interval"), // PROVEN: re-hit interval / hit-record lifetime, floor 600 (03 §1). was "knockback_force"
+    (0x50BC9332, 1, "unk_barrier_hash"), // UNVERIFIED: no read site found (03 §4.2)
+    (0x55815B3B, 1, "knockback_dir_mode_a"), // PROVEN: knockback direction mode (enum 0-5), first of two (03 §1). was "guard_type"
+    (0x5E1DC3E4, 5, "damage_rate"),          // UNVERIFIED: [D:0~4.0] 28 unique
+    (0x66957C67, 1, "target_filter"), // PROVEN: target-relation filter (enum 0-7); decides which entities the interaction can affect and gates reflection; NOT an attack property (03 §1). was "attack_property"
+    (0x6A0CCB8A, 1, "interact_id"),   // UNVERIFIED: no read site found (03 §4.2)
+    (0x720584BA, 1, "interaction_class"), // PROVEN: classification enum, not a magnitude; all 5 read sites only test value in {0,2}; outside the set enables barrier/IF interactions (03 §1). was "block_level"
+    (0x8029185D, 1, "wall_bounce_type"), // UNVERIFIED: PHANTOM — not in any data file, no read site found (03 §4.2)
+    (0x90E41A78, 1, "damage_mult_gate_2"), // PROVEN: engine reads it; gates a second damage multiplier (03 §1). PHANTOM in data files. was "slide_type"
+    (0xA1A98180, 2, "hitstop_frame"), // UNVERIFIED: no read site found (03 §4.2). [D:signed] max=0xFFFFFFFE
+    (0xAD173242, 2, "knockback_distance"), // UNVERIFIED: no read site found (03 §4.2). [D:signed]
+    (0xB69B7051, 2, "ground_bounce"), // UNVERIFIED: no read site found (03 §4.2). [D:signed]
+    (0xBB0F3D7F, 1, "knockback_type"), // Mechanism PROVEN: switch-mapped to weights {0->0, 1->25, 2->125, 3->1000, 4->10, else->100} stored in hit event +64; "hit-reaction severity" reading is UNVERIFIED (03 §1, §4.3)
+    (0xC1361D23, 2, "can_tech"),       // UNVERIFIED: [D:0~48] 32 unique
+    (0xD5D4F8DB, 2, "hit_level"),      // UNVERIFIED: no read site found (03 §4.2)
+    (0xEFEA436F, 2, "max_hit_count"), // PROVEN: max hits of one interaction against the same target (03 §1). was "guard_break_level"
+    (0xFA03CBDA, 2, "untechable_frame"), // UNVERIFIED: PHANTOM — not in any data file, no read site found (03 §4.2)
+    (0xFABCA946, 1, "interact_category"), // UNVERIFIED: no read site found (03 §4.2)
 ];
 
 pub fn interactionid_entry_to_json_value(entry: &InteractionIdEntry) -> Value {

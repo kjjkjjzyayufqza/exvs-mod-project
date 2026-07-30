@@ -9,7 +9,27 @@ type MeshReadonlyTabProps = {
   mesh: unknown | null;
 };
 
-function getMeshObjectStats(obj: MeshObjectJson) {
+export type MeshObjectStats = {
+  vertexCount: number;
+  triangleCount: number;
+  uvChannels: number;
+  /** Null when a binary mesh object carries no bone influence data (rendered as "-"). */
+  boneInfluences: number | null;
+};
+
+export function getMeshObjectStats(obj: MeshObjectJson): MeshObjectStats {
+  const bin = obj.__bin;
+  if (bin) {
+    // Binary side-channel geometry: typed-array views attached by hydrateBundleGeometry.
+    // Inline arrays are absent for these objects, so stats come from the views
+    // (positions are packed xyz triplets; uv views exist per packed channel).
+    return {
+      vertexCount: bin.positions ? bin.positions.length / 3 : 0,
+      triangleCount: Math.floor(bin.indices.length / 3),
+      uvChannels: (bin.uv0 ? 1 : 0) + (bin.uv1 ? 1 : 0),
+      boneInfluences: obj.bone_influences ? obj.bone_influences.length : null,
+    };
+  }
   const vertexCount = obj.positions?.[0]
     ? getVectorDataCount(obj.positions[0].data)
     : 0;
@@ -35,7 +55,7 @@ function MeshObjectRow({ obj }: { obj: MeshObjectJson }) {
       <span className="text-right">{stats.vertexCount.toLocaleString()}</span>
       <span className="text-right">{stats.triangleCount.toLocaleString()}</span>
       <span className="text-right">{stats.uvChannels}</span>
-      <span className="text-right">{stats.boneInfluences}</span>
+      <span className="text-right">{stats.boneInfluences ?? "-"}</span>
     </div>
   );
 }
@@ -59,17 +79,20 @@ export function MeshReadonlyTab({ mesh }: MeshReadonlyTabProps) {
   const meshData = mesh as MeshDataJson | null;
   const objects = meshData?.objects ?? [];
 
-  const totals = useMemo(() => {
-    const totalVertices = objects.reduce(
-      (sum, obj) => sum + getMeshObjectStats(obj).vertexCount,
-      0,
-    );
-    const totalTriangles = objects.reduce(
-      (sum, obj) => sum + getMeshObjectStats(obj).triangleCount,
-      0,
-    );
-    return { totalVertices, totalTriangles };
-  }, [objects]);
+  const totals = useMemo(
+    () =>
+      objects.reduce(
+        (acc, obj) => {
+          const stats = getMeshObjectStats(obj);
+          return {
+            totalVertices: acc.totalVertices + stats.vertexCount,
+            totalTriangles: acc.totalTriangles + stats.triangleCount,
+          };
+        },
+        { totalVertices: 0, totalTriangles: 0 },
+      ),
+    [objects],
+  );
 
   const getScrollElement = useCallback(() => scrollRef.current, []);
   const rowVirtualizer = useVirtualizer({

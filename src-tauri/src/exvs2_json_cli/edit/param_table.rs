@@ -9,6 +9,9 @@ use crate::exvs2_json_cli::util::{
 };
 use crate::format::armsparam::{ArmsParamData, ArmsParamEntry};
 use crate::format::bulletparam::{BulletParamData, BulletParamEntry};
+use crate::format::grapparam::{GrapParamData, GrapParamEntry};
+use crate::format::hitgroupiddef::{HitGroupIdDefData, HitGroupIdDefEntry};
+use crate::format::interactionid::{InteractionIdData, InteractionIdEntry};
 use crate::format::list_command_pool::{ListData, ListEntry};
 use crate::format::param_bin_format::ParamFieldSpec;
 use crate::format::param_entry_schema::{entry_commands_from_named_json, ParamCommandPool};
@@ -89,6 +92,9 @@ impl_param_access!(VernierTableData, VernierTableEntry);
 impl_param_access!(ArmsParamData, ArmsParamEntry);
 impl_param_access!(BulletParamData, BulletParamEntry);
 impl_param_access!(ProjectileDepictionTableData, ProjectileDepictionTableEntry);
+impl_param_access!(HitGroupIdDefData, HitGroupIdDefEntry);
+impl_param_access!(InteractionIdData, InteractionIdEntry);
+impl_param_access!(GrapParamData, GrapParamEntry);
 
 impl ParamEntryAccess for SpeedParamEntry {
     fn entry_id(&self) -> u32 {

@@ -34,6 +34,10 @@ Generate a correct `map_hit.hkt` from `numshb -> mesh -> hkt` that does not hang
 - [x] Verify fixed HKT round-trips and fixed XML has `delta=0` for all generated
   `maxKeyValue` checks.
 - [ ] User in-game test of fixed HKT contact behavior.
+  - note: the contact crash is recorded FIXED via `section_indexed_max_key`
+    (`src-tauri/src/havok_mesh_encode.rs`, commit f566e8a, regression tests);
+    a fresh re-confirmation of this specific fixed file is only possible by
+    the user in-game, so this box stays open.
 
 ## Phase 1: Baseline And Harness
 
@@ -55,7 +59,11 @@ Generate a correct `map_hit.hkt` from `numshb -> mesh -> hkt` that does not hang
 - [x] Export a simple real-game sample HKT to XML + OBJ for visual comparison:
   - source: `E:\XB\解包\com\test\0xBBC60B47\0\0\211stage211_object_build_b_before\map_hit.hkt`
   - outputs: `E:\TAURI_PROJECT\test\211stage211_object_build_b_before\map_hit.xml` and `E:\TAURI_PROJECT\test\211stage211_object_build_b_before\map_hit.obj`
-- [ ] Extend CLI round-trip verifier with section-level invariants:
+- [x] Extend CLI round-trip verifier with section-level invariants:
+  - largely implemented in `scripts/hkt_struct_verify.ps1` (numShapeKeyBits,
+    triangleIsInterior.numBits, numPrimitiveKeys, bitsPerKey, maxKeyValue,
+    section count, packed/shared vertex counts, primitive data run counts,
+    hasSimdTree)
   - target shape id and data id
   - `numShapeKeyBits`
   - `triangleIsInterior.numBits`
@@ -91,7 +99,11 @@ Generate a correct `map_hit.hkt` from `numshb -> mesh -> hkt` that does not hang
   - object-level shape metadata consistency
   - whether replacing only the last body is correct
   - whether stale `simdTree`, `connectivity`, `properties`, or material/user-data references can poison PreviewTool
-- [ ] Review `src-tauri/src/havok_mesh_export.rs` decode path against generated files:
+- [x] Review `src-tauri/src/havok_mesh_export.rs` decode path against generated files:
+  - addressed by commit 617e75d: `decode_shared_vertex` refactor plus
+    decode-back validation of generated meshes (missing-shared-vertex and
+    out-of-range primitive index errors) in `src-tauri/src/havok_mesh_encode.rs`,
+    with a shared-vertex decode test in `src-tauri/src/havok_mesh_export.rs`
   - generated HKT decodes back into expected triangle count
   - no missing shared vertices
   - no out-of-range primitive indices
@@ -139,10 +151,12 @@ Generate a correct `map_hit.hkt` from `numshb -> mesh -> hkt` that does not hang
 
 ## Phase 5: Implement And Verify
 
-- [ ] Apply the smallest evidence-backed code fix.
-- [ ] Run formatting only on explicitly modified Rust files; do not run global `cargo fmt`.
-- [ ] Run `cargo test havok_mesh_encode --lib`.
-- [ ] Run `cargo test collect_save_artifacts --lib`.
+- [x] Apply the smallest evidence-backed code fix.
+  - shipped as `section_indexed_max_key` shape-key space migration in
+    `src-tauri/src/havok_mesh_encode.rs` (commit f566e8a, with regression tests)
+- [x] Run formatting only on explicitly modified Rust files; do not run global `cargo fmt`.
+- [x] Run `cargo test havok_mesh_encode --lib`.
+- [x] Run `cargo test collect_save_artifacts --lib`.
 - [ ] Regenerate `E:\XB\解包\com\test\_hkt_preview_single\map_hit.hkt`.
 - [ ] Run CLI HKT -> XML round-trip verifier.
 - [ ] Run PreviewTool watchdog on working baseline and generated output.
@@ -183,8 +197,11 @@ SDK exporter).
 - [x] Compare XML root tags, element tags, attributes, normalized Havok type schemas,
   compressed-mesh field order, and value-node tags.
 - [x] Rule out XML tag/schema differences as the contact-freeze cause.
-- [ ] Compare and test data-level differences, starting with `convexRadius`,
+- [x] Compare and test data-level differences, starting with `convexRadius`,
   `triangleIsInterior`, and collision topology cleanup.
+  - resolved: the contact freeze was root-caused to the shape-key space
+    (undersized `maxKeyValue` / `triangleIsInterior.numBits`), fixed via
+    `section_indexed_max_key` (commit f566e8a, regression tests)
 
 ## Single-Plane No-Collision Follow-up (2026-06-06)
 

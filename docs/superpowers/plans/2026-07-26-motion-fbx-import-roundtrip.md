@@ -1,5 +1,16 @@
 # MotionFbxImport + RoundTripMotion Implementation Plan
 
+> **STATUS: SHIPPED.** Delivered via commits 427e2ed (manifest-free
+> MotionFbxImport with world-rebase sampling), b54d867 (MotionJson compose +
+> declared-axes import closing the Blender round trip), 9701406 (ClipOps trim
+> and retime with NUANMB command), 86a9374 (MotionFbxImport panel with
+> ImportPreview), 3746643 (batch CompleteMotionFbx export and clip
+> trim/retime tools), 31c7f35 (panel design unification). Individual task
+> checkboxes below are intentionally left as written; this banner is the
+> completion record. Env-gated real-data/Blender tests live in
+> `src-tauri/tests/ssbh_motion_fbx_import_test.rs` (`#[ignore]`, run green
+> per b54d867).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Close the mod developer motion loop: manifest-free FBX→NUANMB import (DCC-tolerant), ImportPreview, batch CompleteMotionFbx export, and trim/retime clip operations.

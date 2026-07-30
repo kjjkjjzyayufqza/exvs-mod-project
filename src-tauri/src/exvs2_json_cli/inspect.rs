@@ -13,6 +13,13 @@ use super::util::{
 use super::{SCHEMA_VERSION, TOOL_NAME};
 use crate::format::armsparam::{build_armsparam, parse_armsparam, ARMSPARAM_COMMAND_POOL};
 use crate::format::bulletparam::{build_bulletparam, parse_bulletparam, BULLETPARAM_COMMAND_POOL};
+use crate::format::grapparam::{build_grapparam, parse_grapparam, GRAPPARAM_COMMAND_POOL};
+use crate::format::hitgroupiddef::{
+    build_hitgroupiddef, parse_hitgroupiddef, HITGROUPIDDEF_COMMAND_POOL,
+};
+use crate::format::interactionid::{
+    build_interactionid, parse_interactionid, INTERACTIONID_COMMAND_POOL,
+};
 use crate::format::list_command_pool::ListData;
 use crate::format::navilist::{
     build_navilist_data, parse_navilist, parse_navilist_data, NAVILIST_COMMAND_POOL,
@@ -56,6 +63,9 @@ pub fn inspect_bytes(
         InspectType::ProjectileDepictionTable => {
             inspect_projectile_depiction_table(bytes, &options)?
         }
+        InspectType::HitGroupIdDef => inspect_hitgroupiddef(bytes, &options)?,
+        InspectType::InteractionId => inspect_interactionid(bytes, &options)?,
+        InspectType::GrapParam => inspect_grapparam(bytes, &options)?,
         InspectType::NaviList => inspect_navi_list(bytes, &options)?,
         InspectType::PilotList => inspect_pilot_list(bytes, &options)?,
         InspectType::Nusktb => inspect_nusktb(bytes, &options, &mut warnings)?,
@@ -116,6 +126,15 @@ pub(crate) fn detect_type(
     }
     if lower.contains("projectile_depiction_table") {
         return Ok(InspectType::ProjectileDepictionTable);
+    }
+    if lower.ends_with("hitgroupiddef.bin") || lower.contains("/hitgroupiddef") {
+        return Ok(InspectType::HitGroupIdDef);
+    }
+    if lower.ends_with("interactionid.bin") || lower.contains("/interactionid") {
+        return Ok(InspectType::InteractionId);
+    }
+    if lower.ends_with("grapparam.bin") || lower.contains("/grapparam") {
+        return Ok(InspectType::GrapParam);
     }
     if lower.contains("navi_list")
         || lower.ends_with("navi_list.bin")
@@ -397,6 +416,106 @@ fn inspect_projectile_depiction_table(
         &parsed.field_specs,
         PROJECTILE_DEPICTION_TABLE_COMMAND_POOL,
         || build_projectile_depiction_table(&parsed),
+    )
+}
+
+fn inspect_hitgroupiddef(bytes: &[u8], options: &InspectOptions) -> Result<Value, String> {
+    let parsed = parse_hitgroupiddef(bytes)?;
+    let mut data = typed_param_data(
+        "hitgroupiddef",
+        serde_json::to_value(&parsed)
+            .map_err(|e| format!("Serialize hitgroupiddef failed: {e}"))?,
+        options.summary,
+    );
+    insert_object_field(
+        &mut data,
+        "fieldNotes",
+        json!({
+            "geometry": "Each row is ONE SPHERE in bone space: center (centerX, centerY, centerZ), radius sphereRadius; shapeMode 0 = static sphere, 1 = frame-swept capsule (docs/hitbox-research/02 §2-4).",
+            "interactionId": "Foreign key to interactionid.entryId, armed via MSC func_148; NOT a bone hash (docs/hitbox-research/01 §2, 02 §6).",
+            "boneId": "Attachment bone id resolved through the skeleton bone-id->index map (02 §3).",
+            "collisionFlags": "Row class: 0 = attack, 1 = hurtbox, 2 = third class (02 §6).",
+            "unusedFields": "unused3284a82d / unused42ee5ca2 / unused458398bb / unusedAce03d8e / unusedDbe70d18 are DEAD: the engine never reads them (02 §7); kept only for byte-faithful round-trips."
+        }),
+    )?;
+    insert_raw_fields_and_roundtrip(
+        &mut data,
+        bytes,
+        options,
+        &parsed
+            .entries
+            .iter()
+            .map(|entry| (entry.entry_id, &entry.commands))
+            .collect::<Vec<_>>(),
+        &parsed.field_specs,
+        HITGROUPIDDEF_COMMAND_POOL,
+        || build_hitgroupiddef(&parsed),
+    )
+}
+
+fn inspect_interactionid(bytes: &[u8], options: &InspectOptions) -> Result<Value, String> {
+    let parsed = parse_interactionid(bytes)?;
+    let mut data = typed_param_data(
+        "interactionid",
+        serde_json::to_value(&parsed)
+            .map_err(|e| format!("Serialize interactionid failed: {e}"))?,
+        options.summary,
+    );
+    insert_object_field(
+        &mut data,
+        "fieldNotes",
+        json!({
+            "damage": "PROVEN: displayed damage 1:1, subtracted from victim HP with truncation (docs/hitbox-research/03 §2).",
+            "downValue": "PROVEN: wiki down value x100, decrements victim knockdown budget (03 §3).",
+            "provenFields": "damageMultGate / damageMultGate2 / visualEffectClass / victimGaugeAdd / knockbackDirModeA / knockbackDirModeB / downAccumQuarter / rehitInterval / targetFilter / interactionClass / maxHitCount / correctionPct are binary-proven (03 §1).",
+            "unverifiedFields": "stunValue / stunFrame / hitstopFrame / knockbackDistance / groundBounce / hitLevel / canTech / seHash / damageRate / hitEffectId / interactCategory / unkBarrierHash / wallBounceType / untechableFrame / interactId keep legacy guessed names with NO proven read site (03 §4).",
+            "interactTargetHash": "Subsystem selector (melee vs other), NOT an entry reference and NOT a bone (01 §3.5)."
+        }),
+    )?;
+    insert_raw_fields_and_roundtrip(
+        &mut data,
+        bytes,
+        options,
+        &parsed
+            .entries
+            .iter()
+            .map(|entry| (entry.entry_id, &entry.commands))
+            .collect::<Vec<_>>(),
+        &parsed.field_specs,
+        INTERACTIONID_COMMAND_POOL,
+        || build_interactionid(&parsed),
+    )
+}
+
+fn inspect_grapparam(bytes: &[u8], options: &InspectOptions) -> Result<Value, String> {
+    let parsed = parse_grapparam(bytes)?;
+    let mut data = typed_param_data(
+        "grapparam",
+        serde_json::to_value(&parsed).map_err(|e| format!("Serialize grapparam failed: {e}"))?,
+        options.summary,
+    );
+    insert_object_field(
+        &mut data,
+        "fieldNotes",
+        json!({
+            "identity": "Move-level melee table (frames/behaviour), bound via MSC func_219; all 16 field hashes are read by sys_0(0x60002, entryId, fieldHash) (docs/hitbox-research/01 §5.2).",
+            "damageCaution": "grapparam damage / correctionPct / downValue are NOT the wiki-visible quantities; those live in interactionid (03 §2.1).",
+            "loadScaling": "grapPriority and downValueLast are multiplied by 100 on load by func_219 (01 §5.2).",
+            "reach": "Different coordinate system from hitgroupiddef sphereRadius; conversion UNPROVEN (01 §7)."
+        }),
+    )?;
+    insert_raw_fields_and_roundtrip(
+        &mut data,
+        bytes,
+        options,
+        &parsed
+            .entries
+            .iter()
+            .map(|entry| (entry.entry_id, &entry.commands))
+            .collect::<Vec<_>>(),
+        &parsed.field_specs,
+        GRAPPARAM_COMMAND_POOL,
+        || build_grapparam(&parsed),
     )
 }
 

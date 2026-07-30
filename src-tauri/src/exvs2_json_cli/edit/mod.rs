@@ -12,6 +12,13 @@ use super::util::supported_edit_type_list;
 use super::{SCHEMA_VERSION, TOOL_NAME};
 use crate::format::armsparam::{build_armsparam, parse_armsparam, ARMSPARAM_COMMAND_POOL};
 use crate::format::bulletparam::{build_bulletparam, parse_bulletparam, BULLETPARAM_COMMAND_POOL};
+use crate::format::grapparam::{build_grapparam, parse_grapparam, GRAPPARAM_COMMAND_POOL};
+use crate::format::hitgroupiddef::{
+    build_hitgroupiddef, parse_hitgroupiddef, HITGROUPIDDEF_COMMAND_POOL,
+};
+use crate::format::interactionid::{
+    build_interactionid, parse_interactionid, INTERACTIONID_COMMAND_POOL,
+};
 use crate::format::navilist::{build_navilist_data, parse_navilist_data, NAVILIST_COMMAND_POOL};
 use crate::format::pilotlist::{
     build_pilotlist_data, parse_pilotlist_data, PILOTLIST_COMMAND_POOL,
@@ -147,6 +154,27 @@ pub fn edit_bytes(
             PROJECTILE_DEPICTION_TABLE_COMMAND_POOL,
             parse_projectile_depiction_table,
             build_projectile_depiction_table,
+        )?,
+        InspectType::HitGroupIdDef => param_table::edit_param_table(
+            bytes,
+            operations,
+            HITGROUPIDDEF_COMMAND_POOL,
+            parse_hitgroupiddef,
+            build_hitgroupiddef,
+        )?,
+        InspectType::InteractionId => param_table::edit_param_table(
+            bytes,
+            operations,
+            INTERACTIONID_COMMAND_POOL,
+            parse_interactionid,
+            build_interactionid,
+        )?,
+        InspectType::GrapParam => param_table::edit_param_table(
+            bytes,
+            operations,
+            GRAPPARAM_COMMAND_POOL,
+            parse_grapparam,
+            build_grapparam,
         )?,
         InspectType::NaviList => param_table::edit_param_table(
             bytes,

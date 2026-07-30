@@ -305,6 +305,7 @@ export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath
               data={typed.data}
               selectedEntryIndex={selectedEntry}
               onSelectEntry={setSelectedEntry}
+              workspaceDefaultPath={workspaceDefaultPath}
               onChange={(nextData) => {
                 setTyped((prev) => (prev ? { ...prev, data: nextData } : prev))
                 setDirty(true)

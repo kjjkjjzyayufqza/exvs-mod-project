@@ -85,7 +85,16 @@ function BulletInfoTabContent() {
         <MayaSection key={group.id} title={group.label} icon={<SlidersHorizontal className="h-3.5 w-3.5" />}>
           <div className="flex flex-col gap-1.5">
             {group.fields.map((def) => (
-              <PropertyField key={def.key} def={def} value={entry[def.key] ?? 0} onChange={onFieldChange} />
+              <PropertyField
+                key={def.key}
+                def={def}
+                value={entry[def.key] ?? 0}
+                onChange={(key, value) => {
+                  if (typeof value === "number") {
+                    onFieldChange(key, value);
+                  }
+                }}
+              />
             ))}
           </div>
         </MayaSection>

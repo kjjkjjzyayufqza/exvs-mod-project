@@ -7,12 +7,26 @@ import { PropertyGroup } from "./PropertyGroup";
 interface CrossReferencePanelProps {
   references: CrossReference[];
   onNavigateToEntry?: (kind: ParamKind, hash: number) => void;
+  /**
+   * Param kinds whose files are currently loaded. Unresolved references to a
+   * loaded kind show "Missing entry" (hash absent from the loaded file);
+   * unresolved references to an unloaded kind show "Not loaded". When
+   * omitted, every unresolved reference shows "Not loaded".
+   */
+  loadedKinds?: ParamKind[];
+  /**
+   * Kinds for which the Open navigation button is rendered. Defaults to all
+   * kinds when omitted.
+   */
+  navigableKinds?: ParamKind[];
   className?: string;
 }
 
 export function CrossReferencePanel({
   references,
   onNavigateToEntry,
+  loadedKinds,
+  navigableKinds,
   className,
 }: CrossReferencePanelProps) {
   if (references.length === 0) {
@@ -46,6 +60,10 @@ export function CrossReferencePanel({
               key={`${ref.sourceField}-${ref.targetHash}`}
               reference={ref}
               onNavigate={onNavigateToEntry}
+              targetKindLoaded={loadedKinds?.includes(ref.targetKind) ?? false}
+              navigable={
+                navigableKinds ? navigableKinds.includes(ref.targetKind) : true
+              }
             />
           ))}
         </PropertyGroup>
@@ -57,6 +75,8 @@ export function CrossReferencePanel({
 interface CrossReferenceRowProps {
   reference: CrossReference;
   onNavigate?: (kind: ParamKind, hash: number) => void;
+  targetKindLoaded: boolean;
+  navigable: boolean;
 }
 
 function camelToLabel(key: string): string {
@@ -65,7 +85,12 @@ function camelToLabel(key: string): string {
     .replace(/^./, (c) => c.toUpperCase());
 }
 
-function CrossReferenceRow({ reference, onNavigate }: CrossReferenceRowProps) {
+function CrossReferenceRow({
+  reference,
+  onNavigate,
+  targetKindLoaded,
+  navigable,
+}: CrossReferenceRowProps) {
   const resolved = reference.targetEntry !== undefined;
 
   return (
@@ -75,7 +100,9 @@ function CrossReferenceRow({ reference, onNavigate }: CrossReferenceRowProps) {
           {resolved ? (
             <Link2 className="h-3 w-3 shrink-0 text-green-400" />
           ) : (
-            <AlertCircle className="h-3 w-3 shrink-0 text-yellow-500" />
+            <AlertCircle
+              className={`h-3 w-3 shrink-0 ${targetKindLoaded ? "text-red-400" : "text-yellow-500"}`}
+            />
           )}
           <span className="truncate text-[10px] text-muted-foreground">
             {camelToLabel(reference.sourceField)}
@@ -85,7 +112,7 @@ function CrossReferenceRow({ reference, onNavigate }: CrossReferenceRowProps) {
           {formatHash(reference.targetHash)}
         </div>
       </div>
-      {resolved && onNavigate && (
+      {resolved && navigable && onNavigate && (
         <button
           type="button"
           className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] text-blue-400 hover:bg-blue-500/10"
@@ -95,9 +122,12 @@ function CrossReferenceRow({ reference, onNavigate }: CrossReferenceRowProps) {
           <ChevronRight className="h-3 w-3" />
         </button>
       )}
-      {!resolved && (
-        <span className="text-[9px] text-yellow-500/80">Not loaded</span>
-      )}
+      {!resolved &&
+        (targetKindLoaded ? (
+          <span className="text-[9px] text-red-400">Missing entry</span>
+        ) : (
+          <span className="text-[9px] text-yellow-500/80">Not loaded</span>
+        ))}
     </div>
   );
 }

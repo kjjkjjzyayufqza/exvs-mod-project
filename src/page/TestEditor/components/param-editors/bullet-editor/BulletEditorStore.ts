@@ -5,17 +5,41 @@ import { simulateTrajectory, type TrajectoryResult } from "../../bullet-preview/
 import type { BulletPreviewScenario, BulletPreviewVisualization } from "../../bullet-preview/bulletPreviewTypes";
 import { DEFAULT_BULLET_PREVIEW_SCENARIO, DEFAULT_BULLET_PREVIEW_VISUALIZATION } from "../../bullet-preview/bulletPreviewTypes";
 import type { ValidationMessage } from "../shared/types";
-import { getMoveTypeDefinition } from "@/lib/gameAlgorithms/moveTypes";
+import type { ParamKind } from "@/lib/gameAlgorithms/crossParamResolver";
 import {
   simulateShootingLoop,
   type ShootingLoopResult,
 } from "@/lib/gameAlgorithms/shootingLoop";
+import { validateBulletEntry } from "./bulletValidation";
+
+/** Sibling param kinds the bullet editor can load for cross-reference resolution. */
+export type BulletSiblingKind = Extract<
+  ParamKind,
+  "interactionid" | "hitgroupiddef" | "projectileDepictionTable"
+>;
+
+export type BulletSiblingFiles = Record<BulletSiblingKind, TypedParamFile | null>;
+export type BulletSiblingPaths = Record<BulletSiblingKind, string>;
+
+const EMPTY_SIBLING_FILES: BulletSiblingFiles = {
+  interactionid: null,
+  hitgroupiddef: null,
+  projectileDepictionTable: null,
+};
+
+const EMPTY_SIBLING_PATHS: BulletSiblingPaths = {
+  interactionid: "",
+  hitgroupiddef: "",
+  projectileDepictionTable: "",
+};
 
 export interface BulletEditorState {
   data: TypedParamFile | null;
   filePath: string;
   armsData: TypedParamFile | null;
   armsFilePath: string;
+  siblingFiles: BulletSiblingFiles;
+  siblingFilePaths: BulletSiblingPaths;
   selectedIndex: number;
   selectedArmsIndex: number;
   dirty: boolean;
@@ -30,6 +54,11 @@ export interface BulletEditorState {
 
   setData: (data: TypedParamFile, filePath: string) => void;
   setArmsData: (data: TypedParamFile, filePath: string) => void;
+  setSiblingFile: (
+    kind: BulletSiblingKind,
+    data: TypedParamFile,
+    filePath: string,
+  ) => void;
   selectEntry: (index: number) => void;
   selectArmsEntry: (index: number) => void;
   updateField: (key: string, value: number) => void;
@@ -54,38 +83,6 @@ function deriveLaunchSpeed(
 ): number {
   const initial = entry && typeof entry.initialSpeed === "number" ? Math.abs(entry.initialSpeed) : 0;
   return initial > 0 ? initial : scenario.launchSpeed;
-}
-
-function validateBulletEntry(entry: TypedParamEntry): ValidationMessage[] {
-  const messages: ValidationMessage[] = [];
-  const speed = typeof entry.initialSpeed === "number" ? entry.initialSpeed : 0;
-  const lifetime = typeof entry.lifetime === "number" ? entry.lifetime : 0;
-  const moveType =
-    typeof entry.moveType === "number" ? Math.trunc(entry.moveType) : 255;
-  const moveDef = getMoveTypeDefinition(moveType);
-
-  if (speed > 640) {
-    messages.push({
-      field: "initialSpeed",
-      level: "error",
-      message: "Speed exceeds game engine max (640)",
-    });
-  }
-  if (!moveDef) {
-    messages.push({
-      field: "moveType",
-      level: "warning",
-      message: `Unknown move type ${moveType}`,
-    });
-  }
-  if (lifetime < 0) {
-    messages.push({
-      field: "lifetime",
-      level: "info",
-      message: "Negative lifetime = absolute duration mode",
-    });
-  }
-  return messages;
 }
 
 function recompute(
@@ -136,6 +133,8 @@ export const useBulletEditorStore = create<BulletEditorState>((set, get) => ({
   filePath: "",
   armsData: null,
   armsFilePath: "",
+  siblingFiles: { ...EMPTY_SIBLING_FILES },
+  siblingFilePaths: { ...EMPTY_SIBLING_PATHS },
   selectedIndex: 0,
   selectedArmsIndex: 0,
   dirty: false,
@@ -192,6 +191,12 @@ export const useBulletEditorStore = create<BulletEditorState>((set, get) => ({
       isPlaying: false,
     });
   },
+
+  setSiblingFile: (kind, data, filePath) =>
+    set((state) => ({
+      siblingFiles: { ...state.siblingFiles, [kind]: data },
+      siblingFilePaths: { ...state.siblingFilePaths, [kind]: filePath },
+    })),
 
   selectEntry: (index) => {
     const { data, scenario, armsData, selectedArmsIndex } = get();

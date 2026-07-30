@@ -72,6 +72,18 @@ mod tests {
             InspectType::SpeedParam
         );
         assert_eq!(
+            InspectType::parse("hitgroupiddef").unwrap(),
+            InspectType::HitGroupIdDef
+        );
+        assert_eq!(
+            InspectType::parse("interaction-id").unwrap(),
+            InspectType::InteractionId
+        );
+        assert_eq!(
+            InspectType::parse("grapparam").unwrap(),
+            InspectType::GrapParam
+        );
+        assert_eq!(
             InspectType::parse("navi-list").unwrap(),
             InspectType::NaviList
         );

@@ -7,6 +7,9 @@ use app_lib::exvs2_json_cli::{
 use app_lib::format::bulletparam::{
     build_bulletparam, parse_bulletparam, BulletParamData, BulletParamEntry,
 };
+use app_lib::format::grapparam::parse_grapparam;
+use app_lib::format::hitgroupiddef::parse_hitgroupiddef;
+use app_lib::format::interactionid::parse_interactionid;
 use app_lib::format::param_bin_format::{ParamBinaryHeader, ParamFieldSpec, PARAM_BIN_MAGIC};
 use glam::{Mat4, Vec3};
 use serde_json::json;
@@ -161,6 +164,241 @@ fn bulletparam_fixture_bytes() -> Vec<u8> {
         source_entries_raw: Vec::new(),
     })
     .expect("build bulletparam fixture")
+}
+
+// Real hitbox-table samples (docs/hitbox-research). Mod build of custom Gyan and the
+// stock Gyan package 0x49544F2B under the unpacked com/file tree.
+const HITBOX_MOD_DIR: &str = r"E:\XB\mod\041cpm\001gundam_005gyan00_001_N2_rocket_mod";
+const HITBOX_STOCK_DIR: &str = "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\041cpm\\0x49544F2B";
+
+fn read_hitbox_sample(dir: &str, file_name: &str) -> (String, Vec<u8>) {
+    let path = format!("{dir}\\{file_name}");
+    let bytes =
+        std::fs::read(&path).unwrap_or_else(|e| panic!("failed to read hitbox sample {path}: {e}"));
+    (path, bytes)
+}
+
+#[test]
+fn inspect_hitbox_tables_auto_detect_and_summarize() {
+    for (file_name, expected_type) in [
+        ("hitgroupiddef.bin", "hitgroupiddef"),
+        ("interactionid.bin", "interactionid"),
+        ("grapparam.bin", "grapparam"),
+    ] {
+        let (path, bytes) = read_hitbox_sample(HITBOX_MOD_DIR, file_name);
+        let report = inspect_bytes(
+            &path,
+            &bytes,
+            InspectOptions {
+                inspect_type: None,
+                pretty: false,
+                summary: true,
+                raw_fields: false,
+                roundtrip_check: false,
+            },
+        )
+        .unwrap_or_else(|e| panic!("{file_name} should inspect: {e}"));
+
+        assert_eq!(report["tool"], "exvs2-json");
+        assert_eq!(report["detectedType"], expected_type);
+        assert_eq!(report["data"]["fileType"], expected_type);
+        assert!(
+            report["data"]["entryCount"].as_u64().unwrap() > 0,
+            "{file_name} summary should report entries"
+        );
+        assert!(
+            report["data"]["fieldNotes"].is_object(),
+            "{file_name} should carry schema guardrail field notes"
+        );
+    }
+}
+
+#[test]
+fn inspect_hitbox_tables_roundtrip_is_byte_identical() {
+    for dir in [HITBOX_MOD_DIR, HITBOX_STOCK_DIR] {
+        for file_name in ["hitgroupiddef.bin", "interactionid.bin", "grapparam.bin"] {
+            let (path, bytes) = read_hitbox_sample(dir, file_name);
+            let report = inspect_bytes(
+                &path,
+                &bytes,
+                InspectOptions {
+                    inspect_type: None,
+                    pretty: false,
+                    summary: true,
+                    raw_fields: false,
+                    roundtrip_check: true,
+                },
+            )
+            .unwrap_or_else(|e| panic!("{path} should inspect: {e}"));
+
+            assert_eq!(
+                report["data"]["roundtripCheck"]["byteIdentical"], true,
+                "{path} rebuild must be byte-identical"
+            );
+        }
+    }
+}
+
+#[test]
+fn edit_hitgroupiddef_sets_sphere_radius_and_reinspects() {
+    let (path, bytes) = read_hitbox_sample(HITBOX_MOD_DIR, "hitgroupiddef.bin");
+    let parsed = parse_hitgroupiddef(&bytes).expect("hitgroupiddef sample should parse");
+    let entry_id = parsed.entries[0].entry_id;
+
+    let request = json!({
+        "type": "hitgroupiddef",
+        "operations": [
+            {
+                "op": "setParamField",
+                "entryId": entry_id,
+                "field": "sphereRadius",
+                "value": 3.25
+            }
+        ]
+    });
+
+    let outcome = edit_bytes(
+        &path,
+        &bytes,
+        &request,
+        EditBytesOptions {
+            inspect_type: None,
+            output_path: None,
+            dry_run: true,
+        },
+    )
+    .expect("hitgroupiddef edit should apply");
+
+    assert_eq!(outcome.report["reportType"], "edit");
+    assert_eq!(outcome.report["detectedType"], "hitgroupiddef");
+    assert_eq!(outcome.report["changed"], true);
+    assert_eq!(outcome.report["operationsApplied"][0]["after"], 3.25);
+
+    let edited = parse_hitgroupiddef(&outcome.bytes).expect("edited hitgroupiddef should parse");
+    let raw = edited.entries[0]
+        .commands
+        .get(&0xDC8A_C901)
+        .copied()
+        .expect("sphere_radius command");
+    assert!((f32::from_bits(raw) - 3.25).abs() < f32::EPSILON);
+
+    let report = inspect_bytes(
+        &path,
+        &outcome.bytes,
+        InspectOptions {
+            inspect_type: Some(InspectType::HitGroupIdDef),
+            pretty: false,
+            summary: false,
+            raw_fields: false,
+            roundtrip_check: true,
+        },
+    )
+    .expect("edited hitgroupiddef should re-inspect");
+    assert_eq!(report["data"]["entries"][0]["sphereRadius"], 3.25);
+    assert_eq!(report["data"]["roundtripCheck"]["byteIdentical"], true);
+}
+
+#[test]
+fn edit_interactionid_sets_damage_and_grapparam_sets_startup_frame() {
+    let (interaction_path, interaction_bytes) =
+        read_hitbox_sample(HITBOX_MOD_DIR, "interactionid.bin");
+    let interaction = parse_interactionid(&interaction_bytes).expect("interactionid parse");
+    let interaction_entry_id = interaction.entries[0].entry_id;
+
+    let outcome = edit_bytes(
+        &interaction_path,
+        &interaction_bytes,
+        &json!({
+            "type": "interactionid",
+            "operations": [
+                { "op": "setParamField", "entryId": interaction_entry_id, "field": "damage", "value": 123 }
+            ]
+        }),
+        EditBytesOptions {
+            inspect_type: None,
+            output_path: None,
+            dry_run: true,
+        },
+    )
+    .expect("interactionid edit should apply");
+    assert_eq!(outcome.report["detectedType"], "interactionid");
+    let edited = parse_interactionid(&outcome.bytes).expect("edited interactionid parse");
+    assert_eq!(edited.entries[0].commands.get(&0x00C5_7BA3), Some(&123u32));
+
+    let (grap_path, grap_bytes) = read_hitbox_sample(HITBOX_MOD_DIR, "grapparam.bin");
+    let grap = parse_grapparam(&grap_bytes).expect("grapparam parse");
+    let grap_entry_id = grap.entries[0].entry_id;
+
+    let outcome = edit_bytes(
+        &grap_path,
+        &grap_bytes,
+        &json!({
+            "type": "grapparam",
+            "operations": [
+                { "op": "setParamField", "entryId": grap_entry_id, "field": "startupFrame", "value": 12 }
+            ]
+        }),
+        EditBytesOptions {
+            inspect_type: None,
+            output_path: None,
+            dry_run: true,
+        },
+    )
+    .expect("grapparam edit should apply");
+    assert_eq!(outcome.report["detectedType"], "grapparam");
+    let edited = parse_grapparam(&outcome.bytes).expect("edited grapparam parse");
+    assert_eq!(edited.entries[0].commands.get(&0x550B_CFAD), Some(&12u32));
+}
+
+#[test]
+fn edit_hitgroupiddef_rejects_legacy_field_name_and_unknown_entry() {
+    let (path, bytes) = read_hitbox_sample(HITBOX_MOD_DIR, "hitgroupiddef.bin");
+    let parsed = parse_hitgroupiddef(&bytes).expect("hitgroupiddef sample should parse");
+    let entry_id = parsed.entries[0].entry_id;
+
+    // Legacy pre-correction name "groupId" (was the radius field) must not silently resolve.
+    let err = edit_bytes(
+        &path,
+        &bytes,
+        &json!({
+            "type": "hitgroupiddef",
+            "operations": [
+                { "op": "setParamField", "entryId": entry_id, "field": "groupId", "value": 1.0 }
+            ]
+        }),
+        EditBytesOptions {
+            inspect_type: None,
+            output_path: None,
+            dry_run: true,
+        },
+    )
+    .expect_err("legacy field name should be rejected");
+    assert!(err.contains("Unknown typed-param field 'groupId'"));
+
+    let missing_entry_id = parsed
+        .entries
+        .iter()
+        .map(|entry| entry.entry_id)
+        .max()
+        .unwrap()
+        .wrapping_add(1000);
+    let err = edit_bytes(
+        &path,
+        &bytes,
+        &json!({
+            "type": "hitgroupiddef",
+            "operations": [
+                { "op": "setParamField", "entryId": missing_entry_id, "field": "sphereRadius", "value": 1.0 }
+            ]
+        }),
+        EditBytesOptions {
+            inspect_type: None,
+            output_path: None,
+            dry_run: true,
+        },
+    )
+    .expect_err("missing entryId should be rejected");
+    assert!(err.contains("was not found"));
 }
 
 #[test]
