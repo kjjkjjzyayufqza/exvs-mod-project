@@ -184,10 +184,36 @@ const ROLE_LABELS: Record<UnitModelFolderRole, string> = {
   unknown: "folder",
 };
 
-function modelGroupName(node: Mid, lookup: Map<number, string>, baseNames: Map<number, string>): string {
+/**
+ * Prefer the `models/<folder>/` segment from fileUrl — that folder name is the
+ * identity SHL `folder_index` and structure order refer to. Item Name / numdlb
+ * baseName can be a renamed stem and must not replace folder identity.
+ */
+function modelFolderNameFromFileUrl(fileUrl: string | undefined): string | null {
+  if (!fileUrl) return null;
+  const parts = fileUrl
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter((part) => part.length > 0 && part !== ".");
+  const modelsIdx = parts.findIndex((part) => part.toLowerCase() === "models");
+  if (modelsIdx >= 0 && modelsIdx + 1 < parts.length) {
+    const folder = parts[modelsIdx + 1];
+    return folder.length > 0 ? folder : null;
+  }
+  return null;
+}
+
+function modelGroupName(
+  node: Mid,
+  lookup: Map<number, string>,
+  baseNames: Map<number, string>,
+  fileUrls: Map<number, string>,
+): string {
   if (node.kind !== "folder") return ROLE_LABELS["model-group"];
   for (const c of node.children) {
     if (c.kind === "item" && lookup.get(c.fileIndex) === ".numdlb") {
+      const fromUrl = modelFolderNameFromFileUrl(fileUrls.get(c.fileIndex));
+      if (fromUrl) return fromUrl;
       return c.name ?? baseNames.get(c.fileIndex) ?? ROLE_LABELS["model-group"];
     }
   }
@@ -218,7 +244,7 @@ function toTreeNode(
 
   const role = isRoot ? "root" : classifyFolder(node, lookup);
   let label = ROLE_LABELS[role];
-  if (role === "model-group") label = modelGroupName(node, lookup, baseNames);
+  if (role === "model-group") label = modelGroupName(node, lookup, baseNames, fileUrls);
 
   const children = node.children.map((c, idx) =>
     toTreeNode(c, `${path}/${idx}`, lookup, baseNames, fileUrls, false),
@@ -245,6 +271,7 @@ function countModels(node: UnitModelTreeNode): number {
 /**
  * Collect model-group folder labels in structure (DFS) order. The position in this list is the
  * `folder_index` used by `shell_*.shl` records, so it resolves a SHL slot to its model name.
+ * Order is defined solely by `_structure.json` SubFileStructure — never by disk enumeration.
  */
 export function collectModelGroupNames(node: UnitModelTreeNode): string[] {
   const out: string[] = [];
@@ -258,7 +285,8 @@ export function collectModelGroupNames(node: UnitModelTreeNode): string[] {
 
 /**
  * Merge structure-JSON model names (authoritative `folder_index` order) with on-disk
- * `models/*` folders that are not yet registered in `_structure.json`.
+ * `models/*` **folder** names that are not yet registered in `_structure.json`.
+ * Disk names never reorder existing structure entries — they only append extras.
  */
 export function mergeShlModelFolderNames(
   structureNames: readonly string[],

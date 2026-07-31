@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getBaseName,
   getParentDir,
@@ -6,8 +6,15 @@ import {
   inferUnitModelOutputPath,
   inferUnitModelStructurePath,
   normalizeUnitModelPackStem,
+  removeSiblingVgsht2ForFhm2dOutput,
   toWindowsPath,
 } from "./unitModelRepackService";
+
+const removeMatchingModVgsht2 = vi.hoisted(() => vi.fn());
+
+vi.mock("@/page/TestEditor/utils/modVgsht2", () => ({
+  removeMatchingModVgsht2,
+}));
 
 describe("unitModelRepackService path helpers", () => {
   it("normalizes slashes to Windows style", () => {
@@ -85,6 +92,31 @@ describe("unitModelRepackService path helpers", () => {
         "E:\\XB\\解包\\com\\file\\0xa258a522_structure.json",
       ),
     ).toBe("E:\\XB\\解包\\com\\file\\0xA258A522.fhm2d");
+  });
+});
+
+describe("removeSiblingVgsht2ForFhm2dOutput", () => {
+  beforeEach(() => {
+    removeMatchingModVgsht2.mockReset();
+    removeMatchingModVgsht2.mockResolvedValue(true);
+  });
+
+  it("deletes same-stem .vgsht2 next to the written .fhm2d", async () => {
+    const removed = await removeSiblingVgsht2ForFhm2dOutput(
+      "E:\\OBHK0.3_v27\\data\\x64\\mod\\0xA258A522.fhm2d",
+    );
+    expect(removed).toBe(true);
+    expect(removeMatchingModVgsht2).toHaveBeenCalledWith(
+      "E:\\OBHK0.3_v27\\data\\x64\\mod",
+      "0xA258A522",
+    );
+  });
+
+  it("returns false when no matching .vgsht2 exists", async () => {
+    removeMatchingModVgsht2.mockResolvedValueOnce(false);
+    await expect(
+      removeSiblingVgsht2ForFhm2dOutput("E:\\mod\\0xAF73362C.fhm2d"),
+    ).resolves.toBe(false);
   });
 });
 

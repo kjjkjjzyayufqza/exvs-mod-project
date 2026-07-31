@@ -96,4 +96,55 @@ describe("collectModelGroupNames", () => {
     const { root } = buildUnitModelStructureTree(tree);
     expect(collectModelGroupNames(root)).toEqual(["body", "wing"]);
   });
+
+  it("labels model groups by models/<folder> from fileUrl, not renamed numdlb stem", () => {
+    const tree = {
+      Magic: 10,
+      SubFileData: [
+        {
+          fileIndex: 0,
+          fileType: ".numdlb",
+          fileBaseName: "026gnbelt_003delatkai_001",
+          fileUrl:
+            ".\\026gnbelt_003delatkai_001\\models\\015gndmuc_004deltpl_001_body_normal\\026gnbelt_003delatkai_001.numdlb",
+        },
+        {
+          fileIndex: 1,
+          fileType: ".numdlb",
+          fileBaseName: "delatkai_body_trans",
+          fileUrl:
+            ".\\026gnbelt_003delatkai_001\\models\\015gndmuc_004deltpl_001_body_trans\\delatkai_body_trans.numdlb",
+        },
+      ],
+      SubFileStructure: [
+        { type: "Folder", unk2: "", unk3: 0, unk5: 0 },
+        { type: "Folder", unk2: "", unk3: 0, unk5: 0 },
+        { type: "Folder", unk2: "", unk3: 0, unk5: 0 },
+        {
+          type: "Item",
+          fileIndex: 0,
+          unk2: "40000000",
+          unk3: 0,
+          Name: "026gnbelt_003delatkai_001",
+        },
+        { type: "EndMark", endMarkCount: 1 },
+        { type: "Folder", unk2: "", unk3: 0, unk5: 0 },
+        {
+          type: "Item",
+          fileIndex: 1,
+          unk2: "40000000",
+          unk3: 0,
+          Name: "delatkai_body_trans",
+        },
+        { type: "EndMark", endMarkCount: 1 },
+        { type: "EndMark", endMarkCount: 2 },
+        { type: "EndMark", endMarkCount: 1 },
+      ],
+    };
+    const { root } = buildUnitModelStructureTree(tree);
+    expect(collectModelGroupNames(root)).toEqual([
+      "015gndmuc_004deltpl_001_body_normal",
+      "015gndmuc_004deltpl_001_body_trans",
+    ]);
+  });
 });

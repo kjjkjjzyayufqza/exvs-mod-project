@@ -142,8 +142,8 @@
  * Order: page content < sidebar < page-popover < modal < floating-window < elevated-popover < toast < topbar
  *
  * Page popovers (asset action menus, etc.) use --z-popover so they stay below dialogs and
- * floating Rnd windows. Portaled selects/dropdowns use --z-popover-elevated so they still
- * paint above --z-modal and --z-modal-nested hosts.
+ * floating Rnd windows. Portaled selects/dropdowns and AlertDialog (unsaved-guard, etc.) use
+ * --z-popover-elevated so they still paint above --z-modal and --z-modal-nested hosts.
  */
 :root {
   --layout-topbar-height: 2rem; /* matches the legacy h-8 top bar */

@@ -8,6 +8,7 @@ import {
   FileBox,
   FileUp,
   FolderPlus,
+  LayoutTemplate,
   Loader2,
   Plus,
   Replace,
@@ -68,6 +69,7 @@ import {
   type UnitModelReplacePreview,
   type UnitModelSourceValidation,
 } from "../utils/unitModelModelService";
+import { createNumatbTemplateFromUnitModel } from "../utils/unitModelNumatbTemplateService";
 import { listUnitModelTextures } from "../utils/unitModelTextureService";
 import { UnitModelAddFolderModal } from "./UnitModelAddFolderModal";
 import { UnitModelRemoveModelModal } from "./UnitModelRemoveModelModal";
@@ -595,6 +597,39 @@ export function UnitModelModelManagerPanel({
     setRemoveTarget(label);
   };
 
+  const handleCreateNumatbTemplate = async (model: ModelSummary) => {
+    if (!structureJsonPath) {
+      toast.error("Open or extract a unit-model folder first.");
+      return;
+    }
+    setBusy(`template:${model.label}`);
+    try {
+      const result = await createNumatbTemplateFromUnitModel({
+        structureJsonPath,
+        model: model.node,
+        templateName: model.label,
+      });
+      const mayaCount = result.template.mayaFile.entries.length;
+      const nustCount = result.template.nustFile.entries.length;
+      toast.success(
+        result.replacedExisting
+          ? `Updated NUMATB template "${result.template.name}"`
+          : `Created NUMATB template "${result.template.name}"`,
+        {
+          description:
+            `Maya ${mayaCount} material(s), Nust ${nustCount} material(s). ` +
+            "Select it in Import FBX / DAE → NUMATB template.",
+        },
+      );
+    } catch (error) {
+      toast.error("Failed to create NUMATB template", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const handleReplaceFolder = async (label: string) => {
     if (!modelRoot || !structureJsonPath) {
       toast.error("Open or extract a unit-model folder first.");
@@ -814,6 +849,24 @@ export function UnitModelModelManagerPanel({
                       aria-label={`Export ${model.label}`}
                     >
                       <Download className="h-3.5 w-3.5" aria-hidden />
+                    </Button>
+                  ) : null}
+                  {structureJsonPath ? (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 text-muted-foreground opacity-0 transition-colors hover:text-primary group-hover:opacity-100 focus-visible:opacity-100"
+                      disabled={busy !== null}
+                      onClick={() => void handleCreateNumatbTemplate(model)}
+                      title={`Create NUMATB template from ${model.label} (maya + nust)`}
+                      aria-label={`Create NUMATB template from ${model.label}`}
+                    >
+                      {busy === `template:${model.label}` ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                      ) : (
+                        <LayoutTemplate className="h-3.5 w-3.5" aria-hidden />
+                      )}
                     </Button>
                   ) : null}
                   {canMutate ? (

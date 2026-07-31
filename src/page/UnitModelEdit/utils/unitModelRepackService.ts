@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
+import { removeMatchingModVgsht2 } from "@/page/TestEditor/utils/modVgsht2";
+
 export interface UnitModelValidationError {
   phase: string;
   model: string | null;
@@ -29,6 +31,8 @@ export interface UnitModelRepackResult {
   outputPath: string;
   totalFiles: number;
   outputSize: number;
+  /** True when a same-stem `.vgsht2` next to the output was deleted after repack. */
+  removedVgsht2?: boolean;
 }
 
 export function trimTrailingSeparators(path: string): string {
@@ -112,16 +116,47 @@ export async function validateUnitModelForRepack(
   });
 }
 
+/**
+ * After writing `<stem>.fhm2d`, remove a same-stem `<stem>.vgsht2` in the same
+ * directory when present (game may still load the old `.vgsht2` over the new pack).
+ * Mirrors Test Editor {@link removeMatchingModVgsht2}.
+ */
+export async function removeSiblingVgsht2ForFhm2dOutput(
+  fhm2dOutputPath: string,
+): Promise<boolean> {
+  const parent = getParentDir(fhm2dOutputPath);
+  const stem = getBaseName(fhm2dOutputPath).replace(/\.fhm2d$/i, "");
+  if (!parent || !stem) return false;
+  return await removeMatchingModVgsht2(parent, stem);
+}
+
+async function repackUnitModelFhm2d(
+  structureJsonPath: string,
+  outputPath: string,
+): Promise<UnitModelRepackResult> {
+  const result = await invoke<UnitModelRepackResult>("repack_unit_model_fhm2d", {
+    structureJsonPath: toWindowsPath(structureJsonPath),
+    outputPath: toWindowsPath(outputPath),
+    atomicWrite: true,
+  });
+  let removedVgsht2 = false;
+  try {
+    removedVgsht2 = await removeSiblingVgsht2ForFhm2dOutput(result.outputPath || outputPath);
+  } catch (error) {
+    // Repack already succeeded; surface cleanup failure to the caller.
+    throw new Error(
+      `Repacked to ${result.outputPath || outputPath}, but failed to remove sibling .vgsht2: ${String(error)}`,
+    );
+  }
+  return { ...result, removedVgsht2 };
+}
+
 export async function repackValidatedUnitModelFolder(
   modelRoot: string,
   structureJsonPath = inferUnitModelStructurePath(modelRoot),
 ): Promise<UnitModelRepackResult> {
   const outputPath = inferUnitModelOutputPath(modelRoot, structureJsonPath);
-  return await invoke<UnitModelRepackResult>("repack_unit_model_fhm2d", {
-    structureJsonPath: toWindowsPath(structureJsonPath),
-    outputPath,
-    atomicWrite: true,
-  });
+  return await repackUnitModelFhm2d(structureJsonPath, outputPath);
 }
 
 /**
@@ -134,11 +169,7 @@ export async function repackValidatedUnitModelFolderToModFolder(
   structureJsonPath: string,
 ): Promise<UnitModelRepackResult> {
   const outputPath = inferUnitModelModOutputPath(modFolder, structureJsonPath);
-  return await invoke<UnitModelRepackResult>("repack_unit_model_fhm2d", {
-    structureJsonPath: toWindowsPath(structureJsonPath),
-    outputPath,
-    atomicWrite: true,
-  });
+  return await repackUnitModelFhm2d(structureJsonPath, outputPath);
 }
 
 export function formatUnitModelReviewPayload(

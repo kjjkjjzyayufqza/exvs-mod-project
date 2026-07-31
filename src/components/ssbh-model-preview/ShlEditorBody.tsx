@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { Plus, Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,6 @@ import type { ShlFileData, ShlRecord } from "./shlIoService";
 import {
   SHL_MODEL_TYPE_OPTIONS,
   appendShlRecord,
-  buildFolderModelIdMap,
   formatModelIdLe,
   parseModelIdLe,
   removeShlRecordAt,
@@ -19,6 +18,15 @@ import {
 const SELECT_CLASS =
   "h-8 w-full rounded-md border border-input bg-background px-2 text-[11px] text-foreground " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
+
+/** Compact u32 fields: hide spinners and keep room for 2–3 digits (slot 10+ was clipping to "1"). */
+const U32_INPUT_CLASS =
+  "h-8 min-w-0 px-1.5 font-mono text-[11px] tabular-nums " +
+  "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+
+/** # | Model | Type | Model id | unk1 | Slot | del — unk1/Slot need ≥5.5rem for two-digit values. */
+const ROW_GRID_COLS =
+  "grid-cols-[2.5rem_minmax(0,2fr)_7.5rem_7rem_5.5rem_5.5rem_2.5rem]";
 
 function formIdPart(reactId: string): string {
   return reactId.replace(/:/g, "");
@@ -84,7 +92,6 @@ export function ShlEditorBody({
   const records = data.records;
   const folders = modelFolderNames ?? [];
   const hasFolderNames = folders.length > 0;
-  const folderModelId = useMemo(() => buildFolderModelIdMap(records), [records]);
 
   const folderLabel = useCallback(
     (folderIndex: number): string => {
@@ -188,9 +195,9 @@ export function ShlEditorBody({
         role="group"
         aria-labelledby={`${fid}-slots-heading`}
       >
-        <div className="min-w-[680px] text-[11px]">
+        <div className="min-w-[720px] text-[11px]">
           <div
-            className="grid grid-cols-[2.5rem_minmax(0,2fr)_minmax(0,1.3fr)_7rem_4rem_4rem_2.5rem] border-b bg-muted/40 text-left"
+            className={cn("grid border-b bg-muted/40 text-left", ROW_GRID_COLS)}
             role="row"
           >
             <div className="px-2 py-2 font-medium" role="columnheader">#</div>
@@ -210,14 +217,11 @@ export function ShlEditorBody({
             records.map((row, rowIndex) => {
               const folder = row.folderIndex >>> 0;
               const folderOutOfRange = hasFolderNames && folder >= folders.length;
-              const knownId = folderModelId.get(folder);
-              const idMismatch =
-                knownId !== undefined && (knownId >>> 0) !== (row.modelId >>> 0);
               const typeKnown = SHL_MODEL_TYPE_OPTIONS.some((o) => o.value === (row.modelType >>> 0));
               return (
                 <div
                   key={rowIndex}
-                  className="grid grid-cols-[2.5rem_minmax(0,2fr)_minmax(0,1.3fr)_7rem_4rem_4rem_2.5rem] items-center border-b border-border/50"
+                  className={cn("grid items-center border-b border-border/50", ROW_GRID_COLS)}
                   role="row"
                 >
                   <div className="px-2 py-1 font-mono text-muted-foreground" role="cell">
@@ -286,7 +290,7 @@ export function ShlEditorBody({
                       )}
                     </select>
                   </div>
-                  <div className="flex items-center gap-1 px-2 py-1" role="cell">
+                  <div className="px-2 py-1" role="cell">
                     <ShlModelIdField
                       modelId={row.modelId}
                       disabled={disabled}
@@ -294,18 +298,12 @@ export function ShlEditorBody({
                       name={`${fid}-modelid-${rowIndex}`}
                       onCommit={(modelId) => updateRecord(rowIndex, { ...row, modelId })}
                     />
-                    {idMismatch && (
-                      <TriangleAlert
-                        className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400"
-                        aria-label="Model id does not match this folder's id elsewhere in the file"
-                      />
-                    )}
                   </div>
-                  <div className="px-2 py-1" role="cell">
+                  <div className="min-w-0 px-1 py-1" role="cell">
                     <Input
                       type="number"
                       min={0}
-                      className="h-8 font-mono text-[11px]"
+                      className={U32_INPUT_CLASS}
                       disabled={disabled}
                       autoComplete="off"
                       aria-label={`unk1 row ${rowIndex + 1}`}
@@ -317,11 +315,11 @@ export function ShlEditorBody({
                       }}
                     />
                   </div>
-                  <div className="px-2 py-1" role="cell">
+                  <div className="min-w-0 px-1 py-1" role="cell">
                     <Input
                       type="number"
                       min={0}
-                      className="h-8 font-mono text-[11px]"
+                      className={U32_INPUT_CLASS}
                       disabled={disabled}
                       autoComplete="off"
                       aria-label={`Slot index row ${rowIndex + 1}`}

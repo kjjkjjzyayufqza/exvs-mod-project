@@ -81,4 +81,29 @@ describe("ShlEditorBody", () => {
       slotIndex: 1,
     });
   });
+
+  it("renders two-digit slot indices fully (not clipped as a single digit)", () => {
+    // Real shell: from F5179C68 onward folder/slot are 10+; narrow columns + number spinners
+    // previously made "10" look like "1" in the UI.
+    const data = file([
+      record({
+        modelId: 0x689c17f5,
+        modelType: 3,
+        folderIndex: 10,
+        unk1: 2,
+        slotIndex: 10,
+      }),
+    ]);
+
+    render(
+      <ShlEditorBody
+        data={data}
+        onChange={() => {}}
+        modelFolderNames={Array.from({ length: 15 }, (_, i) => `model_${i}`)}
+      />,
+    );
+
+    expect(screen.getByLabelText("Slot index row 1")).toHaveValue(10);
+    expect(screen.getByLabelText("unk1 row 1")).toHaveValue(2);
+  });
 });

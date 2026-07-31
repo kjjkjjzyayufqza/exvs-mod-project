@@ -261,6 +261,8 @@ function UnitModelEditWorkspace({
     return set;
   }, [editors.editingPaths, toRelKey]);
 
+  // SHL `folder_index` is the DFS order of model-group folders in `_structure.json`
+  // (not Windows/models directory enumeration order).
   const structureModelNames = useMemo(() => {
     if (structureJson == null) return [];
     try {
@@ -274,6 +276,7 @@ function UnitModelEditWorkspace({
 
   useEffect(() => {
     let cancelled = false;
+    // Disk list is only for models not yet registered in structure JSON.
     if (!workspace.activeRoot) {
       setDiskModelNames([]);
       return;
@@ -290,10 +293,14 @@ function UnitModelEditWorkspace({
     };
   }, [workspace.activeRoot, structureJson]);
 
-  // Structure order defines `folder_index`; append disk-only models so SHL can target new folders.
+  // Authoritative order: structure JSON. Append disk-only folder names (same identity
+  // key: models/<folder>) so newly dropped folders can still be selected in SHL.
   const shlModelFolderNames = useMemo(() => {
-    const merged = mergeShlModelFolderNames(structureModelNames, diskModelNames);
-    return merged.length > 0 ? merged : undefined;
+    if (structureModelNames.length > 0) {
+      return mergeShlModelFolderNames(structureModelNames, diskModelNames);
+    }
+    // No structure model groups yet — best-effort disk folder names only.
+    return diskModelNames.length > 0 ? diskModelNames : undefined;
   }, [structureModelNames, diskModelNames]);
 
   const handleOpenEditor = useCallback(
@@ -310,7 +317,12 @@ function UnitModelEditWorkspace({
   const handleRevealNode = useCallback(
     (node: UnitModelTreeNode) => {
       if (!workspace.structurePath || !node.fileUrl) return;
-      void revealItemInDir(resolveUnitModelNodeAbsPath(workspace.structurePath, node.fileUrl));
+      const abs = resolveUnitModelNodeAbsPath(workspace.structurePath, node.fileUrl);
+      void revealItemInDir(abs).catch((error) => {
+        toast.error("Failed to reveal in Explorer", {
+          description: `${abs}: ${String(error)}`,
+        });
+      });
     },
     [workspace.structurePath],
   );
