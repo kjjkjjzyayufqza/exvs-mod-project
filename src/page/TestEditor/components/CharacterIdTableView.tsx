@@ -467,31 +467,28 @@ export default function CharacterIdTableView({
         return tableData[selectedIndex] ?? null;
     }, [selectedIndex, tableData]);
 
-    const assetRefs = useMemo(() => {
-        if (!selectedRow) return null;
-        const refs: Record<string, AssetRefInfo> = {};
-        
-        // Use a promise-based approach in a separate effect or handle synchronously if possible.
-        // Since getAssetRefInfo is async (due to join), we'll pre-calculate basic info and 
-        // let the component handle the rest, or use a state.
-        return refs;
-    }, [selectedRow]);
-
     const [resolvedAssetRefs, setResolvedAssetRefs] = useState<Record<string, AssetRefInfo>>({});
 
+    // Build expected paths only when a row is selected. Do not probe OB/MOD/WS existence here —
+    // CharacterAssetField probes lazily when the detail field is mounted (viewing that item).
+    const selectedAssetFingerprint = useMemo(() => {
+        if (!selectedRow) return null;
+        return REQUIRED_FIELD_KEYS.map((key) => `${key}:${(selectedRow as any)[key] ?? 0}`).join("|");
+    }, [selectedRow]);
+
     useEffect(() => {
-        if (!selectedRow) {
+        if (!selectedRow || !selectedAssetFingerprint) {
             setResolvedAssetRefs({});
             return;
         }
 
         let cancelled = false;
-        setResolvedAssetRefs({});
+        const row = selectedRow;
 
         const resolve = async () => {
             const entries = await Promise.all(
                 REQUIRED_FIELD_KEYS.map(async (key) => {
-                    const val = (selectedRow as any)[key];
+                    const val = (row as any)[key];
                     const ref = await getAssetRefInfo({
                         fieldKey: key,
                         value: val,
@@ -499,6 +496,7 @@ export default function CharacterIdTableView({
                         obModPath,
                         workspaceRoot: folderPath,
                         workspaceDocument,
+                        probeExistence: false,
                     });
                     return [key, ref] as const;
                 }),
@@ -510,11 +508,11 @@ export default function CharacterIdTableView({
             }
             setResolvedAssetRefs(refs);
         };
-        resolve();
+        void resolve();
         return () => {
             cancelled = true;
         };
-    }, [selectedRow, obDplCachePath, obModPath, folderPath, workspaceDocument]);
+    }, [selectedAssetFingerprint, selectedRow, obDplCachePath, obModPath, folderPath, workspaceDocument]);
 
     const handleExtractAll = useCallback(async () => {
         if (!selectedRow || isExtractingAll) return;
@@ -529,17 +527,26 @@ export default function CharacterIdTableView({
         const results = [];
         try {
             for (const key of REQUIRED_FIELD_KEYS) {
-                const asset = resolvedAssetRefs[key];
-                if (asset && asset.rawValue !== 0) {
-                    const target = await resolveFhm2dPackPaths(
-                        workspaceRoot,
-                        workspaceDocument,
-                        asset.routeId,
-                        asset.hashHex,
-                        sanitizeFhm2dStructureName(`${asset.fieldKey}_${asset.hashHex.replace(/^0x/i, "")}`),
-                    );
-                    results.push(await extractAsset(asset, target));
-                }
+                const pathOnly = resolvedAssetRefs[key];
+                if (!pathOnly || pathOnly.rawValue === 0) continue;
+                // Re-probe so source path case and workspace layout are accurate before extract.
+                const asset = await getAssetRefInfo({
+                    fieldKey: pathOnly.fieldKey,
+                    value: pathOnly.rawValue,
+                    obDplCachePath,
+                    obModPath,
+                    workspaceRoot,
+                    workspaceDocument,
+                    probeExistence: true,
+                });
+                const target = await resolveFhm2dPackPaths(
+                    workspaceRoot,
+                    workspaceDocument,
+                    asset.routeId,
+                    asset.hashHex,
+                    sanitizeFhm2dStructureName(`${asset.fieldKey}_${asset.hashHex.replace(/^0x/i, "")}`),
+                );
+                results.push(await extractAsset(asset, target));
             }
         } finally {
             setIsExtractingAll(false);
@@ -557,7 +564,7 @@ export default function CharacterIdTableView({
                 toast.success(`Successfully extracted ${successCount} assets to workspace`);
             }
         }
-    }, [selectedRow, isExtractingAll, resolvedAssetRefs, folderPath, workspaceDocument]);
+    }, [selectedRow, isExtractingAll, resolvedAssetRefs, folderPath, workspaceDocument, obDplCachePath, obModPath]);
 
     const handleExtractAllMsc = useCallback(async () => {
         if (isExtractingAllMsc) return;

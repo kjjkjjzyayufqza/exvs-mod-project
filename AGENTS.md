@@ -13,8 +13,9 @@ cross-agent hub for Cursor, Claude, Codex, Copilot, and other coding agents.
 - **Key subsystems**:
   - `tools/` — Python-based MSC bytecode toolchain (`mscdec.py`, `msclang.py`,
     `disasmlib.py`, `msc_core.py`, `msc_cfg.py`).
-  - `src-tauri/` — Tauri Rust backend, including the agent-facing `exvs2-json`
-    CLI (`exvs2_json` binary; see [CLI Tools](#cli-tools-agent-facing)).
+  - `src-tauri/` — Tauri Rust backend, including agent-facing CLIs `exvs2-json`
+    (`exvs2_json`) and `fhm2d-extract` (`fhm2d_extract`); see
+    [CLI Tools](#cli-tools-agent-facing).
   - `src/page/` — React page components (TestEditor with MSC workspace, UnitEdit,
     FilesEdit, SceneEdit, etc.).
   - `docs/` — Format specifications and research notes.
@@ -71,6 +72,9 @@ Use `docs/` as the first source of project truth:
 - `docs/exvs2-json-cli.md` — `exvs2-json` CLI for EXVS2 binary resource
   inspection, scoped JSON-driven editing, and correlation JSON (implementation
   in `src-tauri/`).
+- `docs/fhm2d-extract-cli.md` — `fhm2d-extract` CLI for unpacking OB `.fhm2d`
+  with required `--type` / `--layout`; agent outputs must stay under `tmp/`
+  (see `.cursor/rules/fhm2d-extract-artifacts.mdc`).
 - `docs/characterparam-field-notes.md` — characterparam empirical field
   identity (`lockOnDistanceMax` + `alertRangeDistance` = 红锁,
   `boostGaugeInitial` = HP); prefer over stale pool names when they conflict.
@@ -209,6 +213,61 @@ JSON output envelope always sets `"tool": "exvs2-json"`. Reuses the same Rust
 parsers as the desktop editor backend. Cross-repo pickup for  hook
 research: `docs\EXVS2JsonCli.md`.
 
+### `fhm2d-extract` (Cargo binary: `fhm2d_extract`)
+
+Standalone OB `.fhm2d` unpacker with **required** `--type` naming and explicit
+`--layout folder|flat`. Same thin-bin + library CLI core pattern as `exvs2-json`.
+Prefer this CLI for agent-side FHM2D unpack; do not use legacy
+`fhm2d_extract_folder` unless the user asks.
+
+| Item | Path |
+|------|------|
+| Full spec | `docs/fhm2d-extract-cli.md` |
+| CLI core | `src-tauri/src/fhm2d_extract_cli/` |
+| Binary entry | `src-tauri/src/bin/fhm2d_extract.rs` |
+| Extract engine | `src-tauri/src/format/fhm2d.rs` |
+| Integration tests | `src-tauri/tests/fhm2d_extract_cli_test.rs` |
+| Debug executable (agent default) | `src-tauri/target/debug/fhm2d_extract.exe` |
+| Artifact isolation rule | `.cursor/rules/fhm2d-extract-artifacts.mdc` |
+
+**Agent build policy (mandatory):** Debug only. See
+`.cursor/rules/no-release-builds.mdc` and `.cursor/rules/custom-rules.mdc` §7a.
+
+**Artifact location policy (mandatory):** Every persisted artifact created while
+preparing, running, or validating `fhm2d-extract` must be placed under the
+repository-root `tmp/` directory. Prefer a task-scoped directory such as
+`tmp/fhm2d-extract/<task>/`. This includes `--output` extract folders, sibling
+`*_structure.json`, `meta.bin`, redirected logs, reports, and temporary
+fixtures. Do **not** extract beside source `.fhm2d` assets, into game/workspace
+trees, `docs/`, `src-tauri/`, or the repository root unless the user explicitly
+requests that path. Paths are relative to the current working directory: use
+`tmp/...` from the repository root and `../tmp/...` from `src-tauri/`. See
+`.cursor/rules/fhm2d-extract-artifacts.mdc` and custom-rules §7c.
+
+**Run** (from `src-tauri/`; **debug only**):
+
+```powershell
+cargo build --bin fhm2d_extract
+$task = "..\tmp\fhm2d-extract\<task>"
+New-Item -ItemType Directory -Force $task | Out-Null
+.\target\debug\fhm2d_extract.exe "<source.fhm2d>" `
+  --output "$task\pack" `
+  --type motion `
+  --layout folder `
+  2>&1 | Tee-Object -FilePath "$task\extract.log"
+# flat example:
+.\target\debug\fhm2d_extract.exe "<source.fhm2d>" -o "$task\pack_flat" -t character -l flat
+```
+
+**Required flags (no silent defaults):** `--type` / `-t` and `--layout` / `-l`
+(`folder` | `flat`). Types: `character`, `effect`, `motion`, `msc`, `sound`,
+`character_param`, `character_cost`, `all_nutexb`, `stage_list` (also `fhm2d_*`).
+
+Writes files under `--output` and `<out_dir>_structure.json` beside that folder
+name (still under `tmp/` when `--output` is under `tmp/...`). Layout is
+independent of type. Naming warnings go to stderr; extraction still succeeds
+when files were written.
+
 ## Rule And Skill Link Map
 
 `AGENTS.md` is the hub. Every project rule or skill should link back here.
@@ -217,6 +276,8 @@ Current project rule entry points:
 
 - Cursor project rule: `.cursor/rules/custom-rules.mdc`
 - `exvs2-json` artifact isolation: `.cursor/rules/exvs2-json-artifacts.mdc`
+- `fhm2d-extract` artifact isolation: `.cursor/rules/fhm2d-extract-artifacts.mdc`
+- No release builds: `.cursor/rules/no-release-builds.mdc`
 - Cross-agent hub: `AGENTS.md`
 
 Project skills (domain):

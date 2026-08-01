@@ -24,7 +24,8 @@ Do **not** run any of the following for normal development, tests, inspect, or v
 |------|----------|
 | Unit / lib tests | `cargo test` (debug profile) |
 | Build CLI (`exvs2_json`) | `cargo build --bin exvs2_json` → `src-tauri/target/debug/exvs2_json.exe` |
-| Run CLI once | `cargo run --bin exvs2_json -- <args>` (debug; no `--release`) |
+| Build CLI (`fhm2d_extract`) | `cargo build --bin fhm2d_extract` → `src-tauri/target/debug/fhm2d_extract.exe` |
+| Run CLI once | `cargo run --bin exvs2_json -- <args>` or `cargo run --bin fhm2d_extract -- <args>` (debug; no `--release`) |
 | Incremental Rust check after small edits | `cargo test --lib <filter>` or `cargo build --bin <name>` |
 
 ## Why

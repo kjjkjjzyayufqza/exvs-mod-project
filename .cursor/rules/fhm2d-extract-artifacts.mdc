@@ -1,0 +1,71 @@
+---
+description: Keep every persisted fhm2d-extract workflow artifact under the repository tmp directory
+alwaysApply: true
+---
+
+# FHM2D Extract Artifact Isolation
+
+The cross-agent hub is `AGENTS.md`; read it and `docs/fhm2d-extract-cli.md` before
+using `fhm2d-extract` / `fhm2d_extract`.
+
+## When to use this CLI
+
+- Prefer the default-built agent CLI **`fhm2d_extract`** for unpacking OB
+  `.fhm2d` archives from the terminal (required `--type`, required `--layout`).
+- Do **not** use the legacy bin `fhm2d_extract_folder` (needs
+  `legacy-cli-tools`) unless the user explicitly asks for it.
+- Stage SceneEdit rename extract and unit-model regroup extract remain separate
+  Tauri paths; this rule covers the standalone CLI and any agent-side unpack
+  smoke that mirrors it.
+
+## Artifact location (mandatory)
+
+- Put **every** persisted artifact created while preparing, running, or
+  validating `fhm2d-extract` under the repository-root `tmp/` directory.
+- Prefer a task-scoped directory: `tmp/fhm2d-extract/<task>/`.
+- Covered artifacts include:
+  - `--output` extract folders
+  - sibling `*_structure.json` (written next to the output folder name)
+  - `meta.bin` when `--write-meta-bin` is used
+  - redirected CLI stdout/stderr, reports, logs, diffs, and temporary fixtures
+- Treat source `.fhm2d` assets as **read-only** inputs. Never extract into the
+  same directory as the source pack, into game `data\x64`, into workspace
+  `com\file` trees, `docs/`, `src-tauri/`, or the repository root — unless the
+  user **explicitly** requests that exact path.
+- From the repository root, use `tmp/...`; from `src-tauri/`, use `../tmp/...`.
+- Console-only output is not a file artifact. If it must be retained, redirect
+  it under `tmp/`.
+- `tmp/` is gitignored. Do not force-add generated artifacts to version control.
+
+## Build / run defaults
+
+- Debug only: `cargo build --bin fhm2d_extract` →
+  `src-tauri/target/debug/fhm2d_extract.exe`
+- Do not use `--release` unless the user asks (see
+  `.cursor/rules/no-release-builds.mdc`).
+
+## Example (from `src-tauri/`)
+
+```powershell
+$task = "..\tmp\fhm2d-extract\<task>"
+New-Item -ItemType Directory -Force $task | Out-Null
+cargo build --bin fhm2d_extract
+.\target\debug\fhm2d_extract.exe "E:\path\to\0xXXXXXXXX.fhm2d" `
+  --output "$task\pack" `
+  --type motion `
+  --layout folder `
+  2>&1 | Tee-Object -FilePath "$task\extract.log"
+# Files: ..\tmp\fhm2d-extract\<task>\pack\
+# Structure sidecar: ..\tmp\fhm2d-extract\<task>\pack_structure.json
+```
+
+## Required flags (no silent defaults)
+
+| Flag | Rule |
+|------|------|
+| `--type` / `-t` | Required. Missing/invalid → fail. No default to `msc`. |
+| `--layout` / `-l` | Required: `folder` or `flat`. |
+| `--output` / `-o` | Must resolve under repo `tmp/` for agent runs. |
+
+Types: `character`, `effect`, `motion`, `msc`, `sound`, `character_param`,
+`character_cost`, `all_nutexb`, `stage_list` (also `fhm2d_*` ids).

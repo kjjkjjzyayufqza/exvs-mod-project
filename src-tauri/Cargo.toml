@@ -54,6 +54,11 @@ path = "src/bin/exvs2_json.rs"
 test = false
 
 [[bin]]
+name = "fhm2d_extract"
+path = "src/bin/fhm2d_extract.rs"
+test = false
+
+[[bin]]
 name = "fhm2d_extract_folder"
 path = "src/bin/fhm2d_extract_folder.rs"
 test = false
@@ -116,6 +121,10 @@ required-features = ["legacy-cli-tools"]
 [[test]]
 name = "exvs2_json_cli_test"
 path = "tests/exvs2_json_cli_test.rs"
+
+[[test]]
+name = "fhm2d_extract_cli_test"
+path = "tests/fhm2d_extract_cli_test.rs"
 
 [[test]]
 name = "ssbh_motion_interchange_test"

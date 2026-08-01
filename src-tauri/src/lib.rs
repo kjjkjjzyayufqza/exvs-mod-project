@@ -7,6 +7,7 @@ mod console_color;
 #[cfg(debug_assertions)]
 mod dev_tools_sync;
 pub mod exvs2_json_cli;
+pub mod fhm2d_extract_cli;
 mod fhm2d_memory_preview;
 pub mod format;
 pub mod havok_cli;

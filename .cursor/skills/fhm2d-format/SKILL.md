@@ -6,11 +6,23 @@ FHM2D is a compressed archive format used by EXVS2 for bundling stage assets (mo
 textures, configs). This skill documents the binary layout, known pitfalls, and the
 correct approach for repacking and extracting stage files.
 
-**Source files:**
-- `src/format/fhm2d.rs` — extraction (binary → in-memory files)
+**Agent unpack CLI (preferred for terminal work):**
+
+- Binary: `fhm2d_extract` (`cargo build --bin fhm2d_extract`, debug only)
+- Spec: `docs/fhm2d-extract-cli.md`
+- Hub: `AGENTS.md` → CLI Tools → `fhm2d-extract`
+- **Artifact isolation (mandatory):** all agent extract outputs under
+  repository-root `tmp/` (prefer `tmp/fhm2d-extract/<task>/`). Rule:
+  `.cursor/rules/fhm2d-extract-artifacts.mdc`, custom-rules §7c.
+- Required flags: `--type` and `--layout folder|flat` (no silent defaults).
+- Do not use legacy `fhm2d_extract_folder` unless the user asks.
+
+**Source files (under `src-tauri/`):**
+- `src/format/fhm2d.rs` — extraction (binary → in-memory files) + layout
 - `src/format/fhm2d_pack.rs` — repacking (structure JSON → binary)
 - `src/format/fhm2d_stage.rs` — stage rename (numbered folders → semantic names)
-- `src/format/fhm2d_stage_test.rs` — tests
+- `src/fhm2d_extract_cli/` — agent CLI parse/run surface
+- `src/bin/fhm2d_extract.rs` — CLI entry
 
 ## Binary Layout
 
