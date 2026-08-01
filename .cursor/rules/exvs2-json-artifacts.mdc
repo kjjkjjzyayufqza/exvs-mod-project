@@ -1,0 +1,33 @@
+---
+description: Keep every persisted exvs2-json workflow artifact under the repository tmp directory
+alwaysApply: true
+---
+
+# EXVS2 JSON Artifact Isolation
+
+The cross-agent hub is `AGENTS.md`; read it before using `exvs2-json`.
+
+- Put every persisted artifact created while preparing, running, or validating
+  `exvs2-json` under the repository-root `tmp/` directory.
+- Prefer `tmp/exvs2-json/<task>/` so artifacts from separate investigations do
+  not collide.
+- Covered artifacts include redirected `inspect` and `correlate` JSON, edit
+  request JSON, `edit --output` binaries, reports, logs, diffs, and manually
+  created round-trip fixtures.
+- Treat source assets as read-only inputs. Never place an output beside an input
+  or directly modify an input unless the user explicitly requests that exact
+  destructive operation.
+- Do not persist these artifacts in `docs/`, `src-tauri/`, another source tree,
+  or the repository root.
+- From the repository root, use `tmp/...`; from `src-tauri/`, use `../tmp/...`.
+- Console-only output is not a file artifact. If it must be retained, redirect
+  it to a file under `tmp/`.
+- `tmp/` is gitignored. Do not force-add generated artifacts to version control.
+
+Example from `src-tauri/`:
+
+```powershell
+New-Item -ItemType Directory -Force "..\tmp\exvs2-json\<task>" | Out-Null
+.\target\debug\exvs2_json.exe inspect "<input>" --summary --pretty |
+  Out-File -Encoding utf8 "..\tmp\exvs2-json\<task>\inspect.json"
+```

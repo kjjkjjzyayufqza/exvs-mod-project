@@ -1,25 +1,29 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 
-use serde_json::Value;
+use serde_json::{json, Map as JsonMap, Value};
 
+use crate::format::obf_string::{
+    obf_decode_to_string, obf_encode_from_string, read_null_terminated,
+};
 use crate::format::param_bin_format::{
     build_param_binary, read_param_binary, ParamBinaryFile, ParamBinaryHeader, ParamFieldSpec,
 };
 use crate::format::param_entry_schema::{
-    entry_commands_from_named_json, entry_commands_to_named_json, entry_row_matches_command_map,
-    expected_field_specs_ordered, min_entry_data_size_for_specs, parse_commands_map_from_entry_row,
-    validate_file_specs_kind_match_pool, ParamCommandPool,
+    entry_row_matches_command_map, hash_and_kind_for_camel_key, is_hash_in_pool,
+    min_entry_data_size_for_specs, parse_commands_map_from_entry_row, raw_u32_to_json_for_kind,
+    snake_to_camel, validate_file_specs_kind_match_pool, ParamCommandPool, KIND_I32, KIND_U32,
 };
+
+/// Kind 7 = absolute file offset to obfuscated null-terminated string in trailing pool.
+const KIND_STRING: u32 = 7;
 
 // Please keep comments for analysis.
 //
 // Data-verified against 432 arms_param files (1431 entries).
-// No hashes appear as hardcoded immediates in the exe — all accessed via generic LookupCommandDescriptorByHash.
-// Tags: [D:range] = data range from binary files, [D:dist] = value distribution
-//
-// 46/48 confirmed plausible by data patterns. See xDocs/command_system_research/characterparam_naming_audit_20260426.md
-// AI decision (2026-06-19): keep these JSON field names for compatibility only.
+// Kind-7 label names intentionally match speedparam JSON (`actionLabel` /
+// `resourceLabel` decoded strings). Offsets remain on-disk; JSON prefers strings.
+// AI decision (2026-06-19): keep numeric JSON field names for compatibility only.
 // Delta Plus type 1 uses script-driven manual reload, while RX-78-2 type 2 uses
 // field 0xA502BCF2=180 for a 3-second reload with 0xAB9AEF6C=0. The previous UI
 // enum labels are therefore not native-confirmed semantics.
@@ -65,28 +69,166 @@ pub const ARMSPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0xBB93D195, 1, "bullet_type"),        // [D:0~12] enum, 13 distinct bullet types
     (0xD37EC761, 5, "tracking_speed_rate"), // [D:0.0~2.0] float multiplier
     (0xD5C8390D, 5, "bullet_speed_rate"),  // [D:0.0~1.0] float multiplier
-    (0xE6213731, 7, "action_label_offset"), // [D:str] 646 unique action labels
+    // Decoded label strings under actionLabel / resourceLabel (same as speedparam).
+    (0xE6213731, 7, "action_label"),
     (0xEDC16AE3, 2, "ammo_reload_wait_frame"), // [D:0~2000] frame count
     (0xEF3F41B3, 1, "hit_effect_type"),    // [D:0~10] enum: 7 unique (0-4, 9-10), gap at 5-8
-    (0xF3C4CAE9, 7, "resource_label_offset"), // [D:str] 759 unique resource labels
+    (0xF3C4CAE9, 7, "resource_label"),
     (0xF8AEEC77, 2, "bullet_count_per_shot"), // [D:0~210] 12 unique, 874 zeros
     (0xF8E59F33, 2, "firing_interval_frame"), // [D:0~360] 15 unique, 874 zeros
     (0xF952D49B, 2, "full_charge_frame"),  // [D:0~2000] frame count
 ];
 
+/// Legacy JSON keys still accepted on load (offset-style names from older UI).
+const ARMSPARAM_LEGACY_KEY_ALIASES: &[(&str, u32)] = &[
+    ("actionLabelOffset", 0xE6213731),
+    ("resourceLabelOffset", 0xF3C4CAE9),
+];
+
+fn hash_and_kind_for_arms_key(key: &str) -> Option<(u32, u32)> {
+    hash_and_kind_for_camel_key(ARMSPARAM_COMMAND_POOL, key).or_else(|| {
+        let hash = ARMSPARAM_LEGACY_KEY_ALIASES
+            .iter()
+            .find_map(|(legacy_key, h)| (*legacy_key == key).then_some(*h))?;
+        ARMSPARAM_COMMAND_POOL
+            .iter()
+            .find_map(|(pool_hash, kind, _)| (*pool_hash == hash).then_some((hash, *kind)))
+    })
+}
+
+fn pool_string_hashes() -> Vec<u32> {
+    ARMSPARAM_COMMAND_POOL
+        .iter()
+        .filter(|(_, k, _)| *k == KIND_STRING)
+        .map(|(h, _, _)| *h)
+        .collect()
+}
+
 pub fn armsparam_entry_to_json_value(entry: &ArmsParamEntry) -> Value {
-    entry_commands_to_named_json(entry.entry_id, &entry.commands, ARMSPARAM_COMMAND_POOL)
+    let mut map = JsonMap::new();
+    map.insert("entryId".to_string(), json!(entry.entry_id));
+
+    for &(h, kind, name) in ARMSPARAM_COMMAND_POOL {
+        let key = snake_to_camel(name);
+        if kind == KIND_STRING {
+            if let Some(s) = entry.strings.get(&h) {
+                map.insert(key, json!(s));
+            } else if let Some(&raw) = entry.commands.get(&h) {
+                // Fallback: still expose absolute offset if decode failed.
+                map.insert(key, json!(raw));
+            }
+        } else if let Some(&raw) = entry.commands.get(&h) {
+            map.insert(key, raw_u32_to_json_for_kind(kind, raw));
+        }
+    }
+
+    let mut extra = JsonMap::new();
+    for (&h, &v) in &entry.commands {
+        if !is_hash_in_pool(ARMSPARAM_COMMAND_POOL, h) {
+            extra.insert(format!("{h}"), json!(v));
+        }
+    }
+    if !extra.is_empty() {
+        map.insert("extraCommands".to_string(), Value::Object(extra));
+    }
+
+    Value::Object(map)
 }
 
 pub fn armsparam_entry_from_json_value(v: &Value) -> Result<ArmsParamEntry, String> {
-    let (entry_id, commands) = entry_commands_from_named_json(v, ARMSPARAM_COMMAND_POOL)?;
-    Ok(ArmsParamEntry { entry_id, commands })
+    let obj = v
+        .as_object()
+        .ok_or("armsparam entry: expected JSON object")?;
+    let entry_id: u32 = obj
+        .get("entryId")
+        .and_then(|e| e.as_u64().or_else(|| e.as_i64().map(|i| i as u64)))
+        .map(|n| n as u32)
+        .unwrap_or(0);
+
+    let mut commands: HashMap<u32, u32> = HashMap::new();
+    let mut strings: HashMap<u32, String> = HashMap::new();
+
+    for (k, val) in obj {
+        if k == "entryId" {
+            continue;
+        }
+        if k == "extraCommands" {
+            if let Some(ex) = val.as_object() {
+                for (hash_str, v_ex) in ex {
+                    let h: u32 = if let Some(rest) = hash_str
+                        .strip_prefix("0x")
+                        .or_else(|| hash_str.strip_prefix("0X"))
+                    {
+                        u32::from_str_radix(rest, 16)
+                    } else {
+                        hash_str.parse()
+                    }
+                    .map_err(|e| e.to_string())?;
+                    let raw = v_ex
+                        .as_u64()
+                        .or_else(|| v_ex.as_i64().map(|i| i as u64))
+                        .map(|u| u as u32)
+                        .ok_or_else(|| format!("extraCommands.{hash_str}: expected u32"))?;
+                    commands.insert(h, raw);
+                }
+            }
+            continue;
+        }
+        // Accept actionLabel / actionLabelOffset style keys for kind-7 fields.
+        let lookup_key = k
+            .strip_suffix("Offset")
+            .filter(|base| {
+                hash_and_kind_for_arms_key(base).is_some_and(|(_, kind)| kind == KIND_STRING)
+            })
+            .unwrap_or(k.as_str());
+
+        if let Some((h, knd)) = hash_and_kind_for_arms_key(lookup_key) {
+            if knd == KIND_STRING {
+                if let Some(s) = val.as_str() {
+                    strings.insert(h, s.to_string());
+                } else if let Some(n) = val.as_u64().or_else(|| val.as_i64().map(|i| i as u64)) {
+                    commands.insert(h, n as u32);
+                }
+            } else {
+                let raw = match knd {
+                    KIND_U32 => val
+                        .as_u64()
+                        .or_else(|| val.as_i64().map(|i| i as u64))
+                        .map(|u| u as u32)
+                        .ok_or_else(|| format!("{k}: expected u32"))?,
+                    KIND_I32 => {
+                        let x = val.as_i64().ok_or_else(|| format!("{k}: expected i32"))?;
+                        i32::try_from(x).map_err(|_| format!("{k}: i32 out of range"))? as u32
+                    }
+                    5 => {
+                        let f = val.as_f64().ok_or_else(|| format!("{k}: expected f32"))? as f32;
+                        f32::to_bits(f)
+                    }
+                    _ => val
+                        .as_u64()
+                        .or_else(|| val.as_i64().map(|i| i as u64))
+                        .map(|u| u as u32)
+                        .ok_or_else(|| format!("{k}: expected number"))?,
+                };
+                commands.insert(h, raw);
+            }
+        }
+    }
+
+    Ok(ArmsParamEntry {
+        entry_id,
+        commands,
+        strings,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArmsParamEntry {
     pub entry_id: u32,
+    /// Non-string fields and (optionally) absolute offsets for kind-7 fields.
     pub commands: HashMap<u32, u32>,
+    /// Decoded kind-7 label strings (action_label / resource_label).
+    pub strings: HashMap<u32, String>,
 }
 
 impl Serialize for ArmsParamEntry {
@@ -118,31 +260,96 @@ fn expected_field_specs() -> Vec<ParamFieldSpec> {
     expected_field_specs_ordered(ARMSPARAM_COMMAND_POOL)
 }
 
+fn expected_field_specs_ordered(pool: ParamCommandPool) -> Vec<ParamFieldSpec> {
+    let mut entry_offset = 0u32;
+    pool.iter()
+        .map(|(hash, kind, _)| {
+            let spec = ParamFieldSpec {
+                hash: *hash,
+                entry_offset,
+                flags: 0,
+                kind: *kind,
+            };
+            entry_offset += if *kind == KIND_STRING { 8 } else { 4 };
+            spec
+        })
+        .collect()
+}
+
 fn validate_field_specs(field_specs: &[ParamFieldSpec]) -> Result<(), String> {
     validate_file_specs_kind_match_pool(ARMSPARAM_COMMAND_POOL, field_specs)
 }
 
-fn parse_entry_from_raw(
-    raw: &[u8],
-    field_specs: &[ParamFieldSpec],
-    entry_id: u32,
-) -> ArmsParamEntry {
-    let commands = parse_commands_map_from_entry_row(raw, field_specs);
-    ArmsParamEntry { entry_id, commands }
+fn resolve_entry_strings(
+    commands: &HashMap<u32, u32>,
+    full_file_data: &[u8],
+    string_hashes: &[u32],
+) -> HashMap<u32, String> {
+    let mut strings = HashMap::new();
+    for &h in string_hashes {
+        if let Some(&offset) = commands.get(&h) {
+            let raw = read_null_terminated(full_file_data, offset as usize);
+            if !raw.is_empty() {
+                let decoded = obf_decode_to_string(raw);
+                if !decoded.is_empty() {
+                    strings.insert(h, decoded);
+                }
+            }
+        }
+    }
+    strings
 }
 
-fn entry_matches_raw(entry: &ArmsParamEntry, raw: &[u8], field_specs: &[ParamFieldSpec]) -> bool {
-    entry_row_matches_command_map(&entry.commands, raw, field_specs)
+fn entries_base_offset(field_specs_len: usize, entry_count: usize) -> usize {
+    0x20 + field_specs_len * 4 + field_specs_len * 12 + entry_count * 4
+}
+
+fn string_pool_start(field_specs_len: usize, entry_count: usize, entry_size: usize) -> usize {
+    entries_base_offset(field_specs_len, entry_count) + entry_count * entry_size
+}
+
+/// True when decoded strings already match trailing pool at stored offsets (no rewrite needed).
+fn strings_match_existing_pool(b: &ArmsParamData, field_specs: &[ParamFieldSpec]) -> bool {
+    let entry_size = b.header.entry_size as usize;
+    let pool_start = string_pool_start(field_specs.len(), b.entries.len(), entry_size);
+    let string_hashes = pool_string_hashes();
+
+    let mut full = vec![0u8; pool_start];
+    full.extend_from_slice(&b.trailing_data);
+
+    for entry in &b.entries {
+        for &h in &string_hashes {
+            let Some(want) = entry.strings.get(&h) else {
+                continue;
+            };
+            let Some(&off) = entry.commands.get(&h) else {
+                return false;
+            };
+            let raw = read_null_terminated(&full, off as usize);
+            let got = obf_decode_to_string(raw);
+            if got != *want {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 pub fn parse_armsparam(data: &[u8]) -> Result<ArmsParamData, String> {
     let file = read_param_binary(data)?;
     validate_field_specs(&file.field_specs)?;
 
+    let string_hashes = pool_string_hashes();
     let mut entries = Vec::with_capacity(file.entries_raw.len());
     for (i, raw) in file.entries_raw.iter().enumerate() {
         let id = file.entry_ids.get(i).copied().unwrap_or(0);
-        entries.push(parse_entry_from_raw(raw, &file.field_specs, id));
+        let commands = parse_commands_map_from_entry_row(raw, &file.field_specs);
+        let strings = resolve_entry_strings(&commands, data, &string_hashes);
+        entries.push(ArmsParamEntry {
+            entry_id: id,
+            commands,
+            strings,
+        });
     }
 
     Ok(ArmsParamData {
@@ -155,27 +362,18 @@ pub fn parse_armsparam(data: &[u8]) -> Result<ArmsParamData, String> {
     })
 }
 
-pub fn build_armsparam(b: &ArmsParamData) -> Result<Vec<u8>, String> {
-    if !b.field_specs.is_empty() {
-        validate_field_specs(&b.field_specs)?;
-    }
-    let field_specs = if b.field_specs.is_empty() {
-        expected_field_specs()
-    } else {
-        b.field_specs.clone()
-    };
-
-    let min_size = min_entry_data_size_for_specs(&field_specs);
-    let default_floor = b.header.entry_size.max(min_size);
-    let entry_size = default_floor as usize;
-
+fn build_without_string_rewrite(
+    b: &ArmsParamData,
+    field_specs: &[ParamFieldSpec],
+    entry_size: usize,
+) -> Result<Vec<u8>, String> {
     let mut entries_raw: Vec<Vec<u8>> = Vec::with_capacity(b.entries.len());
     for (entry_index, entry) in b.entries.iter().enumerate() {
         if entry_index < b.source_entries_raw.len()
             && b.source_entries_raw[entry_index].len() == entry_size
         {
             let r = &b.source_entries_raw[entry_index];
-            if entry_matches_raw(entry, r, &field_specs) {
+            if entry_row_matches_command_map(&entry.commands, r, field_specs) {
                 entries_raw.push(b.source_entries_raw[entry_index].clone());
                 continue;
             }
@@ -189,7 +387,7 @@ pub fn build_armsparam(b: &ArmsParamData) -> Result<Vec<u8>, String> {
             vec![0u8; entry_size]
         };
 
-        for spec in &field_specs {
+        for spec in field_specs {
             let o = spec.entry_offset as usize;
             if o + 4 > raw.len() {
                 return Err("armsparam entry field offset out of range for entry_size".to_string());
@@ -208,12 +406,121 @@ pub fn build_armsparam(b: &ArmsParamData) -> Result<Vec<u8>, String> {
 
     let file = ParamBinaryFile {
         header,
-        field_specs,
+        field_specs: field_specs.to_vec(),
         entry_ids: b.entries.iter().map(|entry| entry.entry_id).collect(),
         entries_raw,
         trailing_data: b.trailing_data.clone(),
     };
     build_param_binary(&file)
+}
+
+fn build_with_string_rewrite(
+    b: &ArmsParamData,
+    field_specs: &[ParamFieldSpec],
+    entry_size: usize,
+) -> Result<Vec<u8>, String> {
+    let string_hashes = pool_string_hashes();
+    let pool_start = string_pool_start(field_specs.len(), b.entries.len(), entry_size);
+
+    let mut string_pool: Vec<u8> = Vec::new();
+    let mut entry_string_offsets: Vec<HashMap<u32, u32>> = Vec::with_capacity(b.entries.len());
+
+    for entry in &b.entries {
+        let mut offsets = HashMap::new();
+        for &h in &string_hashes {
+            if let Some(s) = entry.strings.get(&h) {
+                let abs_offset = (pool_start + string_pool.len()) as u32;
+                offsets.insert(h, abs_offset);
+                string_pool.extend_from_slice(&obf_encode_from_string(s));
+            } else if let Some(&raw_offset) = entry.commands.get(&h) {
+                let old_pool_start = string_pool_start(
+                    field_specs.len(),
+                    b.source_entries_raw.len().max(1),
+                    entry_size,
+                );
+                if (raw_offset as usize) >= old_pool_start
+                    && !b.trailing_data.is_empty()
+                    && (raw_offset as usize) < old_pool_start + b.trailing_data.len()
+                {
+                    let rel = (raw_offset as usize) - old_pool_start;
+                    let slice = read_null_terminated(&b.trailing_data, rel);
+                    let abs_offset = (pool_start + string_pool.len()) as u32;
+                    offsets.insert(h, abs_offset);
+                    string_pool.extend_from_slice(slice);
+                    if slice.last().copied() != Some(0) {
+                        string_pool.push(0);
+                    }
+                } else {
+                    let abs_offset = (pool_start + string_pool.len()) as u32;
+                    offsets.insert(h, abs_offset);
+                    string_pool.push(0);
+                }
+            }
+        }
+        entry_string_offsets.push(offsets);
+    }
+
+    let mut entries_raw: Vec<Vec<u8>> = Vec::with_capacity(b.entries.len());
+    for (entry_index, entry) in b.entries.iter().enumerate() {
+        let mut raw = if entry_index < b.source_entries_raw.len()
+            && b.source_entries_raw[entry_index].len() == entry_size
+        {
+            b.source_entries_raw[entry_index].clone()
+        } else {
+            vec![0u8; entry_size]
+        };
+
+        for spec in field_specs {
+            let o = spec.entry_offset as usize;
+            if o + 4 > raw.len() {
+                return Err("armsparam entry field offset out of range for entry_size".to_string());
+            }
+            if spec.kind == KIND_STRING {
+                if let Some(&abs_off) = entry_string_offsets[entry_index].get(&spec.hash) {
+                    raw[o..o + 4].copy_from_slice(&abs_off.to_le_bytes());
+                }
+            } else if let Some(v) = entry.commands.get(&spec.hash) {
+                raw[o..o + 4].copy_from_slice(&v.to_le_bytes());
+            }
+        }
+        entries_raw.push(raw);
+    }
+
+    let mut header = b.header.clone();
+    header.entry_count = b.entries.len() as u32;
+    header.commands_count = field_specs.len() as u32;
+    header.entry_size = entry_size as u32;
+
+    let file = ParamBinaryFile {
+        header,
+        field_specs: field_specs.to_vec(),
+        entry_ids: b.entries.iter().map(|entry| entry.entry_id).collect(),
+        entries_raw,
+        trailing_data: string_pool,
+    };
+    build_param_binary(&file)
+}
+
+pub fn build_armsparam(b: &ArmsParamData) -> Result<Vec<u8>, String> {
+    if !b.field_specs.is_empty() {
+        validate_field_specs(&b.field_specs)?;
+    }
+    let field_specs = if b.field_specs.is_empty() {
+        expected_field_specs()
+    } else {
+        b.field_specs.clone()
+    };
+
+    let min_size = min_entry_data_size_for_specs(&field_specs);
+    let default_floor = b.header.entry_size.max(min_size);
+    let entry_size = default_floor as usize;
+
+    let any_strings = b.entries.iter().any(|e| !e.strings.is_empty());
+    if any_strings && !strings_match_existing_pool(b, &field_specs) {
+        build_with_string_rewrite(b, &field_specs, entry_size)
+    } else {
+        build_without_string_rewrite(b, &field_specs, entry_size)
+    }
 }
 
 #[cfg(test)]
@@ -272,5 +579,40 @@ mod tests {
         let deleted_parsed =
             parse_armsparam(&deleted_bytes).expect("failed to parse armsparam after delete");
         assert_eq!(deleted_parsed.entries.len(), parsed.entries.len());
+    }
+
+    #[test]
+    fn armsparam_decodes_and_edits_kind7_labels_when_sample_present() {
+        let Ok(source) = std::fs::read(SAMPLE_PATH) else {
+            return;
+        };
+        let parsed = parse_armsparam(&source).expect("parse armsparam");
+        assert!(!parsed.entries.is_empty());
+
+        let with_strings = parsed
+            .entries
+            .iter()
+            .find(|e| !e.strings.is_empty())
+            .expect("sample should decode at least one kind-7 label");
+        let j = armsparam_entry_to_json_value(with_strings);
+        assert!(
+            j.get("actionLabel").and_then(|v| v.as_str()).is_some()
+                || j.get("resourceLabel").and_then(|v| v.as_str()).is_some(),
+            "JSON should expose decoded actionLabel/resourceLabel strings"
+        );
+
+        let mut edited = parsed.clone();
+        edited.entries[0]
+            .strings
+            .insert(0xE6213731, "ACTION_LABEL_EDIT_TEST".to_string());
+        let bytes = build_armsparam(&edited).expect("rebuild after label edit");
+        let reparsed = parse_armsparam(&bytes).expect("reparse after label edit");
+        assert_eq!(
+            reparsed.entries[0]
+                .strings
+                .get(&0xE6213731)
+                .map(String::as_str),
+            Some("ACTION_LABEL_EDIT_TEST")
+        );
     }
 }

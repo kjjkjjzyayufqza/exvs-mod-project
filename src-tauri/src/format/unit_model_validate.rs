@@ -179,6 +179,8 @@ pub fn validate_unit_model_for_repack(
         );
     }
 
+    // Asset paths resolve against the package parent (sibling of model root / real structure),
+    // never against a working copy under %TEMP%.
     let json_dir = structure_path.parent().unwrap_or_else(|| Path::new("."));
     let mut input = match read_structure_json(&structure_path) {
         Ok(v) => v,
@@ -204,11 +206,19 @@ pub fn validate_unit_model_for_repack(
         let sync_model_root =
             crate::format::unit_model_models::infer_model_root_from_structure_path(&structure_path)
                 .unwrap_or_else(|_| model_root_path.to_path_buf());
+        // Keep working structure copies out of the package tree so UI scanners do not
+        // treat `.unit-model-validate-*_structure.json` as real packs.
+        let system_temp = std::env::temp_dir();
         let temp = Builder::new()
             .prefix(".unit-model-validate-")
             .suffix("_structure.json")
-            .tempfile_in(json_dir)
-            .map_err(|e| format!("Failed to create temporary validation structure: {e}"));
+            .tempfile_in(&system_temp)
+            .map_err(|e| {
+                format!(
+                    "Failed to create temporary validation structure in {}: {e}",
+                    system_temp.display()
+                )
+            });
         let temp = match temp {
             Ok(temp) => temp,
             Err(error) => {

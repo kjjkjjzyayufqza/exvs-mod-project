@@ -162,6 +162,18 @@ JSON. There is **no** tool named `exvs2-cli`; use `exvs2-json` / `exvs2_json`.
 work. Prefer debug for speed. See `.cursor/rules/no-release-builds.mdc` and
 `.cursor/rules/custom-rules.mdc` §7a.
 
+**Artifact location policy (mandatory):** Every persisted artifact created while
+preparing, running, or validating `exvs2-json` must be placed under the
+repository-root `tmp/` directory. Prefer a task-scoped directory such as
+`tmp/exvs2-json/<task>/`. This includes redirected `inspect` / `correlate` JSON,
+edit request JSON, files written by `edit --output`, reports, logs, diffs, and
+manually created round-trip fixtures. Do not write these artifacts beside source
+assets, into `docs/` or `src-tauri/`, or directly into the repository root.
+Paths are relative to the current working directory: use `tmp/...` from the
+repository root and `../tmp/...` from `src-tauri/`. Console-only output does not
+create an artifact; redirect it into `tmp/` whenever it needs to be retained.
+See `.cursor/rules/exvs2-json-artifacts.mdc`.
+
 **Commands**
 
 - `inspect` — parse `.jnttbl`, `character_id_table.bin`, `vernier_table`,
@@ -181,9 +193,13 @@ work. Prefer debug for speed. See `.cursor/rules/no-release-builds.mdc` and
 
 ```powershell
 cargo run --bin exvs2_json -- --help
-cargo run --bin exvs2_json -- inspect "<path>" --summary --pretty
-cargo run --bin exvs2_json -- edit "<path>" --request "<edit.json>" --output "<new-path>" --pretty
-cargo run --bin exvs2_json -- correlate --unit 001GUNDAM/005GYAN00/001 --weapon SuibakuMissile --id 10050102 --pretty
+New-Item -ItemType Directory -Force "..\tmp\exvs2-json\<task>" | Out-Null
+cargo run --bin exvs2_json -- inspect "<path>" --summary --pretty |
+  Out-File -Encoding utf8 "..\tmp\exvs2-json\<task>\inspect.json"
+cargo run --bin exvs2_json -- edit "<path>" --request "..\tmp\exvs2-json\<task>\edit-request.json" --output "..\tmp\exvs2-json\<task>\edited.bin" --pretty |
+  Out-File -Encoding utf8 "..\tmp\exvs2-json\<task>\edit-report.json"
+cargo run --bin exvs2_json -- correlate --unit 001GUNDAM/005GYAN00/001 --weapon SuibakuMissile --id 10050102 --pretty |
+  Out-File -Encoding utf8 "..\tmp\exvs2-json\<task>\correlation.json"
 # Prefer after code change:
 cargo build --bin exvs2_json
 # then: .\target\debug\exvs2_json.exe inspect ...
@@ -200,6 +216,7 @@ research: `docs\EXVS2JsonCli.md`.
 Current project rule entry points:
 
 - Cursor project rule: `.cursor/rules/custom-rules.mdc`
+- `exvs2-json` artifact isolation: `.cursor/rules/exvs2-json-artifacts.mdc`
 - Cross-agent hub: `AGENTS.md`
 
 Project skills (domain):

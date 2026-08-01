@@ -89,63 +89,69 @@ macro_rules! impl_param_access {
 }
 
 impl_param_access!(VernierTableData, VernierTableEntry);
-impl_param_access!(ArmsParamData, ArmsParamEntry);
 impl_param_access!(BulletParamData, BulletParamEntry);
 impl_param_access!(ProjectileDepictionTableData, ProjectileDepictionTableEntry);
 impl_param_access!(HitGroupIdDefData, HitGroupIdDefEntry);
 impl_param_access!(InteractionIdData, InteractionIdEntry);
 impl_param_access!(GrapParamData, GrapParamEntry);
 
-impl ParamEntryAccess for SpeedParamEntry {
-    fn entry_id(&self) -> u32 {
-        self.entry_id
-    }
+macro_rules! impl_string_param_access {
+    ($data:ty, $entry:ty) => {
+        impl ParamEntryAccess for $entry {
+            fn entry_id(&self) -> u32 {
+                self.entry_id
+            }
 
-    fn set_entry_id(&mut self, entry_id: u32) {
-        self.entry_id = entry_id;
-    }
+            fn set_entry_id(&mut self, entry_id: u32) {
+                self.entry_id = entry_id;
+            }
 
-    fn commands(&self) -> &HashMap<u32, u32> {
-        &self.commands
-    }
+            fn commands(&self) -> &HashMap<u32, u32> {
+                &self.commands
+            }
 
-    fn commands_mut(&mut self) -> &mut HashMap<u32, u32> {
-        &mut self.commands
-    }
+            fn commands_mut(&mut self) -> &mut HashMap<u32, u32> {
+                &mut self.commands
+            }
 
-    fn from_parts(entry_id: u32, commands: HashMap<u32, u32>) -> Self {
-        Self {
-            entry_id,
-            commands,
-            strings: HashMap::new(),
+            fn from_parts(entry_id: u32, commands: HashMap<u32, u32>) -> Self {
+                Self {
+                    entry_id,
+                    commands,
+                    strings: HashMap::new(),
+                }
+            }
+
+            fn string_field(&self, hash: u32) -> Option<&str> {
+                self.strings.get(&hash).map(String::as_str)
+            }
+
+            fn set_string_field(&mut self, hash: u32, value: String) -> Result<(), String> {
+                self.strings.insert(hash, value);
+                Ok(())
+            }
         }
-    }
 
-    fn string_field(&self, hash: u32) -> Option<&str> {
-        self.strings.get(&hash).map(String::as_str)
-    }
+        impl ParamTableAccess for $data {
+            type Entry = $entry;
 
-    fn set_string_field(&mut self, hash: u32, value: String) -> Result<(), String> {
-        self.strings.insert(hash, value);
-        Ok(())
-    }
+            fn entries(&self) -> &Vec<Self::Entry> {
+                &self.entries
+            }
+
+            fn entries_mut(&mut self) -> &mut Vec<Self::Entry> {
+                &mut self.entries
+            }
+
+            fn field_specs(&self) -> &[ParamFieldSpec] {
+                &self.field_specs
+            }
+        }
+    };
 }
 
-impl ParamTableAccess for SpeedParamData {
-    type Entry = SpeedParamEntry;
-
-    fn entries(&self) -> &Vec<Self::Entry> {
-        &self.entries
-    }
-
-    fn entries_mut(&mut self) -> &mut Vec<Self::Entry> {
-        &mut self.entries
-    }
-
-    fn field_specs(&self) -> &[ParamFieldSpec] {
-        &self.field_specs
-    }
-}
+impl_string_param_access!(ArmsParamData, ArmsParamEntry);
+impl_string_param_access!(SpeedParamData, SpeedParamEntry);
 
 impl ParamEntryAccess for ListEntry {
     fn entry_id(&self) -> u32 {

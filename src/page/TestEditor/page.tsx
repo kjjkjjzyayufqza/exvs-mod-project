@@ -289,7 +289,16 @@ const TestEditorPage = () => {
   );
   const selectedNode = useMemo(() => findNode(treeData, selectedId), [treeData, selectedId]);
   const [mscWorkspaceFolderPath, setMscWorkspaceFolderPath] = useState<string | null>(null);
+  /** Last tree-resolved MSC pack path. Used so a manual Pick folder is not overwritten until selection moves. */
+  const lastSelectionMscPathRef = useRef<string | null>(null);
+  /** True after the user picks a folder in MSC Workspace; cleared when tree selection resolves a different pack. */
+  const mscFolderManualPickRef = useRef(false);
   const dirtyPackList = useMemo(() => Array.from(dirtyPacks.values()), [dirtyPacks]);
+
+  const handleMscWorkspaceFolderChange = useCallback((path: string | null) => {
+    mscFolderManualPickRef.current = Boolean(path);
+    setMscWorkspaceFolderPath(path);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -300,11 +309,25 @@ const TestEditorPage = () => {
           selectedNode,
           dirnameOfFile: dirname,
         });
-        if (!cancelled) {
-          setMscWorkspaceFolderPath(next);
+        if (cancelled) return;
+
+        if (next) {
+          const prevSelection = lastSelectionMscPathRef.current;
+          lastSelectionMscPathRef.current = next;
+          // Follow tree selection when it first resolves or moves to another MSC pack.
+          // Do not clobber a manual Pick folder while selection stays on the same pack.
+          if (!mscFolderManualPickRef.current || next !== prevSelection) {
+            mscFolderManualPickRef.current = false;
+            setMscWorkspaceFolderPath(next);
+          }
+          return;
         }
+
+        lastSelectionMscPathRef.current = null;
+        // Selection has no MSC pack: keep the last folder (manual or previous) instead of
+        // clearing back to empty / parent-only state.
       } catch {
-        if (!cancelled) setMscWorkspaceFolderPath(null);
+        // Keep existing path on transient resolve errors.
       }
     };
     void sync();
@@ -1527,7 +1550,7 @@ const TestEditorPage = () => {
           viewOptions={viewOptions}
           onViewOptionsChange={setViewOptions}
           mscWorkspaceFolderPath={mscWorkspaceFolderPath}
-          onMscWorkspaceFolderChange={setMscWorkspaceFolderPath}
+          onMscWorkspaceFolderChange={handleMscWorkspaceFolderChange}
           onUnsavedChanges={setHasUnsavedChanges}
           onRevealTreeFolder={revealInTreeByPath}
           selectedNode={selectedNode}

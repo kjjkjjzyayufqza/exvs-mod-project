@@ -74,6 +74,11 @@ import {
   resolveMscActionOverlayForFolder,
   verifyMscRoundtrip,
 } from "./mscWorkspaceActions";
+import {
+  DialogLastPathKey,
+  getDialogDefaultPath,
+  rememberDialogSelection,
+} from "@/utils/dialogLastPath";
 
 interface MscWorkspaceViewProps {
   workspaceRoot: string;
@@ -230,10 +235,16 @@ export default function MscWorkspaceView({
   const handlePickFolder = async () => {
     try {
       setIsPickingFolder(true);
+      // Prefer last picked folder (the folder itself), then current MSC path,
+      // then workspace MSC route root. Never force-open the parent of the last pick.
+      const defaultPath = getDialogDefaultPath(
+        DialogLastPathKey.mscWorkspaceFolder,
+        mscFolderPath ?? workspaceDefaultPath,
+      );
       const selected = await open({
         directory: true,
         multiple: false,
-        defaultPath: workspaceDefaultPath,
+        defaultPath,
       });
       if (!selected || Array.isArray(selected)) return;
       const ok = await folderContainsMscScriptFiles(selected);
@@ -241,6 +252,7 @@ export default function MscWorkspaceView({
         toast.error("Selected folder must contain at least one .bscex, .cscex, or .dscex file");
         return;
       }
+      rememberDialogSelection(DialogLastPathKey.mscWorkspaceFolder, selected, "directory");
       onMscFolderChange?.(selected);
     } catch (e) {
       toast.error(String(e));

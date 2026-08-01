@@ -145,10 +145,11 @@ describe("MscWorkspaceView", () => {
     });
   });
 
-  it("opens the folder picker from the workspace MSC route root", async () => {
+  it("opens the folder picker from the workspace MSC route root when nothing is remembered", async () => {
     const user = userEvent.setup();
     openMock.mockResolvedValue("E:/workspace/040msc/0x12345678");
     folderContainsMscScriptFilesMock.mockResolvedValue(true);
+    window.localStorage.removeItem("tauri.dialog.lastPath.mscWorkspace.folder");
 
     render(
       <MscWorkspaceView
@@ -171,6 +172,60 @@ describe("MscWorkspaceView", () => {
         }),
       );
     });
+  });
+
+  it("opens the folder picker at the current MSC folder, not its parent", async () => {
+    const user = userEvent.setup();
+    openMock.mockResolvedValue("E:/workspace/040msc/0x12345678");
+    folderContainsMscScriptFilesMock.mockResolvedValue(true);
+    window.localStorage.removeItem("tauri.dialog.lastPath.mscWorkspace.folder");
+
+    render(
+      <MscWorkspaceView
+        workspaceRoot="E:/workspace"
+        workspaceDefaultPath="E:/workspace/040msc"
+        mscFolderPath="E:/workspace/040msc/0xABCDEF01"
+        onMscFolderChange={() => {}}
+        isActive
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /pick folder/i }));
+
+    await waitFor(() => {
+      expect(openMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          defaultPath: "E:/workspace/040msc/0xABCDEF01",
+        }),
+      );
+    });
+  });
+
+  it("remembers the picked folder itself for the next open", async () => {
+    const user = userEvent.setup();
+    const onMscFolderChange = vi.fn();
+    openMock.mockResolvedValue("E:/workspace/040msc/0x12345678");
+    folderContainsMscScriptFilesMock.mockResolvedValue(true);
+    window.localStorage.removeItem("tauri.dialog.lastPath.mscWorkspace.folder");
+
+    render(
+      <MscWorkspaceView
+        workspaceRoot="E:/workspace"
+        workspaceDefaultPath="E:/workspace/040msc"
+        mscFolderPath={null}
+        onMscFolderChange={onMscFolderChange}
+        isActive
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /pick folder/i }));
+
+    await waitFor(() => {
+      expect(onMscFolderChange).toHaveBeenCalledWith("E:/workspace/040msc/0x12345678");
+    });
+    expect(window.localStorage.getItem("tauri.dialog.lastPath.mscWorkspace.folder")).toBe(
+      "E:/workspace/040msc/0x12345678",
+    );
   });
 
   it("shows Resolve Overlay action for 2.c", async () => {

@@ -171,7 +171,7 @@ const tabs: StageTab[] = [
     ),
   },
   {
-    name: "Bullet Editor",
+    name: "Bullet Editor (outdated)",
     value: "bullet-editor",
     render: (props: MainViewProps) => (
       <BulletEditorView
@@ -181,7 +181,7 @@ const tabs: StageTab[] = [
     ),
   },
   {
-    name: "Arms Editor",
+    name: "Arms Editor (outdated)",
     value: "arms-editor",
     render: (props: MainViewProps) => (
       <ArmsEditorView
@@ -191,7 +191,7 @@ const tabs: StageTab[] = [
     ),
   },
   {
-    name: "Speed Editor",
+    name: "Speed Editor (outdated)",
     value: "speed-editor",
     render: (props: MainViewProps) => (
       <SpeedEditorView
@@ -201,7 +201,7 @@ const tabs: StageTab[] = [
     ),
   },
   {
-    name: "Character Editor",
+    name: "Character Editor (outdated)",
     value: "character-editor",
     render: (props: MainViewProps) => (
       <CharacterEditorView
@@ -211,7 +211,7 @@ const tabs: StageTab[] = [
     ),
   },
   {
-    name: "ChrSys Editor",
+    name: "ChrSys Editor (outdated)",
     value: "chrsys-editor",
     render: (props: MainViewProps) => (
       <ChrSysEditorView
@@ -221,7 +221,7 @@ const tabs: StageTab[] = [
     ),
   },
   {
-    name: "Grap Editor",
+    name: "Grap Editor (outdated)",
     value: "grap-editor",
     render: (props: MainViewProps) => (
       <GrapEditorView
@@ -231,7 +231,7 @@ const tabs: StageTab[] = [
     ),
   },
   {
-    name: "Depiction Editor",
+    name: "Depiction Editor (outdated)",
     value: "depiction-editor",
     render: (props: MainViewProps) => (
       <DepictionEditorView
@@ -241,7 +241,7 @@ const tabs: StageTab[] = [
     ),
   },
   {
-    name: "HitGroup Editor",
+    name: "HitGroup Editor (outdated)",
     value: "hitgroup-editor",
     render: (props: MainViewProps) => (
       <HitGroupEditorView
@@ -251,7 +251,7 @@ const tabs: StageTab[] = [
     ),
   },
   {
-    name: "Interaction Editor",
+    name: "Interaction Editor (outdated)",
     value: "interaction-editor",
     render: (props: MainViewProps) => (
       <InteractionEditorView

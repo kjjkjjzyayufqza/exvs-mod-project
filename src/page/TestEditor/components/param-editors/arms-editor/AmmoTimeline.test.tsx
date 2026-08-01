@@ -18,11 +18,13 @@ describe("AmmoTimeline", () => {
 
     render(<AmmoTimeline entry={entry} />);
 
-    expect(screen.getByText("Raw Reload Fields")).toBeInTheDocument();
-    expect(screen.getByText("Type 2")).toBeInTheDocument();
+    expect(screen.getByText("Reload schema fields")).toBeInTheDocument();
     expect(screen.getByText("0xA502BCF2")).toBeInTheDocument();
-    expect(screen.getByText("180f")).toBeInTheDocument();
+    expect(screen.getByText("reloadPerShotFrame")).toBeInTheDocument();
+    expect(screen.getByText("180f (3.00s)")).toBeInTheDocument();
+    expect(screen.getByText("ammoCount")).toBeInTheDocument();
+    expect(screen.getByText("overheatFrame")).toBeInTheDocument();
     expect(screen.queryByText(/Shots\/sec/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Overheat/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/simulated/i)).not.toBeInTheDocument();
   });
 });

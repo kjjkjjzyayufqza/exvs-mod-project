@@ -46,13 +46,40 @@ pub fn repack_fhm2d_from_structure(
     atomic_write: bool,
     progress_callback: Option<&dyn Fn(RepackProgress)>,
 ) -> Result<RepackResult, String> {
+    repack_fhm2d_from_structure_with_asset_base(
+        structure_json_path,
+        None,
+        output_path,
+        atomic_write,
+        progress_callback,
+    )
+}
+
+/// Like [`repack_fhm2d_from_structure`], but resolves `fileUrl` paths against
+/// `asset_base_dir` when provided. Use this when the structure JSON is a working
+/// copy under the system temp directory while assets remain next to the original
+/// package (e.g. Unit Model validate/repack temps).
+pub fn repack_fhm2d_from_structure_with_asset_base(
+    structure_json_path: &str,
+    asset_base_dir: Option<&Path>,
+    output_path: &str,
+    atomic_write: bool,
+    progress_callback: Option<&dyn Fn(RepackProgress)>,
+) -> Result<RepackResult, String> {
     let json_content = fs::read_to_string(structure_json_path)
         .map_err(|e| format!("Failed to read structure json: {e}"))?;
     let input = parse_input_structure(&json_content)?;
 
-    let json_dir = Path::new(structure_json_path)
-        .parent()
-        .ok_or_else(|| "Cannot determine parent directory of structure json".to_string())?;
+    let owned_json_dir;
+    let json_dir = if let Some(base) = asset_base_dir {
+        base
+    } else {
+        owned_json_dir = Path::new(structure_json_path)
+            .parent()
+            .ok_or_else(|| "Cannot determine parent directory of structure json".to_string())?
+            .to_path_buf();
+        owned_json_dir.as_path()
+    };
 
     let total_files = input.sub_file_data.len();
 

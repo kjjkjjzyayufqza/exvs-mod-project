@@ -1,87 +1,65 @@
-import { AutoPropertyPanel } from "../shared/AutoPropertyPanel";
-import type { TypedParamEntry } from "../../param-editor/typedParamTypes";
-import type { TypedParamFile } from "../../param-editor/typedParamTypes";
+import { useMemo } from "react";
+import type { TypedParamEntry, TypedParamFile } from "../../param-editor/typedParamTypes";
+import { GameAccuratePropertyPanel } from "../shared/GameAccuratePropertyPanel";
+import {
+  buildArmsComputedSections,
+  buildArmsPropertyGroups,
+  resolveArmsLabels,
+} from "./armsFieldModel";
 
 interface ArmsPropertyPanelProps {
   entry: TypedParamEntry;
   fieldSpecs?: TypedParamFile["fieldSpecs"];
-  onFieldChange: (key: string, value: number) => void;
+  fileBytes?: Uint8Array | null;
+  onFieldChange: (key: string, value: number | string) => void;
 }
 
-// AI decision (2026-06-19): retain JSON keys for save compatibility, but mark
-// reload names unverified because current IDA-derived labels conflict with fixtures.
-const ARMS_GROUPS: Record<string, string[]> = {
-  State: [
-    "isEnabled",
-    "isContinuousFire",
-    "isVernier",
-    "isSuperArmor",
-    "canMoveWhileFiring",
-  ],
-  Ammo: [
-    "ammoCount",
-    "bulletCountPerShot",
-    "firingIntervalFrame",
-    "shotType",
-    "bulletType",
-  ],
-  "Reload (Unverified)": [
-    "reloadType",
-    "reloadTimeTotal",
-    "reloadStartFrame",
-    "reloadPerShotFrame",
-    "reloadLockFrame",
-    "ammoReloadWaitFrame",
-  ],
-  Timing: [
-    "startupFrame",
-    "activeFrame",
-    "recoveryFrame",
-    "cooldownFrame",
-    "totalDurationFrame",
-    "landingRecoveryFrame",
-  ],
-  Charge: ["chargeWeaponType", "chargeFrame", "fullChargeFrame"],
-  Damage: [
-    "damage",
-    "downValue",
-    "stunValue",
-    "damageCorrectionnRate",
-    "downCorrectionRate",
-    "stunCorrectionRate",
-  ],
-  Homing: [
-    "homingAngle",
-    "inductionRate",
-    "homingStartRate",
-    "homingEndRate",
-    "trackingSpeedRate",
-    "bulletSpeedRate",
-    "muzzleCorrectionRate",
-  ],
-  Combat: [
-    "range",
-    "cancelRouteType",
-    "guardBreakType",
-    "hitEffectType",
-    "landingBehaviorType",
-    "boostConsumptionRate",
-  ],
-  Labels: ["actionLabel", "resourceLabel", "actionLabelOffset", "resourceLabelOffset"],
-  Misc: ["unk04Reserved", "overheatFrame"],
-};
+const ARMS_GROUPS = buildArmsPropertyGroups();
+
+/**
+ * Merge decoded kind-7 labels into the entry so the property panel always
+ * shows editable `actionLabel` / `resourceLabel` strings (never raw offsets).
+ */
+function entryWithLabelStrings(
+  entry: TypedParamEntry,
+  fileBytes?: Uint8Array | null,
+): TypedParamEntry {
+  const labels = resolveArmsLabels(entry, fileBytes);
+  return {
+    ...entry,
+    actionLabel:
+      typeof entry.actionLabel === "string"
+        ? entry.actionLabel
+        : (labels.actionLabel ?? ""),
+    resourceLabel:
+      typeof entry.resourceLabel === "string"
+        ? entry.resourceLabel
+        : (labels.resourceLabel ?? ""),
+  };
+}
 
 export function ArmsPropertyPanel({
   entry,
   fieldSpecs,
+  fileBytes,
   onFieldChange,
 }: ArmsPropertyPanelProps) {
+  const displayEntry = useMemo(
+    () => entryWithLabelStrings(entry, fileBytes),
+    [entry, fileBytes],
+  );
+  const computedSections = useMemo(
+    () => buildArmsComputedSections(displayEntry),
+    [displayEntry],
+  );
+
   return (
-    <AutoPropertyPanel
-      entry={entry}
+    <GameAccuratePropertyPanel
+      entry={displayEntry}
       fieldSpecs={fieldSpecs}
       onFieldChange={onFieldChange}
-      groupOverrides={ARMS_GROUPS}
+      groups={ARMS_GROUPS}
+      computedSections={computedSections}
     />
   );
 }
