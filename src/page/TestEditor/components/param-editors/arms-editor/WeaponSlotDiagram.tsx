@@ -1,8 +1,7 @@
 import type { TypedParamEntry } from "../../param-editor/typedParamTypes";
 import {
-  BULLET_TYPE_LABELS,
-  RELOAD_TYPE_LABELS,
-  type ReloadType,
+  RELOAD_BEHAVIOR_TYPE_LABELS,
+  type ReloadBehaviorType,
 } from "@/lib/gameAlgorithms/reloadSystem";
 import {
   formatHashU32,
@@ -20,11 +19,11 @@ export function WeaponSlotDiagram({ entry }: WeaponSlotDiagramProps) {
   const flags = getArmsFlagChips(entry);
   const entryId =
     typeof entry.entryId === "number" ? (entry.entryId as number) : 0;
-  const reloadType = numField(entry, "reloadType");
-  const bulletType = numField(entry, "bulletType");
+  const reloadBehavior = numField(entry, "reloadBehaviorType");
+  const slotIndex = numField(entry, "slotIndex");
   const reloadLabel =
-    RELOAD_TYPE_LABELS[reloadType as ReloadType] ?? `Type ${reloadType}`;
-  const bulletLabel = BULLET_TYPE_LABELS[bulletType] ?? `Type ${bulletType}`;
+    RELOAD_BEHAVIOR_TYPE_LABELS[reloadBehavior as ReloadBehaviorType] ??
+    `Type ${reloadBehavior}`;
 
   return (
     <section className="rounded-lg border border-border/60 bg-card/80 p-4 shadow-[0_1px_0_0_rgba(255,255,255,0.03)_inset]">
@@ -39,10 +38,10 @@ export function WeaponSlotDiagram({ entry }: WeaponSlotDiagramProps) {
         </div>
         <div className="flex flex-wrap gap-1.5">
           <span className="rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 font-mono text-[9px] tabular-nums text-muted-foreground">
-            reload {reloadLabel}
+            slot {slotIndex}
           </span>
           <span className="rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 font-mono text-[9px] tabular-nums text-muted-foreground">
-            bullet {bulletLabel}
+            reload {reloadLabel}
           </span>
         </div>
       </header>

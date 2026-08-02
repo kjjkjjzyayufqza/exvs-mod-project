@@ -3,74 +3,74 @@ import { describe, expect, it } from "vitest";
 import type { TypedParamEntry } from "../../param-editor/typedParamTypes";
 import { ActionReloadTimelinePanel } from "./ActionReloadTimelinePanel";
 
+function entry(overrides: TypedParamEntry = {}): TypedParamEntry {
+  return {
+    ammoCount: 8,
+    initialAmmoCount: 0,
+    slotIndex: 2,
+    behaviorFlags: 6,
+    reloadBehaviorType: 2,
+    reloadGroupBEnabled: 1,
+    chargeInputFlags: 1,
+    chargeStageCount: 3,
+    chargeAccumulateDurationDefaultFrame: 180,
+    chargeAccumulateDurationBaseFrame: 120,
+    chargeAccumulateDurationMode1Scale: 0.5,
+    chargeAccumulateDurationMode2Scale: 1,
+    chargeAccumulateDurationMode3Scale: 1.5,
+    chargeAccumulateDurationMode4Scale: 2,
+    chargeAccumulateDurationMode5Scale: 2.5,
+    chargeDecayDurationDefaultFrame: 60,
+    chargeDecayDurationBaseFrame: 60,
+    chargeDecayDurationMode1Scale: 0.5,
+    chargeDecayDurationMode2Scale: 1,
+    chargeDecayDurationMode3Scale: 1.5,
+    chargeDecayDurationMode4Scale: 2,
+    chargeDecayDurationMode5Scale: 2.5,
+    reloadAuxGroupA: 0,
+    reloadDurationGroupADefault: 180,
+    reloadDurationGroupAMode1: 181,
+    reloadDurationGroupAMode2: 182,
+    reloadDurationGroupAMode3: 183,
+    reloadDurationGroupAMode4: 184,
+    reloadDurationGroupAMode5: 185,
+    reloadAuxGroupB: 0,
+    reloadDurationGroupBDefault: 270,
+    reloadDurationGroupBMode1: 271,
+    reloadDurationGroupBMode2: 272,
+    reloadDurationGroupBMode3: 273,
+    reloadDurationGroupBMode4: 274,
+    reloadDurationGroupBMode5: 275,
+    ...overrides,
+  };
+}
+
 describe("ActionReloadTimelinePanel", () => {
-  it("renders action phases and raw reload segments from the entry frames", () => {
-    const entry = {
-      startupFrame: 10,
-      activeFrame: 20,
-      recoveryFrame: 15,
-      cooldownFrame: 30,
-      totalDurationFrame: 75,
-      landingRecoveryFrame: 12,
-      ammoCount: 8,
-      reloadType: 2,
-      reloadTimeTotal: 40,
-      reloadPerShotFrame: 180,
-      overheatFrame: 0,
-      chargeFrame: 0,
-      fullChargeFrame: 0,
-    } as TypedParamEntry;
+  it("renders native ammo, CSA stages, charge timing, and reload selectors", () => {
+    render(<ActionReloadTimelinePanel entry={entry()} />);
 
-    render(<ActionReloadTimelinePanel entry={entry} />);
-
-    expect(screen.getByText("Action Timeline")).toBeInTheDocument();
-    expect(screen.getByText("75f (1.25s)")).toBeInTheDocument();
-    expect(screen.getByText("Startup:")).toBeInTheDocument();
-    expect(screen.getByText("Cooldown:")).toBeInTheDocument();
-
-    expect(screen.getByText("Raw Reload Timeline")).toBeInTheDocument();
-    expect(screen.getByText("0x103171AE:")).toBeInTheDocument();
-    expect(screen.getByText("0xA502BCF2:")).toBeInTheDocument();
-    expect(screen.getByText("180f")).toBeInTheDocument();
-
-    expect(screen.getByText("Type 2 (unverified)")).toBeInTheDocument();
-    expect(screen.getByText("12f")).toBeInTheDocument();
+    expect(screen.getByText("Capacity / initial")).toBeInTheDocument();
+    expect(screen.getByText("8 / 0")).toBeInTheDocument();
+    expect(screen.getByText("Native slot")).toBeInTheDocument();
+    expect(screen.getByText("Type 2 (step refill)")).toBeInTheDocument();
+    expect(screen.getByText("CSA (shooting CS)")).toBeInTheDocument();
+    expect(screen.getByText("Charge stages and timing")).toBeInTheDocument();
+    expect(screen.getByText("Charge / stage")).toBeInTheDocument();
+    expect(screen.getByText("Charge to max")).toBeInTheDocument();
+    expect(screen.getAllByText("default")).toHaveLength(2);
+    expect(screen.getAllByText("mode 5")).toHaveLength(2);
+    expect(screen.getAllByText("180f (3.00s)").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("540f (9.00s)").length).toBeGreaterThan(0);
+    expect(screen.getByText("270f (4.50s)")).toBeInTheDocument();
   });
 
-  it("shows an explicit empty state when no reload frame fields are set", () => {
-    const entry = {
-      startupFrame: 5,
-      activeFrame: 5,
-      recoveryFrame: 5,
-      cooldownFrame: 5,
-      reloadType: 0,
-      reloadTimeTotal: 0,
-      reloadPerShotFrame: 0,
-      overheatFrame: 0,
-      chargeFrame: 0,
-    } as TypedParamEntry;
-
-    render(<ActionReloadTimelinePanel entry={entry} />);
+  it("labels reload behavior values outside the native 0-5 switch", () => {
+    render(
+      <ActionReloadTimelinePanel entry={entry({ reloadBehaviorType: 9 })} />,
+    );
 
     expect(
-      screen.getByText("Raw Reload Timeline: no timeline data"),
-    ).toBeInTheDocument();
-  });
-
-  it("labels reload types outside the known 0-3 range explicitly", () => {
-    const entry = {
-      startupFrame: 1,
-      activeFrame: 1,
-      recoveryFrame: 1,
-      cooldownFrame: 1,
-      reloadType: 9,
-      reloadTimeTotal: 30,
-    } as TypedParamEntry;
-
-    render(<ActionReloadTimelinePanel entry={entry} />);
-
-    expect(
-      screen.getByText("Type 9 (outside known 0-3 range)"),
+      screen.getByText("Type 9 (outside native 0-5 range)"),
     ).toBeInTheDocument();
   });
 });

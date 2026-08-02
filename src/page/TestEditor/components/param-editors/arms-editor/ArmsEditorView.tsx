@@ -31,6 +31,7 @@ import { AmmoTimeline } from "./AmmoTimeline";
 import { ActionReloadTimelinePanel } from "./ActionReloadTimelinePanel";
 import { useArmsEditorStore } from "./ArmsEditorStore";
 import { numField, resolveArmsLabels } from "./armsFieldModel";
+import { describeChargeInputFlags } from "@/lib/gameAlgorithms/chargeSystem";
 import type { TypedParamEntry, TypedParamFile } from "../../param-editor/typedParamTypes";
 import {
   applyHexBytesToTypedEntry,
@@ -76,8 +77,10 @@ function ArmsEntryLabel({
   fileBytes: Uint8Array | null;
 }) {
   const ammo = numField(row.entry, "ammoCount");
-  const damage = numField(row.entry, "damage");
-  const enabled = numField(row.entry, "isEnabled") !== 0;
+  const initialAmmo = numField(row.entry, "initialAmmoCount");
+  const slotIndex = numField(row.entry, "slotIndex");
+  const chargeInputFlags = numField(row.entry, "chargeInputFlags") >>> 0;
+  const chargeStageCount = numField(row.entry, "chargeStageCount");
   const labels = resolveArmsLabels(row.entry, fileBytes);
   const actionLabel = labels.actionLabel;
   const resourceLabel = labels.resourceLabel;
@@ -90,11 +93,6 @@ function ArmsEntryLabel({
         <span className="min-w-0 truncate font-mono text-[11px] font-semibold tabular-nums tracking-tight">
           {formatHash(row.entryId)}
         </span>
-        {!enabled && (
-          <span className="shrink-0 rounded border border-border/50 px-1 text-[8px] uppercase tracking-wide text-muted-foreground">
-            off
-          </span>
-        )}
       </div>
       {actionLabel || resourceLabel ? (
         <div className="min-w-0 space-y-0.5 overflow-hidden">
@@ -125,8 +123,13 @@ function ArmsEntryLabel({
         </div>
       )}
       <div className="flex gap-2 font-mono text-[9px] tabular-nums text-muted-foreground">
-        <span>ammo {ammo}</span>
-        <span>dmg {damage}</span>
+        <span>ammo {initialAmmo}/{ammo}</span>
+        <span>slot {slotIndex}</span>
+        {chargeInputFlags !== 0 ? (
+          <span>
+            {describeChargeInputFlags(chargeInputFlags)} ×{chargeStageCount}
+          </span>
+        ) : null}
       </div>
     </div>
   );
@@ -452,7 +455,8 @@ export function ArmsEditorView({
                 <p className="max-w-sm text-[11px] leading-relaxed text-muted-foreground">
                   Pick an <span className="font-mono">armsparam.bin</span> path,
                   then Load. Fields follow the Rust command pool
-                  (ammoCount, reloadType, action timing, kind-7 label offsets).
+                  (ammoCount, initialAmmoCount, CSA/CSB stages and timing, native
+                  reload groups, slotIndex, and kind-7 labels).
                 </p>
               </div>
             </div>

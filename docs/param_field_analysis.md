@@ -1,5 +1,10 @@
 # Param Field Analysis (Auto-generated)
 
+> **Value-distribution artifact only.** The `Inferred` column is historical
+> value-shape speculation, not semantic evidence, and must not be used to name
+> or edit fields. The dataset is not a version-pinned OB corpus. Current truth
+> lives in the Rust pools and `docs/param-evidence-registry.tsv`.
+
 Generated from VS2 x64 041cpm data (30 character files per family)
 
 ## arms_param (cmd=48, entry_size from first file)

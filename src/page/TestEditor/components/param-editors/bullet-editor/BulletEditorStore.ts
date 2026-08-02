@@ -7,7 +7,6 @@ import { DEFAULT_BULLET_PREVIEW_SCENARIO, DEFAULT_BULLET_PREVIEW_VISUALIZATION }
 import type { ValidationMessage } from "../shared/types";
 import type { ParamKind } from "@/lib/gameAlgorithms/crossParamResolver";
 import {
-  simulateShootingLoop,
   type ShootingLoopResult,
 } from "@/lib/gameAlgorithms/shootingLoop";
 import { validateBulletEntry } from "./bulletValidation";
@@ -89,8 +88,8 @@ function recompute(
   data: TypedParamFile | null,
   index: number,
   scenario: BulletPreviewScenario,
-  armsData: TypedParamFile | null,
-  armsIndex: number,
+  _armsData: TypedParamFile | null,
+  _armsIndex: number,
 ) {
   if (!data || !data.entries[index]) {
     return {
@@ -100,17 +99,11 @@ function recompute(
     };
   }
   const entry = data.entries[index];
-  const armsEntry = armsData?.entries[armsIndex];
-  const shootingLoopResult = armsEntry
-    ? simulateShootingLoop({
-        armsEntry,
-        bulletEntry: entry,
-        scenario,
-        simulateTrajectory,
-      })
-    : null;
-  const trajectory = shootingLoopResult?.shots[0]?.trajectory
-    ?? simulateTrajectory(entry, scenario);
+  // Native armsparam analysis disproved the former startup/active/recovery and
+  // bulletCountPerShot labels. Keep trajectory preview, but do not fabricate an
+  // arms-driven shooting loop until those fields have native consumers.
+  const shootingLoopResult = null;
+  const trajectory = simulateTrajectory(entry, scenario);
   const validationMessages = validateBulletEntry(entry);
   return { trajectory, shootingLoopResult, validationMessages };
 }

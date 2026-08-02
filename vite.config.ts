@@ -14,7 +14,7 @@ export default defineConfig(async () => ({
   // 2. tauri expects a fixed port, fail if that port is not available.
   // Avoid 3000: Windows often reserves 2951-3050 (excludedportrange) → EACCES.
   server: {
-    port: 5173,
+    port: 6531,
     strictPort: true,
     // Don't watch the Rust crate / build artifacts — avoids needless dev-server
     // churn and full reloads triggered by cargo writing into src-tauri/target.

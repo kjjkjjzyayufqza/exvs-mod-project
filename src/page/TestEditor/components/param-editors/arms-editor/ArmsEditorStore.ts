@@ -69,63 +69,108 @@ function validateArmsEntry(
   fileBytes?: Uint8Array | null,
 ): ValidationMessage[] {
   const messages: ValidationMessage[] = [];
-  const ammo = numField(entry, "ammoCount");
-  const enabled = numField(entry, "isEnabled");
-  const reloadType = numField(entry, "reloadType");
-  const landing = numField(entry, "landingBehaviorType");
+  const capacity = numField(entry, "ammoCount");
+  const initial = numField(entry, "initialAmmoCount");
+  const slotIndex = numField(entry, "slotIndex");
+  const reloadBehaviorType = numField(entry, "reloadBehaviorType");
+  const chargeInputFlags = numField(entry, "chargeInputFlags") >>> 0;
+  const chargeStageCount = numField(entry, "chargeStageCount");
+  const chargeDuration = numField(
+    entry,
+    "chargeAccumulateDurationDefaultFrame",
+  );
+  const chargeDecayDuration = numField(
+    entry,
+    "chargeDecayDurationDefaultFrame",
+  );
   const labels = resolveArmsLabels(entry, fileBytes);
 
-  if (enabled === 0) {
+  if (capacity < 0 || initial < 0) {
     messages.push({
-      field: "isEnabled",
-      level: "info",
-      message: "isEnabled is 0 (entry disabled in schema)",
+      field: capacity < 0 ? "ammoCount" : "initialAmmoCount",
+      level: "error",
+      message: "Ammo capacity and initial count must be non-negative",
     });
   }
-  if (ammo === 0 && enabled !== 0) {
+  if (capacity < 1000 && initial > capacity) {
     messages.push({
-      field: "ammoCount",
+      field: "initialAmmoCount",
       level: "warning",
-      message: "ammoCount is 0 while entry is enabled",
+      message: `Initial ammo (${initial}) exceeds capacity (${capacity})`,
     });
   }
-  if (reloadType < 0 || reloadType > 3) {
+  if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 8) {
     messages.push({
-      field: "reloadType",
+      field: "slotIndex",
       level: "warning",
-      message: `reloadType ${reloadType} is outside corpus enum 0–3`,
-    });
-  }
-  if (landing === 0) {
-    messages.push({
-      field: "landingBehaviorType",
-      level: "info",
-      message: "landingBehaviorType is 0 (corpus usually 1+)",
+      message: `Slot index ${slotIndex} is outside the native 0–8 binding range`,
     });
   }
   if (
-    enabled !== 0 &&
-    !labels.actionLabel &&
-    !labels.resourceLabel
+    !Number.isInteger(reloadBehaviorType) ||
+    reloadBehaviorType < 0 ||
+    reloadBehaviorType > 5
   ) {
+    messages.push({
+      field: "reloadBehaviorType",
+      level: "warning",
+      message: `Reload behavior ${reloadBehaviorType} is outside the native 0–5 switch`,
+    });
+  }
+  if ((chargeInputFlags & ~0xf) !== 0) {
+    messages.push({
+      field: "chargeInputFlags",
+      level: "warning",
+      message: `Charge input flags 0x${chargeInputFlags.toString(16).toUpperCase()} contain bits outside the native 0x1–0x8 mask`,
+    });
+  } else if ((chargeInputFlags & 0xc) !== 0) {
+    messages.push({
+      field: "chargeInputFlags",
+      level: "info",
+      message:
+        "Charge input bits 0x4/0x8 are native-supported, but their gameplay button names remain unresolved",
+    });
+  }
+  if (!Number.isInteger(chargeStageCount) || chargeStageCount < 0) {
+    messages.push({
+      field: "chargeStageCount",
+      level: "error",
+      message: "Charge stage count must be a non-negative integer",
+    });
+  } else if (chargeInputFlags !== 0 && chargeStageCount === 0) {
+    messages.push({
+      field: "chargeStageCount",
+      level: "warning",
+      message: "A charge input is configured, but the maximum stage count is zero",
+    });
+  } else if (chargeInputFlags === 0 && chargeStageCount > 0) {
+    messages.push({
+      field: "chargeInputFlags",
+      level: "warning",
+      message: "Charge stages are configured without an active charge input flag",
+    });
+  }
+  if (chargeDuration < 0 || chargeDecayDuration < 0) {
+    messages.push({
+      field:
+        chargeDuration < 0
+          ? "chargeAccumulateDurationDefaultFrame"
+          : "chargeDecayDurationDefaultFrame",
+      level: "error",
+      message: "Charge accumulation and decay durations must be non-negative",
+    });
+  } else if (chargeInputFlags !== 0 && chargeDuration === 0) {
+    messages.push({
+      field: "chargeAccumulateDurationDefaultFrame",
+      level: "warning",
+      message: "Default charge duration is zero, so the native default mode cannot advance",
+    });
+  }
+  if (!labels.actionLabel && !labels.resourceLabel) {
     messages.push({
       field: "actionLabel",
       level: "info",
-      message: "No action/resource labels on this enabled entry",
-    });
-  }
-
-  const totalDuration = numField(entry, "totalDurationFrame");
-  const phaseSum =
-    numField(entry, "startupFrame") +
-    numField(entry, "activeFrame") +
-    numField(entry, "recoveryFrame") +
-    numField(entry, "cooldownFrame");
-  if (totalDuration > 0 && phaseSum > 0 && totalDuration !== phaseSum) {
-    messages.push({
-      field: "totalDurationFrame",
-      level: "info",
-      message: `totalDurationFrame (${totalDuration}) ≠ phase sum (${phaseSum})`,
+      message: "No decoded action/resource labels on this entry",
     });
   }
 

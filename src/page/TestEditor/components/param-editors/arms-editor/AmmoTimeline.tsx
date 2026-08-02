@@ -1,6 +1,6 @@
 import type { TypedParamEntry } from "../../param-editor/typedParamTypes";
 import {
-  ARMS_RELOAD_SCHEMA_KEYS,
+  ARMS_NATIVE_SCHEMA_KEYS,
   buildArmsSchemaFieldRows,
 } from "./armsFieldModel";
 
@@ -9,22 +9,21 @@ interface AmmoTimelineProps {
 }
 
 /**
- * Evidence-oriented dump of reload/ammo schema fields.
- * Does not invent reload simulation — fixtures (RX-78 / Delta Plus) contradict
- * older enum-based UI claims.
+ * Evidence-oriented dump of native ammo, charge, and reload schema fields.
  */
 export function AmmoTimeline({ entry }: AmmoTimelineProps) {
-  const rows = buildArmsSchemaFieldRows(entry, [...ARMS_RELOAD_SCHEMA_KEYS]);
+  const rows = buildArmsSchemaFieldRows(entry, [...ARMS_NATIVE_SCHEMA_KEYS]);
 
   return (
     <section className="rounded-lg border border-border/60 bg-card/80 p-4 shadow-[0_1px_0_0_rgba(255,255,255,0.03)_inset]">
       <header className="mb-3 space-y-1">
         <h4 className="text-[11px] font-semibold tracking-wide text-muted-foreground">
-          Reload schema fields
+          Native ammo, charge, and reload fields
         </h4>
         <p className="max-w-prose text-[10px] leading-relaxed text-muted-foreground/80">
-          Raw values from ARMSPARAM_COMMAND_POOL. Reload type semantics are
-          unverified; compare hash columns with MSC consumers before retuning.
+          Canonical values from ARMSPARAM_COMMAND_POOL. Legacy names such as
+          downValue, shotType, cancelRouteType, and chargeFrame are compatibility
+          aliases only.
         </p>
       </header>
 

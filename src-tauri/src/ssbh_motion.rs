@@ -27,7 +27,6 @@ const MAX_BONE_COUNT: usize = 512;
 const MAX_CLIP_SAMPLED_FRAMES: usize = 1200;
 
 const NUANMB_RECURSE_MAX_DEPTH: usize = 16;
-const NUANMB_RECURSE_MAX_FILES: usize = 256;
 
 /// Parsed skel + anim kept in memory so playback does not re-read disk every frame.
 pub(crate) struct MotionSampleCache {
@@ -1237,7 +1236,7 @@ fn build_manifest(path: &Path, anim: &AnimData) -> NuanmbManifest {
     }
 }
 
-/// Lists `.nuanmb` files under a directory (recursive, capped).
+/// Lists `.nuanmb` files under a directory (recursive; no file-count cap, depth-capped only).
 #[tauri::command]
 pub fn ssbh_list_nuanmb_under_tree(root_path: String) -> Result<Vec<String>, String> {
     let t0 = Instant::now();
@@ -1246,7 +1245,7 @@ pub fn ssbh_list_nuanmb_under_tree(root_path: String) -> Result<Vec<String>, Str
         Path::new(&root_path.trim()),
         "nuanmb",
         NUANMB_RECURSE_MAX_DEPTH,
-        NUANMB_RECURSE_MAX_FILES,
+        None,
         dir_name_should_skip,
     )?;
     preview_log(&format!(

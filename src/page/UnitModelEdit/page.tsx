@@ -20,6 +20,7 @@ import {
   type DaeExportTarget,
 } from "@/page/SceneEdit/components/DaeExportDialog";
 import {
+  buildUnitModelDiskExportDialogState,
   buildUnitModelExportDialogState,
   exportUnitModelsAsFbx,
   filterUnitModelInstancesByLabel,
@@ -439,14 +440,34 @@ function UnitModelEditWorkspace({
 
   const openSingleModelExportDialog = useCallback(
     (modelLabel: string) => {
+      // Match by models/<folder> identity (structure / Model Manager), not only
+      // the preview displayLabel (.numdlb stem can differ after renames).
       const filtered = filterUnitModelInstancesByLabel(preview.previewInstances, modelLabel);
-      if (filtered.length === 0) {
-        toast.error(`Model "${modelLabel}" is not loaded in the preview`);
+      if (filtered.length > 0) {
+        openDaeExportDialogForInstances(filtered);
         return;
       }
-      openDaeExportDialogForInstances(filtered);
+
+      // Fallback: export from disk even when this model is not currently loaded
+      // in the 3D preview (e.g. load cap, failed mesh, or label/stem mismatch).
+      void (async () => {
+        const diskState = workspace.activeRoot
+          ? buildUnitModelDiskExportDialogState(workspace.activeRoot, modelLabel)
+          : null;
+        const diskPath = diskState?.targets[0]?.rootPath;
+        if (diskState && diskPath && (await exists(diskPath))) {
+          setDaeExportDialog({
+            open: true,
+            targets: diskState.targets,
+          });
+          return;
+        }
+        toast.error(
+          `Model "${modelLabel}" is not available for export (not in preview and no disk folder)`,
+        );
+      })();
     },
-    [openDaeExportDialogForInstances, preview.previewInstances],
+    [openDaeExportDialogForInstances, preview.previewInstances, workspace.activeRoot],
   );
 
   const handleDaeExport = useCallback(

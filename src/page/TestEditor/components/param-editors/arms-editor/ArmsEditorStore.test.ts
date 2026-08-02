@@ -10,8 +10,9 @@ function sampleFile(entries = 2): TypedParamFile {
     entries: Array.from({ length: entries }, (_, i) => ({
       entryId: 0x100 + i,
       ammoCount: 10 + i,
-      damage: 100,
-      isEnabled: 1,
+      initialAmmoCount: 10 + i,
+      slotIndex: i,
+      reloadBehaviorType: 2,
       actionLabel: `ACT_${i}`,
       resourceLabel: `RES_${i}`,
     })),
@@ -39,8 +40,9 @@ describe("ArmsEditorStore entry tooling", () => {
     store.replaceSelectedEntry({
       entryId: 0x101,
       ammoCount: 99,
-      damage: 1,
-      isEnabled: 1,
+      initialAmmoCount: 1,
+      slotIndex: 1,
+      reloadBehaviorType: 2,
       actionLabel: "IMPORTED",
       resourceLabel: "RES",
     });
@@ -58,8 +60,9 @@ describe("ArmsEditorStore entry tooling", () => {
     store.appendEntry({
       entryId: 0x999,
       ammoCount: 3,
-      damage: 50,
-      isEnabled: 1,
+      initialAmmoCount: 0,
+      slotIndex: 2,
+      reloadBehaviorType: 2,
       actionLabel: "COPY",
       resourceLabel: "",
     });
@@ -77,7 +80,7 @@ describe("ArmsEditorStore entry tooling", () => {
     store.setData(sampleFile(3), "arms.bin");
     store.updateField("ammoCount", 1);
     store.selectEntry(2);
-    store.updateField("damage", 7);
+    store.updateField("initialAmmoCount", 7);
     store.selectEntry(1);
     store.deleteSelectedEntry();
 
@@ -85,9 +88,55 @@ describe("ArmsEditorStore entry tooling", () => {
     expect(state.data?.entries).toHaveLength(2);
     expect(state.selectedIndex).toBe(1);
     expect(state.data?.entries[0]?.ammoCount).toBe(1);
-    expect(state.data?.entries[1]?.damage).toBe(7);
+    expect(state.data?.entries[1]?.initialAmmoCount).toBe(7);
     expect(state.dirtyEntryIndices.has(0)).toBe(true);
     expect(state.dirtyEntryIndices.has(1)).toBe(true);
     expect(state.dirtyEntryIndices.has(2)).toBe(false);
+  });
+
+  it("validates native ammo, slot, and reload behavior bounds", () => {
+    const store = useArmsEditorStore.getState();
+    store.setData(sampleFile(1), "arms.bin");
+    store.replaceSelectedEntry({
+      entryId: 0x100,
+      ammoCount: 4,
+      initialAmmoCount: 5,
+      slotIndex: 9,
+      reloadBehaviorType: 6,
+      actionLabel: "ACT",
+      resourceLabel: "RES",
+    });
+
+    const messages = useArmsEditorStore.getState().validationMessages;
+    expect(messages.map((message) => message.field)).toEqual([
+      "initialAmmoCount",
+      "slotIndex",
+      "reloadBehaviorType",
+    ]);
+  });
+
+  it("validates charge input flags, stages, and default timing", () => {
+    const store = useArmsEditorStore.getState();
+    store.setData(sampleFile(1), "arms.bin");
+    store.replaceSelectedEntry({
+      entryId: 0x100,
+      ammoCount: 1,
+      initialAmmoCount: 1,
+      slotIndex: 0,
+      reloadBehaviorType: 4,
+      chargeInputFlags: 0x11,
+      chargeStageCount: 0,
+      chargeAccumulateDurationDefaultFrame: 0,
+      chargeDecayDurationDefaultFrame: 60,
+      actionLabel: "CHARGE",
+      resourceLabel: "RES",
+    });
+
+    const fields = useArmsEditorStore
+      .getState()
+      .validationMessages.map((message) => message.field);
+    expect(fields).toContain("chargeInputFlags");
+    expect(fields).toContain("chargeStageCount");
+    expect(fields).toContain("chargeAccumulateDurationDefaultFrame");
   });
 });

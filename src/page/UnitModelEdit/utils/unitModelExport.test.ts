@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import type { SsbhModelPreviewInstance } from "@/components/ssbh-model-preview/types";
 import {
+  buildUnitModelDiskExportDialogState,
   buildUnitModelExportDialogState,
   filterUnitModelInstancesByLabel,
   getUnitModelExportCapabilities,
   isUnitModelInstanceFbxExportable,
   nextUniqueExportName,
+  resolveUnitModelDiskModelFolderPath,
+  resolveUnitModelFolderNameFromPath,
   resolveUnitModelInstanceLabel,
 } from "./unitModelExport";
 
@@ -20,14 +23,17 @@ function createInstance(
   } = {},
 ): SsbhModelPreviewInstance {
   const sourceKind = overrides.sourceKind ?? "disk";
-  const rootFolder = overrides.rootFolder ?? `E:/unit/models/${id}`;
+  // Default package identity is the models/<folder> name used by Model Manager.
+  const packageLabel = overrides.displayLabel ?? id;
+  const rootFolder = overrides.rootFolder ?? `E:/unit/models/${packageLabel}`;
+  const modlPath = overrides.modlPath ?? `${rootFolder}/body.numdlb`;
   return {
     id,
-    modlPath: overrides.modlPath ?? `${rootFolder}/body.numdlb`,
+    modlPath,
     displayLabel: overrides.displayLabel ?? id,
     bundle: {
       rootFolder,
-      modlPath: `${rootFolder}/body.numdlb`,
+      modlPath,
       meshPath: `${rootFolder}/body.numshb`,
       skelPath: null,
       matlPaths: [],
@@ -136,13 +142,52 @@ describe("getUnitModelExportCapabilities", () => {
   });
 });
 
+describe("resolveUnitModelFolderNameFromPath", () => {
+  it("extracts models/<folder> from a numdlb path", () => {
+    expect(
+      resolveUnitModelFolderNameFromPath(
+        "E:/unit/026gnbelt/models/015gndmuc_004deltpl_001_body_normal/026gnbelt_003delatkai_001.numdlb",
+      ),
+    ).toBe("015gndmuc_004deltpl_001_body_normal");
+  });
+
+  it("extracts models/<folder> from a model folder path", () => {
+    expect(
+      resolveUnitModelFolderNameFromPath(
+        "E:/unit/026gnbelt/models/015gndmuc_004deltpl_001_body_normal",
+      ),
+    ).toBe("015gndmuc_004deltpl_001_body_normal");
+  });
+});
+
 describe("filterUnitModelInstancesByLabel", () => {
-  it("matches instances by display label case-insensitively", () => {
+  it("matches instances by models folder identity case-insensitively", () => {
     const instances = [
-      createInstance("inst-a", { displayLabel: "Alpha" }),
-      createInstance("inst-b", { displayLabel: "Beta" }),
+      createInstance("inst-a", {
+        displayLabel: "Alpha",
+        rootFolder: "E:/unit/models/Alpha",
+      }),
+      createInstance("inst-b", {
+        displayLabel: "Beta",
+        rootFolder: "E:/unit/models/Beta",
+      }),
     ];
     expect(filterUnitModelInstancesByLabel(instances, "beta")).toEqual([instances[1]]);
+  });
+
+  it("matches Model Manager folder labels when displayLabel is a renamed numdlb stem", () => {
+    // Real unit packs often rename the .numdlb while keeping models/<folder> identity.
+    const inst = createInstance("inst-body", {
+      displayLabel: "026gnbelt_003delatkai_001",
+      rootFolder: "E:/unit/models/015gndmuc_004deltpl_001_body_normal",
+      modlPath:
+        "E:/unit/models/015gndmuc_004deltpl_001_body_normal/026gnbelt_003delatkai_001.numdlb",
+    });
+    expect(
+      filterUnitModelInstancesByLabel([inst], "015gndmuc_004deltpl_001_body_normal"),
+    ).toEqual([inst]);
+    // Secondary: still match by numdlb stem for inspector / legacy callers.
+    expect(filterUnitModelInstancesByLabel([inst], "026gnbelt_003delatkai_001")).toEqual([inst]);
   });
 
   it("falls back to root folder basename when display label is absent", () => {
@@ -155,14 +200,54 @@ describe("filterUnitModelInstancesByLabel", () => {
   });
 
   it("returns empty array when no instance matches", () => {
-    const instances = [createInstance("inst-a", { displayLabel: "Alpha" })];
+    const instances = [
+      createInstance("inst-a", {
+        displayLabel: "Alpha",
+        rootFolder: "E:/unit/models/Alpha",
+      }),
+    ];
     expect(filterUnitModelInstancesByLabel(instances, "Missing")).toEqual([]);
   });
 });
 
 describe("resolveUnitModelInstanceLabel", () => {
-  it("prefers displayLabel over root folder basename", () => {
-    const inst = createInstance("x", { displayLabel: "Custom", rootFolder: "E:/unit/models/body" });
-    expect(resolveUnitModelInstanceLabel(inst)).toBe("Custom");
+  it("prefers models/<folder> identity over numdlb stem displayLabel", () => {
+    const inst = createInstance("x", {
+      displayLabel: "026gnbelt_003delatkai_001",
+      rootFolder: "E:/unit/models/015gndmuc_004deltpl_001_body_normal",
+      modlPath:
+        "E:/unit/models/015gndmuc_004deltpl_001_body_normal/026gnbelt_003delatkai_001.numdlb",
+    });
+    expect(resolveUnitModelInstanceLabel(inst)).toBe("015gndmuc_004deltpl_001_body_normal");
+  });
+
+  it("uses parent folder of a loose .numdlb when path has no models segment", () => {
+    const inst = createInstance("x", {
+      displayLabel: "Custom",
+      rootFolder: "E:/loose/body",
+      modlPath: "E:/loose/body/body.numdlb",
+    });
+    expect(resolveUnitModelInstanceLabel(inst)).toBe("body");
+  });
+});
+
+describe("buildUnitModelDiskExportDialogState", () => {
+  it("builds a disk-backed export target under models/<label>", () => {
+    const state = buildUnitModelDiskExportDialogState(
+      "E:/unit/026gnbelt",
+      "015gndmuc_004deltpl_001_body_normal",
+    );
+    expect(state).not.toBeNull();
+    expect(state!.targets).toHaveLength(1);
+    expect(state!.targets[0]).toMatchObject({
+      name: "015gndmuc_004deltpl_001_body_normal",
+      rootPath: "E:/unit/026gnbelt/models/015gndmuc_004deltpl_001_body_normal",
+      type: "ssbh",
+    });
+  });
+
+  it("rejects path-like labels", () => {
+    expect(buildUnitModelDiskExportDialogState("E:/unit", "../escape")).toBeNull();
+    expect(resolveUnitModelDiskModelFolderPath("E:/unit", "a/b")).toBeNull();
   });
 });

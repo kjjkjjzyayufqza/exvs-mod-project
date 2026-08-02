@@ -58,36 +58,44 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x00EC483C, 5, "damage_calculation_multiplier_slot_4"), // [V:sub_140625060] helper supports selector 4; sole observed caller sub_140622010 only supplies slots 0-3
     (0x01F15731, 5, "hp_ratio_family_b_band_35_to_40"),
     (0x04371326, 2, "base_unit_cost"), // [V:sub_1405F9180] case 14/15/18 — base cost; case 18 also multiplied by character_list 0xCAE69E45
-    (0x07B8E157, 2, "ammo_count_main"),
-    (0x0804605C, 5, "down_value_rate"),
-    (0x080AF70C, 2, "boost_gauge_max"),
+    (0x07B8E157, 2, "burst_gauge_event_base_delta"), // [V:sub_14060E340] int -> float, optionally scaled by 0x1C936B77, then accumulated by sub_1405FA270
+    (
+        0x0804605C,
+        5,
+        "target_tracking_response_retention_multiplier",
+    ), // [V:sub_1406824F0 -> sub_140683070 object+0x6C; sub_140626D04] multiplies the previous three-axis response vector before new input is added
+    (0x080AF70C, 2, "unresolved_018"), // [V:OB sub_1406109E0/sub_140625740] first runtime integer-capacity family: config -> current reset, gradual recovery to config; exact gameplay identity remains open
     (0x08218288, 5, "hp_ratio_family_a_band_15_to_20"),
     (0x0872029D, 2, "sub_shot_cost"), // [V:sub_1405F9180] case 3
     (0x08A0ADE8, 5, "hp_ratio_family_b_band_00_to_05"),
     // [V:sub_1405F8600] selector 0; no direct mapping to a HUD color is proven.
     (0x08ECF0BE, 5, "lock_distance_threshold_family_1_slot_0"),
-    (0x0911077E, 2, "boost_recovery_speed"),
-    (0x0ACCE031, 5, "burst_s_mobility_multiplier"),
-    (0x0B25CB7F, 2, "unit_id_composite"),
+    (0x0911077E, 2, "unresolved_02c"), // [V:OB sub_1406109E0/sub_140625740] second runtime integer-state family: config -> current/snapshot reset with independent event timer; exact gameplay identity remains open
+    (0x0ACCE031, 5, "burst_mobility_multiplier_slot_1"),
+    (0x0B25CB7F, 2, "unit_numeric_id"), // [V:CharaParamData loader sub_1408ED7D0 -> object id field +0xF0; virtual getter sub_1408ED740] [D:1001001..3015001]
     (0x0F8134A7, 5, "lock_distance_threshold_family_1_slot_4"), // [V:sub_1405F8600] selector 4
-    (0x104DFF9D, 5, "burst_v_ranged_attack_multiplier"),
-    (0x1113F30E, 5, "model_scale"),
-    (0x14F89980, 5, "burst_s_melee_attack_multiplier"),
+    (0x104DFF9D, 5, "burst_ranged_attack_multiplier_slot_3"),
+    (0x1113F30E, 5, "unresolved_040"), // [V:sub_140634F00 -> runtime+0x94] member of a three-float runtime configuration tuple; also recomputed as base*external percentage; final identity open
+    (0x14F89980, 5, "burst_melee_attack_multiplier_slot_1"),
     (
         0x157CC9FE,
         5,
         "low_durability_incoming_damage_multiplier_band_05_to_10",
     ), // [V:sub_1405F8E70 -> sub_1405F9480] HP 5-10% band; value*0.01 multiplies incoming damage
     (0x15B67A85, 5, "collision_sphere_0_center_z"), // [V:data_141342D80 r0c3 -> sub_140628FD0]
-    (0x1698E3D8, 5, "body_collision_radius"), // [D:4.0,4.4,4.8,60.0] absent from the OB image; name is a data-shape inference, not a proven consumer
-    (0x18415DC4, 2, "is_transformable"),
-    (0x1B2228B5, 1, "unit_attribute_flags"),
+    (0x1698E3D8, 5, "unresolved_050"),              // [D:4.0,4.4,4.8,60.0] absent from the OB image
+    (0x18415DC4, 2, "runtime_progress_percentage_denominator"), // [V:sub_14068FFA0/sys_0(0xD000C)] runtime counter / field * 100, truncated to int
+    (0x1B2228B5, 1, "lock_band_cached_state_override_enabled"),
     (0x1B8808F8, 2, "reserved_05c"), // [D:0] constant across the sampled corpus and absent from the OB image; was "has_shield"
-    (0x1BB18A48, 5, "burst_f_mobility_multiplier"),
-    (0x1BFADFD3, 5, "lock_on_fov_angle"),
-    (0x1C936B77, 5, "down_value_threshold"),
-    (0x1D6EA3F1, 2, "assist_damage"), // [V:sub_1405F9010] case 6/7
-    (0x1E61CF9F, 5, "burst_c_incoming_damage_multiplier"), // [V:sub_1405F8D40 -> sub_1405F9480] active Burst type selector 2
+    (0x1BB18A48, 5, "burst_mobility_multiplier_slot_0"),
+    (0x1BFADFD3, 5, "lock_elevation_upper_limit_degrees"), // [V:pending OB revalidation] clamped to +89, converted to radians, rejects elevation above it
+    (0x1C936B77, 5, "burst_gauge_event_delta_multiplier"), // [V:sub_14060E340] multiplies 0x07B8E157 before the Burst-gauge accumulator call
+    (0x1D6EA3F1, 2, "assist_damage"),                      // [V:sub_1405F9010] case 6/7
+    (
+        0x1E61CF9F,
+        5,
+        "conditional_incoming_damage_multiplier_slot_2",
+    ), // [V:sub_1405F8D40 -> sub_1405F9480] selector slot 2 while state+0xC is 2 or 3
     (0x1EA3FAE1, 2, "burst_cost"),                         // [V:sub_1405F9180] case 9
     (0x21632B7A, 5, "hp_ratio_family_b_band_25_to_30"),
     (0x21E2041A, 5, "hp_ratio_family_a_band_10_to_15"),
@@ -96,24 +104,24 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x24FA2A04, 5, "collision_sphere_3_center_y"), // [V:data_141342D80 r3c2 -> sub_140628FD0]
     (0x25346DCD, 2, "reserved_flag_08c"),
     (0x25384033, 5, "collision_sphere_3_center_x"), // [V:data_141342D80 r3c1 -> sub_140628FD0]
-    (0x2698D841, 5, "damage_correction_base"),
+    (0x2698D841, 5, "unresolved_094"), // [V:sub_140634BD0 -> runtime+0x9C] third member of the same runtime tuple; no proven downstream scalar meaning
     (0x26BC945D, 5, "collision_sphere_3_center_z"), // [V:data_141342D80 r3c3 -> sub_140628FD0]
-    (0x27F7E08A, 5, "camera_pitch_down_angle"),
-    (0x283634C3, 5, "burst_v_mobility_multiplier"),
+    (0x27F7E08A, 5, "lock_elevation_lower_limit_degrees"), // [V:pending OB revalidation] clamped to -89, converted to radians, rejects elevation below it
+    (0x283634C3, 5, "burst_mobility_multiplier_slot_3"),
     (0x28B3FEC3, 5, "hp_ratio_family_a_band_45_to_50"),
     (0x2B99569A, 2, "self_hp_reduction_amount_slot_0"), // [V:data_14133F258 idx=0 -> sub_1405F8DF0 -> sub_1405F9480] HP -= value * burst * guts * ratio
     (0x2C6DC778, 5, "reserved_0ac"), // [D:0.8] constant across the sampled corpus and absent from the OB image; was "aerial_damage_rate"
     (0x2C8221E6, 2, "reserved_flag_0b0"),
     (0x2CF49283, 2, "self_hp_reduction_amount_slot_4"), // [V:data_14133F258 idx=4 -> sub_1405F9480]
     (0x2DA8874F, 2, "special_melee_damage"),            // [V:sub_1405F9010] case 11
-    (0x2DF82AD5, 5, "special_melee_correction_rate"),
+    (0x2DF82AD5, 5, "target_position_offset_default_y"), // [V:sub_1405FC010 -> sub_1405FB520] default local-space vector Y
     (0x30099C4D, 5, "target_position_offset_slot_0_z"), // [V:data_14134BD58 idx=2 -> sub_140690480] local-space Z of offset vector 0
     (0x324F2214, 5, "target_position_offset_slot_0_y"), // [V:data_14134BD58 idx=1 -> sub_140690480] local-space Y of offset vector 0
     (0x32F4D4BE, 2, "reserved_flag_0c8"),
     (0x333722B6, 2, "melee_damage"), // [V:sub_1405F9010] case 2/14
     (0x338D4823, 5, "target_position_offset_slot_0_x"), // [V:data_14134BD58 idx=0 -> sub_140690480] local-space X, sign-flipped when the mirror flag is set
-    (0x379D0C45, 5, "melee_tracking_angle"),
-    (0x38FDFC10, 5, "melee_bonus_rate"),
+    (0x379D0C45, 5, "unresolved_0d4"),
+    (0x38FDFC10, 5, "unit_position_query_local_offset_x"), // [V:sub_1406461D0 -> sub_1406423F0/sub_1406426C0/sub_140645860] X of a local vector transformed by the unit matrix and added to the queried world position
     (0x3AA41969, 5, "collision_sphere_0_radius"), // [V:data_141342D80 r0c0 -> sub_140628FD0; also sub_140639530 -> sub_1406394E0 radius normalisation]
     (0x3C1E9E3B, 2, "runtime_durability_upper_clamp"), // [V:sub_1405F8C60, sub_1405F9500]
     (0x3C43A0D1, 5, "collision_sphere_3_radius"), // [V:data_141342D80 r3c0 -> sub_140628FD0]
@@ -123,78 +131,90 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
         5,
         "low_durability_incoming_damage_multiplier_band_20_to_25",
     ), // [V:sub_1405F8E70 -> sub_1405F9480] HP 20-25% band
-    (0x3D302D72, 5, "burst_f_melee_attack_multiplier"),
+    (0x3D302D72, 5, "burst_melee_attack_multiplier_slot_0"),
     (0x3D501F3B, 2, "hp_regen_value"), // [V:sub_1405F9500] HP regen when a2!=0; adds to current HP, clamped to [0, hp_max]
     (0x3F29DFF4, 2, "reserved_flag_0f8"),
-    (0x432ADAA1, 5, "camera_offset_x"),
-    (0x43DC9679, 5, "burst_s_ranged_attack_multiplier"),
-    (0x45C84958, 2, "reserved_104"), // [D:1000] constant across the sampled corpus and absent from the OB image; was "respawn_invincibility_frame"
+    (0x432ADAA1, 5, "camera_vertical_height_correction"), // [V:sub_140640A20 -> sub_14063FD80] subtracted from the target-aware camera placement branch's vertical height baseline
+    (0x43DC9679, 5, "burst_ranged_attack_multiplier_slot_1"),
+    (0x45C84958, 2, "reserved_104"), // [D:1000,1200] absent from the OB image; was "respawn_invincibility_frame"
     (
         0x46E6927A,
         5,
         "low_durability_incoming_damage_multiplier_band_15_to_20",
     ), // [V:sub_1405F8E70 -> sub_1405F9480] HP 15-20% band
-    (0x4769F064, 5, "burst_v_melee_attack_multiplier"),
-    (0x4778AB75, 1, "movement_type"),
+    (0x4769F064, 5, "burst_melee_attack_multiplier_slot_3"),
+    (0x4778AB75, 1, "unresolved_110"),
     (0x4B4064B6, 5, "lock_distance_threshold_family_2_slot_1"), // [V:sub_1405F8720] selector 1
     (0x4B449047, 5, "collision_sphere_2_radius"), // [V:data_141342D80 r2c0 -> sub_140628FD0]
     (0x4CF8985A, 2, "reserved_flag_11c"),
     (0x4D2405E0, 2, "reserved_flag_120"),
-    (0x4FFACC86, 5, "camera_offset_z"),
+    (0x4FFACC86, 5, "unit_position_query_local_offset_y"), // [V:sub_140646290 -> same position-query vector consumers] Y component
     (0x5175F1DE, 5, "reserved_128"), // [D:0.0] constant across the sampled corpus and absent from the OB image; was "camera_offset_partner_x"
     (0x51BBA4CB, 5, "collision_sphere_2_center_z"), // [V:data_141342D80 r2c3 -> sub_140628FD0]
-    (0x51DD39F0, 5, "body_height"),
+    (0x51DD39F0, 5, "target_relative_camera_height_far"), // [V:sub_140640BA0 -> sub_140640230] far-distance Y value; blended from the near value over horizontal distance 0..130
     (0x52335D5B, 2, "reserved_flag_134"),
     (0x523F70A5, 5, "collision_sphere_2_center_x"), // [V:data_141342D80 r2c1 -> sub_140628FD0]
     (0x5245EE3E, 2, "self_hp_reduction_amount_slot_7"), // [V:data_14133F258 idx=7 -> sub_1405F9480]
     (0x539BC76D, 2, "charge_shot_damage"),          // [V:sub_1405F9010] case 10
     (0x53FD1A92, 5, "collision_sphere_2_center_y"), // [V:data_141342D80 r2c2 -> sub_140628FD0]
     (0x55E4FF75, 5, "lock_distance_threshold_family_1_default"), // [V:sub_1405F8600] default branch
-    (0x5AC06BD2, 5, "lock_on_range_min"),
+    (0x5AC06BD2, 5, "unresolved_14c"), // [V:sub_140646110 -> sub_140643A00/sub_140DC1300] generic selector-query scalar; second consumer exports value*1000; no proof of the legacy lock-range-min name
     (0x5B3AF66C, 5, "hp_ratio_family_b_band_30_to_35"),
     (0x5B851170, 2, "reserved_flag_154"),
     (0x5BBBD90C, 5, "hp_ratio_family_a_band_05_to_10"),
     (0x5BF3A215, 2, "self_hp_reduction_amount_slot_3"), // [V:data_14133F258 idx=3 -> sub_1405F9480]
     (0x5CE8D569, 2, "reserved_flag_160"),
     (0x5E0DDDD8, 2, "special_melee_cost"), // [V:sub_1405F9180] case 13
-    (0x6133A20B, 2, "special_reload_frame"), // [D:0,1000] absent from the OB image; name is a data-shape inference, not a proven consumer
+    (0x6133A20B, 2, "unresolved_168"),     // [D:0,1000] absent from the OB image
     (
         0x6674EE31,
         5,
         "low_durability_incoming_damage_multiplier_band_45_to_50",
     ), // [V:sub_1405F8E70 -> sub_1405F9480] HP 45-50% band
-    (0x6A14228B, 5, "burst_f_ranged_attack_multiplier"),
-    (0x6AF92610, 5, "burst_v_incoming_damage_multiplier"), // [V:sub_1405F8D40 -> sub_1405F9480] active Burst type selector 3
-    (0x6ED37B1F, 5, "burst_correction_base"),
+    (0x6A14228B, 5, "burst_ranged_attack_multiplier_slot_0"),
+    (
+        0x6AF92610,
+        5,
+        "conditional_incoming_damage_multiplier_slot_3",
+    ), // [V:sub_1405F8D40 -> sub_1405F9480] selector slot 3 while state+0xC is 2 or 3
+    (0x6ED37B1F, 5, "unresolved_178"), // [V:sub_1406395F0 -> sub_1406394E0] multiplies ((collisionSphereRadiusScale * sphere0Radius) / 7) * 10; final gameplay identity open
     (
         0x6F2514E8,
         5,
         "low_durability_incoming_damage_multiplier_band_10_to_15",
     ), // [V:sub_1405F8E70 -> sub_1405F9480] HP 10-15% band
-    (0x71D35821, 1, "burst_attribute_flags"),
-    (0x71D87C2C, 5, "burst_speed_multiplier"),
+    (0x71D35821, 1, "target_position_resolver_mode"), // [V:sub_1405FC230 -> sub_1405FC490] equality with 2 becomes the final boolean mode argument of sub_1405FB520
+    (0x71D87C2C, 5, "unresolved_184"),
     (0x72785F9E, 5, "hp_ratio_family_a_band_20_to_25"),
     (0x776BBBE9, 2, "burst_damage"), // [V:sub_1405F9010] case 9 — multiplied by correction rate at a1+20
     (0x78860431, 5, "lock_distance_threshold_family_1_slot_3"), // [V:sub_1405F8600] selector 3
-    (0x78C70D3F, 5, "hitbox_height"),
+    (0x78C70D3F, 5, "target_relative_camera_height_near"), // [V:sub_140640C60 -> sub_140640230] camera Y value at zero horizontal target distance
     (0x7B9D7024, 2, "reserved_flag_198"),
     (0x7BA88A27, 5, "hp_ratio_family_b_band_40_to_45"),
-    (0x7D1A0ACF, 2, "respawn_cost"),
+    (0x7D1A0ACF, 2, "unit_cost_value"), // [V:CharacterList sub_140532860/sub_1405345B0; runtime sub_14060AE50] exact 1500/2000/2500/3000 unit-cost filtering and cost-tier mapping
     // ---- cost dispatcher: sub_1405F9180 switch(attack_type) ----
     (0x8199A311, 2, "main_shot_cost"), // [V:sub_1405F9180] case 0
     (0x8248401F, 2, "hp_regen_value_default"), // [V:sub_1405F9500] HP regen when a2==0; paired with hp_regen_value
-    (0x82B967A9, 5, "walk_speed"),
-    (0x8381BE8A, 2, "team_cost_value"),
-    (0x85C483F0, 5, "burst_s_incoming_damage_multiplier"), // [V:sub_1405F8D40 -> sub_1405F9480] active Burst type selector 1
+    (
+        0x82B967A9,
+        5,
+        "target_relative_camera_height_high_elevation",
+    ), // [V:sub_140640E80 -> sub_140640230] height endpoint selected as the target elevation blend approaches its high-angle limit
+    (0x8381BE8A, 2, "unresolved_1b0"),
+    (
+        0x85C483F0,
+        5,
+        "conditional_incoming_damage_multiplier_slot_1",
+    ), // [V:sub_1405F8D40 -> sub_1405F9480] selector slot 1 while state+0xC is 2 or 3
     (0x86579C72, 5, "hp_ratio_family_b_band_45_to_50"),
     (0x8A902D5F, 5, "damage_calculation_multiplier_slot_0"), // [V:sub_140625060 <- sub_140622010] selected by hit-record slot 0 and multiplied into final damage
     (0x8CBF2B3F, 5, "collision_sphere_0_center_y"), // [V:data_141342D80 r0c2 -> sub_140628FD0]
     (0x8F0666AB, 5, "hp_ratio_family_b_band_10_to_15"),
     (0x8F8749CB, 5, "hp_ratio_family_a_band_25_to_30"),
     (0x904C7CF0, 2, "special_damage"), // [V:sub_1405F9010] case 3/15/18
-    (0x91CDEF2B, 5, "burst_r_mobility_multiplier"),
+    (0x91CDEF2B, 5, "burst_mobility_multiplier_slot_4"),
     (0x91E5A104, 5, "lock_distance_threshold_family_1_slot_1"), // [V:sub_1405F8600] selector 1
-    (0x9B20A527, 5, "sub_shot_correction_base"), // [D:0.0,1.0] absent from the OB image; name is a data-shape inference, not a proven consumer
+    (0x9B20A527, 5, "unresolved_1d8"), // [D:0.0,1.0] absent from the OB image
     (
         0x9B8BF864,
         5,
@@ -203,38 +223,42 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x9BED4726, 5, "damage_calculation_multiplier_slot_1"), // [V:sub_140625060 <- sub_140622010] selected by hit-record slot 1 and multiplied into final damage
     (0x9D8ADBDF, 2, "reserved_flag_1e4"),
     // User in-game 2026-07-11: 红锁距离 (with alert_range_distance). See docs/characterparam-field-notes.md.
-    (0xA223C183, 5, "lock_on_distance_max"), // [V:sub_1405F8720] a2=3
+    (0xA223C183, 5, "lock_distance_threshold_family_2_slot_3"), // [V:sub_1405F8720] selector 3
     (0xA60B0684, 1, "reserved_1ec"), // [D:0] constant across the sampled corpus and absent from the OB image; was "weapon_attribute_flags"
     (0xA644CF59, 5, "hp_ratio_family_a_band_00_to_05"),
     (0xA6C5E039, 5, "hp_ratio_family_b_band_15_to_20"),
-    (0xA6DC5C53, 5, "burst_damage_multiplier"),
-    (0xA83A8232, 5, "minimum_aim_angle"),
+    (0xA6DC5C53, 5, "unresolved_1f8"), // [V:sub_14060E340] replaces coefficient 1.0 when record flag 0x10000000 is set; written to event-state +0x30; no proof of damage semantics
+    (0xA83A8232, 5, "unresolved_1fc"),
     (0xA900CDF7, 5, "target_position_offset_slot_1_z"), // [V:data_14134BD58 idx=5 -> sub_140690480] was "aim_correction_offset_x"; the array proves this is the Z component
     (0xAA841999, 5, "target_position_offset_slot_1_x"), // [V:data_14134BD58 idx=3 -> sub_140690480] was "aim_correction_offset_y"; this is the mirrored X component
     (0xAB4673AE, 5, "target_position_offset_slot_1_y"), // [V:data_14134BD58 idx=4 -> sub_140690480] was "aim_correction_offset_z"; the array proves this is the Y component
     (0xAE7FF94F, 2, "sub_shot_cost_scaled"),            // [V:sub_1405F9180] case 4/5/12
-    (0xAEAC01A7, 2, "reserved_flag_210"),
+    (0xAEAC01A7, 2, "unresolved_210"), // [V:sub_1405D9260 <- sub_1405D6010] fetched for record indices 0 and 1; stored at owner +0x6908/+0x690C, downstream meaning open
     (0xAF153580, 5, "hp_ratio_family_a_band_35_to_40"),
     (0xB2900720, 2, "self_hp_reduction_amount_slot_1"), // [V:data_14133F258 idx=1 -> sub_1405F9480]
     (0xB2E6B445, 2, "reserved_flag_21c"),
-    (0xB3373BD9, 5, "burst_c_mobility_multiplier"),
-    (0xB4F17B6F, 5, "melee_lunge_offset"),
+    (0xB3373BD9, 5, "burst_mobility_multiplier_slot_2"),
+    (0xB4F17B6F, 5, "target_position_offset_default_z"), // [V:sub_1405FC010 -> sub_1405FB520] default local-space vector Z
     (0xB58B705C, 2, "reserved_flag_228"),
     (0xB5FDC339, 2, "self_hp_reduction_amount_slot_5"), // [V:data_14133F258 idx=5 -> sub_1405F9480]
     // Raw base maximum durability before the runtime scale/offset transform.
     // Verified across native consumers and OB-matched Gyan/Hyaku corpus. See docs/characterparam-field-notes.md.
     (0xB7D5327E, 2, "base_max_durability"),
     (0xB91793D4, 5, "damage_calculation_multiplier_slot_3"), // [V:sub_140625060 <- sub_140622010] selected by hit-record slot 3 and multiplied into final damage
-    (0xBA900811, 5, "burst_c_melee_attack_multiplier"),
+    (0xBA900811, 5, "burst_melee_attack_multiplier_slot_2"),
     // User in-game 2026-07-11: also 红锁距离 (with lock_on_distance_max). See docs/characterparam-field-notes.md.
-    (0xBAE8C388, 5, "alert_range_distance"), // [V:sub_1405F8720] default branch
+    (0xBAE8C388, 5, "lock_distance_threshold_family_2_default"), // [V:sub_1405F8720] default branch
     (
         0xBB19842F,
         5,
         "low_durability_incoming_damage_multiplier_band_30_to_35",
     ), // [V:sub_1405F8E70 -> sub_1405F9480] HP 30-35% band
-    (0xBC427D55, 5, "radar_display_scale"),
-    (0xBE256E0C, 5, "burst_r_ranged_attack_multiplier"),
+    (
+        0xBC427D55,
+        5,
+        "target_relative_camera_back_distance_high_elevation",
+    ), // [V:sub_140640D20 -> sub_140640230] backward-distance endpoint for the high target-elevation blend
+    (0xBE256E0C, 5, "burst_ranged_attack_multiplier_slot_4"),
     (0xBE8D97FB, 2, "reserved_flag_24c"),
     (
         0xC1405939,
@@ -243,38 +267,42 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     ), // [V:sub_1405F8E70 -> sub_1405F9480] HP 25-30% band
     (0xC28C40CA, 2, "reserved_flag_254"),
     (0xC2FAF3AF, 2, "self_hp_reduction_amount_slot_6"), // [V:data_14133F258 idx=6 -> sub_1405F9480]
-    (0xC3F64BF9, 5, "ammo_correction_offset"),
+    (0xC3F64BF9, 5, "target_position_offset_default_x"), // [V:sub_1405FC010] local-space X, sign-flipped by mirror bit
     (0xC4852F00, 2, "reserved_flag_260"),
     (0xC59737B6, 2, "self_hp_reduction_amount_slot_2"), // [V:data_14133F258 idx=2 -> sub_1405F9480]
     (0xC5E184D3, 2, "reserved_flag_268"),
     (0xC6A88D7F, 2, "charge_shot_cost"), // [V:sub_1405F9180] case 10
-    (0xC6E2AD28, 5, "charge_damage_multiplier"),
+    (0xC6E2AD28, 5, "unresolved_270"), // [V:sub_140634D00 -> runtime+0x98] tuple member also recomputed as base*external percentage; no proof of legacy charge-damage semantics
     (0xC8B2F571, 5, "collision_sphere_1_center_z"), // [V:data_141342D80 r1c3 -> sub_140628FD0]
     (0xCAF44B28, 5, "collision_sphere_1_center_y"), // [V:data_141342D80 r1c2 -> sub_140628FD0]
     (0xCB36211F, 5, "collision_sphere_1_center_x"), // [V:data_141342D80 r1c1 -> sub_140628FD0]
-    (0xD01D00DF, 5, "melee_lock_angle"),
+    (0xD01D00DF, 5, "unresolved_280"), // [V:sub_14060E340] divided by baseMaxDurability, multiplied by one type-0x29 event bucket, then accumulated into Burst state; dealt/received direction open
     // ---- range/radar distance dispatcher: sub_1405F8720 switch(category) ----
     (0xD249350C, 5, "lock_distance_threshold_family_2_slot_0"), // [V:sub_1405F8720] selector 0
     (0xD24DC1FD, 5, "collision_sphere_1_radius"), // [V:data_141342D80 r1c0 -> sub_140628FD0]
-    (0xD2D0C774, 5, "target_fov_pct"),
+    (0xD2D0C774, 5, "unresolved_28c"),
     (0xD524F115, 5, "lock_distance_threshold_family_2_slot_4"), // [V:sub_1405F8720] selector 4
     (0xD54CE896, 5, "hp_ratio_family_a_band_40_to_45"),
-    (0xD6F39D3C, 5, "radar_correction_offset"),
+    (0xD6F39D3C, 5, "unit_position_query_local_offset_z"), // [V:sub_140646350 -> same position-query vector consumers] Z component
     (0xD854F864, 5, "reserved_29c"), // [D:0.0] constant across the sampled corpus and absent from the OB image; was "radar_display_offset"
     (0xD8F4FBD2, 2, "melee_cost"),   // [V:sub_1405F9180] case 1
     (0xDC414338, 5, "target_position_offset_slot_2_y"), // [V:data_14134BD58 idx=7 -> sub_140690480]
     (0xDC9C3D2F, 5, "hp_ratio_family_b_band_20_to_25"),
     (0xDD83290F, 5, "target_position_offset_slot_2_x"), // [V:data_14134BD58 idx=6 -> sub_140690480] mirrored X component
     (0xDE07FD61, 5, "target_position_offset_slot_2_z"), // [V:data_14134BD58 idx=8 -> sub_140690480]
-    (0xDF888E8B, 2, "rotation_speed_degrees"), // [D:0,180] absent from the OB image; name is a data-shape inference, not a proven consumer
+    (0xDF888E8B, 2, "unresolved_2b4"),                  // [D:0,180] absent from the OB image
     (
         0xE1D22572,
         5,
         "low_durability_incoming_damage_multiplier_band_35_to_40",
     ), // [V:sub_1405F8E70 -> sub_1405F9480] HP 35-40% band
-    (0xE1D56972, 5, "melee_reach_distance"),
+    (
+        0xE1D56972,
+        5,
+        "target_relative_camera_back_distance_normal_elevation",
+    ), // [V:sub_140640AE0 -> sub_140640230] normal-elevation backward camera distance
     (0xE2C6FD16, 2, "sub_shot_damage"), // [V:sub_1405F9010] case 4/5/12 — multiplied by correction rate at a1+20
-    (0xE3E5D41D, 5, "down_value_per_hit"),
+    (0xE3E5D41D, 5, "unresolved_2c4"), // [V:sub_14060E340] linear coefficient for the other type-0x29 event bucket accumulated into Burst state; bucket direction open
     (0xE6213731, 7, "action_label_offset"),
     (0xE6E29192, 5, "lock_distance_threshold_family_1_slot_2"), // [V:sub_1405F8600] selector 2
     (
@@ -282,15 +310,23 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
         5,
         "low_durability_incoming_damage_multiplier_band_00_to_05",
     ), // [V:sub_1405F8E70 -> sub_1405F9480] HP 0-5% band
-    (0xE90161F5, 5, "burst_r_melee_attack_multiplier"),
-    (0xE9F462F6, 5, "damage_proration_rate"),
-    (0xEB1219A4, 2, "main_shot_damage"), // [V:sub_1405F9010] case 0/1
+    (0xE90161F5, 5, "burst_melee_attack_multiplier_slot_4"),
+    (0xE9F462F6, 5, "target_tracking_response_component_limit"), // [V:sub_1406825B0 -> sub_140683070 object+0x68; sub_140626D04] symmetric per-component clamp for the tracking response vector
+    (0xEB1219A4, 2, "main_shot_damage"),                         // [V:sub_1405F9010] case 0/1
     (0xECBC202D, 5, "reserved_2e4"), // [D:0.55] constant across the sampled corpus and absent from the OB image; was "combo_proration_rate"
-    (0xED170E69, 2, "reserved_flag_2e8"),
-    (0xEDB407E8, 5, "burst_c_ranged_attack_multiplier"),
-    (0xEE92BCAB, 5, "main_shot_damage_multiplier"),
-    (0xF15C6A7F, 5, "burst_r_incoming_damage_multiplier"), // [V:sub_1405F8D40 -> sub_1405F9480] active Burst type selector 4
-    (0xF25A5100, 5, "burst_f_incoming_damage_multiplier"), // [V:sub_1405F8D40 -> sub_1405F9480] active Burst type selector 0
+    (0xED170E69, 2, "state_lt_2_positive_accumulator_add_2e8"), // [V:sub_14060E340 -> sub_1405FA270] positive integer is accumulated while state+0xC < 2
+    (0xEDB407E8, 5, "burst_ranged_attack_multiplier_slot_2"),
+    (0xEE92BCAB, 5, "state_bit_0100_multiplier_2f0"), // [V:sub_14060E340] global/default record bit 0x100 gates multiplication into object+0x30
+    (
+        0xF15C6A7F,
+        5,
+        "conditional_incoming_damage_multiplier_slot_4",
+    ), // [V:sub_1405F8D40 -> sub_1405F9480] selector slot 4 while state+0xC is 2 or 3
+    (
+        0xF25A5100,
+        5,
+        "conditional_incoming_damage_multiplier_slot_0",
+    ), // [V:sub_1405F8D40 -> sub_1405F9480] selector slot 0 while state+0xC is 2 or 3
     (0xF3C4CAE9, 7, "resource_label_offset"),
     (0xF55FBBBD, 5, "hp_ratio_family_b_band_05_to_10"),
     (0xF5DE94DD, 5, "hp_ratio_family_a_band_30_to_35"),
@@ -305,6 +341,78 @@ pub fn characterparam_entry_to_json_value(entry: &CharacterParamEntry) -> Value 
 }
 
 const CHARACTERPARAM_LEGACY_KEY_ALIASES: &[(&str, &str)] = &[
+    ("unresolved058", "lockBandCachedStateOverrideEnabled"),
+    // Getter/table reachability alone does not prove the historical English
+    // labels. Preserve them as input aliases while canonical output remains
+    // neutral until downstream arithmetic closes each identity.
+    ("unresolved010", "burstGaugeEventBaseDelta"),
+    ("ammoCountMain", "burstGaugeEventBaseDelta"),
+    ("unresolved014", "targetTrackingResponseRetentionMultiplier"),
+    ("downValueRate", "targetTrackingResponseRetentionMultiplier"),
+    ("boostGaugeMax", "unresolved018"),
+    ("boostRecoverySpeed", "unresolved02c"),
+    ("unresolved034", "unitNumericId"),
+    ("unitIdComposite", "unitNumericId"),
+    ("modelScale", "unresolved040"),
+    ("unresolved054", "runtimeProgressPercentageDenominator"),
+    ("isTransformable", "runtimeProgressPercentageDenominator"),
+    ("unitAttributeFlags", "lockBandCachedStateOverrideEnabled"),
+    ("lockOnFovAngle", "lockElevationUpperLimitDegrees"),
+    ("unresolved068", "burstGaugeEventDeltaMultiplier"),
+    ("downValueThreshold", "burstGaugeEventDeltaMultiplier"),
+    ("damageCorrectionBase", "unresolved094"),
+    ("cameraPitchDownAngle", "lockElevationLowerLimitDegrees"),
+    ("specialMeleeCorrectionRate", "targetPositionOffsetDefaultY"),
+    ("unresolved0d8", "unitPositionQueryLocalOffsetX"),
+    ("meleeBonusRate", "unitPositionQueryLocalOffsetX"),
+    ("unresolved0fc", "cameraVerticalHeightCorrection"),
+    ("cameraOffsetX", "cameraVerticalHeightCorrection"),
+    ("unresolved124", "unitPositionQueryLocalOffsetY"),
+    ("cameraOffsetZ", "unitPositionQueryLocalOffsetY"),
+    ("unresolved130", "targetRelativeCameraHeightFar"),
+    ("bodyHeight", "targetRelativeCameraHeightFar"),
+    ("lockOnRangeMin", "unresolved14c"),
+    ("burstCorrectionBase", "unresolved178"),
+    ("unresolved180", "targetPositionResolverMode"),
+    ("burstAttributeFlags", "targetPositionResolverMode"),
+    ("unresolved194", "targetRelativeCameraHeightNear"),
+    ("hitboxHeight", "targetRelativeCameraHeightNear"),
+    ("unresolved1a0", "unitCostValue"),
+    ("respawnCost", "unitCostValue"),
+    ("unresolved1ac", "targetRelativeCameraHeightHighElevation"),
+    ("walkSpeed", "targetRelativeCameraHeightHighElevation"),
+    ("burstDamageMultiplier", "unresolved1f8"),
+    ("reservedFlag210", "unresolved210"),
+    ("meleeLungeOffset", "targetPositionOffsetDefaultZ"),
+    (
+        "unresolved244",
+        "targetRelativeCameraBackDistanceHighElevation",
+    ),
+    (
+        "radarDisplayScale",
+        "targetRelativeCameraBackDistanceHighElevation",
+    ),
+    ("ammoCorrectionOffset", "targetPositionOffsetDefaultX"),
+    ("chargeDamageMultiplier", "unresolved270"),
+    ("meleeLockAngle", "unresolved280"),
+    ("unresolved298", "unitPositionQueryLocalOffsetZ"),
+    ("radarCorrectionOffset", "unitPositionQueryLocalOffsetZ"),
+    (
+        "unresolved2bc",
+        "targetRelativeCameraBackDistanceNormalElevation",
+    ),
+    (
+        "meleeReachDistance",
+        "targetRelativeCameraBackDistanceNormalElevation",
+    ),
+    ("downValuePerHit", "unresolved2c4"),
+    ("unresolved2dc", "targetTrackingResponseComponentLimit"),
+    (
+        "damageProrationRate",
+        "targetTrackingResponseComponentLimit",
+    ),
+    ("reservedFlag2e8", "stateLt2PositiveAccumulatorAdd2e8"),
+    ("mainShotDamageMultiplier", "stateBit0100Multiplier2f0"),
     // The eight members of the static array at 0x14133F258 were named as reload
     // frames, charge times and counters. Their single native reader is
     // sub_1405F8DF0(base, idx<8), whose only consumer is sub_140682A30 case 8,
@@ -464,45 +572,54 @@ const CHARACTERPARAM_LEGACY_KEY_ALIASES: &[(&str, &str)] = &[
     ),
     (
         "rangedDamageCorrectionRate",
-        "burstFIncomingDamageMultiplier",
+        "conditionalIncomingDamageMultiplierSlot0",
     ),
-    ("subDamageCorrectionRate", "burstSIncomingDamageMultiplier"),
-    ("assistCorrectionRate", "burstCIncomingDamageMultiplier"),
-    ("specialCorrectionRate", "burstVIncomingDamageMultiplier"),
+    (
+        "subDamageCorrectionRate",
+        "conditionalIncomingDamageMultiplierSlot1",
+    ),
+    (
+        "assistCorrectionRate",
+        "conditionalIncomingDamageMultiplierSlot2",
+    ),
+    (
+        "specialCorrectionRate",
+        "conditionalIncomingDamageMultiplierSlot3",
+    ),
     (
         "meleeDamageCorrectionRate",
-        "burstRIncomingDamageMultiplier",
+        "conditionalIncomingDamageMultiplierSlot4",
     ),
     (
         "burstFBoostConsumptionMultiplier",
-        "burstFIncomingDamageMultiplier",
+        "conditionalIncomingDamageMultiplierSlot0",
     ),
     (
         "burstSBoostConsumptionMultiplier",
-        "burstSIncomingDamageMultiplier",
+        "conditionalIncomingDamageMultiplierSlot1",
     ),
     (
         "burstCBoostConsumptionMultiplier",
-        "burstCIncomingDamageMultiplier",
+        "conditionalIncomingDamageMultiplierSlot2",
     ),
     (
         "burstVBoostConsumptionMultiplier",
-        "burstVIncomingDamageMultiplier",
+        "conditionalIncomingDamageMultiplierSlot3",
     ),
     (
         "burstRBoostConsumptionMultiplier",
-        "burstRIncomingDamageMultiplier",
+        "conditionalIncomingDamageMultiplierSlot4",
     ),
-    ("dmgMultiplierTierE", "burstFMeleeAttackMultiplier"),
-    ("movementSpeedBase", "burstSMeleeAttackMultiplier"),
-    ("airDashSpeedBase", "burstCMeleeAttackMultiplier"),
-    ("dmgMultiplierTierG", "burstVMeleeAttackMultiplier"),
-    ("mainShotSpeedBase", "burstRMeleeAttackMultiplier"),
-    ("specialCorrectionBase", "burstFRangedAttackMultiplier"),
-    ("dmgMultiplierTierF", "burstSRangedAttackMultiplier"),
-    ("shotVelocityBase", "burstCRangedAttackMultiplier"),
-    ("dmgMultiplierTierB", "burstVRangedAttackMultiplier"),
-    ("dashSpeedBase", "burstRRangedAttackMultiplier"),
+    ("dmgMultiplierTierE", "burstMeleeAttackMultiplierSlot0"),
+    ("movementSpeedBase", "burstMeleeAttackMultiplierSlot1"),
+    ("airDashSpeedBase", "burstMeleeAttackMultiplierSlot2"),
+    ("dmgMultiplierTierG", "burstMeleeAttackMultiplierSlot3"),
+    ("mainShotSpeedBase", "burstMeleeAttackMultiplierSlot4"),
+    ("specialCorrectionBase", "burstRangedAttackMultiplierSlot0"),
+    ("dmgMultiplierTierF", "burstRangedAttackMultiplierSlot1"),
+    ("shotVelocityBase", "burstRangedAttackMultiplierSlot2"),
+    ("dmgMultiplierTierB", "burstRangedAttackMultiplierSlot3"),
+    ("dashSpeedBase", "burstRangedAttackMultiplierSlot4"),
     ("mainShotCorrectionRate", "damageCalculationMultiplierSlot0"),
     ("subShotCorrectionRate", "damageCalculationMultiplierSlot1"),
     ("boostDashSpeedRate", "damageCalculationMultiplierSlot2"),
@@ -528,11 +645,90 @@ const CHARACTERPARAM_LEGACY_KEY_ALIASES: &[(&str, &str)] = &[
         "burstRDefenseMultiplier",
         "damageCalculationMultiplierSlot4",
     ),
-    ("dmgMultiplierTierC", "burstFMobilityMultiplier"),
-    ("dmgMultiplierTierA", "burstSMobilityMultiplier"),
-    ("dmgMultiplierTierI", "burstCMobilityMultiplier"),
-    ("dmgMultiplierTierD", "burstVMobilityMultiplier"),
-    ("dmgMultiplierTierH", "burstRMobilityMultiplier"),
+    ("dmgMultiplierTierC", "burstMobilityMultiplierSlot0"),
+    ("dmgMultiplierTierA", "burstMobilityMultiplierSlot1"),
+    ("dmgMultiplierTierI", "burstMobilityMultiplierSlot2"),
+    ("dmgMultiplierTierD", "burstMobilityMultiplierSlot3"),
+    ("dmgMultiplierTierH", "burstMobilityMultiplierSlot4"),
+    // Canonical names retired by the 2026-08 evidence audit remain input-only
+    // aliases. Serialization emits the neutral slot/offset names above.
+    ("bodyCollisionRadius", "unresolved050"),
+    ("meleeTrackingAngle", "unresolved0d4"),
+    ("movementType", "unresolved110"),
+    ("specialReloadFrame", "unresolved168"),
+    ("burstSpeedMultiplier", "unresolved184"),
+    ("teamCostValue", "unresolved1b0"),
+    ("subShotCorrectionBase", "unresolved1d8"),
+    ("minimumAimAngle", "unresolved1fc"),
+    ("targetFovPct", "unresolved28c"),
+    ("rotationSpeedDegrees", "unresolved2b4"),
+    ("lockOnDistanceMax", "lockDistanceThresholdFamily2Slot3"),
+    ("alertRangeDistance", "lockDistanceThresholdFamily2Default"),
+    (
+        "burstFIncomingDamageMultiplier",
+        "conditionalIncomingDamageMultiplierSlot0",
+    ),
+    (
+        "burstSIncomingDamageMultiplier",
+        "conditionalIncomingDamageMultiplierSlot1",
+    ),
+    (
+        "burstCIncomingDamageMultiplier",
+        "conditionalIncomingDamageMultiplierSlot2",
+    ),
+    (
+        "burstVIncomingDamageMultiplier",
+        "conditionalIncomingDamageMultiplierSlot3",
+    ),
+    (
+        "burstRIncomingDamageMultiplier",
+        "conditionalIncomingDamageMultiplierSlot4",
+    ),
+    (
+        "burstFMeleeAttackMultiplier",
+        "burstMeleeAttackMultiplierSlot0",
+    ),
+    (
+        "burstSMeleeAttackMultiplier",
+        "burstMeleeAttackMultiplierSlot1",
+    ),
+    (
+        "burstCMeleeAttackMultiplier",
+        "burstMeleeAttackMultiplierSlot2",
+    ),
+    (
+        "burstVMeleeAttackMultiplier",
+        "burstMeleeAttackMultiplierSlot3",
+    ),
+    (
+        "burstRMeleeAttackMultiplier",
+        "burstMeleeAttackMultiplierSlot4",
+    ),
+    (
+        "burstFRangedAttackMultiplier",
+        "burstRangedAttackMultiplierSlot0",
+    ),
+    (
+        "burstSRangedAttackMultiplier",
+        "burstRangedAttackMultiplierSlot1",
+    ),
+    (
+        "burstCRangedAttackMultiplier",
+        "burstRangedAttackMultiplierSlot2",
+    ),
+    (
+        "burstVRangedAttackMultiplier",
+        "burstRangedAttackMultiplierSlot3",
+    ),
+    (
+        "burstRRangedAttackMultiplier",
+        "burstRangedAttackMultiplierSlot4",
+    ),
+    ("burstFMobilityMultiplier", "burstMobilityMultiplierSlot0"),
+    ("burstSMobilityMultiplier", "burstMobilityMultiplierSlot1"),
+    ("burstCMobilityMultiplier", "burstMobilityMultiplierSlot2"),
+    ("burstVMobilityMultiplier", "burstMobilityMultiplierSlot3"),
+    ("burstRMobilityMultiplier", "burstMobilityMultiplierSlot4"),
 ];
 
 pub fn characterparam_entry_from_json_value(v: &Value) -> Result<CharacterParamEntry, String> {
@@ -784,11 +980,13 @@ mod tests {
             }
 
             let output = characterparam_entry_to_json_value(first);
-            assert!(output.get("burstFIncomingDamageMultiplier").is_some());
-            assert!(output.get("burstFMeleeAttackMultiplier").is_some());
-            assert!(output.get("burstFRangedAttackMultiplier").is_some());
+            assert!(output
+                .get("conditionalIncomingDamageMultiplierSlot0")
+                .is_some());
+            assert!(output.get("burstMeleeAttackMultiplierSlot0").is_some());
+            assert!(output.get("burstRangedAttackMultiplierSlot0").is_some());
             assert!(output.get("damageCalculationMultiplierSlot0").is_some());
-            assert!(output.get("burstFMobilityMultiplier").is_some());
+            assert!(output.get("burstMobilityMultiplierSlot0").is_some());
             assert!(output.get("rangedDamageCorrectionRate").is_none());
             assert!(output.get("burstFBoostConsumptionMultiplier").is_none());
             assert!(output.get("burstFDefenseMultiplier").is_none());
@@ -987,74 +1185,78 @@ mod tests {
             (
                 0xF25A5100,
                 "rangedDamageCorrectionRate",
-                "burstFIncomingDamageMultiplier",
+                "conditionalIncomingDamageMultiplierSlot0",
             ),
             (
                 0x85C483F0,
                 "subDamageCorrectionRate",
-                "burstSIncomingDamageMultiplier",
+                "conditionalIncomingDamageMultiplierSlot1",
             ),
             (
                 0x1E61CF9F,
                 "assistCorrectionRate",
-                "burstCIncomingDamageMultiplier",
+                "conditionalIncomingDamageMultiplierSlot2",
             ),
             (
                 0x6AF92610,
                 "specialCorrectionRate",
-                "burstVIncomingDamageMultiplier",
+                "conditionalIncomingDamageMultiplierSlot3",
             ),
             (
                 0xF15C6A7F,
                 "meleeDamageCorrectionRate",
-                "burstRIncomingDamageMultiplier",
+                "conditionalIncomingDamageMultiplierSlot4",
             ),
             (
                 0x3D302D72,
                 "dmgMultiplierTierE",
-                "burstFMeleeAttackMultiplier",
+                "burstMeleeAttackMultiplierSlot0",
             ),
             (
                 0x14F89980,
                 "movementSpeedBase",
-                "burstSMeleeAttackMultiplier",
+                "burstMeleeAttackMultiplierSlot1",
             ),
             (
                 0xBA900811,
                 "airDashSpeedBase",
-                "burstCMeleeAttackMultiplier",
+                "burstMeleeAttackMultiplierSlot2",
             ),
             (
                 0x4769F064,
                 "dmgMultiplierTierG",
-                "burstVMeleeAttackMultiplier",
+                "burstMeleeAttackMultiplierSlot3",
             ),
             (
                 0xE90161F5,
                 "mainShotSpeedBase",
-                "burstRMeleeAttackMultiplier",
+                "burstMeleeAttackMultiplierSlot4",
             ),
             (
                 0x6A14228B,
                 "specialCorrectionBase",
-                "burstFRangedAttackMultiplier",
+                "burstRangedAttackMultiplierSlot0",
             ),
             (
                 0x43DC9679,
                 "dmgMultiplierTierF",
-                "burstSRangedAttackMultiplier",
+                "burstRangedAttackMultiplierSlot1",
             ),
             (
                 0xEDB407E8,
                 "shotVelocityBase",
-                "burstCRangedAttackMultiplier",
+                "burstRangedAttackMultiplierSlot2",
             ),
             (
                 0x104DFF9D,
                 "dmgMultiplierTierB",
-                "burstVRangedAttackMultiplier",
+                "burstRangedAttackMultiplierSlot3",
             ),
-            (0xBE256E0C, "dashSpeedBase", "burstRRangedAttackMultiplier"),
+            (
+                0xBE256E0C,
+                "dashSpeedBase",
+                "burstRangedAttackMultiplierSlot4",
+            ),
             (
                 0x8A902D5F,
                 "mainShotCorrectionRate",
@@ -1080,11 +1282,31 @@ mod tests {
                 "hpCorrectionRate",
                 "damageCalculationMultiplierSlot4",
             ),
-            (0x1BB18A48, "dmgMultiplierTierC", "burstFMobilityMultiplier"),
-            (0x0ACCE031, "dmgMultiplierTierA", "burstSMobilityMultiplier"),
-            (0xB3373BD9, "dmgMultiplierTierI", "burstCMobilityMultiplier"),
-            (0x283634C3, "dmgMultiplierTierD", "burstVMobilityMultiplier"),
-            (0x91CDEF2B, "dmgMultiplierTierH", "burstRMobilityMultiplier"),
+            (
+                0x1BB18A48,
+                "dmgMultiplierTierC",
+                "burstMobilityMultiplierSlot0",
+            ),
+            (
+                0x0ACCE031,
+                "dmgMultiplierTierA",
+                "burstMobilityMultiplierSlot1",
+            ),
+            (
+                0xB3373BD9,
+                "dmgMultiplierTierI",
+                "burstMobilityMultiplierSlot2",
+            ),
+            (
+                0x283634C3,
+                "dmgMultiplierTierD",
+                "burstMobilityMultiplierSlot3",
+            ),
+            (
+                0x91CDEF2B,
+                "dmgMultiplierTierH",
+                "burstMobilityMultiplierSlot4",
+            ),
         ];
 
         for (hash, legacy_key, canonical_key) in cases {

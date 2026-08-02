@@ -240,11 +240,14 @@ pub(crate) fn dir_name_should_skip(name: &str) -> bool {
 }
 
 /// Recursively collects files with extension `want_ext` under `root`, sorted lexicographically.
+///
+/// `max_files`: `Some(n)` caps the result at `n` paths; `None` returns every match under the
+/// depth limit (needed for full unit motion packs that often exceed a few hundred `.nuanmb`).
 pub(crate) fn collect_paths_recursive(
     root: &Path,
     want_ext: &str,
     max_depth: usize,
-    max_files: usize,
+    max_files: Option<usize>,
     skip_dir: fn(&str) -> bool,
 ) -> Result<Vec<PathBuf>, String> {
     let t0 = Instant::now();
@@ -254,6 +257,8 @@ pub(crate) fn collect_paths_recursive(
         want_ext,
         max_depth,
         max_files
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "unlimited".to_string())
     ));
     let root_canon = fs::canonicalize(root)
         .map_err(|e| format!("Failed to canonicalize {}: {e}", root.display()))?;
@@ -265,17 +270,21 @@ pub(crate) fn collect_paths_recursive(
     let mut visited_dirs: HashSet<PathBuf> = HashSet::new();
     let want = want_ext.to_ascii_lowercase();
 
+    fn at_file_cap(out_len: usize, max_files: Option<usize>) -> bool {
+        max_files.is_some_and(|cap| out_len >= cap)
+    }
+
     fn walk(
         dir: &Path,
         depth: usize,
         max_depth: usize,
-        max_files: usize,
+        max_files: Option<usize>,
         want_ext_lc: &str,
         out: &mut Vec<PathBuf>,
         visited_dirs: &mut HashSet<PathBuf>,
         skip_dir: fn(&str) -> bool,
     ) -> Result<(), String> {
-        if out.len() >= max_files {
+        if at_file_cap(out.len(), max_files) {
             return Ok(());
         }
         if depth > max_depth {
@@ -297,7 +306,7 @@ pub(crate) fn collect_paths_recursive(
         entries.sort_by_key(|e| e.file_name());
 
         for ent in entries {
-            if out.len() >= max_files {
+            if at_file_cap(out.len(), max_files) {
                 break;
             }
             let p = ent.path();
@@ -376,7 +385,13 @@ fn collect_numdlb_paths_recursive(
     max_depth: usize,
     max_files: usize,
 ) -> Result<Vec<PathBuf>, String> {
-    collect_paths_recursive(root, "numdlb", max_depth, max_files, dir_name_should_skip)
+    collect_paths_recursive(
+        root,
+        "numdlb",
+        max_depth,
+        Some(max_files),
+        dir_name_should_skip,
+    )
 }
 
 fn find_numdlb_in_dir(dir: &Path) -> Result<PathBuf, String> {

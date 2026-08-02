@@ -20,69 +20,132 @@ const KIND_STRING: u32 = 7;
 
 // Please keep comments for analysis.
 //
-// Data-verified against 432 arms_param files (1431 entries).
+// Data-verified against 432 arms_param files (1431 entries) and traced through
+// the OB v27 CArmsParamAccessor -> CArmsController native load/reset path.
 // Kind-7 label names intentionally match speedparam JSON (`actionLabel` /
 // `resourceLabel` decoded strings). Offsets remain on-disk; JSON prefers strings.
-// AI decision (2026-06-19): keep numeric JSON field names for compatibility only.
-// Delta Plus type 1 uses script-driven manual reload, while RX-78-2 type 2 uses
-// field 0xA502BCF2=180 for a 3-second reload with 0xAB9AEF6C=0. The previous UI
-// enum labels are therefore not native-confirmed semantics.
+// AI decision (2026-08-01): retain semantic names only where a native consumer
+// proves the role. The previous combat/action labels were correlations, not field
+// identities. Old JSON keys remain accepted through ARMSPARAM_LEGACY_KEY_ALIASES.
 pub const ARMSPARAM_COMMAND_POOL: ParamCommandPool = &[
-    (0x020A35DD, 1, "is_enabled"),         // [D:0~1] 237 disabled entries
-    (0x02D35F32, 1, "unk_04_reserved"),    // [D:0~1] only 8/1431 non-zero — purpose unknown
-    (0x0496C136, 1, "is_continuous_fire"), // [D:0~1]
-    (0x04A2CFD6, 2, "reload_start_frame"), // [D:0~2100] frame count
-    (0x103171AE, 2, "reload_time_total"),  // [D:0~2000] frame count
-    (0x11DEE0C8, 1, "reload_type"),        // [D:0~3] enum: 0=754, 1=431, 2=192, 3=54
-    (0x1348893F, 1, "charge_weapon_type"), // [D:0~3] enum: 0=none(248), 1=standard(1168), 2=rare(1), 3=special(14). was "is_charge_weapon"
-    (0x1E8E41EF, 1, "can_move_while_firing"), // [D:0~1] mostly 0 (1330/1431)
-    (0x31427CC3, 2, "homing_angle"),       // [D:0~360] degrees
-    (0x3A1D6254, 5, "induction_rate"),     // [D:0.0~1.0] float multiplier
-    (0x3BC65821, 5, "homing_start_rate"),  // [D:0.0~1.0] float multiplier
-    (0x3CAB9C38, 5, "homing_end_rate"),    // [D:0.0~1.0] float multiplier
-    (0x4961274C, 2, "ammo_count"),         // [D:0~1000] 38 unique values
-    (0x4A7796DB, 5, "damage_correction_rate"), // [D:0.0~1.0] float multiplier
-    (0x4BACACAE, 5, "down_correction_rate"), // [D:0.0~1.0] float multiplier
-    (0x4C527468, 2, "shot_type"),          // [D:0~3] enum, 4 types
-    (0x4C84F7C0, 2, "damage"),             // [D:0~3000] 64 unique
-    (0x4D1A52C2, 5, "stun_correction_rate"), // [D:0.0~1.0] float multiplier
-    (0x4E692ACD, 2, "down_value"),         // [D:0~1000] 36 unique
-    (0x596FC1C3, 1, "cancel_route_type"),  // [D:0~2] enum: 0=1038, 1=234, 2=159
-    (0x5B072B6C, 1, "is_vernier"),         // [D:0~1] most weapons are vernier (1107/1431)
-    (0x67364138, 2, "cooldown_frame"),     // [D:0~2000] frame count
-    (0x73A5FF40, 2, "startup_frame"),      // [D:0~2100] frame count
-    (0x74C83B59, 2, "active_frame"),       // [D:0~2100] frame count
-    (0x89382014, 2, "recovery_frame"),     // [D:0~2000] frame count
-    (0x8E55E40D, 2, "total_duration_frame"), // [D:0~2000] frame count
-    (0x9AC65A75, 2, "landing_recovery_frame"), // [D:0~2100] frame count
-    (0xA06CAAD5, 2, "stun_value"),         // [D:0~60] 7 unique, mostly 0
-    (0xA2CF099B, 5, "boost_consumption_rate"), // [D:0.0~2.0] float multiplier
-    (0xA353F222, 2, "range"),              // [D:0~720] weapon range, mostly 0 (melee?)
-    (0xA479F7F7, 5, "muzzle_correction_rate"), // [D:0.0~1.0] float multiplier
-    (0xA502BCF2, 2, "reload_per_shot_frame"), // [D:0~2400] frame count
-    (0xA635CFC2, 2, "reload_lock_frame"),  // [D:0~360] frame count
-    (0xAB9AEF6C, 2, "overheat_frame"),     // [D:0~6000] frame count (up to 100s)
-    (0xABC33F14, 2, "charge_frame"),       // [D:0~720] frame count
-    (0xAC243293, 1, "guard_break_type"),   // [D:0~4] enum: 0=146, 1=545, 2=685, 3=52, 4=3
-    (0xB669A42A, 1, "landing_behavior_type"), // [D:1~6] enum: 1=1317, 2=21, 4=73, 6=20. never 0
-    (0xB686E88C, 1, "is_super_armor"),     // [D:0~1] 294/1431 have super armor
-    (0xBB93D195, 1, "bullet_type"),        // [D:0~12] enum, 13 distinct bullet types
-    (0xD37EC761, 5, "tracking_speed_rate"), // [D:0.0~2.0] float multiplier
-    (0xD5C8390D, 5, "bullet_speed_rate"),  // [D:0.0~1.0] float multiplier
+    (0x020A35DD, 1, "field_020a35dd"),
+    (0x02D35F32, 1, "field_02d35f32"),
+    (0x0496C136, 1, "field_0496c136"),
+    (0x04A2CFD6, 2, "reload_duration_group_b_mode_4"),
+    (0x103171AE, 2, "reload_duration_group_a_mode_2"),
+    (0x11DEE0C8, 1, "field_11dee0c8"),
+    (0x1348893F, 1, "field_1348893f"),
+    (0x1E8E41EF, 1, "field_1e8e41ef"),
+    (0x31427CC3, 2, "charge_accumulate_duration_default_frame"),
+    (0x3A1D6254, 5, "charge_decay_duration_mode_4_scale"),
+    (0x3BC65821, 5, "charge_accumulate_duration_mode_1_scale"),
+    (0x3CAB9C38, 5, "charge_accumulate_duration_mode_5_scale"),
+    (0x4961274C, 2, "ammo_count"),
+    (0x4A7796DB, 5, "charge_decay_duration_mode_1_scale"),
+    (0x4BACACAE, 5, "charge_accumulate_duration_mode_4_scale"),
+    (0x4C527468, 2, "charge_stage_count"),
+    (0x4C84F7C0, 2, "reload_duration_group_b_default"),
+    (0x4D1A52C2, 5, "charge_decay_duration_mode_5_scale"),
+    (0x4E692ACD, 2, "initial_ammo_count"),
+    (0x596FC1C3, 1, "charge_input_flags"),
+    (0x5B072B6C, 1, "field_5b072b6c"),
+    (0x67364138, 2, "reload_duration_group_a_mode_3"),
+    (0x73A5FF40, 2, "reload_duration_group_b_mode_5"),
+    (0x74C83B59, 2, "reload_duration_group_b_mode_1"),
+    (0x89382014, 2, "reload_duration_group_a_mode_1"),
+    (0x8E55E40D, 2, "reload_duration_group_a_mode_5"),
+    (0x9AC65A75, 2, "reload_duration_group_b_mode_3"),
+    (0xA06CAAD5, 2, "field_a06caad5"),
+    (0xA2CF099B, 5, "charge_accumulate_duration_mode_2_scale"),
+    (0xA353F222, 2, "reload_aux_group_b"),
+    (0xA479F7F7, 5, "charge_decay_duration_mode_3_scale"),
+    (0xA502BCF2, 2, "reload_duration_group_a_default"),
+    (0xA635CFC2, 2, "charge_decay_duration_default_frame"),
+    (0xAB9AEF6C, 2, "slot_index"),
+    (0xABC33F14, 2, "reload_aux_group_a"),
+    (0xAC243293, 1, "reload_behavior_type"),
+    (0xB669A42A, 1, "behavior_flags"),
+    (0xB686E88C, 1, "reload_group_b_enabled"),
+    (0xBB93D195, 1, "field_bb93d195"),
+    (0xD37EC761, 5, "charge_decay_duration_mode_2_scale"),
+    (0xD5C8390D, 5, "charge_accumulate_duration_mode_3_scale"),
     // Decoded label strings under actionLabel / resourceLabel (same as speedparam).
     (0xE6213731, 7, "action_label"),
-    (0xEDC16AE3, 2, "ammo_reload_wait_frame"), // [D:0~2000] frame count
-    (0xEF3F41B3, 1, "hit_effect_type"),    // [D:0~10] enum: 7 unique (0-4, 9-10), gap at 5-8
+    (0xEDC16AE3, 2, "reload_duration_group_b_mode_2"),
+    (0xEF3F41B3, 1, "field_ef3f41b3"),
     (0xF3C4CAE9, 7, "resource_label"),
-    (0xF8AEEC77, 2, "bullet_count_per_shot"), // [D:0~210] 12 unique, 874 zeros
-    (0xF8E59F33, 2, "firing_interval_frame"), // [D:0~360] 15 unique, 874 zeros
-    (0xF952D49B, 2, "full_charge_frame"),  // [D:0~2000] frame count
+    (0xF8AEEC77, 2, "charge_accumulate_duration_base_frame"),
+    (0xF8E59F33, 2, "charge_decay_duration_base_frame"),
+    (0xF952D49B, 2, "reload_duration_group_a_mode_4"),
 ];
 
-/// Legacy JSON keys still accepted on load (offset-style names from older UI).
+/// Legacy JSON keys still accepted on load. These names are compatibility-only
+/// and must not be treated as semantic evidence.
 const ARMSPARAM_LEGACY_KEY_ALIASES: &[(&str, u32)] = &[
+    ("isEnabled", 0x020A35DD),
+    ("unk04Reserved", 0x02D35F32),
+    ("isContinuousFire", 0x0496C136),
+    ("reloadStartFrame", 0x04A2CFD6),
+    ("reloadTimeTotal", 0x103171AE),
+    ("reloadType", 0x11DEE0C8),
+    ("chargeWeaponType", 0x1348893F),
+    ("canMoveWhileFiring", 0x1E8E41EF),
+    ("homingAngle", 0x31427CC3),
+    ("inductionRate", 0x3A1D6254),
+    ("homingStartRate", 0x3BC65821),
+    ("homingEndRate", 0x3CAB9C38),
+    ("damageCorrectionRate", 0x4A7796DB),
+    ("downCorrectionRate", 0x4BACACAE),
+    ("shotType", 0x4C527468),
+    ("damage", 0x4C84F7C0),
+    ("stunCorrectionRate", 0x4D1A52C2),
+    ("downValue", 0x4E692ACD),
+    ("cancelRouteType", 0x596FC1C3),
+    ("isVernier", 0x5B072B6C),
+    ("cooldownFrame", 0x67364138),
+    ("startupFrame", 0x73A5FF40),
+    ("activeFrame", 0x74C83B59),
+    ("recoveryFrame", 0x89382014),
+    ("totalDurationFrame", 0x8E55E40D),
+    ("landingRecoveryFrame", 0x9AC65A75),
+    ("stunValue", 0xA06CAAD5),
+    ("boostConsumptionRate", 0xA2CF099B),
+    ("range", 0xA353F222),
+    ("muzzleCorrectionRate", 0xA479F7F7),
+    ("reloadPerShotFrame", 0xA502BCF2),
+    ("reloadLockFrame", 0xA635CFC2),
+    ("overheatFrame", 0xAB9AEF6C),
+    ("chargeFrame", 0xABC33F14),
+    ("guardBreakType", 0xAC243293),
+    ("landingBehaviorType", 0xB669A42A),
+    ("isSuperArmor", 0xB686E88C),
+    ("bulletType", 0xBB93D195),
+    ("trackingSpeedRate", 0xD37EC761),
+    ("bulletSpeedRate", 0xD5C8390D),
+    ("ammoReloadWaitFrame", 0xEDC16AE3),
+    ("hitEffectType", 0xEF3F41B3),
+    ("bulletCountPerShot", 0xF8AEEC77),
+    ("firingIntervalFrame", 0xF8E59F33),
+    ("fullChargeFrame", 0xF952D49B),
     ("actionLabelOffset", 0xE6213731),
     ("resourceLabelOffset", 0xF3C4CAE9),
+    // Superseded neutral names from the first native-consumer audit.
+    ("selectorValueADefault", 0x31427CC3),
+    ("selectorValueAScale1", 0x3BC65821),
+    ("selectorValueAScale2", 0xA2CF099B),
+    ("selectorValueAScale3", 0xD5C8390D),
+    ("selectorValueAScale4", 0x4BACACAE),
+    ("selectorValueAScale5", 0x3CAB9C38),
+    ("selectorValueABase", 0xF8AEEC77),
+    ("selectorValueBDefault", 0xA635CFC2),
+    ("selectorValueBScale1", 0x4A7796DB),
+    ("selectorValueBScale2", 0xD37EC761),
+    ("selectorValueBScale3", 0xA479F7F7),
+    ("selectorValueBScale4", 0x3A1D6254),
+    ("selectorValueBScale5", 0x4D1A52C2),
+    ("selectorValueBBase", 0xF8E59F33),
+    ("reloadType4IntervalFrame", 0x4C527468),
+    ("field596fc1c3", 0x596FC1C3),
 ];
 
 fn hash_and_kind_for_arms_key(key: &str) -> Option<(u32, u32)> {
@@ -579,6 +642,83 @@ mod tests {
         let deleted_parsed =
             parse_armsparam(&deleted_bytes).expect("failed to parse armsparam after delete");
         assert_eq!(deleted_parsed.entries.len(), parsed.entries.len());
+    }
+
+    #[test]
+    fn armsparam_serializes_native_names_and_accepts_legacy_aliases() {
+        let legacy = json!({
+            "entryId": 0x12345678u32,
+            "ammoCount": 8,
+            "downValue": 0,
+            "overheatFrame": 2,
+            "guardBreakType": 2,
+            "reloadType": 1,
+            "damage": 180,
+            "cancelRouteType": 1,
+            "shotType": 2,
+            "homingAngle": 180,
+            "reloadLockFrame": 60
+        });
+        let entry = armsparam_entry_from_json_value(&legacy).expect("parse legacy aliases");
+
+        assert_eq!(entry.commands.get(&0x4961274C), Some(&8));
+        assert_eq!(entry.commands.get(&0x4E692ACD), Some(&0));
+        assert_eq!(entry.commands.get(&0xAB9AEF6C), Some(&2));
+        assert_eq!(entry.commands.get(&0xAC243293), Some(&2));
+        assert_eq!(entry.commands.get(&0x11DEE0C8), Some(&1));
+        assert_eq!(entry.commands.get(&0x4C84F7C0), Some(&180));
+        assert_eq!(entry.commands.get(&0x596FC1C3), Some(&1));
+        assert_eq!(entry.commands.get(&0x4C527468), Some(&2));
+        assert_eq!(entry.commands.get(&0x31427CC3), Some(&180));
+        assert_eq!(entry.commands.get(&0xA635CFC2), Some(&60));
+
+        let canonical = armsparam_entry_to_json_value(&entry);
+        assert_eq!(canonical.get("ammoCount"), Some(&json!(8)));
+        assert_eq!(canonical.get("initialAmmoCount"), Some(&json!(0)));
+        assert_eq!(canonical.get("slotIndex"), Some(&json!(2)));
+        assert_eq!(canonical.get("reloadBehaviorType"), Some(&json!(2)));
+        assert_eq!(canonical.get("field11dee0c8"), Some(&json!(1)));
+        assert_eq!(canonical.get("chargeInputFlags"), Some(&json!(1)));
+        assert_eq!(canonical.get("chargeStageCount"), Some(&json!(2)));
+        assert_eq!(
+            canonical.get("chargeAccumulateDurationDefaultFrame"),
+            Some(&json!(180))
+        );
+        assert_eq!(
+            canonical.get("chargeDecayDurationDefaultFrame"),
+            Some(&json!(60))
+        );
+        assert_eq!(
+            canonical.get("reloadDurationGroupBDefault"),
+            Some(&json!(180))
+        );
+        assert!(canonical.get("downValue").is_none());
+        assert!(canonical.get("overheatFrame").is_none());
+        assert!(canonical.get("guardBreakType").is_none());
+        assert!(canonical.get("damage").is_none());
+
+        let interim = json!({
+            "entryId": 1,
+            "selectorValueABase": 90,
+            "selectorValueAScale2": 1.5,
+            "selectorValueBBase": 45,
+            "selectorValueBScale2": 0.5,
+            "reloadType4IntervalFrame": 3,
+            "field596fc1c3": 2
+        });
+        let interim_entry =
+            armsparam_entry_from_json_value(&interim).expect("parse interim aliases");
+        let interim_canonical = armsparam_entry_to_json_value(&interim_entry);
+        assert_eq!(
+            interim_canonical.get("chargeAccumulateDurationBaseFrame"),
+            Some(&json!(90))
+        );
+        assert_eq!(
+            interim_canonical.get("chargeDecayDurationBaseFrame"),
+            Some(&json!(45))
+        );
+        assert_eq!(interim_canonical.get("chargeStageCount"), Some(&json!(3)));
+        assert_eq!(interim_canonical.get("chargeInputFlags"), Some(&json!(2)));
     }
 
     #[test]
