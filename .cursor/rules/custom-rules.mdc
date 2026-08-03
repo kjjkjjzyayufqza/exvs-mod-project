@@ -16,6 +16,11 @@ Before making code, asset, documentation, or command changes:
 2. Search `docs/` for Markdown files related to the user's task.
 3. Read the relevant specifications before editing.
 
+When working on NUANMB / motion FBX import or homemade animation conversion,
+also read `docs/nuanmb-ath-helper-bone-policy.md`: **`ATH_*` helper bones must
+not be authored, edited, or converted** into custom motion files (omit whole
+Transform nodes; NUHLPB + rest only).
+
 Legacy per-topic note folders under `docs/` are a **separate, older workflow**
 (auxiliary reference only). Do not treat them as the primary task manager;
 do not create or update them unless the user explicitly requests it.

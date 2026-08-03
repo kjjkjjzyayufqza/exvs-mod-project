@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import {
+  addMotionFolderBundle,
   addMotionItemNode,
   copyMotionSourceToItem,
   deleteMotionNodeFiles,
@@ -21,6 +22,7 @@ import {
   type MotionItemNode,
   type MotionStructureNode,
 } from "@/services/motionFolder/motionFolderService";
+import type { AddMotionParams } from "./MotionFolderAddDialog";
 import {
   flattenMotionNodes,
   motionListItemKey,
@@ -284,25 +286,85 @@ export function useMotionFolderEditor({
   }, [applySelection]);
 
   const runAdd = useCallback(
-    async (params: { sourcePath: string; name: string; unk1: string; unk2: string; parentFolderId: string }) => {
+    async (params: AddMotionParams) => {
       if (!inventory) return;
       setBusyAction("add");
       try {
-        const result = addMotionItemNode({
-          nodes,
-          parentFolderId: params.parentFolderId,
-          sourcePath: params.sourcePath,
-          name: params.name,
-          unk1: params.unk1,
-          unk2: params.unk2,
+        let nextNodes: MotionStructureNode[];
+        let selectPathKey: string;
+        let selectName: string;
+        let selectKind: "item" | "folder";
+        let successMessage: string;
+
+        if (params.mode === "file") {
+          const result = addMotionItemNode({
+            nodes,
+            parentFolderId: params.parentFolderId,
+            sourcePath: params.sourcePath,
+            name: params.name,
+            unk1: params.unk1,
+            unk2: params.unk2,
+            rootName: inventory.rootName,
+            motionRoot: inventory.motionRoot,
+          });
+          await copyMotionSourceToItem(params.sourcePath, result.targetPath);
+          nextNodes = result.nodes;
+          selectPathKey = result.item.pathSegments.join("/");
+          selectName = result.item.name;
+          selectKind = "item";
+          successMessage = "Motion file added and structure JSON saved";
+        } else {
+          const result = addMotionFolderBundle({
+            nodes,
+            parentFolderId: params.parentFolderId,
+            folderName: params.folderName,
+            actionId: params.actionId,
+            unk3: params.unk3,
+            clips: params.clips,
+            rootName: inventory.rootName,
+            motionRoot: inventory.motionRoot,
+          });
+          for (const job of result.copyJobs) {
+            await copyMotionSourceToItem(job.sourcePath, job.targetPath);
+          }
+          nextNodes = result.nodes;
+          selectPathKey = result.folder.pathSegments.join("/");
+          selectName = result.folder.name;
+          selectKind = "folder";
+          successMessage = `Folder bundle added (${result.items.length} clips) and structure JSON saved`;
+        }
+
+        // Persist structure JSON so disk matches memory (files + sibling *_structure.json).
+        await saveMotionFolderStructure({
+          project: inventory.project,
+          nodes: nextNodes,
           rootName: inventory.rootName,
-          motionRoot: inventory.motionRoot,
+          structureJsonPath: inventory.structureJsonPath,
         });
-        await copyMotionSourceToItem(params.sourcePath, result.targetPath);
-        setNodes(result.nodes);
-        applySelection(new Set([result.item.id]), result.item.id);
-        markUnsaved();
-        toast.success("Motion file added");
+        // Re-read after serialize: fileIndex may be remapped for items.
+        const nextInventory = await inspectMotionFolder(inventory.motionRoot, inventory.structureJsonPath);
+        setLoadState({ status: "ready", inventory: nextInventory, pack });
+        setNodes(nextInventory.nodes);
+        setHasUnsavedChanges(false);
+
+        const added =
+          selectKind === "item"
+            ? (nextInventory.items.find(
+                (item) => item.name === selectName && item.pathSegments.join("/") === selectPathKey,
+              ) ?? null)
+            : (nextInventory.folders.find(
+                (folder) => folder.name === selectName && folder.pathSegments.join("/") === selectPathKey,
+              ) ?? null);
+        if (added) {
+          applySelection(new Set([added.id]), added.id);
+        } else {
+          applySelection(new Set(), null);
+        }
+        onPackMutated?.(pack);
+        if (workspaceRoot.trim()) {
+          void rememberMotionFolderPath(workspaceRoot, pack.folderPath);
+        }
+        toast.success(successMessage);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : String(error));
         throw error;
@@ -310,7 +372,7 @@ export function useMotionFolderEditor({
         setBusyAction(null);
       }
     },
-    [applySelection, inventory, markUnsaved, nodes],
+    [applySelection, inventory, nodes, onPackMutated, pack, workspaceRoot],
   );
 
   const runEdit = useCallback(async () => {

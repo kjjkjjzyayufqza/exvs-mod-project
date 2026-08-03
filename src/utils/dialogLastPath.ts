@@ -11,6 +11,7 @@ export const DialogLastPathKey = {
   ssbhPreviewOpenFhm2dMemory: "ssbhPreview.openFhm2dMemory",
   ssbhPreviewOpenNuanmb: "ssbhPreview.openNuanmb",
   ssbhPreviewOpenMotionFolder: "ssbhPreview.openMotionFolder",
+  ssbhPreviewOpenMotionFbx: "ssbhPreview.openMotionFbx",
   ssbhMotionFbxExport: "ssbhMotionFbx.export",
   ssbhMotionFbxImportOpen: "ssbhMotionFbx.importOpen",
   ssbhMotionFbxImportSave: "ssbhMotionFbx.importSave",

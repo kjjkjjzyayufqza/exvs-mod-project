@@ -17,6 +17,11 @@ autotests = false
 [features]
 default = []
 legacy-cli-tools = []
+# Heavy SSBH motion integration harnesses (FBX import/export/interchange).
+# Default `cargo test` only builds agent CLI suites. Opt in with:
+#   cargo test --features motion-tests
+#   cargo test --features motion-tests --test ssbh_motion_interchange_test
+motion-tests = []
 
 [lib]
 name = "app_lib"
@@ -24,6 +29,9 @@ name = "app_lib"
 # `staticlib`/`cdylib` crate types are only required for mobile (iOS/Android)
 # FFI — re-add them if a mobile target is introduced. Dropping them avoids
 # building/linking two unused artifacts on every build.
+#
+# `test = false` keeps the ~460 inline `#[cfg(test)]` unit tests out of
+# default `cargo test` (they still exist for targeted lib testing if re-enabled).
 crate-type = ["lib"]
 test = false
 doctest = false
@@ -118,6 +126,7 @@ path = "src/bin/unit_model_repack_roundtrip.rs"
 test = false
 required-features = ["legacy-cli-tools"]
 
+# Default `cargo test` suite (agent-facing CLIs only — keep this list short).
 [[test]]
 name = "exvs2_json_cli_test"
 path = "tests/exvs2_json_cli_test.rs"
@@ -126,17 +135,21 @@ path = "tests/exvs2_json_cli_test.rs"
 name = "fhm2d_extract_cli_test"
 path = "tests/fhm2d_extract_cli_test.rs"
 
+# Motion pipeline harnesses — require `--features motion-tests`.
 [[test]]
 name = "ssbh_motion_interchange_test"
 path = "tests/ssbh_motion_interchange_test.rs"
+required-features = ["motion-tests"]
 
 [[test]]
 name = "ssbh_motion_fbx_export_test"
 path = "tests/ssbh_motion_fbx_export_test.rs"
+required-features = ["motion-tests"]
 
 [[test]]
 name = "ssbh_motion_fbx_import_test"
 path = "tests/ssbh_motion_fbx_import_test.rs"
+required-features = ["motion-tests"]
 
 [build-dependencies]
 tauri-build = { version = "2.6.1", features = [] }
@@ -154,7 +167,8 @@ tauri-plugin-shell = "2"
 tauri-plugin-store = "2"
 notify = "8.2.0"
 tauri-plugin-opener = "2"
-tauri-plugin-mcp-bridge = "0.2"
+# 0.12+ supports base_port; default 9223 falls inside Windows Hyper-V excluded ranges on many machines (error 10013).
+tauri-plugin-mcp-bridge = "0.12"
 
 nutexb = { git = "https://github.com/kjjkjjzyayufqza/nutexb", features = ["ddsfile"] }
 ssbh_data = { git = "https://github.com/kjjkjjzyayufqza/ssbh_lib", branch = "wmmt2-merge", package = "ssbh_data", features = ["serde"] }
@@ -197,3 +211,113 @@ opt-level = 1
 codegen-units = 1
 lto = "thin"
 strip = true
+
+
+[[example]]
+name = "nuanmb_strip_extra_bones"
+path = "examples/nuanmb_strip_extra_bones.rs"
+
+[[example]]
+name = "nuanmb_diagnose_vs_skel"
+path = "examples/nuanmb_diagnose_vs_skel.rs"
+
+
+[[example]]
+name = "nuanmb_fix_koshi_mune"
+path = "examples/nuanmb_fix_koshi_mune.rs"
+
+
+[[example]]
+name = "nuanmb_reencode_only"
+path = "examples/nuanmb_reencode_only.rs"
+
+
+[[example]]
+name = "nuanmb_compare_two"
+path = "examples/nuanmb_compare_two.rs"
+
+
+[[example]]
+name = "nuanmb_pack_for_game"
+path = "examples/nuanmb_pack_for_game.rs"
+
+
+[[example]]
+name = "nuanmb_keep_18"
+path = "examples/nuanmb_keep_18.rs"
+
+
+[[example]]
+name = "nuanmb_forensic"
+path = "examples/nuanmb_forensic.rs"
+
+
+[[example]]
+name = "nuanmb_skel_chain"
+path = "examples/nuanmb_skel_chain.rs"
+
+
+[[example]]
+name = "nuanmb_fix_research"
+path = "examples/nuanmb_fix_research.rs"
+
+
+[[example]]
+name = "nuanmb_stockify_flags"
+path = "examples/nuanmb_stockify_flags.rs"
+
+
+[[example]]
+name = "nuanmb_sparse_uncompressed"
+path = "examples/nuanmb_sparse_uncompressed.rs"
+
+
+[[example]]
+name = "nuanmb_prop_layout"
+path = "examples/nuanmb_prop_layout.rs"
+
+
+[[example]]
+name = "nuanmb_dump_props"
+path = "examples/nuanmb_dump_props.rs"
+
+
+[[example]]
+name = "nuanmb_static_check"
+path = "examples/nuanmb_static_check.rs"
+
+
+[[example]]
+name = "nuanmb_hold_stock"
+path = "examples/nuanmb_hold_stock.rs"
+
+
+[[example]]
+name = "nuanmb_exp_vis_only"
+path = "examples/nuanmb_exp_vis_only.rs"
+
+
+[[example]]
+name = "nuanmb_exp_no_translate"
+path = "examples/nuanmb_exp_no_translate.rs"
+
+
+[[example]]
+name = "nuanmb_sim_import"
+path = "examples/nuanmb_sim_import.rs"
+
+
+[[example]]
+name = "nuanmb_fix_csa_shot"
+path = "examples/nuanmb_fix_csa_shot.rs"
+
+
+[[example]]
+name = "nuanmb_hdr_census"
+path = "examples/nuanmb_hdr_census.rs"
+
+
+[[example]]
+name = "nuanmb_dump_rot_hdr"
+path = "examples/nuanmb_dump_rot_hdr.rs"
+

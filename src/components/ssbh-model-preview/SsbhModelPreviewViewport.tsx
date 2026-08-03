@@ -8,6 +8,7 @@ import { SsbhModelPreviewQuickActions } from "./SsbhModelPreviewQuickActions";
 import { SsbhModelViewportTimeline } from "./SsbhModelViewportTimeline";
 import { Fhm2dMemoryPreviewModal } from "./Fhm2dMemoryPreviewModal";
 import { shouldRenderPreviewSkeletonLines } from "./ssbhPreviewSkeletonVisibility";
+import { resolveViewportActiveInstancePick } from "./viewportSelectionPolicy";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
 export type SsbhModelPreviewViewportHandle = SsbhModelCanvasExportHandle;
@@ -66,36 +67,47 @@ export const SsbhModelPreviewViewport = forwardRef<
   const onMotionScrubPreview = useCallback((frame: number) => {
     motionScrubFrameRef.current = frame;
   }, []);
+  // Scrub end only commits the frame. Playback resume/pause is owned by the
+  // timeline so accidental scrub no longer permanently cancels play.
   const onMotionScrubEnd = useCallback(
     (frame: number) => {
       motionScrubFrameRef.current = null;
       setMotionScrubbing(false);
       p.setMotionFrame(frame);
-      p.setMotionPlaying(false);
     },
     [p],
   );
 
+  // Empty 3D-view clicks must not clear the active model. Motion timeline / Target
+  // model bind to activePreviewInstanceId — clearing it drops the whole transport UI.
+  // 3D picks never enable Inspect yellow outline (motion/preview stay clean).
   const handleViewportSelectInstance = useCallback(
     (id: string | null) => {
-      if (id) {
-        p.setActivePreviewInstanceId(id);
-        return;
+      const resolution = resolveViewportActiveInstancePick(
+        id ? [id] : [],
+        p.activePreviewInstanceId,
+      );
+      if (resolution.nextActiveId !== p.activePreviewInstanceId) {
+        p.setActivePreviewInstanceId(resolution.nextActiveId);
       }
-      p.setActivePreviewInstanceId(null);
-      p.setSelectedBoneIndex(null);
+      if (resolution.clearBoneSelection) {
+        p.setSelectedBoneIndex(null);
+      }
+      p.setSelectionOutlineEnabled(false);
     },
     [p],
   );
 
   const handleViewportSelectInstances = useCallback(
     (ids: string[]) => {
-      if (ids.length === 0) {
-        p.setActivePreviewInstanceId(null);
-        p.setSelectedBoneIndex(null);
-        return;
+      const resolution = resolveViewportActiveInstancePick(ids, p.activePreviewInstanceId);
+      if (resolution.nextActiveId !== p.activePreviewInstanceId) {
+        p.setActivePreviewInstanceId(resolution.nextActiveId);
       }
-      p.setActivePreviewInstanceId(ids[ids.length - 1] ?? null);
+      if (resolution.clearBoneSelection) {
+        p.setSelectedBoneIndex(null);
+      }
+      p.setSelectionOutlineEnabled(false);
     },
     [p],
   );
@@ -103,10 +115,7 @@ export const SsbhModelPreviewViewport = forwardRef<
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 shrink-0 px-1">
-        <Button type="button" size="sm" variant="default" disabled={p.loading} onClick={() => void p.pickFolder()}>
-          Open model folder
-        </Button>
-        <Button type="button" size="sm" variant="secondary" disabled={p.loading} onClick={() => void p.pickNumdlb()}>
+        <Button type="button" size="sm" variant="default" disabled={p.loading} onClick={() => void p.pickNumdlb()}>
           Open .numdlb
         </Button>
         <Button
@@ -133,10 +142,24 @@ export const SsbhModelPreviewViewport = forwardRef<
           type="button"
           size="sm"
           variant="secondary"
-          disabled={p.loading}
+          disabled={p.loading || p.previewBusy || !p.activePreviewInstanceId}
           onClick={() => void p.pickMotionNuanmbFile()}
         >
           Open .nuanmb
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          disabled={p.loading || p.previewBusy || !p.activePreviewInstanceId}
+          onClick={() =>
+            void p.pickMotionFbxPreview().catch(() => {
+              /* toast already shown in context */
+            })
+          }
+          title="Preview a pure animation FBX on the active model (no save dialog)"
+        >
+          Preview FBX
         </Button>
         <SsbhModelPreviewQuickActions />
         <div
@@ -202,6 +225,7 @@ export const SsbhModelPreviewViewport = forwardRef<
               previewInstances={p.previewInstances}
               activePreviewInstanceId={p.activePreviewInstanceId}
               previewViewMode={p.previewViewMode}
+              selectionOutlineEnabled={p.selectionOutlineEnabled}
               hiddenPreviewInstanceIds={p.hiddenPreviewInstanceIds}
               selectedBoneIndex={p.selectedBoneIndex}
               bonePointSize={p.bonePointSize}

@@ -418,11 +418,16 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                         <button
                           type="button"
                           className="min-w-0 flex-1 cursor-pointer text-left"
-                          onClick={() =>
-                            p.setActivePreviewInstanceId(
-                              inst.id === p.activePreviewInstanceId ? null : inst.id,
-                            )
-                          }
+                          onClick={() => {
+                            if (inst.id === p.activePreviewInstanceId) {
+                              p.setActivePreviewInstanceId(null);
+                              p.setSelectionOutlineEnabled(false);
+                              return;
+                            }
+                            // Inspect list is the only path that enables yellow selection.
+                            p.setSelectionOutlineEnabled(true);
+                            p.setActivePreviewInstanceId(inst.id);
+                          }}
                         >
                           <div className="truncate text-[11px] font-medium leading-tight">{inst.displayLabel}</div>
                           <div className="truncate font-mono text-[9px] text-muted-foreground">{inst.modlPath}</div>
@@ -1144,11 +1149,15 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                         <button
                           type="button"
                           className="min-w-0 flex-1 cursor-pointer truncate text-left text-[10px] font-medium hover:text-foreground"
-                          onClick={() =>
-                            p.setActivePreviewInstanceId(
-                              row.instance.id === p.activePreviewInstanceId ? null : row.instance.id,
-                            )
-                          }
+                          onClick={() => {
+                            if (row.instance.id === p.activePreviewInstanceId) {
+                              p.setActivePreviewInstanceId(null);
+                              p.setSelectionOutlineEnabled(false);
+                              return;
+                            }
+                            p.setSelectionOutlineEnabled(true);
+                            p.setActivePreviewInstanceId(row.instance.id);
+                          }}
                           title={row.instance.modlPath}
                         >
                           {row.instance.displayLabel}
@@ -1175,6 +1184,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                       transform: `translateY(${virtualRow.start}px)`,
                     }}
                     onClick={() => {
+                      p.setSelectionOutlineEnabled(true);
                       p.setActivePreviewInstanceId(row.instance.id);
                       p.setSelectedBoneIndex(row.boneIndex);
                     }}

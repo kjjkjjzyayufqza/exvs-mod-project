@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  addMotionFolderBundle,
   addMotionItemNode,
   removeMotionNode,
   serializeMotionProject,
+  suggestNextMotionBundleFolderName,
   updateMotionNode,
   type MotionFolderNode,
   type MotionItemNode,
@@ -189,6 +191,146 @@ describe("motionFolderService", () => {
       link: false,
       unk1: "33333333",
       unk2: "22222222",
+    });
+  });
+
+  it("suggests next numeric bundle folder name", () => {
+    const parent = baseNodes()[0]!;
+    expect(suggestNextMotionBundleFolderName(parent)).toBe("0");
+    const withFolders: MotionFolderNode = {
+      ...parent,
+      children: [
+        ...parent.children,
+        {
+          id: "folder:0/0",
+          kind: "folder",
+          parentId: parent.id,
+          name: "0",
+          link: false,
+          depth: 1,
+          pathSegments: ["0", "0"],
+          children: [],
+          unk1: "aaaaaaaa",
+          unk2: "00000000",
+          unk2_1: 0,
+          unk3: 2,
+          unk4: 0,
+          unk5: 0,
+          unk6: 0,
+          rawStructure: null,
+          rawParse: null,
+        },
+        {
+          id: "folder:0/3",
+          kind: "folder",
+          parentId: parent.id,
+          name: "3",
+          link: false,
+          depth: 1,
+          pathSegments: ["0", "3"],
+          children: [],
+          unk1: "bbbbbbbb",
+          unk2: "00000000",
+          unk2_1: 0,
+          unk3: 2,
+          unk4: 0,
+          unk5: 0,
+          unk6: 0,
+          rawStructure: null,
+          rawParse: null,
+        },
+      ],
+    };
+    expect(suggestNextMotionBundleFolderName(withFolders)).toBe("4");
+  });
+
+  it("adds a folder-format motion bundle (folder unk1=action id, item unk2=model id)", () => {
+    const result = addMotionFolderBundle({
+      nodes: baseNodes(),
+      parentFolderId: "folder:0",
+      folderName: "0",
+      actionId: "0f1fc213",
+      unk3: 2,
+      clips: [
+        {
+          sourcePath: "E:\\source\\body.nuanmb",
+          name: "001hito_clip",
+          modelId: "43309cab",
+        },
+        {
+          sourcePath: "E:\\source\\weapon.nuanmb",
+          name: "400stick_clip",
+          modelId: "59990c22",
+        },
+      ],
+      rootName: "pack",
+      motionRoot: "E:\\workspace\\003motion\\pack",
+    });
+
+    expect(result.folder.pathSegments).toEqual(["0", "0"]);
+    expect(result.folder.unk1).toBe("0f1fc213");
+    expect(result.folder.unk3).toBe(2);
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0]).toMatchObject({
+      name: "001hito_clip",
+      unk1: "00000000",
+      unk2: "43309cab",
+      pathSegments: ["0", "0"],
+    });
+    expect(result.items[1]).toMatchObject({
+      name: "400stick_clip",
+      unk1: "00000000",
+      unk2: "59990c22",
+    });
+    expect(result.copyJobs).toEqual([
+      {
+        sourcePath: "E:\\source\\body.nuanmb",
+        targetPath: "E:\\workspace\\003motion\\pack\\0\\0\\001hito_clip.nuanmb",
+      },
+      {
+        sourcePath: "E:\\source\\weapon.nuanmb",
+        targetPath: "E:\\workspace\\003motion\\pack\\0\\0\\400stick_clip.nuanmb",
+      },
+    ]);
+
+    const serialized = serializeMotionProject(baseProject(), result.nodes, "pack");
+    expect(serialized.SubFileData).toHaveLength(3);
+    expect(serialized.SubFileStructure).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "Folder",
+          Name: "0",
+          unk1: "0f1fc213",
+          unk3: 2,
+          folderCount: 2,
+        }),
+        expect.objectContaining({
+          type: "Item",
+          Name: "001hito_clip",
+          unk1: "00000000",
+          unk2: "43309cab",
+        }),
+        expect.objectContaining({
+          type: "Item",
+          Name: "400stick_clip",
+          unk1: "00000000",
+          unk2: "59990c22",
+        }),
+      ]),
+    );
+    const parseFolder = serialized.SubFileParseStructure?.children?.[0]?.children?.find(
+      (child) => child.type === "Folder" && child.name === "0",
+    );
+    expect(parseFolder).toMatchObject({
+      type: "Folder",
+      unk1: "0f1fc213",
+      unk3: 2,
+    });
+    expect(parseFolder?.children).toHaveLength(2);
+    expect(parseFolder?.children?.[0]).toMatchObject({
+      type: "Item",
+      unk1: "00000000",
+      unk2: "43309cab",
     });
   });
 

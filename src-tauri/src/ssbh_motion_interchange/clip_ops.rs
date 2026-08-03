@@ -112,6 +112,10 @@ pub struct NuanmbClipTransformRequest {
 }
 
 /// NUANMB → transformed NUANMB. ClipOps v1 output is transform-only.
+///
+/// Write-back uses `write_motion_clip_as_nuanmb`, which **never** re-emits
+/// `ATH_*` helper Transform nodes (homemade motions must not convert ATH).
+/// See `docs/nuanmb-ath-helper-bone-policy.md`.
 pub fn transform_nuanmb_clip(
     request: NuanmbClipTransformRequest,
 ) -> Result<MotionConversionReport, MotionInterchangeError> {
@@ -128,6 +132,7 @@ pub fn transform_nuanmb_clip(
         .and_then(|stem| stem.to_str())
         .unwrap_or("clip")
         .to_string();
+    // ATH_* tracks are never re-emitted on write (nuanmb ATH policy).
     let clip = read_nuanmb_as_motion_clip(&nuanmb_path, &skeleton_path, source_name)?;
     let transformed = match request.operation {
         ClipOperation::Trim {

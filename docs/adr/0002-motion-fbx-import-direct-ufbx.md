@@ -27,3 +27,10 @@ dependency per ADR 0001.
   Blender 5.1 round-trip integration test is the empirical ground truth
 - The bridge-era `fbx.rs` reader remains internal until the generalized
   `dcc_fbx.rs` subsumes its round-trip test coverage
+- **`ATH_*` helper bones are never written into the output NUANMB.** Homemade
+  motions must not modify or convert ATH tracks; the writer omits whole
+  Transform nodes (not rest/identity bake). Policy:
+  `docs/nuanmb-ath-helper-bone-policy.md`
+- **In-game body/shot layout** (uncompressed CompScale/Visibility shell,
+  Translate on every Transform bone, indexed multi-frame `0x4300`, hold snap):  
+  `docs/nuanmb-exvs2-import-in-game-layout.md`

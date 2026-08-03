@@ -72,6 +72,14 @@ Use `docs/` as the first source of project truth:
 - `docs/exvs2-json-cli.md` — `exvs2-json` CLI for EXVS2 binary resource
   inspection, scoped JSON-driven editing, and correlation JSON (implementation
   in `src-tauri/`).
+- `docs/nuanmb-ath-helper-bone-policy.md` — homemade NUANMB must **not**
+  author/edit/convert `ATH_*` helper bones; writer omits whole Transform
+  nodes (NUHLPB + rest only). Code: `ssbh_motion_interchange/nuanmb.rs`.
+- `docs/nuanmb-exvs2-import-in-game-layout.md` — homemade body/shot NUANMB
+  for **in-game** use. Retest ranking: **indexed multi-frame `0x4300` is the
+  critical shot fix**; also CompScale/Visibility shell + hygiene (no ATH /
+  residual / wrong source); **full Translate on every bone** (omit-limb-T not
+  required). Import FBX write path. Code: `ssbh_motion_interchange/nuanmb.rs`.
 - `docs/fhm2d-extract-cli.md` — `fhm2d-extract` CLI for unpacking OB `.fhm2d`
   with required `--type` / `--layout`; agent outputs must stay under `tmp/`
   (see `.cursor/rules/fhm2d-extract-artifacts.mdc`).

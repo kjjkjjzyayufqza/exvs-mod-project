@@ -159,6 +159,11 @@ back as plain serializable structs; no binary payload crosses IPC.
    1..=3600 frames).
 7. **TemplatePreserve write** — existing `write_motion_clip_as_nuanmb`
    (template merge; uncompressed v1.2; never overwrites inputs).
+   **ATH policy:** every `ATH_*` Transform node is **omitted** on write
+   (`is_ath_helper_bone`). Homemade motions must not author, edit, or bake
+   ATH helper bones — they stay on NUSKTB/NUHLPB only. See
+   `docs/nuanmb-ath-helper-bone-policy.md`. Do **not** emit rest/identity
+   tracks for ATH as a substitute.
 8. **Report** — output path, action name, frame count, duration, matched /
    ignored bones, preserved non-Transform group count, warnings (no template,
    NameOnly parent mismatches, ignored helper nodes).

@@ -119,6 +119,7 @@ fn write_sparse_transform_fixture() -> (tempfile::TempDir, std::path::PathBuf, s
     let animation = AnimData {
         major_version: 1,
         minor_version: 2,
+        name: None,
         final_frame_index: 0.0,
         groups: vec![GroupData {
             group_type: GroupType::Transform,
@@ -203,6 +204,177 @@ fn test_motion_clip() -> MotionClip {
     }
 }
 
+/// Homemade NUANMB must never convert/write `ATH_*` Transform nodes
+/// (`docs/nuanmb-ath-helper-bone-policy.md`). Even if the MotionClip skeleton
+/// still lists helpers (as NUSKTB does), the writer must omit them entirely —
+/// not bake rest/identity tracks.
+#[test]
+fn nuanmb_writer_strips_ath_helper_bones() {
+    use ssbh_data::anim_data::GroupType;
+
+    let directory = tempfile::tempdir().unwrap();
+    let output_path = directory.path().join("no_ath.nuanmb");
+    let clip = MotionClip {
+        name: "body_shot".to_string(),
+        sample_rate_hz: 60,
+        skeleton: MotionSkeleton {
+            bones: vec![
+                MotionBone {
+                    name: "BASE".to_string(),
+                    parent_index: None,
+                    rest_local: identity_transform(),
+                },
+                MotionBone {
+                    name: "ATH_TE_R".to_string(),
+                    parent_index: Some(0),
+                    rest_local: identity_transform(),
+                },
+                MotionBone {
+                    name: "ATH_V_BACK_L".to_string(),
+                    parent_index: Some(0),
+                    rest_local: identity_transform(),
+                },
+                MotionBone {
+                    name: "KOSHI".to_string(),
+                    parent_index: Some(0),
+                    rest_local: identity_transform(),
+                },
+            ],
+        },
+        frames: vec![MotionFrame {
+            local_transforms: vec![
+                identity_transform(),
+                Transform {
+                    scale: Vec3::ONE,
+                    rotation: Quat::IDENTITY,
+                    translation: Vec3::new(9.0, 0.0, 0.0),
+                },
+                Transform {
+                    scale: Vec3::ONE,
+                    rotation: Quat::IDENTITY,
+                    translation: Vec3::new(8.0, 0.0, 0.0),
+                },
+                Transform {
+                    scale: Vec3::ONE,
+                    rotation: Quat::from_rotation_y(0.2),
+                    translation: Vec3::new(0.0, 1.0, 0.0),
+                },
+            ],
+        }],
+    };
+
+    write_motion_clip_as_nuanmb(&clip, None, &output_path).unwrap();
+    let output = AnimData::from_file(&output_path).unwrap();
+    let transform = output
+        .groups
+        .iter()
+        .find(|group| group.group_type == GroupType::Transform)
+        .expect("transform group");
+    let names: Vec<&str> = transform.nodes.iter().map(|node| node.name.as_str()).collect();
+    assert_eq!(names, vec!["BASE", "KOSHI"]);
+    assert!(!names.iter().any(|name| name.starts_with("ATH_")));
+}
+
+/// Import/writer must emit stock CompScale+Visibility, **Translate on every
+/// Transform bone** (including limbs), and snap holds to 0x4003, without
+/// residual 0x3409/0x4409 (uncompressed only).
+#[test]
+fn nuanmb_writer_emits_stock_props_and_hold_headers() {
+    use ssbh_lib::formats::anim::Anim;
+
+    let directory = tempfile::tempdir().unwrap();
+    let output_path = directory.path().join("hold.nuanmb");
+    // Two identical frames → hold snap for rotate/translate.
+    // Include a non-root limb name so product policy "always Translate" is covered.
+    let rest = identity_transform();
+    let pose_root = Transform {
+        scale: Vec3::ONE,
+        rotation: Quat::IDENTITY,
+        translation: Vec3::new(0.0, 0.0, 0.0),
+    };
+    let pose_limb = Transform {
+        scale: Vec3::ONE,
+        rotation: Quat::from_rotation_y(0.3),
+        translation: Vec3::new(1.6, 0.0, 1.2),
+    };
+    let clip = MotionClip {
+        name: "hold".to_string(),
+        sample_rate_hz: 60,
+        skeleton: MotionSkeleton {
+            bones: vec![
+                MotionBone {
+                    name: "BASE".to_string(),
+                    parent_index: None,
+                    rest_local: rest,
+                },
+                MotionBone {
+                    name: "MOMO_L".to_string(),
+                    parent_index: Some(0),
+                    rest_local: rest,
+                },
+            ],
+        },
+        frames: vec![
+            MotionFrame {
+                local_transforms: vec![pose_root, pose_limb],
+            },
+            MotionFrame {
+                local_transforms: vec![pose_root, pose_limb],
+            },
+        ],
+    };
+    write_motion_clip_as_nuanmb(&clip, None, &output_path).unwrap();
+
+    let Anim::V12 { tracks, buffers, .. } = Anim::from_file(&output_path).unwrap() else {
+        panic!("expected Anim v1.2");
+    };
+    assert_eq!(tracks.elements.len(), 2);
+    let expected_props = [
+        "CompensateScale",
+        "Scale",
+        "Rotate",
+        "Translate",
+        "Visibility",
+    ];
+    for track in tracks.elements.iter() {
+        let props: Vec<String> = track
+            .properties
+            .elements
+            .iter()
+            .map(|p| p.name.to_string_lossy())
+            .collect();
+        assert_eq!(
+            props,
+            expected_props
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>(),
+            "bone {} must emit full prop shell including Translate",
+            track.name.to_string_lossy()
+        );
+    }
+    // Limb rotate must be constant 0x4003 for a hold.
+    let limb = tracks
+        .elements
+        .iter()
+        .find(|t| t.name.to_string_lossy() == "MOMO_L")
+        .expect("MOMO_L track");
+    let rot_idx = limb.properties.elements[2].buffer_index as usize;
+    let rot = &buffers.elements[rot_idx].elements;
+    assert!(rot.len() >= 4);
+    let header = u32::from_le_bytes([rot[0], rot[1], rot[2], rot[3]]);
+    assert_eq!(header, 0x4003, "hold rotate must use 0x4003, got 0x{header:04X}");
+    // Limb Translate must be present (0x3003 hold for constant T).
+    let t_idx = limb.properties.elements[3].buffer_index as usize;
+    let tbuf = &buffers.elements[t_idx].elements;
+    assert!(tbuf.len() >= 4);
+    let t_hdr = u32::from_le_bytes([tbuf[0], tbuf[1], tbuf[2], tbuf[3]]);
+    assert_eq!(
+        t_hdr, 0x3003,
+        "limb hold Translate must use 0x3003, got 0x{t_hdr:04X}"
+    );
+}
+
 #[test]
 fn nuanmb_encoder_preserves_template_non_transform_groups() {
     let directory = tempfile::tempdir().unwrap();
@@ -211,6 +383,7 @@ fn nuanmb_encoder_preserves_template_non_transform_groups() {
     let template = AnimData {
         major_version: 1,
         minor_version: 2,
+        name: None,
         final_frame_index: 0.0,
         groups: vec![GroupData {
             group_type: GroupType::Visibility,

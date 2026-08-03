@@ -36,6 +36,10 @@ import {
 } from "./motionInstancePipeline";
 import { advanceMotionFrame } from "./motionPlaybackMath";
 import {
+  expandSingleViewWithAttachments,
+  shouldShowPreviewSelectionOutline,
+} from "./viewportSelectionPolicy";
+import {
   Bone,
   Color,
   DoubleSide,
@@ -108,6 +112,22 @@ import {
   type PbrSlotKind,
 } from "./ssbhTextureUpload";
 import type { BuiltMeshDraw, SkelDataJson, SsbhModelPreviewInstance } from "./types";
+import { composeGuestAttachRootMatrix } from "./attachmentTemplateService";
+
+/** Local matrix product rootBone → attachBone (stops at non-Bone parent). Feedback-free. */
+function boneLocalChainMatrix(attachBone: Bone, out: Matrix4): Matrix4 {
+  const chain: Bone[] = [];
+  let cur: Object3D | null = attachBone;
+  while (cur && (cur as Bone).isBone) {
+    chain.push(cur as Bone);
+    cur = cur.parent;
+  }
+  out.identity();
+  for (let i = chain.length - 1; i >= 0; i -= 1) {
+    out.multiply(chain[i]!.matrix);
+  }
+  return out;
+}
 
 function instanceLayoutPosition(_index: number, _count: number): [number, number, number] {
   return [0, 0, 0];
@@ -212,6 +232,8 @@ type SsbhModelCanvasProps = {
   previewInstances: readonly SsbhModelPreviewInstance[];
   activePreviewInstanceId: string | null;
   previewViewMode: PreviewInstanceViewMode;
+  /** Inspect-list-only yellow mesh selection glow. */
+  selectionOutlineEnabled?: boolean;
   hiddenPreviewInstanceIds: ReadonlySet<string>;
   selectedBoneIndex: number | null;
   bonePointSize: number;
@@ -492,7 +514,7 @@ const _interpQb = new Quaternion();
 const _cameraQFrom = new Quaternion();
 const _cameraQTo = new Quaternion();
 const _attachParentM = new Matrix4();
-const _attachChildInvM = new Matrix4();
+const _attachGuestLocalM = new Matrix4();
 const _attachFinalM = new Matrix4();
 
 function lerpNumber(a: number, b: number, t: number): number {
@@ -1021,6 +1043,7 @@ const Scene = memo(function Scene({
   previewInstances,
   activePreviewInstanceId,
   previewViewMode,
+  selectionOutlineEnabled = false,
   hiddenPreviewInstanceIds,
   selectedBoneIndex,
   bonePointSize,
@@ -1161,10 +1184,19 @@ const Scene = memo(function Scene({
         (activePreviewInstanceId
           ? byVisibility.find((inst) => inst.id === activePreviewInstanceId)
           : null) ?? byVisibility[0]!;
-      return [active];
+      // Keep attached weapons/props visible when soloing the motion target.
+      const keepIds = expandSingleViewWithAttachments(active.id, modelAttachments);
+      const expanded = byVisibility.filter((inst) => keepIds.has(inst.id));
+      return expanded.length > 0 ? expanded : [active];
     }
     return byVisibility;
-  }, [previewInstances, hiddenPreviewInstanceIds, previewViewMode, activePreviewInstanceId]);
+  }, [
+    previewInstances,
+    hiddenPreviewInstanceIds,
+    previewViewMode,
+    activePreviewInstanceId,
+    modelAttachments,
+  ]);
 
   const drawsByInstance = useMemo(() => {
     const map = new Map<string, BuiltMeshDraw[]>();
@@ -1181,6 +1213,24 @@ const Scene = memo(function Scene({
     return map;
   }, [draws, previewInstances, singleInstance]);
   const instanceGroupRefs = useRef<Map<string, Group>>(new Map());
+  /**
+   * SkinnedMesh uses bindMode "detached": skinning is pure bone.matrixWorld.
+   * Attach offsets must live on a skeleton parent (not the mesh group), or the
+   * rifle double-transforms / flies when the host animates.
+   */
+  const attachAnchorByInstanceIdRef = useRef<Map<string, Group>>(new Map());
+  const { scene } = useThree();
+
+  useEffect(() => {
+    const anchors = attachAnchorByInstanceIdRef.current;
+    return () => {
+      for (const anchor of anchors.values()) {
+        scene.remove(anchor);
+        anchor.clear();
+      }
+      anchors.clear();
+    };
+  }, [scene]);
 
   useEffect(() => {
     if (!exportHandleRef) return;
@@ -1511,6 +1561,8 @@ const Scene = memo(function Scene({
 
   useFrame(() => {
     const attachedChildIds = new Set<string>();
+    const anchors = attachAnchorByInstanceIdRef.current;
+
     for (const attachment of modelAttachments) {
       const parentRuntime = gpuRuntimeByInstance.get(attachment.parentInstanceId);
       const childRuntime = gpuRuntimeByInstance.get(attachment.childInstanceId);
@@ -1530,15 +1582,71 @@ const Scene = memo(function Scene({
       if (!parentBone || !childBone) {
         continue;
       }
+
+      // Host: pure skeleton world (bones must not sit under the mesh group —
+      // SkinnedMesh bindMode is "detached").
+      for (const root of parentRuntime.rootBones) {
+        if (root.parent && !(root.parent as Bone).isBone) {
+          root.removeFromParent();
+        }
+      }
+      updateGpuSkeletonWorld(parentRuntime);
       _attachParentM.copy(parentBone.matrixWorld);
-      _attachChildInvM.copy(childBone.matrixWorld).invert();
-      _attachFinalM.multiplyMatrices(_attachParentM, _attachChildInvM);
+
+      // Guest attach bone from LOCAL bone chain only (never includes attach anchor).
+      // Temporarily walk while bones may already hang under last frame's anchor.
+      boneLocalChainMatrix(childBone, _attachGuestLocalM);
+
+      _attachFinalM.fromArray(
+        composeGuestAttachRootMatrix(_attachParentM.toArray(), _attachGuestLocalM.toArray()),
+      );
+
+      let anchor = anchors.get(attachment.childInstanceId);
+      if (!anchor) {
+        anchor = new Group();
+        anchor.name = `attach-anchor:${attachment.childInstanceId}`;
+        scene.add(anchor);
+        anchors.set(attachment.childInstanceId, anchor);
+      }
+      // Drive skeleton roots via anchor; keep mesh group at identity (no double transform).
+      for (const root of childRuntime.rootBones) {
+        if (root.parent !== anchor) {
+          anchor.add(root);
+        }
+      }
+      anchor.matrixAutoUpdate = false;
+      anchor.matrix.copy(_attachFinalM);
+      anchor.updateMatrixWorld(true);
+      updateGpuSkeletonWorld(childRuntime);
+      childRuntime.skeleton.update();
+
+      // Mesh group must stay identity so detached skinning is not multiplied again.
       childGroup.matrixAutoUpdate = false;
-      childGroup.matrix.copy(_attachFinalM);
-      childGroup.matrix.decompose(childGroup.position, childGroup.quaternion, childGroup.scale);
+      childGroup.matrix.identity();
+      childGroup.position.set(0, 0, 0);
+      childGroup.quaternion.identity();
+      childGroup.scale.set(1, 1, 1);
       childGroup.updateMatrix();
       childGroup.updateMatrixWorld(true);
+
       attachedChildIds.add(attachment.childInstanceId);
+    }
+
+    // Detach anchors for guests that are no longer attached.
+    for (const [instanceId, anchor] of anchors.entries()) {
+      if (attachedChildIds.has(instanceId)) continue;
+      const runtime = gpuRuntimeByInstance.get(instanceId);
+      if (runtime) {
+        for (const root of runtime.rootBones) {
+          if (root.parent === anchor) {
+            anchor.remove(root);
+          }
+        }
+        updateGpuSkeletonWorld(runtime);
+        runtime.skeleton.update();
+      }
+      scene.remove(anchor);
+      anchors.delete(instanceId);
     }
 
     for (let i = 0; i < visibleInstances.length; i++) {
@@ -1625,7 +1733,15 @@ const Scene = memo(function Scene({
             skeletonBoneCount: instSkel?.bones.length ?? 0,
             sampledBoneCount: instMotionLocals?.length ?? 0,
           });
-          const { motionPoseActive, gpuSkinningActive } = renderState;
+          // Attachment drives the GPU skeleton (anchor). Without forcing GPU skin,
+          // idle guests use BonePreviewRig CPU armature and ignore the glue.
+          const involvedInAttachment = modelAttachments.some(
+            (edge) =>
+              edge.parentInstanceId === inst.id || edge.childInstanceId === inst.id,
+          );
+          const motionPoseActive = renderState.motionPoseActive;
+          const gpuSkinningActive =
+            Boolean(gpuRuntime) && (renderState.gpuSkinningActive || involvedInAttachment);
           const gpuSkeleton = gpuSkinningActive ? gpuRuntime!.skeleton : null;
           const skinningDraws = filterDrawsForMotionSkinning(
             instDraws,
@@ -1699,7 +1815,10 @@ const Scene = memo(function Scene({
                 }
                 previewRenderStyle={previewRenderStyle}
                 animeKeyLightDir={animeKeyLightDir}
-                selectionOutline={isActive}
+                selectionOutline={shouldShowPreviewSelectionOutline({
+                  isActive,
+                  selectionOutlineEnabled,
+                })}
                 motionVisibilityRows={
                   instMotionState?.playing || (motionScrubbing && isActive)
                     ? null

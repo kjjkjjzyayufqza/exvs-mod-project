@@ -20,6 +20,14 @@ pub struct MotionFbxImportRequest {
 }
 
 /// Manifest-free MotionFbxImport: DCC FBX + NUSKTB (+ template) → new NUANMB.
+///
+/// Output Transform tracks never include `ATH_*` helper bones (stripped by
+/// `write_motion_clip_as_nuanmb`). Homemade motions must not convert or author
+/// ATH animation — see `docs/nuanmb-ath-helper-bone-policy.md`.
+///
+/// Encoding is **uncompressed** EXVS2 v1.2 with stock `CompensateScale` +
+/// `Visibility` on every Transform track, and near-constant hold snaps to
+/// `0x4003`/`0x3003` (no residual compression).
 pub fn import_motion_fbx(
     request: MotionFbxImportRequest,
 ) -> Result<MotionConversionReport, MotionInterchangeError> {
@@ -37,18 +45,18 @@ pub fn import_motion_fbx(
             "output_nuanmb_path must end with .nuanmb".to_string(),
         ));
     }
-    let inputs = [
-        Some(&fbx_path),
-        Some(&skeleton_path),
-        template_path.as_ref(),
-    ];
-    if inputs
-        .into_iter()
-        .flatten()
-        .any(|input| input == &output_path)
-    {
+    // FBX / NUSKTB must never be the write target. Template may equal output:
+    // after a successful import the UI selects the new clip, so a second Import
+    // often overwrites that same path while still using it as the non-Transform
+    // group template (loaded fully into memory before writing).
+    if fbx_path == output_path {
         return Err(MotionInterchangeError::Import(
-            "output_nuanmb_path must differ from every input path".to_string(),
+            "output_nuanmb_path must differ from fbx_path".to_string(),
+        ));
+    }
+    if skeleton_path == output_path {
+        return Err(MotionInterchangeError::Import(
+            "output_nuanmb_path must differ from nusktb_path".to_string(),
         ));
     }
 

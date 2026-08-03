@@ -233,9 +233,17 @@ pub fn run() {
             havok_mesh_export::convert_hkt_to_obj
         ]);
 
+    // Debug-only MCP bridge for AI tooling. Prefer 127.0.0.1 and a base port outside
+    // Windows dynamic-port exclusion ranges (often 9181-9680 from Hyper-V/WSL), which
+    // make the plugin default 9223-9322 fail with os error 10013.
     #[cfg(debug_assertions)]
     {
-        builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+        builder = builder.plugin(
+            tauri_plugin_mcp_bridge::Builder::new()
+                .bind_address("127.0.0.1")
+                .base_port(11_000)
+                .build(),
+        );
     }
 
     builder

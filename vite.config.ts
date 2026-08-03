@@ -50,5 +50,12 @@ export default defineConfig(async () => ({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    // SceneEdit suite (~78 files, mostly May 2026) is large and slow for the
+    // default `pnpm test` path. Run it explicitly via `pnpm test:scene`.
+    exclude: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "src/page/SceneEdit/**",
+    ],
   },
 }));

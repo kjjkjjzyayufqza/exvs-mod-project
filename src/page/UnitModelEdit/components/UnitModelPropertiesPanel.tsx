@@ -298,7 +298,13 @@ export function UnitModelPropertiesPanel({
 
         <TabsContent value="motion" className="mt-0 min-h-0 min-w-0 flex-1 overflow-hidden">
           <ScrollArea className="h-full w-full min-w-0">
-            <div className="min-w-0 max-w-full p-3 pb-4">
+            <div className="min-w-0 max-w-full space-y-1 p-3 pb-6">
+              <div className="mb-1 flex items-baseline justify-between gap-2">
+                <h2 className="text-[11px] font-semibold tracking-wide text-foreground">
+                  Motion preview
+                </h2>
+                <span className="text-[9px] text-muted-foreground">Source · Convert · Edit</span>
+              </div>
               <SsbhModelPreviewMotionPanel />
             </div>
           </ScrollArea>

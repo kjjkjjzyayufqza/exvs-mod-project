@@ -18,6 +18,10 @@ the project format. FBX is only a disposable Cascadeur transport file, not a
 format the project binds its internal design to. The Rust backend owns every
 conversion; the frontend may only invoke commands and render results.
 
+**ATH_* helpers (2026-08-02):** homemade NUANMB must never modify or convert
+`ATH_*` bones; the writer omits whole Transform nodes. See
+`docs/nuanmb-ath-helper-bone-policy.md`.
+
 ## Goal
 
 Provide a reusable, application-wide EXVS2 skeletal motion service.

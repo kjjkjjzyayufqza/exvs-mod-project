@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { exists, mkdir, readTextFile, remove, rename, writeTextFile } from "@tauri-apps/plugin-fs";
+import { exists, mkdir, readDir, readTextFile, remove, rename, writeTextFile } from "@tauri-apps/plugin-fs";
 
 export type MotionStructureNode = MotionFolderNode | MotionItemNode;
 
@@ -685,6 +685,177 @@ export function addMotionItemNode(params: {
 
   const nodes = walk(params.nodes);
   return { nodes, item, targetPath: item.filePath };
+}
+
+/** Clip entry when adding a multi-file motion bundle folder. */
+export type MotionBundleClipInput = {
+  sourcePath: string;
+  name: string;
+  /** Item unk2 — model / clip-channel id (8-digit hex). */
+  modelId: string;
+};
+
+/**
+ * Next numeric sibling folder name under a parent (e.g. "0","1",… → "24").
+ * Matches real packs where action bundles are numbered folders under 0\\0.
+ */
+export function suggestNextMotionBundleFolderName(parent: MotionFolderNode): string {
+  let max = -1;
+  for (const child of parent.children) {
+    if (child.kind !== "folder") continue;
+    if (!/^\d+$/.test(child.name)) continue;
+    max = Math.max(max, Number.parseInt(child.name, 10));
+  }
+  return String(max + 1);
+}
+
+/** List top-level `.nuanmb` files in a directory (non-recursive). */
+export async function listNuanmbFilesInDirectory(dirPath: string): Promise<string[]> {
+  const normalized = trimTrailingSeparators(toWindowsPath(dirPath));
+  if (!(await exists(normalized))) {
+    throw new Error(`Directory not found: ${normalized}`);
+  }
+  const entries = await readDir(normalized);
+  const files = entries
+    .filter((entry) => {
+      if (!entry.name || entry.isDirectory) return false;
+      return entry.name.toLowerCase().endsWith(MOTION_EXT);
+    })
+    .map((entry) => joinWindowsPath(normalized, entry.name!))
+    .sort((a, b) => basename(a).localeCompare(basename(b), undefined, { sensitivity: "base" }));
+  return files;
+}
+
+/**
+ * Add a folder-format motion: one Folder = one action id (folder.unk1),
+ * each child Item has unk1=00000000 and unk2=model id.
+ * Does not touch disk; caller copies files via `copyJobs` then saves JSON.
+ */
+export function addMotionFolderBundle(params: {
+  nodes: MotionStructureNode[];
+  parentFolderId: string;
+  folderName: string;
+  /** Folder unk1 — action / motion id. */
+  actionId: string;
+  /** Folder unk3 — group kind; game packs commonly use 2. */
+  unk3?: number;
+  clips: MotionBundleClipInput[];
+  rootName: string;
+  motionRoot: string;
+}): {
+  nodes: MotionStructureNode[];
+  folder: MotionFolderNode;
+  items: MotionItemNode[];
+  copyJobs: Array<{ sourcePath: string; targetPath: string }>;
+} {
+  const folderName = normalizeMotionEntryName(params.folderName);
+  const actionId = normalizeMotionHexInput(params.actionId, "action id (folder unk1)");
+  const unk3 = params.unk3 ?? 2;
+  if (!Number.isInteger(unk3) || unk3 < 0) {
+    throw new Error("folder unk3 must be a non-negative integer");
+  }
+  if (!Array.isArray(params.clips) || params.clips.length === 0) {
+    throw new Error("Folder bundle requires at least one .nuanmb clip");
+  }
+
+  const parentFolder = flattenNodes(params.nodes).find(
+    (node): node is MotionFolderNode => node.kind === "folder" && node.id === params.parentFolderId,
+  );
+  if (!parentFolder) throw new Error("Parent folder not found");
+
+  if (parentFolder.children.some((child) => child.kind === "folder" && child.name === folderName)) {
+    throw new Error(`Folder already exists under parent: ${folderName}`);
+  }
+
+  const pathSegments = [...parentFolder.pathSegments, folderName];
+  const existingItems = collectItems(params.nodes);
+  let nextFileIndex = existingItems.length > 0 ? Math.max(...existingItems.map((item) => item.fileIndex)) + 1 : 0;
+
+  const usedNames = new Set<string>();
+  const items: MotionItemNode[] = [];
+  const copyJobs: Array<{ sourcePath: string; targetPath: string }> = [];
+
+  for (const clip of params.clips) {
+    const name = normalizeMotionEntryName(clip.name);
+    if (usedNames.has(name.toLowerCase())) {
+      throw new Error(`Duplicate clip name in bundle: ${name}`);
+    }
+    usedNames.add(name.toLowerCase());
+    const modelId = normalizeMotionHexInput(clip.modelId, `model id for ${name}`);
+    const sourcePath = toWindowsPath(clip.sourcePath);
+    if (!sourcePath.toLowerCase().endsWith(MOTION_EXT)) {
+      throw new Error(`Only .nuanmb clips are supported: ${sourcePath}`);
+    }
+
+    const fileIndex = nextFileIndex;
+    nextFileIndex += 1;
+    const fileUrl = buildFileUrl(params.rootName, pathSegments, name);
+    const filePath = filePathFromFileUrl(params.motionRoot, fileUrl);
+    const item: MotionItemNode = {
+      id: nextId("item", String(fileIndex)),
+      kind: "item",
+      parentId: nextId("folder", pathSegments.join("/")),
+      name,
+      link: false,
+      depth: pathSegments.length,
+      pathSegments: [...pathSegments],
+      // Folder-format clips: motion id lives on the parent folder; item unk1 is empty.
+      unk1: "00000000",
+      unk2: modelId,
+      unk2_1: 0,
+      unk3: 0,
+      unk4: 0,
+      fileIndex,
+      originalFileIndex: fileIndex,
+      fileType: ".bin",
+      fileUrl,
+      fileBaseName: name,
+      filePath,
+      rawSubFileData: {
+        index: fileIndex,
+        fileType: ".bin",
+        fileIndex,
+        fileUrl,
+        fileBaseName: name,
+      },
+      rawStructure: null,
+      rawParse: null,
+    };
+    items.push(item);
+    copyJobs.push({ sourcePath, targetPath: filePath });
+  }
+
+  const folder: MotionFolderNode = {
+    id: nextId("folder", pathSegments.join("/")),
+    kind: "folder",
+    parentId: parentFolder.id,
+    name: folderName,
+    link: false,
+    depth: pathSegments.length - 1,
+    pathSegments,
+    children: items,
+    unk1: actionId,
+    unk2: "00000000",
+    unk2_1: 0,
+    unk3,
+    unk4: 0,
+    unk5: 0,
+    unk6: 0,
+    rawStructure: null,
+    rawParse: null,
+  };
+
+  const walk = (branch: MotionStructureNode[]): MotionStructureNode[] => {
+    return branch.map((node) => {
+      if (node.kind !== "folder") return node;
+      if (node.id !== params.parentFolderId) {
+        return { ...node, children: walk(node.children) };
+      }
+      return { ...node, children: [...node.children, folder] };
+    });
+  };
+
+  return { nodes: walk(params.nodes), folder, items, copyJobs };
 }
 
 export function updateMotionNode(params: {

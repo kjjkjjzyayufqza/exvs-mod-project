@@ -53,6 +53,7 @@ fn write_two_bone_fixture() -> (tempfile::TempDir, std::path::PathBuf, std::path
     let animation = AnimData {
         major_version: 1,
         minor_version: 2,
+        name: None,
         final_frame_index: (frames.len() - 1) as f32,
         groups: vec![GroupData {
             group_type: GroupType::Transform,

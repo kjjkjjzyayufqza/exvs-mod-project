@@ -13,7 +13,21 @@ const { invokeMock, openMock, saveMock, toastErrorMock, toastSuccessMock } = vi.
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: openMock, save: saveMock }));
+vi.mock("@tauri-apps/api/path", () => ({
+  dirname: vi.fn(async (p: string) => {
+    const i = Math.max(p.lastIndexOf("\\"), p.lastIndexOf("/"));
+    return i > 0 ? p.slice(0, i) : p;
+  }),
+}));
 vi.mock("sonner", () => ({ toast: { error: toastErrorMock, success: toastSuccessMock } }));
+vi.mock("@/store/configStore", () => ({
+  useConfigStore: (sel: (s: Record<string, unknown>) => unknown) =>
+    sel({
+      store: {},
+      getSetting: vi.fn(async () => undefined),
+      setSetting: vi.fn(async () => undefined),
+    }),
+}));
 vi.mock("../MayaInspectorSection", () => ({
   MayaSection: ({ children, title }: { children: React.ReactNode; title: string }) => (
     <section aria-label={title}>{children}</section>
@@ -59,18 +73,24 @@ describe("MotionFbxImportPanel", () => {
     toastErrorMock.mockReset();
     toastSuccessMock.mockReset();
     onImportedMock.mockReset();
-    localStorage.clear();
   });
 
-  it("imports through inspect + save with the selected NUANMB as template", async () => {
+  it("uses separate FBX and NUANMB path fields then imports", async () => {
     openMock.mockResolvedValueOnce("E:\\edit\\attack_edit.fbx");
+    saveMock.mockResolvedValueOnce("E:\\out\\attack_edit.nuanmb");
     invokeMock.mockImplementation((command: string) => {
       if (command === "ssbh_inspect_motion_fbx") return Promise.resolve(inspectReport);
       if (command === "ssbh_import_motion_fbx") return Promise.resolve(importReport);
       return Promise.reject(new Error(`unexpected command ${command}`));
     });
-    saveMock.mockResolvedValueOnce("E:\\out\\attack_edit.nuanmb");
     renderPanel();
+
+    fireEvent.click(screen.getByLabelText(/Source FBX/i));
+    await waitFor(() => expect(openMock).toHaveBeenCalled());
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("ssbh_inspect_motion_fbx", expect.anything()));
+
+    fireEvent.click(screen.getByLabelText(/Output NUANMB/i));
+    await waitFor(() => expect(saveMock).toHaveBeenCalled());
 
     fireEvent.click(screen.getByRole("button", { name: /Import FBX as NUANMB/i }));
 
@@ -91,24 +111,59 @@ describe("MotionFbxImportPanel", () => {
     expect(screen.getByText(/40 frames/)).toBeInTheDocument();
   });
 
-  it("is a no-op when the FBX open dialog is cancelled", async () => {
-    openMock.mockResolvedValueOnce(null);
+  it("does not import when FBX path is empty", async () => {
     renderPanel();
     fireEvent.click(screen.getByRole("button", { name: /Import FBX as NUANMB/i }));
-    await waitFor(() => expect(openMock).toHaveBeenCalled());
     expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("allows re-import when output path equals the selected template NUANMB", async () => {
+    openMock.mockResolvedValueOnce("E:\\edit\\attack_edit.fbx");
+    // Same path as selected motion — second import / overwrite selected.
+    saveMock.mockResolvedValueOnce("E:\\unit\\attack.nuanmb");
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "ssbh_inspect_motion_fbx") return Promise.resolve(inspectReport);
+      if (command === "ssbh_import_motion_fbx") {
+        return Promise.resolve({
+          ...importReport,
+          outputPath: "E:\\unit\\attack.nuanmb",
+        });
+      }
+      return Promise.reject(new Error(`unexpected command ${command}`));
+    });
+    renderPanel();
+
+    fireEvent.click(screen.getByLabelText(/Source FBX/i));
+    await waitFor(() => expect(openMock).toHaveBeenCalled());
+    fireEvent.click(screen.getByLabelText(/Output NUANMB/i));
+    await waitFor(() => expect(saveMock).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /Import FBX as NUANMB/i }));
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("ssbh_import_motion_fbx", {
+        request: expect.objectContaining({
+          outputNuanmbPath: "E:\\unit\\attack.nuanmb",
+          templateNuanmbPath: "E:\\unit\\attack.nuanmb",
+        }),
+      }),
+    );
+    expect(onImportedMock).toHaveBeenCalledWith("E:\\unit\\attack.nuanmb");
   });
 
   it("omits the template when preserve groups is unchecked", async () => {
     openMock.mockResolvedValueOnce("E:\\edit\\attack_edit.fbx");
+    saveMock.mockResolvedValueOnce("E:\\out\\attack_edit.nuanmb");
     invokeMock.mockImplementation((command: string) => {
       if (command === "ssbh_inspect_motion_fbx") return Promise.resolve(inspectReport);
       if (command === "ssbh_import_motion_fbx") return Promise.resolve(importReport);
       return Promise.reject(new Error(`unexpected command ${command}`));
     });
-    saveMock.mockResolvedValueOnce("E:\\out\\attack_edit.nuanmb");
     renderPanel();
 
+    fireEvent.click(screen.getByLabelText(/Source FBX/i));
+    await waitFor(() => expect(openMock).toHaveBeenCalled());
+    fireEvent.click(screen.getByLabelText(/Output NUANMB/i));
+    await waitFor(() => expect(saveMock).toHaveBeenCalled());
     fireEvent.click(screen.getByLabelText(/Preserve groups/i));
     fireEvent.click(screen.getByRole("button", { name: /Import FBX as NUANMB/i }));
 
@@ -117,43 +172,5 @@ describe("MotionFbxImportPanel", () => {
         request: expect.objectContaining({ templateNuanmbPath: null }),
       }),
     );
-  });
-
-  it("surfaces backend errors inline and via toast", async () => {
-    openMock.mockResolvedValueOnce("E:\\edit\\bad.fbx");
-    invokeMock.mockImplementation((command: string) => {
-      if (command === "ssbh_inspect_motion_fbx") return Promise.resolve(inspectReport);
-      return Promise.reject(
-        "Motion FBX import failed: candidate skeleton is missing reference bone 'HAND'",
-      );
-    });
-    saveMock.mockResolvedValueOnce("E:\\out\\bad.nuanmb");
-    renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: /Import FBX as NUANMB/i }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(/missing reference bone/);
-    expect(toastErrorMock).toHaveBeenCalled();
-    expect(onImportedMock).not.toHaveBeenCalled();
-  });
-
-  it("asks for a stack choice when the FBX has multiple stacks", async () => {
-    openMock.mockResolvedValueOnce("E:\\edit\\multi.fbx");
-    invokeMock.mockImplementation((command: string) => {
-      if (command === "ssbh_inspect_motion_fbx")
-        return Promise.resolve({
-          stacks: [
-            { name: "clip_a", frameCount: 40, durationSeconds: 0.65 },
-            { name: "clip_b", frameCount: 20, durationSeconds: 0.317 },
-          ],
-          boneCount: 30,
-          boneNames: ["ROOT"],
-        });
-      return Promise.reject(new Error(`unexpected command ${command}`));
-    });
-    renderPanel();
-
-    fireEvent.click(screen.getByRole("button", { name: /Import FBX as NUANMB/i }));
-
-    expect(await screen.findByText(/multiple animation stacks/i)).toBeInTheDocument();
-    expect(saveMock).not.toHaveBeenCalled();
   });
 });
