@@ -3,15 +3,22 @@ import { ExternalLink, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { EffectFolderValidationResult, EffectFolderHash } from "@/services/effectFolder/effectFolderService";
+import type {
+  EffectFolderHash,
+  EffectFolderInventory,
+  EffectFolderValidationResult,
+} from "@/services/effectFolder/effectFolderService";
 import type { EffectListItem } from "./effectFolderEditorUtils";
 import { formatEffectFolderHash } from "./effectFolderEditorUtils";
+import { EffectFolder3dPreview } from "./EffectFolder3dPreview";
 import { EffectNutexbPreview } from "./EffectNutexbPreview";
 
 type EffectFolderDetailPanelProps = {
   item: EffectListItem | null;
+  inventory: EffectFolderInventory | null;
   inventoryWarnings: string[];
   validation: EffectFolderValidationResult | null;
+  previewSuspended?: boolean;
   onOpenAsEffectProject?: (filePath: string) => void;
 };
 
@@ -80,8 +87,10 @@ function ModelIdTable({ hashes }: { hashes: EffectFolderHash[] }) {
 
 export function EffectFolderDetailPanel({
   item,
+  inventory,
   inventoryWarnings,
   validation,
+  previewSuspended = false,
   onOpenAsEffectProject,
 }: EffectFolderDetailPanelProps) {
   if (!item) {
@@ -102,6 +111,9 @@ export function EffectFolderDetailPanel({
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
       <div className="custom-scrollbar-thin min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="flex flex-col gap-4 p-4">
+          {inventory && (item.category === "efxbn" || item.category === "models") ? (
+            <EffectFolder3dPreview item={item} inventory={inventory} previewSuspended={previewSuspended} />
+          ) : null}
           <div>
             <div className="mb-2 flex items-center gap-2">
               <h3 className="text-sm font-semibold">{item.category.toUpperCase()} details</h3>

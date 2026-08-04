@@ -436,8 +436,10 @@ export default function EffectFolderEditorView({
                     <ResizablePanel defaultSize={58} minSize={32} className="min-h-0">
                       <EffectFolderDetailPanel
                         item={editor.focusedItem}
+                        inventory={inventory}
                         inventoryWarnings={inventory?.warnings ?? []}
                         validation={editor.validation}
+                        previewSuspended={!isActive}
                         onOpenAsEffectProject={onOpenAsEffectProject}
                       />
                     </ResizablePanel>

@@ -12,7 +12,7 @@ function cacheKey(path: string, size: PreviewSize): string {
   return `${path.trim().replace(/\\/g, "/").toLowerCase()}::${size}`;
 }
 
-async function loadNutexbPreview(path: string, size: PreviewSize): Promise<string | null> {
+export async function loadNutexbPreview(path: string, size: PreviewSize): Promise<string | null> {
   const key = cacheKey(path, size);
   if (cache.has(key)) return cache.get(key) ?? null;
   const pending = inflight.get(key);

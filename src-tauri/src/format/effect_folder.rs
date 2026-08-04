@@ -153,12 +153,53 @@ pub struct EfxbnMetaParsedSummary {
 #[serde(rename_all = "camelCase")]
 pub struct EfxbnEffectSummary {
     pub index: usize,
+    pub referenced_effect_index: i32,
+    pub effect_type: u32,
+    pub life_time_base: f32,
+    pub life_time_random: f32,
+    pub interval_base: f32,
+    pub interval_random: f32,
+    pub num_emit: u32,
+    pub action_flags: u32,
+    pub spawn_form_type: u32,
+    pub spawn_form_length: [f32; 4],
+    pub speed_random: [f32; 4],
+    pub size_base: [f32; 4],
+    pub size_random: [f32; 4],
+    pub rotation_base: [f32; 4],
+    pub rotation_random: [f32; 4],
+    pub rotation_speed: [f32; 4],
+    pub center_pivot: [f32; 2],
+    pub delete_settings: u32,
+    pub fade_time_base: f32,
+    pub culling_type: u32,
+    pub z_write_enable: u32,
+    pub z_test_enable: u32,
+    pub blend_state: u32,
+    pub draw_repository_index: u32,
+    pub instance_amount_type: u32,
+    pub draw_amount_index: u32,
+    pub enable_soft_particle: u32,
+    pub position_offset: [f32; 4],
+    pub delay_emit_time_base: f32,
+    pub emit_area_type: u32,
+    pub enable_z_sort: u32,
+    pub strip_segment_interval: f32,
+    pub strip_segment_life: f32,
+    pub strip_segment_split_num: u32,
+    pub strip_tail_alpha_rate: f32,
+    pub strip_head_alpha_rate: f32,
+    pub emit_interpolate_distance: f32,
+    pub emit_interpolate_type: u32,
+    pub mesh_emitter_index: u32,
+    pub mesh_emitter_count: u32,
     pub model_id: i32,
     pub model_hash: EffectFolderHash,
     pub animation_id: i32,
     pub animation_hash: EffectFolderHash,
     pub id_table: Vec<EfxbnIdPair>,
     pub control_references: Vec<EfxbnControlReferenceSummary>,
+    pub model_control_indices: [i32; 4],
     pub meta_parsed: EfxbnMetaParsedSummary,
 }
 
@@ -429,9 +470,25 @@ pub fn parse_efxbn_file(path: &str) -> Result<EfxbnSummary, String> {
     parse_efxbn_bytes(&bytes, path)
 }
 
-const EFXBN_CONTROL_REFERENCE_FIELDS: [u32; 18] = [
-    0x50, 0x58, 0x60, 0x68, 0x70, 0x78, 0x80, 0x88, 0x90, 0x98, 0xa0, 0xa8, 0xb0, 0xb8, 0xc0, 0xc8,
-    0x1c4, 0x1cc,
+const EFXBN_CONTROL_REFERENCE_FIELDS: [(&str, u32); 18] = [
+    ("spawnForm0", 0x50),
+    ("spawnForm1", 0x58),
+    ("spawnForm2", 0x60),
+    ("spawnForm3", 0x68),
+    ("spreadX", 0x70),
+    ("spreadY", 0x78),
+    ("speedBaseX", 0x80),
+    ("speedBaseY", 0x88),
+    ("speedBaseZ", 0x90),
+    ("scaleBaseX", 0x98),
+    ("scaleBaseY", 0xa0),
+    ("scaleBaseZ", 0xa8),
+    ("colorR", 0xb0),
+    ("colorG", 0xb8),
+    ("colorB", 0xc0),
+    ("colorA", 0xc8),
+    ("worldGravityAccel", 0x1c4),
+    ("directionAccel", 0x1cc),
 ];
 
 fn efxbn_unknown_todo() -> EfxbnTodo {
@@ -2070,11 +2127,11 @@ fn parse_efxbn_bytes(bytes: &[u8], path: &str) -> Result<EfxbnSummary, String> {
             });
         }
         let mut control_references = Vec::with_capacity(EFXBN_CONTROL_REFERENCE_FIELDS.len());
-        for (index, raw_offset) in EFXBN_CONTROL_REFERENCE_FIELDS.iter().enumerate() {
+        for (index, (name, raw_offset)) in EFXBN_CONTROL_REFERENCE_FIELDS.iter().enumerate() {
             let off = base + *raw_offset as usize;
             control_references.push(EfxbnControlReferenceSummary {
                 index,
-                name: format!("ctrl{index:02}"),
+                name: (*name).to_string(),
                 raw_offset: *raw_offset,
                 runtime_offset: *raw_offset + 8,
                 selector: read_u32_le(bytes, off)?,
@@ -2126,12 +2183,102 @@ fn parse_efxbn_bytes(bytes: &[u8], path: &str) -> Result<EfxbnSummary, String> {
         };
         effects.push(EfxbnEffectSummary {
             index: i,
+            referenced_effect_index: read_i32_le(bytes, base)?,
+            effect_type: read_u32_le(bytes, base + 0x20)?,
+            life_time_base: read_f32_le(bytes, base + 0x24)?,
+            life_time_random: read_f32_le(bytes, base + 0x28)?,
+            interval_base: read_f32_le(bytes, base + 0x2c)?,
+            interval_random: read_f32_le(bytes, base + 0x30)?,
+            num_emit: read_u32_le(bytes, base + 0x34)?,
+            action_flags: read_u32_le(bytes, base + 0x38)?,
+            spawn_form_type: read_u32_le(bytes, base + 0x3c)?,
+            spawn_form_length: [
+                read_f32_le(bytes, base + 0x40)?,
+                read_f32_le(bytes, base + 0x44)?,
+                read_f32_le(bytes, base + 0x48)?,
+                read_f32_le(bytes, base + 0x4c)?,
+            ],
+            speed_random: [
+                read_f32_le(bytes, base + 0xd8)?,
+                read_f32_le(bytes, base + 0xdc)?,
+                read_f32_le(bytes, base + 0xe0)?,
+                read_f32_le(bytes, base + 0xe4)?,
+            ],
+            size_base: [
+                read_f32_le(bytes, base + 0xe8)?,
+                read_f32_le(bytes, base + 0xec)?,
+                read_f32_le(bytes, base + 0xf0)?,
+                read_f32_le(bytes, base + 0xf4)?,
+            ],
+            size_random: [
+                read_f32_le(bytes, base + 0xf8)?,
+                read_f32_le(bytes, base + 0xfc)?,
+                read_f32_le(bytes, base + 0x100)?,
+                read_f32_le(bytes, base + 0x104)?,
+            ],
+            rotation_base: [
+                read_f32_le(bytes, base + 0x108)?,
+                read_f32_le(bytes, base + 0x10c)?,
+                read_f32_le(bytes, base + 0x110)?,
+                read_f32_le(bytes, base + 0x114)?,
+            ],
+            rotation_random: [
+                read_f32_le(bytes, base + 0x118)?,
+                read_f32_le(bytes, base + 0x11c)?,
+                read_f32_le(bytes, base + 0x120)?,
+                read_f32_le(bytes, base + 0x124)?,
+            ],
+            rotation_speed: [
+                read_f32_le(bytes, base + 0x128)?,
+                read_f32_le(bytes, base + 0x12c)?,
+                read_f32_le(bytes, base + 0x130)?,
+                read_f32_le(bytes, base + 0x134)?,
+            ],
+            center_pivot: [
+                read_f32_le(bytes, base + 0x158)?,
+                read_f32_le(bytes, base + 0x15c)?,
+            ],
+            delete_settings: read_u32_le(bytes, base + 0x160)?,
+            fade_time_base: read_f32_le(bytes, base + 0x164)?,
+            culling_type: read_u32_le(bytes, base + 0x168)?,
+            z_write_enable: read_u32_le(bytes, base + 0x16c)?,
+            z_test_enable: read_u32_le(bytes, base + 0x170)?,
+            blend_state: read_u32_le(bytes, base + 0x174)?,
+            draw_repository_index: read_u32_le(bytes, base + 0x178)?,
+            instance_amount_type: read_u32_le(bytes, base + 0x17c)?,
+            draw_amount_index: read_u32_le(bytes, base + 0x180)?,
+            enable_soft_particle: read_u32_le(bytes, base + 0x184)?,
+            position_offset: [
+                read_f32_le(bytes, base + 0x188)?,
+                read_f32_le(bytes, base + 0x18c)?,
+                read_f32_le(bytes, base + 0x190)?,
+                read_f32_le(bytes, base + 0x194)?,
+            ],
+            delay_emit_time_base: read_f32_le(bytes, base + 0x198)?,
+            emit_area_type: read_u32_le(bytes, base + 0x19c)?,
+            enable_z_sort: read_u32_le(bytes, base + 0x1a0)?,
+            strip_segment_interval: read_f32_le(bytes, base + 0x1d8)?,
+            strip_segment_life: read_f32_le(bytes, base + 0x1e0)?,
+            strip_segment_split_num: read_u32_le(bytes, base + 0x1e8)?,
+            strip_tail_alpha_rate: read_f32_le(bytes, base + 0x254)?,
+            strip_head_alpha_rate: read_f32_le(bytes, base + 0x258)?,
+            emit_interpolate_distance: read_f32_le(bytes, base + 0x25c)?,
+            emit_interpolate_type: read_u32_le(bytes, base + 0x2e8)?,
+            // Reflected SEfxElementData offsets 0x2C8/0x2CC include the runtime-only 8-byte prefix.
+            mesh_emitter_index: read_u32_le(bytes, base + 0x2c0)?,
+            mesh_emitter_count: read_u32_le(bytes, base + 0x2c4)?,
             model_id,
             model_hash: EffectFolderHash::from_i32(model_id),
             animation_id,
             animation_hash: EffectFolderHash::from_i32(animation_id),
             id_table,
             control_references,
+            model_control_indices: [
+                read_i32_le(bytes, base + 0x148)?,
+                read_i32_le(bytes, base + 0x14c)?,
+                read_i32_le(bytes, base + 0x150)?,
+                read_i32_le(bytes, base + 0x154)?,
+            ],
             meta_parsed,
         });
     }
@@ -2846,7 +2993,7 @@ mod tests {
         assert_eq!(parsed.control_lookup_entries[0].value_f32_bits, 0x3FC00000);
         assert_eq!(parsed.control_lookup_entries[0].value, 1.5);
         assert_eq!(parsed.effects[0].control_references.len(), 18);
-        assert_eq!(parsed.effects[0].control_references[0].name, "ctrl00");
+        assert_eq!(parsed.effects[0].control_references[0].name, "spawnForm0");
         assert_eq!(parsed.effects[0].control_references[0].raw_offset, 0x50);
         assert_eq!(parsed.effects[0].control_references[0].runtime_offset, 0x58);
         assert_eq!(parsed.effects[0].control_references[0].selector, 1);
@@ -3043,6 +3190,35 @@ mod tests {
         bytes[0x0c..0x10].copy_from_slice(&(effect_count as u32).to_le_bytes());
         bytes[0x10..0x14].copy_from_slice(&control_config_region_param.to_le_bytes());
         bytes[0x14..0x18].copy_from_slice(&(model_control_count as u32).to_le_bytes());
+        let first_effect_offset = 0x20usize;
+        bytes[first_effect_offset..first_effect_offset + 4].copy_from_slice(&2i32.to_le_bytes());
+        bytes[first_effect_offset + 0x20..first_effect_offset + 0x24].copy_from_slice(&9u32.to_le_bytes());
+        bytes[first_effect_offset + 0x24..first_effect_offset + 0x28].copy_from_slice(&1.0f32.to_le_bytes());
+        bytes[first_effect_offset + 0x28..first_effect_offset + 0x2c].copy_from_slice(&0.25f32.to_le_bytes());
+        bytes[first_effect_offset + 0x2c..first_effect_offset + 0x30].copy_from_slice(&3.0f32.to_le_bytes());
+        bytes[first_effect_offset + 0x30..first_effect_offset + 0x34].copy_from_slice(&0.5f32.to_le_bytes());
+        bytes[first_effect_offset + 0x34..first_effect_offset + 0x38].copy_from_slice(&4u32.to_le_bytes());
+        bytes[first_effect_offset + 0x38..first_effect_offset + 0x3c].copy_from_slice(&0x800u32.to_le_bytes());
+        bytes[first_effect_offset + 0x3c..first_effect_offset + 0x40].copy_from_slice(&10u32.to_le_bytes());
+        bytes[first_effect_offset + 0x40..first_effect_offset + 0x44].copy_from_slice(&128.0f32.to_le_bytes());
+        bytes[first_effect_offset + 0xe8..first_effect_offset + 0xec].copy_from_slice(&2.0f32.to_le_bytes());
+        bytes[first_effect_offset + 0x16c..first_effect_offset + 0x170].copy_from_slice(&1u32.to_le_bytes());
+        bytes[first_effect_offset + 0x170..first_effect_offset + 0x174].copy_from_slice(&1u32.to_le_bytes());
+        bytes[first_effect_offset + 0x174..first_effect_offset + 0x178].copy_from_slice(&2u32.to_le_bytes());
+        bytes[first_effect_offset + 0x188..first_effect_offset + 0x18c].copy_from_slice(&5.0f32.to_le_bytes());
+        bytes[first_effect_offset + 0x1d8..first_effect_offset + 0x1dc].copy_from_slice(&2.0f32.to_le_bytes());
+        bytes[first_effect_offset + 0x1e0..first_effect_offset + 0x1e4].copy_from_slice(&8.0f32.to_le_bytes());
+        bytes[first_effect_offset + 0x1e8..first_effect_offset + 0x1ec].copy_from_slice(&3u32.to_le_bytes());
+        bytes[first_effect_offset + 0x254..first_effect_offset + 0x258].copy_from_slice(&0.25f32.to_le_bytes());
+        bytes[first_effect_offset + 0x258..first_effect_offset + 0x25c].copy_from_slice(&0.75f32.to_le_bytes());
+        bytes[first_effect_offset + 0x25c..first_effect_offset + 0x260].copy_from_slice(&4.0f32.to_le_bytes());
+        bytes[first_effect_offset + 0x2e8..first_effect_offset + 0x2ec].copy_from_slice(&2u32.to_le_bytes());
+        bytes[first_effect_offset + 0x2c0..first_effect_offset + 0x2c4].copy_from_slice(&12u32.to_le_bytes());
+        bytes[first_effect_offset + 0x2c4..first_effect_offset + 0x2c8].copy_from_slice(&34u32.to_le_bytes());
+        for (offset, value) in [(0x148usize, 0i32), (0x14c, -1), (0x150, -1), (0x154, -1)] {
+            bytes[first_effect_offset + offset..first_effect_offset + offset + 4]
+                .copy_from_slice(&value.to_le_bytes());
+        }
         bytes[model_control_offset..model_control_offset + 4].copy_from_slice(&1u32.to_le_bytes());
         let texture_id = 0x6AF9B19Fu32 as i32;
         bytes[model_control_offset + 4..model_control_offset + 8]
@@ -3108,6 +3284,31 @@ mod tests {
             model_control_offset as u32
         );
         assert_eq!(parsed.trailing_offset, file_size as u32);
+        assert_eq!(parsed.effects[0].referenced_effect_index, 2);
+        assert_eq!(parsed.effects[0].effect_type, 9);
+        assert_eq!(parsed.effects[0].life_time_base, 1.0);
+        assert_eq!(parsed.effects[0].life_time_random, 0.25);
+        assert_eq!(parsed.effects[0].interval_base, 3.0);
+        assert_eq!(parsed.effects[0].interval_random, 0.5);
+        assert_eq!(parsed.effects[0].num_emit, 4);
+        assert_eq!(parsed.effects[0].action_flags, 0x800);
+        assert_eq!(parsed.effects[0].spawn_form_type, 10);
+        assert_eq!(parsed.effects[0].spawn_form_length[0], 128.0);
+        assert_eq!(parsed.effects[0].size_base[0], 2.0);
+        assert_eq!(parsed.effects[0].z_write_enable, 1);
+        assert_eq!(parsed.effects[0].z_test_enable, 1);
+        assert_eq!(parsed.effects[0].blend_state, 2);
+        assert_eq!(parsed.effects[0].position_offset[0], 5.0);
+        assert_eq!(parsed.effects[0].strip_segment_interval, 2.0);
+        assert_eq!(parsed.effects[0].strip_segment_life, 8.0);
+        assert_eq!(parsed.effects[0].strip_segment_split_num, 3);
+        assert_eq!(parsed.effects[0].strip_tail_alpha_rate, 0.25);
+        assert_eq!(parsed.effects[0].strip_head_alpha_rate, 0.75);
+        assert_eq!(parsed.effects[0].emit_interpolate_distance, 4.0);
+        assert_eq!(parsed.effects[0].emit_interpolate_type, 2);
+        assert_eq!(parsed.effects[0].mesh_emitter_index, 12);
+        assert_eq!(parsed.effects[0].mesh_emitter_count, 34);
+        assert_eq!(parsed.effects[0].model_control_indices, [0, -1, -1, -1]);
         assert_eq!(parsed.model_control_texture_ids[0].signed, texture_id);
         assert_eq!(parsed.model_controls[0].index, 0);
         assert_eq!(parsed.model_controls[0].input_source_type, 1);

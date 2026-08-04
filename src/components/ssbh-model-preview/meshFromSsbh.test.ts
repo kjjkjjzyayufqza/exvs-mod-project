@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDrawListFromBundle,
   buildMatlLookup,
+  cloneBuiltMeshDrawsForInstance,
   resolveMaterialBinding,
   resolveMaterialTexturePaths,
   createStageSafeTextureSlotLoadEnabled,
@@ -295,6 +296,11 @@ describe("buildDrawListFromBundle", () => {
     expect(prefixed[0]?.key).toBe("pi_a1::body_0");
     expect(prefixed[0]?.previewInstanceId).toBe("pi_a1");
     expect(prefixed[0]?.label).toContain("model.numdlb");
+    const pooled = cloneBuiltMeshDrawsForInstance(prefixed, "pi_a2", "model.numdlb");
+    expect(pooled[0]?.key).toBe("pi_a2::body_0");
+    expect(pooled[0]?.previewInstanceId).toBe("pi_a2");
+    expect(pooled[0]?.geometry).toBe(prefixed[0]?.geometry);
+    expect(pooled[0]?.skin).toBe(prefixed[0]?.skin);
     const geom = draws[0]?.geometry;
     const uv = geom?.getAttribute("uv");
     const uv2 = geom?.getAttribute("uv2");

@@ -27,6 +27,7 @@ import {
   buildDrawListFromBundle,
   buildMatlLookup,
   buildTextureRefToPathMap,
+  cloneBuiltMeshDrawsForInstance,
   createDefaultTextureSlotLoadEnabled,
   resolveMaterialBinding,
   resolveMaterialTexturePaths,
@@ -35,6 +36,7 @@ import {
   type ResolvedMaterialBinding,
   type TexturePreviewSlotKey,
 } from "./meshFromSsbh";
+
 import { clearMeshGeometryRegistry, hydrateBundleGeometry } from "./meshGeometryHydrate";
 import { shouldStartMotionClipLoad } from "./motionClipLoadPolicy";
 import { inspectMotionFbx, previewMotionFbx } from "./motionFbxImportService";
@@ -92,6 +94,15 @@ import {
   TEST_EDITOR_SCENE_CONFIG_VERSION,
   type TestEditorSceneConfig,
 } from "./testEditorSceneConfig";
+
+function disposeDrawGeometries(draws: readonly BuiltMeshDraw[]): void {
+  const disposed = new Set<BufferGeometry>();
+  for (const draw of draws) {
+    if (disposed.has(draw.geometry)) continue;
+    disposed.add(draw.geometry);
+    draw.geometry.dispose();
+  }
+}
 
 export type BoneTransformMode = "translate" | "rotate" | "scale";
 export type PreviewInstanceViewMode = "all" | "single";
@@ -335,6 +346,8 @@ export type SsbhModelPreviewContextValue = {
   setAutoLoadAfterConvertToSsbh: (v: boolean) => void;
   /** Load preview from a folder path or a `.numdlb` file path (same as Open model). */
   loadModelAt: (path: string) => Promise<void>;
+  /** Replace the scene with an ordered set of disk-backed `.numdlb` instances. */
+  loadModelSetAt: (paths: readonly string[]) => Promise<readonly SsbhModelPreviewInstance[]>;
   /** Append a `.numdlb` preview instance without replacing current scene models. */
   addModelAt: (path: string) => Promise<void>;
   /** Replace the current preview scene with bundles that were resolved from an in-memory FHM2D session. */
@@ -859,7 +872,7 @@ export function SsbhModelPreviewProvider({
 
   const releasePreviewResourcesSync = useCallback(() => {
     setDraws((prev) => {
-      prev.forEach((d) => d.geometry.dispose());
+      disposeDrawGeometries(prev);
       return [];
     });
     setTextureDataMap(new Map());
@@ -878,9 +891,7 @@ export function SsbhModelPreviewProvider({
   }, [releasePreviewResourcesSync]);
 
   const disposeLoadedDraws = useCallback((loadedDraws: readonly BuiltMeshDraw[]) => {
-    for (const draw of loadedDraws) {
-      draw.geometry.dispose();
-    }
+    disposeDrawGeometries(loadedDraws);
   }, []);
 
   const bundle = useMemo((): SsbhModelPreviewBundle | null => {
@@ -1348,14 +1359,18 @@ export function SsbhModelPreviewProvider({
     const instances: SsbhModelPreviewInstance[] = [];
     const allDraws: BuiltMeshDraw[] = [];
     const collectedWarnings: string[] = [];
+    const templateDrawsByBundle = new Map<SsbhModelPreviewBundle, BuiltMeshDraw[]>();
     for (let index = 0; index < bundles.length; index++) {
       const b = bundles[index]!;
       const id = previewInstanceIdFromModlPath(b.modlPath, startSlotIndex + index);
-        const label = fileBasename(b.modlPath).replace(/\.numdlb$/i, "") || "model";
+      const label = fileBasename(b.modlPath).replace(/\.numdlb$/i, "") || "model";
+      let created = templateDrawsByBundle.get(b);
+      if (created) {
+        created = cloneBuiltMeshDrawsForInstance(created, id, label);
+      } else {
         const skelJson = b.skel ? (b.skel as SkelDataJson) : null;
         // Attach binary geometry (typed-array views) before building draws.
         await hydrateBundleGeometry(b);
-        let created: BuiltMeshDraw[];
         try {
           created = buildDrawListFromBundle(
             b.modl as ModlDataJson,
@@ -1366,9 +1381,11 @@ export function SsbhModelPreviewProvider({
         } catch (e) {
           throw new Error(`Failed to build mesh draws for ${b.modlPath}: ${String(e)}`);
         }
-        instances.push({ id, modlPath: b.modlPath, displayLabel: label, bundle: b });
-        allDraws.push(...created);
+        templateDrawsByBundle.set(b, created);
         if (b.warnings.length) collectedWarnings.push(...b.warnings);
+      }
+      instances.push({ id, modlPath: b.modlPath, displayLabel: label, bundle: b });
+      allDraws.push(...created);
     }
     if (collectedWarnings.length > 0) {
       const preview = collectedWarnings.slice(0, 4).join("\n");
@@ -1382,9 +1399,10 @@ export function SsbhModelPreviewProvider({
   }, []);
 
   const buildInstancesFromPaths = useCallback(async (paths: string[], startSlotIndex: number) => {
-    const bundles: SsbhModelPreviewBundle[] = [];
-    for (let offset = 0; offset < paths.length; offset += INSTANCE_LOAD_CONCURRENCY) {
-      const chunk = paths.slice(offset, offset + INSTANCE_LOAD_CONCURRENCY);
+    const uniquePaths = [...new Map(paths.map((path) => [path.toLowerCase(), path])).values()];
+    const bundleByPath = new Map<string, SsbhModelPreviewBundle>();
+    for (let offset = 0; offset < uniquePaths.length; offset += INSTANCE_LOAD_CONCURRENCY) {
+      const chunk = uniquePaths.slice(offset, offset + INSTANCE_LOAD_CONCURRENCY);
       const loaded = await Promise.all(
         chunk.map((p) =>
           invoke<SsbhModelPreviewBundle>("ssbh_load_model_preview", {
@@ -1392,8 +1410,11 @@ export function SsbhModelPreviewProvider({
           }),
         ),
       );
-      bundles.push(...loaded);
+      loaded.forEach((bundle, index) => {
+        bundleByPath.set(chunk[index]!.toLowerCase(), bundle);
+      });
     }
+    const bundles = paths.map((path) => bundleByPath.get(path.toLowerCase())!);
     return buildInstancesFromBundles(bundles, startSlotIndex);
   }, [buildInstancesFromBundles]);
 
@@ -1453,7 +1474,7 @@ export function SsbhModelPreviewProvider({
           await syncPreviewCollectionReplace(loaded.instances);
           startTransition(() => {
             setDraws((prev) => {
-              prev.forEach((d) => d.geometry.dispose());
+              disposeDrawGeometries(prev);
               return loaded.draws;
             });
             setPreviewInstances(loaded.instances);
@@ -2301,6 +2322,50 @@ export function SsbhModelPreviewProvider({
     [loadAt],
   );
 
+  const loadModelSetAt = useCallback(
+    async (paths: readonly string[]): Promise<readonly SsbhModelPreviewInstance[]> => {
+      const normalized = paths.map((path) => normalizeScenePathStrict(path.trim()));
+      if (normalized.length === 0) {
+        throw new Error("At least one .numdlb path is required.");
+      }
+      if (normalized.some((path) => !/\.numdlb$/i.test(path))) {
+        throw new Error("Model set preview accepts only .numdlb paths.");
+      }
+
+      const gen = bumpLoadGeneration();
+      setLoading(true);
+      setLoadError(null);
+      try {
+        const instances = await loadInstancesFromPaths(normalized, { generation: gen });
+        if (gen !== loadGenerationRef.current) {
+          return [];
+        }
+        setRecentModelPaths((prev) => {
+          let next = prev;
+          for (const path of normalized) {
+            next = buildNextRecentPaths(next, path);
+          }
+          writeRecentModelPathsToStorage(next);
+          return next;
+        });
+        setModelLoadNonce((nonce) => nonce + 1);
+        return instances;
+      } catch (error) {
+        if (gen === loadGenerationRef.current) {
+          const message = error instanceof Error ? error.message : String(error);
+          setLoadError(message);
+          toast.error(message);
+        }
+        throw error;
+      } finally {
+        if (gen === loadGenerationRef.current) {
+          setLoading(false);
+        }
+      }
+    },
+    [bumpLoadGeneration, loadInstancesFromPaths],
+  );
+
   const requestCameraFit = useCallback(() => {
     setFitRequestId((r) => r + 1);
   }, []);
@@ -2319,7 +2384,7 @@ export function SsbhModelPreviewProvider({
       previewInstances.map((instance) => instance.bundle),
     );
     setDraws((prev) => {
-      prev.forEach((d) => d.geometry.dispose());
+      disposeDrawGeometries(prev);
       return [];
     });
     setPreviewInstances([]);
@@ -2853,6 +2918,7 @@ export function SsbhModelPreviewProvider({
       autoLoadAfterConvertToSsbh,
       setAutoLoadAfterConvertToSsbh,
       loadModelAt,
+      loadModelSetAt,
       addModelAt,
       loadMemoryPreviewBundles,
       appendMemoryPreviewBundles,
@@ -2991,6 +3057,7 @@ export function SsbhModelPreviewProvider({
       autoLoadAfterConvertToSsbh,
       setAutoLoadAfterConvertToSsbh,
       loadModelAt,
+      loadModelSetAt,
       addModelAt,
       loadMemoryPreviewBundles,
       appendMemoryPreviewBundles,

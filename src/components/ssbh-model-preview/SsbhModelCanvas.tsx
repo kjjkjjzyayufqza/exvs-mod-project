@@ -47,13 +47,14 @@ import {
   LineBasicMaterial,
   Matrix4,
   Mesh,
+  MeshBasicMaterial,
   PerspectiveCamera,
   Quaternion,
   Skeleton,
   Vector2,
   Vector3,
 } from "three";
-import type { BufferGeometry, Object3D, Texture } from "three";
+import type { Blending, BufferGeometry, Material, Object3D, Texture } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { StageOrbitControls } from "@/components/viewport/StageOrbitControls";
 import { ViewportMarqueeOverlay } from "@/components/viewport/ViewportMarqueeOverlay";
@@ -205,6 +206,23 @@ function useRenderDebug(name: string, tracked: Record<string, unknown>): void {
   });
 }
 
+export type PreviewInstanceHostTransform = {
+  position: readonly [number, number, number];
+  rotation: readonly [number, number, number];
+  scale: readonly [number, number, number];
+  color?: readonly [number, number, number, number];
+  visible?: boolean;
+  depthWrite?: boolean;
+  depthTest?: boolean;
+  blending?: Blending;
+  /** Optional EFX color map rendered with the game's unlit model pixel path. */
+  effectTexture?: Texture | null;
+  effectUvScale?: readonly [number, number];
+  effectUvOffset?: readonly [number, number];
+  /** Host-owned motion frame, used for per-particle animation phase. */
+  motionFrame?: number;
+};
+
 type SsbhModelCanvasProps = {
   draws: BuiltMeshDraw[];
   textureDataMap: ReadonlyMap<string, NutexbTextureData>;
@@ -243,6 +261,12 @@ type SsbhModelCanvasProps = {
   previewRenderStyle: PreviewRenderStyle;
   /** When true, R3F stops the render loop (background kept-alive route). */
   previewSuspended?: boolean;
+  /** Optional host-owned R3F content rendered inside the fitted model root. */
+  sceneOverlay?: ReactNode;
+  /** Imperative per-frame instance transforms owned by an embedded host. */
+  hostInstanceTransformsRef?: RefObject<ReadonlyMap<string, PreviewInstanceHostTransform>>;
+  /** Keeps the shared canvas advancing while host-owned scene content is animated. */
+  sceneOverlayAnimating?: boolean;
   onViewportBoneSelect: (index: number) => void;
   onViewportBoneSelectionClear: () => void;
   onBoneTransformHotkey: (mode: BoneTransformMode) => void;
@@ -1066,6 +1090,8 @@ const Scene = memo(function Scene({
   motionApplyLighting,
   motionForceVisibleDuringPlayback,
   modelAttachments,
+  sceneOverlay,
+  hostInstanceTransformsRef,
   viewportControls = "default",
   onViewportSelectInstance,
   onViewportSelectInstances,
@@ -1075,6 +1101,7 @@ const Scene = memo(function Scene({
 }: Omit<
   SsbhModelCanvasProps,
   | "previewSuspended"
+  | "sceneOverlayAnimating"
   | "onViewportBoneSelectionClear"
   | "onBoneTransformHotkey"
   | "onUndoBonePose"
@@ -1213,6 +1240,20 @@ const Scene = memo(function Scene({
     return map;
   }, [draws, previewInstances, singleInstance]);
   const instanceGroupRefs = useRef<Map<string, Group>>(new Map());
+  const hostMaterialDefaultsRef = useRef(new WeakMap<Material, {
+    color: Color | null;
+    opacity: number;
+    transparent: boolean;
+    depthWrite: boolean;
+    depthTest: boolean;
+    blending: Blending;
+  }>());
+  const hostTintScratchRef = useRef(new Color());
+  const hostEffectMaterialOverridesRef = useRef(new Map<Mesh, {
+    original: Material | Material[];
+    overrides: MeshBasicMaterial[];
+  }>());
+  const hostEffectTexturesRef = useRef(new Map<string, { source: Texture; texture: Texture }>());
   /**
    * SkinnedMesh uses bindMode "detached": skinning is pure bone.matrixWorld.
    * Attach offsets must live on a skeleton parent (not the mesh group), or the
@@ -1231,6 +1272,16 @@ const Scene = memo(function Scene({
       anchors.clear();
     };
   }, [scene]);
+
+  useEffect(() => () => {
+    for (const [mesh, override] of hostEffectMaterialOverridesRef.current) {
+      mesh.material = override.original;
+      for (const material of override.overrides) material.dispose();
+    }
+    hostEffectMaterialOverridesRef.current.clear();
+    for (const entry of hostEffectTexturesRef.current.values()) entry.texture.dispose();
+    hostEffectTexturesRef.current.clear();
+  }, []);
 
   useEffect(() => {
     if (!exportHandleRef) return;
@@ -1401,7 +1452,11 @@ const Scene = memo(function Scene({
       }
       return;
     }
-    if (!anyMotionPlaying) {
+    const hostMotionFrames = hostInstanceTransformsRef?.current;
+    const hasHostMotion = Boolean(
+      hostMotionFrames && Array.from(hostMotionFrames.values()).some((transform) => Number.isFinite(transform.motionFrame)),
+    );
+    if (!anyMotionPlaying && !hasHostMotion) {
       return;
     }
     lastAppliedScrubFrameRef.current = null;
@@ -1417,7 +1472,9 @@ const Scene = memo(function Scene({
     let cameraFactor = 0;
     let cameraHasData = false;
     for (const [instanceId, motionState] of motionStatesByInstanceId.entries()) {
-      if (!motionState.poseEnabled || !motionState.playing || !motionState.clip) {
+      const hostMotionFrame = hostMotionFrames?.get(instanceId)?.motionFrame;
+      const hostDriven = Number.isFinite(hostMotionFrame);
+      if (!motionState.poseEnabled || (!motionState.playing && !hostDriven) || !motionState.clip) {
         continue;
       }
       const runtime = gpuRuntimeByInstance.get(instanceId);
@@ -1427,13 +1484,15 @@ const Scene = memo(function Scene({
       const clip = motionState.clip;
       const current = playbackFrameRef.current.get(instanceId) ?? motionState.frame;
       const advanceStart = performance.now();
-      const { nextFrame, shouldStopPlayback } = advanceMotionFrame(
-        current,
-        delta,
-        motionState.speed,
-        clip.finalFrameIndex,
-        motionState.loop,
-      );
+      const { nextFrame, shouldStopPlayback } = hostDriven
+        ? { nextFrame: hostMotionFrame as number, shouldStopPlayback: false }
+        : advanceMotionFrame(
+            current,
+            delta,
+            motionState.speed,
+            clip.finalFrameIndex,
+            motionState.loop,
+          );
       phaseAdvance += performance.now() - advanceStart;
       playbackFrameRef.current.set(instanceId, nextFrame);
 
@@ -1476,7 +1535,7 @@ const Scene = memo(function Scene({
       runtime.skeleton.update();
       phaseBones += performance.now() - bonesStart;
 
-      if (instanceId === motionControlInstanceId) {
+      if (instanceId === motionControlInstanceId && !hostDriven) {
         cameraCurrentFrame = currentFrame;
         cameraNextFrame = nextMotionFrame;
         cameraFactor = factor;
@@ -1649,19 +1708,148 @@ const Scene = memo(function Scene({
       anchors.delete(instanceId);
     }
 
+    const activeEffectMeshes = new Set<Mesh>();
+    const activeEffectInstanceIds = new Set<string>();
     for (let i = 0; i < visibleInstances.length; i++) {
       const inst = visibleInstances[i];
       const group = instanceGroupRefs.current.get(inst.id);
       if (!group || attachedChildIds.has(inst.id)) {
         continue;
       }
-      if (!group.matrixAutoUpdate) {
+      const hostTransform = hostInstanceTransformsRef?.current?.get(inst.id);
+      let effectTexture: Texture | null = null;
+      if (hostTransform?.effectTexture) {
+        activeEffectInstanceIds.add(inst.id);
+        let cached = hostEffectTexturesRef.current.get(inst.id);
+        if (!cached || cached.source !== hostTransform.effectTexture) {
+          cached?.texture.dispose();
+          const texture = hostTransform.effectTexture.clone();
+          texture.flipY = false;
+          texture.needsUpdate = true;
+          cached = { source: hostTransform.effectTexture, texture };
+          hostEffectTexturesRef.current.set(inst.id, cached);
+        }
+        const uvScale = hostTransform.effectUvScale ?? [1, 1];
+        const uvOffset = hostTransform.effectUvOffset ?? [0, 0];
+        cached.texture.repeat.set(uvScale[0], uvScale[1]);
+        cached.texture.offset.set(uvOffset[0], uvOffset[1]);
+        cached.texture.updateMatrix();
+        effectTexture = cached.texture;
+      }
+      group.visible = hostTransform?.visible ?? true;
+      if (hostTransform) {
+        group.matrixAutoUpdate = true;
+        group.position.set(...hostTransform.position);
+        group.rotation.set(...hostTransform.rotation);
+        group.scale.set(...hostTransform.scale);
+        group.updateMatrix();
+        group.updateMatrixWorld(true);
+      } else if (!group.matrixAutoUpdate) {
         group.matrixAutoUpdate = true;
         const pos = instanceLayoutPosition(i, previewInstances.length);
         group.position.set(pos[0], pos[1], pos[2]);
         group.updateMatrix();
         group.updateMatrixWorld(true);
       }
+
+      group.traverse((object) => {
+        if (!(object instanceof Mesh)) return;
+        let materials: Material[];
+        const currentOverride = hostEffectMaterialOverridesRef.current.get(object);
+        if (effectTexture) {
+          activeEffectMeshes.add(object);
+          let override = currentOverride;
+          if (!override) {
+            const original = object.material;
+            const originals = Array.isArray(original) ? original : [original];
+            const overrides = originals.map((material) => new MeshBasicMaterial({
+              alphaTest: 0.01,
+              blending: material.blending,
+              color: new Color(0.5, 0.5, 0.5),
+              depthTest: material.depthTest,
+              depthWrite: material.depthWrite,
+              map: effectTexture,
+              opacity: material.opacity,
+              side: material.side,
+              toneMapped: false,
+              transparent: true,
+              vertexColors: Boolean(object.geometry.getAttribute("color")),
+            }));
+            override = { original, overrides };
+            hostEffectMaterialOverridesRef.current.set(object, override);
+            object.material = Array.isArray(original) ? overrides : overrides[0]!;
+          }
+          for (const material of override.overrides) material.map = effectTexture;
+          materials = override.overrides;
+        } else {
+          if (currentOverride) {
+            object.material = currentOverride.original;
+            for (const material of currentOverride.overrides) material.dispose();
+            hostEffectMaterialOverridesRef.current.delete(object);
+          }
+          materials = Array.isArray(object.material) ? object.material : [object.material];
+        }
+        for (const material of materials) {
+          const tintable = material as Material & { color?: Color; opacity: number };
+          let defaults = hostMaterialDefaultsRef.current.get(material);
+          if (hostTransform && !defaults) {
+            defaults = {
+              color: tintable.color?.clone() ?? null,
+              opacity: tintable.opacity,
+              transparent: material.transparent,
+              depthWrite: material.depthWrite,
+              depthTest: material.depthTest,
+              blending: material.blending,
+            };
+            hostMaterialDefaultsRef.current.set(material, defaults);
+          }
+          if (!defaults) continue;
+
+          const previousPipeline = [
+            material.transparent,
+            material.depthWrite,
+            material.depthTest,
+            material.blending,
+          ] as const;
+          if (hostTransform) {
+            const color = hostTransform.color ?? [1, 1, 1, 1];
+            if (tintable.color && defaults.color) {
+              tintable.color.copy(defaults.color).multiply(
+                hostTintScratchRef.current.setRGB(color[0], color[1], color[2]),
+              );
+            }
+            tintable.opacity = defaults.opacity * Math.max(0, color[3]);
+            material.transparent = defaults.transparent || color[3] < 0.999;
+            material.depthWrite = hostTransform.depthWrite ?? defaults.depthWrite;
+            material.depthTest = hostTransform.depthTest ?? defaults.depthTest;
+            material.blending = hostTransform.blending ?? defaults.blending;
+          } else {
+            if (tintable.color && defaults.color) tintable.color.copy(defaults.color);
+            tintable.opacity = defaults.opacity;
+            material.transparent = defaults.transparent;
+            material.depthWrite = defaults.depthWrite;
+            material.depthTest = defaults.depthTest;
+            material.blending = defaults.blending;
+          }
+          if (previousPipeline[0] !== material.transparent ||
+              previousPipeline[1] !== material.depthWrite ||
+              previousPipeline[2] !== material.depthTest ||
+              previousPipeline[3] !== material.blending) {
+            material.needsUpdate = true;
+          }
+        }
+      });
+    }
+    for (const [mesh, override] of hostEffectMaterialOverridesRef.current) {
+      if (activeEffectMeshes.has(mesh)) continue;
+      mesh.material = override.original;
+      for (const material of override.overrides) material.dispose();
+      hostEffectMaterialOverridesRef.current.delete(mesh);
+    }
+    for (const [instanceId, cached] of hostEffectTexturesRef.current) {
+      if (activeEffectInstanceIds.has(instanceId)) continue;
+      cached.texture.dispose();
+      hostEffectTexturesRef.current.delete(instanceId);
     }
   });
 
@@ -1833,6 +2021,7 @@ const Scene = memo(function Scene({
             </group>
           );
         })}
+        {sceneOverlay}
       </group>
 
       {isUnrealViewport ? (
@@ -1910,6 +2099,7 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
   const {
     background,
     previewSuspended = false,
+    sceneOverlayAnimating = false,
     motionScrubbing,
     viewportControls = "default",
     onViewportSelectInstance,
@@ -1980,6 +2170,7 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
     () => Array.from(restSceneProps.motionStatesByInstanceId.values()).some((s) => s.playing),
     [restSceneProps.motionStatesByInstanceId],
   );
+  const renderLoopActive = anyMotionPlaying || sceneOverlayAnimating || motionScrubbing;
   const drawComplexity = useMemo(
     () => measureDrawComplexity(restSceneProps.draws),
     [restSceneProps.draws],
@@ -1993,37 +2184,38 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
       getSsbhCanvasPerformanceProfile({
         drawCount: drawComplexity.drawCount,
         triangleCount: drawComplexity.triangleCount,
-        motionPlaying: anyMotionPlaying,
+        motionPlaying: anyMotionPlaying || sceneOverlayAnimating,
         motionScrubbing,
         previewRenderStyle: restSceneProps.previewRenderStyle,
       }),
-    [drawComplexity, anyMotionPlaying, motionScrubbing, restSceneProps.previewRenderStyle],
+    [drawComplexity, anyMotionPlaying, motionScrubbing, restSceneProps.previewRenderStyle, sceneOverlayAnimating],
   );
   const adaptivePerformanceOptions = useMemo(
     () =>
       getSsbhAdaptivePerformanceOptions({
         drawCount: drawComplexity.drawCount,
         triangleCount: drawComplexity.triangleCount,
-        motionPlaying: anyMotionPlaying,
+        motionPlaying: anyMotionPlaying || sceneOverlayAnimating,
         motionScrubbing,
         previewRenderStyle: restSceneProps.previewRenderStyle,
       }),
-    [drawComplexity, anyMotionPlaying, motionScrubbing, restSceneProps.previewRenderStyle],
+    [drawComplexity, anyMotionPlaying, motionScrubbing, restSceneProps.previewRenderStyle, sceneOverlayAnimating],
   );
   const perfMonitorOptions = useMemo(
     () =>
       getSsbhPerfMonitorOptions({
         drawCount: drawComplexity.drawCount,
         triangleCount: drawComplexity.triangleCount,
-        motionPlaying: anyMotionPlaying,
+        motionPlaying: anyMotionPlaying || sceneOverlayAnimating,
         motionScrubbing,
         previewRenderStyle: restSceneProps.previewRenderStyle,
       }),
-    [drawComplexity, anyMotionPlaying, motionScrubbing, restSceneProps.previewRenderStyle],
+    [drawComplexity, anyMotionPlaying, motionScrubbing, restSceneProps.previewRenderStyle, sceneOverlayAnimating],
   );
 
   useRenderDebug("SsbhModelCanvas", {
     motionPlaying: anyMotionPlaying,
+    sceneOverlayAnimating,
     motionScrubbing,
     previewSuspended,
     draws: restSceneProps.draws.length,
@@ -2124,7 +2316,7 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
       {isUnrealViewport ? <ViewportMarqueeOverlay rect={marqueeRect} /> : null}
       <Canvas
         className="h-full w-full touch-none"
-        frameloop={previewSuspended ? "never" : anyMotionPlaying || motionScrubbing ? "always" : "demand"}
+        frameloop={previewSuspended ? "never" : renderLoopActive ? "always" : "demand"}
         gl={{
           antialias: canvasPerformanceProfile.antialias,
           alpha: false,
@@ -2146,7 +2338,7 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
       >
         <AdaptiveCanvasPerformanceController
           baseDprRange={canvasPerformanceProfile.dpr}
-          motionActive={anyMotionPlaying || motionScrubbing}
+          motionActive={renderLoopActive}
           perfMonitorOptions={perfMonitorOptions}
           previewRenderStyle={restSceneProps.previewRenderStyle}
           showStats={restSceneProps.showStats}

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_TEST_EDITOR_WORKSPACE } from "@/services/testEditorWorkspace/defaults";
+import type { EfxbnEffectSummary } from "@/services/effectFolder/effectFolderService";
+import "./EffectFolderCopyDialog";
 import {
   buildEffectFolderCopyPlan,
   effectListItemKey,
@@ -251,7 +253,7 @@ describe("buildEffectFolderCopyPlan", () => {
                 unk32: 0,
                 unkConfigInfo2: [],
               },
-            },
+            } as EfxbnEffectSummary,
           ],
         },
       },

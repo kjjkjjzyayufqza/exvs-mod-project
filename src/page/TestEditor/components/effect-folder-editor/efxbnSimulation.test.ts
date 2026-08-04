@@ -1,0 +1,273 @@
+import { describe, expect, it } from "vitest";
+import type {
+  EffectFolderHash,
+  EfxbnControlLookupEntry,
+  EfxbnControlReferenceSummary,
+  EfxbnEffectSummary,
+} from "@/services/effectFolder/effectFolderService";
+import type { EffectFolderPreviewPlan } from "./effectFolderPreviewPlan";
+import {
+  resolveEfxbnEmitterPairs,
+  resolveEfxbnModelPoolRequirements,
+  simulateEfxbnEmitterPair,
+} from "./efxbnSimulation";
+
+const ZERO_HASH: EffectFolderHash = { signed: 0, unsigned: 0, hex: "0x00000000" };
+
+function block(overrides: Partial<EfxbnEffectSummary>): EfxbnEffectSummary {
+  return {
+    index: 0,
+    referencedEffectIndex: -1,
+    effectType: 1,
+    lifeTimeBase: 20,
+    lifeTimeRandom: 0,
+    intervalBase: 100,
+    intervalRandom: 0,
+    numEmit: 1,
+    actionFlags: 0,
+    spawnFormType: 0,
+    spawnFormLength: [0, 0, 0, 0],
+    speedRandom: [0, 0, 0, 0],
+    sizeBase: [0.1, 0.1, 1, 0],
+    sizeRandom: [0, 0, 0, 0],
+    rotationBase: [0, 0, 0, 0],
+    rotationRandom: [0, 0, 0, 0],
+    rotationSpeed: [0, 0, 0, 0],
+    centerPivot: [0, 0],
+    deleteSettings: 0,
+    fadeTimeBase: 0,
+    cullingType: 0,
+    zWriteEnable: 0,
+    zTestEnable: 1,
+    blendState: 2,
+    drawRepositoryIndex: 0,
+    instanceAmountType: 0,
+    drawAmountIndex: 0,
+    enableSoftParticle: 0,
+    positionOffset: [0, 0, 0, 0],
+    delayEmitTimeBase: 0,
+    emitAreaType: 0,
+    enableZSort: 0,
+    stripSegmentInterval: 0,
+    stripSegmentLife: 0,
+    stripSegmentSplitNum: 0,
+    stripTailAlphaRate: 0,
+    stripHeadAlphaRate: 0,
+    emitInterpolateDistance: 0,
+    emitInterpolateType: 0,
+    meshEmitterIndex: 0,
+    meshEmitterCount: 0,
+    modelId: 0,
+    modelHash: ZERO_HASH,
+    animationId: 0,
+    animationHash: ZERO_HASH,
+    idTable: [],
+    controlReferences: [],
+    modelControlIndices: [-1, -1, -1, -1],
+    metaParsed: {} as EfxbnEffectSummary["metaParsed"],
+    ...overrides,
+  };
+}
+
+function directControls(values: Record<string, number>) {
+  const entries: EfxbnControlLookupEntry[] = [];
+  const references: EfxbnControlReferenceSummary[] = [];
+  Object.entries(values).forEach(([name, value], index) => {
+    entries.push({ index, keyF32Bits: 0, key: 0, valueF32Bits: 0, value });
+    references.push({ index, name, rawOffset: 0, runtimeOffset: 0, selector: 1, lookupIndex: index });
+  });
+  return { entries, references };
+}
+
+function linearControl(name: string, from: number, to: number, lookupIndex: number) {
+  return {
+    reference: {
+      index: lookupIndex,
+      name,
+      rawOffset: 0,
+      runtimeOffset: 0,
+      selector: 2,
+      lookupIndex,
+    } satisfies EfxbnControlReferenceSummary,
+    entries: [
+      { index: lookupIndex, keyF32Bits: 0, key: 0, valueF32Bits: 0, value: from },
+      { index: lookupIndex + 1, keyF32Bits: 0, key: 100, valueF32Bits: 0, value: to },
+    ] satisfies EfxbnControlLookupEntry[],
+  };
+}
+
+function plan(effectBlocks: EfxbnEffectSummary[], controlLookupEntries: EfxbnControlLookupEntry[]): EffectFolderPreviewPlan {
+  return {
+    kind: "efxbn",
+    key: "fixture",
+    targets: [],
+    localAnimationCount: 0,
+    unresolvedModelHashes: [],
+    unresolvedAnimationHashes: [],
+    unresolvedTextureHashes: [],
+    textureParameters: [],
+    textureBindings: [],
+    localTextureCount: 0,
+    effectBlocks,
+    controlLookupEntries,
+  };
+}
+
+describe("EFXBN frame simulation", () => {
+  it("uses wrapper topology and reaches the expected steady particle count for the 167 pattern", () => {
+    const wrapper = block({
+      index: 0,
+      effectType: 9,
+      referencedEffectIndex: 1,
+      lifeTimeBase: 1,
+      intervalBase: 1,
+      numEmit: 3,
+      actionFlags: 1,
+      spawnFormType: 3,
+      spawnFormLength: [0.7, 0, 0, 0],
+    });
+    const target = block({ index: 1, lifeTimeBase: 16 });
+    const sourcePlan = plan([wrapper, target], []);
+    const pairs = resolveEfxbnEmitterPairs(sourcePlan);
+
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0]).toMatchObject({ emitter: { index: 0 }, target: { index: 1 } });
+    expect(simulateEfxbnEmitterPair(pairs[0], sourcePlan, 20)).toHaveLength(48);
+  });
+
+  it("applies the shader counter order so interval two emits on frames 0, 2, and 4", () => {
+    const wrapper = block({
+      index: 0,
+      effectType: 9,
+      referencedEffectIndex: 1,
+      lifeTimeBase: 1,
+      intervalBase: 2,
+      numEmit: 2,
+      actionFlags: 1,
+    });
+    const target = block({ index: 1, lifeTimeBase: 20 });
+    const sourcePlan = plan([wrapper, target], []);
+
+    expect(simulateEfxbnEmitterPair(resolveEfxbnEmitterPairs(sourcePlan)[0], sourcePlan, 4)).toHaveLength(6);
+  });
+
+  it("evaluates per-particle curves and frame-based gravity instead of global UI progress", () => {
+    const wrapperControls = directControls({ spawnForm0: 0, spawnForm1: 0, spreadX: 0, spreadY: 0 });
+    const targetControls = directControls({
+      speedBaseX: 0,
+      speedBaseY: 0.02,
+      speedBaseZ: 0,
+      scaleBaseX: 1,
+      scaleBaseY: 1,
+      colorR: 1,
+      colorG: 1,
+      colorB: 1,
+      worldGravityAccel: -0.02,
+      directionAccel: 0,
+    });
+    const alpha = linearControl("colorA", 1, 0, wrapperControls.entries.length + targetControls.entries.length);
+    const offset = wrapperControls.entries.length;
+    const shiftedTargetReferences = targetControls.references.map((reference) => ({
+      ...reference,
+      index: reference.index + offset,
+      lookupIndex: reference.lookupIndex + offset,
+    }));
+    const shiftedTargetEntries = targetControls.entries.map((entry) => ({
+      ...entry,
+      index: entry.index + offset,
+    }));
+    const wrapper = block({
+      index: 0,
+      effectType: 9,
+      referencedEffectIndex: 1,
+      lifeTimeBase: 1,
+      intervalBase: 100,
+      actionFlags: 1,
+      controlReferences: wrapperControls.references,
+    });
+    const target = block({
+      index: 1,
+      lifeTimeBase: 20,
+      actionFlags: 0x1000,
+      controlReferences: [...shiftedTargetReferences, alpha.reference],
+    });
+    const sourcePlan = plan(
+      [wrapper, target],
+      [...wrapperControls.entries, ...shiftedTargetEntries, ...alpha.entries],
+    );
+    const particle = simulateEfxbnEmitterPair(resolveEfxbnEmitterPairs(sourcePlan)[0], sourcePlan, 2)[0];
+
+    expect(particle.position[1]).toBeCloseTo(-0.02, 6);
+    expect(particle.color[3]).toBeCloseTo(0.9, 6);
+  });
+
+  it("sizes a bounded local model pool from live shader particles", () => {
+    const modelHash = { signed: 7, unsigned: 7, hex: "0x00000007" };
+    const wrapper = block({
+      index: 0,
+      effectType: 9,
+      referencedEffectIndex: 1,
+      lifeTimeBase: 1,
+      intervalBase: 1,
+      numEmit: 2,
+      actionFlags: 1,
+    });
+    const target = block({ index: 1, modelHash, lifeTimeBase: 3 });
+    const sourcePlan = {
+      ...plan([wrapper, target], []),
+      targets: [{
+        effectIndex: 1,
+        modelHash,
+        modelPath: "E:\\effect\\model.numdlb",
+        animationHash: null,
+        animationPath: null,
+      }],
+    };
+
+    expect(resolveEfxbnModelPoolRequirements(sourcePlan, 4)[0]).toMatchObject({
+      required: 6,
+      capacity: 4,
+      pair: { target: { index: 1 } },
+    });
+  });
+
+  it("spawns type 9 particles from decoded mesh points and multiplies vertex color", () => {
+    const controls = directControls({
+      speedBaseX: 0,
+      speedBaseY: 0,
+      speedBaseZ: 0,
+      scaleBaseX: 1,
+      scaleBaseY: 1,
+      scaleBaseZ: 1,
+      colorR: 1,
+      colorG: 1,
+      colorB: 1,
+      colorA: 1,
+    });
+    const wrapper = block({
+      index: 0,
+      effectType: 9,
+      referencedEffectIndex: 1,
+      spawnFormType: 9,
+      spawnFormLength: [0, 0, 0, 0],
+      positionOffset: [10, 0, 0, 0],
+    });
+    const target = block({ index: 1, controlReferences: controls.references });
+    const sourcePlan = plan([wrapper, target], controls.entries);
+    const points = new Map([[0, [{
+      position: [1, 2, 3] as [number, number, number],
+      normal: [0, 1, 0] as [number, number, number],
+      color: [0.5, 0.6, 0.7, 0.8] as [number, number, number, number],
+    }]]]);
+    const particle = simulateEfxbnEmitterPair(
+      resolveEfxbnEmitterPairs(sourcePlan)[0],
+      sourcePlan,
+      0,
+      1,
+      points,
+    )[0];
+
+    expect(particle.position).toEqual([11, 2, 3]);
+    expect(particle.color).toEqual([0.5, 0.6, 0.7, 0.8]);
+  });
+});

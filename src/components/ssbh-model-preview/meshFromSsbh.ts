@@ -1241,6 +1241,21 @@ export function buildDrawListFromBundle(
   return out;
 }
 
+/** Reuses immutable geometry/skin payloads for another rendered model instance. */
+export function cloneBuiltMeshDrawsForInstance(
+  source: readonly BuiltMeshDraw[],
+  instanceId: string,
+  instanceLabel: string,
+): BuiltMeshDraw[] {
+  const labelPrefix = instanceLabel.trim() ? `${instanceLabel.trim()} — ` : "";
+  return source.map((draw) => ({
+    ...draw,
+    key: `${instanceId}::${draw.meshObjectName}_${draw.meshObjectSubindex}`,
+    label: `${labelPrefix}${draw.meshObjectName} [${draw.meshObjectSubindex}]`,
+    previewInstanceId: instanceId,
+  }));
+}
+
 export function buildMatlLookup(matl: MatlDataJson | null | undefined): Map<string, MatlEntryJson> {
   const map = new Map<string, MatlEntryJson>();
   if (!matl?.entries) return map;

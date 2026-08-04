@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   AlertTriangle,
-  ArrowRight,
   CheckCircle2,
   ChevronDown,
   Copy,
@@ -24,7 +23,6 @@ import {
 import { Label } from "@/components/ui/label";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -123,7 +121,7 @@ function PathBlock({ label, path, mono = true }: { label: string; path: string; 
     <div className="min-w-0 space-y-0.5">
       <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className={cn("break-all text-[11px] leading-snug text-foreground", mono && "font-mono")}>
-        {path || "—"}
+        {path || "None"}
       </div>
     </div>
   );
@@ -147,9 +145,6 @@ function PlanEntryRow({ entry }: { entry: EffectCopyPlanEntry }) {
             <span className="truncate text-xs font-medium">{entry.label}</span>
             <Badge variant={categoryBadgeVariant(entry.category)} className="h-5 rounded-sm px-1.5 text-[10px]">
               {entry.category}
-            </Badge>
-            <Badge variant="outline" className="h-5 rounded-sm px-1.5 text-[10px] text-muted-foreground">
-              {roleLabel(entry.role)}
             </Badge>
             {entry.unsupported ? (
               <Badge variant="destructive" className="h-5 rounded-sm px-1.5 text-[10px]">
@@ -345,7 +340,6 @@ export function EffectFolderCopyDialog({
   const [phase, setPhase] = useState<DialogPhase>("plan");
   const [lastResult, setLastResult] = useState<EffectFolderCopyResult | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
-  const [howItWorksOpen, setHowItWorksOpen] = useState(false);
 
   const plan = useMemo(
     () => buildEffectFolderCopyPlan({ selectedItems, allItems }),
@@ -399,7 +393,6 @@ export function EffectFolderCopyDialog({
     setPhase("plan");
     setLastResult(null);
     setActiveTab("overview");
-    setHowItWorksOpen(false);
   }, [dialogOpen]);
 
   const pickDestinationFolder = useCallback(async () => {
@@ -458,12 +451,10 @@ export function EffectFolderCopyDialog({
 
   return (
     <Dialog open={dialogOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(92vh,880px)] w-[min(96vw,920px)] max-w-4xl flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="shrink-0 space-y-2 border-b px-5 pb-3 pt-5 text-left">
+      <DialogContent className="flex max-h-[min(88vh,760px)] w-[min(94vw,760px)] max-w-3xl flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="shrink-0 space-y-1.5 border-b px-5 pb-3 pt-5 text-left">
           <DialogTitle className="pr-8 text-base">Copy effect entries</DialogTitle>
-          <DialogDescription className="text-[12px] leading-relaxed">
-            Copy selection and matching source-local dependencies. Source remains unchanged.
-          </DialogDescription>
+          <DialogDescription className="sr-only">Copy source-local effect files.</DialogDescription>
           <SummaryChips plan={plan} />
         </DialogHeader>
 
@@ -472,24 +463,6 @@ export function EffectFolderCopyDialog({
             <div className="space-y-4 px-5 py-4">
               {/* Source → Destination */}
               <section className="rounded-lg border bg-muted/15 p-3">
-                <div className="hidden">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Source pack
-                  </div>
-                  <PathBlock label="Effect root" path={sourceEffectRoot} />
-                  <PathBlock label="Structure JSON" path={sourceStructureJsonPath} />
-                  <PathBlock
-                    label="Selection"
-                    path={`${selectedItems.length} entr${selectedItems.length === 1 ? "y" : "ies"}`}
-                    mono={false}
-                  />
-                </div>
-
-                <div className="hidden">
-                  <ArrowRight className="hidden h-4 w-4 md:block" aria-hidden />
-                  <span className="text-[10px] uppercase tracking-wide md:hidden">to</span>
-                </div>
-
                 <div className="space-y-2.5">
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Destination pack
@@ -523,11 +496,6 @@ export function EffectFolderCopyDialog({
                       </Button>
                     </div>
                   </div>
-                  <p className="hidden">
-                    Destination must already be an extracted effect pack with a sibling{" "}
-                    <span className="font-mono">*_structure.json</span>. Existing entries with the same
-                    extension + hash are skipped, not overwritten.
-                  </p>
                 </div>
               </section>
 
@@ -563,7 +531,7 @@ export function EffectFolderCopyDialog({
 
                 <TabsContent value="overview" className="mt-3 space-y-4 focus-visible:outline-none">
                   <SelectionListPanel
-                    title="What you selected"
+                    title="Selection"
                     empty="No entries selected."
                     entries={plan.selected}
                   />
@@ -575,56 +543,6 @@ export function EffectFolderCopyDialog({
                     />
                   ) : null}
 
-                  <Collapsible className="hidden" open={howItWorksOpen} onOpenChange={setHowItWorksOpen}>
-                    <CollapsibleTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="h-8 w-full justify-between px-2 text-xs font-medium"
-                      >
-                        How this copy works
-                        <ChevronDown
-                          className={cn("h-3.5 w-3.5 transition-transform", howItWorksOpen && "rotate-180")}
-                        />
-                      </Button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="space-y-2 px-1 pb-1">
-                      <ol className="list-decimal space-y-1.5 pl-5 text-[11px] leading-relaxed text-muted-foreground">
-                        {plan.steps.map((step) => (
-                          <li key={step}>{step}</li>
-                        ))}
-                      </ol>
-                      <div className="rounded-md border bg-muted/20 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-                        <p className="font-medium text-foreground">Behavior notes</p>
-                        <ul className="mt-1 list-disc space-y-1 pl-4">
-                          <li>
-                            Selecting an <span className="font-mono">.efxbn</span> includes matching source
-                            assets identified by filename-stem CRC32: <span className="font-mono">modelId</span>,{" "}
-                            <span className="font-mono">animationId</span>, texture-parameter IDs, and textures
-                            referenced by copied model NUMATB files.
-                          </li>
-                          <li>
-                            Legacy <span className="font-mono">idTable</span> pairs are control-curve references,
-                            not structure <span className="font-mono">fileIndex</span> values. They never add files.
-                            Referenced assets absent from the source pack are treated as global and ignored.
-                          </li>
-                          <li>
-                            Destination collisions (same <span className="font-mono">ext + hash</span>) are
-                            skipped and reported; files already present are not overwritten.
-                          </li>
-                          <li>
-                            Manually selected “other” files are listed but not transferred. Source NUANMB files
-                            referenced by EFXBN <span className="font-mono">animationId</span> are included
-                            automatically.
-                          </li>
-                          <li>
-                            After copy, repack the <em>destination</em> pack if you need a new{" "}
-                            <span className="font-mono">.fhm2d</span> for the game.
-                          </li>
-                        </ul>
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
                 </TabsContent>
 
                 <TabsContent value="files" className="mt-3 focus-visible:outline-none">
@@ -720,7 +638,7 @@ export function EffectFolderCopyDialog({
           <div className="mr-auto hidden text-[11px] text-muted-foreground sm:block">
             {phase === "result"
               ? "Review the Result / Debug tabs, then close."
-              : `${plan.summary.transferFileCount} file(s) planned · source unchanged`}
+              : `${plan.summary.transferFileCount} file(s)`}
           </div>
           <div className="flex flex-col-reverse gap-2 sm:flex-row">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>

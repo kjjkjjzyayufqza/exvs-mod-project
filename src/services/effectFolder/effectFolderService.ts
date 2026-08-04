@@ -53,12 +53,53 @@ export interface EfxbnMetaParsedSummary {
 
 export interface EfxbnEffectSummary {
   index: number;
+  referencedEffectIndex: number;
+  effectType: number;
+  lifeTimeBase: number;
+  lifeTimeRandom: number;
+  intervalBase: number;
+  intervalRandom: number;
+  numEmit: number;
+  actionFlags: number;
+  spawnFormType: number;
+  spawnFormLength: [number, number, number, number];
+  speedRandom: [number, number, number, number];
+  sizeBase: [number, number, number, number];
+  sizeRandom: [number, number, number, number];
+  rotationBase: [number, number, number, number];
+  rotationRandom: [number, number, number, number];
+  rotationSpeed: [number, number, number, number];
+  centerPivot: [number, number];
+  deleteSettings: number;
+  fadeTimeBase: number;
+  cullingType: number;
+  zWriteEnable: number;
+  zTestEnable: number;
+  blendState: number;
+  drawRepositoryIndex: number;
+  instanceAmountType: number;
+  drawAmountIndex: number;
+  enableSoftParticle: number;
+  positionOffset: [number, number, number, number];
+  delayEmitTimeBase: number;
+  emitAreaType: number;
+  enableZSort: number;
+  stripSegmentInterval: number;
+  stripSegmentLife: number;
+  stripSegmentSplitNum: number;
+  stripTailAlphaRate: number;
+  stripHeadAlphaRate: number;
+  emitInterpolateDistance: number;
+  emitInterpolateType: number;
+  meshEmitterIndex: number;
+  meshEmitterCount: number;
   modelId: number;
   modelHash: EffectFolderHash;
   animationId: number;
   animationHash: EffectFolderHash;
   idTable: EfxbnIdPair[];
   controlReferences: EfxbnControlReferenceSummary[];
+  modelControlIndices: [number, number, number, number];
   metaParsed: EfxbnMetaParsedSummary;
 }
 
