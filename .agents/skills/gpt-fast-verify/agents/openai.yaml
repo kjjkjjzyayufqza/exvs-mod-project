@@ -1,0 +1,4 @@
+interface:
+  display_name: "GPT Fast Verify"
+  short_description: "Run one shortest semantic proof command"
+  default_prompt: "Use $gpt-fast-verify to prove this change with one narrow command."

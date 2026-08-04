@@ -157,6 +157,7 @@ const tabs: StageTab[] = [
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}
         workspaceDefaultPath={props.workspaceRouteRoots["msc.workspace"]}
+        modFolderPath={props.modFolderPath}
       />
     ),
   },
@@ -598,6 +599,7 @@ const MainView = ({
               isActive={activeTab === "msc-workspace"}
               onUnsavedChanges={handleMscWorkspaceUnsaved}
               workspaceDefaultPath={props.workspaceRouteRoots["msc.workspace"]}
+              modFolderPath={props.modFolderPath}
             />
           ),
         };

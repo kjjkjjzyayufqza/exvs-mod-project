@@ -1,0 +1,4 @@
+interface:
+  display_name: "GPT Fast Path"
+  short_description: "Minimize GPT tool calls and token use"
+  default_prompt: "Use $gpt-fast-path to take the shortest non-redundant path."

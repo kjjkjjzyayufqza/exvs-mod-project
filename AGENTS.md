@@ -26,8 +26,32 @@ Before doing any task, every AI agent must:
 
 1. Read this file first.
 2. Read the Cursor project rule: `.cursor/rules/custom-rules.mdc`.
-3. Search `docs/` for Markdown files relevant to the user's request, then read
-   the most relevant specifications before touching code or assets.
+3. Use one scoped filename search for relevant `docs/` Markdown, then read only
+   the most relevant specification before touching code or assets. Skip broad
+   docs scans when the user names the exact file or the task is rules-only.
+
+## GPT/Codex Fast Path (Mandatory)
+
+For GPT-5.6 Sol and other GPT coding models, minimize elapsed time, tool calls,
+and tokens as an explicit correctness constraint:
+
+- Use `caveman`, `gpt-fast-path`, and `gpt-fast-verify` for routine work.
+- Use one discovery path: CodeGraph for structure or `rg` for literal text.
+  Never re-check the same fact with a second tool after deterministic success.
+- Batch independent reads and commands. Do not re-read unchanged files or rerun
+  unchanged successful commands.
+- Default completion gate is exactly one shortest high-signal semantic command.
+  Prefer the exact affected test; otherwise use one narrow build/type/syntax
+  check. Stop after it passes.
+- Do not automatically chain build, typecheck, lint, tests, coverage, audit,
+  E2E, or full-workspace checks. Do not run app tests for docs/rules/skill-only
+  changes.
+- Expand verification only when the user explicitly requests it, release work
+  requires it, the first verifier fails, or material security/data-loss risk
+  cannot be covered by the narrow gate.
+- `gpt-fast-verify` overrides broad default behavior from generic
+  `verification-loop` / `verification-before-completion` skills. Fresh evidence
+  remains mandatory; evidence breadth does not.
 
 ## Lightweight Agent Sessions
 
@@ -283,6 +307,7 @@ when files were written.
 Current project rule entry points:
 
 - Cursor project rule: `.cursor/rules/custom-rules.mdc`
+- GPT fast verification: `.cursor/rules/gpt-fast-verification.mdc`
 - `exvs2-json` artifact isolation: `.cursor/rules/exvs2-json-artifacts.mdc`
 - `fhm2d-extract` artifact isolation: `.cursor/rules/fhm2d-extract-artifacts.mdc`
 - No release builds: `.cursor/rules/no-release-builds.mdc`
@@ -290,6 +315,8 @@ Current project rule entry points:
 
 Project skills (domain):
 
+- GPT shortest execution path: `.agents/skills/gpt-fast-path/SKILL.md`
+- GPT one-command semantic gate: `.agents/skills/gpt-fast-verify/SKILL.md`
 - FHM2D stage pack/extract: `.cursor/skills/fhm2d-format/SKILL.md`
 - Stage numatb color-only materials: `.cursor/skills/exvs-stage-numatb/SKILL.md`
 - Tauri large binary IPC: `.cursor/skills/tauri-ipc-large-binary/SKILL.md`
@@ -330,10 +357,10 @@ Project skills (domain):
 
 ## Verification And Handoff
 
-- Run the narrowest reliable verification for each change.
-- For MSC tool changes, test with real MSC files and verify:
-  - Function pointer resolution (no raw hex pointers in .c output).
-  - `try.` pushBit counts match between original and recompiled.
-  - Header flags correctness.
+- Run exactly one narrowest reliable semantic verifier for each change, then
+  stop on pass. Do not add generic build/lint/type/full-suite checks afterward.
+- For MSC tool changes, prefer one targeted real-file round-trip command or
+  test that covers function pointer resolution, `try.` pushBit counts, and
+  header flags together. Do not verify those as three separate workflows.
 - Summarize what was done, what remains, and verification evidence in your
   final response or active plan artifact.

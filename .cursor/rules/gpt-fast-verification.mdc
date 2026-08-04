@@ -1,0 +1,26 @@
+---
+description: GPT/Codex shortest-path execution and one-command semantic verification
+alwaysApply: true
+---
+
+# GPT Fast Path
+
+Applies to GPT-5.6 Sol and other GPT coding models.
+
+- Communicate in caveman style: outcome, blocker, next action only.
+- Use one evidence path. CodeGraph answers structure; `rg` answers literals.
+  Do not cross-confirm deterministic success.
+- Batch reads. Avoid broad scans, repeated reads, speculative audits, and
+  unrelated cleanup.
+- Completion requires fresh evidence from exactly one smallest semantic
+  verifier. Exact behavioral test > nearest module test > narrow build/type/
+  syntax/schema check.
+- Pass means stop. Failure permits diagnosis plus one rerun of the same gate.
+- Never stack build, typecheck, lint, tests, coverage, audit, E2E, and full
+  suites by default. Docs/rules/skills do not trigger app tests.
+- Expand only for explicit user request, release work, or material security/
+  data-loss risk. Ask before a full suite when practical.
+
+This rule narrows generic verification skills. It does not remove the need for
+fresh evidence.
+

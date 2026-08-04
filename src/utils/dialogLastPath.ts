@@ -29,6 +29,7 @@ export const DialogLastPathKey = {
   ssbhDaeConvertOutputFolder: "ssbhDae.convertOutputFolder",
   /** MSC Workspace "Pick folder" — store the selected folder itself, not its parent. */
   mscWorkspaceFolder: "mscWorkspace.folder",
+  traditionalMscWorkspaceFolder: "mscWorkspace.traditional.folder",
 } as const;
 
 export type DialogLastPathKeyType = (typeof DialogLastPathKey)[keyof typeof DialogLastPathKey];

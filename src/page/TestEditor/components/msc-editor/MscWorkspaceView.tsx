@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { invoke } from "@tauri-apps/api/core";
 import { join } from "@tauri-apps/api/path";
 import {
   Diff,
@@ -38,6 +37,8 @@ import {
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { exists, readDir, readTextFile } from "@tauri-apps/plugin-fs";
 import {
@@ -45,6 +46,7 @@ import {
   getMscConvertLogPath,
   getMscConvertOutputPath,
   getMscRepackOutputPath,
+  type MscWorkspaceMode,
 } from "../../utils/mscWorkspaceUtils";
 import {
   compareByLeadingIndex,
@@ -52,7 +54,7 @@ import {
   getMscFileRole,
   getMscPackSlotIndexForCFile,
   groupMscFiles,
-  isMscPackScriptCFile,
+  isMscRepackableCFile,
   summarizeMscRoundtripReport,
   verifyStateFromReport,
   type MscFileInfo,
@@ -60,13 +62,16 @@ import {
 } from "./mscPipeline";
 import { diffTextLines } from "./mscTextDiff";
 import {
+  getMscAutoRepackFhm2d,
   getMscExternalEditorCommand,
+  setMscAutoRepackFhm2d,
   setMscExternalEditorCommand,
 } from "./mscEditorSettings";
 import { MscPipelineBar } from "./MscPipelineBar";
 import { MscFileRow, type MscFileActionDescriptor } from "./MscFileRow";
 import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
 import { applyFhm2dStructureMigrationToPack, resolveMigratedFhm2dFolderPath } from "@/utils/fhm2dFolderPathResolution";
+import { repackFolderUsingStructureToModFolder } from "@/utils/repackRunner";
 import {
   decompileMscScript,
   openFileInExternalEditor,
@@ -87,6 +92,7 @@ interface MscWorkspaceViewProps {
   isActive: boolean;
   onUnsavedChanges?: (hasChanges: boolean) => void;
   workspaceDefaultPath?: string;
+  modFolderPath?: string;
 }
 
 type BatchKind = "decompile" | "repack";
@@ -110,7 +116,7 @@ interface PreviewState {
   mode: PreviewMode;
 }
 
-const FILE_TYPES = [
+const UNIT_FILE_TYPES = [
   { value: "all", label: "All Files" },
   { value: "c", label: ".c" },
   { value: "resolved", label: "Resolved" },
@@ -120,6 +126,13 @@ const FILE_TYPES = [
   { value: "dscex", label: ".dscex" },
 ] as const;
 
+const TRADITIONAL_FILE_TYPES = [
+  { value: "all", label: "All Files" },
+  { value: "bin", label: ".bin" },
+  { value: "c", label: ".c" },
+  { value: "txt", label: ".txt" },
+] as const;
+
 function matchesFileType(fileName: string, type: string): boolean {
   const lower = fileName.toLowerCase();
   if (type === "all") return true;
@@ -127,8 +140,8 @@ function matchesFileType(fileName: string, type: string): boolean {
   return lower.endsWith(`.${type}`);
 }
 
-function getFileIcon(fileName: string) {
-  switch (getMscFileRole(fileName)) {
+function getFileIcon(fileName: string, mode: MscWorkspaceMode) {
+  switch (getMscFileRole(fileName, mode)) {
     case "c":
       return <FileCode className="size-4 text-foreground" />;
     case "log":
@@ -146,7 +159,10 @@ export default function MscWorkspaceView({
   onMscFolderChange,
   isActive,
   workspaceDefaultPath,
+  modFolderPath,
 }: MscWorkspaceViewProps) {
+  const [workspaceMode, setWorkspaceMode] = useState<MscWorkspaceMode>("unit");
+  const [traditionalFolderPath, setTraditionalFolderPath] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [fileType, setFileType] = useState<string>("all");
   const [allFiles, setAllFiles] = useState<MscFileInfo[]>([]);
@@ -162,8 +178,23 @@ export default function MscWorkspaceView({
     () => new Map(),
   );
   const [editorCommand, setEditorCommand] = useState<string>(() => getMscExternalEditorCommand());
+  const [autoRepackFhm2d, setAutoRepackFhm2dState] = useState(() => getMscAutoRepackFhm2d());
+
+  const activeFolderPath = workspaceMode === "unit" ? mscFolderPath : traditionalFolderPath;
+  const fileTypes = workspaceMode === "unit" ? UNIT_FILE_TYPES : TRADITIONAL_FILE_TYPES;
 
   const isBusy = processingFile !== null || batch !== null || isFolderRepacking;
+
+  const setActiveFolderPath = useCallback(
+    (path: string) => {
+      if (workspaceMode === "unit") {
+        onMscFolderChange?.(path);
+      } else {
+        setTraditionalFolderPath(path);
+      }
+    },
+    [onMscFolderChange, workspaceMode],
+  );
 
   const setSlotVerifyState = useCallback((slotIndex: number, state: MscVerifyState | null) => {
     setVerifyStates((prev) => {
@@ -178,14 +209,14 @@ export default function MscWorkspaceView({
   }, []);
 
   const fetchFiles = useCallback(async () => {
-    if (!mscFolderPath) return;
+    if (!activeFolderPath) return;
     try {
       setIsLoading(true);
-      const entries = await readDir(mscFolderPath);
+      const entries = await readDir(activeFolderPath);
       const files: MscFileInfo[] = [];
       for (const entry of entries) {
         if (!entry.isFile || !entry.name) continue;
-        files.push({ name: entry.name, path: await join(mscFolderPath, entry.name) });
+        files.push({ name: entry.name, path: await join(activeFolderPath, entry.name) });
       }
       files.sort(compareByLeadingIndex);
       setAllFiles(files);
@@ -195,20 +226,25 @@ export default function MscWorkspaceView({
     } finally {
       setIsLoading(false);
     }
-  }, [mscFolderPath]);
+  }, [activeFolderPath]);
 
   useEffect(() => {
-    if (isActive && mscFolderPath) {
+    if (isActive && activeFolderPath) {
       void fetchFiles();
     }
-  }, [isActive, mscFolderPath, fetchFiles]);
+  }, [isActive, activeFolderPath, fetchFiles]);
 
   // Verify results, snapshots, and preview belong to one folder only.
   useEffect(() => {
     setVerifyStates({});
     setPreview(null);
     setDecompileSnapshots(new Map());
-  }, [mscFolderPath]);
+  }, [activeFolderPath, workspaceMode]);
+
+  useEffect(() => {
+    setFileType("all");
+    setSearchQuery("");
+  }, [workspaceMode]);
 
   const filteredFiles = useMemo(
     () =>
@@ -220,16 +256,25 @@ export default function MscWorkspaceView({
     [allFiles, searchQuery, fileType],
   );
 
-  const groups = useMemo(() => groupMscFiles(filteredFiles), [filteredFiles]);
+  const groups = useMemo(
+    () => groupMscFiles(filteredFiles, workspaceMode),
+    [filteredFiles, workspaceMode],
+  );
   const slots = useMemo(() => computeMscSlotStatuses(allFiles.map((f) => f.name)), [allFiles]);
 
   const scriptTargets = useMemo(
-    () => allFiles.filter((f) => getMscFileRole(f.name) === "script").sort(compareByLeadingIndex),
-    [allFiles],
+    () =>
+      allFiles
+        .filter((f) => getMscFileRole(f.name, workspaceMode) === "script")
+        .sort(compareByLeadingIndex),
+    [allFiles, workspaceMode],
   );
   const repackTargets = useMemo(
-    () => allFiles.filter((f) => isMscPackScriptCFile(f.name)).sort(compareByLeadingIndex),
-    [allFiles],
+    () =>
+      allFiles
+        .filter((f) => isMscRepackableCFile(f.name, workspaceMode))
+        .sort(compareByLeadingIndex),
+    [allFiles, workspaceMode],
   );
 
   const handlePickFolder = async () => {
@@ -238,8 +283,10 @@ export default function MscWorkspaceView({
       // Prefer last picked folder (the folder itself), then current MSC path,
       // then workspace MSC route root. Never force-open the parent of the last pick.
       const defaultPath = getDialogDefaultPath(
-        DialogLastPathKey.mscWorkspaceFolder,
-        mscFolderPath ?? workspaceDefaultPath,
+        workspaceMode === "unit"
+          ? DialogLastPathKey.mscWorkspaceFolder
+          : DialogLastPathKey.traditionalMscWorkspaceFolder,
+        activeFolderPath ?? (workspaceMode === "unit" ? workspaceDefaultPath : workspaceRoot),
       );
       const selected = await open({
         directory: true,
@@ -247,13 +294,21 @@ export default function MscWorkspaceView({
         defaultPath,
       });
       if (!selected || Array.isArray(selected)) return;
-      const ok = await folderContainsMscScriptFiles(selected);
+      const ok = await folderContainsMscScriptFiles(selected, workspaceMode);
       if (!ok) {
-        toast.error("Selected folder must contain at least one .bscex, .cscex, or .dscex file");
+        toast.error(
+          workspaceMode === "unit"
+            ? "Selected folder must contain at least one .bscex, .cscex, or .dscex file"
+            : "Selected folder must contain at least one .bin file",
+        );
         return;
       }
-      rememberDialogSelection(DialogLastPathKey.mscWorkspaceFolder, selected, "directory");
-      onMscFolderChange?.(selected);
+      const dialogKey =
+        workspaceMode === "unit"
+          ? DialogLastPathKey.mscWorkspaceFolder
+          : DialogLastPathKey.traditionalMscWorkspaceFolder;
+      rememberDialogSelection(dialogKey, selected, "directory");
+      setActiveFolderPath(selected);
     } catch (e) {
       toast.error(String(e));
     } finally {
@@ -261,11 +316,16 @@ export default function MscWorkspaceView({
     }
   };
 
-  const handleRepackFolder = async () => {
-    if (!mscFolderPath) return;
+  const handleRepackFolder = useCallback(async () => {
+    if (!activeFolderPath) return;
+    const resolvedModFolderPath = modFolderPath?.trim();
+    if (!resolvedModFolderPath) {
+      toast.error("Configure OB Mod path in Config before repacking");
+      return;
+    }
     try {
       setIsFolderRepacking(true);
-      let normalized = await resolveMigratedFhm2dFolderPath(mscFolderPath.replace(/\//g, "\\"));
+      let normalized = await resolveMigratedFhm2dFolderPath(activeFolderPath.replace(/\//g, "\\"));
       const folderName = normalized.split("\\").filter(Boolean).pop() ?? "";
       const parentDir = normalized.split("\\").slice(0, -1).join("\\");
       let structurePath = `${parentDir}\\${folderName}_structure.json`;
@@ -283,32 +343,33 @@ export default function MscWorkspaceView({
         );
         normalized = migratedPaths.folderPath.replace(/\//g, "\\");
         structurePath = migratedPaths.structureJsonPath.replace(/\//g, "\\");
-        onMscFolderChange?.(normalized);
+        setActiveFolderPath(normalized);
       }
-      const migratedParentDir = normalized.split("\\").slice(0, -1).join("\\");
-      const migratedFolderName = normalized.split("\\").filter(Boolean).pop() ?? "";
-      const outputPath = `${migratedParentDir}\\${migratedFolderName}.fhm2d`;
-      await invoke("repack_fhm2d", { structureJsonPath: structurePath, outputPath, atomicWrite: true });
-      toast.success("Repack Folder completed successfully");
+      const result = await repackFolderUsingStructureToModFolder({
+        structurePath,
+        inputFolderPath: normalized,
+        modFolderPath: resolvedModFolderPath,
+      });
+      toast.success(`Repacked to mod: ${result.outputPath}`);
     } catch (error) {
       console.error("Error during repack folder:", error);
       toast.error(`Repack Folder failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsFolderRepacking(false);
     }
-  };
+  }, [activeFolderPath, modFolderPath, setActiveFolderPath]);
 
   /** Decompile one script to raw C/log outputs. Throws on tool failure. */
   const convertScriptCore = useCallback(
     async (file: MscFileInfo): Promise<string> => {
       const inputPath = file.path;
-      const outputPath = getMscConvertOutputPath(inputPath);
-      const logPath = getMscConvertLogPath(inputPath);
+      const outputPath = getMscConvertOutputPath(inputPath, workspaceMode);
+      const logPath = getMscConvertLogPath(inputPath, workspaceMode);
       await decompileMscScript({
         inputPath,
         outputPath,
         logPath,
-        mscFolderPath,
+        mscFolderPath: activeFolderPath,
       });
 
       // Snapshot the freshly decompiled C so later edits can be diffed, and
@@ -329,15 +390,15 @@ export default function MscWorkspaceView({
 
       return `${file.name} converted to raw C`;
     },
-    [mscFolderPath, setSlotVerifyState],
+    [activeFolderPath, workspaceMode, setSlotVerifyState],
   );
 
   /** Recompile one C file back to its source pack extension. Throws on tool failure. */
   const repackScriptCore = useCallback(
     async (file: MscFileInfo): Promise<string> => {
       const inputPath = file.path;
-      const outputPath = getMscRepackOutputPath(inputPath);
-      await repackMscScript({ inputPath, outputPath, mscFolderPath });
+      const outputPath = getMscRepackOutputPath(inputPath, workspaceMode);
+      await repackMscScript({ inputPath, outputPath, mscFolderPath: activeFolderPath });
       // The original script changed, so any previous verify verdict is stale.
       const slotIndex = Number.parseInt(file.name, 10);
       if (Number.isInteger(slotIndex)) {
@@ -345,7 +406,7 @@ export default function MscWorkspaceView({
       }
       return `${file.name} to ${outputPath.replace(/^.*[\\/]/, "")}`;
     },
-    [mscFolderPath, setSlotVerifyState],
+    [activeFolderPath, workspaceMode, setSlotVerifyState],
   );
 
   const handleConvertOne = useCallback(
@@ -368,6 +429,9 @@ export default function MscWorkspaceView({
       try {
         setProcessingFile(file.name);
         toast.success(`Repacked ${await repackScriptCore(file)}`);
+        if (autoRepackFhm2d) {
+          await handleRepackFolder();
+        }
         await fetchFiles();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : `Error repacking ${file.name}`);
@@ -375,7 +439,7 @@ export default function MscWorkspaceView({
         setProcessingFile(null);
       }
     },
-    [repackScriptCore, fetchFiles],
+    [autoRepackFhm2d, handleRepackFolder, repackScriptCore, fetchFiles],
   );
 
   const handleResolveOverlay = useCallback(
@@ -428,6 +492,11 @@ export default function MscWorkspaceView({
     setMscExternalEditorCommand(nextCommand);
   }, []);
 
+  const handleAutoRepackFhm2dChange = useCallback((enabled: boolean) => {
+    setAutoRepackFhm2dState(enabled);
+    setMscAutoRepackFhm2d(enabled);
+  }, []);
+
   const handlePreview = useCallback(async (file: MscFileInfo) => {
     try {
       const content = await readTextFile(file.path);
@@ -452,7 +521,7 @@ export default function MscWorkspaceView({
       try {
         setProcessingFile(file.name);
         setSlotVerifyState(slotIndex, { status: "verifying" });
-        const result = await verifyMscRoundtrip({ cFilePath: file.path, mscFolderPath });
+        const result = await verifyMscRoundtrip({ cFilePath: file.path, mscFolderPath: activeFolderPath });
         setSlotVerifyState(slotIndex, verifyStateFromReport(result.report));
         const summary = summarizeMscRoundtripReport(result.report);
         if (result.report.isMatch) {
@@ -477,7 +546,7 @@ export default function MscWorkspaceView({
         await fetchFiles();
       }
     },
-    [mscFolderPath, setSlotVerifyState, fetchFiles],
+    [activeFolderPath, setSlotVerifyState, fetchFiles],
   );
 
   const runBatch = useCallback(
@@ -495,6 +564,13 @@ export default function MscWorkspaceView({
         setBatch((prev) => (prev ? { ...prev, done: prev.done + 1 } : prev));
       }
       setBatch(null);
+      if (kind === "repack" && autoRepackFhm2d) {
+        if (failures === 0) {
+          await handleRepackFolder();
+        } else {
+          toast.warning("Automatic .fhm2d repack skipped because one or more MSC files failed");
+        }
+      }
       await fetchFiles();
       const verb = kind === "decompile" ? "Decompiled" : "Repacked";
       if (failures === 0) {
@@ -503,7 +579,7 @@ export default function MscWorkspaceView({
         toast.warning(`${verb} ${targets.length - failures}/${targets.length} file(s), ${failures} failed`);
       }
     },
-    [convertScriptCore, repackScriptCore, fetchFiles],
+    [autoRepackFhm2d, convertScriptCore, handleRepackFolder, repackScriptCore, fetchFiles],
   );
 
   const collectExisting = useCallback(async (paths: string[]): Promise<string[]> => {
@@ -517,27 +593,32 @@ export default function MscWorkspaceView({
   const openConvertOne = useCallback(
     async (file: MscFileInfo) => {
       try {
-        const outputPath = getMscConvertOutputPath(file.path);
-        const logPath = getMscConvertLogPath(file.path);
+        const outputPath = getMscConvertOutputPath(file.path, workspaceMode);
+        const logPath = getMscConvertLogPath(file.path, workspaceMode);
         const overwrite = await collectExisting([outputPath, logPath]);
         setConfirm({ mode: "convert-one", file, outputPath, logPath, overwrite });
       } catch (error) {
         toast.error(error instanceof Error ? error.message : `Failed to prepare convert for ${file.name}`);
       }
     },
-    [collectExisting],
+    [collectExisting, workspaceMode],
   );
 
   const openDecompileAll = useCallback(async () => {
-    const outputs = scriptTargets.flatMap((f) => [getMscConvertOutputPath(f.path), getMscConvertLogPath(f.path)]);
+    const outputs = scriptTargets.flatMap((f) => [
+      getMscConvertOutputPath(f.path, workspaceMode),
+      getMscConvertLogPath(f.path, workspaceMode),
+    ]);
     const overwrite = await collectExisting(outputs);
     setConfirm({ mode: "decompile-all", targets: scriptTargets, overwrite });
-  }, [scriptTargets, collectExisting]);
+  }, [scriptTargets, collectExisting, workspaceMode]);
 
   const openRepackAll = useCallback(async () => {
-    const overwrite = await collectExisting(repackTargets.map((f) => getMscRepackOutputPath(f.path)));
+    const overwrite = await collectExisting(
+      repackTargets.map((f) => getMscRepackOutputPath(f.path, workspaceMode)),
+    );
     setConfirm({ mode: "repack-all", targets: repackTargets, overwrite });
-  }, [repackTargets, collectExisting]);
+  }, [repackTargets, collectExisting, workspaceMode]);
 
   const handleConfirm = useCallback(async () => {
     if (!confirm) return;
@@ -554,7 +635,7 @@ export default function MscWorkspaceView({
 
   const createFileActions = useCallback(
     (file: MscFileInfo): MscFileActionDescriptor[] => {
-      const role = getMscFileRole(file.name);
+      const role = getMscFileRole(file.name, workspaceMode);
       const working = processingFile === file.name;
       const disabled = isBusy;
 
@@ -590,8 +671,8 @@ export default function MscWorkspaceView({
             icon: <ExternalLink />,
           },
         ];
-        if (isMscPackScriptCFile(file.name)) {
-          if (file.name.toLowerCase() === "2.c") {
+        if (isMscRepackableCFile(file.name, workspaceMode)) {
+          if (workspaceMode === "unit" && file.name.toLowerCase() === "2.c") {
             actions.push({
               key: "resolve-overlay",
               label: working ? "Resolving…" : "Resolve Overlay",
@@ -601,14 +682,16 @@ export default function MscWorkspaceView({
               icon: <Wand2 />,
             });
           }
-          actions.push({
-            key: "verify",
-            label: working ? "Verifying…" : "Verify",
-            onClick: () => handleVerifyRoundtrip(file),
-            variant: "outline",
-            disabled,
-            icon: working ? <Loader2 className="animate-spin" /> : <ShieldCheck />,
-          });
+          if (workspaceMode === "unit") {
+            actions.push({
+              key: "verify",
+              label: working ? "Verifying…" : "Verify",
+              onClick: () => handleVerifyRoundtrip(file),
+              variant: "outline",
+              disabled,
+              icon: working ? <Loader2 className="animate-spin" /> : <ShieldCheck />,
+            });
+          }
           actions.push({
             key: "repack",
             label: working ? "Repacking…" : "Repack",
@@ -653,36 +736,63 @@ export default function MscWorkspaceView({
       handleResolveOverlay,
       handleVerifyRoundtrip,
       handleRepackOne,
+      workspaceMode,
     ],
   );
 
   const previewSnapshot = preview ? (decompileSnapshots.get(preview.file.path) ?? null) : null;
-  const previewSupportsDiff = preview !== null && getMscFileRole(preview.file.name) === "c";
+  const previewSupportsDiff =
+    preview !== null && getMscFileRole(preview.file.name, workspaceMode) === "c";
   const previewDiff = useMemo(() => {
     if (!preview || preview.mode !== "diff" || previewSnapshot === null) return null;
     return diffTextLines(previewSnapshot, preview.content);
   }, [preview, previewSnapshot]);
 
-  if (!mscFolderPath) {
+  const workspaceModeTabs = (
+    <Tabs
+      value={workspaceMode}
+      onValueChange={(value) => setWorkspaceMode(value as MscWorkspaceMode)}
+      className="shrink-0"
+    >
+      <TabsList aria-label="MSC workspace type">
+        <TabsTrigger value="unit">Unit MSC</TabsTrigger>
+        <TabsTrigger value="traditional">Traditional MSC</TabsTrigger>
+      </TabsList>
+    </Tabs>
+  );
+
+  if (!activeFolderPath) {
     return (
-      <div className="flex h-full min-h-48 flex-col items-center justify-center gap-4 px-4 text-center text-muted-foreground">
-        <FolderOpen className="size-10 opacity-50" />
-        <div className="max-w-md space-y-2 text-sm">
-          <p className="font-medium text-foreground">MSC Workspace</p>
-          <p>
-            Select a folder containing at least one{" "}
-            <code className="rounded bg-muted px-1 font-mono">.bscex</code>,{" "}
-            <code className="rounded bg-muted px-1 font-mono">.cscex</code>, or{" "}
-            <code className="rounded bg-muted px-1 font-mono">.dscex</code> file.
-          </p>
-          {workspaceRoot ? (
-            <p className="font-mono text-[11px] text-muted-foreground">Workspace root: {workspaceRoot}</p>
-          ) : null}
+      <div className="flex h-full min-h-48 flex-col gap-4 px-4 pb-4">
+        {workspaceModeTabs}
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center text-muted-foreground">
+          <FolderOpen className="size-10 opacity-50" />
+          <div className="max-w-md space-y-2 text-sm">
+            <p className="font-medium text-foreground">
+              {workspaceMode === "unit" ? "Unit MSC Workspace" : "Traditional MSC Workspace"}
+            </p>
+            {workspaceMode === "unit" ? (
+              <p>
+                Select a folder containing at least one{" "}
+                <code className="rounded bg-muted px-1 font-mono">.bscex</code>,{" "}
+                <code className="rounded bg-muted px-1 font-mono">.cscex</code>, or{" "}
+                <code className="rounded bg-muted px-1 font-mono">.dscex</code> file.
+              </p>
+            ) : (
+              <p>
+                Select a folder containing <code className="rounded bg-muted px-1 font-mono">.bin</code>{" "}
+                MSC scripts. Arbitrary file names are supported.
+              </p>
+            )}
+            {workspaceRoot ? (
+              <p className="font-mono text-[11px] text-muted-foreground">Workspace root: {workspaceRoot}</p>
+            ) : null}
+          </div>
+          <Button type="button" variant="secondary" size="sm" onClick={() => void handlePickFolder()} disabled={isPickingFolder}>
+            {isPickingFolder ? <Loader2 className="mr-2 animate-spin" /> : <FolderOpen className="mr-2" />}
+            {isPickingFolder ? "Picking…" : "Pick folder"}
+          </Button>
         </div>
-        <Button type="button" variant="secondary" size="sm" onClick={() => void handlePickFolder()} disabled={isPickingFolder}>
-          {isPickingFolder ? <Loader2 className="mr-2 animate-spin" /> : <FolderOpen className="mr-2" />}
-          {isPickingFolder ? "Picking…" : "Pick folder"}
-        </Button>
       </div>
     );
   }
@@ -690,12 +800,15 @@ export default function MscWorkspaceView({
   return (
     <>
       <div className="flex h-full flex-col gap-4 pb-4">
+        {workspaceModeTabs}
         <div className="flex shrink-0 flex-col gap-3 border-b pb-4">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 flex-1 space-y-1">
-              <h2 className="text-lg font-semibold tracking-tight">MSC Workspace</h2>
-              <p className="break-all font-mono text-[11px] text-muted-foreground" title={mscFolderPath}>
-                {mscFolderPath}
+              <h2 className="text-lg font-semibold tracking-tight">
+                {workspaceMode === "unit" ? "Unit MSC Workspace" : "Traditional MSC Workspace"}
+              </h2>
+              <p className="break-all font-mono text-[11px] text-muted-foreground" title={activeFolderPath}>
+                {activeFolderPath}
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -718,7 +831,9 @@ export default function MscWorkspaceView({
             </div>
           </div>
 
-          <MscPipelineBar slots={slots} verifyStates={verifyStates} />
+          {workspaceMode === "unit" ? (
+            <MscPipelineBar slots={slots} verifyStates={verifyStates} />
+          ) : null}
 
           {batch ? (
             <div className="space-y-1.5">
@@ -732,7 +847,7 @@ export default function MscWorkspaceView({
             </div>
           ) : null}
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Input
               placeholder="Search files in this folder…"
               value={searchQuery}
@@ -744,7 +859,7 @@ export default function MscWorkspaceView({
                 <SelectValue placeholder="File type" />
               </SelectTrigger>
               <SelectContent>
-                {FILE_TYPES.map((type) => (
+                {fileTypes.map((type) => (
                   <SelectItem key={type.value} value={type.value}>
                     {type.label}
                   </SelectItem>
@@ -759,6 +874,19 @@ export default function MscWorkspaceView({
               aria-label="External editor command"
               title="External editor command used by Open (e.g. cursor, code, notepad)"
             />
+            <label
+              htmlFor="msc-auto-repack-fhm2d"
+              className="flex h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-xs text-muted-foreground"
+              title="After compiling C back to MSC, automatically repack the containing FHM2D"
+            >
+              <Switch
+                id="msc-auto-repack-fhm2d"
+                checked={autoRepackFhm2d}
+                onCheckedChange={handleAutoRepackFhm2dChange}
+                disabled={isBusy}
+              />
+              Auto-repack .fhm2d
+            </label>
           </div>
         </div>
 
@@ -856,7 +984,7 @@ export default function MscWorkspaceView({
                     <MscFileRow
                       key={file.path}
                       name={file.name}
-                      icon={getFileIcon(file.name)}
+                      icon={getFileIcon(file.name, workspaceMode)}
                       actions={createFileActions(file)}
                     />
                   ))}

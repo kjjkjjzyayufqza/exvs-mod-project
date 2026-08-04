@@ -461,7 +461,10 @@ export default function EffectFolderEditorView({
           <EffectFolderCopyDialog
             open={copyOpen}
             onOpenChange={setCopyOpen}
-            selectionCount={editor.selectedItems.length}
+            sourceEffectRoot={activePack.folderPath}
+            sourceStructureJsonPath={activePack.structureJsonPath}
+            selectedItems={editor.selectedItems}
+            allItems={editor.allItems}
             busy={busy}
             onCopy={editor.runCopy}
           />

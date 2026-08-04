@@ -6,6 +6,7 @@
  */
 
 const MSC_EXTERNAL_EDITOR_STORAGE_KEY = "exvs2.mscExternalEditorCommand";
+const MSC_AUTO_REPACK_FHM2D_STORAGE_KEY = "exvs2.mscAutoRepackFhm2d";
 
 export const DEFAULT_MSC_EXTERNAL_EDITOR_COMMAND = "cursor";
 
@@ -28,6 +29,22 @@ export function setMscExternalEditorCommand(command: string | null): void {
       return;
     }
     localStorage.setItem(MSC_EXTERNAL_EDITOR_STORAGE_KEY, trimmed);
+  } catch {
+    // localStorage may be unavailable in some test environments
+  }
+}
+
+export function getMscAutoRepackFhm2d(): boolean {
+  try {
+    return localStorage.getItem(MSC_AUTO_REPACK_FHM2D_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function setMscAutoRepackFhm2d(enabled: boolean): void {
+  try {
+    localStorage.setItem(MSC_AUTO_REPACK_FHM2D_STORAGE_KEY, String(enabled));
   } catch {
     // localStorage may be unavailable in some test environments
   }

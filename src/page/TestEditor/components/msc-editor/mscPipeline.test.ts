@@ -7,6 +7,7 @@ import {
   getMscRoundtripTempPath,
   groupMscFiles,
   isMscPackScriptCFile,
+  isMscRepackableCFile,
   summarizeMscRoundtripReport,
   verifyStateFromReport,
   type MscFileInfo,
@@ -24,11 +25,23 @@ describe("getMscFileRole", () => {
     expect(getMscFileRole("2.DSCEX")).toBe("script");
   });
 
+  it("classifies arbitrary bin names as traditional scripts", () => {
+    expect(getMscFileRole("000triad_battle_b004_001_r2.bin", "traditional")).toBe("script");
+    expect(getMscFileRole("0.bscex", "traditional")).toBe("other");
+  });
+
   it("classifies decompiled C, logs, and other files", () => {
     expect(getMscFileRole("0.c")).toBe("c");
     expect(getMscFileRole("2.resolved.md")).toBe("resolved");
     expect(getMscFileRole("0.txt")).toBe("log");
     expect(getMscFileRole("notes.md")).toBe("other");
+  });
+});
+
+describe("isMscRepackableCFile", () => {
+  it("accepts every C file only in traditional mode", () => {
+    expect(isMscRepackableCFile("000triad_battle_a001_001.c", "traditional")).toBe(true);
+    expect(isMscRepackableCFile("000triad_battle_a001_001.c", "unit")).toBe(false);
   });
 });
 

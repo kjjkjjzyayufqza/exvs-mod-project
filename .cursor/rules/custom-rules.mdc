@@ -13,8 +13,9 @@ This Cursor rule is AI-only guidance for this repository. The cross-agent hub is
 Before making code, asset, documentation, or command changes:
 
 1. Read `AGENTS.md`.
-2. Search `docs/` for Markdown files related to the user's task.
-3. Read the relevant specifications before editing.
+2. Run one scoped filename search for related `docs/` Markdown unless the exact
+   file is already known or the task is rules-only.
+3. Read only the most relevant specification before editing.
 
 When working on NUANMB / motion FBX import or homemade animation conversion,
 also read `docs/nuanmb-ath-helper-bone-policy.md`: **`ATH_*` helper bones must
@@ -44,6 +45,7 @@ do not create or update them unless the user explicitly requests it.
 7a. **禁止默认 release 构建（效率优先）**：除非用户**明确要求** release/发版产物，否则**禁止** `cargo build --release`、`cargo run --release`、`cargo test --release`，以及优先使用 `target/release/*`。日常验证一律用 **debug**：`cargo test`、`cargo build --bin <name>`、`cargo run --bin <name> -- …`，可执行文件路径为 `src-tauri/target/debug/`。详见 `.cursor/rules/no-release-builds.mdc`。
 7b. **`exvs2-json` 产物隔离**：准备、运行或验证 `exvs2-json` 时创建的所有持久化产物必须写入仓库根目录的 `tmp/`（推荐 `tmp/exvs2-json/<task>/`），不得写到源资产旁、`docs/`、`src-tauri/` 或仓库根目录。完整范围与路径规则见 `.cursor/rules/exvs2-json-artifacts.mdc`。
 7c. **`fhm2d-extract` 产物隔离与入口**：解包 OB `.fhm2d` 时优先使用默认构建的 agent CLI `fhm2d_extract`（必填 `--type` 与 `--layout`；文档 `docs/fhm2d-extract-cli.md`）。准备、运行或验证时创建的所有持久化产物（`--output` 目录、`*_structure.json`、`meta.bin`、日志、报告）必须写入仓库根目录的 `tmp/`（推荐 `tmp/fhm2d-extract/<task>/`），不得写到源 `.fhm2d` 旁、游戏/workspace 树、`docs/`、`src-tauri/` 或仓库根目录。完整规则见 `.cursor/rules/fhm2d-extract-artifacts.mdc`。
+7d. **GPT 最短路径（强制）**：GPT-5.6 Sol 与其他 GPT 编码模型默认启用 caveman、单一发现路径、单命令语义验证；成功后立即停止。禁止自动串联 build/typecheck/lint/test/coverage/audit/E2E/full-suite。完整优先级与例外见 `.cursor/rules/gpt-fast-verification.mdc` 和 `AGENTS.md`。
 8. **一致性优先**：新增功能/修改逻辑时，优先复用现有工具函数、组件与数据模型；避免引入重复实现；文件命名、导出方式、目录组织保持与周边代码一致。
 9. **useTransition（React）性能优化**：当用户交互会触发较重的 UI 更新（例如：大列表渲染、复杂计算/过滤/排序、树结构重建、图表/3D 视图重算）且该更新不需要阻塞输入/点击反馈时，优先将对应的 `setState`/路由切换包进 `startTransition`（或使用 `useTransition`）以降低卡顿；但**不要**用 `useTransition` 替代 I/O 的等待（例如文件读写/网络请求的 `await`），I/O 的 loading/错误处理仍应使用显式状态管理（如 `isLoading`）。
 10. **Endian 计算规则（Effect Project）**：涉及 `bone_index`、hash、jnttbl 命中、nusktb 名称映射等后端/业务计算时，一律使用 **LE 数值** 进行匹配；`BE/LE` 切换仅用于 UI 展示，不得改变计算结果。

@@ -8,6 +8,8 @@ const MSC_SCRIPT_EXTENSION_BY_C_FILE_BASENAME = {
   "2": ".dscex",
 } as const;
 
+export type MscWorkspaceMode = "unit" | "traditional";
+
 function getLowerCaseFileExtension(name: string): string {
   const dotIndex = name.lastIndexOf(".");
   if (dotIndex < 0) {
@@ -23,28 +25,55 @@ function replaceTrailingExtension(path: string, currentExtension: string, nextEx
   return path.slice(0, -currentExtension.length) + nextExtension;
 }
 
-export function isMscFolderMarkerFile(name: string): boolean {
+export function isMscFolderMarkerFile(
+  name: string,
+  mode: MscWorkspaceMode = "unit",
+): boolean {
   const extension = getLowerCaseFileExtension(name);
+  if (mode === "traditional") {
+    return extension === ".bin";
+  }
   return MSC_FOLDER_MARKERS.includes(extension as (typeof MSC_FOLDER_MARKERS)[number]);
 }
 
-export function getMscConvertOutputPath(scriptPath: string): string {
+export function getMscConvertOutputPath(
+  scriptPath: string,
+  mode: MscWorkspaceMode = "unit",
+): string {
   const extension = getLowerCaseFileExtension(scriptPath);
+  if (mode === "traditional") {
+    if (extension !== ".bin") {
+      throw new Error(`MSC workspace: unsupported traditional convert source: ${scriptPath}`);
+    }
+    return replaceTrailingExtension(scriptPath, extension, ".c");
+  }
   if (!MSC_FOLDER_MARKERS.includes(extension as (typeof MSC_FOLDER_MARKERS)[number])) {
     throw new Error(`MSC workspace: unsupported convert source: ${scriptPath}`);
   }
   return replaceTrailingExtension(scriptPath, extension, ".c");
 }
 
-export function getMscConvertLogPath(scriptPath: string): string {
+export function getMscConvertLogPath(
+  scriptPath: string,
+  mode: MscWorkspaceMode = "unit",
+): string {
   const extension = getLowerCaseFileExtension(scriptPath);
+  if (mode === "traditional") {
+    if (extension !== ".bin") {
+      throw new Error(`MSC workspace: unsupported traditional convert source: ${scriptPath}`);
+    }
+    return replaceTrailingExtension(scriptPath, extension, ".txt");
+  }
   if (!MSC_FOLDER_MARKERS.includes(extension as (typeof MSC_FOLDER_MARKERS)[number])) {
     throw new Error(`MSC workspace: unsupported convert source: ${scriptPath}`);
   }
   return replaceTrailingExtension(scriptPath, extension, ".txt");
 }
 
-export function getMscRepackOutputPath(cFilePath: string): string {
+export function getMscRepackOutputPath(
+  cFilePath: string,
+  mode: MscWorkspaceMode = "unit",
+): string {
   const extension = getLowerCaseFileExtension(cFilePath);
   if (extension !== ".c") {
     throw new Error(`MSC workspace: unsupported repack source: ${cFilePath}`);
@@ -57,6 +86,9 @@ export function getMscRepackOutputPath(cFilePath: string): string {
   }
 
   const baseName = fileName.slice(0, -extension.length);
+  if (mode === "traditional") {
+    return replaceTrailingExtension(cFilePath, extension, ".bin");
+  }
   const targetExtension =
     MSC_SCRIPT_EXTENSION_BY_C_FILE_BASENAME[
       baseName as keyof typeof MSC_SCRIPT_EXTENSION_BY_C_FILE_BASENAME
@@ -79,13 +111,16 @@ export function getMscResolvedOverlayPath(cFilePath: string): string {
 /**
  * Returns true if the directory contains at least one file with a .bscex / .cscex / .dscex suffix (non-recursive).
  */
-export async function folderContainsMscScriptFiles(dirPath: string): Promise<boolean> {
+export async function folderContainsMscScriptFiles(
+  dirPath: string,
+  mode: MscWorkspaceMode = "unit",
+): Promise<boolean> {
   const trimmed = dirPath.trim();
   if (!trimmed) {
     return false;
   }
   const entries = await readDir(trimmed);
-  return entries.some((e) => e.isFile && e.name && isMscFolderMarkerFile(e.name));
+  return entries.some((e) => e.isFile && e.name && isMscFolderMarkerFile(e.name, mode));
 }
 
 type MscWorkspaceSelectionNode = Pick<TestTreeNode, "path" | "isDir">;

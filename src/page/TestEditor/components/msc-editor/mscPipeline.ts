@@ -9,6 +9,8 @@
  * recompiles back to its source extension in place.
  */
 
+import type { MscWorkspaceMode } from "../../utils/mscWorkspaceUtils";
+
 export interface MscFileInfo {
   name: string;
   path: string;
@@ -36,13 +38,24 @@ export function isMscPackScriptCFile(name: string): boolean {
   return lower === "0.c" || lower === "1.c" || lower === "2.c";
 }
 
-export function getMscFileRole(name: string): MscFileRole {
+export function getMscFileRole(
+  name: string,
+  mode: MscWorkspaceMode = "unit",
+): MscFileRole {
   const lower = name.toLowerCase();
-  if (SCRIPT_EXTENSIONS.some((ext) => lower.endsWith(ext))) return "script";
+  if (mode === "traditional" && lower.endsWith(".bin")) return "script";
+  if (mode === "unit" && SCRIPT_EXTENSIONS.some((ext) => lower.endsWith(ext))) return "script";
   if (lower.endsWith(".resolved.md")) return "resolved";
   if (lower.endsWith(".c")) return "c";
   if (lower.endsWith(".txt")) return "log";
   return "other";
+}
+
+export function isMscRepackableCFile(
+  name: string,
+  mode: MscWorkspaceMode,
+): boolean {
+  return mode === "traditional" ? name.toLowerCase().endsWith(".c") : isMscPackScriptCFile(name);
 }
 
 export interface MscSlotStatus extends MscPackSlot {
@@ -159,10 +172,13 @@ const GROUP_ORDER: ReadonlyArray<{ role: MscFileRole; label: string }> = [
   { role: "other", label: "Other" },
 ];
 
-export function groupMscFiles(files: readonly MscFileInfo[]): MscFileGroup[] {
+export function groupMscFiles(
+  files: readonly MscFileInfo[],
+  mode: MscWorkspaceMode = "unit",
+): MscFileGroup[] {
   const byRole = new Map<MscFileRole, MscFileInfo[]>();
   for (const file of files) {
-    const role = getMscFileRole(file.name);
+    const role = getMscFileRole(file.name, mode);
     const bucket = byRole.get(role);
     if (bucket) {
       bucket.push(file);

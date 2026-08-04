@@ -983,6 +983,17 @@ def main(args):
         with open(args.filename if args.filename != None else (os.path.basename(os.path.splitext(args.file)[0]) + '.c'), "w") as f:
             printC(globalVarDecls, funcs, f)
 
+def read_function_pointer_map(log_file):
+    """Read absolute script offsets from an mscdec disassembly log."""
+    pointer_map = {}
+    with open(log_file, 'r', encoding='utf-8') as log:
+        for line in log:
+            match = re.search(r'func_name: (\w+), pointer: (\d+)', line)
+            if match:
+                pointer_map[int(match.group(2))] = match.group(1)
+    return pointer_map
+
+
 def handle_func_241_pointer_funcs(file_name, log_file):
     # this function only for handle the normal msc
     # scan the entire output.c file and replace all func_241 pointer calls
@@ -990,10 +1001,9 @@ def handle_func_241_pointer_funcs(file_name, log_file):
     with open(file_name, 'r', encoding='utf-8') as f:
         content = f.readlines()
 
-    with open(log_file, "r") as log:
-        log_content = log.readlines()
-
+    pointer_map = read_function_pointer_map(log_file)
     data_block = []
+    unresolved_pointers = set()
 
     # 2. scan all lines for func_241 calls
     for line_index, line in enumerate(content):
@@ -1008,13 +1018,7 @@ def handle_func_241_pointer_funcs(file_name, log_file):
             pointer_value = int(pointer_hex, 16) + 0x30
 
             # 3.2 Find the function name by pointer value in log
-            function_name = None
-            for log_line in log_content:
-                if f'pointer: {str(pointer_value)}]' in log_line:
-                    function_name_match = re.search(r'func_name: (\w+), pointer: \d+', log_line)
-                    if function_name_match:
-                        function_name = function_name_match.group(1)
-                        break
+            function_name = pointer_map.get(pointer_value)
 
             if function_name:
                 # 3.3 Replace the pointer to the function name
@@ -1025,6 +1029,12 @@ def handle_func_241_pointer_funcs(file_name, log_file):
                     original_line)
                 debug_print(f"Replacing pointer {pointer_hex} with function {function_name}")
                 data_block.append([original_line, replaced_str])
+            else:
+                unresolved_pointers.add(pointer_hex)
+
+    if unresolved_pointers:
+        unresolved = ', '.join(sorted(unresolved_pointers, key=lambda value: int(value, 16)))
+        raise DecompilerError(f"Unable to resolve func_241 script pointers: {unresolved}")
 
     # 4. Write the replaced content to the file
     with open(file_name, 'w', encoding='utf-8') as f:
@@ -1043,23 +1053,25 @@ def handle_sys_1_0x10001_0x10_var1_pointer_funcs(file_name, log_file):
     with open(file_name, 'r', encoding='utf-8') as f:
         content = f.readlines()
     
-    with open(log_file, "r") as log:
-        log_content = log.readlines()
-        
+    pointer_map = read_function_pointer_map(log_file)
     data_block = []
+    unresolved_pointers = set()
     
-    func_index = "sys_1(0x10001, 0x10, var1, "
     line_count = 0
     target_func = None
     
     # Step 1: Find the target function from sys_1 call
     for line in content:
         line_count += 1
-        if func_index in line:
+        target_func_match = re.search(
+            r'sys_1\(\s*0x10001\s*,\s*0x10\s*,\s*\w+\s*,\s*(\w+)\s*\(',
+            line,
+        )
+        if target_func_match:
             # this step we need to find the called function name
             # e.g. sys_1(0x10001, 0x10, var1, func_981(func_872(var1, 0x2)));
             # we need to get the func_981 and jump to func_981 and loop it again
-            target_func = re.search(r'sys_1\(0x10001, 0x10, var1, (\w+)\(', line).group(1)
+            target_func = target_func_match.group(1)
             # hardcode the target_func name to "int func_981(int arg0)"
             target_func = "int " + target_func + "(int arg0)"
             break
@@ -1094,10 +1106,6 @@ def handle_sys_1_0x10001_0x10_var1_pointer_funcs(file_name, log_file):
                     target_func_end_line = current_index
                     break
                     
-                if 'return var1;' in current_line:
-                    target_func_end_line = current_index
-                    break
-                    
                 # Look for condition comparisons and collect switch cases BEFORE replacement
                 if '== arg0' in current_line:
                     condition_match = re.search(r'0x([0-9a-fA-F]+)\s*==\s*arg0', current_line)
@@ -1113,13 +1121,11 @@ def handle_sys_1_0x10001_0x10_var1_pointer_funcs(file_name, log_file):
                                     pointer_value = pointer_match.group(1)
                                     pointer_value_int = int(pointer_value, 16) + 0x30
                                     
-                                    # Find function name from log
-                                    for log_line in log_content:
-                                        if f'pointer: {str(pointer_value_int)}]' in log_line:
-                                            function_name = re.search(r'func_name: (\w+), pointer: \d+', log_line).group(1)
-                                            # Collect switch case info using the condition hex value
-                                            switch_cases.append((condition_hex, function_name))
-                                            break
+                                    function_name = pointer_map.get(pointer_value_int)
+                                    if function_name:
+                                        switch_cases.append((condition_hex, function_name))
+                                    else:
+                                        unresolved_pointers.add(pointer_value)
                                 break
                             elif '}' in assignment_line or 'else' in assignment_line:
                                 break
@@ -1133,21 +1139,24 @@ def handle_sys_1_0x10001_0x10_var1_pointer_funcs(file_name, log_file):
                         # find the pointer value and + 0x30 and format it remove ";"
                         pointer_value = re.search(r'var1 = (0x[0-9a-fA-F]+);', original_line).group(1)
                         pointer_value_int = int(pointer_value, 16) + 0x30
+                        function_name = pointer_map.get(pointer_value_int)
                         replaced_str = None
-                        for log_line in log_content:
-                            if f'pointer: {str(pointer_value_int)}]' in log_line:
-                                function_name_match = re.search(r'func_name: (\w+), pointer: \d+', log_line)
-                                if not function_name_match:
-                                    continue
-                                function_name = function_name_match.group(1)
-                                replaced_str = re.sub(
-                                    r'(var1 = 0x[0-9a-fA-F]+;)',
-                                    r'var1 = ' + function_name + r';',
-                                    original_line)
-                                break
+                        if function_name:
+                            replaced_str = re.sub(
+                                r'(var1 = 0x[0-9a-fA-F]+;)',
+                                r'var1 = ' + function_name + r';',
+                                original_line)
                         if replaced_str is not None:
                             data_block.append([content[current_index], replaced_str])
+                        else:
+                            unresolved_pointers.add(pointer_value)
             break
+
+    if unresolved_pointers:
+        unresolved = ', '.join(sorted(unresolved_pointers, key=lambda value: int(value, 16)))
+        raise DecompilerError(
+            f"Unable to resolve script pointers in {target_func}: {unresolved}"
+        )
     
     # Step 3: Write replaced content first
     with open(file_name, 'w', encoding='utf-8') as f:
@@ -1168,24 +1177,31 @@ def handle_var3_sys_0_0x700000_0_var1_0xa_pointer_funcs(file_name, log_file):
     with open(file_name, 'r', encoding='utf-8') as f:
         content = f.readlines()
     
-    with open(log_file, "r") as log:
-        log_content = log.readlines()
-        
+    pointer_map = read_function_pointer_map(log_file)
     data_block = []
+    unresolved_pointers = set()
     
-    func_index = "var3 = sys_0(0x700000, 0, var1, 0xa);"
     line_count = 0
     target_func = None
     for line in content:
         line_count += 1
-        if func_index in line:
+        external_table_match = re.search(
+            r'(\w+)\s*=\s*sys_0\(\s*0x700000\s*,\s*0\s*,\s*\w+\s*,\s*0xa\s*\)\s*;',
+            line,
+        )
+        if external_table_match:
             # next line must be "var4 = func_870(var3);", then we need get the the func_870
-            target_func_match = re.search(r'var4 = (\w+)\(var3\);', content[line_count])
+            table_value_var = external_table_match.group(1)
+            target_func_match = re.search(
+                rf'\w+\s*=\s*(\w+)\(\s*{re.escape(table_value_var)}\s*\)\s*;',
+                content[line_count],
+            )
             if not target_func_match:
-                return
+                continue
             target_func = target_func_match.group(1)
             # hardcode the target_func name to "int func_981(int arg0)"
             target_func = "int " + target_func + "(int arg0)"
+            break
             
     # the second loop to find the target_func name
     line_count = 0 # reset
@@ -1203,22 +1219,25 @@ def handle_var3_sys_0_0x700000_0_var1_0xa_pointer_funcs(file_name, log_file):
                     pointer = re.search(r'return 0x[0-9a-fA-F]+;', original_line)
                     if(pointer):
                         # find the pointer value and + 0x30 and format it remove ";"
-                        pointer_value = re.search(r'return (0x[0-9a-fA-F]+);', original_line).group(1)
-                        pointer_value = int(pointer_value, 16) + 0x30
+                        pointer_hex = re.search(r'return (0x[0-9a-fA-F]+);', original_line).group(1)
+                        pointer_value = int(pointer_hex, 16) + 0x30
                         replaced_str = None
-                        for log_line in log_content:
-                            if f'pointer: {str(pointer_value)}]' in log_line:
-                                function_name_match = re.search(r'func_name: (\w+), pointer: \d+', log_line)
-                                if not function_name_match:
-                                    continue
-                                function_name = function_name_match.group(1)
-                                replaced_str = re.sub(
-                                    r'(return 0x[0-9a-fA-F]+;)',
-                                    r'return ' + function_name + r';',
-                                    original_line)
-                                break
+                        function_name = pointer_map.get(pointer_value)
+                        if function_name:
+                            replaced_str = re.sub(
+                                r'(return 0x[0-9a-fA-F]+;)',
+                                r'return ' + function_name + r';',
+                                original_line)
                         if replaced_str is not None:
                             data_block.append([content[current_index], replaced_str])
+                        else:
+                            unresolved_pointers.add(pointer_hex)
+
+    if unresolved_pointers:
+        unresolved = ', '.join(sorted(unresolved_pointers, key=lambda value: int(value, 16)))
+        raise DecompilerError(
+            f"Unable to resolve script pointers in {target_func}: {unresolved}"
+        )
     # write
     with open(file_name, 'w', encoding='utf-8') as f:
         for line in content:
@@ -1400,6 +1419,22 @@ def generate_switch_case_function(func_name, switch_cases):
     lines = generate_switch_case_function_lines(func_name, switch_cases)
     return ''.join(lines)
 
+
+def is_new_external_action_msc(file_name):
+    """Return whether a decompiled MSC uses the external action-table dispatcher."""
+    with open(file_name, 'r', encoding='utf-8') as f:
+        source = f.read()
+
+    has_external_action_table = re.search(
+        r'\w+\s*=\s*sys_0\(\s*0x700000\s*,\s*0\s*,\s*\w+\s*,\s*0xa\s*\)\s*;',
+        source,
+    )
+    has_action_dispatcher = re.search(
+        r'sys_1\(\s*0x10001\s*,\s*0x10\s*,\s*\w+\s*,\s*\w+\s*\(',
+        source,
+    )
+    return bool(has_external_action_table and has_action_dispatcher)
+
 def handle_exvs2_pointer_funcs(args):
     file_name = args.filename or os.path.basename(os.path.splitext(args.file)[0]) + '.c'
     log_file = args.log or 'log.txt'
@@ -1435,7 +1470,12 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--split', action='store_true', help='Split to put all functions before main() into stdlib.c')
     parser.add_argument('-x', '--xmlPath', dest='xmlPath', help="Path to load overload MSC xml info")
     parser.add_argument('--exvsMapping', dest='exvsMapping', help="Path to EXVS native-truth mapping JSON")
-    parser.add_argument('--exvsPostprocess', dest='exvsPostprocess', action='store_true', help="Run EXVS2-specific pointer and switch-case postprocessing")
+    parser.add_argument(
+        '--exvsPostprocess',
+        dest='exvsPostprocess',
+        action='store_true',
+        help="Force EXVS2 pointer and switch postprocessing (external action-table MSCs are detected automatically)",
+    )
     parser.add_argument('-c', '--assumeCharStd', dest='assumeCharStd', action='store_true', help="Assume the MSC binary is a character")
     parser.add_argument('-log', '--log', dest='log', help="Log file to output to", default="log.txt")
     parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help="Mirror progress and debug output to the console")
@@ -1446,7 +1486,8 @@ if __name__ == "__main__":
     main(args)
     end = timeit.default_timer()
     debug_print('Execution completed in %f seconds' % (end - start))
-    if args.exvsPostprocess:
+    output_file = args.filename or os.path.basename(os.path.splitext(args.file)[0]) + '.c'
+    if args.exvsPostprocess or is_new_external_action_msc(output_file):
         handle_exvs2_pointer_funcs(args)
 
 
