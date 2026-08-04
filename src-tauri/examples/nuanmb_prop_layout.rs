@@ -7,7 +7,10 @@ fn main() {
         println!("\n======== {path} ========");
         let anim = match Anim::from_file(Path::new(&path)) {
             Ok(a) => a,
-            Err(e) => { println!("fail {e}"); continue; }
+            Err(e) => {
+                println!("fail {e}");
+                continue;
+            }
         };
         let Anim::V12 {
             name,
@@ -27,7 +30,11 @@ fn main() {
             "name={:?} unk1={unk1} final_frame_index={final_frame_index} unk2={unk2} unk3={unk3}",
             name.to_string_lossy()
         );
-        println!("tracks={} buffers={}", tracks.elements.len(), buffers.elements.len());
+        println!(
+            "tracks={} buffers={}",
+            tracks.elements.len(),
+            buffers.elements.len()
+        );
         for t in tracks.elements.iter() {
             let props: Vec<String> = t
                 .properties
@@ -35,7 +42,9 @@ fn main() {
                 .iter()
                 .map(|p| {
                     let bi = p.buffer_index as usize;
-                    let hdr = if bi < buffers.elements.len() && buffers.elements[bi].elements.len() >= 4 {
+                    let hdr = if bi < buffers.elements.len()
+                        && buffers.elements[bi].elements.len() >= 4
+                    {
                         let b = &buffers.elements[bi].elements;
                         u32::from_le_bytes([b[0], b[1], b[2], b[3]])
                     } else {

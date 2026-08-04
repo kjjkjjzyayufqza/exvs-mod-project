@@ -12,9 +12,30 @@ use std::env;
 use std::path::Path;
 
 const KEEP_24: &[&str] = &[
-    "ASHI_L", "ASHI_R", "ATAMA", "BASE", "CENTER_RT", "GBL_RT", "HIZA_L", "HIZA_R",
-    "KATA_L", "KATA_R", "KOSHI", "KUBI", "MOMO_L", "MOMO_R", "MUNE1", "MUNE2",
-    "SAKOTSU_L", "SAKOTSU_R", "TE_L", "TE_R", "TSUMASAKI_L", "TSUMASAKI_R", "UDE_L", "UDE_R",
+    "ASHI_L",
+    "ASHI_R",
+    "ATAMA",
+    "BASE",
+    "CENTER_RT",
+    "GBL_RT",
+    "HIZA_L",
+    "HIZA_R",
+    "KATA_L",
+    "KATA_R",
+    "KOSHI",
+    "KUBI",
+    "MOMO_L",
+    "MOMO_R",
+    "MUNE1",
+    "MUNE2",
+    "SAKOTSU_L",
+    "SAKOTSU_R",
+    "TE_L",
+    "TE_R",
+    "TSUMASAKI_L",
+    "TSUMASAKI_R",
+    "UDE_L",
+    "UDE_R",
 ];
 
 fn leaf(name: &str) -> String {
@@ -100,16 +121,36 @@ fn main() {
         // KEEP Scale + Rotate + Translate on every bone (dense TRS).
         // Order close to stock but with Translate present on limbs:
         //   CompensateScale, Scale, Rotate, Translate, Visibility
-        push(&mut props, &mut buffers, "CompensateScale", encode_u16_1013(0));
-        push(&mut props, &mut buffers, "Scale", encode_const_vec3(tr.scale));
-        push(&mut props, &mut buffers, "Rotate", encode_const_quat(tr.rotation));
+        push(
+            &mut props,
+            &mut buffers,
+            "CompensateScale",
+            encode_u16_1013(0),
+        );
+        push(
+            &mut props,
+            &mut buffers,
+            "Scale",
+            encode_const_vec3(tr.scale),
+        );
+        push(
+            &mut props,
+            &mut buffers,
+            "Rotate",
+            encode_const_quat(tr.rotation),
+        );
         push(
             &mut props,
             &mut buffers,
             "Translate",
             encode_const_vec3(tr.translation),
         );
-        push(&mut props, &mut buffers, "Visibility", encode_u16_1013(0x7FFF));
+        push(
+            &mut props,
+            &mut buffers,
+            "Visibility",
+            encode_u16_1013(0x7FFF),
+        );
 
         tracks.push(TrackV1 {
             name: name.as_str().into(),

@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::fhm2d_memory_preview::{collect_texture_refs, load_matl_data};
 use crate::format::fhm2d::SubFileStructureEntry;
 
 #[derive(Clone, Debug, Deserialize)]
@@ -67,6 +68,7 @@ pub struct EffectFolderModel {
     pub folder_unk3: i32,
     pub files: Vec<EffectFolderFileItem>,
     pub missing_required_exts: Vec<String>,
+    pub material_texture_ids: Vec<EffectFolderHash>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -344,12 +346,20 @@ pub fn inspect_effect_folder(
     let data_by_index = build_file_record_map(&structure.sub_file_data, &json_dir)?;
     let forest = parse_forest(&structure.sub_file_structure)?;
     let mut warnings = Vec::new();
-
     let mut efxbns = Vec::new();
     let mut textures = Vec::new();
     let mut others = Vec::new();
     let mut models = Vec::new();
     collect_models(&forest, &data_by_index, &mut models);
+    for model in &mut models {
+        match collect_model_material_texture_ids(&model.files) {
+            Ok(ids) => model.material_texture_ids = ids,
+            Err(error) => warnings.push(format!(
+                "Failed to read material textures for model {}: {error}",
+                model.name
+            )),
+        }
+    }
     let model_hashes: HashSet<i32> = models.iter().map(|m| m.hash.signed).collect();
 
     for item in collect_items(&forest) {
@@ -996,6 +1006,20 @@ pub fn copy_effect_folder_selection(
             &mut copied_keys,
         )?;
     }
+    for animation in closure.animation_items {
+        append_source_item_to_destination(
+            &source_root,
+            &dest_root,
+            dest_json_dir,
+            &mut dest_structure,
+            &mut dest_forest,
+            &mut dest_data,
+            &animation,
+            &mut copied,
+            &mut skipped,
+            &mut copied_keys,
+        )?;
+    }
     for efxbn in closure.efxbn_items {
         append_source_item_to_destination(
             &source_root,
@@ -1057,6 +1081,7 @@ struct CopyClosure {
     efxbn_items: Vec<Node>,
     model_nodes: Vec<Node>,
     texture_items: Vec<Node>,
+    animation_items: Vec<Node>,
 }
 
 fn build_copy_closure(
@@ -1068,70 +1093,46 @@ fn build_copy_closure(
     let mut closure = CopyClosure::default();
     let all_items = collect_items(forest);
     let all_models = collect_model_nodes(forest, data_by_index);
-    let items_by_file_index: HashMap<i32, &Node> = all_items
-        .iter()
-        .filter_map(|item| item.file_index().map(|idx| (idx, *item)))
-        .collect();
-    // Model-group files (numdlb/numshb/nusktb/bin/…) → owning model folder.
-    let mut model_by_file_index: HashMap<i32, &Node> = HashMap::new();
-    for model in &all_models {
-        for item in collect_items(std::slice::from_ref(*model)) {
-            if let Some(idx) = item.file_index() {
-                model_by_file_index.insert(idx, *model);
-            }
-        }
-    }
-
     let mut wanted_model_hashes = BTreeSet::new();
     let mut wanted_texture_hashes = BTreeSet::new();
-    let mut wanted_file_indices = BTreeSet::new();
-    let mut efxbn_queue: Vec<i32> = Vec::new();
-    let mut visited_efxbn: HashSet<i32> = HashSet::new();
+    let mut wanted_animation_hashes = BTreeSet::new();
     let mut efxbn_in_closure: HashSet<i32> = HashSet::new();
     let mut texture_in_closure: HashSet<i32> = HashSet::new();
     let mut model_in_closure: HashSet<i32> = HashSet::new();
 
-    let push_efxbn = |item: &Node,
-                      closure: &mut CopyClosure,
-                      efxbn_in_closure: &mut HashSet<i32>,
-                      efxbn_queue: &mut Vec<i32>,
-                      visited_efxbn: &mut HashSet<i32>| {
-        let Some(file_index) = item.file_index() else {
-            return;
+    let push_efxbn =
+        |item: &Node, closure: &mut CopyClosure, efxbn_in_closure: &mut HashSet<i32>| {
+            let Some(file_index) = item.file_index() else {
+                return;
+            };
+            if efxbn_in_closure.insert(file_index) {
+                closure.efxbn_items.push(item.clone());
+            }
         };
-        if efxbn_in_closure.insert(file_index) {
-            closure.efxbn_items.push(item.clone());
-        }
-        if visited_efxbn.insert(file_index) {
-            efxbn_queue.push(file_index);
-        }
-    };
 
-    let push_texture = |item: &Node,
-                        closure: &mut CopyClosure,
-                        texture_in_closure: &mut HashSet<i32>| {
-        let Some(file_index) = item.file_index() else {
-            return;
+    let push_texture =
+        |item: &Node, closure: &mut CopyClosure, texture_in_closure: &mut HashSet<i32>| {
+            let Some(file_index) = item.file_index() else {
+                return;
+            };
+            if texture_in_closure.insert(file_index) {
+                closure.texture_items.push(item.clone());
+            }
         };
-        if texture_in_closure.insert(file_index) {
-            closure.texture_items.push(item.clone());
-        }
-    };
 
-    let push_model = |model: &Node,
-                      closure: &mut CopyClosure,
-                      model_in_closure: &mut HashSet<i32>| {
-        let key = folder_hash(model).unwrap_or_else(|| {
-            // Fallback: first child file index keeps uniqueness when hash is missing.
-            collect_items(std::slice::from_ref(model))
-                .first()
-                .and_then(|item| item.file_index())
-                .unwrap_or(0)
-        });
-        if model_in_closure.insert(key) {
-            closure.model_nodes.push(model.clone());
-        }
-    };
+    let push_model =
+        |model: &Node, closure: &mut CopyClosure, model_in_closure: &mut HashSet<i32>| {
+            let key = folder_hash(model).unwrap_or_else(|| {
+                // Fallback: first child file index keeps uniqueness when hash is missing.
+                collect_items(std::slice::from_ref(model))
+                    .first()
+                    .and_then(|item| item.file_index())
+                    .unwrap_or(0)
+            });
+            if model_in_closure.insert(key) {
+                closure.model_nodes.push(model.clone());
+            }
+        };
 
     // Seed from user selection.
     for item in &all_items {
@@ -1149,16 +1150,7 @@ fn build_copy_closure(
         }
         match record.actual_ext.as_str() {
             ".efxbn" => {
-                if let Some(hash) = item.item_entry().and_then(item_hash) {
-                    wanted_texture_hashes.insert(hash);
-                }
-                push_efxbn(
-                    item,
-                    &mut closure,
-                    &mut efxbn_in_closure,
-                    &mut efxbn_queue,
-                    &mut visited_efxbn,
-                );
+                push_efxbn(item, &mut closure, &mut efxbn_in_closure);
             }
             ".nutexb" => push_texture(item, &mut closure, &mut texture_in_closure),
             _ => {}
@@ -1174,12 +1166,10 @@ fn build_copy_closure(
         }
     }
 
-    // Expand efxbn dependency closure (modelIds, model-control textures, id_table fileIndex).
-    while let Some(efxbn_index) = efxbn_queue.pop() {
-        let Some(item) = items_by_file_index.get(&efxbn_index) else {
-            warnings.push(format!(
-                "Selected efxbn references missing fileIndex {efxbn_index}."
-            ));
+    // Read direct EFXBN resource IDs. Control references are curve selectors,
+    // not FHM2D file indices, so they must never expand the copy set.
+    for item in closure.efxbn_items.clone() {
+        let Some(efxbn_index) = item.file_index() else {
             continue;
         };
         let Some(record) = data_by_index.get(&efxbn_index) else {
@@ -1188,40 +1178,19 @@ fn build_copy_closure(
         if record.actual_ext != ".efxbn" {
             continue;
         }
-        if let Some(hash) = item.item_entry().and_then(item_hash) {
-            wanted_texture_hashes.insert(hash);
-        }
         match parse_efxbn_file(record.path.to_string_lossy().as_ref()) {
             Ok(summary) => {
                 absorb_efxbn_summary_refs(
                     &summary,
                     &mut wanted_model_hashes,
                     &mut wanted_texture_hashes,
-                    &mut wanted_file_indices,
+                    &mut wanted_animation_hashes,
                 );
             }
             Err(error) => warnings.push(format!(
                 "Failed to parse efxbn {}: {error}",
                 record.file_url
             )),
-        }
-
-        // Resolve newly discovered fileIndex refs immediately so nested efxbn enqueue.
-        let pending: Vec<i32> = wanted_file_indices.iter().copied().collect();
-        for file_index in pending {
-            resolve_wanted_file_index(
-                file_index,
-                data_by_index,
-                &items_by_file_index,
-                &model_by_file_index,
-                &mut closure,
-                &mut efxbn_in_closure,
-                &mut texture_in_closure,
-                &mut model_in_closure,
-                &mut efxbn_queue,
-                &mut visited_efxbn,
-                warnings,
-            );
         }
     }
 
@@ -1233,18 +1202,21 @@ fn build_copy_closure(
         }
     }
 
-    let copied_model_hashes: HashSet<i32> =
-        closure.model_nodes.iter().filter_map(folder_hash).collect();
-    for hash in &wanted_model_hashes {
-        if !copied_model_hashes.contains(hash) {
-            warnings.push(format!(
-                "Selected efxbn references missing modelId {}.",
-                EffectFolderHash::from_i32(*hash).hex
-            ));
+    // Material textures are transitive dependencies of source-owned models.
+    // Missing resource IDs stay silent because EXVS2 may use global pools.
+    for model in &closure.model_nodes {
+        let model_files = model_from_node(model, data_by_index).files;
+        match collect_model_material_texture_ids(&model_files) {
+            Ok(ids) => {
+                wanted_texture_hashes.extend(ids.into_iter().map(|hash| hash.signed));
+            }
+            Err(error) => warnings.push(format!(
+                "Failed to read copied model material textures: {error}"
+            )),
         }
     }
 
-    // Textures referenced by hash (efxbn item hash, modelId, model-control color map).
+    // Textures referenced by model-control blocks or copied model materials.
     for item in &all_items {
         let Some(file_index) = item.file_index() else {
             continue;
@@ -1264,87 +1236,33 @@ fn build_copy_closure(
         }
     }
 
-    // Final pass for any remaining fileIndex refs (e.g. textures only found by hash path).
-    for file_index in wanted_file_indices.iter().copied() {
-        resolve_wanted_file_index(
-            file_index,
-            data_by_index,
-            &items_by_file_index,
-            &model_by_file_index,
-            &mut closure,
-            &mut efxbn_in_closure,
-            &mut texture_in_closure,
-            &mut model_in_closure,
-            &mut efxbn_queue,
-            &mut visited_efxbn,
-            warnings,
-        );
-    }
-
-    // Nested efxbn enqueued during final fileIndex pass still need expansion.
-    while let Some(efxbn_index) = efxbn_queue.pop() {
-        let Some(item) = items_by_file_index.get(&efxbn_index) else {
+    // Animation IDs are filename-stem CRC32 values. Copy only matching source
+    // NUANMB files; globally resolved animations are intentionally ignored.
+    let copied_model_file_indices: HashSet<i32> = closure
+        .model_nodes
+        .iter()
+        .flat_map(|model| collect_items(std::slice::from_ref(model)))
+        .filter_map(|item| item.file_index())
+        .collect();
+    let mut animation_in_closure = HashSet::new();
+    for item in &all_items {
+        let Some(file_index) = item.file_index() else {
             continue;
         };
-        let Some(record) = data_by_index.get(&efxbn_index) else {
+        if copied_model_file_indices.contains(&file_index) {
+            continue;
+        }
+        let Some(record) = data_by_index.get(&file_index) else {
             continue;
         };
-        if record.actual_ext != ".efxbn" {
-            continue;
-        }
-        if let Some(hash) = item.item_entry().and_then(item_hash) {
-            wanted_texture_hashes.insert(hash);
-        }
-        match parse_efxbn_file(record.path.to_string_lossy().as_ref()) {
-            Ok(summary) => {
-                absorb_efxbn_summary_refs(
-                    &summary,
-                    &mut wanted_model_hashes,
-                    &mut wanted_texture_hashes,
-                    &mut wanted_file_indices,
-                );
-            }
-            Err(error) => warnings.push(format!(
-                "Failed to parse efxbn {}: {error}",
-                record.file_url
-            )),
-        }
-        for file_index in wanted_file_indices.iter().copied() {
-            resolve_wanted_file_index(
-                file_index,
-                data_by_index,
-                &items_by_file_index,
-                &model_by_file_index,
-                &mut closure,
-                &mut efxbn_in_closure,
-                &mut texture_in_closure,
-                &mut model_in_closure,
-                &mut efxbn_queue,
-                &mut visited_efxbn,
-                warnings,
-            );
-        }
-        for model in &all_models {
-            let model_hash = folder_hash(model);
-            if model_hash.is_some_and(|hash| wanted_model_hashes.contains(&hash)) {
-                push_model(model, &mut closure, &mut model_in_closure);
-            }
-        }
-        for item in &all_items {
-            let Some(file_index) = item.file_index() else {
-                continue;
-            };
-            let Some(record) = data_by_index.get(&file_index) else {
-                continue;
-            };
-            if record.actual_ext == ".nutexb"
-                && item
-                    .item_entry()
-                    .and_then(item_hash)
-                    .is_some_and(|hash| wanted_texture_hashes.contains(&hash))
-            {
-                push_texture(item, &mut closure, &mut texture_in_closure);
-            }
+        if record.actual_ext == ".nuanmb"
+            && item
+                .item_entry()
+                .and_then(item_hash)
+                .is_some_and(|hash| wanted_animation_hashes.contains(&hash))
+            && animation_in_closure.insert(file_index)
+        {
+            closure.animation_items.push((*item).clone());
         }
     }
 
@@ -1355,13 +1273,11 @@ fn absorb_efxbn_summary_refs(
     summary: &EfxbnSummary,
     wanted_model_hashes: &mut BTreeSet<i32>,
     wanted_texture_hashes: &mut BTreeSet<i32>,
-    wanted_file_indices: &mut BTreeSet<i32>,
+    wanted_animation_hashes: &mut BTreeSet<i32>,
 ) {
     for hash in &summary.model_ids {
         if hash.signed != 0 {
             wanted_model_hashes.insert(hash.signed);
-            // Historical behavior: modelId may also identify a texture hash.
-            wanted_texture_hashes.insert(hash.signed);
         }
     }
     for hash in &summary.model_control_texture_ids {
@@ -1369,68 +1285,9 @@ fn absorb_efxbn_summary_refs(
             wanted_texture_hashes.insert(hash.signed);
         }
     }
-    // Effect meta id_table stores structure SubFileData.fileIndex values (textures,
-    // model members, nested efxbn). Flag is retained in the parse but not required
-    // for copy resolution — any non-zero id is a dependency.
-    for effect in &summary.effects {
-        for pair in &effect.id_table {
-            if pair.id != 0 {
-                wanted_file_indices.insert(pair.id);
-            }
-        }
-    }
-}
-
-fn resolve_wanted_file_index(
-    file_index: i32,
-    data_by_index: &HashMap<i32, FileRecord>,
-    items_by_file_index: &HashMap<i32, &Node>,
-    model_by_file_index: &HashMap<i32, &Node>,
-    closure: &mut CopyClosure,
-    efxbn_in_closure: &mut HashSet<i32>,
-    texture_in_closure: &mut HashSet<i32>,
-    model_in_closure: &mut HashSet<i32>,
-    efxbn_queue: &mut Vec<i32>,
-    visited_efxbn: &mut HashSet<i32>,
-    warnings: &mut Vec<String>,
-) {
-    let Some(record) = data_by_index.get(&file_index) else {
-        warnings.push(format!(
-            "Efxbn id_table references missing fileIndex {file_index}."
-        ));
-        return;
-    };
-    match record.actual_ext.as_str() {
-        ".nutexb" => {
-            if let Some(item) = items_by_file_index.get(&file_index) {
-                if texture_in_closure.insert(file_index) {
-                    closure.texture_items.push((*item).clone());
-                }
-            }
-        }
-        ".efxbn" => {
-            if let Some(item) = items_by_file_index.get(&file_index) {
-                if efxbn_in_closure.insert(file_index) {
-                    closure.efxbn_items.push((*item).clone());
-                }
-                if visited_efxbn.insert(file_index) {
-                    efxbn_queue.push(file_index);
-                }
-            }
-        }
-        _ => {
-            if let Some(model) = model_by_file_index.get(&file_index) {
-                let key = folder_hash(model).unwrap_or(file_index);
-                if model_in_closure.insert(key) {
-                    closure.model_nodes.push((*model).clone());
-                }
-            } else if items_by_file_index.contains_key(&file_index) {
-                // Non-model, non-texture payload (rare). Leave a warning so the UI can surface it.
-                warnings.push(format!(
-                    "Efxbn id_table fileIndex {file_index} ({}) is not a texture or model member; skipped.",
-                    record.actual_ext
-                ));
-            }
+    for hash in &summary.animation_ids {
+        if hash.signed != 0 {
+            wanted_animation_hashes.insert(hash.signed);
         }
     }
 }
@@ -2063,7 +1920,31 @@ fn model_from_node(node: &Node, data_by_index: &HashMap<i32, FileRecord>) -> Eff
         folder_unk3,
         files,
         missing_required_exts,
+        material_texture_ids: Vec::new(),
     }
+}
+
+fn collect_model_material_texture_ids(
+    files: &[EffectFolderFileItem],
+) -> Result<Vec<EffectFolderHash>, String> {
+    let mut hashes = BTreeSet::new();
+    for file in files
+        .iter()
+        .filter(|file| file.actual_ext == ".numatb" && !file.missing)
+    {
+        let bytes = fs::read(&file.path)
+            .map_err(|e| format!("Failed to read numatb {}: {e}", file.path))?;
+        let matl = load_matl_data(&bytes)
+            .map_err(|e| format!("Failed to parse numatb {}: {e}", file.path))?;
+        for reference in collect_texture_refs(&matl) {
+            let base_name = file_basename(reference.trim());
+            let resource_stem = stem(&base_name);
+            if !resource_stem.is_empty() {
+                hashes.insert(crc32fast::hash(resource_stem.as_bytes()) as i32);
+            }
+        }
+    }
+    Ok(hashes.into_iter().map(EffectFolderHash::from_i32).collect())
 }
 
 fn file_item_from_node(
@@ -2998,6 +2879,150 @@ mod tests {
         assert!(json["effects"][0]["metaParsed"].is_object());
         assert!(json["effects"][0]["metaParsed"]["unkConfigInfo"].is_array());
         assert!(json["effects"][0]["metaParsed"]["configHeader"]["unkBytes12"].is_array());
+    }
+
+    #[test]
+    fn copy_closure_uses_resource_hashes_not_control_lookup_indexes() {
+        fn item_node(file_index: i32, hash: i32) -> Node {
+            Node::Item {
+                entry_index: file_index as usize,
+                entry: SubFileStructureEntry::Item {
+                    unk1: String::new(),
+                    file_index,
+                    unk2: String::new(),
+                    unk2_1: 0,
+                    unk3: hash,
+                    unk4: 0,
+                    original_file_index: file_index,
+                    display_name: None,
+                },
+                file_index,
+            }
+        }
+
+        fn record(root: &Path, file_index: i32, ext: &str, stem: &str) -> FileRecord {
+            let path = root.join(format!("{stem}{ext}"));
+            if !path.exists() {
+                fs::write(&path, b"stub").unwrap();
+            }
+            FileRecord {
+                file_index,
+                file_type: ext.to_string(),
+                actual_ext: ext.to_string(),
+                file_url: path.to_string_lossy().to_string(),
+                file_base_name: stem.to_string(),
+                path,
+            }
+        }
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let model_id = 100i32;
+        let texture_id = 200i32;
+        let animation_id = 300i32;
+        let efxbn_hash = 999i32;
+
+        let control_lookup_offset = 0x20 + 0x370 - 8;
+        let model_control_offset = control_lookup_offset + 8;
+        let mut bytes = vec![0u8; model_control_offset + 0xb8];
+        let file_size = bytes.len() as u32;
+        bytes[0..4].copy_from_slice(b"EFXB");
+        bytes[0x04..0x08].copy_from_slice(&2u32.to_le_bytes());
+        bytes[0x08..0x0c].copy_from_slice(&file_size.to_le_bytes());
+        bytes[0x0c..0x10].copy_from_slice(&1u32.to_le_bytes());
+        bytes[0x10..0x14].copy_from_slice(&1u32.to_le_bytes());
+        bytes[0x14..0x18].copy_from_slice(&1u32.to_le_bytes());
+        bytes[0x20 + 0x138..0x20 + 0x13c].copy_from_slice(&model_id.to_le_bytes());
+        bytes[0x20 + 0x288..0x20 + 0x28c].copy_from_slice(&animation_id.to_le_bytes());
+        bytes[0x20 + 0x50..0x20 + 0x54].copy_from_slice(&1u32.to_le_bytes());
+        // This is a control lookup index, deliberately equal to an unrelated fileIndex.
+        bytes[0x20 + 0x54..0x20 + 0x58].copy_from_slice(&6u32.to_le_bytes());
+        bytes[model_control_offset + 4..model_control_offset + 8]
+            .copy_from_slice(&texture_id.to_le_bytes());
+        let efxbn_path = root.join("effect.efxbn");
+        fs::write(&efxbn_path, bytes).unwrap();
+
+        let model_file = item_node(10, 0);
+        let model = Node::Folder {
+            entry_index: 7,
+            entry: SubFileStructureEntry::Folder {
+                unk1: String::new(),
+                folder_count: 1,
+                unk2: String::new(),
+                unk2_1: 0,
+                unk3: 2,
+                unk4: 0,
+                unk5: model_id,
+                unk6: 0,
+            },
+            children: vec![model_file],
+        };
+        let forest = vec![
+            item_node(1, efxbn_hash),
+            item_node(2, texture_id),
+            item_node(3, model_id),
+            item_node(4, efxbn_hash),
+            item_node(5, animation_id),
+            item_node(6, 6),
+            model,
+        ];
+        let mut records = HashMap::new();
+        let mut efxbn_record = record(root, 1, ".efxbn", "effect");
+        efxbn_record.path = efxbn_path;
+        records.insert(1, efxbn_record);
+        records.insert(2, record(root, 2, ".nutexb", "direct_texture"));
+        records.insert(3, record(root, 3, ".nutexb", "model_hash_false_positive"));
+        records.insert(4, record(root, 4, ".nutexb", "efxbn_hash_false_positive"));
+        records.insert(5, record(root, 5, ".nuanmb", "animation"));
+        records.insert(6, record(root, 6, ".bin", "control_index_false_positive"));
+        records.insert(10, record(root, 10, ".numdlb", "model"));
+
+        let mut warnings = Vec::new();
+        let closure = build_copy_closure(
+            &forest,
+            &records,
+            &[EffectFolderSelection {
+                kind: "efxbn".to_string(),
+                file_index: Some(1),
+                hash_id: None,
+                name: None,
+            }],
+            &mut warnings,
+        );
+
+        assert_eq!(
+            closure
+                .efxbn_items
+                .iter()
+                .filter_map(Node::file_index)
+                .collect::<Vec<_>>(),
+            vec![1]
+        );
+        assert_eq!(
+            closure
+                .texture_items
+                .iter()
+                .filter_map(Node::file_index)
+                .collect::<Vec<_>>(),
+            vec![2]
+        );
+        assert_eq!(
+            closure
+                .animation_items
+                .iter()
+                .filter_map(Node::file_index)
+                .collect::<Vec<_>>(),
+            vec![5]
+        );
+        assert_eq!(
+            closure
+                .model_nodes
+                .iter()
+                .filter_map(folder_hash)
+                .collect::<Vec<_>>(),
+            vec![model_id]
+        );
+        assert!(warnings.is_empty());
     }
 
     #[test]

@@ -101,7 +101,7 @@ describe("effect list helpers", () => {
 
 describe("buildEffectFolderCopyPlan", () => {
   const modelHash = { signed: 100, unsigned: 100, hex: "0x00000064" };
-  const textureHash = { signed: 100, unsigned: 100, hex: "0x00000064" };
+  const textureHash = { signed: 101, unsigned: 101, hex: "0x00000065" };
   const efxbnHash = { signed: 200, unsigned: 200, hex: "0x000000C8" };
 
   const modelItem: EffectListItem = {
@@ -126,6 +126,7 @@ describe("buildEffectFolderCopyPlan", () => {
         },
       ],
       missingRequiredExts: [],
+      materialTextureIds: [textureHash],
     },
   };
 
@@ -191,7 +192,7 @@ describe("buildEffectFolderCopyPlan", () => {
     },
   };
 
-  it("includes efxbn selection plus referenced model and matching texture", () => {
+  it("includes an efxbn, its source model, and the model material texture", () => {
     const plan = buildEffectFolderCopyPlan({
       selectedItems: [efxbnWithRefs],
       allItems: [efxbnWithRefs, modelItem, textureItem],
@@ -206,7 +207,7 @@ describe("buildEffectFolderCopyPlan", () => {
     expect(plan.warnings).toHaveLength(0);
   });
 
-  it("pulls models and textures from efxbn id_table fileIndex refs", () => {
+  it("does not treat control-reference lookup indexes as fileIndex dependencies", () => {
     const modelFileIndex = 10;
     const textureFileIndex = 5;
     const efxbnWithIdTable: EffectListItem = {
@@ -261,15 +262,14 @@ describe("buildEffectFolderCopyPlan", () => {
       allItems: [efxbnWithIdTable, modelItem, textureItem],
     });
 
-    expect(plan.summary.modelCount).toBe(1);
-    expect(plan.summary.textureCount).toBe(1);
-    expect(plan.dependencies.some((d) => d.category === "model")).toBe(true);
-    expect(plan.dependencies.some((d) => d.category === "texture")).toBe(true);
-    expect(plan.dependencies.find((d) => d.category === "texture")?.reason).toContain("id_table");
+    expect(plan.summary.modelCount).toBe(0);
+    expect(plan.summary.textureCount).toBe(0);
+    expect(plan.dependencies).toHaveLength(0);
+    expect(plan.warnings).toHaveLength(0);
   });
 
   it("includes model-control texture hashes", () => {
-    const controlTexHash = { signed: 100, unsigned: 100, hex: "0x00000064" };
+    const controlTexHash = textureHash;
     const efxbnWithControlTex: EffectListItem = {
       category: "efxbn",
       item: {
@@ -292,14 +292,54 @@ describe("buildEffectFolderCopyPlan", () => {
     expect(plan.dependencies[0]?.category).toBe("texture");
   });
 
-  it("warns when efxbn references a model missing from inventory", () => {
+  it("includes a source NUANMB matching efxbn animationId", () => {
+    const animationHash = { signed: 300, unsigned: 300, hex: "0x0000012C" };
+    const animationItem: EffectListItem = {
+      category: "other",
+      item: {
+        fileIndex: 8,
+        fileType: ".nuanmb",
+        actualExt: ".nuanmb",
+        fileUrl: "animations/effect_a.nuanmb",
+        fileBaseName: "effect_a",
+        name: "effect_a",
+        path: "E:/src/animations/effect_a.nuanmb",
+        hash: animationHash,
+        unk2: null,
+        missing: false,
+      },
+    };
+    const efxbnWithAnimation: EffectListItem = {
+      category: "efxbn",
+      item: {
+        ...efxbnWithRefs.item,
+        efxbn: {
+          ...efxbnWithRefs.item.efxbn!,
+          modelIds: [],
+          animationIds: [animationHash],
+        },
+      },
+    };
+
+    const plan = buildEffectFolderCopyPlan({
+      selectedItems: [efxbnWithAnimation],
+      allItems: [efxbnWithAnimation, animationItem],
+    });
+
+    expect(plan.summary.animationCount).toBe(1);
+    expect(plan.dependencies).toHaveLength(1);
+    expect(plan.dependencies[0]?.category).toBe("animation");
+  });
+
+  it("ignores resource IDs absent from the source inventory as global", () => {
     const plan = buildEffectFolderCopyPlan({
       selectedItems: [efxbnWithRefs],
       allItems: [efxbnWithRefs, textureItem],
     });
 
     expect(plan.summary.modelCount).toBe(0);
-    expect(plan.warnings.some((w) => w.includes("missing modelId"))).toBe(true);
+    expect(plan.summary.textureCount).toBe(0);
+    expect(plan.warnings).toHaveLength(0);
   });
 
   it("marks unsupported other selections and warns", () => {

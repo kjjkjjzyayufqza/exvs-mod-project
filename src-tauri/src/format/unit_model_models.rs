@@ -103,12 +103,15 @@ fn sync_unit_model_texture_containers_at_paths(
 ) -> Result<bool, String> {
     // Resolve fileUrl against the package asset base (parent of model root), not the
     // structure file's parent. Working structure copies may live under the system temp dir.
-    let json_dir = model_root.parent().filter(|p| !p.as_os_str().is_empty()).ok_or_else(|| {
-        format!(
-            "Cannot determine asset base directory for model root {}",
-            model_root.display()
-        )
-    })?;
+    let json_dir = model_root
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .ok_or_else(|| {
+            format!(
+                "Cannot determine asset base directory for model root {}",
+                model_root.display()
+            )
+        })?;
     let raw = fs::read_to_string(structure_path).map_err(|e| {
         format!(
             "Failed to read structure JSON {}: {e}",

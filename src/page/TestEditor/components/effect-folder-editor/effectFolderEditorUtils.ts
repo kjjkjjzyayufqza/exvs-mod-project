@@ -249,7 +249,7 @@ export function parseHashInput(raw: string): number | null {
 /** Role of an entry in the effect-folder copy plan (mirrors backend closure). */
 export type EffectCopyPlanRole = "selected" | "dependency";
 
-export type EffectCopyPlanCategory = "efxbn" | "model" | "texture" | "other";
+export type EffectCopyPlanCategory = "efxbn" | "model" | "texture" | "animation" | "other";
 
 export type EffectCopyPlanFile = {
   path: string;
@@ -290,6 +290,7 @@ export type EffectFolderCopyPlan = {
     efxbnCount: number;
     modelCount: number;
     textureCount: number;
+    animationCount: number;
     otherCount: number;
     dependencyCount: number;
     transferFileCount: number;
@@ -326,7 +327,7 @@ function modelToPlanEntry(
 }
 
 function fileItemToPlanEntry(
-  category: "efxbn" | "texture" | "other",
+  category: "efxbn" | "texture" | "animation" | "other",
   item: EffectFolderFileItem,
   role: EffectCopyPlanRole,
   reason: string,
@@ -354,17 +355,19 @@ function fileItemToPlanEntry(
 }
 
 /**
- * Preview the effect-folder copy closure the backend builds in
+ * Preview the source-local effect-folder dependency set the backend builds in
  * `build_copy_closure` (src-tauri/src/format/effect_folder.rs).
  *
  * Rules mirrored from Rust:
  * - Selected .efxbn → copy efxbn and expand:
  *   - meta modelIds (model folder hash + optional texture hash)
  *   - model-control colorMap texture hashes
- *   - effect id_table entries as structure fileIndex refs (textures, model members, nested efxbn)
- * - Nested efxbn referenced by id_table are expanded recursively.
+ * - Legacy idTable pairs are control-curve references and never resolve files.
  * - Selected .nutexb texture → copy texture.
- * - Selected model → copy model folder + member files.
+ * - Selected/referenced model → copy model folder + member files and matching
+ *   source textures named by its NUMATB material references.
+ * - EFXBN animationId → matching source NUANMB.
+ * - Control-reference pairs are curve selectors, never FHM2D file indices.
  * - Non-efxbn / non-nutexb "other" selections are currently ignored by the backend.
  */
 export function buildEffectFolderCopyPlan(params: {
@@ -378,14 +381,8 @@ export function buildEffectFolderCopyPlan(params: {
 
   const wantedModelHashes = new Set<number>();
   const wantedTextureHashes = new Set<number>();
-  const wantedFileIndices = new Set<number>();
-  const depEfxbnFileIndices = new Set<number>();
-  const depModelKeys = new Set<string>();
-  const depTextureKeys = new Set<string>();
+  const wantedAnimationHashes = new Set<number>();
 
-  const inventoryEfxbn = allItems.filter(
-    (item): item is Extract<EffectListItem, { category: "efxbn" }> => item.category === "efxbn",
-  );
   const inventoryModels = allItems.filter(
     (item): item is Extract<EffectListItem, { category: "models" }> => item.category === "models",
   );
@@ -396,40 +393,19 @@ export function buildEffectFolderCopyPlan(params: {
     (item): item is Extract<EffectListItem, { category: "other" }> => item.category === "other",
   );
 
-  const efxbnByFileIndex = new Map(inventoryEfxbn.map((item) => [item.item.fileIndex, item]));
-  const textureByFileIndex = new Map(inventoryTextures.map((item) => [item.item.fileIndex, item]));
-  const otherByFileIndex = new Map(inventoryOther.map((item) => [item.item.fileIndex, item]));
-  const modelByFileIndex = new Map<number, Extract<EffectListItem, { category: "models" }>>();
-  for (const modelItem of inventoryModels) {
-    for (const file of modelItem.model.files) {
-      modelByFileIndex.set(file.fileIndex, modelItem);
-    }
-  }
-
   const absorbEfxbnSummary = (summary: NonNullable<EffectFolderFileItem["efxbn"]>) => {
     for (const modelHash of summary.modelIds) {
       if (modelHash.signed === 0) continue;
       wantedModelHashes.add(modelHash.signed);
-      wantedTextureHashes.add(modelHash.signed);
     }
     for (const textureHash of summary.modelControlTextureIds) {
       if (textureHash.signed === 0) continue;
       wantedTextureHashes.add(textureHash.signed);
     }
-    for (const effect of summary.effects) {
-      for (const pair of effect.idTable) {
-        if (pair.id !== 0) wantedFileIndices.add(pair.id);
-      }
+    for (const animationHash of summary.animationIds) {
+      if (animationHash.signed === 0) continue;
+      wantedAnimationHashes.add(animationHash.signed);
     }
-  };
-
-  const efxbnQueue: number[] = [];
-  const visitedEfxbn = new Set<number>();
-
-  const enqueueEfxbn = (fileIndex: number) => {
-    if (visitedEfxbn.has(fileIndex)) return;
-    visitedEfxbn.add(fileIndex);
-    efxbnQueue.push(fileIndex);
   };
 
   for (const item of selectedItems) {
@@ -441,10 +417,13 @@ export function buildEffectFolderCopyPlan(params: {
         selected.push(
           fileItemToPlanEntry("efxbn", item.item, "selected", "User selected this efxbn entry"),
         );
-        if (item.item.hash) {
-          wantedTextureHashes.add(item.item.hash.signed);
+        if (item.item.efxbn) {
+          absorbEfxbnSummary(item.item.efxbn);
+        } else {
+          warnings.push(
+            `Efxbn "${effectListItemLabel(item)}" has no parsed summary; related source assets may be incomplete.`,
+          );
         }
-        enqueueEfxbn(item.item.fileIndex);
         break;
       }
       case "textures":
@@ -474,61 +453,6 @@ export function buildEffectFolderCopyPlan(params: {
     }
   }
 
-  while (efxbnQueue.length > 0) {
-    const fileIndex = efxbnQueue.pop()!;
-    const efxbnItem = efxbnByFileIndex.get(fileIndex);
-    if (!efxbnItem) {
-      warnings.push(`Efxbn references missing fileIndex ${fileIndex}.`);
-      continue;
-    }
-    if (efxbnItem.item.hash) {
-      wantedTextureHashes.add(efxbnItem.item.hash.signed);
-    }
-    const summary = efxbnItem.item.efxbn;
-    if (!summary) {
-      warnings.push(
-        `Efxbn "${effectListItemLabel(efxbnItem)}" has no parsed summary; related models/textures may be incomplete.`,
-      );
-      continue;
-    }
-    const before = wantedFileIndices.size;
-    absorbEfxbnSummary(summary);
-    // Newly discovered nested efxbn refs must be expanded in this BFS.
-    if (wantedFileIndices.size !== before || wantedFileIndices.size > 0) {
-      for (const refIndex of wantedFileIndices) {
-        if (efxbnByFileIndex.has(refIndex)) {
-          depEfxbnFileIndices.add(refIndex);
-          enqueueEfxbn(refIndex);
-        }
-      }
-    }
-  }
-
-  for (const refIndex of wantedFileIndices) {
-    if (efxbnByFileIndex.has(refIndex)) {
-      depEfxbnFileIndices.add(refIndex);
-      continue;
-    }
-    const modelItem = modelByFileIndex.get(refIndex);
-    if (modelItem) {
-      depModelKeys.add(effectListItemKey(modelItem));
-      continue;
-    }
-    const textureItem = textureByFileIndex.get(refIndex);
-    if (textureItem) {
-      depTextureKeys.add(effectListItemKey(textureItem));
-      continue;
-    }
-    if (otherByFileIndex.has(refIndex)) {
-      const other = otherByFileIndex.get(refIndex)!;
-      warnings.push(
-        `Efxbn id_table fileIndex ${refIndex} (${other.item.actualExt || "unknown"} "${effectListItemLabel(other)}") is not a texture or model member; skipped.`,
-      );
-    } else {
-      warnings.push(`Efxbn id_table references missing fileIndex ${refIndex}.`);
-    }
-  }
-
   const dependencies: EffectCopyPlanEntry[] = [];
   const depKeys = new Set<string>();
 
@@ -536,29 +460,22 @@ export function buildEffectFolderCopyPlan(params: {
     const key = effectListItemKey(modelItem);
     if (selectedKeys.has(key) || depKeys.has(key)) continue;
     const byHash = wantedModelHashes.has(modelItem.model.hash.signed);
-    const byFileIndex = depModelKeys.has(key);
-    if (!byHash && !byFileIndex) continue;
+    if (!byHash) continue;
     depKeys.add(key);
     dependencies.push(
       modelToPlanEntry(
         modelItem.model,
         "dependency",
-        byFileIndex
-          ? `Referenced by efxbn id_table fileIndex (model folder ${formatEffectFolderHash(modelItem.model.hash)})`
-          : `Referenced by efxbn modelId ${formatEffectFolderHash(modelItem.model.hash)}`,
+        `Referenced by efxbn modelId ${formatEffectFolderHash(modelItem.model.hash)}`,
       ),
     );
   }
 
-  const resolvedModelHashes = new Set(
-    inventoryModels
-      .filter((m) => selectedKeys.has(effectListItemKey(m)) || depKeys.has(effectListItemKey(m)))
-      .map((m) => m.model.hash.signed),
-  );
-  for (const hash of wantedModelHashes) {
-    if (!resolvedModelHashes.has(hash)) {
-      const display = `0x${(hash >>> 0).toString(16).toUpperCase().padStart(8, "0")}`;
-      warnings.push(`Selected efxbn references missing modelId ${display}.`);
+  for (const modelItem of inventoryModels) {
+    const key = effectListItemKey(modelItem);
+    if (!selectedKeys.has(key) && !depKeys.has(key)) continue;
+    for (const textureHash of modelItem.model.materialTextureIds ?? []) {
+      if (textureHash.signed !== 0) wantedTextureHashes.add(textureHash.signed);
     }
   }
 
@@ -567,33 +484,31 @@ export function buildEffectFolderCopyPlan(params: {
     if (selectedKeys.has(key) || depKeys.has(key)) continue;
     const hash = textureItem.item.hash;
     const byHash = hash != null && wantedTextureHashes.has(hash.signed);
-    const byFileIndex = depTextureKeys.has(key);
-    if (!byHash && !byFileIndex) continue;
+    if (!byHash) continue;
     depKeys.add(key);
     dependencies.push(
       fileItemToPlanEntry(
         "texture",
         textureItem.item,
         "dependency",
-        byFileIndex
-          ? `Referenced by efxbn id_table fileIndex ${textureItem.item.fileIndex}`
-          : `Auto-included via efxbn texture/model hash ${hash ? formatEffectFolderHash(hash) : "unknown"}`,
+        `Referenced by efxbn/model texture hash ${hash ? formatEffectFolderHash(hash) : "unknown"}`,
       ),
     );
   }
 
-  for (const fileIndex of depEfxbnFileIndices) {
-    const efxbnItem = efxbnByFileIndex.get(fileIndex);
-    if (!efxbnItem) continue;
-    const key = effectListItemKey(efxbnItem);
+  for (const animationItem of inventoryOther) {
+    if (animationItem.item.actualExt.toLowerCase() !== ".nuanmb") continue;
+    const key = effectListItemKey(animationItem);
     if (selectedKeys.has(key) || depKeys.has(key)) continue;
+    const hash = animationItem.item.hash;
+    if (!hash || !wantedAnimationHashes.has(hash.signed)) continue;
     depKeys.add(key);
     dependencies.push(
       fileItemToPlanEntry(
-        "efxbn",
-        efxbnItem.item,
+        "animation",
+        animationItem.item,
         "dependency",
-        `Referenced by efxbn id_table fileIndex ${fileIndex}`,
+        `Referenced by efxbn animationId ${formatEffectFolderHash(hash)}`,
       ),
     );
   }
@@ -612,6 +527,7 @@ export function buildEffectFolderCopyPlan(params: {
   const efxbnCount = transferable.filter((e) => e.category === "efxbn").length;
   const modelCount = transferable.filter((e) => e.category === "model").length;
   const textureCount = transferable.filter((e) => e.category === "texture").length;
+  const animationCount = transferable.filter((e) => e.category === "animation").length;
   const otherCount = selected.filter((e) => e.category === "other").length;
   const missingCount = transferFiles.filter((f) => f.missing).length;
   const unsupportedCount = selected.filter((e) => e.unsupported).length;
@@ -619,8 +535,9 @@ export function buildEffectFolderCopyPlan(params: {
   const steps = [
     "Validate source and destination effect pack folders exist.",
     "Read source and destination sibling *_structure.json files.",
-    "Build a copy closure from your selection (efxbn modelIds + model-control textures + id_table fileIndex refs, including nested efxbn).",
-    "Copy textures first, then model folders, then efxbn files (skip when destination already has the same ext+hash).",
+    "Build a source-local dependency set from EFXBN modelId, animationId, and texture-parameter CRC32 values.",
+    "Include source textures referenced by copied model NUMATB files; ignore resources found only in global game pools.",
+    "Copy textures first, then model folders, animations, and efxbn files (skip when destination already has the same ext+hash).",
     "Append new structure tree nodes and subFileData records for copied items.",
     "Write the destination *_structure.json (atomic). Source pack is never modified.",
   ];
@@ -635,6 +552,7 @@ export function buildEffectFolderCopyPlan(params: {
       efxbnCount,
       modelCount,
       textureCount,
+      animationCount,
       otherCount,
       dependencyCount: dependencies.length,
       transferFileCount: transferFiles.length,

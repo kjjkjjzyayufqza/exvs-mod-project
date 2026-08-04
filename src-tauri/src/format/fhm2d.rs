@@ -74,9 +74,7 @@ impl ExtractLayout {
         match value.trim().to_ascii_lowercase().as_str() {
             "folder" | "structure" => Ok(Self::Folder),
             "flat" | "single" => Ok(Self::Flat),
-            other => Err(format!(
-                "Unsupported layout '{other}' (use folder or flat)"
-            )),
+            other => Err(format!("Unsupported layout '{other}' (use folder or flat)")),
         }
     }
 

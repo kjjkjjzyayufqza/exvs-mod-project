@@ -159,6 +159,7 @@ export interface EffectFolderModel {
   folderUnk3: number;
   files: EffectFolderFileItem[];
   missingRequiredExts: string[];
+  materialTextureIds?: EffectFolderHash[];
 }
 
 export interface EffectFolderInventory {

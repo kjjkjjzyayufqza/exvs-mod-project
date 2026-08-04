@@ -270,7 +270,11 @@ fn nuanmb_writer_strips_ath_helper_bones() {
         .iter()
         .find(|group| group.group_type == GroupType::Transform)
         .expect("transform group");
-    let names: Vec<&str> = transform.nodes.iter().map(|node| node.name.as_str()).collect();
+    let names: Vec<&str> = transform
+        .nodes
+        .iter()
+        .map(|node| node.name.as_str())
+        .collect();
     assert_eq!(names, vec!["BASE", "KOSHI"]);
     assert!(!names.iter().any(|name| name.starts_with("ATH_")));
 }
@@ -325,7 +329,10 @@ fn nuanmb_writer_emits_stock_props_and_hold_headers() {
     };
     write_motion_clip_as_nuanmb(&clip, None, &output_path).unwrap();
 
-    let Anim::V12 { tracks, buffers, .. } = Anim::from_file(&output_path).unwrap() else {
+    let Anim::V12 {
+        tracks, buffers, ..
+    } = Anim::from_file(&output_path).unwrap()
+    else {
         panic!("expected Anim v1.2");
     };
     assert_eq!(tracks.elements.len(), 2);
@@ -363,7 +370,10 @@ fn nuanmb_writer_emits_stock_props_and_hold_headers() {
     let rot = &buffers.elements[rot_idx].elements;
     assert!(rot.len() >= 4);
     let header = u32::from_le_bytes([rot[0], rot[1], rot[2], rot[3]]);
-    assert_eq!(header, 0x4003, "hold rotate must use 0x4003, got 0x{header:04X}");
+    assert_eq!(
+        header, 0x4003,
+        "hold rotate must use 0x4003, got 0x{header:04X}"
+    );
     // Limb Translate must be present (0x3003 hold for constant T).
     let t_idx = limb.properties.elements[3].buffer_index as usize;
     let tbuf = &buffers.elements[t_idx].elements;

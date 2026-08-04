@@ -322,11 +322,7 @@ fn compose(
         } else {
             anim.rotation
         },
-        if f.override_scale {
-            rest_s
-        } else {
-            anim.scale
-        },
+        if f.override_scale { rest_s } else { anim.scale },
     )
 }
 

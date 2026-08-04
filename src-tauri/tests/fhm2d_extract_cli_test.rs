@@ -5,9 +5,7 @@
 //! `FHM2D_EXTRACT_FIXTURE` is set to a real OB `.fhm2d` path.
 
 use app_lib::fhm2d_extract_cli::run_cli_with_args;
-use app_lib::format::fhm2d::{
-    extract_fhm2d_to_folder_with_layout, ExtractLayout, Fhm2dFormat,
-};
+use app_lib::format::fhm2d::{extract_fhm2d_to_folder_with_layout, ExtractLayout, Fhm2dFormat};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -24,16 +22,13 @@ fn help_mentions_required_type_and_layout() {
 
 #[test]
 fn missing_type_is_hard_error() {
-    let err = run_cli_with_args([
-        "fixture.fhm2d",
-        "--output",
-        "out_dir",
-        "--layout",
-        "flat",
-    ])
-    .expect_err("type required");
+    let err = run_cli_with_args(["fixture.fhm2d", "--output", "out_dir", "--layout", "flat"])
+        .expect_err("type required");
     let lower = err.to_ascii_lowercase();
-    assert!(lower.contains("type") || lower.contains("required"), "{err}");
+    assert!(
+        lower.contains("type") || lower.contains("required"),
+        "{err}"
+    );
 }
 
 #[test]
@@ -47,7 +42,10 @@ fn missing_layout_is_hard_error() {
     ])
     .expect_err("layout required");
     let lower = err.to_ascii_lowercase();
-    assert!(lower.contains("layout") || lower.contains("required"), "{err}");
+    assert!(
+        lower.contains("layout") || lower.contains("required"),
+        "{err}"
+    );
 }
 
 #[test]
@@ -101,7 +99,10 @@ fn all_documented_types_parse_via_cli_flag() {
             "type {ty} rejected: {err}"
         );
         assert!(
-            err.contains("Failed to read") || err.contains("os error") || err.contains("cannot find") || err.contains("The system cannot find"),
+            err.contains("Failed to read")
+                || err.contains("os error")
+                || err.contains("cannot find")
+                || err.contains("The system cannot find"),
             "type {ty}: unexpected error after parse: {err}"
         );
     }
@@ -138,10 +139,7 @@ fn extract_flat_and_folder_when_fixture_present() {
         return;
     };
 
-    let root = std::env::temp_dir().join(format!(
-        "fhm2d_extract_cli_test_{}",
-        std::process::id()
-    ));
+    let root = std::env::temp_dir().join(format!("fhm2d_extract_cli_test_{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).expect("temp root");
 
@@ -174,10 +172,13 @@ fn extract_flat_and_folder_when_fixture_present() {
     .expect("folder extract");
 
     assert!(
-        flat_out.join("..").join(format!(
-            "{}_structure.json",
-            flat_out.file_name().unwrap().to_string_lossy()
-        )).exists()
+        flat_out
+            .join("..")
+            .join(format!(
+                "{}_structure.json",
+                flat_out.file_name().unwrap().to_string_lossy()
+            ))
+            .exists()
             || PathBuf::from(format!("{}_structure.json", flat_out.display())).exists(),
         "structure json missing for flat out"
     );

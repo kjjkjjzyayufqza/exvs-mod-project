@@ -181,7 +181,10 @@ mod tests {
 
     #[test]
     fn parse_accepts_layout_spellings() {
-        assert_eq!(ExtractLayout::parse("folder").unwrap(), ExtractLayout::Folder);
+        assert_eq!(
+            ExtractLayout::parse("folder").unwrap(),
+            ExtractLayout::Folder
+        );
         assert_eq!(
             ExtractLayout::parse("structure").unwrap(),
             ExtractLayout::Folder

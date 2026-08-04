@@ -28,10 +28,7 @@ fn is_ath(name: &str) -> bool {
 
 fn is_extra_drop(name: &str) -> bool {
     let l = leaf(name).to_ascii_uppercase();
-    is_ath(name)
-        || l.starts_with("FUN_")
-        || l.starts_with("SARM_")
-        || l.starts_with("PENQI_")
+    is_ath(name) || l.starts_with("FUN_") || l.starts_with("SARM_") || l.starts_with("PENQI_")
 }
 
 fn encode_u16_1013(v: u16) -> Vec<u8> {
@@ -50,7 +47,9 @@ fn vec3_hold(values: &[Vec3], eps: f32) -> bool {
 
 fn quat_hold(values: &[Quat], eps: f32) -> bool {
     let a0 = values[0].normalize();
-    values.iter().all(|q| 1.0 - a0.dot(q.normalize()).abs() <= eps)
+    values
+        .iter()
+        .all(|q| 1.0 - a0.dot(q.normalize()).abs() <= eps)
 }
 
 fn encode_vec3(values: &[Vec3]) -> Vec<u8> {
@@ -163,11 +162,21 @@ fn rewrite_game_safe(input: &Path, output: &Path) {
                 let trans: Vec<Vec3> = vals.iter().map(|v| v.translation).collect();
                 let mut props = Vec::new();
                 // CompScale + Scale + Rotate + Translate (all bones) + Visibility
-                push(&mut props, &mut buffers, "CompensateScale", encode_u16_1013(0));
+                push(
+                    &mut props,
+                    &mut buffers,
+                    "CompensateScale",
+                    encode_u16_1013(0),
+                );
                 push(&mut props, &mut buffers, "Scale", encode_vec3(&scales));
                 push(&mut props, &mut buffers, "Rotate", encode_quat(&rots));
                 push(&mut props, &mut buffers, "Translate", encode_vec3(&trans));
-                push(&mut props, &mut buffers, "Visibility", encode_u16_1013(0x7FFF));
+                push(
+                    &mut props,
+                    &mut buffers,
+                    "Visibility",
+                    encode_u16_1013(0x7FFF),
+                );
                 tracks.push(TrackV1 {
                     name: n.name.as_str().into(),
                     track_type: TrackTypeV1::Transform,

@@ -135,6 +135,10 @@ path = "tests/exvs2_json_cli_test.rs"
 name = "fhm2d_extract_cli_test"
 path = "tests/fhm2d_extract_cli_test.rs"
 
+[[test]]
+name = "effect_folder_real_data_test"
+path = "tests/effect_folder_real_data_test.rs"
+
 # Motion pipeline harnesses — require `--features motion-tests`.
 [[test]]
 name = "ssbh_motion_interchange_test"
@@ -320,4 +324,3 @@ path = "examples/nuanmb_hdr_census.rs"
 [[example]]
 name = "nuanmb_dump_rot_hdr"
 path = "examples/nuanmb_dump_rot_hdr.rs"
-

@@ -35,7 +35,10 @@ fn main() {
                     for v in vals.iter_mut() {
                         v.translation = glam::Vec3::ZERO;
                     }
-                    fixed_nodes.push(format!("{l} max|T|before={max_before:.4} frames={}", vals.len()));
+                    fixed_nodes.push(format!(
+                        "{l} max|T|before={max_before:.4} frames={}",
+                        vals.len()
+                    ));
                 }
             }
         }

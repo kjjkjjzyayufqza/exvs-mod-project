@@ -13,9 +13,30 @@ use std::env;
 use std::path::Path;
 
 const KEEP_24: &[&str] = &[
-    "ASHI_L", "ASHI_R", "ATAMA", "BASE", "CENTER_RT", "GBL_RT", "HIZA_L", "HIZA_R",
-    "KATA_L", "KATA_R", "KOSHI", "KUBI", "MOMO_L", "MOMO_R", "MUNE1", "MUNE2",
-    "SAKOTSU_L", "SAKOTSU_R", "TE_L", "TE_R", "TSUMASAKI_L", "TSUMASAKI_R", "UDE_L", "UDE_R",
+    "ASHI_L",
+    "ASHI_R",
+    "ATAMA",
+    "BASE",
+    "CENTER_RT",
+    "GBL_RT",
+    "HIZA_L",
+    "HIZA_R",
+    "KATA_L",
+    "KATA_R",
+    "KOSHI",
+    "KUBI",
+    "MOMO_L",
+    "MOMO_R",
+    "MUNE1",
+    "MUNE2",
+    "SAKOTSU_L",
+    "SAKOTSU_R",
+    "TE_L",
+    "TE_R",
+    "TSUMASAKI_L",
+    "TSUMASAKI_R",
+    "UDE_L",
+    "UDE_R",
 ];
 
 fn leaf(name: &str) -> String {
@@ -98,8 +119,18 @@ fn main() {
         // NO CompensateScale, NO Visibility — isolate "no limb Translate" only.
         // Roots: Scale + Rotate + Translate (like dense)
         // Limbs: Scale + Rotate only (NO Translate → ovT=true)
-        push(&mut props, &mut buffers, "Scale", encode_const_vec3(tr.scale));
-        push(&mut props, &mut buffers, "Rotate", encode_const_quat(tr.rotation));
+        push(
+            &mut props,
+            &mut buffers,
+            "Scale",
+            encode_const_vec3(tr.scale),
+        );
+        push(
+            &mut props,
+            &mut buffers,
+            "Rotate",
+            encode_const_quat(tr.rotation),
+        );
         if is_rootish(name) {
             push(
                 &mut props,

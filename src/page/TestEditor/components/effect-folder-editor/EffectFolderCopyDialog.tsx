@@ -69,6 +69,8 @@ function categoryBadgeVariant(
       return "secondary";
     case "texture":
       return "outline";
+    case "animation":
+      return "secondary";
     case "other":
       return "destructive";
   }
@@ -81,12 +83,13 @@ function roleLabel(role: EffectCopyPlanEntry["role"]): string {
 function SummaryChips({ plan }: { plan: EffectFolderCopyPlan }) {
   const chips: Array<{ label: string; value: number; tone?: "warn" | "danger" | "muted" }> = [
     { label: "selected", value: plan.summary.selectedCount },
-    { label: "efxbn", value: plan.summary.efxbnCount },
-    { label: "models", value: plan.summary.modelCount },
-    { label: "textures", value: plan.summary.textureCount },
-    { label: "deps", value: plan.summary.dependencyCount, tone: "muted" },
     { label: "files", value: plan.summary.transferFileCount },
   ];
+  if (plan.summary.modelCount > 0) chips.splice(-1, 0, { label: "models", value: plan.summary.modelCount });
+  if (plan.summary.textureCount > 0) chips.splice(-1, 0, { label: "textures", value: plan.summary.textureCount });
+  if (plan.summary.animationCount > 0) {
+    chips.splice(-1, 0, { label: "animations", value: plan.summary.animationCount });
+  }
   if (plan.summary.missingCount > 0) {
     chips.push({ label: "missing", value: plan.summary.missingCount, tone: "warn" });
   }
@@ -167,8 +170,6 @@ function PlanEntryRow({ entry }: { entry: EffectCopyPlanEntry }) {
               {formatEffectFolderHash(entry.hash)}
             </div>
           ) : null}
-          <div className="break-all font-mono text-[10px] text-muted-foreground">{entry.path || "—"}</div>
-          <p className="text-[11px] leading-snug text-muted-foreground">{entry.reason}</p>
         </div>
         {hasChildren ? (
           <Button
@@ -444,7 +445,7 @@ export function EffectFolderCopyDialog({
       }
     } catch (copyError) {
       setError(copyError instanceof Error ? copyError.message : String(copyError));
-      setActiveTab("debug");
+      setActiveTab("overview");
     }
   }, [destinationRoot, onCopy, onOpenChange, plan.summary.transferFileCount, selectedItems.length]);
 
@@ -461,8 +462,7 @@ export function EffectFolderCopyDialog({
         <DialogHeader className="shrink-0 space-y-2 border-b px-5 pb-3 pt-5 text-left">
           <DialogTitle className="pr-8 text-base">Copy effect entries</DialogTitle>
           <DialogDescription className="text-[12px] leading-relaxed">
-            Review the selection, related assets the backend will pull in, destination pack paths, and the
-            exact transfer plan before writing files. Source pack is never modified.
+            Copy selection and matching source-local dependencies. Source remains unchanged.
           </DialogDescription>
           <SummaryChips plan={plan} />
         </DialogHeader>
@@ -471,8 +471,8 @@ export function EffectFolderCopyDialog({
           <ScrollArea className="h-[min(58vh,560px)]">
             <div className="space-y-4 px-5 py-4">
               {/* Source → Destination */}
-              <section className="grid gap-3 rounded-lg border bg-muted/15 p-3 md:grid-cols-[1fr_auto_1fr] md:items-stretch">
-                <div className="space-y-2.5 rounded-md border bg-background/80 p-3">
+              <section className="rounded-lg border bg-muted/15 p-3">
+                <div className="hidden">
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Source pack
                   </div>
@@ -485,12 +485,12 @@ export function EffectFolderCopyDialog({
                   />
                 </div>
 
-                <div className="flex items-center justify-center text-muted-foreground md:px-1">
+                <div className="hidden">
                   <ArrowRight className="hidden h-4 w-4 md:block" aria-hidden />
                   <span className="text-[10px] uppercase tracking-wide md:hidden">to</span>
                 </div>
 
-                <div className="space-y-2.5 rounded-md border bg-background/80 p-3">
+                <div className="space-y-2.5">
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Destination pack
                   </div>
@@ -523,11 +523,7 @@ export function EffectFolderCopyDialog({
                       </Button>
                     </div>
                   </div>
-                  <PathBlock
-                    label="Inferred structure JSON"
-                    path={destinationStructurePath || "Enter a destination folder to infer …_structure.json"}
-                  />
-                  <p className="text-[10px] leading-snug text-muted-foreground">
+                  <p className="hidden">
                     Destination must already be an extracted effect pack with a sibling{" "}
                     <span className="font-mono">*_structure.json</span>. Existing entries with the same
                     extension + hash are skipped, not overwritten.
@@ -556,18 +552,12 @@ export function EffectFolderCopyDialog({
               ) : null}
 
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid h-9 w-full grid-cols-4">
+                <TabsList className={cn("grid h-9 w-full grid-cols-2", phase === "result" && "hidden")}>
                   <TabsTrigger value="overview" className="text-xs">
                     Overview
                   </TabsTrigger>
                   <TabsTrigger value="files" className="text-xs">
                     Files
-                  </TabsTrigger>
-                  <TabsTrigger value="result" className="text-xs" disabled={phase !== "result"}>
-                    Result
-                  </TabsTrigger>
-                  <TabsTrigger value="debug" className="text-xs">
-                    Debug
                   </TabsTrigger>
                 </TabsList>
 
@@ -577,13 +567,15 @@ export function EffectFolderCopyDialog({
                     empty="No entries selected."
                     entries={plan.selected}
                   />
-                  <SelectionListPanel
-                    title="Related assets auto-included"
-                    empty="No extra models or textures will be pulled in."
-                    entries={plan.dependencies}
-                  />
+                  {plan.dependencies.length > 0 ? (
+                    <SelectionListPanel
+                      title="Included dependencies"
+                      empty=""
+                      entries={plan.dependencies}
+                    />
+                  ) : null}
 
-                  <Collapsible open={howItWorksOpen} onOpenChange={setHowItWorksOpen}>
+                  <Collapsible className="hidden" open={howItWorksOpen} onOpenChange={setHowItWorksOpen}>
                     <CollapsibleTrigger asChild>
                       <Button
                         type="button"
@@ -606,21 +598,24 @@ export function EffectFolderCopyDialog({
                         <p className="font-medium text-foreground">Behavior notes</p>
                         <ul className="mt-1 list-disc space-y-1 pl-4">
                           <li>
-                            Selecting an <span className="font-mono">.efxbn</span> expands a full dependency
-                            closure: meta <span className="font-mono">modelId</span>s, model-control color-map
-                            texture hashes, and every non-zero{" "}
-                            <span className="font-mono">id_table</span> entry (structure{" "}
-                            <span className="font-mono">fileIndex</span> → nutexb, model folder members, nested
-                            efxbn). Nested efxbn are expanded recursively.
+                            Selecting an <span className="font-mono">.efxbn</span> includes matching source
+                            assets identified by filename-stem CRC32: <span className="font-mono">modelId</span>,{" "}
+                            <span className="font-mono">animationId</span>, texture-parameter IDs, and textures
+                            referenced by copied model NUMATB files.
+                          </li>
+                          <li>
+                            Legacy <span className="font-mono">idTable</span> pairs are control-curve references,
+                            not structure <span className="font-mono">fileIndex</span> values. They never add files.
+                            Referenced assets absent from the source pack are treated as global and ignored.
                           </li>
                           <li>
                             Destination collisions (same <span className="font-mono">ext + hash</span>) are
                             skipped and reported; files already present are not overwritten.
                           </li>
                           <li>
-                            Non-efxbn / non-nutexb “other” files are listed here but are{" "}
-                            <strong className="font-medium text-foreground">not</strong> transferred by the
-                            current backend.
+                            Manually selected “other” files are listed but not transferred. Source NUANMB files
+                            referenced by EFXBN <span className="font-mono">animationId</span> are included
+                            automatically.
                           </li>
                           <li>
                             After copy, repack the <em>destination</em> pack if you need a new{" "}
@@ -645,7 +640,6 @@ export function EffectFolderCopyDialog({
                             <TableHead className="h-8 text-[10px]">Role</TableHead>
                             <TableHead className="h-8 text-[10px]">Kind</TableHead>
                             <TableHead className="h-8 text-[10px]">Name</TableHead>
-                            <TableHead className="h-8 text-[10px]">Path</TableHead>
                             <TableHead className="h-8 text-[10px]">Status</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -664,9 +658,6 @@ export function EffectFolderCopyDialog({
                                 {file.name}
                                 <div className="text-muted-foreground">{file.actualExt}</div>
                               </TableCell>
-                              <TableCell className="max-w-[18rem] py-1.5 align-top break-all font-mono text-[10px]">
-                                {file.path}
-                              </TableCell>
                               <TableCell className="py-1.5 align-top text-[10px]">
                                 {file.missing ? (
                                   <span className="text-amber-700 dark:text-amber-400">missing on disk</span>
@@ -680,7 +671,7 @@ export function EffectFolderCopyDialog({
                       </Table>
                     </div>
                   )}
-                  <p className="mt-2 text-[10px] text-muted-foreground">
+                  <p className="hidden">
                     Paths are from the source pack. Destination filenames keep the source base name when
                     free; collisions get a unique sibling name. Structure indices are reassigned on the
                     destination side.

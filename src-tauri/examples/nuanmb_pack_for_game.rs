@@ -27,10 +27,7 @@ fn is_ath(name: &str) -> bool {
 
 fn is_extra_drop(name: &str) -> bool {
     let l = leaf(name).to_ascii_uppercase();
-    is_ath(name)
-        || l.starts_with("FUN_")
-        || l.starts_with("PENQI_")
-        || l.starts_with("SARM_")
+    is_ath(name) || l.starts_with("FUN_") || l.starts_with("PENQI_") || l.starts_with("SARM_")
 }
 
 fn is_rootish(name: &str) -> bool {
@@ -158,7 +155,11 @@ fn pack_anim(mut anim: AnimData, skel: &SkelData, output: &Path) -> AnimData {
     encoded
         .write_to_file(output)
         .unwrap_or_else(|e| panic!("write failed: {e}"));
-    println!("wrote {} ({} bytes)", output.display(), std::fs::metadata(output).map(|m| m.len()).unwrap_or(0));
+    println!(
+        "wrote {} ({} bytes)",
+        output.display(),
+        std::fs::metadata(output).map(|m| m.len()).unwrap_or(0)
+    );
 
     AnimData::from_file(output).expect("reload packed")
 }
@@ -244,7 +245,9 @@ fn compare_composed(a: &AnimData, b: &AnimData, skel: &SkelData) {
 
 fn main() {
     let mut args = env::args().skip(1);
-    let input = args.next().expect("in.nuanmb or will be FBX path when 4 args");
+    let input = args
+        .next()
+        .expect("in.nuanmb or will be FBX path when 4 args");
     let skel_path = args.next().expect("skel.nusktb");
     let output = args.next().expect("out.nuanmb");
     let fbx_opt = args.next();

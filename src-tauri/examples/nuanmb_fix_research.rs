@@ -13,12 +13,30 @@ use std::path::Path;
 
 /// Official body shot set (24). No ATH. Includes SAKOTSU (parent of arm chain).
 const KEEP_24: &[&str] = &[
-    "GBL_RT", "CENTER_RT", "BASE", "KOSHI",
-    "MOMO_L", "HIZA_L", "ASHI_L", "TSUMASAKI_L",
-    "MOMO_R", "HIZA_R", "ASHI_R", "TSUMASAKI_R",
-    "MUNE1", "MUNE2", "KUBI", "ATAMA",
-    "SAKOTSU_L", "KATA_L", "UDE_L", "TE_L",
-    "SAKOTSU_R", "KATA_R", "UDE_R", "TE_R",
+    "GBL_RT",
+    "CENTER_RT",
+    "BASE",
+    "KOSHI",
+    "MOMO_L",
+    "HIZA_L",
+    "ASHI_L",
+    "TSUMASAKI_L",
+    "MOMO_R",
+    "HIZA_R",
+    "ASHI_R",
+    "TSUMASAKI_R",
+    "MUNE1",
+    "MUNE2",
+    "KUBI",
+    "ATAMA",
+    "SAKOTSU_L",
+    "KATA_L",
+    "UDE_L",
+    "TE_L",
+    "SAKOTSU_R",
+    "KATA_R",
+    "UDE_R",
+    "TE_R",
 ];
 
 fn leaf(name: &str) -> String {
@@ -87,9 +105,7 @@ fn main() {
     }
 
     anim.name = ssbh_data::anim_data::disk_anim_name_from_path(Path::new(&output));
-    let encoded = anim
-        .to_anim_uncompressed()
-        .expect("uncompressed encode");
+    let encoded = anim.to_anim_uncompressed().expect("uncompressed encode");
     encoded.write_to_file(Path::new(&output)).expect("write");
 
     println!("encoding=to_anim_uncompressed");

@@ -3,8 +3,8 @@ use std::path::Path;
 use glam::{Quat, Vec3};
 use ssbh_data::{
     anim_data::{
-        AnimData, GroupData, GroupType, NodeData, TrackData, TrackValues, Transform, TransformFlags,
-        UvTransform,
+        AnimData, GroupData, GroupType, NodeData, TrackData, TrackValues, Transform,
+        TransformFlags, UvTransform,
     },
     skel_data::SkelData,
 };
@@ -289,11 +289,7 @@ fn write_anim_data_exvs2_uncompressed(
                 let mut properties = Vec::new();
                 match (&track.values, group.group_type) {
                     (TrackValues::Transform(vals), GroupType::Transform) if !vals.is_empty() => {
-                        encode_transform_track_exvs2(
-                            vals,
-                            &mut properties,
-                            &mut buffers,
-                        )?;
+                        encode_transform_track_exvs2(vals, &mut properties, &mut buffers)?;
                     }
                     (TrackValues::Boolean(vals), GroupType::Visibility) if !vals.is_empty() => {
                         let data = encode_bool_uncompressed(vals)?;
@@ -389,12 +385,7 @@ fn encode_transform_track_exvs2(
         "Translate",
         encode_vec3_uncompressed(&translations)?,
     );
-    push_property(
-        properties,
-        buffers,
-        "Visibility",
-        encode_u16_1013(0x7FFF),
-    );
+    push_property(properties, buffers, "Visibility", encode_u16_1013(0x7FFF));
     Ok(())
 }
 
@@ -423,9 +414,9 @@ fn vec3_is_hold(values: &[Vec3], eps: f32) -> bool {
         return true;
     }
     let a0 = values[0];
-    values
-        .iter()
-        .all(|v| (v.x - a0.x).abs() <= eps && (v.y - a0.y).abs() <= eps && (v.z - a0.z).abs() <= eps)
+    values.iter().all(|v| {
+        (v.x - a0.x).abs() <= eps && (v.y - a0.y).abs() <= eps && (v.z - a0.z).abs() <= eps
+    })
 }
 
 fn quat_is_hold(values: &[Quat], eps_one_minus_abs_dot: f32) -> bool {

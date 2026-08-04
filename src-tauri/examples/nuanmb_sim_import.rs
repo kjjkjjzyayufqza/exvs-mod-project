@@ -1,4 +1,6 @@
-use app_lib::ssbh_motion_interchange::{import_motion_fbx, MotionFbxImportRequest, RigBindingPolicy};
+use app_lib::ssbh_motion_interchange::{
+    import_motion_fbx, MotionFbxImportRequest, RigBindingPolicy,
+};
 use std::env;
 
 fn main() {

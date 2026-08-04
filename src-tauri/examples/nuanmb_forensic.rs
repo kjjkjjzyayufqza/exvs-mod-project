@@ -113,7 +113,11 @@ fn print_anim_summary(label: &str, anim: &AnimData, tracks: &HashMap<String, Tra
     let mut names: Vec<_> = tracks.keys().cloned().collect();
     names.sort();
     println!("bones: {}", names.join(", "));
-    let ath: Vec<_> = names.iter().filter(|n| n.starts_with("ATH_")).cloned().collect();
+    let ath: Vec<_> = names
+        .iter()
+        .filter(|n| n.starts_with("ATH_"))
+        .cloned()
+        .collect();
     println!("ATH count={}", ath.len());
     if !ath.is_empty() {
         println!("ATH: {}", ath.join(", "));
@@ -175,7 +179,10 @@ fn main() {
             .map(|r| (s.first.translation - r.translation).length())
             .unwrap_or(-1.0);
         let (hc, sc) = if let Some(r) = rest {
-            (compose(r, &h.first, &h.flags), compose(r, &s.first, &s.flags))
+            (
+                compose(r, &h.first, &h.flags),
+                compose(r, &s.first, &s.flags),
+            )
         } else {
             (h.first, s.first)
         };
@@ -280,7 +287,9 @@ fn main() {
     // Sample via app public smoke if possible
     if let Some(hlpb) = hlpb_path {
         println!("\n=== HLPB path provided: {hlpb} ===");
-        println!("(constraint names extracted earlier: ATH_* driven by MOMO/HIZA/KATA/SAKOTSU/KOSHI)");
+        println!(
+            "(constraint names extracted earlier: ATH_* driven by MOMO/HIZA/KATA/SAKOTSU/KOSHI)"
+        );
         let _ = hlpb;
     }
 
@@ -288,16 +297,28 @@ fn main() {
     println!("\n=== HYPOTHESIS SCORECARD ===");
     let home_sparse_like = ht.values().filter(|t| t.flags.override_translation).count();
     let stock_sparse_like = st.values().filter(|t| t.flags.override_translation).count();
-    println!("1) Flag style: homemade ovT-true count={home_sparse_like}/{} stock={stock_sparse_like}/{}", ht.len(), st.len());
+    println!(
+        "1) Flag style: homemade ovT-true count={home_sparse_like}/{} stock={stock_sparse_like}/{}",
+        ht.len(),
+        st.len()
+    );
     println!("   -> if homemade is all ovT=false dense TRS, game HLPB + rest hangoffs can still work IF T matches rest.");
     let koshi_bad = ht
         .get("KOSHI")
-        .and_then(|h| rests.get("KOSHI").map(|r| (h.first.translation - r.translation).length() > 0.05))
+        .and_then(|h| {
+            rests
+                .get("KOSHI")
+                .map(|r| (h.first.translation - r.translation).length() > 0.05)
+        })
         .unwrap_or(false);
     println!("2) KOSHI non-rest translation: {koshi_bad}");
     let mune_bad = ht
         .get("MUNE1")
-        .and_then(|h| rests.get("MUNE1").map(|r| (h.first.translation - r.translation).length() > 0.05))
+        .and_then(|h| {
+            rests
+                .get("MUNE1")
+                .map(|r| (h.first.translation - r.translation).length() > 0.05)
+        })
         .unwrap_or(false);
     println!("3) MUNE1 non-rest translation: {mune_bad}");
     let missing_sakotsu = !hs.contains("SAKOTSU_L") && ss.contains("SAKOTSU_L");

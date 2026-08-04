@@ -9,7 +9,12 @@ fn main() {
             println!("FAIL {path}");
             continue;
         };
-        let Anim::V12 { tracks, buffers, .. } = anim else { continue };
+        let Anim::V12 {
+            tracks, buffers, ..
+        } = anim
+        else {
+            continue;
+        };
         let mut rot: HashMap<u32, usize> = HashMap::new();
         let mut trn: HashMap<u32, usize> = HashMap::new();
         let mut has_cs = 0usize;
@@ -21,15 +26,21 @@ fn main() {
             for p in t.properties.elements.iter() {
                 let pn = p.name.to_string_lossy();
                 let bi = p.buffer_index as usize;
-                if bi >= buffers.elements.len() { continue; }
+                if bi >= buffers.elements.len() {
+                    continue;
+                }
                 let b = &buffers.elements[bi].elements;
-                if b.len() < 4 { continue; }
+                if b.len() < 4 {
+                    continue;
+                }
                 let h = u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
                 match pn.as_str() {
                     "Rotate" => *rot.entry(h).or_default() += 1,
                     "Translate" => {
                         *trn.entry(h).or_default() += 1;
-                        if !is_root { n_limb_translate += 1; }
+                        if !is_root {
+                            n_limb_translate += 1;
+                        }
                     }
                     "CompensateScale" => has_cs += 1,
                     "Visibility" => has_vis += 1,
@@ -39,12 +50,19 @@ fn main() {
         }
         let base = Path::new(&path).file_name().unwrap().to_string_lossy();
         println!("{base}");
-        println!("  tracks={} CompScale={has_cs} Vis={has_vis} limbTranslateProps={n_limb_translate}", tracks.elements.len());
+        println!(
+            "  tracks={} CompScale={has_cs} Vis={has_vis} limbTranslateProps={n_limb_translate}",
+            tracks.elements.len()
+        );
         print!("  Rotate hdrs:");
-        for (h, c) in rot { print!(" 0x{h:04X}x{c}"); }
+        for (h, c) in rot {
+            print!(" 0x{h:04X}x{c}");
+        }
         println!();
         print!("  Translate hdrs:");
-        for (h, c) in trn { print!(" 0x{h:04X}x{c}"); }
+        for (h, c) in trn {
+            print!(" 0x{h:04X}x{c}");
+        }
         println!();
     }
 }
