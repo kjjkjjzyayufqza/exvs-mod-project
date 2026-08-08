@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_TEST_EDITOR_WORKSPACE } from "@/services/testEditorWorkspace/defaults";
 import type { EfxbnEffectSummary } from "@/services/effectFolder/effectFolderService";
 import "./EffectFolderCopyDialog";
+import { makeEfxbnEffectBlock } from "./efxbnTestFactory";
 import {
   buildEffectFolderCopyPlan,
   effectListItemKey,
@@ -168,20 +169,14 @@ describe("buildEffectFolderCopyPlan", () => {
         fileSize: 0,
         actualSize: 0,
         effectCount: 1,
-        controlConfigRegionParam: 0,
+        curveKeyCount: 0,
         controlLookupRegionOffset: 0,
         controlLookupRegionSize: 0,
         controlLookupRegionEnd: 0,
-        controlBlockSize: null,
-        controlRemainderSize: 0,
         modelControlConfigCount: 0,
         modelControlRegionOffset: 0,
         modelControlRegionSize: 0,
         trailingOffset: 0,
-        unk0x18: 0,
-        unk0x1C: 0,
-        unknown18: 0,
-        unknown1c: 0,
         modelIds: [modelHash],
         animationIds: [],
         modelControlTextureIds: [],
@@ -221,39 +216,14 @@ describe("buildEffectFolderCopyPlan", () => {
           modelIds: [],
           modelControlTextureIds: [],
           effects: [
-            {
+            makeEfxbnEffectBlock({
               index: 0,
-              modelId: 0,
-              modelHash: { signed: 0, unsigned: 0, hex: "0x00000000" },
-              animationId: 0,
-              animationHash: { signed: 0, unsigned: 0, hex: "0x00000000" },
               idTable: [
                 { flag: 1, id: textureFileIndex },
                 { flag: 1, id: modelFileIndex },
                 { flag: 1, id: 0 },
               ],
-              controlReferences: [],
-              metaParsed: {
-                unkConfigInfo: [],
-                configHeader: {
-                  number: 0,
-                  unkFloatA: 0,
-                  unkIntA: 0,
-                  unkFloatB: 0,
-                  unkIntB: 0,
-                  unkBytes12: [],
-                  unkFloats4: [0, 0, 0, 0],
-                },
-                idTablePairs: [],
-                controlReferences: [],
-                modelId: 0,
-                modelHash: { signed: 0, unsigned: 0, hex: "0x00000000" },
-                animationId: 0,
-                animationHash: { signed: 0, unsigned: 0, hex: "0x00000000" },
-                unk32: 0,
-                unkConfigInfo2: [],
-              },
-            } as EfxbnEffectSummary,
+            }),
           ],
         },
       },
@@ -294,18 +264,18 @@ describe("buildEffectFolderCopyPlan", () => {
     expect(plan.dependencies[0]?.category).toBe("texture");
   });
 
-  it("includes a source NUANMB matching efxbn animationId", () => {
+  it("keeps a content-detected NUANMB in the EFXBN closure when it is also selected", () => {
     const animationHash = { signed: 300, unsigned: 300, hex: "0x0000012C" };
     const animationItem: EffectListItem = {
       category: "other",
       item: {
         fileIndex: 8,
-        fileType: ".nuanmb",
+        fileType: ".efxbn",
         actualExt: ".nuanmb",
-        fileUrl: "animations/effect_a.nuanmb",
-        fileBaseName: "effect_a",
-        name: "effect_a",
-        path: "E:/src/animations/effect_a.nuanmb",
+        fileUrl: "animations/129.efxbn",
+        fileBaseName: "129",
+        name: "129.efxbn",
+        path: "E:/src/animations/129.efxbn",
         hash: animationHash,
         unk2: null,
         missing: false,
@@ -324,13 +294,19 @@ describe("buildEffectFolderCopyPlan", () => {
     };
 
     const plan = buildEffectFolderCopyPlan({
-      selectedItems: [efxbnWithAnimation],
+      selectedItems: [efxbnWithAnimation, animationItem],
       allItems: [efxbnWithAnimation, animationItem],
     });
 
     expect(plan.summary.animationCount).toBe(1);
+    expect(plan.summary.unsupportedCount).toBe(1);
     expect(plan.dependencies).toHaveLength(1);
     expect(plan.dependencies[0]?.category).toBe("animation");
+    expect(plan.dependencies[0]?.files[0]).toMatchObject({
+      name: "129.efxbn",
+      actualExt: ".nuanmb",
+    });
+    expect(plan.transferFiles.map((file) => file.category)).toEqual(["efxbn", "animation"]);
   });
 
   it("ignores resource IDs absent from the source inventory as global", () => {

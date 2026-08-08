@@ -22,6 +22,9 @@ legacy-cli-tools = []
 #   cargo test --features motion-tests
 #   cargo test --features motion-tests --test ssbh_motion_interchange_test
 motion-tests = []
+# Offline nuanmb research examples (22 targets). Keep off default cargo/RA
+# check paths so flycheck does not expand the analysis/build surface.
+nuanmb-examples = []
 
 [lib]
 name = "app_lib"
@@ -139,6 +142,10 @@ path = "tests/fhm2d_extract_cli_test.rs"
 name = "effect_folder_real_data_test"
 path = "tests/effect_folder_real_data_test.rs"
 
+[[test]]
+name = "effect_model_preview_real_data_test"
+path = "tests/effect_model_preview_real_data_test.rs"
+
 # Motion pipeline harnesses — require `--features motion-tests`.
 [[test]]
 name = "ssbh_motion_interchange_test"
@@ -199,10 +206,18 @@ sha2 = "0.10"
 
 # --- Build profiles -------------------------------------------------------
 
-# Dev: keep app code unoptimized (default opt-level 0) for fast incremental
-# rebuilds, but optimize dependencies once (they rarely change) so heavy
-# decode/mesh crates such as image_dds, ufbx, glam and rayon are not crippling
-# at runtime during dev.
+# Dev memory profile: line-tables-only keeps breakpoints usable while
+# shrinking libapp_lib rlib size (full debuginfo was ~800MB per hash).
+# Parallel rustc is capped in .cargo/config.toml (jobs = 3) for peak RAM.
+# App code stays opt-level 0 (default); dependencies use opt-level 1 so
+# decode/mesh crates (image_dds, ufbx, glam, rayon) stay usable at runtime.
+#
+# Examples: cargo run --example <name> --features nuanmb-examples
+# Motion tests: cargo test --features motion-tests --test <name>
+[profile.dev]
+debug = "line-tables-only"
+incremental = true
+
 [profile.dev.package."*"]
 opt-level = 1
 
@@ -220,107 +235,110 @@ strip = true
 [[example]]
 name = "nuanmb_strip_extra_bones"
 path = "examples/nuanmb_strip_extra_bones.rs"
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_diagnose_vs_skel"
 path = "examples/nuanmb_diagnose_vs_skel.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_fix_koshi_mune"
 path = "examples/nuanmb_fix_koshi_mune.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_reencode_only"
 path = "examples/nuanmb_reencode_only.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_compare_two"
 path = "examples/nuanmb_compare_two.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_pack_for_game"
 path = "examples/nuanmb_pack_for_game.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_keep_18"
 path = "examples/nuanmb_keep_18.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_forensic"
 path = "examples/nuanmb_forensic.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_skel_chain"
 path = "examples/nuanmb_skel_chain.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_fix_research"
 path = "examples/nuanmb_fix_research.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_stockify_flags"
 path = "examples/nuanmb_stockify_flags.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_sparse_uncompressed"
 path = "examples/nuanmb_sparse_uncompressed.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_prop_layout"
 path = "examples/nuanmb_prop_layout.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_dump_props"
 path = "examples/nuanmb_dump_props.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_static_check"
 path = "examples/nuanmb_static_check.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_hold_stock"
 path = "examples/nuanmb_hold_stock.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_exp_vis_only"
 path = "examples/nuanmb_exp_vis_only.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_exp_no_translate"
 path = "examples/nuanmb_exp_no_translate.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_sim_import"
 path = "examples/nuanmb_sim_import.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_fix_csa_shot"
 path = "examples/nuanmb_fix_csa_shot.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_hdr_census"
 path = "examples/nuanmb_hdr_census.rs"
-
+required-features = ["nuanmb-examples"]
 
 [[example]]
 name = "nuanmb_dump_rot_hdr"
 path = "examples/nuanmb_dump_rot_hdr.rs"
+required-features = ["nuanmb-examples"]
+

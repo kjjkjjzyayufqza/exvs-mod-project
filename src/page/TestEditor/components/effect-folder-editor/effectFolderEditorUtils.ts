@@ -297,8 +297,6 @@ export type EffectFolderCopyPlan = {
     missingCount: number;
     unsupportedCount: number;
   };
-  /** Ordered steps the backend performs (for the Steps tab). */
-  steps: string[];
 };
 
 function modelToPlanEntry(
@@ -499,7 +497,9 @@ export function buildEffectFolderCopyPlan(params: {
   for (const animationItem of inventoryOther) {
     if (animationItem.item.actualExt.toLowerCase() !== ".nuanmb") continue;
     const key = effectListItemKey(animationItem);
-    if (selectedKeys.has(key) || depKeys.has(key)) continue;
+    // Direct "other" selections are unsupported, but the backend still copies a
+    // source-local NUANMB when a selected EFXBN references it.
+    if (depKeys.has(key)) continue;
     const hash = animationItem.item.hash;
     if (!hash || !wantedAnimationHashes.has(hash.signed)) continue;
     depKeys.add(key);
@@ -532,16 +532,6 @@ export function buildEffectFolderCopyPlan(params: {
   const missingCount = transferFiles.filter((f) => f.missing).length;
   const unsupportedCount = selected.filter((e) => e.unsupported).length;
 
-  const steps = [
-    "Validate source and destination effect pack folders exist.",
-    "Read source and destination sibling *_structure.json files.",
-    "Build a source-local dependency set from EFXBN modelId, animationId, and texture-parameter CRC32 values.",
-    "Include source textures referenced by copied model NUMATB files; ignore resources found only in global game pools.",
-    "Copy textures first, then model folders, animations, and efxbn files (skip when destination already has the same ext+hash).",
-    "Append new structure tree nodes and subFileData records for copied items.",
-    "Write the destination *_structure.json (atomic). Source pack is never modified.",
-  ];
-
   return {
     selected,
     dependencies,
@@ -559,6 +549,5 @@ export function buildEffectFolderCopyPlan(params: {
       missingCount,
       unsupportedCount,
     },
-    steps,
   };
 }

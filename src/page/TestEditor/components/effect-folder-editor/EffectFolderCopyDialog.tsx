@@ -28,13 +28,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   inferEffectFolderStructurePath,
   type EffectFolderCopyResult,
-  type EffectFolderSelection,
 } from "@/services/effectFolder/effectFolderService";
 import {
   buildEffectFolderCopyPlan,
-  effectListItemLabel,
   formatEffectFolderHash,
-  toEffectFolderSelections,
   type EffectCopyPlanEntry,
   type EffectFolderCopyPlan,
   type EffectListItem,
@@ -220,35 +217,6 @@ function SelectionListPanel({ title, empty, entries }: { title: string; empty: s
   );
 }
 
-function DebugJsonBlock({ title, value }: { title: string; value: unknown }) {
-  const text = useMemo(() => {
-    try {
-      return JSON.stringify(value, null, 2);
-    } catch {
-      return String(value);
-    }
-  }, [value]);
-
-  const copyJson = useCallback(() => {
-    void navigator.clipboard.writeText(text);
-  }, [text]);
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between gap-2">
-        <h4 className="text-[11px] font-medium text-muted-foreground">{title}</h4>
-        <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={copyJson}>
-          <Copy className="mr-1 h-3 w-3" />
-          Copy JSON
-        </Button>
-      </div>
-      <pre className="custom-scrollbar-thin max-h-56 overflow-auto rounded-md border bg-muted/30 p-2.5 font-mono text-[10px] leading-relaxed">
-        {text}
-      </pre>
-    </div>
-  );
-}
-
 function ResultPanel({ result }: { result: EffectFolderCopyResult }) {
   return (
     <div className="space-y-3">
@@ -257,24 +225,9 @@ function ResultPanel({ result }: { result: EffectFolderCopyResult }) {
         <div className="min-w-0 space-y-1">
           <p className="text-xs font-medium">Copy finished</p>
           <p className="text-[11px] text-muted-foreground">
-            Wrote {result.copiedFiles.length} file(s). Destination pack now lists {result.totalFiles} total
-            structure file record(s).
+            {result.copiedFiles.length} copied · {result.skipped.length} skipped · {result.warnings.length}{" "}
+            warning(s) · {result.totalFiles} total structure record(s)
           </p>
-        </div>
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-3">
-        <div className="rounded-md border px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Copied</div>
-          <div className="text-lg font-semibold tabular-nums">{result.copiedFiles.length}</div>
-        </div>
-        <div className="rounded-md border px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Skipped</div>
-          <div className="text-lg font-semibold tabular-nums">{result.skipped.length}</div>
-        </div>
-        <div className="rounded-md border px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Warnings</div>
-          <div className="text-lg font-semibold tabular-nums">{result.warnings.length}</div>
         </div>
       </div>
 
@@ -328,8 +281,6 @@ function ResultPanel({ result }: { result: EffectFolderCopyResult }) {
 export function EffectFolderCopyDialog({
   open: dialogOpen,
   onOpenChange,
-  sourceEffectRoot,
-  sourceStructureJsonPath,
   selectedItems,
   allItems,
   busy = false,
@@ -346,11 +297,6 @@ export function EffectFolderCopyDialog({
     [allItems, selectedItems],
   );
 
-  const selections: EffectFolderSelection[] = useMemo(
-    () => toEffectFolderSelections(selectedItems),
-    [selectedItems],
-  );
-
   const destinationStructurePath = useMemo(() => {
     const trimmed = destinationRoot.trim();
     if (!trimmed) return "";
@@ -360,31 +306,6 @@ export function EffectFolderCopyDialog({
       return "";
     }
   }, [destinationRoot]);
-
-  const debugRequest = useMemo(
-    () => ({
-      command: "copy_effect_folder_selection",
-      sourceEffectRoot,
-      sourceStructureJsonPath,
-      destinationEffectRoot: destinationRoot.trim() || null,
-      destinationStructureJsonPath: destinationStructurePath || null,
-      selections,
-      selectedLabels: selectedItems.map((item) => ({
-        key: item.category,
-        label: effectListItemLabel(item),
-      })),
-      planSummary: plan.summary,
-    }),
-    [
-      destinationRoot,
-      destinationStructurePath,
-      plan.summary,
-      selectedItems,
-      selections,
-      sourceEffectRoot,
-      sourceStructureJsonPath,
-    ],
-  );
 
   useEffect(() => {
     if (!dialogOpen) return;
@@ -461,41 +382,33 @@ export function EffectFolderCopyDialog({
         <div className="min-h-0 flex-1 overflow-hidden">
           <ScrollArea className="h-[min(58vh,560px)]">
             <div className="space-y-4 px-5 py-4">
-              {/* Source → Destination */}
-              <section className="rounded-lg border bg-muted/15 p-3">
-                <div className="space-y-2.5">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Destination pack
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="effect-copy-destination" className="text-[11px]">
-                      Effect pack folder
-                    </Label>
-                    <div className="flex gap-2">
-                      <FilePathInput
-                        id="effect-copy-destination"
-                        value={destinationRoot}
-                        onChange={(event) => {
-                          setDestinationRoot(event.target.value);
-                          setError(null);
-                        }}
-                        placeholder="E:\\workspace\\006effect\\0xDEST"
-                        className="font-mono text-xs"
-                        disabled={busy || phase === "result"}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="shrink-0"
-                        onClick={() => void pickDestinationFolder()}
-                        disabled={busy || phase === "result"}
-                      >
-                        <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
-                        Browse
-                      </Button>
-                    </div>
-                  </div>
+              <section className="space-y-1.5 rounded-lg border bg-muted/15 p-3">
+                <Label htmlFor="effect-copy-destination" className="text-[11px]">
+                  Destination effect pack folder
+                </Label>
+                <div className="flex gap-2">
+                  <FilePathInput
+                    id="effect-copy-destination"
+                    value={destinationRoot}
+                    onChange={(event) => {
+                      setDestinationRoot(event.target.value);
+                      setError(null);
+                    }}
+                    placeholder="E:\\workspace\\006effect\\0xDEST"
+                    className="font-mono text-xs"
+                    disabled={busy || phase === "result"}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => void pickDestinationFolder()}
+                    disabled={busy || phase === "result"}
+                  >
+                    <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
+                    Browse
+                  </Button>
                 </div>
               </section>
 
@@ -606,29 +519,6 @@ export function EffectFolderCopyDialog({
                   )}
                 </TabsContent>
 
-                <TabsContent value="debug" className="mt-3 space-y-4 focus-visible:outline-none">
-                  <div className="rounded-md border bg-muted/15 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-                    Debug payload mirrors the Tauri command{" "}
-                    <span className="font-mono text-foreground">copy_effect_folder_selection</span> and the
-                    frontend plan computed from inventory (aligned with{" "}
-                    <span className="font-mono text-foreground">build_copy_closure</span>). Use this when
-                    reporting skipped items or incomplete dependency pull-in.
-                  </div>
-                  <DebugJsonBlock title="Request payload" value={debugRequest} />
-                  <DebugJsonBlock
-                    title="Copy plan"
-                    value={{
-                      summary: plan.summary,
-                      warnings: plan.warnings,
-                      steps: plan.steps,
-                      selected: plan.selected,
-                      dependencies: plan.dependencies,
-                      transferFiles: plan.transferFiles,
-                    }}
-                  />
-                  {lastResult ? <DebugJsonBlock title="Last result" value={lastResult} /> : null}
-                  {error ? <DebugJsonBlock title="Last error" value={{ message: error }} /> : null}
-                </TabsContent>
               </Tabs>
             </div>
           </ScrollArea>
@@ -637,7 +527,7 @@ export function EffectFolderCopyDialog({
         <DialogFooter className="shrink-0 gap-2 border-t px-5 py-3 sm:justify-between">
           <div className="mr-auto hidden text-[11px] text-muted-foreground sm:block">
             {phase === "result"
-              ? "Review the Result / Debug tabs, then close."
+              ? `${lastResult?.copiedFiles.length ?? 0} file(s) copied`
               : `${plan.summary.transferFileCount} file(s)`}
           </div>
           <div className="flex flex-col-reverse gap-2 sm:flex-row">

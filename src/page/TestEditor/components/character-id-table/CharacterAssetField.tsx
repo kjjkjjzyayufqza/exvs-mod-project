@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { dirname } from "@tauri-apps/api/path";
 import { exists } from "@tauri-apps/plugin-fs";
 import { openPath } from "@tauri-apps/plugin-opener";
@@ -171,22 +171,39 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     setRemoveModFhm2d(canRemoveMod);
   }, [removeDialogOpen, canRemoveWorkspace, canRemoveExtract, canRemoveMod, extractOutputSameAsWorkspace]);
 
-  // Sync from parent path-only asset; existence stays null until probe finishes.
-  useEffect(() => {
-    setLiveAsset(asset);
-    setSourceExists(asset.sourceExists);
-    setWorkspaceExists(asset.workspaceExists);
-    setModExists(asset.modExists);
-  }, [asset]);
+  // Identity of the hash this field is showing. Path-only parent updates (exists: null)
+  // must not wipe local probe results for the same hash — that caused every sibling
+  // asset field to stay in the loading/pulse state after any live onChange commit.
+  const assetIdentity = `${asset.fieldKey}:${asset.rawValue}`;
+  const lastIdentityRef = useRef<string>("");
 
-  // Probe OB/MOD/WS only while this field is mounted (selected item detail view).
   useEffect(() => {
-    if (asset.rawValue === 0) return;
-    if (
-      asset.sourceExists !== null &&
-      asset.modExists !== null &&
-      asset.workspaceExists !== null
-    ) {
+    const identityChanged = lastIdentityRef.current !== assetIdentity;
+    if (identityChanged) {
+      lastIdentityRef.current = assetIdentity;
+      setLiveAsset(asset);
+      setSourceExists(asset.sourceExists);
+      setModExists(asset.modExists);
+      setWorkspaceExists(asset.workspaceExists);
+      return;
+    }
+
+    // Same hash: adopt fresher path metadata from parent, but keep known existence.
+    setLiveAsset((prev) => ({
+      ...asset,
+      sourceExists: prev.sourceExists ?? asset.sourceExists,
+      modExists: prev.modExists ?? asset.modExists,
+      workspaceExists: prev.workspaceExists ?? asset.workspaceExists,
+    }));
+  }, [asset, assetIdentity]);
+
+  // Probe OB/MOD/WS only when the field hash (or probe roots) change — not when
+  // parent re-sends path-only refs with null existence flags.
+  useEffect(() => {
+    if (asset.rawValue === 0) {
+      setSourceExists(false);
+      setModExists(false);
+      setWorkspaceExists(false);
       return;
     }
 
@@ -226,9 +243,6 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   }, [
     asset.fieldKey,
     asset.rawValue,
-    asset.sourceExists,
-    asset.modExists,
-    asset.workspaceExists,
     obDplCachePath,
     obModPath,
     projectRootDir,

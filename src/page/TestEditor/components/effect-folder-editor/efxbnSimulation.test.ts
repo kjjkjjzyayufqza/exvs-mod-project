@@ -6,6 +6,7 @@ import type {
   EfxbnEffectSummary,
 } from "@/services/effectFolder/effectFolderService";
 import type { EffectFolderPreviewPlan } from "./effectFolderPreviewPlan";
+import { makeEfxbnEffectBlock } from "./efxbnTestFactory";
 import {
   resolveEfxbnEmitterPairs,
   resolveEfxbnModelPoolRequirements,
@@ -15,58 +16,7 @@ import {
 const ZERO_HASH: EffectFolderHash = { signed: 0, unsigned: 0, hex: "0x00000000" };
 
 function block(overrides: Partial<EfxbnEffectSummary>): EfxbnEffectSummary {
-  return {
-    index: 0,
-    referencedEffectIndex: -1,
-    effectType: 1,
-    lifeTimeBase: 20,
-    lifeTimeRandom: 0,
-    intervalBase: 100,
-    intervalRandom: 0,
-    numEmit: 1,
-    actionFlags: 0,
-    spawnFormType: 0,
-    spawnFormLength: [0, 0, 0, 0],
-    speedRandom: [0, 0, 0, 0],
-    sizeBase: [0.1, 0.1, 1, 0],
-    sizeRandom: [0, 0, 0, 0],
-    rotationBase: [0, 0, 0, 0],
-    rotationRandom: [0, 0, 0, 0],
-    rotationSpeed: [0, 0, 0, 0],
-    centerPivot: [0, 0],
-    deleteSettings: 0,
-    fadeTimeBase: 0,
-    cullingType: 0,
-    zWriteEnable: 0,
-    zTestEnable: 1,
-    blendState: 2,
-    drawRepositoryIndex: 0,
-    instanceAmountType: 0,
-    drawAmountIndex: 0,
-    enableSoftParticle: 0,
-    positionOffset: [0, 0, 0, 0],
-    delayEmitTimeBase: 0,
-    emitAreaType: 0,
-    enableZSort: 0,
-    stripSegmentInterval: 0,
-    stripSegmentLife: 0,
-    stripSegmentSplitNum: 0,
-    stripTailAlphaRate: 0,
-    stripHeadAlphaRate: 0,
-    emitInterpolateDistance: 0,
-    emitInterpolateType: 0,
-    meshEmitterIndex: 0,
-    meshEmitterCount: 0,
-    modelId: 0,
-    modelHash: ZERO_HASH,
-    animationId: 0,
-    animationHash: ZERO_HASH,
-    idTable: [],
-    controlReferences: [],
-    modelControlIndices: [-1, -1, -1, -1],
-    metaParsed: {} as EfxbnEffectSummary["metaParsed"],
-    ...overrides,
-  };
+  return makeEfxbnEffectBlock(overrides);
 }
 
 function directControls(values: Record<string, number>) {
@@ -119,6 +69,8 @@ describe("EFXBN frame simulation", () => {
       index: 0,
       effectType: 9,
       referencedEffectIndex: 1,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
       lifeTimeBase: 1,
       intervalBase: 1,
       numEmit: 3,
@@ -140,6 +92,8 @@ describe("EFXBN frame simulation", () => {
       index: 0,
       effectType: 9,
       referencedEffectIndex: 1,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
       lifeTimeBase: 1,
       intervalBase: 2,
       numEmit: 2,
@@ -180,6 +134,8 @@ describe("EFXBN frame simulation", () => {
       index: 0,
       effectType: 9,
       referencedEffectIndex: 1,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
       lifeTimeBase: 1,
       intervalBase: 100,
       actionFlags: 1,
@@ -207,6 +163,8 @@ describe("EFXBN frame simulation", () => {
       index: 0,
       effectType: 9,
       referencedEffectIndex: 1,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
       lifeTimeBase: 1,
       intervalBase: 1,
       numEmit: 2,
@@ -248,6 +206,8 @@ describe("EFXBN frame simulation", () => {
       index: 0,
       effectType: 9,
       referencedEffectIndex: 1,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
       spawnFormType: 9,
       spawnFormLength: [0, 0, 0, 0],
       positionOffset: [10, 0, 0, 0],
@@ -269,5 +229,80 @@ describe("EFXBN frame simulation", () => {
 
     expect(particle.position).toEqual([11, 2, 3]);
     expect(particle.color).toEqual([0.5, 0.6, 0.7, 0.8]);
+  });
+});
+
+describe("EFXBN block topology", () => {
+  it("pairs every declared child, not only the first", () => {
+    const wrapper = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 3,
+      childIndexArray: [1, 2, 3, -1, -1, -1, -1, -1],
+      referencedEffectIndex: 1,
+    });
+    const children = [1, 2, 3].map((index) => block({ index }));
+
+    const pairs = resolveEfxbnEmitterPairs(plan([wrapper, ...children], []));
+
+    expect(pairs).toHaveLength(3);
+    expect(pairs.map((pair) => pair.target.index)).toEqual([1, 2, 3]);
+    expect(pairs.every((pair) => pair.emitter?.index === 0)).toBe(true);
+  });
+
+  it("treats any block with children as an emitter, not just element type 9", () => {
+    const emitter = block({
+      index: 0,
+      effectType: 1,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+    });
+    const child = block({ index: 1 });
+
+    const pairs = resolveEfxbnEmitterPairs(plan([emitter, child], []));
+
+    // The emitter is drawable itself, so it also renders standalone.
+    expect(pairs).toHaveLength(2);
+    expect(pairs[0].emitter?.index).toBe(0);
+    expect(pairs[0].target.index).toBe(1);
+    expect(pairs[1].emitter).toBeNull();
+    expect(pairs[1].target.index).toBe(0);
+  });
+
+  it("ignores child slots past childIndexSize", () => {
+    const wrapper = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [1, 2, -1, -1, -1, -1, -1, -1],
+    });
+
+    const pairs = resolveEfxbnEmitterPairs(
+      plan([wrapper, block({ index: 1 }), block({ index: 2 })], []),
+    );
+
+    expect(pairs.filter((pair) => pair.emitter !== null)).toHaveLength(1);
+    expect(pairs[0].target.index).toBe(1);
+  });
+
+  it("does not render non-drawable element types standalone", () => {
+    const orphanWrapper = block({ index: 0, effectType: 9, childIndexSize: 0 });
+
+    const pairs = resolveEfxbnEmitterPairs(plan([orphanWrapper], []));
+
+    expect(pairs).toHaveLength(0);
+  });
+
+  it("throws when a child index points at a missing block", () => {
+    const wrapper = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [7, -1, -1, -1, -1, -1, -1, -1],
+    });
+
+    expect(() => resolveEfxbnEmitterPairs(plan([wrapper], []))).toThrow(
+      /references child block 7/,
+    );
   });
 });

@@ -1024,8 +1024,9 @@ fn apply_naming(
                 numdlb_character_enrich::NumdlbCharacterNamingMode::Effect,
             )?;
             apply_nutexb_names(&mut output.sub_file_data, files)?;
-            apply_effect_shallow_parent_bins_to_efxbn(
+            apply_effect_shallow_parent_resource_names(
                 &mut output.sub_file_data,
+                files,
                 out_name,
                 &output.sub_file_parse_structure,
             )
@@ -1278,14 +1279,19 @@ fn apply_nutexb_names(
     Ok(())
 }
 
-/// Loose `.bin` files next to numbered effect group folders are renamed to `.efxbn`.
+/// Names loose resources next to numbered effect group folders from their binary signatures.
 /// Parent paths from `build_folder_map` include both `["0"]` (from items whose folder path is `0\0\`)
 /// and `["0","0"]` (from items under `0\0\0\`); using **max** depth keeps `["0","0"]` so loose bins match.
-fn apply_effect_shallow_parent_bins_to_efxbn(
+fn apply_effect_shallow_parent_resource_names(
     sub: &mut [OutputSubFileData],
+    files: &[DecodedSubFile],
     out_name: &str,
     parse_root: &ParseNode,
 ) -> Result<(), String> {
+    let data_by_file_index = files
+        .iter()
+        .map(|file| (file.file_index, file.data.as_slice()))
+        .collect::<HashMap<_, _>>();
     let folder_map = build_folder_map(parse_root)?;
     let mut parent_dirs: HashSet<Vec<String>> = HashSet::new();
     for path in folder_map.values() {
@@ -1322,16 +1328,31 @@ fn apply_effect_shallow_parent_bins_to_efxbn(
         if !shallow_parents.contains(&rel) {
             continue;
         }
-        let segments = split_path_segments(item.file_url.as_str());
-        let old_name = segments
-            .last()
-            .ok_or_else(|| format!("Invalid fileUrl: {}", item.file_url))?;
-        let base = strip_extension(old_name.as_str());
-        let new_name = format!("{base}.efxbn");
+        let bytes = data_by_file_index.get(&item.file_index).ok_or_else(|| {
+            format!(
+                "Effect naming missing decoded data for fileIndex {}",
+                item.file_index
+            )
+        })?;
         let prefix = parent_segments(item.file_url.as_str())?;
-        item.file_type = ".efxbn".to_string();
-        item.file_base_name = Some(base);
-        item.file_url = build_file_url(prefix.as_slice(), new_name.as_str());
+        if bytes.get(0..4) == Some(b"EFXB") {
+            let segments = split_path_segments(item.file_url.as_str());
+            let old_name = segments
+                .last()
+                .ok_or_else(|| format!("Invalid fileUrl: {}", item.file_url))?;
+            let base = strip_extension(old_name.as_str());
+            let new_name = format!("{base}.efxbn");
+            item.file_type = ".efxbn".to_string();
+            item.file_base_name = Some(base);
+            item.file_url = build_file_url(prefix.as_slice(), new_name.as_str());
+        } else if bytes.get(0..4) == Some(b"HBSS") && bytes.get(0x10..0x14) == Some(b"MINA") {
+            let raw = read_c_string_utf8(bytes, MOTION_INTERNAL_NAME_OFFSET, 4096)?;
+            let name = normalize_motion_file_name(raw.as_str())?;
+            // Keep the original type-0 metadata for lossless repacking. The URL extension is
+            // content-aware for extraction/editor use, while file_type remains the FHM2D type.
+            item.file_base_name = Some(strip_extension(name.as_str()));
+            item.file_url = build_file_url(prefix.as_slice(), name.as_str());
+        }
     }
     Ok(())
 }
@@ -1689,3 +1710,119 @@ fn is_windows_invalid_char(ch: char) -> bool {
 
 #[path = "fhm2d_numdlb_character.rs"]
 mod numdlb_character_enrich;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_item(file_index: i32) -> ParseNode {
+        ParseNode {
+            node_type: Some("Item".to_string()),
+            name: file_index.to_string(),
+            link: None,
+            unk1: None,
+            unk2: None,
+            unk3: None,
+            children: None,
+        }
+    }
+
+    fn parse_folder(name: &str, children: Vec<ParseNode>) -> ParseNode {
+        ParseNode {
+            node_type: Some("Folder".to_string()),
+            name: name.to_string(),
+            link: None,
+            unk1: None,
+            unk2: None,
+            unk3: None,
+            children: Some(children),
+        }
+    }
+
+    fn output_file(index: usize, file_index: i32, file_url: &str) -> OutputSubFileData {
+        OutputSubFileData {
+            index,
+            file_type: ".bin".to_string(),
+            file_index,
+            file_url: file_url.to_string(),
+            file_base_name: Some(file_index.to_string()),
+        }
+    }
+
+    #[test]
+    fn effect_shallow_resources_are_named_from_magic() {
+        let mut motion = vec![0u8; 0x90];
+        motion[0..4].copy_from_slice(b"HBSS");
+        motion[0x10..0x14].copy_from_slice(b"MINA");
+        let motion_name = b"eff_test_motion.nuanmb\0";
+        motion[0x50..0x50 + motion_name.len()].copy_from_slice(motion_name);
+        let mut non_motion_hbss = vec![0u8; 0x20];
+        non_motion_hbss[0..4].copy_from_slice(b"HBSS");
+        non_motion_hbss[0x10..0x14].copy_from_slice(b"LDOM");
+
+        let files = vec![
+            DecodedSubFile {
+                file_index: 129,
+                data: motion,
+            },
+            DecodedSubFile {
+                file_index: 167,
+                data: b"EFXBpayload".to_vec(),
+            },
+            DecodedSubFile {
+                file_index: 168,
+                data: b"NOPEpayload".to_vec(),
+            },
+            DecodedSubFile {
+                file_index: 169,
+                data: non_motion_hbss,
+            },
+            DecodedSubFile {
+                file_index: 1,
+                data: b"group payload".to_vec(),
+            },
+        ];
+        let mut sub = vec![
+            output_file(0, 129, ".\\pack\\0\\0\\129.bin"),
+            output_file(1, 167, ".\\pack\\0\\0\\167.bin"),
+            output_file(2, 168, ".\\pack\\0\\0\\168.bin"),
+            output_file(3, 169, ".\\pack\\0\\0\\169.bin"),
+            output_file(4, 1, ".\\pack\\0\\0\\0\\1.bin"),
+        ];
+        let parse_root = ParseNode {
+            node_type: None,
+            name: "root".to_string(),
+            link: None,
+            unk1: None,
+            unk2: None,
+            unk3: None,
+            children: Some(vec![parse_folder(
+                "0",
+                vec![parse_folder(
+                    "0",
+                    vec![
+                        parse_item(129),
+                        parse_item(167),
+                        parse_item(168),
+                        parse_item(169),
+                        parse_folder("0", vec![parse_item(1)]),
+                    ],
+                )],
+            )]),
+        };
+
+        apply_effect_shallow_parent_resource_names(&mut sub, &files, "pack", &parse_root)
+            .expect("name effect resources");
+
+        assert_eq!(sub[0].file_type, ".bin");
+        assert_eq!(sub[0].file_base_name.as_deref(), Some("eff_test_motion"));
+        assert_eq!(sub[0].file_url, ".\\pack\\0\\0\\eff_test_motion.nuanmb");
+        assert_eq!(sub[1].file_type, ".efxbn");
+        assert_eq!(sub[1].file_url, ".\\pack\\0\\0\\167.efxbn");
+        assert_eq!(sub[2].file_type, ".bin");
+        assert_eq!(sub[2].file_url, ".\\pack\\0\\0\\168.bin");
+        assert_eq!(sub[3].file_type, ".bin");
+        assert_eq!(sub[3].file_url, ".\\pack\\0\\0\\169.bin");
+        assert_eq!(sub[4].file_type, ".bin");
+    }
+}

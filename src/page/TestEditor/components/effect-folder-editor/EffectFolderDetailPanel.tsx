@@ -228,9 +228,8 @@ function EfxbnDetail({
           <MetadataRow label="Magic" value={summary.magic} />
           <MetadataRow label="Version/flags" value={String(summary.versionOrFlags)} />
           <MetadataRow label="Effect count" value={String(summary.effectCount)} />
-          <MetadataRow label="unk0x18" value={String(summary.unk0x18)} />
-          <MetadataRow label="unk0x1C" value={String(summary.unk0x1C)} />
-          <MetadataRow label="Control lookup" value={`${summary.controlLookupEntries.length} entries`} />
+          <MetadataRow label="Model controls" value={String(summary.modelControlConfigCount)} />
+          <MetadataRow label="Curve keys" value={`${summary.curveKeyCount} keys`} />
           <MetadataRow label="Texture parameters" value={String(summary.textureParameters.length)} />
           <div className="space-y-2">
             <h5 className="text-[11px] font-medium text-muted-foreground">Model IDs</h5>

@@ -1392,6 +1392,7 @@ mod normalize_frame_tests {
         AnimData {
             major_version: 2,
             minor_version: 0,
+            name: None,
             final_frame_index: 0.0,
             groups: vec![GroupData {
                 group_type: GroupType::Transform,

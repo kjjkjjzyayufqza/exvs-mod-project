@@ -121,6 +121,36 @@ export const DEFAULT_PREVIEW_DIRECTIONAL_X = 8;
 export const DEFAULT_PREVIEW_DIRECTIONAL_Y = 14;
 export const DEFAULT_PREVIEW_DIRECTIONAL_Z = 6;
 
+const MOTION_RESOURCE_CACHE_LIMIT = 32;
+// Keep only in-flight work: motion files may be rewritten in place between loads.
+const motionManifestPromiseCache = new Map<string, Promise<NuanmbManifest>>();
+const motionClipPromiseCache = new Map<string, Promise<MotionClip>>();
+
+function cachedMotionResource<T>(
+  cache: Map<string, Promise<T>>,
+  key: string,
+  load: () => Promise<T>,
+): Promise<T> {
+  const cached = cache.get(key);
+  if (cached) {
+    cache.delete(key);
+    cache.set(key, cached);
+    return cached;
+  }
+  const task = load();
+  cache.set(key, task);
+  const removeSettledTask = () => {
+    if (cache.get(key) === task) cache.delete(key);
+  };
+  void task.then(removeSettledTask, removeSettledTask);
+  while (cache.size > MOTION_RESOURCE_CACHE_LIMIT) {
+    const oldest = cache.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
+  return task;
+}
+
 export type {
   PreviewLightingPreset,
   PreviewLightingValues,
@@ -1618,7 +1648,11 @@ export function SsbhModelPreviewProvider({
         });
         void (async () => {
           try {
-            const manifest = await invoke<NuanmbManifest>("ssbh_nuanmb_manifest", { path: selectedPath });
+            const manifest = await cachedMotionResource(
+              motionManifestPromiseCache,
+              selectedPath,
+              () => invoke<NuanmbManifest>("ssbh_nuanmb_manifest", { path: selectedPath }),
+            );
             setMotionByInstanceId((prev) => {
               const p = prev[inst.id];
               if (
@@ -1716,13 +1750,17 @@ export function SsbhModelPreviewProvider({
       });
       void (async () => {
         try {
-          const clip = await invoke<MotionClip>("ssbh_load_motion_clip", {
-            request: {
-              skelPath,
-              nuanmbPath: selectedPath,
-              matlPath,
-            },
-          });
+          const clip = await cachedMotionResource(
+            motionClipPromiseCache,
+            loadKey,
+            () => invoke<MotionClip>("ssbh_load_motion_clip", {
+              request: {
+                skelPath,
+                nuanmbPath: selectedPath,
+                matlPath,
+              },
+            }),
+          );
           setMotionByInstanceId((prev) => {
             const p = prev[inst.id];
             if (

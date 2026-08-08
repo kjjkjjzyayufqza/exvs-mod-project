@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import type { CharacterListEntry } from "@/models/characterListEntry";
 import { cn } from "@/lib/utils";
 import { CharacterCard } from "./CharacterCard";
+import { filterCharacterListRows } from "./characterListSearch";
 
 interface CharacterListProps {
   characters: CharacterListEntry[];
@@ -39,13 +40,10 @@ export function CharacterList({
     if (selectedIndex >= 0) lastSelectedIndexRef.current = selectedIndex;
   }, [selectedIndex]);
 
-  const filteredRows = useMemo(() => {
-    const term = deferredSearchTerm.trim();
-    if (!term) return characters.map((row, idx) => ({ row, idx }));
-    return characters
-      .map((row, idx) => ({ row, idx }))
-      .filter(({ row }) => row.entryId.toString().includes(term));
-  }, [characters, deferredSearchTerm]);
+  const filteredRows = useMemo(
+    () => filterCharacterListRows(characters, deferredSearchTerm),
+    [characters, deferredSearchTerm],
+  );
 
   const rowVirtualizer = useVirtualizer({
     count: filteredRows.length,
@@ -81,7 +79,7 @@ export function CharacterList({
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
         <Input
           ref={inputRef}
-          placeholder="Search by Character ID..."
+          placeholder="Search by Character ID or string fields..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-10 pr-8 h-8"

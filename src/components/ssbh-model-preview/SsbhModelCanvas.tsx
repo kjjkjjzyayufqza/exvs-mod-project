@@ -34,7 +34,7 @@ import {
   shouldSyncPlaybackFrame,
   type MotionPlaybackFrameObservation,
 } from "./motionInstancePipeline";
-import { advanceMotionFrame } from "./motionPlaybackMath";
+import { advanceMotionFrame, normalizeMotionFrame } from "./motionPlaybackMath";
 import {
   expandSingleViewWithAttachments,
   shouldShowPreviewSelectionOutline,
@@ -217,6 +217,8 @@ export type PreviewInstanceHostTransform = {
   blending?: Blending;
   /** Optional EFX color map rendered with the game's unlit model pixel path. */
   effectTexture?: Texture | null;
+  /** Keep the unlit EFX material active when a source-local color map is unavailable. */
+  effectMaterialActive?: boolean;
   effectUvScale?: readonly [number, number];
   effectUvOffset?: readonly [number, number];
   /** Host-owned motion frame, used for per-particle animation phase. */
@@ -1374,17 +1376,12 @@ const Scene = memo(function Scene({
         throw new Error("Motion clip has no sampled frames");
       }
       const maxIndex = frameCount - 1;
-      let f = scrubFrame;
-      if (activeLoop) {
-        f =
-          activeClip.finalFrameIndex > 0
-            ? ((f % activeClip.finalFrameIndex) + activeClip.finalFrameIndex) % activeClip.finalFrameIndex
-            : 0;
-      } else if (f < 0) {
-        f = 0;
-      } else if (f > maxIndex) {
-        f = maxIndex;
-      }
+      const f = normalizeMotionFrame(
+        scrubFrame,
+        activeClip.finalFrameIndex,
+        frameCount,
+        activeLoop,
+      );
       playbackFrameRef.current.set(motionControlInstanceId, f);
       const currentIndex = Math.floor(f);
       const nextIndex = activeLoop ? (currentIndex + 1) % frameCount : Math.min(currentIndex + 1, maxIndex);
@@ -1501,17 +1498,12 @@ const Scene = memo(function Scene({
         throw new Error("Motion clip has no sampled frames");
       }
       const maxIndex = frameCount - 1;
-      let f = nextFrame;
-      if (motionState.loop) {
-        f =
-          clip.finalFrameIndex > 0
-            ? ((f % clip.finalFrameIndex) + clip.finalFrameIndex) % clip.finalFrameIndex
-            : 0;
-      } else if (f < 0) {
-        f = 0;
-      } else if (f > maxIndex) {
-        f = maxIndex;
-      }
+      const f = normalizeMotionFrame(
+        nextFrame,
+        clip.finalFrameIndex,
+        frameCount,
+        motionState.loop,
+      );
       const currentIndex = Math.floor(f);
       const nextIndex = motionState.loop ? (currentIndex + 1) % frameCount : Math.min(currentIndex + 1, maxIndex);
       const factor = f - currentIndex;
@@ -1717,6 +1709,8 @@ const Scene = memo(function Scene({
         continue;
       }
       const hostTransform = hostInstanceTransformsRef?.current?.get(inst.id);
+      const effectMaterialActive =
+        hostTransform?.effectMaterialActive ?? Boolean(hostTransform?.effectTexture);
       let effectTexture: Texture | null = null;
       if (hostTransform?.effectTexture) {
         activeEffectInstanceIds.add(inst.id);
@@ -1756,7 +1750,7 @@ const Scene = memo(function Scene({
         if (!(object instanceof Mesh)) return;
         let materials: Material[];
         const currentOverride = hostEffectMaterialOverridesRef.current.get(object);
-        if (effectTexture) {
+        if (effectMaterialActive) {
           activeEffectMeshes.add(object);
           let override = currentOverride;
           if (!override) {
@@ -1779,7 +1773,12 @@ const Scene = memo(function Scene({
             hostEffectMaterialOverridesRef.current.set(object, override);
             object.material = Array.isArray(original) ? overrides : overrides[0]!;
           }
-          for (const material of override.overrides) material.map = effectTexture;
+          for (const material of override.overrides) {
+            if (material.map !== effectTexture) {
+              material.map = effectTexture;
+              material.needsUpdate = true;
+            }
+          }
           materials = override.overrides;
         } else {
           if (currentOverride) {

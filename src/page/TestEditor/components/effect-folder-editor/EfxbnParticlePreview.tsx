@@ -23,6 +23,8 @@ import {
   resolveEfxbnEmitterPairs,
   simulateEfxbnEmitterPair,
   type EfxbnEmitterPair,
+  isEfxbnStripBlock,
+  efxbnRuntime,
 } from "./efxbnSimulation";
 import type { EfxbnMeshEmitterPoint } from "./efxbnMeshEmitter";
 
@@ -122,10 +124,10 @@ function createGeometry() {
   return geometry;
 }
 
-function createMaterial(pair: EfxbnEmitterPair) {
+function createMaterial(pair: EfxbnEmitterPair, externalModelProxy: boolean) {
   return new ShaderMaterial({
     transparent: true,
-    depthWrite: pair.target.zWriteEnable !== 0,
+    depthWrite: efxbnRuntime(pair.target).zWriteEnable !== 0,
     depthTest: pair.target.zTestEnable !== 0,
     blending: threeBlendState(pair.target.blendState),
     side: DoubleSide,
@@ -134,6 +136,7 @@ function createMaterial(pair: EfxbnEmitterPair) {
       colorMap: { value: null },
       hasColorMap: { value: 0 },
       selected: { value: 0 },
+      externalModelProxy: { value: externalModelProxy ? 1 : 0 },
     },
     vertexShader: `
       attribute vec3 particleCenter;
@@ -165,6 +168,7 @@ function createMaterial(pair: EfxbnEmitterPair) {
       uniform sampler2D colorMap;
       uniform float hasColorMap;
       uniform float selected;
+      uniform float externalModelProxy;
       varying vec2 vUv;
       varying vec2 vQuadUv;
       varying vec4 vColor;
@@ -179,6 +183,7 @@ function createMaterial(pair: EfxbnEmitterPair) {
         if (color.a < 0.01) discard;
         color.rgb *= 0.5;
         color.rgb = mix(color.rgb, color.rgb + vec3(0.12), selected);
+        color.rgb = mix(color.rgb, vec3(1.0, 0.22, 0.68), externalModelProxy * 0.65);
         gl_FragColor = color;
       }
     `,
@@ -190,6 +195,7 @@ function EfxbnParticleLayer({
   plan,
   progressRef,
   selected,
+  externalModelProxy,
   meshEmitterPointsByEffectIndex,
   onSelectEffect,
 }: {
@@ -197,11 +203,15 @@ function EfxbnParticleLayer({
   plan: EffectFolderPreviewPlan;
   progressRef: MutableRefObject<number>;
   selected: boolean;
+  externalModelProxy: boolean;
   meshEmitterPointsByEffectIndex: ReadonlyMap<number, readonly EfxbnMeshEmitterPoint[]>;
   onSelectEffect: (effectIndex: number) => void;
 }) {
   const geometry = useMemo(() => createGeometry(), []);
-  const material = useMemo(() => createMaterial(pair), [pair]);
+  const material = useMemo(
+    () => createMaterial(pair, externalModelProxy),
+    [externalModelProxy, pair],
+  );
   const textureBinding = plan.textureBindings.find(
     (binding) => binding.effectIndex === pair.target.index && binding.file !== null,
   );
@@ -264,6 +274,7 @@ function EfxbnParticleLayer({
 
   return (
     <mesh
+      name={externalModelProxy ? `efxbn-external-model-proxy-${pair.target.index}` : undefined}
       geometry={geometry}
       material={material}
       frustumCulled={false}
@@ -284,10 +295,19 @@ export function EfxbnParticlePreview({
   onSelectEffect,
 }: EfxbnParticlePreviewProps) {
   const pairs = useMemo(() => resolveEfxbnEmitterPairs(plan), [plan]);
+  const localModelEffectIndexes = useMemo(
+    () => new Set(plan.targets.flatMap(
+      (target) => target.effectIndex === null ? [] : [target.effectIndex],
+    )),
+    [plan.targets],
+  );
   return (
     <group name="efxbn-particle-preview">
       {pairs.map((pair) => {
-        if (pair.target.effectType === 2 || pair.target.modelHash.signed !== 0) return null;
+        const externalModelProxy = pair.target.modelHash.signed !== 0 &&
+          !localModelEffectIndexes.has(pair.target.index);
+        if ((isEfxbnStripBlock(pair.target) && !externalModelProxy) ||
+            (pair.target.modelHash.signed !== 0 && !externalModelProxy)) return null;
         const emitterIndex = pair.emitter?.index ?? null;
         if (
           hiddenEffectIndexes.has(pair.target.index) ||
@@ -302,6 +322,7 @@ export function EfxbnParticlePreview({
             plan={plan}
             progressRef={progressRef}
             selected={selectedEffectIndex === pair.target.index || selectedEffectIndex === emitterIndex}
+            externalModelProxy={externalModelProxy}
             meshEmitterPointsByEffectIndex={meshEmitterPointsByEffectIndex}
             onSelectEffect={onSelectEffect}
           />

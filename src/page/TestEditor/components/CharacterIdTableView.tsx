@@ -39,6 +39,7 @@ import { useResourceRegistry } from "@/hooks/useResourceRegistry";
 import { AssetRefInfo, getAssetRefInfo } from "./character-id-table/assetRef";
 import { CharacterAssetField } from "./character-id-table/CharacterAssetField";
 import { filterCharacterIdTableRows } from "./character-id-table/characterIdTableSearch";
+import { mergeResolvedAssetRefs } from "./character-id-table/mergeAssetRefs";
 import { extractAsset } from "./character-id-table/extractFhm2d";
 import { buildBulkMscExtractPlan } from "./character-id-table/bulkMscExtract";
 import { clearFhm2dPackResolutionCache, resolveFhm2dPackPaths } from "@/services/testEditorWorkspace/paths";
@@ -476,19 +477,29 @@ export default function CharacterIdTableView({
         return REQUIRED_FIELD_KEYS.map((key) => `${key}:${(selectedRow as any)[key] ?? 0}`).join("|");
     }, [selectedRow]);
 
+    // Resolve path-only asset refs when asset *hashes* change (fingerprint), not on every
+    // selectedRow identity change (live DualValueProperty commits rewrite the row object
+    // each keystroke — including Character ID edits that do not touch Model/Effect/...).
     useEffect(() => {
-        if (!selectedRow || !selectedAssetFingerprint) {
+        if (!selectedAssetFingerprint) {
             setResolvedAssetRefs({});
             return;
         }
 
+        // Parse values from fingerprint so we do not depend on selectedRow identity.
+        const values = new Map<string, number>();
+        for (const part of selectedAssetFingerprint.split("|")) {
+            const sep = part.indexOf(":");
+            if (sep < 0) continue;
+            values.set(part.slice(0, sep), Number(part.slice(sep + 1)) | 0);
+        }
+
         let cancelled = false;
-        const row = selectedRow;
 
         const resolve = async () => {
             const entries = await Promise.all(
                 REQUIRED_FIELD_KEYS.map(async (key) => {
-                    const val = (row as any)[key];
+                    const val = values.get(key) ?? 0;
                     const ref = await getAssetRefInfo({
                         fieldKey: key,
                         value: val,
@@ -502,17 +513,19 @@ export default function CharacterIdTableView({
                 }),
             );
             if (cancelled) return;
-            const refs: Record<string, AssetRefInfo> = {};
+            const next: Record<string, AssetRefInfo> = {};
             for (const [key, ref] of entries) {
-                refs[key] = ref;
+                next[key] = ref;
             }
-            setResolvedAssetRefs(refs);
+            // Preserve already-probed fields whose hash did not change so sibling
+            // asset rows do not flash loading when one field is edited live.
+            setResolvedAssetRefs((prev) => mergeResolvedAssetRefs(prev, next));
         };
         void resolve();
         return () => {
             cancelled = true;
         };
-    }, [selectedAssetFingerprint, selectedRow, obDplCachePath, obModPath, folderPath, workspaceDocument]);
+    }, [selectedAssetFingerprint, obDplCachePath, obModPath, folderPath, workspaceDocument]);
 
     const handleExtractAll = useCallback(async () => {
         if (!selectedRow || isExtractingAll) return;

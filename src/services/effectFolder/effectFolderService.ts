@@ -53,6 +53,13 @@ export interface EfxbnMetaParsedSummary {
 
 export interface EfxbnEffectSummary {
   index: number;
+  /** Tree depth. 0 is a root emitter; children carry the parent depth plus one. */
+  level: number;
+  /** Number of valid entries in `childIndexArray`. */
+  childIndexSize: number;
+  /** Block indices spawned by this block. Unused slots are -1. */
+  childIndexArray: [number, number, number, number, number, number, number, number];
+  /** First child index, retained for callers that predate `childIndexArray`. */
   referencedEffectIndex: number;
   effectType: number;
   lifeTimeBase: number;
@@ -69,6 +76,16 @@ export interface EfxbnEffectSummary {
   rotationBase: [number, number, number, number];
   rotationRandom: [number, number, number, number];
   rotationSpeed: [number, number, number, number];
+  internalElementDataIndex: number;
+  enableDataFlag: number;
+  /** Model resource handle. Mirrors `modelId`/`modelHash`. */
+  nudHandle: number;
+  /** Texture handle bound directly to the block, independent of the parameter slots. */
+  textureHandle: number;
+  /** Primary and pass-2 color-map parameter slots. */
+  colorTextureParameterIndex: [number, number];
+  /** Primary and pass-2 UV-offset parameter slots. */
+  uvTextureParameterIndex: [number, number];
   centerPivot: [number, number];
   deleteSettings: number;
   fadeTimeBase: number;
@@ -84,15 +101,65 @@ export interface EfxbnEffectSummary {
   delayEmitTimeBase: number;
   emitAreaType: number;
   enableZSort: number;
+  deleteEffectId: number;
+  deleteEndScale: [number, number, number, number];
+  lightAttenuationRadius: number;
+  lightingFlags: number;
+  normalMapHash: number;
+  worldWindApplyRate: number;
   stripSegmentInterval: number;
   stripSegmentLife: number;
   stripSegmentSplitNum: number;
+  drawerId: number;
+  softParticleRange: number;
+  cameraFadeRange: number;
+  extraFlags: number;
+  noiseDirectionMaxRot: number;
+  noiseDirectionAreaRange: number;
+  blurStartColor: [number, number, number, number];
+  blurEndColor: [number, number, number, number];
+  blurEnableRange: number;
+  blurFadePower: number;
+  lightType: number;
+  lightBaseRadius: number;
+  rotationSpeedRandom: [number, number, number, number];
+  cameraOffset: number;
+  postEffectType: number;
+  postEffectBlendRate: number;
   stripTailAlphaRate: number;
   stripHeadAlphaRate: number;
   emitInterpolateDistance: number;
+  noiseRotatePosOffset: number;
+  zSortOffset: number;
+  specialShaderType: number;
+  reflectionPower: number;
+  pass2BlendType: number;
+  animationDelayFrame: number;
+  animationLoopStartFrame: number;
+  animationLoopEndFrame: number;
+  animationDeleteFrame: number;
+  animationSpeedRate: number;
+  animationBlendDeleteFrame: number;
+  emitterLodType: number;
+  animationStartFrame: number;
+  boundingSphereInfo: [number, number, number, number];
+  postEffectShapeRadius: number;
+  worldWaterApplyRate: number;
+  numEmitCountRandom: number;
+  depthEmissionRange: number;
+  depthEmissionPower: number;
+  highlightPower: number;
   emitInterpolateType: number;
   meshEmitterIndex: number;
   meshEmitterCount: number;
+  fieldEffectType: number;
+  fieldEffectPower: number;
+  fieldEffectInterval: number;
+  fieldEffectAngle: number;
+  fieldEffectFrequency: number;
+  fieldEffectOffset: number;
+  fieldEffectRecieveRate: number;
+  fieldEffectExtraValue1: number;
   modelId: number;
   modelHash: EffectFolderHash;
   animationId: number;
@@ -101,6 +168,25 @@ export interface EfxbnEffectSummary {
   controlReferences: EfxbnControlReferenceSummary[];
   modelControlIndices: [number, number, number, number];
   metaParsed: EfxbnMetaParsedSummary;
+  /**
+   * Loader-derived values from `sub_140146590`. Anything that renders or simulates
+   * should read these; the sibling fields keep the authored record for round-tripping.
+   */
+  runtime?: EfxbnRuntimeNormalization;
+}
+
+export interface EfxbnRuntimeNormalization {
+  /** Type-9 wrappers adopt a type derived from their first child. */
+  elementType: number;
+  actionFlags: number;
+  deleteSettings: number;
+  /** Derived from `blendState` and `enableSoftParticle`, never read from the file. */
+  zWriteEnable: number;
+  softParticleRange: number;
+  stripSegmentLife: number;
+  stripTailAlphaRate: number;
+  stripHeadAlphaRate: number;
+  internalElementDataIndex: number;
 }
 
 export interface EfxbnModelControlSummary {
@@ -155,20 +241,15 @@ export interface EfxbnSummary {
   fileSize: number;
   actualSize: number;
   effectCount: number;
-  controlConfigRegionParam: number;
+  /** Number of `(time, value)` curve keys stored after the effect blocks. */
+  curveKeyCount: number;
   controlLookupRegionOffset: number;
   controlLookupRegionSize: number;
   controlLookupRegionEnd: number;
-  controlBlockSize: number | null;
-  controlRemainderSize: number;
   modelControlConfigCount: number;
   modelControlRegionOffset: number;
   modelControlRegionSize: number;
   trailingOffset: number;
-  unk0x18: number;
-  unk0x1C: number;
-  unknown18: number;
-  unknown1c: number;
   modelIds: EffectFolderHash[];
   animationIds: EffectFolderHash[];
   modelControlTextureIds: EffectFolderHash[];

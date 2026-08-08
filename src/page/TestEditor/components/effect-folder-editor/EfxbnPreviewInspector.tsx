@@ -5,6 +5,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import type { EfxbnEffectSummary } from "@/services/effectFolder/effectFolderService";
 import { evaluateEfxbnControl, type EffectFolderPreviewPlan } from "./effectFolderPreviewPlan";
+import {
+  efxbnChildIndexes,
+  findEfxbnParentBlocks,
+  isEfxbnEmitterBlock,
+  EFXBN_ELEMENT_TYPE,
+  efxbnRuntime,
+} from "./efxbnSimulation";
 
 type EfxbnPreviewInspectorProps = {
   plan: EffectFolderPreviewPlan;
@@ -18,15 +25,16 @@ type EfxbnPreviewInspectorProps = {
 };
 
 function typeName(block: EfxbnEffectSummary): string {
-  if (block.effectType === 1) return "Billboard";
-  if (block.effectType === 2) return "Strip";
-  if (block.effectType === 3) return "Model";
+  if (block.effectType === EFXBN_ELEMENT_TYPE.billboard) return "Billboard";
+  if (block.effectType === EFXBN_ELEMENT_TYPE.model) return "Model";
+  if (block.effectType === EFXBN_ELEMENT_TYPE.strip) return "Strip";
   if (block.effectType === 9) {
     return block.spawnFormType === 9 || block.spawnFormType === 10
       ? "Mesh emitter wrapper"
       : "Wrapper";
   }
-  return `Type ${block.effectType}`;
+  // Types 6, 8, 10 and 11 are structural containers with no proven authoring name.
+  return `Container ${block.effectType}`;
 }
 
 function InspectorRow({ label, value, mono = true }: { label: string; value: string; mono?: boolean }) {
@@ -94,9 +102,7 @@ export function EfxbnPreviewInspector({
           const visible = !hiddenEffectIndexes.has(block.index);
           const target = plan.targets.find((candidate) => candidate.effectIndex === block.index);
           const blockTextures = plan.textureBindings.filter((binding) => binding.effectIndex === block.index);
-          const linkedFrom = plan.effectBlocks.find(
-            (candidate) => candidate.effectType === 9 && candidate.referencedEffectIndex === block.index,
-          );
+          const linkedFrom = findEfxbnParentBlocks(plan.effectBlocks, block.index)[0];
           return (
             <div
               key={block.index}
@@ -156,8 +162,12 @@ export function EfxbnPreviewInspector({
           <TabsContent value="block" className="custom-scrollbar-thin min-h-0 flex-1 overflow-y-auto">
             <InspectorRow label="Index" value={String(selectedBlock.index)} />
             <InspectorRow label="Runtime type" value={`${selectedBlock.effectType} (${typeName(selectedBlock)})`} />
-            {selectedBlock.effectType === 9 ? (
-              <InspectorRow label="Target block" value={String(selectedBlock.referencedEffectIndex)} />
+            <InspectorRow label="Tree level" value={String(selectedBlock.level)} />
+            {isEfxbnEmitterBlock(selectedBlock) ? (
+              <InspectorRow
+                label="Child blocks"
+                value={efxbnChildIndexes(selectedBlock).join(", ")}
+              />
             ) : null}
             <InspectorRow
               label="Lifetime"
@@ -175,7 +185,7 @@ export function EfxbnPreviewInspector({
             />
             <InspectorRow
               label="Depth / blend"
-              value={`Z${selectedBlock.zTestEnable ? "T" : "-"}${selectedBlock.zWriteEnable ? "W" : "-"} · ${selectedBlock.blendState}`}
+              value={`Z${selectedBlock.zTestEnable ? "T" : "-"}${efxbnRuntime(selectedBlock).zWriteEnable ? "W" : "-"} · ${selectedBlock.blendState}`}
             />
             <InspectorRow label="Model" value={selectedBlock.modelHash.signed === 0 ? "none" : selectedBlock.modelHash.hex} />
             <InspectorRow label="Animation" value={selectedBlock.animationHash.signed === 0 ? "none" : selectedBlock.animationHash.hex} />

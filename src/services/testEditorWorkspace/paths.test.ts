@@ -7,11 +7,15 @@ import {
 } from "./paths";
 import type { TestEditorWorkspaceDocument } from "./types";
 
-const { existsMock, readDirMock, readTextFileMock } = vi.hoisted(() => ({
-  existsMock: vi.fn(),
-  readDirMock: vi.fn(),
-  readTextFileMock: vi.fn(),
-}));
+const { existsMock, readDirMock, readTextFileMock, writeTextFileMock, removeMock } = vi.hoisted(
+  () => ({
+    existsMock: vi.fn(),
+    readDirMock: vi.fn(),
+    readTextFileMock: vi.fn(),
+    writeTextFileMock: vi.fn(),
+    removeMock: vi.fn(),
+  }),
+);
 
 vi.mock("@tauri-apps/api/path", () => ({
   join: vi.fn(async (...parts: string[]) => parts.filter(Boolean).join("/")),
@@ -21,6 +25,8 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
   exists: existsMock,
   readDir: readDirMock,
   readTextFile: readTextFileMock,
+  writeTextFile: writeTextFileMock,
+  remove: removeMock,
 }));
 
 function withExistingPaths(paths: string[]) {
@@ -58,8 +64,12 @@ describe("testEditorWorkspace paths", () => {
     existsMock.mockReset();
     readDirMock.mockReset();
     readTextFileMock.mockReset();
+    writeTextFileMock.mockReset();
+    removeMock.mockReset();
     readDirMock.mockResolvedValue([]);
     readTextFileMock.mockRejectedValue(new Error("Missing mock file"));
+    writeTextFileMock.mockResolvedValue(undefined);
+    removeMock.mockResolvedValue(undefined);
   });
 
   it("builds the Character Model pack under 002chara", async () => {
@@ -196,7 +206,48 @@ describe("testEditorWorkspace paths", () => {
     expect(gyan.existing?.folderPath).toBe("E:/workspace/002chara/Gyan_model");
     expect(zaku.existing?.folderPath).toBe("E:/workspace/002chara/Zaku_model");
     expect(readDirMock).toHaveBeenCalledTimes(1);
-    expect(readTextFileMock).toHaveBeenCalledTimes(2);
+    // Two custom-name structure files; disk index miss uses readTextFile once each.
+    // (Sidecar index path may also be probed and rejected — count >= 2.)
+    expect(readTextFileMock.mock.calls.filter((c) => String(c[0]).endsWith("_structure.json")).length).toBe(2);
+  });
+
+  it("indexes hash-stem packs without reading structure JSON content", async () => {
+    // Custom-named hit for 0xBDBE6FEA; sibling 0xDEADBEEF is hash-stem and must
+    // not trigger a content read when building the named index.
+    withExistingPaths([
+      "E:/workspace/006effect/Gyan_effect",
+      "E:/workspace/006effect/0xDEADBEEF",
+    ]);
+    withDirectoryEntries({
+      "E:/workspace/006effect": [
+        "Gyan_effect",
+        "Gyan_effect_structure.json",
+        "0xDEADBEEF",
+        "0xDEADBEEF_structure.json",
+        "other.bin",
+      ],
+    });
+    withTextFiles({
+      "E:/workspace/006effect/Gyan_effect_structure.json": JSON.stringify({
+        Name: "Gyan_effect",
+        HashName: "0xBDBE6FEA",
+        SubFileData: new Array(5000).fill({ fileUrl: "./x.bin" }),
+      }),
+    });
+
+    const resolution = await resolveExistingFhm2dPack(
+      "E:/workspace",
+      withoutLegacyFallback(),
+      "unit.effect",
+      "0xBDBE6FEA",
+    );
+
+    expect(resolution.existing?.folderPath).toBe("E:/workspace/006effect/Gyan_effect");
+    const structureReads = readTextFileMock.mock.calls.filter((c) =>
+      String(c[0]).endsWith("_structure.json"),
+    );
+    expect(structureReads).toHaveLength(1);
+    expect(String(structureReads[0]?.[0])).toContain("Gyan_effect_structure.json");
   });
 
   it("resolves a legacy custom-named pack by HashName metadata", async () => {

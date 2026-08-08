@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { EfxbnEffectSummary } from "@/services/effectFolder/effectFolderService";
 import type { EfxbnPreviewParticle } from "./efxbnSimulation";
 import { buildEfxbnStripMeshData } from "./efxbnStripGeometry";
+import { makeEfxbnEffectBlock, makeEfxbnRuntime } from "./efxbnTestFactory";
 
 describe("EFXBN strip ribbon geometry", () => {
   it("subdivides history into paired ribbon vertices and fades tail to head", () => {
@@ -10,11 +10,15 @@ describe("EFXBN strip ribbon geometry", () => {
       size: [0.2, 0.1],
       color: [1, 0.5, 0.25, 0.8],
     } as EfxbnPreviewParticle;
-    const target = {
+    // Strip blocks are element type 5; the loader defaults a zero tail rate to 0.3, so
+    // this fixture pins the rates explicitly through the runtime record.
+    const target = makeEfxbnEffectBlock({
+      effectType: 5,
       stripSegmentSplitNum: 2,
       stripTailAlphaRate: 0,
       stripHeadAlphaRate: 1,
-    } as EfxbnEffectSummary;
+      runtime: makeEfxbnRuntime({ stripTailAlphaRate: 0, stripHeadAlphaRate: 1 }),
+    });
 
     const data = buildEfxbnStripMeshData([particle], target, 100);
 

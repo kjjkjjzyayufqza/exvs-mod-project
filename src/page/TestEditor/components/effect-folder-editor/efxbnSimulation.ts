@@ -1,11 +1,17 @@
-import type { EfxbnEffectSummary } from "@/services/effectFolder/effectFolderService";
+import type {
+  EfxbnEffectSummary,
+  EfxbnRuntimeNormalization,
+} from "@/services/effectFolder/effectFolderService";
 import { evaluateEfxbnControl, type EffectFolderPreviewPlan } from "./effectFolderPreviewPlan";
 import type { EfxbnMeshEmitterPoint } from "./efxbnMeshEmitter";
 
 export const EFXBN_PREVIEW_FRAME_COUNT = 120;
 export const EFXBN_PREVIEW_FPS = 60;
 export const EFXBN_MODEL_POOL_LIMIT = 64;
+export const EFXBN_MODEL_POOL_GLOBAL_LIMIT = 128;
 export const EFXBN_SIMULATION_LIMIT = 2_048;
+export const EFXBN_STRIP_HISTORY_SAMPLE_LIMIT = 2_048;
+export const EFXBN_STRIP_MIN_SEGMENT_INTERVAL = 1 / 16;
 
 export type EfxbnEmitterPair = {
   emitter: EfxbnEffectSummary | null;
@@ -17,6 +23,7 @@ export type EfxbnPreviewParticle = {
   emitterEffectIndex: number | null;
   targetEffectIndex: number;
   age: number;
+  phaseAge: number;
   lifeTime: number;
   position: [number, number, number];
   size: [number, number];
@@ -190,9 +197,14 @@ function simulateParticle(
   const target = pair.target;
   const lifeTime = randomizedBase(target.lifeTimeBase, target.lifeTimeRandom, random);
   if (lifeTime <= EPSILON) return null;
-  let age = Math.max(0, frame - spawnFrame);
-  if ((target.actionFlags & 1) !== 0) age %= lifeTime;
-  else if (age >= lifeTime) return null;
+  const age = Math.max(0, frame - spawnFrame);
+  const looping = isLooping(target);
+  if (!looping && age >= lifeTime) return null;
+  const phaseAge = looping ? age % lifeTime : age;
+  const curveProgress = (sampleAge: number) => {
+    const samplePhase = looping ? sampleAge % lifeTime : Math.min(sampleAge, lifeTime);
+    return (samplePhase / lifeTime) * 100;
+  };
 
   const spawn = pair.emitter
     ? spawnPositionAndDirection(
@@ -234,18 +246,23 @@ function simulateParticle(
   let gravityVelocity = 0;
   let directionVelocity = 0;
   let elapsed = 0;
-  const historySamples: Array<{ age: number; position: [number, number, number] }> = target.effectType === 2
+  const historySamples: Array<{ age: number; position: [number, number, number] }> = target.effectType === EFXBN_ELEMENT_TYPE.strip
     ? [{ age: 0, position: [...position] }]
     : [];
-  const stripInterval = Math.max(EPSILON, target.stripSegmentInterval || 1);
+  const authoredStripInterval = target.stripSegmentInterval;
+  const stripInterval = Number.isFinite(authoredStripInterval) && authoredStripInterval > 0
+    ? Math.max(EFXBN_STRIP_MIN_SEGMENT_INTERVAL, authoredStripInterval)
+    : 1;
   let nextStripSample = stripInterval;
   while (elapsed < age) {
+    const canSampleStrip = target.effectType === EFXBN_ELEMENT_TYPE.strip &&
+      historySamples.length < EFXBN_STRIP_HISTORY_SAMPLE_LIMIT;
     const step = Math.min(
       1,
       age - elapsed,
-      target.effectType === 2 ? Math.max(EPSILON, nextStripSample - elapsed) : Number.POSITIVE_INFINITY,
+      canSampleStrip ? Math.max(EPSILON, nextStripSample - elapsed) : Number.POSITIVE_INFINITY,
     );
-    const progress = Math.min(100, ((elapsed + step) / lifeTime) * 100);
+    const progress = curveProgress(elapsed + step);
     const velocity: [number, number, number] = [
       controlValue(target, plan, "speedBaseX", progress) * speedRate[0],
       controlValue(target, plan, "speedBaseY", progress) * speedRate[1],
@@ -261,24 +278,26 @@ function simulateParticle(
     position[1] += (velocity[1] + spawn.direction[1] * directionVelocity + gravityVelocity) * step;
     position[2] += (velocity[2] + spawn.direction[2] * directionVelocity) * step;
     elapsed += step;
-    if (target.effectType === 2 && elapsed + EPSILON >= nextStripSample) {
+    if (canSampleStrip && elapsed + EPSILON >= nextStripSample) {
       historySamples.push({ age: elapsed, position: [...position] });
       nextStripSample += stripInterval;
     }
   }
-  if (target.effectType === 2 &&
+  if (target.effectType === EFXBN_ELEMENT_TYPE.strip &&
       (historySamples.length === 0 || Math.abs(historySamples[historySamples.length - 1].age - age) > EPSILON)) {
-    historySamples.push({ age, position: [...position] });
+    const finalSample = { age, position: [...position] as [number, number, number] };
+    if (historySamples.length < EFXBN_STRIP_HISTORY_SAMPLE_LIMIT) historySamples.push(finalSample);
+    else historySamples[historySamples.length - 1] = finalSample;
   }
 
-  const progress = Math.min(100, (age / lifeTime) * 100);
+  const progress = curveProgress(age);
   const scaleX = controlValue(target, plan, "scaleBaseX", progress);
   const scaleY = controlValue(target, plan, "scaleBaseY", progress);
   const scaleZ = controlValue(target, plan, "scaleBaseZ", progress);
   const scale: [number, number, number] = [
-    Math.abs(target.sizeBase[0] * sizeRandom[0] * scaleX),
-    Math.abs(target.sizeBase[1] * sizeRandom[1] * scaleY),
-    Math.abs(target.sizeBase[2] * sizeRandom[2] * scaleZ),
+    target.sizeBase[0] * sizeRandom[0] * scaleX,
+    target.sizeBase[1] * sizeRandom[1] * scaleY,
+    target.sizeBase[2] * sizeRandom[2] * scaleZ,
   ];
   const rotationEuler: [number, number, number] = [
     rotationBase[0] + target.rotationSpeed[0] * age,
@@ -290,6 +309,7 @@ function simulateParticle(
     emitterEffectIndex: pair.emitter?.index ?? null,
     targetEffectIndex: target.index,
     age,
+    phaseAge,
     lifeTime,
     position,
     size: [scale[0], scale[1]],
@@ -302,25 +322,112 @@ function simulateParticle(
     ],
     rotation: rotationEuler[2],
     rotationEuler,
-    history: target.effectType === 2
+    history: target.effectType === EFXBN_ELEMENT_TYPE.strip
       ? historySamples
-          .filter((sample) => sample.age >= Math.max(0, age - Math.max(0, target.stripSegmentLife)))
+          .filter((sample) => sample.age >= Math.max(0, age - Math.max(0, efxbnRuntime(target).stripSegmentLife)))
           .map((sample) => sample.position)
       : [],
   };
 }
 
+/**
+ * `SEfxElementData.elementType` values.
+ *
+ * Only three types draw anything: `sub_140145DF0` writes the per-slot enable gate at
+ * `slot + 916` as `elementType == 1 || elementType == 3 || elementType == 5`, and
+ * `sub_140188E30` picks `efxDrawModel` for type 3 and `efxDrawFace` otherwise. The
+ * strip-specific defaults in `sub_140146590` are gated on `elementType == 5`.
+ *
+ * The remaining values are structural containers that only spawn children. A survey
+ * of the 4,201 shipped EFXBN files (36,737 blocks) finds types 1, 3, 5, 6, 8, 9, 10
+ * and 11 — and no type 2 at all.
+ */
+export const EFXBN_ELEMENT_TYPE = {
+  billboard: 1,
+  model: 3,
+  strip: 5,
+} as const;
+
+const EFXBN_DRAWABLE_ELEMENT_TYPES = new Set<number>([
+  EFXBN_ELEMENT_TYPE.billboard,
+  EFXBN_ELEMENT_TYPE.model,
+  EFXBN_ELEMENT_TYPE.strip,
+]);
+
+export function isEfxbnStripBlock(block: EfxbnEffectSummary): boolean {
+  return block.effectType === EFXBN_ELEMENT_TYPE.strip;
+}
+
+/**
+ * Loader-derived values for a block.
+ *
+ * The backend always fills these in. Reading the authored fields instead would diverge
+ * from the game, so a missing record is an error rather than something to work around.
+ */
+export function efxbnRuntime(block: EfxbnEffectSummary): EfxbnRuntimeNormalization {
+  if (!block.runtime) {
+    throw new Error(`EFXBN block ${block.index} is missing loader normalization.`);
+  }
+  return block.runtime;
+}
+
+function isLooping(block: EfxbnEffectSummary): boolean {
+  return (efxbnRuntime(block).actionFlags & 1) !== 0;
+}
+
+export function isEfxbnDrawableBlock(block: EfxbnEffectSummary): boolean {
+  return EFXBN_DRAWABLE_ELEMENT_TYPES.has(block.effectType);
+}
+
+/** Valid child block indices declared by `childIndexSize` and `childIndexArray`. */
+export function efxbnChildIndexes(block: EfxbnEffectSummary): number[] {
+  const childCount = Math.min(block.childIndexSize, block.childIndexArray.length);
+  return block.childIndexArray.slice(0, childCount).filter((index) => index >= 0);
+}
+
+/** A block is an emitter when it declares at least one child. */
+export function isEfxbnEmitterBlock(block: EfxbnEffectSummary): boolean {
+  return efxbnChildIndexes(block).length > 0;
+}
+
+/** Blocks that declare `childIndex` as one of their children. */
+export function findEfxbnParentBlocks(
+  blocks: readonly EfxbnEffectSummary[],
+  childIndex: number,
+): EfxbnEffectSummary[] {
+  return blocks.filter((block) => efxbnChildIndexes(block).includes(childIndex));
+}
+
+/**
+ * Expands the block tree into one pair per parent/child edge.
+ *
+ * A block declares up to eight children through `childIndexArray`, so an emitter
+ * that spawns several distinct targets produces several pairs. Drawable blocks that
+ * no parent references render on their own with a null emitter.
+ */
 export function resolveEfxbnEmitterPairs(plan: EffectFolderPreviewPlan): EfxbnEmitterPair[] {
+  const blocksByIndex = new Map(plan.effectBlocks.map((block) => [block.index, block]));
   const pairedTargets = new Set<number>();
-  const pairs: EfxbnEmitterPair[] = plan.effectBlocks.flatMap((emitter) => {
-    if (emitter.effectType !== 9 || emitter.referencedEffectIndex < 0) return [];
-    const target = plan.effectBlocks.find((block) => block.index === emitter.referencedEffectIndex);
-    if (!target) return [];
-    pairedTargets.add(target.index);
-    return [{ emitter, target }];
-  });
+  const pairs: EfxbnEmitterPair[] = [];
+
+  for (const emitter of plan.effectBlocks) {
+    const childCount = Math.min(emitter.childIndexSize, emitter.childIndexArray.length);
+    for (let slot = 0; slot < childCount; slot += 1) {
+      const childIndex = emitter.childIndexArray[slot];
+      if (childIndex < 0) continue;
+      const target = blocksByIndex.get(childIndex);
+      if (!target) {
+        throw new Error(
+          `EFXBN block ${emitter.index} references child block ${childIndex}, which does not exist.`,
+        );
+      }
+      pairedTargets.add(target.index);
+      pairs.push({ emitter, target });
+    }
+  }
+
   for (const target of plan.effectBlocks) {
-    if (target.effectType === 9 || pairedTargets.has(target.index)) continue;
+    if (pairedTargets.has(target.index) || !isEfxbnDrawableBlock(target)) continue;
     pairs.push({ emitter: null, target });
   }
   return pairs;
@@ -343,7 +450,7 @@ export function simulateEfxbnEmitterPair(
   const lastTick = Math.floor(clampedFrame);
   for (let tick = 0; tick <= lastTick && particles.length < maxParticles; tick += 1) {
     const emitterLifeTime = Math.max(EPSILON, emitter?.lifeTimeBase ?? 1);
-    const looping = emitter ? (emitter.actionFlags & 1) !== 0 : false;
+    const looping = emitter ? isLooping(emitter) : false;
     if (emitter && !looping && tick > emitterLifeTime) break;
     if (Math.abs(delayCounter) >= EPSILON) {
       delayCounter -= 1;
@@ -384,14 +491,32 @@ export type EfxbnModelPoolRequirement = {
   capacity: number;
 };
 
-export function resolveEfxbnModelPoolRequirements(
+export type EfxbnModelPoolPlan = {
+  requirements: EfxbnModelPoolRequirement[];
+  capacityByEffectIndex: ReadonlyMap<number, number>;
+  totalRequired: number;
+  totalCapacity: number;
+  limitedEffectCount: number;
+  globalLimit: number;
+  truncated: boolean;
+};
+
+function normalizedPoolLimit(value: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(0, Math.floor(value));
+}
+
+export function resolveEfxbnModelPoolPlan(
   plan: EffectFolderPreviewPlan,
-  limit = EFXBN_MODEL_POOL_LIMIT,
-): EfxbnModelPoolRequirement[] {
+  perEffectLimit = EFXBN_MODEL_POOL_LIMIT,
+  globalLimit = EFXBN_MODEL_POOL_GLOBAL_LIMIT,
+): EfxbnModelPoolPlan {
+  const normalizedPerEffectLimit = normalizedPoolLimit(perEffectLimit, EFXBN_MODEL_POOL_LIMIT);
+  const normalizedGlobalLimit = normalizedPoolLimit(globalLimit, EFXBN_MODEL_POOL_GLOBAL_LIMIT);
   const localModelEffects = new Set(
     plan.targets.flatMap((target) => target.effectIndex === null ? [] : [target.effectIndex]),
   );
-  return resolveEfxbnEmitterPairs(plan).flatMap((pair) => {
+  const rawRequirements = resolveEfxbnEmitterPairs(plan).flatMap((pair) => {
     if (!localModelEffects.has(pair.target.index)) return [];
     let required = 0;
     for (let frame = 0; frame <= EFXBN_PREVIEW_FRAME_COUNT; frame += 1) {
@@ -401,6 +526,75 @@ export function resolveEfxbnModelPoolRequirements(
       );
       if (required >= EFXBN_SIMULATION_LIMIT) break;
     }
-    return [{ pair, required, capacity: Math.min(required, limit) }];
+    return [{ pair, required }];
   });
+
+  const requiredByEffectIndex = new Map(
+    rawRequirements.map((requirement) => [requirement.pair.target.index, requirement.required]),
+  );
+  for (const target of plan.targets) {
+    if (target.effectIndex === null) continue;
+    const block = plan.effectBlocks.find((candidate) => candidate.index === target.effectIndex);
+    if (!block || (block.spawnFormType !== 9 && block.spawnFormType !== 10)) continue;
+    requiredByEffectIndex.set(
+      target.effectIndex,
+      Math.max(1, requiredByEffectIndex.get(target.effectIndex) ?? 0),
+    );
+  }
+
+  const orderedEffectIndexes = plan.targets.flatMap((target) =>
+    target.effectIndex === null || !requiredByEffectIndex.has(target.effectIndex)
+      ? []
+      : [target.effectIndex]
+  ).filter((effectIndex, index, values) => values.indexOf(effectIndex) === index);
+  const desiredCapacityByEffectIndex = new Map(
+    orderedEffectIndexes.map((effectIndex) => [
+      effectIndex,
+      Math.min(requiredByEffectIndex.get(effectIndex) ?? 0, normalizedPerEffectLimit),
+    ]),
+  );
+  const capacityByEffectIndex = new Map(orderedEffectIndexes.map((effectIndex) => [effectIndex, 0]));
+  let remaining = Math.min(
+    normalizedGlobalLimit,
+    Array.from(desiredCapacityByEffectIndex.values()).reduce((sum, capacity) => sum + capacity, 0),
+  );
+  while (remaining > 0) {
+    let progressed = false;
+    for (const effectIndex of orderedEffectIndexes) {
+      if (remaining <= 0) break;
+      const current = capacityByEffectIndex.get(effectIndex) ?? 0;
+      const desired = desiredCapacityByEffectIndex.get(effectIndex) ?? 0;
+      if (current >= desired) continue;
+      capacityByEffectIndex.set(effectIndex, current + 1);
+      remaining -= 1;
+      progressed = true;
+    }
+    if (!progressed) break;
+  }
+
+  const requirements = rawRequirements.map((requirement) => ({
+    ...requirement,
+    capacity: capacityByEffectIndex.get(requirement.pair.target.index) ?? 0,
+  }));
+  const totalRequired = Array.from(requiredByEffectIndex.values()).reduce((sum, required) => sum + required, 0);
+  const totalCapacity = Array.from(capacityByEffectIndex.values()).reduce((sum, capacity) => sum + capacity, 0);
+  const limitedEffectCount = orderedEffectIndexes.filter(
+    (effectIndex) => (capacityByEffectIndex.get(effectIndex) ?? 0) < (requiredByEffectIndex.get(effectIndex) ?? 0),
+  ).length;
+  return {
+    requirements,
+    capacityByEffectIndex,
+    totalRequired,
+    totalCapacity,
+    limitedEffectCount,
+    globalLimit: normalizedGlobalLimit,
+    truncated: totalCapacity < totalRequired,
+  };
+}
+
+export function resolveEfxbnModelPoolRequirements(
+  plan: EffectFolderPreviewPlan,
+  limit = EFXBN_MODEL_POOL_LIMIT,
+): EfxbnModelPoolRequirement[] {
+  return resolveEfxbnModelPoolPlan(plan, limit, Number.MAX_SAFE_INTEGER).requirements;
 }

@@ -1,0 +1,6 @@
+# Repo-root cargo defaults (picked up when cargo runs from the workspace root).
+# Package-local overrides also live in src-tauri/.cargo/config.toml.
+
+[build]
+# Cap parallel rustc so flycheck / check peaks stay within 32GB RAM.
+jobs = 3

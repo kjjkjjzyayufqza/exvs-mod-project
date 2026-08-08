@@ -944,6 +944,22 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
     let mut matl_paths: Vec<String> = Vec::new();
     let mut matl_combined: Option<MatlData> = None;
 
+    // Effect models list a `nusubf/<name>__maya__.numatb` that the shipped game never
+    // contains: across the 2,314 `nusubf` folders in the retail tree there are 2,317
+    // `.numshb`, 2,317 `.nusktb`, and zero `.numatb`. Their material comes from the EFXBN
+    // model-control parameters and the unlit `efxDrawFace`/`efxDrawModel` path instead, so
+    // a folder holding no `.numatb` at all is authored that way rather than damaged.
+    let folder_has_any_numatb = !collect_paths_recursive(
+        &root_canon,
+        "numatb",
+        NUMDLB_RECURSE_MAX_DEPTH,
+        Some(1),
+        dir_name_should_skip,
+    )
+    .unwrap_or_default()
+    .is_empty();
+    let mut materialless_refs: Vec<String> = Vec::new();
+
     for name in &modl.material_file_names {
         let name_trim = name.trim();
         if name_trim.is_empty() {
@@ -956,6 +972,7 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
             ));
             continue;
         }
+        let mut searched: Vec<PathBuf> = Vec::new();
         let mut p_lex = match resolve_relative_from_model_folder(&root_canon, &mat_rel) {
             Ok(p) => p,
             Err(_) => {
@@ -969,19 +986,33 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
                 }
             }
         };
+        searched.push(p_lex.clone());
         if !p_lex.is_file() {
+            // Extraction flattens `nusubf`, so the basename beside the modl is the real
+            // location for every effect pack.
             if let Some(fname) = Path::new(&mat_rel).file_name() {
                 let alt = root_canon.join(fname);
+                if alt != p_lex {
+                    searched.push(alt.clone());
+                }
                 if alt.is_file() {
                     p_lex = alt;
                 }
             }
         }
         if !p_lex.is_file() {
-            warnings.push(format!(
-                "Material file listed in model but missing: {}",
-                p_lex.display()
-            ));
+            if folder_has_any_numatb {
+                let candidates = searched
+                    .iter()
+                    .map(|path| preview_path_to_frontend(path))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                warnings.push(format!(
+                    "Material file listed in model but missing: {name_trim} (searched: {candidates})"
+                ));
+            } else {
+                materialless_refs.push(name_trim.to_string());
+            }
             continue;
         }
         let p = verify_preview_path_under_model_tree(&root_canon, &p_lex)?;
@@ -1003,6 +1034,16 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
                 existing.entries.extend(data.entries);
             }
         }
+    }
+
+    if !materialless_refs.is_empty() {
+        warnings.push(format!(
+            "Model folder holds no .numatb, so {} material reference(s) stay unresolved ({}). \
+             Effect models are authored this way and take their material from the EFXBN \
+             model-control parameters.",
+            materialless_refs.len(),
+            materialless_refs.join(", ")
+        ));
     }
 
     merge_additional_numatb_in_model_folder(
@@ -1076,7 +1117,8 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
         let v = serde_json::to_value(m).map_err(|e| format!("Failed to serialize Matl: {e}"))?;
         (refs, resolved, resolve_rows, Some(v))
     } else {
-        if !modl.material_file_names.is_empty() {
+        // A materialless model folder already reported why, so do not say it twice.
+        if !modl.material_file_names.is_empty() && materialless_refs.is_empty() {
             warnings.push(
                 "No material files could be loaded; meshes render with a neutral material.".into(),
             );

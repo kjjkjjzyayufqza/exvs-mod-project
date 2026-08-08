@@ -12,8 +12,10 @@ import { EfxbnStripPreview } from "./EfxbnStripPreview";
 import {
   EFXBN_PREVIEW_FPS,
   EFXBN_PREVIEW_FRAME_COUNT,
-  resolveEfxbnModelPoolRequirements,
+  isEfxbnEmitterBlock,
   simulateEfxbnEmitterPair,
+  type EfxbnModelPoolRequirement,
+  efxbnRuntime,
 } from "./efxbnSimulation";
 import { extractEfxbnMeshEmitterPoints, type EfxbnMeshEmitterPoint } from "./efxbnMeshEmitter";
 
@@ -25,6 +27,7 @@ type EfxbnDiagnosticOverlayProps = {
   selectedEffectIndex: number | null;
   hiddenEffectIndexes: ReadonlySet<number>;
   instanceIdsByEffectIndex: ReadonlyMap<number, readonly string[]>;
+  modelRequirements: readonly EfxbnModelPoolRequirement[];
   hostInstanceTransformsRef: MutableRefObject<ReadonlyMap<string, PreviewInstanceHostTransform>>;
   onSelectEffect: (effectIndex: number) => void;
   onProgressChange: (progress: number) => void;
@@ -149,6 +152,7 @@ export function EfxbnDiagnosticOverlay({
   selectedEffectIndex,
   hiddenEffectIndexes,
   instanceIdsByEffectIndex,
+  modelRequirements,
   hostInstanceTransformsRef,
   onSelectEffect,
   onProgressChange,
@@ -156,7 +160,6 @@ export function EfxbnDiagnosticOverlay({
   const progressRef = useRef(progress);
   const lastUiUpdateRef = useRef(0);
   const onProgressChangeRef = useRef(onProgressChange);
-  const modelRequirements = useMemo(() => resolveEfxbnModelPoolRequirements(plan), [plan]);
   const modelEffectTexturePaths = useMemo(() => new Map(
     modelRequirements.flatMap((requirement) => {
       const binding = plan.textureBindings.find(
@@ -228,11 +231,12 @@ export function EfxbnDiagnosticOverlay({
           scale: particle.scale,
           color: particle.color,
           effectTexture,
+          effectMaterialActive: true,
           effectUvScale: uvTransform.scale,
           effectUvOffset: uvTransform.offset,
           motionFrame: particle.age,
           visible: true,
-          depthWrite: target.zWriteEnable !== 0,
+          depthWrite: efxbnRuntime(target).zWriteEnable !== 0,
           depthTest: target.zTestEnable !== 0,
           blending: target.blendState === 2
             ? AdditiveBlending
@@ -244,6 +248,7 @@ export function EfxbnDiagnosticOverlay({
           rotation: [0, 0, 0],
           scale: [1, 1, 1],
           effectTexture,
+          effectMaterialActive: true,
           effectUvScale: uvTransform.scale,
           effectUvOffset: uvTransform.offset,
           motionFrame: 0,
@@ -293,7 +298,7 @@ export function EfxbnDiagnosticOverlay({
         meshEmitterPointsByEffectIndex={meshEmitterPointsByEffectIndex}
       />
       {plan.effectBlocks.map((block) =>
-        block.effectType !== 9 || hiddenEffectIndexes.has(block.index) ? null : (
+        !isEfxbnEmitterBlock(block) || hiddenEffectIndexes.has(block.index) ? null : (
           <EmitterShape
             key={block.index}
             block={block}

@@ -1,20 +1,62 @@
 import { useEffect, useMemo, useState } from "react";
 import { ImageIcon, Loader2, TriangleAlert } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { stat } from "@tauri-apps/plugin-fs";
 import { cn } from "@/lib/utils";
 
 type PreviewSize = "thumbnail" | "preview";
 
-const cache = new Map<string, string | null>();
+const PREVIEW_CACHE_LIMIT = 32;
+const cache = new Map<string, string>();
 const inflight = new Map<string, Promise<string | null>>();
 
-function cacheKey(path: string, size: PreviewSize): string {
-  return `${path.trim().replace(/\\/g, "/").toLowerCase()}::${size}`;
+type PreviewCacheIdentity = {
+  key: string;
+  cacheable: boolean;
+};
+
+async function cacheKey(path: string, size: PreviewSize): Promise<PreviewCacheIdentity> {
+  const normalized = path.trim().replace(/\\/g, "/").toLowerCase();
+  try {
+    const info = await stat(path);
+    const modified = info.mtime instanceof Date ? info.mtime.getTime() : Number.NaN;
+    if (!Number.isFinite(modified)) {
+      return {
+        key: `${normalized}::${size}::unversioned`,
+        cacheable: false,
+      };
+    }
+    return {
+      key: `${normalized}::${size}::${info.size}:${modified}`,
+      cacheable: true,
+    };
+  } catch {
+    return {
+      key: `${normalized}::${size}::unversioned`,
+      cacheable: false,
+    };
+  }
+}
+
+function rememberPreview(key: string, value: string): void {
+  cache.delete(key);
+  cache.set(key, value);
+  while (cache.size > PREVIEW_CACHE_LIMIT) {
+    const oldest = cache.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
 }
 
 export async function loadNutexbPreview(path: string, size: PreviewSize): Promise<string | null> {
-  const key = cacheKey(path, size);
-  if (cache.has(key)) return cache.get(key) ?? null;
+  const { key, cacheable } = await cacheKey(path, size);
+  if (cacheable) {
+    const cached = cache.get(key);
+    if (cached) {
+      rememberPreview(key, cached);
+      return cached;
+    }
+  }
   const pending = inflight.get(key);
   if (pending) return pending;
 
@@ -23,10 +65,9 @@ export async function loadNutexbPreview(path: string, size: PreviewSize): Promis
       const command = size === "thumbnail" ? "nutexb_thumbnail_base64" : "nutexb_preview_base64";
       const base64 = await invoke<string>(command, { inputPath: path });
       const dataUrl = `data:image/png;base64,${base64}`;
-      cache.set(key, dataUrl);
+      if (cacheable) rememberPreview(key, dataUrl);
       return dataUrl;
     } catch {
-      cache.set(key, null);
       return null;
     } finally {
       inflight.delete(key);

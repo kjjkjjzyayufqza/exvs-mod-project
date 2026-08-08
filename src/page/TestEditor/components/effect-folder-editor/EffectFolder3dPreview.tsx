@@ -18,7 +18,10 @@ import { EfxbnDiagnosticOverlay } from "./EfxbnDiagnosticOverlay";
 import { EfxbnPreviewInspector } from "./EfxbnPreviewInspector";
 import {
   EFXBN_PREVIEW_FRAME_COUNT,
-  resolveEfxbnModelPoolRequirements,
+  efxbnChildIndexes,
+  findEfxbnParentBlocks,
+  resolveEfxbnModelPoolPlan,
+  type EfxbnModelPoolPlan,
 } from "./efxbnSimulation";
 
 type EffectFolder3dPreviewProps = {
@@ -36,25 +39,22 @@ function EffectFolderPreviewScene({
   selectedEffectIndex,
   onInstanceMapChange,
   hostInstanceTransformsRef,
+  modelPoolPlan,
 }: {
   plan: EffectFolderPreviewPlan;
   selectedEffectIndex: number | null;
   onInstanceMapChange: (mapping: ReadonlyMap<number, readonly string[]>) => void;
   hostInstanceTransformsRef: MutableRefObject<ReadonlyMap<string, PreviewInstanceHostTransform>>;
+  modelPoolPlan: EfxbnModelPoolPlan | null;
 }) {
   const {
     loadModelSetAt,
     loadMotionNuanmbPathForInstance,
-    motionStatesByInstanceId,
     requestCameraFit,
     setInstanceModelId,
     setActivePreviewInstanceId,
-    setMotionFrameForInstance,
-    setMotionPlayingForInstance,
   } = useSsbhModelPreview();
   const loadedPlanKeyRef = useRef<string | null>(null);
-  const animatedInstancesRef = useRef<string[]>([]);
-  const startedPlanKeyRef = useRef<string | null>(null);
   const instanceIdsByEffectIndexRef = useRef<Map<number, string[]>>(new Map());
   const selectedEffectIndexRef = useRef(selectedEffectIndex);
   selectedEffectIndexRef.current = selectedEffectIndex;
@@ -62,32 +62,20 @@ function EffectFolderPreviewScene({
     if (plan.kind === "model") {
       return plan.targets.map((target) => ({ target, poolIndex: 0 }));
     }
-    const capacityByEffectIndex = new Map(
-      resolveEfxbnModelPoolRequirements(plan).map((requirement) => [
-        requirement.pair.target.index,
-        requirement.capacity,
-      ]),
-    );
     return plan.targets.flatMap((target) => {
-      const block = target.effectIndex === null
-        ? null
-        : plan.effectBlocks.find((effect) => effect.index === target.effectIndex);
       const capacity = target.effectIndex === null
         ? 1
-        : (capacityByEffectIndex.get(target.effectIndex) ??
-          (block && (block.spawnFormType === 9 || block.spawnFormType === 10) ? 1 : 0));
+        : (modelPoolPlan?.capacityByEffectIndex.get(target.effectIndex) ?? 0);
       return Array.from({ length: capacity }, (_, poolIndex) => ({ target, poolIndex }));
     });
-  }, [plan]);
+  }, [modelPoolPlan, plan]);
 
   useEffect(() => {
     if (loadedPlanKeyRef.current === plan.key) return;
     loadedPlanKeyRef.current = plan.key;
-    animatedInstancesRef.current = [];
     instanceIdsByEffectIndexRef.current = new Map();
     hostInstanceTransformsRef.current = new Map();
     onInstanceMapChange(new Map());
-    startedPlanKeyRef.current = null;
     let cancelled = false;
 
     if (modelLoadSlots.length === 0) {
@@ -98,7 +86,6 @@ function EffectFolderPreviewScene({
     void loadModelSetAt(modelLoadSlots.map((slot) => slot.target.modelPath))
       .then((instances) => {
         if (cancelled) return;
-        const animatedIds: string[] = [];
         instances.forEach((instance, index) => {
           const slot = modelLoadSlots[index];
           if (!slot) return;
@@ -110,7 +97,6 @@ function EffectFolderPreviewScene({
           }
           if (slot.poolIndex === 0) setInstanceModelId(instance.id, target.modelHash.hex);
           if (target.animationPath) {
-            animatedIds.push(instance.id);
             loadMotionNuanmbPathForInstance(instance.id, target.animationPath);
           }
         });
@@ -131,7 +117,6 @@ function EffectFolderPreviewScene({
             ? null
             : instanceIdsByEffectIndexRef.current.get(selectedEffectIndexRef.current)?.[0];
         if (selectedInstanceId) setActivePreviewInstanceId(selectedInstanceId);
-        animatedInstancesRef.current = animatedIds;
         requestCameraFit();
       })
       .catch(() => {
@@ -160,25 +145,6 @@ function EffectFolderPreviewScene({
     if (instanceId) setActivePreviewInstanceId(instanceId);
   }, [selectedEffectIndex, setActivePreviewInstanceId]);
 
-  useEffect(() => {
-    const instanceIds = animatedInstancesRef.current;
-    if (instanceIds.length === 0 || startedPlanKeyRef.current === plan.key) return;
-    const states = instanceIds.map((instanceId) => motionStatesByInstanceId.get(instanceId));
-    if (states.some((state) => !state || state.sampling)) return;
-    if (states.some((state) => !state?.clip || state.sampleError)) return;
-
-    startedPlanKeyRef.current = plan.key;
-    for (const instanceId of instanceIds) {
-      setMotionFrameForInstance(instanceId, 0);
-      setMotionPlayingForInstance(instanceId, true);
-    }
-  }, [
-    motionStatesByInstanceId,
-    plan.key,
-    setMotionFrameForInstance,
-    setMotionPlayingForInstance,
-  ]);
-
   return null;
 }
 
@@ -197,6 +163,19 @@ export function EffectFolder3dPreview({
     () => new Map(),
   );
   const hostInstanceTransformsRef = useRef<ReadonlyMap<string, PreviewInstanceHostTransform>>(new Map());
+  const modelPoolPlan = useMemo(
+    () => plan?.kind === "efxbn" ? resolveEfxbnModelPoolPlan(plan) : null,
+    [plan],
+  );
+  const externalModelEffectCount = useMemo(() => {
+    if (plan?.kind !== "efxbn") return 0;
+    const localEffectIndexes = new Set(
+      plan.targets.flatMap((target) => target.effectIndex === null ? [] : [target.effectIndex]),
+    );
+    return plan.effectBlocks.filter(
+      (effect) => effect.modelHash.signed !== 0 && !localEffectIndexes.has(effect.index),
+    ).length;
+  }, [plan]);
 
   useEffect(() => {
     const firstEffectIndex = plan?.effectBlocks[0]?.index ?? null;
@@ -225,11 +204,12 @@ export function EffectFolder3dPreview({
       setSelectedEffectIndex(effectIndex);
       const selectedBlock = plan?.effectBlocks.find((block) => block.index === effectIndex);
       const keep = new Set([effectIndex]);
-      if (selectedBlock?.effectType === 9 && selectedBlock.referencedEffectIndex >= 0) {
-        keep.add(selectedBlock.referencedEffectIndex);
+      // Solo keeps the block plus its direct neighbours in the block tree.
+      if (selectedBlock) {
+        for (const childIndex of efxbnChildIndexes(selectedBlock)) keep.add(childIndex);
       }
-      for (const block of plan?.effectBlocks ?? []) {
-        if (block.effectType === 9 && block.referencedEffectIndex === effectIndex) keep.add(block.index);
+      for (const parent of findEfxbnParentBlocks(plan?.effectBlocks ?? [], effectIndex)) {
+        keep.add(parent.index);
       }
       setHiddenEffectIndexes(
         new Set(plan?.effectBlocks.filter((block) => !keep.has(block.index)).map((block) => block.index) ?? []),
@@ -255,12 +235,25 @@ export function EffectFolder3dPreview({
     plan.targets.length > 0 ? `${plan.targets.length} models` : null,
     plan.localTextureCount > 0 ? `${plan.localTextureCount} textures` : null,
   ].filter(Boolean).join(" · ");
+  const previewDiagnostics = [
+    modelPoolPlan?.truncated
+      ? `Model pool capped at ${modelPoolPlan.totalCapacity}/${modelPoolPlan.totalRequired} instances across ${modelPoolPlan.limitedEffectCount} effects.`
+      : null,
+    externalModelEffectCount > 0
+      ? `${externalModelEffectCount} external model effect${externalModelEffectCount === 1 ? "" : "s"} use visible proxy geometry.`
+      : null,
+  ].filter((message): message is string => message !== null);
   return (
     <section className="space-y-2" aria-label={plan.kind === "efxbn" ? "EFXBN 3D preview" : "Model 3D preview"}>
       <div className="flex flex-wrap items-center gap-2">
         <h4 className="mr-auto text-xs font-medium">Preview</h4>
         {previewCounts ? <span className="text-[10px] tabular-nums text-muted-foreground">{previewCounts}</span> : null}
       </div>
+      {previewDiagnostics.length > 0 ? (
+        <p className="text-[10px] text-amber-600 dark:text-amber-400" role="status">
+          {previewDiagnostics.join(" ")}
+        </p>
+      ) : null}
 
       {!hasRenderableScene ? (
         <div className="flex min-h-32 flex-col items-center justify-center rounded-md border border-dashed bg-muted/10 px-4 text-center">
@@ -280,6 +273,7 @@ export function EffectFolder3dPreview({
               selectedEffectIndex={selectedEffectIndex}
               onInstanceMapChange={setInstanceIdsByEffectIndex}
               hostInstanceTransformsRef={hostInstanceTransformsRef}
+              modelPoolPlan={modelPoolPlan}
             />
             {hasDiagnosticBlocks ? (
               <ResizablePanelGroup orientation="horizontal" className="min-h-0">
@@ -297,6 +291,7 @@ export function EffectFolder3dPreview({
                         selectedEffectIndex={selectedEffectIndex}
                         hiddenEffectIndexes={hiddenEffectIndexes}
                         instanceIdsByEffectIndex={instanceIdsByEffectIndex}
+                        modelRequirements={modelPoolPlan?.requirements ?? []}
                         hostInstanceTransformsRef={hostInstanceTransformsRef}
                         onSelectEffect={setSelectedEffectIndex}
                         onProgressChange={handleEffectProgressChange}

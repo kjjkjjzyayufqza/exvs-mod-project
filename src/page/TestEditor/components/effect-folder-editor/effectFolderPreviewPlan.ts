@@ -195,12 +195,23 @@ function uniqueHashes(hashes: readonly EffectFolderHash[]): EffectFolderHash[] {
   });
 }
 
+function compactRevisionSignature(value: unknown): string {
+  const serialized = JSON.stringify(value) ?? "";
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < serialized.length; index += 1) {
+    hash ^= serialized.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
 function planKey(
   kind: EffectFolderPreviewPlan["kind"],
   sourcePath: string,
   targets: readonly EffectFolderPreviewTarget[],
   unresolvedModelHashes: readonly EffectFolderHash[],
   unresolvedAnimationHashes: readonly EffectFolderHash[],
+  revisionSignature: string,
 ): string {
   return [
     kind,
@@ -211,6 +222,7 @@ function planKey(
     ),
     ...unresolvedModelHashes.map((hash) => `model:${hash.signed}`),
     ...unresolvedAnimationHashes.map((hash) => `animation:${hash.signed}`),
+    `revision:${revisionSignature}`,
   ].join("|");
 }
 
@@ -236,7 +248,14 @@ export function buildEffectFolderPreviewPlan(
     const unresolvedModelHashes = modelFile ? [] : [item.model.hash];
     return {
       kind: "model",
-      key: planKey("model", item.model.name, targets, unresolvedModelHashes, []),
+      key: planKey(
+        "model",
+        item.model.name,
+        targets,
+        unresolvedModelHashes,
+        [],
+        compactRevisionSignature(item.model),
+      ),
       targets,
       localAnimationCount: 0,
       unresolvedModelHashes,
@@ -307,9 +326,30 @@ export function buildEffectFolderPreviewPlan(
     }
   }
   const unresolvedTextureHashes = uniqueHashes(unresolvedTextures);
+  const revisionSignature = compactRevisionSignature({
+    summary,
+    modelSlots: targets.map((target) => ({
+      effectIndex: target.effectIndex,
+      modelPath: target.modelPath,
+      animationPath: target.animationPath,
+    })),
+    textureSlots: textureBindings.map((binding) => ({
+      effectIndex: binding.effectIndex,
+      controlIndex: binding.controlIndex,
+      fileIndex: binding.file?.fileIndex ?? null,
+      path: binding.file?.path ?? null,
+    })),
+  });
   return {
     kind: "efxbn",
-    key: planKey("efxbn", item.item.path, targets, unresolvedModelHashes, unresolvedAnimationHashes),
+    key: planKey(
+      "efxbn",
+      item.item.path,
+      targets,
+      unresolvedModelHashes,
+      unresolvedAnimationHashes,
+      revisionSignature,
+    ),
     targets,
     localAnimationCount: targets.filter((target) => target.animationPath !== null).length,
     unresolvedModelHashes,

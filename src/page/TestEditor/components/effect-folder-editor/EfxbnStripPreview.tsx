@@ -4,6 +4,7 @@ import {
   BufferAttribute,
   BufferGeometry,
   DoubleSide,
+  DynamicDrawUsage,
   ShaderMaterial,
 } from "three";
 import type { EffectFolderPreviewPlan } from "./effectFolderPreviewPlan";
@@ -14,17 +15,52 @@ import {
   resolveEfxbnEmitterPairs,
   simulateEfxbnEmitterPair,
   type EfxbnEmitterPair,
+  isEfxbnStripBlock,
+  efxbnRuntime,
 } from "./efxbnSimulation";
-import { buildEfxbnStripMeshData } from "./efxbnStripGeometry";
+import {
+  buildEfxbnStripMeshData,
+  EFXBN_STRIP_VERTEX_LIMIT,
+} from "./efxbnStripGeometry";
 import { threeBlendState, useEfxbnTexture } from "./EfxbnParticlePreview";
 
-const MAX_STRIP_VERTICES = 16_384;
 const MAX_STRIP_PARTICLES = 256;
+const MAX_STRIP_INDICES = (EFXBN_STRIP_VERTEX_LIMIT / 2) * 6;
+
+function dynamicAttribute(length: number, itemSize: number): BufferAttribute {
+  return new BufferAttribute(new Float32Array(length), itemSize).setUsage(DynamicDrawUsage);
+}
+
+function createStripGeometry(): BufferGeometry {
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", dynamicAttribute(EFXBN_STRIP_VERTEX_LIMIT * 3, 3));
+  geometry.setAttribute("previousCenter", dynamicAttribute(EFXBN_STRIP_VERTEX_LIMIT * 3, 3));
+  geometry.setAttribute("nextCenter", dynamicAttribute(EFXBN_STRIP_VERTEX_LIMIT * 3, 3));
+  geometry.setAttribute("ribbonSide", dynamicAttribute(EFXBN_STRIP_VERTEX_LIMIT, 1));
+  geometry.setAttribute("ribbonWidth", dynamicAttribute(EFXBN_STRIP_VERTEX_LIMIT, 1));
+  geometry.setAttribute("uv", dynamicAttribute(EFXBN_STRIP_VERTEX_LIMIT * 2, 2));
+  geometry.setAttribute("ribbonColor", dynamicAttribute(EFXBN_STRIP_VERTEX_LIMIT * 4, 4));
+  geometry.setIndex(
+    new BufferAttribute(new Uint16Array(MAX_STRIP_INDICES), 1).setUsage(DynamicDrawUsage),
+  );
+  geometry.setDrawRange(0, 0);
+  return geometry;
+}
+
+function updateFloatAttribute(
+  geometry: BufferGeometry,
+  name: string,
+  values: readonly number[],
+): void {
+  const attribute = geometry.getAttribute(name) as BufferAttribute;
+  (attribute.array as Float32Array).set(values);
+  attribute.needsUpdate = true;
+}
 
 function createStripMaterial(pair: EfxbnEmitterPair) {
   return new ShaderMaterial({
     transparent: true,
-    depthWrite: pair.target.zWriteEnable !== 0,
+    depthWrite: efxbnRuntime(pair.target).zWriteEnable !== 0,
     depthTest: pair.target.zTestEnable !== 0,
     blending: threeBlendState(pair.target.blendState),
     side: DoubleSide,
@@ -32,8 +68,6 @@ function createStripMaterial(pair: EfxbnEmitterPair) {
     uniforms: {
       colorMap: { value: null },
       hasColorMap: { value: 0 },
-      uvScale: { value: [1, 1] },
-      uvOffset: { value: [0, 0] },
     },
     vertexShader: `
       attribute vec3 previousCenter;
@@ -41,8 +75,6 @@ function createStripMaterial(pair: EfxbnEmitterPair) {
       attribute float ribbonSide;
       attribute float ribbonWidth;
       attribute vec4 ribbonColor;
-      uniform vec2 uvScale;
-      uniform vec2 uvOffset;
       varying vec2 vUv;
       varying vec4 vColor;
       void main() {
@@ -53,7 +85,7 @@ function createStripMaterial(pair: EfxbnEmitterPair) {
         tangent = length(tangent) < 0.00001 ? vec2(0.0, 1.0) : normalize(tangent);
         center.xy += vec2(-tangent.y, tangent.x) * ribbonSide * ribbonWidth;
         gl_Position = projectionMatrix * center;
-        vUv = uv * uvScale + uvOffset;
+        vUv = uv;
         vColor = ribbonColor;
       }
     `,
@@ -84,7 +116,7 @@ function EfxbnStripLayer({
   progressRef: MutableRefObject<number>;
   meshEmitterPointsByEffectIndex: ReadonlyMap<number, readonly EfxbnMeshEmitterPoint[]>;
 }) {
-  const geometry = useMemo(() => new BufferGeometry(), []);
+  const geometry = useMemo(createStripGeometry, []);
   const material = useMemo(() => createStripMaterial(pair), [pair]);
   const textureBinding = plan.textureBindings.find(
     (binding) => binding.effectIndex === pair.target.index && binding.file !== null,
@@ -104,22 +136,27 @@ function EfxbnStripLayer({
     const particles = simulateEfxbnEmitterPair(
       pair, plan, frame, MAX_STRIP_PARTICLES, meshEmitterPointsByEffectIndex,
     );
-    const data = buildEfxbnStripMeshData(particles, pair.target, MAX_STRIP_VERTICES);
-    geometry.dispose();
-    geometry.setAttribute("position", new BufferAttribute(new Float32Array(data.centers), 3));
-    geometry.setAttribute("previousCenter", new BufferAttribute(new Float32Array(data.previousCenters), 3));
-    geometry.setAttribute("nextCenter", new BufferAttribute(new Float32Array(data.nextCenters), 3));
-    geometry.setAttribute("ribbonSide", new BufferAttribute(new Float32Array(data.sides), 1));
-    geometry.setAttribute("ribbonWidth", new BufferAttribute(new Float32Array(data.widths), 1));
-    geometry.setAttribute("uv", new BufferAttribute(new Float32Array(data.uvs), 2));
-    geometry.setAttribute("ribbonColor", new BufferAttribute(new Float32Array(data.colors), 4));
-    geometry.setIndex(data.indices);
-    const representative = particles[0];
-    const uv = evaluateEfxbnUvTransform(textureBinding?.parameter, representative?.age ?? 0, {
-      particleSeed: representative?.id ?? pair.target.index,
-    });
-    material.uniforms.uvScale.value = uv.scale;
-    material.uniforms.uvOffset.value = uv.offset;
+    const data = buildEfxbnStripMeshData(
+      particles,
+      pair.target,
+      EFXBN_STRIP_VERTEX_LIMIT,
+      (particle) => evaluateEfxbnUvTransform(textureBinding?.parameter, particle.age, {
+        particleSeed: particle.id,
+      }),
+    );
+    updateFloatAttribute(geometry, "position", data.centers);
+    updateFloatAttribute(geometry, "previousCenter", data.previousCenters);
+    updateFloatAttribute(geometry, "nextCenter", data.nextCenters);
+    updateFloatAttribute(geometry, "ribbonSide", data.sides);
+    updateFloatAttribute(geometry, "ribbonWidth", data.widths);
+    updateFloatAttribute(geometry, "uv", data.uvs);
+    updateFloatAttribute(geometry, "ribbonColor", data.colors);
+    const index = geometry.getIndex();
+    if (index) {
+      (index.array as Uint16Array).set(data.indices);
+      index.needsUpdate = true;
+    }
+    geometry.setDrawRange(0, data.indices.length);
   });
 
   return <mesh geometry={geometry} material={material} frustumCulled={false} />;
@@ -137,7 +174,7 @@ export function EfxbnStripPreview({
   meshEmitterPointsByEffectIndex: ReadonlyMap<number, readonly EfxbnMeshEmitterPoint[]>;
 }) {
   const pairs = useMemo(
-    () => resolveEfxbnEmitterPairs(plan).filter((pair) => pair.target.effectType === 2),
+    () => resolveEfxbnEmitterPairs(plan).filter((pair) => isEfxbnStripBlock(pair.target)),
     [plan],
   );
   return <group name="efxbn-strip-preview">{pairs.map((pair) => {

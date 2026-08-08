@@ -6,7 +6,12 @@ Add a Blender-like 3D preview to Test Editor effect details by reusing the Unit 
 
 ## Evidence
 
-- The on-disk effect block is `0x370` bytes; after the eight-byte runtime prefix it is exactly the shader-reflected `SEfxElementData` (`0x370`/880 bytes). Parser raw offsets therefore map to runtime offsets with `+8`.
+- The on-disk effect block is `0x370` bytes and is byte-for-byte the shader-reflected
+  `SEfxElementData` (`0x370`/880 bytes), so block offsets and reflected offsets are the
+  same number. **Superseded claim:** an earlier note in this file described an "eight-byte
+  runtime prefix" and a `+8` mapping. That was an artifact of the parser starting the block
+  region at `0x20` instead of `0x18`; see
+  `docs/agent-sessions/2026-08-08-efxbn-format-rederivation.md`.
 - `fxc /dumpbin`, YYadorigi, etnlgd/3DMigoto, and spacehamster/DXDecompiler independently agree on the reflected structures and DXBC instruction offsets. All 44 named EFX compute shaders were extracted; all 44 produced YYadorigi HLSL.
 - Spawn and kinetic shaders prove the LCG (`1664525*x + 1013904223`), lifetime/interval/size randomization (`base * (1 + signedRandom * rate)`), frame counters, wrapper-to-target spawn requests, per-particle curve time, gravity, direction acceleration, wind/water gates, and billboard/model/strip field use.
 - The base Face PS samples `colorMap * particleColor`, discards alpha below `0.01`, and halves RGB unless the `0x40000` feature is set. Source-external textures intentionally use a neutral radial fallback.
