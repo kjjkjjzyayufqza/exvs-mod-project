@@ -1,7 +1,6 @@
 import type {
   EffectFolderHash,
   EfxbnEffectSummary,
-  EfxbnMetaParsedSummary,
   EfxbnRuntimeNormalization,
 } from "@/services/effectFolder/effectFolderService";
 
@@ -17,32 +16,6 @@ export const ZERO_HASH: EffectFolderHash = { signed: 0, unsigned: 0, hex: "0x000
 
 const ZERO4: [number, number, number, number] = [0, 0, 0, 0];
 
-export function makeEfxbnMetaParsed(
-  overrides: Partial<EfxbnMetaParsedSummary> = {},
-): EfxbnMetaParsedSummary {
-  return {
-    unkConfigInfo: [],
-    configHeader: {
-      number: 0,
-      unkFloatA: 0,
-      unkIntA: 0,
-      unkFloatB: 0,
-      unkIntB: 0,
-      unkBytes12: [],
-      unkFloats4: [0, 0, 0, 0],
-    },
-    idTablePairs: [],
-    controlReferences: [],
-    modelId: 0,
-    modelHash: ZERO_HASH,
-    animationId: 0,
-    animationHash: ZERO_HASH,
-    unk32: 0,
-    unkConfigInfo2: [],
-    ...overrides,
-  };
-}
-
 export function makeEfxbnRuntime(
   overrides: Partial<EfxbnRuntimeNormalization> = {},
 ): EfxbnRuntimeNormalization {
@@ -56,6 +29,7 @@ export function makeEfxbnRuntime(
     stripTailAlphaRate: 0.3,
     stripHeadAlphaRate: 0.3,
     internalElementDataIndex: 0,
+    drawScheme: { flag: 0, meshMultiUvFlag: 0 },
     ...overrides,
   };
 }
@@ -103,6 +77,9 @@ function deriveRuntime(block: EfxbnEffectSummary): EfxbnRuntimeNormalization {
         ? 0.3
         : block.stripHeadAlphaRate,
     internalElementDataIndex: block.index,
+    // The backend derives this from the model-control table, which fixtures do not model.
+    // Tests that care about the draw scheme pass an explicit `runtime`.
+    drawScheme: { flag: 0, meshMultiUvFlag: 0 },
   };
 }
 
@@ -134,6 +111,7 @@ export function makeEfxbnEffectBlock(
     enableDataFlag: 0,
     nudHandle: 0,
     textureHandle: 0,
+    pad01: [0, 0],
     colorTextureParameterIndex: [-1, -1],
     uvTextureParameterIndex: [-1, -1],
     centerPivot: [0, 0],
@@ -158,9 +136,12 @@ export function makeEfxbnEffectBlock(
     normalMapHash: 0,
     worldWindApplyRate: 0,
     stripSegmentInterval: 0,
+    stripSegmentLengthNotUse: 0,
     stripSegmentLife: 0,
+    stripSegmentNumNotUse: 0,
     stripSegmentSplitNum: 1,
     drawerId: 0,
+    worldWindApplyRateRandom: 0,
     softParticleRange: 0,
     cameraFadeRange: 0,
     extraFlags: 0,
@@ -214,10 +195,8 @@ export function makeEfxbnEffectBlock(
     modelHash: ZERO_HASH,
     animationId: 0,
     animationHash: ZERO_HASH,
-    idTable: [],
     controlReferences: [],
-    modelControlIndices: [-1, -1, -1, -1],
-    metaParsed: makeEfxbnMetaParsed(),
+    reserveArea: new Array<number>(31).fill(0),
     runtime: undefined,
     ...overrides,
   };

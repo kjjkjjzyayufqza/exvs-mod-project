@@ -259,6 +259,17 @@ action hash 不是 raw 按键。
 | `0x193fe550` | `ACTION_BC_SPECIAL_MELEE` | 特格 / 特殊移动 |
 | `0x178d1109` | `ACTION_B_MELEE` | N 格 |
 | `0x8ae55bb1` | `ACTION_ABC_FINAL_ATTACK` | 觉醒技 |
+| `0xf32aa1ba` | `func_480` → `func_69(0x34)` | **胜利 pose 1** |
+| `0x900ab393` | `func_482` → `func_69(0x35)` | **失败 pose 1** |
+
+结果 pose 注册形如：
+
+```c
+func_241(0xf32aa1ba, func_480); // 胜利 pose 1
+func_241(0x900ab393, func_482); // 失败 pose 1
+```
+
+不要与主射 `func_241(主射hash, ACTION_A_SHOT)` 混改：pose 走 state slot tick（`0x34`/`0x35`），主射走射击 runtime globals。
 
 模组开发入口：
 

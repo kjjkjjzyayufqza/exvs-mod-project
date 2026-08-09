@@ -42,6 +42,7 @@ import {
 } from "../utils/sceneTextureConvert";
 import {
   analyzeTextureAddCandidates,
+  findTextureEntryForDuplicate,
   invalidateNutexbInternalName,
   type AnalyzedAddCandidate,
   type RawAddFile,
@@ -244,7 +245,53 @@ export function SceneTextureManager({
 
       try {
         let done = 0;
-        for (const { candidate, ddsFormat } of selections) {
+        let addedCount = 0;
+        let replacedCount = 0;
+        let failedCount = 0;
+
+        for (const { candidate, ddsFormat, replace } of selections) {
+          if (replace) {
+            const existing = findTextureEntryForDuplicate(
+              useSceneTextureManagerStore.getState().entries,
+              candidate,
+            );
+            if (!existing?.nutexbPath) {
+              failedCount += 1;
+              toast.error(`Cannot replace ${candidate.filename}`, {
+                description: existing
+                  ? "Existing texture has no target path"
+                  : "Matching texture entry not found",
+              });
+              done += 1;
+              setConvertProgress({ done, total: selections.length });
+              continue;
+            }
+            try {
+              await replaceNutexbInPlace({
+                sourcePath: candidate.sourcePath,
+                targetNutexbPath: existing.nutexbPath,
+                ddsFormat,
+              });
+              invalidateNutexbInternalName(existing.nutexbPath);
+              replaceEntry(existing.id, {
+                format: candidate.isNutexb ? "unknown" : ddsFormat,
+                thumbnailDataUrl: null,
+                sourceImagePath: candidate.isNutexb ? null : candidate.sourcePath,
+              });
+              replacedCount += 1;
+            } catch (error) {
+              failedCount += 1;
+              console.error(error);
+              toast.error(`Failed to replace ${existing.filename}`, {
+                description:
+                  error instanceof Error ? error.message : String(error),
+              });
+            }
+            done += 1;
+            setConvertProgress({ done, total: selections.length });
+            continue;
+          }
+
           const entryId = `tex_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
           if (candidate.isNutexb) {
@@ -263,6 +310,7 @@ export function SceneTextureManager({
               nutexbPath: candidate.sourcePath,
               sourceImagePath: null,
             });
+            addedCount += 1;
           } else {
             addEntry({
               id: entryId,
@@ -289,8 +337,10 @@ export function SceneTextureManager({
                 format: ddsFormat,
                 thumbnailDataUrl: null,
               });
+              addedCount += 1;
             } catch {
               replaceEntry(entryId, { format: "error" });
+              failedCount += 1;
             }
           }
 
@@ -298,7 +348,19 @@ export function SceneTextureManager({
           setConvertProgress({ done, total: selections.length });
         }
 
-        useSceneDirtyStore.getState().markGlobalDirty("textures");
+        if (addedCount > 0 || replacedCount > 0) {
+          useSceneDirtyStore.getState().markGlobalDirty("textures");
+          clearNutexbRgbaCache();
+          clearSceneTextureThumbnailCache();
+          bumpThumbnailCache();
+        }
+        if (replacedCount > 0 && failedCount === 0) {
+          toast.success(
+            addedCount > 0
+              ? `Added ${addedCount}, replaced ${replacedCount} texture(s)`
+              : `Replaced ${replacedCount} texture(s)`,
+          );
+        }
       } finally {
         setIsAddConverting(false);
         setConvertProgress(null);

@@ -54,7 +54,7 @@ import {
   Vector2,
   Vector3,
 } from "three";
-import type { Blending, BufferGeometry, Material, Object3D, Texture } from "three";
+import type { Blending, BufferGeometry, Material, Object3D, Side, Texture } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { StageOrbitControls } from "@/components/viewport/StageOrbitControls";
 import { ViewportMarqueeOverlay } from "@/components/viewport/ViewportMarqueeOverlay";
@@ -215,15 +215,119 @@ export type PreviewInstanceHostTransform = {
   depthWrite?: boolean;
   depthTest?: boolean;
   blending?: Blending;
+  /** Face culling, from the block's `cullingType` through the engine's D3D11 cull table. */
+  side?: Side;
   /** Optional EFX color map rendered with the game's unlit model pixel path. */
   effectTexture?: Texture | null;
   /** Keep the unlit EFX material active when a source-local color map is unavailable. */
   effectMaterialActive?: boolean;
   effectUvScale?: readonly [number, number];
   effectUvOffset?: readonly [number, number];
+  /**
+   * ColorEx UV-offset (distortion) map and its own animated UV set. When present the unlit EFX
+   * material reproduces `efxDrawModelColorExPS` bit `0x80`: the colour UV is displaced by
+   * `offset.a * (offset.rg - 0.5) * distortion` and alpha is scaled by `offset.a`.
+   */
+  effectUvOffsetTexture?: Texture | null;
+  effectOffsetUvScale?: readonly [number, number];
+  effectOffsetUvOffset?: readonly [number, number];
+  effectDistortion?: readonly [number, number];
+  /** Draw-scheme bit `0x40000`: skip the `rgb * 0.5` the base model pixel shader applies. */
+  effectFullBrightness?: boolean;
+  /** Draw-scheme bit `0x40` (`blendState == 4`): the AddMix premultiply-and-drop-alpha path. */
+  effectAddMix?: boolean;
+  /**
+   * `hkImageAddressMode` BORDER on the colour / offset sampler. WebGL2 has no border wrap, so
+   * the injected shader zeroes alpha outside the authored UV range instead.
+   */
+  effectColorBorder?: boolean;
+  effectOffsetBorder?: boolean;
   /** Host-owned motion frame, used for per-particle animation phase. */
   motionFrame?: number;
 };
+
+/** Uniforms the EFX override material injects into `MeshBasicMaterial`. */
+type EfxColorExUniforms = {
+  efxUvOffsetMap: { value: Texture | null };
+  efxHasUvOffsetMap: { value: number };
+  efxDistortion: { value: [number, number] };
+  efxOffsetUvScale: { value: [number, number] };
+  efxOffsetUvOffset: { value: [number, number] };
+  efxColorBorder: { value: number };
+  efxOffsetBorder: { value: number };
+  efxAddMix: { value: number };
+};
+
+/**
+ * Injects the ColorEx distortion path into a stock `MeshBasicMaterial` instead of replacing it
+ * with a `ShaderMaterial`, so three.js keeps owning skinning, vertex colours and instancing.
+ */
+function attachEfxColorExUniforms(material: MeshBasicMaterial): EfxColorExUniforms {
+  const uniforms: EfxColorExUniforms = {
+    efxUvOffsetMap: { value: null },
+    efxHasUvOffsetMap: { value: 0 },
+    efxDistortion: { value: [0, 0] },
+    efxOffsetUvScale: { value: [1, 1] },
+    efxOffsetUvOffset: { value: [0, 0] },
+    efxColorBorder: { value: 0 },
+    efxOffsetBorder: { value: 0 },
+    efxAddMix: { value: 0 },
+  };
+  material.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, uniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+uniform vec2 efxOffsetUvScale;
+uniform vec2 efxOffsetUvOffset;
+varying vec2 vEfxOffsetUv;`,
+      )
+      .replace(
+        "#include <uv_vertex>",
+        `#include <uv_vertex>
+vEfxOffsetUv = uv * efxOffsetUvScale + efxOffsetUvOffset;`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+uniform sampler2D efxUvOffsetMap;
+uniform float efxHasUvOffsetMap;
+uniform vec2 efxDistortion;
+uniform float efxColorBorder;
+uniform float efxOffsetBorder;
+uniform float efxAddMix;
+varying vec2 vEfxOffsetUv;
+float efxBorderAlpha( vec2 uvValue, float enabled ) {
+  if ( enabled < 0.5 ) return 1.0;
+  vec2 inside = step( vec2( 0.0 ), uvValue ) * step( uvValue, vec2( 1.0 ) );
+  return inside.x * inside.y;
+}`,
+      )
+      .replace(
+        "#include <map_fragment>",
+        `#ifdef USE_MAP
+  vec2 efxColorUv = vMapUv;
+  float efxOffsetAlpha = 1.0;
+  if ( efxHasUvOffsetMap > 0.5 ) {
+    vec4 efxOffsetTexel = texture2D( efxUvOffsetMap, vEfxOffsetUv );
+    efxOffsetAlpha = efxOffsetTexel.a * efxBorderAlpha( vEfxOffsetUv, efxOffsetBorder );
+    efxColorUv += efxOffsetTexel.a * ( efxOffsetTexel.rg - 0.5 ) * efxDistortion;
+  }
+  diffuseColor *= texture2D( map, efxColorUv );
+  diffuseColor.a *= efxOffsetAlpha * efxBorderAlpha( efxColorUv, efxColorBorder );
+  // efxDrawModelAddMixPS: premultiply and drop alpha once the texel is bright.
+  if ( efxAddMix > 0.5 ) {
+    float efxBright = step( 0.8, max( diffuseColor.r, max( diffuseColor.g, diffuseColor.b ) ) );
+    diffuseColor.rgb *= diffuseColor.a;
+    diffuseColor.a = mix( diffuseColor.a, 0.0, efxBright );
+  }
+#endif`,
+      );
+  };
+  return uniforms;
+}
 
 type SsbhModelCanvasProps = {
   draws: BuiltMeshDraw[];
@@ -1249,6 +1353,7 @@ const Scene = memo(function Scene({
     depthWrite: boolean;
     depthTest: boolean;
     blending: Blending;
+    side: Side;
   }>());
   const hostTintScratchRef = useRef(new Color());
   const hostEffectMaterialOverridesRef = useRef(new Map<Mesh, {
@@ -1256,6 +1361,7 @@ const Scene = memo(function Scene({
     overrides: MeshBasicMaterial[];
   }>());
   const hostEffectTexturesRef = useRef(new Map<string, { source: Texture; texture: Texture }>());
+  const efxColorExUniformsRef = useRef(new Map<MeshBasicMaterial, EfxColorExUniforms>());
   /**
    * SkinnedMesh uses bindMode "detached": skinning is pure bone.matrixWorld.
    * Attach offsets must live on a skeleton parent (not the mesh group), or the
@@ -1730,6 +1836,16 @@ const Scene = memo(function Scene({
         cached.texture.updateMatrix();
         effectTexture = cached.texture;
       }
+      // The offset map keeps the source texture: its UV set is applied in the injected
+      // shader, not through three's per-texture matrix.
+      const effectUvOffsetTexture = hostTransform?.effectUvOffsetTexture ?? null;
+      const effectDistortion = hostTransform?.effectDistortion ?? [0, 0];
+      const effectOffsetUvScale = hostTransform?.effectOffsetUvScale ?? [1, 1];
+      const effectOffsetUvOffset = hostTransform?.effectOffsetUvOffset ?? [0, 0];
+      const effectBaseLevel = hostTransform?.effectFullBrightness ? 1 : 0.5;
+      const effectAddMix = hostTransform?.effectAddMix ? 1 : 0;
+      const effectColorBorder = hostTransform?.effectColorBorder ? 1 : 0;
+      const effectOffsetBorder = hostTransform?.effectOffsetBorder ? 1 : 0;
       group.visible = hostTransform?.visible ?? true;
       if (hostTransform) {
         group.matrixAutoUpdate = true;
@@ -1756,19 +1872,23 @@ const Scene = memo(function Scene({
           if (!override) {
             const original = object.material;
             const originals = Array.isArray(original) ? original : [original];
-            const overrides = originals.map((material) => new MeshBasicMaterial({
-              alphaTest: 0.01,
-              blending: material.blending,
-              color: new Color(0.5, 0.5, 0.5),
-              depthTest: material.depthTest,
-              depthWrite: material.depthWrite,
-              map: effectTexture,
-              opacity: material.opacity,
-              side: material.side,
-              toneMapped: false,
-              transparent: true,
-              vertexColors: Boolean(object.geometry.getAttribute("color")),
-            }));
+            const overrides = originals.map((material) => {
+              const override = new MeshBasicMaterial({
+                alphaTest: 0.01,
+                blending: material.blending,
+                color: new Color(effectBaseLevel, effectBaseLevel, effectBaseLevel),
+                depthTest: material.depthTest,
+                depthWrite: material.depthWrite,
+                map: effectTexture,
+                opacity: material.opacity,
+                side: material.side,
+                toneMapped: false,
+                transparent: true,
+                vertexColors: Boolean(object.geometry.getAttribute("color")),
+              });
+              efxColorExUniformsRef.current.set(override, attachEfxColorExUniforms(override));
+              return override;
+            });
             override = { original, overrides };
             hostEffectMaterialOverridesRef.current.set(object, override);
             object.material = Array.isArray(original) ? overrides : overrides[0]!;
@@ -1778,12 +1898,27 @@ const Scene = memo(function Scene({
               material.map = effectTexture;
               material.needsUpdate = true;
             }
+            material.color.setScalar(effectBaseLevel);
+            const uniforms = efxColorExUniformsRef.current.get(material);
+            if (uniforms) {
+              uniforms.efxUvOffsetMap.value = effectUvOffsetTexture;
+              uniforms.efxHasUvOffsetMap.value = effectUvOffsetTexture ? 1 : 0;
+              uniforms.efxDistortion.value = [effectDistortion[0], effectDistortion[1]];
+              uniforms.efxOffsetUvScale.value = [effectOffsetUvScale[0], effectOffsetUvScale[1]];
+              uniforms.efxOffsetUvOffset.value = [effectOffsetUvOffset[0], effectOffsetUvOffset[1]];
+              uniforms.efxColorBorder.value = effectColorBorder;
+              uniforms.efxOffsetBorder.value = effectOffsetBorder;
+              uniforms.efxAddMix.value = effectAddMix;
+            }
           }
           materials = override.overrides;
         } else {
           if (currentOverride) {
             object.material = currentOverride.original;
-            for (const material of currentOverride.overrides) material.dispose();
+            for (const material of currentOverride.overrides) {
+              efxColorExUniformsRef.current.delete(material);
+              material.dispose();
+            }
             hostEffectMaterialOverridesRef.current.delete(object);
           }
           materials = Array.isArray(object.material) ? object.material : [object.material];
@@ -1799,6 +1934,7 @@ const Scene = memo(function Scene({
               depthWrite: material.depthWrite,
               depthTest: material.depthTest,
               blending: material.blending,
+              side: material.side,
             };
             hostMaterialDefaultsRef.current.set(material, defaults);
           }
@@ -1809,6 +1945,7 @@ const Scene = memo(function Scene({
             material.depthWrite,
             material.depthTest,
             material.blending,
+            material.side,
           ] as const;
           if (hostTransform) {
             const color = hostTransform.color ?? [1, 1, 1, 1];
@@ -1822,6 +1959,7 @@ const Scene = memo(function Scene({
             material.depthWrite = hostTransform.depthWrite ?? defaults.depthWrite;
             material.depthTest = hostTransform.depthTest ?? defaults.depthTest;
             material.blending = hostTransform.blending ?? defaults.blending;
+            material.side = hostTransform.side ?? defaults.side;
           } else {
             if (tintable.color && defaults.color) tintable.color.copy(defaults.color);
             tintable.opacity = defaults.opacity;

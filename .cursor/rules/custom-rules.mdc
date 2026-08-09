@@ -16,6 +16,9 @@ Before making code, asset, documentation, or command changes:
 2. Run one scoped filename search for related `docs/` Markdown unless the exact
    file is already known or the task is rules-only.
 3. Read only the most relevant specification before editing.
+4. If `AGENTS.md` has an **Active Research Bootstrap** whose triggers match the
+   task, read that bootstrap before any discovery. Reuse its settled evidence;
+   repeat research only when one of its explicit restart conditions is met.
 
 When working on NUANMB / motion FBX import or homemade animation conversion,
 also read `docs/nuanmb-ath-helper-bone-policy.md`: **`ATH_*` helper bones must

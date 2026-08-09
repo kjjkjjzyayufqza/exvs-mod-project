@@ -5,6 +5,8 @@ use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
+use crate::format::unit_model_models::normalize_texture_filename;
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UnitModelTextureEntry {
@@ -374,8 +376,30 @@ fn build_inventory(model_root: &Path, doc: StructureDocument) -> UnitModelTextur
             } else {
                 None
             };
-            let file_key = normalize_filename_key(&filename);
-            let referenced_by = numatb_refs.get(&file_key).cloned().unwrap_or_default();
+            // A numatb reference is resolved against the name stored in the nutexb footer,
+            // never against the file name: fhm2d records carry no names of their own. Fall
+            // back to the file name only when the footer could not be read.
+            let file_key = info
+                .as_ref()
+                .map(|i| normalize_texture_filename(&i.name))
+                .unwrap_or_else(|| normalize_texture_filename(&filename));
+            let mut referenced_by = numatb_refs.get(&file_key).cloned().unwrap_or_default();
+            // A reference that differs only in case does not resolve in game, but it still
+            // pins the texture here: listing it as unreferenced would invite the operator to
+            // delete the very file the numatb was meant to use.
+            for (reference, labels) in &numatb_refs {
+                if *reference == file_key || !reference.eq_ignore_ascii_case(&file_key) {
+                    continue;
+                }
+                warnings.push(format!(
+                    "Texture '{}' stores the name '{file_key}' but {} reference it as '{reference}'. The game matches texture names byte for byte, so that reference does not resolve and the model will crash the game when it is drawn.",
+                    filename,
+                    labels.join(", ")
+                ));
+                referenced_by.extend(labels.iter().cloned());
+            }
+            referenced_by.sort();
+            referenced_by.dedup();
             let structure_ref_count = *structure_refs.get(&entry.file_index).unwrap_or(&0);
             let numatb_reference_count = referenced_by.len();
             UnitModelTextureEntry {
@@ -509,20 +533,10 @@ fn push_numatb_ref(
     seen_for_file: &mut HashSet<String>,
     out: &mut HashMap<String, Vec<String>>,
 ) {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return;
-    }
-    let mut name = trimmed
-        .replace('\\', "/")
-        .split('/')
-        .last()
-        .unwrap_or(trimmed)
-        .to_string();
-    if !name.to_ascii_lowercase().ends_with(".nutexb") {
-        name.push_str(".nutexb");
-    }
-    let key = normalize_filename_key(&name);
+    // Key on the exact spelling. The game resolves texture references byte for byte, so a
+    // reference that differs only in case points at nothing and has to stay distinguishable
+    // from one that resolves.
+    let key = normalize_texture_filename(raw);
     if key.is_empty() || key == ".nutexb" {
         return;
     }

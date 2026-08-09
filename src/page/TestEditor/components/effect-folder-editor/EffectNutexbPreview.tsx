@@ -78,6 +78,22 @@ export async function loadNutexbPreview(path: string, size: PreviewSize): Promis
   return task;
 }
 
+/** Drop cached previews for a path so a replace/re-encode is shown immediately. */
+export function invalidateEffectNutexbPreviewCache(path: string): void {
+  const normalized = path.trim().replace(/\\/g, "/").toLowerCase();
+  if (!normalized) return;
+  for (const key of [...cache.keys()]) {
+    if (key.startsWith(`${normalized}::`)) {
+      cache.delete(key);
+    }
+  }
+  for (const key of [...inflight.keys()]) {
+    if (key.startsWith(`${normalized}::`)) {
+      inflight.delete(key);
+    }
+  }
+}
+
 export function EffectNutexbThumbnail({
   path,
   label,
@@ -130,10 +146,13 @@ export function EffectNutexbPreview({
   path,
   label,
   className,
+  revision = 0,
 }: {
   path: string;
   label: string;
   className?: string;
+  /** Bump after in-place replace/export-side edits so the preview reloads. */
+  revision?: number;
 }) {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [src, setSrc] = useState<string | null>(null);
@@ -150,7 +169,7 @@ export function EffectNutexbPreview({
     return () => {
       cancelled = true;
     };
-  }, [path]);
+  }, [path, revision]);
 
   return (
     <div

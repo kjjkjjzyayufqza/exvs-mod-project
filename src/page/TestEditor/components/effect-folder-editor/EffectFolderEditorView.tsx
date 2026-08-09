@@ -441,6 +441,14 @@ export default function EffectFolderEditorView({
                         validation={editor.validation}
                         previewSuspended={!isActive}
                         onOpenAsEffectProject={onOpenAsEffectProject}
+                        onEfxbnWritten={() => {
+                          editor.markMutated();
+                          void editor.reload({ silent: true, preserveSelection: true });
+                        }}
+                        onStructureMutated={() => {
+                          editor.markMutated();
+                          void editor.reload({ silent: true, preserveSelection: true });
+                        }}
                       />
                     </ResizablePanel>
                   </ResizablePanelGroup>

@@ -1,4 +1,6 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { confirm } from "@tauri-apps/plugin-dialog";
+import { toast } from "sonner";
 
 import {
   Boxes,
@@ -11,9 +13,11 @@ import {
   FolderOpen,
   Image as ImageIcon,
   Layers,
+  Loader2,
   Pencil,
   ShieldHalf,
   Sparkles,
+  Wrench,
 } from "lucide-react";
 
 import { CopyInfoToAiButton } from "@/components/CopyInfoToAiButton";
@@ -24,10 +28,15 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { ssbhEditorKindForPath } from "@/components/ssbh-model-preview/useSsbhFileEditorSessions";
 
+import {
+  analyzeUnitModelNumatbProfiles,
+  fixUnitModelNumatbProfiles,
+} from "../utils/unitModelNumatbProfileFixService";
 import {
   buildUnitModelStructureTree,
   type UnitModelFolderRole,
@@ -39,6 +48,9 @@ interface UnitModelStructureTreeViewProps {
   /** Parsed `_structure.json` object. `null` while no model is loaded. */
   structureJson: unknown | null;
   structureJsonPath?: string | null;
+  modelRoot?: string | null;
+  /** Reload structure JSON after disk/structure mutations. */
+  onMutated?: () => void;
   selectedFileIndex?: number | null;
   onSelectNode?: (node: UnitModelTreeNode) => void;
   /** Open the editor for an editable item node (double-click / context menu). */
@@ -265,6 +277,8 @@ function TreeRow({
 export function UnitModelStructureTreeView({
   structureJson,
   structureJsonPath,
+  modelRoot,
+  onMutated,
   selectedFileIndex,
   onSelectNode,
   onOpenEditor,
@@ -287,6 +301,7 @@ export function UnitModelStructureTreeView({
   const [expanded, setExpanded] = useState<Set<string>>(() =>
     parsed.tree ? defaultExpanded(parsed.tree.root) : new Set(),
   );
+  const [profileFixBusy, setProfileFixBusy] = useState(false);
 
   const toggle = (id: string) =>
     setExpanded((prev) => {
@@ -295,6 +310,77 @@ export function UnitModelStructureTreeView({
       else next.add(id);
       return next;
     });
+
+  const handleAutoFixNumatbProfiles = useCallback(async () => {
+    if (!modelRoot?.trim() || !structureJsonPath?.trim()) {
+      toast.error("No unit model folder loaded");
+      return;
+    }
+    if (profileFixBusy) return;
+    setProfileFixBusy(true);
+    try {
+      const analysis = await analyzeUnitModelNumatbProfiles({
+        modelRoot: modelRoot.trim(),
+        structureJsonPath: structureJsonPath.trim(),
+      });
+      if (analysis.fixed === 0) {
+        toast.success("NUMATB profiles look correct", {
+          description: `Scanned ${analysis.scanned} numatb file(s); no rename needed.`,
+        });
+        for (const warning of analysis.warnings.slice(0, 3)) {
+          toast.warning("Profile scan warning", { description: warning });
+        }
+        return;
+      }
+
+      const previewLines = analysis.fixes
+        .slice(0, 8)
+        .map(
+          (fix) =>
+            `${fix.oldFilename} → ${fix.newFilename} (${fix.contentProfile})`,
+        );
+      const more =
+        analysis.fixes.length > 8 ? `\n…and ${analysis.fixes.length - 8} more` : "";
+      const ok = await confirm(
+        [
+          `Detected ${analysis.fixes.length} numatb file(s) to rename so basenames match the game .numdlb list.`,
+          "",
+          "Content rule: non-empty shader_label → nust slot; empty → maya slot.",
+          "Target names come from sibling .numdlb material paths (basename only).",
+          "",
+          "Will NOT modify any .numdlb. Only renames .numatb on disk + structure JSON.",
+          "",
+          ...previewLines,
+          more,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        {
+          title: "Auto-fix NUMATB names (numdlb untouched)",
+          kind: "warning",
+        },
+      );
+      if (!ok) return;
+
+      const result = await fixUnitModelNumatbProfiles({
+        modelRoot: modelRoot.trim(),
+        structureJsonPath: structureJsonPath.trim(),
+      });
+      toast.success(`Fixed ${result.fixed} numatb profile name(s)`, {
+        description: `Scanned ${result.scanned}; skipped ${result.skipped}.`,
+      });
+      for (const warning of result.warnings.slice(0, 3)) {
+        toast.warning("Profile fix warning", { description: warning });
+      }
+      onMutated?.();
+    } catch (error) {
+      toast.error("Failed to auto-fix NUMATB profiles", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setProfileFixBusy(false);
+    }
+  }, [modelRoot, structureJsonPath, profileFixBusy, onMutated]);
 
   return (
     <div className={cn("flex h-full min-h-0 flex-col border-r bg-card/40", className)}>
@@ -311,15 +397,33 @@ export function UnitModelStructureTreeView({
           )}
         </div>
         {parsed.tree ? (
-          <CopyInfoToAiButton
-            label="Copy structure to AI"
-            buildPayload={() => ({
-              kind: "unit-model-structure-tree",
-              scope: "structure-tree",
-              note: structureJsonPath ? `from ${structureJsonPath}` : undefined,
-              data: { summary: parsed.tree?.summary, structureJson },
-            })}
-          />
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1 px-2 text-[11px]"
+              disabled={profileFixBusy || !modelRoot || !structureJsonPath}
+              title="Detect maya/nust from shader_label and rename mismatched .numatb + structure JSON"
+              onClick={() => void handleAutoFixNumatbProfiles()}
+            >
+              {profileFixBusy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Wrench className="h-3.5 w-3.5" />
+              )}
+              Auto-fix profiles
+            </Button>
+            <CopyInfoToAiButton
+              label="Copy structure to AI"
+              buildPayload={() => ({
+                kind: "unit-model-structure-tree",
+                scope: "structure-tree",
+                note: structureJsonPath ? `from ${structureJsonPath}` : undefined,
+                data: { summary: parsed.tree?.summary, structureJson },
+              })}
+            />
+          </div>
         ) : null}
       </div>
 

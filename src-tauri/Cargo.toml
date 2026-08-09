@@ -146,6 +146,10 @@ path = "tests/effect_folder_real_data_test.rs"
 name = "effect_model_preview_real_data_test"
 path = "tests/effect_model_preview_real_data_test.rs"
 
+[[test]]
+name = "ssbh_motion_real_data_test"
+path = "tests/ssbh_motion_real_data_test.rs"
+
 # Motion pipeline harnesses — require `--features motion-tests`.
 [[test]]
 name = "ssbh_motion_interchange_test"
@@ -341,4 +345,10 @@ required-features = ["nuanmb-examples"]
 name = "nuanmb_dump_rot_hdr"
 path = "examples/nuanmb_dump_rot_hdr.rs"
 required-features = ["nuanmb-examples"]
+
+
+[[bin]]
+name = "efxbn_color_dump"
+path = "src/bin/efxbn_color_dump.rs"
+test = false
 

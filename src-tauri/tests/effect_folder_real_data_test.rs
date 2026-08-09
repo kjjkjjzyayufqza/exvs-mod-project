@@ -577,3 +577,238 @@ fn normalizes_167_efxbn_blocks_without_touching_authored_values() {
     assert_eq!(summary.effects[1].effect_type, 1);
     assert_eq!(summary.effects[0].action_flags, 1);
 }
+
+/// `drawSchemeFlag` is the runtime word at element `+0x390` that `sub_140188E30` uses to pick
+/// the pixel-shader variant. It never appears in the file, so the parser has to synthesize it.
+///
+/// Both drawable blocks in `167.efxbn` bind a UV-offset parameter and enable the depth test,
+/// which is `0x80 | 0x10`. `0x80` alone puts them on the ColorEx variant (mask `0x280`).
+#[test]
+fn computes_draw_scheme_flag_for_real_167_blocks() {
+    let source_path = Path::new(SOURCE_ROOT)
+        .join("0")
+        .join("0")
+        .join(SELECTED_FILE);
+    if !source_path.is_file() {
+        eprintln!("SKIP: real effect fixture is unavailable: {SOURCE_ROOT}");
+        return;
+    }
+
+    let summary =
+        app_lib::format::effect_folder::parse_efxbn_file(source_path.to_string_lossy().as_ref())
+            .expect("parse 167.efxbn");
+    let schemes: Vec<_> = summary
+        .effects
+        .iter()
+        .map(|effect| effect.runtime.as_ref().expect("runtime").draw_scheme)
+        .collect();
+
+    // The loader only writes the enable byte for authored types 1/3/5, so the two type-9
+    // wrappers never get a draw scheme at all.
+    assert_eq!(
+        schemes.iter().map(|s| s.flag).collect::<Vec<_>>(),
+        vec![0x0, 0x90, 0x0, 0x90]
+    );
+    // Neither block is a model, so no bit depends on the mesh.
+    assert!(schemes.iter().all(|s| s.mesh_multi_uv_flag == 0));
+}
+
+/// A pack with real model blocks pins the gate and the mesh-dependent group.
+#[test]
+fn draw_scheme_flag_gates_on_drawable_types_and_reports_the_mesh_multi_uv_group() {
+    let source_path = Path::new(r"E:\XB\mod\006effect\001gundam_002chrgel_001\0\0\14.efxbn");
+    if !source_path.is_file() {
+        eprintln!(
+            "SKIP: real effect fixture is unavailable: {}",
+            source_path.display()
+        );
+        return;
+    }
+
+    let summary =
+        app_lib::format::effect_folder::parse_efxbn_file(source_path.to_string_lossy().as_ref())
+            .expect("parse 14.efxbn");
+    let scheme = |index: usize| {
+        summary.effects[index]
+            .runtime
+            .as_ref()
+            .expect("runtime")
+            .draw_scheme
+    };
+
+    // Container types 6 and 9 are never enabled.
+    assert_eq!(summary.effects[0].effect_type, 6);
+    assert_eq!(scheme(0).flag, 0);
+    assert_eq!(summary.effects[1].effect_type, 9);
+    assert_eq!(scheme(1).flag, 0);
+
+    // Model blocks always carry the multi-UV candidate bit; whether it applies depends on the
+    // mesh, which the parser does not read.
+    assert_eq!(summary.effects[2].effect_type, 3);
+    assert_eq!(scheme(2).flag, 0x411);
+    assert_eq!(scheme(2).mesh_multi_uv_flag, 0x1000);
+
+    // A billboard with only the depth test set.
+    assert_eq!(summary.effects[6].effect_type, 1);
+    assert_eq!(scheme(6).flag, 0x10);
+    assert_eq!(scheme(6).mesh_multi_uv_flag, 0);
+
+    // A model block that also binds a UV-offset parameter.
+    assert_eq!(scheme(8).flag, 0x491);
+    assert_eq!(scheme(8).mesh_multi_uv_flag, 0x1000);
+}
+
+/// Every EFXBN under a root, in a stable order, for corpus-wide sweeps.
+fn collect_efxbn_paths(root: &Path, out: &mut Vec<std::path::PathBuf>) {
+    let Ok(entries) = fs::read_dir(root) else {
+        return;
+    };
+    let mut children: Vec<std::path::PathBuf> = entries
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .collect();
+    children.sort();
+    for child in children {
+        if child.is_dir() {
+            collect_efxbn_paths(&child, out);
+        } else if child
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("efxbn"))
+        {
+            out.push(child);
+        }
+    }
+}
+
+/// F1a: `build_efxbn_bytes` must reproduce an unmodified file byte for byte.
+///
+/// Every one of the 880 bytes in a block and the 184 bytes in a model control is covered by a
+/// typed field, so the builder reconstructs rather than copying a raw image. A mismatch here
+/// means a field is unparsed, which would silently drop authored data on the first real edit.
+#[test]
+fn build_efxbn_bytes_round_trips_a_real_corpus_sample() {
+    const SAMPLE_TARGET: usize = 240;
+    let mut paths = Vec::new();
+    for root in [r"E:\XB\mod\006effect", r"E:\XB\解包"] {
+        collect_efxbn_paths(Path::new(root), &mut paths);
+    }
+    if paths.len() < SAMPLE_TARGET {
+        eprintln!(
+            "SKIP: only {} real .efxbn available, need {SAMPLE_TARGET}",
+            paths.len()
+        );
+        return;
+    }
+
+    // Spread the sample across the whole tree instead of taking one pack's worth.
+    let stride = paths.len() / SAMPLE_TARGET;
+    let sample: Vec<&std::path::PathBuf> = paths.iter().step_by(stride.max(1)).collect();
+    let mut checked = 0usize;
+    let mut mismatches = Vec::new();
+    for path in &sample {
+        let text = path.to_string_lossy().to_string();
+        let Ok(original) = fs::read(path.as_path()) else {
+            continue;
+        };
+        let Ok(summary) = app_lib::format::effect_folder::parse_efxbn_file(&text) else {
+            continue;
+        };
+        let rebuilt = app_lib::format::effect_folder::build_efxbn_bytes(&summary)
+            .unwrap_or_else(|error| panic!("build {text}: {error}"));
+        checked += 1;
+        if rebuilt != original {
+            let first = rebuilt
+                .iter()
+                .zip(original.iter())
+                .position(|(a, b)| a != b)
+                .map(|offset| format!("0x{offset:X}"))
+                .unwrap_or_else(|| "length".to_string());
+            mismatches.push(format!(
+                "{text}: first difference at {first} (built {} bytes, original {} bytes)",
+                rebuilt.len(),
+                original.len()
+            ));
+        }
+    }
+
+    assert!(
+        checked >= SAMPLE_TARGET,
+        "expected at least {SAMPLE_TARGET} parsed samples, got {checked}"
+    );
+    assert!(
+        mismatches.is_empty(),
+        "{} of {checked} files did not round-trip:\n{}",
+        mismatches.len(),
+        mismatches
+            .iter()
+            .take(5)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}
+
+/// K3: corpus-wide claims this project reasons from, promoted to a test so they cannot rot.
+///
+/// Each one is load-bearing somewhere in the preview: no type 2 (the strip test used to key on
+/// it), no `blendState == 3` (its descriptor preset was never resolved, so the renderer rejects
+/// it), `cullingType` inside the engine's three-entry cull table, and no structural dangling
+/// reference in any shipped file.
+#[test]
+fn shipped_corpus_holds_the_invariants_the_preview_relies_on() {
+    let mut paths = Vec::new();
+    for root in [r"E:\XB\mod\006effect", r"E:\XB\解包"] {
+        collect_efxbn_paths(Path::new(root), &mut paths);
+    }
+    if paths.is_empty() {
+        eprintln!("SKIP: no real .efxbn tree is available");
+        return;
+    }
+
+    let mut files = 0usize;
+    let mut blocks = 0usize;
+    let mut violations: Vec<String> = Vec::new();
+    for path in &paths {
+        let text = path.to_string_lossy().to_string();
+        let Ok(summary) = app_lib::format::effect_folder::parse_efxbn_file(&text) else {
+            continue;
+        };
+        files += 1;
+        blocks += summary.effects.len();
+        for effect in &summary.effects {
+            if effect.effect_type == 2 {
+                violations.push(format!("{text} block {} is element type 2", effect.index));
+            }
+            if effect.blend_state == 3 {
+                violations.push(format!("{text} block {} has blendState 3", effect.index));
+            }
+            if effect.culling_type > 2 {
+                violations.push(format!(
+                    "{text} block {} has cullingType {}",
+                    effect.index, effect.culling_type
+                ));
+            }
+        }
+        for problem in app_lib::format::effect_folder::validate_efxbn_summary(&summary) {
+            violations.push(format!("{text}: {problem}"));
+        }
+        if violations.len() > 20 {
+            break;
+        }
+    }
+
+    assert!(
+        files > 1_000,
+        "expected a real corpus, parsed only {files} files"
+    );
+    assert!(
+        violations.is_empty(),
+        "{} invariant violations across {files} files / {blocks} blocks:\n{}",
+        violations.len(),
+        violations
+            .iter()
+            .take(10)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}

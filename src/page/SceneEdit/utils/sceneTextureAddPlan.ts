@@ -184,17 +184,50 @@ export async function analyzeTextureAddCandidates(
   return result;
 }
 
+/**
+ * True when a flagged duplicate can be opted into as a replace (overwrite the
+ * existing texture). Batch-internal collisions cannot replace — only one file
+ * in the batch can own that name.
+ */
+export function isReplaceableDuplicate(candidate: AnalyzedAddCandidate): boolean {
+  return (
+    candidate.duplicate &&
+    candidate.duplicateReason !== null &&
+    candidate.duplicateReason !== "batch-duplicate"
+  );
+}
+
+/**
+ * Resolve the manager entry that a replaceable duplicate would overwrite.
+ * Matches by the display filename stored in `duplicateOf` (the existing entry's
+ * filename), scoped to model textures only.
+ */
+export function findTextureEntryForDuplicate(
+  entries: readonly TextureManagerEntry[],
+  candidate: AnalyzedAddCandidate,
+): TextureManagerEntry | null {
+  if (!isReplaceableDuplicate(candidate) || !candidate.duplicateOf) return null;
+  const key = normalizeTextureNameKey(candidate.duplicateOf);
+  if (!key) return null;
+  return (
+    entries.find(
+      (entry) =>
+        entry.scope === "model" && normalizeTextureNameKey(entry.filename) === key,
+    ) ?? null
+  );
+}
+
 /** Human-readable explanation for a duplicate candidate. */
 export function describeDuplicate(candidate: AnalyzedAddCandidate): string {
   if (!candidate.duplicate) return "";
   const target = candidate.duplicateOf ?? "an existing texture";
   switch (candidate.duplicateReason) {
     case "internal-name":
-      return `Internal name matches ${target}`;
+      return `Internal name matches ${target} — check to replace`;
     case "batch-duplicate":
       return `Duplicate of ${target} in this batch`;
     case "filename":
     default:
-      return `Same name as ${target}`;
+      return `Same name as ${target} — check to replace`;
   }
 }

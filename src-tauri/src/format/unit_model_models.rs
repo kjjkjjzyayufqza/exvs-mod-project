@@ -470,13 +470,23 @@ fn ensure_texture_pool_entry(
         return Ok((file_index, changed));
     }
 
-    let target_path = find_texture_source_path(model_root, &key).ok_or_else(|| {
-        format!(
-            "Referenced texture '{}' was not found in SubFileData or on disk under {}",
-            key,
-            model_root.display()
-        )
-    })?;
+    let target_path =
+        find_texture_source_path(model_root, &key).ok_or_else(|| {
+            match texture_pool
+                .keys()
+                .find(|name| name.eq_ignore_ascii_case(&key))
+            {
+                Some(actual) => format!(
+                    "Referenced texture '{key}' does not match the packaged texture '{actual}'. \
+The game matches texture names byte for byte, so the two spellings must be identical."
+                ),
+                None => format!(
+                    "Referenced texture '{}' was not found in SubFileData or on disk under {}",
+                    key,
+                    model_root.display()
+                ),
+            }
+        })?;
     *next_file_index += 1;
     let file_index = *next_file_index;
     sub_file_data.push(json!({
@@ -525,15 +535,32 @@ fn maybe_repair_texture_pool_path(
 }
 
 fn find_texture_source_path(model_root: &Path, filename: &str) -> Option<PathBuf> {
-    let direct = model_root.join("textures").join(filename);
-    if direct.is_file() {
-        return Some(direct);
-    }
-    let legacy = model_root.join(filename);
-    if legacy.is_file() {
-        return Some(legacy);
+    for candidate in [
+        model_root.join("textures").join(filename),
+        model_root.join(filename),
+    ] {
+        if candidate.is_file() && on_disk_name_matches(&candidate) {
+            return Some(candidate);
+        }
     }
     None
+}
+
+/// Whether the file really is spelled the way it was asked for.
+///
+/// Windows resolves paths case-insensitively, so `is_file()` alone accepts
+/// `wep_2004_aomap.nutexb` for a file named `Wep_2004_AOMap.nutexb` and the caller would
+/// then register the texture under a spelling the game cannot resolve.
+fn on_disk_name_matches(candidate: &Path) -> bool {
+    let Some(requested) = candidate.file_name() else {
+        return false;
+    };
+    match fs::canonicalize(candidate) {
+        Ok(real) => real.file_name() == Some(requested),
+        // With no canonical path there is nothing to compare against; do not reject a
+        // texture that is demonstrably on disk.
+        Err(_) => true,
+    }
 }
 
 fn import_texture_into_pool(
@@ -619,22 +646,29 @@ fn file_url_for_target(json_dir: &Path, target: &Path) -> String {
     format!(".\\{}", rel.to_string_lossy().replace('/', "\\"))
 }
 
-fn normalize_texture_filename(raw: &str) -> String {
+/// Basename with a canonical lowercase `.nutexb` extension, stem case preserved.
+///
+/// This doubles as the texture pool key and as the name a numatb reference is resolved
+/// against, so the stem has to keep its exact case. The game compares texture names byte
+/// for byte, and folding case here would bind a reference to a texture the game can never
+/// find, producing an archive that looks consistent and crashes on load.
+pub(crate) fn normalize_texture_filename(raw: &str) -> String {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return String::new();
     }
-    let mut filename = trimmed
-        .replace('/', "\\")
+    let cleaned = trimmed.replace('/', "\\");
+    let filename = cleaned
         .split('\\')
         .filter(|segment| !segment.is_empty() && *segment != ".")
         .last()
-        .unwrap_or(trimmed)
-        .to_string();
-    if !filename.to_ascii_lowercase().ends_with(".nutexb") {
-        filename.push_str(".nutexb");
+        .unwrap_or(trimmed);
+    match filename.rfind('.') {
+        Some(idx) if idx > 0 && filename[idx..].eq_ignore_ascii_case(".nutexb") => {
+            format!("{}.nutexb", &filename[..idx])
+        }
+        _ => format!("{filename}.nutexb"),
     }
-    filename.to_ascii_lowercase()
 }
 
 fn reindex_sub_file_data_values(entries: &mut [Value]) {
@@ -1177,7 +1211,11 @@ pub fn preview_unit_model_model_replacement(
     let incoming_reused_indices: HashSet<i32> = textures
         .reused_from_pool
         .iter()
-        .filter_map(|name| texture_index.get(&name.to_ascii_lowercase()).copied())
+        .filter_map(|name| {
+            texture_index
+                .get(&normalize_texture_filename(name))
+                .copied()
+        })
         .collect();
     let orphaned_after_replace = target_texture_refs
         .iter()
@@ -1281,7 +1319,7 @@ fn build_source_validation_report(
     let mut seen = HashSet::new();
     for numatb in &source.numatbs {
         for reference in numatb_texture_refs(numatb)? {
-            if seen.insert(reference.to_ascii_lowercase()) {
+            if seen.insert(reference.clone()) {
                 texture_references.push(reference);
             }
         }
@@ -1341,24 +1379,13 @@ fn numatb_texture_refs(path: &Path) -> Result<Vec<String>, String> {
             .map(|t| t.data.as_str())
             .chain(entry.textures2.iter().map(|t| t.data.as_str()))
         {
-            let trimmed = tex.trim();
-            if trimmed.is_empty() {
+            let name = normalize_texture_filename(tex);
+            if name.is_empty() || name == ".nutexb" {
                 continue;
             }
-            let mut name = trimmed
-                .replace('\\', "/")
-                .split('/')
-                .last()
-                .unwrap_or(trimmed)
-                .to_string();
-            if !name.to_ascii_lowercase().ends_with(".nutexb") {
-                name.push_str(".nutexb");
-            }
-            let key = name.to_ascii_lowercase();
-            if key == ".nutexb" {
-                continue;
-            }
-            if seen.insert(key) {
+            // Deduplicate on the exact name: references that differ only in case are two
+            // distinct names to the game, so collapsing them would drop one of them.
+            if seen.insert(name.clone()) {
                 refs.push(name);
             }
         }
@@ -2507,7 +2534,7 @@ fn texture_index_by_name(sub_file_data: &[Value]) -> HashMap<String, i32> {
         .filter_map(|entry| {
             let idx = entry.get("fileIndex").and_then(Value::as_i64)? as i32;
             let url = entry.get("fileUrl").and_then(Value::as_str)?;
-            Some((file_basename(url).to_ascii_lowercase(), idx))
+            Some((normalize_texture_filename(url), idx))
         })
         .collect()
 }
@@ -2521,7 +2548,7 @@ fn build_replace_texture_plan(
     let mut reused_from_pool = Vec::new();
     let mut missing = Vec::new();
     for reference in references {
-        let key = reference.to_ascii_lowercase();
+        let key = normalize_texture_filename(reference);
         if texture_index.contains_key(&key) {
             reused_from_pool.push(reference.clone());
         } else if source_path.join(reference).is_file() {

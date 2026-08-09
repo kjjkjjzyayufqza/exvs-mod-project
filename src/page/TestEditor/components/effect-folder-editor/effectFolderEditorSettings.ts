@@ -4,6 +4,10 @@ import type { EffectInventoryCategory } from "./effectFolderEditorUtils";
 
 export const EFFECT_FOLDER_EDITOR_STORE_KEY = "testEditor.effectFolder.v1";
 
+/** Tauri store keys under `dialogDefaultPath` — effect-folder texture dialogs. */
+export const EFFECT_FOLDER_REPLACE_TEXTURE_DIALOG_PATH_KEY = "testEditor.effectFolder.replaceTexture";
+export const EFFECT_FOLDER_EXPORT_TEXTURE_DIALOG_PATH_KEY = "testEditor.effectFolder.exportTexture";
+
 export type EffectFolderPackSelectionState = {
   focusedKey: string | null;
   selectedKeys: string[];

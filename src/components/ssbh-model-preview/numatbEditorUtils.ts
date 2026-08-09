@@ -73,12 +73,39 @@ export function isNumatbBundleDirty(
   );
 }
 
-/** Heuristic: __maya__ in basename selects Maya profile; otherwise Nust. */
+/**
+ * Content-based profile identity (preferred when matl JSON is available).
+ *
+ * EXVS authoring convention:
+ * - **Nust** materials carry a non-empty `shader_label` (e.g. `vsngCharaBasic`).
+ * - **Maya** materials leave `shader_label` empty.
+ *
+ * Rule: any entry with a non-empty (trimmed) `shader_label` → `"nust"`;
+ * all empty / no entries → `"maya"`.
+ */
+export function detectNumatbProfileFromMatl(matl: MatlDataJson): NumatbProfileKind {
+  const hasShaderLabel = matl.entries.some(
+    (entry) => (entry.shader_label ?? "").trim().length > 0,
+  );
+  return hasShaderLabel ? "nust" : "maya";
+}
+
+/**
+ * Filename heuristic when only a path/basename is known.
+ * Prefer {@link detectNumatbProfileFromMatl} whenever matl content is available.
+ *
+ * - Contains `__maya__` → maya
+ * - Contains `__nust__` → nust
+ * - Otherwise → nust (legacy default for unmarked names)
+ */
 export function detectNumatbProfileFromPath(filePath: string): NumatbProfileKind {
   const lower = filePath.replace(/\\/g, "/").toLowerCase();
   const base = lower.split("/").pop() ?? lower;
   if (base.includes("__maya__")) {
     return "maya";
+  }
+  if (base.includes("__nust__")) {
+    return "nust";
   }
   return "nust";
 }

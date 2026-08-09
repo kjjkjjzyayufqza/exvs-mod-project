@@ -43,6 +43,8 @@ export function UnitModelHierarchyPanel({
         <UnitModelStructureTreeView
           structureJson={structureJson}
           structureJsonPath={structureJsonPath}
+          modelRoot={modelRoot}
+          onMutated={onMutated}
           className="h-full border-r-0"
           onOpenEditor={onOpenEditor}
           onRevealNode={onRevealNode}

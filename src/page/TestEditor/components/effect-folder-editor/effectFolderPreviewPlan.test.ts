@@ -11,6 +11,7 @@ import {
   buildEffectFolderPreviewPlan,
   evaluateEfxbnControl,
   evaluateEfxbnUvTransform,
+  resolveEfxbnColorMapBinding,
 } from "./effectFolderPreviewPlan";
 
 function hash(signed: number): EffectFolderHash {
@@ -84,9 +85,9 @@ describe("buildEffectFolderPreviewPlan", () => {
     const localAnimation = file("E:\\effect\\motion\\main.nuanmb", "nuanmb", localAnimationHash);
     const summary = {
       effects: [
-        { index: 0, modelHash: localModelHash, animationHash: localAnimationHash, modelControlIndices: [-1, -1, -1, -1] },
-        { index: 1, modelHash: localModelHash, animationHash: hash(0), modelControlIndices: [-1, -1, -1, -1] },
-        { index: 2, modelHash: externalModelHash, animationHash: externalAnimationHash, modelControlIndices: [-1, -1, -1, -1] },
+        { index: 0, modelHash: localModelHash, animationHash: localAnimationHash, colorTextureParameterIndex: [-1, -1], uvTextureParameterIndex: [-1, -1] },
+        { index: 1, modelHash: localModelHash, animationHash: hash(0), colorTextureParameterIndex: [-1, -1], uvTextureParameterIndex: [-1, -1] },
+        { index: 2, modelHash: externalModelHash, animationHash: externalAnimationHash, colorTextureParameterIndex: [-1, -1], uvTextureParameterIndex: [-1, -1] },
       ],
       modelControls: [],
       controlLookupEntries: [],
@@ -145,7 +146,8 @@ describe("buildEffectFolderPreviewPlan", () => {
           index: 0,
           modelHash: hash(0),
           animationHash: hash(0),
-          modelControlIndices: [0, -1, -1, -1],
+          colorTextureParameterIndex: [0, -1],
+          uvTextureParameterIndex: [-1, -1],
         },
       ],
       modelControls: [parameter],
@@ -162,11 +164,49 @@ describe("buildEffectFolderPreviewPlan", () => {
     expect(plan?.textureBindings).toHaveLength(1);
     expect(plan?.textureBindings[0]).toMatchObject({
       effectIndex: 0,
+      slot: "color0",
       controlIndex: 0,
       file: textureFile,
     });
+    expect(resolveEfxbnColorMapBinding(plan!, 0)?.file).toBe(textureFile);
     expect(plan?.localTextureCount).toBe(1);
     expect(plan?.unresolvedTextureHashes).toEqual([]);
+  });
+
+  it("never promotes a UV-offset map into the primary colour slot", () => {
+    // Real shape: 453 of the shipped blocks leave `colorTextureParameterIndex[0]` pointing at a
+    // parameter with no colour map while `uvTextureParameterIndex[0]` carries a distortion map.
+    // Example: mod/006effect/053gbftry_005tsient_001/0/0/150.efxbn block 1.
+    const distortionHash = hash(606);
+    const distortionFile = file("E:\\effect\\texture\\offset.nutexb", "nutexb", distortionHash);
+    const emptyColorParameter = { index: 0, colorMapHash: hash(0) };
+    const uvOffsetParameter = { index: 1, colorMapHash: distortionHash };
+    const summary = {
+      effects: [
+        {
+          index: 0,
+          modelHash: hash(0),
+          animationHash: hash(0),
+          colorTextureParameterIndex: [0, -1],
+          uvTextureParameterIndex: [1, -1],
+        },
+      ],
+      modelControls: [emptyColorParameter, uvOffsetParameter],
+      controlLookupEntries: [],
+      textureParameters: [emptyColorParameter, uvOffsetParameter],
+    } as unknown as EfxbnSummary;
+    const efxbnFile = { ...file("E:\\effect\\distorted.efxbn", "efxbn"), efxbn: summary };
+
+    const plan = buildEffectFolderPreviewPlan(
+      { category: "efxbn", item: efxbnFile },
+      inventory([], [], [distortionFile]),
+    );
+
+    expect(plan?.textureBindings.map((binding) => binding.slot)).toEqual(["color0", "uv0"]);
+    // The colour slot keeps its own (empty) parameter instead of adopting the distortion map.
+    expect(resolveEfxbnColorMapBinding(plan!, 0)?.parameter).toBe(emptyColorParameter);
+    expect(resolveEfxbnColorMapBinding(plan!, 0)?.file).toBeNull();
+    expect(plan?.textureBindings[1].file).toBe(distortionFile);
   });
 
   it("reconstructs shader atlas, scroll, and reverse UV transforms", () => {

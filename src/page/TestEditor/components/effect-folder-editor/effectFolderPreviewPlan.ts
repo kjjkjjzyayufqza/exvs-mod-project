@@ -17,8 +17,20 @@ export type EffectFolderPreviewTarget = {
   animationPath: string | null;
 };
 
+/**
+ * The four texture-parameter slots a block can reference, in block layout order.
+ *
+ * `colorTextureParameterIndex[2]` and `uvTextureParameterIndex[2]` sit next to each other at
+ * block offsets `0x150`-`0x15c`, so the flat `modelControlIndices` view of the same bytes
+ * loses which map plays which role.
+ */
+export const EFXBN_TEXTURE_SLOTS = ["color0", "color1", "uv0", "uv1"] as const;
+
+export type EfxbnTextureSlot = (typeof EFXBN_TEXTURE_SLOTS)[number];
+
 export type EffectFolderPreviewTextureBinding = {
   effectIndex: number;
+  slot: EfxbnTextureSlot;
   controlIndex: number;
   parameter: EfxbnModelControlSummary;
   file: EffectFolderFileItem | null;
@@ -38,6 +50,22 @@ export type EffectFolderPreviewPlan = {
   effectBlocks: EfxbnEffectSummary[];
   controlLookupEntries: EfxbnControlLookupEntry[];
 };
+
+/**
+ * `hkImageAddressMode::Enum`, read from the engine's own name table at `0x1415CB9B0`.
+ *
+ * `sub_1401777A0` copies the authored `addressingMode` straight into the sampler's U, V and W
+ * address modes, so this is an identity mapping rather than a remap. Over the shipped corpus the
+ * bound texture parameters are 76% `wrap`, 17% `mirror`, 4.5% `border` and 3% `clamp`; `border`
+ * uses the D3D default transparent-black border.
+ */
+export const EFXBN_ADDRESS_MODE = {
+  wrap: 0,
+  mirror: 1,
+  clamp: 2,
+  border: 3,
+  mirrorOnce: 4,
+} as const;
 
 export type EfxbnUvTransform = {
   scale: [number, number];
@@ -144,6 +172,47 @@ export function evaluateEfxbnUvTransform(
     scaleV = -scaleV;
   }
   return { scale: [scaleU, scaleV], offset: [offsetU, offsetV] };
+}
+
+/**
+ * The block's colour-map binding, i.e. `colorTextureParameterIndex[0]`.
+ *
+ * The other three slots carry the pass-2 colour map and the two UV-offset (distortion) maps,
+ * so taking whichever binding happens to resolve first textures the block with the wrong
+ * image. Across the 4,512 shipped `.efxbn` there are 453 blocks whose `color0` slot has no
+ * colour map while a later slot does — `053gbftry_005tsient_001/0/0/150.efxbn` block 1 among
+ * them — and every one of those rendered a distortion map as its colour.
+ *
+ * Returned regardless of whether the texture file resolved locally: the UV animation is
+ * authored on the parameter, so it still applies when the image itself lives in another pack.
+ */
+export function resolveEfxbnColorMapBinding(
+  plan: EffectFolderPreviewPlan,
+  effectIndex: number,
+): EffectFolderPreviewTextureBinding | null {
+  return (
+    plan.textureBindings.find(
+      (binding) => binding.effectIndex === effectIndex && binding.slot === "color0",
+    ) ?? null
+  );
+}
+
+/**
+ * The block's UV-offset (distortion) map, i.e. `uvTextureParameterIndex[0]`.
+ *
+ * Binding this slot is what sets draw-scheme bit `0x80` and puts the block on the ColorEx
+ * variant, where `efxDrawFaceColorExPS` displaces the colour UV by
+ * `offset.a * (offset.rg - 0.5) * distortion` and scales alpha by `offset.a`.
+ */
+export function resolveEfxbnUvOffsetMapBinding(
+  plan: EffectFolderPreviewPlan,
+  effectIndex: number,
+): EffectFolderPreviewTextureBinding | null {
+  return (
+    plan.textureBindings.find(
+      (binding) => binding.effectIndex === effectIndex && binding.slot === "uv0",
+    ) ?? null
+  );
 }
 
 export function evaluateEfxbnControl(
@@ -316,14 +385,24 @@ export function buildEffectFolderPreviewPlan(
   const textureBindings: EffectFolderPreviewTextureBinding[] = [];
   const unresolvedTextures: EffectFolderHash[] = [];
   for (const effect of summary?.effects ?? []) {
-    for (const controlIndex of effect.modelControlIndices ?? []) {
-      if (controlIndex < 0) continue;
+    const controlIndexes = [
+      ...effect.colorTextureParameterIndex,
+      ...effect.uvTextureParameterIndex,
+    ];
+    controlIndexes.forEach((controlIndex, slotOrdinal) => {
+      if (controlIndex < 0) return;
       const parameter = summary?.modelControls[controlIndex];
-      if (!parameter) continue;
+      if (!parameter) return;
       const file = texturesByHash.get(parameter.colorMapHash.signed) ?? null;
       if (!file && parameter.colorMapHash.signed !== 0) unresolvedTextures.push(parameter.colorMapHash);
-      textureBindings.push({ effectIndex: effect.index, controlIndex, parameter, file });
-    }
+      textureBindings.push({
+        effectIndex: effect.index,
+        slot: EFXBN_TEXTURE_SLOTS[slotOrdinal],
+        controlIndex,
+        parameter,
+        file,
+      });
+    });
   }
   const unresolvedTextureHashes = uniqueHashes(unresolvedTextures);
   const revisionSignature = compactRevisionSignature({
@@ -335,6 +414,7 @@ export function buildEffectFolderPreviewPlan(
     })),
     textureSlots: textureBindings.map((binding) => ({
       effectIndex: binding.effectIndex,
+      slot: binding.slot,
       controlIndex: binding.controlIndex,
       fileIndex: binding.file?.fileIndex ?? null,
       path: binding.file?.path ?? null,

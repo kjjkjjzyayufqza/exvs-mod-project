@@ -19,6 +19,7 @@ use crate::format::fhm2d_structure_metadata::{
     metadata_from_source_strict, normalize_hash_name, read_metadata, sanitize_structure_name,
     structure_stem,
 };
+use crate::format::numatb_format::{detect_numatb_profile_from_matl, NumatbProfileKind};
 use crate::ssbh_preview::{self, SsbhModelPreviewBundle, TextureRefResolve};
 
 const NUMDLB_MAGIC: &[u8; 4] = b"HBSS";
@@ -326,6 +327,7 @@ fn convert_to_virtual_tree(
 const SDKV_MAGIC: &[u8; 4] = b"SDKV";
 const SDKV_MAGIC_OFFSET: usize = 0x0C;
 pub(crate) const STAGE_SKY_NAME: &str = "sky";
+const MAYA_NUMATB_SUFFIX: &str = "__maya__";
 const NUST_NUMATB_SUFFIX: &str = "__nust__";
 
 fn infer_numdlb_name_from_tree(
@@ -874,7 +876,7 @@ fn rename_model_subfolder_files(
             }
         }
 
-        rename_numatb_with_maya_nust(subfolder, modl, warnings);
+        rename_numatb_with_maya_nust(subfolder, modl, file_index_map, warnings);
     }
 
     let bin_indices: Vec<usize> = subfolder
@@ -891,20 +893,79 @@ fn rename_model_subfolder_files(
     }
 }
 
-/// Rename numatb files using numdlb material_file_names (maya/nust pattern).
+/// Classify a numatb blob as Maya / Nust from matl content (shader_label).
+/// Falls back to `None` when the bytes cannot be parsed as MatlData.
+fn classify_numatb_bytes(data: &[u8]) -> Option<NumatbProfileKind> {
+    let mut cursor = Cursor::new(data);
+    match ssbh_data::prelude::MatlData::read(&mut cursor) {
+        Ok(matl) => Some(detect_numatb_profile_from_matl(&matl)),
+        Err(_) => None,
+    }
+}
+
+fn material_name_profile(name: &str) -> Option<NumatbProfileKind> {
+    let base = basename_no_ext(name).to_ascii_lowercase();
+    if base.contains(MAYA_NUMATB_SUFFIX) {
+        Some(NumatbProfileKind::Maya)
+    } else if base.contains(NUST_NUMATB_SUFFIX) {
+        Some(NumatbProfileKind::Nust)
+    } else {
+        None
+    }
+}
+
+fn ensure_numatb_filename(stem: &str) -> String {
+    let trimmed = stem.trim();
+    if trimmed.to_ascii_lowercase().ends_with(".numatb") {
+        trimmed.to_string()
+    } else {
+        format!("{trimmed}.numatb")
+    }
+}
+
+fn default_profile_filename(model_name: &str, profile: NumatbProfileKind) -> String {
+    match profile {
+        NumatbProfileKind::Maya => format!("{model_name}{MAYA_NUMATB_SUFFIX}.numatb"),
+        NumatbProfileKind::Nust => format!("{model_name}{NUST_NUMATB_SUFFIX}.numatb"),
+    }
+}
+
+fn pick_material_name_for_profile(
+    material_names: &[String],
+    profile: NumatbProfileKind,
+    used: &mut HashSet<usize>,
+) -> Option<String> {
+    // Prefer an unused name whose basename already marks the target profile.
+    for (i, name) in material_names.iter().enumerate() {
+        if used.contains(&i) {
+            continue;
+        }
+        if material_name_profile(name) == Some(profile) {
+            used.insert(i);
+            return Some(ensure_numatb_filename(&basename_no_ext(name)));
+        }
+    }
+    None
+}
+
+/// Rename numatb files for editor-friendly `__maya__` / `__nust__` basenames.
 ///
-/// Sorted by file_index: first N match material_file_names[0..N] (maya first,
-/// nust template second). Extra numatb beyond declared count get variant names
-/// derived from the __nust__ template (material_file_names[1]).
+/// **Profile identity (content-first):**
+/// - Parse each numatb as MatlData; any non-empty `shader_label` → Nust, else Maya
+///   (see [`detect_numatb_profile_from_matl`]).
+/// - Assign names so content-Maya files get maya names and content-Nust files get
+///   nust names — pack order is not assumed to be maya-then-nust.
 ///
-/// NOTE: EXVS2 game runtime loads numatb files directly from the model's folder
-/// structure (the 2 numatb files packed alongside the numdlb), NOT by reading
-/// the material_file_names array in numdlb. It auto-detects maya vs nust by
-/// their `__maya__` / `__nust__` filename suffix convention.
-/// This rename logic is purely for human-friendly display in the editor.
+/// **Name sources:**
+/// - Prefer matching entries from numdlb `material_file_names` (by suffix).
+/// - Fall back to `{model}__maya__.numatb` / `{model}__nust__.numatb`.
+/// - Extra Nust mats beyond the base template become `_m001__nust__` variants.
+///
+/// When no blob can be parsed, falls back to positional `material_file_names[i]`.
 fn rename_numatb_with_maya_nust(
     subfolder: &mut StageVirtualTreeFolder,
     modl: &StageModlInfo,
+    file_index_map: &HashMap<i32, &InMemoryFhm2dFile>,
     warnings: &mut Vec<String>,
 ) {
     let mut numatb_indices: Vec<usize> = subfolder
@@ -925,10 +986,118 @@ fn rename_numatb_with_maya_nust(
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect();
+
+    let mut maya_queue: Vec<usize> = Vec::new();
+    let mut nust_queue: Vec<usize> = Vec::new();
+    let mut unknown_queue: Vec<usize> = Vec::new();
+
+    for &idx in &numatb_indices {
+        let file_index = subfolder.files[idx].file_index;
+        let profile = file_index_map
+            .get(&file_index)
+            .and_then(|bin| classify_numatb_bytes(bin.data.as_slice()));
+        match profile {
+            Some(NumatbProfileKind::Maya) => maya_queue.push(idx),
+            Some(NumatbProfileKind::Nust) => nust_queue.push(idx),
+            None => {
+                warnings.push(format!(
+                    "Model '{}': could not parse numatb file_index={} for shader_label profile; using leftover material name",
+                    modl.model_name, file_index
+                ));
+                unknown_queue.push(idx);
+            }
+        }
+    }
+
+    if maya_queue.is_empty() && nust_queue.is_empty() {
+        rename_numatb_positional(subfolder, modl, &numatb_indices, &material_names, warnings);
+        return;
+    }
+
+    let mut used_material_slots: HashSet<usize> = HashSet::new();
+    let mut assigned: HashMap<usize, String> = HashMap::new();
+
+    // Content-maya → maya material names (then synthesized).
+    for (i, idx) in maya_queue.iter().copied().enumerate() {
+        let name = if i == 0 {
+            pick_material_name_for_profile(
+                &material_names,
+                NumatbProfileKind::Maya,
+                &mut used_material_slots,
+            )
+            .unwrap_or_else(|| default_profile_filename(&modl.model_name, NumatbProfileKind::Maya))
+        } else {
+            format!("{}{i}{MAYA_NUMATB_SUFFIX}.numatb", modl.model_name)
+        };
+        assigned.insert(idx, name);
+    }
+
+    // Resolve base nust template stem once (from material table or model name).
+    let nust_template_stem = pick_material_name_for_profile(
+        &material_names,
+        NumatbProfileKind::Nust,
+        &mut used_material_slots,
+    )
+    .map(|filename| basename_no_ext(&filename))
+    .unwrap_or_else(|| format!("{}{NUST_NUMATB_SUFFIX}", modl.model_name));
+
+    let nust_prefix = if nust_template_stem
+        .to_ascii_lowercase()
+        .ends_with(NUST_NUMATB_SUFFIX)
+    {
+        &nust_template_stem[..nust_template_stem.len() - NUST_NUMATB_SUFFIX.len()]
+    } else {
+        modl.model_name.as_str()
+    };
+
+    // Content-nust → base nust name, then _m001__nust__ variants.
+    for (i, idx) in nust_queue.iter().copied().enumerate() {
+        let name = if i == 0 {
+            ensure_numatb_filename(&nust_template_stem)
+        } else {
+            format!("{nust_prefix}_m{i:03}{NUST_NUMATB_SUFFIX}.numatb")
+        };
+        assigned.insert(idx, name);
+    }
+
+    // Unparsed blobs: leftover material_file_names, then synthetic.
+    let mut next_material = 0usize;
+    for idx in unknown_queue {
+        while next_material < material_names.len() && used_material_slots.contains(&next_material) {
+            next_material += 1;
+        }
+        if next_material < material_names.len() {
+            used_material_slots.insert(next_material);
+            assigned.insert(
+                idx,
+                ensure_numatb_filename(&basename_no_ext(&material_names[next_material])),
+            );
+            next_material += 1;
+        } else {
+            assigned.insert(
+                idx,
+                format!("{}_{}.numatb", modl.model_name, assigned.len()),
+            );
+        }
+    }
+
+    for (idx, name) in assigned {
+        subfolder.files[idx].file_name = name;
+    }
+}
+
+/// Legacy positional rename used when no numatb blob can be content-classified.
+fn rename_numatb_positional(
+    subfolder: &mut StageVirtualTreeFolder,
+    modl: &StageModlInfo,
+    numatb_indices: &[usize],
+    material_names: &[String],
+    warnings: &mut Vec<String>,
+) {
     let declared_count = material_names.len();
 
     if declared_count == 0 {
-        for &idx in &numatb_indices {
+        for &idx in numatb_indices {
             subfolder.files[idx].file_name = format!("{}.numatb", modl.model_name);
         }
         return;
@@ -947,9 +1116,6 @@ fn rename_numatb_with_maya_nust(
     }
 
     if declared_count < 2 {
-        // EXVS2 auto-detects numatb by __maya__/__nust__ suffix, independent of
-        // numdlb material_file_names. When numdlb only declares 1 path (typically
-        // nust), infer the other numatb name using the model_name + __maya__ convention.
         let first_is_nust = material_names
             .first()
             .map(|n| basename_no_ext(n).ends_with(NUST_NUMATB_SUFFIX))
@@ -957,7 +1123,8 @@ fn rename_numatb_with_maya_nust(
         for e in 0..extra_count {
             let target = numatb_indices[declared_count + e];
             if first_is_nust && extra_count == 1 {
-                subfolder.files[target].file_name = format!("{}__maya__.numatb", modl.model_name);
+                subfolder.files[target].file_name =
+                    default_profile_filename(&modl.model_name, NumatbProfileKind::Maya);
             } else {
                 subfolder.files[target].file_name =
                     format!("{}_{}.numatb", modl.model_name, declared_count + e);
@@ -5000,7 +5167,8 @@ fn extract_nutexb_names_from_matl(matl: &ssbh_data::prelude::MatlData) -> Vec<St
 
 /// Parse numatb texture refs ordered by role: [0] = maya refs, [1] = nust refs.
 ///
-/// Identifies maya/nust by `__maya__` / `__nust__` filename suffix.
+/// Identifies maya/nust by `__maya__` / `__nust__` filename suffix (set during
+/// extract rename using content heuristic: non-empty shader_label → nust).
 /// Returns exactly 2 entries (maya first, nust second) matching EXVS2 game
 /// folder structure: subdir 0/ = maya textures, subdir 1/ = nust textures.
 pub(crate) fn parse_numatb_texture_refs_by_role(

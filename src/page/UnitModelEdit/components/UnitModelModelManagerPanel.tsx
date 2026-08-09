@@ -246,15 +246,16 @@ function buildSourceTexturePlan(
   validation: UnitModelSourceValidation,
   poolTextureNames: ReadonlySet<string>,
 ): UnitModelSourceTexturePlan {
-  const sourceNames = new Set(validation.sourceTexturesFound.map((name) => name.toLowerCase()));
+  // Matched byte for byte, the way the game does: a texture whose name differs only in case
+  // does not resolve, so reporting it as found here would green-light a package that crashes.
+  const sourceNames = new Set(validation.sourceTexturesFound);
   const copiedFromSource: string[] = [];
   const reusedFromPool: string[] = [];
   const missing: string[] = [];
   for (const reference of validation.textureReferences) {
-    const key = reference.toLowerCase();
-    if (poolTextureNames.has(key)) {
+    if (poolTextureNames.has(reference)) {
       reusedFromPool.push(reference);
-    } else if (sourceNames.has(key)) {
+    } else if (sourceNames.has(reference)) {
       copiedFromSource.push(reference);
     } else {
       missing.push(reference);
@@ -341,7 +342,14 @@ export function UnitModelModelManagerPanel({
       );
       const validation = await validateUnitModelSourceFolder(source);
       const inventory = await listUnitModelTextures(modelRoot, structureJsonPath);
-      const poolNames = new Set(inventory.textures.map((texture) => texture.filename.toLowerCase()));
+      // fhm2d records carry no names, so a numatb reference resolves against the name stored
+      // inside the nutexb; fall back to the file name only when the footer was unreadable.
+      const poolNames = new Set(
+        inventory.textures.map((texture) => {
+          const stored = texture.internalName?.trim();
+          return stored ? `${stored}.nutexb` : texture.filename;
+        }),
+      );
       const texturePlan = buildSourceTexturePlan(validation, poolNames);
       setAddFolderPreview({ source, validation, texturePlan });
     } catch (error) {

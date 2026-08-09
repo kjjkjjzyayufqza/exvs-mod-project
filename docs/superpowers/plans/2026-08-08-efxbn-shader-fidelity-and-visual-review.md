@@ -1,5 +1,11 @@
 # EFXBN Shader Fidelity and Visual Review Plan
 
+> **Status 2026-08-09: partly done, open items superseded.** Tasks 1.1, 1.2, 1.3, 3.2, 6.5
+> (`0x80` path), 3.3 and 8.1 are complete and documented below. Everything still open has been
+> restated, re-prioritised against corpus measurements, and merged with the editing work in
+> `2026-08-09-efxbn-preview-and-editing-roadmap.md`. **Plan new work from that document**; keep
+> this one as the record of the shader-fidelity investigation.
+
 > **For agentic workers:** Steps use checkbox (`- [ ]`) syntax for tracking. Phases 1-3 are ordered by hard dependency; later phases are independently schedulable. Every task must end with a real test run — never mark a step done on inspection alone.
 
 **Goal:** Close the gap between the fully decoded EFXBN shader set and the Test Editor preview implementation, then validate the result against reference appearance instead of only proving the preview is non-empty.
@@ -146,96 +152,42 @@ field to the TypeScript summary type.
 Run: `cargo test --manifest-path src-tauri/Cargo.toml --lib efxbn`
 Expected: PASS
 
-### Task 1.2: Carry the model-control slot number into texture bindings
+### Task 1.2: Carry the model-control slot number into texture bindings — DONE 2026-08-09
 
-**Files:**
-- Modify: `src/page/TestEditor/components/effect-folder-editor/effectFolderPreviewPlan.ts`
-- Test: `src/page/TestEditor/components/effect-folder-editor/effectFolderPreviewPlan.test.ts`
+The four slots are positional: `colorTextureParameterIndex[2]` (primary colour, pass-2 colour)
+followed by `uvTextureParameterIndex[2]` (primary UV offset, pass-2 UV offset), all four at
+block offsets `0x150`-`0x15c`. The parser exposed both the typed pair and a flat
+`modelControlIndices[4]` view of the same dwords; the plan builder read the flat one and every
+consumer then took the first slot that happened to resolve.
 
-The four `modelControlIndices` slots are positional: `0` primary color, `1` pass-2 color,
-`2` primary UV offset, `3` pass-2 UV offset (RDEF `colorTextureParameterIndex[2]` +
-`uvTextureParameterIndex[2]`, selector `sub_1401757B0`). The plan builder at
-`effectFolderPreviewPlan.ts:316-327` iterates the array but discards the position, so every
-consumer that calls `.find(binding => binding.file !== null)` can promote an auxiliary map
-into the primary color slot.
+Measured on all 4,512 shipped `.efxbn`: 453 blocks leave `color0` empty while a later slot
+resolves, so those rendered a distortion map as their colour
+(`053gbftry_005tsient_001/0/0/150.efxbn` block 1 among them).
 
-- [ ] **Step 1: Write the failing test**
+`EffectFolderPreviewTextureBinding` now carries a named `slot`
+(`color0` / `color1` / `uv0` / `uv1`) and `resolveEfxbnColorMapBinding()` matches `color0`
+only, returning the binding even when the texture is not local so the authored UV animation
+still applies. The flat view is deleted from Rust, the TypeScript summary, and both fixtures.
+Write-up in `docs/agent-sessions/2026-08-08-efxbn-format-rederivation.md`.
 
-Extend the binding assertion at `effectFolderPreviewPlan.test.ts:162` to cover a block whose
-slot `0` is unresolved and slot `2` is resolved, asserting that the primary-color lookup
-returns `null` rather than the slot-2 file.
+### Task 1.3: Compute `drawSchemeFlag` in the backend — DONE 2026-08-09
 
-- [ ] **Step 2: Run test to verify it fails**
+`sub_1401470F0` fully decompiled; every producer bit recorded with its source condition, the
+enable gate (`sub_140145DF0`, authored element type 1/3/5), and the consumer masks
+(`sub_140188E30`). Two findings worth carrying forward:
 
-Run: `pnpm vitest run src/page/TestEditor/components/effect-folder-editor/effectFolderPreviewPlan.test.ts`
-Expected: FAIL
+- `0x8000` and `0x40000` test the **same** `extraFlags & 0x2000` bit, confirmed at instruction
+  level. The half-brightness bypass is therefore just `extraFlags & 0x2000`.
+- `sub_140146590` writes the **normalized** element type back to `+0x28`, and the shader
+  selector reads that — so Task 3.1 must branch on the normalized type.
 
-- [ ] **Step 3: Implement**
+Implemented as `EfxbnDrawScheme { flag, meshMultiUvFlag }` on each block's `runtime`. The
+multi-UV group needs the model mesh, which the parser does not read, so it is reported
+separately instead of guessed. TypeScript mirrors it and `resolveEfxbnShaderVariants()` applies
+the masks; the inspector shows the flag, the variants, and a "base shader only" warning.
 
-Add `slotIndex: 0 | 1 | 2 | 3` to `EffectFolderPreviewTextureBinding` and populate it from the
-loop position. Add a `resolvePrimaryColorBinding(plan, effectIndex)` helper that matches
-`slotIndex === 0` only. Auxiliary slots must never be promoted.
-
-- [ ] **Step 4: Update the four consumers**
-
-Replace the slot-agnostic `.find` calls at `EfxbnParticlePreview.tsx:213`,
-`EfxbnStripPreview.tsx:119`, and `EfxbnDiagnosticOverlay.tsx:163` and `:208` with the helper.
-`EfxbnPreviewInspector.tsx:55,96` filters for display and should show the slot label instead.
-
-- [ ] **Step 5: Run test to verify it passes**
-
-Run: `pnpm vitest run src/page/TestEditor/components/effect-folder-editor`
-Expected: PASS
-
-### Task 1.3: Compute `drawSchemeFlag` in the backend
-
-**Files:**
-- Modify: `src-tauri/src/format/effect_folder.rs`
-- Test: `src-tauri/src/format/effect_folder.rs`
-
-The runtime flag word at element `+0x390` is synthesized by `sub_1401470F0` from the copied
-`0x370` record, and `sub_140188E30` selects the pixel-shader variant from it. The frontend
-currently has no access to it, so every variant decision is a guess. Producing it once in Rust
-removes that guesswork for both the preview and the Blender tool.
-
-- [ ] **Step 1: Re-derive the producer**
-
-Route through reverse-skill / IDA MCP and decompile `sub_1401470F0` fully. The prior session
-recorded partial producers (`0x20`, `0x40`, `0x8000` from authored fields; `0x80`, `0x200`,
-`0x2000`, `0x4000` from model-control presence and input type; `0x1000` from a type-3 mesh
-walk) but the IDA instance disconnected before a complete pass. Record every producer bit in
-the fidelity ledger with its source condition.
-
-- [ ] **Step 2: Write the failing test**
-
-Assert the expected `draw_scheme_flag` for each of the four blocks in the real `167.efxbn`
-fixture, plus one block from a pack that exercises a Light or Soft variant.
-
-- [ ] **Step 3: Implement**
-
-Add `pub draw_scheme_flag: u32` to `EfxbnEffectSummary`, computed from already-parsed fields.
-Do not read `+0x390` from disk — it is runtime-only. Per the no-fallback rule, any producer
-condition that cannot be derived from parsed data must raise an error rather than default to
-zero.
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `cargo test --manifest-path src-tauri/Cargo.toml --lib efxbn`
-Expected: PASS
-
-- [ ] **Step 5: Expose the decoded variant list**
-
-Add a derived `shaderVariants: string[]` to the TypeScript summary using the any-bit-hit masks
-(these are masks, not enum values):
-
-```text
-0x40      AddMix
-0x280     ColorEx
-0x20804   Light
-0x1000    MultiUV
-0x10001   Soft
-0x20000   HLight
-```
+Full derivation and the corpus tables in
+`docs/agent-sessions/2026-08-08-efxbn-format-rederivation.md`.
 
 ---
 
@@ -326,6 +278,8 @@ result into position. The current code treats the vector as world XYZ and only a
 - Modify: `src/page/TestEditor/components/effect-folder-editor/EfxbnParticlePreview.tsx`
 
 `sub_140188E30` selects `efxDrawModel` when `*(a3 + 40) == 3` and `efxDrawFace` otherwise.
+`+0x28` holds the **normalized** type by then (`sub_140146590` writes it back), so the branch
+must read `runtime.elementType`, not the authored `effectType` and not the model hash.
 The billboard component at `EfxbnParticlePreview.tsx:305-308` instead excludes blocks by
 `modelHash.signed !== 0`, so a type-3 block with an unresolved hash silently renders as a
 billboard and a non-type-3 block carrying a model hash is wrongly excluded.
@@ -336,15 +290,15 @@ billboard and a non-type-3 block carrying a model hash is wrongly excluded.
       but drive it from resolution state rather than from routing.
 - [ ] **Step 4: Run test to verify it passes**
 
-### Task 3.2: Consume slot-aware texture bindings
+### Task 3.2: Consume slot-aware texture bindings — DONE 2026-08-09
 
-**Depends on:** Task 1.2 — this is Step 4 of that task; verify no consumer still calls the
-slot-agnostic `.find`.
+`EfxbnParticlePreview.tsx`, `EfxbnStripPreview.tsx`, both call sites in
+`EfxbnDiagnosticOverlay.tsx`, and `tools/efxbn_blender_preview/scene_plan.ts` now call
+`resolveEfxbnColorMapBinding()`. `EfxbnPreviewInspector.tsx` lists every slot and labels it by
+role instead of printing the model-control record index as "slot N".
 
-- [ ] **Step 1: Grep for regressions**
-
-Run: `rg "textureBindings\.find" src/`
-Expected: no matches outside the slot-aware helper.
+Regression guard: `rg "textureBindings\.find" src/ tools/` must match only the helper body in
+`effectFolderPreviewPlan.ts`.
 
 ### Task 3.3: Implement the `0x40000` half-brightness bypass
 
@@ -365,6 +319,11 @@ out.a = c.a
 ```
 
 All three call sites currently multiply by `0.5` unconditionally.
+
+**Measured 2026-08-09: `0x40000` is set on 104 of 21,408 drawable blocks (0.5%).** The
+unconditional `0.5` is already right 99.5% of the time, so this is a correctness fix with
+almost no visual payoff — do not schedule it ahead of ColorEx. The flag reduces to
+`extraFlags & 0x2000`.
 
 - [ ] **Step 1: Write the failing test** — a material-uniform test asserting the multiplier
       follows the flag.
@@ -542,8 +501,17 @@ in the UI or documentation.
 
 **Depends on:** Task 1.3 for variant selection.
 
-Implement in ascending order of infrastructure cost. Each task adds one variant, one test, and
-one ledger row moving from "decoded, not rendered" to "implemented".
+Measured over the 21,408 drawable blocks in the shipped corpus (2026-08-09): Soft 51.6%,
+base-only 35.1%, ColorEx 27.2%, Light 7.4%, HLight 2.4%, AddMix 0.1%.
+
+**Do ColorEx first, not last.** Its share comes almost entirely from bit `0x80` (UV-offset map
+bound, 27.2%), not from `0x200` (framebuffer grab, 1.8%). The `0x80` path is one extra texture
+sample plus `alpha *= offsetSample.a` and needs no scene colour target; only the rare `0x200`
+path does. Soft has the largest share but its `saturate((sceneZ - particleEyeZ) / range)` term
+saturates to 1 in a preview with no scene geometry, so it barely changes the current picture.
+
+Each task adds one variant, one test, and one ledger row moving from "decoded, not rendered"
+to "implemented".
 
 ### Task 6.1: AddMix (`0x40`)
 
@@ -609,22 +577,23 @@ alpha = primary.a * secondary.a * particle.a
 
 - [ ] Write failing test → run → implement → run → update ledger.
 
-### Task 6.5: ColorEx (`0x280`)
+### Task 6.5: ColorEx (`0x280`) — DONE 2026-08-09 (bit `0x80` path)
 
-```text
-screenUv     = clip.xy / clip.w * (0.5, -0.5) + 0.5
-offsetSample = UVOffsetMap(offsetUv)
-d            = offsetSample.a * (offsetSample.rg - 0.5)
+Implemented from `efxDrawFaceColorExPS.dump.txt`, not from prose. The `0x80` branch is
+`d = offset.a * (offset.rg - 0.5)`, `colorUv += d * distortion`, `alpha *= offset.a`, and it
+needs no scene colour target. `distortionU/V` come from the **offset-map** parameter, settled by
+corpus: the colour parameter carries a single constant `(0.1, 0.1)` across all 5,741 ColorEx
+blocks while the offset parameter carries 157 distinct authored values.
 
-flag 0x80:  colorUv += d * distortionUV; screenUv += d * distortionUV; alpha *= offsetSample.a
-flag 0x200: color = FrameBuffer(screenUv); color.a = 1
-else:       color = ColorMap(colorUv)
-```
+Wired at all three draw sites, because ColorEx is not billboard-only — Model 30.5%, Strip 27.9%,
+Billboard 21.3%. The offset map has its own independently animated UV set, so the billboard path
+gained two instanced attributes, the strip geometry emits a second `offsetUvs` array, and the
+model path injects the math into `MeshBasicMaterial` via `onBeforeCompile` (keeping three.js in
+charge of skinning and vertex colours). The `0x40000` full-brightness branch from Task 3.3 is
+wired at the same three sites.
 
-Requires a scene colour render target — a single Three.js material cannot express this. Do this
-last.
-
-- [ ] Add the colour render target → write failing test → run → implement → run → update ledger.
+**Still open:** the `0x200` framebuffer-grab branch (1.8% of blocks), which does need a scene
+colour render target.
 
 ---
 
@@ -647,12 +616,18 @@ These four mappings currently have no evidence and are marked as inferences:
 
 Pixel shaders cannot establish any of them — blend and depth are D3D state objects.
 
-- [ ] **Step 1: Locate the state builder**
+- [x] **Step 1: Locate the state builder — DONE 2026-08-09**
 
-Route through reverse-skill / IDA MCP. The previous session searched for `CreateBlendState`
-imports and found the calls wrapped by the engine, so search the render-state descriptor
-construction reachable from `sub_1401886B0` (which reads slot `+0x270` to choose between fixed
-depth/zanzou shaders and the dynamic selector) instead of the D3D import table.
+`sub_140174B30` builds the draw state and calls `sub_1401774B0(blendState, descriptor)`, which
+seeds a 48-byte-per-render-target descriptor from `sub_140085A50(preset)` and patches it per
+`blendState`. Raw presets and patches recorded in the session document. **The enum namespace is
+still unproven** — preset 1 writes `6` where a D3D blend op would be out of range — so no field
+assignment has been promoted. Next: follow `sub_1400876A0`, which consumes the descriptor, to
+the graphics-API translation that fixes the namespace.
+
+Also measured: `blendState` is `2` on 78.9% of drawable blocks, `1` on 18.1%, `0` on 2.9%, `4`
+on 0.1%, and **never `3`** — so the preview's `3 -> Subtractive` branch is dead code and the
+18.1% on `1` currently falls through to Normal blending unverified.
 
 - [ ] **Step 2: Record findings with confidence levels**
 
@@ -677,7 +652,14 @@ This is the phase that was cut off. `tools/efxbn_blender_preview/` works and pro
 sample pack has zero local models and zero local textures, so the image is neutral blue-white
 billboard fallback. Nothing has been compared against reference appearance.
 
-### Task 8.1: Render a positive sample with local models and textures
+### Task 8.1: Render a positive sample with local models and textures — DONE 2026-08-09
+
+`053gbftry_005tsient_001/0/0/200.efxbn` is the positive sample: 5 of 5 model handles and 11 of
+15 texture handles resolve inside its own pack (57 candidates exist tree-wide; this is the best).
+Rendering it converts 10 models and 10 textures and resolves colour textures for 20 of 32
+particle groups, 10 of them model particles. `tests/test_preview.py` asserts that, plus that
+every binding handed to Blender is the `color0` slot. Original step-by-step kept below.
+
 
 **Files:**
 - Modify: `tools/efxbn_blender_preview/tests/test_preview.py`
@@ -700,7 +682,14 @@ python tools/efxbn_blender_preview/efxbn_blender_preview.py `
 - [ ] **Step 3: Add a regression test** asserting non-zero resolved textures and models.
 - [ ] **Step 4: Run** `python -m unittest tools.efxbn_blender_preview.tests.test_preview`
 
-### Task 8.2: Compare against reference appearance
+### Task 8.2: Compare against reference appearance — BLOCKED 2026-08-09
+
+The offline render of the positive sample is heavily blown out: the Blender mirror approximates
+every game blend state with emissive materials, so additive stacking saturates. It validates the
+parse and simulation chain, **not** appearance, and cannot serve as the "our render" side.
+
+Unblocking needs either an in-game capture to compare against, or teaching the mirror the real
+blend states — which is blocked on the same unproven enum namespace as Phase 7 Task 7.1.
 
 This replaces the `cie_visual` agent that never returned.
 

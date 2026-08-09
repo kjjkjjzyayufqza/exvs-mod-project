@@ -6,10 +6,14 @@ import type {
   EfxbnEffectSummary,
 } from "@/services/effectFolder/effectFolderService";
 import type { EffectFolderPreviewPlan } from "./effectFolderPreviewPlan";
-import { makeEfxbnEffectBlock } from "./efxbnTestFactory";
+import { makeEfxbnEffectBlock, makeEfxbnRuntime } from "./efxbnTestFactory";
 import {
+  efxbnParticleLifeCount,
+  efxbnSpawnBasis,
+  resolveEfxbnEmitCount,
   resolveEfxbnEmitterPairs,
   resolveEfxbnModelPoolRequirements,
+  resolveEfxbnShaderVariants,
   simulateEfxbnEmitterPair,
 } from "./efxbnSimulation";
 
@@ -139,6 +143,8 @@ describe("EFXBN frame simulation", () => {
       lifeTimeBase: 1,
       intervalBase: 100,
       actionFlags: 1,
+      // Spawn form 1 leaves the spawn basis at identity, so speedBase reads as world XYZ here.
+      spawnFormType: 1,
       controlReferences: wrapperControls.references,
     });
     const target = block({
@@ -232,6 +238,213 @@ describe("EFXBN frame simulation", () => {
   });
 });
 
+describe("EFXBN particle life count (efxKineticParticleBillboard3rd)", () => {
+  // `add r2.z, lifeCount, 1 ; lt lifeTime, that ; movc ... ; movc r6.xyzw, loopBit,
+  //  r3.wyxz(=1.0, ...), r4.xyzw` — expiry resets lifeCount to 1.0 and touches nothing else.
+  it("counts up, then wraps to one instead of zero when the loop bit is set", () => {
+    expect([0, 1, 2, 3, 4, 5, 6].map((age) => efxbnParticleLifeCount(age, 4, true, false)))
+      .toEqual([0, 1, 2, 3, 1, 2, 3]);
+  });
+
+  it("clamps at lifeTime under the force-loop flag so the emitter never expires", () => {
+    expect([0, 3, 4, 9].map((age) => efxbnParticleLifeCount(age, 4, true, true)))
+      .toEqual([0, 3, 4, 4]);
+  });
+
+  it("counts straight up when neither loop flag is set", () => {
+    expect([0, 1, 5].map((age) => efxbnParticleLifeCount(age, 4, false, false)))
+      .toEqual([0, 1, 5]);
+  });
+});
+
+describe("EFXBN spawn basis (efxSpawnParticleCommon3rd)", () => {
+  // spawnSystem column 1 is the spawn direction: with C = 0 the shader builds
+  // column0 = (cosB, 0, -sinB), column1 = (sinA sinB, cosA, sinA cosB), column2 =
+  // (cosA sinB, -sinA, cosA cosB), i.e. Ry(azimuth) * Rx(polar).
+  it("is the identity when the direction is +Y, which is the no-emitter case", () => {
+    const basis = efxbnSpawnBasis([0, 1, 0]);
+    const identity = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    [basis.x, basis.y, basis.z].forEach((column, columnIndex) => {
+      column.forEach((value, row) => expect(value).toBeCloseTo(identity[columnIndex][row], 6));
+    });
+  });
+
+  it("puts the spawn direction on column 1 and stays orthonormal", () => {
+    const direction: [number, number, number] = [0.6, 0, 0.8];
+    const basis = efxbnSpawnBasis(direction);
+    expect(basis.y[0]).toBeCloseTo(0.6, 6);
+    expect(basis.y[2]).toBeCloseTo(0.8, 6);
+    const dot = (a: readonly number[], b: readonly number[]) =>
+      a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    expect(dot(basis.x, basis.y)).toBeCloseTo(0, 6);
+    expect(dot(basis.y, basis.z)).toBeCloseTo(0, 6);
+    expect(dot(basis.x, basis.z)).toBeCloseTo(0, 6);
+    expect(dot(basis.x, basis.x)).toBeCloseTo(1, 6);
+  });
+});
+
+describe("EFXBN emit count randomisation (efxKineticEmitterCommon3rd)", () => {
+  // bfi r5.w, l(31), l(1), numEmitCountRandom, l(1)  →  2R + 1
+  // udiv null, r5.w, lcg(seed), r5.w ; iadd r5.x, -R, r5.w ; iadd numEmit, r5.x
+  it("offsets numEmit by lcg(seed) % (2R + 1) - R", () => {
+    expect(resolveEfxbnEmitCount(5, 0, 0, 0x1234_5678)).toBe(5);
+    const randomised = resolveEfxbnEmitCount(5, 2, 0, 0x1234_5678);
+    expect(randomised).toBeGreaterThanOrEqual(3);
+    expect(randomised).toBeLessThanOrEqual(7);
+    expect(resolveEfxbnEmitCount(5, 2, 0, 0x1234_5678)).toBe(randomised);
+  });
+
+  it("replaces the count entirely when meshEmitterCount is set", () => {
+    expect(resolveEfxbnEmitCount(5, 2, 9, 0x1234_5678)).toBe(9);
+  });
+});
+
+describe("EFXBN Phase A simulation semantics", () => {
+  const kinematicControls = (speed: Record<string, number>) =>
+    directControls({
+      speedBaseX: 0,
+      speedBaseY: 0,
+      speedBaseZ: 0,
+      scaleBaseX: 1,
+      scaleBaseY: 1,
+      scaleBaseZ: 1,
+      colorR: 1,
+      colorG: 1,
+      colorB: 1,
+      colorA: 1,
+      ...speed,
+    });
+
+  it("wraps a looping particle's curve phase without rebuilding its position", () => {
+    const controls = kinematicControls({ speedBaseY: 1 });
+    const emitter = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 200,
+      intervalBase: 1000,
+      numEmit: 1,
+      actionFlags: 1,
+      // Spawn form 1 keeps the spawn basis at identity so speedBaseY reads as world +Y.
+      spawnFormType: 1,
+      controlReferences: controls.references,
+    });
+    const target = block({
+      index: 1,
+      lifeTimeBase: 4,
+      actionFlags: 1,
+      controlReferences: controls.references,
+    });
+    const sourcePlan = plan([emitter, target], controls.entries);
+    const pair = resolveEfxbnEmitterPairs(sourcePlan)[0];
+
+    const frames = [3, 4, 5].map((frame) => simulateEfxbnEmitterPair(pair, sourcePlan, frame)[0]);
+    expect(frames.map((particle) => particle.phaseAge)).toEqual([3, 1, 2]);
+    // Position keeps accumulating straight through the cycle boundary.
+    expect(frames[1].position[1]).toBeGreaterThan(frames[0].position[1]);
+    expect(frames[2].position[1]).toBeGreaterThan(frames[1].position[1]);
+  });
+
+  it("randomises emitter lifetime so differently seeded pairs stop emitting at different frames", () => {
+    const controls = kinematicControls({});
+    const makePlan = (emitterIndex: number, targetIndex: number) => {
+      const emitter = block({
+        index: emitterIndex,
+        effectType: 9,
+        childIndexSize: 1,
+        childIndexArray: [targetIndex, -1, -1, -1, -1, -1, -1, -1],
+        lifeTimeBase: 40,
+        lifeTimeRandom: 0.5,
+        intervalBase: 1,
+        numEmit: 1,
+        controlReferences: controls.references,
+      });
+      const target = block({ index: targetIndex, lifeTimeBase: 1000, actionFlags: 1 });
+      return plan([emitter, target], controls.entries);
+    };
+    const countAt = (emitterIndex: number, targetIndex: number) => {
+      const sourcePlan = makePlan(emitterIndex, targetIndex);
+      return simulateEfxbnEmitterPair(resolveEfxbnEmitterPairs(sourcePlan)[0], sourcePlan, 80).length;
+    };
+
+    const first = countAt(0, 1);
+    const second = countAt(2, 3);
+    expect(first).not.toBe(second);
+    // life = 40 * (1 +/- 0.5), so the emitter must stop between 20 and 60 emissions.
+    for (const count of [first, second]) {
+      expect(count).toBeGreaterThanOrEqual(20);
+      expect(count).toBeLessThanOrEqual(61);
+    }
+  });
+
+  it("drives emitter curves from lifeTimeRatio * lifeCount rather than a raw frame modulo", () => {
+    // spreadX ramps 0 -> PI/2 across the emitter's life, so a randomised lifetime moves the
+    // sample point. lifeTimeRandom 0 keeps ratio 1 and pins the ramp to lifeTimeBase.
+    const ramp = linearControl("spreadX", 0, Math.PI / 2, 0);
+    const emitter = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 10,
+      intervalBase: 1,
+      numEmit: 1,
+      controlReferences: [ramp.reference],
+    });
+    const controls = kinematicControls({ speedBaseY: 1 });
+    const target = block({ index: 1, lifeTimeBase: 100, controlReferences: controls.references });
+    const sourcePlan = plan([emitter, target], [...ramp.entries, ...controls.entries]);
+    const particles = simulateEfxbnEmitterPair(
+      resolveEfxbnEmitterPairs(sourcePlan)[0],
+      sourcePlan,
+      10,
+    );
+
+    // The emitter dies once lifeCount passes lifeTimeBase, so it emits exactly 10 times.
+    expect(particles).toHaveLength(10);
+  });
+
+  it("applies speedBase in the particle's own spawn frame, not world space", () => {
+    const controls = kinematicControls({ speedBaseY: 1 });
+    const ringAngle = Math.PI / 2;
+    const angleControls = directControls({ spawnForm0: ringAngle, spawnForm1: ringAngle });
+    const shiftedControls = controls.references.map((reference) => ({
+      ...reference,
+      index: reference.index + angleControls.entries.length,
+      lookupIndex: reference.lookupIndex + angleControls.entries.length,
+    }));
+    const shiftedEntries = controls.entries.map((entry) => ({
+      ...entry,
+      index: entry.index + angleControls.entries.length,
+    }));
+    const emitter = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 100,
+      intervalBase: 1000,
+      numEmit: 1,
+      spawnFormType: 3,
+      spawnFormLength: [2, 0, 0, 0],
+      controlReferences: angleControls.references,
+    });
+    const target = block({ index: 1, lifeTimeBase: 100, controlReferences: shiftedControls });
+    const sourcePlan = plan([emitter, target], [...angleControls.entries, ...shiftedEntries]);
+    const particle = simulateEfxbnEmitterPair(
+      resolveEfxbnEmitterPairs(sourcePlan)[0],
+      sourcePlan,
+      4,
+    )[0];
+
+    // The ring places the particle at +Z with an outward direction, so speedBaseY travels
+    // along +Z and leaves world Y alone.
+    expect(particle.position[2]).toBeGreaterThan(4);
+    expect(particle.position[1]).toBeCloseTo(0, 6);
+  });
+});
+
 describe("EFXBN block topology", () => {
   it("pairs every declared child, not only the first", () => {
     const wrapper = block({
@@ -304,5 +517,30 @@ describe("EFXBN block topology", () => {
     expect(() => resolveEfxbnEmitterPairs(plan([wrapper], []))).toThrow(
       /references child block 7/,
     );
+  });
+});
+
+describe("resolveEfxbnShaderVariants", () => {
+  const withFlag = (flag: number, meshMultiUvFlag = 0) =>
+    makeEfxbnEffectBlock({ runtime: makeEfxbnRuntime({ drawScheme: { flag, meshMultiUvFlag } }) });
+
+  it("selects every variant whose mask shares a bit with the draw scheme", () => {
+    // Masks are any-bit-hit, not equality: sub_140188E30 tests `flag & mask`.
+    expect(resolveEfxbnShaderVariants(withFlag(0))).toEqual([]);
+    expect(resolveEfxbnShaderVariants(withFlag(0x40))).toEqual(["AddMix"]);
+    // 0x80 is one bit of the 0x280 ColorEx mask, so it alone selects ColorEx.
+    expect(resolveEfxbnShaderVariants(withFlag(0x90))).toEqual(["ColorEx"]);
+    // enableSoftParticle (0x1) is one bit of the 0x10001 Soft mask. Both flags are real:
+    // 001gundam_002chrgel_001/0/0/14.efxbn blocks 2 and 8.
+    expect(resolveEfxbnShaderVariants(withFlag(0x411))).toEqual(["Soft"]);
+    expect(resolveEfxbnShaderVariants(withFlag(0x491))).toEqual(["ColorEx", "Soft"]);
+    // Lighting bit 0x4 hits the Light mask; 0x20000 hits both Light and HLight.
+    expect(resolveEfxbnShaderVariants(withFlag(0x20004))).toEqual(["Light", "HLight"]);
+  });
+
+  it("only reports MultiUV once the caller confirms the mesh has a second UV set", () => {
+    const block = withFlag(0x10, 0x1000);
+    expect(resolveEfxbnShaderVariants(block)).toEqual([]);
+    expect(resolveEfxbnShaderVariants(block, { meshHasSecondUvSet: true })).toEqual(["MultiUV"]);
   });
 });

@@ -36,16 +36,76 @@
   "selectedEfxbn": {
     "path": "E:\\fixtures\\特效根目录\\火花.efxbn",
     "controlLookupEntries": [
-      { "index": 0, "keyF32Bits": 0, "key": 0.0, "valueF32Bits": 0, "value": 0.0 },
-      { "index": 1, "keyF32Bits": 0, "key": 0.0, "valueF32Bits": 0, "value": 0.08 },
-      { "index": 2, "keyF32Bits": 0, "key": 0.0, "valueF32Bits": 0, "value": 0.0 },
-      { "index": 3, "keyF32Bits": 0, "key": 0.0, "valueF32Bits": 0, "value": 1.0 },
-      { "index": 4, "keyF32Bits": 0, "key": 0.0, "valueF32Bits": 0, "value": 1.0 },
-      { "index": 5, "keyF32Bits": 0, "key": 0.0, "valueF32Bits": 0, "value": 1.0 },
-      { "index": 6, "keyF32Bits": 0, "key": 0.0, "valueF32Bits": 0, "value": 1.0 },
-      { "index": 7, "keyF32Bits": 0, "key": 0.0, "valueF32Bits": 0, "value": 0.3 },
-      { "index": 8, "keyF32Bits": 0, "key": 0.0, "valueF32Bits": 0, "value": 0.05 },
-      { "index": 9, "keyF32Bits": 0, "key": 0.0, "valueF32Bits": 0, "value": 0.9 }
+      {
+        "index": 0,
+        "keyF32Bits": 0,
+        "key": 0.0,
+        "valueF32Bits": 0,
+        "value": 0.0
+      },
+      {
+        "index": 1,
+        "keyF32Bits": 0,
+        "key": 0.0,
+        "valueF32Bits": 0,
+        "value": 0.08
+      },
+      {
+        "index": 2,
+        "keyF32Bits": 0,
+        "key": 0.0,
+        "valueF32Bits": 0,
+        "value": 0.0
+      },
+      {
+        "index": 3,
+        "keyF32Bits": 0,
+        "key": 0.0,
+        "valueF32Bits": 0,
+        "value": 1.0
+      },
+      {
+        "index": 4,
+        "keyF32Bits": 0,
+        "key": 0.0,
+        "valueF32Bits": 0,
+        "value": 1.0
+      },
+      {
+        "index": 5,
+        "keyF32Bits": 0,
+        "key": 0.0,
+        "valueF32Bits": 0,
+        "value": 1.0
+      },
+      {
+        "index": 6,
+        "keyF32Bits": 0,
+        "key": 0.0,
+        "valueF32Bits": 0,
+        "value": 1.0
+      },
+      {
+        "index": 7,
+        "keyF32Bits": 0,
+        "key": 0.0,
+        "valueF32Bits": 0,
+        "value": 0.3
+      },
+      {
+        "index": 8,
+        "keyF32Bits": 0,
+        "key": 0.0,
+        "valueF32Bits": 0,
+        "value": 0.05
+      },
+      {
+        "index": 9,
+        "keyF32Bits": 0,
+        "key": 0.0,
+        "valueF32Bits": 0,
+        "value": 0.9
+      }
     ],
     "effects": [
       {
@@ -57,57 +117,296 @@
         "intervalBase": 4.0,
         "intervalRandom": 0.0,
         "numEmit": 4,
+          "numEmitCountRandom": 0,
+          "meshEmitterIndex": 0,
+          "meshEmitterCount": 0,
         "actionFlags": 1,
         "spawnFormType": 3,
-        "spawnFormLength": [2.0, 1.0, 0.0, 0.0],
-        "speedRandom": [0.0, 0.0, 0.0, 0.0],
-        "sizeBase": [1.0, 1.0, 1.0, 1.0],
-        "sizeRandom": [0.0, 0.0, 0.0, 0.0],
-        "rotationBase": [0.0, 0.0, 0.0, 0.0],
-        "rotationRandom": [0.0, 0.0, 0.0, 0.0],
-        "rotationSpeed": [0.0, 0.0, 0.02, 0.0],
-        "positionOffset": [0.0, 0.0, 0.0, 0.0],
+        "spawnFormLength": [
+          2.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        "speedRandom": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "sizeBase": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "sizeRandom": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotationBase": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotationRandom": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotationSpeed": [
+          0.0,
+          0.0,
+          0.02,
+          0.0
+        ],
+        "positionOffset": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
         "delayEmitTimeBase": 0.0,
         "controlReferences": [],
-        "modelControlIndices": [-1, -1, -1, -1],
-        "modelHash": { "signed": 0, "unsigned": 0, "hex": "0x00000000" },
-        "animationHash": { "signed": 0, "unsigned": 0, "hex": "0x00000000" }
+        "colorTextureParameterIndex": [
+          -1,
+          -1
+        ],
+        "uvTextureParameterIndex": [
+          -1,
+          -1
+        ],
+        "modelHash": {
+          "signed": 0,
+          "unsigned": 0,
+          "hex": "0x00000000"
+        },
+        "animationHash": {
+          "signed": 0,
+          "unsigned": 0,
+          "hex": "0x00000000"
+        },
+        "childIndexSize": 1,
+        "childIndexArray": [
+          1,
+          -1,
+          -1,
+          -1,
+          -1,
+          -1,
+          -1,
+          -1
+        ],
+        "runtime": {
+          "elementType": 0,
+          "actionFlags": 1,
+          "deleteSettings": 0,
+          "zWriteEnable": 1,
+          "softParticleRange": 8.0,
+          "stripSegmentLife": 0.0,
+          "stripTailAlphaRate": 0.0,
+          "stripHeadAlphaRate": 0.0,
+          "internalElementDataIndex": 0,
+          "drawScheme": {
+            "flag": 0,
+            "meshMultiUvFlag": 0
+          }
+        }
       },
       {
         "index": 1,
         "referencedEffectIndex": -1,
-        "effectType": 0,
+        "effectType": 1,
         "lifeTimeBase": 30.0,
         "lifeTimeRandom": 0.0,
         "intervalBase": 1.0,
         "intervalRandom": 0.0,
         "numEmit": 1,
+          "numEmitCountRandom": 0,
+          "meshEmitterIndex": 0,
+          "meshEmitterCount": 0,
         "actionFlags": 0,
         "spawnFormType": 0,
-        "spawnFormLength": [0.0, 0.0, 0.0, 0.0],
-        "speedRandom": [0.1, 0.1, 0.1, 0.0],
-        "sizeBase": [0.18, 0.12, 0.18, 1.0],
-        "sizeRandom": [0.25, 0.25, 0.25, 0.0],
-        "rotationBase": [0.0, 0.0, 0.0, 0.0],
-        "rotationRandom": [0.0, 0.0, 0.5, 0.0],
-        "rotationSpeed": [0.0, 0.0, 0.03, 0.0],
-        "positionOffset": [0.0, 0.0, 0.0, 0.0],
+        "spawnFormLength": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "speedRandom": [
+          0.1,
+          0.1,
+          0.1,
+          0.0
+        ],
+        "sizeBase": [
+          0.18,
+          0.12,
+          0.18,
+          1.0
+        ],
+        "sizeRandom": [
+          0.25,
+          0.25,
+          0.25,
+          0.0
+        ],
+        "rotationBase": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotationRandom": [
+          0.0,
+          0.0,
+          0.5,
+          0.0
+        ],
+        "rotationSpeed": [
+          0.0,
+          0.0,
+          0.03,
+          0.0
+        ],
+        "positionOffset": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
         "delayEmitTimeBase": 0.0,
         "controlReferences": [
-          { "index": 0, "name": "speedBaseX", "rawOffset": 0, "runtimeOffset": 0, "selector": 1, "lookupIndex": 0 },
-          { "index": 1, "name": "speedBaseY", "rawOffset": 0, "runtimeOffset": 0, "selector": 1, "lookupIndex": 1 },
-          { "index": 2, "name": "speedBaseZ", "rawOffset": 0, "runtimeOffset": 0, "selector": 1, "lookupIndex": 2 },
-          { "index": 3, "name": "scaleBaseX", "rawOffset": 0, "runtimeOffset": 0, "selector": 1, "lookupIndex": 3 },
-          { "index": 4, "name": "scaleBaseY", "rawOffset": 0, "runtimeOffset": 0, "selector": 1, "lookupIndex": 4 },
-          { "index": 5, "name": "scaleBaseZ", "rawOffset": 0, "runtimeOffset": 0, "selector": 1, "lookupIndex": 5 },
-          { "index": 6, "name": "colorR", "rawOffset": 0, "runtimeOffset": 0, "selector": 1, "lookupIndex": 6 },
-          { "index": 7, "name": "colorG", "rawOffset": 0, "runtimeOffset": 0, "selector": 1, "lookupIndex": 7 },
-          { "index": 8, "name": "colorB", "rawOffset": 0, "runtimeOffset": 0, "selector": 1, "lookupIndex": 8 },
-          { "index": 9, "name": "colorA", "rawOffset": 0, "runtimeOffset": 0, "selector": 1, "lookupIndex": 9 }
+          {
+            "index": 0,
+            "name": "speedBaseX",
+            "rawOffset": 0,
+            "runtimeOffset": 0,
+            "selector": 1,
+            "lookupIndex": 0
+          },
+          {
+            "index": 1,
+            "name": "speedBaseY",
+            "rawOffset": 0,
+            "runtimeOffset": 0,
+            "selector": 1,
+            "lookupIndex": 1
+          },
+          {
+            "index": 2,
+            "name": "speedBaseZ",
+            "rawOffset": 0,
+            "runtimeOffset": 0,
+            "selector": 1,
+            "lookupIndex": 2
+          },
+          {
+            "index": 3,
+            "name": "scaleBaseX",
+            "rawOffset": 0,
+            "runtimeOffset": 0,
+            "selector": 1,
+            "lookupIndex": 3
+          },
+          {
+            "index": 4,
+            "name": "scaleBaseY",
+            "rawOffset": 0,
+            "runtimeOffset": 0,
+            "selector": 1,
+            "lookupIndex": 4
+          },
+          {
+            "index": 5,
+            "name": "scaleBaseZ",
+            "rawOffset": 0,
+            "runtimeOffset": 0,
+            "selector": 1,
+            "lookupIndex": 5
+          },
+          {
+            "index": 6,
+            "name": "colorR",
+            "rawOffset": 0,
+            "runtimeOffset": 0,
+            "selector": 1,
+            "lookupIndex": 6
+          },
+          {
+            "index": 7,
+            "name": "colorG",
+            "rawOffset": 0,
+            "runtimeOffset": 0,
+            "selector": 1,
+            "lookupIndex": 7
+          },
+          {
+            "index": 8,
+            "name": "colorB",
+            "rawOffset": 0,
+            "runtimeOffset": 0,
+            "selector": 1,
+            "lookupIndex": 8
+          },
+          {
+            "index": 9,
+            "name": "colorA",
+            "rawOffset": 0,
+            "runtimeOffset": 0,
+            "selector": 1,
+            "lookupIndex": 9
+          }
         ],
-        "modelControlIndices": [0, -1, -1, -1],
-        "modelHash": { "signed": 0, "unsigned": 0, "hex": "0x00000000" },
-        "animationHash": { "signed": 0, "unsigned": 0, "hex": "0x00000000" }
+        "colorTextureParameterIndex": [
+          0,
+          -1
+        ],
+        "uvTextureParameterIndex": [
+          -1,
+          -1
+        ],
+        "modelHash": {
+          "signed": 0,
+          "unsigned": 0,
+          "hex": "0x00000000"
+        },
+        "animationHash": {
+          "signed": 0,
+          "unsigned": 0,
+          "hex": "0x00000000"
+        },
+        "childIndexSize": 0,
+        "childIndexArray": [
+          -1,
+          -1,
+          -1,
+          -1,
+          -1,
+          -1,
+          -1,
+          -1
+        ],
+        "runtime": {
+          "elementType": 1,
+          "actionFlags": 0,
+          "deleteSettings": 0,
+          "zWriteEnable": 1,
+          "softParticleRange": 8.0,
+          "stripSegmentLife": 0.0,
+          "stripTailAlphaRate": 0.0,
+          "stripHeadAlphaRate": 0.0,
+          "internalElementDataIndex": 1,
+          "drawScheme": {
+            "flag": 16,
+            "meshMultiUvFlag": 0
+          }
+        },
+        "zTestEnable": 1
       }
     ],
     "modelControls": [
@@ -115,15 +414,29 @@
         "index": 0,
         "inputSourceType": 0,
         "colorMapId": 0,
-        "colorMapHash": { "signed": 0, "unsigned": 0, "hex": "0x00000000" },
+        "colorMapHash": {
+          "signed": 0,
+          "unsigned": 0,
+          "hex": "0x00000000"
+        },
         "addressingMode": 0,
         "reverseU": 0,
         "reverseV": 0,
         "textureWidth": 64,
         "textureHeight": 64,
         "uvPatternType": 0,
-        "uvU": [0.0, 64.0, 64.0, 0.0],
-        "uvV": [0.0, 0.0, 64.0, 64.0],
+        "uvU": [
+          0.0,
+          64.0,
+          64.0,
+          0.0
+        ],
+        "uvV": [
+          0.0,
+          0.0,
+          64.0,
+          64.0
+        ],
         "uvScrollSpeed": 0.0,
         "uvScrollLimit": 0.0,
         "uvScrollDirection": 0.0,

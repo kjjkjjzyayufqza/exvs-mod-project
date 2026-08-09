@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { TableProperties } from "lucide-react";
+import { BadgeCheck, Dices, TableProperties } from "lucide-react";
+import { toast } from "sonner";
 import { checkStringCoverage, getDefaultRanges } from "@/utils/exvsStringAllowedRanges";
 
 import { Button } from "@/components/ui/button";
@@ -12,10 +13,18 @@ import { CHARACTERLIST_STRING_FIELDS } from "@/models/characterListEntry";
 import { StringFieldGroup } from "./StringFieldGroup";
 import { SeriesIdPickerItem, SeriesIdPickerPopover } from "./SeriesIdPickerPopover";
 import { CardIconIndexPickerItem, CardIconIndexPickerPopover } from "./CardIconIndexPickerPopover";
+import {
+  findCharacterUniqueIdConflicts,
+  isCharacterUniqueIdUnique,
+  pickNextCharacterUniqueId,
+  type CharacterUniqueIdEntry,
+} from "./characterUniqueId";
 
 interface CharacterFormProps {
   character: CharacterListEntry;
   characterId: number;
+  /** All list entries for unique-ID check / pick (entryId + characterUniqueId). */
+  uniqueIdEntries: CharacterUniqueIdEntry[];
   seriesIdPickerItems: SeriesIdPickerItem[];
   seriesIdPickerLoading?: boolean;
   seriesIdPickerError?: string | null;
@@ -33,6 +42,7 @@ interface CharacterFormProps {
 export function CharacterForm({
   character,
   characterId,
+  uniqueIdEntries,
   seriesIdPickerItems,
   seriesIdPickerLoading,
   seriesIdPickerError,
@@ -105,6 +115,38 @@ export function CharacterForm({
       });
     },
     [applyChanges]
+  );
+
+  const handleCheckUniqueId = useCallback(() => {
+    const uniqueId = formData.characterUniqueId ?? 0;
+    const conflicts = findCharacterUniqueIdConflicts(uniqueId, uniqueIdEntries, characterId);
+    if (conflicts.length === 0) {
+      toast.success("Character Unique ID is unique", {
+        description: `Value ${uniqueId} is not used by other entries.`,
+      });
+      return;
+    }
+    toast.error("Character Unique ID is not unique", {
+      description: `Value ${uniqueId} also used by Character ID(s): ${conflicts.join(", ")}`,
+    });
+  }, [characterId, formData.characterUniqueId, uniqueIdEntries]);
+
+  const handlePickNewUniqueId = useCallback(() => {
+    const nextId = pickNextCharacterUniqueId(uniqueIdEntries);
+    handleFieldChange("characterUniqueId", nextId);
+    toast.success("Picked new Character Unique ID", {
+      description: `Set to ${nextId}`,
+    });
+  }, [handleFieldChange, uniqueIdEntries]);
+
+  const uniqueIdIsUnique = useMemo(
+    () =>
+      isCharacterUniqueIdUnique(
+        formData.characterUniqueId ?? 0,
+        uniqueIdEntries,
+        characterId,
+      ),
+    [characterId, formData.characterUniqueId, uniqueIdEntries],
   );
 
   const fieldGroups = useMemo(
@@ -380,6 +422,51 @@ export function CharacterForm({
                           open={cardIconIndexPickerOpen}
                           onOpenChange={setCardIconIndexPickerOpen}
                         />
+                      ) : field.name === "characterUniqueId" ? (
+                        <TooltipProvider delayDuration={100}>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={handleCheckUniqueId}
+                                  aria-label="Check unique"
+                                >
+                                  <BadgeCheck
+                                    className={
+                                      uniqueIdIsUnique
+                                        ? "h-3.5 w-3.5 text-emerald-500"
+                                        : "h-3.5 w-3.5 text-destructive"
+                                    }
+                                  />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                {uniqueIdIsUnique
+                                  ? "Unique (click to re-check)"
+                                  : "Duplicate (click for details)"}
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={handlePickNewUniqueId}
+                                  aria-label="Pick new unique ID"
+                                >
+                                  <Dices className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">Pick next free Unique ID</TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </TooltipProvider>
                       ) : undefined
                     }
                     value={formData[field.name] ?? 0}

@@ -207,7 +207,7 @@ describe("buildEffectFolderCopyPlan", () => {
   it("does not treat control-reference lookup indexes as fileIndex dependencies", () => {
     const modelFileIndex = 10;
     const textureFileIndex = 5;
-    const efxbnWithIdTable: EffectListItem = {
+    const efxbnWithCurveLookups: EffectListItem = {
       category: "efxbn",
       item: {
         ...efxbnWithRefs.item,
@@ -218,11 +218,14 @@ describe("buildEffectFolderCopyPlan", () => {
           effects: [
             makeEfxbnEffectBlock({
               index: 0,
-              idTable: [
-                { flag: 1, id: textureFileIndex },
-                { flag: 1, id: modelFileIndex },
-                { flag: 1, id: 0 },
-              ],
+              controlReferences: [textureFileIndex, modelFileIndex, 0].map((lookupIndex, index) => ({
+                index,
+                name: `curve${index}`,
+                rawOffset: 0,
+                runtimeOffset: 0,
+                selector: 1,
+                lookupIndex,
+              })),
             }),
           ],
         },
@@ -230,8 +233,8 @@ describe("buildEffectFolderCopyPlan", () => {
     };
 
     const plan = buildEffectFolderCopyPlan({
-      selectedItems: [efxbnWithIdTable],
-      allItems: [efxbnWithIdTable, modelItem, textureItem],
+      selectedItems: [efxbnWithCurveLookups],
+      allItems: [efxbnWithCurveLookups, modelItem, textureItem],
     });
 
     expect(plan.summary.modelCount).toBe(0);

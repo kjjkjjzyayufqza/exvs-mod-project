@@ -721,3 +721,49 @@ Use the following naming in notes, tooling, and tests:
 - A+B+C = Awakening Skill (`覚醒技`)
 
 This keeps script-side action-mask research aligned with gameplay-side terminology.
+
+---
+
+## Result poses (victory / defeat) action hashes
+
+**Settled** for typical unit `2.c` registration tables (including
+`wing_gundam_zero_rebellion_msc`):
+
+| Action hash | Registration | Entry callback | State slot | Meaning |
+|---|---|---|---|---|
+| `0xf32aa1ba` | `func_241(0xf32aa1ba, func_480)` | `func_480` | `0x34` via `func_69(0x34)` | **Victory pose 1** |
+| `0x900ab393` | `func_241(0x900ab393, func_482)` | `func_482` | `0x35` via `func_69(0x35)` | **Defeat pose 1** (失败 pose 1) |
+
+Also mirrored at boot by `func_2(hash, entry, slot)` so the same hashes stay
+linked to slots `0x34` / `0x35` if the primary `0x10002` row is missing.
+
+### Dispatch shape (do not confuse with main shot)
+
+```text
+func_241(0xf32aa1ba, func_480)     // victory pose 1
+  -> engine resolves action hash 0xf32aa1ba
+  -> func_480
+  -> func_69(0x34)                 // load slot tick (often func_871 / func_870)
+  -> callFunc3(func_481)           // keep ticking via func_72
+
+func_241(0x900ab393, func_482)     // defeat pose 1
+  -> func_482
+  -> func_69(0x35)
+  -> callFunc3(func_483)
+```
+
+Main shot remains a **different** hash → `ACTION_A_SHOT` path
+(`func_586` / phase callbacks / ammo). Replacing
+`func_241(mainShotHash, ACTION_A_SHOT)` with `func_871` (or only calling
+`func_871()` once) will not correctly play victory pose 1: `func_871` is a
+**slot `0x34` tick**, not an action-hash entry handler.
+
+### Practical rules
+
+1. To rebind or force **victory pose 1**, keep hash `0xf32aa1ba` → `func_480`
+   (or an entry that still does `func_69(0x34)` + continuous `func_72` ticks).
+2. To rebind or force **defeat pose 1**, keep hash `0x900ab393` → `func_482`
+   (or equivalent `func_69(0x35)` entry).
+3. Slot tick functions registered with `sys_1(0x10001, 0x2, 0x34, ...)` may
+   branch on unit mode (`func_186()` etc.); that changes *which* tick body runs
+   on the slot, not the pose action-hash identity above.

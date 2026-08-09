@@ -28,6 +28,7 @@ pub mod stagelist;
 pub mod unit_model_extract;
 pub mod unit_model_migrate;
 pub mod unit_model_models;
+pub mod unit_model_numatb_profile_fix;
 pub mod unit_model_repack;
 pub mod unit_model_textures;
 pub mod unit_model_validate;

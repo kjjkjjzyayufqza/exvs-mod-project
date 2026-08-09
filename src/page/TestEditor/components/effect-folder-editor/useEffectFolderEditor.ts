@@ -493,6 +493,7 @@ export function useEffectFolderEditor({
     validation,
     busyAction,
     reload,
+    markMutated,
     runValidate,
     runRepack,
     runDelete,

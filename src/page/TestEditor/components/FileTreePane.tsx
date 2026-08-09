@@ -277,19 +277,20 @@ function FileTreePaneImpl({
         inputFolderPath: repackTarget.folderPath,
         modFolderPath: modDir,
       });
-      const entryName = repackTarget.hashFolderName;
+      // Delete by written .fhm2d stem (HashName), not workspace folder name.
+      // Custom packs like Gyan_model repack to 0xHASH.fhm2d / 0xHASH.vgsht2.
       if (repackRemoveVgsht2InMod) {
         try {
-          const removed = await removeMatchingModVgsht2(modDir, entryName);
+          const removed = await removeMatchingModVgsht2(modDir, repackResult.outputPath);
           if (removed) {
             toast.success(`Repacked to mod: ${repackResult.outputPath}`, {
-              description: `Removed ${entryName}.vgsht2`,
+              description: "Removed matching .vgsht2 (same stem as .fhm2d)",
             });
           } else {
             toast.success(`Repacked to mod: ${repackResult.outputPath}`);
           }
         } catch (removeErr) {
-          console.error(`Failed to remove mod/${entryName}.vgsht2`, removeErr);
+          console.error(`Failed to remove matching .vgsht2 beside ${repackResult.outputPath}`, removeErr);
           toast.error(
             `Repacked to mod but failed to remove .vgsht2: ${(removeErr as Error).message}`,
           );
@@ -459,7 +460,8 @@ function FileTreePaneImpl({
                   className="mt-0.5"
                 />
                 <span>
-                  After repack, remove matching <code className="rounded bg-muted px-1 py-0.5">.vgsht2</code> in the same
+                  After repack, remove the <code className="rounded bg-muted px-1 py-0.5">.vgsht2</code> with the same stem as the written{" "}
+                  <code className="rounded bg-muted px-1 py-0.5">.fhm2d</code> (HashName) in the same
                   OB Mod folder.
                 </span>
               </label>

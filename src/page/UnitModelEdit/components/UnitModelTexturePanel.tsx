@@ -53,6 +53,7 @@ import {
 } from "@/page/SceneEdit/utils/sceneTextureConvert";
 import {
   analyzeTextureAddCandidates,
+  findTextureEntryForDuplicate,
   invalidateNutexbInternalName,
   type AnalyzedAddCandidate,
   type RawAddFile,
@@ -380,8 +381,33 @@ export function UnitModelTexturePanel({
       setConvertProgress({ done: 0, total: selections.length });
       try {
         let done = 0;
+        let addedCount = 0;
+        let replacedCount = 0;
         let nextInventory: UnitModelTextureInventory | null = null;
-        for (const { candidate, ddsFormat } of selections) {
+        const entriesForLookup = managerEntries;
+
+        for (const { candidate, ddsFormat, replace } of selections) {
+          if (replace) {
+            const existing = findTextureEntryForDuplicate(entriesForLookup, candidate);
+            if (!existing?.nutexbPath) {
+              throw new Error(
+                existing
+                  ? `Cannot replace ${candidate.filename}: existing texture has no path`
+                  : `Cannot replace ${candidate.filename}: matching texture not found`,
+              );
+            }
+            await replaceNutexbInPlace({
+              sourcePath: candidate.sourcePath,
+              targetNutexbPath: existing.nutexbPath,
+              ddsFormat,
+            });
+            invalidateNutexbInternalName(existing.nutexbPath);
+            replacedCount += 1;
+            done += 1;
+            setConvertProgress({ done, total: selections.length });
+            continue;
+          }
+
           const sourceNutexbPath = candidate.isNutexb
             ? candidate.sourcePath
             : (
@@ -397,12 +423,26 @@ export function UnitModelTexturePanel({
             targetFilename: candidate.nutexbFilename,
           });
           invalidateNutexbInternalName(sourceNutexbPath);
+          addedCount += 1;
           done += 1;
           setConvertProgress({ done, total: selections.length });
         }
-        if (nextInventory) setInventory(nextInventory);
+
+        if (replacedCount > 0) {
+          await refreshInventory();
+          await reloadPreviewAfterDiskChange();
+        } else if (nextInventory) {
+          setInventory(nextInventory);
+        }
         emitUnitTexturesChanged();
-        toast.success(`Added ${selections.length} unit texture(s)`);
+        const summaryParts: string[] = [];
+        if (addedCount > 0) summaryParts.push(`Added ${addedCount}`);
+        if (replacedCount > 0) summaryParts.push(`replaced ${replacedCount}`);
+        toast.success(
+          summaryParts.length > 0
+            ? `${summaryParts.join(", ")} unit texture(s)`
+            : "No unit textures changed",
+        );
       } catch (error) {
         toast.error("Failed to add unit texture", { description: String(error) });
         await refreshInventory();
@@ -415,7 +455,7 @@ export function UnitModelTexturePanel({
         bumpThumbnailCache();
       }
     },
-    [activeRoot, structurePath, refreshInventory],
+    [activeRoot, structurePath, refreshInventory, reloadPreviewAfterDiskChange, managerEntries],
   );
 
   const handleReplaceTexture = useCallback(

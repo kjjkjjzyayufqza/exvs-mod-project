@@ -9,6 +9,11 @@ export interface ConfigState {
   // Settings that will be stored in the config store
   obDplCachePath?: string;
   obModPath?: string;
+  /**
+   * Test Editor workspace root (e.g. E:\XB\mod).
+   * Used by FHM2D Init extracts into 012list/041cpm/006effect/….
+   */
+  testEditorFolder?: string;
   extractOutputPath?: string;
   characterIdDebugMscOutputPath?: string;
   unitModelOutputPath?: string;

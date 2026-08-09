@@ -6,11 +6,6 @@ export interface EffectFolderHash {
   hex: string;
 }
 
-export interface EfxbnIdPair {
-  flag: number;
-  id: number;
-}
-
 export interface EfxbnControlLookupEntry {
   index: number;
   keyF32Bits: number;
@@ -26,29 +21,6 @@ export interface EfxbnControlReferenceSummary {
   runtimeOffset: number;
   selector: number;
   lookupIndex: number;
-}
-
-export interface EfxbnMetaConfigHeaderSummary {
-  number: number;
-  unkFloatA: number;
-  unkIntA: number;
-  unkFloatB: number;
-  unkIntB: number;
-  unkBytes12: number[];
-  unkFloats4: [number, number, number, number];
-}
-
-export interface EfxbnMetaParsedSummary {
-  unkConfigInfo: number[];
-  configHeader: EfxbnMetaConfigHeaderSummary;
-  idTablePairs: EfxbnIdPair[];
-  controlReferences: EfxbnControlReferenceSummary[];
-  modelId: number;
-  modelHash: EffectFolderHash;
-  animationId: number;
-  animationHash: EffectFolderHash;
-  unk32: number;
-  unkConfigInfo2: number[];
 }
 
 export interface EfxbnEffectSummary {
@@ -82,6 +54,8 @@ export interface EfxbnEffectSummary {
   nudHandle: number;
   /** Texture handle bound directly to the block, independent of the parameter slots. */
   textureHandle: number;
+  /** Reflected as `pad01[2]`; carried so a rebuilt file stays byte-identical. */
+  pad01: [number, number];
   /** Primary and pass-2 color-map parameter slots. */
   colorTextureParameterIndex: [number, number];
   /** Primary and pass-2 UV-offset parameter slots. */
@@ -108,9 +82,14 @@ export interface EfxbnEffectSummary {
   normalMapHash: number;
   worldWindApplyRate: number;
   stripSegmentInterval: number;
+  /** Reflected as `stripSegmentLength_NotUse`; declared by the engine and never read. */
+  stripSegmentLengthNotUse: number;
   stripSegmentLife: number;
+  /** Reflected as `stripSegmentNum_NotUse`; declared and never read. */
+  stripSegmentNumNotUse: number;
   stripSegmentSplitNum: number;
   drawerId: number;
+  worldWindApplyRateRandom: number;
   softParticleRange: number;
   cameraFadeRange: number;
   extraFlags: number;
@@ -164,10 +143,9 @@ export interface EfxbnEffectSummary {
   modelHash: EffectFolderHash;
   animationId: number;
   animationHash: EffectFolderHash;
-  idTable: EfxbnIdPair[];
   controlReferences: EfxbnControlReferenceSummary[];
-  modelControlIndices: [number, number, number, number];
-  metaParsed: EfxbnMetaParsedSummary;
+  /** `reserve_area[31]` at reflected offset 756; carried verbatim for the byte-faithful writer. */
+  reserveArea: number[];
   /**
    * Loader-derived values from `sub_140146590`. Anything that renders or simulates
    * should read these; the sibling fields keep the authored record for round-tripping.
@@ -187,6 +165,22 @@ export interface EfxbnRuntimeNormalization {
   stripTailAlphaRate: number;
   stripHeadAlphaRate: number;
   internalElementDataIndex: number;
+  drawScheme: EfxbnDrawScheme;
+}
+
+/**
+ * The runtime draw-scheme flag word at element `+0x390`, synthesized by `sub_1401470F0` and
+ * consumed by `sub_140188E30` to pick the pixel-shader variant. Never stored in the file.
+ */
+export interface EfxbnDrawScheme {
+  /** Every bit the EFXBN alone determines. Zero for blocks the loader never enables. */
+  flag: number;
+  /**
+   * The multi-UV group, which applies only when the block's model mesh carries two or more
+   * vertex attribute streams of type 17. The backend has no mesh, so it reports the group
+   * separately; OR it into `flag` once the mesh is known.
+   */
+  meshMultiUvFlag: number;
 }
 
 export interface EfxbnModelControlSummary {
@@ -418,6 +412,28 @@ export async function parseEffectEfxbnFile(path: string): Promise<EfxbnSummary> 
   });
 }
 
+export interface EfxbnControlConstantPatch {
+  lookupIndex: number;
+  value: number;
+}
+
+export interface EfxbnControlConstantWriteResult {
+  path: string;
+  patchedCount: number;
+  summary: EfxbnSummary;
+}
+
+/** Surgical write of constant curve-key value floats. Does not rewrite blocks. */
+export async function patchEffectEfxbnControlConstants(
+  path: string,
+  patches: readonly EfxbnControlConstantPatch[],
+): Promise<EfxbnControlConstantWriteResult> {
+  return await invoke<EfxbnControlConstantWriteResult>("patch_effect_efxbn_control_constants", {
+    path: toWindowsPath(path),
+    patches: [...patches],
+  });
+}
+
 export async function validateEffectFolderForRepack(
   effectRoot: string,
   structureJsonPath = inferEffectFolderStructurePath(effectRoot),
@@ -455,6 +471,23 @@ export async function importEffectFolderFile(params: {
     kind: params.kind,
     hashId: params.hashId,
     targetFilename: params.targetFilename ?? null,
+  });
+}
+
+/** Update structure Item `unk3` (resource hash). Stored as JSON number (i32). */
+export async function updateEffectFolderItemHash(params: {
+  effectRoot: string;
+  structureJsonPath?: string;
+  fileIndex: number;
+  hashId: number;
+}): Promise<EffectFolderMutationResult> {
+  return await invoke<EffectFolderMutationResult>("update_effect_folder_item_hash", {
+    effectRoot: toWindowsPath(params.effectRoot),
+    structureJsonPath: params.structureJsonPath
+      ? toWindowsPath(params.structureJsonPath)
+      : null,
+    fileIndex: params.fileIndex,
+    hashId: params.hashId | 0,
   });
 }
 

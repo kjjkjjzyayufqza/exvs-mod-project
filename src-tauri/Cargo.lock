@@ -4710,7 +4710,7 @@ dependencies = [
 [[package]]
 name = "ssbh_data"
 version = "0.19.0"
-source = "git+https://github.com/kjjkjjzyayufqza/ssbh_lib?branch=wmmt2-merge#372d730103d3f4f1931594bf373204b1d7ca8d5a"
+source = "git+https://github.com/kjjkjjzyayufqza/ssbh_lib?branch=wmmt2-merge#15485ddb45e2c29866039aae5ad30497f686dc62"
 dependencies = [
  "ahash",
  "bilge",
@@ -4729,7 +4729,7 @@ dependencies = [
 [[package]]
 name = "ssbh_lib"
 version = "0.19.0"
-source = "git+https://github.com/kjjkjjzyayufqza/ssbh_lib?branch=wmmt2-merge#372d730103d3f4f1931594bf373204b1d7ca8d5a"
+source = "git+https://github.com/kjjkjjzyayufqza/ssbh_lib?branch=wmmt2-merge#15485ddb45e2c29866039aae5ad30497f686dc62"
 dependencies = [
  "bilge",
  "binrw 0.15.1",
@@ -4743,7 +4743,7 @@ dependencies = [
 [[package]]
 name = "ssbh_write"
 version = "0.19.0"
-source = "git+https://github.com/kjjkjjzyayufqza/ssbh_lib?branch=wmmt2-merge#372d730103d3f4f1931594bf373204b1d7ca8d5a"
+source = "git+https://github.com/kjjkjjzyayufqza/ssbh_lib?branch=wmmt2-merge#15485ddb45e2c29866039aae5ad30497f686dc62"
 dependencies = [
  "ssbh_write_derive",
 ]
@@ -4751,7 +4751,7 @@ dependencies = [
 [[package]]
 name = "ssbh_write_derive"
 version = "0.19.0"
-source = "git+https://github.com/kjjkjjzyayufqza/ssbh_lib?branch=wmmt2-merge#372d730103d3f4f1931594bf373204b1d7ca8d5a"
+source = "git+https://github.com/kjjkjjzyayufqza/ssbh_lib?branch=wmmt2-merge#15485ddb45e2c29866039aae5ad30497f686dc62"
 dependencies = [
  "proc-macro2",
  "quote",

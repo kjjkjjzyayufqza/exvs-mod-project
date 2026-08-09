@@ -1,6 +1,7 @@
 import {
   buildEffectFolderPreviewPlan,
   evaluateEfxbnUvTransform,
+  resolveEfxbnColorMapBinding,
 } from "../../src/page/TestEditor/components/effect-folder-editor/effectFolderPreviewPlan";
 import {
   EFXBN_PREVIEW_FPS,
@@ -105,9 +106,7 @@ function buildScenePlan(
       ? simulateEfxbnEmitterPair(pair, previewPlan, frame, remaining)
       : [];
     remaining -= particles.length;
-    const binding = previewPlan.textureBindings.find(
-      (candidate) => candidate.effectIndex === pair.target.index,
-    );
+    const binding = resolveEfxbnColorMapBinding(previewPlan, pair.target.index);
     const modelParticle = modelEffectIndices.has(pair.target.index);
     return {
       emitterEffectIndex: pair.emitter?.index ?? null,
@@ -120,6 +119,7 @@ function buildScenePlan(
       textureBinding: binding
         ? {
             effectIndex: binding.effectIndex,
+            slot: binding.slot,
             controlIndex: binding.controlIndex,
             sourcePath: binding.file?.path ?? null,
             colorMapHash: hashSummary(binding.parameter.colorMapHash),

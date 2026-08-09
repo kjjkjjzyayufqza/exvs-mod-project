@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use app_lib::ssbh_preview::load_model_preview_bundle;
 
@@ -6,12 +6,28 @@ use app_lib::ssbh_preview::load_model_preview_bundle;
 /// `nusubf/<name>` paths but the files sit beside the modl.
 const EFFECT_MODEL_FOLDER: &str = r"E:\XB\mod\006effect\053gbftry_005tsient_001\0\0\16";
 
-fn skip_unless_fixture_present() -> bool {
-    if Path::new(EFFECT_MODEL_FOLDER).is_dir() {
+/// Root of the extracted effect packs. One EFXBN preview loads every model in a pack, so a
+/// warning that fires per model is multiplied by the pack size.
+const EFFECT_PACK_ROOT: &str = r"E:\XB\mod\006effect";
+
+/// Cap on the sweep below — enough packs to cover the shapes, small enough to stay fast.
+const SWEEP_MODEL_LIMIT: usize = 120;
+
+/// A real model that declares the `__nust__` runtime material profile yet ships no
+/// `.numatb`. Only three models in the whole tree look like this, and all three are
+/// genuinely unresolved rather than authored that way.
+const RUNTIME_PROFILE_WITHOUT_NUMATB_FOLDER: &str = r"E:\XB\解包\com\file\0x2D1B7C40\custom_wing";
+
+fn skip_unless_dir_present(folder: &str) -> bool {
+    if Path::new(folder).is_dir() {
         return false;
     }
-    eprintln!("SKIP: real effect model fixture is unavailable: {EFFECT_MODEL_FOLDER}");
+    eprintln!("SKIP: real model fixture is unavailable: {folder}");
     true
+}
+
+fn skip_unless_fixture_present() -> bool {
+    skip_unless_dir_present(EFFECT_MODEL_FOLDER)
 }
 
 /// Effect models never ship a NUMATB.
@@ -102,11 +118,13 @@ fn missing_material_warning_names_every_searched_location() {
     );
 }
 
-/// A materialless model must explain itself exactly once. The generic
-/// "no material files could be loaded" line is redundant when the folder already
-/// reported that it holds no `.numatb`.
+/// An effect model must stay completely silent about materials.
+///
+/// Every effect model in the tree is authored without a `.numatb`, so any material line —
+/// including the generic "no material files could be loaded" one — is noise repeated once
+/// per model in a preview that loads dozens of them.
 #[test]
-fn materialless_effect_model_reports_a_single_material_warning() {
+fn materialless_effect_model_reports_no_material_warning() {
     if skip_unless_fixture_present() {
         return;
     }
@@ -119,10 +137,101 @@ fn materialless_effect_model_reports_a_single_material_warning() {
         .filter(|warning| warning.to_lowercase().contains("material"))
         .collect();
 
-    assert_eq!(
-        material_warnings.len(),
-        1,
-        "expected one material warning, got: {material_warnings:?}"
+    assert!(
+        material_warnings.is_empty(),
+        "effect models carry no material on disk by design, got: {material_warnings:?}"
     );
-    assert!(material_warnings[0].contains("no .numatb"));
+}
+
+/// Collects `.numdlb` folders under `root`, sorted, capped at `limit`.
+fn collect_model_folders(root: &Path, limit: usize) -> Vec<PathBuf> {
+    let mut folders = Vec::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        let mut children = Vec::new();
+        let mut holds_model = false;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                children.push(path);
+            } else if path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("numdlb"))
+            {
+                holds_model = true;
+            }
+        }
+        if holds_model {
+            folders.push(dir);
+        }
+        children.sort();
+        stack.extend(children.into_iter().rev());
+    }
+    folders.sort();
+    folders.truncate(limit);
+    folders
+}
+
+/// A whole pack of real effect models must load without a single warning.
+///
+/// One `.efxbn` preview loads every model the effect references, so a warning that is
+/// correct-but-expected for one model becomes a wall of identical lines for the pack. This
+/// sweep is what proves the silence generalizes past the single fixture above.
+#[test]
+fn real_effect_models_load_without_warnings() {
+    if skip_unless_dir_present(EFFECT_PACK_ROOT) {
+        return;
+    }
+
+    let folders = collect_model_folders(Path::new(EFFECT_PACK_ROOT), SWEEP_MODEL_LIMIT);
+    assert!(
+        !folders.is_empty(),
+        "effect pack root holds no model folders: {EFFECT_PACK_ROOT}"
+    );
+
+    let mut reported: Vec<String> = Vec::new();
+    for folder in &folders {
+        let bundle = load_model_preview_bundle(folder.to_string_lossy().as_ref())
+            .unwrap_or_else(|e| panic!("load effect model {}: {e}", folder.display()));
+        for warning in &bundle.warnings {
+            reported.push(format!("{}: {warning}", folder.display()));
+        }
+    }
+
+    assert!(
+        reported.is_empty(),
+        "{} of {} effect models reported warnings:\n{}",
+        reported.len(),
+        folders.len(),
+        reported.join("\n")
+    );
+}
+
+/// Silence is scoped to models that never declare a runtime material.
+///
+/// A model that records a `__nust__` profile needs it on disk: the profile pair is how the
+/// unit-model reader identifies a complete model folder. Missing it stays a warning, so the
+/// effect-model silence above cannot degrade into a blanket "materials are optional".
+#[test]
+fn model_declaring_a_nust_profile_warns_when_the_folder_holds_no_numatb() {
+    if skip_unless_dir_present(RUNTIME_PROFILE_WITHOUT_NUMATB_FOLDER) {
+        return;
+    }
+
+    let bundle = load_model_preview_bundle(RUNTIME_PROFILE_WITHOUT_NUMATB_FOLDER)
+        .expect("load model declaring a runtime material profile");
+
+    let warning = bundle
+        .warnings
+        .iter()
+        .find(|warning| warning.contains("Material file listed in model but missing"))
+        .expect("missing runtime material must still be reported");
+    assert!(
+        warning.contains("__nust__.numatb"),
+        "warning should name the unresolved runtime profile: {warning}"
+    );
+    assert!(bundle.matl.is_none());
 }

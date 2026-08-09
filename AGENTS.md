@@ -83,6 +83,46 @@ from an earlier AI task manager. It is **auxiliary only**:
 - For current truth, prefer `docs/` specifications and current verification
   evidence over stale session notes.
 
+## Active Research Bootstrap (Read Before Rediscovery)
+
+Long-running research cases may register a compact bootstrap here. When a task
+matches a registered trigger, read the linked bootstrap **before** CodeGraph,
+`rg`, broad docs searches, binary inspection, or asset inventory. Treat its
+settled findings as the starting state; do not reproduce them merely to gain
+confidence.
+
+### Wing Zero Rebellion transformation port
+
+**Triggers:** `Wing Gundam Zero Rebellion`, `wing_gundam_zero_rebellion`,
+`900000004`, `28001001`, `028gunwtv_001gunwtv_001`, `kamaesht2neo`, or work on
+porting the TV Wing Zero / Neo Bird transformation.
+
+Read order:
+
+1. `docs/agent-sessions/2026-08-09-wing-zero-rebellion-transform-handoff.md`
+   — compact current truth, invalidated assumptions, source paths, and restart
+   conditions.
+2. `docs/msc-research/2026-08-09-wing-zero-rebellion-transform-port-plan.md`
+   — read only the sections needed for implementation or a disputed detail.
+3. `work/20260809-wing-zero-rebellion-transform-plan/evidence/E-007.md` and
+   `E-008.md` — read only when auditing the canonical-name inventory, direct
+   motion Items, SHL mapping, or skeleton comparison.
+
+Reuse rules:
+
+- Locate source resources by canonical names, never by package hash. Resource
+  table hashes are validation values after name resolution.
+- Do not repeat source file counting, six-resource inventory, three transform
+  motion lookup, SHL model-folder mapping, or body/wing skeleton comparison
+  unless a restart condition in the bootstrap is met.
+- Do not unpack FHM2D for this case. The complete named source resources and
+  modern structure JSON files are already present.
+- Do not reopen the legacy hash manifests to determine availability; their old
+  “85 model assets missing” conclusion is explicitly superseded.
+- If implementation is requested, begin at the bootstrap's implementation
+  checkpoint and capture target before-manifests. Do not restart research from
+  package discovery.
+
 ## Required Documentation Sources
 
 Use `docs/` as the first source of project truth:

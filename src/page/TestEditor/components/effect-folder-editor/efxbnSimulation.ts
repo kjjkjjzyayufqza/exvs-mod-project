@@ -23,6 +23,7 @@ export type EfxbnPreviewParticle = {
   emitterEffectIndex: number | null;
   targetEffectIndex: number;
   age: number;
+  /** `SEfxElementInstance.lifeCount`. Wraps to 1 on loop, clamps at `lifeTime` on force-loop. */
   phaseAge: number;
   lifeTime: number;
   position: [number, number, number];
@@ -31,7 +32,21 @@ export type EfxbnPreviewParticle = {
   color: [number, number, number, number];
   rotation: number;
   rotationEuler: [number, number, number];
-  history: [number, number, number][];
+  history: EfxbnStripHistoryNode[];
+};
+
+/**
+ * One strip ring-buffer node.
+ *
+ * `EfxExtractedDrawInfoStrip3rd` gives every node its own segment endpoints (which is where the
+ * width lives) and its own `prevColorAlpha` / `currentColorAlpha`, so a ribbon is not a uniform
+ * extrusion of the head particle's size and colour.
+ */
+export type EfxbnStripHistoryNode = {
+  position: [number, number, number];
+  /** Half-width at the node: `sizeBase.x * sizeRandom.x * scaleBaseX` at that node's phase. */
+  width: number;
+  color: [number, number, number, number];
 };
 
 const LCG_MULTIPLIER = 1_664_525;
@@ -40,17 +55,23 @@ const UINT32_RANGE = 4_294_967_296;
 const EPSILON = 0.00001;
 
 type RandomSource = {
+  nextUint: () => number;
   nextUnit: () => number;
   nextSigned: () => number;
 };
 
+function lcgStep(seed: number): number {
+  return (Math.imul(seed, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+}
+
 function makeRandomSource(initialSeed: number): RandomSource {
   let seed = initialSeed >>> 0;
-  const nextUnit = () => {
-    seed = (Math.imul(seed, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-    return seed / UINT32_RANGE;
+  const nextUint = () => {
+    seed = lcgStep(seed);
+    return seed;
   };
-  return { nextUnit, nextSigned: () => nextUnit() * 2 - 1 };
+  const nextUnit = () => nextUint() / UINT32_RANGE;
+  return { nextUint, nextUnit, nextSigned: () => nextUnit() * 2 - 1 };
 }
 
 function pairSeed(emitterIndex: number | null, targetIndex: number): number {
@@ -62,6 +83,126 @@ function pairSeed(emitterIndex: number | null, targetIndex: number): number {
 
 function randomizedBase(base: number, randomRate: number, random: RandomSource): number {
   return base * (1 + random.nextSigned() * randomRate);
+}
+
+/** `actionFlags & 1` — the loop bit, already forced on by the loader when `0x08000000` is set. */
+const EFXBN_ACTION_FLAG_LOOP = 0x1;
+/**
+ * `actionFlags & 0x08000000`. Both the emitter and the particle kinetic shaders clamp
+ * `lifeCount` at `lifeTime` under this flag, so the instance never reaches the expiry test.
+ */
+const EFXBN_ACTION_FLAG_FORCE_LOOP = 0x0800_0000;
+/** `actionFlags & 0x200` — suppresses the emitter's delay restart on a loop cycle. */
+const EFXBN_ACTION_FLAG_KEEP_DELAY = 0x200;
+
+/**
+ * Number of frames one life cycle spans.
+ *
+ * `efxKineticParticleBillboard3rd` expires an instance when `lifeTime < lifeCount + 1`, so with
+ * `lifeCount` tracking the particle's age the last living age is `floor(lifeTime) - 1` and the
+ * cycle repeats every `floor(lifeTime)` frames.
+ */
+function lifeCycleFrames(lifeTime: number): number {
+  return Math.max(1, Math.floor(lifeTime));
+}
+
+/**
+ * `SEfxElementInstance.lifeCount` at a given age, reproducing the kinetic shader's recurrence.
+ *
+ * ```text
+ * add   r2.z, lifeCount, l(1.000000)      ; next
+ * lt    r2.w, lifeTime, r2.z              ; would overrun
+ * and   r1.w, forceLoop, r2.w
+ * movc  r4.x, r1.w, lifeTime, r2.z        ; force-loop clamps instead of advancing
+ * lt    r1.w, lifeTime, r4.x              ; expired
+ * movc  r6.xyzw, loopBit, r3.wyxz, ...    ; r3.w = l(1.000000) — the wrap target
+ * ```
+ *
+ * Nothing else is touched on the wrap, which is why a looping particle's position is continuous.
+ */
+export function efxbnParticleLifeCount(
+  age: number,
+  lifeTime: number,
+  looping: boolean,
+  forceLooping: boolean,
+): number {
+  if (age <= 0) return 0;
+  if (forceLooping) return Math.min(age, lifeTime);
+  const cycle = lifeCycleFrames(lifeTime);
+  if (!looping || age < cycle) return age;
+  return ((age - cycle) % cycle) + 1;
+}
+
+/** True once a non-looping instance has passed `lifeTime < lifeCount + 1`. */
+function isExpiredAtAge(age: number, lifeTime: number): boolean {
+  return age >= lifeCycleFrames(lifeTime);
+}
+
+/**
+ * Number of particles one emission tick releases.
+ *
+ * `efxKineticEmitterCommon3rd`:
+ * ```text
+ * bfi  r5.w, l(31), l(1), numEmitCountRandom, l(1)  ; 2R + 1
+ * udiv null, r5.w, lcg(seed), r5.w                  ; seed % (2R + 1)
+ * iadd r5.x, -numEmitCountRandom, r5.w              ; centred on zero
+ * iadd r1.w, numEmit, r5.x
+ * ult  r5.x, l(0), meshEmitterCount
+ * movc r1.w, r5.x, meshEmitterCount, r1.w
+ * ige  r5.z, r1.w, l(1)                             ; nothing emits below one
+ * ```
+ *
+ * `meshEmitterCount` is zero in all 40,309 blocks of the shipped corpus, so the override is
+ * carried for fidelity rather than for coverage.
+ */
+export function resolveEfxbnEmitCount(
+  numEmit: number,
+  numEmitCountRandom: number,
+  meshEmitterCount: number,
+  seed: number,
+): number {
+  if (meshEmitterCount > 0) return meshEmitterCount;
+  const range = numEmitCountRandom * 2 + 1;
+  const offset = (lcgStep(seed) % range) - numEmitCountRandom;
+  return Math.max(0, numEmit + offset);
+}
+
+export type EfxbnSpawnBasis = {
+  x: [number, number, number];
+  y: [number, number, number];
+  z: [number, number, number];
+};
+
+/**
+ * The `spawnSystem` matrix `efxSpawnParticleCommon3rd` writes at instance offset 320, expressed
+ * as its three column vectors.
+ *
+ * The shader builds it from two spawn-form angles and stores rows at `l(320)`/`l(336)`/`l(352)`
+ * with `l(368)` fixed at `(0, 0, 0, 1)`. Expanding its `sincos`/`dp2`/`dp3` chain with the third
+ * angle at zero — which is what every spawn-form branch except types 4 and 8 leaves it at — gives
+ *
+ * ```text
+ * column0 = ( cos B,          0,      -sin B       )
+ * column1 = ( sin A sin B,    cos A,   sin A cos B )
+ * column2 = ( cos A sin B,   -sin A,   cos A cos B )
+ * ```
+ *
+ * i.e. `Ry(B) * Rx(A)`, so **column 1 is exactly the spawn direction**. The no-emitter branch
+ * writes the identity and the preview's no-emitter direction is `+Y`, which is the same thing.
+ * Recovering `A` and `B` from a unit direction therefore reproduces the shader's basis.
+ */
+export function efxbnSpawnBasis(direction: readonly [number, number, number]): EfxbnSpawnBasis {
+  const unit = normalize3(direction);
+  const cosPolar = unit[1];
+  const sinPolar = Math.hypot(unit[0], unit[2]);
+  const azimuth = sinPolar < EPSILON ? 0 : Math.atan2(unit[0], unit[2]);
+  const sinAzimuth = Math.sin(azimuth);
+  const cosAzimuth = Math.cos(azimuth);
+  return {
+    x: [cosAzimuth, 0, -sinAzimuth],
+    y: [unit[0], unit[1], unit[2]],
+    z: [cosPolar * sinAzimuth, -sinPolar, cosPolar * cosAzimuth],
+  };
 }
 
 function controlValue(
@@ -198,13 +339,15 @@ function simulateParticle(
   const lifeTime = randomizedBase(target.lifeTimeBase, target.lifeTimeRandom, random);
   if (lifeTime <= EPSILON) return null;
   const age = Math.max(0, frame - spawnFrame);
-  const looping = isLooping(target);
-  if (!looping && age >= lifeTime) return null;
-  const phaseAge = looping ? age % lifeTime : age;
-  const curveProgress = (sampleAge: number) => {
-    const samplePhase = looping ? sampleAge % lifeTime : Math.min(sampleAge, lifeTime);
-    return (samplePhase / lifeTime) * 100;
-  };
+  const actionFlags = efxbnRuntime(target).actionFlags;
+  const looping = (actionFlags & EFXBN_ACTION_FLAG_LOOP) !== 0;
+  const forceLooping = (actionFlags & EFXBN_ACTION_FLAG_FORCE_LOOP) !== 0;
+  if (!looping && !forceLooping && isExpiredAtAge(age, lifeTime)) return null;
+  const phaseAge = efxbnParticleLifeCount(age, lifeTime, looping, forceLooping);
+  // `mul r1.y, lifeTimeRatio, lifeCount ; div r1.y, r1.y, lifeTimeBase` with
+  // `lifeTimeRatio = lifeTimeBase / lifeTime`, i.e. lifeCount over the randomised lifetime.
+  const curveProgress = (sampleAge: number) =>
+    (efxbnParticleLifeCount(sampleAge, lifeTime, looping, forceLooping) / lifeTime) * 100;
 
   const spawn = pair.emitter
     ? spawnPositionAndDirection(
@@ -243,12 +386,39 @@ function simulateParticle(
     target.rotationBase[1] + random.nextSigned() * target.rotationRandom[1],
     target.rotationBase[2] + random.nextSigned() * target.rotationRandom[2],
   ];
+  // `speedBase` is authored in the particle's spawn frame; the kinetic shader transforms it with
+  // `dp4 r2.x, spawnSystemRow, speed` and adds the result to the stored position each frame.
+  const basis = efxbnSpawnBasis(spawn.direction);
   let gravityVelocity = 0;
   let directionVelocity = 0;
   let elapsed = 0;
-  const historySamples: Array<{ age: number; position: [number, number, number] }> = target.effectType === EFXBN_ELEMENT_TYPE.strip
-    ? [{ age: 0, position: [...position] }]
-    : [];
+  // A strip node freezes the particle's own state at the moment it entered the ring buffer.
+  const stripNodeAt = (
+    sampleAge: number,
+    samplePosition: readonly [number, number, number],
+  ): { age: number; node: EfxbnStripHistoryNode } => {
+    const nodeProgress = curveProgress(sampleAge);
+    return {
+      age: sampleAge,
+      node: {
+        position: [samplePosition[0], samplePosition[1], samplePosition[2]],
+        width:
+          Math.abs(
+            target.sizeBase[0] *
+              sizeRandom[0] *
+              controlValue(target, plan, "scaleBaseX", nodeProgress),
+          ) * 0.5,
+        color: [
+          controlValue(target, plan, "colorR", nodeProgress) * spawn.color[0],
+          controlValue(target, plan, "colorG", nodeProgress) * spawn.color[1],
+          controlValue(target, plan, "colorB", nodeProgress) * spawn.color[2],
+          Math.max(0, controlValue(target, plan, "colorA", nodeProgress) * spawn.color[3]),
+        ],
+      },
+    };
+  };
+  const historySamples: Array<{ age: number; node: EfxbnStripHistoryNode }> =
+    target.effectType === EFXBN_ELEMENT_TYPE.strip ? [stripNodeAt(0, position)] : [];
   const authoredStripInterval = target.stripSegmentInterval;
   const stripInterval = Number.isFinite(authoredStripInterval) && authoredStripInterval > 0
     ? Math.max(EFXBN_STRIP_MIN_SEGMENT_INTERVAL, authoredStripInterval)
@@ -263,10 +433,15 @@ function simulateParticle(
       canSampleStrip ? Math.max(EPSILON, nextStripSample - elapsed) : Number.POSITIVE_INFINITY,
     );
     const progress = curveProgress(elapsed + step);
-    const velocity: [number, number, number] = [
+    const localSpeed: [number, number, number] = [
       controlValue(target, plan, "speedBaseX", progress) * speedRate[0],
       controlValue(target, plan, "speedBaseY", progress) * speedRate[1],
       controlValue(target, plan, "speedBaseZ", progress) * speedRate[2],
+    ];
+    const velocity: [number, number, number] = [
+      basis.x[0] * localSpeed[0] + basis.y[0] * localSpeed[1] + basis.z[0] * localSpeed[2],
+      basis.x[1] * localSpeed[0] + basis.y[1] * localSpeed[1] + basis.z[1] * localSpeed[2],
+      basis.x[2] * localSpeed[0] + basis.y[2] * localSpeed[1] + basis.z[2] * localSpeed[2],
     ];
     if ((target.actionFlags & 0x4000) !== 0) {
       directionVelocity += controlValue(target, plan, "directionAccel", progress) * step;
@@ -279,13 +454,13 @@ function simulateParticle(
     position[2] += (velocity[2] + spawn.direction[2] * directionVelocity) * step;
     elapsed += step;
     if (canSampleStrip && elapsed + EPSILON >= nextStripSample) {
-      historySamples.push({ age: elapsed, position: [...position] });
+      historySamples.push(stripNodeAt(elapsed, position));
       nextStripSample += stripInterval;
     }
   }
   if (target.effectType === EFXBN_ELEMENT_TYPE.strip &&
       (historySamples.length === 0 || Math.abs(historySamples[historySamples.length - 1].age - age) > EPSILON)) {
-    const finalSample = { age, position: [...position] as [number, number, number] };
+    const finalSample = stripNodeAt(age, position);
     if (historySamples.length < EFXBN_STRIP_HISTORY_SAMPLE_LIMIT) historySamples.push(finalSample);
     else historySamples[historySamples.length - 1] = finalSample;
   }
@@ -325,7 +500,7 @@ function simulateParticle(
     history: target.effectType === EFXBN_ELEMENT_TYPE.strip
       ? historySamples
           .filter((sample) => sample.age >= Math.max(0, age - Math.max(0, efxbnRuntime(target).stripSegmentLife)))
-          .map((sample) => sample.position)
+          .map((sample) => sample.node)
       : [],
   };
 }
@@ -359,6 +534,97 @@ export function isEfxbnStripBlock(block: EfxbnEffectSummary): boolean {
 }
 
 /**
+ * How `efxConstructDrawBufferBillboard3rd` orients a billboard quad.
+ *
+ * ```text
+ * and  r15.xyzw, actionFlags, l(32, 0x20000000, 0x02000000, 0x00400000)
+ * ult  r15.xyz,  l(0, 0, 0, 0), r15.xyzx
+ * or   r1.w,     r15.y, r15.x        ; 0x20 or 0x20000000 -> the axis-locked basis
+ * if_nz r1.w ... else ... and r0.w, actionFlags, l(128)   ; 0x80 -> the element's own rotation
+ * ```
+ *
+ * The names are the flag values' behaviour, not engine vocabulary — the HLSL has none.
+ * Over the 7,395 shipped billboard blocks: camera-facing 5,139, axis-locked 1,652,
+ * element-rotation 604.
+ */
+export const EFXBN_BILLBOARD_BASIS = {
+  /** Quad lies in the camera plane and spins by the particle's Z rotation. */
+  cameraFacing: 0,
+  /** Quad is oriented entirely by the particle's own rotation. `actionFlags & 0x80`. */
+  elementRotation: 1,
+  /** Quad keeps the particle's up axis and yaws toward the camera. `0x20` or `0x20000000`. */
+  cameraAxis: 2,
+} as const;
+
+export type EfxbnBillboardBasis =
+  (typeof EFXBN_BILLBOARD_BASIS)[keyof typeof EFXBN_BILLBOARD_BASIS];
+
+const EFXBN_ACTION_FLAG_AXIS_BILLBOARD = 0x20;
+const EFXBN_ACTION_FLAG_AXIS_BILLBOARD_ALT = 0x2000_0000;
+const EFXBN_ACTION_FLAG_ELEMENT_ROTATION = 0x80;
+
+export function resolveEfxbnBillboardBasis(block: EfxbnEffectSummary): EfxbnBillboardBasis {
+  const actionFlags = efxbnRuntime(block).actionFlags;
+  if (
+    (actionFlags & (EFXBN_ACTION_FLAG_AXIS_BILLBOARD | EFXBN_ACTION_FLAG_AXIS_BILLBOARD_ALT)) !== 0
+  ) {
+    return EFXBN_BILLBOARD_BASIS.cameraAxis;
+  }
+  if ((actionFlags & EFXBN_ACTION_FLAG_ELEMENT_ROTATION) !== 0) {
+    return EFXBN_BILLBOARD_BASIS.elementRotation;
+  }
+  return EFXBN_BILLBOARD_BASIS.cameraFacing;
+}
+
+/**
+ * Pixel-shader variants and the draw-scheme masks that select them.
+ *
+ * `sub_140188E30` appends one suffix per mask that shares **any** bit with the block's
+ * draw-scheme flag, in this order — they are masks, not enum values, so a single bit such as
+ * `0x80` is enough to pull in the whole ColorEx variant.
+ */
+export const EFXBN_SHADER_VARIANT_MASKS = [
+  ["AddMix", 0x40],
+  ["ColorEx", 0x280],
+  ["Light", 0x20804],
+  ["MultiUV", 0x1000],
+  ["Soft", 0x10001],
+  ["HLight", 0x20000],
+] as const satisfies ReadonlyArray<readonly [string, number]>;
+
+export type EfxbnShaderVariant = (typeof EFXBN_SHADER_VARIANT_MASKS)[number][0];
+
+/**
+ * Draw-scheme bit that skips the `rgb * 0.5` the base Face and Model pixel shaders otherwise
+ * apply. Set on 104 of the 21,408 shipped drawable blocks, so the halving is the common case.
+ */
+export const DRAW_SCHEME_FULL_BRIGHTNESS = 0x40000;
+
+/** Draw-scheme bit set when the block binds a UV-offset map, i.e. the ColorEx distortion path. */
+export const DRAW_SCHEME_UV_OFFSET_MAP = 0x80;
+
+export type EfxbnShaderVariantOptions = {
+  /**
+   * Whether the block's model mesh carries two or more vertex attribute streams of type 17.
+   * The backend cannot know this, so the MultiUV group stays out of the flag until a caller
+   * that resolved the mesh says otherwise.
+   */
+  meshHasSecondUvSet?: boolean;
+};
+
+/** The pixel-shader variants the game would compile for this block. */
+export function resolveEfxbnShaderVariants(
+  block: EfxbnEffectSummary,
+  options: EfxbnShaderVariantOptions = {},
+): EfxbnShaderVariant[] {
+  const scheme = efxbnRuntime(block).drawScheme;
+  const flag = options.meshHasSecondUvSet ? scheme.flag | scheme.meshMultiUvFlag : scheme.flag;
+  return EFXBN_SHADER_VARIANT_MASKS.filter(([, mask]) => (flag & mask) !== 0).map(
+    ([name]) => name,
+  );
+}
+
+/**
  * Loader-derived values for a block.
  *
  * The backend always fills these in. Reading the authored fields instead would diverge
@@ -369,10 +635,6 @@ export function efxbnRuntime(block: EfxbnEffectSummary): EfxbnRuntimeNormalizati
     throw new Error(`EFXBN block ${block.index} is missing loader normalization.`);
   }
   return block.runtime;
-}
-
-function isLooping(block: EfxbnEffectSummary): boolean {
-  return (efxbnRuntime(block).actionFlags & 1) !== 0;
 }
 
 export function isEfxbnDrawableBlock(block: EfxbnEffectSummary): boolean {
@@ -444,22 +706,58 @@ export function simulateEfxbnEmitterPair(
   const random = makeRandomSource(pairSeed(pair.emitter?.index ?? null, pair.target.index));
   const particles: EfxbnPreviewParticle[] = [];
   const emitter = pair.emitter;
+  // `efxSpawnEmitterCommon3rd` randomises the emitter's own lifetime exactly like a particle's
+  // and stores `lifeTimeRatio = lifeTimeBase / lifeTime` beside it, which is what every emitter
+  // curve is then sampled through.
+  const lifeTimeBase = emitter?.lifeTimeBase ?? 0;
+  const emitterLifeTime = emitter
+    ? randomizedBase(lifeTimeBase, emitter.lifeTimeRandom, random)
+    : 0;
+  const emitterLifeTimeRatio = emitterLifeTime > EPSILON ? lifeTimeBase / emitterLifeTime : 0;
+  const emitterActionFlags = emitter ? efxbnRuntime(emitter).actionFlags : 0;
+  const emitterLooping = (emitterActionFlags & EFXBN_ACTION_FLAG_LOOP) !== 0;
+  const emitterForceLooping = (emitterActionFlags & EFXBN_ACTION_FLAG_FORCE_LOOP) !== 0;
+  // On a loop cycle the emitter restarts `lifeCount` at zero only when it re-arms its emission
+  // delay: `movc r3.yz, r1.wwww, ...` with `r1.w = (actionFlags & 512) == 0 && delayEmitTimeBase > 0`.
+  const loopRestartLifeCount =
+    (emitterActionFlags & EFXBN_ACTION_FLAG_KEEP_DELAY) === 0 &&
+    (emitter?.delayEmitTimeBase ?? 0) > 0
+      ? 0
+      : 1;
+
   let generatorCounter = 0;
   let delayCounter = emitter?.delayEmitTimeBase ?? 0;
+  let lifeCount = 0;
   let particleId = 0;
   const lastTick = Math.floor(clampedFrame);
   for (let tick = 0; tick <= lastTick && particles.length < maxParticles; tick += 1) {
-    const emitterLifeTime = Math.max(EPSILON, emitter?.lifeTimeBase ?? 1);
-    const looping = emitter ? isLooping(emitter) : false;
-    if (emitter && !looping && tick > emitterLifeTime) break;
+    if (emitter) {
+      const next = lifeCount + 1;
+      const clamped = emitterForceLooping && emitterLifeTime < next ? emitterLifeTime : next;
+      if (emitterLifeTime < clamped) {
+        if (!emitterLooping) break;
+        lifeCount = loopRestartLifeCount;
+        delayCounter = loopRestartLifeCount === 0 ? emitter.delayEmitTimeBase : delayCounter;
+      } else {
+        lifeCount = clamped;
+      }
+    }
     if (Math.abs(delayCounter) >= EPSILON) {
       delayCounter -= 1;
       continue;
     }
 
     if (generatorCounter <= EPSILON) {
-      const emitCount = Math.max(0, emitter?.numEmit ?? pair.target.numEmit ?? 1);
-      const emitterProgress = ((tick % emitterLifeTime) / emitterLifeTime) * 100;
+      const emitCount = emitter
+        ? resolveEfxbnEmitCount(
+            emitter.numEmit,
+            emitter.numEmitCountRandom,
+            emitter.meshEmitterCount,
+            random.nextUint(),
+          )
+        : Math.max(0, pair.target.numEmit);
+      const emitterProgress =
+        lifeTimeBase > EPSILON ? ((emitterLifeTimeRatio * lifeCount) / lifeTimeBase) * 100 : 0;
       for (let index = 0; index < emitCount && particles.length < maxParticles; index += 1) {
         const particle = simulateParticle(
           pair,

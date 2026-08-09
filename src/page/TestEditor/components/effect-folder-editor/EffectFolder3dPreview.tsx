@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { confirm } from "@tauri-apps/plugin-dialog";
 import { Box, Pause, Play, RotateCcw } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import {
@@ -8,12 +10,27 @@ import {
 } from "@/components/ssbh-model-preview/SsbhModelPreviewContext";
 import { SsbhModelPreviewViewport } from "@/components/ssbh-model-preview/SsbhModelPreviewViewport";
 import type { PreviewInstanceHostTransform } from "@/components/ssbh-model-preview/SsbhModelCanvas";
-import type { EffectFolderInventory } from "@/services/effectFolder/effectFolderService";
+import {
+  patchEffectEfxbnControlConstants,
+  type EffectFolderInventory,
+  type EfxbnControlLookupEntry,
+} from "@/services/effectFolder/effectFolderService";
 import type { EffectListItem } from "./effectFolderEditorUtils";
 import {
   buildEffectFolderPreviewPlan,
   type EffectFolderPreviewPlan,
 } from "./effectFolderPreviewPlan";
+import {
+  acceptWrittenPatches,
+  createEfxbnDraft,
+  efxbnDraftDirtyCount,
+  isEfxbnDraftDirty,
+  listControlConstantPatches,
+  patchColorConstants,
+  revertEfxbnDraft,
+  sameEfxbnPath,
+  type EfxbnDraftSession,
+} from "./efxbnDraftSession";
 import { EfxbnDiagnosticOverlay } from "./EfxbnDiagnosticOverlay";
 import { EfxbnPreviewInspector } from "./EfxbnPreviewInspector";
 import {
@@ -28,6 +45,8 @@ type EffectFolder3dPreviewProps = {
   item: EffectListItem;
   inventory: EffectFolderInventory;
   previewSuspended?: boolean;
+  /** Called after a successful on-disk efxbn write so the parent can re-inspect. */
+  onEfxbnWritten?: () => void;
 };
 
 function allowsAutomaticPreviewMotion(): boolean {
@@ -152,8 +171,81 @@ export function EffectFolder3dPreview({
   item,
   inventory,
   previewSuspended = false,
+  onEfxbnWritten,
 }: EffectFolder3dPreviewProps) {
-  const plan = useMemo(() => buildEffectFolderPreviewPlan(item, inventory), [inventory, item]);
+  const basePlan = useMemo(() => buildEffectFolderPreviewPlan(item, inventory), [inventory, item]);
+  const sourceSummary = item.category === "efxbn" ? item.item.efxbn ?? null : null;
+  const [draft, setDraft] = useState<EfxbnDraftSession | null>(null);
+  const [writing, setWriting] = useState(false);
+  const draftRef = useRef<EfxbnDraftSession | null>(null);
+  draftRef.current = draft;
+
+  const efxbnPath = item.category === "efxbn" ? item.item.path : null;
+  // Recreate the live draft when the focused file changes. Inventory reloads keep a dirty
+  // draft so concurrent edits are not silently discarded.
+  useEffect(() => {
+    if (!sourceSummary || !efxbnPath) {
+      setDraft(null);
+      return;
+    }
+    setDraft((current) => {
+      if (!current || !sameEfxbnPath(current.path, efxbnPath)) {
+        try {
+          return createEfxbnDraft(sourceSummary, efxbnPath);
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : String(error));
+          return null;
+        }
+      }
+      if (isEfxbnDraftDirty(current)) {
+        // Keep the inventory file path as the write target even if the draft was older.
+        return sameEfxbnPath(current.path, efxbnPath) ? current : { ...current, path: efxbnPath };
+      }
+      try {
+        return createEfxbnDraft(sourceSummary, efxbnPath);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+        return current;
+      }
+    });
+  }, [sourceSummary, efxbnPath]);
+
+  // Structural plan for 3D (stable identity while colour drafts change).
+  // Live curve values flow through controlLookupEntriesRef so R3F does not remount.
+  const controlLookupEntriesRef = useRef<readonly EfxbnControlLookupEntry[]>(
+    basePlan?.kind === "efxbn" ? basePlan.controlLookupEntries : [],
+  );
+  const draftCommitRafRef = useRef(0);
+
+  // Inspector still needs draft values overlaid for evaluated control rows / colour UI.
+  const plan = useMemo(() => {
+    if (!basePlan || basePlan.kind !== "efxbn" || !draft) return basePlan;
+    return {
+      ...basePlan,
+      controlLookupEntries: draft.controlLookupEntries,
+    };
+  }, [basePlan, draft]);
+
+  useEffect(() => {
+    if (draft) {
+      controlLookupEntriesRef.current = draft.controlLookupEntries;
+      return;
+    }
+    if (basePlan?.kind === "efxbn") {
+      controlLookupEntriesRef.current = basePlan.controlLookupEntries;
+    }
+  }, [basePlan, draft]);
+
+  useEffect(
+    () => () => {
+      if (draftCommitRafRef.current) {
+        cancelAnimationFrame(draftCommitRafRef.current);
+        draftCommitRafRef.current = 0;
+      }
+    },
+    [],
+  );
+
   const [effectProgress, setEffectProgress] = useState(0);
   const [effectPlaying, setEffectPlaying] = useState(false);
   const [effectSpeed, setEffectSpeed] = useState(1);
@@ -163,10 +255,121 @@ export function EffectFolder3dPreview({
     () => new Map(),
   );
   const hostInstanceTransformsRef = useRef<ReadonlyMap<string, PreviewInstanceHostTransform>>(new Map());
+  // Pool capacity is structural — never recompute from colour draft identity.
   const modelPoolPlan = useMemo(
-    () => plan?.kind === "efxbn" ? resolveEfxbnModelPoolPlan(plan) : null,
-    [plan],
+    () => (basePlan?.kind === "efxbn" ? resolveEfxbnModelPoolPlan(basePlan) : null),
+    [basePlan],
   );
+
+  const handlePatchColor = useCallback(
+    (blockIndex: number, color: { r?: number; g?: number; b?: number; a?: number }) => {
+      // Freeze authoring while a disk write is in flight so the snapshot stays honest.
+      if (writing) return;
+      const current = draftRef.current;
+      if (!current) return;
+      try {
+        const next = patchColorConstants(current, blockIndex, color);
+        if (next === current) return;
+        // 3D sim reads this ref on the next frame — no React re-render required.
+        draftRef.current = next;
+        controlLookupEntriesRef.current = next.controlLookupEntries;
+        // Coalesce React state commits to at most once per animation frame so the
+        // colour picker / sliders stay responsive while dirty badges still update.
+        if (draftCommitRafRef.current) return;
+        draftCommitRafRef.current = requestAnimationFrame(() => {
+          draftCommitRafRef.current = 0;
+          const pending = draftRef.current;
+          if (pending) setDraft(pending);
+        });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+      }
+    },
+    [writing],
+  );
+
+  const handleRevertDraft = useCallback(() => {
+    setDraft((current) => {
+      if (!current) return current;
+      const next = revertEfxbnDraft(current);
+      draftRef.current = next;
+      controlLookupEntriesRef.current = next.controlLookupEntries;
+      return next;
+    });
+  }, []);
+
+  const handleWriteDraft = useCallback(async () => {
+    if (writing) return;
+    const live = draftRef.current;
+    if (!live) {
+      toast.error("No live EFXBN draft to write");
+      return;
+    }
+    // Prefer the currently focused inventory path — it is the file the UI is showing.
+    const writePath = (efxbnPath?.trim() || live.path).trim();
+    if (!writePath) {
+      toast.error("EFXBN file path is empty; cannot write");
+      return;
+    }
+
+    let patches;
+    try {
+      patches = listControlConstantPatches(live);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+      return;
+    }
+    if (patches.length === 0) {
+      toast.error("No dirty constant lanes to write", {
+        description: "Change a colour channel first, then use Save EFXBN in the panel footer.",
+      });
+      return;
+    }
+
+    const dirtyCount = efxbnDraftDirtyCount(live);
+    const confirmed = await confirm(
+      `Write ${patches.length} control value${patches.length === 1 ? "" : "s"} (${dirtyCount} dirty lane${dirtyCount === 1 ? "" : "s"}) to disk?\n\n${writePath}`,
+      {
+        title: "Save EFXBN",
+        kind: "warning",
+        okLabel: "Save",
+        cancelLabel: "Cancel",
+      },
+    );
+    if (!confirmed) return;
+
+    setWriting(true);
+    try {
+      const result = await patchEffectEfxbnControlConstants(writePath, patches);
+      // Re-baseline only the written indices so concurrent edits during await stay dirty.
+      setDraft((current) => {
+        if (
+          !current ||
+          (!sameEfxbnPath(current.path, writePath) && !sameEfxbnPath(current.path, live.path))
+        ) {
+          return current;
+        }
+        const aligned = sameEfxbnPath(current.path, writePath)
+          ? current
+          : { ...current, path: writePath };
+        const next = acceptWrittenPatches(aligned, patches);
+        draftRef.current = next;
+        controlLookupEntriesRef.current = next.controlLookupEntries;
+        return next;
+      });
+      toast.success(
+        `Wrote ${result.patchedCount} control value${result.patchedCount === 1 ? "" : "s"}`,
+        { description: result.path || writePath },
+      );
+      onEfxbnWritten?.();
+    } catch (error) {
+      toast.error("Failed to write EFXBN", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setWriting(false);
+    }
+  }, [efxbnPath, onEfxbnWritten, writing]);
   const externalModelEffectCount = useMemo(() => {
     if (plan?.kind !== "efxbn") return 0;
     const localEffectIndexes = new Set(
@@ -269,22 +472,23 @@ export function EffectFolder3dPreview({
             defaultLightingPreset="softCharacter"
           >
             <EffectFolderPreviewScene
-              plan={plan}
+              plan={basePlan ?? plan}
               selectedEffectIndex={selectedEffectIndex}
               onInstanceMapChange={setInstanceIdsByEffectIndex}
               hostInstanceTransformsRef={hostInstanceTransformsRef}
               modelPoolPlan={modelPoolPlan}
             />
-            {hasDiagnosticBlocks ? (
+            {hasDiagnosticBlocks && basePlan?.kind === "efxbn" ? (
               <ResizablePanelGroup orientation="horizontal" className="min-h-0">
                 <ResizablePanel defaultSize={72} minSize={50} className="min-h-0 p-1">
                   <SsbhModelPreviewViewport
                     embedded
-                    showTimeline={plan.localAnimationCount > 0}
+                    showTimeline={basePlan.localAnimationCount > 0}
                     viewportControls="unreal"
                     sceneOverlay={
                       <EfxbnDiagnosticOverlay
-                        plan={plan}
+                        plan={basePlan}
+                        controlLookupEntriesRef={controlLookupEntriesRef}
                         progress={effectProgress}
                         playing={effectPlaying}
                         speed={effectSpeed}
@@ -298,7 +502,7 @@ export function EffectFolder3dPreview({
                       />
                     }
                     sceneOverlayAnimating={effectPlaying}
-                    sceneOverlayLabel={`${plan.effectBlocks.length - hiddenEffectIndexes.size} visible blocks`}
+                    sceneOverlayLabel={`${basePlan.effectBlocks.length - hiddenEffectIndexes.size} visible blocks`}
                     hostHiddenPreviewInstanceIds={hiddenPreviewInstanceIds}
                     hostInstanceTransformsRef={hostInstanceTransformsRef}
                   />
@@ -306,7 +510,7 @@ export function EffectFolder3dPreview({
                 <ResizableHandle withHandle />
                 <ResizablePanel defaultSize={28} minSize={22} className="min-h-0">
                   <EfxbnPreviewInspector
-                    plan={plan}
+                    plan={plan ?? basePlan}
                     progress={effectProgress}
                     selectedEffectIndex={selectedEffectIndex}
                     hiddenEffectIndexes={hiddenEffectIndexes}
@@ -314,6 +518,11 @@ export function EffectFolder3dPreview({
                     onSetEffectVisible={handleSetEffectVisible}
                     onShowAll={handleShowAllEffects}
                     onSolo={handleSoloEffect}
+                    draft={draft}
+                    writing={writing}
+                    onPatchColor={draft ? handlePatchColor : undefined}
+                    onRevertDraft={draft ? handleRevertDraft : undefined}
+                    onWriteDraft={draft ? () => void handleWriteDraft() : undefined}
                   />
                 </ResizablePanel>
               </ResizablePanelGroup>
