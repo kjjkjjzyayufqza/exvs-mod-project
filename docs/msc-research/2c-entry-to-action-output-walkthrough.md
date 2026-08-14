@@ -182,8 +182,8 @@ Notion 经验能解释它为什么像换装：
 
 | 调用 | 脚本侧含义 |
 |---|---|
-| `sys_4B(0x2, modelHash, boneIndex, actionHash, targetModel)` | 把模型接到模型 / bone |
-| `sys_4B(0x3)` | 卸下装备 / detach |
+| `sys_4B(0x2, modelId, boneHash, actionHash[, parentModel])` | 把模型挂到 body 骨上；**第三参是 body `.jnttbl` 的 `boneHash`，不是 nusktb 顺序 index**（见 `docs/exvs-msc-syscall-4b-notes.md`） |
+| `sys_4B(0x3)` / `sys_4B(0x3, modelId)` | 卸下全部 / 卸下指定模型 |
 | `sys_47(0x10/0x11/0x12,...)` | rotate / translate / scale |
 
 但 `func_887/888` 不是动作 dispatch，也不是输入判断。它们只是被启动链和动作段调用的 shell 输出层。

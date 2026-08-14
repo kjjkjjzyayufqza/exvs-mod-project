@@ -7,12 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import { useConfigStore } from "@/store/configStore";
 import {
   resolveMotionPackFromFolderPathAsync,
   resolveMotionPackFromStructureJson,
+  type MotionHexDisplayEndian,
 } from "./motionFolderEditorUtils";
 import {
   getMotionFolderWorkspaceState,
@@ -63,6 +65,8 @@ export default function MotionFolderEditorView({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
+  /** UI-only: structure stores LE hex; BE shows MSC integer spelling (byte-swapped). */
+  const [hexDisplayEndian, setHexDisplayEndian] = useState<MotionHexDisplayEndian>("le");
   const hydratedRef = useRef(false);
   const lastSuggestedPathRef = useRef<string | null>(null);
 
@@ -374,6 +378,31 @@ export default function MotionFolderEditorView({
                       className="h-8 min-w-0 flex-1 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
                     />
                     <div className="flex shrink-0 items-center gap-1 border-l border-border/60 pl-2">
+                      <ToggleGroup
+                        type="single"
+                        value={hexDisplayEndian}
+                        onValueChange={(next) => {
+                          if (next === "le" || next === "be") setHexDisplayEndian(next);
+                        }}
+                        className="mr-1"
+                      >
+                        <ToggleGroupItem
+                          value="le"
+                          className="h-7 px-2 text-[10px]"
+                          title="Show structure JSON LE bytes (e.g. a621fd5e)"
+                          aria-label="Little-endian hex display"
+                        >
+                          LE
+                        </ToggleGroupItem>
+                        <ToggleGroupItem
+                          value="be"
+                          className="h-7 px-2 text-[10px]"
+                          title="Show MSC integer spelling / byte-swapped (e.g. 5efd21a6)"
+                          aria-label="Big-endian MSC hex display"
+                        >
+                          BE
+                        </ToggleGroupItem>
+                      </ToggleGroup>
                       <Button
                         type="button"
                         size="sm"
@@ -421,10 +450,13 @@ export default function MotionFolderEditorView({
                         inventory={inventory}
                         editDraft={editor.editDraft}
                         onEditDraftChange={editor.setEditDraft}
+                        hexDisplayEndian={hexDisplayEndian}
+                        onHexDisplayEndianChange={setHexDisplayEndian}
                         busy={busy}
                         busyAction={editor.busyAction}
-                        onApplyEdit={() => void editor.runEdit()}
+                        onApplyEdit={(draft) => void editor.runEdit(draft)}
                         onReplace={() => void runReplace()}
+                        onMoveFolderChild={editor.runMoveFolderChild}
                       />
                     </ResizablePanel>
                   </ResizablePanelGroup>
@@ -443,6 +475,8 @@ export default function MotionFolderEditorView({
             busy={busy}
             folders={editor.folders}
             defaultParentFolderId={editor.defaultParentFolderId}
+            motionRoot={activePack.folderPath}
+            rootName={inventory?.rootName ?? activePack.hashFolderName ?? ""}
             onAdd={editor.runAdd}
           />
           <MotionFolderRemoveDialog

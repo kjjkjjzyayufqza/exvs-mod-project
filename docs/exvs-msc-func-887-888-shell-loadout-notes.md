@@ -109,9 +109,24 @@ applyShellLoadout
 | `sys_4B(4, entry_id)` | 判断 shell entry 是否存在 |
 
 2026-07-05 修正：`sys_4B(0x2, model_id, bone_hash, action_hash[, parent])`
-里的 `bone_hash` 来自目标模型自己的 `.jnttbl`，不是 `.shl` 的 `model_type`。跨机体
-移植时不能直接复用另一个模型的 bone hash；目标模型没有对应 bone 证据时，先用 `0`
-或重新从目标模型 `.jnttbl` 取值。
+里的 `bone_hash` 是 **挂点所在 body 的 `.jnttbl` 字段 `boneHash`**，**不是**
+`.nusktb` 的顺序下标，也不是 `.shl` 的 `model_type`。
+
+跨机体移植时不能直接复用另一个机体 body 的 bone hash；没有证据时先从目标 body
+`.jnttbl` 按骨名/`boneIndex` 查表，或用 `0`。
+
+**2026-08-12 实机纠正（Wing Zero Rebellion）：** 第三参误用 nusktb index
+会挂失败。双手枪官方写法 `0x18`/`0x19` 实际是 jnttbl `boneHash`（对应
+`ATH_TE_L` / `ATH_TE_R`），不是 index 24/25。头骨 `ATAMA` 的 jnttbl
+`boneHash` 是 `0xE`（nusktb 顺序 35 / `0x23` 不能当第三参）。正确挂盾：
+
+```c
+// SHL LE model id 03AA066E == MSC 0x6E06AA03; ATAMA boneHash 0xE
+sys_4B(0x2, 0x6e06aa03, 0xe, 0x4094b0f4);
+sys_4B(0x3, 0x6e06aa03); // detach one model
+```
+
+完整说明见 `docs/exvs-msc-syscall-4b-notes.md`。
 
 因此 `func_889` 到 `func_895` 中反复出现的模式：
 

@@ -9,11 +9,13 @@ import {
   getMotionNodeParentFolder,
   inspectMotionFolder,
   motionNodeMatchesQuery,
+  moveMotionFolderChild,
   normalizeMotionEntryName,
   normalizeMotionUnk1Input,
   normalizeMotionUnk2Input,
   removeMotionNode,
   renameMotionDiskPaths,
+  reorderMotionFolderChildren,
   replaceMotionItemFile,
   saveMotionFolderStructure,
   updateMotionNode,
@@ -296,6 +298,7 @@ export function useMotionFolderEditor({
         let selectKind: "item" | "folder";
         let successMessage: string;
 
+        const replaceExisting = params.replaceExisting === true;
         if (params.mode === "file") {
           const result = addMotionItemNode({
             nodes,
@@ -306,13 +309,18 @@ export function useMotionFolderEditor({
             unk2: params.unk2,
             rootName: inventory.rootName,
             motionRoot: inventory.motionRoot,
+            replaceExisting,
           });
-          await copyMotionSourceToItem(params.sourcePath, result.targetPath);
+          await copyMotionSourceToItem(params.sourcePath, result.targetPath, {
+            overwrite: replaceExisting,
+          });
           nextNodes = result.nodes;
           selectPathKey = result.item.pathSegments.join("/");
           selectName = result.item.name;
           selectKind = "item";
-          successMessage = "Motion file added and structure JSON saved";
+          successMessage = replaceExisting
+            ? "Motion file replaced and structure JSON saved"
+            : "Motion file added and structure JSON saved";
         } else {
           const result = addMotionFolderBundle({
             nodes,
@@ -323,15 +331,20 @@ export function useMotionFolderEditor({
             clips: params.clips,
             rootName: inventory.rootName,
             motionRoot: inventory.motionRoot,
+            replaceExisting,
           });
           for (const job of result.copyJobs) {
-            await copyMotionSourceToItem(job.sourcePath, job.targetPath);
+            await copyMotionSourceToItem(job.sourcePath, job.targetPath, {
+              overwrite: replaceExisting,
+            });
           }
           nextNodes = result.nodes;
           selectPathKey = result.folder.pathSegments.join("/");
           selectName = result.folder.name;
           selectKind = "folder";
-          successMessage = `Folder bundle added (${result.items.length} clips) and structure JSON saved`;
+          successMessage = replaceExisting
+            ? `Folder bundle replaced (${result.items.length} clips) and structure JSON saved`
+            : `Folder bundle added (${result.items.length} clips) and structure JSON saved`;
         }
 
         // Persist structure JSON so disk matches memory (files + sibling *_structure.json).
@@ -375,33 +388,42 @@ export function useMotionFolderEditor({
     [applySelection, inventory, nodes, onPackMutated, pack, workspaceRoot],
   );
 
-  const runEdit = useCallback(async () => {
-    if (!inventory || !focusedNode) return;
-    setBusyAction("edit");
-    try {
-      normalizeMotionEntryName(editDraft.name);
-      normalizeMotionUnk1Input(editDraft.unk1);
-      normalizeMotionUnk2Input(editDraft.unk2);
-      const result = updateMotionNode({
-        nodes,
-        nodeId: focusedNode.id,
-        name: editDraft.name,
-        unk1: editDraft.unk1,
-        unk2: editDraft.unk2,
-        rootName: inventory.rootName,
-        motionRoot: inventory.motionRoot,
-      });
-      await renameMotionDiskPaths(result.renamedPaths);
-      setNodes(result.nodes);
-      applySelection(selectedKeys, focusedNode.id);
-      markUnsaved();
-      toast.success("Motion entry updated");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setBusyAction(null);
-    }
-  }, [applySelection, editDraft, focusedNode, inventory, markUnsaved, nodes, selectedKeys]);
+  const runEdit = useCallback(
+    async (draftOverride?: Partial<MotionEditDraft>) => {
+      if (!inventory || !focusedNode) return;
+      const draft: MotionEditDraft = {
+        name: draftOverride?.name ?? editDraft.name,
+        unk1: draftOverride?.unk1 ?? editDraft.unk1,
+        unk2: draftOverride?.unk2 ?? editDraft.unk2,
+      };
+      setBusyAction("edit");
+      try {
+        normalizeMotionEntryName(draft.name);
+        normalizeMotionUnk1Input(draft.unk1);
+        normalizeMotionUnk2Input(draft.unk2);
+        setEditDraft(draft);
+        const result = updateMotionNode({
+          nodes,
+          nodeId: focusedNode.id,
+          name: draft.name,
+          unk1: draft.unk1,
+          unk2: draft.unk2,
+          rootName: inventory.rootName,
+          motionRoot: inventory.motionRoot,
+        });
+        await renameMotionDiskPaths(result.renamedPaths);
+        setNodes(result.nodes);
+        applySelection(selectedKeys, focusedNode.id);
+        markUnsaved();
+        toast.success("Motion entry updated");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [applySelection, editDraft, focusedNode, inventory, markUnsaved, nodes, selectedKeys],
+  );
 
   const runReplace = useCallback(
     async (sourcePath: string) => {
@@ -479,6 +501,43 @@ export function useMotionFolderEditor({
     }
   }, [inventory, nodes, onPackMutated, pack, reload, workspaceRoot]);
 
+  const runReorderFolderChildren = useCallback(
+    (folderId: string, orderedChildIds: string[]) => {
+      try {
+        const nextNodes = reorderMotionFolderChildren({
+          nodes,
+          folderId,
+          orderedChildIds,
+        });
+        setNodes(nextNodes);
+        markUnsaved();
+        toast.success("Child order updated (Save to write structure JSON)");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+      }
+    },
+    [markUnsaved, nodes],
+  );
+
+  const runMoveFolderChild = useCallback(
+    (folderId: string, childId: string, direction: "up" | "down") => {
+      try {
+        const nextNodes = moveMotionFolderChild({
+          nodes,
+          folderId,
+          childId,
+          direction,
+        });
+        if (nextNodes === nodes) return;
+        setNodes(nextNodes);
+        markUnsaved();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+      }
+    },
+    [markUnsaved, nodes],
+  );
+
   return {
     loadState,
     inventory,
@@ -506,6 +565,8 @@ export function useMotionFolderEditor({
     runReplace,
     runRemove,
     runSave,
+    runReorderFolderChildren,
+    runMoveFolderChild,
     defaultParentFolderId,
   };
 }

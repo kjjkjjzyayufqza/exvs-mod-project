@@ -32,6 +32,8 @@ AI 新增符号还必须使用逆向语义名，不能新建 `global777` 这类�
 
 如果当前问题是“玩家按键、方向、BD / step 怎么变成 `2.c` 里的 action hash”，看 [0.c 到 2.c：输入、action hash、BD / step 边界怎么串起来](./0c-to-2c-input-action-boundary.md)。它说明 `0.c func_143` 如何把输入和资源状态选成 action hash，再由 `2.c func_44/1043/ACTION_*` 消费并输出表现。
 
+**Wing Zero Rebellion 鸟形态 / form 输入表：** 看 [鸟形态 0.c 输入映射（对照 TV Zero）](./wing-zero-rebellion-bird-form-0c-input-map.md)。结论：只改 `0.c` `func_143`（不要在 `2.c` `ACTION_*` 硬拦）；Rebellion **主射 bit = `0x1`**（`0x7cd11119`），**不是** TV 的 `0x100`；鸟 form id = **`0x2`**（TV 为 `0x1`）。Thinker 偏移雷区见 [2026-08-13 offset bug](../agent-sessions/2026-08-13-msc-0c-function-pointer-offset-bug.md)。
+
 如果当前问题是“普通 BD、step、boost、射击伤害、普通弹体 hitbox、格斗追踪这些该改脚本还是资源”，看 [MSC 资源层 patch 指南：BD / step / boost / 射击 / 格斗该改哪些表](./resource-control-surface-for-modders.md)。它把 `speed_param`、`arms_param`、`bullet_param`、`character_param` 和 `0.c/2.c` 调用链对齐。
 
 如果当前问题是“Delta Plus 主射为什么 2 连射、为什么空弹后手动换弹，以及怎样改成 RX-78-2 那样单发 + 自动回弹”，看 [Delta Plus 主射调用链与 RX-78-2 风格自动回弹方案](./delta-plus-main-shot-rx78-style-auto-reload.md)。它把 wiki 行为、`0.c` 空弹分支、`2.c` 主射/换弹 action、RX 对比和 patch 步骤放在同一页。

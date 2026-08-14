@@ -530,9 +530,11 @@ func_888(arg0)
 
 Notion 解释：
 
-- `sys_4B(0x2, model, bone, resource, target)` 接模型；`bone` 是目标模型自身
-  `.jnttbl` 的 bone / joint hash，不能直接复用其他模型的挂点 hash。
-- `sys_4B(0x3)` 解除全部装备。
+- `sys_4B(0x2, modelId, boneHash, actionHash[, parentModel])` 接模型。
+  **`boneHash` 取 body `.jnttbl` 的 `boneHash` 字段，不是 nusktb 顺序下标**
+  （误用 index 会挂不上；例：`ATAMA` 用 `0xE` 而非 `0x23`）。
+  完整规则与 Rebellion 实机例见 `docs/exvs-msc-syscall-4b-notes.md`。
+- `sys_4B(0x3)` 解除全部装备；`sys_4B(0x3, modelId)` 只卸一个模型。
 - `sys_47(0x10/0x11/0x12)` 对模型/bone 做 rotate/translate/scale。
 
 结论：`func_887/888` 是 shell/loadout 层，但它必须和 `global170` 的 motion group 一起理解，否则只看到“挂组件”，看不到“为什么某些格斗切另一组动作”。

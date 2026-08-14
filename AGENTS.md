@@ -104,7 +104,10 @@ Read order:
    conditions.
 2. `docs/msc-research/2026-08-09-wing-zero-rebellion-transform-port-plan.md`
    — read only the sections needed for implementation or a disputed detail.
-3. `work/20260809-wing-zero-rebellion-transform-plan/evidence/E-007.md` and
+3. `docs/msc-research/wing-zero-rebellion-bird-form-0c-input-map.md`
+   — bird-form input map: **0.c `func_143` only** (not `2.c` `ACTION_*`);
+   Rebellion main-shot bit = **`0x1`** (not TV `0x100`); bird form id = **`0x2`**.
+4. `work/20260809-wing-zero-rebellion-transform-plan/evidence/E-007.md` and
    `E-008.md` — read only when auditing the canonical-name inventory, direct
    motion Items, SHL mapping, or skeleton comparison.
 
@@ -112,6 +115,8 @@ Reuse rules:
 
 - Locate source resources by canonical names, never by package hash. Resource
   table hashes are validation values after name resolution.
+- Do not re-derive Rebellion vs TV input-bit semantics or re-litigate “gate
+  bird arsenal in 2.c ACTION_*” — settled in the bird-form input-map note.
 - Do not repeat source file counting, six-resource inventory, three transform
   motion lookup, SHL model-folder mapping, or body/wing skeleton comparison
   unless a restart condition in the bootstrap is met.
@@ -370,6 +375,15 @@ Project skills (domain):
   `// End, origin is ...` comments. See
   `docs/msc-research/msc-ai-edit-block-rule.md`. Verify with
   `python .\tools\check_msc_ai_blocks.py "<modified X.c>"`.
+- **MSC function pointers must be symbols, not decompiled script offsets.**
+  Default `msclang` relocates `func_143` but keeps bare ints like `0x5fef`
+  forever; growing any earlier function then breaks the action thinker and the
+  unit has no actions. After editing any `0.c` / `2.c`, run:
+  `python .\tools\check_msc_opaque_func_ptrs.py "<modified X.c>"`
+  Critical bad pattern: `sys_1(0x10001, 0, 0x1, 0x5fef)` — must be
+  `sys_1(0x10001, 0, 0x1, func_143)`. Optional rewrite:
+  `python .\tools\check_msc_opaque_func_ptrs.py "<file>" --fix --write`.
+  Full bug report: `docs/agent-sessions/2026-08-13-msc-0c-function-pointer-offset-bug.md`.
 - When adding symbols to MSC decompiled `X.c` files, work as a reverse engineer:
   preserve existing decompiler names when reading old code, but never invent new
   opaque names like `global777` / `var42` for AI-added state. Use semantic names

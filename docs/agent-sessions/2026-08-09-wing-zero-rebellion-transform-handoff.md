@@ -9,7 +9,10 @@
 2. 需要实施细节时，只读
    `docs/msc-research/2026-08-09-wing-zero-rebellion-transform-port-plan.md`
    的第 1、9–16、21 节。
-3. 只有质疑资源盘点或映射证据时才读：
+3. **鸟形态武装 / 主射封锁 / 0.c 输入 bit（2026-08-14 已实机确认）：**
+   `docs/msc-research/wing-zero-rebellion-bird-form-0c-input-map.md`
+   — 只改 `0.c` `func_143`；Rebellion 主射 bit=`0x1` 不是 TV 的 `0x100`；鸟 form=`0x2`。
+4. 只有质疑资源盘点或映射证据时才读：
    - `work/20260809-wing-zero-rebellion-transform-plan/evidence/E-007.md`
    - `work/20260809-wing-zero-rebellion-transform-plan/evidence/E-008.md`
 

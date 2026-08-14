@@ -2,14 +2,32 @@ import { describe, expect, it } from "vitest";
 import {
   addMotionFolderBundle,
   addMotionItemNode,
+  isValidMotionHexId,
+  moveArrayItem,
+  moveMotionFolderChild,
+  previewAddMotionFileTarget,
+  previewAddMotionFolderTargets,
   removeMotionNode,
+  reorderMotionFolderChildren,
   serializeMotionProject,
   suggestNextMotionBundleFolderName,
   updateMotionNode,
   type MotionFolderNode,
   type MotionItemNode,
+  type MotionStructureNode,
   type MotionStructureProject,
 } from "./motionFolderService";
+
+function findFolderByName(nodes: MotionStructureNode[], name: string): MotionFolderNode | undefined {
+  for (const node of nodes) {
+    if (node.kind === "folder") {
+      if (node.name === name) return node;
+      const nested = findFolderByName(node.children, name);
+      if (nested) return nested;
+    }
+  }
+  return undefined;
+}
 
 function baseProject(): MotionStructureProject {
   return {
@@ -194,6 +212,14 @@ describe("motionFolderService", () => {
     });
   });
 
+  it("validates 8-digit motion hex ids", () => {
+    expect(isValidMotionHexId("0f1fc213")).toBe(true);
+    expect(isValidMotionHexId("0x0F1FC213")).toBe(true);
+    expect(isValidMotionHexId("")).toBe(false);
+    expect(isValidMotionHexId("0000000")).toBe(false);
+    expect(isValidMotionHexId("zzzzzzzz")).toBe(false);
+  });
+
   it("suggests next numeric bundle folder name", () => {
     const parent = baseNodes()[0]!;
     expect(suggestNextMotionBundleFolderName(parent)).toBe("0");
@@ -340,6 +366,123 @@ describe("motionFolderService", () => {
     expect(removed.removed?.kind).toBe("item");
     expect(serialized.SubFileData).toHaveLength(0);
     expect(serialized.SubFileStructure.some((entry) => entry.type === "Item")).toBe(false);
+  });
+
+  it("reorders folder children and serializes item order for body-first packs", () => {
+    const bundle = addMotionFolderBundle({
+      nodes: baseNodes(),
+      parentFolderId: "folder:0",
+      folderName: "9",
+      actionId: "a621fd5e",
+      unk3: 2,
+      clips: [
+        { sourcePath: "E:\\source\\wing.nuanmb", name: "wing_clip", modelId: "c1a9c1f6" },
+        { sourcePath: "E:\\source\\body.nuanmb", name: "body_clip", modelId: "9c5e24c7" },
+      ],
+      rootName: "pack",
+      motionRoot: "E:\\workspace\\003motion\\pack",
+    });
+
+    expect(bundle.folder.children.map((child) => child.name)).toEqual(["wing_clip", "body_clip"]);
+
+    const reordered = reorderMotionFolderChildren({
+      nodes: bundle.nodes,
+      folderId: bundle.folder.id,
+      orderedChildIds: [bundle.items[1]!.id, bundle.items[0]!.id],
+    });
+    expect(findFolderByName(reordered, "9")?.children.map((child) => child.name)).toEqual([
+      "body_clip",
+      "wing_clip",
+    ]);
+
+    const serialized = serializeMotionProject(baseProject(), reordered, "pack");
+    const parseFolder = serialized.SubFileParseStructure?.children?.[0]?.children?.find(
+      (child) => child.type === "Folder" && child.name === "9",
+    );
+    expect(parseFolder?.children?.map((child) => child.unk2)).toEqual(["9c5e24c7", "c1a9c1f6"]);
+
+    const movedDown = moveMotionFolderChild({
+      nodes: reordered,
+      folderId: bundle.folder.id,
+      childId: bundle.items[1]!.id,
+      direction: "down",
+    });
+    expect(findFolderByName(movedDown, "9")?.children.map((child) => child.name)).toEqual([
+      "wing_clip",
+      "body_clip",
+    ]);
+
+    expect(moveArrayItem(["a", "b", "c"], 2, "up")).toEqual(["a", "c", "b"]);
+    expect(moveArrayItem(["a", "b"], 0, "up")).toEqual(["a", "b"]);
+  });
+
+  it("previews add targets and replaces existing folder when replaceExisting is set", () => {
+    const parent = baseNodes()[0] as MotionFolderNode;
+    const preview = previewAddMotionFolderTargets({
+      motionRoot: "E:\\workspace\\003motion\\pack",
+      rootName: "pack",
+      parentFolder: parent,
+      folderName: "trans_loop",
+      clipNames: ["trans_loop_body", "trans_loop_wing"],
+    });
+    expect(preview.folderPath).toBe("E:\\workspace\\003motion\\pack\\0\\trans_loop");
+    expect(preview.filePaths).toEqual([
+      "E:\\workspace\\003motion\\pack\\0\\trans_loop\\trans_loop_body.nuanmb",
+      "E:\\workspace\\003motion\\pack\\0\\trans_loop\\trans_loop_wing.nuanmb",
+    ]);
+    expect(preview.existingStructureFolder).toBeNull();
+
+    expect(
+      previewAddMotionFileTarget({
+        motionRoot: "E:\\workspace\\003motion\\pack",
+        rootName: "pack",
+        parentFolder: parent,
+        name: "solo",
+      }),
+    ).toBe("E:\\workspace\\003motion\\pack\\0\\solo.nuanmb");
+
+    const first = addMotionFolderBundle({
+      nodes: baseNodes(),
+      parentFolderId: "folder:0",
+      folderName: "trans_loop",
+      actionId: "a621fd5e",
+      clips: [
+        { sourcePath: "E:\\source\\body.nuanmb", name: "trans_loop_body", modelId: "9c5e24c7" },
+        { sourcePath: "E:\\source\\wing.nuanmb", name: "trans_loop_wing", modelId: "c1a9c1f6" },
+      ],
+      rootName: "pack",
+      motionRoot: "E:\\workspace\\003motion\\pack",
+    });
+    expect(() =>
+      addMotionFolderBundle({
+        nodes: first.nodes,
+        parentFolderId: "folder:0",
+        folderName: "trans_loop",
+        actionId: "a621fd5e",
+        clips: [
+          { sourcePath: "E:\\source\\body2.nuanmb", name: "trans_loop_body", modelId: "9c5e24c7" },
+        ],
+        rootName: "pack",
+        motionRoot: "E:\\workspace\\003motion\\pack",
+      }),
+    ).toThrow(/already exists/);
+
+    const replaced = addMotionFolderBundle({
+      nodes: first.nodes,
+      parentFolderId: "folder:0",
+      folderName: "trans_loop",
+      actionId: "b621fd5e",
+      clips: [
+        { sourcePath: "E:\\source\\body2.nuanmb", name: "trans_loop_body", modelId: "9c5e24c7" },
+      ],
+      rootName: "pack",
+      motionRoot: "E:\\workspace\\003motion\\pack",
+      replaceExisting: true,
+    });
+    const folder = findFolderByName(replaced.nodes, "trans_loop");
+    expect(folder?.unk1).toBe("b621fd5e");
+    expect(folder?.children).toHaveLength(1);
+    expect(folder?.children[0]).toMatchObject({ name: "trans_loop_body", unk2: "9c5e24c7" });
   });
 
   it("preserves parse link independently from nonzero unk2", () => {

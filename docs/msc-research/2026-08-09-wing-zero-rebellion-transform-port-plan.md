@@ -374,14 +374,16 @@ Target 必须在“动画自然结束”和“中途被打断”两条路径都�
 
 ### 11.1 `0.c`
 
-默认改动：无。
+**鸟形态输入表（2026-08-14 已实机）：** 在 `func_143` 按 `global39` 分流，只改 selector，不在 `2.c` `ACTION_*` 硬拦。  
+规范与 Rebellion vs TV bit 对照见  
+[`docs/msc-research/wing-zero-rebellion-bird-form-0c-input-map.md`](./wing-zero-rebellion-bird-form-0c-input-map.md)。
 
-只有选定 build 的 source 复核发现以下任一项不一致，才允许修改：
+其余默认：无。只有选定 build 的 source 复核发现以下任一项不一致，才再改：
 
 - `func_13` 的 `0x17/18/19` hash；
 - `func_14` 的 resolver；
 - `func_35/36/37` fallback；
-- `func_15/77` 的 form gate。
+- `func_15/77` 的 form gate（与上条鸟形态文档配套时可存在）。
 
 ### 11.2 `2.c` 现有表项
 

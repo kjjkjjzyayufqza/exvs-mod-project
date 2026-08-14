@@ -347,8 +347,7 @@ path = "examples/nuanmb_dump_rot_hdr.rs"
 required-features = ["nuanmb-examples"]
 
 
-[[bin]]
-name = "efxbn_color_dump"
-path = "src/bin/efxbn_color_dump.rs"
-test = false
+
+
+
 

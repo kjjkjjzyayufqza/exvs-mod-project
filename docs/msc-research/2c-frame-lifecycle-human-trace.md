@@ -641,8 +641,9 @@ func_888(mode)
 
 Notion 记录：
 
-- `sys_4B(0x2, modelHash, boneIndex, actionHash, targetModel)`：接模型到模型 / bone。
-- `sys_4B(0x3)`：解除装备 / detach。
+- `sys_4B(0x2, modelId, boneHash, actionHash[, parentModel])`：挂模型；第三参是 body
+  `.jnttbl` 的 `boneHash`，**不是** nusktb index（见 `docs/exvs-msc-syscall-4b-notes.md`）。
+- `sys_4B(0x3)` / `sys_4B(0x3, modelId)`：卸全部 / 卸指定模型。
 - `sys_47(0x10/0x11/0x12, model, bone, x,y,z)`：rotate / translate / scale。
 
 模组规则：
