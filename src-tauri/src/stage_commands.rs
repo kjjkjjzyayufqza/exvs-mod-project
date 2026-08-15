@@ -1388,6 +1388,46 @@ pub async fn replace_unit_model_model(
 }
 
 #[tauri::command]
+pub async fn replace_unit_model_numshb(
+    model_root: String,
+    structure_json_path: Option<String>,
+    target_model_name: String,
+    source_numshb_path: String,
+) -> Result<unit_model_models::UnitModelMutationResult, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_models::replace_unit_model_numshb(
+            &model_root,
+            structure_json_path.as_deref(),
+            &target_model_name,
+            &source_numshb_path,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn preview_unit_model_numshb_replacement(
+    model_root: String,
+    structure_json_path: Option<String>,
+    target_model_name: String,
+    source_numshb_path: String,
+) -> Result<unit_model_models::UnitModelNumshbReplacePreview, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_models::preview_unit_model_numshb_replacement(
+            &model_root,
+            structure_json_path.as_deref(),
+            &target_model_name,
+            &source_numshb_path,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
+#[tauri::command]
 pub async fn preview_unit_model_model_replacement(
     model_root: String,
     structure_json_path: Option<String>,

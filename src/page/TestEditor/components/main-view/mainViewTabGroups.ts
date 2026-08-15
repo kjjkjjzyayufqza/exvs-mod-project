@@ -48,6 +48,22 @@ export const MAIN_VIEW_TAB_META: MainViewTabMeta[] = [
   { value: "interaction-editor", name: "Interaction Editor (outdated)", shortName: "Interaction (outdated)", group: "param" },
 ];
 
+/** Tabs that stay mounted after the first visit so returning does not remount/rerender. */
+export const KEEP_MOUNTED_MAIN_VIEW_TABS = new Set([
+  "param-editor",
+  "bullet-editor",
+  "speed-editor",
+  "depiction-editor",
+]);
+
+export function shouldKeepMainViewTabMounted(
+  tabValue: string,
+  isActive: boolean,
+  hasUnsaved: boolean,
+): boolean {
+  return isActive || KEEP_MOUNTED_MAIN_VIEW_TABS.has(tabValue) || hasUnsaved;
+}
+
 export function groupMainViewTabs(tabs: MainViewTabMeta[]): Array<{ id: MainViewTabGroupId; label: string; tabs: MainViewTabMeta[] }> {
   const byGroup = new Map<MainViewTabGroupId, MainViewTabMeta[]>();
   for (const tab of tabs) {

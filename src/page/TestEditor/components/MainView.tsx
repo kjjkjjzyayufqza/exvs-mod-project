@@ -27,6 +27,7 @@ import MotionFolderEditorView from "./motion-folder-editor/MotionFolderEditorVie
 import { resolveMotionPackFromStructureJson } from "./motion-folder-editor/motionFolderEditorUtils";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import { shouldAutoActivateMscWorkspaceTab } from "../utils/mscWorkspaceUtils";
+import { shouldKeepMainViewTabMounted } from "./main-view/mainViewTabGroups";
 
 type StageTab = {
   name: string;
@@ -709,7 +710,11 @@ const MainView = ({
           {resolvedTabs.map((tab) => {
             if (!visitedTabs.has(tab.value)) return null;
             const isActive = activeTab === tab.value;
-            const shouldKeepMounted = isActive || tab.value === "bullet-editor" || tab.value === "speed-editor" || tab.value === "depiction-editor" || Boolean(unsavedTabMap[tab.value]);
+            const shouldKeepMounted = shouldKeepMainViewTabMounted(
+              tab.value,
+              isActive,
+              Boolean(unsavedTabMap[tab.value]),
+            );
             if (!shouldKeepMounted) {
               return null;
             }

@@ -43,7 +43,7 @@ import {
 } from "./daeImportConfigProfiles";
 
 export type DaeImportPrimaryMode = "preview" | "ssbh";
-export type DaeImportWorkflowMode = "standard" | "batchDisk" | "unitModel";
+export type DaeImportWorkflowMode = "standard" | "batchDisk" | "unitModel" | "unitModelReplaceNumshb";
 
 const VIEWPORT_MARGIN = 48;
 const SSBH_MAX_WIDTH = 1080;
@@ -172,6 +172,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
 }: DaeImportConfigModalBodyProps) {
   const batchDiskMode = workflowMode === "batchDisk";
   const unitModelMode = workflowMode === "unitModel";
+  const replaceNumshbMode = workflowMode === "unitModelReplaceNumshb";
   const primaryMode = getPrimaryMode(config);
   const hktAvailable = isHktGenerationAvailable(havokInfo);
   const [hktValidationError, setHktValidationError] = useState<string | null>(null);
@@ -224,7 +225,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
     ],
   );
   const textureReferenceValidation = useNumatbTextureReferenceValidation({
-    enabled: primaryMode === "ssbh",
+    enabled: primaryMode === "ssbh" && !replaceNumshbMode,
     sourcePath: entry.filePath,
     stageRoot: config.directToDisk ? config.outputDirectory : stageRoot,
     slots: declaredTextureSlots,
@@ -234,6 +235,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
     if (primaryMode !== "ssbh") return true;
     if (!ssbhSession.outputBaseName.trim()) return false;
     if (ssbhSession.includeGeometryNames.length === 0) return false;
+    if (replaceNumshbMode) return true;
     if (!ssbhSession.numdlbEntries.every((r) => r.materialLabel.trim())) return false;
     const missing = collectMissingTexturePathsForExportSession(
       ssbhSession.mayaFile,
@@ -249,7 +251,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
       textureReferenceValidation.issues.length === 0 &&
       !textureReferenceValidation.error
     );
-  }, [primaryMode, ssbhSession, textureReferenceValidation]);
+  }, [primaryMode, replaceNumshbMode, ssbhSession, textureReferenceValidation]);
 
   const updateConfig = (partial: Partial<DaeImportConfig>) => {
     onConfigChange(entry.importId, { ...config, ...partial });
@@ -301,16 +303,18 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
     (batchDiskMode ? allEntriesReady : !entry.analyzing) &&
     !blockedByHkt &&
     (!config.generateHkt || hktAvailable) &&
-    (config.directToDisk
-      ? Boolean(config.outputDirectory) && (entry.analysis?.canConvert ?? false) && ssbhReady
-      : primaryMode === "preview"
-        ? true
-        : (entry.analysis?.canConvert ?? false) && ssbhReady);
+    (replaceNumshbMode
+      ? (entry.analysis?.canConvert ?? false) && ssbhReady
+      : config.directToDisk
+        ? Boolean(config.outputDirectory) && (entry.analysis?.canConvert ?? false) && ssbhReady
+        : primaryMode === "preview"
+          ? true
+          : (entry.analysis?.canConvert ?? false) && ssbhReady);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {unitModelMode ? (
+          {unitModelMode && !replaceNumshbMode ? (
             <DaeImportConfigProfileSelector
               captureSnapshot={captureImportConfigProfile}
               onApply={applyImportConfigProfile}
@@ -373,7 +377,13 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
           ) : null}
 
           <DaeImportSection title="Import Options">
-            {unitModelMode ? (
+            {replaceNumshbMode ? (
+              <DaeImportFieldRow label="Import Mode">
+                <span className="text-right text-[11px] font-medium">
+                  Convert mesh only (.numshb)
+                </span>
+              </DaeImportFieldRow>
+            ) : unitModelMode ? (
               <DaeImportFieldRow label="Import Mode">
                 <span className="text-right text-[11px] font-medium">
                   Add to Unit model package
@@ -426,7 +436,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
               </>
             )}
 
-            {config.directToDisk && !unitModelMode && (
+            {config.directToDisk && !unitModelMode && !replaceNumshbMode && (
               <DaeImportFieldRow
                 label="Output Directory"
                 hint={
@@ -467,7 +477,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
               </DaeImportFieldRow>
             )}
 
-            {!unitModelMode ? (
+            {!unitModelMode && !replaceNumshbMode ? (
               <DaeImportBoolField
                 label="Generate HKT Collision"
                 hint={
@@ -503,6 +513,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
               directToDisk={config.directToDisk}
               batchCount={batchDiskMode ? entries.length : 1}
               unitModelMode={unitModelMode}
+              replaceNumshbMode={replaceNumshbMode}
               textureReferenceIssues={textureReferenceValidation.issues}
               textureReferenceValidationError={textureReferenceValidation.error}
               textureReferencesValidating={textureReferenceValidation.validating}
@@ -515,7 +526,9 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
             Cancel
           </Button>
           <Button type="button" size="sm" onClick={onImport} disabled={!canImport}>
-            {unitModelMode
+            {replaceNumshbMode
+              ? "Convert NUMSHB"
+              : unitModelMode
               ? "Add Unit Model"
               : batchDiskMode
               ? `Convert ${entries.length} File${entries.length === 1 ? "" : "s"} to Disk`
@@ -557,12 +570,17 @@ export function DaeImportConfigModal({
   if (!entry || !config) return null;
   const batchDiskMode = workflowMode === "batchDisk";
   const unitModelMode = workflowMode === "unitModel";
-  const title = unitModelMode
+  const replaceNumshbMode = workflowMode === "unitModelReplaceNumshb";
+  const title = replaceNumshbMode
+    ? "Convert mesh for replace"
+    : unitModelMode
     ? "Import Unit Model"
     : batchDiskMode
       ? "Batch Import Static Mesh"
       : "Import Static Mesh";
-  const subtitle = unitModelMode
+  const subtitle = replaceNumshbMode
+    ? `${entry.fileName} to NUMSHB only`
+    : unitModelMode
     ? `${entry.fileName} to Unit model package`
     : batchDiskMode
     ? `${entries.length} FBX/DAE file${entries.length === 1 ? "" : "s"} to disk`

@@ -131,6 +131,10 @@ required-features = ["legacy-cli-tools"]
 
 # Default `cargo test` suite (agent-facing CLIs only — keep this list short).
 [[test]]
+name = "replace_unit_model_numshb"
+path = "tests/replace_unit_model_numshb.rs"
+
+[[test]]
 name = "exvs2_json_cli_test"
 path = "tests/exvs2_json_cli_test.rs"
 

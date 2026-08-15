@@ -4,6 +4,7 @@
 
 - Each filesystem event is converted to **incremental** `FolderChangePayload` ops and emitted immediately on `test-editor:folder-change`.
 - After a **400ms debounce** with no new events, `watch_loop` runs `build_tree` on the entire workspace root and emits a payload with **`full_tree`**, replacing the client tree in one shot.
+- Watcher ignore: any path whose component is `.git` (the git metadata directory) is dropped, so index/object/lock churn never dirties **Repack Changes**. `.gitignore` and other sibling files are still watched. `__convert` remains ignored by substring.
 
 ## Cost at very large workspaces
 

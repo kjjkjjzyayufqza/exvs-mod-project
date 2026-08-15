@@ -26,18 +26,20 @@ export interface UnitModelSourceValidation {
   ignoredSourceNuhlpb: boolean;
 }
 
+export interface UnitModelReplaceTargetPreview {
+  modelName: string;
+  modelIndex: number;
+  numdlbPath: string | null;
+  numshbPath: string | null;
+  nusktbPath: string | null;
+  jnttblPath: string | null;
+  numatbPaths: string[];
+  nuhlpbPath: string | null;
+}
+
 export interface UnitModelReplacePreview {
   source: UnitModelSourceValidation;
-  target: {
-    modelName: string;
-    modelIndex: number;
-    numdlbPath: string | null;
-    numshbPath: string | null;
-    nusktbPath: string | null;
-    jnttblPath: string | null;
-    numatbPaths: string[];
-    nuhlpbPath: string | null;
-  };
+  target: UnitModelReplaceTargetPreview;
   compatibility: {
     skeleton: {
       sourceBoneCount: number;
@@ -62,6 +64,43 @@ export interface UnitModelReplacePreview {
     reusedFromPool: string[];
     missing: string[];
     orphanedAfterReplace: string[];
+  };
+  warnings: string[];
+  blockers: string[];
+}
+
+export interface UnitModelMeshObjectRef {
+  name: string;
+  subindex: number;
+}
+
+export interface UnitModelNumdlbEntryRef {
+  name: string;
+  subindex: number;
+  materialLabel: string;
+}
+
+export interface UnitModelNumshbReplacePreview {
+  target: UnitModelReplaceTargetPreview;
+  sourceNumshbPath: string;
+  targetNumshbPath: string;
+  meshObjects: {
+    source: UnitModelMeshObjectRef[];
+    targetNumdlbEntries: UnitModelNumdlbEntryRef[];
+    kept: UnitModelMeshObjectRef[];
+    missingInSource: UnitModelMeshObjectRef[];
+    newInSource: UnitModelMeshObjectRef[];
+  };
+  skeleton: {
+    sourceInfluenceBones: string[];
+    targetBoneNames: string[];
+    matchingBoneNames: number;
+    missingInTargetSkeleton: string[];
+  };
+  stats: {
+    sourceObjectCount: number;
+    sourceVertexCount: number;
+    sourceTriangleCount: number;
   };
   warnings: string[];
   blockers: string[];
@@ -205,6 +244,58 @@ export async function previewUnitModelModelReplacement(
     structureJsonPath: structureJsonPath ? toWindowsPath(structureJsonPath) : null,
     targetModelName: trimmedName,
     sourceDir: toWindowsPath(trimmedSource),
+  });
+}
+
+export async function replaceUnitModelNumshb(
+  modelRoot: string,
+  targetModelName: string,
+  sourceNumshbPath: string,
+  structureJsonPath?: string,
+): Promise<UnitModelMutationResult> {
+  const trimmedRoot = modelRoot.trim();
+  const trimmedName = targetModelName.trim();
+  const trimmedSource = sourceNumshbPath.trim();
+  if (!trimmedRoot) {
+    throw new Error("Unit model root is required.");
+  }
+  if (!trimmedName) {
+    throw new Error("Target model name is required.");
+  }
+  if (!trimmedSource) {
+    throw new Error("Source NUMSHB path is required.");
+  }
+  return await invoke<UnitModelMutationResult>("replace_unit_model_numshb", {
+    modelRoot: toWindowsPath(trimmedRoot),
+    structureJsonPath: structureJsonPath ? toWindowsPath(structureJsonPath) : null,
+    targetModelName: trimmedName,
+    sourceNumshbPath: toWindowsPath(trimmedSource),
+  });
+}
+
+export async function previewUnitModelNumshbReplacement(
+  modelRoot: string,
+  targetModelName: string,
+  sourceNumshbPath: string,
+  structureJsonPath?: string,
+): Promise<UnitModelNumshbReplacePreview> {
+  const trimmedRoot = modelRoot.trim();
+  const trimmedName = targetModelName.trim();
+  const trimmedSource = sourceNumshbPath.trim();
+  if (!trimmedRoot) {
+    throw new Error("Unit model root is required.");
+  }
+  if (!trimmedName) {
+    throw new Error("Target model name is required.");
+  }
+  if (!trimmedSource) {
+    throw new Error("Source NUMSHB path is required.");
+  }
+  return await invoke<UnitModelNumshbReplacePreview>("preview_unit_model_numshb_replacement", {
+    modelRoot: toWindowsPath(trimmedRoot),
+    structureJsonPath: structureJsonPath ? toWindowsPath(structureJsonPath) : null,
+    targetModelName: trimmedName,
+    sourceNumshbPath: toWindowsPath(trimmedSource),
   });
 }
 

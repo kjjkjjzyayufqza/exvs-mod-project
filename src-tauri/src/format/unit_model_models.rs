@@ -935,6 +935,61 @@ pub struct UnitModelReplaceTexturePlan {
     pub orphaned_after_replace: Vec<String>,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitModelMeshObjectRef {
+    pub name: String,
+    pub subindex: u64,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitModelNumdlbEntryRef {
+    pub name: String,
+    pub subindex: u64,
+    pub material_label: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitModelNumshbObjectCompatibility {
+    pub source: Vec<UnitModelMeshObjectRef>,
+    pub target_numdlb_entries: Vec<UnitModelNumdlbEntryRef>,
+    pub kept: Vec<UnitModelMeshObjectRef>,
+    pub missing_in_source: Vec<UnitModelMeshObjectRef>,
+    pub new_in_source: Vec<UnitModelMeshObjectRef>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitModelNumshbSkeletonCompatibility {
+    pub source_influence_bones: Vec<String>,
+    pub target_bone_names: Vec<String>,
+    pub matching_bone_names: usize,
+    pub missing_in_target_skeleton: Vec<String>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitModelNumshbStats {
+    pub source_object_count: usize,
+    pub source_vertex_count: usize,
+    pub source_triangle_count: usize,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitModelNumshbReplacePreview {
+    pub target: UnitModelReplaceTargetPreview,
+    pub source_numshb_path: String,
+    pub target_numshb_path: String,
+    pub mesh_objects: UnitModelNumshbObjectCompatibility,
+    pub skeleton: UnitModelNumshbSkeletonCompatibility,
+    pub stats: UnitModelNumshbStats,
+    pub warnings: Vec<String>,
+    pub blockers: Vec<String>,
+}
+
 fn ext_lower(path: &Path) -> String {
     path.extension()
         .and_then(|e| e.to_str())
@@ -2134,6 +2189,406 @@ pub fn replace_unit_model_model(
         total_files: new_sub_file_data.len(),
         removed_files,
     })
+}
+
+/// Replace only the target model's `.numshb` bytes in place. Sibling SSBH files,
+/// NUHLPB, textures, and `_structure.json` stay untouched so NUMDLB identity and
+/// `mesh_file_name` keep resolving to the same path.
+pub fn replace_unit_model_numshb(
+    model_root: &str,
+    structure_json_path: Option<&str>,
+    target_model_name: &str,
+    source_numshb_path: &str,
+) -> Result<UnitModelMutationResult, String> {
+    let located = resolve_target_model_files(model_root, structure_json_path, target_model_name)?;
+    let source_path = validate_source_numshb_path(source_numshb_path)?;
+    MeshData::from_file(&source_path).map_err(|e| {
+        format!(
+            "Source is not a readable .numshb ({}): {e}",
+            source_path.display()
+        )
+    })?;
+    ensure_path_inside_root(&located.root_path, &located.numshb_path)?;
+    overwrite_existing_file(&source_path, &located.numshb_path)?;
+    Ok(UnitModelMutationResult {
+        model_root: located.root_path.to_string_lossy().to_string(),
+        structure_json_path: located.structure_path.to_string_lossy().to_string(),
+        model_count: located.model_count,
+        total_files: located.total_files,
+        removed_files: Vec::new(),
+    })
+}
+
+pub fn preview_unit_model_numshb_replacement(
+    model_root: &str,
+    structure_json_path: Option<&str>,
+    target_model_name: &str,
+    source_numshb_path: &str,
+) -> Result<UnitModelNumshbReplacePreview, String> {
+    let located = resolve_target_model_files(model_root, structure_json_path, target_model_name)?;
+    let source_path = validate_source_numshb_path(source_numshb_path)?;
+    let source_mesh = MeshData::from_file(&source_path).map_err(|e| {
+        format!(
+            "Source is not a readable .numshb ({}): {e}",
+            source_path.display()
+        )
+    })?;
+
+    let source_objects: Vec<UnitModelMeshObjectRef> = source_mesh
+        .objects
+        .iter()
+        .map(|object| UnitModelMeshObjectRef {
+            name: object.name.clone(),
+            subindex: object.subindex,
+        })
+        .collect();
+    let target_numdlb_entries = match located.numdlb_path.as_ref() {
+        Some(path) => {
+            let modl = ModlData::from_file(path)
+                .map_err(|e| format!("Failed to read target numdlb {}: {e}", path.display()))?;
+            modl.entries
+                .into_iter()
+                .map(|entry| UnitModelNumdlbEntryRef {
+                    name: entry.mesh_object_name,
+                    subindex: entry.mesh_object_subindex,
+                    material_label: entry.material_label,
+                })
+                .collect()
+        }
+        None => Vec::new(),
+    };
+    let source_keys: HashSet<(String, u64)> = source_objects
+        .iter()
+        .map(|object| (object.name.clone(), object.subindex))
+        .collect();
+    let target_keys: HashSet<(String, u64)> = target_numdlb_entries
+        .iter()
+        .map(|entry| (entry.name.clone(), entry.subindex))
+        .collect();
+    let kept: Vec<UnitModelMeshObjectRef> = source_objects
+        .iter()
+        .filter(|object| target_keys.contains(&(object.name.clone(), object.subindex)))
+        .cloned()
+        .collect();
+    let new_in_source: Vec<UnitModelMeshObjectRef> = source_objects
+        .iter()
+        .filter(|object| !target_keys.contains(&(object.name.clone(), object.subindex)))
+        .cloned()
+        .collect();
+    let missing_in_source: Vec<UnitModelMeshObjectRef> = target_numdlb_entries
+        .iter()
+        .filter(|entry| !source_keys.contains(&(entry.name.clone(), entry.subindex)))
+        .map(|entry| UnitModelMeshObjectRef {
+            name: entry.name.clone(),
+            subindex: entry.subindex,
+        })
+        .collect();
+
+    let source_influence_bones = collect_mesh_influence_bones(&source_mesh);
+    let target_bone_names = match located.nusktb_path.as_ref() {
+        Some(path) => read_skel_bone_names(path)?,
+        None => Vec::new(),
+    };
+    let target_bone_set: HashSet<String> = target_bone_names.iter().cloned().collect();
+    let missing_in_target_skeleton: Vec<String> = source_influence_bones
+        .iter()
+        .filter(|name| !target_bone_set.contains(*name))
+        .cloned()
+        .collect();
+    let matching_bone_names = source_influence_bones.len() - missing_in_target_skeleton.len();
+
+    let mut warnings = Vec::new();
+    let mut blockers = Vec::new();
+    if let Err(error) = ensure_path_inside_root(&located.root_path, &located.numshb_path) {
+        blockers.push(error);
+    }
+    if source_objects.is_empty() {
+        warnings.push("Source NUMSHB contains no mesh objects.".to_string());
+    }
+    if !missing_in_source.is_empty() || !new_in_source.is_empty() {
+        warnings.push(format!(
+            "Mesh objects differ from NUMDLB entries: {} missing in source, {} new in source.",
+            missing_in_source.len(),
+            new_in_source.len()
+        ));
+    }
+    if !missing_in_target_skeleton.is_empty() {
+        warnings.push(format!(
+            "{} skin bone(s) in the source NUMSHB are not in the target NUSKTB.",
+            missing_in_target_skeleton.len()
+        ));
+    }
+    let source_name = source_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    let target_name = located
+        .numshb_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    if !source_name.eq_ignore_ascii_case(target_name) {
+        warnings.push(format!(
+            "Source file '{source_name}' will overwrite target '{target_name}' in place."
+        ));
+    }
+
+    Ok(UnitModelNumshbReplacePreview {
+        target: located.target,
+        source_numshb_path: path_to_string(source_path),
+        target_numshb_path: path_to_string(located.numshb_path),
+        mesh_objects: UnitModelNumshbObjectCompatibility {
+            source: source_objects.clone(),
+            target_numdlb_entries,
+            kept,
+            missing_in_source,
+            new_in_source,
+        },
+        skeleton: UnitModelNumshbSkeletonCompatibility {
+            source_influence_bones,
+            target_bone_names,
+            matching_bone_names,
+            missing_in_target_skeleton,
+        },
+        stats: collect_numshb_stats(&source_mesh),
+        warnings,
+        blockers,
+    })
+}
+
+struct LocatedTargetModel {
+    root_path: PathBuf,
+    structure_path: PathBuf,
+    model_count: usize,
+    total_files: usize,
+    numshb_path: PathBuf,
+    numdlb_path: Option<PathBuf>,
+    nusktb_path: Option<PathBuf>,
+    target: UnitModelReplaceTargetPreview,
+}
+
+fn resolve_target_model_files(
+    model_root: &str,
+    structure_json_path: Option<&str>,
+    target_model_name: &str,
+) -> Result<LocatedTargetModel, String> {
+    let root_path = validate_dir(model_root)?;
+    let structure_path = resolve_structure_path(&root_path, structure_json_path)?;
+    let json_dir = structure_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .to_path_buf();
+    let target_name = target_model_name.trim().to_string();
+    if target_name.is_empty() {
+        return Err("Target model name cannot be empty.".to_string());
+    }
+
+    let raw = fs::read_to_string(&structure_path).map_err(|e| {
+        format!(
+            "Failed to read structure JSON {}: {e}",
+            structure_path.display()
+        )
+    })?;
+    let value: Value = serde_json::from_str(&raw).map_err(|e| {
+        format!(
+            "Failed to parse structure JSON {}: {e}",
+            structure_path.display()
+        )
+    })?;
+    let sub_file_data = value
+        .get("SubFileData")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "Structure JSON missing SubFileData array".to_string())?
+        .clone();
+    let sub_file_structure: Vec<SubFileStructureEntry> = serde_json::from_value(
+        value
+            .get("SubFileStructure")
+            .cloned()
+            .ok_or_else(|| "Structure JSON missing SubFileStructure".to_string())?,
+    )
+    .map_err(|e| format!("Failed to parse SubFileStructure: {e}"))?;
+    let ext_by_index = build_ext_by_index(&sub_file_data);
+    let mut root = parse_root(&sub_file_structure)?;
+    let model_count = count_model_groups(&root, &ext_by_index);
+    let (model_index, target_files) = {
+        let models = find_models_container(&mut root, &ext_by_index)
+            .ok_or_else(|| "Could not locate the models container in the structure.".to_string())?;
+        let index = models
+            .iter()
+            .position(|mg| {
+                folder_has_direct_ext(mg, ".numdlb", &ext_by_index)
+                    && model_group_name(mg, &ext_by_index).as_deref() == Some(target_name.as_str())
+            })
+            .ok_or_else(|| format!("Model '{target_name}' was not found in the structure."))?;
+        let group = &models[index];
+        (index, direct_file_indices_by_ext(group, &ext_by_index))
+    };
+
+    let numdlb_path = first_path_for_ext(&target_files, ".numdlb", &sub_file_data, &json_dir);
+    let numshb_path = first_path_for_ext(&target_files, ".numshb", &sub_file_data, &json_dir)
+        .ok_or_else(|| format!("Target model '{target_name}' is missing a .numshb item."))?;
+    let nusktb_path = first_path_for_ext(&target_files, ".nusktb", &sub_file_data, &json_dir);
+    let jnttbl_path = first_path_for_ext(&target_files, ".jnttbl", &sub_file_data, &json_dir);
+    let numatb_paths = paths_for_ext(&target_files, ".numatb", &sub_file_data, &json_dir);
+    let nuhlpb_path = find_named_nuhlpb_path(
+        &root,
+        &ext_by_index,
+        &sub_file_data,
+        &json_dir,
+        &target_name,
+    );
+    if !numshb_path.is_file() {
+        return Err(format!(
+            "Target .numshb does not exist on disk: {}",
+            numshb_path.display()
+        ));
+    }
+
+    Ok(LocatedTargetModel {
+        root_path,
+        structure_path,
+        model_count,
+        total_files: sub_file_data.len(),
+        numshb_path: numshb_path.clone(),
+        numdlb_path: numdlb_path.clone(),
+        nusktb_path: nusktb_path.clone(),
+        target: UnitModelReplaceTargetPreview {
+            model_name: target_name,
+            model_index,
+            numdlb_path: numdlb_path.map(path_to_string),
+            numshb_path: Some(path_to_string(numshb_path)),
+            nusktb_path: nusktb_path.map(path_to_string),
+            jnttbl_path: jnttbl_path.map(path_to_string),
+            numatb_paths: numatb_paths.into_iter().map(path_to_string).collect(),
+            nuhlpb_path: nuhlpb_path.map(path_to_string),
+        },
+    })
+}
+
+fn validate_source_numshb_path(source_numshb_path: &str) -> Result<PathBuf, String> {
+    let trimmed = source_numshb_path.trim();
+    if trimmed.is_empty() {
+        return Err("Source NUMSHB path is required.".to_string());
+    }
+    let path = PathBuf::from(trimmed);
+    if !path.is_file() {
+        return Err(format!("Source NUMSHB is not a file: {}", path.display()));
+    }
+    if ext_lower(&path) != ".numshb" {
+        return Err(format!(
+            "Source file must be a .numshb, found {}",
+            path.display()
+        ));
+    }
+    Ok(path)
+}
+
+fn ensure_path_inside_root(root: &Path, candidate: &Path) -> Result<(), String> {
+    let root_canon = fs::canonicalize(root).map_err(|e| {
+        format!(
+            "Failed to resolve unit model root {}: {e}",
+            root.display()
+        )
+    })?;
+    let candidate_canon = fs::canonicalize(candidate).map_err(|e| {
+        format!(
+            "Failed to resolve target path {}: {e}",
+            candidate.display()
+        )
+    })?;
+    if !candidate_canon.starts_with(&root_canon) {
+        return Err(format!(
+            "Target NUMSHB {} is outside the unit model root.",
+            candidate.display()
+        ));
+    }
+    Ok(())
+}
+
+fn overwrite_existing_file(source: &Path, dest: &Path) -> Result<(), String> {
+    if paths_are_same_file(source, dest) {
+        return Ok(());
+    }
+    let dest_name = dest
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("Invalid target NUMSHB path: {}", dest.display()))?;
+    let backup = dest.with_file_name(format!("{dest_name}.replace-bak"));
+    if backup.exists() {
+        fs::remove_file(&backup).map_err(|e| {
+            format!(
+                "Failed to remove leftover backup {}: {e}",
+                backup.display()
+            )
+        })?;
+    }
+    fs::rename(dest, &backup).map_err(|e| {
+        format!(
+            "Failed to stage existing NUMSHB {}: {e}",
+            dest.display()
+        )
+    })?;
+    if let Err(error) = fs::copy(source, dest) {
+        let _ = fs::rename(&backup, dest);
+        return Err(format!(
+            "Failed to copy {} -> {}: {error}",
+            source.display(),
+            dest.display()
+        ));
+    }
+    if let Err(error) = fs::remove_file(&backup) {
+        return Err(format!(
+            "NUMSHB replaced but failed to delete backup {}: {error}",
+            backup.display()
+        ));
+    }
+    Ok(())
+}
+
+fn paths_are_same_file(left: &Path, right: &Path) -> bool {
+    match (fs::canonicalize(left), fs::canonicalize(right)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => left == right,
+    }
+}
+
+fn collect_mesh_influence_bones(mesh: &MeshData) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut seen = HashSet::new();
+    for object in &mesh.objects {
+        for influence in &object.bone_influences {
+            if seen.insert(influence.bone_name.clone()) {
+                names.push(influence.bone_name.clone());
+            }
+        }
+        if !object.parent_bone_name.is_empty() && seen.insert(object.parent_bone_name.clone()) {
+            names.push(object.parent_bone_name.clone());
+        }
+    }
+    names
+}
+
+fn collect_numshb_stats(mesh: &MeshData) -> UnitModelNumshbStats {
+    use ssbh_data::mesh_data::VectorData;
+    let mut source_vertex_count = 0usize;
+    let mut source_triangle_count = 0usize;
+    for object in &mesh.objects {
+        source_vertex_count += object
+            .positions
+            .first()
+            .map(|attribute| match &attribute.data {
+                VectorData::Vector2(values) => values.len(),
+                VectorData::Vector3(values) => values.len(),
+                VectorData::Vector4(values) => values.len(),
+            })
+            .unwrap_or(0);
+        source_triangle_count += object.vertex_indices.len() / 3;
+    }
+    UnitModelNumshbStats {
+        source_object_count: mesh.objects.len(),
+        source_vertex_count,
+        source_triangle_count,
+    }
 }
 
 fn restore_backups(backups: &[(PathBuf, PathBuf)]) {
@@ -3399,6 +3854,86 @@ mod tests {
                 .any(|warning| warning.contains("Source model 'beta'")),
             "source/target identity warning expected"
         );
+    }
+
+    fn write_distinct_numshb(path: &Path, object_name: &str) {
+        use ssbh_data::mesh_data::{AttributeData, MeshObjectData, VectorData};
+        MeshData {
+            major_version: 1,
+            minor_version: 10,
+            objects: vec![MeshObjectData {
+                name: object_name.to_string(),
+                subindex: 0,
+                positions: vec![AttributeData {
+                    name: "Position0".to_string(),
+                    data: VectorData::Vector3(vec![
+                        glam::Vec3::new(1.0, 0.0, 0.0),
+                        glam::Vec3::new(0.0, 1.0, 0.0),
+                        glam::Vec3::new(0.0, 0.0, 1.0),
+                    ]),
+                }],
+                vertex_indices: vec![0, 1, 2],
+                ..Default::default()
+            }],
+            is_vs2: false,
+        }
+        .write_to_file(path)
+        .unwrap();
+    }
+
+    #[test]
+    fn replace_numshb_overwrites_target_path_and_leaves_siblings_untouched() {
+        let parent = tempfile::tempdir().unwrap();
+        let fixture = write_replace_fixture(parent.path());
+        let source_dir = tempfile::tempdir().unwrap();
+        let source_numshb = source_dir.path().join("foreign__maya__.numshb");
+        write_distinct_numshb(&source_numshb, "Body");
+
+        let target_numshb = fixture.alpha_dir.join("alpha.numshb");
+        let sibling_paths = [
+            fixture.alpha_dir.join("alpha.numdlb"),
+            fixture.alpha_dir.join("alpha.nusktb"),
+            fixture.alpha_dir.join("alpha.jnttbl"),
+            fixture.alpha_dir.join("alpha__maya__.numatb"),
+            fixture.alpha_dir.join("alpha__nust__.numatb"),
+            fixture.nuhlpb_dir.join("alpha.nuhlpb"),
+        ];
+        let before_structure = fs::read(&fixture.structure_path).unwrap();
+        let before_siblings: Vec<_> = sibling_paths
+            .iter()
+            .map(|path| fs::read(path).unwrap())
+            .collect();
+        let before_target = fs::read(&target_numshb).unwrap();
+        let source_bytes = fs::read(&source_numshb).unwrap();
+        assert_ne!(before_target, source_bytes);
+
+        let result = replace_unit_model_numshb(
+            fixture.root.to_string_lossy().as_ref(),
+            Some(fixture.structure_path.to_string_lossy().as_ref()),
+            "alpha",
+            source_numshb.to_string_lossy().as_ref(),
+        )
+        .expect("numshb-only replace should succeed");
+
+        assert_eq!(result.model_count, 1);
+        assert_eq!(fs::read(&target_numshb).unwrap(), source_bytes);
+        assert!(
+            !fixture.alpha_dir.join("foreign__maya__.numshb").exists(),
+            "source filename must not be copied beside the target"
+        );
+        assert_eq!(
+            fs::read(&fixture.structure_path).unwrap(),
+            before_structure,
+            "_structure.json must stay byte-identical"
+        );
+        for (path, before) in sibling_paths.iter().zip(before_siblings) {
+            assert_eq!(
+                fs::read(path).unwrap(),
+                before,
+                "{} must stay byte-identical",
+                path.display()
+            );
+        }
     }
 
     #[test]

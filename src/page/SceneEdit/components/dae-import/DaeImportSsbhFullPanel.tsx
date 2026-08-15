@@ -36,6 +36,7 @@ interface DaeImportSsbhFullPanelProps {
   directToDisk?: boolean;
   batchCount?: number;
   unitModelMode?: boolean;
+  replaceNumshbMode?: boolean;
 }
 
 export function DaeImportSsbhFullPanel({
@@ -48,6 +49,7 @@ export function DaeImportSsbhFullPanel({
   directToDisk = false,
   batchCount = 1,
   unitModelMode = false,
+  replaceNumshbMode = false,
 }: DaeImportSsbhFullPanelProps) {
   const setSourcePath = useDaeSsbhSessionStore((state) => state.setSourcePath);
   const loadAnalysis = useDaeSsbhSessionStore((state) => state.loadAnalysis);
@@ -61,19 +63,27 @@ export function DaeImportSsbhFullPanel({
   }, [loadTemplateLibrary]);
 
   useEffect(() => {
-    if (!unitModelMode) return;
+    if (!unitModelMode && !replaceNumshbMode) return;
     const state = useDaeSsbhSessionStore.getState();
-    state.setWriteNumdlb(true);
-    state.setWriteNumshb(true);
-    state.setWriteNusktb(true);
-    state.setWriteNumatb(true);
-    state.setWriteMayaProfile(true);
+    if (replaceNumshbMode) {
+      state.setWriteNumdlb(false);
+      state.setWriteNumshb(true);
+      state.setWriteNusktb(false);
+      state.setWriteNumatb(false);
+      state.setWriteMayaProfile(false);
+    } else {
+      state.setWriteNumdlb(true);
+      state.setWriteNumshb(true);
+      state.setWriteNusktb(true);
+      state.setWriteNumatb(true);
+      state.setWriteMayaProfile(true);
+    }
     const fileName = sourcePath.split(/[/\\]/).pop() ?? "";
     if (detectStaticMeshImportFormat(fileName) === "fbx") {
       state.setImportKind("fbx");
       state.setFlipUv(true);
     }
-  }, [sourcePath, unitModelMode]);
+  }, [sourcePath, unitModelMode, replaceNumshbMode]);
 
   useEffect(() => {
     if (!analysis?.canConvert) {
@@ -172,7 +182,9 @@ export function DaeImportSsbhFullPanel({
     <div className="space-y-3 p-4">
       <DaeImportPanelSection title="Output">
         <p className="text-[11px] text-muted-foreground">
-          {unitModelMode
+          {replaceNumshbMode
+            ? "Only a temporary .numshb is written. The existing NUMDLB, NUMATB, NUSKTB, JNTTBL, and NUHLPB stay untouched."
+            : unitModelMode
             ? `Generated model files are registered under the Unit model models folder${stageRoot ? ` (${stageRoot})` : ""}. Referenced textures are deduplicated into its shared texture pool.`
             : directToDisk
             ? batchCount > 1
@@ -257,7 +269,7 @@ export function DaeImportSsbhFullPanel({
           <label className="flex cursor-pointer items-center gap-2 text-[11px]">
             <Checkbox
               checked={session.writeNumdlb}
-              disabled={unitModelMode}
+              disabled={unitModelMode || replaceNumshbMode}
               onCheckedChange={(c) => session.setWriteNumdlb(c === true)}
             />
             .numdlb
@@ -265,7 +277,7 @@ export function DaeImportSsbhFullPanel({
           <label className="flex cursor-pointer items-center gap-2 text-[11px]">
             <Checkbox
               checked={session.writeNumshb}
-              disabled={unitModelMode}
+              disabled={unitModelMode || replaceNumshbMode}
               onCheckedChange={(c) => session.setWriteNumshb(c === true)}
             />
             .numshb
@@ -273,7 +285,7 @@ export function DaeImportSsbhFullPanel({
           <label className="flex cursor-pointer items-center gap-2 text-[11px]">
             <Checkbox
               checked={session.writeNusktb}
-              disabled={unitModelMode}
+              disabled={unitModelMode || replaceNumshbMode}
               onCheckedChange={(c) => session.setWriteNusktb(c === true)}
             />
             .nusktb
@@ -281,7 +293,7 @@ export function DaeImportSsbhFullPanel({
           <label className="flex cursor-pointer items-center gap-2 text-[11px]">
             <Checkbox
               checked={session.writeNumatb}
-              disabled={unitModelMode}
+              disabled={unitModelMode || replaceNumshbMode}
               onCheckedChange={(c) => session.setWriteNumatb(c === true)}
             />
             __nust__.numatb
@@ -289,16 +301,20 @@ export function DaeImportSsbhFullPanel({
           <label className="flex cursor-pointer items-center gap-2 text-[11px]">
             <Checkbox
               checked={session.writeMayaProfile}
-              disabled={unitModelMode}
+              disabled={unitModelMode || replaceNumshbMode}
               onCheckedChange={(c) => session.setWriteMayaProfile(c === true)}
             />
             __maya__.numatb
           </label>
-          {unitModelMode ? (
+          {unitModelMode && !replaceNumshbMode ? (
             <label className="flex cursor-pointer items-center gap-2 text-[11px]">
               <Checkbox checked disabled />
               .jnttbl
             </label>
+          ) : replaceNumshbMode ? (
+            <p className="col-span-2 text-[10px] text-muted-foreground">
+              Other SSBH outputs stay off for mesh-only replace.
+            </p>
           ) : (
             <label className="flex cursor-pointer items-center gap-2 text-[11px]">
               <Checkbox
@@ -311,6 +327,7 @@ export function DaeImportSsbhFullPanel({
         </div>
       </DaeImportPanelSection>
 
+      {replaceNumshbMode ? null : (
       <DaeImportPanelSection title="NUMDLB Mapping">
         <NumdlbMaterialMappingEditor
           rows={session.numdlbEntries}
@@ -321,72 +338,77 @@ export function DaeImportSsbhFullPanel({
           embedTableWithoutInnerScroll
         />
       </DaeImportPanelSection>
+      )}
 
-      <DaeImportPanelSection
-        title="NUMATB Profiles (Texture Data)"
-        headerEnd={
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 shrink-0"
-            title="Copy full NUMATB profile data as JSON (for AI analysis)"
-            aria-label="Copy NUMATB profiles as JSON"
-            onClick={() => void handleCopyNumatbProfilesJson()}
+      {replaceNumshbMode ? null : (
+        <>
+          <DaeImportPanelSection
+            title="NUMATB Profiles (Texture Data)"
+            headerEnd={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                title="Copy full NUMATB profile data as JSON (for AI analysis)"
+                aria-label="Copy NUMATB profiles as JSON"
+                onClick={() => void handleCopyNumatbProfilesJson()}
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            }
           >
-            <Copy className="h-3.5 w-3.5" />
-          </Button>
-        }
-      >
-        <NumatbTemplateEditor />
-      </DaeImportPanelSection>
+            <NumatbTemplateEditor />
+          </DaeImportPanelSection>
 
-      <MissingTexturePathFillPanel
-        slots={fillTextureSlots}
-        onFillSlot={(slot, basename) => {
-          applyTexturePathFillToProfiles(
-            updateProfileAttribute,
-            addProfileAttribute,
-            () => {
-              const state = useDaeSsbhSessionStore.getState();
-              return { mayaFile: state.mayaFile, nustFile: state.nustFile };
-            },
-            slot,
-            basename,
-          );
-        }}
-      />
-      {textureReferencesValidating ? (
-        <p className="text-[11px] text-muted-foreground">
-          Checking NUMATB texture references...
-        </p>
-      ) : null}
-      {textureReferenceValidationError ? (
-        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
-          <p className="text-[11px] text-destructive">
-            Texture reference validation failed: {textureReferenceValidationError}
-          </p>
-        </div>
-      ) : null}
-      <MissingTexturePathFillPanel
-        slots={textureReferenceIssues.map((issue) => issue.slot)}
-        title="Fix texture references that cannot be resolved before conversion:"
-        getSlotMessage={(slot) =>
-          textureReferenceIssueMessages.get(missingTexturePathSlotKey(slot)) ?? null
-        }
-        onFillSlot={(slot, basename) => {
-          applyTexturePathFillToProfiles(
-            updateProfileAttribute,
-            addProfileAttribute,
-            () => {
-              const state = useDaeSsbhSessionStore.getState();
-              return { mayaFile: state.mayaFile, nustFile: state.nustFile };
-            },
-            slot,
-            basename,
-          );
-        }}
-      />
+          <MissingTexturePathFillPanel
+            slots={fillTextureSlots}
+            onFillSlot={(slot, basename) => {
+              applyTexturePathFillToProfiles(
+                updateProfileAttribute,
+                addProfileAttribute,
+                () => {
+                  const state = useDaeSsbhSessionStore.getState();
+                  return { mayaFile: state.mayaFile, nustFile: state.nustFile };
+                },
+                slot,
+                basename,
+              );
+            }}
+          />
+          {textureReferencesValidating ? (
+            <p className="text-[11px] text-muted-foreground">
+              Checking NUMATB texture references...
+            </p>
+          ) : null}
+          {textureReferenceValidationError ? (
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
+              <p className="text-[11px] text-destructive">
+                Texture reference validation failed: {textureReferenceValidationError}
+              </p>
+            </div>
+          ) : null}
+          <MissingTexturePathFillPanel
+            slots={textureReferenceIssues.map((issue) => issue.slot)}
+            title="Fix texture references that cannot be resolved before conversion:"
+            getSlotMessage={(slot) =>
+              textureReferenceIssueMessages.get(missingTexturePathSlotKey(slot)) ?? null
+            }
+            onFillSlot={(slot, basename) => {
+              applyTexturePathFillToProfiles(
+                updateProfileAttribute,
+                addProfileAttribute,
+                () => {
+                  const state = useDaeSsbhSessionStore.getState();
+                  return { mayaFile: state.mayaFile, nustFile: state.nustFile };
+                },
+                slot,
+                basename,
+              );
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }
