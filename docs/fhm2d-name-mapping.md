@@ -30,6 +30,10 @@ read directly from `.fhm2d`; entries with internal file names are marked
 ## Naming policy
 
 - `hashName` always keeps the game-facing `0xXXXXXXXX` name.
+  `ob_unit.json` sometimes stores a 1–7 hex-digit value such as `0x06044d2`;
+  the generator left-pads that exact token to 8 digits (`0x006044D2`) instead
+  of dropping the row. Path search still requires 8 hex digits so names like
+  `001gundam_017dom000_001` are not treated as hashes.
 - `name` is the editable workspace folder and structure JSON stem.
 - For EXVS2 meta paths, `name` is usually the pack directory basename, such as
   `001gundam_002chrgel_001`.

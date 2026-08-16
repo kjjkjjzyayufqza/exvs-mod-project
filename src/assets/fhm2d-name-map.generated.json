@@ -25,7 +25,7 @@
   },
   "stats": {
     "referenceDirectoryCount": 21655,
-    "entryCount": 20742,
+    "entryCount": 20745,
     "characterListRowCount": 687,
     "characterMatchedEntryCount": 4651,
     "obStructureHashCount": 36,
@@ -81,29 +81,29 @@
     },
     {
       "hashName": "0x0031807C",
-      "name": "ob_0031807c",
-      "routeId": null,
-      "routePrefix": null,
-      "source": "ob-dplcache-fallback",
-      "confidence": "ob-dplcache-fallback",
-      "packagePath": "ob_0031807c",
+      "name": "756gndmnt_002jststb_001",
+      "routeId": "unit.param",
+      "routePrefix": "041cpm",
+      "source": "manual-research-note",
+      "confidence": "manual-research-note",
+      "packagePath": "041cpm/756gndmnt_002jststb_001",
       "gameRelativePath": null,
       "categoryPath": null,
       "aliases": [
-        "0x0031807C",
-        "ob_0031807c"
+        "756gndmnt_002jststb_001",
+        "gndmnt_002jststb"
       ],
-      "sourcePathCount": 1,
+      "sourcePathCount": 0,
       "matchedPathCount": 0,
-      "character": null,
+      "character": {
+        "characterId": 756002001
+      },
       "evidence": {
-        "path": "E:\\OBHK0.3_v27\\data\\x64\\dplcache_release\\0x0031807C.fhm2d",
-        "sizeBytes": 5347,
-        "fileCount": 9,
-        "typeCounts": {
-          ".bin": 9
-        },
-        "internalNames": []
+        "path": "tools\\fhm2d_name_mapping_overrides.json",
+        "notes": "ob_unit.json ammoFileName is the 7-hex string 0x031807c so the 8-hex normalizer never emitted an ob-unit-list param row. Leftover dplcache named it ob_0031807c (9x .bin, no internal names).",
+        "references": [
+          "E:\\OBHK0.3_v27\\data\\x64\\050ai\\aiscript\\ai_CHR_756GNDMNT_002JSTSTB_001.aimsexcd"
+        ]
       }
     },
     {
@@ -32690,18 +32690,21 @@
       "name": "001gundam_017dom000_001_00bc54b9",
       "routeId": "unit.model",
       "routePrefix": "002chara",
-      "source": "ob-dplcache-internal",
-      "confidence": "ob-dplcache-internal",
+      "source": "manual-research-note",
+      "confidence": "manual-research-note",
       "packagePath": "002chara/001gundam_017dom000_001",
       "gameRelativePath": null,
       "categoryPath": "002chara",
       "aliases": [
         "001gundam_017dom000_001",
-        "0x00BC54B9"
+        "0x00BC54B9",
+        "unit_501705001"
       ],
       "sourcePathCount": 1,
       "matchedPathCount": 22,
-      "character": null,
+      "character": {
+        "characterId": 501705001
+      },
       "evidence": {
         "path": "E:\\OBHK0.3_v27\\data\\x64\\dplcache_release\\0x00BC54B9.fhm2d",
         "sizeBytes": 6775657,
@@ -48011,48 +48014,49 @@
       "name": "749orphn2_005rgnjla_001",
       "routeId": "unit.model",
       "routePrefix": "002chara",
-      "source": "ob-dplcache-internal",
-      "confidence": "ob-dplcache-internal",
+      "source": "manual-research-note",
+      "confidence": "manual-research-note",
       "packagePath": "002chara/749orphn2_005rgnjla_001",
       "gameRelativePath": null,
-      "categoryPath": "002chara",
+      "categoryPath": null,
       "aliases": [
-        "0x00DB34FD",
         "749orphn2_005rgnjla_001"
       ],
-      "sourcePathCount": 1,
-      "matchedPathCount": 15,
-      "character": null,
+      "sourcePathCount": 0,
+      "matchedPathCount": 0,
+      "character": {
+        "characterId": 749005001
+      },
       "evidence": {
-        "path": "E:\\OBHK0.3_v27\\data\\x64\\dplcache_release\\0x00DB34FD.fhm2d",
-        "sizeBytes": 11130106,
-        "fileCount": 52,
-        "typeCounts": {
-          ".bin": 12,
-          ".nudnbb": 1,
-          ".nuhlpb": 4,
-          ".numatb": 8,
-          ".numdlb": 4,
-          ".numshb": 4,
-          ".nusktb": 4,
-          ".nutexb": 15
-        },
-        "internalNames": [
-          "001_001_001_beamrifle",
-          "749orphn2_005rgnjla_001_pbr1_ambientocclusion",
-          "749orphn2_005rgnjla_001_pbr1_basecolor",
-          "749orphn2_005rgnjla_001_pbr1_emissive",
-          "749orphn2_005rgnjla_001_pbr1_metallic",
-          "749orphn2_005rgnjla_001_pbr1_normal",
-          "749orphn2_005rgnjla_001_pbr1_roughness",
-          "749orphn2_005rgnjla_001_pbr1_roughnessandmask",
-          "749orphn2_005rgnjla_001_pbr2_ambientocclusion",
-          "749orphn2_005rgnjla_001_pbr2_basecolor",
-          "749orphn2_005rgnjla_001_pbr2_metallic",
-          "749orphn2_005rgnjla_001_pbr2_normal",
-          "749orphn2_005rgnjla_001_pbr2_roughness",
-          "749orphn2_005rgnjla_001_pbr2_roughnessandmask",
-          "barispecular00_cubemap"
+        "path": "tools\\fhm2d_name_mapping_overrides.json",
+        "notes": "ob_unit.json modelFileName is the 7-hex string 0x0db34fd so the 8-hex normalizer never emitted an ob-unit-list model row.",
+        "references": []
+      }
+    },
+    {
+      "hashName": "0x00ACD4C4",
+      "name": "701gundam_007acguy0_001",
+      "routeId": "unit.model",
+      "routePrefix": "002chara",
+      "source": "manual-research-note",
+      "confidence": "manual-research-note",
+      "packagePath": "002chara/701gundam_007acguy0_001",
+      "gameRelativePath": null,
+      "categoryPath": null,
+      "aliases": [
+        "701gundam_007acguy0_001",
+        "gundam_007acguy0"
+      ],
+      "sourcePathCount": 0,
+      "matchedPathCount": 0,
+      "character": {
+        "characterId": 701007001
+      },
+      "evidence": {
+        "path": "tools\\fhm2d_name_mapping_overrides.json",
+        "notes": "ob_unit.json modelFileName is the 7-hex string 0x0acd4c4 so the 8-hex normalizer never emitted an ob-unit-list model row. Padded 0x00ACD4C4.fhm2d is absent from this dplcache dump.",
+        "references": [
+          "E:\\OBHK0.3_v27\\data\\x64\\050ai\\aiscript\\ai_CHR_701GUNDAM_007ACGUY0_001.aimsexcd"
         ]
       }
     },
@@ -55051,53 +55055,31 @@
     },
     {
       "hashName": "0x006044D2",
-      "name": "000common_000common_001",
+      "name": "017gyakch_006newhws_001",
       "routeId": "unit.motion",
       "routePrefix": "003motion",
-      "source": "ob-dplcache-internal",
-      "confidence": "ob-dplcache-internal",
-      "packagePath": "003motion/000common_000common_001",
+      "source": "manual-research-note",
+      "confidence": "manual-research-note",
+      "packagePath": "003motion/017gyakch_006newhws_001",
       "gameRelativePath": null,
-      "categoryPath": "003motion",
+      "categoryPath": null,
       "aliases": [
-        "000common_000common_001",
-        "0x006044D2"
+        "017gyakch_006newhws_001",
+        "gyakch_006newhws"
       ],
-      "sourcePathCount": 1,
-      "matchedPathCount": 24,
-      "character": null,
+      "sourcePathCount": 0,
+      "matchedPathCount": 0,
+      "character": {
+        "characterId": 17006001,
+        "characterName": "νガンダムHWS",
+        "pilotName": "アムロ",
+        "seriesId": "0x52C67F2F"
+      },
       "evidence": {
-        "path": "E:\\OBHK0.3_v27\\data\\x64\\dplcache_release\\0x006044D2.fhm2d",
-        "sizeBytes": 1603803,
-        "fileCount": 366,
-        "typeCounts": {
-          ".nuanmb": 366
-        },
-        "internalNames": [
-          "001hito_000common_000common_001_45mdmg_weak_air_bk",
-          "001hito_000common_000common_001_45mdmg_weak_air_fr",
-          "001hito_000common_000common_001_continuihithrzn_hard_air_bk",
-          "001hito_000common_000common_001_continuihithrzn_hard_air_fr",
-          "001hito_000common_000common_001_glideloop_faceup_gnd_fr",
-          "001hito_000common_000common_001_knockhit_weak_air_lw",
-          "001hito_000common_000common_001_lowerhit_weak_gnd_bk",
-          "001hito_000common_000common_001_lowerhit_weak_gnd_fr",
-          "001hito_000common_000common_001_middlehit_weak_air_bk",
-          "001hito_000common_000common_001_middlehit_weak_air_fr",
-          "001hito_000common_000common_001_spindownflp_faceup_gnd_fr",
-          "001hito_000common_000common_001_spinfall_hard_air_bk",
-          "001hito_000common_000common_001_spinfall_hard_air_fr",
-          "001hito_000common_000common_001_stabilize_faceup_air_fr",
-          "001hito_000common_000common_001_verticalhit_invin_air_bk",
-          "001hito_000common_000common_001_verticalhit_invin_air_fr",
-          "001hito_017gyakch_006newhws_001_kakf31a_sht_air_fr",
-          "001hito_017gyakch_006newhws_001_winbgn03_sht_air_fr",
-          "736newhwssld_017gyakch_006newhws_001_hmshield00_kakf31a_sht_air_fr",
-          "736newhwssld_017gyakch_006newhws_001_hmshield00_winbgn03_sht_air_fr",
-          "741newhwsbp_017gyakch_006newhws_001_backpack00_kakf31a_sht_air_fr",
-          "741newhwsbp_017gyakch_006newhws_001_backpack00_winbgn03_sht_air_fr",
-          "742newhwsfinfunnelset_017gyakch_006newhws_001_posefun00_wepdef_sht_gnd_fr",
-          "742newhwsfinfunnelset_017gyakch_006newhws_001_posefun00_winbgn03_sht_air_fr"
+        "path": "tools\\fhm2d_name_mapping_overrides.json",
+        "notes": "OB-only ν Gundam HWS (17006001) motion pack. VS2 has no 0x006044D2_meta.bin. ob_unit.json animeFileName is the 7-hex string 0x06044d2 so the 8-hex normalizer never emits an ob-unit-list motion row. First-24 nuanmb sampling majority-votes 000common_000common_001. Short name from ai_CHR_017GYAKCH_006NEWHWS_001, not 001NEWGUN (17001001).",
+        "references": [
+          "E:\\OBHK0.3_v27\\data\\x64\\050ai\\aiscript\\ai_CHR_017GYAKCH_006NEWHWS_001.aimsexcd"
         ]
       }
     },
@@ -441329,6 +441311,57 @@
       "evidence": {
         "path": "tools\\ob_unit.json",
         "field": "ammoFileName"
+      }
+    },
+    {
+      "hashName": "0x00FF1FC0",
+      "name": "unit_505707001",
+      "routeId": "unit.param",
+      "routePrefix": "041cpm",
+      "source": "manual-research-note",
+      "confidence": "manual-research-note",
+      "packagePath": "041cpm/unit_505707001",
+      "gameRelativePath": null,
+      "categoryPath": null,
+      "aliases": [
+        "unit_505707001"
+      ],
+      "sourcePathCount": 0,
+      "matchedPathCount": 0,
+      "character": {
+        "characterId": 505707001
+      },
+      "evidence": {
+        "path": "tools\\fhm2d_name_mapping_overrides.json",
+        "notes": "ob_unit.json ammoFileName is the 7-hex string 0x0ff1fc0 so the 8-hex normalizer never emitted an ob-unit-list param row. Padded 0x00FF1FC0.fhm2d is absent from this dplcache dump.",
+        "references": []
+      }
+    },
+    {
+      "hashName": "0x003CDD4D",
+      "name": "733gndage_017gnaocm_001",
+      "routeId": "unit.param",
+      "routePrefix": "041cpm",
+      "source": "manual-research-note",
+      "confidence": "manual-research-note",
+      "packagePath": "041cpm/733gndage_017gnaocm_001",
+      "gameRelativePath": null,
+      "categoryPath": null,
+      "aliases": [
+        "733gndage_017gnaocm_001",
+        "gndage_017gnaocm"
+      ],
+      "sourcePathCount": 0,
+      "matchedPathCount": 0,
+      "character": {
+        "characterId": 733017001
+      },
+      "evidence": {
+        "path": "tools\\fhm2d_name_mapping_overrides.json",
+        "notes": "ob_unit.json ammoFileName is the 7-hex string 0x03cdd4d so the 8-hex normalizer never emitted an ob-unit-list param row. Padded 0x003CDD4D.fhm2d is absent from this dplcache dump.",
+        "references": [
+          "E:\\OBHK0.3_v27\\data\\x64\\050ai\\aiscript\\ai_CHR_733GNDAGE_017GNAOCM_001.aimsexcd"
+        ]
       }
     },
     {
