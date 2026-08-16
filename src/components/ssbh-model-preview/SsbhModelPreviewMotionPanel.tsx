@@ -247,14 +247,7 @@ export function SsbhModelPreviewMotionPanel() {
                 p.setMotionPlaying(false);
               }}
             />
-            {p.motionSelectedNuanmbPath ? (
-              <p
-                className="truncate font-mono text-[9px] text-muted-foreground"
-                title={p.motionSelectedNuanmbPath}
-              >
-                {basename(p.motionSelectedNuanmbPath)}
-              </p>
-            ) : null}
+
           </div>
         ) : (
           <p className="rounded-md border border-dashed border-border/70 bg-muted/20 px-2.5 py-2 text-[10px] leading-relaxed text-muted-foreground">
