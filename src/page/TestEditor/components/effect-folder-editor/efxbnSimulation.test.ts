@@ -8,13 +8,19 @@ import type {
 import type { EffectFolderPreviewPlan } from "./effectFolderPreviewPlan";
 import { makeEfxbnEffectBlock, makeEfxbnRuntime } from "./efxbnTestFactory";
 import {
+  bindEfxbnModelInstanceSlots,
+  EFXBN_PREVIEW_FRAME_COUNT,
+  EFXBN_PREVIEW_MAX_FRAME_COUNT,
+  EFXBN_PREVIEW_MIN_FRAME_COUNT,
   efxbnParticleLifeCount,
+  resolveEfxbnPreviewFrameCount,
   efxbnSpawnBasis,
   resolveEfxbnEmitCount,
   resolveEfxbnEmitterPairs,
   resolveEfxbnModelPoolRequirements,
   resolveEfxbnShaderVariants,
   simulateEfxbnEmitterPair,
+  type EfxbnPreviewParticle,
 } from "./efxbnSimulation";
 
 const ZERO_HASH: EffectFolderHash = { signed: 0, unsigned: 0, hex: "0x00000000" };
@@ -62,6 +68,8 @@ function plan(effectBlocks: EfxbnEffectSummary[], controlLookupEntries: EfxbnCon
     textureParameters: [],
     textureBindings: [],
     localTextureCount: 0,
+    commonModelCount: 0,
+    commonTextureCount: 0,
     effectBlocks,
     controlLookupEntries,
   };
@@ -185,6 +193,7 @@ describe("EFXBN frame simulation", () => {
         modelPath: "E:\\effect\\model.numdlb",
         animationHash: null,
         animationPath: null,
+        source: "pack" as const,
       }],
     };
 
@@ -346,6 +355,124 @@ describe("EFXBN Phase A simulation semantics", () => {
     expect(frames[2].position[1]).toBeGreaterThan(frames[1].position[1]);
   });
 
+  it("keeps every live particle's randomised state fixed as the frame advances past an expiry", () => {
+    const controls = kinematicControls({ speedBaseY: 1 });
+    const emitter = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 400,
+      intervalBase: 1,
+      numEmit: 3,
+      spawnFormType: 1,
+      controlReferences: controls.references,
+    });
+    // A randomised lifetime means particles emitted on the same tick expire on different frames,
+    // which is what re-randomises everything behind them when the draw stream is shared.
+    const target = block({
+      index: 1,
+      lifeTimeBase: 6,
+      lifeTimeRandom: 0.6,
+      sizeRandom: [0.5, 0.5, 0.5, 0],
+      rotationRandom: [1, 1, 1, 0],
+      controlReferences: controls.references,
+    });
+    const sourcePlan = plan([emitter, target], controls.entries);
+    const pair = resolveEfxbnEmitterPairs(sourcePlan)[0];
+
+    const lifeTimeById = new Map<number, number>();
+    const rotationById = new Map<number, string>();
+    for (let frame = 4; frame <= 24; frame += 1) {
+      for (const particle of simulateEfxbnEmitterPair(pair, sourcePlan, frame)) {
+        const knownLifeTime = lifeTimeById.get(particle.id);
+        if (knownLifeTime === undefined) {
+          lifeTimeById.set(particle.id, particle.lifeTime);
+          rotationById.set(particle.id, particle.rotationEuler.join(","));
+          continue;
+        }
+        expect(
+          particle.lifeTime,
+          `particle ${particle.id} was re-randomised at frame ${frame}`,
+        ).toBeCloseTo(knownLifeTime, 10);
+        expect(rotationById.get(particle.id)).toBe(particle.rotationEuler.join(","));
+      }
+    }
+    // The fixture has to actually exercise expiry, or the assertion above proves nothing.
+    expect(lifeTimeById.size).toBeGreaterThan(20);
+  });
+
+  it("keeps a model instance slot bound to the same particle while that particle lives", () => {
+    const controls = kinematicControls({ speedBaseY: 1 });
+    const emitter = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 400,
+      intervalBase: 1,
+      numEmit: 2,
+      spawnFormType: 1,
+      controlReferences: controls.references,
+    });
+    const target = block({
+      index: 1,
+      lifeTimeBase: 8,
+      lifeTimeRandom: 0.6,
+      controlReferences: controls.references,
+    });
+    const sourcePlan = plan([emitter, target], controls.entries);
+    const pair = resolveEfxbnEmitterPairs(sourcePlan)[0];
+    const capacity = 24;
+
+    let previous = new Map<number, number>();
+    const slotHistory = new Map<number, number>();
+    let expiries = 0;
+    let live = 0;
+    for (let frame = 2; frame <= 40; frame += 1) {
+      const particles = simulateEfxbnEmitterPair(pair, sourcePlan, frame, capacity);
+      const binding = bindEfxbnModelInstanceSlots(particles, capacity, previous);
+      previous = binding.slotByParticleId;
+      if (particles.length < live) expiries += 1;
+      live = particles.length;
+
+      binding.slots.forEach((particle, slot) => {
+        if (!particle) return;
+        const knownSlot = slotHistory.get(particle.id);
+        if (knownSlot === undefined) {
+          slotHistory.set(particle.id, slot);
+          return;
+        }
+        expect(knownSlot, `particle ${particle.id} moved slot at frame ${frame}`).toBe(slot);
+      });
+      // Every live particle must be on screen; the pool is wider than the live set here.
+      expect(binding.slots.filter(Boolean)).toHaveLength(particles.length);
+    }
+    // Without expiries in the run, a stable-slot assertion proves nothing.
+    expect(expiries).toBeGreaterThan(0);
+  });
+
+  it("reuses a freed model instance slot for a later particle", () => {
+    const particle = (id: number) =>
+      ({ id, position: [0, 0, 0] }) as unknown as EfxbnPreviewParticle;
+
+    const first = bindEfxbnModelInstanceSlots([particle(0), particle(1)], 2, new Map());
+    expect(first.slots.map((entry) => entry?.id ?? null)).toEqual([0, 1]);
+
+    const afterExpiry = bindEfxbnModelInstanceSlots(
+      [particle(1), particle(2)],
+      2,
+      first.slotByParticleId,
+    );
+    expect(afterExpiry.slots.map((entry) => entry?.id ?? null)).toEqual([2, 1]);
+  });
+
+  it("drops nothing and allocates no slot when the pool has no capacity", () => {
+    const binding = bindEfxbnModelInstanceSlots([], 0, new Map());
+    expect(binding.slots).toEqual([]);
+    expect(binding.slotByParticleId.size).toBe(0);
+  });
+
   it("randomises emitter lifetime so differently seeded pairs stop emitting at different frames", () => {
     const controls = kinematicControls({});
     const makePlan = (emitterIndex: number, targetIndex: number) => {
@@ -442,6 +569,110 @@ describe("EFXBN Phase A simulation semantics", () => {
     // along +Z and leaves world Y alone.
     expect(particle.position[2]).toBeGreaterThan(4);
     expect(particle.position[1]).toBeCloseTo(0, 6);
+  });
+});
+
+describe("EFXBN preview window", () => {
+  it("spans the emitter's own life plus the tail of the particles it spawns", () => {
+    const emitter = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 60,
+      delayEmitTimeBase: 10,
+    });
+    const target = block({ index: 1, lifeTimeBase: 20 });
+
+    expect(resolveEfxbnPreviewFrameCount([emitter, target])).toBe(90);
+  });
+
+  it("follows a nested emitter chain rather than stopping at the first child", () => {
+    const root = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 40,
+    });
+    const middle = block({
+      index: 1,
+      effectType: 6,
+      childIndexSize: 1,
+      childIndexArray: [2, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 30,
+      delayEmitTimeBase: 5,
+    });
+    const leaf = block({ index: 2, lifeTimeBase: 25 });
+
+    expect(resolveEfxbnPreviewFrameCount([root, middle, leaf])).toBe(100);
+  });
+
+  it("covers the randomised upper bound of a lifetime, not just its base", () => {
+    const solo = block({ index: 0, lifeTimeBase: 40, lifeTimeRandom: 0.5 });
+
+    expect(resolveEfxbnPreviewFrameCount([solo])).toBe(60);
+  });
+
+  it("clamps a very short effect up and a very long one down", () => {
+    expect(resolveEfxbnPreviewFrameCount([block({ index: 0, lifeTimeBase: 4 })])).toBe(
+      EFXBN_PREVIEW_MIN_FRAME_COUNT,
+    );
+    expect(resolveEfxbnPreviewFrameCount([block({ index: 0, lifeTimeBase: 9_000 })])).toBe(
+      EFXBN_PREVIEW_MAX_FRAME_COUNT,
+    );
+  });
+
+  it("never shortens the window for a looping effect, which has no natural end", () => {
+    const emitter = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 20,
+      actionFlags: 1,
+    });
+    const target = block({ index: 1, lifeTimeBase: 10 });
+
+    // One cycle is 30 frames; restarting that often would make the effect pulse.
+    expect(resolveEfxbnPreviewFrameCount([emitter, target])).toBe(EFXBN_PREVIEW_FRAME_COUNT);
+  });
+
+  it("still extends past the fixed window for a long looping effect", () => {
+    const emitter = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 200,
+      actionFlags: 1,
+    });
+    const target = block({ index: 1, lifeTimeBase: 40 });
+
+    expect(resolveEfxbnPreviewFrameCount([emitter, target])).toBe(240);
+  });
+
+  it("survives a child cycle instead of recursing forever", () => {
+    const first = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 20,
+    });
+    const second = block({
+      index: 1,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [0, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 20,
+    });
+
+    expect(resolveEfxbnPreviewFrameCount([first, second])).toBe(40);
+  });
+
+  it("falls back to the minimum window when no block declares a lifetime", () => {
+    expect(resolveEfxbnPreviewFrameCount([])).toBe(EFXBN_PREVIEW_MIN_FRAME_COUNT);
   });
 });
 

@@ -32,6 +32,7 @@ import {
   EFFECT_FOLDER_REPLACE_TEXTURE_DIALOG_PATH_KEY,
 } from "./effectFolderEditorSettings";
 import { EffectFolder3dPreview } from "./EffectFolder3dPreview";
+import { EffectFolderResolutionPanel } from "./EffectFolderResolutionPanel";
 import {
   EffectNutexbPreview,
   invalidateEffectNutexbPreviewCache,
@@ -41,8 +42,9 @@ import { crc32Ieee } from "@/utils/crc32Ieee";
 type EffectFolderDetailPanelProps = {
   item: EffectListItem | null;
   inventory: EffectFolderInventory | null;
-  inventoryWarnings: string[];
   validation: EffectFolderValidationResult | null;
+  /** True while the entry list is hidden, so the preview owns the full panel width. */
+  previewExpanded?: boolean;
   previewSuspended?: boolean;
   onOpenAsEffectProject?: (filePath: string) => void;
   onEfxbnWritten?: () => void;
@@ -300,8 +302,8 @@ function ModelIdTable({ hashes }: { hashes: EffectFolderHash[] }) {
 export function EffectFolderDetailPanel({
   item,
   inventory,
-  inventoryWarnings,
   validation,
+  previewExpanded = false,
   previewSuspended = false,
   onOpenAsEffectProject,
   onEfxbnWritten,
@@ -310,11 +312,9 @@ export function EffectFolderDetailPanel({
   if (!item) {
     return (
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
-        <div className="custom-scrollbar-thin min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+        <div className="custom-scrollbar-thin min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4">
           <p className="text-xs text-muted-foreground">Select an entry to inspect details.</p>
-          {inventoryWarnings.length > 0 ? (
-            <ValidationWarnings title="Inventory warnings" messages={inventoryWarnings} />
-          ) : null}
+          {inventory ? <EffectFolderResolutionPanel inventory={inventory} /> : null}
           {validation ? <ValidationResultPanel validation={validation} /> : null}
         </div>
       </div>
@@ -338,6 +338,7 @@ export function EffectFolderDetailPanel({
             <EffectFolder3dPreview
               item={item}
               inventory={inventory}
+              previewExpanded={previewExpanded}
               previewSuspended={previewSuspended}
               onEfxbnWritten={onEfxbnWritten}
             />
@@ -367,9 +368,7 @@ export function EffectFolderDetailPanel({
             ) : null}
           </div>
 
-          {inventoryWarnings.length > 0 ? (
-            <ValidationWarnings title="Inventory warnings" messages={inventoryWarnings} />
-          ) : null}
+          {inventory ? <EffectFolderResolutionPanel inventory={inventory} /> : null}
           {validation ? <ValidationResultPanel validation={validation} /> : null}
         </div>
       </div>
@@ -772,19 +771,6 @@ function ModelDetail({ item }: { item: Extract<EffectListItem, { category: "mode
           ))}
         </ul>
       </div>
-    </div>
-  );
-}
-
-function ValidationWarnings({ title, messages }: { title: string; messages: string[] }) {
-  return (
-    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
-      <h4 className="mb-2 text-xs font-medium text-amber-800 dark:text-amber-200">{title}</h4>
-      <ul className="list-disc space-y-1 pl-4 text-[11px] text-amber-900 dark:text-amber-100">
-        {messages.map((message) => (
-          <li key={message}>{message}</li>
-        ))}
-      </ul>
     </div>
   );
 }

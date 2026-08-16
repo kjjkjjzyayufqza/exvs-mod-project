@@ -550,3 +550,332 @@ map and the ColorEx offset map, at all three draw sites (billboard, strip, and t
   count randomisation (2.2), loop semantics that wrap phase but not position (2.3), and the spawn
   basis for local velocity (2.4). Those four are what "the effect's progression is off" maps to,
   and none of them has been touched.
+
+## 2026-08-15 The "flicker" and "solid instead of transparent" symptoms
+
+Two user-reported symptoms, both traced to the same stage of the pipeline: the compute shader
+that builds the billboard draw buffer, and the sort that runs just before it. Neither symptom is
+visible in the `efxDrawFace*PS` decompilations, which is why earlier passes missed them — the
+engine folds both terms into the **vertex colour** before the pixel shader ever samples.
+
+### Confirming where the vertex colour comes from
+
+`efxDrawFaceVS` takes `POSITION` already in world space and passes `COLOR` straight through to
+`TEXCOORD_2`, which is the `TEXCOORD` the pixel shaders multiply the texel by. Its only edit is
+an atmosphere/scattering blend on RGB when `drawScheme & 0x100`; `TEXCOORD_2.w = COLOR.w` leaves
+alpha untouched. So every per-particle alpha decision happens in
+`efxConstructDrawBufferBillboard3rd`, upstream of both shaders.
+
+### The view-angle colour ramp — the "solid" symptom
+
+The `blur*` field names in the reflected schema are wrong. There is no blur. Element fields
+`+0x210` / `+0x220` / `+0x230` / `+0x234` (`blurStartColor`, `blurEndColor`, `blurEnableRange`,
+`blurFadePower`) drive a **view-angle ramp** on the whole RGBA, gated by `actionFlags & 0x02000000`:
+
+```text
+rim  = 1 - |dot(normalize(particlePos - cameraPos), quadNormal)|   ; 0 face-on, 1 edge-on
+t    = rim > threshold ? pow((rim - threshold) / (1 - threshold), power) : 0
+color *= lerp(startColor, endColor, t)                              ; multiply, not replace
+```
+
+The quad normal is the third basis vector the same shader builds for the corners: the camera
+forward axis for a screen-facing quad, the element rotation's z axis for a rotated one, and
+`cross(right, up)` for the axis-locked branch.
+
+Corpus (25,891 drawable blocks in 5,325 files):
+
+| | count | share |
+| --- | --- | --- |
+| billboard blocks with the ramp | 1,079 | 12.1% of billboards |
+| ...of those, axis-locked | 634 | 58.8% |
+| ...element-rotated | 278 | 25.8% |
+| ...screen-facing | 167 | 15.5% |
+
+The end colour's **alpha is 0 in every shipped variant** — 792 blocks fade to `(0,0,0,0)` and 161
+to `(1,1,1,0)`. Threshold is `0.0` everywhere; power ranges 0.5–5.0 with 2.0 dominant (810).
+
+So an axis-locked or element-rotated quad is supposed to **fade to nothing as it turns edge-on**.
+The preview drew it at full opacity, which is exactly "not transparent but solid": a hard opaque
+sliver where the game shows nothing. It also produced the flicker, because an animating quad
+sweeps through edge-on repeatedly and the slab popped in and out each time.
+
+**This is billboard-only.** `efxConstructDrawBufferStrip3rd` and `efxConstructDrawBufferModel3rd`
+read neither `0x02000000` nor the `+0x210` block, even though 52.5% of model blocks author the
+flag. Applying it to models or strips would be wrong.
+
+### Camera-proximity fade
+
+Same shader, gated by `(extraFlags & 0x1000) && |cameraFadeRange| >= 1e-5 &&
+(actionFlags & 0x00400000)`:
+
+```text
+depth = dot(particlePos - cameraPos, quadNormal)
+alpha *= depth > cameraFadeRange ? 1 : (depth / cameraFadeRange < 0.5 ? 0 : 2*depth/range - 1)
+```
+
+and the quad collapses to a point when the result reaches zero. Only 15 of 25,891 drawable blocks
+arm all three conditions (`cameraFadeRange` 10.0 x14, 300.0 x1), but it is cheap and shares the
+normal the ramp already needs.
+
+### Particle sorting — the "flicker" symptom
+
+`efxMakeSortInfoBillboardDrawerID3rd` writes, per particle:
+
+```text
+dist        = length(particlePos - cameraPos)                      ; CB0_m0[12].xyz is the camera
+frontToBack = (blendState == 0) && (extraFlags & 0x2000)           ; T3[+95] and T3[+129]
+key         = (frontToBack ? -dist : dist) * 1000 + subPriority * 0.001
+payload     = particleIndex | (drawerID << 16)
+inactive particles get key 100000.0 and payload 0xFFFFFFFF
+```
+
+`efxSortParticle3rd` is a bitonic sort whose comparator swaps when
+`drawerB < drawerA || (drawerA == drawerB && keyA < keyB)` — **drawerID ascending, key
+descending**. Descending on `+dist` draws the farthest particle first (back-to-front, correct for
+every transparent state); descending on `-dist` draws the nearest first (front-to-back, correct
+for opaque early-Z). 25,874 of 25,891 drawable blocks take the back-to-front branch; only 17 are
+`blendState == 0 && extraFlags & 0x2000`.
+
+The preview uploaded instances in simulation order and never sorted. Element stride confirmation:
+the sort shader indexes the element table at `elementIndex * 220` dwords = 880 bytes =
+`SEfxElementData`, and `+95`/`+129` dwords land exactly on `blendState` (`0x17C`) and `extraFlags`
+(`0x204`).
+
+Render-state corpus for context — the preview's `depthWrite` was **not** the problem:
+
+```text
+blendState : 2=78.0%  1=19.1%  0=2.8%  4=0.1%
+zWriteEnable (post-normalization): 0=96.3%  1=3.7%
+zTestEnable: 1=98.7%  0=1.3%
+enableSoftParticle: 1=53.9%
+```
+
+### What was implemented
+
+`efxbnBillboardShading.ts` (new) holds the billboard-only paths and the sort, all pure and
+unit-tested:
+
+- `resolveEfxbnViewAngleRamp` / `efxbnViewAngleFactor`
+- `resolveEfxbnCameraFadeRange` / `efxbnCameraFadeAlpha`
+- `efxbnParticleDrawOrder` / `efxbnParticleSortsFrontToBack` / `efxbnRequiresParticleDepthSort`
+
+The billboard vertex shader now computes the quad normal per basis mode and applies both terms to
+`vColor`, which the existing `a < 0.01` discard then turns into the same "quad disappears"
+behaviour the engine gets by collapsing the corners. The strip layer reorders its ribbons before
+building the index buffer — one strip particle is one ribbon, so emitting them far-to-near is the
+whole fix there.
+
+`efxbnRequiresParticleDepthSort` skips the sort only where the result is provably identical:
+opaque (the depth test alone decides) and additive without a depth write (commutative). That keeps
+the per-frame cost off the 78% additive majority while still matching the engine's output.
+
+The inspector's Detail tab now reports `Draw order`, `View-angle ramp` and `Camera fade` so a
+block's expected behaviour can be read off while judging the viewport.
+
+### Still open
+
+- The sort's `subPriority * 0.001` tiebreak lives in the draw-info buffer written by
+  `efxExtractDrawInfoBillboard3rd`, not in the element record, and is not modelled. It cannot
+  reorder across the `* 1000` distance term, so it only breaks exact ties.
+- `drawScheme & 0x100` blends an atmosphere/scattering texture into RGB in `efxDrawFaceVS`. The
+  preview has no scene to sample.
+- `enableZSort` (`+0x1a8`, 8.3% of drawable blocks) and `zSortOffset` are parsed but their
+  consumer has not been located; the distance sort above runs unconditionally in the engine, so
+  these are something else.
+
+## 2026-08-15 Cross-pack references: most of an effect lives in `000common_001`
+
+`33.efxbn` in `wing_gundam_zero_rebellion_effect` should draw a sphere. The preview drew a flat
+disc. All six of its blocks are Model or Emitter — there is not one Billboard in the file — so the
+disc was not a billboard bug: the preview had failed to find the model and had fallen back to
+proxy geometry.
+
+Block 0 binds `nudHandle = 0x328D9438`. That is
+`crc32("eff_000common_000common_001_sphere_001")`, and the only `.numdlb` with that stem lives in
+`006effect/000common_001/0/0/101/`. The four model-control blocks all bind
+`0xAD0769F6 = crc32("eff_000common_000common_001_color_001")`, likewise present only in
+`000common_001`.
+
+### How large the problem is
+
+Scanning every `.efxbn` in the 11 shipped non-common packs and resolving each ID against (a) the
+pack's own files and (b) `000common_001`:
+
+| Reference kind | Own pack | `000common_001` only | Nowhere |
+| --- | --- | --- | --- |
+| Model (`nudHandle`, block `+0x140`) | 484 (42.1%) | **664 (57.8%)** | 1 (0.1%) |
+| Texture (`colorMapId`, model control `+0x04`) | 518 (30.2%) | **1,191 (69.5%)** | 5 (0.3%) |
+| Animation (`animationHash`, block `+0x290`) | 8 (80%) | 0 | 2 (20%) |
+
+`000common_001` ships 122 models and no `.nuanmb` at all. The whole corpus binds only 10 animation
+references, so animations stay pack-local; models and colour maps do not.
+
+For `wing_gundam_zero_rebellion_effect` specifically: 71 model-block references, 22 own, **49
+shared**, 0 missing. Indexing that pack alone leaves 69% of its model references unresolved.
+
+### Why the parser missed it
+
+`inspect_effect_folder` read one structure JSON and built `model_hashes` from that pack only.
+Nothing was wrong with the hash math — Rust does not even compute CRC32 here, it reads the folder
+entry's `unk5`, whose values coincide with `crc32(stem)`. The pack boundary was the bug. Texture
+references were never checked at all, and unresolved models produced no warning from `inspect`
+(only `validate_effect_folder_for_repack` warned, at which point the pack shape is already fixed).
+
+### What resolution now does
+
+`inspect_effect_folder` indexes the sibling `000common_001` for models and textures only —
+`.efxbn` payloads there are never parsed, because nothing reads them and the pack contributes
+~1,000 files to every inspection. Each reference is then sorted three ways:
+
+- resolved in the opened pack — silent, the normal edit target
+- resolved in the shared pack — aggregated into one warning plus `summary.commonModelIds` /
+  `commonTextureIds`
+- resolved nowhere — one warning per ID, plus `summary.unresolvedModelIds` /
+  `unresolvedTextureIds`
+
+The opened pack wins a hash collision: a pack that ships its own copy of a shared resource is
+editing that copy, and the preview must show what the edit does.
+
+An absent shared pack is a warning rather than an error, because a pack extracted or copied on its
+own is still worth inspecting — but every reference it can no longer resolve is then listed by ID,
+so nothing degrades silently. A shared pack that exists but cannot be read *is* an error.
+
+### Downstream
+
+`buildEffectFolderPreviewPlan` resolves models and colour maps against the union of both packs and
+tags every hit `pack` or `common`. Loading was already path-based (`loadModelSetAt(paths)`,
+`loadNutexbPreview(path)`), so no loader change was needed — only discovery.
+
+Copy is deliberately unchanged: a shared-pack model is not copied into a copy destination, because
+the destination resolves it from `000common_001` at runtime exactly as the source did.
+
+## 2026-08-16 The flicker was two identity bugs, not a shading bug
+
+The view-angle ramp and the particle sort fixed the "solid slivers" symptom but left most effects
+flickering. The remaining cause was not shading at all: the preview was silently re-randomising
+its particles and re-pointing its model instances on almost every frame.
+
+### 1. One shared random stream, consumed conditionally
+
+`simulateEfxbnEmitterPair` replays the whole emission history from tick 0 on every rendered frame,
+drawing from a single `makeRandomSource(pairSeed(...))`. `simulateParticle` draws the particle's
+lifetime first and then returns early when that particle has already expired:
+
+```ts
+const lifeTime = randomizedBase(target.lifeTimeBase, target.lifeTimeRandom, random);
+if (lifeTime <= EPSILON) return null;
+const age = Math.max(0, frame - spawnFrame);
+if (!looping && !forceLooping && isExpiredAtAge(age, lifeTime)) return null;   // <- draws stop here
+```
+
+Everything after that point — spawn position and direction, `speedRate`, `sizeRandom`,
+`rotationBase` — is never drawn for a dead particle. The stream is sequential, so the moment any
+particle expires, **every particle emitted after it reads a different slice of the stream**. A
+regression test over frames 4-24 of a 3-per-tick emitter with `lifeTimeRandom = 0.6` caught it on
+the first expiry: particle 6's lifetime jumped from 5.757 to 8.582 between frame 4 and frame 5.
+With expiries happening on nearly every frame, the entire live cloud was re-rolled continuously.
+
+Fix: the emitter keeps its own stream (its lifetime, then exactly two draws per emission tick —
+emit count and interval), and each particle draws from `makeRandomSource(particleSeed(seed, id))`.
+The engine does the same thing for the same reason: `efxSpawnParticleCommon3rd` advances an LCG
+stored on the instance, not a per-emitter one.
+
+### 2. Model instances addressed by array position
+
+`EfxbnDiagnosticOverlay` drove the model pool with
+
+```ts
+instanceIds.forEach((instanceId, index) => {
+  const particle = particles[index];
+```
+
+`particles` holds only the live ones. When a particle expires the array closes up, so on that
+frame every instance behind it snapped onto a different particle's position, rotation, scale,
+colour and `motionFrame`. For a model-driven effect that is a hard teleport of the whole pool,
+several times a second.
+
+Fix: `bindEfxbnModelInstanceSlots(particles, capacity, previousSlotByParticleId)` holds a slot
+with its particle across frames and only releases it when that particle is gone — a free list, the
+same shape the engine's instance allocator uses. Particle ids are assigned in emission order and
+never reused, so they identify a particle across frames. The slot map is kept per emitter/target
+edge rather than per target block, because two emitters may spawn the same block and each needs
+its own stable assignment.
+
+### Why the ids are safe to key on
+
+`particleId` increments for every *attempted* particle, alive or not, and the tick loop always
+replays from tick 0 with a frame-independent emitter stream. The `particles.length < maxParticles`
+cap can stop emission earlier on one frame than another, but only ever truncates the tail — the
+prefix of ids and their values is identical at every frame.
+
+## 2026-08-16 The preview window, and what 33.efxbn actually is
+
+### A fixed 120-frame window is wrong for a third of the corpus
+
+The preview mapped progress 0..100 onto a hardcoded 120 frames for every effect. Measuring the
+678 shipped files:
+
+| | share |
+| --- | --- |
+| effects with a looping emitter (fill the window) | 57.4% |
+| one-shot effects | 42.6% |
+| …of those, finishing in under half the window | 77.2% |
+| one-shot window fill ratio | p10 0.06, p50 0.25, p90 1.00 |
+| effects needing more than 120 frames | 6.9% |
+
+A median one-shot effect therefore played for about half a second and then left an empty viewport
+for a second and a half before snapping back — a blink, not an animation — while 47 files were cut
+off mid-flight.
+
+`resolveEfxbnPreviewFrameCount` now derives the window from the longest root-to-leaf
+`delay + life` chain down the child tree, because an emitter produces until its life ends and the
+last thing it spawns lives its own span after that. Applied to the corpus: **25.4% shortened
+(dead time removed), 8.7% extended (no longer cut off), 65.9% unchanged.**
+
+A looping effect never ends, so its chain length says nothing about restart cadence — and
+restarting once per cycle would make it pulse. Those keep the 120-frame floor, which is why the
+unchanged share is exactly the looping share plus the one-shot effects that already filled the
+window.
+
+### Two NaN paths in the view-angle ramp
+
+`normalize(particleCenter - cameraLocalPosition)` is undefined for a particle sitting on the
+camera, and `(rim - threshold) / (1 - threshold)` divides by zero at `threshold == 1`. Either one
+turns the whole vertex colour into NaN, which drops the quad for that frame — a flicker rather
+than a wrong shade. Both are guarded now, in the GLSL and in `efxbnViewAngleFactor`, which the
+inspector and the tests share.
+
+### `cullingType` is not the reason a model goes missing
+
+The EFXBN preview is the only surface in the app that culls faces — every other SSBH mesh draws
+DoubleSide — and it does so from `cullingType`, which 31.4% of model blocks set non-zero
+(27.1% type 1, 4.3% type 2). Getting the winding convention backwards would hide all of them.
+
+Measured rather than assumed: the shipped `eff_000common_000common_001_sphere_001__maya__.numshb`
+winds counter-clockwise seen from outside, which is WebGL's front-face convention, so
+`cullingType 1 → FrontSide` shows the exterior. The mapping is correct and is now pinned by
+`shipped_effect_meshes_wind_counter_clockwise_when_seen_from_outside`.
+
+### What 33.efxbn is
+
+Six blocks, no billboards:
+
+| block | type | model | resolves in |
+| --- | --- | --- | --- |
+| 0 | Model | `0x328D9438` sphere_001 | **`000common_001`** |
+| 1 | Model | `0x365C959D` ring_001 | own pack |
+| 2 | Emitter → 3 | — | — |
+| 3 | Model | `0xAF55C427` ring_002 | own pack |
+| 4 | Emitter → 5 | — | — |
+| 5 | Model | `0xAF55C427` ring_002 | own pack |
+
+It is a sphere wrapped in three rings. The three rings resolve in the pack's own files and always
+drew; only the sphere needs the shared pack. Seeing "a circular plane" is therefore the rings
+rendering without the sphere — the shared-pack model is the single missing piece, and blocks 1/3/5
+prove the rest of the path works.
+
+`the_shared_sphere_model_exposes_a_loadable_numdlb` pins the backend half end to end: the sphere
+resolves through the shared pack, its `.numdlb` and `.numshb` exist on disk and are not flagged
+missing, and block 0 binds exactly that hash. A frontend that still draws proxy geometry for it is
+running an `inspect_effect_folder` that predates shared-pack resolution, which
+`assertResolvedInventoryShape` now rejects by name instead of letting the preview degrade.

@@ -24,6 +24,8 @@ import type { ChrSysParamFile } from "./chrSysTypes"
 import { PARAM_KINDS, type ParamKindId, resolveTypedFileTypeForPath, getParamKind } from "./paramKinds"
 import { TypedParamDataPanel } from "./TypedParamDataPanel"
 import type { TypedParamFile } from "./typedParamTypes"
+import { isProjectileDepictionTableFileType } from "./projectileDepictionCopy"
+import { sortTypedParamFileByUnsignedEntryId } from "./paramEntryUtils"
 
 interface ParamEditorViewProps {
   onUnsavedChanges?: (hasChanges: boolean) => void
@@ -133,8 +135,14 @@ export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath
     if (typed) {
       setSaving(true)
       try {
+        const dataJson = isProjectileDepictionTableFileType(typed.fileType)
+          ? sortTypedParamFileByUnsignedEntryId(typed.data)
+          : typed.data
+        if (dataJson !== typed.data) {
+          setTyped((prev) => (prev ? { ...prev, data: dataJson } : prev))
+        }
         await invoke("build_typed_param_file", {
-          dataJson: typed.data,
+          dataJson,
           outputPath: typed.path,
           paramType: typed.fileType,
         })
@@ -306,6 +314,7 @@ export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath
               selectedEntryIndex={selectedEntry}
               onSelectEntry={setSelectedEntry}
               workspaceDefaultPath={workspaceDefaultPath}
+              sourceFilePath={typed.path}
               onChange={(nextData) => {
                 setTyped((prev) => (prev ? { ...prev, data: nextData } : prev))
                 setDirty(true)

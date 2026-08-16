@@ -1,5 +1,5 @@
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useState, type MutableRefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import {
   AddEquation,
   AdditiveBlending,
@@ -11,6 +11,7 @@ import {
   FrontSide,
   InstancedBufferAttribute,
   InstancedBufferGeometry,
+  Matrix4,
   MirroredRepeatWrapping,
   NoBlending,
   NormalBlending,
@@ -20,7 +21,9 @@ import {
   ShaderMaterial,
   SRGBColorSpace,
   Texture,
+  Vector3,
   type Blending,
+  type Mesh,
   type Side,
   type Wrapping,
 } from "three";
@@ -34,7 +37,6 @@ import {
   type EffectFolderPreviewPlan,
 } from "./effectFolderPreviewPlan";
 import {
-  EFXBN_PREVIEW_FRAME_COUNT,
   resolveEfxbnBillboardBasis,
   resolveEfxbnEmitterPairs,
   simulateEfxbnEmitterPair,
@@ -44,11 +46,21 @@ import {
   DRAW_SCHEME_FULL_BRIGHTNESS,
 } from "./efxbnSimulation";
 import type { EfxbnMeshEmitterPoint } from "./efxbnMeshEmitter";
+import {
+  EFXBN_BLEND_STATE,
+  efxbnParticleDrawOrder,
+  efxbnParticleSortsFrontToBack,
+  efxbnRequiresParticleDepthSort,
+  resolveEfxbnCameraFadeRange,
+  resolveEfxbnViewAngleRamp,
+} from "./efxbnBillboardShading";
 
 type EfxbnParticlePreviewProps = {
   plan: EffectFolderPreviewPlan;
   controlLookupEntriesRef: MutableRefObject<readonly EfxbnControlLookupEntry[]>;
   progressRef: MutableRefObject<number>;
+  /** Playback window in frames, derived from the effect's own length. */
+  frameCount: number;
   selectedEffectIndex: number | null;
   hiddenEffectIndexes: ReadonlySet<number>;
   meshEmitterPointsByEffectIndex: ReadonlyMap<number, readonly EfxbnMeshEmitterPoint[]>;
@@ -88,7 +100,7 @@ export function threeWrapForEfxbnAddressMode(mode: number): Wrapping {
 }
 
 /** `blendState` that selects the AddMix pixel-shader variant (draw-scheme bit `0x40`). */
-export const EFXBN_BLEND_STATE_ADD_MIX = 4;
+export const EFXBN_BLEND_STATE_ADD_MIX = EFXBN_BLEND_STATE.addMix;
 
 /** True when the sampler must fade to the transparent border outside the authored UV range. */
 export function usesEfxbnBorderAddressing(mode: number | undefined): boolean {
@@ -317,6 +329,8 @@ function createGeometry() {
 }
 
 function createMaterial(pair: EfxbnEmitterPair, externalModelProxy: boolean) {
+  const viewAngleRamp = resolveEfxbnViewAngleRamp(pair.target);
+  const cameraFadeRange = resolveEfxbnCameraFadeRange(pair.target);
   return new ShaderMaterial({
     transparent: true,
     depthWrite: efxbnRuntime(pair.target).zWriteEnable !== 0,
@@ -341,6 +355,16 @@ function createMaterial(pair: EfxbnEmitterPair, externalModelProxy: boolean) {
       addMix: { value: pair.target.blendState === EFXBN_BLEND_STATE_ADD_MIX ? 1 : 0 },
       basisMode: { value: resolveEfxbnBillboardBasis(pair.target) },
       centerPivot: { value: [pair.target.centerPivot[0], pair.target.centerPivot[1]] },
+      // Both view-dependent vertex-colour terms need the camera in the mesh's own space.
+      cameraLocalPosition: { value: new Vector3() },
+      cameraLocalForward: { value: new Vector3(0, 0, -1) },
+      hasViewAngleRamp: { value: viewAngleRamp ? 1 : 0 },
+      viewAngleStartColor: { value: viewAngleRamp?.startColor ?? [1, 1, 1, 1] },
+      viewAngleEndColor: { value: viewAngleRamp?.endColor ?? [1, 1, 1, 1] },
+      viewAngleThreshold: { value: viewAngleRamp?.threshold ?? 0 },
+      viewAnglePower: { value: viewAngleRamp?.power ?? 1 },
+      hasCameraFade: { value: cameraFadeRange === null ? 0 : 1 },
+      cameraFadeRange: { value: cameraFadeRange ?? 0 },
     },
     vertexShader: `
       attribute vec3 particleCenter;
@@ -354,6 +378,15 @@ function createMaterial(pair: EfxbnEmitterPair, externalModelProxy: boolean) {
       attribute vec2 particleOffsetUvOffset;
       uniform float basisMode;
       uniform vec2 centerPivot;
+      uniform vec3 cameraLocalPosition;
+      uniform vec3 cameraLocalForward;
+      uniform float hasViewAngleRamp;
+      uniform vec4 viewAngleStartColor;
+      uniform vec4 viewAngleEndColor;
+      uniform float viewAngleThreshold;
+      uniform float viewAnglePower;
+      uniform float hasCameraFade;
+      uniform float cameraFadeRange;
       varying vec2 vUv;
       varying vec2 vOffsetUv;
       varying vec2 vQuadUv;
@@ -374,16 +407,20 @@ function createMaterial(pair: EfxbnEmitterPair, externalModelProxy: boolean) {
         // (width * centerPivotX, height * centerPivotY) * 0.5 before laying out the corners.
         vec2 quad = position.xy * particleSize;
         vec2 pivot = particleSize * centerPivot * 0.5;
+        // The quad's plane normal, which both view-dependent colour terms are measured against.
+        // A screen-facing quad borrows the camera axis, exactly as the engine's basis does.
+        vec3 quadNormal = cameraLocalForward;
         if (basisMode > 0.5) {
           mat3 rotation = efxRotation(particleRotationEuler);
           vec3 right = rotation[0];
           vec3 up = rotation[1];
+          quadNormal = rotation[2];
           if (basisMode > 1.5) {
             // Axis-locked: keep the element up axis and yaw the quad toward the camera.
-            vec3 eye = (inverse(modelViewMatrix) * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-            vec3 axisRight = cross(up, particleCenter - eye);
+            vec3 axisRight = cross(up, particleCenter - cameraLocalPosition);
             float axisLength = length(axisRight);
             right = axisLength > 1e-5 ? axisRight / axisLength : rotation[0];
+            quadNormal = normalize(cross(right, up));
           }
           vec3 world = particleCenter + right * (quad.x + pivot.x) + up * (quad.y + pivot.y);
           gl_Position = projectionMatrix * modelViewMatrix * vec4(world, 1.0);
@@ -401,7 +438,31 @@ function createMaterial(pair: EfxbnEmitterPair, externalModelProxy: boolean) {
         vUv = uv * particleUvScale + particleUvOffset;
         vOffsetUv = uv * particleOffsetUvScale + particleOffsetUvOffset;
         vQuadUv = uv;
+
+        // efxConstructDrawBufferBillboard3rd folds two view-dependent terms into the vertex
+        // colour before the pixel shader ever samples, so neither appears in efxDrawFace*PS.
         vColor = particleColor;
+        vec3 toParticle = particleCenter - cameraLocalPosition;
+        float toParticleLength = length(toParticle);
+        // A particle sitting exactly on the camera has no view direction. Normalizing it would
+        // hand NaN to the ramp and drop the quad for that frame, so treat it as face-on.
+        vec3 toParticleDir = toParticleLength > 1e-5 ? toParticle / toParticleLength : quadNormal;
+        if (hasViewAngleRamp > 0.5) {
+          // rim is 0 face-on and 1 edge-on, so a rotated quad fades out instead of showing a
+          // hard opaque sliver. Every shipped block that enables this ramps alpha down to 0.
+          float rim = 1.0 - abs(dot(toParticleDir, quadNormal));
+          float rampSpan = max(1.0 - viewAngleThreshold, 1e-5);
+          float ramp = rim > viewAngleThreshold
+            ? pow((rim - viewAngleThreshold) / rampSpan, viewAnglePower)
+            : 0.0;
+          vColor *= mix(viewAngleStartColor, viewAngleEndColor, ramp);
+        }
+        if (hasCameraFade > 0.5) {
+          // Hidden inside half the range, linear to the full range, untouched beyond it.
+          float depth = dot(toParticle, quadNormal);
+          float ratio = depth / cameraFadeRange;
+          vColor.a *= depth > cameraFadeRange ? 1.0 : (ratio < 0.5 ? 0.0 : ratio * 2.0 - 1.0);
+        }
       }
     `,
     fragmentShader: `
@@ -469,6 +530,7 @@ function EfxbnParticleLayer({
   plan,
   controlLookupEntriesRef,
   progressRef,
+  frameCount,
   selected,
   externalModelProxy,
   meshEmitterPointsByEffectIndex,
@@ -478,6 +540,7 @@ function EfxbnParticleLayer({
   plan: EffectFolderPreviewPlan;
   controlLookupEntriesRef: MutableRefObject<readonly EfxbnControlLookupEntry[]>;
   progressRef: MutableRefObject<number>;
+  frameCount: number;
   selected: boolean;
   externalModelProxy: boolean;
   meshEmitterPointsByEffectIndex: ReadonlyMap<number, readonly EfxbnMeshEmitterPoint[]>;
@@ -487,6 +550,16 @@ function EfxbnParticleLayer({
   const material = useMemo(
     () => createMaterial(pair, externalModelProxy),
     [externalModelProxy, pair],
+  );
+  const meshRef = useRef<Mesh>(null);
+  const worldToLocalRef = useRef(new Matrix4());
+  const requiresDepthSort = useMemo(
+    () => efxbnRequiresParticleDepthSort(pair.target),
+    [pair.target],
+  );
+  const sortsFrontToBack = useMemo(
+    () => efxbnParticleSortsFrontToBack(pair.target),
+    [pair.target],
   );
   const textureBinding = resolveEfxbnColorMapBinding(plan, pair.target.index);
   const texture = useEfxbnTexture(
@@ -531,8 +604,10 @@ function EfxbnParticleLayer({
     [geometry, material],
   );
 
-  useFrame(() => {
-    const frame = (progressRef.current / 100) * EFXBN_PREVIEW_FRAME_COUNT;
+  useFrame((state) => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    const frame = (progressRef.current / 100) * frameCount;
     const particles = simulateEfxbnEmitterPair(
       pair,
       livePlan(plan, controlLookupEntriesRef),
@@ -540,6 +615,29 @@ function EfxbnParticleLayer({
       MAX_PARTICLES_PER_EMITTER,
       meshEmitterPointsByEffectIndex,
     );
+
+    // Particle positions are authored in the mesh's own space, so the camera has to come to
+    // them rather than the other way round.
+    mesh.updateWorldMatrix(true, false);
+    const worldToLocal = worldToLocalRef.current.copy(mesh.matrixWorld).invert();
+    const cameraLocalPosition = material.uniforms.cameraLocalPosition.value as Vector3;
+    cameraLocalPosition
+      .setFromMatrixPosition(state.camera.matrixWorld)
+      .applyMatrix4(worldToLocal);
+    (material.uniforms.cameraLocalForward.value as Vector3)
+      .set(0, 0, -1)
+      .transformDirection(state.camera.matrixWorld)
+      .transformDirection(worldToLocal);
+
+    // efxMakeSortInfoBillboardDrawerID3rd + efxSortParticle3rd draw the farthest particle first.
+    const drawOrder = requiresDepthSort
+      ? efxbnParticleDrawOrder(
+          particles.map((particle) => particle.position),
+          [cameraLocalPosition.x, cameraLocalPosition.y, cameraLocalPosition.z],
+          sortsFrontToBack,
+        )
+      : null;
+
     const center = geometry.getAttribute("particleCenter") as InstancedBufferAttribute;
     const size = geometry.getAttribute("particleSize") as InstancedBufferAttribute;
     const color = geometry.getAttribute("particleColor") as InstancedBufferAttribute;
@@ -549,7 +647,8 @@ function EfxbnParticleLayer({
     const uvOffset = geometry.getAttribute("particleUvOffset") as InstancedBufferAttribute;
     const offsetUvScale = geometry.getAttribute("particleOffsetUvScale") as InstancedBufferAttribute;
     const offsetUvOffset = geometry.getAttribute("particleOffsetUvOffset") as InstancedBufferAttribute;
-    particles.forEach((particle, index) => {
+    particles.forEach((_unsorted, index) => {
+      const particle = particles[drawOrder ? drawOrder[index]! : index]!;
       const uvTransform = evaluateEfxbnUvTransform(textureBinding?.parameter, particle.age, {
         particleSeed: particle.id,
       });
@@ -580,6 +679,7 @@ function EfxbnParticleLayer({
 
   return (
     <mesh
+      ref={meshRef}
       name={externalModelProxy ? `efxbn-external-model-proxy-${pair.target.index}` : undefined}
       geometry={geometry}
       material={material}
@@ -596,6 +696,7 @@ export function EfxbnParticlePreview({
   plan,
   controlLookupEntriesRef,
   progressRef,
+  frameCount,
   selectedEffectIndex,
   hiddenEffectIndexes,
   meshEmitterPointsByEffectIndex,
@@ -629,6 +730,7 @@ export function EfxbnParticlePreview({
             plan={plan}
             controlLookupEntriesRef={controlLookupEntriesRef}
             progressRef={progressRef}
+            frameCount={frameCount}
             selected={selectedEffectIndex === pair.target.index || selectedEffectIndex === emitterIndex}
             externalModelProxy={externalModelProxy}
             meshEmitterPointsByEffectIndex={meshEmitterPointsByEffectIndex}

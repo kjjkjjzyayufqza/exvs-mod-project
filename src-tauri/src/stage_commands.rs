@@ -810,14 +810,17 @@ pub async fn copy_effect_folder_selection(
     destination_effect_root: String,
     destination_structure_json_path: Option<String>,
     selections: Vec<effect_folder::EffectFolderSelection>,
+    policies: Option<Vec<effect_folder::EffectFolderCopyEfxbnPolicy>>,
 ) -> Result<effect_folder::EffectFolderCopyResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        effect_folder::copy_effect_folder_selection(
+        let policies = policies.unwrap_or_default();
+        effect_folder::copy_effect_folder_selection_with_policies(
             &source_effect_root,
             source_structure_json_path.as_deref(),
             &destination_effect_root,
             destination_structure_json_path.as_deref(),
             &selections,
+            &policies,
         )
     })
     .await

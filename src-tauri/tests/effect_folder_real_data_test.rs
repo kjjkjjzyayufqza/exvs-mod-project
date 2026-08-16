@@ -3,7 +3,8 @@ use std::fs;
 use std::path::Path;
 
 use app_lib::format::effect_folder::{
-    copy_effect_folder_selection, inspect_effect_folder, EffectFolderSelection,
+    copy_effect_folder_selection, inspect_effect_folder, sanitize_effect_copy_dest_file_name,
+    EffectFolderSelection,
 };
 use serde_json::json;
 
@@ -811,4 +812,249 @@ fn shipped_corpus_holds_the_invariants_the_preview_relies_on() {
             .collect::<Vec<_>>()
             .join("\n")
     );
+}
+
+/// `33.efxbn` in this pack draws six Model blocks and binds no resource of its own: its models
+/// and colour maps all live in `000common_001`. It is the smallest proof that indexing only the
+/// opened pack leaves an effect with nothing to draw.
+const COMMON_REF_ROOT: &str = r"E:\XB\mod\006effect\wing_gundam_zero_rebellion_effect";
+const COMMON_REF_STRUCTURE: &str =
+    r"E:\XB\mod\006effect\wing_gundam_zero_rebellion_effect_structure.json";
+const COMMON_PACK_ROOT: &str = r"E:\XB\mod\006effect\000common_001";
+const COMMON_PACK_STRUCTURE: &str = r"E:\XB\mod\006effect\000common_001_structure.json";
+/// `0x328D9438` = crc32("eff_000common_000common_001_sphere_001").
+const COMMON_SPHERE_MODEL_ID: i32 = 848_139_320;
+/// `0xAD0769F6` = crc32("eff_000common_000common_001_color_001").
+const COMMON_COLOR_TEXTURE_ID: i32 = -1_392_023_050;
+
+#[test]
+fn resolves_efxbn_references_that_live_in_the_shared_common_pack() {
+    if !Path::new(COMMON_REF_ROOT).is_dir() || !Path::new(COMMON_PACK_ROOT).is_dir() {
+        eprintln!("SKIP: real effect fixture is unavailable: {COMMON_REF_ROOT}");
+        return;
+    }
+
+    let inventory = inspect_effect_folder(COMMON_REF_ROOT, Some(COMMON_REF_STRUCTURE))
+        .expect("inspect effect pack that references the shared pack");
+
+    let common = inventory
+        .common_pack
+        .as_ref()
+        .expect("the shared pack sits next to the opened pack and must be indexed");
+    assert!(
+        common.effect_root.ends_with("000common_001"),
+        "unexpected shared pack root: {}",
+        common.effect_root
+    );
+    assert!(
+        common
+            .models
+            .iter()
+            .any(|model| model.hash.signed == COMMON_SPHERE_MODEL_ID),
+        "the shared pack must expose the sphere model referenced by 33.efxbn"
+    );
+    assert!(
+        common.textures.iter().any(|texture| texture
+            .hash
+            .as_ref()
+            .is_some_and(|hash| hash.signed == COMMON_COLOR_TEXTURE_ID)),
+        "the shared pack must expose the colour map referenced by 33.efxbn"
+    );
+
+    assert!(
+        inventory
+            .summary
+            .common_model_ids
+            .iter()
+            .any(|hash| hash.signed == COMMON_SPHERE_MODEL_ID),
+        "a model that only exists in the shared pack must be reported as shared, not unresolved"
+    );
+    assert!(
+        inventory
+            .summary
+            .common_texture_ids
+            .iter()
+            .any(|hash| hash.signed == COMMON_COLOR_TEXTURE_ID),
+        "a texture that only exists in the shared pack must be reported as shared, not unresolved"
+    );
+    assert!(
+        inventory
+            .summary
+            .unresolved_model_ids
+            .iter()
+            .all(|hash| hash.signed != COMMON_SPHERE_MODEL_ID),
+        "shared-pack models must not be counted as unresolved"
+    );
+    assert!(
+        inventory
+            .summary
+            .unresolved_texture_ids
+            .iter()
+            .all(|hash| hash.signed != COMMON_COLOR_TEXTURE_ID),
+        "shared-pack textures must not be counted as unresolved"
+    );
+
+    assert!(
+        inventory
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("000common_001")),
+        "the shared-pack resolution must be stated in the warnings, not only in the summary"
+    );
+}
+
+/// Indexing the shared model is not enough — the preview only draws it if the model group
+/// carries a `.numdlb` that exists on disk. `33.efxbn` renders proxy geometry otherwise, which is
+/// the flat disc that made a sphere-shaped effect look like a circle.
+#[test]
+fn the_shared_sphere_model_exposes_a_loadable_numdlb() {
+    if !Path::new(COMMON_REF_ROOT).is_dir() || !Path::new(COMMON_PACK_ROOT).is_dir() {
+        eprintln!("SKIP: real effect fixture is unavailable: {COMMON_REF_ROOT}");
+        return;
+    }
+
+    let inventory = inspect_effect_folder(COMMON_REF_ROOT, Some(COMMON_REF_STRUCTURE))
+        .expect("inspect effect pack that references the shared pack");
+    let common = inventory.common_pack.as_ref().expect("shared pack indexed");
+    let sphere = common
+        .models
+        .iter()
+        .find(|model| model.hash.signed == COMMON_SPHERE_MODEL_ID)
+        .expect("shared pack exposes the sphere model");
+
+    let numdlb = sphere
+        .files
+        .iter()
+        .find(|file| file.actual_ext == ".numdlb")
+        .expect("the sphere model group carries a numdlb");
+    assert!(
+        !numdlb.missing && Path::new(&numdlb.path).is_file(),
+        "sphere numdlb must exist on disk: {} (missing={})",
+        numdlb.path,
+        numdlb.missing
+    );
+    assert!(
+        sphere
+            .files
+            .iter()
+            .any(|file| file.actual_ext == ".numshb" && !file.missing),
+        "the sphere model group must carry the mesh the preview draws"
+    );
+
+    let block_zero_model = inventory
+        .efxbns
+        .iter()
+        .find(|item| item.path.ends_with("33.efxbn"))
+        .and_then(|item| item.efxbn.as_ref())
+        .map(|summary| summary.effects[0].model_id)
+        .expect("33.efxbn parses and declares a model on its first block");
+    assert_eq!(block_zero_model, COMMON_SPHERE_MODEL_ID);
+}
+
+/// Which face of a shipped effect mesh the winding calls "front".
+///
+/// The EFXBN preview is the only place in the app that culls faces — every other SSBH surface
+/// draws DoubleSide — and it does so from `cullingType`, which 31.4% of model blocks set to a
+/// non-zero value. If the winding convention is the opposite of WebGL's, that mapping hides
+/// nearly a third of all model blocks completely, so the convention has to be measured rather
+/// than assumed. A sphere is the one shape where "outward" is unambiguous.
+#[test]
+fn shipped_effect_meshes_wind_counter_clockwise_when_seen_from_outside() {
+    const SPHERE_NUMSHB: &str = r"E:\XB\mod\006effect\000common_001\0\0\101\eff_000common_000common_001_sphere_001__maya__.numshb";
+    if !Path::new(SPHERE_NUMSHB).is_file() {
+        eprintln!("SKIP: real effect fixture is unavailable: {SPHERE_NUMSHB}");
+        return;
+    }
+
+    let bytes = fs::read(SPHERE_NUMSHB).expect("read sphere numshb");
+    let mesh = app_lib::numshb_collision::numshb_bytes_to_collision_trimesh(&bytes)
+        .expect("parse sphere numshb");
+    assert!(mesh.indices.len() >= 3, "sphere mesh must have triangles");
+
+    let count = mesh.vertices.len() as f64;
+    let center = mesh.vertices.iter().fold([0.0f64; 3], |mut acc, vertex| {
+        acc[0] += vertex[0] / count;
+        acc[1] += vertex[1] / count;
+        acc[2] += vertex[2] / count;
+        acc
+    });
+
+    let mut outward = 0usize;
+    let mut inward = 0usize;
+    for triangle in mesh.indices.chunks_exact(3) {
+        let [a, b, c] = [
+            mesh.vertices[triangle[0] as usize],
+            mesh.vertices[triangle[1] as usize],
+            mesh.vertices[triangle[2] as usize],
+        ];
+        let edge0 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        let edge1 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+        let normal = [
+            edge0[1] * edge1[2] - edge0[2] * edge1[1],
+            edge0[2] * edge1[0] - edge0[0] * edge1[2],
+            edge0[0] * edge1[1] - edge0[1] * edge1[0],
+        ];
+        let radial = [
+            (a[0] + b[0] + c[0]) / 3.0 - center[0],
+            (a[1] + b[1] + c[1]) / 3.0 - center[1],
+            (a[2] + b[2] + c[2]) / 3.0 - center[2],
+        ];
+        let facing = normal[0] * radial[0] + normal[1] * radial[1] + normal[2] * radial[2];
+        if facing > 0.0 {
+            outward += 1;
+        } else if facing < 0.0 {
+            inward += 1;
+        }
+    }
+
+    let total = outward + inward;
+    assert!(total > 0, "sphere mesh produced no oriented triangles");
+    // WebGL treats counter-clockwise as front-facing, and a CCW-from-outside triangle has its
+    // winding normal pointing away from the centre.
+    assert!(
+        outward * 10 > total * 9,
+        "expected the shipped sphere to wind CCW from outside so FrontSide shows its exterior, \
+         got {outward} outward / {inward} inward of {total}"
+    );
+}
+
+#[test]
+fn inspecting_the_shared_pack_itself_indexes_no_second_copy() {
+    if !Path::new(COMMON_PACK_ROOT).is_dir() {
+        eprintln!("SKIP: real effect fixture is unavailable: {COMMON_PACK_ROOT}");
+        return;
+    }
+
+    let inventory = inspect_effect_folder(COMMON_PACK_ROOT, Some(COMMON_PACK_STRUCTURE))
+        .expect("inspect the shared pack");
+
+    assert!(
+        inventory.common_pack.is_none(),
+        "the shared pack must not index itself a second time"
+    );
+    assert!(
+        inventory
+            .models
+            .iter()
+            .any(|model| model.hash.signed == COMMON_SPHERE_MODEL_ID),
+        "the sphere model must resolve inside the shared pack's own inventory"
+    );
+    assert!(
+        !inventory
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("is not next to")),
+        "the shared pack must not warn about a missing sibling of itself"
+    );
+}
+
+#[test]
+fn sanitize_effect_copy_dest_file_name_rejects_path_escapes() {
+    assert!(sanitize_effect_copy_dest_file_name("107.efxbn").is_ok());
+    assert!(sanitize_effect_copy_dest_file_name("copied")
+        .unwrap()
+        .ends_with(".efxbn"));
+    assert!(sanitize_effect_copy_dest_file_name("..\\evil.efxbn").is_err());
+    assert!(sanitize_effect_copy_dest_file_name("../evil.efxbn").is_err());
+    assert!(sanitize_effect_copy_dest_file_name("sub/107.efxbn").is_err());
 }

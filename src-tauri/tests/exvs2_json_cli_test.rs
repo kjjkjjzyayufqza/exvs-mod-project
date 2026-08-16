@@ -5,7 +5,8 @@ use app_lib::exvs2_json_cli::{
     edit_bytes, inspect_bytes, EditBytesOptions, InspectOptions, InspectType,
 };
 use app_lib::format::bulletparam::{
-    build_bulletparam, parse_bulletparam, BulletParamData, BulletParamEntry,
+    build_bulletparam, bulletparam_entry_from_json_value, bulletparam_entry_to_json_value,
+    parse_bulletparam, BulletParamData, BulletParamEntry,
 };
 use app_lib::format::grapparam::parse_grapparam;
 use app_lib::format::hitgroupiddef::parse_hitgroupiddef;
@@ -680,4 +681,39 @@ fn edit_bulletparam_sets_named_f32_field() {
         .expect("initialAngle command");
     assert!((f32::from_bits(raw) - 2.5).abs() < f32::EPSILON);
     assert_eq!(outcome.report["operationsApplied"][0]["after"], 2.5);
+}
+
+#[test]
+fn bulletparam_serializes_bullet_size_and_accepts_initial_speed_alias() {
+    let legacy = json!({
+        "entryId": 1,
+        "initialSpeed": 12.5
+    });
+    let entry = bulletparam_entry_from_json_value(&legacy).expect("parse legacy alias");
+    let raw = *entry
+        .commands
+        .get(&0xAB606D9E)
+        .expect("bullet_size hash");
+    assert!((f32::from_bits(raw) - 12.5).abs() < 1e-5);
+
+    let canonical = bulletparam_entry_to_json_value(&entry);
+    assert!(canonical.get("initialSpeed").is_none());
+    let size = canonical
+        .get("bulletSize")
+        .and_then(|v| v.as_f64())
+        .expect("canonical bulletSize");
+    assert!((size - 12.5).abs() < 1e-5);
+
+    let both = json!({
+        "entryId": 1,
+        "initialSpeed": 1.0,
+        "bulletSize": 3.0
+    });
+    let prefer_canonical =
+        bulletparam_entry_from_json_value(&both).expect("canonical key wins over alias");
+    let preferred = *prefer_canonical
+        .commands
+        .get(&0xAB606D9E)
+        .expect("bullet_size hash");
+    assert!((f32::from_bits(preferred) - 3.0).abs() < 1e-5);
 }

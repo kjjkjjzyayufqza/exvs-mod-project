@@ -168,7 +168,7 @@ transform/orientation logic rather than as collider extents, and custom id
 | 0xA36593AD | 0x0D4 | u32 | behavior_type | 8 unique; behavior enum |
 | 0xA5364F08 | 0x0D8 | float | aim_correction_angle | [-60,90] aim correction |
 | 0xA8987774 | 0x0DC | u32 | ammo_type_hash | 16 unique; ammo type ref |
-| 0xAB606D9E | 0x0E0 | float | initial_speed | [0,640] launch speed |
+| 0xAB606D9E | 0x0E0 | float | bullet_size | [0,640] bullet size; `initial_speed` is a legacy alias |
 | 0xABEDC73A | 0x0E4 | float | launch_angle_horizontal | [-90,120] horizontal launch |
 | 0xAF2B7098 | 0x0E8 | float | tracking_angle | [0,180] tracking arc |
 | 0xB306BEE8 | 0x0EC | float | min_homing_distance | [0,200] min homing engage |

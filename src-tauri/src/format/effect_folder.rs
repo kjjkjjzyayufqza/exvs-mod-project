@@ -24,6 +24,17 @@ pub struct EffectFolderSelection {
     pub name: Option<String>,
 }
 
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectFolderCopyEfxbnPolicy {
+    pub file_index: i32,
+    pub dest_file_name: Option<String>,
+    #[serde(default)]
+    pub overwrite: bool,
+    #[serde(default)]
+    pub skip: bool,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EffectFolderHash {
@@ -72,6 +83,27 @@ pub struct EffectFolderModel {
     pub material_texture_ids: Vec<EffectFolderHash>,
 }
 
+/// The pack every other effect pack draws shared models and colour maps from.
+///
+/// A `.efxbn` names a model or texture by CRC32, never by path, so a reference resolves against
+/// the whole `006effect` tree rather than the opened folder. Across the shipped corpus 59.4% of
+/// model references (523 of 880) and 69.5% of texture references (1,191 of 1,714) exist only
+/// here, so a pack indexed on its own leaves the majority of its effects with nothing to draw.
+pub const EFFECT_FOLDER_COMMON_PACK_NAME: &str = "000common_001";
+
+/// The resource half of the shared pack, indexed alongside whichever pack was opened.
+///
+/// Only models and textures: the shared pack's own ~1,000 files include `.efxbn` payloads that
+/// nothing in this inventory reads, and parsing them would dominate every inspection.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectFolderCommonPack {
+    pub effect_root: String,
+    pub structure_json_path: String,
+    pub models: Vec<EffectFolderModel>,
+    pub textures: Vec<EffectFolderFileItem>,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EffectFolderInventorySummary {
@@ -79,7 +111,14 @@ pub struct EffectFolderInventorySummary {
     pub efxbn_count: usize,
     pub model_count: usize,
     pub texture_count: usize,
+    /// Model IDs found in neither this pack nor the shared pack. A real defect.
     pub unresolved_model_ids: Vec<EffectFolderHash>,
+    /// Texture IDs found in neither this pack nor the shared pack. A real defect.
+    pub unresolved_texture_ids: Vec<EffectFolderHash>,
+    /// Model IDs that resolve only through the shared pack. Expected, not a defect.
+    pub common_model_ids: Vec<EffectFolderHash>,
+    /// Texture IDs that resolve only through the shared pack. Expected, not a defect.
+    pub common_texture_ids: Vec<EffectFolderHash>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -92,6 +131,9 @@ pub struct EffectFolderInventory {
     pub models: Vec<EffectFolderModel>,
     pub textures: Vec<EffectFolderFileItem>,
     pub other_files: Vec<EffectFolderFileItem>,
+    /// None when the opened pack *is* the shared pack, or when no shared pack sits beside it —
+    /// the latter also raises a warning, since references into it can no longer be resolved.
+    pub common_pack: Option<EffectFolderCommonPack>,
     pub warnings: Vec<String>,
 }
 
@@ -738,20 +780,55 @@ pub fn inspect_effect_folder(
         }
     }
 
-    let mut unresolved = BTreeSet::new();
+    let common_pack = collect_common_pack(&root_path, &mut warnings)?;
+    let texture_hashes = texture_hash_set(&textures);
+    let common_model_hashes: HashSet<i32> = common_pack
+        .as_ref()
+        .map(|pack| pack.models.iter().map(|model| model.hash.signed).collect())
+        .unwrap_or_default();
+    let common_texture_hashes = common_pack
+        .as_ref()
+        .map(|pack| texture_hash_set(&pack.textures))
+        .unwrap_or_default();
+
+    let mut unresolved_models = BTreeSet::new();
+    let mut unresolved_textures = BTreeSet::new();
+    let mut common_models = BTreeSet::new();
+    let mut common_textures = BTreeSet::new();
     for item in &efxbns {
-        if let Some(summary) = &item.efxbn {
-            for hash in &summary.model_ids {
-                if hash.signed != 0 && !model_hashes.contains(&hash.signed) {
-                    unresolved.insert(hash.signed);
-                }
-            }
+        let Some(summary) = &item.efxbn else {
+            continue;
+        };
+        for hash in &summary.model_ids {
+            classify_resource_reference(
+                hash.signed,
+                &model_hashes,
+                &common_model_hashes,
+                &mut common_models,
+                &mut unresolved_models,
+            );
+        }
+        for hash in &summary.model_control_texture_ids {
+            classify_resource_reference(
+                hash.signed,
+                &texture_hashes,
+                &common_texture_hashes,
+                &mut common_textures,
+                &mut unresolved_textures,
+            );
         }
     }
-    let unresolved_model_ids = unresolved
-        .into_iter()
-        .map(EffectFolderHash::from_i32)
-        .collect::<Vec<_>>();
+    let unresolved_model_ids = hash_list(unresolved_models);
+    let unresolved_texture_ids = hash_list(unresolved_textures);
+    let common_model_ids = hash_list(common_models);
+    let common_texture_ids = hash_list(common_textures);
+    push_reference_warnings(
+        &mut warnings,
+        &common_model_ids,
+        &common_texture_ids,
+        &unresolved_model_ids,
+        &unresolved_texture_ids,
+    );
 
     Ok(EffectFolderInventory {
         effect_root: root_path.to_string_lossy().to_string(),
@@ -761,14 +838,157 @@ pub fn inspect_effect_folder(
             efxbn_count: efxbns.len(),
             model_count: models.len(),
             texture_count: textures.len(),
-            unresolved_model_ids: unresolved_model_ids.clone(),
+            unresolved_model_ids,
+            unresolved_texture_ids,
+            common_model_ids,
+            common_texture_ids,
         },
         efxbns,
         models,
         textures,
         other_files: others,
+        common_pack,
         warnings,
     })
+}
+
+fn texture_hash_set(textures: &[EffectFolderFileItem]) -> HashSet<i32> {
+    textures
+        .iter()
+        .filter_map(|texture| texture.hash.as_ref().map(|hash| hash.signed))
+        .collect()
+}
+
+fn hash_list(hashes: BTreeSet<i32>) -> Vec<EffectFolderHash> {
+    hashes.into_iter().map(EffectFolderHash::from_i32).collect()
+}
+
+/// Sort one referenced resource ID into "resolved here", "resolved in the shared pack", or
+/// "resolved nowhere". A zero ID means the block binds no resource at all.
+fn classify_resource_reference(
+    hash: i32,
+    own: &HashSet<i32>,
+    common: &HashSet<i32>,
+    from_common: &mut BTreeSet<i32>,
+    unresolved: &mut BTreeSet<i32>,
+) {
+    if hash == 0 || own.contains(&hash) {
+        return;
+    }
+    if common.contains(&hash) {
+        from_common.insert(hash);
+        return;
+    }
+    unresolved.insert(hash);
+}
+
+/// State where every cross-pack reference landed.
+///
+/// Shared-pack hits are aggregated because they are the common case — the majority of every
+/// pack's references — while anything unresolved is listed one ID at a time, because each one is
+/// a resource the game will fail to draw.
+fn push_reference_warnings(
+    warnings: &mut Vec<String>,
+    common_model_ids: &[EffectFolderHash],
+    common_texture_ids: &[EffectFolderHash],
+    unresolved_model_ids: &[EffectFolderHash],
+    unresolved_texture_ids: &[EffectFolderHash],
+) {
+    if !common_model_ids.is_empty() || !common_texture_ids.is_empty() {
+        warnings.push(format!(
+            "Resolved {} model and {} texture reference(s) from the shared pack {EFFECT_FOLDER_COMMON_PACK_NAME}.",
+            common_model_ids.len(),
+            common_texture_ids.len()
+        ));
+    }
+    for hash in unresolved_model_ids {
+        warnings.push(format!(
+            "EFXBN references modelId {} that exists in neither this pack nor {EFFECT_FOLDER_COMMON_PACK_NAME}.",
+            hash.hex
+        ));
+    }
+    for hash in unresolved_texture_ids {
+        warnings.push(format!(
+            "EFXBN references textureId {} that exists in neither this pack nor {EFFECT_FOLDER_COMMON_PACK_NAME}.",
+            hash.hex
+        ));
+    }
+}
+
+/// The shared pack that sits next to `root`, or None when `root` is that pack.
+fn common_pack_root(root: &Path) -> Result<Option<PathBuf>, String> {
+    let name = root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("Invalid effect root name: {}", root.display()))?;
+    if name.eq_ignore_ascii_case(EFFECT_FOLDER_COMMON_PACK_NAME) {
+        return Ok(None);
+    }
+    let parent = root.parent().ok_or_else(|| {
+        format!(
+            "Cannot resolve the shared effect pack next to {}",
+            root.display()
+        )
+    })?;
+    Ok(Some(parent.join(EFFECT_FOLDER_COMMON_PACK_NAME)))
+}
+
+/// Index the shared pack's models and textures so references into it can be resolved.
+///
+/// An absent shared pack is reported as a warning rather than an error: a pack extracted or
+/// copied on its own is still worth inspecting, and every reference it cannot resolve is then
+/// listed by ID. A shared pack that exists but cannot be read is an error, because silently
+/// dropping half the resources would make the inventory lie.
+fn collect_common_pack(
+    root: &Path,
+    warnings: &mut Vec<String>,
+) -> Result<Option<EffectFolderCommonPack>, String> {
+    let Some(common_root) = common_pack_root(root)? else {
+        return Ok(None);
+    };
+    let structure_path = resolve_structure_path(&common_root, None)?;
+    if !common_root.is_dir() || !structure_path.is_file() {
+        warnings.push(format!(
+            "Shared effect pack {EFFECT_FOLDER_COMMON_PACK_NAME} is not next to {}; references that live there cannot be resolved.",
+            root.display()
+        ));
+        return Ok(None);
+    }
+    let (models, textures) = collect_effect_folder_resources(&structure_path)?;
+    Ok(Some(EffectFolderCommonPack {
+        effect_root: common_root.to_string_lossy().to_string(),
+        structure_json_path: structure_path.to_string_lossy().to_string(),
+        models,
+        textures,
+    }))
+}
+
+/// The models and textures a pack publishes for other packs to reference by hash.
+fn collect_effect_folder_resources(
+    structure_path: &Path,
+) -> Result<(Vec<EffectFolderModel>, Vec<EffectFolderFileItem>), String> {
+    let json_dir = structure_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .to_path_buf();
+    let structure = read_structure_file(structure_path)?;
+    let data_by_index = build_file_record_map(&structure.sub_file_data, &json_dir)?;
+    let forest = parse_forest(&structure.sub_file_structure)?;
+    let mut models = Vec::new();
+    collect_models(&forest, &data_by_index, &mut models);
+    let mut textures = Vec::new();
+    for item in collect_items(&forest) {
+        let Some(record) = item
+            .file_index()
+            .and_then(|index| data_by_index.get(&index))
+        else {
+            continue;
+        };
+        if record.actual_ext == ".nutexb" {
+            textures.push(file_item_from_node(record, item.item_entry()));
+        }
+    }
+    Ok((models, textures))
 }
 
 pub fn parse_efxbn_file(path: &str) -> Result<EfxbnSummary, String> {
@@ -1402,9 +1622,19 @@ pub fn validate_effect_folder_for_repack(
     }
 
     let model_hashes: HashSet<i32> = models.iter().map(|m| m.hash.signed).collect();
+    let common_model_hashes: HashSet<i32> = match collect_common_pack(&root_path, &mut warnings) {
+        Ok(pack) => pack
+            .map(|pack| pack.models.iter().map(|model| model.hash.signed).collect())
+            .unwrap_or_default(),
+        Err(error) => {
+            push_error(&mut errors, "structure", None, error, Some(&structure_path));
+            HashSet::new()
+        }
+    };
     let mut efxbn_count = 0usize;
     let mut texture_count = 0usize;
     let mut unresolved = BTreeSet::new();
+    let mut from_common = BTreeSet::new();
     let mut seen_hash_by_kind: HashSet<(String, i32)> = HashSet::new();
     for item in collect_items(&forest) {
         let Some(file_index) = item.file_index() else {
@@ -1445,9 +1675,13 @@ pub fn validate_effect_folder_for_repack(
                         );
                     }
                     for hash in summary.model_ids {
-                        if hash.signed != 0 && !model_hashes.contains(&hash.signed) {
-                            unresolved.insert(hash.signed);
-                        }
+                        classify_resource_reference(
+                            hash.signed,
+                            &model_hashes,
+                            &common_model_hashes,
+                            &mut from_common,
+                            &mut unresolved,
+                        );
                     }
                 }
                 Err(error) => push_error(
@@ -1470,9 +1704,15 @@ pub fn validate_effect_folder_for_repack(
             }
         }
     }
+    if !from_common.is_empty() {
+        warnings.push(format!(
+            "Resolved {} model reference(s) from the shared pack {EFFECT_FOLDER_COMMON_PACK_NAME}.",
+            from_common.len()
+        ));
+    }
     for hash in &unresolved {
         warnings.push(format!(
-            "EFXBN references missing modelId {}.",
+            "EFXBN references modelId {} that exists in neither this pack nor {EFFECT_FOLDER_COMMON_PACK_NAME}.",
             EffectFolderHash::from_i32(*hash).hex
         ));
     }
@@ -1779,6 +2019,24 @@ pub fn copy_effect_folder_selection(
     destination_structure_json_path: Option<&str>,
     selections: &[EffectFolderSelection],
 ) -> Result<EffectFolderCopyResult, String> {
+    copy_effect_folder_selection_with_policies(
+        source_effect_root,
+        source_structure_json_path,
+        destination_effect_root,
+        destination_structure_json_path,
+        selections,
+        &[],
+    )
+}
+
+pub fn copy_effect_folder_selection_with_policies(
+    source_effect_root: &str,
+    source_structure_json_path: Option<&str>,
+    destination_effect_root: &str,
+    destination_structure_json_path: Option<&str>,
+    selections: &[EffectFolderSelection],
+    policies: &[EffectFolderCopyEfxbnPolicy],
+) -> Result<EffectFolderCopyResult, String> {
     let source_root = validate_dir(source_effect_root)?;
     let source_structure_path = resolve_structure_path(&source_root, source_structure_json_path)?;
     let source_json_dir = source_structure_path
@@ -1814,6 +2072,7 @@ pub fn copy_effect_folder_selection(
             &mut copied,
             &mut skipped,
             &mut copied_keys,
+            None,
         )?;
     }
     for model in closure.model_nodes {
@@ -1842,9 +2101,19 @@ pub fn copy_effect_folder_selection(
             &mut copied,
             &mut skipped,
             &mut copied_keys,
+            None,
         )?;
     }
     for efxbn in closure.efxbn_items {
+        let file_index = efxbn.file_index();
+        let policy = file_index.and_then(|idx| policies.iter().find(|item| item.file_index == idx));
+        if policy.is_some_and(|item| item.skip) {
+            skipped.push(format!(
+                "Kept existing efxbn fileIndex {}.",
+                file_index.unwrap_or(-1)
+            ));
+            continue;
+        }
         append_source_item_to_destination(
             &source_root,
             &dest_root,
@@ -1856,6 +2125,7 @@ pub fn copy_effect_folder_selection(
             &mut copied,
             &mut skipped,
             &mut copied_keys,
+            policy,
         )?;
     }
 
@@ -2127,6 +2397,7 @@ fn append_source_item_to_destination(
     copied: &mut Vec<String>,
     skipped: &mut Vec<String>,
     copied_keys: &mut HashSet<String>,
+    policy: Option<&EffectFolderCopyEfxbnPolicy>,
 ) -> Result<(), String> {
     let Node::Item {
         entry, file_index, ..
@@ -2143,7 +2414,37 @@ fn append_source_item_to_destination(
     if !copied_keys.insert(key.clone()) {
         return Ok(());
     }
+    let overwrite = policy.is_some_and(|item| item.overwrite);
+    let dest_name = match policy.and_then(|item| {
+        item.dest_file_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(ToOwned::to_owned)
+    }) {
+        Some(name) => Some(sanitize_effect_copy_dest_file_name(&name)?),
+        None => None,
+    };
     if destination_has_item_hash(dest_forest, dest_data, &source_record.actual_ext, hash) {
+        if overwrite {
+            let dest_record = find_dest_record_by_hash(
+                dest_forest,
+                dest_data,
+                &source_record.actual_ext,
+                hash,
+            )
+            .ok_or_else(|| {
+                format!(
+                    "Destination already has {} hash {} but the file record is missing.",
+                    source_record.actual_ext,
+                    EffectFolderHash::from_i32(hash).hex
+                )
+            })?;
+            let dest_path = dest_record.path.clone();
+            copy_one_file_replace(&source_record.path, &dest_path)?;
+            copied.push(dest_path.to_string_lossy().to_string());
+            return Ok(());
+        }
         skipped.push(format!(
             "Destination already has {} hash {}.",
             source_record.actual_ext,
@@ -2151,14 +2452,38 @@ fn append_source_item_to_destination(
         ));
         return Ok(());
     }
+    if overwrite {
+        return Err(format!(
+            "Overwrite requested for {} hash {}, but the destination pack does not have it.",
+            source_record.actual_ext,
+            EffectFolderHash::from_i32(hash).hex
+        ));
+    }
 
     let target_dir = primary_file_dir(dest_root, dest_data);
-    let filename = source_record
+    let source_filename = source_record
         .path
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("effect_file.bin");
-    let target = unique_child_path(&target_dir, filename);
+    let filename = dest_name.as_deref().unwrap_or(source_filename);
+    let filename = if source_record.actual_ext == ".efxbn" {
+        ensure_extension(filename, ".efxbn")
+    } else {
+        filename.to_string()
+    };
+    let target = if dest_name.is_some() {
+        let candidate = target_dir.join(&filename);
+        if candidate.exists() {
+            return Err(format!(
+                "Destination already has file {}.",
+                candidate.display()
+            ));
+        }
+        candidate
+    } else {
+        unique_child_path(&target_dir, &filename)
+    };
     copy_one_file(&source_record.path, &target)?;
     let new_file_index = next_file_index(&dest_structure.sub_file_data);
     let file_url = file_url_for_target(dest_json_dir, &target);
@@ -3444,11 +3769,23 @@ fn destination_has_item_hash(
     ext: &str,
     hash: i32,
 ) -> bool {
-    collect_items(forest).into_iter().any(|item| {
-        item.file_index()
-            .and_then(|idx| data_by_index.get(&idx))
-            .is_some_and(|record| record.actual_ext == ext)
-            && item.item_entry().and_then(item_hash) == Some(hash)
+    find_dest_record_by_hash(forest, data_by_index, ext, hash).is_some()
+}
+
+fn find_dest_record_by_hash<'a>(
+    forest: &[Node],
+    data_by_index: &'a HashMap<i32, FileRecord>,
+    ext: &str,
+    hash: i32,
+) -> Option<&'a FileRecord> {
+    collect_items(forest).into_iter().find_map(|item| {
+        let file_index = item.file_index()?;
+        let record = data_by_index.get(&file_index)?;
+        if record.actual_ext == ext && item.item_entry().and_then(item_hash) == Some(hash) {
+            Some(record)
+        } else {
+            None
+        }
     })
 }
 
@@ -3675,14 +4012,18 @@ fn file_url_for_target(json_dir: &Path, target: &Path) -> String {
 }
 
 fn copy_one_file(source: &Path, destination: &Path) -> Result<(), String> {
-    if !source.is_file() {
-        return Err(format!("Source file does not exist: {}", source.display()));
-    }
     if destination.exists() {
         return Err(format!(
             "Import destination already exists and will not be overwritten: {}",
             destination.display()
         ));
+    }
+    copy_one_file_replace(source, destination)
+}
+
+fn copy_one_file_replace(source: &Path, destination: &Path) -> Result<(), String> {
+    if !source.is_file() {
+        return Err(format!("Source file does not exist: {}", source.display()));
     }
     if let Some(parent) = destination.parent() {
         fs::create_dir_all(parent)
@@ -3747,6 +4088,23 @@ fn delete_file_if_under(root: &Path, path: &Path) {
     if path.starts_with(root) {
         let _ = fs::remove_file(path);
     }
+}
+
+pub fn sanitize_effect_copy_dest_file_name(name: &str) -> Result<String, String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("Destination file name is empty.".to_string());
+    }
+    if trimmed == "."
+        || trimmed == ".."
+        || trimmed.contains("..")
+        || trimmed.contains('/')
+        || trimmed.contains('\\')
+        || Path::new(trimmed).is_absolute()
+    {
+        return Err("Destination file name must be a single file name inside the pack.".to_string());
+    }
+    Ok(ensure_extension(trimmed, ".efxbn"))
 }
 
 fn ensure_extension(name: &str, ext: &str) -> String {

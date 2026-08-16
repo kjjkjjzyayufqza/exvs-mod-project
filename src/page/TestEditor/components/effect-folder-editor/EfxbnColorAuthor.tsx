@@ -297,19 +297,19 @@ export function EfxbnColorAuthor({
       </p>
 
       <div className="rounded-md border border-border/60 bg-muted/15 p-2">
-        <div className="mb-2 flex items-center gap-2">
-          <span className="text-[11px] font-medium">Particle / model tint</span>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className="min-w-0 truncate text-[11px] font-medium">Particle / model tint</span>
           {dirty ? (
-            <Badge variant="outline" className="h-4 border-amber-500/40 px-1 text-[8px] text-amber-400">
+            <Badge variant="outline" className="h-4 shrink-0 border-amber-500/40 px-1 text-[8px] text-amber-400">
               dirty
             </Badge>
           ) : null}
           {writing ? (
-            <Badge variant="outline" className="h-4 px-1 text-[8px] text-muted-foreground">
+            <Badge variant="outline" className="h-4 shrink-0 px-1 text-[8px] text-muted-foreground">
               writing
             </Badge>
           ) : null}
-          <span className="ml-auto font-mono text-[9px] text-muted-foreground">
+          <span className="ml-auto shrink-0 font-mono text-[9px] text-muted-foreground">
             {allConst ? "const" : anyCurve && anyEditable ? "mixed" : anyCurve ? "curve" : "mixed"}
           </span>
         </div>
@@ -434,25 +434,25 @@ export function EfxbnColorAuthor({
 
       <div>
         <div className="mb-1 flex items-center gap-2">
-          <span className="text-[11px] font-medium">Curve key table</span>
-          <span className="ml-auto font-mono text-[9px] text-muted-foreground">
+          <span className="min-w-0 truncate text-[11px] font-medium">Curve key table</span>
+          <span className="ml-auto shrink-0 font-mono text-[9px] text-muted-foreground">
             eval @ {progress.toFixed(1)}
           </span>
         </div>
         {evaluated.map((lane) => (
           <div
             key={lane.name}
-            className="flex items-center gap-2 border-b border-border/45 py-1.5 last:border-b-0"
+            className="flex items-center gap-2 overflow-hidden border-b border-border/45 py-1.5 last:border-b-0"
           >
             <span className="w-12 shrink-0 font-mono text-[9px]">{lane.name}</span>
-            <Badge variant="outline" className="h-4 px-1 text-[8px]">
+            <Badge variant="outline" className="h-4 shrink-0 px-1 text-[8px]">
               {lane.meta.mode === "const"
                 ? `idx ${lane.meta.lookupIndex}`
                 : lane.meta.mode === "curve"
                   ? `${lane.meta.selector} keys`
                   : "unused"}
             </Badge>
-            <span className="ml-auto font-mono text-[9px] tabular-nums">
+            <span className="ml-auto shrink-0 font-mono text-[9px] tabular-nums">
               {lane.value.toFixed(4)}
             </span>
           </div>

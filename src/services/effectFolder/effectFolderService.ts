@@ -278,6 +278,19 @@ export interface EffectFolderModel {
   materialTextureIds?: EffectFolderHash[];
 }
 
+/**
+ * The resource half of `000common_001`, indexed alongside whichever pack was opened.
+ *
+ * A `.efxbn` names its model and colour map by CRC32, so most references resolve against the
+ * shared pack rather than the opened one. See `effectFolderCommonPack.ts` for the corpus shares.
+ */
+export interface EffectFolderCommonPack {
+  effectRoot: string;
+  structureJsonPath: string;
+  models: EffectFolderModel[];
+  textures: EffectFolderFileItem[];
+}
+
 export interface EffectFolderInventory {
   effectRoot: string;
   structureJsonPath: string;
@@ -286,12 +299,21 @@ export interface EffectFolderInventory {
     efxbnCount: number;
     modelCount: number;
     textureCount: number;
+    /** Model IDs found in neither this pack nor the shared pack. A real defect. */
     unresolvedModelIds: EffectFolderHash[];
+    /** Texture IDs found in neither this pack nor the shared pack. A real defect. */
+    unresolvedTextureIds: EffectFolderHash[];
+    /** Model IDs that resolve only through the shared pack. Expected, not a defect. */
+    commonModelIds: EffectFolderHash[];
+    /** Texture IDs that resolve only through the shared pack. Expected, not a defect. */
+    commonTextureIds: EffectFolderHash[];
   };
   efxbns: EffectFolderFileItem[];
   models: EffectFolderModel[];
   textures: EffectFolderFileItem[];
   otherFiles: EffectFolderFileItem[];
+  /** Null when the opened pack is the shared pack, or when no shared pack sits beside it. */
+  commonPack: EffectFolderCommonPack | null;
   warnings: string[];
 }
 
@@ -396,14 +418,38 @@ export function inferEffectFolderModOutputPath(modFolder: string, structurePath:
   return `${normalizedModFolder}\\${normalizeEffectPackStem(stem)}.fhm2d`;
 }
 
+/**
+ * Reject an inventory whose summary predates shared-pack resolution.
+ *
+ * Without these fields every reference that lives in `000common_001` silently reads as
+ * unresolved, and the preview quietly swaps proxy geometry in for the real model — a flat disc
+ * where a sphere belongs, with nothing on screen to say why. A desktop build that still returns
+ * the old shape is a stale binary, so say that instead of degrading.
+ */
+function assertResolvedInventoryShape(inventory: EffectFolderInventory): EffectFolderInventory {
+  const missing = (["commonModelIds", "commonTextureIds", "unresolvedTextureIds"] as const).filter(
+    (field) => !Array.isArray(inventory.summary?.[field]),
+  );
+  if (missing.length > 0 || inventory.commonPack === undefined) {
+    throw new Error(
+      "inspect_effect_folder returned an inventory without shared-pack resolution " +
+        `(missing: ${[...missing, ...(inventory.commonPack === undefined ? ["commonPack"] : [])].join(", ")}). ` +
+        "The Rust backend is out of date — rebuild the desktop app.",
+    );
+  }
+  return inventory;
+}
+
 export async function inspectEffectFolder(
   effectRoot: string,
   structureJsonPath = inferEffectFolderStructurePath(effectRoot),
 ): Promise<EffectFolderInventory> {
-  return await invoke<EffectFolderInventory>("inspect_effect_folder", {
-    effectRoot: toWindowsPath(effectRoot),
-    structureJsonPath: toWindowsPath(structureJsonPath),
-  });
+  return assertResolvedInventoryShape(
+    await invoke<EffectFolderInventory>("inspect_effect_folder", {
+      effectRoot: toWindowsPath(effectRoot),
+      structureJsonPath: toWindowsPath(structureJsonPath),
+    }),
+  );
 }
 
 export async function parseEffectEfxbnFile(path: string): Promise<EfxbnSummary> {
@@ -521,12 +567,20 @@ export async function deleteEffectFolderEntries(params: {
   });
 }
 
+export interface EffectFolderCopyEfxbnPolicy {
+  fileIndex: number;
+  destFileName?: string | null;
+  overwrite?: boolean;
+  skip?: boolean;
+}
+
 export async function copyEffectFolderSelection(params: {
   sourceEffectRoot: string;
   sourceStructureJsonPath?: string;
   destinationEffectRoot: string;
   destinationStructureJsonPath?: string;
   selections: EffectFolderSelection[];
+  policies?: EffectFolderCopyEfxbnPolicy[];
 }): Promise<EffectFolderCopyResult> {
   return await invoke<EffectFolderCopyResult>("copy_effect_folder_selection", {
     sourceEffectRoot: toWindowsPath(params.sourceEffectRoot),
@@ -538,5 +592,6 @@ export async function copyEffectFolderSelection(params: {
       ? toWindowsPath(params.destinationStructureJsonPath)
       : null,
     selections: params.selections,
+    policies: params.policies ?? [],
   });
 }

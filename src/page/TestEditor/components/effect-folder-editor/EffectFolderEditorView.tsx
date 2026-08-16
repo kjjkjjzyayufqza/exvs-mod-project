@@ -3,6 +3,8 @@ import {
   Copy,
   FolderOpen,
   Loader2,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   RefreshCw,
   Search,
@@ -18,6 +20,7 @@ import { FilePathInput } from "@/components/ui/filePathInput";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { EFFECT_FOLDER_COMMON_PACK_NAME } from "@/services/effectFolder/effectFolderCommonPack";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import {
   resolveEffectPackFromFolderPathAsync,
@@ -121,6 +124,15 @@ export default function EffectFolderEditorView({
 
   const inventory = editor.loadState.status === "ready" ? editor.loadState.inventory : null;
   const busy = editor.busyAction != null;
+  // The preview and its inspector share the right panel; hiding the entry list is the only way
+  // to give them a readable width on a laptop screen.
+  const [listCollapsed, setListCollapsed] = useState(false);
+  const sharedRefCount = inventory
+    ? inventory.summary.commonModelIds.length + inventory.summary.commonTextureIds.length
+    : 0;
+  const unresolvedRefCount = inventory
+    ? inventory.summary.unresolvedModelIds.length + inventory.summary.unresolvedTextureIds.length
+    : 0;
 
   useEffect(() => {
     hydratedRef.current = false;
@@ -253,9 +265,14 @@ export default function EffectFolderEditorView({
                   <span>{inventory.summary.efxbnCount} efxbn</span>
                   <span>{inventory.summary.modelCount} models</span>
                   <span>{inventory.summary.textureCount} textures</span>
-                  {inventory.summary.unresolvedModelIds.length > 0 ? (
+                  {sharedRefCount > 0 ? (
+                    <span className="text-sky-600 dark:text-sky-400">
+                      {sharedRefCount} refs from {EFFECT_FOLDER_COMMON_PACK_NAME}
+                    </span>
+                  ) : null}
+                  {unresolvedRefCount > 0 ? (
                     <span className="text-amber-600 dark:text-amber-400">
-                      {inventory.summary.unresolvedModelIds.length} unresolved model refs
+                      {unresolvedRefCount} unresolved refs
                     </span>
                   ) : null}
                 </div>
@@ -416,29 +433,53 @@ export default function EffectFolderEditorView({
                           {editor.selectedItems.length} selected
                         </span>
                       ) : null}
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        onClick={() => setListCollapsed((collapsed) => !collapsed)}
+                        title={listCollapsed ? "Show the entry list" : "Hide the entry list and widen the preview"}
+                        aria-label={listCollapsed ? "Show the entry list" : "Hide the entry list"}
+                        aria-pressed={listCollapsed}
+                      >
+                        {listCollapsed ? (
+                          <PanelLeftOpen className="h-4 w-4" />
+                        ) : (
+                          <PanelLeftClose className="h-4 w-4" />
+                        )}
+                      </Button>
                     </div>
                   </div>
 
-                  <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
-                    <ResizablePanel defaultSize={42} minSize={28} className="min-h-0">
-                      <EffectFolderListPanel
-                        items={editor.filteredItems}
-                        category={editor.category}
-                        onCategoryChange={editor.setCategory}
-                        categoryCounts={categoryCounts}
-                        selectedKeys={editor.selectedKeys}
-                        focusedKey={editor.focusedKey}
-                        onToggleSelection={editor.toggleSelection}
-                        onFocus={editor.setFocusedKey}
-                      />
-                    </ResizablePanel>
-                    <ResizableHandle withHandle />
-                    <ResizablePanel defaultSize={58} minSize={32} className="min-h-0">
+                  <ResizablePanelGroup
+                    orientation="horizontal"
+                    className="min-h-0 flex-1"
+                    key={listCollapsed ? "detail-only" : "list-and-detail"}
+                  >
+                    {listCollapsed ? null : (
+                      <>
+                        <ResizablePanel defaultSize={32} minSize={20} className="min-h-0">
+                          <EffectFolderListPanel
+                            items={editor.filteredItems}
+                            category={editor.category}
+                            onCategoryChange={editor.setCategory}
+                            categoryCounts={categoryCounts}
+                            selectedKeys={editor.selectedKeys}
+                            focusedKey={editor.focusedKey}
+                            onToggleSelection={editor.toggleSelection}
+                            onFocus={editor.setFocusedKey}
+                          />
+                        </ResizablePanel>
+                        <ResizableHandle withHandle />
+                      </>
+                    )}
+                    <ResizablePanel defaultSize={listCollapsed ? 100 : 68} minSize={40} className="min-h-0">
                       <EffectFolderDetailPanel
                         item={editor.focusedItem}
                         inventory={inventory}
-                        inventoryWarnings={inventory?.warnings ?? []}
                         validation={editor.validation}
+                        previewExpanded={listCollapsed}
                         previewSuspended={!isActive}
                         onOpenAsEffectProject={onOpenAsEffectProject}
                         onEfxbnWritten={() => {

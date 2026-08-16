@@ -14,6 +14,7 @@ import {
   parseHexPreviewEditText,
   readTypedEntryId,
   readTypedEntryLabels,
+  sortTypedParamFileByUnsignedEntryId,
   removeEntryEditorMetaAt,
   shiftHighlightedEntryIndices,
 } from "./paramEntryUtils";
@@ -33,6 +34,19 @@ function createData(entries: TypedParamEntry[]): TypedParamFile {
     trailingData: [],
   };
 }
+
+describe("sortTypedParamFileByUnsignedEntryId", () => {
+  it("orders entries by unsigned id so 0x75516B0D precedes 0x9ED6C1D4", () => {
+    const data = createData([
+      { entryId: 0x9ed6c1d4, mainEffectHash: 1 },
+      { entryId: 0xe473bd36, mainEffectHash: 2 },
+      { entryId: 0x75516b0d, mainEffectHash: 3 },
+    ])
+    const sorted = sortTypedParamFileByUnsignedEntryId(data)
+    expect(sorted.entryIds).toEqual([0x75516b0d, 0x9ed6c1d4, 0xe473bd36])
+    expect(sorted.entries.map((entry) => entry.mainEffectHash)).toEqual([3, 1, 2])
+  })
+})
 
 describe("paramEntryUtils", () => {
   it("reads actionLabel then resourceLabel strings for list subtitles", () => {
@@ -219,6 +233,34 @@ describe("paramEntryUtils", () => {
     expect(nextEntry.damage).toBe(-2);
     expect(nextEntry.speedRate).toBe(1);
     expect(nextEntry.bulletEffectHash).toBe(0x41424344);
+  });
+
+  it("keeps bulletSize aligned to field spec offset 0xE0", () => {
+    const data: TypedParamFile = {
+      header: {},
+      fieldSpecs: [
+        { kind: 1, entryOffset: 0xdc, hash: 0xa8987774 },
+        { kind: 5, entryOffset: 0xe0, hash: 0xab606d9e },
+        { kind: 5, entryOffset: 0xe4, hash: 0xabedc73a },
+      ],
+      entryIds: [1],
+      entries: [
+        {
+          entryId: 1,
+          ammoTypeHash: 1,
+          bulletSize: 12.5,
+          launchAngleHorizontal: 0,
+        },
+      ],
+      trailingData: [],
+    };
+
+    const layout = buildTypedEntryFieldLayout(data, 0);
+    expect(layout).toEqual([
+      { key: "ammoTypeHash", offset: 0xdc, kind: 1 },
+      { key: "bulletSize", offset: 0xe0, kind: 5 },
+      { key: "launchAngleHorizontal", offset: 0xe4, kind: 5 },
+    ]);
   });
 
   it("rejects hex edit text with the wrong byte count", () => {

@@ -23,8 +23,8 @@ import {
 } from "./EfxbnParticlePreview";
 import { EfxbnStripPreview } from "./EfxbnStripPreview";
 import {
+  bindEfxbnModelInstanceSlots,
   EFXBN_PREVIEW_FPS,
-  EFXBN_PREVIEW_FRAME_COUNT,
   isEfxbnEmitterBlock,
   simulateEfxbnEmitterPair,
   type EfxbnModelPoolRequirement,
@@ -41,6 +41,8 @@ type EfxbnDiagnosticOverlayProps = {
    */
   controlLookupEntriesRef: MutableRefObject<readonly EfxbnControlLookupEntry[]>;
   progress: number;
+  /** Playback window in frames, derived from the effect's own length. */
+  frameCount: number;
   playing: boolean;
   speed: number;
   selectedEffectIndex: number | null;
@@ -51,6 +53,8 @@ type EfxbnDiagnosticOverlayProps = {
   onSelectEffect: (effectIndex: number) => void;
   onProgressChange: (progress: number) => void;
 };
+
+const EMPTY_SLOT_MAP: ReadonlyMap<number, number> = new Map();
 
 function livePlanFromRef(
   plan: EffectFolderPreviewPlan,
@@ -87,12 +91,14 @@ function EfxbnMeshEmitterRegistration({
   effectIndex,
   instanceId,
   requestedCount,
+  frameCount,
   progressRef,
   pointsRef,
 }: {
   effectIndex: number;
   instanceId: string;
   requestedCount: number;
+  frameCount: number;
   progressRef: MutableRefObject<number>;
   pointsRef: MutableRefObject<Map<number, readonly EfxbnMeshEmitterPoint[]>>;
 }) {
@@ -112,7 +118,7 @@ function EfxbnMeshEmitterRegistration({
     let boneMatrices: Float32Array | null = null;
     if (runtime) {
       if (motionState?.poseEnabled && motionState.clip) {
-        const frame = (progressRef.current / 100) * EFXBN_PREVIEW_FRAME_COUNT;
+        const frame = (progressRef.current / 100) * frameCount;
         const sample = sampleMotionClipFrame(motionState.clip, frame, motionState.loop);
         if (sample.boneLocals.length === runtime.bones.length) {
           applyLocalPoseToObjects(runtime.bones, sample.boneLocals);
@@ -178,6 +184,7 @@ export function EfxbnDiagnosticOverlay({
   plan,
   controlLookupEntriesRef,
   progress,
+  frameCount,
   playing,
   speed,
   selectedEffectIndex,
@@ -215,6 +222,10 @@ export function EfxbnDiagnosticOverlay({
   ), [modelRequirements, plan]);
   const modelEffectTexturesRef = useRef(new Map<number, Texture>());
   const modelEffectOffsetTexturesRef = useRef(new Map<number, Texture>());
+  // Pool slots survive between frames so an instance stays with its particle; see
+  // `bindEfxbnModelInstanceSlots`. Keyed per emitter/target edge rather than per target, because
+  // two emitters may spawn the same block and each needs its own stable slot assignment.
+  const modelSlotsByPairRef = useRef(new Map<string, ReadonlyMap<number, number>>());
   const meshEmitterPointsByEffectIndexRef = useRef(new Map<number, readonly EfxbnMeshEmitterPoint[]>());
   const meshEmitterPointsByEffectIndex = meshEmitterPointsByEffectIndexRef.current;
 
@@ -227,10 +238,15 @@ export function EfxbnDiagnosticOverlay({
   useEffect(() => () => {
     hostInstanceTransformsRef.current = new Map();
   }, [hostInstanceTransformsRef]);
+  // Pair keys repeat across files, so a new document must start from an empty free list rather
+  // than inherit the previous one's slot assignments.
+  useEffect(() => {
+    modelSlotsByPairRef.current = new Map();
+  }, [plan.key]);
 
   useFrame((state, delta) => {
     if (playing) {
-      const progressPerSecond = (EFXBN_PREVIEW_FPS / EFXBN_PREVIEW_FRAME_COUNT) * 100;
+      const progressPerSecond = (EFXBN_PREVIEW_FPS / frameCount) * 100;
       progressRef.current = (progressRef.current + delta * progressPerSecond * speed) % 100;
       const now = state.clock.elapsedTime;
       if (now - lastUiUpdateRef.current >= 0.1) {
@@ -239,7 +255,7 @@ export function EfxbnDiagnosticOverlay({
       }
     }
 
-    const frame = (progressRef.current / 100) * EFXBN_PREVIEW_FRAME_COUNT;
+    const frame = (progressRef.current / 100) * frameCount;
     const livePlan = livePlanFromRef(plan, controlLookupEntriesRef);
     const transforms = new Map<string, PreviewInstanceHostTransform>();
     for (const instanceIds of instanceIdsByEffectIndex.values()) {
@@ -275,8 +291,15 @@ export function EfxbnDiagnosticOverlay({
         meshEmitterPointsByEffectIndex,
       );
       const instanceIds = instanceIdsByEffectIndex.get(target.index) ?? [];
+      const pairKey = `${requirement.pair.emitter?.index ?? "root"}:${target.index}`;
+      const slotBinding = bindEfxbnModelInstanceSlots(
+        particles,
+        instanceIds.length,
+        modelSlotsByPairRef.current.get(pairKey) ?? EMPTY_SLOT_MAP,
+      );
+      modelSlotsByPairRef.current.set(pairKey, slotBinding.slotByParticleId);
       instanceIds.forEach((instanceId, index) => {
-        const particle = particles[index];
+        const particle = slotBinding.slots[index] ?? undefined;
         const uvTransform = evaluateEfxbnUvTransform(textureBinding?.parameter, particle?.age ?? 0, {
           modelParticle: true,
           particleSeed: particle?.id ?? index,
@@ -362,6 +385,7 @@ export function EfxbnDiagnosticOverlay({
             effectIndex={block.index}
             instanceId={instanceId}
             requestedCount={block.meshEmitterCount}
+            frameCount={frameCount}
             progressRef={progressRef}
             pointsRef={meshEmitterPointsByEffectIndexRef}
           />
@@ -371,6 +395,7 @@ export function EfxbnDiagnosticOverlay({
         plan={plan}
         controlLookupEntriesRef={controlLookupEntriesRef}
         progressRef={progressRef}
+        frameCount={frameCount}
         selectedEffectIndex={selectedEffectIndex}
         hiddenEffectIndexes={hiddenEffectIndexes}
         meshEmitterPointsByEffectIndex={meshEmitterPointsByEffectIndex}
@@ -380,6 +405,7 @@ export function EfxbnDiagnosticOverlay({
         plan={plan}
         controlLookupEntriesRef={controlLookupEntriesRef}
         progressRef={progressRef}
+        frameCount={frameCount}
         hiddenEffectIndexes={hiddenEffectIndexes}
         meshEmitterPointsByEffectIndex={meshEmitterPointsByEffectIndex}
       />

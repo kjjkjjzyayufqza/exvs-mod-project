@@ -1,5 +1,11 @@
 # EFXBN Preview and Editing Roadmap
 
+> **The preview track of this plan is superseded by**
+> `2026-08-16-efxbn-preview-fidelity-continuation.md`. Start there for any preview work: this
+> file's §3 phases were re-audited on 2026-08-16 and most of Phase A and B had already shipped
+> while still being listed as open. The **editing track (§4, Phases F–J) is still current** and is
+> not restated in the continuation plan.
+>
 > **Supersedes the open portions of** `2026-08-08-efxbn-shader-fidelity-and-visual-review.md`.
 > That plan stays as the record of the shader-fidelity investigation; every task still open in it
 > is restated here with corrected priorities and merged with the editing work it never covered.
@@ -55,18 +61,26 @@ this codebase.
 | `0x40000` brightness | Flag-driven at all three draw sites | base Face/Model PS |
 | Texture addressing | `hkImageAddressMode`: 0 WRAP, 1 MIRROR, 2 CLAMP, 3 BORDER. Identity map into the sampler | name table `0x1415CB9B0` |
 | Effect model materials | Effect models legitimately ship no NUMATB; discriminator is the declared `__nust__` profile | 8,767-model survey |
+| View-angle alpha ramp | The `blur*` fields are **not** blur: `actionFlags & 0x02000000` fades a billboard's RGBA to `endColor` as it turns edge-on, and end alpha is 0 in every shipped variant. Billboard-only | `efxConstructDrawBufferBillboard3rd` |
+| Camera-proximity fade | `(extraFlags & 0x1000) && \|cameraFadeRange\| >= 1e-5 && (actionFlags & 0x00400000)`; hidden inside half the range, linear to full | same shader |
+| Particle draw order | Key `(opaque && extraFlags & 0x2000 ? -dist : dist) * 1000`, sorted **descending** — back-to-front for 99.9% of drawable blocks | `efxMakeSortInfoBillboardDrawerID3rd`, `efxSortParticle3rd` |
+| Per-particle determinism | Each particle draws from its own `particleSeed(pairSeed, id)` stream. A shared stream re-randomised every particle behind an expiry on the frame it died, because `simulateParticle` returns before drawing when the particle is already dead | `efxSpawnParticleCommon3rd` (per-instance LCG) |
+| Model instance slots | `bindEfxbnModelInstanceSlots` holds a pool slot with its particle across frames and frees it on expiry. Indexing the live array by position teleported every instance behind an expiry | engine free-list allocation |
+| Billboard quad basis and pivot | Basis from `actionFlags & 0x20 / 0x80 / 0x20000000`, and `centerPivot` offsets the quad by `right*(sizeX*pivotX*0.5) + up*(sizeY*pivotY*0.5)`. Non-zero on 24.0% of billboards, dominated by ±1 (edge-anchored) | `efxConstructDrawBufferBillboard3rd`, `efxExtractDrawInfoBillboard3rd` |
+| Face culling | `cullingType` 0/1/2 → DoubleSide/FrontSide/BackSide. Verified by measuring the shipped `sphere_001` mesh: it winds counter-clockwise seen from outside, which is WebGL's front face, so FrontSide shows the exterior. Matters — 31.4% of model blocks cull | mesh winding measurement |
+| Playback window | Derived per effect from the longest root-to-leaf `delay + life` chain instead of a fixed 120 frames. 25.4% of files were playing into dead air, 8.7% were cut off mid-flight. Looping effects keep the 120-frame floor so they do not restart more often than before | corpus, 678 files |
+| Cross-pack references | Models and colour maps are bound by CRC32 across the whole `006effect` tree. **57.8% of model references (664/1,149) and 69.5% of texture references (1,191/1,714) exist only in `000common_001`.** `inspect_effect_folder` indexes the shared pack alongside the opened one; the preview plan resolves against both and tags each hit `pack` or `common` | corpus, 11 non-common packs |
 
 ### Known-wrong or unimplemented (preview)
 
+Re-audited 2026-08-16 against the source. The Phase A rows, the strip-history row and the
+billboard-basis row had all been implemented since this table was written and are struck from it;
+what follows is what is still genuinely open.
+
 | Gap | Share of drawable blocks | Phase |
 | --- | --- | --- |
-| Emitter lifetime not randomised (particles are, emitters are not) | all emitters | A |
-| Emit count not randomised; `meshEmitterCount` ignored | all emitters | A |
-| Looping rebuilds position from the spawn point → teleport per cycle | `actionFlags & 1` blocks | A |
-| `speedBase` treated as world, not spawn-local | all | A |
-| Strip history keeps centres only → uniform width/colour ribbons | 1,306 strips | B |
+| Strip `centerPivot.x` ignored — `efxExtractDrawInfoStrip3rd` puts the ribbon edges at `centre - side*halfWidth*(pivotX ± 1)`, so a non-zero pivot slides the ribbon off its path | 20.0% of strips | B |
 | Strip UV axes transposed | 1,306 strips | B |
-| Billboard basis ignores action flags `0x20 / 0x80 / 0x20000000`; `centerPivot` unused | 7,395 billboards | B |
 | UV scroll semantics not split by draw type; limit applied as modulo everywhere | 7,320 scroll parameters | C |
 | Four-corner `uvU/uvV` collapsed to a min/max rectangle | all | C |
 | Spawn-form branches 2/4/7/8 and `emitInterpolate*` back-fill | see §C3 | C |
@@ -76,7 +90,7 @@ this codebase.
 | MultiUV | model blocks with a second UV set | D |
 | ColorEx `0x200` framebuffer grab | 1.8% | D |
 | `blendState` 1 rendered as Normal, unverified | 18.1% | E |
-| `cullingType` always DoubleSide, unverified | 82.5% are type 0 | E |
+| Looping effects still restart the timeline from tick 0, so a looping emitter ramps up from nothing once per window instead of running continuously. Needs a warm-up offset, which in turn needs care for effects that mix looping and one-shot blocks | 57.4% of files contain a looping block | E |
 
 ### Blocked
 
@@ -91,8 +105,8 @@ this codebase.
 | --- | --- |
 | Import / copy / delete / repack files | Implemented (`stage_commands`) |
 | Repack validation | Implemented (`validate_effect_folder_for_repack`) |
-| EFXBN field editing | **None.** `EffectFolderDetailPanel` has zero input controls |
-| EFXBN write path | `patch_efxbn_control_constants` — curve-key values only, and **no UI caller** |
+| EFXBN field editing | Colour only. `EfxbnColorAuthor` edits the r/g/b/a control-constant lanes of the selected block through a draft session; every other block field is read-only |
+| EFXBN write path | `patch_efxbn_control_constants` — curve-key values only. Called from `EffectFolder3dPreview` when the draft is saved |
 | Curve editing | None |
 | Texture / model rebinding | None |
 | Round-trip byte-fidelity proof | None |

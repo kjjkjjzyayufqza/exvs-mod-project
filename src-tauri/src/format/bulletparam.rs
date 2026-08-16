@@ -8,8 +8,9 @@ use crate::format::param_bin_format::{
 };
 use crate::format::param_entry_schema::{
     entry_commands_from_named_json, entry_commands_to_named_json, entry_row_matches_command_map,
-    expected_field_specs_ordered, min_entry_data_size_for_specs, parse_commands_map_from_entry_row,
-    validate_file_specs_kind_match_pool, ParamCommandPool,
+    expected_field_specs_ordered, min_entry_data_size_for_specs,
+    parse_commands_map_from_entry_row, snake_to_camel, validate_file_specs_kind_match_pool,
+    ParamCommandPool,
 };
 
 // Please keep comments for analysis.
@@ -23,6 +24,7 @@ use crate::format::param_entry_schema::{
 //   is_beam           -> beam_type_hash       (19 unique, max ~4B, not boolean)
 //   is_penetrating    -> penetrate_type_hash  (17 unique, max ~4B, not boolean)
 //   inherit_speed_flag -> inherit_speed_hash  (34 unique, max ~4B, not a flag)
+//   initial_speed     -> bullet_size          (was mislabelled as launch speed)
 pub const BULLETPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x0594D6D4, 5, "initial_angle"), // [V:sub_1405C4400] angular offset, 143 unique
     (0x05D5D30D, 5, "max_range"),     // [D:0~10000] distance, 112 unique
@@ -84,7 +86,7 @@ pub const BULLETPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0xA5364F08, 5, "aim_correction_angle"), // [D:-300~440]
     (0xA68F0209, 5, "reserved_0e8"),  // PHANTOM — not in any file
     (0xA8987774, 1, "ammo_type_hash"), // [D:HASH] 153 unique
-    (0xAB606D9E, 5, "initial_speed"), // [D:0~640]
+    (0xAB606D9E, 5, "bullet_size"), // [D:0~640] was "initial_speed"
     (0xABEDC73A, 5, "launch_angle_horizontal"), // [D:-140~500]
     (0xAF2B7098, 5, "tracking_angle"), // [D:0~180] degrees
     (0xB306BEE8, 5, "min_homing_distance"), // [D:0~360]
@@ -111,6 +113,31 @@ pub const BULLETPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0xFF51E424, 5, "tracking_start_distance"), // [D:0~1000]
 ];
 
+/// Input-only compatibility aliases. Serialization always emits the command-pool key.
+const BULLETPARAM_LEGACY_KEY_ALIASES: &[(&str, u32)] = &[("initialSpeed", 0xAB606D9E)];
+
+fn apply_bulletparam_legacy_aliases(v: &Value) -> Value {
+    let Some(obj) = v.as_object() else {
+        return v.clone();
+    };
+    let mut map = obj.clone();
+    for &(legacy_key, hash) in BULLETPARAM_LEGACY_KEY_ALIASES {
+        let Some(canonical) = BULLETPARAM_COMMAND_POOL
+            .iter()
+            .find_map(|(pool_hash, _, name)| (*pool_hash == hash).then(|| snake_to_camel(name)))
+        else {
+            continue;
+        };
+        if map.contains_key(&canonical) {
+            continue;
+        }
+        if let Some(value) = map.remove(legacy_key) {
+            map.insert(canonical, value);
+        }
+    }
+    Value::Object(map)
+}
+
 #[cfg(test)]
 pub const BULLETPARAM_ENTRY_SIZE: u32 = (BULLETPARAM_COMMAND_POOL.len() as u32) * 4;
 
@@ -119,7 +146,8 @@ pub fn bulletparam_entry_to_json_value(entry: &BulletParamEntry) -> Value {
 }
 
 pub fn bulletparam_entry_from_json_value(v: &Value) -> Result<BulletParamEntry, String> {
-    let (entry_id, commands) = entry_commands_from_named_json(v, BULLETPARAM_COMMAND_POOL)?;
+    let remapped = apply_bulletparam_legacy_aliases(v);
+    let (entry_id, commands) = entry_commands_from_named_json(&remapped, BULLETPARAM_COMMAND_POOL)?;
     Ok(BulletParamEntry { entry_id, commands })
 }
 
@@ -416,6 +444,41 @@ mod tests {
                 &updated_bin.entries_raw[0][o..o + 4]
             );
         }
+    }
+
+    #[test]
+    fn bulletparam_serializes_bullet_size_and_accepts_initial_speed_alias() {
+        let legacy = serde_json::json!({
+            "entryId": 1,
+            "initialSpeed": 12.5
+        });
+        let entry = bulletparam_entry_from_json_value(&legacy).expect("parse legacy alias");
+        let raw = *entry
+            .commands
+            .get(&0xAB606D9E)
+            .expect("bullet_size hash");
+        assert!((f32::from_bits(raw) - 12.5).abs() < 1e-5);
+
+        let canonical = bulletparam_entry_to_json_value(&entry);
+        assert!(canonical.get("initialSpeed").is_none());
+        let size = canonical
+            .get("bulletSize")
+            .and_then(|v| v.as_f64())
+            .expect("canonical bulletSize");
+        assert!((size - 12.5).abs() < 1e-5);
+
+        let both = serde_json::json!({
+            "entryId": 1,
+            "initialSpeed": 1.0,
+            "bulletSize": 3.0
+        });
+        let prefer_canonical =
+            bulletparam_entry_from_json_value(&both).expect("canonical key wins over alias");
+        let preferred = *prefer_canonical
+            .commands
+            .get(&0xAB606D9E)
+            .expect("bullet_size hash");
+        assert!((f32::from_bits(preferred) - 3.0).abs() < 1e-5);
     }
 
     #[test]

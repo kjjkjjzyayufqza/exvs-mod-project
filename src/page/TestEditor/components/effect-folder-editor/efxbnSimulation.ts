@@ -5,8 +5,16 @@ import type {
 import { evaluateEfxbnControl, type EffectFolderPreviewPlan } from "./effectFolderPreviewPlan";
 import type { EfxbnMeshEmitterPoint } from "./efxbnMeshEmitter";
 
+/**
+ * Window used when an effect declares no lifetime at all. Every other effect derives its own —
+ * see `resolveEfxbnPreviewFrameCount`.
+ */
 export const EFXBN_PREVIEW_FRAME_COUNT = 120;
 export const EFXBN_PREVIEW_FPS = 60;
+/** Below this a short effect strobes rather than reads as an animation. */
+export const EFXBN_PREVIEW_MIN_FRAME_COUNT = 30;
+/** The longest effect in the shipped corpus runs 600 frames; nothing needs more. */
+export const EFXBN_PREVIEW_MAX_FRAME_COUNT = 600;
 export const EFXBN_MODEL_POOL_LIMIT = 64;
 export const EFXBN_MODEL_POOL_GLOBAL_LIMIT = 128;
 export const EFXBN_SIMULATION_LIMIT = 2_048;
@@ -79,6 +87,28 @@ function pairSeed(emitterIndex: number | null, targetIndex: number): number {
     Math.imul((emitterIndex ?? 0x6d2b79f5) ^ 0x9e3779b9, 0x85ebca6b) ^
     Math.imul(targetIndex ^ 0xc2b2ae35, 0x27d4eb2d)
   ) >>> 0;
+}
+
+/** SplitMix32 finalizer — turns adjacent particle ids into uncorrelated seeds. */
+function mixSeed(value: number): number {
+  let mixed = value >>> 0;
+  mixed = Math.imul(mixed ^ (mixed >>> 16), 0x21f0aaad) >>> 0;
+  mixed = Math.imul(mixed ^ (mixed >>> 15), 0x735a2d97) >>> 0;
+  return (mixed ^ (mixed >>> 15)) >>> 0;
+}
+
+/**
+ * The seed one particle draws all of its own randomness from.
+ *
+ * Every particle must own its stream. The preview replays the whole emission history on each
+ * rendered frame, and an expired particle stops drawing partway through its own spawn; with one
+ * shared stream that shift lands on every particle emitted after it, so the entire live cloud
+ * re-randomised its lifetime, size and rotation each time any earlier particle died — the effect
+ * flickered continuously. The engine seeds per instance for the same reason
+ * (`efxSpawnParticleCommon3rd` advances an LCG stored on the instance).
+ */
+function particleSeed(pair: number, particleId: number): number {
+  return mixSeed((pair + Math.imul(particleId + 1, 0x9e3779b9)) >>> 0);
 }
 
 function randomizedBase(base: number, randomRate: number, random: RandomSource): number {
@@ -703,7 +733,10 @@ export function simulateEfxbnEmitterPair(
   meshEmitterPointsByEffectIndex?: ReadonlyMap<number, readonly EfxbnMeshEmitterPoint[]>,
 ): EfxbnPreviewParticle[] {
   const clampedFrame = Math.max(0, frame);
-  const random = makeRandomSource(pairSeed(pair.emitter?.index ?? null, pair.target.index));
+  const seed = pairSeed(pair.emitter?.index ?? null, pair.target.index);
+  // Emitter-level draws only: its own lifetime, then two per emission tick. Particle draws come
+  // from `particleSeed`, so a particle expiring can never shift what the emitter rolls next.
+  const random = makeRandomSource(seed);
   const particles: EfxbnPreviewParticle[] = [];
   const emitter = pair.emitter;
   // `efxSpawnEmitterCommon3rd` randomises the emitter's own lifetime exactly like a particle's
@@ -765,7 +798,7 @@ export function simulateEfxbnEmitterPair(
           tick,
           clampedFrame,
           particleId,
-          random,
+          makeRandomSource(particleSeed(seed, particleId)),
           emitterProgress,
           meshEmitterPointsByEffectIndex,
         );
@@ -781,6 +814,67 @@ export function simulateEfxbnEmitterPair(
     generatorCounter -= 1;
   }
   return particles;
+}
+
+/** Longest a block can live once spawned, taking the randomised upper bound. */
+function maxBlockLifeTime(block: EfxbnEffectSummary): number {
+  const spread = Math.max(0, block.lifeTimeRandom);
+  return Math.max(0, block.lifeTimeBase) * (1 + spread);
+}
+
+function subtreeSpan(
+  block: EfxbnEffectSummary,
+  blocksByIndex: ReadonlyMap<number, EfxbnEffectSummary>,
+  visiting: Set<number>,
+): number {
+  if (visiting.has(block.index)) return 0;
+  visiting.add(block.index);
+  let childSpan = 0;
+  for (const childIndex of efxbnChildIndexes(block)) {
+    const child = blocksByIndex.get(childIndex);
+    if (child) childSpan = Math.max(childSpan, subtreeSpan(child, blocksByIndex, visiting));
+  }
+  visiting.delete(block.index);
+  return Math.max(0, block.delayEmitTimeBase) + maxBlockLifeTime(block) + childSpan;
+}
+
+/**
+ * How many frames the timeline spans before it wraps back to the start.
+ *
+ * The preview used to play every effect over a fixed 120-frame window, which is wrong in both
+ * directions. 42.6% of the shipped corpus is one-shot, and 77.2% of those finish in under half
+ * that window — the median fills a quarter of it. Such an effect played for half a second and
+ * then left an empty viewport for a second and a half before snapping back, which reads as a
+ * blink rather than an animation. At the other end 6.9% of effects need more than 120 frames and
+ * were cut off mid-flight.
+ *
+ * An emitter produces from its delay until its life ends, and the last thing it spawns lives its
+ * own full span after that, so an effect's length is the longest root-to-leaf sum down the child
+ * tree.
+ *
+ * A **looping** effect never ends on its own, so its length says nothing about how often the
+ * timeline should restart — and restarting every cycle would make it pulse. Those keep at least
+ * the fixed window, so the wrap stays as rare as it was.
+ */
+export function resolveEfxbnPreviewFrameCount(blocks: readonly EfxbnEffectSummary[]): number {
+  const blocksByIndex = new Map(blocks.map((block) => [block.index, block]));
+  const childIndexes = new Set(blocks.flatMap((block) => efxbnChildIndexes(block)));
+  let longest = 0;
+  for (const block of blocks) {
+    if (childIndexes.has(block.index)) continue;
+    longest = Math.max(longest, subtreeSpan(block, blocksByIndex, new Set()));
+  }
+  // A cycle leaves every block parented, so fall back to the deepest span from any of them.
+  if (longest === 0) {
+    for (const block of blocks) {
+      longest = Math.max(longest, subtreeSpan(block, blocksByIndex, new Set()));
+    }
+  }
+  const loops = blocks.some(
+    (block) => (efxbnRuntime(block).actionFlags & EFXBN_ACTION_FLAG_LOOP) !== 0,
+  );
+  const floor = loops ? EFXBN_PREVIEW_FRAME_COUNT : EFXBN_PREVIEW_MIN_FRAME_COUNT;
+  return Math.min(EFXBN_PREVIEW_MAX_FRAME_COUNT, Math.max(floor, Math.ceil(longest)));
 }
 
 export type EfxbnModelPoolRequirement = {
@@ -806,6 +900,7 @@ function normalizedPoolLimit(value: number, fallback: number): number {
 
 export function resolveEfxbnModelPoolPlan(
   plan: EffectFolderPreviewPlan,
+  frameCount = EFXBN_PREVIEW_FRAME_COUNT,
   perEffectLimit = EFXBN_MODEL_POOL_LIMIT,
   globalLimit = EFXBN_MODEL_POOL_GLOBAL_LIMIT,
 ): EfxbnModelPoolPlan {
@@ -817,7 +912,7 @@ export function resolveEfxbnModelPoolPlan(
   const rawRequirements = resolveEfxbnEmitterPairs(plan).flatMap((pair) => {
     if (!localModelEffects.has(pair.target.index)) return [];
     let required = 0;
-    for (let frame = 0; frame <= EFXBN_PREVIEW_FRAME_COUNT; frame += 1) {
+    for (let frame = 0; frame <= frameCount; frame += 1) {
       required = Math.max(
         required,
         simulateEfxbnEmitterPair(pair, plan, frame, EFXBN_SIMULATION_LIMIT).length,
@@ -893,6 +988,58 @@ export function resolveEfxbnModelPoolPlan(
 export function resolveEfxbnModelPoolRequirements(
   plan: EffectFolderPreviewPlan,
   limit = EFXBN_MODEL_POOL_LIMIT,
+  frameCount = EFXBN_PREVIEW_FRAME_COUNT,
 ): EfxbnModelPoolRequirement[] {
-  return resolveEfxbnModelPoolPlan(plan, limit, Number.MAX_SAFE_INTEGER).requirements;
+  return resolveEfxbnModelPoolPlan(plan, frameCount, limit, Number.MAX_SAFE_INTEGER).requirements;
+}
+
+export type EfxbnModelInstanceBinding = {
+  /** One entry per pool slot; null where that slot has no live particle this frame. */
+  slots: (EfxbnPreviewParticle | null)[];
+  /** The slot each live particle holds, to feed back in on the next frame. */
+  slotByParticleId: Map<number, number>;
+};
+
+/**
+ * Bind live particles to model-instance pool slots, keeping a slot with its particle.
+ *
+ * The pool loads one model per slot and drives it from whichever particle it is given. Reading
+ * the live-particle array by position does not work: the array closes up when a particle expires,
+ * so every instance behind it snaps onto a different particle's position, scale and colour on
+ * that single frame. With particles expiring continuously that is a permanent flicker across the
+ * whole model half of the preview.
+ *
+ * Slots are therefore held across frames — the engine allocates instances from a free list for
+ * the same reason — and released only when the particle that owned one is gone. Particle ids are
+ * assigned in emission order and never reused, so they identify a particle across frames.
+ */
+export function bindEfxbnModelInstanceSlots(
+  particles: readonly EfxbnPreviewParticle[],
+  capacity: number,
+  previousSlotByParticleId: ReadonlyMap<number, number>,
+): EfxbnModelInstanceBinding {
+  const size = Math.max(0, Math.floor(capacity));
+  const slots = new Array<EfxbnPreviewParticle | null>(size).fill(null);
+  const slotByParticleId = new Map<number, number>();
+  if (size === 0) return { slots, slotByParticleId };
+
+  const unplaced: EfxbnPreviewParticle[] = [];
+  for (const particle of particles) {
+    const held = previousSlotByParticleId.get(particle.id);
+    if (held === undefined || held >= size || slots[held] !== null) {
+      unplaced.push(particle);
+      continue;
+    }
+    slots[held] = particle;
+    slotByParticleId.set(particle.id, held);
+  }
+
+  let cursor = 0;
+  for (const particle of unplaced) {
+    while (cursor < size && slots[cursor] !== null) cursor += 1;
+    if (cursor >= size) break;
+    slots[cursor] = particle;
+    slotByParticleId.set(particle.id, cursor);
+  }
+  return { slots, slotByParticleId };
 }

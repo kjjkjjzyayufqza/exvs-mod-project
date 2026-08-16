@@ -1,11 +1,14 @@
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, type MutableRefObject } from "react";
+import { useEffect, useMemo, useRef, type MutableRefObject } from "react";
 import {
   BufferAttribute,
   BufferGeometry,
   DoubleSide,
   DynamicDrawUsage,
+  Matrix4,
   ShaderMaterial,
+  Vector3,
+  type Mesh,
 } from "three";
 import type { EfxbnControlLookupEntry } from "@/services/effectFolder/effectFolderService";
 import type { EffectFolderPreviewPlan } from "./effectFolderPreviewPlan";
@@ -18,7 +21,6 @@ import {
 import type { EfxbnMeshEmitterPoint } from "./efxbnMeshEmitter";
 import {
   DRAW_SCHEME_FULL_BRIGHTNESS,
-  EFXBN_PREVIEW_FRAME_COUNT,
   resolveEfxbnEmitterPairs,
   simulateEfxbnEmitterPair,
   type EfxbnEmitterPair,
@@ -37,6 +39,11 @@ import {
   useEfxbnTexture,
   usesEfxbnBorderAddressing,
 } from "./EfxbnParticlePreview";
+import {
+  efxbnParticleDrawOrder,
+  efxbnParticleSortsFrontToBack,
+  efxbnRequiresParticleDepthSort,
+} from "./efxbnBillboardShading";
 
 const MAX_STRIP_PARTICLES = 256;
 const MAX_STRIP_INDICES = (EFXBN_STRIP_VERTEX_LIMIT / 2) * 6;
@@ -176,16 +183,29 @@ function EfxbnStripLayer({
   plan,
   controlLookupEntriesRef,
   progressRef,
+  frameCount,
   meshEmitterPointsByEffectIndex,
 }: {
   pair: EfxbnEmitterPair;
   plan: EffectFolderPreviewPlan;
   controlLookupEntriesRef: MutableRefObject<readonly EfxbnControlLookupEntry[]>;
   progressRef: MutableRefObject<number>;
+  frameCount: number;
   meshEmitterPointsByEffectIndex: ReadonlyMap<number, readonly EfxbnMeshEmitterPoint[]>;
 }) {
   const geometry = useMemo(createStripGeometry, []);
   const material = useMemo(() => createStripMaterial(pair), [pair]);
+  const meshRef = useRef<Mesh>(null);
+  const worldToLocalRef = useRef(new Matrix4());
+  const cameraLocalRef = useRef(new Vector3());
+  const requiresDepthSort = useMemo(
+    () => efxbnRequiresParticleDepthSort(pair.target),
+    [pair.target],
+  );
+  const sortsFrontToBack = useMemo(
+    () => efxbnParticleSortsFrontToBack(pair.target),
+    [pair.target],
+  );
   const textureBinding = resolveEfxbnColorMapBinding(plan, pair.target.index);
   const texture = useEfxbnTexture(
     textureBinding?.file?.path ?? null,
@@ -217,8 +237,10 @@ function EfxbnStripLayer({
     material.dispose();
   }, [geometry, material]);
 
-  useFrame(() => {
-    const frame = (progressRef.current / 100) * EFXBN_PREVIEW_FRAME_COUNT;
+  useFrame((state) => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    const frame = (progressRef.current / 100) * frameCount;
     const particles = simulateEfxbnEmitterPair(
       pair,
       livePlan(plan, controlLookupEntriesRef),
@@ -226,8 +248,26 @@ function EfxbnStripLayer({
       MAX_STRIP_PARTICLES,
       meshEmitterPointsByEffectIndex,
     );
+
+    // One strip particle is one ribbon, and `efxSortParticle3rd` orders them by camera distance
+    // like any other particle. Emitting the ribbons in that order is the whole fix here, because
+    // the builder appends them into a single index buffer in the order it receives them.
+    let ordered = particles;
+    if (requiresDepthSort) {
+      mesh.updateWorldMatrix(true, false);
+      const cameraLocal = cameraLocalRef.current
+        .setFromMatrixPosition(state.camera.matrixWorld)
+        .applyMatrix4(worldToLocalRef.current.copy(mesh.matrixWorld).invert());
+      const drawOrder = efxbnParticleDrawOrder(
+        particles.map((particle) => particle.position),
+        [cameraLocal.x, cameraLocal.y, cameraLocal.z],
+        sortsFrontToBack,
+      );
+      ordered = drawOrder.map((index) => particles[index]!);
+    }
+
     const data = buildEfxbnStripMeshData(
-      particles,
+      ordered,
       pair.target,
       EFXBN_STRIP_VERTEX_LIMIT,
       (particle) => evaluateEfxbnUvTransform(textureBinding?.parameter, particle.age, {
@@ -253,19 +293,22 @@ function EfxbnStripLayer({
     geometry.setDrawRange(0, data.indices.length);
   });
 
-  return <mesh geometry={geometry} material={material} frustumCulled={false} />;
+  return <mesh ref={meshRef} geometry={geometry} material={material} frustumCulled={false} />;
 }
 
 export function EfxbnStripPreview({
   plan,
   controlLookupEntriesRef,
   progressRef,
+  frameCount,
   hiddenEffectIndexes,
   meshEmitterPointsByEffectIndex,
 }: {
   plan: EffectFolderPreviewPlan;
   controlLookupEntriesRef: MutableRefObject<readonly EfxbnControlLookupEntry[]>;
   progressRef: MutableRefObject<number>;
+  /** Playback window in frames, derived from the effect's own length. */
+  frameCount: number;
   hiddenEffectIndexes: ReadonlySet<number>;
   meshEmitterPointsByEffectIndex: ReadonlyMap<number, readonly EfxbnMeshEmitterPoint[]>;
 }) {
@@ -283,6 +326,7 @@ export function EfxbnStripPreview({
       plan={plan}
       controlLookupEntriesRef={controlLookupEntriesRef}
       progressRef={progressRef}
+      frameCount={frameCount}
       meshEmitterPointsByEffectIndex={meshEmitterPointsByEffectIndex}
     />;
   })}</group>;

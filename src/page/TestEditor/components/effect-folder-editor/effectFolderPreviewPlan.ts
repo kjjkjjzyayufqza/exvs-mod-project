@@ -9,12 +9,22 @@ import type {
 } from "@/services/effectFolder/effectFolderService";
 import type { EffectListItem } from "./effectFolderEditorUtils";
 
+/**
+ * Which pack a resolved resource came from.
+ *
+ * `.efxbn` blocks bind models and colour maps by CRC32, and most of those IDs only exist in the
+ * shared `000common_001` pack. Loading still works either way, but an editor must not present a
+ * shared file as if it belonged to the pack being edited.
+ */
+export type EffectFolderResourceSource = "pack" | "common";
+
 export type EffectFolderPreviewTarget = {
   effectIndex: number | null;
   modelHash: EffectFolderHash;
   modelPath: string;
   animationHash: EffectFolderHash | null;
   animationPath: string | null;
+  source: EffectFolderResourceSource;
 };
 
 /**
@@ -34,6 +44,8 @@ export type EffectFolderPreviewTextureBinding = {
   controlIndex: number;
   parameter: EfxbnModelControlSummary;
   file: EffectFolderFileItem | null;
+  /** Null while the binding is unresolved — no pack owns the file yet. */
+  source: EffectFolderResourceSource | null;
 };
 
 export type EffectFolderPreviewPlan = {
@@ -47,8 +59,13 @@ export type EffectFolderPreviewPlan = {
   textureParameters: EfxbnModelControlSummary[];
   textureBindings: EffectFolderPreviewTextureBinding[];
   localTextureCount: number;
+  /** Distinct model IDs that only the shared pack could resolve. */
+  commonModelCount: number;
+  /** Distinct texture IDs that only the shared pack could resolve. */
+  commonTextureCount: number;
   effectBlocks: EfxbnEffectSummary[];
-  controlLookupEntries: EfxbnControlLookupEntry[];
+  /** Read-only: the live editor swaps the whole array in rather than mutating it in place. */
+  controlLookupEntries: readonly EfxbnControlLookupEntry[];
 };
 
 /**
@@ -255,6 +272,31 @@ function firstAvailableFile(files: readonly EffectFolderFileItem[], extension: s
   return files.find((file) => !file.missing && normalizedExtension(file) === extension) ?? null;
 }
 
+type SourcedResource<T> = { value: T; source: EffectFolderResourceSource };
+
+/**
+ * Index the opened pack's resources over the shared pack's, keyed by the CRC32 a block binds.
+ *
+ * The opened pack wins a collision: a pack that ships its own copy of a shared resource is
+ * editing that copy, and the preview must show what the edit does.
+ */
+function resourcesByHash<T>(
+  packResources: readonly T[],
+  commonResources: readonly T[],
+  hashOf: (resource: T) => number | null,
+): Map<number, SourcedResource<T>> {
+  const byHash = new Map<number, SourcedResource<T>>();
+  for (const value of commonResources) {
+    const hash = hashOf(value);
+    if (hash !== null) byHash.set(hash, { value, source: "common" });
+  }
+  for (const value of packResources) {
+    const hash = hashOf(value);
+    if (hash !== null) byHash.set(hash, { value, source: "pack" });
+  }
+  return byHash;
+}
+
 function uniqueHashes(hashes: readonly EffectFolderHash[]): EffectFolderHash[] {
   const seen = new Set<number>();
   return hashes.filter((hash) => {
@@ -311,6 +353,7 @@ export function buildEffectFolderPreviewPlan(
             modelPath: modelFile.path,
             animationHash: null,
             animationPath: null,
+            source: "pack",
           },
         ]
       : [];
@@ -333,13 +376,21 @@ export function buildEffectFolderPreviewPlan(
       textureParameters: [],
       textureBindings: [],
       localTextureCount: 0,
+      commonModelCount: 0,
+      commonTextureCount: 0,
       effectBlocks: [],
       controlLookupEntries: [],
     };
   }
 
   const summary = item.item.efxbn;
-  const modelsByHash = new Map(inventory.models.map((model) => [model.hash.signed, model]));
+  const modelsByHash = resourcesByHash(
+    inventory.models,
+    inventory.commonPack?.models ?? [],
+    (model) => model.hash.signed,
+  );
+  // Animations stay pack-local on purpose: the shared pack ships no `.nuanmb` at all, and the
+  // whole corpus binds only 10 animation references.
   const localFiles = [
     ...inventory.otherFiles,
     ...inventory.models.flatMap((model) => model.files),
@@ -354,6 +405,7 @@ export function buildEffectFolderPreviewPlan(
   const targets: EffectFolderPreviewTarget[] = [];
   const unresolvedModels: EffectFolderHash[] = [];
   const unresolvedAnimations: EffectFolderHash[] = [];
+  const commonModelHashes = new Set<number>();
 
   for (const effect of summary?.effects ?? []) {
     const animationHash = effect.animationHash.signed === 0 ? null : effect.animationHash;
@@ -362,11 +414,12 @@ export function buildEffectFolderPreviewPlan(
 
     if (effect.modelHash.signed === 0) continue;
     const model = modelsByHash.get(effect.modelHash.signed);
-    const modelFile = model ? firstAvailableFile(model.files, "numdlb") : null;
-    if (!modelFile) {
+    const modelFile = model ? firstAvailableFile(model.value.files, "numdlb") : null;
+    if (!model || !modelFile) {
       unresolvedModels.push(effect.modelHash);
       continue;
     }
+    if (model.source === "common") commonModelHashes.add(effect.modelHash.signed);
 
     targets.push({
       effectIndex: effect.index,
@@ -374,16 +427,20 @@ export function buildEffectFolderPreviewPlan(
       modelPath: modelFile.path,
       animationHash,
       animationPath: animationFile?.path ?? null,
+      source: model.source,
     });
   }
 
   const unresolvedModelHashes = uniqueHashes(unresolvedModels);
   const unresolvedAnimationHashes = uniqueHashes(unresolvedAnimations);
-  const texturesByHash = new Map(
-    inventory.textures.flatMap((file) => (file.hash && !file.missing ? [[file.hash.signed, file] as const] : [])),
+  const texturesByHash = resourcesByHash(
+    inventory.textures,
+    inventory.commonPack?.textures ?? [],
+    (file) => (file.hash && !file.missing ? file.hash.signed : null),
   );
   const textureBindings: EffectFolderPreviewTextureBinding[] = [];
   const unresolvedTextures: EffectFolderHash[] = [];
+  const commonTextureHashes = new Set<number>();
   for (const effect of summary?.effects ?? []) {
     const controlIndexes = [
       ...effect.colorTextureParameterIndex,
@@ -393,14 +450,16 @@ export function buildEffectFolderPreviewPlan(
       if (controlIndex < 0) return;
       const parameter = summary?.modelControls[controlIndex];
       if (!parameter) return;
-      const file = texturesByHash.get(parameter.colorMapHash.signed) ?? null;
-      if (!file && parameter.colorMapHash.signed !== 0) unresolvedTextures.push(parameter.colorMapHash);
+      const texture = texturesByHash.get(parameter.colorMapHash.signed) ?? null;
+      if (!texture && parameter.colorMapHash.signed !== 0) unresolvedTextures.push(parameter.colorMapHash);
+      if (texture?.source === "common") commonTextureHashes.add(parameter.colorMapHash.signed);
       textureBindings.push({
         effectIndex: effect.index,
         slot: EFXBN_TEXTURE_SLOTS[slotOrdinal],
         controlIndex,
         parameter,
-        file,
+        file: texture?.value ?? null,
+        source: texture?.source ?? null,
       });
     });
   }
@@ -440,6 +499,8 @@ export function buildEffectFolderPreviewPlan(
     localTextureCount: new Set(
       textureBindings.flatMap((binding) => (binding.file ? [binding.file.path.toLowerCase()] : [])),
     ).size,
+    commonModelCount: commonModelHashes.size,
+    commonTextureCount: commonTextureHashes.size,
     effectBlocks: summary?.effects ?? [],
     controlLookupEntries: summary?.controlLookupEntries ?? [],
   };

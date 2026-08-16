@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type {
+  EffectFolderCommonPack,
   EffectFolderFileItem,
   EffectFolderHash,
   EffectFolderInventory,
@@ -56,6 +57,7 @@ function inventory(
   models: EffectFolderModel[],
   otherFiles: EffectFolderFileItem[],
   textures: EffectFolderFileItem[] = [],
+  commonPack: EffectFolderCommonPack | null = null,
 ): EffectFolderInventory {
   return {
     effectRoot: "E:\\effect",
@@ -66,12 +68,28 @@ function inventory(
       modelCount: models.length,
       textureCount: 0,
       unresolvedModelIds: [],
+      unresolvedTextureIds: [],
+      commonModelIds: [],
+      commonTextureIds: [],
     },
     efxbns: [],
     models,
     textures,
     otherFiles,
+    commonPack,
     warnings: [],
+  };
+}
+
+function commonPack(
+  models: EffectFolderModel[],
+  textures: EffectFolderFileItem[] = [],
+): EffectFolderCommonPack {
+  return {
+    effectRoot: "E:\\006effect\\000common_001",
+    structureJsonPath: "E:\\006effect\\000common_001_structure.json",
+    models,
+    textures,
   };
 }
 
@@ -109,6 +127,66 @@ describe("buildEffectFolderPreviewPlan", () => {
     expect(plan?.targets[1].animationPath).toBeNull();
     expect(plan?.unresolvedModelHashes).toEqual([externalModelHash]);
     expect(plan?.unresolvedAnimationHashes).toEqual([externalAnimationHash]);
+  });
+
+  it("resolves models and colour maps that only exist in the shared common pack", () => {
+    const sharedModelHash = hash(0x328d9438 | 0);
+    const sharedTextureHash = hash(0xad0769f6 | 0);
+    const missingModelHash = hash(909);
+    const sharedModel = model(sharedModelHash, "E:\\006effect\\000common_001\\0\\0\\101\\sphere.numdlb");
+    const sharedTexture = file(
+      "E:\\006effect\\000common_001\\0\\0\\102\\color.nutexb",
+      "nutexb",
+      sharedTextureHash,
+    );
+    const summary = {
+      effects: [
+        { index: 0, modelHash: sharedModelHash, animationHash: hash(0), colorTextureParameterIndex: [0, -1], uvTextureParameterIndex: [-1, -1] },
+        { index: 1, modelHash: missingModelHash, animationHash: hash(0), colorTextureParameterIndex: [-1, -1], uvTextureParameterIndex: [-1, -1] },
+      ],
+      modelControls: [{ index: 0, colorMapId: sharedTextureHash.signed, colorMapHash: sharedTextureHash }],
+      controlLookupEntries: [],
+      textureParameters: [],
+    } as unknown as EfxbnSummary;
+    const efxbnFile = { ...file("E:\\effect\\33.efxbn", "efxbn", hash(33)), efxbn: summary };
+
+    const plan = buildEffectFolderPreviewPlan(
+      { category: "efxbn", item: efxbnFile },
+      inventory([], [], [], commonPack([sharedModel], [sharedTexture])),
+    );
+
+    expect(plan?.targets.map((target) => target.modelPath)).toEqual([sharedModel.files[0].path]);
+    expect(plan?.targets.map((target) => target.source)).toEqual(["common"]);
+    expect(plan?.textureBindings[0].file?.path).toBe(sharedTexture.path);
+    expect(plan?.textureBindings[0].source).toBe("common");
+    expect(plan?.commonModelCount).toBe(1);
+    expect(plan?.commonTextureCount).toBe(1);
+    expect(plan?.unresolvedModelHashes).toEqual([missingModelHash]);
+    expect(plan?.unresolvedTextureHashes).toEqual([]);
+  });
+
+  it("marks pack-local resources as pack-sourced even when a shared pack is indexed", () => {
+    const localModelHash = hash(101);
+    const localModel = model(localModelHash, "E:\\effect\\model\\main.numdlb");
+    const shadowedModel = model(localModelHash, "E:\\006effect\\000common_001\\0\\0\\1\\other.numdlb");
+    const summary = {
+      effects: [
+        { index: 0, modelHash: localModelHash, animationHash: hash(0), colorTextureParameterIndex: [-1, -1], uvTextureParameterIndex: [-1, -1] },
+      ],
+      modelControls: [],
+      controlLookupEntries: [],
+      textureParameters: [],
+    } as unknown as EfxbnSummary;
+    const efxbnFile = { ...file("E:\\effect\\1.efxbn", "efxbn", hash(1)), efxbn: summary };
+
+    const plan = buildEffectFolderPreviewPlan(
+      { category: "efxbn", item: efxbnFile },
+      inventory([localModel], [], [], commonPack([shadowedModel])),
+    );
+
+    expect(plan?.targets[0].modelPath).toBe(localModel.files[0].path);
+    expect(plan?.targets[0].source).toBe("pack");
+    expect(plan?.commonModelCount).toBe(0);
   });
 
   it("evaluates direct and clamped linear EFXBN controls on the runtime 0 to 100 scale", () => {

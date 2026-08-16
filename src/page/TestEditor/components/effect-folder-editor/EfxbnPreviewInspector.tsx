@@ -4,9 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import type { EfxbnEffectSummary } from "@/services/effectFolder/effectFolderService";
+import { EFFECT_FOLDER_COMMON_PACK_NAME } from "@/services/effectFolder/effectFolderCommonPack";
 import {
   evaluateEfxbnControl,
   type EffectFolderPreviewPlan,
+  type EffectFolderResourceSource,
   type EfxbnTextureSlot,
 } from "./effectFolderPreviewPlan";
 import { EfxbnColorAuthor } from "./EfxbnColorAuthor";
@@ -14,6 +16,12 @@ import {
   EFXBN_BLEND_STATE_LABELS,
   EFXBN_CULLING_TYPE_LABELS,
 } from "./EfxbnParticlePreview";
+import {
+  efxbnParticleSortsFrontToBack,
+  efxbnRequiresParticleDepthSort,
+  resolveEfxbnCameraFadeRange,
+  resolveEfxbnViewAngleRamp,
+} from "./efxbnBillboardShading";
 import {
   efxbnDraftDirtyCount,
   isEfxbnBlockDirty,
@@ -69,6 +77,18 @@ function typeName(block: EfxbnEffectSummary): string {
   return `Container ${block.effectType}`;
 }
 
+/** Short enough for a badge in a narrow inspector; the full pack name goes in the tooltip. */
+function resourceSourceLabel(source: EffectFolderResourceSource): string {
+  return source === "pack" ? "pack" : "common";
+}
+
+function resourceSourceTitle(source: EffectFolderResourceSource | null): string {
+  if (source === null) return "Present in neither this pack nor the shared pack";
+  return source === "pack"
+    ? "Resolved in the pack being edited"
+    : `Resolved in the shared pack ${EFFECT_FOLDER_COMMON_PACK_NAME}`;
+}
+
 function InspectorRow({ label, value, mono = true }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex items-start justify-between gap-2 border-b border-border/45 py-1.5 last:border-b-0">
@@ -111,21 +131,57 @@ export function EfxbnPreviewInspector({
   const cullingTypeLabel = selectedBlock
     ? EFXBN_CULLING_TYPE_LABELS[selectedBlock.cullingType] ?? `${selectedBlock.cullingType} (unmapped)`
     : "";
+  const drawOrderLabel = selectedBlock
+    ? efxbnRequiresParticleDepthSort(selectedBlock)
+      ? efxbnParticleSortsFrontToBack(selectedBlock)
+        ? "sorted front to back"
+        : "sorted back to front"
+      : "unsorted (order-independent)"
+    : "";
+  const viewAngleRamp = selectedBlock ? resolveEfxbnViewAngleRamp(selectedBlock) : null;
+  const viewAngleRampLabel = !selectedBlock
+    ? ""
+    : viewAngleRamp === null
+      ? "off"
+      : `a ${viewAngleRamp.startColor[3].toFixed(2)} → ${viewAngleRamp.endColor[3].toFixed(2)} · pow ${viewAngleRamp.power.toFixed(2)}`;
+  const cameraFadeRange = selectedBlock ? resolveEfxbnCameraFadeRange(selectedBlock) : null;
+  const cameraFadeLabel = !selectedBlock
+    ? ""
+    : cameraFadeRange === null
+      ? "off"
+      : `${cameraFadeRange.toFixed(2)} units`;
+  // Most blocks bind a model that only exists in the shared pack, so the ID alone does not say
+  // whether the preview found it — the resolved source does.
+  const modelTarget = selectedBlock
+    ? plan.targets.find((target) => target.effectIndex === selectedBlock.index) ?? null
+    : null;
+  const modelLabel = !selectedBlock
+    ? ""
+    : selectedBlock.modelHash.signed === 0
+      ? "none"
+      : `${selectedBlock.modelHash.hex} · ${modelTarget ? resourceSourceLabel(modelTarget.source) : "unresolved"}`;
   const draftDirty = draft ? isEfxbnDraftDirty(draft) : false;
   const dirtyCount = draft ? efxbnDraftDirtyCount(draft) : 0;
   const liveAuthor = Boolean(draft && onPatchColor);
 
   return (
-    <aside className="flex h-full min-h-0 flex-col bg-muted/10" aria-label="EFXBN live author">
-      <div className="flex h-9 shrink-0 items-center gap-1 border-b px-2">
-        <Layers3 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-        <span className="text-[11px] font-medium">{liveAuthor ? "Live author" : "Blocks"}</span>
-        <span className="text-[10px] tabular-nums text-muted-foreground">{plan.effectBlocks.length}</span>
+    <aside
+      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-muted/10"
+      aria-label="EFXBN live author"
+    >
+      <div className="flex h-9 shrink-0 items-center gap-1 overflow-hidden border-b px-2">
+        <Layers3 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="min-w-0 truncate text-[11px] font-medium">
+          {liveAuthor ? "Live author" : "Blocks"}
+        </span>
+        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+          {plan.effectBlocks.length}
+        </span>
         {liveAuthor ? (
           <Badge
             variant="outline"
             className={cn(
-              "ml-1 h-4 px-1.5 text-[8px]",
+              "ml-1 h-4 shrink-0 px-1.5 text-[8px]",
               draftDirty
                 ? "border-amber-500/40 text-amber-400"
                 : "border-emerald-500/35 text-emerald-400",
@@ -134,12 +190,12 @@ export function EfxbnPreviewInspector({
             {draftDirty ? `${dirtyCount} unsaved` : "live draft"}
           </Badge>
         ) : null}
-        <div className="flex-1" />
+        <div className="min-w-0 flex-1" />
         <Button
           type="button"
           size="icon"
           variant="ghost"
-          className="h-6 w-6"
+          className="h-6 w-6 shrink-0"
           onClick={onShowAll}
           title="Show all blocks"
           aria-label="Show all EFXBN blocks"
@@ -151,7 +207,7 @@ export function EfxbnPreviewInspector({
             type="button"
             size="sm"
             variant="ghost"
-            className="h-6 px-1.5 text-[10px]"
+            className="h-6 shrink-0 px-1.5 text-[10px]"
             onClick={() => onSolo(selectedBlock.index)}
             title="Hide every block except the selected block"
           >
@@ -283,19 +339,22 @@ export function EfxbnPreviewInspector({
               value={`Z${selectedBlock.zTestEnable ? "T" : "-"}${efxbnRuntime(selectedBlock).zWriteEnable ? "W" : "-"} · ${blendStateLabel}`}
             />
             <InspectorRow label="Culling" value={cullingTypeLabel} />
-            <InspectorRow label="Model" value={selectedBlock.modelHash.signed === 0 ? "none" : selectedBlock.modelHash.hex} />
+            <InspectorRow label="Draw order" value={drawOrderLabel} />
+            <InspectorRow label="View-angle ramp" value={viewAngleRampLabel} />
+            <InspectorRow label="Camera fade" value={cameraFadeLabel} />
+            <InspectorRow label="Model" value={modelLabel} />
             <InspectorRow label="Animation" value={selectedBlock.animationHash.signed === 0 ? "none" : selectedBlock.animationHash.hex} />
           </TabsContent>
 
           <TabsContent value="controls" className="custom-scrollbar-thin min-h-0 flex-1 overflow-y-auto">
             {activeControls.length > 0 ? (
               activeControls.map((reference) => (
-                <div key={reference.index} className="flex items-center gap-2 border-b border-border/45 py-1.5 last:border-b-0">
-                  <span className="w-12 shrink-0 font-mono text-[9px]">{reference.name}</span>
-                  <Badge variant="outline" className="h-4 px-1 text-[8px]">
+                <div key={reference.index} className="flex items-center gap-2 overflow-hidden border-b border-border/45 py-1.5 last:border-b-0">
+                  <span className="w-12 shrink-0 truncate font-mono text-[9px]">{reference.name}</span>
+                  <Badge variant="outline" className="h-4 shrink-0 px-1 text-[8px]">
                     {reference.selector === 1 ? "direct" : `${reference.selector} keys`}
                   </Badge>
-                  <span className="ml-auto font-mono text-[9px] tabular-nums">
+                  <span className="ml-auto shrink-0 font-mono text-[9px] tabular-nums">
                     {evaluateEfxbnControl(reference, plan.controlLookupEntries, progress).toFixed(4)}
                   </span>
                 </div>
@@ -307,10 +366,10 @@ export function EfxbnPreviewInspector({
 
           <TabsContent value="material" className="custom-scrollbar-thin min-h-0 flex-1 overflow-y-auto">
             <div className="border-b border-border/45 py-1.5">
-              <div className="flex items-center gap-2">
-                <span className="text-[9px] font-medium">Shader variants</span>
+              <div className="flex items-center gap-2 overflow-hidden">
+                <span className="min-w-0 truncate text-[9px] font-medium">Shader variants</span>
                 <span
-                  className="ml-auto font-mono text-[9px] text-muted-foreground"
+                  className="ml-auto shrink-0 font-mono text-[9px] text-muted-foreground"
                   title="Runtime draw-scheme flag word (element +0x390)"
                 >
                   0x{drawSchemeFlag.toString(16).toUpperCase()}
@@ -340,10 +399,18 @@ export function EfxbnPreviewInspector({
                   className="border-b border-border/45 py-1.5 last:border-b-0"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-medium">{EFXBN_TEXTURE_SLOT_LABELS[binding.slot]}</span>
-                    <span className="font-mono text-[9px] text-muted-foreground">#{binding.controlIndex}</span>
-                    <Badge variant={binding.file ? "outline" : "secondary"} className="ml-auto h-4 px-1 text-[8px]">
-                      {binding.file ? "local" : "external"}
+                    <span className="min-w-0 truncate text-[9px] font-medium">
+                      {EFXBN_TEXTURE_SLOT_LABELS[binding.slot]}
+                    </span>
+                    <span className="shrink-0 font-mono text-[9px] text-muted-foreground">
+                      #{binding.controlIndex}
+                    </span>
+                    <Badge
+                      variant={binding.source ? "outline" : "secondary"}
+                      className="ml-auto h-4 shrink-0 px-1 text-[8px]"
+                      title={resourceSourceTitle(binding.source)}
+                    >
+                      {binding.source ? resourceSourceLabel(binding.source) : "missing"}
                     </Badge>
                   </div>
                   <div className="mt-1 truncate font-mono text-[9px] text-muted-foreground" title={binding.file?.path}>
@@ -372,25 +439,25 @@ export function EfxbnPreviewInspector({
           )}
           aria-label="EFXBN document actions"
         >
-          <div className="mb-1.5 flex min-w-0 items-center gap-1.5">
-            <span className="text-[10px] font-medium text-muted-foreground">EFXBN file</span>
+          <div className="mb-1.5 flex min-w-0 flex-wrap items-center gap-1.5">
+            <span className="truncate text-[10px] font-medium text-muted-foreground">EFXBN file</span>
             {draftDirty ? (
               <Badge
                 variant="outline"
-                className="h-4 border-amber-500/40 px-1.5 text-[8px] text-amber-400"
+                className="h-4 shrink-0 border-amber-500/40 px-1.5 text-[8px] text-amber-400"
               >
                 {dirtyCount} unsaved
               </Badge>
             ) : (
               <Badge
                 variant="outline"
-                className="h-4 border-emerald-500/30 px-1.5 text-[8px] text-emerald-400"
+                className="h-4 shrink-0 border-emerald-500/30 px-1.5 text-[8px] text-emerald-400"
               >
                 clean
               </Badge>
             )}
             {writing ? (
-              <Badge variant="outline" className="h-4 px-1.5 text-[8px] text-muted-foreground">
+              <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-[8px] text-muted-foreground">
                 writing
               </Badge>
             ) : null}
@@ -401,13 +468,13 @@ export function EfxbnPreviewInspector({
           >
             {draft?.path || "No draft path"}
           </p>
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {onRevertDraft ? (
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="h-8 gap-1.5 px-2.5 text-[11px]"
+                className="h-8 shrink-0 gap-1.5 px-2.5 text-[11px]"
                 disabled={!draftDirty || writing}
                 onClick={onRevertDraft}
                 title="Discard all unsaved constant edits in this efxbn draft"
@@ -421,7 +488,7 @@ export function EfxbnPreviewInspector({
                 type="button"
                 size="sm"
                 className={cn(
-                  "ml-auto h-8 gap-1.5 px-3 text-[11px]",
+                  "ml-auto h-8 shrink-0 gap-1.5 px-3 text-[11px]",
                   draftDirty && "bg-amber-600 text-white hover:bg-amber-500",
                 )}
                 disabled={!draftDirty || writing}

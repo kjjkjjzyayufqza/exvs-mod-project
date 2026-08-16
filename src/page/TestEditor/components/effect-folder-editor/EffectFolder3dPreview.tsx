@@ -15,6 +15,8 @@ import {
   type EffectFolderInventory,
   type EfxbnControlLookupEntry,
 } from "@/services/effectFolder/effectFolderService";
+import { EFFECT_FOLDER_COMMON_PACK_NAME } from "@/services/effectFolder/effectFolderCommonPack";
+import { cn } from "@/lib/utils";
 import type { EffectListItem } from "./effectFolderEditorUtils";
 import {
   buildEffectFolderPreviewPlan,
@@ -38,12 +40,15 @@ import {
   efxbnChildIndexes,
   findEfxbnParentBlocks,
   resolveEfxbnModelPoolPlan,
+  resolveEfxbnPreviewFrameCount,
   type EfxbnModelPoolPlan,
 } from "./efxbnSimulation";
 
 type EffectFolder3dPreviewProps = {
   item: EffectListItem;
   inventory: EffectFolderInventory;
+  /** True when the entry list is hidden, so the viewport can claim more height as well. */
+  previewExpanded?: boolean;
   previewSuspended?: boolean;
   /** Called after a successful on-disk efxbn write so the parent can re-inspect. */
   onEfxbnWritten?: () => void;
@@ -170,6 +175,7 @@ function EffectFolderPreviewScene({
 export function EffectFolder3dPreview({
   item,
   inventory,
+  previewExpanded = false,
   previewSuspended = false,
   onEfxbnWritten,
 }: EffectFolder3dPreviewProps) {
@@ -255,10 +261,16 @@ export function EffectFolder3dPreview({
     () => new Map(),
   );
   const hostInstanceTransformsRef = useRef<ReadonlyMap<string, PreviewInstanceHostTransform>>(new Map());
-  // Pool capacity is structural — never recompute from colour draft identity.
-  const modelPoolPlan = useMemo(
-    () => (basePlan?.kind === "efxbn" ? resolveEfxbnModelPoolPlan(basePlan) : null),
+  // The playback window is the effect's own length, not a fixed 120 frames — see
+  // `resolveEfxbnPreviewFrameCount`. Structural, so it never recomputes from colour draft identity.
+  const frameCount = useMemo(
+    () => (basePlan ? resolveEfxbnPreviewFrameCount(basePlan.effectBlocks) : EFXBN_PREVIEW_FRAME_COUNT),
     [basePlan],
+  );
+  // Pool capacity is structural too.
+  const modelPoolPlan = useMemo(
+    () => (basePlan?.kind === "efxbn" ? resolveEfxbnModelPoolPlan(basePlan, frameCount) : null),
+    [basePlan, frameCount],
   );
 
   const handlePatchColor = useCallback(
@@ -433,17 +445,24 @@ export function EffectFolder3dPreview({
 
   const hasDiagnosticBlocks = plan.effectBlocks.length > 0;
   const hasRenderableScene = plan.targets.length > 0 || hasDiagnosticBlocks;
+  const sharedResourceCount = plan.commonModelCount + plan.commonTextureCount;
+  const unresolvedModelList = plan.unresolvedModelHashes
+    .slice(0, 3)
+    .map((hash) => hash.hex)
+    .join(", ");
   const previewCounts = [
     hasDiagnosticBlocks ? `${plan.effectBlocks.length} blocks` : null,
     plan.targets.length > 0 ? `${plan.targets.length} models` : null,
     plan.localTextureCount > 0 ? `${plan.localTextureCount} textures` : null,
+    sharedResourceCount > 0 ? `${sharedResourceCount} from ${EFFECT_FOLDER_COMMON_PACK_NAME}` : null,
   ].filter(Boolean).join(" · ");
   const previewDiagnostics = [
     modelPoolPlan?.truncated
       ? `Model pool capped at ${modelPoolPlan.totalCapacity}/${modelPoolPlan.totalRequired} instances across ${modelPoolPlan.limitedEffectCount} effects.`
       : null,
     externalModelEffectCount > 0
-      ? `${externalModelEffectCount} external model effect${externalModelEffectCount === 1 ? "" : "s"} use visible proxy geometry.`
+      ? `${externalModelEffectCount} block${externalModelEffectCount === 1 ? "" : "s"} bind a model that resolved in neither this pack nor ${EFFECT_FOLDER_COMMON_PACK_NAME}` +
+        `${unresolvedModelList ? ` (${unresolvedModelList})` : ""}, so a flat proxy quad is drawn instead of the real mesh.`
       : null,
   ].filter((message): message is string => message !== null);
   return (
@@ -464,7 +483,12 @@ export function EffectFolder3dPreview({
           <p className="text-xs text-muted-foreground">No preview data.</p>
         </div>
       ) : (
-        <div className="h-[min(64vh,620px)] min-h-[460px] overflow-hidden rounded-md border bg-muted/5">
+        <div
+          className={cn(
+            "min-h-[460px] overflow-hidden rounded-md border bg-muted/5",
+            previewExpanded ? "h-[min(80vh,900px)]" : "h-[min(64vh,620px)]",
+          )}
+        >
           <SsbhModelPreviewProvider
             key={plan.key}
             workspaceRoot={inventory.effectRoot}
@@ -490,6 +514,7 @@ export function EffectFolder3dPreview({
                         plan={basePlan}
                         controlLookupEntriesRef={controlLookupEntriesRef}
                         progress={effectProgress}
+                        frameCount={frameCount}
                         playing={effectPlaying}
                         speed={effectSpeed}
                         selectedEffectIndex={selectedEffectIndex}
@@ -574,7 +599,7 @@ export function EffectFolder3dPreview({
             aria-label="EFXBN control progress"
           />
           <span className="w-11 text-right font-mono text-[10px] tabular-nums text-muted-foreground">
-            {Math.round((effectProgress / 100) * EFXBN_PREVIEW_FRAME_COUNT)}f
+            {Math.round((effectProgress / 100) * frameCount)}f / {frameCount}f
           </span>
           <Button
             type="button"
