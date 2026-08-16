@@ -141,21 +141,30 @@ Rebellion 的 `func_143` 用 `global39 != 0`（或显式 `== 0x2`）进鸟分支
 | 策略 | 内容 |
 |------|------|
 | 普通形态 `global39 == 0` | 保留完整 `func_95` 表 |
-| 鸟形态 `0x1` 主射 | `0x476fac14` `ACTION_A_SHOT_BIRD`（空弹 `func_98(0)`）。**不要**接地面 `0x7cd11119`（`func_884` 会卸鸟挂件） |
+| 鸟形态 `0x1` 主射 | `0x476fac14` `ACTION_A_SHOT_BIRD`（空弹 `func_98(0)`）。**不要**接地面 `0x7cd11119`（`func_884` 会卸鸟挂件）。`2.c` 必须按 TV `ALT_2` 关对锁、禁止 `func_76(0x38)` |
 | 鸟形态其它武装 | 仍不映射副射/特射/特格/近战/蓄力 |
 | 可选保留 | partner/`0x400` + `0xc0000` 条件那条 |
 | 不在本文件做的事 | 不在 `2.c` `ACTION_*` 加 form `return` |
 
-`ACTION_A_SHOT_BIRD` 不播新射击 motion：`func_76(0x38, 4, 0)` 复用变形 loop（表 `0x38` / `0x9de587ce`），再 `sys_4F(0, 0, 0x860a72cd)`。
+`ACTION_A_SHOT_BIRD` 对照 TV `0x476fac14` `ACTION_A_SHOT_STATE_0_ALT_2`：
+
+- `func_593` 四槽：`676` start / `677` shoot / `678` **no_ammo** / `679` end。
+- **关掉自动对锁**：`global689 = 0xffffffff`，`global452/453/454 = 0`，`global693 = 0`。不要沿用 `func_586` 默认的 `689=0xa` 和转身插值——那就是 wiki 变形特射「对准敌人前进」同一套 `func_302` / yaw。
+- **不要** `func_76(0x38)`。TV 用 `func_308` 在本 action handle 上播鸟 loop（TV `0xcf3250eb`，Rebellion `0x9de587ce`）。占用变形 loop 槽时，被打取消会卡在飞行态。
+- 相位结束用 `func_91()`，被打断才能离开 shoot / no_ammo。
+- 弹体仍是 `sys_4F(0, 0, 0x860a72cd)`。不要 `func_884`。
 
 TV 鸟分支（`global39 == 0x1`）会给 `0x100`/`0x200`/`0x80` 等换 **另一套 hash**；那是“有飞行武装”的完整产品。Rebellion 在没有对应 bird action hash 之前，用 **空映射** 等价于硬禁普通武装，且仍符合 **只改 0.c selector** 的架构。
 
-可选补强（仍在 `0.c`，非 TV 原文但合理）：
+受击 / 倒地走移植计划的 **FORCED_RECOVERY**。完整证据、hash 表、作废修法和 TV 对照见
+[飞行打断后动作≠形态](./wing-zero-rebellion-flight-interrupt-form.md)。
 
-- `func_15`–`func_20`：鸟形态 return 0，挡 cancel 表上的地面近战解析  
-- `func_41` / `func_42`：鸟形态 return 0，挡高优先级 resolver 仍吐普通槽 hash  
+- `func_15` 的 `var1` 中断块：鸟形态直接回站立 slot `0x2`，不要回 `0x18`。
+- `func_143` **禁止**在离开飞行动作后补交 `0x77b100ff`。鸟 `0x200` 仍是官方解除 `0xa02d57dc`。
+- `2.c` `func_41`：`global143==2` 且当前动作不是 enter/loop/exit/鸟主射时，立刻拆 form。
+- `2.c` `func_882`（对应 TV `func_888` → `func_1077`）：鸟形态同样拆 form。
 
-TV 本体依赖 `sys_1(0x10001,0x3/0x4,…)` 资源表切换；Rebellion 未完整 port 时，上述 gate 是补偿，不是替代 `func_143` 分流。
+`func_16`–`func_20` / `func_41` / `func_42` 的鸟形态 `return 0` 仍保留，只挡地面武装解析，不能用来代替拆形态。
 
 ---
 
@@ -195,6 +204,7 @@ TV 本体依赖 `sys_1(0x10001,0x3/0x4,…)` 资源表切换；Rebellion 未完�
 4. **鸟 form id = `0x2`，不是 TV 的 `0x1`。**  
 5. **Thinker 第四参必须是 `func_143` 符号。**  
 6. 完整 TV 飞行武装 = 第二套 hash +（可选）`0x10001` 表 swap；未 port 前用空映射禁武装。
+7. **飞行打断 = FORCED_RECOVERY**，详见 [flight-interrupt-form](./wing-zero-rebellion-flight-interrupt-form.md)。不要重排 `0x77b100ff`。
 
 ---
 

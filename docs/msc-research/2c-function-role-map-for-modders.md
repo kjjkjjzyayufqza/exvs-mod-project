@@ -155,12 +155,12 @@ func_44/52 负责把本帧 action hash 调度成 ACTION_*。
 |---|---|---|---|---|
 | `func_586` | `reset_ranged_runtime` | 清射击 runtime | `ACTION_A/AB` 入口常先调 | 不作为普通改点 |
 | `func_587` | `run_simple_ranged_runtime` | 简单射击 driver | 主射 `func_913` 调它 | 查 phase callback 何时执行 |
-| `func_593` | `run_multi_phase_ranged_runtime` | 多阶段射击 driver | 副射类使用 | 查多段 callback |
-| `global676` | `ranged_pre_phase_callback` | ranged phase callback | `ACTION_AB_SUB` 等写 | 阶段动作 |
-| `global677` | `ranged_start_callback` | 起手 / motion callback | 主射写 `func_914` | 改起手、shell、motion |
-| `global678` | `ranged_mid_callback` | 中段 callback | 部分副射写 | 改续段 |
-| `global679` | `ranged_end_callback` | 结束 callback | 部分副射写 | 改收尾 |
-| `global680` | `ranged_fire_callback` | 发射 / phase callback 候选 | 主射写 `func_915` | 改发射点 |
+| `func_593` | `run_multi_phase_ranged_runtime` | 旧版 / 正常班多阶段射击 driver | 副射/特射写 `676/677/678/679` | 查 start/shoot/no_ammo/end |
+| `global676` | `ranged_start_callback` | start | `func_593` 第一段 | 改起手 motion |
+| `global677` | `ranged_shoot_callback` | shoot（有弹） | start 结束后 `sys_0(0x90000,slot)!=0` | 改开火 / `sys_4F(0,...)` |
+| `global678` | `ranged_no_ammo_callback` | 没子弹分支 | start 结束后槽空才进；**不是 cancel** | 改空弹段 / 常伴 `sys_4F(0x12,...)` |
+| `global679` | `ranged_end_callback` | end | shoot 或 no_ammo 之后 | 改收尾 |
+| `global680` | `ranged_fire_callback` | `func_587` 新版主射的 fire 槽 | 主射写 `func_915` | 不要和 `func_593` 的 `677` 混用 |
 | `global681` | `ranged_ammo_slot` | ammo slot | 主射 `0`，副射常 `1` | 改 slot 时必须全链一致 |
 | `sys_4F(0,slot,hash)` | `request_weapon_fire` | 发射 / weapon request | Notion 与项目 sys_4F 文档 | 改弹种 |
 | `sys_4F(0x7,slot,1)` | `consume_ammo_slot` | 主动扣弹 | Notion 记录 | 改扣弹 |

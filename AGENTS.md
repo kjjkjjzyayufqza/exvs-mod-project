@@ -107,7 +107,10 @@ Read order:
 3. `docs/msc-research/wing-zero-rebellion-bird-form-0c-input-map.md`
    — bird-form input map: **0.c `func_143` only** (not `2.c` `ACTION_*`);
    Rebellion main-shot bit = **`0x1`** (not TV `0x100`); bird form id = **`0x2`**.
-4. `work/20260809-wing-zero-rebellion-transform-plan/evidence/E-007.md` and
+4. `docs/msc-research/wing-zero-rebellion-flight-interrupt-form.md`
+   — hit/interrupt is **FORCED_RECOVERY**, not TV requeue of `0x77b100ff`.
+   Action hash ≠ form (`global143`). Do not tear form only on standing idle.
+5. `work/20260809-wing-zero-rebellion-transform-plan/evidence/E-007.md` and
    `E-008.md` — read only when auditing the canonical-name inventory, direct
    motion Items, SHL mapping, or skeleton comparison.
 
@@ -134,6 +137,9 @@ Use `docs/` as the first source of project truth:
 
 - `docs/msc-binary-format-spec.md` — MSC bytecode format specification (header,
   opcodes, pushBit, script offset table, string table, EXVS2 vs Smash differences).
+- `docs/msc-research/func593-vanilla-ranged-slots.md` — vanilla / old-style
+  `func_593` ranged quartet: `676` start, `677` shoot, `678` **no-ammo
+  (not cancel)**, `679` end. Do not confuse with `func_587` (`677`+`680` fire).
 - `docs/exvs-stage-numatb-simple-color.md` — stage map props with only a color
   texture: use `FeRendererMovableVertexColor` → `vstgStandard_VertexColor`, strip
   unused PBR slots (avoids in-game overexposure).

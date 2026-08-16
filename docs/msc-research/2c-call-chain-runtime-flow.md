@@ -349,18 +349,29 @@ if (func_309(global20, 0x834))
 
 ### `func_586/587`：射击 / 多阶段武装 runtime
 
-配置槽：
+配置槽分两套，不要混：
+
+旧版 / 正常班（`func_593`，副射/特射常见）：
 
 ```text
-global676  可选 start callback
-global677  main motion callback
-global678  branch callback
-global679  finish / return callback
+global676  start
+global677  shoot（有弹）
+global678  no_ammo（没子弹；不是 cancel）
+global679  end
+global681  ammo slot
+```
+
+新版 / 简单主射（`func_587`）：
+
+```text
+global677  motion / startup
 global680  fire callback
 global681  ammo slot
 ```
 
-driver：
+`func_593` 四槽的完整证据见 [func593-vanilla-ranged-slots.md](./func593-vanilla-ranged-slots.md)。
+
+driver（`func_587` 简单主射）：
 
 ```text
 func_587

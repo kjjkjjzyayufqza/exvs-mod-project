@@ -278,6 +278,15 @@ stateDiagram-v2
 
 `FORCED_RECOVERY` 必须幂等：无论当前处于进入、持续还是退出阶段，重复调用都只留下一个正常 body、一套正常 wing/weapon、正常 speed row 和清空后的临时 effect。
 
+**2026-08-16 落地（不要改回 TV 保形态）：** 完整证据见
+[飞行打断后动作≠形态](./wing-zero-rebellion-flight-interrupt-form.md)。
+
+- 打断只换动作 hash，不清 `global143`。
+- Rebellion 不得在打断后重选 `0x77b100ff`（会造成「动作不是飞、操作还是飞」）。
+- `0.c` `func_15` 鸟+中断 → 站立 `0x2`；`func_143` 不补交 loop。
+- `2.c`：非 enter/loop/exit/鸟主射时拆 form；`func_882` 对齐 TV `func_888`→`func_1077`。
+- 拆除门闩必须覆盖受击 `0x4cdc9902`、空中 idle `0xf5f21169`、slot `0x21`/`0x22`，不能只认站立 `0x6d00aeaa`。
+
 ## 9. Source 形态切换的精确行为与适配规则
 
 ### 9.1 Source 正常形态 `func_1077`

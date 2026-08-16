@@ -12,7 +12,11 @@
 3. **鸟形态武装 / 主射封锁 / 0.c 输入 bit（2026-08-14 已实机确认）：**
    `docs/msc-research/wing-zero-rebellion-bird-form-0c-input-map.md`
    — 只改 `0.c` `func_143`；Rebellion 主射 bit=`0x1` 不是 TV 的 `0x100`；鸟 form=`0x2`。
-4. 只有质疑资源盘点或映射证据时才读：
+4. **飞行打断 / 动作≠形态（2026-08-16）：**
+   `docs/msc-research/wing-zero-rebellion-flight-interrupt-form.md`
+   — 打断只换动作 hash，不清 `global143`。Rebellion 受击必须 FORCED_RECOVERY，
+   **禁止**再排 `0x77b100ff`。拆 form 不能只认站立 `0x6d00aeaa`。
+5. 只有质疑资源盘点或映射证据时才读：
    - `work/20260809-wing-zero-rebellion-transform-plan/evidence/E-007.md`
    - `work/20260809-wing-zero-rebellion-transform-plan/evidence/E-008.md`
 
@@ -93,6 +97,9 @@ Core Bird 只需以上四组。独立 `wep_wing00` 是 source 普通形态资源
 - “三个 motion 是多子通道 action folder”——错误，它们是 direct Item。
 - “需要把 source wing 动作重定向到 Rebellion wing”——错误，骨架不兼容且 Bird 不加载独立 wing。
 - “复制整个 source MSC/0.c/共通控制器”——不需要，会扩大回归面。
+- “鸟形态 `func_15` 整函数 return 0 可安全挡地面武装”——错误，会挡掉中断后的 slot 重选。
+- “受击后跟 TV 一样重选 `0x77b100ff`”——错误。Rebellion 飞行不完整；那会造成动作已离飞行、操作仍是飞行。
+- “只在站立 idle `0x6d00aeaa` 拆 form 就够”——错误。受击 `0x4cdc9902`、空中 idle `0xf5f21169`、`0x21`/`0x22` 都过不了这道门。
 
 ## 实施检查点
 

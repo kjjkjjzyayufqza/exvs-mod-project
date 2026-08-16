@@ -122,17 +122,19 @@ func_915
 ```text
 ACTION_AB_SUB                 2.c:26257
   -> func_586()
-  -> global676 = func_926
-  -> global677 = func_927
-  -> global678 = func_928
-  -> global679 = func_929
+  -> global676 = func_926      start
+  -> global677 = func_927      shoot（有弹）
+  -> global678 = func_928      no_ammo（没子弹；不是 cancel）
+  -> global679 = func_929      end
   -> global681 = 1            ammo slot 1
   -> global685 = 0xa          连射 / 循环间隔候选
   -> callFunc3(func_925)
 
 func_925
-  -> func_593()               多阶段 ranged driver
+  -> func_593()               旧版 / 正常班多阶段 ranged driver
 ```
+
+这套四槽的证据和命名见 [func593-vanilla-ranged-slots.md](./func593-vanilla-ranged-slots.md)。
 
 关键发射点：
 
@@ -144,7 +146,7 @@ func_927
   -> func_123(0x200)
 ```
 
-`func_928` 不是发弹，而是 `sys_4F(0x12,1)`，更像对 slot 1 的状态 / handle 清理或续段控制，先不要和 `sys_4F(0,slot,hash)` 混起来。
+`func_928` 不是发弹，而是 `sys_4F(0x12,1)` 收武器 handle。它在 `func_595` 里只在 **弹药槽已空** 时被调用，不要把它当成 BD cancel / 中段续射。
 
 ### 方向副射 `ACTION_AB_SUB_DIRECTIONAL`
 
@@ -175,7 +177,7 @@ func_933
 
 风险：
 
-- `func_593` 是多阶段 ranged driver，比主射 `func_587` 多 `global676/678/679` 槽。只改一个 callback 容易导致阶段不匹配。
+- `func_593` 是旧版 / 正常班多阶段 ranged driver，槽是 start / shoot / no_ammo / end。只改一个 callback 容易导致阶段不匹配。`678` 是空弹段，不是 cancel。
 - 如果改连射间隔，必须同时观察 `global685`、`global682/683`、`global707/711`。
 
 ## Recipe 3：改特射援护
