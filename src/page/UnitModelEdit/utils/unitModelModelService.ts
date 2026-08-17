@@ -6,6 +6,11 @@ import type {
 } from "@/page/SceneEdit/utils/sceneSessionService";
 import { toWindowsPath } from "./unitModelRepackService";
 import { syncUnitModelTextureContainers } from "./unitModelTextureService";
+import {
+  addExvsCommonModel,
+  removeExvsCommonModel,
+  replaceExvsCommonModel,
+} from "./exvsCommonService";
 
 export interface UnitModelMutationResult {
   modelRoot: string;
@@ -145,6 +150,7 @@ export async function removeUnitModelModel(
   modelRoot: string,
   modelName: string,
   structureJsonPath?: string,
+  exvsCommon = false,
 ): Promise<UnitModelMutationResult> {
   const trimmedRoot = modelRoot.trim();
   const trimmedName = modelName.trim();
@@ -153,6 +159,14 @@ export async function removeUnitModelModel(
   }
   if (!trimmedName) {
     throw new Error("Model name is required.");
+  }
+  if (exvsCommon) {
+    if (!structureJsonPath) throw new Error("EXVS Common structure JSON is required.");
+    return await removeExvsCommonModel({
+      modelRoot: trimmedRoot,
+      structureJsonPath,
+      modelName: trimmedName,
+    });
   }
   const mutation = await invoke<UnitModelMutationResult>("remove_unit_model_model", {
     modelRoot: toWindowsPath(trimmedRoot),
@@ -172,6 +186,7 @@ export async function addUnitModelModel(
   modelRoot: string,
   sourceDir: string,
   structureJsonPath?: string,
+  exvsCommonModelId?: number,
 ): Promise<UnitModelMutationResult> {
   const trimmedRoot = modelRoot.trim();
   const trimmedSource = sourceDir.trim();
@@ -180,6 +195,15 @@ export async function addUnitModelModel(
   }
   if (!trimmedSource) {
     throw new Error("Source model folder is required.");
+  }
+  if (exvsCommonModelId !== undefined) {
+    if (!structureJsonPath) throw new Error("EXVS Common structure JSON is required.");
+    return await addExvsCommonModel({
+      modelRoot: trimmedRoot,
+      structureJsonPath,
+      sourceDir: trimmedSource,
+      modelId: exvsCommonModelId,
+    });
   }
   const mutation = await invoke<UnitModelMutationResult>("add_unit_model_model", {
     modelRoot: toWindowsPath(trimmedRoot),
@@ -199,6 +223,7 @@ export async function replaceUnitModelModel(
   targetModelName: string,
   sourceDir: string,
   structureJsonPath?: string,
+  exvsCommon = false,
 ): Promise<UnitModelMutationResult> {
   const trimmedRoot = modelRoot.trim();
   const trimmedName = targetModelName.trim();
@@ -211,6 +236,15 @@ export async function replaceUnitModelModel(
   }
   if (!trimmedSource) {
     throw new Error("Source model folder is required.");
+  }
+  if (exvsCommon) {
+    if (!structureJsonPath) throw new Error("EXVS Common structure JSON is required.");
+    return await replaceExvsCommonModel({
+      modelRoot: trimmedRoot,
+      structureJsonPath,
+      targetModelName: trimmedName,
+      sourceDir: trimmedSource,
+    });
   }
   const mutation = await invoke<UnitModelMutationResult>("replace_unit_model_model", {
     modelRoot: toWindowsPath(trimmedRoot),
@@ -319,6 +353,7 @@ export async function importUnitModelStaticMesh(
     sourcePath: string;
     config: ImportConfig;
     includeGeometryNames: string[];
+    exvsCommonModelId?: number;
   },
   onProgress: (progress: StaticMeshImportProgress) => void,
 ): Promise<UnitModelMutationResult> {
@@ -331,9 +366,11 @@ export async function importUnitModelStaticMesh(
       sourcePath: toWindowsPath(params.sourcePath),
       config: params.config,
       includeGeometryNames: params.includeGeometryNames,
+      exvsCommonModelId: params.exvsCommonModelId,
     },
     onProgress: channel,
   });
+  if (params.exvsCommonModelId !== undefined) return mutation;
   return await syncAllModelTextureContainers(
     mutation,
     params.modelRoot,

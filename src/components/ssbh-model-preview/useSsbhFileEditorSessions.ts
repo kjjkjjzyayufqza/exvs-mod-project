@@ -86,6 +86,8 @@ export type SsbhFileEditorGuard = { sessionId: string; action: "close" | "reload
 export interface UseSsbhFileEditorSessionsOptions {
   /** Called after ANY editor saves successfully, with the saved file's path. */
   onSaved?: (savedPath: string) => void;
+  allowBodylessShl?: boolean;
+  writeShl?: (filePath: string, file: ShlFileData) => Promise<void>;
 }
 
 function normalizePathKey(path: string): string {
@@ -160,6 +162,10 @@ async function loadNumatbProfileBundle(
 export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOptions = {}) {
   const onSavedRef = useRef(options.onSaved);
   onSavedRef.current = options.onSaved;
+  const allowBodylessShlRef = useRef(options.allowBodylessShl === true);
+  allowBodylessShlRef.current = options.allowBodylessShl === true;
+  const writeShlRef = useRef(options.writeShl);
+  writeShlRef.current = options.writeShl;
 
   // ---------------------------------------------------------------- numdlb ----
   const [numdlbSessions, setNumdlbSessions] = useState<NumdlbEditorWindowSession[]>([]);
@@ -1091,7 +1097,9 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
     const snapshot = shlSessionsRef.current.find((x) => x.id === sessionId);
     if (!snapshot?.draftData) return;
     try {
-      assertShlValidForSave(snapshot.draftData);
+      assertShlValidForSave(snapshot.draftData, {
+        requireBody: !allowBodylessShlRef.current,
+      });
     } catch (e) {
       toast.error(String(e));
       return;
@@ -1100,7 +1108,11 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
     const path = snapshot.filePath;
     setShlSessions((prev) => prev.map((x) => (x.id === sessionId ? { ...x, saving: true } : x)));
     try {
-      await shlWriteFile({ filePath: path, file: draft });
+      if (writeShlRef.current) {
+        await writeShlRef.current(path, draft);
+      } else {
+        await shlWriteFile({ filePath: path, file: draft });
+      }
       const saved = cloneShlFileData(draft);
       setShlSessions((prev) =>
         prev.map((s) =>

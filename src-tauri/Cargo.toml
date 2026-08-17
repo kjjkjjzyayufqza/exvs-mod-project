@@ -143,6 +143,10 @@ name = "fhm2d_extract_cli_test"
 path = "tests/fhm2d_extract_cli_test.rs"
 
 [[test]]
+name = "exvs_common_bundle_test"
+path = "tests/exvs_common_bundle_test.rs"
+
+[[test]]
 name = "effect_folder_real_data_test"
 path = "tests/effect_folder_real_data_test.rs"
 

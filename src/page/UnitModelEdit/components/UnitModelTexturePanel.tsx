@@ -84,6 +84,11 @@ import {
   UNIT_MODEL_EXPORT_TEXTURE_DIALOG_PATH_KEY,
   UNIT_MODEL_REPLACE_TEXTURE_DIALOG_PATH_KEY,
 } from "../utils/unitModelEditorSettings";
+import {
+  addExvsCommonTexture,
+  isExvsCommonModelRoot,
+  removeExvsCommonTexture,
+} from "../utils/exvsCommonService";
 
 const ASYNC_THUMB_CONCURRENCY = 4;
 const UNIT_TEXTURES_CHANGED_EVENT = "unit-model-textures-changed";
@@ -132,6 +137,7 @@ export function UnitModelTexturePanel({
   const preview = useSsbhModelPreview();
   const loadedRoot = inferLoadedRoot(preview);
   const activeRoot = unitRoot ?? loadedRoot;
+  const isExvsCommon = isExvsCommonModelRoot(activeRoot);
   const structurePath = useMemo(() => {
     if (!activeRoot) return null;
     try {
@@ -350,6 +356,10 @@ export function UnitModelTexturePanel({
 
   const handleRegisterPoolOrphans = useCallback(async () => {
     if (!activeRoot || !structurePath) return;
+    if (isExvsCommon) {
+      toast.message("EXVS Common textures must be added through the managed Add action.");
+      return;
+    }
     setBusy("register");
     try {
       const next = await registerUnitModelPoolOrphans({
@@ -372,7 +382,7 @@ export function UnitModelTexturePanel({
     } finally {
       setBusy(null);
     }
-  }, [activeRoot, structurePath, refreshInventory]);
+  }, [activeRoot, isExvsCommon, structurePath, refreshInventory]);
 
   const handleBatchConfirm = useCallback(
     async (selections: TextureAddSelection[]) => {
@@ -416,12 +426,22 @@ export function UnitModelTexturePanel({
                   ddsFormat,
                 })
               ).outputNutexbPath;
-          nextInventory = await addUnitModelNutexb({
-            modelRoot: activeRoot,
-            structureJsonPath: structurePath,
-            sourcePath: sourceNutexbPath,
-            targetFilename: candidate.nutexbFilename,
-          });
+          if (isExvsCommon) {
+            await addExvsCommonTexture({
+              modelRoot: activeRoot,
+              structureJsonPath: structurePath,
+              sourcePath: sourceNutexbPath,
+              targetFilename: candidate.nutexbFilename,
+            });
+            nextInventory = await listUnitModelTextures(activeRoot, structurePath);
+          } else {
+            nextInventory = await addUnitModelNutexb({
+              modelRoot: activeRoot,
+              structureJsonPath: structurePath,
+              sourcePath: sourceNutexbPath,
+              targetFilename: candidate.nutexbFilename,
+            });
+          }
           invalidateNutexbInternalName(sourceNutexbPath);
           addedCount += 1;
           done += 1;
@@ -455,7 +475,7 @@ export function UnitModelTexturePanel({
         bumpThumbnailCache();
       }
     },
-    [activeRoot, structurePath, refreshInventory, reloadPreviewAfterDiskChange, managerEntries],
+    [activeRoot, isExvsCommon, structurePath, refreshInventory, reloadPreviewAfterDiskChange, managerEntries],
   );
 
   const handleReplaceTexture = useCallback(
@@ -515,11 +535,21 @@ export function UnitModelTexturePanel({
       if (!ok) return;
       setBusy("remove");
       try {
-        const next = await removeUnitModelNutexb({
-          modelRoot: activeRoot,
-          structureJsonPath: structurePath,
-          fileIndex: texture.fileIndex,
-        });
+        let next: UnitModelTextureInventory;
+        if (isExvsCommon) {
+          await removeExvsCommonTexture({
+              modelRoot: activeRoot,
+              structureJsonPath: structurePath,
+              fileIndex: texture.fileIndex,
+          });
+          next = await listUnitModelTextures(activeRoot, structurePath);
+        } else {
+          next = await removeUnitModelNutexb({
+              modelRoot: activeRoot,
+              structureJsonPath: structurePath,
+              fileIndex: texture.fileIndex,
+          });
+        }
         setInventory(next);
         clearSceneTextureThumbnailCache();
         bumpThumbnailCache();
@@ -531,7 +561,7 @@ export function UnitModelTexturePanel({
         setBusy(null);
       }
     },
-    [activeRoot, structurePath],
+    [activeRoot, isExvsCommon, structurePath],
   );
 
   const handleExportTexture = useCallback(async (texture: UnitModelTextureEntry) => {
@@ -700,7 +730,7 @@ export function UnitModelTexturePanel({
           size="icon"
           className="h-8 w-8 shrink-0"
           onClick={() => void handleRegisterPoolOrphans()}
-          disabled={noRoot || busy !== null}
+          disabled={noRoot || busy !== null || isExvsCommon}
           title="Register orphan textures already on disk in textures/"
         >
           {busy === "register" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}

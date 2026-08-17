@@ -94,4 +94,16 @@ describe("assertShlValidForSave", () => {
       assertShlValidForSave(file([record({ modelType: 3, folderIndex: 1 })])),
     ).toThrow(/Body \(type 0\)/);
   });
+
+  it("allows the native Common all-type-6 shape when body is not required", () => {
+    expect(() =>
+      assertShlValidForSave(file([record({ modelType: 6 })]), { requireBody: false }),
+    ).not.toThrow();
+  });
+
+  it("exposes all OB dispatcher types 0 through 7", () => {
+    for (const modelType of [0, 1, 2, 3, 4, 5, 6, 7]) {
+      expect(shlModelTypeLabel(modelType)).not.toContain("Unknown");
+    }
+  });
 });

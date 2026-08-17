@@ -2696,6 +2696,8 @@ pub struct UnitModelStaticMeshImportOptions {
     pub source_path: String,
     pub config: ImportConfig,
     pub include_geometry_names: Vec<String>,
+    #[serde(default)]
+    pub exvs_common_model_id: Option<u32>,
 }
 
 fn required_unit_model_ssbh_config(
@@ -2929,6 +2931,7 @@ pub async fn unit_model_import_static_mesh(
     let structure_json_path = options.structure_json_path.clone();
     let ssbh_for_convert = ssbh_config.clone();
     let include_geometry_names = options.include_geometry_names.clone();
+    let exvs_common_model_id = options.exvs_common_model_id;
     let progress_for_task = on_progress.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
         let artifacts = convert_import_path_to_ssbh_artifact_paths_with_geometry(
@@ -2960,11 +2963,30 @@ pub async fn unit_model_import_static_mesh(
                     base_filename: base.clone(),
                 },
             );
-            let mutation = crate::format::unit_model_models::add_unit_model_model(
-                &model_root_text,
-                structure_json_path.as_deref(),
-                staging.to_string_lossy().as_ref(),
-            )?;
+            let mutation = if let Some(model_id) = exvs_common_model_id {
+                let structure_path = structure_json_path.as_deref().ok_or_else(|| {
+                    "EXVS common static-mesh import requires structure_json_path.".to_string()
+                })?;
+                let common = crate::format::exvs_common::add_exvs_common_model(
+                    &model_root_text,
+                    structure_path,
+                    staging.to_string_lossy().as_ref(),
+                    model_id,
+                )?;
+                crate::format::unit_model_models::UnitModelMutationResult {
+                    model_root: common.model_root,
+                    structure_json_path: common.structure_json_path,
+                    model_count: common.model_count,
+                    total_files: common.total_files,
+                    removed_files: Vec::new(),
+                }
+            } else {
+                crate::format::unit_model_models::add_unit_model_model(
+                    &model_root_text,
+                    structure_json_path.as_deref(),
+                    staging.to_string_lossy().as_ref(),
+                )?
+            };
             send_static_mesh_progress(
                 Some(&progress_for_task),
                 StaticMeshImportProgress::WriteFinished {

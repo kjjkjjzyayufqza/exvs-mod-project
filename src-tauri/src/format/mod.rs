@@ -5,6 +5,7 @@ pub mod characterparam;
 pub mod chrsysparam;
 pub mod effect_folder;
 pub mod effect_project;
+pub mod exvs_common;
 pub mod fhm2d;
 pub mod fhm2d_pack;
 pub mod fhm2d_stage;

@@ -725,6 +725,44 @@ pub(crate) fn infer_model_root_from_structure_path(
     Ok(model_root)
 }
 
+/// Return model-group names in the depth-first order used by SHL
+/// `folder_index` values.
+pub(crate) fn list_unit_model_model_names(
+    model_root: &str,
+    structure_json_path: Option<&str>,
+) -> Result<Vec<String>, String> {
+    let root_path = validate_dir(model_root)?;
+    let structure_path = resolve_structure_path(&root_path, structure_json_path)?;
+    let raw = fs::read_to_string(&structure_path).map_err(|error| {
+        format!(
+            "Failed to read structure JSON {}: {error}",
+            structure_path.display()
+        )
+    })?;
+    let value: Value = serde_json::from_str(&raw).map_err(|error| {
+        format!(
+            "Failed to parse structure JSON {}: {error}",
+            structure_path.display()
+        )
+    })?;
+    let sub_file_data = value
+        .get("SubFileData")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "Structure JSON missing SubFileData array".to_string())?;
+    let structure: Vec<SubFileStructureEntry> = serde_json::from_value(
+        value
+            .get("SubFileStructure")
+            .cloned()
+            .ok_or_else(|| "Structure JSON missing SubFileStructure".to_string())?,
+    )
+    .map_err(|error| format!("Failed to parse SubFileStructure: {error}"))?;
+    let ext_by_index = build_ext_by_index(sub_file_data);
+    let root = parse_root(&structure)?;
+    let mut names = Vec::new();
+    collect_model_group_names(&root, &ext_by_index, &mut names);
+    Ok(names)
+}
+
 /// Remove a whole model (its folder of model files plus its paired nuhlpb), dropping any pool
 /// entries that become unreferenced (model files and now-orphaned textures), and rewrite the
 /// structure JSON. Returns the updated counts and the deleted file URLs.
@@ -1550,6 +1588,25 @@ pub fn add_unit_model_model(
     structure_json_path: Option<&str>,
     source_dir: &str,
 ) -> Result<UnitModelMutationResult, String> {
+    add_unit_model_model_with_options(model_root, structure_json_path, source_dir, true)
+}
+
+/// Add a model without synthesizing a NUHLPB. The EXVS common bundle has no
+/// NUHLPB branch and owns shell records separately.
+pub(crate) fn add_unit_model_model_without_nuhlpb(
+    model_root: &str,
+    structure_json_path: Option<&str>,
+    source_dir: &str,
+) -> Result<UnitModelMutationResult, String> {
+    add_unit_model_model_with_options(model_root, structure_json_path, source_dir, false)
+}
+
+fn add_unit_model_model_with_options(
+    model_root: &str,
+    structure_json_path: Option<&str>,
+    source_dir: &str,
+    create_nuhlpb: bool,
+) -> Result<UnitModelMutationResult, String> {
     let root_path = validate_dir(model_root)?;
     let structure_path = resolve_structure_path(&root_path, structure_json_path)?;
     let out_name = root_path
@@ -1745,24 +1802,35 @@ pub fn add_unit_model_model(
         children: group_children,
     };
 
-    // Every imported model receives a fresh empty NUHLPB. Model-specific source
-    // constraints are intentionally not carried into a different package.
-    let nuhlpb_filename = format!("{}.nuhlpb", source.model_name);
-    let nuhlpb_dst = root_path.join("nuhlpb").join(&nuhlpb_filename);
-    let empty_nuhlpb_dir =
-        tempfile::tempdir().map_err(|e| format!("Failed to create empty NUHLPB temp dir: {e}"))?;
-    let nuhlpb_src = empty_nuhlpb_dir.path().join(&nuhlpb_filename);
-    write_empty_nuhlpb(&nuhlpb_src)?;
-    next_file_index += 1;
-    let nuhlpb_fi = next_file_index;
-    copies.push((nuhlpb_src, nuhlpb_dst));
-    sub_file_data.push(json!({
-        "index": sub_file_data.len(),
-        "fileType": ".nuhlpb",
-        "fileIndex": nuhlpb_fi,
-        "fileUrl": make_url(&format!("nuhlpb/{nuhlpb_filename}")),
-        "fileBaseName": source.model_name,
-    }));
+    // Legacy unit packages receive a fresh empty NUHLPB. The common profile
+    // deliberately skips this because its native structure has no NUHLPB branch.
+    let mut nuhlpb_node = None;
+    let _empty_nuhlpb_dir = if create_nuhlpb {
+        let nuhlpb_filename = format!("{}.nuhlpb", source.model_name);
+        let nuhlpb_dst = root_path.join("nuhlpb").join(&nuhlpb_filename);
+        let temp_dir = tempfile::tempdir()
+            .map_err(|e| format!("Failed to create empty NUHLPB temp dir: {e}"))?;
+        let nuhlpb_src = temp_dir.path().join(&nuhlpb_filename);
+        write_empty_nuhlpb(&nuhlpb_src)?;
+        next_file_index += 1;
+        let nuhlpb_fi = next_file_index;
+        copies.push((nuhlpb_src, nuhlpb_dst));
+        sub_file_data.push(json!({
+            "index": sub_file_data.len(),
+            "fileType": ".nuhlpb",
+            "fileIndex": nuhlpb_fi,
+            "fileUrl": make_url(&format!("nuhlpb/{nuhlpb_filename}")),
+            "fileBaseName": source.model_name,
+        }));
+        nuhlpb_node = Some(Node::Item {
+            entry: make_item(nuhlpb_fi, "00000000", 0, &source.model_name),
+            file_index: nuhlpb_fi,
+            name: Some(source.model_name.clone()),
+        });
+        Some(temp_dir)
+    } else {
+        None
+    };
 
     // Insert into the tree.
     {
@@ -1770,14 +1838,10 @@ pub fn add_unit_model_model(
             .ok_or_else(|| "Could not locate the models container in the structure.".to_string())?;
         models.push(model_group);
     }
-    {
+    if let Some(nuhlpb_node) = nuhlpb_node {
         let nuhlpb_folder = find_nuhlpb_folder(&mut root, &ext_by_index)
             .ok_or_else(|| "Could not locate the nuhlpb folder in the structure.".to_string())?;
-        nuhlpb_folder.push(Node::Item {
-            entry: make_item(nuhlpb_fi, "00000000", 0, &source.model_name),
-            file_index: nuhlpb_fi,
-            name: Some(source.model_name.clone()),
-        });
+        nuhlpb_folder.push(nuhlpb_node);
     }
 
     let mut new_structure = Vec::new();
@@ -3163,6 +3227,24 @@ fn count_model_groups(root: &Node, ext_by_index: &std::collections::HashMap<i32,
         }
     }
     walk(root, ext_by_index)
+}
+
+fn collect_model_group_names(
+    node: &Node,
+    ext_by_index: &std::collections::HashMap<i32, String>,
+    names: &mut Vec<String>,
+) {
+    let Node::Folder { children, .. } = node else {
+        return;
+    };
+    if folder_has_direct_ext(node, ".numdlb", ext_by_index) {
+        if let Some(name) = model_group_name(node, ext_by_index) {
+            names.push(name);
+        }
+    }
+    for child in children {
+        collect_model_group_names(child, ext_by_index, names);
+    }
 }
 
 /// Remove the named model group (and its paired nuhlpb item) from the tree in place.

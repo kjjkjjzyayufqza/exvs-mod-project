@@ -17,6 +17,11 @@ import {
   type UnitModelRepackResult,
   type UnitModelValidationResult,
 } from "../utils/unitModelRepackService";
+import {
+  commonValidationAsUnitModel,
+  isExvsCommonModelRoot,
+  validateExvsCommonBundle,
+} from "../utils/exvsCommonService";
 import { type UnitModelExtractResult } from "../utils/unitModelExtractService";
 import { buildUnitModelAiReviewPayload } from "../utils/unitModelAiReviewPayload";
 import {
@@ -58,6 +63,7 @@ export function useUnitModelWorkspace(
   const obModPath = useConfigStore((state) => state.obModPath ?? "");
   const loadedRoot = inferLoadedRoot(preview);
   const activeRoot = unitRoot ?? loadedRoot;
+  const isExvsCommon = isExvsCommonModelRoot(activeRoot);
   const structurePath = useMemo(() => {
     if (!activeRoot) return null;
     try {
@@ -127,7 +133,11 @@ export function useUnitModelWorkspace(
       }
 
       try {
-        const result = await validateUnitModelForRepack(activeRoot, structurePath);
+        const result = isExvsCommon
+          ? commonValidationAsUnitModel(
+              await validateExvsCommonBundle(activeRoot, structurePath),
+            )
+          : await validateUnitModelForRepack(activeRoot, structurePath);
         if (requestId !== validationRequestIdRef.current) {
           return null;
         }
@@ -156,10 +166,11 @@ export function useUnitModelWorkspace(
         }
       }
     },
-    [activeRoot, structurePath],
+    [activeRoot, isExvsCommon, structurePath],
   );
 
   const autoSyncStructureForRoot = useCallback(async (rootPath: string) => {
+    if (isExvsCommonModelRoot(rootPath)) return;
     const resolvedStructurePath = inferUnitModelStructurePath(rootPath);
     try {
       await syncUnitModelTextureContainers(rootPath, resolvedStructurePath);
@@ -201,7 +212,14 @@ export function useUnitModelWorkspace(
         trimmedSelected,
         "directory",
       );
-      let rootToLoad = await resolveMigratedFhm2dFolderPath(trimmedSelected);
+      let rootToLoad = trimmedSelected;
+      if (isExvsCommonModelRoot(rootToLoad)) {
+        onUnitRootChange(rootToLoad);
+        await preview.loadModelAt(rootToLoad);
+        setLastRepack(null);
+        return;
+      }
+      rootToLoad = await resolveMigratedFhm2dFolderPath(rootToLoad);
       try {
         const metadataStructurePath = inferUnitModelStructurePath(rootToLoad);
         const metadataMigration = await promptAndMigrateFhm2dStructureIfNeeded({
@@ -354,6 +372,7 @@ export function useUnitModelWorkspace(
     obModPath,
     loadedRoot,
     activeRoot,
+    isExvsCommon,
     structurePath,
     folderName,
     validation,

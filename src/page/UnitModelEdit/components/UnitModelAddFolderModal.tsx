@@ -10,6 +10,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { parseExvsCommonRuntimeModelId } from "../utils/exvsCommonService";
 import type { UnitModelSourceValidation } from "../utils/unitModelModelService";
 import {
   UnitModelSourceValidationPreview,
@@ -24,6 +27,9 @@ type UnitModelAddFolderModalProps = {
   busy: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  exvsCommon?: boolean;
+  modelIdText?: string;
+  onModelIdTextChange?: (value: string) => void;
 };
 
 /**
@@ -39,8 +45,19 @@ export function UnitModelAddFolderModal({
   busy,
   onConfirm,
   onCancel,
+  exvsCommon = false,
+  modelIdText = "",
+  onModelIdTextChange,
 }: UnitModelAddFolderModalProps) {
   const missingTextureCount = texturePlan?.missing.length ?? 0;
+  let modelIdError: string | null = null;
+  if (exvsCommon) {
+    try {
+      parseExvsCommonRuntimeModelId(modelIdText);
+    } catch (error) {
+      modelIdError = String(error);
+    }
+  }
 
   return (
     <AlertDialog
@@ -61,12 +78,29 @@ export function UnitModelAddFolderModal({
         </AlertDialogHeader>
 
         {validation ? (
-          <div className="max-h-[55vh] overflow-y-auto pr-1">
+          <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
             <UnitModelSourceValidationPreview
               validation={validation}
               duplicateName={duplicateName}
               texturePlan={texturePlan}
             />
+            {exvsCommon ? (
+              <div className="space-y-1.5 rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
+                <Label htmlFor="exvs-common-model-id">Runtime model ID (u32 hex)</Label>
+                <Input
+                  id="exvs-common-model-id"
+                  value={modelIdText}
+                  placeholder="0x48415431"
+                  className="font-mono"
+                  onChange={(event) => onModelIdTextChange?.(event.target.value)}
+                  disabled={busy}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Must be unique in the Common SHL. A type-6 record is added automatically.
+                </p>
+                {modelIdError ? <p className="text-[11px] text-destructive">{modelIdError}</p> : null}
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -76,7 +110,7 @@ export function UnitModelAddFolderModal({
           </AlertDialogCancel>
           <Button
             type="button"
-            disabled={busy || duplicateName || missingTextureCount > 0 || !validation}
+            disabled={busy || duplicateName || missingTextureCount > 0 || !validation || Boolean(modelIdError)}
             onClick={onConfirm}
           >
             {busy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
