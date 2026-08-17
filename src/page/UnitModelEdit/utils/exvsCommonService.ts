@@ -10,6 +10,8 @@ import { getBaseName, toWindowsPath } from "./unitModelRepackService";
 
 export const EXVS_COMMON_HASH_NAME = "0xCB665375";
 export const EXVS_COMMON_PACKAGE_NAME = "000common_000common_001";
+/** SHL model_type written for newly added Common models (Part). */
+export const EXVS_COMMON_NEW_SHL_MODEL_TYPE = 3;
 
 export interface ExvsCommonBundlePaths {
   sourceFhm2d: string;

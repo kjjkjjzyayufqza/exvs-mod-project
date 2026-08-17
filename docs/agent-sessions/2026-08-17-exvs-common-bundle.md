@@ -11,7 +11,7 @@ Add a standalone `ExvsCommon` Rust domain and Unit Model Editor profile for the 
 - Common identity is fixed `HashName=0xCB665375`.
 - Layout uses `models`, `textures`, `camera`, `system`, and `control` under one `002chara` package.
 - Camera/system resources are visible but read-only; models/textures support full CRUD.
-- SHL supports types 0..7, automatic model CRUD synchronization, and unrestricted advanced edits with warnings.
+- SHL supports types 0..7; newly added models write type 3 (Part). Automatic model CRUD synchronization, and unrestricted advanced edits with warnings.
 - Unknown resources extract to a stable fallback name and block repack.
 
 ## Progress

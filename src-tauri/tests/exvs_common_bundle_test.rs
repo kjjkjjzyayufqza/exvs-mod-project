@@ -3,7 +3,7 @@ use app_lib::format::exvs_common::{
     classify_common_resource, extract_exvs_common_bundle_impl, materialize_exvs_common_extraction,
     remove_common_shl_model_records, remove_exvs_common_model, remove_exvs_common_texture,
     repack_exvs_common_bundle_impl, resolve_exvs_common_bundle_paths, validate_exvs_common_bundle,
-    CommonResourceKind, EXVS_COMMON_HASH_NAME, EXVS_COMMON_PACKAGE_NAME,
+    CommonResourceKind, EXVS_COMMON_HASH_NAME, EXVS_COMMON_NEW_MODEL_TYPE, EXVS_COMMON_PACKAGE_NAME,
 };
 use app_lib::format::fhm2d::Fhm2dFormat;
 use app_lib::format::fhm2d::{InMemoryFhm2dExtraction, InMemoryFhm2dFile};
@@ -94,7 +94,7 @@ fn unknown_resources_get_a_stable_content_hash_name() {
 }
 
 #[test]
-fn common_shl_model_sync_uses_type_six_and_reindexes_after_remove() {
+fn common_shl_model_sync_uses_type_three_and_reindexes_after_remove() {
     let mut shl = app_lib::format::shl::ShlFile {
         version: 100,
         reserved08: 0,
@@ -119,7 +119,8 @@ fn common_shl_model_sync_uses_type_six_and_reindexes_after_remove() {
     };
 
     add_common_shl_model_record(&mut shl, 0x300, 3).expect("add common SHL record");
-    assert_eq!(shl.records[2].model_type, 6);
+    assert_eq!(shl.records[2].model_type, EXVS_COMMON_NEW_MODEL_TYPE);
+    assert_eq!(EXVS_COMMON_NEW_MODEL_TYPE, 3);
     assert_eq!(shl.records[2].folder_index, 3);
     assert!(add_common_shl_model_record(&mut shl, 0x300, 4).is_err());
 
@@ -307,7 +308,10 @@ fn real_common_package_extracts_with_43_physical_and_48_logical_resources() {
     .expect("parse added SHL");
     assert_eq!(added_shl.records.len(), 5);
     assert_eq!(added_shl.records.last().unwrap().model_id, 0x4841_5431);
-    assert_eq!(added_shl.records.last().unwrap().model_type, 6);
+    assert_eq!(
+        added_shl.records.last().unwrap().model_type,
+        EXVS_COMMON_NEW_MODEL_TYPE
+    );
 
     let removed =
         remove_exvs_common_model(&added.model_root, &added.structure_json_path, "hat_test")

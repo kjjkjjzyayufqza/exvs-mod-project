@@ -3,15 +3,8 @@ import { confirm } from "@tauri-apps/plugin-dialog";
 import { Loader2, PackageCheck, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import type {
   UnitModelRepackResult,
   UnitModelValidationResult,
@@ -21,6 +14,13 @@ import {
   repackExvsCommonBundle,
   validateExvsCommonBundle,
 } from "../utils/exvsCommonService";
+
+const DIMENSIONS = {
+  width: 560,
+  height: 440,
+  minWidth: 480,
+  minHeight: 360,
+};
 
 type ExvsCommonRepackDialogProps = {
   open: boolean;
@@ -111,41 +111,20 @@ export function ExvsCommonRepackDialog({
     }
   };
 
+  if (!open) return null;
+
   return (
-    <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Repack EXVS Common Bundle</DialogTitle>
-          <DialogDescription>
-            Output is fixed to the configured OB Mod Path as 0xCB665375.fhm2d. DPLCache is never
-            modified.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3 text-xs">
-          <div className="rounded-md border bg-muted/20 p-3">
-            <div className="text-muted-foreground">Destination</div>
-            <div className="break-all font-mono text-[11px]">
-              {modFolder ? `${modFolder.replace(/[\\/]+$/, "")}\\0xCB665375.fhm2d` : "OB Mod Path not configured"}
-            </div>
-          </div>
-          {busy && !validation ? (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Validating...
-            </div>
-          ) : validation?.valid ? (
-            <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-emerald-600">
-              Validation passed. {validation.warnings.length} non-blocking warning(s).
-            </div>
-          ) : validation ? (
-            <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-destructive">
-              <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{validation.errors[0]?.message ?? "Validation failed"}</span>
-            </div>
-          ) : null}
-        </div>
-
-        <DialogFooter>
+    <AppRndModalShell
+      titleId="exvs-common-repack-title"
+      title="Repack EXVS Common"
+      subtitle="Writes 0xCB665375.fhm2d to the configured OB Mod path. DPLCache is never modified."
+      headerIcon={<PackageCheck className="h-5 w-5 text-primary" />}
+      dimensions={DIMENSIONS}
+      storageKey="app.rnd-size.exvs-common-repack"
+      onClose={() => onOpenChange(false)}
+      closeDisabled={busy}
+      footer={
+        <div className="flex justify-end gap-2 p-3">
           <Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
@@ -153,8 +132,31 @@ export function ExvsCommonRepackDialog({
             {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <PackageCheck className="mr-1.5 h-4 w-4" />}
             Repack Common
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      }
+    >
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 text-xs">
+        <div className="rounded-md bg-muted/20 p-3">
+          <div className="text-muted-foreground">Destination</div>
+          <div className="break-all font-mono text-[11px] tabular-nums">
+            {modFolder ? `${modFolder.replace(/[\\/]+$/, "")}\\0xCB665375.fhm2d` : "OB Mod Path not configured"}
+          </div>
+        </div>
+        {busy && !validation ? (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Validating...
+          </div>
+        ) : validation?.valid ? (
+          <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-emerald-600">
+            Validation passed. {validation.warnings.length} non-blocking warning(s).
+          </div>
+        ) : validation ? (
+          <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-destructive">
+            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{validation.errors[0]?.message ?? "Validation failed"}</span>
+          </div>
+        ) : null}
+      </div>
+    </AppRndModalShell>
   );
 }

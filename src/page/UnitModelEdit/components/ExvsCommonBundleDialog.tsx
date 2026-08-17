@@ -3,21 +3,21 @@ import { exists } from "@tauri-apps/plugin-fs";
 import { ArchiveRestore, FolderOpen, Loader2, PackageOpen } from "lucide-react";
 import { toast } from "sonner";
 
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { useConfigStore } from "@/store/configStore";
 import {
   extractExvsCommonBundle,
   resolveExvsCommonBundlePaths,
   type ExvsCommonBundlePaths,
 } from "../utils/exvsCommonService";
+
+const DIMENSIONS = {
+  width: 620,
+  height: 460,
+  minWidth: 520,
+  minHeight: 360,
+};
 
 type ExvsCommonBundleDialogProps = {
   open: boolean;
@@ -109,47 +109,20 @@ export function ExvsCommonBundleDialog({
     }
   };
 
+  if (!open) return null;
+
   return (
-    <Dialog open={open} onOpenChange={(next) => !working && onOpenChange(next)}>
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Open / Extract EXVS Common</DialogTitle>
-          <DialogDescription>
-            Uses only the configured DPLCache source and keeps camera, system, model, texture, and
-            SHL resources together under 002chara.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3 text-xs">
-          {checking ? (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Checking configured paths...
-            </div>
-          ) : error ? (
-            <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-destructive">
-              {error}
-            </div>
-          ) : paths ? (
-            <>
-              <div className="rounded-md border bg-muted/20 p-3">
-                <div className="text-muted-foreground">DPLCache source</div>
-                <div className="break-all font-mono text-[11px]">{paths.sourceFhm2d}</div>
-                <div className={sourceExists ? "mt-1 text-emerald-600" : "mt-1 text-destructive"}>
-                  {sourceExists ? "Source found" : "Source missing"}
-                </div>
-              </div>
-              <div className="rounded-md border bg-muted/20 p-3">
-                <div className="text-muted-foreground">Workspace</div>
-                <div className="break-all font-mono text-[11px]">{paths.modelRoot}</div>
-                <div className="mt-1 text-muted-foreground">
-                  {workspaceExists ? "Existing Common workspace found" : "No existing workspace"}
-                </div>
-              </div>
-            </>
-          ) : null}
-        </div>
-
-        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+    <AppRndModalShell
+      titleId="exvs-common-bundle-title"
+      title="Open / Extract EXVS Common"
+      subtitle="DPLCache source only. Camera, system, model, texture, and SHL stay under 002chara."
+      headerIcon={<ArchiveRestore className="h-5 w-5 text-primary" />}
+      dimensions={DIMENSIONS}
+      storageKey="app.rnd-size.exvs-common-bundle"
+      onClose={() => onOpenChange(false)}
+      closeDisabled={working}
+      footer={
+        <div className="flex flex-wrap justify-end gap-2 p-3">
           <Button variant="outline" disabled={working} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
@@ -177,8 +150,37 @@ export function ExvsCommonBundleDialog({
               Extract EXVS Common
             </Button>
           )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      }
+    >
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 text-xs">
+        {checking ? (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Checking configured paths...
+          </div>
+        ) : error ? (
+          <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-destructive">
+            {error}
+          </div>
+        ) : paths ? (
+          <>
+            <div className="rounded-md bg-muted/20 p-3">
+              <div className="text-muted-foreground">DPLCache source</div>
+              <div className="break-all font-mono text-[11px] tabular-nums">{paths.sourceFhm2d}</div>
+              <div className={sourceExists ? "mt-1 text-emerald-600" : "mt-1 text-destructive"}>
+                {sourceExists ? "Source found" : "Source missing"}
+              </div>
+            </div>
+            <div className="rounded-md bg-muted/20 p-3">
+              <div className="text-muted-foreground">Workspace</div>
+              <div className="break-all font-mono text-[11px] tabular-nums">{paths.modelRoot}</div>
+              <div className="mt-1 text-muted-foreground">
+                {workspaceExists ? "Existing Common workspace found" : "No existing workspace"}
+              </div>
+            </div>
+          </>
+        ) : null}
+      </div>
+    </AppRndModalShell>
   );
 }

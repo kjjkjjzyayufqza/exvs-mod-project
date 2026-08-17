@@ -78,6 +78,7 @@ import {
 } from "../utils/unitModelModelService";
 import { createNumatbTemplateFromUnitModel } from "../utils/unitModelNumatbTemplateService";
 import { listUnitModelTextures } from "../utils/unitModelTextureService";
+import { ExvsCommonModelIdDialog } from "./ExvsCommonModelIdDialog";
 import { UnitModelAddFolderModal } from "./UnitModelAddFolderModal";
 import { UnitModelRemoveModelModal } from "./UnitModelRemoveModelModal";
 import {
@@ -92,7 +93,10 @@ import {
   UNIT_MODEL_REPLACE_NUMSHB_SOURCE_DIALOG_PATH_KEY,
   UNIT_MODEL_REPLACE_SSBH_FOLDER_DIALOG_PATH_KEY,
 } from "../utils/unitModelEditorSettings";
-import { parseExvsCommonRuntimeModelId } from "../utils/exvsCommonService";
+import {
+  EXVS_COMMON_NEW_SHL_MODEL_TYPE,
+  parseExvsCommonRuntimeModelId,
+} from "../utils/exvsCommonService";
 
 interface UnitModelModelManagerPanelProps {
   structureJson: unknown | null;
@@ -319,6 +323,7 @@ export function UnitModelModelManagerPanel({
   } | null>(null);
   const [commonModelIdText, setCommonModelIdText] = useState("");
   const [commonStaticMeshModelId, setCommonStaticMeshModelId] = useState<number | null>(null);
+  const [commonStaticMeshIdOpen, setCommonStaticMeshIdOpen] = useState(false);
   const [replaceTarget, setReplaceTarget] = useState<{
     label: string;
     index: number;
@@ -411,7 +416,7 @@ export function UnitModelModelManagerPanel({
       );
       toast.success(`Model '${validation.modelName}' added`, {
         description: isExvsCommon
-          ? `${result.modelCount} models, ${result.totalFiles} files. Type-6 SHL record added automatically.`
+          ? `${result.modelCount} models, ${result.totalFiles} files. Type-${EXVS_COMMON_NEW_SHL_MODEL_TYPE} SHL record added automatically.`
           : `${result.modelCount} models, ${result.totalFiles} files. Empty NUHLPB created automatically.`,
       });
       showMutationSyncWarning(result.syncWarning);
@@ -434,18 +439,22 @@ export function UnitModelModelManagerPanel({
       toast.error("Open or extract a unit-model folder first.");
       return;
     }
+    if (isExvsCommon) {
+      setCommonModelIdText("");
+      setCommonStaticMeshIdOpen(true);
+      return;
+    }
+    await startStaticMeshImport(null);
+  };
+
+  const startStaticMeshImport = async (commonModelId: number | null) => {
+    if (!modelRoot || !structureJsonPath) {
+      toast.error("Open or extract a unit-model folder first.");
+      return;
+    }
     setBusy("analyze");
     try {
-      if (isExvsCommon) {
-        const entered = window.prompt(
-          "Enter a unique runtime u32 model ID (hex), for example 0x48415431:",
-          "",
-        );
-        if (entered === null) return;
-        setCommonStaticMeshModelId(parseExvsCommonRuntimeModelId(entered));
-      } else {
-        setCommonStaticMeshModelId(null);
-      }
+      setCommonStaticMeshModelId(commonModelId);
       const selected = await open({
         multiple: false,
         title: "Select FBX or DAE for Unit model import",
@@ -620,7 +629,7 @@ export function UnitModelModelManagerPanel({
       );
       toast.success(`Unit model '${baseFilename}' added`, {
         description: isExvsCommon
-          ? `${result.modelCount} models, ${result.totalFiles} files. Type-6 SHL record added automatically.`
+          ? `${result.modelCount} models, ${result.totalFiles} files. Type-${EXVS_COMMON_NEW_SHL_MODEL_TYPE} SHL record added automatically.`
           : `${result.modelCount} models, ${result.totalFiles} files. Empty NUHLPB created automatically.`,
       });
       showMutationSyncWarning(result.syncWarning);
@@ -1294,6 +1303,17 @@ export function UnitModelModelManagerPanel({
           </div>
         )}
       </ScrollArea>
+      <ExvsCommonModelIdDialog
+        open={commonStaticMeshIdOpen}
+        busy={busy === "analyze"}
+        initialValue={commonModelIdText}
+        onCancel={() => setCommonStaticMeshIdOpen(false)}
+        onConfirm={(modelId, text) => {
+          setCommonModelIdText(text);
+          setCommonStaticMeshIdOpen(false);
+          void startStaticMeshImport(modelId);
+        }}
+      />
       <UnitModelAddFolderModal
         open={addFolderPreview !== null}
         validation={addFolderPreview?.validation ?? null}

@@ -8,6 +8,24 @@ const mocks = vi.hoisted(() => ({
   extract: vi.fn(),
 }));
 
+vi.mock("@/components/AppRndModalShell", () => ({
+  AppRndModalShell: ({
+    children,
+    footer,
+    title,
+  }: {
+    children: React.ReactNode;
+    footer?: React.ReactNode;
+    title: string;
+  }) => (
+    <div>
+      <h1>{title}</h1>
+      {children}
+      <footer>{footer}</footer>
+    </div>
+  ),
+}));
+
 vi.mock("@tauri-apps/plugin-fs", () => ({ exists: mocks.exists }));
 vi.mock("@/store/configStore", () => ({
   useConfigStore: (selector: (state: Record<string, string>) => unknown) =>

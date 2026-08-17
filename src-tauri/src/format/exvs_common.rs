@@ -24,6 +24,8 @@ pub const EXVS_COMMON_HASH_NAME: &str = "0xCB665375";
 pub const EXVS_COMMON_PACKAGE_NAME: &str = "000common_000common_001";
 pub const EXVS_COMMON_PREFIX: &str = "002chara";
 pub const EXVS_COMMON_FHM2D_FILENAME: &str = "0xCB665375.fhm2d";
+/// SHL `model_type` written for newly added Common models. Existing records stay unchanged.
+pub const EXVS_COMMON_NEW_MODEL_TYPE: u32 = 3;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1074,7 +1076,7 @@ pub fn add_common_shl_model_record(
     }
     shl.records.push(ShlRecord {
         model_id,
-        model_type: 6,
+        model_type: EXVS_COMMON_NEW_MODEL_TYPE,
         folder_index,
         unk1: 0,
         slot_index: folder_index,

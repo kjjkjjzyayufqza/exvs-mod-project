@@ -1,23 +1,25 @@
 import { FolderPlus, Loader2 } from "lucide-react";
 
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { parseExvsCommonRuntimeModelId } from "../utils/exvsCommonService";
+import {
+  EXVS_COMMON_NEW_SHL_MODEL_TYPE,
+  parseExvsCommonRuntimeModelId,
+} from "../utils/exvsCommonService";
 import type { UnitModelSourceValidation } from "../utils/unitModelModelService";
 import {
   UnitModelSourceValidationPreview,
   type UnitModelSourceTexturePlan,
 } from "./UnitModelSourceValidationPreview";
+
+const DIMENSIONS = {
+  width: 640,
+  height: 620,
+  minWidth: 520,
+  minHeight: 420,
+};
 
 type UnitModelAddFolderModalProps = {
   open: boolean;
@@ -59,55 +61,23 @@ export function UnitModelAddFolderModal({
     }
   }
 
+  if (!open) return null;
+
   return (
-    <AlertDialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next && !busy) onCancel();
-      }}
-    >
-      <AlertDialogContent className="max-w-xl">
-        <AlertDialogHeader>
-          <AlertDialogTitle className="flex items-center gap-2">
-            <FolderPlus className="h-4 w-4 text-primary" aria-hidden />
-            Add model from folder
-          </AlertDialogTitle>
-          <AlertDialogDescription>
-            Review the prepared SSBH folder before it is copied into the package as a new model.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-
-        {validation ? (
-          <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
-            <UnitModelSourceValidationPreview
-              validation={validation}
-              duplicateName={duplicateName}
-              texturePlan={texturePlan}
-            />
-            {exvsCommon ? (
-              <div className="space-y-1.5 rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
-                <Label htmlFor="exvs-common-model-id">Runtime model ID (u32 hex)</Label>
-                <Input
-                  id="exvs-common-model-id"
-                  value={modelIdText}
-                  placeholder="0x48415431"
-                  className="font-mono"
-                  onChange={(event) => onModelIdTextChange?.(event.target.value)}
-                  disabled={busy}
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Must be unique in the Common SHL. A type-6 record is added automatically.
-                </p>
-                {modelIdError ? <p className="text-[11px] text-destructive">{modelIdError}</p> : null}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
-          <AlertDialogCancel type="button" disabled={busy} onClick={onCancel}>
+    <AppRndModalShell
+      titleId="unit-model-add-folder-title"
+      title="Add model from folder"
+      subtitle="Review the prepared SSBH folder before it is copied into the package"
+      headerIcon={<FolderPlus className="h-5 w-5 text-primary" />}
+      dimensions={DIMENSIONS}
+      storageKey="app.rnd-size.unit-model-add-folder"
+      onClose={onCancel}
+      closeDisabled={busy}
+      footer={
+        <div className="flex justify-end gap-2 p-3">
+          <Button type="button" variant="outline" disabled={busy} onClick={onCancel}>
             Cancel
-          </AlertDialogCancel>
+          </Button>
           <Button
             type="button"
             disabled={busy || duplicateName || missingTextureCount > 0 || !validation || Boolean(modelIdError)}
@@ -116,8 +86,36 @@ export function UnitModelAddFolderModal({
             {busy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
             {busy ? "Adding..." : "Add model"}
           </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+        </div>
+      }
+    >
+      {validation ? (
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+          <UnitModelSourceValidationPreview
+            validation={validation}
+            duplicateName={duplicateName}
+            texturePlan={texturePlan}
+          />
+          {exvsCommon ? (
+            <div className="space-y-1.5 rounded-md bg-muted/30 p-3">
+              <Label htmlFor="exvs-common-model-id">Runtime model ID</Label>
+              <Input
+                id="exvs-common-model-id"
+                value={modelIdText}
+                placeholder="0x48415431"
+                className="font-mono tabular-nums"
+                onChange={(event) => onModelIdTextChange?.(event.target.value)}
+                disabled={busy}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Unique in the Common SHL. New records use type {EXVS_COMMON_NEW_SHL_MODEL_TYPE}{" "}
+                (Part).
+              </p>
+              {modelIdError ? <p className="text-[11px] text-destructive">{modelIdError}</p> : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </AppRndModalShell>
   );
 }

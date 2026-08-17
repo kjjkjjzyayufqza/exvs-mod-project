@@ -6,6 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
 import {
   addExvsCommonModel,
   EXVS_COMMON_HASH_NAME,
+  EXVS_COMMON_NEW_SHL_MODEL_TYPE,
   isExvsCommonStructure,
   parseExvsCommonRuntimeModelId,
 } from "./exvsCommonService";
@@ -17,6 +18,7 @@ describe("EXVS Common profile", () => {
     expect(isExvsCommonStructure({ HashName: "0xcb665375" })).toBe(true);
     expect(isExvsCommonStructure({ HashName: "0xAF73362C" })).toBe(false);
     expect(EXVS_COMMON_HASH_NAME).toBe("0xCB665375");
+    expect(EXVS_COMMON_NEW_SHL_MODEL_TYPE).toBe(3);
   });
 
   it("parses user-entered runtime u32 hex without little-endian reversal", () => {
