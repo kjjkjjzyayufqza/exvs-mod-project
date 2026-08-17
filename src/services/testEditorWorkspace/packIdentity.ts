@@ -14,6 +14,13 @@ type RoutePrefixEntry = {
   routeId: WorkspaceAssetRouteId | null;
 };
 
+function pathHasGitDirectory(input: string): boolean {
+  return input
+    .replace(/\\/g, "/")
+    .split("/")
+    .some((segment) => segment === ".git");
+}
+
 function normalizePathForCompare(input: string): string {
   return input
     .trim()
@@ -214,6 +221,8 @@ export function classifyWorkspacePackPath(params: {
   nodeIsDirectory?: boolean;
   document: TestEditorWorkspaceDocument;
 }): WorkspacePackIdentity | null {
+  if (pathHasGitDirectory(params.nodePath)) return null;
+
   const relativePath = relativePathFromRoot(params.nodePath, params.workspaceRoot);
   if (relativePath === null || !relativePath) return null;
 

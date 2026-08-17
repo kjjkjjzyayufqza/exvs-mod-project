@@ -110,7 +110,11 @@ export function UnitModelRepackDialog({
       }
       const result = await repackValidatedUnitModelFolderToModFolder(modFolder, structurePath);
       onRepacked(result);
-      toast.success("Unit model repacked to OB Mod folder", { description: result.outputPath });
+      toast.success("Unit model repacked to OB Mod folder", {
+        description: result.removedVgsht2
+          ? `${result.outputPath} (removed matching .vgsht2)`
+          : result.outputPath,
+      });
       onOpenChange(false);
     } catch (error) {
       toast.error("Unit model repack failed", { description: String(error) });

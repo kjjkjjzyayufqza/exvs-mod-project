@@ -11,6 +11,14 @@ export const DialogLastPathKey = {
   ssbhPreviewOpenFhm2dMemory: "ssbhPreview.openFhm2dMemory",
   ssbhPreviewOpenNuanmb: "ssbhPreview.openNuanmb",
   ssbhPreviewOpenMotionFolder: "ssbhPreview.openMotionFolder",
+  ssbhPreviewOpenMotionFbx: "ssbhPreview.openMotionFbx",
+  ssbhMotionFbxExport: "ssbhMotionFbx.export",
+  ssbhMotionFbxImportOpen: "ssbhMotionFbx.importOpen",
+  ssbhMotionFbxImportSave: "ssbhMotionFbx.importSave",
+  ssbhMotionBatchExportDir: "ssbhMotionFbx.batchExportDir",
+  ssbhMotionClipOpsSave: "ssbhMotionFbx.clipOpsSave",
+  ssbhBlender51Exe: "ssbhMotionFbx.blender51",
+  /** @deprecated CascadeurBridge removed; keys kept only so old localStorage values are ignored safely */
   ssbhCascadeurExportBridge: "ssbhCascadeur.exportBridge",
   ssbhCascadeurImportFbx: "ssbhCascadeur.importFbx",
   ssbhCascadeurImportManifest: "ssbhCascadeur.importManifest",
@@ -19,6 +27,9 @@ export const DialogLastPathKey = {
   ssbhDaeImportSourceDae: "ssbhDae.importSource.dae",
   ssbhDaeImportSourceFbx: "ssbhDae.importSource.fbx",
   ssbhDaeConvertOutputFolder: "ssbhDae.convertOutputFolder",
+  /** MSC Workspace "Pick folder" — store the selected folder itself, not its parent. */
+  mscWorkspaceFolder: "mscWorkspace.folder",
+  traditionalMscWorkspaceFolder: "mscWorkspace.traditional.folder",
 } as const;
 
 export type DialogLastPathKeyType = (typeof DialogLastPathKey)[keyof typeof DialogLastPathKey];

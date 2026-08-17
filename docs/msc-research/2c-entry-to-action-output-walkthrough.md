@@ -182,8 +182,8 @@ Notion 经验能解释它为什么像换装：
 
 | 调用 | 脚本侧含义 |
 |---|---|
-| `sys_4B(0x2, modelHash, boneIndex, actionHash, targetModel)` | 把模型接到模型 / bone |
-| `sys_4B(0x3)` | 卸下装备 / detach |
+| `sys_4B(0x2, modelId, boneHash, actionHash[, parentModel])` | 把模型挂到 body 骨上；**第三参是 body `.jnttbl` 的 `boneHash`，不是 nusktb 顺序 index**（见 `docs/exvs-msc-syscall-4b-notes.md`） |
+| `sys_4B(0x3)` / `sys_4B(0x3, modelId)` | 卸下全部 / 卸下指定模型 |
 | `sys_47(0x10/0x11/0x12,...)` | rotate / translate / scale |
 
 但 `func_887/888` 不是动作 dispatch，也不是输入判断。它们只是被启动链和动作段调用的 shell 输出层。
@@ -259,6 +259,17 @@ action hash 不是 raw 按键。
 | `0x193fe550` | `ACTION_BC_SPECIAL_MELEE` | 特格 / 特殊移动 |
 | `0x178d1109` | `ACTION_B_MELEE` | N 格 |
 | `0x8ae55bb1` | `ACTION_ABC_FINAL_ATTACK` | 觉醒技 |
+| `0xf32aa1ba` | `func_480` → `func_69(0x34)` | **胜利 pose 1** |
+| `0x900ab393` | `func_482` → `func_69(0x35)` | **失败 pose 1** |
+
+结果 pose 注册形如：
+
+```c
+func_241(0xf32aa1ba, func_480); // 胜利 pose 1
+func_241(0x900ab393, func_482); // 失败 pose 1
+```
+
+不要与主射 `func_241(主射hash, ACTION_A_SHOT)` 混改：pose 走 state slot tick（`0x34`/`0x35`），主射走射击 runtime globals。
 
 模组开发入口：
 

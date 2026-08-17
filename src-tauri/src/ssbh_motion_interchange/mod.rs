@@ -1,6 +1,11 @@
+mod blender_compose;
+mod blender_resolve;
 mod cascadeur;
+mod clip_ops;
+mod dcc_fbx;
 mod fbx;
 mod motion_clip;
+mod motion_fbx_import;
 mod nuanmb;
 mod validate;
 
@@ -9,10 +14,21 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+pub use blender_compose::{
+    export_complete_motion_fbx, parse_compose_success_from_stdout, resolve_compose_script_path,
+    CompleteMotionFbxExportReport, CompleteMotionFbxExportRequest,
+};
+pub use blender_resolve::{candidate_blender_51_paths, resolve_blender_51_executable};
+pub use clip_ops::{
+    retime_motion_clip, transform_nuanmb_clip, trim_motion_clip, ClipOperation,
+    NuanmbClipTransformRequest,
+};
+pub use dcc_fbx::{inspect_motion_fbx_file, MotionFbxInspectReport, MotionFbxStackSummary};
 pub use motion_clip::{
     MotionBone, MotionClip, MotionFrame, MotionSkeleton, EXVS2_SAMPLE_RATE_HZ,
     MAX_MOTION_FRAME_COUNT,
 };
+pub use motion_fbx_import::{import_motion_fbx, MotionFbxImportRequest};
 pub use nuanmb::{
     read_motion_skeleton, read_nuanmb_as_motion_clip, write_motion_clip_as_nuanmb,
     NuanmbWriteReport,
@@ -23,6 +39,10 @@ pub use validate::{validate_rig_binding, RigBindingPolicy, RigBindingReport};
 pub enum MotionInterchangeError {
     InvalidClip(String),
     Bridge(String),
+    /// MotionFbxExport / BlenderCompose failures (path resolve, process, staging).
+    Compose(String),
+    /// MotionFbxImport failures (FBX load, stack, sampling, output).
+    Import(String),
     Nuanmb(String),
     RigMismatch(String),
 }
@@ -32,6 +52,8 @@ impl fmt::Display for MotionInterchangeError {
         match self {
             Self::InvalidClip(message) => write!(f, "Invalid motion clip: {message}"),
             Self::Bridge(message) => write!(f, "Cascadeur bridge failed: {message}"),
+            Self::Compose(message) => write!(f, "Motion FBX export failed: {message}"),
+            Self::Import(message) => write!(f, "Motion FBX import failed: {message}"),
             Self::Nuanmb(message) => write!(f, "NUANMB conversion failed: {message}"),
             Self::RigMismatch(message) => write!(f, "Rig mismatch: {message}"),
         }
@@ -153,28 +175,29 @@ pub fn import_cascadeur_bridge_to_nuanmb(
 }
 
 #[tauri::command]
-pub async fn ssbh_export_nuanmb_to_cascadeur_bridge(
-    request: NuanmbToCascadeurRequest,
-) -> Result<MotionConversionReport, String> {
-    run_blocking(move || export_nuanmb_to_cascadeur_bridge(request)).await
+pub async fn ssbh_export_complete_motion_fbx(
+    request: CompleteMotionFbxExportRequest,
+) -> Result<CompleteMotionFbxExportReport, String> {
+    run_blocking(move || export_complete_motion_fbx(request)).await
 }
 
 #[tauri::command]
-pub async fn ssbh_import_cascadeur_bridge_to_nuanmb(
-    request: CascadeurToNuanmbRequest,
-) -> Result<MotionConversionReport, String> {
-    run_blocking(move || import_cascadeur_bridge_to_nuanmb(request)).await
+pub async fn ssbh_inspect_motion_fbx(fbx_path: String) -> Result<MotionFbxInspectReport, String> {
+    run_blocking(move || inspect_motion_fbx_file(Path::new(fbx_path.trim()))).await
 }
 
 #[tauri::command]
-pub async fn ssbh_inspect_cascadeur_bridge(
-    request: CascadeurBridgeInspectRequest,
-) -> Result<CascadeurBridgeManifest, String> {
-    run_blocking(move || {
-        let path = required_path(&request.bridge_manifest_path, "bridge_manifest_path")?;
-        read_cascadeur_bridge_manifest(&path)
-    })
-    .await
+pub async fn ssbh_import_motion_fbx(
+    request: MotionFbxImportRequest,
+) -> Result<MotionConversionReport, String> {
+    run_blocking(move || import_motion_fbx(request)).await
+}
+
+#[tauri::command]
+pub async fn ssbh_transform_nuanmb_clip(
+    request: NuanmbClipTransformRequest,
+) -> Result<MotionConversionReport, String> {
+    run_blocking(move || transform_nuanmb_clip(request)).await
 }
 
 async fn run_blocking<T: Send + 'static>(

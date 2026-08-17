@@ -13,8 +13,9 @@ cross-agent hub for Cursor, Claude, Codex, Copilot, and other coding agents.
 - **Key subsystems**:
   - `tools/` — Python-based MSC bytecode toolchain (`mscdec.py`, `msclang.py`,
     `disasmlib.py`, `msc_core.py`, `msc_cfg.py`).
-  - `src-tauri/` — Tauri Rust backend, including the agent-facing `exvs2-json`
-    CLI (`exvs2_json` binary; see [CLI Tools](#cli-tools-agent-facing)).
+  - `src-tauri/` — Tauri Rust backend, including agent-facing CLIs `exvs2-json`
+    (`exvs2_json`) and `fhm2d-extract` (`fhm2d_extract`); see
+    [CLI Tools](#cli-tools-agent-facing).
   - `src/page/` — React page components (TestEditor with MSC workspace, UnitEdit,
     FilesEdit, SceneEdit, etc.).
   - `docs/` — Format specifications and research notes.
@@ -25,8 +26,32 @@ Before doing any task, every AI agent must:
 
 1. Read this file first.
 2. Read the Cursor project rule: `.cursor/rules/custom-rules.mdc`.
-3. Search `docs/` for Markdown files relevant to the user's request, then read
-   the most relevant specifications before touching code or assets.
+3. Use one scoped filename search for relevant `docs/` Markdown, then read only
+   the most relevant specification before touching code or assets. Skip broad
+   docs scans when the user names the exact file or the task is rules-only.
+
+## GPT/Codex Fast Path (Mandatory)
+
+For GPT-5.6 Sol and other GPT coding models, minimize elapsed time, tool calls,
+and tokens as an explicit correctness constraint:
+
+- Use `caveman`, `gpt-fast-path`, and `gpt-fast-verify` for routine work.
+- Use one discovery path: CodeGraph for structure or `rg` for literal text.
+  Never re-check the same fact with a second tool after deterministic success.
+- Batch independent reads and commands. Do not re-read unchanged files or rerun
+  unchanged successful commands.
+- Default completion gate is exactly one shortest high-signal semantic command.
+  Prefer the exact affected test; otherwise use one narrow build/type/syntax
+  check. Stop after it passes.
+- Do not automatically chain build, typecheck, lint, tests, coverage, audit,
+  E2E, or full-workspace checks. Do not run app tests for docs/rules/skill-only
+  changes.
+- Expand verification only when the user explicitly requests it, release work
+  requires it, the first verifier fails, or material security/data-loss risk
+  cannot be covered by the narrow gate.
+- `gpt-fast-verify` overrides broad default behavior from generic
+  `verification-loop` / `verification-before-completion` skills. Fresh evidence
+  remains mandatory; evidence breadth does not.
 
 ## Lightweight Agent Sessions
 
@@ -58,12 +83,63 @@ from an earlier AI task manager. It is **auxiliary only**:
 - For current truth, prefer `docs/` specifications and current verification
   evidence over stale session notes.
 
+## Active Research Bootstrap (Read Before Rediscovery)
+
+Long-running research cases may register a compact bootstrap here. When a task
+matches a registered trigger, read the linked bootstrap **before** CodeGraph,
+`rg`, broad docs searches, binary inspection, or asset inventory. Treat its
+settled findings as the starting state; do not reproduce them merely to gain
+confidence.
+
+### Wing Zero Rebellion transformation port
+
+**Triggers:** `Wing Gundam Zero Rebellion`, `wing_gundam_zero_rebellion`,
+`900000004`, `28001001`, `028gunwtv_001gunwtv_001`, `kamaesht2neo`, or work on
+porting the TV Wing Zero / Neo Bird transformation.
+
+Read order:
+
+1. `docs/agent-sessions/2026-08-09-wing-zero-rebellion-transform-handoff.md`
+   — compact current truth, invalidated assumptions, source paths, and restart
+   conditions.
+2. `docs/msc-research/2026-08-09-wing-zero-rebellion-transform-port-plan.md`
+   — read only the sections needed for implementation or a disputed detail.
+3. `docs/msc-research/wing-zero-rebellion-bird-form-0c-input-map.md`
+   — bird-form input map: **0.c `func_143` only** (not `2.c` `ACTION_*`);
+   Rebellion main-shot bit = **`0x1`** (not TV `0x100`); bird form id = **`0x2`**.
+4. `docs/msc-research/wing-zero-rebellion-flight-interrupt-form.md`
+   — hit/interrupt is **FORCED_RECOVERY**, not TV requeue of `0x77b100ff`.
+   Action hash ≠ form (`global143`). Do not tear form only on standing idle.
+5. `work/20260809-wing-zero-rebellion-transform-plan/evidence/E-007.md` and
+   `E-008.md` — read only when auditing the canonical-name inventory, direct
+   motion Items, SHL mapping, or skeleton comparison.
+
+Reuse rules:
+
+- Locate source resources by canonical names, never by package hash. Resource
+  table hashes are validation values after name resolution.
+- Do not re-derive Rebellion vs TV input-bit semantics or re-litigate “gate
+  bird arsenal in 2.c ACTION_*” — settled in the bird-form input-map note.
+- Do not repeat source file counting, six-resource inventory, three transform
+  motion lookup, SHL model-folder mapping, or body/wing skeleton comparison
+  unless a restart condition in the bootstrap is met.
+- Do not unpack FHM2D for this case. The complete named source resources and
+  modern structure JSON files are already present.
+- Do not reopen the legacy hash manifests to determine availability; their old
+  “85 model assets missing” conclusion is explicitly superseded.
+- If implementation is requested, begin at the bootstrap's implementation
+  checkpoint and capture target before-manifests. Do not restart research from
+  package discovery.
+
 ## Required Documentation Sources
 
 Use `docs/` as the first source of project truth:
 
 - `docs/msc-binary-format-spec.md` — MSC bytecode format specification (header,
   opcodes, pushBit, script offset table, string table, EXVS2 vs Smash differences).
+- `docs/msc-research/func593-vanilla-ranged-slots.md` — vanilla / old-style
+  `func_593` ranged quartet: `676` start, `677` shoot, `678` **no-ammo
+  (not cancel)**, `679` end. Do not confuse with `func_587` (`677`+`680` fire).
 - `docs/exvs-stage-numatb-simple-color.md` — stage map props with only a color
   texture: use `FeRendererMovableVertexColor` → `vstgStandard_VertexColor`, strip
   unused PBR slots (avoids in-game overexposure).
@@ -71,6 +147,17 @@ Use `docs/` as the first source of project truth:
 - `docs/exvs2-json-cli.md` — `exvs2-json` CLI for EXVS2 binary resource
   inspection, scoped JSON-driven editing, and correlation JSON (implementation
   in `src-tauri/`).
+- `docs/nuanmb-ath-helper-bone-policy.md` — homemade NUANMB must **not**
+  author/edit/convert `ATH_*` helper bones; writer omits whole Transform
+  nodes (NUHLPB + rest only). Code: `ssbh_motion_interchange/nuanmb.rs`.
+- `docs/nuanmb-exvs2-import-in-game-layout.md` — homemade body/shot NUANMB
+  for **in-game** use. Retest ranking: **indexed multi-frame `0x4300` is the
+  critical shot fix**; also CompScale/Visibility shell + hygiene (no ATH /
+  residual / wrong source); **full Translate on every bone** (omit-limb-T not
+  required). Import FBX write path. Code: `ssbh_motion_interchange/nuanmb.rs`.
+- `docs/fhm2d-extract-cli.md` — `fhm2d-extract` CLI for unpacking OB `.fhm2d`
+  with required `--type` / `--layout`; agent outputs must stay under `tmp/`
+  (see `.cursor/rules/fhm2d-extract-artifacts.mdc`).
 - `docs/characterparam-field-notes.md` — characterparam empirical field
   identity (`lockOnDistanceMax` + `alertRangeDistance` = 红锁,
   `boostGaugeInitial` = HP); prefer over stale pool names when they conflict.
@@ -162,6 +249,18 @@ JSON. There is **no** tool named `exvs2-cli`; use `exvs2-json` / `exvs2_json`.
 work. Prefer debug for speed. See `.cursor/rules/no-release-builds.mdc` and
 `.cursor/rules/custom-rules.mdc` §7a.
 
+**Artifact location policy (mandatory):** Every persisted artifact created while
+preparing, running, or validating `exvs2-json` must be placed under the
+repository-root `tmp/` directory. Prefer a task-scoped directory such as
+`tmp/exvs2-json/<task>/`. This includes redirected `inspect` / `correlate` JSON,
+edit request JSON, files written by `edit --output`, reports, logs, diffs, and
+manually created round-trip fixtures. Do not write these artifacts beside source
+assets, into `docs/` or `src-tauri/`, or directly into the repository root.
+Paths are relative to the current working directory: use `tmp/...` from the
+repository root and `../tmp/...` from `src-tauri/`. Console-only output does not
+create an artifact; redirect it into `tmp/` whenever it needs to be retained.
+See `.cursor/rules/exvs2-json-artifacts.mdc`.
+
 **Commands**
 
 - `inspect` — parse `.jnttbl`, `character_id_table.bin`, `vernier_table`,
@@ -181,9 +280,13 @@ work. Prefer debug for speed. See `.cursor/rules/no-release-builds.mdc` and
 
 ```powershell
 cargo run --bin exvs2_json -- --help
-cargo run --bin exvs2_json -- inspect "<path>" --summary --pretty
-cargo run --bin exvs2_json -- edit "<path>" --request "<edit.json>" --output "<new-path>" --pretty
-cargo run --bin exvs2_json -- correlate --unit 001GUNDAM/005GYAN00/001 --weapon SuibakuMissile --id 10050102 --pretty
+New-Item -ItemType Directory -Force "..\tmp\exvs2-json\<task>" | Out-Null
+cargo run --bin exvs2_json -- inspect "<path>" --summary --pretty |
+  Out-File -Encoding utf8 "..\tmp\exvs2-json\<task>\inspect.json"
+cargo run --bin exvs2_json -- edit "<path>" --request "..\tmp\exvs2-json\<task>\edit-request.json" --output "..\tmp\exvs2-json\<task>\edited.bin" --pretty |
+  Out-File -Encoding utf8 "..\tmp\exvs2-json\<task>\edit-report.json"
+cargo run --bin exvs2_json -- correlate --unit 001GUNDAM/005GYAN00/001 --weapon SuibakuMissile --id 10050102 --pretty |
+  Out-File -Encoding utf8 "..\tmp\exvs2-json\<task>\correlation.json"
 # Prefer after code change:
 cargo build --bin exvs2_json
 # then: .\target\debug\exvs2_json.exe inspect ...
@@ -193,6 +296,61 @@ JSON output envelope always sets `"tool": "exvs2-json"`. Reuses the same Rust
 parsers as the desktop editor backend. Cross-repo pickup for  hook
 research: `docs\EXVS2JsonCli.md`.
 
+### `fhm2d-extract` (Cargo binary: `fhm2d_extract`)
+
+Standalone OB `.fhm2d` unpacker with **required** `--type` naming and explicit
+`--layout folder|flat`. Same thin-bin + library CLI core pattern as `exvs2-json`.
+Prefer this CLI for agent-side FHM2D unpack; do not use legacy
+`fhm2d_extract_folder` unless the user asks.
+
+| Item | Path |
+|------|------|
+| Full spec | `docs/fhm2d-extract-cli.md` |
+| CLI core | `src-tauri/src/fhm2d_extract_cli/` |
+| Binary entry | `src-tauri/src/bin/fhm2d_extract.rs` |
+| Extract engine | `src-tauri/src/format/fhm2d.rs` |
+| Integration tests | `src-tauri/tests/fhm2d_extract_cli_test.rs` |
+| Debug executable (agent default) | `src-tauri/target/debug/fhm2d_extract.exe` |
+| Artifact isolation rule | `.cursor/rules/fhm2d-extract-artifacts.mdc` |
+
+**Agent build policy (mandatory):** Debug only. See
+`.cursor/rules/no-release-builds.mdc` and `.cursor/rules/custom-rules.mdc` §7a.
+
+**Artifact location policy (mandatory):** Every persisted artifact created while
+preparing, running, or validating `fhm2d-extract` must be placed under the
+repository-root `tmp/` directory. Prefer a task-scoped directory such as
+`tmp/fhm2d-extract/<task>/`. This includes `--output` extract folders, sibling
+`*_structure.json`, `meta.bin`, redirected logs, reports, and temporary
+fixtures. Do **not** extract beside source `.fhm2d` assets, into game/workspace
+trees, `docs/`, `src-tauri/`, or the repository root unless the user explicitly
+requests that path. Paths are relative to the current working directory: use
+`tmp/...` from the repository root and `../tmp/...` from `src-tauri/`. See
+`.cursor/rules/fhm2d-extract-artifacts.mdc` and custom-rules §7c.
+
+**Run** (from `src-tauri/`; **debug only**):
+
+```powershell
+cargo build --bin fhm2d_extract
+$task = "..\tmp\fhm2d-extract\<task>"
+New-Item -ItemType Directory -Force $task | Out-Null
+.\target\debug\fhm2d_extract.exe "<source.fhm2d>" `
+  --output "$task\pack" `
+  --type motion `
+  --layout folder `
+  2>&1 | Tee-Object -FilePath "$task\extract.log"
+# flat example:
+.\target\debug\fhm2d_extract.exe "<source.fhm2d>" -o "$task\pack_flat" -t character -l flat
+```
+
+**Required flags (no silent defaults):** `--type` / `-t` and `--layout` / `-l`
+(`folder` | `flat`). Types: `character`, `effect`, `motion`, `msc`, `sound`,
+`character_param`, `character_cost`, `all_nutexb`, `stage_list` (also `fhm2d_*`).
+
+Writes files under `--output` and `<out_dir>_structure.json` beside that folder
+name (still under `tmp/` when `--output` is under `tmp/...`). Layout is
+independent of type. Naming warnings go to stderr; extraction still succeeds
+when files were written.
+
 ## Rule And Skill Link Map
 
 `AGENTS.md` is the hub. Every project rule or skill should link back here.
@@ -200,10 +358,16 @@ research: `docs\EXVS2JsonCli.md`.
 Current project rule entry points:
 
 - Cursor project rule: `.cursor/rules/custom-rules.mdc`
+- GPT fast verification: `.cursor/rules/gpt-fast-verification.mdc`
+- `exvs2-json` artifact isolation: `.cursor/rules/exvs2-json-artifacts.mdc`
+- `fhm2d-extract` artifact isolation: `.cursor/rules/fhm2d-extract-artifacts.mdc`
+- No release builds: `.cursor/rules/no-release-builds.mdc`
 - Cross-agent hub: `AGENTS.md`
 
 Project skills (domain):
 
+- GPT shortest execution path: `.agents/skills/gpt-fast-path/SKILL.md`
+- GPT one-command semantic gate: `.agents/skills/gpt-fast-verify/SKILL.md`
 - FHM2D stage pack/extract: `.cursor/skills/fhm2d-format/SKILL.md`
 - Stage numatb color-only materials: `.cursor/skills/exvs-stage-numatb/SKILL.md`
 - Tauri large binary IPC: `.cursor/skills/tauri-ipc-large-binary/SKILL.md`
@@ -217,6 +381,15 @@ Project skills (domain):
   `// End, origin is ...` comments. See
   `docs/msc-research/msc-ai-edit-block-rule.md`. Verify with
   `python .\tools\check_msc_ai_blocks.py "<modified X.c>"`.
+- **MSC function pointers must be symbols, not decompiled script offsets.**
+  Default `msclang` relocates `func_143` but keeps bare ints like `0x5fef`
+  forever; growing any earlier function then breaks the action thinker and the
+  unit has no actions. After editing any `0.c` / `2.c`, run:
+  `python .\tools\check_msc_opaque_func_ptrs.py "<modified X.c>"`
+  Critical bad pattern: `sys_1(0x10001, 0, 0x1, 0x5fef)` — must be
+  `sys_1(0x10001, 0, 0x1, func_143)`. Optional rewrite:
+  `python .\tools\check_msc_opaque_func_ptrs.py "<file>" --fix --write`.
+  Full bug report: `docs/agent-sessions/2026-08-13-msc-0c-function-pointer-offset-bug.md`.
 - When adding symbols to MSC decompiled `X.c` files, work as a reverse engineer:
   preserve existing decompiler names when reading old code, but never invent new
   opaque names like `global777` / `var42` for AI-added state. Use semantic names
@@ -244,10 +417,10 @@ Project skills (domain):
 
 ## Verification And Handoff
 
-- Run the narrowest reliable verification for each change.
-- For MSC tool changes, test with real MSC files and verify:
-  - Function pointer resolution (no raw hex pointers in .c output).
-  - `try.` pushBit counts match between original and recompiled.
-  - Header flags correctness.
+- Run exactly one narrowest reliable semantic verifier for each change, then
+  stop on pass. Do not add generic build/lint/type/full-suite checks afterward.
+- For MSC tool changes, prefer one targeted real-file round-trip command or
+  test that covers function pointer resolution, `try.` pushBit counts, and
+  header flags together. Do not verify those as three separate workflows.
 - Summarize what was done, what remains, and verification evidence in your
   final response or active plan artifact.

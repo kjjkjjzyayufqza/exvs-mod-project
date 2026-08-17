@@ -8,33 +8,41 @@ interface InteractionPropertyPanelProps {
   onFieldChange: (key: string, value: number) => void;
 }
 
+// Field grouping per the proven semantics in docs/hitbox-research/03-hit-effect-taxonomy.md.
+// interactId (0x6A0CCB8A) = victim reaction id dispatched by MSC func_629 (407=stun,
+// 500/501=bind); untechableFrame (0xFA03CBDA) = reaction-state duration (×100). These keep
+// their pre-proof pool names but their proven roles drive this grouping.
 const INTERACTION_GROUPS: Record<string, string[]> = {
-  Damage: ["damage", "damageRate", "correctionPct"],
+  "Victim reaction (interact_id)": ["interactId", "untechableFrame"],
+  Damage: [
+    "damage",
+    "damageRate",
+    "correctionPct",
+    "damageMultGate",
+    "damageMultGate2",
+  ],
   Knockback: [
-    "knockbackForce",
-    "knockbackDistance",
     "knockbackType",
+    "knockbackDistance",
+    "knockbackDirModeA",
+    "knockbackDirModeB",
     "groundBounce",
   ],
-  Stun: ["stunValue", "stunFrame", "hitstopFrame"],
-  Down: ["downValue", "hitLevel", "canTech", "untechableFrame"],
-  Guard: ["guardType", "guardBreakLevel", "blockLevel"],
-  Properties: [
-    "interactType",
-    "interactId",
-    "interactCategory",
-    "interactRange",
-    "priority",
-    "attackProperty",
+  "Hit Resolution": ["maxHitCount", "rehitInterval", "hitstopFrame", "hitLevel"],
+  Down: ["downValue", "downAccumQuarter", "canTech"],
+  "Screen shake (0x22C412CA/0x3626F732)": ["stunValue", "stunFrame"],
+  Classification: [
+    "interactionClass",
+    "targetFilter",
+    "visualEffectClass",
     "hitEffectId",
+    "interactCategory",
+    "victimGaugeAdd",
   ],
   References: [
     "interactTargetHash",
     "seHash",
     "unkBarrierHash",
-    "guardInteractHash",
-    "receiveMode",
-    "slideType",
     "wallBounceType",
   ],
 };

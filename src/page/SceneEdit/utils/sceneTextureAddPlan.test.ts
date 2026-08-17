@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   analyzeTextureAddCandidates,
   buildExistingTextureKeys,
+  findTextureEntryForDuplicate,
+  isReplaceableDuplicate,
   normalizeTextureNameKey,
+  type AnalyzedAddCandidate,
   type InternalNameReader,
   type RawAddFile,
 } from "./sceneTextureAddPlan";
@@ -148,5 +151,69 @@ describe("analyzeTextureAddCandidates", () => {
     expect(candidate.isNutexb).toBe(true);
     expect(candidate.internalName).toBe("cliff_internal");
     expect(candidate.duplicate).toBe(false);
+  });
+});
+
+describe("isReplaceableDuplicate / findTextureEntryForDuplicate", () => {
+  function makeCandidate(
+    overrides: Partial<AnalyzedAddCandidate> = {},
+  ): AnalyzedAddCandidate {
+    return {
+      id: "C:/in/a.png",
+      sourcePath: "C:/in/a.png",
+      filename: "a.png",
+      nutexbFilename: "a.nutexb",
+      isNutexb: false,
+      internalName: null,
+      duplicate: true,
+      duplicateReason: "filename",
+      duplicateOf: "diffuse.nutexb",
+      ...overrides,
+    };
+  }
+
+  it("treats filename and internal-name collisions as replaceable", () => {
+    expect(
+      isReplaceableDuplicate(makeCandidate({ duplicateReason: "filename" })),
+    ).toBe(true);
+    expect(
+      isReplaceableDuplicate(makeCandidate({ duplicateReason: "internal-name" })),
+    ).toBe(true);
+  });
+
+  it("does not allow batch-duplicate or unique rows to replace", () => {
+    expect(
+      isReplaceableDuplicate(makeCandidate({ duplicateReason: "batch-duplicate" })),
+    ).toBe(false);
+    expect(
+      isReplaceableDuplicate(
+        makeCandidate({ duplicate: false, duplicateReason: null, duplicateOf: null }),
+      ),
+    ).toBe(false);
+  });
+
+  it("resolves the existing model entry by duplicateOf filename", () => {
+    const entries = [
+      makeEntry({ id: "e1", filename: "diffuse.nutexb", scope: "model" }),
+      makeEntry({
+        id: "info1",
+        filename: "diffuse.nutexb",
+        scope: "info",
+        infoCategory: "fog",
+      }),
+    ];
+    const found = findTextureEntryForDuplicate(
+      entries,
+      makeCandidate({ duplicateOf: "diffuse.nutexb" }),
+    );
+    expect(found?.id).toBe("e1");
+  });
+
+  it("returns null when no matching model entry exists", () => {
+    const found = findTextureEntryForDuplicate(
+      [makeEntry({ filename: "other.nutexb" })],
+      makeCandidate({ duplicateOf: "missing.nutexb" }),
+    );
+    expect(found).toBeNull();
   });
 });

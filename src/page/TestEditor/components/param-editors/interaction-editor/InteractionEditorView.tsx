@@ -7,6 +7,7 @@ import { FilePathInput } from "@/components/ui/filePathInput";
 import { EntryListPanel } from "../shared/EntryListPanel";
 import { EditorStatusBar } from "../shared/EditorStatusBar";
 import { EventChainPanel } from "./EventChainPanel";
+import { HitEffectPanel } from "./HitEffectPanel";
 import { InteractionPropertyPanel } from "./InteractionPropertyPanel";
 import { useInteractionEditorStore } from "./InteractionEditorStore";
 import type { TypedParamFile } from "../../param-editor/typedParamTypes";
@@ -124,7 +125,8 @@ export function InteractionEditorView({
           onSelect={(i) => store.getState().selectEntry(i)}
         />
 
-        <div className="flex min-h-0 flex-col border-x">
+        <div className="flex min-h-0 flex-col overflow-y-auto border-x">
+          {entry && <HitEffectPanel entry={entry} />}
           <EventChainPanel entry={entry} />
         </div>
 

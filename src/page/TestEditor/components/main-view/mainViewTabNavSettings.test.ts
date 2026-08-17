@@ -5,7 +5,7 @@ import { MAIN_VIEW_TAB_META } from "./mainViewTabGroups";
 describe("findMainViewTabLabel", () => {
   it("returns short name for known tabs", () => {
     expect(findMainViewTabLabel("effect-folder", MAIN_VIEW_TAB_META)).toBe("Effect");
-    expect(findMainViewTabLabel("bullet-editor", MAIN_VIEW_TAB_META)).toBe("Bullet");
+    expect(findMainViewTabLabel("bullet-editor", MAIN_VIEW_TAB_META)).toBe("Bullet (outdated)");
   });
 
   it("returns null for unknown tabs", () => {

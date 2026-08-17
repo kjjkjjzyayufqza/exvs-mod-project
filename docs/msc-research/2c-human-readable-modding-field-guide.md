@@ -457,7 +457,9 @@ sys_47(0x10/0x11/0x12,...)
 global170 / global143
 ```
 
-Notion 记录中，`sys_4B(0x2, modelHash, boneIndex, actionHash, targetModel)` 是模型接上模型；`sys_4B(0x3)` 是解除装备。当前样本中：
+Notion 记录中，`sys_4B(0x2, modelId, boneHash, actionHash[, parentModel])` 是挂模型；
+**第三参是 body `.jnttbl` 的 `boneHash`，不是 nusktb 顺序 index**
+（见 `docs/exvs-msc-syscall-4b-notes.md`）。`sys_4B(0x3)` / `sys_4B(0x3, modelId)` 卸全部 / 卸指定。当前样本中：
 
 - `func_877` 初始化 active shell。
 - `func_887` 根据 `global170` 应用默认 loadout。

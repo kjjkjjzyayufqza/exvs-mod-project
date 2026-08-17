@@ -1,0 +1,13 @@
+# Local cargo defaults for this package only (does not affect other workspaces).
+#
+# Peak RAM during `cargo check` / rust-analyzer flycheck is dominated by how
+# many rustc processes run in parallel. This machine has many logical CPUs;
+# unbounded jobs was the main amplifier next to the large app_lib crate.
+
+[build]
+# Hard cap parallel rustc. Raise to 6-8 only if free RAM stays comfortably
+# above ~8GB while flycheck runs.
+jobs = 3
+
+[term]
+quiet = false

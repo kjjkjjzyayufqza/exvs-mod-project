@@ -1,4 +1,7 @@
-import type { DaeSsbhSessionState } from "@/components/ssbh-model-preview/daeSsbhTypes";
+import {
+  ensureMatlDataSerdeFields,
+  type DaeSsbhSessionState,
+} from "@/components/ssbh-model-preview/daeSsbhTypes";
 import type { MatlDataJson } from "@/components/ssbh-model-preview/types";
 import { collectDeclaredTexturePathSlotRefsForExportSession } from "@/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
 import type { ImportedDaeObject } from "../components/MapViewport";
@@ -85,9 +88,11 @@ export async function assertSsbhSessionTextureReferencesResolvable(params: {
  */
 function stripNutexbFromMatl(matl: MatlDataJson | null | undefined): MatlDataJson | null {
   if (!matl) return null;
+  // ensureMatlDataSerdeFields: coerce map-form colors/vectors/border_color to [f32;4] for Rust MatlData.
+  const normalized = ensureMatlDataSerdeFields(matl);
   return {
-    ...matl,
-    entries: matl.entries.map((entry) => ({
+    ...normalized,
+    entries: normalized.entries.map((entry) => ({
       ...entry,
       textures: entry.textures.map((tex) => ({
         ...tex,

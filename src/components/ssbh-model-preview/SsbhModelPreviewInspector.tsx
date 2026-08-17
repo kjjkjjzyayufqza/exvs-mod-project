@@ -25,7 +25,13 @@ import {
   getNutexbPreviewCacheStats,
   type NutexbPreviewCacheStats,
 } from "./nutexbPreviewCache";
-import { useSsbhModelPreview, type PreviewRenderStyle } from "./SsbhModelPreviewContext";
+import {
+  useSsbhModelPreview,
+  type PreviewRenderStyle,
+  type PreviewLightingPreset,
+  PREVIEW_LIGHTING_PRESET_META,
+  matchPreviewLightingPreset,
+} from "./SsbhModelPreviewContext";
 import { TEXTURE_PREVIEW_SLOT_META, TEXTURE_SLOT_TO_PATH_FIELD, buildMatlLookup } from "./meshFromSsbh";
 import { lookupTextureData } from "./ssbhTextureUpload";
 import { ssbhExportFolderToDae, type SsbhDaeUpAxis } from "./ssbhDaeIoService";
@@ -412,11 +418,16 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                         <button
                           type="button"
                           className="min-w-0 flex-1 cursor-pointer text-left"
-                          onClick={() =>
-                            p.setActivePreviewInstanceId(
-                              inst.id === p.activePreviewInstanceId ? null : inst.id,
-                            )
-                          }
+                          onClick={() => {
+                            if (inst.id === p.activePreviewInstanceId) {
+                              p.setActivePreviewInstanceId(null);
+                              p.setSelectionOutlineEnabled(false);
+                              return;
+                            }
+                            // Inspect list is the only path that enables yellow selection.
+                            p.setSelectionOutlineEnabled(true);
+                            p.setActivePreviewInstanceId(inst.id);
+                          }}
                         >
                           <div className="truncate text-[11px] font-medium leading-tight">{inst.displayLabel}</div>
                           <div className="truncate font-mono text-[9px] text-muted-foreground">{inst.modlPath}</div>
@@ -800,6 +811,41 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
       <MayaSection title="Lighting & Environment" icon={<Layout className="h-3.5 w-3.5" />} defaultOpen={false}>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
+            <Label
+              className="text-[11px] text-muted-foreground"
+              title="Soft character reduces low-poly faceting on unit models (higher ambient, softer key)."
+            >
+              Lighting preset
+            </Label>
+            <Select
+              value={matchPreviewLightingPreset({
+                ambientIntensity: p.ambientIntensity,
+                directionalIntensity: p.directionalIntensity,
+                directionalX: p.directionalX,
+                directionalY: p.directionalY,
+                directionalZ: p.directionalZ,
+              })}
+              onValueChange={(v) => {
+                if (v === "custom") return;
+                p.applyLightingPreset(v as PreviewLightingPreset);
+              }}
+            >
+              <SelectTrigger className="h-8 text-[11px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PREVIEW_LIGHTING_PRESET_META.map((preset) => (
+                  <SelectItem key={preset.id} value={preset.id} className="text-[11px]" title={preset.description}>
+                    {preset.label}
+                  </SelectItem>
+                ))}
+                <SelectItem value="custom" className="text-[11px]" disabled>
+                  Custom (sliders)
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <Label className="text-[11px] text-muted-foreground">Ambient</Label>
               <span className="text-[10px] font-mono">{p.ambientIntensity.toFixed(2)}</span>
@@ -1103,11 +1149,15 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                         <button
                           type="button"
                           className="min-w-0 flex-1 cursor-pointer truncate text-left text-[10px] font-medium hover:text-foreground"
-                          onClick={() =>
-                            p.setActivePreviewInstanceId(
-                              row.instance.id === p.activePreviewInstanceId ? null : row.instance.id,
-                            )
-                          }
+                          onClick={() => {
+                            if (row.instance.id === p.activePreviewInstanceId) {
+                              p.setActivePreviewInstanceId(null);
+                              p.setSelectionOutlineEnabled(false);
+                              return;
+                            }
+                            p.setSelectionOutlineEnabled(true);
+                            p.setActivePreviewInstanceId(row.instance.id);
+                          }}
                           title={row.instance.modlPath}
                         >
                           {row.instance.displayLabel}
@@ -1134,6 +1184,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                       transform: `translateY(${virtualRow.start}px)`,
                     }}
                     onClick={() => {
+                      p.setSelectionOutlineEnabled(true);
                       p.setActivePreviewInstanceId(row.instance.id);
                       p.setSelectedBoneIndex(row.boneIndex);
                     }}

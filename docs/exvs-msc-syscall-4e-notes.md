@@ -167,6 +167,13 @@ native 行为：
 
 当前不建议把它直接命名成“锁定开启”或“追踪开启”，因为还缺运行时验证。
 
+脚本侧补充（2026-08-17，Rebellion N 特射）：
+
+- `func_593` 的 `679` recovery 入口几乎都先 `sys_4E(0)`。
+- 实机：墙黏照射在只打了 `sys_4F(0x12, slot)` 之后仍然活着；补上 `sys_4E(0)` 后梁立刻消失。
+- 这是 **脚本配方**，还不能把 native `subcmd 0` 正式命名成「销毁投射物」。
+- 完整顺序、为何必须在 `hiv_lock_aim` 之前调用，见 `docs/msc-research/alt2-gerobi-stop-and-followup.md`。
+
 ### `subcmd 0x01`
 
 native 行为：

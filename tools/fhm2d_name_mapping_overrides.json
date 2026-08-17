@@ -18,6 +18,119 @@
         "docs/superpowers/specs/2026-06-27-gyan-hyaku-shiki-flight-porting-notes.md",
         "docs/superpowers/specs/2026-06-26-msc-toolchain-session-repair-record.md"
       ]
+    },
+    {
+      "hashName": "0x006044D2",
+      "name": "017gyakch_006newhws_001",
+      "routePrefix": "003motion",
+      "routeId": "unit.motion",
+      "characterId": 17006001,
+      "source": "manual-research-note",
+      "confidence": "manual-research-note",
+      "aliases": [
+        "017gyakch_006newhws_001",
+        "gyakch_006newhws"
+      ],
+      "notes": "OB-only ν Gundam HWS (17006001) motion pack. VS2 has no 0x006044D2_meta.bin. ob_unit.json animeFileName is the 7-hex string 0x06044d2 so the 8-hex normalizer never emits an ob-unit-list motion row. First-24 nuanmb sampling majority-votes 000common_000common_001. Short name from ai_CHR_017GYAKCH_006NEWHWS_001, not 001NEWGUN (17001001).",
+      "references": [
+        "E:\\OBHK0.3_v27\\data\\x64\\050ai\\aiscript\\ai_CHR_017GYAKCH_006NEWHWS_001.aimsexcd"
+      ]
+    },
+    {
+      "hashName": "0x0031807C",
+      "name": "756gndmnt_002jststb_001",
+      "routePrefix": "041cpm",
+      "routeId": "unit.param",
+      "characterId": 756002001,
+      "source": "manual-research-note",
+      "confidence": "manual-research-note",
+      "aliases": [
+        "756gndmnt_002jststb_001",
+        "gndmnt_002jststb"
+      ],
+      "notes": "ob_unit.json ammoFileName is the 7-hex string 0x031807c so the 8-hex normalizer never emitted an ob-unit-list param row. Leftover dplcache named it ob_0031807c.",
+      "references": [
+        "E:\\OBHK0.3_v27\\data\\x64\\050ai\\aiscript\\ai_CHR_756GNDMNT_002JSTSTB_001.aimsexcd"
+      ]
+    },
+    {
+      "hashName": "0x00BC54B9",
+      "name": "001gundam_017dom000_001_00bc54b9",
+      "routePrefix": "002chara",
+      "routeId": "unit.model",
+      "characterId": 501705001,
+      "source": "manual-research-note",
+      "confidence": "manual-research-note",
+      "aliases": [
+        "001gundam_017dom000_001",
+        "unit_501705001"
+      ],
+      "notes": "ob_unit.json modelFileName is the 7-hex string 0x0bc54b9. Internal model stem is Dom 001gundam_017dom000_001; hash suffix kept because official Dom 0x90598108 already owns that route name.",
+      "references": [
+        "E:\\OBHK0.3_v27\\data\\x64\\050ai\\aiscript\\ai_CHR_001GUNDAM_017DOM000_001.aimsexcd"
+      ]
+    },
+    {
+      "hashName": "0x00DB34FD",
+      "name": "749orphn2_005rgnjla_001",
+      "routePrefix": "002chara",
+      "routeId": "unit.model",
+      "characterId": 749005001,
+      "source": "manual-research-note",
+      "confidence": "manual-research-note",
+      "aliases": [
+        "749orphn2_005rgnjla_001"
+      ],
+      "notes": "ob_unit.json modelFileName is the 7-hex string 0x0db34fd so the 8-hex normalizer never emitted an ob-unit-list model row.",
+      "references": []
+    },
+    {
+      "hashName": "0x00ACD4C4",
+      "name": "701gundam_007acguy0_001",
+      "routePrefix": "002chara",
+      "routeId": "unit.model",
+      "characterId": 701007001,
+      "source": "manual-research-note",
+      "confidence": "manual-research-note",
+      "aliases": [
+        "701gundam_007acguy0_001",
+        "gundam_007acguy0"
+      ],
+      "notes": "ob_unit.json modelFileName is the 7-hex string 0x0acd4c4. Padded 0x00ACD4C4.fhm2d is absent from this dplcache dump.",
+      "references": [
+        "E:\\OBHK0.3_v27\\data\\x64\\050ai\\aiscript\\ai_CHR_701GUNDAM_007ACGUY0_001.aimsexcd"
+      ]
+    },
+    {
+      "hashName": "0x00FF1FC0",
+      "name": "unit_505707001",
+      "routePrefix": "041cpm",
+      "routeId": "unit.param",
+      "characterId": 505707001,
+      "source": "manual-research-note",
+      "confidence": "manual-research-note",
+      "aliases": [
+        "unit_505707001"
+      ],
+      "notes": "ob_unit.json ammoFileName is the 7-hex string 0x0ff1fc0. Padded 0x00FF1FC0.fhm2d is absent from this dplcache dump.",
+      "references": []
+    },
+    {
+      "hashName": "0x003CDD4D",
+      "name": "733gndage_017gnaocm_001",
+      "routePrefix": "041cpm",
+      "routeId": "unit.param",
+      "characterId": 733017001,
+      "source": "manual-research-note",
+      "confidence": "manual-research-note",
+      "aliases": [
+        "733gndage_017gnaocm_001",
+        "gndage_017gnaocm"
+      ],
+      "notes": "ob_unit.json ammoFileName is the 7-hex string 0x03cdd4d. Padded 0x003CDD4D.fhm2d is absent from this dplcache dump.",
+      "references": [
+        "E:\\OBHK0.3_v27\\data\\x64\\050ai\\aiscript\\ai_CHR_733GNDAGE_017GNAOCM_001.aimsexcd"
+      ]
     }
   ]
 }

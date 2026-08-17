@@ -22,7 +22,7 @@ Parser reuse:
 
 - `.jnttbl` → `src-tauri/src/jnttbl_format.rs`
 - `character_id_table.bin` → same layout as `src/models/characterIdTable.ts`
-- Typed param tables → `src-tauri/src/format/{vernier_table,armsparam,bulletparam,projectile_depiction_table}.rs`
+- Typed param tables → `src-tauri/src/format/{vernier_table,armsparam,bulletparam,projectile_depiction_table,hitgroupiddef,interactionid,grapparam}.rs`
 - SSBH model files → `ssbh_data` (`SkelData`, `MeshData`, `ModlData`) via the same parsers as UnitEdit / FBX round-trip
 
 ## How To Run
@@ -93,6 +93,9 @@ builders:
 - `bulletparam`
 - `speedparam`
 - `projectile-depiction-table`
+- `hitgroupiddef`
+- `interactionid`
+- `grapparam`
 - `navi-list`
 - `pilot-list`
 
@@ -133,6 +136,9 @@ Supported operations:
 | `armsparam` | `armsparam` | filename |
 | `bulletparam` | `bulletparam` | filename |
 | `projectile-depiction-table` | `projectile_depiction_table` | filename |
+| `hitgroupiddef` | `hitgroupiddef` | filename |
+| `interactionid` | `interactionid` | filename |
+| `grapparam` | `grapparam` | filename |
 | `navi-list` | `navi_list` | filename contains `navi_list` (`.vgsht2` / `.bin`) |
 | `pilot-list` | `pilot_list` | filename contains `pilot_list` (`.vgsht2` / `.bin`) |
 | `nusktb` | `nusktb` | `.nusktb`, or `HBSS` + `LEKS` tag at `0x10` |
@@ -221,6 +227,66 @@ Use `rawLeBytes` for IDA byte search. Use `hex` for human-readable correlation.
   `CShellCollision` multi-sphere patch, not a data-only bulletparam edit. See
   `docs\EXVS2ProjectileCollision900300001.md`.
 
+### `hitgroupiddef` / `interactionid` / `grapparam` (hitbox tables)
+
+The three melee-hitbox tables share the standard param-bin container and the full
+typed-param edit op set (`setParamField`, `copyParamEntry`, `upsertParamEntry`,
+`deleteParamEntry`). Rebuilds are byte-identical (verified across all 87 table
+files under `E:\XB\mod\041cpm` and `E:\XB\解包\com\file\041cpm`). Field names
+follow the corrected, binary-proven schema in `docs/hitbox-research/`; legacy
+pre-correction names (`groupId`, `boneHash`, `receiveMode`, …) are rejected as
+unknown fields — there is no alias fallback.
+
+**hitgroupiddef** (`docs/hitbox-research/02-hitbox-volume-engine.md`, binary-proven):
+
+- One row = ONE SPHERE in bone space: center `centerX`/`centerY`/`centerZ`,
+  radius `sphereRadius` (f32, untransformed by the bone matrix).
+- `shapeMode`: `0` = static sphere, `1` = frame-swept capsule between prev/current
+  frame centers.
+- `interactionId`: foreign key to `interactionid.entryId`, armed by MSC
+  `func_148(interactionId)`; it is **not** a bone hash.
+- `boneId`: attachment bone id resolved through the skeleton bone-id→index map.
+- `collisionFlags`: row class — `0` attack, `1` hurtbox, `2` third class.
+- `unused3284a82d` / `unused42ee5ca2` / `unused458398bb` / `unusedAce03d8e` /
+  `unusedDbe70d18`: DEAD — the engine never reads them (02 §7). They are parsed
+  and rebuilt only for byte-faithful round-trips; editing them has no effect.
+
+**interactionid** (`docs/hitbox-research/03-hit-effect-taxonomy.md` §1):
+
+- Binary-proven fields: `damage` (displayed damage 1:1), `downValue` (wiki down
+  value ×100, decrementing budget), `correctionPct`, `damageMultGate`,
+  `damageMultGate2`, `visualEffectClass`, `victimGaugeAdd`, `knockbackDirModeA`,
+  `knockbackDirModeB`, `downAccumQuarter`, `rehitInterval`, `targetFilter`,
+  `interactionClass`, `maxHitCount`, `knockbackType` (mechanism proven).
+- UNVERIFIED (legacy guessed names with no proven read site — 03 §4): `stunValue`,
+  `stunFrame`, `hitstopFrame`, `knockbackDistance`, `groundBounce`, `hitLevel`,
+  `canTech`, `seHash`, `damageRate`, `hitEffectId`, `interactCategory`,
+  `unkBarrierHash`, `wallBounceType`, `untechableFrame`, `interactId`.
+- `interactTargetHash` is a subsystem selector (melee vs other), not an entry
+  reference and not a bone (01 §3.5).
+
+**grapparam** (`docs/hitbox-research/01-melee-hitbox-architecture.md` §5.2):
+
+- Move-level melee table (frames/behaviour), bound via MSC `func_219(hash)`;
+  all 16 field hashes are read by `sys_0(0x60002, entryId, fieldHash)`.
+- CAUTION: `damage` / `correctionPct` / `downValue` here are NOT the wiki-visible
+  displayed damage / correction / down values — those live in `interactionid`
+  (03 §2.1). Do not edit grapparam damage expecting displayed damage to change.
+- `grapPriority` and `downValueLast` are multiplied by 100 on load.
+- `reach` uses a different coordinate system from `sphereRadius`; conversion is
+  UNPROVEN (01 §7).
+
+Example edit request:
+
+```json
+{
+  "type": "hitgroupiddef",
+  "operations": [
+    { "op": "setParamField", "entryId": 1, "field": "sphereRadius", "value": 3.25 }
+  ]
+}
+```
+
 ### `navi_list` / `pilot_list`
 
 Both are standard `param_bin` tables (magic `0xCDABB8A9`, same as
@@ -264,6 +330,11 @@ The CLI avoids overclaiming:
   model availability.
 - Parser field names are not runtime proof. For projectile collision changes,
   confirm the native task/vtable consumer before relying on a field label.
+- Hitbox tables: only fields marked PROVEN in `docs/hitbox-research/` have
+  binary-verified consumers. UNVERIFIED interactionid fields keep legacy guessed
+  names and may do nothing. The five `unused*` hitgroupiddef fields are dead.
+- grapparam damage-like fields are move-level bookkeeping, not the displayed
+  damage; displayed damage/correction/down values live in interactionid.
 
 ## Testing
 

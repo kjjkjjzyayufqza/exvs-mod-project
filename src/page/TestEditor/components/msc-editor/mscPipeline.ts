@@ -9,6 +9,8 @@
  * recompiles back to its source extension in place.
  */
 
+import type { MscWorkspaceMode } from "../../utils/mscWorkspaceUtils";
+
 export interface MscFileInfo {
   name: string;
   path: string;
@@ -36,13 +38,24 @@ export function isMscPackScriptCFile(name: string): boolean {
   return lower === "0.c" || lower === "1.c" || lower === "2.c";
 }
 
-export function getMscFileRole(name: string): MscFileRole {
+export function getMscFileRole(
+  name: string,
+  mode: MscWorkspaceMode = "unit",
+): MscFileRole {
   const lower = name.toLowerCase();
-  if (SCRIPT_EXTENSIONS.some((ext) => lower.endsWith(ext))) return "script";
+  if (mode === "traditional" && lower.endsWith(".bin")) return "script";
+  if (mode === "unit" && SCRIPT_EXTENSIONS.some((ext) => lower.endsWith(ext))) return "script";
   if (lower.endsWith(".resolved.md")) return "resolved";
   if (lower.endsWith(".c")) return "c";
   if (lower.endsWith(".txt")) return "log";
   return "other";
+}
+
+export function isMscRepackableCFile(
+  name: string,
+  mode: MscWorkspaceMode,
+): boolean {
+  return mode === "traditional" ? name.toLowerCase().endsWith(".c") : isMscPackScriptCFile(name);
 }
 
 export interface MscSlotStatus extends MscPackSlot {
@@ -78,6 +91,73 @@ export function compareByLeadingIndex(a: MscFileInfo, b: MscFileInfo): number {
   return a.name.localeCompare(b.name, undefined, { numeric: true });
 }
 
+/** Slot index (0/1/2) for a pack root C file name such as `1.c`. Throws on anything else. */
+export function getMscPackSlotIndexForCFile(name: string): number {
+  if (!isMscPackScriptCFile(name)) {
+    throw new Error(`MSC workspace: not a pack root C file: ${name}`);
+  }
+  return Number.parseInt(name, 10);
+}
+
+/**
+ * Temp recompile target used by round-trip verify. Lives next to the C file
+ * but uses a non-script extension so it is never picked up as a pack source.
+ */
+export function getMscRoundtripTempPath(cFilePath: string): string {
+  const normalized = cFilePath.replace(/\\/g, "/");
+  const fileName = normalized.split("/").pop() ?? "";
+  const slotIndex = getMscPackSlotIndexForCFile(fileName);
+  return cFilePath.slice(0, cFilePath.length - fileName.length) + `${slotIndex}.roundtrip.tmp`;
+}
+
+/** Shape returned by the `compare_msc_roundtrip` Tauri command. */
+export interface MscRoundtripCompareReport {
+  isMatch: boolean;
+  originalSize: number;
+  recompiledSize: number;
+  firstDivergenceOffset: number | null;
+  contextStartOffset: number | null;
+  originalContextHex: string | null;
+  recompiledContextHex: string | null;
+}
+
+export type MscVerifyState =
+  | { status: "verifying" }
+  | { status: "match"; totalSize: number }
+  | {
+      status: "mismatch";
+      firstDivergenceOffset: number;
+      originalSize: number;
+      recompiledSize: number;
+    }
+  | { status: "error"; message: string };
+
+/** Fold a backend compare report into the per-slot verify state. */
+export function verifyStateFromReport(report: MscRoundtripCompareReport): MscVerifyState {
+  if (report.isMatch) {
+    return { status: "match", totalSize: report.originalSize };
+  }
+  if (report.firstDivergenceOffset === null) {
+    throw new Error("MSC workspace: mismatch report is missing the first divergence offset");
+  }
+  return {
+    status: "mismatch",
+    firstDivergenceOffset: report.firstDivergenceOffset,
+    originalSize: report.originalSize,
+    recompiledSize: report.recompiledSize,
+  };
+}
+
+/** One-line human summary of a compare report for toasts. */
+export function summarizeMscRoundtripReport(report: MscRoundtripCompareReport): string {
+  if (report.isMatch) {
+    return `byte-identical (${report.originalSize} bytes)`;
+  }
+  const offset = report.firstDivergenceOffset;
+  const offsetText = offset === null ? "unknown offset" : `offset 0x${offset.toString(16)}`;
+  return `diverges at ${offsetText} (original ${report.originalSize} bytes, recompiled ${report.recompiledSize} bytes)`;
+}
+
 export interface MscFileGroup {
   role: MscFileRole;
   label: string;
@@ -92,10 +172,13 @@ const GROUP_ORDER: ReadonlyArray<{ role: MscFileRole; label: string }> = [
   { role: "other", label: "Other" },
 ];
 
-export function groupMscFiles(files: readonly MscFileInfo[]): MscFileGroup[] {
+export function groupMscFiles(
+  files: readonly MscFileInfo[],
+  mode: MscWorkspaceMode = "unit",
+): MscFileGroup[] {
   const byRole = new Map<MscFileRole, MscFileInfo[]>();
   for (const file of files) {
-    const role = getMscFileRole(file.name);
+    const role = getMscFileRole(file.name, mode);
     const bucket = byRole.get(role);
     if (bucket) {
       bucket.push(file);

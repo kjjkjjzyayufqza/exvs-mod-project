@@ -12,6 +12,7 @@ MSCDEC = TOOLS_DIR / "mscdec.py"
 
 RX78_SCRIPT0 = Path(r"E:\XB\mod\040msc\001gundam_001gundam_001\0.bscex")
 DOM_SCRIPT2 = Path(r"E:\XB\mod\040msc\001gundam_017dom000_001_0473be5c\2.dscex")
+TSIENT_SCRIPT2 = Path(r"E:\XB\mod\040msc\053gbftry_005tsient_001\2.dscex")
 
 
 def decompile_to_text(input_path, output_path, log_path):
@@ -87,6 +88,33 @@ class MscdecScriptRefRegressionTests(unittest.TestCase):
         self.assertIn("var1 = func_45;", text)
         self.assertIn("sys_2(0, 0x2, var1);", text)
         self.assertNotIn("var1 = 0x4438;", text)
+
+    def test_tsient_script2_auto_beautifies_new_action_dispatcher(self):
+        if not TSIENT_SCRIPT2.exists():
+            raise AssertionError(f"Missing regression fixture: {TSIENT_SCRIPT2}")
+
+        with tempfile.TemporaryDirectory(prefix="mscdec_tsient_script2_") as tmp_dir:
+            tmp = Path(tmp_dir)
+            text = decompile_to_text(
+                TSIENT_SCRIPT2,
+                tmp / "2.c",
+                tmp / "2.log",
+            )
+
+        resolver = text.split("int func_983(int arg0)", 1)[1].split(
+            "void func_984()", 1
+        )[0]
+        group_resolver = text.split("int func_873(int arg0)", 1)[1].split(
+            "void func_874()", 1
+        )[0]
+        self.assertIn("return func_942;", group_resolver)
+        self.assertNotIn("return 0x3a5e5;", group_resolver)
+        self.assertIn("switch(arg0)", resolver)
+        self.assertEqual(resolver.count("case 0x"), 138)
+        self.assertIn("case 0xd6fd54:", resolver)
+        self.assertIn("var1 = func_1040;", resolver)
+        self.assertNotRegex(resolver, r"var1 = 0x[0-9a-fA-F]+;")
+        self.assertEqual(resolver.count("{"), resolver.count("}"))
 
 
 if __name__ == "__main__":

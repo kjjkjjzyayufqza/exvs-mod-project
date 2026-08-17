@@ -1,6 +1,8 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
+import { join, tempDir } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
+import { mkdir, remove } from "@tauri-apps/plugin-fs";
 import {
   Boxes,
   ChevronDown,
@@ -8,6 +10,7 @@ import {
   FileBox,
   FileUp,
   FolderPlus,
+  LayoutTemplate,
   Loader2,
   Plus,
   Replace,
@@ -30,7 +33,7 @@ import {
   getStoredDialogDefaultPath,
   rememberStoredDialogSelection,
 } from "@/utils/dialogDefaultPathStore";
-import { DaeImportConfigModal } from "@/page/SceneEdit/components/dae-import/DaeImportConfigModal";
+import { DaeImportConfigModal, type DaeImportWorkflowMode } from "@/page/SceneEdit/components/dae-import/DaeImportConfigModal";
 import {
   applyUnitModelFbxImportDefaults,
   createDefaultDaeImportConfig,
@@ -49,6 +52,8 @@ import {
 import {
   ssbhAnalyzeDae,
   ssbhAnalyzeFbx,
+  ssbhConvertDaeToSsbh,
+  ssbhConvertFbxToSsbh,
 } from "@/components/ssbh-model-preview/ssbhDaeIoService";
 import {
   assertSsbhSessionTextureReferencesResolvable,
@@ -62,20 +67,29 @@ import {
   addUnitModelModel,
   importUnitModelStaticMesh,
   previewUnitModelModelReplacement,
+  previewUnitModelNumshbReplacement,
   removeUnitModelModel,
   replaceUnitModelModel,
+  replaceUnitModelNumshb,
   validateUnitModelSourceFolder,
+  type UnitModelNumshbReplacePreview,
   type UnitModelReplacePreview,
   type UnitModelSourceValidation,
 } from "../utils/unitModelModelService";
+import { createNumatbTemplateFromUnitModel } from "../utils/unitModelNumatbTemplateService";
 import { listUnitModelTextures } from "../utils/unitModelTextureService";
 import { UnitModelAddFolderModal } from "./UnitModelAddFolderModal";
 import { UnitModelRemoveModelModal } from "./UnitModelRemoveModelModal";
-import { UnitModelReplaceFolderModal } from "./UnitModelReplaceFolderModal";
+import {
+  UnitModelReplaceFolderModal,
+  type UnitModelReplaceScope,
+} from "./UnitModelReplaceFolderModal";
 import type { UnitModelSourceTexturePlan } from "./UnitModelSourceValidationPreview";
 import {
   UNIT_MODEL_ADD_SSBH_FOLDER_DIALOG_PATH_KEY,
   UNIT_MODEL_IMPORT_STATIC_MESH_DIALOG_PATH_KEY,
+  UNIT_MODEL_REPLACE_NUMSHB_DIALOG_PATH_KEY,
+  UNIT_MODEL_REPLACE_NUMSHB_SOURCE_DIALOG_PATH_KEY,
   UNIT_MODEL_REPLACE_SSBH_FOLDER_DIALOG_PATH_KEY,
 } from "../utils/unitModelEditorSettings";
 
@@ -244,15 +258,16 @@ function buildSourceTexturePlan(
   validation: UnitModelSourceValidation,
   poolTextureNames: ReadonlySet<string>,
 ): UnitModelSourceTexturePlan {
-  const sourceNames = new Set(validation.sourceTexturesFound.map((name) => name.toLowerCase()));
+  // Matched byte for byte, the way the game does: a texture whose name differs only in case
+  // does not resolve, so reporting it as found here would green-light a package that crashes.
+  const sourceNames = new Set(validation.sourceTexturesFound);
   const copiedFromSource: string[] = [];
   const reusedFromPool: string[] = [];
   const missing: string[] = [];
   for (const reference of validation.textureReferences) {
-    const key = reference.toLowerCase();
-    if (poolTextureNames.has(key)) {
+    if (poolTextureNames.has(reference)) {
       reusedFromPool.push(reference);
-    } else if (sourceNames.has(key)) {
+    } else if (sourceNames.has(reference)) {
       copiedFromSource.push(reference);
     } else {
       missing.push(reference);
@@ -298,18 +313,32 @@ export function UnitModelModelManagerPanel({
     validation: UnitModelSourceValidation;
     texturePlan: UnitModelSourceTexturePlan;
   } | null>(null);
+  const [replaceTarget, setReplaceTarget] = useState<{
+    label: string;
+    index: number;
+  } | null>(null);
+  const [replaceScope, setReplaceScope] = useState<UnitModelReplaceScope>("numshb");
   const [replaceFolderPreview, setReplaceFolderPreview] = useState<{
     source: string;
     preview: UnitModelReplacePreview;
   } | null>(null);
+  const [replaceNumshbPreview, setReplaceNumshbPreview] = useState<{
+    source: string;
+    preview: UnitModelNumshbReplacePreview;
+    tempDir?: string;
+  } | null>(null);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
   const [importEntries, setImportEntries] = useState<DaeImportEntry[]>([]);
+  const [importWorkflow, setImportWorkflow] = useState<DaeImportWorkflowMode>("unitModel");
   const [showImportConfig, setShowImportConfig] = useState(false);
   const [importProgress, setImportProgress] = useState<UnitImportProgressState>({
     open: false,
     progress: 0,
     steps: [],
   });
+  const replaceTargetRef = useRef(replaceTarget);
+  replaceTargetRef.current = replaceTarget;
+  const suppressReplaceCloseRef = useRef(false);
 
   const canMutate = Boolean(modelRoot && structureJsonPath);
 
@@ -339,7 +368,14 @@ export function UnitModelModelManagerPanel({
       );
       const validation = await validateUnitModelSourceFolder(source);
       const inventory = await listUnitModelTextures(modelRoot, structureJsonPath);
-      const poolNames = new Set(inventory.textures.map((texture) => texture.filename.toLowerCase()));
+      // fhm2d records carry no names, so a numatb reference resolves against the name stored
+      // inside the nutexb; fall back to the file name only when the footer was unreadable.
+      const poolNames = new Set(
+        inventory.textures.map((texture) => {
+          const stored = texture.internalName?.trim();
+          return stored ? `${stored}.nutexb` : texture.filename;
+        }),
+      );
       const texturePlan = buildSourceTexturePlan(validation, poolNames);
       setAddFolderPreview({ source, validation, texturePlan });
     } catch (error) {
@@ -440,6 +476,7 @@ export function UnitModelModelManagerPanel({
         session.setFlipUv(true);
       }
 
+      setImportWorkflow("unitModel");
       setImportEntries([entry]);
       setShowImportConfig(true);
       try {
@@ -595,11 +632,85 @@ export function UnitModelModelManagerPanel({
     setRemoveTarget(label);
   };
 
-  const handleReplaceFolder = async (label: string) => {
+  const handleCreateNumatbTemplate = async (model: ModelSummary) => {
+    if (!structureJsonPath) {
+      toast.error("Open or extract a unit-model folder first.");
+      return;
+    }
+    setBusy(`template:${model.label}`);
+    try {
+      const result = await createNumatbTemplateFromUnitModel({
+        structureJsonPath,
+        model: model.node,
+        templateName: model.label,
+      });
+      const mayaCount = result.template.mayaFile.entries.length;
+      const nustCount = result.template.nustFile.entries.length;
+      toast.success(
+        result.replacedExisting
+          ? `Updated NUMATB template "${result.template.name}"`
+          : `Created NUMATB template "${result.template.name}"`,
+        {
+          description:
+            `Maya ${mayaCount} material(s), Nust ${nustCount} material(s). ` +
+            "Select it in Import FBX / DAE → NUMATB template.",
+        },
+      );
+    } catch (error) {
+      toast.error("Failed to create NUMATB template", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleOpenReplace = (label: string, index: number) => {
     if (!modelRoot || !structureJsonPath) {
       toast.error("Open or extract a unit-model folder first.");
       return;
     }
+    setReplaceTarget({ label, index });
+    setReplaceScope("numshb");
+    setReplaceFolderPreview(null);
+    setReplaceNumshbPreview(null);
+  };
+
+  const cleanupReplaceTempDir = async (path?: string) => {
+    if (!path) return;
+    try {
+      await remove(path, { recursive: true });
+    } catch {
+      // Temp conversion files are best-effort cleanup.
+    }
+  };
+
+  const handleCloseReplace = () => {
+    if (busy?.startsWith("replace:")) return;
+    if (suppressReplaceCloseRef.current || showImportConfig || importProgress.open) {
+      return;
+    }
+    const tempPath = replaceNumshbPreview?.tempDir;
+    setReplaceTarget(null);
+    setReplaceFolderPreview(null);
+    setReplaceNumshbPreview(null);
+    void cleanupReplaceTempDir(tempPath);
+  };
+
+  const handleReplaceScopeChange = (scope: UnitModelReplaceScope) => {
+    const tempPath = replaceNumshbPreview?.tempDir;
+    setReplaceScope(scope);
+    setReplaceFolderPreview(null);
+    setReplaceNumshbPreview(null);
+    void cleanupReplaceTempDir(tempPath);
+  };
+
+  const handleChooseFullFolder = async () => {
+    if (!modelRoot || !structureJsonPath || !replaceTarget) {
+      toast.error("Open or extract a unit-model folder first.");
+      return;
+    }
+    const label = replaceTarget.label;
     setBusy(`replace:${label}`);
     try {
       const source = await open({
@@ -633,8 +744,270 @@ export function UnitModelModelManagerPanel({
     }
   };
 
+  const handleChooseExistingNumshb = async () => {
+    if (!modelRoot || !structureJsonPath || !replaceTarget) {
+      toast.error("Open or extract a unit-model folder first.");
+      return;
+    }
+    const label = replaceTarget.label;
+    setBusy(`replace:${label}`);
+    try {
+      const selected = await open({
+        multiple: false,
+        title: `Select replacement NUMSHB for ${label}`,
+        filters: [{ name: "NUMSHB", extensions: ["numshb"] }],
+        defaultPath:
+          (await getStoredDialogDefaultPath(UNIT_MODEL_REPLACE_NUMSHB_DIALOG_PATH_KEY)) ??
+          modelRoot ??
+          undefined,
+      });
+      const source = Array.isArray(selected) ? selected[0] : selected;
+      if (typeof source !== "string" || !source.trim()) return;
+      await rememberStoredDialogSelection(
+        UNIT_MODEL_REPLACE_NUMSHB_DIALOG_PATH_KEY,
+        source,
+        "file",
+      );
+      const preview = await previewUnitModelNumshbReplacement(
+        modelRoot,
+        label,
+        source,
+        structureJsonPath,
+      );
+      const previousTemp = replaceNumshbPreview?.tempDir;
+      setReplaceNumshbPreview({ source, preview });
+      await cleanupReplaceTempDir(previousTemp);
+    } catch (error) {
+      toast.error("Replacement NUMSHB is invalid", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleConvertReplaceNumshb = async () => {
+    if (!modelRoot || !structureJsonPath || !replaceTarget) {
+      toast.error("Open or extract a unit-model folder first.");
+      return;
+    }
+    setBusy("analyze");
+    try {
+      const selected = await open({
+        multiple: false,
+        title: `Select FBX or DAE to convert as NUMSHB for ${replaceTarget.label}`,
+        filters: [{ name: "Static Mesh", extensions: ["fbx", "dae"] }],
+        defaultPath:
+          (await getStoredDialogDefaultPath(UNIT_MODEL_REPLACE_NUMSHB_SOURCE_DIALOG_PATH_KEY)) ??
+          modelRoot ??
+          undefined,
+      });
+      const filePath = Array.isArray(selected) ? selected[0] : selected;
+      if (!filePath) return;
+      await rememberStoredDialogSelection(
+        UNIT_MODEL_REPLACE_NUMSHB_SOURCE_DIALOG_PATH_KEY,
+        filePath,
+        "file",
+      );
+      const fileName = filePath.split(/[/\\]/).pop() ?? "model.fbx";
+      const baseFilename = sanitizeBaseFilename(fileName);
+      const sourceFormat = detectStaticMeshImportFormat(fileName);
+      let config = createDefaultDaeImportConfig(baseFilename);
+      config.loadToScene = false;
+      config.convertToSsbh = true;
+      config.generateHkt = false;
+      config.directToDisk = true;
+      config.outputDirectory = modelRoot;
+      config.ssbhConfig.writeNumdlb = false;
+      config.ssbhConfig.writeNumshb = true;
+      config.ssbhConfig.writeNusktb = false;
+      config.ssbhConfig.writeNumatb = false;
+      config.ssbhConfig.writeJnttbl = false;
+      config.ssbhConfig.writeMayaProfile = false;
+      config = applyUnitModelFbxImportDefaults(config, sourceFormat);
+
+      const entry: DaeImportEntry = {
+        importId: `unit_model_replace_numshb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        fileName,
+        filePath,
+        sourceFormat,
+        analysis: null,
+        config,
+        analyzing: true,
+        analyzeError: null,
+      };
+
+      const session = useDaeSsbhSessionStore.getState();
+      session.resetSession();
+      session.setOutputBaseName(baseFilename);
+      session.setWriteNumdlb(false);
+      session.setWriteNumshb(true);
+      session.setWriteNusktb(false);
+      session.setWriteNumatb(false);
+      session.setWriteMayaProfile(false);
+      if (sourceFormat === "fbx") {
+        session.setImportKind("fbx");
+        session.setFlipUv(true);
+      }
+
+      suppressReplaceCloseRef.current = true;
+      setImportWorkflow("unitModelReplaceNumshb");
+      setImportEntries([entry]);
+      setShowImportConfig(true);
+      try {
+        const analysis =
+          entry.sourceFormat === "fbx"
+            ? await ssbhAnalyzeFbx(filePath)
+            : await ssbhAnalyzeDae(filePath);
+        setImportEntries((current) =>
+          current.map((candidate) =>
+            candidate.importId === entry.importId
+              ? {
+                  ...candidate,
+                  analysis,
+                  config: applyUnitModelFbxImportDefaults(
+                    syncDaeImportConfigUpAxisFromAnalysis(
+                      candidate.config,
+                      analysis,
+                    ),
+                    candidate.sourceFormat,
+                  ),
+                  analyzing: false,
+                }
+              : candidate,
+          ),
+        );
+      } catch (error) {
+        setImportEntries((current) =>
+          current.map((candidate) =>
+            candidate.importId === entry.importId
+              ? {
+                  ...candidate,
+                  analyzing: false,
+                  analyzeError:
+                    error instanceof Error ? error.message : String(error),
+                }
+              : candidate,
+          ),
+        );
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleConfirmReplaceNumshbConvert = async () => {
+    const entry = importEntries[0];
+    const target = replaceTargetRef.current;
+    if (!entry || !entry.analysis) {
+      toast.error("FBX/DAE analysis is not ready.");
+      return;
+    }
+    if (!modelRoot || !structureJsonPath || !target) {
+      toast.error("Replace target is missing. Reopen Replace and try again.");
+      return;
+    }
+    const session = useDaeSsbhSessionStore.getState();
+    const baseFilename = sanitizeBaseFilename(session.outputBaseName);
+    setBusy(`replace:${target.label}`);
+    setShowImportConfig(false);
+    setImportProgress({
+      open: true,
+      progress: 20,
+      steps: [
+        { step: "convert", label: "Converting FBX/DAE to NUMSHB...", status: "active" },
+        { step: "done", label: "Preparing replace preview...", status: "pending" },
+      ],
+    });
+    const stamp = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const outputDir = await join(await tempDir(), "unit-model-replace-numshb", stamp);
+    try {
+      await mkdir(outputDir, { recursive: true });
+      const convertParams = {
+        outputDir,
+        baseFilename,
+        scaleFactor: Number.parseFloat(session.scaleFactorText) || 1,
+        flipUv: session.flipUv,
+        upAxis: session.upAxis,
+        includeGeometryNames: [...session.includeGeometryNames],
+        writeLog: false,
+        writeNumdlb: false,
+        writeNumshb: true,
+        writeNusktb: false,
+        writeNumatb: false,
+        writeMayaProfile: false,
+        numdlbEntries: [],
+        mayaFile: null,
+        nustFile: null,
+      };
+      const converted =
+        entry.sourceFormat === "fbx"
+          ? await ssbhConvertFbxToSsbh({ fbxPath: entry.filePath, ...convertParams })
+          : await ssbhConvertDaeToSsbh({ daePath: entry.filePath, ...convertParams });
+      const source = converted.files.numshbPath?.trim();
+      if (!source) {
+        throw new Error("Conversion did not produce a .numshb file.");
+      }
+      const preview = await previewUnitModelNumshbReplacement(
+        modelRoot,
+        target.label,
+        source,
+        structureJsonPath,
+      );
+      const previousTemp = replaceNumshbPreview?.tempDir;
+      setReplaceTarget(target);
+      setReplaceNumshbPreview({ source, preview, tempDir: outputDir });
+      await cleanupReplaceTempDir(previousTemp);
+      setImportEntries([]);
+      suppressReplaceCloseRef.current = false;
+    } catch (error) {
+      toast.error("Failed to convert FBX/DAE to NUMSHB", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+      suppressReplaceCloseRef.current = true;
+      setShowImportConfig(true);
+      await cleanupReplaceTempDir(outputDir);
+    } finally {
+      setImportProgress({ open: false, progress: 0, steps: [] });
+      setBusy(null);
+    }
+  };
+
   const handleConfirmReplaceFolder = async () => {
-    if (!modelRoot || !structureJsonPath || !replaceFolderPreview) return;
+    if (!modelRoot || !structureJsonPath || !replaceTarget) return;
+    if (replaceScope === "numshb") {
+      if (!replaceNumshbPreview) return;
+      if (replaceNumshbPreview.preview.blockers.length > 0) {
+        toast.error("Cannot replace mesh while blockers remain.");
+        return;
+      }
+      const targetName = replaceNumshbPreview.preview.target.modelName;
+      setBusy(`replace:${targetName}`);
+      try {
+        await replaceUnitModelNumshb(
+          modelRoot,
+          targetName,
+          replaceNumshbPreview.source,
+          structureJsonPath,
+        );
+        toast.success(`Mesh for '${targetName}' replaced`, {
+          description: "Only the existing .numshb was overwritten.",
+        });
+        const tempPath = replaceNumshbPreview.tempDir;
+        setReplaceTarget(null);
+        setReplaceNumshbPreview(null);
+        await cleanupReplaceTempDir(tempPath);
+        onMutated?.();
+      } catch (error) {
+        toast.error("Failed to replace mesh", {
+          description: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        setBusy(null);
+      }
+      return;
+    }
+    if (!replaceFolderPreview) return;
     const { source, preview } = replaceFolderPreview;
     if (preview.blockers.length > 0) {
       toast.error("Cannot replace model while blockers remain.");
@@ -653,6 +1026,7 @@ export function UnitModelModelManagerPanel({
         description: `${result.modelCount} models, ${result.totalFiles} files. ${result.removedFiles.length} old file(s) removed.`,
       });
       showMutationSyncWarning(result.syncWarning);
+      setReplaceTarget(null);
       setReplaceFolderPreview(null);
       emitUnitModelTexturesChanged();
       onMutated?.();
@@ -764,7 +1138,7 @@ export function UnitModelModelManagerPanel({
           </div>
         ) : parsed.models.length > 0 ? (
           <ul className="divide-y">
-            {parsed.models.map((model) => {
+            {parsed.models.map((model, modelIndex) => {
               const isSelected = selectedModelLabel != null && selectedModelLabel === model.label;
               return (
                 <li
@@ -816,6 +1190,24 @@ export function UnitModelModelManagerPanel({
                       <Download className="h-3.5 w-3.5" aria-hidden />
                     </Button>
                   ) : null}
+                  {structureJsonPath ? (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6 text-muted-foreground opacity-0 transition-colors hover:text-primary group-hover:opacity-100 focus-visible:opacity-100"
+                      disabled={busy !== null}
+                      onClick={() => void handleCreateNumatbTemplate(model)}
+                      title={`Create NUMATB template from ${model.label} (maya + nust)`}
+                      aria-label={`Create NUMATB template from ${model.label}`}
+                    >
+                      {busy === `template:${model.label}` ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                      ) : (
+                        <LayoutTemplate className="h-3.5 w-3.5" aria-hidden />
+                      )}
+                    </Button>
+                  ) : null}
                   {canMutate ? (
                     <>
                       <Button
@@ -824,7 +1216,7 @@ export function UnitModelModelManagerPanel({
                         variant="ghost"
                         className="h-6 w-6 text-muted-foreground opacity-0 transition-colors hover:text-primary group-hover:opacity-100 focus-visible:opacity-100"
                         disabled={busy !== null}
-                        onClick={() => void handleReplaceFolder(model.label)}
+                        onClick={() => handleOpenReplace(model.label, modelIndex)}
                         title={`Replace ${model.label}`}
                         aria-label={`Replace ${model.label}`}
                       >
@@ -875,11 +1267,21 @@ export function UnitModelModelManagerPanel({
         onCancel={() => setAddFolderPreview(null)}
       />
       <UnitModelReplaceFolderModal
-        open={replaceFolderPreview !== null}
-        preview={replaceFolderPreview?.preview ?? null}
-        busy={busy === `replace:${replaceFolderPreview?.preview.target.modelName ?? ""}`}
+        open={
+          replaceTarget !== null && !showImportConfig && !importProgress.open
+        }
+        targetModelName={replaceTarget?.label ?? ""}
+        targetModelIndex={replaceTarget?.index ?? null}
+        scope={replaceScope}
+        fullPreview={replaceFolderPreview?.preview ?? null}
+        numshbPreview={replaceNumshbPreview?.preview ?? null}
+        busy={busy === `replace:${replaceTarget?.label ?? ""}`}
+        onScopeChange={handleReplaceScopeChange}
+        onChooseFullFolder={() => void handleChooseFullFolder()}
+        onChooseExistingNumshb={() => void handleChooseExistingNumshb()}
+        onConvertFbx={() => void handleConvertReplaceNumshb()}
         onConfirm={() => void handleConfirmReplaceFolder()}
-        onCancel={() => setReplaceFolderPreview(null)}
+        onCancel={handleCloseReplace}
       />
       <UnitModelRemoveModelModal
         open={removeTarget !== null}
@@ -895,11 +1297,16 @@ export function UnitModelModelManagerPanel({
           entries={importEntries}
           havokInfo={null}
           stageRoot={modelRoot ?? null}
-          workflowMode="unitModel"
+          workflowMode={importWorkflow}
           viewportSuspend={viewportSuspend}
           onConfigChange={handleImportConfigChange}
-          onImport={() => void handleConfirmStaticMeshImport()}
+          onImport={() =>
+            void (importWorkflow === "unitModelReplaceNumshb"
+              ? handleConfirmReplaceNumshbConvert()
+              : handleConfirmStaticMeshImport())
+          }
           onCancel={() => {
+            suppressReplaceCloseRef.current = false;
             setShowImportConfig(false);
             setImportEntries([]);
           }}

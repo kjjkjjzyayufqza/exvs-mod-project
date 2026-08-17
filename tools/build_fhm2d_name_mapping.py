@@ -112,7 +112,16 @@ def normalize_slashes(value: str) -> str:
 
 
 def normalize_hash_name(value: str) -> str | None:
-    match = re.search(r"(?:0x)?([0-9a-fA-F]{8})", value)
+    text = (value or "").strip()
+    if not text:
+        return None
+    exact = re.fullmatch(r"(?:0x)?([0-9a-fA-F]{1,8})", text)
+    if exact:
+        digits = exact.group(1)
+        if int(digits, 16) == 0:
+            return None
+        return f"0x{digits.upper():0>8}"
+    match = re.search(r"(?:0x)?([0-9a-fA-F]{8})", text)
     return f"0x{match.group(1).upper()}" if match else None
 
 

@@ -1,10 +1,14 @@
-import { useEffect, useRef } from "react";
-import { Layers, Loader2, RefreshCw, RotateCcw, Save } from "lucide-react";
+import { useCallback, useEffect, useRef } from "react";
+import { Copy, Layers, Loader2, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { ShlFileData } from "./shlIoService";
 import { ShlEditorBody } from "./ShlEditorBody";
 import { assertShlValidForSave, isShlDraftDirty } from "./shlEditorUtils";
+import {
+  buildShlClipboardExportPayload,
+  copyShlJsonToClipboard,
+} from "./copyShlJson";
 import {
   isSsbhEditorDialogActive,
   SsbhEditorModalWindowShell,
@@ -64,6 +68,19 @@ export function ShlEditorModalWindow({
   savingRef.current = session.saving;
   loadingRef.current = session.loading;
 
+  const handleCopyJson = useCallback(async () => {
+    const draft = draftRef.current;
+    if (!draft) return;
+    await copyShlJsonToClipboard(
+      buildShlClipboardExportPayload({
+        filePath: session.filePath,
+        draft,
+        base: session.baseData,
+        modelFolderNames,
+      }),
+    );
+  }, [modelFolderNames, session.baseData, session.filePath]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
@@ -90,6 +107,19 @@ export function ShlEditorModalWindow({
   const footer =
     !session.loading && !session.loadError && session.draftData ? (
       <div className="flex flex-wrap items-center justify-end gap-2 bg-muted/20 px-5 py-4">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 text-[10px]"
+          disabled={session.saving || session.loading}
+          title="Copy full SHL draft JSON (for AI / debug)"
+          aria-label="Copy SHL JSON"
+          onClick={() => void handleCopyJson()}
+        >
+          <Copy className="mr-1 h-3.5 w-3.5" />
+          Copy JSON
+        </Button>
         <Button
           type="button"
           variant="outline"

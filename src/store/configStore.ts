@@ -14,6 +14,8 @@ import {
 const SIDEBAR_OPEN_STORE_KEY = "sidebarOpen";
 const SIDEBAR_OPEN_MIRROR_KEY = "sidebar:open";
 export const CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY = "characterIdDebugMscOutputPath";
+/** Test Editor open-folder root; also FHM2D Init workspace extract root. */
+export const TEST_EDITOR_FOLDER_STORE_KEY = "testEditorFolder";
 
 export function readSidebarOpenMirror(): boolean {
   try {
@@ -35,6 +37,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   store: null,
   obDplCachePath: "",
   obModPath: "",
+  testEditorFolder: "",
   extractOutputPath: "",
   characterIdDebugMscOutputPath: "",
   unitModelOutputPath: "",
@@ -51,6 +54,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     // Load saved settings if they exist
     const obDplCachePath = await _store.get("obDplCachePath") || "";
     const obModPath = await _store.get("obModPath") || "";
+    const testEditorFolder = await _store.get(TEST_EDITOR_FOLDER_STORE_KEY) || "";
     const extractOutputPath = await _store.get("extractOutputPath") || "";
     const characterIdDebugMscOutputPath = await _store.get(CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY) || "";
     const unitModelOutputPath = await _store.get("unitModelOutputPath") || "";
@@ -67,6 +71,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     set({
       obDplCachePath: obDplCachePath as string,
       obModPath: obModPath as string,
+      testEditorFolder: testEditorFolder as string,
       extractOutputPath: extractOutputPath as string,
       characterIdDebugMscOutputPath: characterIdDebugMscOutputPath as string,
       unitModelOutputPath: unitModelOutputPath as string,
@@ -97,6 +102,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     // Keep known fields in sync for components that rely on Zustand state.
     if (key === "obDplCachePath") set({ obDplCachePath: String(value ?? "") });
     if (key === "obModPath") set({ obModPath: String(value ?? "") });
+    if (key === TEST_EDITOR_FOLDER_STORE_KEY) set({ testEditorFolder: String(value ?? "") });
     if (key === "extractOutputPath") set({ extractOutputPath: String(value ?? "") });
     if (key === CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY) set({ characterIdDebugMscOutputPath: String(value ?? "") });
     if (key === "unitModelOutputPath") set({ unitModelOutputPath: String(value ?? "") });

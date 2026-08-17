@@ -19,32 +19,44 @@ use crate::format::param_entry_schema::{
 const KIND_STRING: u32 = 7;
 
 pub const SPEEDPARAM_COMMAND_POOL: ParamCommandPool = &[
-    (0x06D1922D, 2, "walk_speed_forward"),
-    (0x086B475D, 2, "step_turn_mid_speed_threshold"),
-    (0x0B6480D5, 2, "reserved_008"), // [D:50] constant; no MSC reader in the 1827-file corpus
+    (
+        0x06D1922D,
+        2,
+        "movement_channel_4_base_vector_scale_percent_06d1922d",
+    ),
+    (0x086B475D, 2, "heading_adjustment_mid_distance_threshold"),
+    (0x0B6480D5, 2, "unresolved_008"), // [D:50,80] no MSC reader in the audited corpus
     (0x0B9EBECE, 2, "decaying_move_magnitude_initial"), // [V:func_471] seeds global507; decays by 0x9297EF74, clamped at 0
-    (0x0CF37AD7, 2, "alternate_free_flight_speed_delta"),
-    (0x0D5BB2EF, 2, "reserved_014"), // [D:250,303] no MSC reader in the corpus
+    (0x0CF37AD7, 2, "floored_move_magnitude_delta"),
+    (0x0D5BB2EF, 2, "unresolved_014"), // [D:250,303,500] no MSC reader in the audited corpus
     (0x0E682BA8, 2, "air_step_speed_terminal"),
     (0x11FFDDB4, 2, "boost_ascent_vertical_speed_initial"),
     (0x17A9D82D, 2, "boost_ascent_horizontal_speed_delta"),
     (0x18895A55, 2, "transform_roll_neutral_retention"),
-    (0x29AA8A04, 2, "reserved_028"), // [D:-2] constant; no MSC reader
-    (0x2C76D0A7, 2, "reserved_02c"), // [D:7] constant; no MSC reader
+    (0x29AA8A04, 2, "unresolved_028"), // [D:-10,-2] no MSC reader
+    (0x2C76D0A7, 2, "unresolved_02c"), // [D:7] no MSC reader
     (0x2D28CC4B, 2, "transform_roll_response"),
     (0x2DF7AF95, 2, "boost_dash_loop_timer"),
-    (0x2EAE942B, 2, "reserved_038"), // [D:260,312] no MSC reader in the corpus
+    (0x2EAE942B, 2, "unresolved_038"), // [D:260,312,400] no MSC reader in the audited corpus
     (0x32FD1EDC, 2, "boost_dash_yaw_response"),
     (0x37D1D056, 2, "air_step_speed_delta"),
-    (0x3BF9E21E, 2, "max_ground_speed"),
+    (
+        0x3BF9E21E,
+        2,
+        "movement_channel_4_base_vector_scale_percent_3bf9e21e",
+    ),
     (0x4031CB84, 2, "ground_step_secondary_timer"),
     (0x41DABEC5, 2, "ground_step_speed_terminal"),
     (0x459455EA, 2, "transform_forward_speed_terminal"),
     (0x4D4B65EA, 2, "transform_roll_target_magnitude"),
-    (0x4D601E55, 2, "step_turn_high_speed_adjustment"),
+    (
+        0x4D601E55,
+        2,
+        "heading_adjustment_high_distance_tier_step_degrees",
+    ),
     (0x4F705BAD, 2, "air_step_primary_timer"),
     (0x5481CCF4, 2, "boost_dash_speed_terminal"),
-    (0x56C51E87, 2, "reserved_064"), // [D:92] constant; no MSC reader
+    (0x56C51E87, 2, "unresolved_064"), // [D:92] no MSC reader
     (0x58313EF7, 2, "ground_walk_speed_delta"),
     (0x5E8CAF43, 2, "transform_forward_speed_initial"),
     (0x5EF705B7, 2, "boost_ascent_yaw_response"),
@@ -54,26 +66,38 @@ pub const SPEEDPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x7242066A, 2, "free_flight_magnitude_floor"), // [V:func_467,func_469] global509 floor and re-seed threshold
     (0x737D64F4, 2, "air_step_secondary_timer"),
     (0x77749DD2, 2, "uniform_axis_motion_retention_ramp_end"), // [V:func_300 -> sys_46(3,4,V,V,V)] percent ramp end; larger value = less damping, so the former decay name had inverted polarity
-    (0x7BF44A41, 2, "alternate_free_flight_speed_initial"),
+    (0x7BF44A41, 2, "floored_move_magnitude_seed"),
     (0x7C2572A1, 2, "ground_walk_entry_turn_time_base"),
     (0x7C3CF4DD, 2, "ground_step_primary_timer"),
-    (0x7CD3A712, 2, "boost_consumption_base"),
-    (0x7D79F6FA, 2, "step_turn_high_speed_threshold"),
+    (
+        0x7CD3A712,
+        2,
+        "movement_channel_4_base_vector_scale_percent_7cd3a712",
+    ),
+    (0x7D79F6FA, 2, "heading_adjustment_high_distance_threshold"),
     (0x7E5878A3, 2, "ground_walk_speed_initial"),
-    (0x8173DA19, 2, "reserved_0a4"), // [D:4] constant; no MSC reader
+    (0x8173DA19, 2, "unresolved_0a4"), // [D:2,4] no MSC reader
     (0x84043A2D, 2, "boost_dash_entry_turn_timer"),
     (0x8D0A9843, 2, "ground_step_speed_delta"),
     (0x8EDC8D6E, 2, "walk_stop_motion_retention"),
     (0x9297EF74, 2, "decaying_move_magnitude_delta"), // [V:func_471] per-update addend to the 0x0B9EBECE seed
     (0x95FA2B6D, 2, "free_flight_magnitude_bound"), // [V:func_469,func_1074] dual role: re-seed value in one handler, floor in another
     (0x97BE8DFC, 2, "ground_walk_entry_turn_time_angle_scale"),
-    (0x9A378388, 2, "guard_recovery_frame"),
+    (
+        0x9A378388,
+        2,
+        "movement_channel_4_zero_transition_duration_9a378388",
+    ),
     (0x9EAA4E96, 2, "ground_walk_entry_speed"),
     (0x9FD06227, 2, "transform_pitch_pose_scale"),
     (0xA49287B9, 2, "boost_dash_speed_initial"),
     (0xA55D6C5E, 2, "vertical_axis_motion_retention"), // [V:func_302] sys_46(3,4,0x64,V,0x64) percent ramp end
-    (0xA7CBBC07, 2, "reserved_0d4"), // [D:35] constant; no MSC reader
-    (0xB20B67C9, 2, "air_boost_efficiency"),
+    (0xA7CBBC07, 2, "unresolved_0d4"),                 // [D:20,35] no MSC reader
+    (
+        0xB20B67C9,
+        2,
+        "movement_channel_4_base_vector_scale_percent_b20b67c9",
+    ),
     (0xBC0127E1, 2, "vertical_axis_motion_retention_base"), // [V:sys_46(0x3,0x4,...)] y-axis movement-scale percent; no gauge or guard arithmetic anywhere
     (0xC6157381, 2, "air_step_speed_initial"),
     (0xC6BBC347, 2, "boost_ascent_turn_time_angle_scale"),
@@ -91,7 +115,11 @@ pub const SPEEDPARAM_COMMAND_POOL: ParamCommandPool = &[
     // emits, so harmonising them would make one of the two misleading. The guard in
     // tools/check_param_name_evidence.py accepts either spelling for these hashes.
     (0xE6213731, 7, "action_label"),
-    (0xEC580BCC, 2, "step_turn_mid_speed_adjustment"),
+    (
+        0xEC580BCC,
+        2,
+        "heading_adjustment_mid_distance_tier_step_degrees",
+    ),
     (0xF3B9AD85, 2, "transform_pitch_response"),
     (0xF3C4CAE9, 7, "resource_label"),
     (0xF44C9D4E, 2, "boost_ascent_horizontal_speed_terminal"),
@@ -104,6 +132,38 @@ pub const SPEEDPARAM_COMMAND_POOL: ParamCommandPool = &[
 /// Input-only compatibility aliases for names published before the MSC consumer audit.
 /// Serialization always emits the evidence-based canonical key from the command pool.
 const SPEEDPARAM_LEGACY_KEY_ALIASES: &[(&str, u32)] = &[
+    ("headingAdjustmentLadderMidThreshold", 0x086B475D),
+    ("headingAdjustmentHighTier", 0x4D601E55),
+    ("headingAdjustmentLadderHighThreshold", 0x7D79F6FA),
+    ("headingAdjustmentMidTier", 0xEC580BCC),
+    ("mode4Value06d1922d", 0x06D1922D),
+    ("mode4Value3bf9e21e", 0x3BF9E21E),
+    ("mode4Value7cd3a712", 0x7CD3A712),
+    ("modeFScaledValue9a378388", 0x9A378388),
+    ("mode4ValueB20b67c9", 0xB20B67C9),
+    ("stepTurnMidInputThreshold", 0x086B475D),
+    ("reserved008", 0x0B6480D5),
+    ("reserved014", 0x0D5BB2EF),
+    ("reserved028", 0x29AA8A04),
+    ("reserved02c", 0x2C76D0A7),
+    ("reserved038", 0x2EAE942B),
+    ("stepTurnHighInputAdjustment", 0x4D601E55),
+    ("reserved064", 0x56C51E87),
+    ("stepTurnHighInputThreshold", 0x7D79F6FA),
+    ("reserved0a4", 0x8173DA19),
+    ("reserved0d4", 0xA7CBBC07),
+    ("stepTurnMidInputAdjustment", 0xEC580BCC),
+    ("walkSpeedForward", 0x06D1922D),
+    ("stepTurnMidSpeedThreshold", 0x086B475D),
+    ("alternateFreeFlightSpeedDelta", 0x0CF37AD7),
+    ("maxGroundSpeed", 0x3BF9E21E),
+    ("stepTurnHighSpeedAdjustment", 0x4D601E55),
+    ("alternateFreeFlightSpeedInitial", 0x7BF44A41),
+    ("boostConsumptionBase", 0x7CD3A712),
+    ("stepTurnHighSpeedThreshold", 0x7D79F6FA),
+    ("guardRecoveryFrame", 0x9A378388),
+    ("airBoostEfficiency", 0xB20B67C9),
+    ("stepTurnMidSpeedAdjustment", 0xEC580BCC),
     ("boostRecoveryDelayFrame", 0x0CF37AD7),
     ("airSteerLimit", 0x7BF44A41),
     ("walkSpeedBase", 0x086B475D),
@@ -637,7 +697,7 @@ mod tests {
     const SAMPLE_PATH: &str = "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\0x08248A8D\\speedparam.bin";
     const GYAN_PATH: &str =
         "e:\\XB\\mod\\041cpm\\001gundam_005gyan00_001_N2_rocket_mod\\speedparam.bin";
-    const ALTERNATE_FREE_FLIGHT_PATHS: [&str; 3] = [
+    const FLOORED_MOVE_MAGNITUDE_PATHS: [&str; 3] = [
         "E:\\XB\\解包\\com\\file\\041cpm\\0x37F04F98\\speedparam.bin",
         "E:\\XB\\解包\\com\\file\\041cpm\\0x62419441\\speedparam.bin",
         "E:\\XB\\解包\\com\\file\\041cpm\\0x682678AF\\speedparam.bin",
@@ -792,9 +852,9 @@ mod tests {
     }
 
     #[test]
-    fn alternate_free_flight_curve_matches_real_ob_rows_and_legacy_aliases() {
-        for path in ALTERNATE_FREE_FLIGHT_PATHS {
-            let source = std::fs::read(path).expect("read alternate free-flight speedparam");
+    fn floored_move_magnitude_fields_match_real_rows_and_legacy_aliases() {
+        for path in FLOORED_MOVE_MAGNITUDE_PATHS {
+            let source = std::fs::read(path).expect("read floored-magnitude speedparam");
             let parsed = parse_speedparam(&source).expect("parse alternate free-flight speedparam");
             let rebuilt =
                 build_speedparam(&parsed).expect("rebuild alternate free-flight speedparam");
@@ -829,8 +889,10 @@ mod tests {
             );
 
             let json = speedparam_entry_to_json_value(row);
-            assert_eq!(json["alternateFreeFlightSpeedInitial"], json!(30));
-            assert_eq!(json["alternateFreeFlightSpeedDelta"], json!(320));
+            assert_eq!(json["flooredMoveMagnitudeSeed"], json!(30));
+            assert_eq!(json["flooredMoveMagnitudeDelta"], json!(320));
+            assert!(json.get("alternateFreeFlightSpeedInitial").is_none());
+            assert!(json.get("alternateFreeFlightSpeedDelta").is_none());
             assert!(json.get("airSteerLimit").is_none());
             assert!(json.get("boostRecoveryDelayFrame").is_none());
         }

@@ -1563,7 +1563,19 @@ fn watch_loop(
 /// Paths containing "__convert" (file or folder name) are ignored from watch events.
 const WATCH_IGNORE_PATTERNS: &[&str] = &["__convert"];
 
+fn path_has_git_directory(path: &Path) -> bool {
+    path.components().any(|component| {
+        matches!(
+            component,
+            std::path::Component::Normal(name) if name == ".git"
+        )
+    })
+}
+
 fn should_ignore_path(path: &Path) -> bool {
+    if path_has_git_directory(path) {
+        return true;
+    }
     let s = path.to_string_lossy();
     WATCH_IGNORE_PATTERNS.iter().any(|pat| s.contains(pat))
 }
@@ -1761,8 +1773,7 @@ mod watcher_suppression_tests {
 
     #[test]
     fn extend_watcher_suppression_until_keeps_longer_existing_lease() {
-        let suppress_until =
-            Mutex::new(Some(Instant::now() + Duration::from_millis(5_000)));
+        let suppress_until = Mutex::new(Some(Instant::now() + Duration::from_millis(5_000)));
         let original_until = suppress_until.lock().unwrap().unwrap();
 
         extend_watcher_suppression_until(
@@ -1778,11 +1789,26 @@ mod watcher_suppression_tests {
     #[test]
     fn watcher_is_suppressed_clears_expired_lease() {
         let suppress_count = AtomicUsize::new(0);
-        let suppress_until =
-            Mutex::new(Some(Instant::now() - Duration::from_millis(1)));
+        let suppress_until = Mutex::new(Some(Instant::now() - Duration::from_millis(1)));
 
         assert!(!watcher_is_suppressed(&suppress_count, &suppress_until));
         assert!(suppress_until.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn should_ignore_path_skips_git_directory_but_not_gitignore() {
+        assert!(should_ignore_path(Path::new(r"E:\workspace\.git\index")));
+        assert!(should_ignore_path(Path::new(
+            r"E:\workspace\002chara\0xBDBE6FEA\.git\HEAD"
+        )));
+        assert!(should_ignore_path(Path::new(r"E:\workspace\.git")));
+        assert!(!should_ignore_path(Path::new(r"E:\workspace\.gitignore")));
+        assert!(!should_ignore_path(Path::new(
+            r"E:\workspace\002chara\0xBDBE6FEA\0.numdlb"
+        )));
+        assert!(should_ignore_path(Path::new(
+            r"E:\workspace\__convert\temp.bin"
+        )));
     }
 }
 

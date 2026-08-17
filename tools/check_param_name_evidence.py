@@ -87,8 +87,14 @@ def collect_annotations(source: str) -> dict[str, bool]:
         if not match:
             continue
         field_hash = f"0x{int(match.group(1), 16) & 0xFFFFFFFF:08x}"
-        window = "\n".join(lines[index : index + 5])
-        found = bool(ANNOTATION_RE.search(window))
+        entry_lines = [line]
+        for following in lines[index + 1:]:
+            if POOL_LINE_HASH_RE.search(following):
+                break
+            entry_lines.append(following)
+            if following.lstrip().startswith(")") or following.rstrip().endswith("),"):
+                break
+        found = bool(ANNOTATION_RE.search("\n".join(entry_lines)))
         out[field_hash] = out.get(field_hash, False) or found
     return out
 
@@ -154,7 +160,7 @@ def main() -> int:
 
     failures: list[str] = []
     pools: dict[str, dict[str, tuple[int, str]]] = {}
-    alias_names: dict[str, set[str]] = {}
+    alias_names: dict[str, dict[str, set[str]]] = {}
     annotations: dict[str, dict[str, bool]] = {}
 
     for file_type, rust_path, pool_const, alias_const in POOLS:
@@ -167,17 +173,33 @@ def main() -> int:
             continue
         pools[file_type] = pool
         alias_names[file_type] = {
-            name_key(name) for names in aliases.values() for name in names
+            field_hash: {name_key(name) for name in names}
+            for field_hash, names in aliases.items()
         }
         with open(rust_path, encoding="utf-8") as handle:
             annotations[file_type] = collect_annotations(handle.read())
 
         # Rule 1: registry completeness, both directions.
         for field_hash in pool:
-            if (file_type, field_hash) not in registry:
+            row = registry.get((file_type, field_hash))
+            if row is None:
                 failures.append(
                     f"[rule1] {file_type} {field_hash} "
                     f"'{pool[field_hash][1]}' has no registry row")
+                continue
+            kind, key = pool[field_hash]
+            if row.get("canonical_key") != key:
+                failures.append(
+                    f"[rule1] {file_type} {field_hash} registry canonical_key "
+                    f"'{row.get('canonical_key')}' != pool key '{key}'")
+            if row.get("kind") != str(kind):
+                failures.append(
+                    f"[rule1] {file_type} {field_hash} registry kind "
+                    f"'{row.get('kind')}' != pool kind '{kind}'")
+            if row.get("grade") not in {"S", "B", "C", "R-fixed", "U"}:
+                failures.append(
+                    f"[rule1] {file_type} {field_hash} has invalid registry grade "
+                    f"'{row.get('grade')}'")
         for (reg_type, reg_hash) in registry:
             if reg_type == file_type and reg_hash not in pool:
                 failures.append(
@@ -229,7 +251,9 @@ def main() -> int:
                 else existing if label in existing
                 else f"{existing}, {label}"
             )
-            accepted_by_hash[field_hash].update(alias_names.get(file_type, set()))
+            accepted_by_hash[field_hash].update(
+                alias_names.get(file_type, {}).get(field_hash, set())
+            )
 
     drift = 0
     alias_presented_as_canonical = 0

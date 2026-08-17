@@ -144,8 +144,13 @@ pub fn build_projectile_depiction_table(
     let default_floor = b.header.entry_size.max(min_size);
     let entry_size = default_floor as usize;
 
-    let mut entries_raw: Vec<Vec<u8>> = Vec::with_capacity(b.entries.len());
-    for (entry_index, entry) in b.entries.iter().enumerate() {
+    // The runtime binary-searches this table by unsigned entry id.
+    let mut ordered: Vec<(usize, &ProjectileDepictionTableEntry)> =
+        b.entries.iter().enumerate().collect();
+    ordered.sort_by_key(|(_, entry)| entry.entry_id);
+
+    let mut entries_raw: Vec<Vec<u8>> = Vec::with_capacity(ordered.len());
+    for &(entry_index, entry) in &ordered {
         if entry_index < b.source_entries_raw.len()
             && b.source_entries_raw[entry_index].len() == entry_size
         {
@@ -180,14 +185,14 @@ pub fn build_projectile_depiction_table(
     }
 
     let mut header = b.header.clone();
-    header.entry_count = b.entries.len() as u32;
+    header.entry_count = ordered.len() as u32;
     header.commands_count = field_specs.len() as u32;
     header.entry_size = entry_size as u32;
 
     let file = ParamBinaryFile {
         header,
         field_specs,
-        entry_ids: b.entries.iter().map(|entry| entry.entry_id).collect(),
+        entry_ids: ordered.iter().map(|(_, entry)| entry.entry_id).collect(),
         entries_raw,
         trailing_data: b.trailing_data.clone(),
     };
@@ -283,6 +288,48 @@ mod tests {
         let deleted_parsed = parse_projectile_depiction_table(&deleted_bytes)
             .expect("failed to parse projectile_depiction_table after delete");
         assert_eq!(deleted_parsed.entries.len(), parsed.entries.len());
+    }
+
+    #[test]
+    fn build_rewrites_entries_in_unsigned_id_order() {
+        let source = std::fs::read(SAMPLE_PATH_COM)
+            .expect("failed to read projectile_depiction_table sample file");
+        let parsed = parse_projectile_depiction_table(&source)
+            .expect("failed to parse projectile_depiction_table sample file");
+        assert!(
+            parsed.entries.len() >= 2,
+            "sample needs at least two entries to test sort"
+        );
+
+        let mut shuffled = parsed.clone();
+        shuffled.entries.reverse();
+        shuffled.source_entries_raw.reverse();
+        shuffled.entry_ids.reverse();
+
+        let rebuilt = build_projectile_depiction_table(&shuffled)
+            .expect("failed to rebuild shuffled projectile_depiction_table");
+        let rebuilt_parsed = parse_projectile_depiction_table(&rebuilt)
+            .expect("failed to parse rebuilt projectile_depiction_table");
+        let ids: Vec<u32> = rebuilt_parsed
+            .entries
+            .iter()
+            .map(|entry| entry.entry_id)
+            .collect();
+        let mut expected = ids.clone();
+        expected.sort_unstable();
+        assert_eq!(ids, expected);
+        assert_eq!(
+            rebuilt_parsed
+                .entries
+                .iter()
+                .map(|entry| entry.entry_id)
+                .collect::<std::collections::BTreeSet<_>>(),
+            parsed
+                .entries
+                .iter()
+                .map(|entry| entry.entry_id)
+                .collect::<std::collections::BTreeSet<_>>()
+        );
     }
 
     #[test]

@@ -1,11 +1,11 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
-import { open, type DialogFilter } from "@tauri-apps/plugin-dialog"
+import { open, save, type DialogFilter } from "@tauri-apps/plugin-dialog"
 import { dirname } from "@tauri-apps/api/path"
 import { useConfigStore } from "@/store/configStore"
 
-type PickerKind = "file" | "folder"
+type PickerKind = "file" | "folder" | "save"
 const DIALOG_DEFAULT_PATH_STORE_KEY = "dialogDefaultPath"
 
 type DialogDefaultPathMap = Record<string, string | undefined>
@@ -15,6 +15,10 @@ export interface FilePathInputPickerOptions {
   multiple?: boolean
   title?: string
   filters?: DialogFilter[]
+  /**
+   * Suggested file name for `kind: "save"` (joined with the last-used directory).
+   */
+  defaultFileName?: string
   /**
    * If provided, the dialog will try to open at this path first.
    * If omitted, the component will resolve it from store keys (if available).
@@ -202,13 +206,32 @@ const FilePathInput = React.forwardRef<HTMLInputElement, FilePathInputProps>(
       if (!picker) return
       const defaultPath = await resolveDialogDefaultPath()
 
-      const selected = await open({
-        multiple: picker.multiple ?? false,
-        directory: picker.kind === "folder",
-        title: picker.title,
-        filters: picker.filters,
-        defaultPath,
-      })
+      let selected: string | string[] | null
+      if (picker.kind === "save") {
+        const dirDefault = defaultPath
+        const suggestedName = picker.defaultFileName?.trim()
+        let saveDefaultPath = dirDefault
+        if (dirDefault && suggestedName) {
+          const sep = dirDefault.includes("\\") ? "\\" : "/"
+          saveDefaultPath = `${dirDefault.replace(/[/\\]+$/, "")}${sep}${suggestedName}`
+        } else if (suggestedName && !dirDefault) {
+          saveDefaultPath = suggestedName
+        }
+        const saved = await save({
+          title: picker.title,
+          filters: picker.filters,
+          defaultPath: saveDefaultPath,
+        })
+        selected = typeof saved === "string" && saved.trim() ? saved.trim() : null
+      } else {
+        selected = await open({
+          multiple: picker.multiple ?? false,
+          directory: picker.kind === "folder",
+          title: picker.title,
+          filters: picker.filters,
+          defaultPath,
+        })
+      }
 
       if (!selected) return
       const rawValue = selected as string | string[]

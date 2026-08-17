@@ -2,11 +2,25 @@
 
 ## Status
 
+**Partially superseded (2026-07-25).** CascadeurBridge as a user product
+(animation-only FBX + `bridge.json` round-trip) is abandoned in favor of
+one-way **MotionFbxExport** / **BlenderCompose** producing a single
+CompleteMotionFbx. See
+`docs/superpowers/specs/2026-07-25-motion-fbx-export-blender-compose-design.md`
+and `docs/adr/0001-motion-fbx-export-via-blender-compose.md`.
+
+`MotionClip`, NUANMB adapters, SampleRate60, and rig validation remain useful
+internal concepts; the Cascadeur-facing bridge package does not.
+
 Approved by direct user delegation on 2026-07-13. Revised after separating the
 Blender model workflow from the Cascadeur animation workflow. `MotionClip` is
 the project format. FBX is only a disposable Cascadeur transport file, not a
 format the project binds its internal design to. The Rust backend owns every
 conversion; the frontend may only invoke commands and render results.
+
+**ATH_* helpers (2026-08-02):** homemade NUANMB must never modify or convert
+`ATH_*` bones; the writer omits whole Transform nodes. See
+`docs/nuanmb-ath-helper-bone-policy.md`.
 
 ## Goal
 

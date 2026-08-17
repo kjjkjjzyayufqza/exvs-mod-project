@@ -14,6 +14,7 @@ use crate::format::fhm2d_stage_validate;
 use crate::format::unit_model_extract;
 use crate::format::unit_model_migrate;
 use crate::format::unit_model_models;
+use crate::format::unit_model_numatb_profile_fix;
 use crate::format::unit_model_repack;
 use crate::format::unit_model_textures;
 use crate::format::unit_model_validate;
@@ -649,6 +650,18 @@ pub async fn parse_effect_efxbn_file(path: String) -> Result<effect_folder::Efxb
 }
 
 #[tauri::command]
+pub async fn patch_effect_efxbn_control_constants(
+    path: String,
+    patches: Vec<effect_folder::EfxbnControlConstantPatch>,
+) -> Result<effect_folder::EfxbnControlConstantWriteResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        effect_folder::patch_efxbn_control_constants(&path, &patches)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+#[tauri::command]
 pub async fn validate_effect_folder_for_repack(
     effect_root: String,
     structure_json_path: Option<String>,
@@ -732,6 +745,25 @@ pub async fn import_effect_folder_file(
 }
 
 #[tauri::command]
+pub async fn update_effect_folder_item_hash(
+    effect_root: String,
+    structure_json_path: Option<String>,
+    file_index: i32,
+    hash_id: i32,
+) -> Result<effect_folder::EffectFolderMutationResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        effect_folder::update_effect_folder_item_hash(
+            &effect_root,
+            structure_json_path.as_deref(),
+            file_index,
+            hash_id,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+#[tauri::command]
 pub async fn import_effect_folder_model(
     effect_root: String,
     structure_json_path: Option<String>,
@@ -778,14 +810,17 @@ pub async fn copy_effect_folder_selection(
     destination_effect_root: String,
     destination_structure_json_path: Option<String>,
     selections: Vec<effect_folder::EffectFolderSelection>,
+    policies: Option<Vec<effect_folder::EffectFolderCopyEfxbnPolicy>>,
 ) -> Result<effect_folder::EffectFolderCopyResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        effect_folder::copy_effect_folder_selection(
+        let policies = policies.unwrap_or_default();
+        effect_folder::copy_effect_folder_selection_with_policies(
             &source_effect_root,
             source_structure_json_path.as_deref(),
             &destination_effect_root,
             destination_structure_json_path.as_deref(),
             &selections,
+            &policies,
         )
     })
     .await
@@ -1179,6 +1214,41 @@ pub async fn add_unit_model_nutexb(
     Ok(result)
 }
 
+/// Dry-run scan: report numatb files whose `__maya__`/`__nust__` marker disagrees with
+/// content (any non-empty shader_label → nust).
+#[tauri::command]
+pub async fn analyze_unit_model_numatb_profiles(
+    model_root: String,
+    structure_json_path: Option<String>,
+) -> Result<unit_model_numatb_profile_fix::NumatbProfileFixReport, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_numatb_profile_fix::analyze_unit_model_numatb_profiles(
+            &model_root,
+            structure_json_path.as_deref(),
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
+/// Rename mismatched numatb files and rewrite `_structure.json` SubFileData / Item Name.
+#[tauri::command]
+pub async fn fix_unit_model_numatb_profiles(
+    model_root: String,
+    structure_json_path: Option<String>,
+) -> Result<unit_model_numatb_profile_fix::NumatbProfileFixReport, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_numatb_profile_fix::fix_unit_model_numatb_profiles(
+            &model_root,
+            structure_json_path.as_deref(),
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
 #[tauri::command]
 pub async fn register_unit_model_pool_orphans(
     model_root: String,
@@ -1313,6 +1383,46 @@ pub async fn replace_unit_model_model(
             structure_json_path.as_deref(),
             &target_model_name,
             &source_dir,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn replace_unit_model_numshb(
+    model_root: String,
+    structure_json_path: Option<String>,
+    target_model_name: String,
+    source_numshb_path: String,
+) -> Result<unit_model_models::UnitModelMutationResult, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_models::replace_unit_model_numshb(
+            &model_root,
+            structure_json_path.as_deref(),
+            &target_model_name,
+            &source_numshb_path,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn preview_unit_model_numshb_replacement(
+    model_root: String,
+    structure_json_path: Option<String>,
+    target_model_name: String,
+    source_numshb_path: String,
+) -> Result<unit_model_models::UnitModelNumshbReplacePreview, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_models::preview_unit_model_numshb_replacement(
+            &model_root,
+            structure_json_path.as_deref(),
+            &target_model_name,
+            &source_numshb_path,
         )
     })
     .await

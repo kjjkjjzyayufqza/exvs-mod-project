@@ -26,11 +26,19 @@ E:\XB\解包\com\file\0xBDBE6FEA\2.c
 MSC `X.c` 代码都必须用 `// AI decision ...` 和 `// End, origin is ...` 成对包住。
 AI 新增符号还必须使用逆向语义名，不能新建 `global777` 这类无意义名字。
 
+如果当前问题是“`global676/677/678/679` 四个 callback 分别是什么”，看
+[`func_593` 旧版 / 正常班 ranged 四槽](./func593-vanilla-ranged-slots.md)。
+**`678` 是没子弹分支，不是 cancel。** `func_587` 主射用的是 `677+680`，不要和这套混。
+
 如果当前问题是“这个玩家系统到底在哪一层控制，应该改资源、脚本 segment 还是 native syscall”，看 [MSC 系统控制面矩阵：BD / 移动 / 镜头 / 动作 / 射击 / 格斗怎么改](./system-control-surface-matrix.md)。它把每个系统拆成玩家语义、`2.c` 控制面、资源层、syscall 层、patch 点和实机验证。
 
 如果当前问题是“我怎么从真实 `2.c` 行号证明这些结论”，看 [2.c 源码证据走读：从 `func_1` 证明到可改点](./2c-source-proof-walkthrough-for-modders.md)。它按 `main/func_1/func_4/func_44/func_1043/ACTION_*` 的真实代码形状，逐步追到主射 `sys_4F`、特射 `sys_51`、特格 `sys_46`、格斗 `func_532/535/536` 和镜头 `sys_53`。
 
 如果当前问题是“玩家按键、方向、BD / step 怎么变成 `2.c` 里的 action hash”，看 [0.c 到 2.c：输入、action hash、BD / step 边界怎么串起来](./0c-to-2c-input-action-boundary.md)。它说明 `0.c func_143` 如何把输入和资源状态选成 action hash，再由 `2.c func_44/1043/ACTION_*` 消费并输出表现。
+
+**Wing Zero Rebellion 鸟形态 / form 输入表：** 看 [鸟形态 0.c 输入映射（对照 TV Zero）](./wing-zero-rebellion-bird-form-0c-input-map.md)。结论：只改 `0.c` `func_143`（不要在 `2.c` `ACTION_*` 硬拦）；Rebellion **主射 bit = `0x1`**（`0x7cd11119`），**不是** TV 的 `0x100`；鸟 form id = **`0x2`**（TV 为 `0x1`）。Thinker 偏移雷区见 [2026-08-13 offset bug](../agent-sessions/2026-08-13-msc-0c-function-pointer-offset-bug.md)。
+
+**Wing Zero Rebellion 飞行打断：** 看 [飞行打断后动作≠形态](./wing-zero-rebellion-flight-interrupt-form.md)。动作 hash 和 `global143` 是两套字段；Rebellion 受击必须 **FORCED_RECOVERY**，禁止再排 `0x77b100ff`。拆 form 不能只认站立 `0x6d00aeaa`。
 
 如果当前问题是“普通 BD、step、boost、射击伤害、普通弹体 hitbox、格斗追踪这些该改脚本还是资源”，看 [MSC 资源层 patch 指南：BD / step / boost / 射击 / 格斗该改哪些表](./resource-control-surface-for-modders.md)。它把 `speed_param`、`arms_param`、`bullet_param`、`character_param` 和 `0.c/2.c` 调用链对齐。
 

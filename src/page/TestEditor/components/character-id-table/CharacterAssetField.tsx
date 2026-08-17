@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { dirname } from "@tauri-apps/api/path";
 import { exists } from "@tauri-apps/plugin-fs";
 import { openPath } from "@tauri-apps/plugin-opener";
@@ -33,7 +33,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { AssetRefInfo } from "./assetRef";
+import { AssetRefInfo, getAssetRefInfo } from "./assetRef";
 import { extractAsset, getExtractOutputFolderCollisionInfo } from "./extractFhm2d";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { copyAssetAsNew } from "./copyAssetAsNew";
@@ -105,6 +105,8 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   onReveal,
   onFieldUpdate,
 }) => {
+  // Local copy may gain probed paths/exists after lazy probe on mount.
+  const [liveAsset, setLiveAsset] = useState<AssetRefInfo>(asset);
   const [sourceExists, setSourceExists] = useState<boolean | null>(asset.sourceExists);
   const [modExists, setModExists] = useState<boolean | null>(asset.modExists);
   const [workspaceExists, setWorkspaceExists] = useState<boolean | null>(asset.workspaceExists);
@@ -129,14 +131,14 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
 
   const closeActionsPopover = () => setActionsPopoverOpen(false);
   const workspaceAssetRootPath =
-    asset.workspacePack.existing?.routeRootPath ?? asset.workspacePack.configured.routeRootPath;
+    liveAsset.workspacePack.existing?.routeRootPath ?? liveAsset.workspacePack.configured.routeRootPath;
   const trimmedSeed = copySeed.trim();
   const copySeedCrcPreview = useMemo(() => {
     const crc = crc32Ieee(trimmedSeed);
     return { hex: crc.hashHex, int32: crc.hashInt32 };
   }, [trimmedSeed]);
 
-  const canCopyAsNew = Boolean(asset.workspacePack.existing && asset.workspacePack.configured.routeRootPath.trim());
+  const canCopyAsNew = Boolean(liveAsset.workspacePack.existing && liveAsset.workspacePack.configured.routeRootPath.trim());
   const canRemoveWorkspace = Boolean(projectRootDir?.trim() && workspaceAssetRootPath.trim());
   const canRemoveExtract = Boolean(extractOutputPath?.trim());
   const canRemoveMod = Boolean(obModPath?.trim());
@@ -151,8 +153,8 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     extractDestination === "workspace" ? projectRootDir.trim() : extractOutputPath.trim();
   const sanitizedExtractName = sanitizeFhm2dStructureName(extractName);
   const extractRouteRootPreview = activeExtractRoot
-    ? asset.workspacePack.configured.prefix
-      ? joinPreviewPath(activeExtractRoot, asset.workspacePack.configured.prefix)
+    ? liveAsset.workspacePack.configured.prefix
+      ? joinPreviewPath(activeExtractRoot, liveAsset.workspacePack.configured.prefix)
       : activeExtractRoot
     : "";
   const namedExtractFolderPreview = activeExtractRoot
@@ -169,11 +171,83 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     setRemoveModFhm2d(canRemoveMod);
   }, [removeDialogOpen, canRemoveWorkspace, canRemoveExtract, canRemoveMod, extractOutputSameAsWorkspace]);
 
+  // Identity of the hash this field is showing. Path-only parent updates (exists: null)
+  // must not wipe local probe results for the same hash — that caused every sibling
+  // asset field to stay in the loading/pulse state after any live onChange commit.
+  const assetIdentity = `${asset.fieldKey}:${asset.rawValue}`;
+  const lastIdentityRef = useRef<string>("");
+
   useEffect(() => {
-    setSourceExists(asset.sourceExists);
-    setWorkspaceExists(asset.workspaceExists);
-    setModExists(asset.modExists);
-  }, [asset.sourceExists, asset.workspaceExists, asset.modExists]);
+    const identityChanged = lastIdentityRef.current !== assetIdentity;
+    if (identityChanged) {
+      lastIdentityRef.current = assetIdentity;
+      setLiveAsset(asset);
+      setSourceExists(asset.sourceExists);
+      setModExists(asset.modExists);
+      setWorkspaceExists(asset.workspaceExists);
+      return;
+    }
+
+    // Same hash: adopt fresher path metadata from parent, but keep known existence.
+    setLiveAsset((prev) => ({
+      ...asset,
+      sourceExists: prev.sourceExists ?? asset.sourceExists,
+      modExists: prev.modExists ?? asset.modExists,
+      workspaceExists: prev.workspaceExists ?? asset.workspaceExists,
+    }));
+  }, [asset, assetIdentity]);
+
+  // Probe OB/MOD/WS only when the field hash (or probe roots) change — not when
+  // parent re-sends path-only refs with null existence flags.
+  useEffect(() => {
+    if (asset.rawValue === 0) {
+      setSourceExists(false);
+      setModExists(false);
+      setWorkspaceExists(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSourceExists(null);
+    setModExists(null);
+    setWorkspaceExists(null);
+
+    const probe = async () => {
+      try {
+        const probed = await getAssetRefInfo({
+          fieldKey: asset.fieldKey,
+          value: asset.rawValue,
+          obDplCachePath,
+          obModPath,
+          workspaceRoot: projectRootDir,
+          workspaceDocument,
+          probeExistence: true,
+        });
+        if (cancelled) return;
+        setLiveAsset(probed);
+        setSourceExists(probed.sourceExists);
+        setModExists(probed.modExists);
+        setWorkspaceExists(probed.workspaceExists);
+      } catch (err) {
+        if (cancelled) return;
+        console.error("Failed to probe asset existence:", err);
+        setSourceExists(false);
+        setModExists(false);
+        setWorkspaceExists(false);
+      }
+    };
+    void probe();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    asset.fieldKey,
+    asset.rawValue,
+    obDplCachePath,
+    obModPath,
+    projectRootDir,
+    workspaceDocument,
+  ]);
 
   const resolveExtractTarget = async (
     destination: "workspace" | "output",
@@ -191,8 +265,8 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     return resolveFhm2dPackPaths(
       root,
       workspaceDocument,
-      asset.routeId,
-      asset.hashHex,
+      liveAsset.routeId,
+      liveAsset.hashHex,
       packName,
     );
   };
@@ -202,7 +276,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     destination: "workspace" | "output",
   ) => {
     setIsExtracting(true);
-    const result = await extractAsset(asset, target, { writeMetaBin });
+    const result = await extractAsset(liveAsset, target, { writeMetaBin });
     setIsExtracting(false);
 
     if (result.success) {
@@ -210,7 +284,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
       const destinationLabel =
         destination === "workspace" ? "workspace" : "output folder";
       if (result.namingWarning) {
-        toast.error(`Extracted ${asset.fieldKey} but FHM naming failed`, {
+        toast.error(`Extracted ${liveAsset.fieldKey} but FHM naming failed`, {
           description: result.namingWarning,
           duration: 20_000,
           action: {
@@ -223,7 +297,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
           result.modelCount != null && result.totalFiles != null
             ? ` (${result.modelCount} models, ${result.totalFiles} files)`
             : "";
-        toast.success(`Extracted ${asset.fieldKey} to ${destinationLabel}${modelSummary}`, {
+        toast.success(`Extracted ${liveAsset.fieldKey} to ${destinationLabel}${modelSummary}`, {
           action: {
             label: "Open Folder",
             onClick: () => openPath(result.path!),
@@ -236,18 +310,19 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
         normalizePathKey(result.path) === normalizePathKey(target.folderPath)
       ) {
         setWorkspaceExists(true);
+        setLiveAsset((prev) => ({ ...prev, workspaceExists: true }));
       } else if (
         destination === "output" &&
         result.path &&
-        normalizePathKey(result.path) === normalizePathKey(asset.workspaceFolderPath)
+        normalizePathKey(result.path) === normalizePathKey(liveAsset.workspaceFolderPath)
       ) {
         setWorkspaceExists(true);
+        setLiveAsset((prev) => ({ ...prev, workspaceExists: true }));
       }
     } else {
       toast.error(result.error || "Extraction failed");
     }
   };
-
   const openExtractNameDialog = (destination: "workspace" | "output") => {
     if (isExtracting) {
       return;
@@ -323,9 +398,9 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   };
 
   const handleOpenSourceFolder = async () => {
-    if (!asset.sourceFilePath) return;
+    if (!liveAsset.sourceFilePath) return;
     try {
-      const folderPath = await dirname(asset.sourceFilePath);
+      const folderPath = await dirname(liveAsset.sourceFilePath);
       await openPath(folderPath);
     } catch (err) {
       console.error("Failed to open source folder:", err);
@@ -334,16 +409,15 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
   };
 
   const handleOpenModFolder = async () => {
-    if (!asset.modFilePath) return;
+    if (!liveAsset.modFilePath) return;
     try {
-      const folderPath = await dirname(asset.modFilePath);
+      const folderPath = await dirname(liveAsset.modFilePath);
       await openPath(folderPath);
     } catch (err) {
       console.error("Failed to open mod folder:", err);
       toast.error("Failed to open mod folder");
     }
   };
-
   const handleCopyPath = async (path: string) => {
     await writeText(path);
     toast.success("Path copied to clipboard");
@@ -354,11 +428,11 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
       toast.error("Please enter a seed string");
       return;
     }
-    if (!asset.workspacePack.existing) {
+    if (!liveAsset.workspacePack.existing) {
       toast.error("Workspace asset source was not found");
       return;
     }
-    if (!asset.workspacePack.configured.routeRootPath.trim()) {
+    if (!liveAsset.workspacePack.configured.routeRootPath.trim()) {
       toast.error("Workspace asset destination is not configured");
       return;
     }
@@ -366,23 +440,23 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     setIsCopyingAsNew(true);
     try {
       const result = await copyAssetAsNew({
-        sourceFolderPath: asset.workspacePack.existing.folderPath,
-        sourceStructureJsonPath: asset.workspacePack.existing.structureJsonPath,
-        destinationAssetRootDir: asset.workspacePack.configured.routeRootPath,
-        oldHashHex: asset.hashHex,
+        sourceFolderPath: liveAsset.workspacePack.existing.folderPath,
+        sourceStructureJsonPath: liveAsset.workspacePack.existing.structureJsonPath,
+        destinationAssetRootDir: liveAsset.workspacePack.configured.routeRootPath,
+        oldHashHex: liveAsset.hashHex,
         seed: trimmedSeed,
-        fieldKey: asset.fieldKey,
+        fieldKey: liveAsset.fieldKey,
       });
-      clearFhm2dPackResolutionCache(asset.workspacePack.configured.routeRootPath);
+      clearFhm2dPackResolutionCache(liveAsset.workspacePack.configured.routeRootPath);
 
-      const unitSlot = UNIT_FIELD_KEY_TO_SLOT[asset.fieldKey] ?? asset.fieldKey.toLowerCase();
+      const unitSlot = UNIT_FIELD_KEY_TO_SLOT[liveAsset.fieldKey] ?? liveAsset.fieldKey.toLowerCase();
       let registrySaved = false;
       if (resourceRegistry) {
         const registerResult = await resourceRegistry.registerWorkspace({
           category: "unit",
           slot: unitSlot,
           seed: trimmedSeed,
-          notes: `copy-as-new from ${asset.hashHex}`,
+          notes: `copy-as-new from ${liveAsset.hashHex}`,
         });
         if (registerResult.ok) {
           registrySaved = true;
@@ -396,7 +470,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
       setCopySeed("");
 
       const descriptionParts = [
-        `Current ${asset.fieldKey} left unchanged (${asset.hashHex}).`,
+        `Current ${liveAsset.fieldKey} left unchanged (${liveAsset.hashHex}).`,
         registrySaved
           ? "Seed saved to workspace registry."
           : resourceRegistry
@@ -433,10 +507,10 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
     setIsRemoving(true);
     try {
       const extractOutputAssetRoot = takeExtract
-        ? await resolveWorkspaceRouteRoot(extractOutputPath, workspaceDocument, asset.routeId)
+        ? await resolveWorkspaceRouteRoot(extractOutputPath, workspaceDocument, liveAsset.routeId)
         : undefined;
       await removeAssetWorkspace({
-        hashHex: asset.hashHex,
+        hashHex: liveAsset.hashHex,
         targets: {
           workspaceAssetRoot: takeWorkspace ? workspaceAssetRootPath : undefined,
           extractOutputAssetRoot,
@@ -454,10 +528,10 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
         takeWorkspace || (takeExtract && extractOutputSameAsWorkspace);
 
       if (clearedWorkspaceRow) {
-        onFieldUpdate?.(asset.fieldKey, 0);
+        onFieldUpdate?.(liveAsset.fieldKey, 0);
         setWorkspaceExists(false);
       } else if (takeExtract) {
-        setWorkspaceExists(await exists(asset.workspaceFolderPath));
+        setWorkspaceExists(await exists(liveAsset.workspaceFolderPath));
       }
 
       if (takeMod) {
@@ -465,7 +539,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
       }
 
       setRemoveDialogOpen(false);
-      toast.success(`Removed asset data for ${asset.hashHex}`);
+      toast.success(`Removed asset data for ${liveAsset.hashHex}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       toast.error(message || "Failed to remove asset data");
@@ -500,7 +574,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
           exists={workspaceExists} 
           label="WS" 
           tooltip={workspaceExists ? "Extracted folder exists in workspace. Click to filter the file tree." : "Not extracted in workspace"} 
-          onClick={workspaceExists ? () => onReveal?.(asset.workspaceFolderPath) : undefined}
+          onClick={workspaceExists ? () => onReveal?.(liveAsset.workspaceFolderPath) : undefined}
         />
       </div>
 
@@ -514,9 +588,9 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
         <PopoverContent className="w-80 p-3" align="end">
           <div className="space-y-3">
             <div>
-              <h4 className="font-medium text-sm mb-1">{asset.fieldKey} Asset</h4>
+              <h4 className="font-medium text-sm mb-1">{liveAsset.fieldKey} Asset</h4>
               <p className="text-xs text-muted-foreground font-mono break-all bg-muted p-1.5 rounded">
-                {asset.hashHex} ({asset.rawValue})
+                {liveAsset.hashHex} ({liveAsset.rawValue})
               </p>
             </div>
 
@@ -524,11 +598,11 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
               <div className="flex flex-col gap-1 overflow-hidden">
                 <span className="text-[10px] font-bold uppercase text-muted-foreground">Source (OB)</span>
                 <div className="flex items-center justify-between gap-2 overflow-hidden">
-                  <span className="text-xs truncate flex-1 bg-muted/30 p-1 rounded" title={asset.sourceFilePath}>
-                    {asset.sourceFilePath || "Not configured"}
+                  <span className="text-xs truncate flex-1 bg-muted/30 p-1 rounded" title={liveAsset.sourceFilePath}>
+                    {liveAsset.sourceFilePath || "Not configured"}
                   </span>
                   <div className="flex gap-1 shrink-0">
-                    <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleCopyPath(asset.sourceFilePath)} disabled={!asset.sourceFilePath}>
+                    <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleCopyPath(liveAsset.sourceFilePath)} disabled={!liveAsset.sourceFilePath}>
                       <Copy className="h-3 w-3" />
                     </Button>
                   </div>
@@ -538,11 +612,11 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
               <div className="flex flex-col gap-1 overflow-hidden">
                 <span className="text-[10px] font-bold uppercase text-muted-foreground">Workspace (WS)</span>
                 <div className="flex items-center justify-between gap-2 overflow-hidden">
-                  <span className="text-xs truncate flex-1 bg-muted/30 p-1 rounded" title={asset.workspaceFolderPath}>
-                    {asset.workspaceFolderPath || "Not configured"}
+                  <span className="text-xs truncate flex-1 bg-muted/30 p-1 rounded" title={liveAsset.workspaceFolderPath}>
+                    {liveAsset.workspaceFolderPath || "Not configured"}
                   </span>
                   <div className="flex gap-1 shrink-0">
-                    <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleCopyPath(asset.workspaceFolderPath)} disabled={!asset.workspaceFolderPath}>
+                    <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleCopyPath(liveAsset.workspaceFolderPath)} disabled={!liveAsset.workspaceFolderPath}>
                       <Copy className="h-3 w-3" />
                     </Button>
                   </div>
@@ -552,11 +626,11 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
               <div className="flex flex-col gap-1 overflow-hidden">
                 <span className="text-[10px] font-bold uppercase text-muted-foreground">Mod (MOD)</span>
                 <div className="flex items-center justify-between gap-2 overflow-hidden">
-                  <span className="text-xs truncate flex-1 bg-muted/30 p-1 rounded" title={asset.modFilePath}>
-                    {asset.modFilePath || "Not configured"}
+                  <span className="text-xs truncate flex-1 bg-muted/30 p-1 rounded" title={liveAsset.modFilePath}>
+                    {liveAsset.modFilePath || "Not configured"}
                   </span>
                   <div className="flex gap-1 shrink-0">
-                    <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleCopyPath(asset.modFilePath)} disabled={!asset.modFilePath}>
+                    <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => handleCopyPath(liveAsset.modFilePath)} disabled={!liveAsset.modFilePath}>
                       <Copy className="h-3 w-3" />
                     </Button>
                   </div>
@@ -632,7 +706,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
                 variant="outline" 
                 size="sm" 
                 className="w-full justify-start gap-2"
-                onClick={() => openPath(asset.workspaceFolderPath)}
+                onClick={() => openPath(liveAsset.workspaceFolderPath)}
                 disabled={!workspaceExists}
               >
                 <ExternalLink className="h-3.5 w-3.5" />
@@ -826,9 +900,8 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
               id={`extract-name-${asset.fieldKey}`}
               value={extractName}
               onChange={setExtractName}
-              sourceNameOrPath={asset.hashHex}
-              routeId={asset.routeId}
-              description={
+              sourceNameOrPath={liveAsset.hashHex}
+              routeId={liveAsset.routeId}              description={
                 extractDestination === "workspace"
                   ? "Folder and structure JSON name under the workspace route (e.g. 041cpm/<Name>)."
                   : "Folder and structure JSON name under the extract output route."
@@ -837,11 +910,9 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
             <Fhm2dMetadataSummary
               compact
               name={sanitizedExtractName}
-              hashName={normalizeFhm2dHashName(asset.hashHex)}
-              folderPath={namedExtractFolderPreview}
+              hashName={normalizeFhm2dHashName(liveAsset.hashHex)}              folderPath={namedExtractFolderPreview}
               structureJsonPath={namedExtractStructurePreview}
-              repackOutputPath={asset.modFilePath}
-            />
+              repackOutputPath={liveAsset.modFilePath}            />
           </div>
         </AppRndModalShell>
       ) : null}

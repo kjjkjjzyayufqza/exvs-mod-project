@@ -64,9 +64,9 @@ export async function probeResourcePaths(params: {
     return {
       hashInt32,
       hashHex: info.hashHex,
-      obExists: info.sourceExists,
-      modExists: info.modExists,
-      workspaceExists: info.workspaceExists,
+      obExists: Boolean(info.sourceExists),
+      modExists: Boolean(info.modExists),
+      workspaceExists: Boolean(info.workspaceExists),
     };
   }
 

@@ -25,7 +25,7 @@ export interface ComputedSection {
 interface GameAccuratePropertyPanelProps {
   entry: TypedParamEntry;
   fieldSpecs?: Array<Record<string, number>>;
-  onFieldChange: (key: string, value: number) => void;
+  onFieldChange: (key: string, value: number | string) => void;
   groups: PropertyGroupDef[];
   computedSections?: ComputedSection[];
 }
@@ -45,11 +45,17 @@ export function GameAccuratePropertyPanel({
     [groups, entry],
   );
 
+  // Scroll is owned by the parent panel shell (min-h-0 + overflow-y-auto).
+  // Do not put overflow-y-auto here alone — without a height cap it grows and never scrolls.
   return (
-    <div className="space-y-3 overflow-y-auto p-3">
-      <div className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-1.5">
-        <span className="text-[10px] text-muted-foreground">Entry ID</span>
-        <span className="font-mono text-[11px]">{formatHash(entryId)}</span>
+    <div className="space-y-3 p-3">
+      <div className="flex items-center justify-between rounded-md border border-border/60 bg-muted/15 px-3 py-1.5">
+        <span className="text-[10px] font-medium tracking-wide text-muted-foreground">
+          Entry ID
+        </span>
+        <span className="font-mono text-[11px] tabular-nums font-semibold tracking-tight">
+          {formatHash(entryId)}
+        </span>
       </div>
 
       {computedSections && computedSections.length > 0 && (
@@ -59,7 +65,7 @@ export function GameAccuratePropertyPanel({
               key={section.label}
               label={section.label}
               defaultOpen={section.defaultOpen ?? true}
-              className="border-blue-500/30 bg-blue-500/5"
+              className="border-primary/20 bg-primary/[0.04]"
             >
               {section.values.map((cv) => (
                 <div
@@ -76,7 +82,7 @@ export function GameAccuratePropertyPanel({
                     )}
                   </span>
                   <span
-                    className="font-mono text-[11px] font-medium"
+                    className="font-mono text-[11px] font-medium tabular-nums"
                     style={cv.color ? { color: cv.color } : undefined}
                   >
                     {typeof cv.value === "number"
@@ -99,7 +105,9 @@ export function GameAccuratePropertyPanel({
               key={def.key}
               def={def}
               value={entry[def.key] ?? 0}
-              onChange={onFieldChange}
+              onChange={(key, value) => {
+                onFieldChange(key, value);
+              }}
             />
           ))}
         </PropertyGroup>

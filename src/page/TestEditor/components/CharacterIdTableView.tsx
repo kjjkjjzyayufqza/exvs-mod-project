@@ -39,6 +39,7 @@ import { useResourceRegistry } from "@/hooks/useResourceRegistry";
 import { AssetRefInfo, getAssetRefInfo } from "./character-id-table/assetRef";
 import { CharacterAssetField } from "./character-id-table/CharacterAssetField";
 import { filterCharacterIdTableRows } from "./character-id-table/characterIdTableSearch";
+import { mergeResolvedAssetRefs } from "./character-id-table/mergeAssetRefs";
 import { extractAsset } from "./character-id-table/extractFhm2d";
 import { buildBulkMscExtractPlan } from "./character-id-table/bulkMscExtract";
 import { clearFhm2dPackResolutionCache, resolveFhm2dPackPaths } from "@/services/testEditorWorkspace/paths";
@@ -467,31 +468,38 @@ export default function CharacterIdTableView({
         return tableData[selectedIndex] ?? null;
     }, [selectedIndex, tableData]);
 
-    const assetRefs = useMemo(() => {
-        if (!selectedRow) return null;
-        const refs: Record<string, AssetRefInfo> = {};
-        
-        // Use a promise-based approach in a separate effect or handle synchronously if possible.
-        // Since getAssetRefInfo is async (due to join), we'll pre-calculate basic info and 
-        // let the component handle the rest, or use a state.
-        return refs;
-    }, [selectedRow]);
-
     const [resolvedAssetRefs, setResolvedAssetRefs] = useState<Record<string, AssetRefInfo>>({});
 
+    // Build expected paths only when a row is selected. Do not probe OB/MOD/WS existence here —
+    // CharacterAssetField probes lazily when the detail field is mounted (viewing that item).
+    const selectedAssetFingerprint = useMemo(() => {
+        if (!selectedRow) return null;
+        return REQUIRED_FIELD_KEYS.map((key) => `${key}:${(selectedRow as any)[key] ?? 0}`).join("|");
+    }, [selectedRow]);
+
+    // Resolve path-only asset refs when asset *hashes* change (fingerprint), not on every
+    // selectedRow identity change (live DualValueProperty commits rewrite the row object
+    // each keystroke — including Character ID edits that do not touch Model/Effect/...).
     useEffect(() => {
-        if (!selectedRow) {
+        if (!selectedAssetFingerprint) {
             setResolvedAssetRefs({});
             return;
         }
 
+        // Parse values from fingerprint so we do not depend on selectedRow identity.
+        const values = new Map<string, number>();
+        for (const part of selectedAssetFingerprint.split("|")) {
+            const sep = part.indexOf(":");
+            if (sep < 0) continue;
+            values.set(part.slice(0, sep), Number(part.slice(sep + 1)) | 0);
+        }
+
         let cancelled = false;
-        setResolvedAssetRefs({});
 
         const resolve = async () => {
             const entries = await Promise.all(
                 REQUIRED_FIELD_KEYS.map(async (key) => {
-                    const val = (selectedRow as any)[key];
+                    const val = values.get(key) ?? 0;
                     const ref = await getAssetRefInfo({
                         fieldKey: key,
                         value: val,
@@ -499,22 +507,25 @@ export default function CharacterIdTableView({
                         obModPath,
                         workspaceRoot: folderPath,
                         workspaceDocument,
+                        probeExistence: false,
                     });
                     return [key, ref] as const;
                 }),
             );
             if (cancelled) return;
-            const refs: Record<string, AssetRefInfo> = {};
+            const next: Record<string, AssetRefInfo> = {};
             for (const [key, ref] of entries) {
-                refs[key] = ref;
+                next[key] = ref;
             }
-            setResolvedAssetRefs(refs);
+            // Preserve already-probed fields whose hash did not change so sibling
+            // asset rows do not flash loading when one field is edited live.
+            setResolvedAssetRefs((prev) => mergeResolvedAssetRefs(prev, next));
         };
-        resolve();
+        void resolve();
         return () => {
             cancelled = true;
         };
-    }, [selectedRow, obDplCachePath, obModPath, folderPath, workspaceDocument]);
+    }, [selectedAssetFingerprint, obDplCachePath, obModPath, folderPath, workspaceDocument]);
 
     const handleExtractAll = useCallback(async () => {
         if (!selectedRow || isExtractingAll) return;
@@ -529,17 +540,26 @@ export default function CharacterIdTableView({
         const results = [];
         try {
             for (const key of REQUIRED_FIELD_KEYS) {
-                const asset = resolvedAssetRefs[key];
-                if (asset && asset.rawValue !== 0) {
-                    const target = await resolveFhm2dPackPaths(
-                        workspaceRoot,
-                        workspaceDocument,
-                        asset.routeId,
-                        asset.hashHex,
-                        sanitizeFhm2dStructureName(`${asset.fieldKey}_${asset.hashHex.replace(/^0x/i, "")}`),
-                    );
-                    results.push(await extractAsset(asset, target));
-                }
+                const pathOnly = resolvedAssetRefs[key];
+                if (!pathOnly || pathOnly.rawValue === 0) continue;
+                // Re-probe so source path case and workspace layout are accurate before extract.
+                const asset = await getAssetRefInfo({
+                    fieldKey: pathOnly.fieldKey,
+                    value: pathOnly.rawValue,
+                    obDplCachePath,
+                    obModPath,
+                    workspaceRoot,
+                    workspaceDocument,
+                    probeExistence: true,
+                });
+                const target = await resolveFhm2dPackPaths(
+                    workspaceRoot,
+                    workspaceDocument,
+                    asset.routeId,
+                    asset.hashHex,
+                    sanitizeFhm2dStructureName(`${asset.fieldKey}_${asset.hashHex.replace(/^0x/i, "")}`),
+                );
+                results.push(await extractAsset(asset, target));
             }
         } finally {
             setIsExtractingAll(false);
@@ -557,7 +577,7 @@ export default function CharacterIdTableView({
                 toast.success(`Successfully extracted ${successCount} assets to workspace`);
             }
         }
-    }, [selectedRow, isExtractingAll, resolvedAssetRefs, folderPath, workspaceDocument]);
+    }, [selectedRow, isExtractingAll, resolvedAssetRefs, folderPath, workspaceDocument, obDplCachePath, obModPath]);
 
     const handleExtractAllMsc = useCallback(async () => {
         if (isExtractingAllMsc) return;

@@ -1,56 +1,88 @@
 import type { TypedParamEntry } from "../../param-editor/typedParamTypes";
+import {
+  RELOAD_BEHAVIOR_TYPE_LABELS,
+  type ReloadBehaviorType,
+} from "@/lib/gameAlgorithms/reloadSystem";
+import {
+  formatHashU32,
+  getArmsFlagChips,
+  buildArmsOverviewStats,
+  numField,
+} from "./armsFieldModel";
 
 interface WeaponSlotDiagramProps {
   entry: TypedParamEntry;
 }
 
-function num(entry: TypedParamEntry, key: string): number {
-  const v = entry[key];
-  return typeof v === "number" ? v : 0;
-}
-
-interface StatBar {
-  label: string;
-  value: number;
-  max: number;
-  color: string;
-}
-
 export function WeaponSlotDiagram({ entry }: WeaponSlotDiagramProps) {
-  // AI decision (2026-06-19): omit inferred reload duration. RX-78-2 reloads
-  // in 180f, but the previously graphed reloadTimeTotal field contains 40.
-  const stats: StatBar[] = [
-    { label: "Damage", value: num(entry, "damage"), max: 500, color: "#ef4444" },
-    { label: "Ammo", value: num(entry, "ammoCount"), max: 20, color: "#3b82f6" },
-    { label: "Startup", value: num(entry, "startupFrame"), max: 60, color: "#f59e0b" },
-    { label: "Active", value: num(entry, "activeFrame"), max: 120, color: "#8b5cf6" },
-    { label: "Recovery", value: num(entry, "recoveryFrame"), max: 60, color: "#ec4899" },
-  ];
+  const stats = buildArmsOverviewStats(entry);
+  const flags = getArmsFlagChips(entry);
+  const entryId =
+    typeof entry.entryId === "number" ? (entry.entryId as number) : 0;
+  const reloadBehavior = numField(entry, "reloadBehaviorType");
+  const slotIndex = numField(entry, "slotIndex");
+  const reloadLabel =
+    RELOAD_BEHAVIOR_TYPE_LABELS[reloadBehavior as ReloadBehaviorType] ??
+    `Type ${reloadBehavior}`;
 
   return (
-    <div className="rounded-md border bg-card p-4 shadow-sm">
-      <h4 className="mb-3 text-[11px] font-semibold text-muted-foreground">
-        Weapon Stats
-      </h4>
-      <div className="space-y-2">
-        {stats.map((s) => {
-          const pct = s.max > 0 ? Math.min((s.value / s.max) * 100, 100) : 0;
+    <section className="rounded-lg border border-border/60 bg-card/80 p-4 shadow-[0_1px_0_0_rgba(255,255,255,0.03)_inset]">
+      <header className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 space-y-0.5">
+          <h4 className="text-[11px] font-semibold tracking-wide text-muted-foreground">
+            Arms overview
+          </h4>
+          <p className="font-mono text-[12px] font-semibold tabular-nums tracking-tight">
+            {formatHashU32(entryId)}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <span className="rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 font-mono text-[9px] tabular-nums text-muted-foreground">
+            slot {slotIndex}
+          </span>
+          <span className="rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 font-mono text-[9px] tabular-nums text-muted-foreground">
+            reload {reloadLabel}
+          </span>
+        </div>
+      </header>
+
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {flags.map((flag) => (
+          <span
+            key={flag.key}
+            className={
+              flag.active
+                ? "rounded-md border border-primary/35 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-foreground"
+                : "rounded-md border border-border/40 bg-muted/20 px-2 py-0.5 text-[10px] text-muted-foreground/70"
+            }
+          >
+            {flag.label}
+          </span>
+        ))}
+      </div>
+
+      <div className="space-y-2.5">
+        {stats.map((stat) => {
+          const pct =
+            stat.max > 0 ? Math.min((stat.value / stat.max) * 100, 100) : 0;
           return (
-            <div key={s.label} className="flex items-center gap-2">
-              <span className="w-16 shrink-0 text-right text-[10px] text-muted-foreground">
-                {s.label}
+            <div key={stat.key} className="grid grid-cols-[4.5rem_minmax(0,1fr)_5.5rem] items-center gap-2">
+              <span className="text-right text-[10px] text-muted-foreground">
+                {stat.label}
               </span>
-              <div className="h-3 flex-1 overflow-hidden rounded-full bg-muted">
+              <div className="h-2 overflow-hidden rounded-sm bg-muted/60">
                 <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: `${pct}%`, backgroundColor: s.color }}
+                  className="h-full rounded-sm bg-primary/75 transition-[width] duration-300 ease-out"
+                  style={{ width: `${pct}%` }}
                 />
               </div>
-              <span className="w-12 font-mono text-[10px]">{s.value}</span>
+              <span className="truncate text-right font-mono text-[10px] tabular-nums text-foreground/90">
+                {stat.display}
+              </span>
             </div>
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }

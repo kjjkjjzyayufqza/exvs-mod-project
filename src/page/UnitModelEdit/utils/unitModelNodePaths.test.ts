@@ -27,4 +27,21 @@ describe("resolveUnitModelNodeAbsPath", () => {
       resolveUnitModelNodeAbsPath("E:\\out\\pkg_structure.json", "\\pkg\\model_a\\m.numatb"),
     ).toBe("E:\\out\\pkg\\model_a\\m.numatb");
   });
+
+  it("strips structure-JSON .\\ prefix so copy/reveal paths stay canonical on Windows", () => {
+    expect(
+      resolveUnitModelNodeAbsPath(
+        "E:\\XB\\mod\\002chara\\026gnbelt_structure.json",
+        ".\\026gnbelt_003delatkai_001\\shell_015gndmuc_004deltpl_001.shl",
+      ),
+    ).toBe(
+      "E:\\XB\\mod\\002chara\\026gnbelt_003delatkai_001\\shell_015gndmuc_004deltpl_001.shl",
+    );
+  });
+
+  it("strips repeated leading ./ after slash normalization", () => {
+    expect(
+      resolveUnitModelNodeAbsPath("E:\\out\\pkg_structure.json", "././pkg/model_a/m.numatb"),
+    ).toBe("E:\\out\\pkg\\model_a\\m.numatb");
+  });
 });

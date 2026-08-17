@@ -27,10 +27,10 @@ export function EventChainPanel({ entry }: EventChainPanelProps) {
 
   const stats: StatDisplay[] = [
     { label: "Damage", value: num(entry, "damage"), max: 500, color: "#ef4444" },
-    { label: "Knockback Force", value: num(entry, "knockbackForce"), max: 200, color: "#f59e0b" },
-    { label: "Stun Value", value: num(entry, "stunValue"), max: 100, color: "#8b5cf6" },
-    { label: "Down Value", value: num(entry, "downValue"), max: 100, color: "#3b82f6" },
-    { label: "Hit Level", value: num(entry, "hitLevel"), max: 10, color: "#22c55e" },
+    { label: "Re-hit Interval", value: num(entry, "rehitInterval"), max: 1000, color: "#f59e0b" },
+    { label: "Stun Value (unverified)", value: num(entry, "stunValue"), max: 100, color: "#8b5cf6" },
+    { label: "Down Value (x100)", value: num(entry, "downValue"), max: 1000, color: "#3b82f6" },
+    { label: "Max Hit Count", value: num(entry, "maxHitCount"), max: 20, color: "#22c55e" },
   ];
 
   const maxBarW = 260;

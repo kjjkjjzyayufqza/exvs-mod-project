@@ -14,7 +14,7 @@ const MAX_OPTIONS_FILTERED = 400;
 type BoneIndexSearchSelectProps = {
   value: number;
   onChange: (next: number) => void;
-  boneNames: string[] | null;
+  boneNames: readonly string[] | null;
   disabled?: boolean;
   className?: string;
   /** Unique prefix for id/name (e.g. from useId). */
@@ -121,7 +121,12 @@ export function BoneIndexSearchSelect({
           <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+      <PopoverContent
+        // AppRndModalShell / floating windows sit at --z-modal-nested (210).
+        // Default --z-popover (50) renders under the modal so the list looks "dead".
+        className="z-[var(--z-popover-elevated)] w-[var(--radix-popover-trigger-width)] p-0"
+        align="start"
+      >
         <div className="flex flex-col gap-1 border-b p-2">
           <Label htmlFor={searchInputId} className="sr-only">
             Search bone index or name

@@ -14,24 +14,28 @@ use crate::format::param_entry_schema::{
 
 // Please keep comments for analysis.
 // Data-verified: 432 files, 17677 entries. cmd_count={15}.
-// CRITICAL: 0xD32D39ED was "is_enabled" but has 141 unique hash values — renamed to parent_bone_hash.
-//           Same hash is "bone_hash" in vernier_table.rs, confirming it's a bone reference.
+// Binary-proven schema (docs/hitbox-research/02-hitbox-volume-engine.md):
+// a row defines ONE SPHERE in bone space. Center = (0x8B1AA53F, 0xFC1D95A9, 0x6514C413),
+// radius = 0xDC8AC901, attached to bone 0xD32D39ED on the skeleton selected by 0xEDD1C108.
+// 0xC3656A99 is a foreign key to interactionid.entry_id (armed via MSC func_148), NOT a bone hash.
+// The five "unused_*" fields are DEAD: the engine never reads them (02 §7); they are kept
+// only for byte-faithful round-trips.
 pub const HITGROUPIDDEF_COMMAND_POOL: ParamCommandPool = &[
-    (0x11E501D5, 1, "hit_type"),         // [D:0~3] enum, 4 types
-    (0x3284A82D, 5, "offset_x"),         // [D:always 0] unused
-    (0x42EE5CA2, 5, "offset_y"),         // [D:always 0] unused
-    (0x458398BB, 5, "offset_z"),         // [D:-5~6] 6 unique, mostly 0
-    (0x6514C413, 5, "radius"),           // [D:-54~700] 146 unique
-    (0x7395D184, 1, "enable_state"),     // [D:0~1] boolean
-    (0x8B1AA53F, 5, "scale_x"),          // [D:-2000~2700] 306 unique
-    (0xACE03D8E, 5, "scale_y"),          // [D:always 0] unused
-    (0xC3656A99, 1, "bone_hash"),        // [D:HASH] 5856 unique
-    (0xD32D39ED, 1, "parent_bone_hash"), // [D:HASH] 141 unique. was "is_enabled" — NOT boolean!
-    (0xDBE70D18, 5, "scale_z"),          // [D:always 0] unused
-    (0xDC8AC901, 5, "group_id"),         // [D:-12~150] float, 59 unique
-    (0xEDD1C108, 1, "model_hash"),       // [D:HASH] 587 unique
-    (0xF89A41E1, 1, "collision_flags"),  // [D:0~2] enum, 3 types
-    (0xFC1D95A9, 5, "joint_offset"),     // [D:-40~85] 86 unique
+    (0x11E501D5, 1, "hit_type"), // [D:0~3] enum. Not part of volume construction; read once per active group from the LAST row, stored for hit resolution (02 §7)
+    (0x3284A82D, 5, "unused_3284a82d"), // DEAD: engine never reads (02 §7). [D:always 0]. was "offset_x"
+    (0x42EE5CA2, 5, "unused_42ee5ca2"), // DEAD: hash appears 0 times in the binary (02 §7). [D:always 0]. was "offset_y"
+    (0x458398BB, 5, "unused_458398bb"), // DEAD: engine never reads (02 §7). was "offset_z"
+    (0x6514C413, 5, "center_z"), // Sphere center Z, forward offset in bone space (02 §2). was "radius"
+    (0x7395D184, 1, "shape_mode"), // 0 = static sphere, 1 = frame-swept capsule between prev/current frame centers (02 §4). was "enable_state"
+    (0x8B1AA53F, 5, "center_x"),   // Sphere center X in bone space (02 §2). was "scale_x"
+    (0xACE03D8E, 5, "unused_ace03d8e"), // DEAD: engine never reads (02 §7). [D:always 0]. was "scale_y"
+    (0xC3656A99, 1, "interaction_id"), // FK to interactionid.entry_id; class-0 rows are selected by this key when MSC func_148 arms it (01 §2, 02 §6). was "bone_hash"
+    (0xD32D39ED, 1, "bone_id"), // Attachment bone id, looked up in the skeleton bone-id->index map (02 §3). was "parent_bone_hash"
+    (0xDBE70D18, 5, "unused_dbe70d18"), // DEAD: engine never reads (02 §7). [D:always 0]. was "scale_z"
+    (0xDC8AC901, 5, "sphere_radius"), // Sphere radius (f32); untransformed by the bone matrix (02 §2-3). was "group_id"
+    (0xEDD1C108, 1, "model_hash"), // Actor/model selector: decides which skeleton the sphere attaches to; class-1 hurtbox index key (02 §3, §6)
+    (0xF89A41E1, 1, "collision_flags"), // Row class: 0 = attack, 1 = hurtbox, 2 = third class (02 §6)
+    (0xFC1D95A9, 5, "center_y"),        // Sphere center Y in bone space (02 §2). was "joint_offset"
 ];
 
 pub fn hitgroupiddef_entry_to_json_value(entry: &HitGroupIdDefEntry) -> Value {

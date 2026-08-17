@@ -34,7 +34,11 @@ import {
   shouldSyncPlaybackFrame,
   type MotionPlaybackFrameObservation,
 } from "./motionInstancePipeline";
-import { advanceMotionFrame } from "./motionPlaybackMath";
+import { advanceMotionFrame, normalizeMotionFrame } from "./motionPlaybackMath";
+import {
+  expandSingleViewWithAttachments,
+  shouldShowPreviewSelectionOutline,
+} from "./viewportSelectionPolicy";
 import {
   Bone,
   Color,
@@ -43,13 +47,14 @@ import {
   LineBasicMaterial,
   Matrix4,
   Mesh,
+  MeshBasicMaterial,
   PerspectiveCamera,
   Quaternion,
   Skeleton,
   Vector2,
   Vector3,
 } from "three";
-import type { BufferGeometry, Object3D, Texture } from "three";
+import type { Blending, BufferGeometry, Material, Object3D, Side, Texture } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { StageOrbitControls } from "@/components/viewport/StageOrbitControls";
 import { ViewportMarqueeOverlay } from "@/components/viewport/ViewportMarqueeOverlay";
@@ -108,6 +113,22 @@ import {
   type PbrSlotKind,
 } from "./ssbhTextureUpload";
 import type { BuiltMeshDraw, SkelDataJson, SsbhModelPreviewInstance } from "./types";
+import { composeGuestAttachRootMatrix } from "./attachmentTemplateService";
+
+/** Local matrix product rootBone → attachBone (stops at non-Bone parent). Feedback-free. */
+function boneLocalChainMatrix(attachBone: Bone, out: Matrix4): Matrix4 {
+  const chain: Bone[] = [];
+  let cur: Object3D | null = attachBone;
+  while (cur && (cur as Bone).isBone) {
+    chain.push(cur as Bone);
+    cur = cur.parent;
+  }
+  out.identity();
+  for (let i = chain.length - 1; i >= 0; i -= 1) {
+    out.multiply(chain[i]!.matrix);
+  }
+  return out;
+}
 
 function instanceLayoutPosition(_index: number, _count: number): [number, number, number] {
   return [0, 0, 0];
@@ -185,6 +206,137 @@ function useRenderDebug(name: string, tracked: Record<string, unknown>): void {
   });
 }
 
+/**
+ * Scene-graph name of an instance's root group, so a host overlay can find the Object3D it
+ * needs (the effect preview's depth pre-pass renders one instance and nothing else).
+ */
+export function previewInstanceGroupName(instanceId: string): string {
+  return `preview-instance:${instanceId}`;
+}
+
+export type PreviewInstanceHostTransform = {
+  position: readonly [number, number, number];
+  rotation: readonly [number, number, number];
+  scale: readonly [number, number, number];
+  color?: readonly [number, number, number, number];
+  visible?: boolean;
+  depthWrite?: boolean;
+  depthTest?: boolean;
+  blending?: Blending;
+  /** Face culling, from the block's `cullingType` through the engine's D3D11 cull table. */
+  side?: Side;
+  /** Optional EFX color map rendered with the game's unlit model pixel path. */
+  effectTexture?: Texture | null;
+  /** Keep the unlit EFX material active when a source-local color map is unavailable. */
+  effectMaterialActive?: boolean;
+  effectUvScale?: readonly [number, number];
+  effectUvOffset?: readonly [number, number];
+  /**
+   * ColorEx UV-offset (distortion) map and its own animated UV set. When present the unlit EFX
+   * material reproduces `efxDrawModelColorExPS` bit `0x80`: the colour UV is displaced by
+   * `offset.a * (offset.rg - 0.5) * distortion` and alpha is scaled by `offset.a`.
+   */
+  effectUvOffsetTexture?: Texture | null;
+  effectOffsetUvScale?: readonly [number, number];
+  effectOffsetUvOffset?: readonly [number, number];
+  effectDistortion?: readonly [number, number];
+  /** Draw-scheme bit `0x40000`: skip the `rgb * 0.5` the base model pixel shader applies. */
+  effectFullBrightness?: boolean;
+  /** Draw-scheme bit `0x40` (`blendState == 4`): the AddMix premultiply-and-drop-alpha path. */
+  effectAddMix?: boolean;
+  /**
+   * `hkImageAddressMode` BORDER on the colour / offset sampler. WebGL2 has no border wrap, so
+   * the injected shader zeroes alpha outside the authored UV range instead.
+   */
+  effectColorBorder?: boolean;
+  effectOffsetBorder?: boolean;
+  /** Host-owned motion frame, used for per-particle animation phase. */
+  motionFrame?: number;
+};
+
+/** Uniforms the EFX override material injects into `MeshBasicMaterial`. */
+type EfxColorExUniforms = {
+  efxUvOffsetMap: { value: Texture | null };
+  efxHasUvOffsetMap: { value: number };
+  efxDistortion: { value: [number, number] };
+  efxOffsetUvScale: { value: [number, number] };
+  efxOffsetUvOffset: { value: [number, number] };
+  efxColorBorder: { value: number };
+  efxOffsetBorder: { value: number };
+  efxAddMix: { value: number };
+};
+
+/**
+ * Injects the ColorEx distortion path into a stock `MeshBasicMaterial` instead of replacing it
+ * with a `ShaderMaterial`, so three.js keeps owning skinning, vertex colours and instancing.
+ */
+function attachEfxColorExUniforms(material: MeshBasicMaterial): EfxColorExUniforms {
+  const uniforms: EfxColorExUniforms = {
+    efxUvOffsetMap: { value: null },
+    efxHasUvOffsetMap: { value: 0 },
+    efxDistortion: { value: [0, 0] },
+    efxOffsetUvScale: { value: [1, 1] },
+    efxOffsetUvOffset: { value: [0, 0] },
+    efxColorBorder: { value: 0 },
+    efxOffsetBorder: { value: 0 },
+    efxAddMix: { value: 0 },
+  };
+  material.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, uniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+uniform vec2 efxOffsetUvScale;
+uniform vec2 efxOffsetUvOffset;
+varying vec2 vEfxOffsetUv;`,
+      )
+      .replace(
+        "#include <uv_vertex>",
+        `#include <uv_vertex>
+vEfxOffsetUv = uv * efxOffsetUvScale + efxOffsetUvOffset;`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+uniform sampler2D efxUvOffsetMap;
+uniform float efxHasUvOffsetMap;
+uniform vec2 efxDistortion;
+uniform float efxColorBorder;
+uniform float efxOffsetBorder;
+uniform float efxAddMix;
+varying vec2 vEfxOffsetUv;
+float efxBorderAlpha( vec2 uvValue, float enabled ) {
+  if ( enabled < 0.5 ) return 1.0;
+  vec2 inside = step( vec2( 0.0 ), uvValue ) * step( uvValue, vec2( 1.0 ) );
+  return inside.x * inside.y;
+}`,
+      )
+      .replace(
+        "#include <map_fragment>",
+        `#ifdef USE_MAP
+  vec2 efxColorUv = vMapUv;
+  float efxOffsetAlpha = 1.0;
+  if ( efxHasUvOffsetMap > 0.5 ) {
+    vec4 efxOffsetTexel = texture2D( efxUvOffsetMap, vEfxOffsetUv );
+    efxOffsetAlpha = efxOffsetTexel.a * efxBorderAlpha( vEfxOffsetUv, efxOffsetBorder );
+    efxColorUv += efxOffsetTexel.a * ( efxOffsetTexel.rg - 0.5 ) * efxDistortion;
+  }
+  diffuseColor *= texture2D( map, efxColorUv );
+  diffuseColor.a *= efxOffsetAlpha * efxBorderAlpha( efxColorUv, efxColorBorder );
+  // efxDrawModelAddMixPS: premultiply and drop alpha once the texel is bright.
+  if ( efxAddMix > 0.5 ) {
+    float efxBright = step( 0.8, max( diffuseColor.r, max( diffuseColor.g, diffuseColor.b ) ) );
+    diffuseColor.rgb *= diffuseColor.a;
+    diffuseColor.a = mix( diffuseColor.a, 0.0, efxBright );
+  }
+#endif`,
+      );
+  };
+  return uniforms;
+}
+
 type SsbhModelCanvasProps = {
   draws: BuiltMeshDraw[];
   textureDataMap: ReadonlyMap<string, NutexbTextureData>;
@@ -212,6 +364,8 @@ type SsbhModelCanvasProps = {
   previewInstances: readonly SsbhModelPreviewInstance[];
   activePreviewInstanceId: string | null;
   previewViewMode: PreviewInstanceViewMode;
+  /** Inspect-list-only yellow mesh selection glow. */
+  selectionOutlineEnabled?: boolean;
   hiddenPreviewInstanceIds: ReadonlySet<string>;
   selectedBoneIndex: number | null;
   bonePointSize: number;
@@ -221,6 +375,12 @@ type SsbhModelCanvasProps = {
   previewRenderStyle: PreviewRenderStyle;
   /** When true, R3F stops the render loop (background kept-alive route). */
   previewSuspended?: boolean;
+  /** Optional host-owned R3F content rendered inside the fitted model root. */
+  sceneOverlay?: ReactNode;
+  /** Imperative per-frame instance transforms owned by an embedded host. */
+  hostInstanceTransformsRef?: RefObject<ReadonlyMap<string, PreviewInstanceHostTransform>>;
+  /** Keeps the shared canvas advancing while host-owned scene content is animated. */
+  sceneOverlayAnimating?: boolean;
   onViewportBoneSelect: (index: number) => void;
   onViewportBoneSelectionClear: () => void;
   onBoneTransformHotkey: (mode: BoneTransformMode) => void;
@@ -492,7 +652,7 @@ const _interpQb = new Quaternion();
 const _cameraQFrom = new Quaternion();
 const _cameraQTo = new Quaternion();
 const _attachParentM = new Matrix4();
-const _attachChildInvM = new Matrix4();
+const _attachGuestLocalM = new Matrix4();
 const _attachFinalM = new Matrix4();
 
 function lerpNumber(a: number, b: number, t: number): number {
@@ -1021,6 +1181,7 @@ const Scene = memo(function Scene({
   previewInstances,
   activePreviewInstanceId,
   previewViewMode,
+  selectionOutlineEnabled = false,
   hiddenPreviewInstanceIds,
   selectedBoneIndex,
   bonePointSize,
@@ -1043,6 +1204,8 @@ const Scene = memo(function Scene({
   motionApplyLighting,
   motionForceVisibleDuringPlayback,
   modelAttachments,
+  sceneOverlay,
+  hostInstanceTransformsRef,
   viewportControls = "default",
   onViewportSelectInstance,
   onViewportSelectInstances,
@@ -1052,6 +1215,7 @@ const Scene = memo(function Scene({
 }: Omit<
   SsbhModelCanvasProps,
   | "previewSuspended"
+  | "sceneOverlayAnimating"
   | "onViewportBoneSelectionClear"
   | "onBoneTransformHotkey"
   | "onUndoBonePose"
@@ -1161,10 +1325,19 @@ const Scene = memo(function Scene({
         (activePreviewInstanceId
           ? byVisibility.find((inst) => inst.id === activePreviewInstanceId)
           : null) ?? byVisibility[0]!;
-      return [active];
+      // Keep attached weapons/props visible when soloing the motion target.
+      const keepIds = expandSingleViewWithAttachments(active.id, modelAttachments);
+      const expanded = byVisibility.filter((inst) => keepIds.has(inst.id));
+      return expanded.length > 0 ? expanded : [active];
     }
     return byVisibility;
-  }, [previewInstances, hiddenPreviewInstanceIds, previewViewMode, activePreviewInstanceId]);
+  }, [
+    previewInstances,
+    hiddenPreviewInstanceIds,
+    previewViewMode,
+    activePreviewInstanceId,
+    modelAttachments,
+  ]);
 
   const drawsByInstance = useMemo(() => {
     const map = new Map<string, BuiltMeshDraw[]>();
@@ -1181,6 +1354,50 @@ const Scene = memo(function Scene({
     return map;
   }, [draws, previewInstances, singleInstance]);
   const instanceGroupRefs = useRef<Map<string, Group>>(new Map());
+  const hostMaterialDefaultsRef = useRef(new WeakMap<Material, {
+    color: Color | null;
+    opacity: number;
+    transparent: boolean;
+    depthWrite: boolean;
+    depthTest: boolean;
+    blending: Blending;
+    side: Side;
+  }>());
+  const hostTintScratchRef = useRef(new Color());
+  const hostEffectMaterialOverridesRef = useRef(new Map<Mesh, {
+    original: Material | Material[];
+    overrides: MeshBasicMaterial[];
+  }>());
+  const hostEffectTexturesRef = useRef(new Map<string, { source: Texture; texture: Texture }>());
+  const efxColorExUniformsRef = useRef(new Map<MeshBasicMaterial, EfxColorExUniforms>());
+  /**
+   * SkinnedMesh uses bindMode "detached": skinning is pure bone.matrixWorld.
+   * Attach offsets must live on a skeleton parent (not the mesh group), or the
+   * rifle double-transforms / flies when the host animates.
+   */
+  const attachAnchorByInstanceIdRef = useRef<Map<string, Group>>(new Map());
+  const { scene } = useThree();
+
+  useEffect(() => {
+    const anchors = attachAnchorByInstanceIdRef.current;
+    return () => {
+      for (const anchor of anchors.values()) {
+        scene.remove(anchor);
+        anchor.clear();
+      }
+      anchors.clear();
+    };
+  }, [scene]);
+
+  useEffect(() => () => {
+    for (const [mesh, override] of hostEffectMaterialOverridesRef.current) {
+      mesh.material = override.original;
+      for (const material of override.overrides) material.dispose();
+    }
+    hostEffectMaterialOverridesRef.current.clear();
+    for (const entry of hostEffectTexturesRef.current.values()) entry.texture.dispose();
+    hostEffectTexturesRef.current.clear();
+  }, []);
 
   useEffect(() => {
     if (!exportHandleRef) return;
@@ -1273,17 +1490,12 @@ const Scene = memo(function Scene({
         throw new Error("Motion clip has no sampled frames");
       }
       const maxIndex = frameCount - 1;
-      let f = scrubFrame;
-      if (activeLoop) {
-        f =
-          activeClip.finalFrameIndex > 0
-            ? ((f % activeClip.finalFrameIndex) + activeClip.finalFrameIndex) % activeClip.finalFrameIndex
-            : 0;
-      } else if (f < 0) {
-        f = 0;
-      } else if (f > maxIndex) {
-        f = maxIndex;
-      }
+      const f = normalizeMotionFrame(
+        scrubFrame,
+        activeClip.finalFrameIndex,
+        frameCount,
+        activeLoop,
+      );
       playbackFrameRef.current.set(motionControlInstanceId, f);
       const currentIndex = Math.floor(f);
       const nextIndex = activeLoop ? (currentIndex + 1) % frameCount : Math.min(currentIndex + 1, maxIndex);
@@ -1351,7 +1563,11 @@ const Scene = memo(function Scene({
       }
       return;
     }
-    if (!anyMotionPlaying) {
+    const hostMotionFrames = hostInstanceTransformsRef?.current;
+    const hasHostMotion = Boolean(
+      hostMotionFrames && Array.from(hostMotionFrames.values()).some((transform) => Number.isFinite(transform.motionFrame)),
+    );
+    if (!anyMotionPlaying && !hasHostMotion) {
       return;
     }
     lastAppliedScrubFrameRef.current = null;
@@ -1367,7 +1583,9 @@ const Scene = memo(function Scene({
     let cameraFactor = 0;
     let cameraHasData = false;
     for (const [instanceId, motionState] of motionStatesByInstanceId.entries()) {
-      if (!motionState.poseEnabled || !motionState.playing || !motionState.clip) {
+      const hostMotionFrame = hostMotionFrames?.get(instanceId)?.motionFrame;
+      const hostDriven = Number.isFinite(hostMotionFrame);
+      if (!motionState.poseEnabled || (!motionState.playing && !hostDriven) || !motionState.clip) {
         continue;
       }
       const runtime = gpuRuntimeByInstance.get(instanceId);
@@ -1377,13 +1595,15 @@ const Scene = memo(function Scene({
       const clip = motionState.clip;
       const current = playbackFrameRef.current.get(instanceId) ?? motionState.frame;
       const advanceStart = performance.now();
-      const { nextFrame, shouldStopPlayback } = advanceMotionFrame(
-        current,
-        delta,
-        motionState.speed,
-        clip.finalFrameIndex,
-        motionState.loop,
-      );
+      const { nextFrame, shouldStopPlayback } = hostDriven
+        ? { nextFrame: hostMotionFrame as number, shouldStopPlayback: false }
+        : advanceMotionFrame(
+            current,
+            delta,
+            motionState.speed,
+            clip.finalFrameIndex,
+            motionState.loop,
+          );
       phaseAdvance += performance.now() - advanceStart;
       playbackFrameRef.current.set(instanceId, nextFrame);
 
@@ -1392,17 +1612,12 @@ const Scene = memo(function Scene({
         throw new Error("Motion clip has no sampled frames");
       }
       const maxIndex = frameCount - 1;
-      let f = nextFrame;
-      if (motionState.loop) {
-        f =
-          clip.finalFrameIndex > 0
-            ? ((f % clip.finalFrameIndex) + clip.finalFrameIndex) % clip.finalFrameIndex
-            : 0;
-      } else if (f < 0) {
-        f = 0;
-      } else if (f > maxIndex) {
-        f = maxIndex;
-      }
+      const f = normalizeMotionFrame(
+        nextFrame,
+        clip.finalFrameIndex,
+        frameCount,
+        motionState.loop,
+      );
       const currentIndex = Math.floor(f);
       const nextIndex = motionState.loop ? (currentIndex + 1) % frameCount : Math.min(currentIndex + 1, maxIndex);
       const factor = f - currentIndex;
@@ -1426,7 +1641,7 @@ const Scene = memo(function Scene({
       runtime.skeleton.update();
       phaseBones += performance.now() - bonesStart;
 
-      if (instanceId === motionControlInstanceId) {
+      if (instanceId === motionControlInstanceId && !hostDriven) {
         cameraCurrentFrame = currentFrame;
         cameraNextFrame = nextMotionFrame;
         cameraFactor = factor;
@@ -1511,6 +1726,8 @@ const Scene = memo(function Scene({
 
   useFrame(() => {
     const attachedChildIds = new Set<string>();
+    const anchors = attachAnchorByInstanceIdRef.current;
+
     for (const attachment of modelAttachments) {
       const parentRuntime = gpuRuntimeByInstance.get(attachment.parentInstanceId);
       const childRuntime = gpuRuntimeByInstance.get(attachment.childInstanceId);
@@ -1530,30 +1747,254 @@ const Scene = memo(function Scene({
       if (!parentBone || !childBone) {
         continue;
       }
+
+      // Host: pure skeleton world (bones must not sit under the mesh group —
+      // SkinnedMesh bindMode is "detached").
+      for (const root of parentRuntime.rootBones) {
+        if (root.parent && !(root.parent as Bone).isBone) {
+          root.removeFromParent();
+        }
+      }
+      updateGpuSkeletonWorld(parentRuntime);
       _attachParentM.copy(parentBone.matrixWorld);
-      _attachChildInvM.copy(childBone.matrixWorld).invert();
-      _attachFinalM.multiplyMatrices(_attachParentM, _attachChildInvM);
+
+      // Guest attach bone from LOCAL bone chain only (never includes attach anchor).
+      // Temporarily walk while bones may already hang under last frame's anchor.
+      boneLocalChainMatrix(childBone, _attachGuestLocalM);
+
+      _attachFinalM.fromArray(
+        composeGuestAttachRootMatrix(_attachParentM.toArray(), _attachGuestLocalM.toArray()),
+      );
+
+      let anchor = anchors.get(attachment.childInstanceId);
+      if (!anchor) {
+        anchor = new Group();
+        anchor.name = `attach-anchor:${attachment.childInstanceId}`;
+        scene.add(anchor);
+        anchors.set(attachment.childInstanceId, anchor);
+      }
+      // Drive skeleton roots via anchor; keep mesh group at identity (no double transform).
+      for (const root of childRuntime.rootBones) {
+        if (root.parent !== anchor) {
+          anchor.add(root);
+        }
+      }
+      anchor.matrixAutoUpdate = false;
+      anchor.matrix.copy(_attachFinalM);
+      anchor.updateMatrixWorld(true);
+      updateGpuSkeletonWorld(childRuntime);
+      childRuntime.skeleton.update();
+
+      // Mesh group must stay identity so detached skinning is not multiplied again.
       childGroup.matrixAutoUpdate = false;
-      childGroup.matrix.copy(_attachFinalM);
-      childGroup.matrix.decompose(childGroup.position, childGroup.quaternion, childGroup.scale);
+      childGroup.matrix.identity();
+      childGroup.position.set(0, 0, 0);
+      childGroup.quaternion.identity();
+      childGroup.scale.set(1, 1, 1);
       childGroup.updateMatrix();
       childGroup.updateMatrixWorld(true);
+
       attachedChildIds.add(attachment.childInstanceId);
     }
 
+    // Detach anchors for guests that are no longer attached.
+    for (const [instanceId, anchor] of anchors.entries()) {
+      if (attachedChildIds.has(instanceId)) continue;
+      const runtime = gpuRuntimeByInstance.get(instanceId);
+      if (runtime) {
+        for (const root of runtime.rootBones) {
+          if (root.parent === anchor) {
+            anchor.remove(root);
+          }
+        }
+        updateGpuSkeletonWorld(runtime);
+        runtime.skeleton.update();
+      }
+      scene.remove(anchor);
+      anchors.delete(instanceId);
+    }
+
+    const activeEffectMeshes = new Set<Mesh>();
+    const activeEffectInstanceIds = new Set<string>();
     for (let i = 0; i < visibleInstances.length; i++) {
       const inst = visibleInstances[i];
       const group = instanceGroupRefs.current.get(inst.id);
       if (!group || attachedChildIds.has(inst.id)) {
         continue;
       }
-      if (!group.matrixAutoUpdate) {
+      const hostTransform = hostInstanceTransformsRef?.current?.get(inst.id);
+      const effectMaterialActive =
+        hostTransform?.effectMaterialActive ?? Boolean(hostTransform?.effectTexture);
+      let effectTexture: Texture | null = null;
+      if (hostTransform?.effectTexture) {
+        activeEffectInstanceIds.add(inst.id);
+        let cached = hostEffectTexturesRef.current.get(inst.id);
+        if (!cached || cached.source !== hostTransform.effectTexture) {
+          cached?.texture.dispose();
+          const texture = hostTransform.effectTexture.clone();
+          texture.flipY = false;
+          texture.needsUpdate = true;
+          cached = { source: hostTransform.effectTexture, texture };
+          hostEffectTexturesRef.current.set(inst.id, cached);
+        }
+        const uvScale = hostTransform.effectUvScale ?? [1, 1];
+        const uvOffset = hostTransform.effectUvOffset ?? [0, 0];
+        cached.texture.repeat.set(uvScale[0], uvScale[1]);
+        cached.texture.offset.set(uvOffset[0], uvOffset[1]);
+        cached.texture.updateMatrix();
+        effectTexture = cached.texture;
+      }
+      // The offset map keeps the source texture: its UV set is applied in the injected
+      // shader, not through three's per-texture matrix.
+      const effectUvOffsetTexture = hostTransform?.effectUvOffsetTexture ?? null;
+      const effectDistortion = hostTransform?.effectDistortion ?? [0, 0];
+      const effectOffsetUvScale = hostTransform?.effectOffsetUvScale ?? [1, 1];
+      const effectOffsetUvOffset = hostTransform?.effectOffsetUvOffset ?? [0, 0];
+      const effectBaseLevel = hostTransform?.effectFullBrightness ? 1 : 0.5;
+      const effectAddMix = hostTransform?.effectAddMix ? 1 : 0;
+      const effectColorBorder = hostTransform?.effectColorBorder ? 1 : 0;
+      const effectOffsetBorder = hostTransform?.effectOffsetBorder ? 1 : 0;
+      group.visible = hostTransform?.visible ?? true;
+      if (hostTransform) {
+        group.matrixAutoUpdate = true;
+        group.position.set(...hostTransform.position);
+        group.rotation.set(...hostTransform.rotation);
+        group.scale.set(...hostTransform.scale);
+        group.updateMatrix();
+        group.updateMatrixWorld(true);
+      } else if (!group.matrixAutoUpdate) {
         group.matrixAutoUpdate = true;
         const pos = instanceLayoutPosition(i, previewInstances.length);
         group.position.set(pos[0], pos[1], pos[2]);
         group.updateMatrix();
         group.updateMatrixWorld(true);
       }
+
+      group.traverse((object) => {
+        if (!(object instanceof Mesh)) return;
+        let materials: Material[];
+        const currentOverride = hostEffectMaterialOverridesRef.current.get(object);
+        if (effectMaterialActive) {
+          activeEffectMeshes.add(object);
+          let override = currentOverride;
+          if (!override) {
+            const original = object.material;
+            const originals = Array.isArray(original) ? original : [original];
+            const overrides = originals.map((material) => {
+              const override = new MeshBasicMaterial({
+                alphaTest: 0.01,
+                blending: material.blending,
+                color: new Color(effectBaseLevel, effectBaseLevel, effectBaseLevel),
+                depthTest: material.depthTest,
+                depthWrite: material.depthWrite,
+                map: effectTexture,
+                opacity: material.opacity,
+                side: material.side,
+                toneMapped: false,
+                transparent: true,
+                vertexColors: Boolean(object.geometry.getAttribute("color")),
+              });
+              efxColorExUniformsRef.current.set(override, attachEfxColorExUniforms(override));
+              return override;
+            });
+            override = { original, overrides };
+            hostEffectMaterialOverridesRef.current.set(object, override);
+            object.material = Array.isArray(original) ? overrides : overrides[0]!;
+          }
+          for (const material of override.overrides) {
+            if (material.map !== effectTexture) {
+              material.map = effectTexture;
+              material.needsUpdate = true;
+            }
+            material.color.setScalar(effectBaseLevel);
+            const uniforms = efxColorExUniformsRef.current.get(material);
+            if (uniforms) {
+              uniforms.efxUvOffsetMap.value = effectUvOffsetTexture;
+              uniforms.efxHasUvOffsetMap.value = effectUvOffsetTexture ? 1 : 0;
+              uniforms.efxDistortion.value = [effectDistortion[0], effectDistortion[1]];
+              uniforms.efxOffsetUvScale.value = [effectOffsetUvScale[0], effectOffsetUvScale[1]];
+              uniforms.efxOffsetUvOffset.value = [effectOffsetUvOffset[0], effectOffsetUvOffset[1]];
+              uniforms.efxColorBorder.value = effectColorBorder;
+              uniforms.efxOffsetBorder.value = effectOffsetBorder;
+              uniforms.efxAddMix.value = effectAddMix;
+            }
+          }
+          materials = override.overrides;
+        } else {
+          if (currentOverride) {
+            object.material = currentOverride.original;
+            for (const material of currentOverride.overrides) {
+              efxColorExUniformsRef.current.delete(material);
+              material.dispose();
+            }
+            hostEffectMaterialOverridesRef.current.delete(object);
+          }
+          materials = Array.isArray(object.material) ? object.material : [object.material];
+        }
+        for (const material of materials) {
+          const tintable = material as Material & { color?: Color; opacity: number };
+          let defaults = hostMaterialDefaultsRef.current.get(material);
+          if (hostTransform && !defaults) {
+            defaults = {
+              color: tintable.color?.clone() ?? null,
+              opacity: tintable.opacity,
+              transparent: material.transparent,
+              depthWrite: material.depthWrite,
+              depthTest: material.depthTest,
+              blending: material.blending,
+              side: material.side,
+            };
+            hostMaterialDefaultsRef.current.set(material, defaults);
+          }
+          if (!defaults) continue;
+
+          const previousPipeline = [
+            material.transparent,
+            material.depthWrite,
+            material.depthTest,
+            material.blending,
+            material.side,
+          ] as const;
+          if (hostTransform) {
+            const color = hostTransform.color ?? [1, 1, 1, 1];
+            if (tintable.color && defaults.color) {
+              tintable.color.copy(defaults.color).multiply(
+                hostTintScratchRef.current.setRGB(color[0], color[1], color[2]),
+              );
+            }
+            tintable.opacity = defaults.opacity * Math.max(0, color[3]);
+            material.transparent = defaults.transparent || color[3] < 0.999;
+            material.depthWrite = hostTransform.depthWrite ?? defaults.depthWrite;
+            material.depthTest = hostTransform.depthTest ?? defaults.depthTest;
+            material.blending = hostTransform.blending ?? defaults.blending;
+            material.side = hostTransform.side ?? defaults.side;
+          } else {
+            if (tintable.color && defaults.color) tintable.color.copy(defaults.color);
+            tintable.opacity = defaults.opacity;
+            material.transparent = defaults.transparent;
+            material.depthWrite = defaults.depthWrite;
+            material.depthTest = defaults.depthTest;
+            material.blending = defaults.blending;
+          }
+          if (previousPipeline[0] !== material.transparent ||
+              previousPipeline[1] !== material.depthWrite ||
+              previousPipeline[2] !== material.depthTest ||
+              previousPipeline[3] !== material.blending) {
+            material.needsUpdate = true;
+          }
+        }
+      });
+    }
+    for (const [mesh, override] of hostEffectMaterialOverridesRef.current) {
+      if (activeEffectMeshes.has(mesh)) continue;
+      mesh.material = override.original;
+      for (const material of override.overrides) material.dispose();
+      hostEffectMaterialOverridesRef.current.delete(mesh);
+    }
+    for (const [instanceId, cached] of hostEffectTexturesRef.current) {
+      if (activeEffectInstanceIds.has(instanceId)) continue;
+      cached.texture.dispose();
+      hostEffectTexturesRef.current.delete(instanceId);
     }
   });
 
@@ -1625,7 +2066,15 @@ const Scene = memo(function Scene({
             skeletonBoneCount: instSkel?.bones.length ?? 0,
             sampledBoneCount: instMotionLocals?.length ?? 0,
           });
-          const { motionPoseActive, gpuSkinningActive } = renderState;
+          // Attachment drives the GPU skeleton (anchor). Without forcing GPU skin,
+          // idle guests use BonePreviewRig CPU armature and ignore the glue.
+          const involvedInAttachment = modelAttachments.some(
+            (edge) =>
+              edge.parentInstanceId === inst.id || edge.childInstanceId === inst.id,
+          );
+          const motionPoseActive = renderState.motionPoseActive;
+          const gpuSkinningActive =
+            Boolean(gpuRuntime) && (renderState.gpuSkinningActive || involvedInAttachment);
           const gpuSkeleton = gpuSkinningActive ? gpuRuntime!.skeleton : null;
           const skinningDraws = filterDrawsForMotionSkinning(
             instDraws,
@@ -1635,6 +2084,7 @@ const Scene = memo(function Scene({
           return (
             <group
               key={inst.id}
+              name={previewInstanceGroupName(inst.id)}
               position={pos}
               onClick={unrealSelectionEnabled ? handleInstanceViewportClick(inst.id) : undefined}
               ref={(el) => {
@@ -1699,7 +2149,10 @@ const Scene = memo(function Scene({
                 }
                 previewRenderStyle={previewRenderStyle}
                 animeKeyLightDir={animeKeyLightDir}
-                selectionOutline={isActive}
+                selectionOutline={shouldShowPreviewSelectionOutline({
+                  isActive,
+                  selectionOutlineEnabled,
+                })}
                 motionVisibilityRows={
                   instMotionState?.playing || (motionScrubbing && isActive)
                     ? null
@@ -1714,6 +2167,7 @@ const Scene = memo(function Scene({
             </group>
           );
         })}
+        {sceneOverlay}
       </group>
 
       {isUnrealViewport ? (
@@ -1791,6 +2245,7 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
   const {
     background,
     previewSuspended = false,
+    sceneOverlayAnimating = false,
     motionScrubbing,
     viewportControls = "default",
     onViewportSelectInstance,
@@ -1861,6 +2316,7 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
     () => Array.from(restSceneProps.motionStatesByInstanceId.values()).some((s) => s.playing),
     [restSceneProps.motionStatesByInstanceId],
   );
+  const renderLoopActive = anyMotionPlaying || sceneOverlayAnimating || motionScrubbing;
   const drawComplexity = useMemo(
     () => measureDrawComplexity(restSceneProps.draws),
     [restSceneProps.draws],
@@ -1874,37 +2330,38 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
       getSsbhCanvasPerformanceProfile({
         drawCount: drawComplexity.drawCount,
         triangleCount: drawComplexity.triangleCount,
-        motionPlaying: anyMotionPlaying,
+        motionPlaying: anyMotionPlaying || sceneOverlayAnimating,
         motionScrubbing,
         previewRenderStyle: restSceneProps.previewRenderStyle,
       }),
-    [drawComplexity, anyMotionPlaying, motionScrubbing, restSceneProps.previewRenderStyle],
+    [drawComplexity, anyMotionPlaying, motionScrubbing, restSceneProps.previewRenderStyle, sceneOverlayAnimating],
   );
   const adaptivePerformanceOptions = useMemo(
     () =>
       getSsbhAdaptivePerformanceOptions({
         drawCount: drawComplexity.drawCount,
         triangleCount: drawComplexity.triangleCount,
-        motionPlaying: anyMotionPlaying,
+        motionPlaying: anyMotionPlaying || sceneOverlayAnimating,
         motionScrubbing,
         previewRenderStyle: restSceneProps.previewRenderStyle,
       }),
-    [drawComplexity, anyMotionPlaying, motionScrubbing, restSceneProps.previewRenderStyle],
+    [drawComplexity, anyMotionPlaying, motionScrubbing, restSceneProps.previewRenderStyle, sceneOverlayAnimating],
   );
   const perfMonitorOptions = useMemo(
     () =>
       getSsbhPerfMonitorOptions({
         drawCount: drawComplexity.drawCount,
         triangleCount: drawComplexity.triangleCount,
-        motionPlaying: anyMotionPlaying,
+        motionPlaying: anyMotionPlaying || sceneOverlayAnimating,
         motionScrubbing,
         previewRenderStyle: restSceneProps.previewRenderStyle,
       }),
-    [drawComplexity, anyMotionPlaying, motionScrubbing, restSceneProps.previewRenderStyle],
+    [drawComplexity, anyMotionPlaying, motionScrubbing, restSceneProps.previewRenderStyle, sceneOverlayAnimating],
   );
 
   useRenderDebug("SsbhModelCanvas", {
     motionPlaying: anyMotionPlaying,
+    sceneOverlayAnimating,
     motionScrubbing,
     previewSuspended,
     draws: restSceneProps.draws.length,
@@ -2005,7 +2462,7 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
       {isUnrealViewport ? <ViewportMarqueeOverlay rect={marqueeRect} /> : null}
       <Canvas
         className="h-full w-full touch-none"
-        frameloop={previewSuspended ? "never" : anyMotionPlaying || motionScrubbing ? "always" : "demand"}
+        frameloop={previewSuspended ? "never" : renderLoopActive ? "always" : "demand"}
         gl={{
           antialias: canvasPerformanceProfile.antialias,
           alpha: false,
@@ -2027,7 +2484,7 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
       >
         <AdaptiveCanvasPerformanceController
           baseDprRange={canvasPerformanceProfile.dpr}
-          motionActive={anyMotionPlaying || motionScrubbing}
+          motionActive={renderLoopActive}
           perfMonitorOptions={perfMonitorOptions}
           previewRenderStyle={restSceneProps.previewRenderStyle}
           showStats={restSceneProps.showStats}

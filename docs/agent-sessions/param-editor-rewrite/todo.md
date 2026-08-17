@@ -1,5 +1,15 @@
 # Param Editor Rewrite — Implementation Plan
 
+> **STATUS (2026-07-26 audit + wiring pass):** Phase 1 library shipped as `src/lib/gameAlgorithms/`
+> (tested modules; some planned filenames were superseded — see notes below). Phase 2.1's
+> 83-move-type premise was RE-invalidated (`moveTypes.ts:8`: 513-595 are entity command IDs;
+> real move types are 0-7/255). Wired this pass: 2.3 cross-references (`BulletCrossRefPanel`),
+> 2.4 corrected validation (`bulletValidation.ts`), 3.1-3.3 character visualizers
+> (`AttackTypeBreakdownTable` / `GutsBandChart` / `LockRangeRings`), 4.1 action/reload timeline
+> (`ActionReloadTimelinePanel`). `damageCalculation.ts` hash maps were synced to the canonical
+> CHARACTERPARAM_COMMAND_POOL (previous maps contained audit-rejected lock hashes).
+> "Further IDA Analysis" section remains blocked: no live IDA instance.
+
 ## Overview
 
 Rewrite all 9 param editors to use game-accurate algorithms reverse-engineered from
@@ -16,17 +26,17 @@ See `process.md` for the full reverse engineering analysis.
 
 Create a TypeScript library implementing the core game algorithms:
 
-- [ ] `paramSystem.ts` — FNV-1a hash lookup, command descriptor binary search (mirrors LookupCommandDescriptorByHash)
-- [ ] `ballisticSolver.ts` — Ballistic angle solver (sub_1405C42E0), trajectory calculator (sub_1405B5040)
-- [ ] `spawnPosition.ts` — Deg→rad conversion, 3D spawn offset (sub_1405C4400)
-- [ ] `damageCalculation.ts` — Damage dispatcher, cost dispatcher, guts correction (sub_1405F9010/9180/8E70)
-- [ ] `movementPhysics.ts` — Speed/acceleration/gravity formulas from movement state machine
-- [ ] `reloadSystem.ts` — 4 reload types (standard, per-shot, overheat, charge)
-- [ ] `collisionGeometry.ts` — Hit volume computation from bone + offset + scale
+- [ ] `paramSystem.ts` — FNV-1a hash lookup, command descriptor binary search (mirrors LookupCommandDescriptorByHash) → not shipped under this name; hash/descriptor lookup lives in the Rust command pools (`src-tauri/src/format/*`)
+- [x] `ballisticSolver.ts` — Ballistic angle solver (sub_1405C42E0), trajectory calculator (sub_1405B5040) → shipped + tested
+- [ ] `spawnPosition.ts` — Deg→rad conversion, 3D spawn offset (sub_1405C4400) → not shipped under this name; see `vec3.ts` / `shootingLoop.ts`
+- [x] `damageCalculation.ts` — Damage dispatcher, cost dispatcher, guts correction (sub_1405F9010/9180/8E70) → shipped + tested; hash maps synced to canonical pool 2026-07-26
+- [ ] `movementPhysics.ts` — Speed/acceleration/gravity formulas from movement state machine → superseded by `movementParamSemantics.ts`
+- [x] `reloadSystem.ts` — 4 reload types (standard, per-shot, overheat, charge) → shipped + tested
+- [x] `collisionGeometry.ts` — Hit volume computation from bone + offset + scale → shipped + tested
 
 ### 1.2 Cross-Param Reference Resolver
 
-- [ ] `crossParamResolver.ts` — Resolves hash references between param types:
+- [x] `crossParamResolver.ts` — Resolves hash references between param types: → shipped + tested; wired into UI 2026-07-26 (`BulletCrossRefPanel`)
   - bulletparam.interaction_hash → interactionid entry
   - bulletparam.hitgroup_hash → hitgroupiddef entry
   - bulletparam.bullet_resource_hash → projectile_depiction_table entry
@@ -34,15 +44,20 @@ Create a TypeScript library implementing the core game algorithms:
 
 ### 1.3 Shared Editor Components
 
-- [ ] `GameAccuratePropertyPanel.tsx` — Property panel that shows both raw values AND computed game values
-- [ ] `CrossReferencePanel.tsx` — Shows linked entries from other param files
-- [ ] `TimelineVisualizer.tsx` — Frame-based timeline (startup → active → recovery → cooldown)
+- [x] `GameAccuratePropertyPanel.tsx` — Property panel that shows both raw values AND computed game values → shipped
+- [x] `CrossReferencePanel.tsx` — Shows linked entries from other param files → shipped; wired 2026-07-26 with loadedKinds/navigableKinds states
+- [x] `TimelineVisualizer.tsx` — Frame-based timeline (startup → active → recovery → cooldown) → shipped; wired 2026-07-26 (`ActionReloadTimelinePanel`)
 
 ---
 
 ## Phase 2: bulletparam Editor (Priority: Highest)
 
 ### 2.1 Move Type Simulation Engine
+
+> **SUPERSEDED (RE-invalidated):** 513-595 are entity command IDs, not move types
+> (`src/lib/gameAlgorithms/moveTypes.ts:8`). Real move types are 0-7/255; the
+> TrajectorySimulator was rewritten RE-grounded (2026-05-31) and the dead 513-595
+> code deleted. Do not implement the items below as written.
 
 The game has **83 move types** (IDs 513–595). Each implements a different projectile behavior.
 The editor must simulate the correct behavior for each move type.
@@ -68,15 +83,15 @@ The editor must simulate the correct behavior for each move type.
 
 ### 2.3 Cross-Reference Integration
 
-- [ ] Load and display linked interactionid entry (from interaction_hash)
-- [ ] Load and display linked hitgroupiddef entry (from hitgroup_hash)
-- [ ] Load and display linked depiction entry (from bullet_resource_hash)
-- [ ] Show child_bullet_hash chain (recursive bullet spawning)
+- [x] Load and display linked interactionid entry (from interaction_hash) → 2026-07-26 `BulletCrossRefPanel` + sibling file slots in `BulletEditorStore`
+- [x] Load and display linked hitgroupiddef entry (from hitgroup_hash) → same
+- [x] Load and display linked depiction entry (from bullet_resource_hash) → same
+- [x] Show child_bullet_hash chain (recursive bullet spawning) → `followChildBulletChain` with depth/hash/move-type + Go-to navigation
 
 ### 2.4 Validation with Game Constants
 
-- [ ] Validate initial_speed against game engine clamp (max 640 from data)
-- [ ] Validate move_type against known valid range (513–595)
+- [ ] Validate initial_speed against game engine clamp (max 640 from data) → REJECTED 2026-07-26: no evidence for a 640 clamp in process.md; the pre-existing unsubstantiated `speed > 640` store error was removed and a test pins no speed message
+- [x] Validate move_type against known valid range (513–595) → implemented CORRECTED 2026-07-26 in `bulletValidation.ts`: valid set is {0-7, 255}; 513-595 are entity command IDs (tests pin 513/560/595 as unknown)
 - [ ] Validate homing parameters against game constraints
 - [ ] Show warnings for PHANTOM fields (not used in any real file)
 
@@ -86,27 +101,27 @@ The editor must simulate the correct behavior for each move type.
 
 ### 3.1 Damage/Cost Calculator
 
-- [ ] Implement full DamageDispatcher with all 19 attack types
-- [ ] Implement full CostDispatcher with all 19 attack types (including case 18 factor)
-- [ ] Interactive table: select attack type → show damage AND cost simultaneously
-- [ ] Show correction_rate multiplication for cases 4/5/9/12
+- [x] Implement full DamageDispatcher with all 19 attack types → `damageCalculation.ts` (types 16/17 have no field mapping; rendered as explicit "unavailable")
+- [x] Implement full CostDispatcher with all 19 attack types (including case 18 factor) → incl. case-18 character_list factor input (ceil semantics)
+- [x] Interactive table: select attack type → show damage AND cost simultaneously → 2026-07-26 `AttackTypeBreakdownTable.tsx`
+- [x] Show correction_rate multiplication for cases 4/5/9/12 → correction-rate slider with "x corr" marker
 
 ### 3.2 Guts System Visualizer
 
-- [ ] Implement 10-band HP correction system (5% per band, >50% = 1.0)
-- [ ] Visual: HP bar with color-coded bands showing correction multiplier per band
-- [ ] Interactive: drag HP slider, see effective damage multiplier in real-time
+- [x] Implement 10-band HP correction system (5% per band, >50% = 1.0) → `lowDurabilityIncomingDamageTable` (strict `>` band selection mirrors sub_1405F8E70)
+- [x] Visual: HP bar with color-coded bands showing correction multiplier per band → 2026-07-26 `GutsBandChart.tsx` (missing bands render explicit "unavailable")
+- [x] Interactive: drag HP slider, see effective damage multiplier in real-time → HP slider highlights active band + multiplier readout
 - [ ] Show actual damage after guts correction for each attack type
 
 ### 3.3 Lock Distance Visualizer
 
-- [ ] Implement 6-tier lock distance system
-- [ ] Visual: concentric circles showing red/green/mid/far/max lock ranges
-- [ ] Show lock-on FOV angle overlay
+- [x] Implement 6-tier lock distance system → `LOCK_DISTANCE_TYPES` / `getLockDistance`; hashes synced to canonical pool (previous four lock hashes were audit-rejected values)
+- [x] Visual: concentric circles showing red/green/mid/far/max lock ranges → 2026-07-26 `LockRangeRings.tsx`; labels are neutral "Slot 0-4 / Default" because slot→HUD-color mapping is unproven per the lock audit
+- [x] Show lock-on FOV angle overlay → `lockOnFovAngle` wedge overlay when field present
 
 ### 3.4 Stat Overview
 
-- [ ] Radar chart with game-meaningful categories (not raw field names):
+- [x] Radar chart with game-meaningful categories (not raw field names): → shipped earlier (`StatRadarChart`)
   - Offense: melee_damage, ranged_damage, assist_damage
   - Defense: max_hp, guard_damage_rate, barrier_damage_rate
   - Mobility: movement_speed_base, boost_dash_speed_rate, step_speed_rate
@@ -119,9 +134,9 @@ The editor must simulate the correct behavior for each move type.
 
 ### 4.1 Action Timeline Visualizer
 
-- [ ] Full frame-accurate timeline: startup → active → recovery → cooldown
-- [ ] Show reload timing overlay (reload_start_frame, reload_time_total, reload_per_shot_frame)
-- [ ] Show charge frame overlay for charge weapons
+- [x] Full frame-accurate timeline: startup → active → recovery → cooldown → 2026-07-26 `ActionReloadTimelinePanel.tsx` (`getActionTimeline` → `TimelineVisualizer` + `FrameTickRuler`)
+- [x] Show reload timing overlay (reload_start_frame, reload_time_total, reload_per_shot_frame) → raw hash-labeled reload timeline (`getReloadTimeline`), preserving the 2026-06-19 evidence-boundary decision
+- [ ] Show charge frame overlay for charge weapons → `fullChargeFrame` shown as raw duration field only, not a timeline overlay yet
 - [ ] Playback animation: see the action timeline play out in real-time
 
 ### 4.2 Reload System Simulator
@@ -233,6 +248,8 @@ The editor must simulate the correct behavior for each move type.
 
 ## Phase 9: chrsysparam Editor (Priority: Low)
 
+> Shipped: `chrsys-editor/ChrSysEditorView.tsx` + `HashCategoryPanel.tsx` + `ChrSysPropertyPanel.tsx`.
+
 ### 9.1 Hash-Value Table View
 
 - [ ] Clean table with hash → 4 value columns
@@ -242,6 +259,8 @@ The editor must simulate the correct behavior for each move type.
 ---
 
 ## Phase 10: projectile_depiction_table Editor (Priority: Low)
+
+> Shipped: `depiction-editor/DepictionEditorView.tsx` + `ProjectilePreview3D.tsx` + `DepictionPropertyPanel.tsx`.
 
 ### 10.1 Visual Configuration Preview
 
@@ -277,11 +296,29 @@ The editor must simulate the correct behavior for each move type.
 
 For full implementation, these functions need deeper reverse engineering:
 
-- [ ] `sub_14043C200` — Full decompilation of all 83 move type cases (currently truncated at 1433 chars)
-- [ ] `sub_1405C5090` — Full spawn position logic (truncated)
-- [ ] Speed param movement state machine functions (0x14037xxxx range)
-- [ ] Arms param weapon action initializers (0x140DDxxxx range, 24+ functions)
-- [ ] Chrsysparam runtime consumers (need to find which functions read .csyspm entries)
-- [ ] Depiction table rendering consumers (how render_mode maps to shader selection)
+- [x] ~~`sub_14043C200` — Full decompilation of all 83 move type cases~~ → **R (premise rejected)**:
+      sub_14043C200 is an MSC query syscall dispatcher, not bullet physics, and 513-595 are
+      entity command IDs, not move types (`src/lib/gameAlgorithms/moveTypes.ts:8`). Corroborated
+      2026-07-26: moveType hash 0x06E90346 has NO physics dispatcher at any of its 16 immediate
+      sites (see `docs/agent-sessions/bullet-editor-physics-redesign/process.md`). Nothing to
+      decompile; item closed as rejected.
+- [x] `sub_1405C5090` — Full spawn position logic (truncated) → CLOSED 2026-07-26, process.md
+      "Item 1": it produces a full 4x4 world spawn TRANSFORM (orientation + position), not a
+      point; base-transform select at 0x1405C5105..0x1405C5195 reads hashes 0xEDD1C108 /
+      0xD32D39ED from table singleton+0xB58
+- [ ] Speed param movement state machine functions (0x14037xxxx range) → NOT STARTED: the RE pass
+      was killed by a session-quota error immediately after opening this item. Next step: enter
+      via SPEEDPARAM_COMMAND_POOL hash immediates (`src-tauri/src/format/speedparam.rs`), treating
+      its `[V:func_*]` / `[D:*]` annotations as hypotheses
+- [ ] Arms param weapon action initializers (0x140DDxxxx range, 24+ functions) → NOT STARTED.
+      Known anchor from Item 2: the weapon action table lives at runtime slot singleton+0x268E60
+- [x] Chrsysparam runtime consumers (need to find which functions read .csyspm entries) → CLOSED
+      2026-07-26, process.md "Item 3": magic/version checks sub_14066C890 / sub_14066C880, loaded
+      by character-instance init sub_140635B30, handle stored at instance+215592 (0x34A28).
+      Also surfaced an R-grade data-loss defect in `src-tauri/src/format/chrsysparam.rs`, now
+      guarded (see the follow-up section in process.md)
+- [x] Depiction table rendering consumers (how render_mode maps to shader selection) → CLOSED
+      2026-07-26, process.md "Item 2": getter sub_14066DB70 reads hash 0xBA4BBA9D from table
+      singleton+0xC0; sole consumer is the depiction factory sub_140689D60
 
 These can be analyzed incrementally as each editor phase begins.

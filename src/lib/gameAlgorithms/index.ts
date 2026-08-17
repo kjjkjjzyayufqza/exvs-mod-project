@@ -42,6 +42,8 @@ export {
   ATTACK_TYPE_LABELS,
   getDamageForAttackType,
   getCostForAttackType,
+  getDamageFieldInfo,
+  getCostFieldInfo,
   lowDurabilityIncomingDamageMultiplier,
   lowDurabilityIncomingDamageTable,
   gutsCorrection,
@@ -51,20 +53,24 @@ export {
 } from "./damageCalculation";
 
 export {
-  type ReloadType,
-  type ActionTimeline,
-  type ReloadTimeline,
-  RELOAD_TYPE_LABELS,
-  RELOAD_TYPE_DESCRIPTIONS,
-  CHARGE_WEAPON_TYPE_LABELS,
-  SHOT_TYPE_LABELS,
-  CANCEL_ROUTE_LABELS,
-  GUARD_BREAK_TYPE_LABELS,
-  LANDING_BEHAVIOR_LABELS,
-  BULLET_TYPE_LABELS,
-  getActionTimeline,
-  getReloadTimeline,
+  type ReloadBehaviorType,
+  type ReloadDurationGroup,
+  type ArmsReloadProfile,
+  RELOAD_BEHAVIOR_TYPE_LABELS,
+  RELOAD_BEHAVIOR_TYPE_DESCRIPTIONS,
+  getArmsReloadProfile,
+  getReloadDurationForSelector,
 } from "./reloadSystem";
+
+export {
+  type ChargeDurationFamily,
+  type ArmsChargeProfile,
+  CHARGE_INPUT_FLAG_LABELS,
+  getArmsChargeProfile,
+  getChargeDurationForSelector,
+  getChargeFullDurationForSelector,
+  describeChargeInputFlags,
+} from "./chargeSystem";
 
 export {
   type EvidenceGrade,
@@ -77,17 +83,30 @@ export {
 } from "./movementParamSemantics";
 
 export {
-  type HitVolumeType,
   type HitVolume,
-  type HitVolumeGeometry,
-  HIT_TYPE_LABELS,
+  type ShapeMode,
+  type SweepCoverage,
+  SHAPE_MODE_LABELS,
   COLLISION_FLAG_LABELS,
   getHitVolume,
-  computeHitVolumeGeometry,
   boundingSphereRadius,
-  groupHitVolumes,
-  getBoneHierarchy,
+  groupVolumesByInteraction,
+  describeSweepCoverage,
+  verticalHitReach,
 } from "./collisionGeometry";
+
+export {
+  type HitEffectCategory,
+  type HitEffectFact,
+  type HitEffectClassification,
+  HIT_EFFECT_CATEGORY_LABELS,
+  KNOCKBACK_TYPE_WEIGHTS,
+  KNOCKBACK_TYPE_DEFAULT_WEIGHT,
+  KNOCKDOWN_BUDGET,
+  GRAB_VISUAL_EFFECT_CLASS,
+  knockbackWeight,
+  classifyHitEffect,
+} from "./hitEffectClassification";
 
 export {
   type ParamKind,
@@ -109,10 +128,5 @@ export {
 export {
   type ShootingEndReason,
   type ShootingTrajectorySummary,
-  type ShootingTimeline,
-  type ShootingLoopShot,
-  type ShootingLoopResult,
-  buildShootingTimeline,
   classifyShootingEndReason,
-  simulateShootingLoop,
 } from "./shootingLoop";

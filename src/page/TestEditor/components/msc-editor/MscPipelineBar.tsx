@@ -1,36 +1,86 @@
-import { CheckCircle2, Circle } from "lucide-react";
+import { AlertCircle, CheckCircle2, Circle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { MscSlotStatus } from "./mscPipeline";
+import type { MscSlotStatus, MscVerifyState } from "./mscPipeline";
 
 interface MscPipelineBarProps {
   slots: MscSlotStatus[];
+  /** Per-slot round-trip verify state, keyed by slot index. */
+  verifyStates?: Readonly<Record<number, MscVerifyState>>;
 }
+
+type FlagTone = "idle" | "ok" | "bad" | "busy";
 
 interface StageFlagProps {
-  active: boolean;
+  tone: FlagTone;
   label: string;
+  title?: string;
 }
 
-function StageFlag({ active, label }: StageFlagProps) {
+const FLAG_TONE_CLASSES: Record<FlagTone, string> = {
+  idle: "bg-muted text-muted-foreground/60",
+  ok: "bg-primary/15 text-primary",
+  bad: "bg-destructive/15 text-destructive",
+  busy: "bg-muted text-muted-foreground",
+};
+
+function StageFlag({ tone, label, title }: StageFlagProps) {
+  const icon =
+    tone === "ok" ? (
+      <CheckCircle2 className="size-3" />
+    ) : tone === "bad" ? (
+      <AlertCircle className="size-3" />
+    ) : tone === "busy" ? (
+      <Loader2 className="size-3 animate-spin" />
+    ) : (
+      <Circle className="size-3" />
+    );
   return (
     <span
+      title={title}
       className={cn(
         "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums transition-colors",
-        active ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground/60",
+        FLAG_TONE_CLASSES[tone],
       )}
     >
-      {active ? <CheckCircle2 className="size-3" /> : <Circle className="size-3" />}
+      {icon}
       {label}
     </span>
   );
 }
 
+function verifyFlagProps(state: MscVerifyState | undefined): StageFlagProps {
+  if (!state) {
+    return { tone: "idle", label: "VERIFY", title: "Round-trip not verified yet" };
+  }
+  switch (state.status) {
+    case "verifying":
+      return { tone: "busy", label: "VERIFY", title: "Round-trip verify running" };
+    case "match":
+      return {
+        tone: "ok",
+        label: "VERIFY",
+        title: `Round-trip byte-identical (${state.totalSize} bytes)`,
+      };
+    case "mismatch":
+      return {
+        tone: "bad",
+        label: "VERIFY",
+        title:
+          `Round-trip diverges at offset 0x${state.firstDivergenceOffset.toString(16)} ` +
+          `(original ${state.originalSize} bytes, recompiled ${state.recompiledSize} bytes)`,
+      };
+    case "error":
+      return { tone: "bad", label: "VERIFY", title: state.message };
+  }
+}
+
 /**
  * Compact, data-driven pipeline state. Each of the three pack slots reports
- * whether its source script and its decompiled C file exist on disk. The
- * status flags are semantic (real file state), not decoration.
+ * whether its source script and its decompiled C file exist on disk, plus the
+ * latest round-trip verify outcome. The status flags are semantic (real file
+ * and verify state), not decoration.
  */
-export function MscPipelineBar({ slots }: MscPipelineBarProps) {
+export function MscPipelineBar({ slots, verifyStates }: MscPipelineBarProps) {
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
       {slots.map((slot) => (
@@ -51,8 +101,9 @@ export function MscPipelineBar({ slots }: MscPipelineBarProps) {
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <StageFlag active={slot.hasSource} label="SRC" />
-            <StageFlag active={slot.hasDecompiled} label="C" />
+            <StageFlag tone={slot.hasSource ? "ok" : "idle"} label="SRC" />
+            <StageFlag tone={slot.hasDecompiled ? "ok" : "idle"} label="C" />
+            <StageFlag {...verifyFlagProps(verifyStates?.[slot.index])} />
           </div>
         </div>
       ))}

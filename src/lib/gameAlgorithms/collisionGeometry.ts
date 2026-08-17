@@ -1,15 +1,20 @@
 /**
  * Game-accurate collision volume computation.
- * Derived from hitgroupiddef field analysis and entity position resolver
- * functions sub_1403643B0 and sub_140379EA0 in vsac27_Release.exe.
+ * Binary-proven schema from docs/hitbox-research/02-hitbox-volume-engine.md
+ * (vsac27_Release.exe, sphere constructor sub_14066A8E0, placement sub_140669D30).
  *
- * Hit groups define collision volumes (spheres/capsules) attached to bones.
- * The game uses bone_hash to attach volumes to character model bones,
- * and parent_bone_hash for hierarchical collision chains.
+ * A hitgroupiddef row defines ONE SPHERE in bone space:
+ *   center = (centerX, centerY, centerZ)  -- Z is the forward offset
+ *   radius = sphereRadius                 -- untransformed by the bone matrix
+ * The sphere is attached to bone `boneId` on the skeleton selected by `modelHash`.
+ * When shapeMode === 1 the engine sweeps a capsule between the previous-frame and
+ * current-frame centers; the first frame after activation is always a static sphere.
+ * `interactionId` is a foreign key to interactionid.entryId: arming an interaction
+ * via MSC func_148 activates every class-0 row whose interactionId matches.
  */
 
 import type { TypedParamEntry } from "@/page/TestEditor/components/param-editor/typedParamTypes";
-import { type Vec3, vec3Add, vec3Scale } from "./vec3";
+import type { Vec3 } from "./vec3";
 
 function field(entry: TypedParamEntry, key: string): number {
   const v = entry[key];
@@ -21,199 +26,138 @@ function fieldFloat(entry: TypedParamEntry, key: string): number {
   return typeof v === "number" ? v : 0.0;
 }
 
-export type HitVolumeType = 0 | 1 | 2 | 3;
+/** shapeMode (0x7395D184): 0 = static sphere, 1 = frame-swept capsule. */
+export type ShapeMode = 0 | 1;
 
-export const HIT_TYPE_LABELS: Record<HitVolumeType, string> = {
-  0: "Sphere",
-  1: "Capsule (vertical)",
-  2: "Capsule (horizontal)",
-  3: "Box",
+export const SHAPE_MODE_LABELS: Record<ShapeMode, string> = {
+  0: "Static sphere",
+  1: "Frame-swept capsule",
 };
 
+/** collisionFlags (0xF89A41E1) is the row class (02 §6). */
 export const COLLISION_FLAG_LABELS: Record<number, string> = {
-  0: "Normal",
-  1: "Intangible",
-  2: "Super armor",
+  0: "Attack (keyed by interaction FK)",
+  1: "Hurtbox (keyed by model hash)",
+  2: "Third class",
 };
 
 export interface HitVolume {
-  hitType: HitVolumeType;
-  offset: Vec3;
-  scale: Vec3;
-  radius: number;
-  jointOffset: number;
-  boneHash: number;
-  parentBoneHash: number;
-  modelHash: number;
-  enableState: boolean;
-  collisionFlags: number;
-  groupId: number;
-}
-
-export interface HitVolumeGeometry {
-  type: "sphere" | "capsule" | "box";
+  /** Sphere center in bone space: (centerX, centerY, centerZ-forward). */
   center: Vec3;
-  radius: number;
-  height: number;
-  halfExtents: Vec3;
+  /** Sphere radius (f32), untransformed by the bone matrix. */
+  sphereRadius: number;
+  /** FK to interactionid.entryId (class-0 rows); sentinel 1 on hurtbox rows. */
+  interactionId: number;
+  /** Attachment bone id, resolved through the skeleton bone-id map. */
+  boneId: number;
+  /** Actor/model selector: decides which skeleton the sphere attaches to. */
+  modelHash: number;
+  /** 0 = static sphere, 1 = frame-swept capsule. */
+  shapeMode: ShapeMode;
+  /** Row class: 0 = attack, 1 = hurtbox, 2 = third class. */
+  collisionFlags: number;
+  /** Not part of volume construction; read from the last row per group (02 §7). */
+  hitType: number;
 }
 
 export function getHitVolume(entry: TypedParamEntry): HitVolume {
   return {
-    hitType: field(entry, "hitType") as HitVolumeType,
-    offset: [
-      fieldFloat(entry, "offsetX"),
-      fieldFloat(entry, "offsetY"),
-      fieldFloat(entry, "offsetZ"),
+    center: [
+      fieldFloat(entry, "centerX"),
+      fieldFloat(entry, "centerY"),
+      fieldFloat(entry, "centerZ"),
     ],
-    scale: [
-      fieldFloat(entry, "scaleX"),
-      fieldFloat(entry, "scaleY"),
-      fieldFloat(entry, "scaleZ"),
-    ],
-    radius: fieldFloat(entry, "radius"),
-    jointOffset: fieldFloat(entry, "jointOffset"),
-    boneHash: field(entry, "boneHash"),
-    parentBoneHash: field(entry, "parentBoneHash"),
+    sphereRadius: fieldFloat(entry, "sphereRadius"),
+    interactionId: field(entry, "interactionId"),
+    boneId: field(entry, "boneId"),
     modelHash: field(entry, "modelHash"),
-    enableState: field(entry, "enableState") !== 0,
+    shapeMode: field(entry, "shapeMode") === 1 ? 1 : 0,
     collisionFlags: field(entry, "collisionFlags"),
-    groupId: fieldFloat(entry, "groupId"),
+    hitType: field(entry, "hitType"),
   };
 }
 
 /**
- * Computes the renderable geometry for a hit volume.
- * The game computes collision shapes from bone position + offset + scale + radius.
- */
-export function computeHitVolumeGeometry(volume: HitVolume): HitVolumeGeometry {
-  const center: Vec3 = [...volume.offset];
-
-  switch (volume.hitType) {
-    case 0:
-      return {
-        type: "sphere",
-        center,
-        radius: Math.abs(volume.radius),
-        height: 0,
-        halfExtents: [0, 0, 0],
-      };
-    case 1:
-      return {
-        type: "capsule",
-        center,
-        radius: Math.abs(volume.radius),
-        height: Math.abs(volume.scale[0]),
-        halfExtents: [0, 0, 0],
-      };
-    case 2:
-      return {
-        type: "capsule",
-        center,
-        radius: Math.abs(volume.radius),
-        height: Math.abs(volume.scale[0]),
-        halfExtents: [0, 0, 0],
-      };
-    case 3:
-      return {
-        type: "box",
-        center,
-        radius: 0,
-        height: 0,
-        halfExtents: [
-          Math.abs(volume.scale[0]) * 0.5,
-          Math.abs(volume.scale[1]) * 0.5,
-          Math.abs(volume.scale[2]) * 0.5,
-        ],
-      };
-    default:
-      return {
-        type: "sphere",
-        center,
-        radius: Math.abs(volume.radius),
-        height: 0,
-        halfExtents: [0, 0, 0],
-      };
-  }
-}
-
-/**
- * Computes the bounding sphere radius that encompasses the entire hit volume.
- * Used for broad-phase collision detection.
+ * Bounding sphere radius around the bone origin that encloses the volume.
+ * The swept-capsule endpoints depend on animation, so the static per-row
+ * bound is |center| + radius (the first active frame is always a sphere).
  */
 export function boundingSphereRadius(volume: HitVolume): number {
-  const geo = computeHitVolumeGeometry(volume);
-
-  switch (geo.type) {
-    case "sphere":
-      return geo.radius;
-    case "capsule":
-      return geo.radius + geo.height * 0.5;
-    case "box": {
-      const [hx, hy, hz] = geo.halfExtents;
-      return Math.sqrt(hx * hx + hy * hy + hz * hz);
-    }
-    default:
-      return 0;
-  }
+  const [x, y, z] = volume.center;
+  return Math.sqrt(x * x + y * y + z * z) + Math.abs(volume.sphereRadius);
 }
 
 /**
- * Groups hit volume entries by their group_id for organized display.
+ * Groups attack rows (collisionFlags === 0) by their interactionid foreign key.
+ * Rows sharing an interactionId form the sphere set activated together by one
+ * MSC func_148 call; other row classes are returned under their own FK value.
  */
-export function groupHitVolumes(
+export function groupVolumesByInteraction(
   entries: TypedParamEntry[],
-): Map<number, { groupId: number; volumes: Array<{ index: number; volume: HitVolume }> }> {
-  const groups = new Map<number, { groupId: number; volumes: Array<{ index: number; volume: HitVolume }> }>();
+): Map<number, { interactionId: number; volumes: Array<{ index: number; volume: HitVolume }> }> {
+  const groups = new Map<
+    number,
+    { interactionId: number; volumes: Array<{ index: number; volume: HitVolume }> }
+  >();
 
   entries.forEach((entry, index) => {
     const volume = getHitVolume(entry);
-    const gid = volume.groupId;
+    const key = volume.interactionId;
 
-    if (!groups.has(gid)) {
-      groups.set(gid, { groupId: gid, volumes: [] });
+    if (!groups.has(key)) {
+      groups.set(key, { interactionId: key, volumes: [] });
     }
-    groups.get(gid)!.volumes.push({ index, volume });
+    groups.get(key)!.volumes.push({ index, volume });
   });
 
   return groups;
 }
 
 /**
- * Returns the bone hierarchy chain for a hit volume.
- * Walks parent_bone_hash references until root (hash = 0) or max depth.
+ * Sphere/capsule coverage facts for one row, in the terms an author reasons about.
+ *
+ * Intersection is `dist² < (r_att + r_def)²` (02 §5): a single sphere reaches
+ * `r_att + r_def` in every direction. When shapeMode === 1 the engine sweeps a
+ * capsule along the animation between frames, so the blade "volume" is the sweep
+ * of this sphere — a horizontal slash covers a wide horizontal arc but its OFF-sweep
+ * (e.g. vertical) reach is still just `r_att + r_def`. That is why a horizontal
+ * saber does not hit things above/below outside that band; there is no long static
+ * capsule pre-placed along the blade.
  */
-export function getBoneHierarchy(
-  entries: TypedParamEntry[],
-  startIndex: number,
-  maxDepth: number = 16,
-): Array<{ index: number; boneHash: number; parentBoneHash: number }> {
-  const chain: Array<{ index: number; boneHash: number; parentBoneHash: number }> = [];
-  const visited = new Set<number>();
-  let currentIndex = startIndex;
+export interface SweepCoverage {
+  radius: number;
+  /** Full extent of one static sphere along any axis (2 × radius). */
+  diameter: number;
+  /** Reach along the bone-forward axis from the bone origin (centerZ + radius). */
+  forwardReach: number;
+  shapeMode: ShapeMode;
+  isSwept: boolean;
+  summary: string;
+}
 
-  for (let depth = 0; depth < maxDepth; depth++) {
-    if (currentIndex < 0 || currentIndex >= entries.length) break;
-    if (visited.has(currentIndex)) break;
-    visited.add(currentIndex);
+/**
+ * Off-sweep hit reach against an opponent hurt sphere of the given radius: the
+ * band a horizontal slash covers vertically is `r_att + r_def`, independent of sweep.
+ */
+export function verticalHitReach(volume: HitVolume, opponentHurtRadius: number): number {
+  return Math.abs(volume.sphereRadius) + Math.abs(opponentHurtRadius);
+}
 
-    const vol = getHitVolume(entries[currentIndex]!);
-    chain.push({
-      index: currentIndex,
-      boneHash: vol.boneHash,
-      parentBoneHash: vol.parentBoneHash,
-    });
-
-    if (vol.parentBoneHash === 0) break;
-
-    const parentIndex = entries.findIndex((e) => {
-      const parentVol = getHitVolume(e);
-      return parentVol.boneHash === vol.parentBoneHash;
-    });
-
-    if (parentIndex < 0) break;
-    currentIndex = parentIndex;
-  }
-
-  return chain;
+export function describeSweepCoverage(volume: HitVolume): SweepCoverage {
+  const radius = Math.abs(volume.sphereRadius);
+  const forwardReach = volume.center[2] + radius;
+  const isSwept = volume.shapeMode === 1;
+  const summary = isSwept
+    ? `Swept capsule (r=${radius}): the hit volume is the animation sweep of this sphere; ` +
+      `off-sweep reach (e.g. vertical during a horizontal slash) is only r_att + r_def.`
+    : `Static sphere (r=${radius}): covers a ${(radius * 2).toFixed(1)} diameter around bone ` +
+      `${volume.boneId}, reaching ${forwardReach.toFixed(1)} forward.`;
+  return {
+    radius,
+    diameter: radius * 2,
+    forwardReach,
+    shapeMode: volume.shapeMode,
+    isSwept,
+    summary,
+  };
 }

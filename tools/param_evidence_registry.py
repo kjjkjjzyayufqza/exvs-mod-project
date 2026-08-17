@@ -73,8 +73,14 @@ def norm(text: str) -> str:
 
 
 def build_verdict_index(folder: str) -> dict[str, str]:
-    """hash -> verdict, from the per-group grading reports."""
-    out: dict[str, str] = {}
+    """Return the effective verdict for each hash.
+
+    Reports are processed deterministically.  A ``regrade`` report explicitly
+    supersedes an initial ``grade`` report; within the same tier the
+    lexicographically later filename wins.  This matters when a later audit
+    revisits an earlier OPEN result.
+    """
+    selected: dict[str, tuple[int, str, str]] = {}
     if not os.path.isdir(folder):
         return out
     hash_re = re.compile(r"0[xX][0-9A-Fa-f]{8}")
@@ -93,9 +99,14 @@ def build_verdict_index(folder: str) -> dict[str, str]:
                 for cell in cells:
                     upper = cell.upper()
                     if upper in ("CONFIRM", "REJECT", "OPEN", "S"):
-                        out.setdefault(norm(hashes[0]), upper)
+                        key = norm(hashes[0])
+                        priority = 1 if "regrade" in name.lower() else 0
+                        candidate = (priority, name, upper)
+                        current = selected.get(key)
+                        if current is None or candidate[:2] > current[:2]:
+                            selected[key] = candidate
                         break
-    return out
+    return {key: candidate[2] for key, candidate in selected.items()}
 
 
 def grade_for(verdict: str, kind: int, msc_read: str, consumption: str,
@@ -122,8 +133,11 @@ def grade_for(verdict: str, kind: int, msc_read: str, consumption: str,
         return "R-fixed", mechanism
     if verdict == "OPEN":
         return "C", mechanism
+    # Reachability is not semantic identity.  A getter hit or membership in a
+    # native hash table stays grade C until a per-hash verdict closes the
+    # downstream arithmetic/role.
     if mechanism.startswith("code_getter") or mechanism == "data_table":
-        return "B", mechanism
+        return "C", mechanism
     return "C", mechanism
 
 
@@ -142,11 +156,25 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    missing_inputs = [
+        path
+        for path in (args.verdicts, args.crosscheck, args.consumption)
+        if not os.path.exists(path)
+    ]
+    if missing_inputs:
+        for path in missing_inputs:
+            print(f"missing required evidence input: {path}", file=sys.stderr)
+        return 2
+
     verdicts = build_verdict_index(args.verdicts)
     cross = {(r["file_type"], norm(r["hash"])): r
              for r in load_tsv(args.crosscheck) if r.get("hash")}
     consumption = {norm(r["hash"]): r for r in load_tsv(args.consumption)
                    if r.get("hash")}
+    if not verdicts or not cross or not consumption:
+        print("required evidence input parsed as empty; refusing to overwrite registry",
+              file=sys.stderr)
+        return 2
 
     rows: list[dict] = []
     for spec in POOLS:
@@ -162,10 +190,19 @@ def main() -> int:
         with open(spec["rust"], encoding="utf-8") as handle:
             source_lines = handle.read().splitlines()
         annotated: dict[str, bool] = {}
-        for line in source_lines:
+        for index, line in enumerate(source_lines):
             match = re.search(r"\(\s*(0[xX][0-9A-Fa-f]+)\s*,", line)
             if match:
-                annotated[norm(match.group(1))] = bool(ANNOTATION_RE.search(line))
+                entry_lines = [line]
+                for following in source_lines[index + 1:]:
+                    if re.search(r"\(\s*0[xX][0-9A-Fa-f]+\s*,", following):
+                        break
+                    entry_lines.append(following)
+                    if following.lstrip().startswith(")") or following.rstrip().endswith("),"):
+                        break
+                annotated[norm(match.group(1))] = bool(
+                    ANNOTATION_RE.search("\n".join(entry_lines))
+                )
 
         for field_hash, (kind, canonical) in sorted(pool.items()):
             cross_row = cross.get((spec["file_type"], field_hash), {})

@@ -20,12 +20,13 @@ export interface HitGroupEditorState {
 
 function validateHitGroupEntry(entry: TypedParamEntry): ValidationMessage[] {
   const messages: ValidationMessage[] = [];
-  const radius = typeof entry.radius === "number" ? entry.radius : 0;
-  if (radius < 0) {
+  const sphereRadius =
+    typeof entry.sphereRadius === "number" ? entry.sphereRadius : 0;
+  if (sphereRadius < 0) {
     messages.push({
-      field: "radius",
+      field: "sphereRadius",
       level: "warning",
-      message: "Negative radius",
+      message: "Negative sphere radius",
     });
   }
   return messages;

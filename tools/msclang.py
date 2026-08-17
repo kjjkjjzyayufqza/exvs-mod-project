@@ -362,7 +362,7 @@ def isCommandFloat(cmd, lookingFor):
     if cmd is None: #debug
         return lookingFor
     if cmd.command == 0x2d and cmd.parameters[1] in FLOAT_RETURN_SYSCALLS:
-        print("debug: ", cmd.parameters[1])
+        debug_print("debug:  %s" % (cmd.parameters[1],))
         return True
     if cmd.command == 0x2d:
         return lookingFor
@@ -386,6 +386,15 @@ outputAB34 = False
 binaryOpCount = 0
 forceOrAB34 = False
 exvs_native_truth_mapping = None
+
+# Console verbosity for debug prints. Quiet by default so UI-driven batch
+# runs produce no stdout noise; enable with -v/--verbose.
+VERBOSE = False
+
+
+def debug_print(message):
+    if VERBOSE:
+        print(message)
 
 
 def compile_call_argument(
@@ -952,10 +961,12 @@ def compileNode(node, loopParent=None, parentLoopCondition=None):
             nodeOut.append(functionCallCommand)
             nodeOut.append(endLabel)
     else:
-        node.show()
-        print(node)
-        print(node.__slots__)
-        print()
+        # Unhandled AST node: diagnostics only, gated behind the verbose flag.
+        if VERBOSE:
+            node.show()
+            print(node)
+            print(node.__slots__)
+            print()
 
     nodeCount = nodeCount - 1
     position += len(nodeOut)
@@ -1227,5 +1238,7 @@ if __name__ == "__main__":
     parser.add_argument('-i', '--pushInt', dest='usePushShort', action='store_false', help='Disable using pushShort as a space saver')
     parser.add_argument('-x', '--xmlPath', dest='xmlPath', help="Path to load overload MSC xml info")
     parser.add_argument('--exvsMapping', dest='exvsMapping', help="Path to EXVS native-truth mapping JSON")
+    parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help="Print compiler debug output to the console")
     args = parser.parse_args()
+    VERBOSE = args.verbose
     main(args)

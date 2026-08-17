@@ -13,6 +13,7 @@ import { isImageFile } from "@/page/TestEditor/components/ImagePreview";
 import { SCENE_EDIT_RND_SIZE_KEYS } from "./sceneEditRndSizePersistence";
 import {
   describeDuplicate,
+  isReplaceableDuplicate,
   type AnalyzedAddCandidate,
 } from "../utils/sceneTextureAddPlan";
 
@@ -27,6 +28,8 @@ const CANDIDATE_ROW_HEIGHT = 52;
 export interface TextureAddSelection {
   candidate: AnalyzedAddCandidate;
   ddsFormat: DdsFormat;
+  /** When true, overwrite the existing texture that this candidate collides with. */
+  replace: boolean;
 }
 
 interface TextureAddConfirmModalProps {
@@ -52,15 +55,18 @@ export function TextureAddConfirmModal({
   const [bulkFormat, setBulkFormat] = useState<DdsFormat>(DEFAULT_DDS_FORMAT);
   const candidateListRef = useRef<HTMLDivElement | null>(null);
 
-  // Keep per-row selection in sync with the candidate list. Duplicates can never
-  // be checked; non-duplicate rows default to checked and preserve prior choices
-  // (so the row stays selected when analysis flips an unrelated row).
+  // Keep per-row selection in sync with the candidate list.
+  // - Unique rows: default checked; preserve prior choice when analysis updates.
+  // - Replaceable duplicates: checkbox enabled but default unchecked (opt-in replace).
+  // - Batch-internal duplicates: never selectable.
   useEffect(() => {
     setChecked((prev) => {
       const next: Record<string, boolean> = {};
       for (const candidate of candidates) {
-        if (candidate.duplicate) {
+        if (candidate.duplicate && !isReplaceableDuplicate(candidate)) {
           next[candidate.id] = false;
+        } else if (isReplaceableDuplicate(candidate)) {
+          next[candidate.id] = prev[candidate.id] ?? false;
         } else {
           next[candidate.id] = prev[candidate.id] ?? true;
         }
@@ -76,25 +82,46 @@ export function TextureAddConfirmModal({
     });
   }, [candidates]);
 
-  const selectableIds = useMemo(
+  /** Rows the master checkbox toggles — unique adds only (never mass-replace). */
+  const masterToggleIds = useMemo(
     () => candidates.filter((c) => !c.duplicate).map((c) => c.id),
     [candidates],
   );
-  const imageIds = useMemo(
-    () => candidates.filter((c) => !c.duplicate && !c.isNutexb).map((c) => c.id),
+  const selectableIds = useMemo(
+    () =>
+      candidates
+        .filter((c) => !c.duplicate || isReplaceableDuplicate(c))
+        .map((c) => c.id),
     [candidates],
   );
-  const duplicateCount = candidates.length - selectableIds.length;
+  const imageIds = useMemo(
+    () =>
+      candidates
+        .filter((c) => (!c.duplicate || isReplaceableDuplicate(c)) && !c.isNutexb)
+        .map((c) => c.id),
+    [candidates],
+  );
+  const replaceableCount = useMemo(
+    () => candidates.filter((c) => isReplaceableDuplicate(c)).length,
+    [candidates],
+  );
   const selectedCount = useMemo(
     () => selectableIds.filter((id) => checked[id]).length,
     [selectableIds, checked],
   );
+  const selectedReplaceCount = useMemo(
+    () =>
+      candidates.filter((c) => isReplaceableDuplicate(c) && checked[c.id]).length,
+    [candidates, checked],
+  );
+  const selectedAddCount = selectedCount - selectedReplaceCount;
 
   const masterState: boolean | "indeterminate" = useMemo(() => {
-    if (selectableIds.length === 0 || selectedCount === 0) return false;
-    if (selectedCount === selectableIds.length) return true;
+    const masterSelected = masterToggleIds.filter((id) => checked[id]).length;
+    if (masterToggleIds.length === 0 || masterSelected === 0) return false;
+    if (masterSelected === masterToggleIds.length) return true;
     return "indeterminate";
-  }, [selectableIds.length, selectedCount]);
+  }, [masterToggleIds, checked]);
 
   const busy = analyzing || isConverting;
   const getCandidateListScrollElement = useCallback(() => candidateListRef.current, []);
@@ -110,11 +137,11 @@ export function TextureAddConfirmModal({
     (value: boolean) => {
       setChecked((prev) => {
         const next = { ...prev };
-        for (const id of selectableIds) next[id] = value;
+        for (const id of masterToggleIds) next[id] = value;
         return next;
       });
     },
-    [selectableIds],
+    [masterToggleIds],
   );
 
   const applyFormatTo = useCallback(
@@ -130,21 +157,31 @@ export function TextureAddConfirmModal({
 
   const handleConfirm = useCallback(() => {
     const selections: TextureAddSelection[] = candidates
-      .filter((c) => !c.duplicate && checked[c.id])
-      .map((c) => ({ candidate: c, ddsFormat: formats[c.id] ?? DEFAULT_DDS_FORMAT }));
+      .filter((c) => checked[c.id] && (!c.duplicate || isReplaceableDuplicate(c)))
+      .map((c) => ({
+        candidate: c,
+        ddsFormat: formats[c.id] ?? DEFAULT_DDS_FORMAT,
+        replace: isReplaceableDuplicate(c),
+      }));
     if (selections.length === 0) return;
     onConfirm(selections);
   }, [candidates, checked, formats, onConfirm]);
 
+  const footerSummary = useMemo(() => {
+    if (analyzing) return "Checking for duplicate names...";
+    const parts: string[] = [];
+    if (selectedAddCount > 0) parts.push(`${selectedAddCount} add`);
+    if (selectedReplaceCount > 0) parts.push(`${selectedReplaceCount} replace`);
+    if (parts.length > 0) return parts.join(" · ");
+    if (replaceableCount > 0) {
+      return `${replaceableCount} name conflict(s) — check to replace`;
+    }
+    return "No duplicates";
+  }, [analyzing, selectedAddCount, selectedReplaceCount, replaceableCount]);
+
   const footer = (
     <div className="flex items-center gap-2 bg-muted/20 px-3 py-2">
-      <span className="mr-auto text-[10px] text-muted-foreground">
-        {analyzing
-          ? "Checking for duplicate names..."
-          : duplicateCount > 0
-            ? `${duplicateCount} duplicate(s) skipped`
-            : "No duplicates"}
-      </span>
+      <span className="mr-auto text-[10px] text-muted-foreground">{footerSummary}</span>
       <Button
         variant="outline"
         size="sm"
@@ -167,6 +204,10 @@ export function TextureAddConfirmModal({
               ? `Converting ${convertProgress.done}/${convertProgress.total}...`
               : "Converting..."}
           </>
+        ) : selectedReplaceCount > 0 && selectedAddCount === 0 ? (
+          `Confirm & Replace (${selectedReplaceCount})`
+        ) : selectedReplaceCount > 0 ? (
+          `Confirm (${selectedAddCount}+${selectedReplaceCount})`
         ) : (
           `Confirm & Convert (${selectedCount})`
         )}
@@ -178,7 +219,7 @@ export function TextureAddConfirmModal({
     <AppRndModalShell
       titleId="texture-add-confirm-modal-title"
       title={`Add textures (${candidates.length})`}
-      subtitle="Review duplicates and conversion formats"
+      subtitle="Review name conflicts; check a conflict row to replace"
       headerIcon={<Images className="h-4 w-4 text-primary" />}
       dimensions={TEXTURE_ADD_MODAL_DIMENSIONS}
       storageKey={SCENE_EDIT_RND_SIZE_KEYS.textureAddConfirm}
@@ -191,11 +232,13 @@ export function TextureAddConfirmModal({
             <label className="flex items-center gap-1.5 text-[11px] select-none cursor-pointer">
               <Checkbox
                 checked={masterState}
-                disabled={busy || selectableIds.length === 0}
+                disabled={busy || masterToggleIds.length === 0}
                 onCheckedChange={(value) => toggleAll(value === true)}
+                title="Toggle all unique (non-conflict) rows"
               />
               <span>
                 {selectedCount}/{selectableIds.length} selected
+                {selectedReplaceCount > 0 ? ` (${selectedReplaceCount} replace)` : ""}
               </span>
             </label>
 
@@ -290,20 +333,35 @@ function CandidateRow({
     return convertFileSrc(candidate.sourcePath);
   }, [candidate.filename, candidate.isNutexb, candidate.sourcePath]);
 
-  const isDuplicate = candidate.duplicate;
+  const replaceable = isReplaceableDuplicate(candidate);
+  const blockedDuplicate = candidate.duplicate && !replaceable;
+  const rowSelectable = !candidate.duplicate || replaceable;
+  const willReplace = replaceable && checked;
 
   return (
     <div
       className={cn(
         "flex h-full items-center gap-2 border-b border-border/30 px-3 py-1.5",
-        isDuplicate ? "bg-destructive/5 opacity-70" : "hover:bg-muted/30",
+        blockedDuplicate
+          ? "bg-destructive/5 opacity-70"
+          : willReplace
+            ? "bg-amber-500/10"
+            : replaceable
+              ? "bg-destructive/5"
+              : "hover:bg-muted/30",
       )}
     >
       <Checkbox
         checked={checked}
-        disabled={disabled || isDuplicate}
+        disabled={disabled || !rowSelectable}
         onCheckedChange={(value) => onToggle(value === true)}
-        title={isDuplicate ? describeDuplicate(candidate) : undefined}
+        title={
+          replaceable
+            ? "Check to replace the existing texture with this file"
+            : blockedDuplicate
+              ? describeDuplicate(candidate)
+              : undefined
+        }
       />
 
       <div className="w-9 h-9 shrink-0 rounded bg-muted/50 flex items-center justify-center overflow-hidden">
@@ -323,9 +381,19 @@ function CandidateRow({
       <div className="flex flex-col min-w-0 flex-1">
         <span className="text-[11px] truncate leading-tight" title={candidate.filename}>
           {candidate.filename}
+          {willReplace ? (
+            <span className="ml-1 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+              replace
+            </span>
+          ) : null}
         </span>
-        {isDuplicate ? (
-          <span className="flex items-center gap-1 text-[10px] text-destructive leading-tight">
+        {candidate.duplicate ? (
+          <span
+            className={cn(
+              "flex items-center gap-1 text-[10px] leading-tight",
+              willReplace ? "text-amber-700 dark:text-amber-400" : "text-destructive",
+            )}
+          >
             <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
             <span className="truncate">{describeDuplicate(candidate)}</span>
           </span>
@@ -342,13 +410,13 @@ function CandidateRow({
       <div className="shrink-0 w-[150px]" data-no-drag>
         {candidate.isNutexb ? (
           <span className="text-[10px] text-muted-foreground italic block text-right pr-1">
-            copy as-is
+            {willReplace ? "overwrite as-is" : "copy as-is"}
           </span>
         ) : (
           <TextureFormatSelect
             value={format}
             onChange={onFormatChange}
-            disabled={disabled || isDuplicate}
+            disabled={disabled || !rowSelectable || (replaceable && !checked)}
             triggerClassName="h-7 text-[11px] w-full"
           />
         )}

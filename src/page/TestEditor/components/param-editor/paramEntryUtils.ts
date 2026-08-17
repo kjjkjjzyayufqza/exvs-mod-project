@@ -83,6 +83,12 @@ function normalizeSearchText(value: string): string {
   return value.toLowerCase().replace(/^0x/, "").replace(/[^a-z0-9.-]/g, "");
 }
 
+const TYPED_ENTRY_META_KEYS = new Set(["entryId", "extraCommands", "entrySize"]);
+
+export function isTypedEntryFieldKey(key: string): boolean {
+  return !TYPED_ENTRY_META_KEYS.has(key);
+}
+
 function readableKey(key: string): string {
   return key.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").toLowerCase();
 }
@@ -97,6 +103,21 @@ export function readTypedEntryId(entry: TypedParamEntry, index: number): number 
     return raw >>> 0;
   }
   return index >>> 0;
+}
+
+export function sortTypedParamFileByUnsignedEntryId(data: TypedParamFile): TypedParamFile {
+  const indexed = data.entries.map((entry, index) => ({
+    entry,
+    index,
+    id: readTypedEntryId(entry, index),
+  }))
+  indexed.sort((left, right) => {
+    if (left.id !== right.id) return left.id < right.id ? -1 : 1
+    return left.index - right.index
+  })
+  const entries = indexed.map((row) => row.entry)
+  const entryIds = indexed.map((row) => row.id)
+  return { ...data, entries, entryIds }
 }
 
 function readNonEmptyStringField(entry: TypedParamEntry, key: string): string | null {
@@ -322,7 +343,7 @@ export function buildTypedEntryFieldLayout(
 ): TypedEntryFieldLayout[] | null {
   const entry = data.entries[entryIndex];
   if (!entry) return null;
-  const keys = Object.keys(entry).filter((key) => key !== "entryId" && !key.endsWith("Size"));
+  const keys = Object.keys(entry).filter(isTypedEntryFieldKey);
   return keys.map((key, index) => {
     const labelHash = LABEL_FIELD_HASH[key];
     const byHash =

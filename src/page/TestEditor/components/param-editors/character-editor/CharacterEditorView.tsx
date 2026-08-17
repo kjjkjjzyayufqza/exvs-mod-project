@@ -8,6 +8,9 @@ import { EntryListPanel } from "../shared/EntryListPanel";
 import { EditorStatusBar } from "../shared/EditorStatusBar";
 import { CharacterPropertyPanel } from "./CharacterPropertyPanel";
 import { StatRadarChart } from "./StatRadarChart";
+import { AttackTypeBreakdownTable } from "./AttackTypeBreakdownTable";
+import { GutsBandChart } from "./GutsBandChart";
+import { LockRangeRings } from "./LockRangeRings";
 import { useCharacterEditorStore } from "./CharacterEditorStore";
 import { formatHash } from "@/models/commandTable";
 import type { TypedParamFile } from "../../param-editor/typedParamTypes";
@@ -140,9 +143,18 @@ export function CharacterEditorView({
           renderLabel={renderEntryLabel}
         />
 
-        <div className="flex min-h-0 items-start justify-center overflow-y-auto border-x">
+        <div className="min-h-0 overflow-y-auto border-x">
           {data ? (
-            <StatRadarChart entry={entry} />
+            <div className="flex flex-col gap-3 p-3">
+              <StatRadarChart entry={entry} />
+              {entry && (
+                <>
+                  <AttackTypeBreakdownTable entry={entry} />
+                  <GutsBandChart entry={entry} />
+                  <LockRangeRings entry={entry} />
+                </>
+              )}
+            </div>
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
               Click the file path input above to select a characterparam.bin

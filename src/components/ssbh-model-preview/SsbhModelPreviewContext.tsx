@@ -27,6 +27,7 @@ import {
   buildDrawListFromBundle,
   buildMatlLookup,
   buildTextureRefToPathMap,
+  cloneBuiltMeshDrawsForInstance,
   createDefaultTextureSlotLoadEnabled,
   resolveMaterialBinding,
   resolveMaterialTexturePaths,
@@ -35,8 +36,15 @@ import {
   type ResolvedMaterialBinding,
   type TexturePreviewSlotKey,
 } from "./meshFromSsbh";
+
 import { clearMeshGeometryRegistry, hydrateBundleGeometry } from "./meshGeometryHydrate";
 import { shouldStartMotionClipLoad } from "./motionClipLoadPolicy";
+import { inspectMotionFbx, previewMotionFbx } from "./motionFbxImportService";
+import {
+  PREVIEW_LIGHTING_PRESETS,
+  type PreviewLightingPreset,
+  type PreviewLightingValues,
+} from "./previewLightingPresets";
 import type { NutexbTextureData, NutexbTextureDataMap } from "./ssbhTextureUpload";
 import { decodeSceneNutexbRgba } from "@/page/SceneEdit/utils/sceneTextureDecode";
 import {
@@ -87,6 +95,15 @@ import {
   type TestEditorSceneConfig,
 } from "./testEditorSceneConfig";
 
+function disposeDrawGeometries(draws: readonly BuiltMeshDraw[]): void {
+  const disposed = new Set<BufferGeometry>();
+  for (const draw of draws) {
+    if (disposed.has(draw.geometry)) continue;
+    disposed.add(draw.geometry);
+    draw.geometry.dispose();
+  }
+}
+
 export type BoneTransformMode = "translate" | "rotate" | "scale";
 export type PreviewInstanceViewMode = "all" | "single";
 export type PreviewControlScope = "all" | "single";
@@ -103,6 +120,46 @@ export const DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY = 1.05;
 export const DEFAULT_PREVIEW_DIRECTIONAL_X = 8;
 export const DEFAULT_PREVIEW_DIRECTIONAL_Y = 14;
 export const DEFAULT_PREVIEW_DIRECTIONAL_Z = 6;
+
+const MOTION_RESOURCE_CACHE_LIMIT = 32;
+// Keep only in-flight work: motion files may be rewritten in place between loads.
+const motionManifestPromiseCache = new Map<string, Promise<NuanmbManifest>>();
+const motionClipPromiseCache = new Map<string, Promise<MotionClip>>();
+
+function cachedMotionResource<T>(
+  cache: Map<string, Promise<T>>,
+  key: string,
+  load: () => Promise<T>,
+): Promise<T> {
+  const cached = cache.get(key);
+  if (cached) {
+    cache.delete(key);
+    cache.set(key, cached);
+    return cached;
+  }
+  const task = load();
+  cache.set(key, task);
+  const removeSettledTask = () => {
+    if (cache.get(key) === task) cache.delete(key);
+  };
+  void task.then(removeSettledTask, removeSettledTask);
+  while (cache.size > MOTION_RESOURCE_CACHE_LIMIT) {
+    const oldest = cache.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
+  return task;
+}
+
+export type {
+  PreviewLightingPreset,
+  PreviewLightingValues,
+} from "./previewLightingPresets";
+export {
+  PREVIEW_LIGHTING_PRESET_META,
+  PREVIEW_LIGHTING_PRESETS,
+  matchPreviewLightingPreset,
+} from "./previewLightingPresets";
 
 export type MaterialDebugViewMode =
   | "full"
@@ -225,6 +282,12 @@ export type SsbhModelPreviewContextValue = {
   togglePreviewInstanceSelected: (id: string) => void;
   activePreviewInstanceId: string | null;
   setActivePreviewInstanceId: (id: string | null) => void;
+  /**
+   * Yellow mesh selection glow. Only Inspect collection-list picks set this true.
+   * Motion target / open folder leave it false so preview stays un-tinted.
+   */
+  selectionOutlineEnabled: boolean;
+  setSelectionOutlineEnabled: (enabled: boolean) => void;
   previewViewMode: PreviewInstanceViewMode;
   setPreviewViewMode: (mode: PreviewInstanceViewMode) => void;
   previewControlScope: PreviewControlScope;
@@ -268,6 +331,8 @@ export type SsbhModelPreviewContextValue = {
   setDirectionalY: (v: number) => void;
   directionalZ: number;
   setDirectionalZ: (v: number) => void;
+  /** Apply a named lighting preset (studio / softCharacter / harsh). */
+  applyLightingPreset: (preset: PreviewLightingPreset) => void;
   normalMapEnabled: boolean;
   setNormalMapEnabled: (v: boolean) => void;
   selectedDebugDrawKey: string | null;
@@ -311,6 +376,8 @@ export type SsbhModelPreviewContextValue = {
   setAutoLoadAfterConvertToSsbh: (v: boolean) => void;
   /** Load preview from a folder path or a `.numdlb` file path (same as Open model). */
   loadModelAt: (path: string) => Promise<void>;
+  /** Replace the scene with an ordered set of disk-backed `.numdlb` instances. */
+  loadModelSetAt: (paths: readonly string[]) => Promise<readonly SsbhModelPreviewInstance[]>;
   /** Append a `.numdlb` preview instance without replacing current scene models. */
   addModelAt: (path: string) => Promise<void>;
   /** Replace the current preview scene with bundles that were resolved from an in-memory FHM2D session. */
@@ -379,12 +446,35 @@ export type SsbhModelPreviewContextValue = {
   motionForceVisibleDuringPlayback: boolean;
   setMotionForceVisibleDuringPlayback: (v: boolean) => void;
   pickMotionNuanmbFile: () => Promise<void>;
+  /**
+   * Open a pure animation FBX, sample it onto the active instance skeleton into a
+   * temp NUANMB, and load that clip for preview (no save dialog).
+   * When the FBX has multiple stacks, pass `animationStackName` or the backend errors.
+   */
+  pickMotionFbxPreview: (options?: {
+    fbxPath?: string;
+    animationStackName?: string | null;
+  }) => Promise<void>;
+  loadMotionNuanmbPath: (path: string) => void;
   pickMotionFolder: () => Promise<void>;
   reloadMotionClip: () => void;
   resetMotionPose: () => void;
   clearMotion: () => void;
   modelAttachments: readonly PreviewModelAttachment[];
   setModelAttachments: (next: PreviewModelAttachment[]) => void;
+  /** Stable game modelId (8-hex) tags on preview instances for attachment + motion bundles. */
+  modelIdByInstanceId: ReadonlyMap<string, string>;
+  setInstanceModelId: (instanceId: string, modelId: string | null) => void;
+  /**
+   * Load a nuanmb onto a specific instance (used by multi-model motion bundles).
+   * Does not change the active preview instance.
+   */
+  loadMotionNuanmbPathForInstance: (instanceId: string, path: string) => void;
+  /**
+   * Play a single or multi-clip motion plan. Bundle mode requires every clip.modelId
+   * to be bound to a loaded instance via setInstanceModelId / attachment templates.
+   */
+  playMotionBundle: (plan: import("./attachmentTemplateTypes").MotionPlayPlan) => Promise<void>;
   exportSceneConfig: () => Promise<void>;
   importSceneConfig: () => Promise<void>;
 };
@@ -403,6 +493,11 @@ type ProviderProps = {
   workspaceRoot: string | null | undefined;
   /** When true, pause the Three.js render loop while the Test Editor route stays mounted in the background. */
   previewSuspended?: boolean;
+  /**
+   * Initial lighting preset. Unit Model Editor uses `softCharacter` so low-poly
+   * mecha facets are less exaggerated than the default studio key light.
+   */
+  defaultLightingPreset?: PreviewLightingPreset;
   children: ReactNode;
 };
 
@@ -447,15 +542,19 @@ function createDefaultMotionState(): InternalPreviewInstanceMotionState {
 export function SsbhModelPreviewProvider({
   workspaceRoot,
   previewSuspended = false,
+  defaultLightingPreset = "studio",
   children,
 }: ProviderProps) {
   const root = workspaceRoot?.trim() ? workspaceRoot : null;
+  const initialLighting: PreviewLightingValues =
+    PREVIEW_LIGHTING_PRESETS[defaultLightingPreset] ?? PREVIEW_LIGHTING_PRESETS.studio;
 
   const [previewInstances, setPreviewInstances] = useState<SsbhModelPreviewInstance[]>([]);
   const [previewCollectionSnapshot, setPreviewCollectionSnapshot] = useState<PreviewCollectionSnapshot>(
     createEmptyPreviewCollectionSnapshot(),
   );
   const [activePreviewInstanceId, setActivePreviewInstanceId] = useState<string | null>(null);
+  const [selectionOutlineEnabled, setSelectionOutlineEnabled] = useState(false);
   const [previewViewMode, setPreviewViewMode] = useState<PreviewInstanceViewMode>("all");
   const [previewControlScope, setPreviewControlScope] = useState<PreviewControlScope>("single");
   const [hiddenPreviewInstanceIds, setHiddenPreviewInstanceIds] = useState<Set<string>>(new Set());
@@ -472,11 +571,21 @@ export function SsbhModelPreviewProvider({
   const [showAxesGizmo, setShowAxesGizmo] = useState(true);
   const [showStats, setShowStats] = useState(false);
   const [background, setBackground] = useState(DEFAULT_PREVIEW_3D_BACKGROUND);
-  const [ambientIntensity, setAmbientIntensity] = useState(DEFAULT_PREVIEW_AMBIENT_INTENSITY);
-  const [directionalIntensity, setDirectionalIntensity] = useState(DEFAULT_PREVIEW_DIRECTIONAL_INTENSITY);
-  const [directionalX, setDirectionalX] = useState(DEFAULT_PREVIEW_DIRECTIONAL_X);
-  const [directionalY, setDirectionalY] = useState(DEFAULT_PREVIEW_DIRECTIONAL_Y);
-  const [directionalZ, setDirectionalZ] = useState(DEFAULT_PREVIEW_DIRECTIONAL_Z);
+  const [ambientIntensity, setAmbientIntensity] = useState(initialLighting.ambientIntensity);
+  const [directionalIntensity, setDirectionalIntensity] = useState(
+    initialLighting.directionalIntensity,
+  );
+  const [directionalX, setDirectionalX] = useState(initialLighting.directionalX);
+  const [directionalY, setDirectionalY] = useState(initialLighting.directionalY);
+  const [directionalZ, setDirectionalZ] = useState(initialLighting.directionalZ);
+  const applyLightingPreset = useCallback((preset: PreviewLightingPreset) => {
+    const values = PREVIEW_LIGHTING_PRESETS[preset];
+    setAmbientIntensity(values.ambientIntensity);
+    setDirectionalIntensity(values.directionalIntensity);
+    setDirectionalX(values.directionalX);
+    setDirectionalY(values.directionalY);
+    setDirectionalZ(values.directionalZ);
+  }, []);
   const [normalMapEnabled, setNormalMapEnabled] = useState(true);
   const [selectedDebugDrawKey, setSelectedDebugDrawKey] = useState<string | null>(null);
   const [textureDataMap, setTextureDataMap] = useState<NutexbTextureDataMap>(() => new Map());
@@ -553,10 +662,50 @@ export function SsbhModelPreviewProvider({
   );
 
   const [motionByInstanceId, setMotionByInstanceId] = useState<Record<string, InternalPreviewInstanceMotionState>>({});
+  const motionByInstanceIdRef = useRef(motionByInstanceId);
+  motionByInstanceIdRef.current = motionByInstanceId;
   const [motionApplyCamera, setMotionApplyCamera] = useState(false);
   const [motionApplyLighting, setMotionApplyLighting] = useState(false);
   const [motionForceVisibleDuringPlayback, setMotionForceVisibleDuringPlayback] = useState(true);
   const [modelAttachments, setModelAttachments] = useState<PreviewModelAttachment[]>([]);
+  /** instanceId → modelId (8-hex lowercase) */
+  const [modelIdByInstanceIdState, setModelIdByInstanceIdState] = useState<Record<string, string>>(
+    {},
+  );
+  /** Instances that share transport when a folder motion bundle is active. */
+  const motionBundleInstanceIdsRef = useRef<string[] | null>(null);
+
+  const modelIdByInstanceId = useMemo(() => {
+    return new Map(Object.entries(modelIdByInstanceIdState));
+  }, [modelIdByInstanceIdState]);
+
+  const setInstanceModelId = useCallback((instanceId: string, modelId: string | null) => {
+    const id = instanceId.trim();
+    if (!id) {
+      throw new Error("instanceId is required");
+    }
+    setModelIdByInstanceIdState((prev) => {
+      if (!modelId || !modelId.trim()) {
+        if (!(id in prev)) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      }
+      const normalized = modelId.trim().replace(/^0x/i, "").toLowerCase();
+      if (!/^[0-9a-f]{8}$/.test(normalized)) {
+        throw new Error("modelId must be an 8-digit hex value");
+      }
+      // One modelId → one instance: drop other owners of the same id.
+      const next: Record<string, string> = {};
+      for (const [key, value] of Object.entries(prev)) {
+        if (key === id || value !== normalized) {
+          next[key] = value;
+        }
+      }
+      next[id] = normalized;
+      return next;
+    });
+  }, []);
 
   const setAutoLoadAfterConvertToSsbh = useCallback((v: boolean) => {
     setAutoLoadAfterConvertToSsbhState(v);
@@ -570,11 +719,17 @@ export function SsbhModelPreviewProvider({
     setActivePreviewInstanceId(snapshot.activeItemId);
     setHiddenPreviewInstanceIds(new Set(snapshot.hiddenItemIds));
     // Multi-select disabled: ignore snapshot.selectedItemIds (was setSelectedPreviewInstanceIds).
+    // Clearing active always drops Inspect selection glow.
+    if (!snapshot.activeItemId) {
+      setSelectionOutlineEnabled(false);
+    }
   }, []);
 
   const syncPreviewCollectionReplace = useCallback(
     async (instances: readonly SsbhModelPreviewInstance[]) => {
       const snapshot = await replacePreviewCollectionItemsService(buildPreviewCollectionSourceItems(instances));
+      // Fresh folder open: no stuck solo view, no leftover yellow selection.
+      setSelectionOutlineEnabled(false);
       applyPreviewCollectionSnapshot(snapshot);
       return snapshot;
     },
@@ -747,7 +902,7 @@ export function SsbhModelPreviewProvider({
 
   const releasePreviewResourcesSync = useCallback(() => {
     setDraws((prev) => {
-      prev.forEach((d) => d.geometry.dispose());
+      disposeDrawGeometries(prev);
       return [];
     });
     setTextureDataMap(new Map());
@@ -766,9 +921,7 @@ export function SsbhModelPreviewProvider({
   }, [releasePreviewResourcesSync]);
 
   const disposeLoadedDraws = useCallback((loadedDraws: readonly BuiltMeshDraw[]) => {
-    for (const draw of loadedDraws) {
-      draw.geometry.dispose();
-    }
+    disposeDrawGeometries(loadedDraws);
   }, []);
 
   const bundle = useMemo((): SsbhModelPreviewBundle | null => {
@@ -800,6 +953,23 @@ export function SsbhModelPreviewProvider({
           existingIds.has(attachment.childInstanceId),
       ),
     );
+    setModelIdByInstanceIdState((prev) => {
+      let changed = false;
+      const next: Record<string, string> = {};
+      for (const [instanceId, modelId] of Object.entries(prev)) {
+        if (existingIds.has(instanceId)) {
+          next[instanceId] = modelId;
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    const peers = motionBundleInstanceIdsRef.current;
+    if (peers) {
+      const remaining = peers.filter((id) => existingIds.has(id));
+      motionBundleInstanceIdsRef.current = remaining.length > 0 ? remaining : null;
+    }
   }, [previewInstances]);
 
   const reloadMotionClipForInstance = useCallback((instanceId: string) => {
@@ -862,14 +1032,22 @@ export function SsbhModelPreviewProvider({
       if (current.playing === playing) {
         return prev;
       }
-      return {
-        ...prev,
-        [instanceId]: {
-          ...current,
+      const peers = motionBundleInstanceIdsRef.current;
+      const targets =
+        peers && peers.includes(instanceId) ? peers : [instanceId];
+      const next = { ...prev };
+      for (const id of targets) {
+        const state = next[id] ?? createDefaultMotionState();
+        if (playing && (!state.clip || state.sampling || state.sampleError !== null)) {
+          continue;
+        }
+        next[id] = {
+          ...state,
           playing,
-          poseEnabled: playing ? true : current.poseEnabled,
-        },
-      };
+          poseEnabled: playing ? true : state.poseEnabled,
+        };
+      }
+      return next;
     });
   }, []);
 
@@ -886,6 +1064,7 @@ export function SsbhModelPreviewProvider({
     });
     if (typeof selected !== "string") return;
     rememberDialogSelection(DialogLastPathKey.ssbhPreviewOpenNuanmb, selected, "file");
+    setSelectionOutlineEnabled(false);
     setMotionByInstanceId((prev) => ({
       ...prev,
       [activeId]: {
@@ -904,6 +1083,195 @@ export function SsbhModelPreviewProvider({
     }));
   }, [resolvedActivePreviewInstanceId, root]);
 
+  const loadMotionNuanmbPathForInstance = useCallback((instanceId: string, path: string) => {
+    const id = instanceId.trim();
+    const nuanmbPath = path.trim();
+    if (!id) {
+      throw new Error("instanceId is required");
+    }
+    if (!nuanmbPath) {
+      throw new Error("nuanmb path is required");
+    }
+    setSelectionOutlineEnabled(false);
+    setMotionByInstanceId((prev) => {
+      const current = prev[id] ?? createDefaultMotionState();
+      const nuanmbPaths = current.nuanmbPaths.includes(nuanmbPath)
+        ? current.nuanmbPaths
+        : [...current.nuanmbPaths, nuanmbPath];
+      return {
+        ...prev,
+        [id]: {
+          ...current,
+          nuanmbPaths,
+          selectedNuanmbPath: nuanmbPath,
+          poseEnabled: false,
+          frame: 0,
+          playing: false,
+          clip: null,
+          sample: null,
+          sampleError: null,
+          attemptedManifestPath: null,
+          attemptedClipKey: null,
+        },
+      };
+    });
+  }, []);
+
+  const loadMotionNuanmbPath = useCallback(
+    (path: string) => {
+      const activeId = resolvedActivePreviewInstanceId;
+      if (!activeId) {
+        throw new Error("No active preview instance.");
+      }
+      motionBundleInstanceIdsRef.current = null;
+      loadMotionNuanmbPathForInstance(activeId, path);
+    },
+    [loadMotionNuanmbPathForInstance, resolvedActivePreviewInstanceId],
+  );
+
+  const playMotionBundle = useCallback(
+    async (plan: import("./attachmentTemplateTypes").MotionPlayPlan) => {
+      if (plan.kind === "single") {
+        motionBundleInstanceIdsRef.current = null;
+        const activeId = resolvedActivePreviewInstanceId;
+        if (!activeId) {
+          throw new Error("No active preview instance for single-clip motion.");
+        }
+        loadMotionNuanmbPathForInstance(activeId, plan.nuanmbPath);
+        return;
+      }
+
+      const idToInstance = new Map<string, string>();
+      for (const [instanceId, modelId] of Object.entries(modelIdByInstanceIdState)) {
+        idToInstance.set(modelId, instanceId);
+      }
+      const missing: string[] = [];
+      const assignments: Array<{ instanceId: string; path: string; modelId: string }> = [];
+      for (const clip of plan.clips) {
+        const instanceId = idToInstance.get(clip.modelId);
+        if (!instanceId) {
+          missing.push(clip.modelId);
+          continue;
+        }
+        assignments.push({ instanceId, path: clip.nuanmbPath, modelId: clip.modelId });
+      }
+      if (missing.length > 0) {
+        throw new Error(
+          `Motion bundle requires unbound modelId(s): ${missing.join(", ")}. Bind them in Attachments first.`,
+        );
+      }
+      if (assignments.length === 0) {
+        throw new Error("Motion bundle has no clips to play.");
+      }
+
+      for (const assignment of assignments) {
+        loadMotionNuanmbPathForInstance(assignment.instanceId, assignment.path);
+      }
+
+      const instanceIds = assignments.map((item) => item.instanceId);
+      motionBundleInstanceIdsRef.current = instanceIds;
+
+      const primaryId =
+        resolvedActivePreviewInstanceId && instanceIds.includes(resolvedActivePreviewInstanceId)
+          ? resolvedActivePreviewInstanceId
+          : instanceIds[0]!;
+      if (primaryId !== resolvedActivePreviewInstanceId) {
+        setActivePreviewInstanceId(primaryId);
+      }
+
+      // Shared transport: start all clips together; sampling fills clip asynchronously.
+      setMotionByInstanceId((prev) => {
+        const next = { ...prev };
+        for (const instanceId of instanceIds) {
+          const current = next[instanceId] ?? createDefaultMotionState();
+          next[instanceId] = {
+            ...current,
+            frame: 0,
+            playing: true,
+            loop: true,
+            poseEnabled: current.clip !== null,
+          };
+        }
+        return next;
+      });
+    },
+    [
+      loadMotionNuanmbPathForInstance,
+      modelIdByInstanceIdState,
+      resolvedActivePreviewInstanceId,
+      setActivePreviewInstanceId,
+    ],
+  );
+
+
+  const pickMotionFbxPreview = useCallback(
+    async (options?: { fbxPath?: string; animationStackName?: string | null }) => {
+      const activeId = resolvedActivePreviewInstanceId;
+      if (!activeId) {
+        throw new Error("No active preview instance.");
+      }
+      const activeInstance = previewInstances.find((instance) => instance.id === activeId) ?? null;
+      const skelPath = activeInstance?.bundle.skelPath?.trim() ?? "";
+      if (!skelPath) {
+        throw new Error("Active model needs a NUSKTB to preview motion FBX.");
+      }
+
+      let fbxPath = options?.fbxPath?.trim() ?? "";
+      if (!fbxPath) {
+        const selected = await open({
+          directory: false,
+          multiple: false,
+          defaultPath: getDialogDefaultPath(DialogLastPathKey.ssbhPreviewOpenMotionFbx, root),
+          filters: [{ name: "FBX animation", extensions: ["fbx"] }],
+        });
+        if (typeof selected !== "string" || !selected.trim()) return;
+        rememberDialogSelection(DialogLastPathKey.ssbhPreviewOpenMotionFbx, selected, "file");
+        fbxPath = selected.trim();
+      }
+
+      const currentMotion = motionByInstanceIdRef.current[activeId] ?? createDefaultMotionState();
+      const templateNuanmbPath = currentMotion.selectedNuanmbPath;
+      let stackName = options?.animationStackName?.trim() || null;
+
+      try {
+        if (!stackName) {
+          const inspect = await inspectMotionFbx(fbxPath);
+          if (inspect.stacks.length > 1) {
+            const names = inspect.stacks.map((s) => s.name).join(", ");
+            const message = `This FBX has multiple animation stacks. Choose one in the Motion panel: ${names}`;
+            toast.message("Pick an animation stack", { description: names });
+            throw new Error(message);
+          }
+          stackName = inspect.stacks[0]?.name ?? null;
+        }
+
+        const report = await previewMotionFbx({
+          fbxPath,
+          nusktbPath: skelPath,
+          templateNuanmbPath,
+          animationStackName: stackName,
+          rigBindingPolicy: "exactHierarchy",
+        });
+        loadMotionNuanmbPath(report.outputPath);
+        toast.success("FBX preview loaded", {
+          description: `${report.actionName} · ${report.frameCount} frames · ${report.matchedBones.length} bones matched`,
+        });
+        if (report.warnings.length > 0) {
+          toast.message("FBX preview warnings", {
+            description: report.warnings.slice(0, 3).join("\n"),
+          });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes("multiple animation stacks")) {
+          toast.error("FBX motion preview failed", { description: message });
+        }
+        throw error instanceof Error ? error : new Error(message);
+      }
+    },
+    [loadMotionNuanmbPath, previewInstances, resolvedActivePreviewInstanceId, root],
+  );
+
   const pickMotionFolder = useCallback(async () => {
     const activeId = resolvedActivePreviewInstanceId;
     if (!activeId) {
@@ -916,12 +1284,89 @@ export function SsbhModelPreviewProvider({
     });
     if (typeof selected !== "string") return;
     rememberDialogSelection(DialogLastPathKey.ssbhPreviewOpenMotionFolder, selected, "directory");
+
+    // Prefer structure-aware multi-model bundle when structure JSON + modelId bindings exist.
+    try {
+      const {
+        inspectMotionFolder,
+        inferMotionFolderStructurePath,
+      } = await import("@/services/motionFolder/motionFolderService");
+      const { buildMotionPlayPlanFromNode } = await import("./attachmentTemplateService");
+      const structurePath = inferMotionFolderStructurePath(selected);
+      const inventory = await inspectMotionFolder(selected, structurePath);
+      const multiFolders = inventory.folders.filter(
+        (folder) =>
+          folder.children.filter((child) => child.kind === "item").length >= 2 &&
+          folder.children.some(
+            (child) => child.kind === "item" && child.unk2 && child.unk2 !== "00000000",
+          ),
+      );
+      if (multiFolders.length > 0) {
+        const folder = multiFolders[0]!;
+        const plan = buildMotionPlayPlanFromNode({
+          kind: "folder",
+          unk1: folder.unk1,
+          children: folder.children
+            .filter((child): child is typeof child & { kind: "item" } => child.kind === "item")
+            .map((child) => ({
+              kind: "item" as const,
+              unk1: child.unk1,
+              unk2: child.unk2,
+              name: child.name,
+              filePath: child.filePath,
+            })),
+        });
+        const required =
+          plan.kind === "bundle" ? plan.clips.map((clip) => clip.modelId) : [];
+        const bound = new Set(Object.values(modelIdByInstanceIdState));
+        const missing = required.filter((id) => !bound.has(id));
+        if (missing.length === 0 && plan.kind === "bundle") {
+          await playMotionBundle(plan);
+          toast.success("Motion folder bundle playing", {
+            description: `action ${plan.actionId} · ${plan.clips.length} clip(s) · multi-model`,
+          });
+          return;
+        }
+        if (missing.length > 0) {
+          toast.message("Motion folder has multi-model clips", {
+            description: `Bind modelId(s) in Attachments first: ${missing.join(", ")}. Loaded clip list on active model instead.`,
+          });
+        }
+      }
+      const listedFromStructure = inventory.items.map((item) => item.filePath).filter(Boolean);
+      if (listedFromStructure.length > 0) {
+        setSelectionOutlineEnabled(false);
+        motionBundleInstanceIdsRef.current = null;
+        setMotionByInstanceId((prev) => ({
+          ...prev,
+          [activeId]: {
+            ...(prev[activeId] ?? createDefaultMotionState()),
+            nuanmbPaths: listedFromStructure,
+            selectedNuanmbPath: listedFromStructure[0] ?? null,
+            poseEnabled: false,
+            frame: 0,
+            playing: false,
+            clip: null,
+            sample: null,
+            sampleError: null,
+            attemptedManifestPath: null,
+            attemptedClipKey: null,
+          },
+        }));
+        return;
+      }
+    } catch {
+      // Fall through to flat nuanmb listing when structure is absent or unreadable.
+    }
+
     const listed = await invoke<string[]>("ssbh_list_nuanmb_under_tree", { rootPath: selected });
     if (listed.length === 0) {
       const msg = "No .nuanmb files under the selected folder.";
       toast.error(msg);
       throw new Error(msg);
     }
+    setSelectionOutlineEnabled(false);
+    motionBundleInstanceIdsRef.current = null;
     setMotionByInstanceId((prev) => ({
       ...prev,
       [activeId]: {
@@ -938,20 +1383,24 @@ export function SsbhModelPreviewProvider({
         attemptedClipKey: null,
       },
     }));
-  }, [resolvedActivePreviewInstanceId, root]);
+  }, [modelIdByInstanceIdState, playMotionBundle, resolvedActivePreviewInstanceId, root]);
 
   const buildInstancesFromBundles = useCallback(async (bundles: SsbhModelPreviewBundle[], startSlotIndex: number) => {
     const instances: SsbhModelPreviewInstance[] = [];
     const allDraws: BuiltMeshDraw[] = [];
     const collectedWarnings: string[] = [];
+    const templateDrawsByBundle = new Map<SsbhModelPreviewBundle, BuiltMeshDraw[]>();
     for (let index = 0; index < bundles.length; index++) {
       const b = bundles[index]!;
       const id = previewInstanceIdFromModlPath(b.modlPath, startSlotIndex + index);
-        const label = fileBasename(b.modlPath).replace(/\.numdlb$/i, "") || "model";
+      const label = fileBasename(b.modlPath).replace(/\.numdlb$/i, "") || "model";
+      let created = templateDrawsByBundle.get(b);
+      if (created) {
+        created = cloneBuiltMeshDrawsForInstance(created, id, label);
+      } else {
         const skelJson = b.skel ? (b.skel as SkelDataJson) : null;
         // Attach binary geometry (typed-array views) before building draws.
         await hydrateBundleGeometry(b);
-        let created: BuiltMeshDraw[];
         try {
           created = buildDrawListFromBundle(
             b.modl as ModlDataJson,
@@ -962,9 +1411,11 @@ export function SsbhModelPreviewProvider({
         } catch (e) {
           throw new Error(`Failed to build mesh draws for ${b.modlPath}: ${String(e)}`);
         }
-        instances.push({ id, modlPath: b.modlPath, displayLabel: label, bundle: b });
-        allDraws.push(...created);
+        templateDrawsByBundle.set(b, created);
         if (b.warnings.length) collectedWarnings.push(...b.warnings);
+      }
+      instances.push({ id, modlPath: b.modlPath, displayLabel: label, bundle: b });
+      allDraws.push(...created);
     }
     if (collectedWarnings.length > 0) {
       const preview = collectedWarnings.slice(0, 4).join("\n");
@@ -978,9 +1429,10 @@ export function SsbhModelPreviewProvider({
   }, []);
 
   const buildInstancesFromPaths = useCallback(async (paths: string[], startSlotIndex: number) => {
-    const bundles: SsbhModelPreviewBundle[] = [];
-    for (let offset = 0; offset < paths.length; offset += INSTANCE_LOAD_CONCURRENCY) {
-      const chunk = paths.slice(offset, offset + INSTANCE_LOAD_CONCURRENCY);
+    const uniquePaths = [...new Map(paths.map((path) => [path.toLowerCase(), path])).values()];
+    const bundleByPath = new Map<string, SsbhModelPreviewBundle>();
+    for (let offset = 0; offset < uniquePaths.length; offset += INSTANCE_LOAD_CONCURRENCY) {
+      const chunk = uniquePaths.slice(offset, offset + INSTANCE_LOAD_CONCURRENCY);
       const loaded = await Promise.all(
         chunk.map((p) =>
           invoke<SsbhModelPreviewBundle>("ssbh_load_model_preview", {
@@ -988,8 +1440,11 @@ export function SsbhModelPreviewProvider({
           }),
         ),
       );
-      bundles.push(...loaded);
+      loaded.forEach((bundle, index) => {
+        bundleByPath.set(chunk[index]!.toLowerCase(), bundle);
+      });
     }
+    const bundles = paths.map((path) => bundleByPath.get(path.toLowerCase())!);
     return buildInstancesFromBundles(bundles, startSlotIndex);
   }, [buildInstancesFromBundles]);
 
@@ -1049,7 +1504,7 @@ export function SsbhModelPreviewProvider({
           await syncPreviewCollectionReplace(loaded.instances);
           startTransition(() => {
             setDraws((prev) => {
-              prev.forEach((d) => d.geometry.dispose());
+              disposeDrawGeometries(prev);
               return loaded.draws;
             });
             setPreviewInstances(loaded.instances);
@@ -1193,7 +1648,11 @@ export function SsbhModelPreviewProvider({
         });
         void (async () => {
           try {
-            const manifest = await invoke<NuanmbManifest>("ssbh_nuanmb_manifest", { path: selectedPath });
+            const manifest = await cachedMotionResource(
+              motionManifestPromiseCache,
+              selectedPath,
+              () => invoke<NuanmbManifest>("ssbh_nuanmb_manifest", { path: selectedPath }),
+            );
             setMotionByInstanceId((prev) => {
               const p = prev[inst.id];
               if (
@@ -1291,13 +1750,17 @@ export function SsbhModelPreviewProvider({
       });
       void (async () => {
         try {
-          const clip = await invoke<MotionClip>("ssbh_load_motion_clip", {
-            request: {
-              skelPath,
-              nuanmbPath: selectedPath,
-              matlPath,
-            },
-          });
+          const clip = await cachedMotionResource(
+            motionClipPromiseCache,
+            loadKey,
+            () => invoke<MotionClip>("ssbh_load_motion_clip", {
+              request: {
+                skelPath,
+                nuanmbPath: selectedPath,
+                matlPath,
+              },
+            }),
+          );
           setMotionByInstanceId((prev) => {
             const p = prev[inst.id];
             if (
@@ -1450,14 +1913,15 @@ export function SsbhModelPreviewProvider({
     const instanceId = resolvedActivePreviewInstanceId;
     if (!instanceId) return;
     setMotionByInstanceId((prev) => {
-      const current = prev[instanceId] ?? createDefaultMotionState();
-      return {
-        ...prev,
-        [instanceId]: {
-          ...current,
-          loop: v,
-        },
-      };
+      const peers = motionBundleInstanceIdsRef.current;
+      const targets =
+        peers && peers.includes(instanceId) ? peers : [instanceId];
+      const next = { ...prev };
+      for (const id of targets) {
+        const current = next[id] ?? createDefaultMotionState();
+        next[id] = { ...current, loop: v };
+      }
+      return next;
     });
   }, [resolvedActivePreviewInstanceId]);
 
@@ -1465,22 +1929,34 @@ export function SsbhModelPreviewProvider({
     const instanceId = resolvedActivePreviewInstanceId;
     if (!instanceId) return;
     setMotionByInstanceId((prev) => {
-      const current = prev[instanceId] ?? createDefaultMotionState();
-      return {
-        ...prev,
-        [instanceId]: {
-          ...current,
-          speed: v,
-        },
-      };
+      const peers = motionBundleInstanceIdsRef.current;
+      const targets =
+        peers && peers.includes(instanceId) ? peers : [instanceId];
+      const next = { ...prev };
+      for (const id of targets) {
+        const current = next[id] ?? createDefaultMotionState();
+        next[id] = { ...current, speed: v };
+      }
+      return next;
     });
   }, [resolvedActivePreviewInstanceId]);
 
-  const setMotionFrame = useCallback((v: number) => {
-    const instanceId = resolvedActivePreviewInstanceId;
-    if (!instanceId) return;
-    setMotionFrameForInstance(instanceId, v);
-  }, [resolvedActivePreviewInstanceId, setMotionFrameForInstance]);
+  const setMotionFrame = useCallback(
+    (v: number) => {
+      const instanceId = resolvedActivePreviewInstanceId;
+      if (!instanceId) return;
+      setMotionFrameForInstance(instanceId, v);
+      const peers = motionBundleInstanceIdsRef.current;
+      if (peers && peers.includes(instanceId)) {
+        for (const peerId of peers) {
+          if (peerId !== instanceId) {
+            setMotionFrameForInstance(peerId, v);
+          }
+        }
+      }
+    },
+    [resolvedActivePreviewInstanceId, setMotionFrameForInstance],
+  );
 
   const reloadMotionClip = useCallback(() => {
     const instanceId = resolvedActivePreviewInstanceId;
@@ -1884,6 +2360,50 @@ export function SsbhModelPreviewProvider({
     [loadAt],
   );
 
+  const loadModelSetAt = useCallback(
+    async (paths: readonly string[]): Promise<readonly SsbhModelPreviewInstance[]> => {
+      const normalized = paths.map((path) => normalizeScenePathStrict(path.trim()));
+      if (normalized.length === 0) {
+        throw new Error("At least one .numdlb path is required.");
+      }
+      if (normalized.some((path) => !/\.numdlb$/i.test(path))) {
+        throw new Error("Model set preview accepts only .numdlb paths.");
+      }
+
+      const gen = bumpLoadGeneration();
+      setLoading(true);
+      setLoadError(null);
+      try {
+        const instances = await loadInstancesFromPaths(normalized, { generation: gen });
+        if (gen !== loadGenerationRef.current) {
+          return [];
+        }
+        setRecentModelPaths((prev) => {
+          let next = prev;
+          for (const path of normalized) {
+            next = buildNextRecentPaths(next, path);
+          }
+          writeRecentModelPathsToStorage(next);
+          return next;
+        });
+        setModelLoadNonce((nonce) => nonce + 1);
+        return instances;
+      } catch (error) {
+        if (gen === loadGenerationRef.current) {
+          const message = error instanceof Error ? error.message : String(error);
+          setLoadError(message);
+          toast.error(message);
+        }
+        throw error;
+      } finally {
+        if (gen === loadGenerationRef.current) {
+          setLoading(false);
+        }
+      }
+    },
+    [bumpLoadGeneration, loadInstancesFromPaths],
+  );
+
   const requestCameraFit = useCallback(() => {
     setFitRequestId((r) => r + 1);
   }, []);
@@ -1902,12 +2422,13 @@ export function SsbhModelPreviewProvider({
       previewInstances.map((instance) => instance.bundle),
     );
     setDraws((prev) => {
-      prev.forEach((d) => d.geometry.dispose());
+      disposeDrawGeometries(prev);
       return [];
     });
     setPreviewInstances([]);
     applyPreviewCollectionSnapshot(createEmptyPreviewCollectionSnapshot());
     setActivePreviewInstanceId(null);
+    setSelectionOutlineEnabled(false);
     setHiddenPreviewInstanceIds(new Set());
     setLoadError(null);
     setDrawError(null);
@@ -1962,11 +2483,7 @@ export function SsbhModelPreviewProvider({
     setShowAxesGizmo(true);
     setShowStats(false);
     setBackground(DEFAULT_PREVIEW_3D_BACKGROUND);
-    setAmbientIntensity(0.4);
-    setDirectionalIntensity(1.05);
-    setDirectionalX(8);
-    setDirectionalY(14);
-    setDirectionalZ(6);
+    applyLightingPreset(defaultLightingPreset);
     setNormalMapEnabled(true);
     setMaterialDebugViewMode("full");
     setTextureFlipY(false);
@@ -1979,7 +2496,7 @@ export function SsbhModelPreviewProvider({
     setBonePoseHistory({ undoStack: [], redoStack: [], applyNonce: 0, applyData: null });
     setFitRequestId((r) => r + 1);
     clearAllMotion();
-  }, [clearAllMotion]);
+  }, [applyLightingPreset, clearAllMotion, defaultLightingPreset]);
 
   const clearRecentModelPaths = useCallback(() => {
     writeRecentModelPathsToStorage([]);
@@ -2365,6 +2882,8 @@ export function SsbhModelPreviewProvider({
       togglePreviewInstanceSelected,
       activePreviewInstanceId,
       setActivePreviewInstanceId: setActivePreviewInstanceIdRemote,
+      selectionOutlineEnabled,
+      setSelectionOutlineEnabled,
       previewViewMode,
       setPreviewViewMode: setPreviewViewModeRemote,
       previewControlScope,
@@ -2404,6 +2923,7 @@ export function SsbhModelPreviewProvider({
       setDirectionalY,
       directionalZ,
       setDirectionalZ,
+      applyLightingPreset,
       normalMapEnabled,
       setNormalMapEnabled,
       selectedDebugDrawKey,
@@ -2436,6 +2956,7 @@ export function SsbhModelPreviewProvider({
       autoLoadAfterConvertToSsbh,
       setAutoLoadAfterConvertToSsbh,
       loadModelAt,
+      loadModelSetAt,
       addModelAt,
       loadMemoryPreviewBundles,
       appendMemoryPreviewBundles,
@@ -2494,12 +3015,18 @@ export function SsbhModelPreviewProvider({
       motionForceVisibleDuringPlayback,
       setMotionForceVisibleDuringPlayback,
       pickMotionNuanmbFile,
+      pickMotionFbxPreview,
+      loadMotionNuanmbPath,
       pickMotionFolder,
       reloadMotionClip,
       resetMotionPose,
       clearMotion,
       modelAttachments,
       setModelAttachments,
+      modelIdByInstanceId,
+      setInstanceModelId,
+      loadMotionNuanmbPathForInstance,
+      playMotionBundle,
       exportSceneConfig,
       importSceneConfig,
     } satisfies SsbhModelPreviewContextValue),
@@ -2512,6 +3039,8 @@ export function SsbhModelPreviewProvider({
       togglePreviewInstanceSelected,
       activePreviewInstanceId,
       setActivePreviewInstanceIdRemote,
+      selectionOutlineEnabled,
+      setSelectionOutlineEnabled,
       previewViewMode,
       setPreviewViewModeRemote,
       previewControlScope,
@@ -2539,6 +3068,7 @@ export function SsbhModelPreviewProvider({
       directionalX,
       directionalY,
       directionalZ,
+      applyLightingPreset,
       normalMapEnabled,
       selectedDebugDrawKey,
       textureDataMap,
@@ -2565,6 +3095,7 @@ export function SsbhModelPreviewProvider({
       autoLoadAfterConvertToSsbh,
       setAutoLoadAfterConvertToSsbh,
       loadModelAt,
+      loadModelSetAt,
       addModelAt,
       loadMemoryPreviewBundles,
       appendMemoryPreviewBundles,
@@ -2622,12 +3153,18 @@ export function SsbhModelPreviewProvider({
       motionForceVisibleDuringPlayback,
       setMotionForceVisibleDuringPlayback,
       pickMotionNuanmbFile,
+      pickMotionFbxPreview,
+      loadMotionNuanmbPath,
       pickMotionFolder,
       reloadMotionClip,
       resetMotionPose,
       clearMotion,
       modelAttachments,
       setModelAttachments,
+      modelIdByInstanceId,
+      setInstanceModelId,
+      loadMotionNuanmbPathForInstance,
+      playMotionBundle,
       exportSceneConfig,
       importSceneConfig,
     ],

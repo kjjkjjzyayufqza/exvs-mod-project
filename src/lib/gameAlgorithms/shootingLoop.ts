@@ -1,5 +1,11 @@
 import type { TypedParamEntry } from "@/page/TestEditor/components/param-editor/typedParamTypes";
 
+/**
+ * Bullet trajectory stop classification plus a quarantined legacy shooting-loop
+ * prototype. The prototype's armsparam timing/count inputs were disproved by
+ * native OB v27 consumers and must not be connected to parsed armsparam data.
+ */
+
 export type ShootingEndReason = "hit" | "effectiveRange" | "lifetime" | "unknown";
 
 export interface ShootingTrajectorySummary {
@@ -7,6 +13,7 @@ export interface ShootingTrajectorySummary {
   hitFrame: number;
 }
 
+/** @deprecated Uses disproved legacy armsparam aliases. */
 export interface ShootingTimeline {
   startupFrame: number;
   activeFrame: number;
@@ -17,6 +24,7 @@ export interface ShootingTimeline {
   cooldownEndFrame: number;
 }
 
+/** @deprecated Uses disproved legacy armsparam aliases. */
 export interface ShootingLoopShot<TTrajectory extends ShootingTrajectorySummary> {
   shotIndex: number;
   spawnFrame: number;
@@ -26,6 +34,7 @@ export interface ShootingLoopShot<TTrajectory extends ShootingTrajectorySummary>
   trajectory: TTrajectory;
 }
 
+/** @deprecated Uses disproved legacy armsparam aliases. */
 export interface ShootingLoopResult<TTrajectory extends ShootingTrajectorySummary> {
   timeline: ShootingTimeline;
   spawnFrames: number[];
@@ -41,6 +50,7 @@ export interface ClassifyShootingEndReasonArgs<
   bulletEntry: TypedParamEntry;
 }
 
+/** @deprecated Uses disproved legacy armsparam aliases. */
 export interface SimulateShootingLoopArgs<
   TScenario,
   TTrajectory extends ShootingTrajectorySummary,
@@ -74,6 +84,7 @@ function lifetimeFrames(entry: TypedParamEntry, fallback: number): number {
   return Math.max(1, Math.round(lifetime));
 }
 
+/** @deprecated Uses disproved legacy armsparam aliases. */
 export function buildShootingTimeline(armsEntry: TypedParamEntry): ShootingTimeline {
   const startupFrame = nonNegativeFrame(armsEntry, "startupFrame");
   const activeFrame = nonNegativeFrame(armsEntry, "activeFrame");
@@ -112,6 +123,7 @@ export function classifyShootingEndReason<
   return "lifetime";
 }
 
+/** @deprecated Uses disproved legacy armsparam aliases. */
 export function simulateShootingLoop<
   TScenario,
   TTrajectory extends ShootingTrajectorySummary,

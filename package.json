@@ -10,7 +10,9 @@
     "tauri": "tauri",
     "tauri-build": "tauri build",
     "start": "tauri dev",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:scene": "vitest run src/page/SceneEdit",
+    "test:all": "vitest run --config vitest.all.config.ts"
   },
   "dependencies": {
     "@comfyorg/fbx-exporter-three": "^1.0.1",

@@ -1,10 +1,13 @@
-import { exists, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { exists, readTextFile, remove, writeTextFile } from "@tauri-apps/plugin-fs";
 import { Command } from "@tauri-apps/plugin-shell";
+import { invoke } from "@tauri-apps/api/core";
 import { join, resourceDir } from "@tauri-apps/api/path";
 import {
   applyMscResolvedOverlayToScript2,
   type MscResolvedOverlayStatus,
 } from "../../utils/mscResolvedOverlay";
+import { getMscRepackOutputPath } from "../../utils/mscWorkspaceUtils";
+import { getMscRoundtripTempPath, type MscRoundtripCompareReport } from "./mscPipeline";
 
 export async function decompileMscScript(params: {
   inputPath: string;
@@ -49,6 +52,79 @@ export async function repackMscScript(params: {
 
   if (command.code !== 0) {
     throw new Error(command.stderr || `msclang failed for ${params.inputPath}`);
+  }
+}
+
+export interface MscRoundtripVerifyResult {
+  report: MscRoundtripCompareReport;
+  originalPath: string;
+  tempOutputPath: string;
+  /** Non-null when the temp recompile output could not be deleted afterwards. */
+  tempCleanupError: string | null;
+}
+
+/**
+ * Round-trip verify: recompile a pack root C file to a temp path (the
+ * original script is never touched) and byte-compare it against the original.
+ */
+export async function verifyMscRoundtrip(params: {
+  cFilePath: string;
+  mscFolderPath?: string | null;
+}): Promise<MscRoundtripVerifyResult> {
+  const originalPath = getMscRepackOutputPath(params.cFilePath);
+  if (!(await exists(originalPath))) {
+    throw new Error(
+      `MSC round-trip verify: original script not found: ${originalPath}. Keep the source script next to its C file.`,
+    );
+  }
+
+  const tempOutputPath = getMscRoundtripTempPath(params.cFilePath);
+  await repackMscScript({
+    inputPath: params.cFilePath,
+    outputPath: tempOutputPath,
+    mscFolderPath: params.mscFolderPath,
+  });
+
+  try {
+    const report = await invoke<MscRoundtripCompareReport>("compare_msc_roundtrip", {
+      originalPath,
+      recompiledPath: tempOutputPath,
+    });
+    let tempCleanupError: string | null = null;
+    try {
+      await remove(tempOutputPath);
+    } catch (cleanupError) {
+      tempCleanupError =
+        cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+    }
+    return { report, originalPath, tempOutputPath, tempCleanupError };
+  } catch (error) {
+    // Best-effort cleanup on compare failure; the compare error stays primary.
+    await remove(tempOutputPath).catch(() => undefined);
+    throw error;
+  }
+}
+
+/**
+ * Open a file with the configured external editor command via `cmd /C` so
+ * PATH-resolved commands (cursor, code, notepad, ...) work unchanged.
+ */
+export async function openFileInExternalEditor(params: {
+  filePath: string;
+  editorCommand: string;
+}): Promise<void> {
+  const editorCommand = params.editorCommand.trim();
+  if (editorCommand.length === 0) {
+    throw new Error("MSC workspace: external editor command is empty. Configure it in the toolbar.");
+  }
+
+  const command = await Command.create("exec-cmd", ["/C", editorCommand, params.filePath]).execute();
+  if (command.code !== 0) {
+    const detail = command.stderr.trim() || `exit code ${command.code}`;
+    throw new Error(
+      `Failed to open ${params.filePath} with "${editorCommand}" (${detail}). ` +
+        "Check the external editor command in the toolbar.",
+    );
   }
 }
 

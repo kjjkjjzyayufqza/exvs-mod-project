@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { toast } from "sonner"
-import { Search, CopyPlus, Eye, Plus, Trash2, Pencil, Save, X, ClipboardCopy, Braces, FileInput } from "lucide-react"
+import { Search, CopyPlus, Eye, Plus, Trash2, Pencil, Save, X, ClipboardCopy, Braces, FileInput, Copy } from "lucide-react"
 import { AppRndModalShell } from "@/components/AppRndModalShell"
 import { Button } from "@/components/ui/button"
 import { formatHash } from "@/models/commandTable"
@@ -18,6 +18,7 @@ import {
   createInitialEntryEditorMeta,
   filterTypedParamEntryRows,
   formatHexPreviewEditText,
+  isTypedEntryFieldKey,
   markEntryEditorMetaDirty,
   parseHexPreviewEditText,
   readTypedEntryId,
@@ -33,6 +34,12 @@ import {
   copyTypedParamFileJsonToClipboard,
 } from "./typedParamClipboard"
 import { TypedParamImportDialog } from "./TypedParamImportDialog"
+import { ProjectileDepictionCopyDialog } from "./ProjectileDepictionCopyDialog"
+import { isProjectileDepictionTableFileType } from "./projectileDepictionCopy"
+import {
+  HitboxParamAnalysisPanel,
+  isHitboxParamFileType,
+} from "./HitboxParamAnalysisPanel"
 import { readObfLabelAtOffset } from "../../utils/mscParamLabelResolver"
 
 /** Baseline estimate; measureElement adjusts when action/resource labels are present. */
@@ -171,18 +178,23 @@ export function TypedParamDataPanel({
   selectedEntryIndex,
   onSelectEntry,
   onChange,
+  workspaceDefaultPath,
+  sourceFilePath,
 }: {
   fileType: string
   data: TypedParamFile
   selectedEntryIndex: number
   onSelectEntry: (i: number) => void
   onChange: (next: TypedParamFile) => void
+  workspaceDefaultPath?: string
+  sourceFilePath?: string
 }) {
   const [fieldSearch, setFieldSearch] = useState("")
   const [entrySearchDraft, setEntrySearchDraft] = useState("")
   const [entrySearch, setEntrySearch] = useState("")
   const [previewOpen, setPreviewOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [copyEffectOpen, setCopyEffectOpen] = useState(false)
   const [hexPreviewMode, setHexPreviewMode] = useState<"view" | "edit">("view")
   const [hexEditDraft, setHexEditDraft] = useState("")
   const [isEntrySearchPending, startEntrySearchTransition] = useTransition()
@@ -289,7 +301,7 @@ export function TypedParamDataPanel({
   const fieldInfoMap = useMemo(() => {
     if (!entry || !data.fieldSpecs) return {}
     const map: Record<string, { kind: number; offset: number }> = {}
-    const keys = Object.keys(entry).filter((k) => k !== "entryId" && !k.endsWith("Size"))
+    const keys = Object.keys(entry).filter(isTypedEntryFieldKey)
     // Prefer hash-name alignment for known kind-7 labels; fall back to index for others.
     const LABEL_HASH: Record<string, number> = {
       actionLabel: 0xe6213731,
@@ -610,6 +622,20 @@ export function TypedParamDataPanel({
                   <Eye className="h-3 w-3" />
                   Hex
                 </Button>
+                {isProjectileDepictionTableFileType(fileType) ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className={PANEL_TOOLBAR_BUTTON_CLASS}
+                    disabled={!entry}
+                    title="Copy this entry's effect hashes into another effect pack"
+                    onClick={() => setCopyEffectOpen(true)}
+                  >
+                    <Copy className="h-3 w-3" />
+                    Copy Effect
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   size="sm"
@@ -648,6 +674,17 @@ export function TypedParamDataPanel({
             </div>
           </div>
         </div>
+        {entry && isHitboxParamFileType(fileType) ? (
+          <div className="max-h-[48%] shrink-0 overflow-y-auto border-b bg-muted/5 px-3 py-3">
+            <HitboxParamAnalysisPanel
+              key={fileType}
+              fileType={fileType}
+              data={data}
+              selectedEntryIndex={selectedEntryIndex}
+              workspaceDefaultPath={workspaceDefaultPath}
+            />
+          </div>
+        ) : null}
         <div
           ref={fieldListRef}
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.04),transparent_55%)] px-4 py-3 pr-3 dark:bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.03),transparent_55%)]"
@@ -763,6 +800,17 @@ export function TypedParamDataPanel({
         selectedEntryIndex={selectedEntryIndex}
         onApply={applyImportedEntry}
       />
+      {isProjectileDepictionTableFileType(fileType) ? (
+        <ProjectileDepictionCopyDialog
+          open={copyEffectOpen}
+          onOpenChange={setCopyEffectOpen}
+          data={data}
+          selectedEntryIndex={selectedEntryIndex}
+          sourceFilePath={sourceFilePath}
+          workspaceDefaultPath={workspaceDefaultPath}
+          onApplyToCurrentFile={onChange}
+        />
+      ) : null}
     </div>
   )
 }

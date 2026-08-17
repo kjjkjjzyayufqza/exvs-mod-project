@@ -60,9 +60,12 @@ pub fn detect_fbx_import_source(scene: &Scene) -> FbxImportSource {
     FbxImportSource::Unknown
 }
 
-/// Blender FBX IO uses `FrontAxisSign=+1` / `CoordAxisSign=+1`, while our FBX export uses
-/// Maya-style `-1`/`-1`. ufbx resolves those conventions into different scene spaces; without
-/// correction, a Blender round-trip flips the model 180 degrees around Y (head/tail reversed).
+/// This project's FBX exporter writes `FrontAxisSign=-1` / `CoordAxisSign=-1` (see
+/// `ssbh_fbx.rs`), while every DCC observed so far — Blender FBX IO *and* the Maya FBX SDK —
+/// writes `+1`/`+1`. Those two conventions differ by exactly 180 degrees around Y, so a file
+/// that came back through any DCC needs that rotation undone.
+///
+/// The name is historical: this detects the *standard* axis triple, not Blender specifically.
 fn scene_uses_blender_fbx_axis_convention(scene: &Scene) -> bool {
     scene.settings.axes.front == ufbx::CoordinateAxis::PositiveZ
         && scene.settings.axes.right == ufbx::CoordinateAxis::PositiveX
@@ -72,6 +75,12 @@ fn scene_uses_blender_fbx_axis_convention(scene: &Scene) -> bool {
         )
 }
 
+/// Rotate the whole imported scene 180 degrees around Y.
+///
+/// Meshes are corrected in place. Bones need the same change of basis, but they are stored as
+/// **local** transforms and `local = inv(parent_world) * world` already cancels the rotation for
+/// every child — so only the roots still carry it, and touching any bone below a root would
+/// double-apply the correction.
 fn apply_y180_axis_convention_correction(scene: &mut ImportScene) {
     let rot = Mat4::from_rotation_y(std::f32::consts::PI);
     for mesh in &mut scene.meshes {
@@ -84,6 +93,14 @@ fn apply_y180_axis_convention_correction(scene: &mut ImportScene) {
                 *normal = normalized;
             }
         }
+    }
+    for bone in scene
+        .bones
+        .iter_mut()
+        .filter(|bone| bone.parent_index.is_none())
+    {
+        let corrected = rot * Mat4::from_cols_array_2d(&bone.transform);
+        bone.transform = glam_to_import_columns(corrected);
     }
 }
 
@@ -339,12 +356,17 @@ fn local_transform_upto_ancestor(child: &Node, ancestor: &Node) -> Result<Mat4> 
     Ok(m)
 }
 
+/// A root bone has no bone parent in `ImportScene`, so its local transform *is* its world
+/// transform and must be read as such.
+///
+/// Reading `node_to_parent` instead silently drops every non-bone ancestor, and DCCs disagree
+/// about whether those exist: Blender wraps skeletons in an `Armature` null that carries the
+/// axis-convention rotation, Maya parents the root bone straight to the scene root and puts the
+/// rotation on the bone itself. Meshes always carry the full `geometry_to_world`, so the old
+/// behaviour made mesh and skeleton agree for Blender and disagree for Maya — which shipped as a
+/// model rendered back-to-front and upside-down.
 fn root_bone_local_transform(node: &Node) -> Mat4 {
-    if node.parent.is_some() {
-        ufbx_matrix3x4_to_glam(&node.node_to_parent)
-    } else {
-        ufbx_matrix3x4_to_glam(&node.node_to_world)
-    }
+    ufbx_matrix3x4_to_glam(&node.node_to_world)
 }
 
 fn ancestor_bone_parent_index(
@@ -1002,6 +1024,16 @@ mod tests {
     const GYAN_BODY_NORMAL_FBX: &str =
         r"D:\output\exvs2\Gyan\001gundam_005gyan00_001_body_normal.fbx";
 
+    /// Same weapon exported from two different DCCs. Both declare `+Y up / +Z front / +X right`,
+    /// so both need the axis-convention correction and both must import to the same skeleton.
+    const WING_ZERO_RIFLE_MAYA_FBX: &str =
+        r"D:\output\exvs2\wing_gundam_zero_rebellion\bsrifle00b_out.fbx";
+    const WING_ZERO_RIFLE_BLENDER_FBX: &str =
+        r"D:\output\exvs2\wing_gundam_zero_rebellion\016gundmw_001wgzero_001_wep_bsrifle00b.fbx";
+    /// `ATH_SHOT` local translation in the shipped `016gundmw_001wgzero_001_wep_bsrifle00b`
+    /// skeleton. Read back from the game file, so it is the orientation the engine expects.
+    const WING_ZERO_RIFLE_ATH_SHOT_LOCAL: [f32; 3] = [14.335_7, 0.0, 0.813_49];
+
     fn assert_close3(actual: [f32; 3], expected: [f32; 3]) {
         for (actual, expected) in actual.iter().zip(expected.iter()) {
             assert!(
@@ -1656,6 +1688,124 @@ mod tests {
             assert!(
                 matched >= om.vertices.len().saturating_sub(1),
                 "Blender round-trip vertices should match original fbxA after Y180 correction"
+            );
+        }
+    }
+
+    fn bone(name: &str, parent_index: Option<usize>, transform: Mat4) -> ImportBone {
+        ImportBone {
+            name: name.to_string(),
+            parent_index,
+            transform: glam_to_import_columns(transform),
+            inverse_bind_matrix: None,
+        }
+    }
+
+    fn scene_with_bones(bones: Vec<ImportBone>) -> ImportScene {
+        ImportScene {
+            meshes: Vec::new(),
+            materials: Vec::new(),
+            bones,
+            up_axis: UpAxisConversion::YUp,
+            fbx_import_source: None,
+        }
+    }
+
+    fn bone_local(scene: &ImportScene, name: &str) -> Mat4 {
+        let b = scene
+            .bones
+            .iter()
+            .find(|b| b.name == name)
+            .unwrap_or_else(|| panic!("bone '{name}' missing from imported scene"));
+        Mat4::from_cols_array_2d(&b.transform)
+    }
+
+    /// Regression: the axis-convention correction used to rewrite mesh vertices only, so a scene
+    /// whose nodes carry the Y180 produced correct meshes on top of a skeleton still rotated 180
+    /// degrees about Y. In game the weapon rendered back-to-front and upside-down.
+    ///
+    /// Bones are stored as **local** transforms and `local = inv(parent_world) * world` already
+    /// cancels the rotation for every child, so the whole error lands on the root. Correcting any
+    /// bone below the root would double-apply it — which is why only the root changes here.
+    #[test]
+    fn y180_correction_clears_the_root_bone_and_leaves_children_untouched() {
+        let y180 = Mat4::from_rotation_y(std::f32::consts::PI);
+        let child_local = Mat4::from_translation(Vec3::new(14.3357, 0.0, 0.81349));
+        let mut scene = scene_with_bones(vec![
+            bone("GBL_RT", None, y180),
+            bone("STICK", Some(0), Mat4::IDENTITY),
+            bone("ATH_SHOT", Some(1), child_local),
+        ]);
+
+        apply_y180_axis_convention_correction(&mut scene);
+
+        assert_close_matrix(bone_local(&scene, "GBL_RT"), Mat4::IDENTITY);
+        assert_close_matrix(bone_local(&scene, "STICK"), Mat4::IDENTITY);
+        assert_close_matrix(bone_local(&scene, "ATH_SHOT"), child_local);
+    }
+
+    /// Multi-root scenes must have every root corrected, not just the first one.
+    #[test]
+    fn y180_correction_clears_every_root_bone() {
+        let y180 = Mat4::from_rotation_y(std::f32::consts::PI);
+        let mut scene = scene_with_bones(vec![
+            bone("ROOT_A", None, y180),
+            bone("ROOT_B", None, y180),
+            bone("CHILD_OF_A", Some(0), Mat4::IDENTITY),
+        ]);
+
+        apply_y180_axis_convention_correction(&mut scene);
+
+        assert_close_matrix(bone_local(&scene, "ROOT_A"), Mat4::IDENTITY);
+        assert_close_matrix(bone_local(&scene, "ROOT_B"), Mat4::IDENTITY);
+        assert_close_matrix(bone_local(&scene, "CHILD_OF_A"), Mat4::IDENTITY);
+    }
+
+    /// End-to-end proof that the fix is DCC independent: the same weapon exported from Maya and
+    /// from Blender must import to the same skeleton, and that skeleton must match the orientation
+    /// the shipped game file uses (identity root, `ATH_SHOT` on +X).
+    ///
+    /// Both files declare `+Y up / +Z front / +X right`; the project's own FBX exporter writes
+    /// `-Z front / -X right`, and that 180-degree difference is what the correction exists for.
+    #[test]
+    fn maya_and_blender_exports_import_to_the_same_upright_skeleton() {
+        let cases = [
+            ("maya", WING_ZERO_RIFLE_MAYA_FBX),
+            ("blender", WING_ZERO_RIFLE_BLENDER_FBX),
+        ];
+        for (label, path_str) in cases {
+            let path = Path::new(path_str);
+            if !path.is_file() {
+                eprintln!("SKIP: {label} rifle FBX not found at {path_str}");
+                continue;
+            }
+
+            let scene = parse_fbx_file(path).unwrap_or_else(|e| panic!("{label} import: {e}"));
+            let root = scene
+                .bones
+                .iter()
+                .find(|b| b.parent_index.is_none())
+                .unwrap_or_else(|| panic!("{label}: imported scene has no root bone"));
+            eprintln!(
+                "[{label}] root='{}' bones={} transform={:?}",
+                root.name,
+                scene.bones.len(),
+                root.transform
+            );
+
+            assert_close_matrix(Mat4::from_cols_array_2d(&root.transform), Mat4::IDENTITY);
+
+            let ath = Mat4::from_cols_array_2d(
+                &scene
+                    .bones
+                    .iter()
+                    .find(|b| b.name == "ATH_SHOT")
+                    .unwrap_or_else(|| panic!("{label}: ATH_SHOT missing"))
+                    .transform,
+            );
+            assert_close3(
+                ath.w_axis.truncate().to_array(),
+                WING_ZERO_RIFLE_ATH_SHOT_LOCAL,
             );
         }
     }

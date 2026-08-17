@@ -167,8 +167,8 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
           <ScrollArea className="max-h-[min(70vh,420px)]">
             <div className="p-3 space-y-3">
               <p className="text-[10px] text-muted-foreground leading-snug -mt-0.5 pb-2 border-b border-border/60">
-                Open models from the toolbar: <span className="text-foreground/90">Open model folder</span> or{" "}
-                <span className="text-foreground/90">Open .numdlb</span>.
+                Open models from the toolbar: <span className="text-foreground/90">Open .numdlb</span> or{" "}
+                <span className="text-foreground/90">Add .numdlb</span>.
               </p>
               <div>
                 <div className="flex items-center justify-between gap-2 mb-1.5">

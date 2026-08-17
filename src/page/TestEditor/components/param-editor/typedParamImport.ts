@@ -3,6 +3,7 @@ import {
   applyHexBytesToTypedEntry,
   buildTypedEntryFieldLayout,
   buildTypedEntryHexPreview,
+  isTypedEntryFieldKey,
   parseHexPreviewEditText,
 } from "./paramEntryUtils"
 import type { TypedParamEntryClipboardPayload } from "./typedParamClipboard"
@@ -26,7 +27,7 @@ export type TypedParamImportApplyResult =
   | { ok: false; error: string }
 
 function getEntryFieldKeys(entry: TypedParamEntry): string[] {
-  return Object.keys(entry).filter((key) => key !== "entryId" && !key.endsWith("Size"))
+  return Object.keys(entry).filter(isTypedEntryFieldKey)
 }
 
 function isTypedFieldValue(value: unknown): value is TypedFieldValue {
@@ -95,7 +96,7 @@ function validateImportedEntryFields(
   }
 
   const unknownKeys = Object.keys(importedEntry).filter(
-    (key) => key !== "entryId" && !key.endsWith("Size") && !fieldKeys.includes(key),
+    (key) => isTypedEntryFieldKey(key) && !fieldKeys.includes(key),
   )
   if (unknownKeys.length > 0) {
     return {

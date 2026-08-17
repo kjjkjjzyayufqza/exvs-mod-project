@@ -1,372 +1,410 @@
-unit_501705001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-768freedm_001imojus_001_2109c86b/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-unit_514709001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-768freedm_001imojus_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-767hathmv_004gust00_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-767hathmv_003mef02m_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-767hathmv_002mesf02_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-766suisei_002demitr_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-767hathmv_001mesf01_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-766suisei_001demicc_001_73b8d56b/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-766suisei_001demicc_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-762blddrr_004elarmy_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-762blddrr_001wodomp_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-762blddrr_002eldaut_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-757buildd_001jeganb_001_ee167a91/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-757buildd_001jeganb_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-756gndmnt_003jststc_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-756gndmnt_001jststa_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-756gndmnt_002jststb_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-753gbftry_001theend_001_75ff5604/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-753gbftry_001theend_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-749orphn2_005rgnjla_001_1e55465d/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-749orphn2_005rgnjla_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-749orphn2_004rgnlaz_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-749orphn2_003lndmnr_001_5dcbe501/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-749orphn2_003lndmnr_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-749orphn2_002hekija_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-749orphn2_001helmrc_001_74680500/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-749orphn2_001helmrc_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-746tnbolt_001gmthnd_001_84428ce0/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-745mising_005grdvin_001_c62d4ebe/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-745mising_005grdvin_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-745mising_003ricdm2_001_9cbdd9db/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-745mising_002zk2psy_001_4447620d/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-742grecon_007jahakn_001_0b422b05/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-742grecon_005grimor_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-742grecon_007jahakn_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-733gndage_026danazn_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-733gndage_025gurdln_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-733gndage_001genace_001_89080825/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-729sstarg_003civast_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-729sstarg_004kerbuc_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-729sstarg_002blduel_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-729sstarg_001verbst_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-728gunwtv_010virgo0_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-728gunwtv_009aries0_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-728gunwtv_005magrsd_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-728gunwtv_006magaud_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-728gunwtv_002leo000_001_1a5a85d1/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-728gunwtv_001maganc_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-727gn00aw_002elsjnx_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-725gigloo_002oggo00_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-727gn00aw_001bravst_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-723crosgn_006aabeja_001_cbae8267/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-723crosgn_006aabeja_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-723crosgn_005btotug_001_78409f1e/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-723crosgn_005btotug_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-723crosgn_004desphs_001_fa1846db/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-723crosgn_004desphs_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-721destny_012blzkwr_001_d1ef9c77/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-721destny_012blzkwr_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-721destny_011gnzkwr_001_80d219b4/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-721destny_011gnzkwr_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-721destny_010destny_001_f5ee76e4/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-721destny_010destny_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-721destny_009injust_001_e0f6e523/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-721destny_009injust_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-721destny_008strkfr_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-721destny_007wndmnm_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-721destny_008strkfr_001_6cfe48a8/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-721destny_006gellsg_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-721destny_005gnzkwr_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-721destny_004windam_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-721destny_002chaogn_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-721destny_003slaszk_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-721destny_001abysgn_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-720gnseed_012freedm_001_c6944cea/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-720gnseed_012freedm_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-720gnseed_011fobidn_001_883c9670/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-720gnseed_011fobidn_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-720gnseed_004calmit_001_3b2ecc57/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-720gnseed_001ginn00_001_3bd48790/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-720gnseed_003bucue0_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-718ggundm_001dtarmy_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-717gyakch_004regzcu_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-717gyakch_004regzcu_001_b8925719/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-716gundmw_001serpnt_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-715gndmuc_011jesta0_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-715gndmuc_007bylncs_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-715gndmuc_005zk1snp_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-715gndmuc_003loto00_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-714gndm00_009ahead0_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-714gndm00_008gadesa_001_f99bf3ee/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-714gndm00_007masrao_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-714gndm00_008gadesa_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-714gndm00_006uniflg_001_80220c4e/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-710turnag_005bandit_001_92e9558b/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-710turnag_005bandit_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-708gndm08_005gmsnpr_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-708gndm08_003gmgrnd_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-708gndm08_002mpgntk_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-707gundmx_005dutres_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-707gundmx_004dutneo_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-707gundmx_003gunlpd_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-707gundmx_001gbdome_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-705vgundm_012contio_001_bcd28460/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-705vgundm_012contio_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-705vgundm_011einrad_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-705vgundm_002javern_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-703zzgndm_004gazchm_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-703zzgndm_003dreisn_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-703zzgndm_002gazac0_001_db45cfa4/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-702zgundm_006ricdia_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-702zgundm_005barzam_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-702zgundm_003palatn_001_ad98c1e4/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-654gexvs2_003glfunl_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-662blddrr_001eldaub_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-654gexvs2_001glshot_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-654gexvs2_002glfigh_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-651buildf_001psycgm_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-642grecon_001grach0_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-633gndage_001vagsid_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-549orphn2_002gsonrf_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-543orphan_707ryusei_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-542grecon_005mntero_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-543orphan_003gsonre_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-542grecon_004garcan_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-542grecon_003pself0_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-542grecon_001gself0_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-534extgun_004exleos_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-533gndage_720gexeje_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-533gndage_718clnche_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-533gndage_715zedasm_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-533gndage_709gbuncr_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-533gndage_010ageflg_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-533gndage_703gexes0_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-533gndage_008drkhnd_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-533gndage_007legils_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-533gndage_004gagefx_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-529sstarg_703civast_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-529sstarg_702blduel_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-528gunwtv_706magaud_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-529sstarg_701verbst_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-528gunwtv_705magrsd_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-527gn00aw_006harute_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-527gn00aw_005zabnya_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-527gn00aw_001quanta_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-525gigloo_001zudah0_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-523crosgn_001crosx1_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-523crosgn_004crosx3_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-522astray_001astred_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-521destny_702chaogn_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-521destny_701abysgn_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-521destny_007legend_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-521destny_005impuls_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-520gnseed_012aegis0_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-520gnseed_009blitzg_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-518ggundm_007rising_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-518ggundm_006shinig_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-518ggundm_001godgnd_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-517gyakch_703grdoga_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-517gyakch_702jgdgqs_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-517gyakch_701jegan0_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-517gyakch_004jgdoga_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-516gundmw_003talgs3_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-517gyakch_003regz00_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-516gundmw_004dthell_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-516gundmw_001wgzero_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-516gundmw_002hvarms_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-515gndmuc_011rezel0_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-515gndmuc_709grzlan_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-515gndmuc_010jesta0_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-515gndmuc_006rozenz_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-514gndm00_704tiespc_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-514gndm00_018virtue_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-514gndm00_009ariosg_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-514gndm00_002oogndm_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-514gndm00_001gnexia_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-513gndmsm_704dmtrpn_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-513gndmsm_701xamel0_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-513gndmsm_006gmcnn2_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-512pocket_701gmsnp2_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-512pocket_004kampfr_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-510turnag_006ssumo2_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-510turnag_005crnkpl_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-510turnag_004kapool_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-507gundmx_703gunlpd_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-507gundmx_702gunamb_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-505vgundm_703rigcnt_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-505vgundm_002gunez0_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-505vgundm_710vgndhx_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-504gunf91_004vignag_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-503zzgndm_013qub2bl_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-503zzgndm_012zznrml_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-502zgundm_015hizack_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-502zgundm_013marasi_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-502zgundm_001zgundm_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-502zgundm_005gunmk2_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-502zgundm_002hyaksk_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-502zgundm_012methus_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-501gundam_711zaku20_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-501gundam_701gm0000_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-501gundam_016gntank_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-501gundam_015gcanon_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-068freedm_002inj2nd_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-501gundam_001gundam_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-068freedm_001risfre_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-066suisei_002pharct_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-066suisei_003dabald_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-066suisei_001aerial_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-062blddrr_001earthr_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-059nextgn_004nextgs_002/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-059nextgn_004nextgs_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-059nextgn_003nextgv_002/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-059nextgn_002nextgx_002/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-059nextgn_003nextgv_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-059nextgn_002nextgx_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-059nextgn_001nextge_002/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-057buildd_002zeromr_002/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-058vlprgs_001overon_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-059nextgn_001nextge_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-057buildd_003oosky0_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-057buildd_002zeromr_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-057buildd_001oodvac_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-056gndmnt_003phenex_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-056gndmnt_002sinast_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-056gndmnt_001narrtv_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-056gndmnt_001narrtv_001_5b1bf670/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-055sdgaid_001kntgnd_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-053gbftry_005tsient_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-053gbftry_003ltngfb_001_878be356/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-053gbftry_004strwin_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-053gbftry_003ltngfb_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-053gbftry_002trybng_001_01939e88/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-053gbftry_002trybng_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-051buildf_006sengok_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-051buildf_005stabld_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-051buildf_004wgfenc_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-051buildf_003gnxmao_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-051buildf_002zakamz_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-051buildf_001bldstr_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-049orphn2_006flaurs_001_3d9ec0c9/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-049orphn2_006flaurs_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-049orphn2_005kmrvdr_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-049orphn2_004barrex_001_c3c63551/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-049orphn2_004barrex_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-049orphn2_003gnbael_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-049orphn2_002gsonrf_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-046tnbolt_004acgytb_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-045mising_006tdsrtr_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-045mising_004pixyfd_001_6ca264a5/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-045mising_004pixyfd_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-043orphan_003gsonre_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-042grecon_009hecate_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-042grecon_008dahack_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-042grecon_007kabakl_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-042grecon_006glucif_001_be974163/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-042grecon_006glucif_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-042grecon_005mntero_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-034extgun_005exexel_001_72eeda1d/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-034extgun_005exexel_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-034extgun_004exleos_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-034extgun_003exaios_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-034extgun_001execli_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-034extgun_001execli_002/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-034extgun_002exxeno_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-033gndage_011ffrsia_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-033gndage_010ageflg_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-033gndage_008drkhnd_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-033gndage_007legils_002/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-033gndage_006farsia_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-033gndage_003gnage3_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-033gndage_004gagefx_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-031gnhath_002penelp_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-031gnhath_001xigndm_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-030gsenti_001exsgun_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-029sstarg_002stgazr_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-029sstarg_001stnoir_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-028gunwtv_014talges_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-028gunwtv_010sandtv_001_7e33c649/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-028gunwtv_009altrtv_001_a5ba8636/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-028gunwtv_001gunwtv_001_ad47e15a/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-027gn00aw_006harute_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-027gn00aw_005zabnya_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-027gn00aw_004quntfs_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-027gn00aw_003bravct_001_3f303ca1/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-027gn00aw_003bravct_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-025gigloo_002hildol_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-024bluede_002efrtcs_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-024bluede_001bldes1_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-023crosgn_009vigna2_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-022astray_011drednh_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-022astray_010astbfd_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-022astray_009astgam_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-022astray_009astgam_001_7fb94687/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-022astray_008astrdr_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-022astray_006astrki_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-022astray_005hyperi_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-022astray_004drednt_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-022astray_003astgat_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-021destny_015akatki_001_d992fc4f/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-021destny_015akatki_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-021destny_013des2he_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-021destny_012stroug_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-021destny_011gfignt_001_d87447bb/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-021destny_011gfignt_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-021destny_010gai2wa_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-021destny_010gai2wa_001_4f12419f/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-021destny_009inj2la_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-021destny_008imp2lu_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-021destny_007legend_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-021destny_006gaiagn_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-021destny_005impuls_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-020gnseed_014calamt_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-020gnseed_013justic_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-020gnseed_013justic_001_7ce71a5c/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-020gnseed_011buster_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-020gnseed_011buster_001_1d1e9d20/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-020gnseed_010raider_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-020gnseed_006duelas_001_ea8a3528/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-018ggundm_008maxter_001_019eace6/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-018ggundm_008maxter_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-018ggundm_007rising_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-018ggundm_006shinig_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-018ggundm_005nobelg_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-018ggundm_004spiegl_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-018ggundm_002dragon_001_bb2054aa/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-017gyakch_007nglrff_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-017gyakch_006newhws_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-016gundmw_003talgs3_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-015gndmuc_009banorn_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-015gndmuc_008faunig_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-015gndmuc_006rozenz_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-015gndmuc_003sinanj_001_54a08a2d/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-014gndm00_026aheads_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-014gndm00_025garazo_001_75e3d538/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-014gndm00_025garazo_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-014gndm00_019theins_001_109b55e4/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-014gndm00_016jagdac_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-014gndm00_012oog7sg_002/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-014gndm00_012oog7sg_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-014gndm00_008thdrei_001_a3547101/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-014gndm00_009ariosg_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-014gndm00_011avaexa_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-014gndm00_007rebons_001_4c0c99be/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-014gndm00_007rebons_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-013gndmsm_007gmcstm_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-013gndmsm_003grbrtt_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-012pocket_002zak2fz_001_0be91513/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-012pocket_004kampfr_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-010turnag_001turnag_001_c0a8d696/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-007gundmx_006bertig_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-007gundmx_004gundmx_002/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-007gundmx_004gundmx_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-007gundmx_003gunxdv_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-007gundmx_001gndmdx_001_9dfbf226/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-007gundmx_001gndmdx_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-005vgundm_013gedlav_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-005vgundm_012rigcnt_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-003zzgndm_015dvnwlf_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-003zzgndm_013qub2bl_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-003zzgndm_005acgyhm_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-003zzgndm_004zak3cm_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-003zzgndm_001zzgndm_001_cea039dc/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-002zgundm_018dijeh0_001_fd243ec7/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-002zgundm_018dijeh0_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-002zgundm_014gabtly_001_ba2e6efe/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-002zgundm_006hambrb_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-001gundam_017dom000_001/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-001gundam_006gmecha_001/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
-001gundam_002chrgel_001_188a3f18/2.c overlay: MSC action rename: cannot find func_143 in 0.c
-001gundam_001gundam_002/2.c overlay: MSC action rename: no func_241 bindings matched legacy action routes
+{
+  "mirrorTexturePathsAcrossProfiles": true,
+  "numdlbMaterialMappings": [
+    {
+      "meshObjectName": "SHAPE_ROOTShape",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    },
+    {
+      "meshObjectName": "SHAPE_ROOTShape__sub1",
+      "meshObjectSubindex": 0,
+      "materialLabel": "pbr1Mtl"
+    }
+  ],
+  "exportOptions": {
+    "writeMayaProfile": true,
+    "writeNumatb": true
+  },
+  "mayaProfile": {
+    "major_version": 1,
+    "minor_version": 6,
+    "entries": [
+      {
+        "material_label": "pbr1Mtl",
+        "shader_label": "",
+        "blend_states": [
+          {
+            "param_id": "BlendState0",
+            "data": {
+              "source_color": "One",
+              "color_operation": "Add",
+              "destination_color": "Zero",
+              "source_alpha": "One",
+              "alpha_operation": "Add",
+              "destination_alpha": "Zero",
+              "alpha_sample_to_coverage": false
+            }
+          }
+        ],
+        "floats": [],
+        "float1s": [
+          {
+            "param_id": "CosinePower",
+            "data": 20
+          }
+        ],
+        "booleans": [
+          {
+            "param_id": "UseDiffuseUvTransform",
+            "data": true
+          },
+          {
+            "param_id": "UseSpecularUvTransform",
+            "data": true
+          },
+          {
+            "param_id": "UseNormalUvTransform",
+            "data": true
+          }
+        ],
+        "vectors": [],
+        "colors": [
+          {
+            "param_id": "Diffuse",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          },
+          {
+            "param_id": "Specular",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          }
+        ],
+        "rasterizer_states": [
+          {
+            "param_id": "RasterizerState0",
+            "data": {
+              "fill_mode": "Solid",
+              "cull_mode": "Back",
+              "depth_bias": 0
+            }
+          }
+        ],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          },
+          {
+            "param_id": "SpecularSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          },
+          {
+            "param_id": "NormalSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "ClampToEdge",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0.5,
+                "g": 0.5,
+                "b": 0.5,
+                "a": 1
+              },
+              "lod_bias": 0,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "DiffuseMap",
+            "data": "028gunwtv_001gunwtv_001_pbr1_basecolor"
+          },
+          {
+            "param_id": "SpecularMap",
+            "data": "028gunwtv_001gunwtv_001_pbr1_metallic"
+          },
+          {
+            "param_id": "NormalMap",
+            "data": "028gunwtv_001gunwtv_001_pbr1_normal"
+          },
+          {
+            "param_id": "Texture1",
+            "data": "028gunwtv_001gunwtv_001_pbr1_roughnessandmask"
+          },
+          {
+            "param_id": "RoughnessMap",
+            "data": "028gunwtv_001gunwtv_001_pbr1_roughness"
+          },
+          {
+            "param_id": "AmbientOcclusionMap",
+            "data": "028gunwtv_001gunwtv_001_pbr1_ambientocclusion"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": [
+          {
+            "param_id": "DiffuseUvTransform",
+            "data": {
+              "scale_u": 1,
+              "scale_v": 1,
+              "rotation": 0,
+              "translate_u": 0,
+              "translate_v": 0
+            }
+          },
+          {
+            "param_id": "SpecularUvTransform",
+            "data": {
+              "scale_u": 1,
+              "scale_v": 1,
+              "rotation": 0,
+              "translate_u": 0,
+              "translate_v": 0
+            }
+          },
+          {
+            "param_id": "NormalUvTransform",
+            "data": {
+              "scale_u": 1,
+              "scale_v": 1,
+              "rotation": 0,
+              "translate_u": 0,
+              "translate_v": 0
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "nustProfile": {
+    "major_version": 1,
+    "minor_version": 6,
+    "entries": [
+      {
+        "material_label": "pbr1Mtl",
+        "shader_label": "vsngCharaBasic",
+        "blend_states": [],
+        "floats": [
+          {
+            "param_id": "CustomInteger0",
+            "data": 0
+          }
+        ],
+        "float1s": [
+          {
+            "param_id": "CustomFloat0",
+            "data": 0.1
+          },
+          {
+            "param_id": "CustomFloat1",
+            "data": 1
+          },
+          {
+            "param_id": "CustomFloat2",
+            "data": 1
+          },
+          {
+            "param_id": "CustomFloat3",
+            "data": 1
+          },
+          {
+            "param_id": "CustomFloat4",
+            "data": 1
+          },
+          {
+            "param_id": "CustomFloat5",
+            "data": 0
+          },
+          {
+            "param_id": "CustomFloat7",
+            "data": 1
+          },
+          {
+            "param_id": "CustomFloat8",
+            "data": 1
+          },
+          {
+            "param_id": "CustomFloat9",
+            "data": 1
+          },
+          {
+            "param_id": "EmissiveScale",
+            "data": 4
+          }
+        ],
+        "booleans": [
+          {
+            "param_id": "UseMetallicMap",
+            "data": true
+          },
+          {
+            "param_id": "UseAmbientOcclusionMap",
+            "data": true
+          },
+          {
+            "param_id": "ReceiveShadow",
+            "data": true
+          },
+          {
+            "param_id": "UseRoughnessMap",
+            "data": true
+          },
+          {
+            "param_id": "UseNormalMap",
+            "data": true
+          },
+          {
+            "param_id": "UseEmissiveMap",
+            "data": false
+          },
+          {
+            "param_id": "NormalMapBc5",
+            "data": false
+          }
+        ],
+        "vectors": [
+          {
+            "param_id": "CustomVector0",
+            "data": {
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "w": 0
+            }
+          },
+          {
+            "param_id": "CustomVector2",
+            "data": {
+              "x": 1,
+              "y": 1,
+              "z": 1,
+              "w": 1
+            }
+          },
+          {
+            "param_id": "CustomVector3",
+            "data": {
+              "x": 1,
+              "y": 1,
+              "z": 1,
+              "w": 1
+            }
+          }
+        ],
+        "colors": [
+          {
+            "param_id": "CustomColor0",
+            "data": {
+              "r": 0,
+              "g": 0,
+              "b": 0,
+              "a": 0
+            }
+          },
+          {
+            "param_id": "CustomColor1",
+            "data": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+            }
+          },
+          {
+            "param_id": "CustomColor2",
+            "data": {
+              "r": 0,
+              "g": 0,
+              "b": 0,
+              "a": 0
+            }
+          }
+        ],
+        "rasterizer_states": [],
+        "samplers": [
+          {
+            "param_id": "DiffuseSampler",
+            "data": {
+              "wraps": "Repeat",
+              "wrapt": "Repeat",
+              "wrapr": "Repeat",
+              "min_filter": "LinearMipmapLinear",
+              "mag_filter": "Linear",
+              "border_color": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0
+              },
+              "lod_bias": -1,
+              "max_anisotropy": "One"
+            }
+          }
+        ],
+        "textures": [
+          {
+            "param_id": "AmbientOcclusionMap",
+            "data": "028gunwtv_001gunwtv_001_pbr1_ambientocclusion"
+          },
+          {
+            "param_id": "MetallicMap",
+            "data": "028gunwtv_001gunwtv_001_pbr1_metallic"
+          },
+          {
+            "param_id": "RoughnessMap",
+            "data": "028gunwtv_001gunwtv_001_pbr1_roughness"
+          },
+          {
+            "param_id": "Texture1",
+            "data": "028gunwtv_001gunwtv_001_pbr1_roughnessandmask"
+          },
+          {
+            "param_id": "BaseColorMap",
+            "data": "028gunwtv_001gunwtv_001_pbr1_basecolor"
+          },
+          {
+            "param_id": "NormalMap",
+            "data": "028gunwtv_001gunwtv_001_pbr1_normal"
+          }
+        ],
+        "textures2": [],
+        "type4_v16": [],
+        "type4_v15": [],
+        "uv_transforms": []
+      }
+    ]
+  }
+}

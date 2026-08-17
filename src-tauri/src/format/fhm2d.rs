@@ -44,7 +44,7 @@ pub struct InMemoryFhm2dExtraction {
     pub unk_count: u32,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Fhm2dFormat {
     Character,
     /// Model subset + nutexb (no character-package steps: nuhlpb 0\\3, folder 0 bins, 0\\1 magic).
@@ -59,20 +59,86 @@ pub enum Fhm2dFormat {
     Sound,
 }
 
+/// Disk layout when writing extracted files under `out_dir`.
+///
+/// - `Folder` preserves SubFileStructure path segments under the output root.
+/// - `Flat` writes only basenames under the output root (no nested archive folders).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ExtractLayout {
+    Folder,
+    Flat,
+}
+
+impl ExtractLayout {
+    pub fn parse(value: &str) -> Result<Self, String> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "folder" | "structure" => Ok(Self::Folder),
+            "flat" | "single" => Ok(Self::Flat),
+            other => Err(format!("Unsupported layout '{other}' (use folder or flat)")),
+        }
+    }
+
+    /// Historical default: motion/effect preserve folders; everything else is flat.
+    pub fn default_for_format(format: Option<Fhm2dFormat>) -> Self {
+        match format {
+            Some(Fhm2dFormat::Motion) | Some(Fhm2dFormat::Effect) => Self::Folder,
+            _ => Self::Flat,
+        }
+    }
+}
+
 impl Fhm2dFormat {
     pub fn from_opt_str(value: Option<&str>) -> Result<Option<Self>, String> {
         match value {
             None => Ok(None),
-            Some("fhm2d_character") => Ok(Some(Self::Character)),
-            Some("fhm2d_effect") => Ok(Some(Self::Effect)),
-            Some("fhm2d_all_nutexb") => Ok(Some(Self::AllNutexb)),
-            Some("fhm2d_stage_list") => Ok(Some(Self::StageList)),
-            Some("fhm2d_character_param") => Ok(Some(Self::CharacterParam)),
-            Some("fhm2d_character_cost") => Ok(Some(Self::CharacterCost)),
-            Some("fhm2d_msc") => Ok(Some(Self::Msc)),
-            Some("fhm2d_motion") => Ok(Some(Self::Motion)),
-            Some("fhm2d_sound") => Ok(Some(Self::Sound)),
-            Some(other) => Err(format!("Unsupported fhm2d format: {other}")),
+            Some(raw) => Self::parse_cli(raw).map(Some),
+        }
+    }
+
+    /// Parse a required type spelling for CLI / agents.
+    ///
+    /// Accepts short names (`motion`, `character_param`) and legacy `fhm2d_*` ids.
+    pub fn parse_cli(value: &str) -> Result<Self, String> {
+        let normalized = value
+            .trim()
+            .to_ascii_lowercase()
+            .replace('-', "_")
+            .replace(' ', "_");
+        let key = normalized
+            .strip_prefix("fhm2d_")
+            .unwrap_or(normalized.as_str());
+        match key {
+            "character" => Ok(Self::Character),
+            "effect" => Ok(Self::Effect),
+            "all_nutexb" | "allnutexb" => Ok(Self::AllNutexb),
+            "stage_list" | "stagelist" => Ok(Self::StageList),
+            "character_param" | "characterparam" | "param" => Ok(Self::CharacterParam),
+            "character_cost" | "charactercost" | "cost" => Ok(Self::CharacterCost),
+            "msc" => Ok(Self::Msc),
+            "motion" => Ok(Self::Motion),
+            "sound" => Ok(Self::Sound),
+            other => Err(format!(
+                "Unsupported fhm2d type '{other}'. Supported: {}",
+                Self::supported_type_list()
+            )),
+        }
+    }
+
+    pub fn supported_type_list() -> &'static str {
+        "character, effect, motion, msc, sound, character_param, character_cost, all_nutexb, stage_list"
+    }
+
+    pub fn as_cli_str(self) -> &'static str {
+        match self {
+            Self::Character => "character",
+            Self::Effect => "effect",
+            Self::AllNutexb => "all_nutexb",
+            Self::StageList => "stage_list",
+            Self::CharacterParam => "character_param",
+            Self::CharacterCost => "character_cost",
+            Self::Msc => "msc",
+            Self::Motion => "motion",
+            Self::Sound => "sound",
         }
     }
 }
@@ -227,6 +293,7 @@ pub struct Fhm2dExtractor<'a> {
     format: Option<Fhm2dFormat>,
     list_output_file_name: Option<String>,
     write_meta_bin: bool,
+    layout: ExtractLayout,
 }
 
 impl<'a> Fhm2dExtractor<'a> {
@@ -237,12 +304,31 @@ impl<'a> Fhm2dExtractor<'a> {
         list_output_file_name: Option<String>,
         write_meta_bin: bool,
     ) -> Self {
+        Self::with_layout(
+            source_path,
+            out_dir,
+            format,
+            list_output_file_name,
+            write_meta_bin,
+            ExtractLayout::default_for_format(format),
+        )
+    }
+
+    pub fn with_layout(
+        source_path: &'a str,
+        out_dir: &'a str,
+        format: Option<Fhm2dFormat>,
+        list_output_file_name: Option<String>,
+        write_meta_bin: bool,
+        layout: ExtractLayout,
+    ) -> Self {
         Self {
             source_path,
             out_dir,
             format,
             list_output_file_name,
             write_meta_bin,
+            layout,
         }
     }
 
@@ -286,6 +372,7 @@ impl<'a> Fhm2dExtractor<'a> {
             structure_name.as_str(),
             hash_name.as_str(),
             self.format,
+            self.layout,
         )?;
 
         let mut named_output = output.clone();
@@ -310,10 +397,10 @@ impl<'a> Fhm2dExtractor<'a> {
             out_name.as_str(),
             files.as_slice(),
             output.sub_file_data.as_slice(),
-            self.format,
+            self.layout,
         )?;
 
-        if self.format == Some(Fhm2dFormat::Motion) {
+        if self.format == Some(Fhm2dFormat::Motion) && self.layout == ExtractLayout::Folder {
             ensure_motion_empty_folders(self.out_dir, &output.sub_file_parse_structure)?;
         }
 
@@ -326,6 +413,7 @@ impl<'a> Fhm2dExtractor<'a> {
     }
 }
 
+/// Extract with historical layout defaults (motion/effect → folder, others → flat).
 pub fn extract_fhm2d_to_folder_impl(
     source_path: &str,
     out_dir: &str,
@@ -339,6 +427,26 @@ pub fn extract_fhm2d_to_folder_impl(
         format,
         list_output_file_name,
         write_meta_bin,
+    )
+    .extract()
+}
+
+/// Extract with an explicit disk layout independent of naming type.
+pub fn extract_fhm2d_to_folder_with_layout(
+    source_path: &str,
+    out_dir: &str,
+    format: Option<Fhm2dFormat>,
+    list_output_file_name: Option<String>,
+    write_meta_bin: bool,
+    layout: ExtractLayout,
+) -> Result<ExtractFhm2dResult, String> {
+    Fhm2dExtractor::with_layout(
+        source_path,
+        out_dir,
+        format,
+        list_output_file_name,
+        write_meta_bin,
+        layout,
     )
     .extract()
 }
@@ -364,6 +472,7 @@ pub fn extract_fhm2d_to_memory_impl(
     let mut files = parsed.files;
     files.sort_by_key(|f| f.file_index);
 
+    let layout = ExtractLayout::default_for_format(format);
     let mut output = build_output_structure(
         parsed.meta_header,
         parsed.unk_count,
@@ -375,6 +484,7 @@ pub fn extract_fhm2d_to_memory_impl(
         sanitize_structure_name(source_name).as_str(),
         metadata_from_source(source_name, source_name).1.as_str(),
         format,
+        layout,
     )?;
 
     let mut named_output = output.clone();
@@ -502,6 +612,7 @@ fn build_output_structure(
     structure_name: &str,
     hash_name: &str,
     format: Option<Fhm2dFormat>,
+    layout: ExtractLayout,
 ) -> Result<OutputStructure, String> {
     if type_list.len() != files.len() {
         return Err(format!(
@@ -510,7 +621,9 @@ fn build_output_structure(
             files.len()
         ));
     }
-    let folder_map = if format == Some(Fhm2dFormat::Effect) {
+    // Seed fileUrl with SubFileStructure folders when writing a folder layout, or for
+    // effect (historical: effect naming always assumes archive folders in fileUrl).
+    let folder_map = if layout == ExtractLayout::Folder || format == Some(Fhm2dFormat::Effect) {
         Some(build_folder_map(&sub_file_parse_structure)?)
     } else {
         None
@@ -911,8 +1024,9 @@ fn apply_naming(
                 numdlb_character_enrich::NumdlbCharacterNamingMode::Effect,
             )?;
             apply_nutexb_names(&mut output.sub_file_data, files)?;
-            apply_effect_shallow_parent_bins_to_efxbn(
+            apply_effect_shallow_parent_resource_names(
                 &mut output.sub_file_data,
+                files,
                 out_name,
                 &output.sub_file_parse_structure,
             )
@@ -1165,14 +1279,19 @@ fn apply_nutexb_names(
     Ok(())
 }
 
-/// Loose `.bin` files next to numbered effect group folders are renamed to `.efxbn`.
+/// Names loose resources next to numbered effect group folders from their binary signatures.
 /// Parent paths from `build_folder_map` include both `["0"]` (from items whose folder path is `0\0\`)
 /// and `["0","0"]` (from items under `0\0\0\`); using **max** depth keeps `["0","0"]` so loose bins match.
-fn apply_effect_shallow_parent_bins_to_efxbn(
+fn apply_effect_shallow_parent_resource_names(
     sub: &mut [OutputSubFileData],
+    files: &[DecodedSubFile],
     out_name: &str,
     parse_root: &ParseNode,
 ) -> Result<(), String> {
+    let data_by_file_index = files
+        .iter()
+        .map(|file| (file.file_index, file.data.as_slice()))
+        .collect::<HashMap<_, _>>();
     let folder_map = build_folder_map(parse_root)?;
     let mut parent_dirs: HashSet<Vec<String>> = HashSet::new();
     for path in folder_map.values() {
@@ -1209,16 +1328,31 @@ fn apply_effect_shallow_parent_bins_to_efxbn(
         if !shallow_parents.contains(&rel) {
             continue;
         }
-        let segments = split_path_segments(item.file_url.as_str());
-        let old_name = segments
-            .last()
-            .ok_or_else(|| format!("Invalid fileUrl: {}", item.file_url))?;
-        let base = strip_extension(old_name.as_str());
-        let new_name = format!("{base}.efxbn");
+        let bytes = data_by_file_index.get(&item.file_index).ok_or_else(|| {
+            format!(
+                "Effect naming missing decoded data for fileIndex {}",
+                item.file_index
+            )
+        })?;
         let prefix = parent_segments(item.file_url.as_str())?;
-        item.file_type = ".efxbn".to_string();
-        item.file_base_name = Some(base);
-        item.file_url = build_file_url(prefix.as_slice(), new_name.as_str());
+        if bytes.get(0..4) == Some(b"EFXB") {
+            let segments = split_path_segments(item.file_url.as_str());
+            let old_name = segments
+                .last()
+                .ok_or_else(|| format!("Invalid fileUrl: {}", item.file_url))?;
+            let base = strip_extension(old_name.as_str());
+            let new_name = format!("{base}.efxbn");
+            item.file_type = ".efxbn".to_string();
+            item.file_base_name = Some(base);
+            item.file_url = build_file_url(prefix.as_slice(), new_name.as_str());
+        } else if bytes.get(0..4) == Some(b"HBSS") && bytes.get(0x10..0x14) == Some(b"MINA") {
+            let raw = read_c_string_utf8(bytes, MOTION_INTERNAL_NAME_OFFSET, 4096)?;
+            let name = normalize_motion_file_name(raw.as_str())?;
+            // Keep the original type-0 metadata for lossless repacking. The URL extension is
+            // content-aware for extraction/editor use, while file_type remains the FHM2D type.
+            item.file_base_name = Some(strip_extension(name.as_str()));
+            item.file_url = build_file_url(prefix.as_slice(), name.as_str());
+        }
     }
     Ok(())
 }
@@ -1335,7 +1469,7 @@ fn write_files(
     out_name: &str,
     files: &[DecodedSubFile],
     sub_file_data: &[OutputSubFileData],
-    format: Option<Fhm2dFormat>,
+    layout: ExtractLayout,
 ) -> Result<(), String> {
     if files.len() != sub_file_data.len() {
         return Err("Write files: file list and metadata list length mismatch".to_string());
@@ -1343,17 +1477,15 @@ fn write_files(
     let base = PathBuf::from(out_dir);
     fs::create_dir_all(&base).map_err(|e| format!("Create output dir failed: {e}"))?;
     for (idx, item) in sub_file_data.iter().enumerate() {
-        let rel = if matches!(
-            format,
-            Some(Fhm2dFormat::Motion) | Some(Fhm2dFormat::Effect)
-        ) {
-            motion_relative_path(item.file_url.as_str(), out_name)?
-        } else {
-            let parts = split_path_segments(item.file_url.as_str());
-            parts
-                .last()
-                .cloned()
-                .ok_or_else(|| format!("Invalid fileUrl for write: {}", item.file_url))?
+        let rel = match layout {
+            ExtractLayout::Folder => folder_relative_path(item.file_url.as_str(), out_name)?,
+            ExtractLayout::Flat => {
+                let parts = split_path_segments(item.file_url.as_str());
+                parts
+                    .last()
+                    .cloned()
+                    .ok_or_else(|| format!("Invalid fileUrl for write: {}", item.file_url))?
+            }
         };
         validate_relative_path(rel.as_str())?;
         let full = base.join(rel.as_str());
@@ -1403,8 +1535,8 @@ fn ensure_motion_empty_folders(out_dir: &str, root: &ParseNode) -> Result<(), St
 }
 
 /// Relative path under the output folder name (`out_name` first segment), preserving subfolders in `fileUrl`.
-/// Used for `fhm2d_motion` and `fhm2d_effect` writes.
-fn motion_relative_path(file_url: &str, out_name: &str) -> Result<String, String> {
+/// Used for folder-layout writes (any type).
+fn folder_relative_path(file_url: &str, out_name: &str) -> Result<String, String> {
     let segments = split_path_segments(file_url);
     if segments.len() < 2 {
         return Err(format!(
@@ -1418,6 +1550,12 @@ fn motion_relative_path(file_url: &str, out_name: &str) -> Result<String, String
         ));
     }
     Ok(segments[1..].join("/"))
+}
+
+/// Backward-compatible alias used by older call sites/docs.
+#[allow(dead_code)]
+fn motion_relative_path(file_url: &str, out_name: &str) -> Result<String, String> {
+    folder_relative_path(file_url, out_name)
 }
 
 fn get_file_type(file_type: u32) -> &'static str {
@@ -1572,3 +1710,119 @@ fn is_windows_invalid_char(ch: char) -> bool {
 
 #[path = "fhm2d_numdlb_character.rs"]
 mod numdlb_character_enrich;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_item(file_index: i32) -> ParseNode {
+        ParseNode {
+            node_type: Some("Item".to_string()),
+            name: file_index.to_string(),
+            link: None,
+            unk1: None,
+            unk2: None,
+            unk3: None,
+            children: None,
+        }
+    }
+
+    fn parse_folder(name: &str, children: Vec<ParseNode>) -> ParseNode {
+        ParseNode {
+            node_type: Some("Folder".to_string()),
+            name: name.to_string(),
+            link: None,
+            unk1: None,
+            unk2: None,
+            unk3: None,
+            children: Some(children),
+        }
+    }
+
+    fn output_file(index: usize, file_index: i32, file_url: &str) -> OutputSubFileData {
+        OutputSubFileData {
+            index,
+            file_type: ".bin".to_string(),
+            file_index,
+            file_url: file_url.to_string(),
+            file_base_name: Some(file_index.to_string()),
+        }
+    }
+
+    #[test]
+    fn effect_shallow_resources_are_named_from_magic() {
+        let mut motion = vec![0u8; 0x90];
+        motion[0..4].copy_from_slice(b"HBSS");
+        motion[0x10..0x14].copy_from_slice(b"MINA");
+        let motion_name = b"eff_test_motion.nuanmb\0";
+        motion[0x50..0x50 + motion_name.len()].copy_from_slice(motion_name);
+        let mut non_motion_hbss = vec![0u8; 0x20];
+        non_motion_hbss[0..4].copy_from_slice(b"HBSS");
+        non_motion_hbss[0x10..0x14].copy_from_slice(b"LDOM");
+
+        let files = vec![
+            DecodedSubFile {
+                file_index: 129,
+                data: motion,
+            },
+            DecodedSubFile {
+                file_index: 167,
+                data: b"EFXBpayload".to_vec(),
+            },
+            DecodedSubFile {
+                file_index: 168,
+                data: b"NOPEpayload".to_vec(),
+            },
+            DecodedSubFile {
+                file_index: 169,
+                data: non_motion_hbss,
+            },
+            DecodedSubFile {
+                file_index: 1,
+                data: b"group payload".to_vec(),
+            },
+        ];
+        let mut sub = vec![
+            output_file(0, 129, ".\\pack\\0\\0\\129.bin"),
+            output_file(1, 167, ".\\pack\\0\\0\\167.bin"),
+            output_file(2, 168, ".\\pack\\0\\0\\168.bin"),
+            output_file(3, 169, ".\\pack\\0\\0\\169.bin"),
+            output_file(4, 1, ".\\pack\\0\\0\\0\\1.bin"),
+        ];
+        let parse_root = ParseNode {
+            node_type: None,
+            name: "root".to_string(),
+            link: None,
+            unk1: None,
+            unk2: None,
+            unk3: None,
+            children: Some(vec![parse_folder(
+                "0",
+                vec![parse_folder(
+                    "0",
+                    vec![
+                        parse_item(129),
+                        parse_item(167),
+                        parse_item(168),
+                        parse_item(169),
+                        parse_folder("0", vec![parse_item(1)]),
+                    ],
+                )],
+            )]),
+        };
+
+        apply_effect_shallow_parent_resource_names(&mut sub, &files, "pack", &parse_root)
+            .expect("name effect resources");
+
+        assert_eq!(sub[0].file_type, ".bin");
+        assert_eq!(sub[0].file_base_name.as_deref(), Some("eff_test_motion"));
+        assert_eq!(sub[0].file_url, ".\\pack\\0\\0\\eff_test_motion.nuanmb");
+        assert_eq!(sub[1].file_type, ".efxbn");
+        assert_eq!(sub[1].file_url, ".\\pack\\0\\0\\167.efxbn");
+        assert_eq!(sub[2].file_type, ".bin");
+        assert_eq!(sub[2].file_url, ".\\pack\\0\\0\\168.bin");
+        assert_eq!(sub[3].file_type, ".bin");
+        assert_eq!(sub[3].file_url, ".\\pack\\0\\0\\169.bin");
+        assert_eq!(sub[4].file_type, ".bin");
+    }
+}

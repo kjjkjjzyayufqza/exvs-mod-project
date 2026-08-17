@@ -33,16 +33,15 @@ export function PropertyField({ def, value, onChange }: PropertyFieldProps) {
 
   if (def.type === "string") {
     return (
-      <div className="flex items-center justify-between gap-2">
-        <label className="min-w-0 shrink-0 text-[11px] text-muted-foreground">
-          {def.label}
-        </label>
-        <Input
-          type="text"
-          className="h-7 w-44 font-mono text-[11px]"
+      <div className="flex min-w-0 flex-col gap-1">
+        <label className="text-[11px] text-muted-foreground">{def.label}</label>
+        <textarea
+          className="min-h-[2rem] w-full resize-y break-all rounded-md border border-input bg-background px-2 py-1.5 font-mono text-[11px] leading-snug outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          rows={2}
           value={stringValue}
           onChange={(e) => onChange(def.key, e.target.value)}
           placeholder="(empty)"
+          spellCheck={false}
         />
       </div>
     );

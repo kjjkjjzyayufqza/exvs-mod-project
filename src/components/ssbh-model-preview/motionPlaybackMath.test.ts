@@ -15,9 +15,9 @@ describe("advanceMotionFrame", () => {
     expect(r.shouldStopPlayback).toBe(true);
   });
 
-  it("wraps using ssbh_wgpu finalFrameIndex semantics", () => {
+  it("includes the final frame before wrapping", () => {
     const r = advanceMotionFrame(10, 1 / 60, 1, 10, true);
-    expect(r.nextFrame).toBeCloseTo(1, 5);
+    expect(r.nextFrame).toBeCloseTo(0, 5);
     expect(r.shouldStopPlayback).toBe(false);
   });
 
@@ -74,7 +74,12 @@ describe("sampleMotionClipFrame", () => {
 
   it("wraps when looping", () => {
     const s = sampleMotionClipFrame(clip, 3.1, true);
-    expect(s.boneLocals[0]?.translation[0]).toBeCloseTo(1.1, 5);
+    expect(s.boneLocals[0]?.translation[0]).toBeCloseTo(0.1, 5);
+  });
+
+  it("samples the declared final frame without wrapping early", () => {
+    const s = sampleMotionClipFrame(clip, 2, true);
+    expect(s.boneLocals[0]?.translation[0]).toBe(2);
   });
 
   it("interpolates bone locals between sampled frames", () => {

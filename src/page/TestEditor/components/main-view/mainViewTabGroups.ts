@@ -36,16 +36,33 @@ export const MAIN_VIEW_TAB_META: MainViewTabMeta[] = [
   { value: "stage-list", name: "Stage List", shortName: "Stages", group: "stage" },
   { value: "msc-workspace", name: "MSC Workspace", shortName: "MSC", group: "msc" },
   { value: "param-editor", name: "Param Editor", shortName: "Param", group: "param" },
-  { value: "bullet-editor", name: "Bullet Editor", shortName: "Bullet", group: "param" },
-  { value: "arms-editor", name: "Arms Editor", shortName: "Arms", group: "param" },
-  { value: "speed-editor", name: "Speed Editor", shortName: "Speed", group: "param" },
-  { value: "character-editor", name: "Character Editor", shortName: "Char param", group: "param" },
-  { value: "chrsys-editor", name: "ChrSys Editor", shortName: "ChrSys", group: "param" },
-  { value: "grap-editor", name: "Grap Editor", shortName: "Grap", group: "param" },
-  { value: "depiction-editor", name: "Depiction Editor", shortName: "Depiction", group: "param" },
-  { value: "hitgroup-editor", name: "HitGroup Editor", shortName: "HitGroup", group: "param" },
-  { value: "interaction-editor", name: "Interaction Editor", shortName: "Interaction", group: "param" },
+  // Legacy per-type editors — prefer Param Editor; labels mark them as outdated.
+  { value: "bullet-editor", name: "Bullet Editor (outdated)", shortName: "Bullet (outdated)", group: "param" },
+  { value: "arms-editor", name: "Arms Editor (outdated)", shortName: "Arms (outdated)", group: "param" },
+  { value: "speed-editor", name: "Speed Editor (outdated)", shortName: "Speed (outdated)", group: "param" },
+  { value: "character-editor", name: "Character Editor (outdated)", shortName: "Char param (outdated)", group: "param" },
+  { value: "chrsys-editor", name: "ChrSys Editor (outdated)", shortName: "ChrSys (outdated)", group: "param" },
+  { value: "grap-editor", name: "Grap Editor (outdated)", shortName: "Grap (outdated)", group: "param" },
+  { value: "depiction-editor", name: "Depiction Editor (outdated)", shortName: "Depiction (outdated)", group: "param" },
+  { value: "hitgroup-editor", name: "HitGroup Editor (outdated)", shortName: "HitGroup (outdated)", group: "param" },
+  { value: "interaction-editor", name: "Interaction Editor (outdated)", shortName: "Interaction (outdated)", group: "param" },
 ];
+
+/** Tabs that stay mounted after the first visit so returning does not remount/rerender. */
+export const KEEP_MOUNTED_MAIN_VIEW_TABS = new Set([
+  "param-editor",
+  "bullet-editor",
+  "speed-editor",
+  "depiction-editor",
+]);
+
+export function shouldKeepMainViewTabMounted(
+  tabValue: string,
+  isActive: boolean,
+  hasUnsaved: boolean,
+): boolean {
+  return isActive || KEEP_MOUNTED_MAIN_VIEW_TABS.has(tabValue) || hasUnsaved;
+}
 
 export function groupMainViewTabs(tabs: MainViewTabMeta[]): Array<{ id: MainViewTabGroupId; label: string; tabs: MainViewTabMeta[] }> {
   const byGroup = new Map<MainViewTabGroupId, MainViewTabMeta[]>();

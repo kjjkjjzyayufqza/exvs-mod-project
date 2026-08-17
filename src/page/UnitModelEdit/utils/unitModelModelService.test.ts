@@ -27,8 +27,10 @@ import {
   addUnitModelModel,
   importUnitModelStaticMesh,
   previewUnitModelModelReplacement,
+  previewUnitModelNumshbReplacement,
   removeUnitModelModel,
   replaceUnitModelModel,
+  replaceUnitModelNumshb,
   validateUnitModelSourceFolder,
 } from "./unitModelModelService";
 
@@ -250,6 +252,85 @@ describe("unitModelModelService", () => {
       modelRoot: "E:\\unit\\0",
       structureJsonPath: "E:\\unit\\0_structure.json",
     });
+  });
+
+  it("previews and commits NUMSHB-only replacement without texture container sync", async () => {
+    mocks.invokeMock
+      .mockResolvedValueOnce({
+        target: {
+          modelName: "alpha",
+          modelIndex: 0,
+          numdlbPath: "E:\\unit\\0\\models\\alpha\\alpha.numdlb",
+          numshbPath: "E:\\unit\\0\\models\\alpha\\alpha.numshb",
+          nusktbPath: null,
+          jnttblPath: null,
+          numatbPaths: [],
+          nuhlpbPath: null,
+        },
+        sourceNumshbPath: "E:\\src\\body.numshb",
+        targetNumshbPath: "E:\\unit\\0\\models\\alpha\\alpha.numshb",
+        meshObjects: {
+          source: [],
+          targetNumdlbEntries: [],
+          kept: [],
+          missingInSource: [],
+          newInSource: [],
+        },
+        skeleton: {
+          sourceInfluenceBones: [],
+          targetBoneNames: [],
+          matchingBoneNames: 0,
+          missingInTargetSkeleton: [],
+        },
+        stats: {
+          sourceObjectCount: 0,
+          sourceVertexCount: 0,
+          sourceTriangleCount: 0,
+        },
+        warnings: [],
+        blockers: [],
+      })
+      .mockResolvedValueOnce({
+        modelRoot: "E:\\unit\\0",
+        structureJsonPath: "E:\\unit\\0_structure.json",
+        modelCount: 1,
+        totalFiles: 7,
+        removedFiles: [],
+      });
+
+    await previewUnitModelNumshbReplacement(
+      "E:/unit/0",
+      "alpha",
+      "E:/src/body.numshb",
+      "E:/unit/0_structure.json",
+    );
+    await replaceUnitModelNumshb(
+      "E:/unit/0",
+      "alpha",
+      "E:/src/body.numshb",
+      "E:/unit/0_structure.json",
+    );
+
+    expect(mocks.invokeMock).toHaveBeenNthCalledWith(
+      1,
+      "preview_unit_model_numshb_replacement",
+      {
+        modelRoot: "E:\\unit\\0",
+        structureJsonPath: "E:\\unit\\0_structure.json",
+        targetModelName: "alpha",
+        sourceNumshbPath: "E:\\src\\body.numshb",
+      },
+    );
+    expect(mocks.invokeMock).toHaveBeenNthCalledWith(2, "replace_unit_model_numshb", {
+      modelRoot: "E:\\unit\\0",
+      structureJsonPath: "E:\\unit\\0_structure.json",
+      targetModelName: "alpha",
+      sourceNumshbPath: "E:\\src\\body.numshb",
+    });
+    expect(mocks.invokeMock).not.toHaveBeenCalledWith(
+      "sync_unit_model_texture_containers",
+      expect.anything(),
+    );
   });
 
   it("passes selected geometries and streams progress for FBX/DAE imports", async () => {

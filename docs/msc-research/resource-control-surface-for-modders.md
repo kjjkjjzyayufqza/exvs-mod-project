@@ -1,5 +1,11 @@
 # MSC 资源层 patch 指南：BD / step / boost / 射击 / 格斗该改哪些表
 
+> **Safety notice (2026-08-01):** parameter labels inherited from
+> `docs/command_mapping.md` are historical hypotheses and must not be treated as
+> editing truth. Resolve hashes through the current Rust pools and
+> `docs/param-evidence-registry.tsv`; unresolved fields are intentionally not
+> assigned gameplay meanings.
+
 这页回答一个模组开发里很实际的问题：
 
 ```text

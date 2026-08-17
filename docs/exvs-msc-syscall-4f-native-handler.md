@@ -435,6 +435,10 @@
   - 单 entry 的 release / stop / end 生命周期动作
 - 脚本侧证据：
   - `sys_4F(0x12, global682);`
+- 脚本侧补充（2026-08-17，Rebellion N 特射墙黏照射）：
+  - 开火若在 slot `0x5`，必须 `sys_4F(0x12, 0x5)`，只 release ammo 槽 `global681` 停不掉。
+  - 照射已经打在墙上之后，**只 `0x12` 往往还留着活梁**。回收段真正收口要再加 `sys_4E(0)`，而且必须在任何 yaw / 切段之前。
+  - 详细顺序与失败案例见 `docs/msc-research/alt2-gerobi-stop-and-followup.md`。
 
 ### `subcmd 0x13`
 

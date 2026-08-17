@@ -2,25 +2,16 @@ import { exists, readDir } from "@tauri-apps/plugin-fs";
 
 import { toWindowsPath } from "./unitModelRepackService";
 
-async function readModelNameFromDir(modelDir: string): Promise<string | null> {
-  try {
-    const entries = await readDir(modelDir);
-    for (const entry of entries) {
-      if (entry.isDirectory || !entry.name) continue;
-      const lower = entry.name.toLowerCase();
-      if (!lower.endsWith(".numdlb")) continue;
-      const stem = entry.name.slice(0, -".numdlb".length);
-      return stem.length > 0 ? stem : null;
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
 /**
- * List model identities found under `{modelRoot}/models/*` on disk.
- * Uses the `.numdlb` stem when present; otherwise falls back to the folder name.
+ * List model folder identities under `{modelRoot}/models/*` on disk.
+ *
+ * Uses the **directory name** (not the `.numdlb` stem). SHL `folder_index` and
+ * structure-JSON model groups key off the `models/<folder>/` segment; numdlb
+ * basenames can differ after renames (e.g. folder `015gndmuc_…_body_normal`
+ * with `026gnbelt_….numdlb` inside) and must not redefine slot order.
+ *
+ * Order is filesystem enumeration order and is only a fallback when structure
+ * JSON is unavailable — never the authoritative SHL folder index order.
  */
 export async function listUnitModelDiskModelNames(modelRoot: string): Promise<string[]> {
   const root = toWindowsPath(modelRoot).replace(/\\+$/, "");
@@ -33,8 +24,7 @@ export async function listUnitModelDiskModelNames(modelRoot: string): Promise<st
 
   for (const entry of entries) {
     if (!entry.isDirectory || !entry.name) continue;
-    const modelDir = `${modelsDir}\\${entry.name}`;
-    const modelName = (await readModelNameFromDir(modelDir)) ?? entry.name;
+    const modelName = entry.name;
     const key = modelName.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);

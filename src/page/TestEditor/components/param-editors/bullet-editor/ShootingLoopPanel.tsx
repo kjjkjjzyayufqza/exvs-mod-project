@@ -26,8 +26,9 @@ export function ShootingLoopPanel({ result }: ShootingLoopPanelProps) {
   if (!result) {
     return (
       <div className="rounded-md border bg-card p-3 text-[11px] text-muted-foreground shadow-sm">
-        Load an armsparam and pick an arms entry to enable the manual shooting
-        loop workbench.
+        Arms-driven shooting-loop simulation is disabled: the former action
+        timing and shots-per-trigger field names were disproved by native
+        armsparam analysis.
       </div>
     );
   }

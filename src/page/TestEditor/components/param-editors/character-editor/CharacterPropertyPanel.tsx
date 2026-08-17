@@ -5,7 +5,7 @@ import type { TypedParamFile } from "../../param-editor/typedParamTypes";
 interface CharacterPropertyPanelProps {
   entry: TypedParamEntry;
   fieldSpecs?: TypedParamFile["fieldSpecs"];
-  onFieldChange: (key: string, value: number | string) => void;
+  onFieldChange: (key: string, value: number) => void;
 }
 
 const CHARACTER_GROUPS: Record<string, string[]> = {

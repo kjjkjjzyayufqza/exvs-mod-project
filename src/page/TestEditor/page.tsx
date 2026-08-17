@@ -26,7 +26,7 @@ import {
 import { useTestEditorPageActive } from "./hooks/useTestEditorPageActive";
 import { useTestEditorFolderWatch } from "./hooks/useTestEditorFolderWatch";
 import { TestEditorWorkspaceArea } from "./components/TestEditorWorkspaceArea";
-import { useConfigStore } from "@/store/configStore";
+import { TEST_EDITOR_FOLDER_STORE_KEY, useConfigStore } from "@/store/configStore";
 import { TestEditorToolbar } from "./components/TestEditorToolbar";
 import ListeningRepackDialog from "./components/ListeningRepackDialog";
 import { resolveMscWorkspaceFolderPathForSelection } from "./utils/mscWorkspaceUtils";
@@ -78,6 +78,7 @@ import type { NumatbEditorWindowSession } from "@/components/ssbh-model-preview/
 import {
   buildNumatbModalBundleFromLoadedFile,
   cloneNumatbBundle,
+  detectNumatbProfileFromMatl,
   detectNumatbProfileFromPath,
   type NumatbModalBundle,
 } from "@/components/ssbh-model-preview/numatbEditorUtils";
@@ -101,7 +102,6 @@ import {
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 
 const WATCH_COMMAND = "watch_folder";
-const TEST_EDITOR_FOLDER_STORE_KEY = "testEditorFolder";
 
 const TestEditorPage = () => {
   const store = useConfigStore((s) => s.store);
@@ -289,7 +289,16 @@ const TestEditorPage = () => {
   );
   const selectedNode = useMemo(() => findNode(treeData, selectedId), [treeData, selectedId]);
   const [mscWorkspaceFolderPath, setMscWorkspaceFolderPath] = useState<string | null>(null);
+  /** Last tree-resolved MSC pack path. Used so a manual Pick folder is not overwritten until selection moves. */
+  const lastSelectionMscPathRef = useRef<string | null>(null);
+  /** True after the user picks a folder in MSC Workspace; cleared when tree selection resolves a different pack. */
+  const mscFolderManualPickRef = useRef(false);
   const dirtyPackList = useMemo(() => Array.from(dirtyPacks.values()), [dirtyPacks]);
+
+  const handleMscWorkspaceFolderChange = useCallback((path: string | null) => {
+    mscFolderManualPickRef.current = Boolean(path);
+    setMscWorkspaceFolderPath(path);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -300,11 +309,25 @@ const TestEditorPage = () => {
           selectedNode,
           dirnameOfFile: dirname,
         });
-        if (!cancelled) {
-          setMscWorkspaceFolderPath(next);
+        if (cancelled) return;
+
+        if (next) {
+          const prevSelection = lastSelectionMscPathRef.current;
+          lastSelectionMscPathRef.current = next;
+          // Follow tree selection when it first resolves or moves to another MSC pack.
+          // Do not clobber a manual Pick folder while selection stays on the same pack.
+          if (!mscFolderManualPickRef.current || next !== prevSelection) {
+            mscFolderManualPickRef.current = false;
+            setMscWorkspaceFolderPath(next);
+          }
+          return;
         }
+
+        lastSelectionMscPathRef.current = null;
+        // Selection has no MSC pack: keep the last folder (manual or previous) instead of
+        // clearing back to empty / parent-only state.
       } catch {
-        if (!cancelled) setMscWorkspaceFolderPath(null);
+        // Keep existing path on transient resolve errors.
       }
     };
     void sync();
@@ -1242,11 +1265,11 @@ const TestEditorPage = () => {
       }
       const id = crypto.randomUUID();
       const nextZ = ++numatbZIndexRef.current;
-      const primaryProfile = detectNumatbProfileFromPath(filePath);
+      const pathProfile = detectNumatbProfileFromPath(filePath);
       const newSession: NumatbEditorWindowSession = {
         id,
         filePath,
-        primaryProfile,
+        primaryProfile: pathProfile,
         loading: true,
         saving: false,
         loadError: null,
@@ -1257,7 +1280,9 @@ const TestEditorPage = () => {
       };
       void ssbhTemplateReadNumatb(filePath)
         .then((data) => {
-          const bundle = buildNumatbModalBundleFromLoadedFile(data, primaryProfile);
+          // Content wins: any non-empty shader_label → nust, else maya.
+          const contentProfile = detectNumatbProfileFromMatl(data);
+          const bundle = buildNumatbModalBundleFromLoadedFile(data, contentProfile);
           const base = cloneNumatbBundle(bundle);
           const draft = cloneNumatbBundle(bundle);
           setNumatbSessions((p) =>
@@ -1265,6 +1290,7 @@ const TestEditorPage = () => {
               s.id === id
                 ? {
                     ...s,
+                    primaryProfile: contentProfile,
                     loading: false,
                     loadError: null,
                     baseData: base,
@@ -1343,18 +1369,17 @@ const TestEditorPage = () => {
 
   const reloadNumatbSession = useCallback(async (sessionId: string) => {
     let fp = "";
-    let profile: NumatbProfileKind = "nust";
     setNumatbSessions((prev) => {
       const s = prev.find((x) => x.id === sessionId);
       if (!s) return prev;
       fp = s.filePath;
-      profile = s.primaryProfile;
       return prev.map((x) => (x.id === sessionId ? { ...x, loading: true, loadError: null } : x));
     });
     if (!fp) return;
     try {
       const data = await ssbhTemplateReadNumatb(fp);
-      const bundle = buildNumatbModalBundleFromLoadedFile(data, profile);
+      const contentProfile = detectNumatbProfileFromMatl(data);
+      const bundle = buildNumatbModalBundleFromLoadedFile(data, contentProfile);
       const base = cloneNumatbBundle(bundle);
       const draft = cloneNumatbBundle(bundle);
       setNumatbSessions((prev) =>
@@ -1362,6 +1387,7 @@ const TestEditorPage = () => {
           s.id === sessionId
             ? {
                 ...s,
+                primaryProfile: contentProfile,
                 loading: false,
                 loadError: null,
                 baseData: base,
@@ -1527,7 +1553,7 @@ const TestEditorPage = () => {
           viewOptions={viewOptions}
           onViewOptionsChange={setViewOptions}
           mscWorkspaceFolderPath={mscWorkspaceFolderPath}
-          onMscWorkspaceFolderChange={setMscWorkspaceFolderPath}
+          onMscWorkspaceFolderChange={handleMscWorkspaceFolderChange}
           onUnsavedChanges={setHasUnsavedChanges}
           onRevealTreeFolder={revealInTreeByPath}
           selectedNode={selectedNode}

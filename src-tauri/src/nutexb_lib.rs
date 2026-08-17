@@ -34,6 +34,66 @@ pub struct NutexbInfo {
     pub is_swizzled: bool,
 }
 
+/// Size of the trailing footer, which differs between the two nutexb versions in use.
+const NUTEXB_FOOTER_SIZE_V11: u64 = 0x86C;
+const NUTEXB_FOOTER_SIZE_V12: u64 = 112;
+/// Both versions open the footer with this magic and follow it with a 0x40-byte,
+/// null-terminated texture name.
+const NUTEXB_FOOTER_MAGIC: &[u8; 4] = b"46XT";
+const NUTEXB_NAME_SIZE: usize = 0x40;
+
+/// The texture name stored in the nutexb footer, read without touching the image data.
+///
+/// This is the name the game resolves numatb texture references against: fhm2d records
+/// carry no names of their own, so neither the file name nor the structure entry has any
+/// say in it. Reading only the footer keeps package-wide validation cheap — the payload of
+/// a single 4K texture can be several megabytes and a unit package holds dozens.
+pub fn read_nutexb_name(path: &Path) -> Result<String, String> {
+    use std::io::{Read, Seek, SeekFrom};
+
+    let mut file =
+        File::open(path).map_err(|e| format!("Failed to open nutexb {}: {e}", path.display()))?;
+    let size = file
+        .seek(SeekFrom::End(-4))
+        .map_err(|e| format!("Failed to seek nutexb {}: {e}", path.display()))?
+        + 4;
+    let mut version = [0u8; 4];
+    file.read_exact(&mut version)
+        .map_err(|e| format!("Failed to read nutexb version {}: {e}", path.display()))?;
+    let major = u16::from_le_bytes([version[0], version[1]]);
+    let minor = u16::from_le_bytes([version[2], version[3]]);
+
+    let footer_size = if (major, minor) == (1, 1) {
+        NUTEXB_FOOTER_SIZE_V11
+    } else {
+        NUTEXB_FOOTER_SIZE_V12
+    };
+    let footer_start = size.checked_sub(footer_size).ok_or_else(|| {
+        format!(
+            "Nutexb {} is too small for a v{major}.{minor} footer ({size} bytes).",
+            path.display()
+        )
+    })?;
+
+    file.seek(SeekFrom::Start(footer_start))
+        .map_err(|e| format!("Failed to seek nutexb footer {}: {e}", path.display()))?;
+    let mut head = [0u8; 4 + NUTEXB_NAME_SIZE];
+    file.read_exact(&mut head)
+        .map_err(|e| format!("Failed to read nutexb footer {}: {e}", path.display()))?;
+    if &head[..4] != NUTEXB_FOOTER_MAGIC {
+        return Err(format!(
+            "Nutexb {} has no footer magic at 0x{footer_start:x}.",
+            path.display()
+        ));
+    }
+    let name = &head[4..];
+    let end = name
+        .iter()
+        .position(|b| *b == 0)
+        .unwrap_or(NUTEXB_NAME_SIZE);
+    Ok(String::from_utf8_lossy(&name[..end]).into_owned())
+}
+
 /// Full-file CRC32 (IEEE) over raw .nutexb bytes; used as part of the preview cache version key.
 pub fn nutexb_file_crc32(bytes: &[u8]) -> u32 {
     let mut h = Crc32Hasher::new();

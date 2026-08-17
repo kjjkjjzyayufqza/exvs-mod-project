@@ -7,12 +7,16 @@ Apply `.nutexb` textures to SceneEdit models with the same end-to-end behavior a
 ## Tasks
 
 - [x] Confirm architecture decisions with user via grill flow.
-- [ ] Reuse TestEditor texture decode/caching pipeline in SceneEdit.
-- [ ] Ensure memory-stage bundles use TestEditor-compatible source metadata (`sourceKind: "memory"`, `sourceSessionId`).
-- [ ] Ensure disk-stage bundles continue to work with the unified texture pipeline.
-- [ ] Add SceneEdit texture decode progress UI (`Decoding unique textures x/y`).
-- [ ] Verify duplicate texture cache hits across models.
-- [ ] Run `cargo check` and frontend lint checks on changed files.
+- [x] Reuse TestEditor texture decode/caching pipeline in SceneEdit.
+- [x] Ensure memory-stage bundles use TestEditor-compatible source metadata (`sourceKind: "memory"`, `sourceSessionId`).
+- [x] Ensure disk-stage bundles continue to work with the unified texture pipeline.
+- [x] Add SceneEdit texture decode progress UI (`Decoding unique textures x/y`).
+- [x] Verify duplicate texture cache hits across models.
+- [x] Run `cargo check` and frontend lint checks on changed files.
+
+Delivered in commits 3f67781, a91209a, f117868: pipeline lives in
+`src/page/SceneEdit/hooks/useSceneTextureLoader.ts` with memory/disk IPC
+routing, `versionId`-based dedup, and `SceneViewportOverlay` decode progress.
 
 ## 2026-05-31 Texture Folder Regression
 

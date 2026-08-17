@@ -112,13 +112,38 @@ func_18()
 ...
 func_877()
 func_2(0x27786a84, 0x18680, 0x36)
-func_2(0xf32aa1ba, 0x181c0, 0x34)
-func_2(0x900ab393, 0x1827c, 0x35)
+func_2(0xf32aa1ba, 0x181c0, 0x34)   // victory pose 1 hash + state slot 0x34
+func_2(0x900ab393, 0x1827c, 0x35)   // defeat pose 1 hash + state slot 0x35
 ```
 
 这里 `func_877` 是机体表现层真正入口：激活 base shell、设置 `global20/global170`、调用 `func_887` 应用默认 loadout、调用 `func_1042` 注册 action 表、并设置 `global1 = func_878` 作为每帧维护函数。
 
-`func_2` 是 fallback 注册工具：如果某个 action hash 没有 `0x10002` 注册，就写入脚本 offset；如果某个 slot callback 没有，就继承 slot `0x1` 的 callback。Notion 里提到 `sys_1(0x10001,0x2,0x34,...)` 和胜利 pose 有关，当前 `func_1044` 也确实对 slot `0x34` 做条件注册。
+`func_2` 是 fallback 注册工具：如果某个 action hash 没有 `0x10002` 注册，就写入脚本 offset；如果某个 slot callback 没有，就继承 slot `0x1` 的 callback。
+
+### 结果 pose（胜利 / 失败）action hash
+
+**Settled identity**（`wing_gundam_zero_rebellion_msc` / 同类 `2.c` 注册表；与 `func_241` 写表一致）：
+
+| action hash | `func_241` / 入口 callback | state slot (`func_69`) | 玩家语义 |
+|---|---|---|---|
+| `0xf32aa1ba` | `func_480` | `0x34` | **胜利 pose 1** |
+| `0x900ab393` | `func_482` | `0x35` | **失败 pose 1** |
+
+对应启动/注册形态：
+
+```c
+func_241(0xf32aa1ba, func_480); // victory pose 1
+func_241(0x900ab393, func_482); // defeat pose 1
+// + func_2(hash, entry, slot) 绑定同一 hash 与 state slot
+// + sys_1(0x10001, 0x2, 0x34, tickFn) / 0x35 注册槽上每帧 tick
+```
+
+结构要点（改主射/pose 时别接错总线）：
+
+- 结果 pose **不是** 主射 `ACTION_A_SHOT` 链；hash 也不同。
+- 入口 callback（`func_480` / `func_482`）会做权限/准备，再 `func_69(0x34|0x35)` 装 state tick，并 `callFunc3(...)` 持续 `func_72`。
+- 槽 `0x34` 的 tick 在部分机体上按 `func_186()` 分叉（例如 `func_871` vs `func_870`）；**hash→`func_480` 的身份是胜利 pose 1**，与槽内 tick 变体无关。
+- 不要把 `func_241(主射hash, func_871)` 当成“播胜利 pose”：`func_871` 是槽 `0x34` 的 tick，不是 `0x10002` 入口形态。
 
 ## 每帧主循环
 
@@ -248,6 +273,10 @@ func_1042
 | `0x193fe550` | `ACTION_BC_SPECIAL_MELEE` | 特格 |
 | `0x178d1109` | `ACTION_B_MELEE` | 格斗 |
 | `0x8ae55bb1` | `ACTION_ABC_FINAL_ATTACK` | 觉醒技 |
+| `0xf32aa1ba` | `func_480`（→ state `0x34`） | **胜利 pose 1** |
+| `0x900ab393` | `func_482`（→ state `0x35`） | **失败 pose 1** |
+
+注：部分机体主射 hash 不是 `0xf48d2d49`（例如 wing zero rebellion 样本为 `0x7cd11119` → `ACTION_A_SHOT`）。结果 pose 两枚 hash 在同类 `2.c` 注册表中稳定出现。
 
 OverBoost wiki 的玩家侧按键能帮助命名：副射是射击+格斗，特射是射击+跳，特格是格斗+跳；但具体 hash 必须以 `func_1043` 和当前 ACTION wrapper 为准。
 
@@ -320,18 +349,29 @@ if (func_309(global20, 0x834))
 
 ### `func_586/587`：射击 / 多阶段武装 runtime
 
-配置槽：
+配置槽分两套，不要混：
+
+旧版 / 正常班（`func_593`，副射/特射常见）：
 
 ```text
-global676  可选 start callback
-global677  main motion callback
-global678  branch callback
-global679  finish / return callback
+global676  start
+global677  shoot（有弹）
+global678  no_ammo（没子弹；不是 cancel）
+global679  end
+global681  ammo slot
+```
+
+新版 / 简单主射（`func_587`）：
+
+```text
+global677  motion / startup
 global680  fire callback
 global681  ammo slot
 ```
 
-driver：
+`func_593` 四槽的完整证据见 [func593-vanilla-ranged-slots.md](./func593-vanilla-ranged-slots.md)。
+
+driver（`func_587` 简单主射）：
 
 ```text
 func_587
@@ -501,9 +541,11 @@ func_888(arg0)
 
 Notion 解释：
 
-- `sys_4B(0x2, model, bone, resource, target)` 接模型；`bone` 是目标模型自身
-  `.jnttbl` 的 bone / joint hash，不能直接复用其他模型的挂点 hash。
-- `sys_4B(0x3)` 解除全部装备。
+- `sys_4B(0x2, modelId, boneHash, actionHash[, parentModel])` 接模型。
+  **`boneHash` 取 body `.jnttbl` 的 `boneHash` 字段，不是 nusktb 顺序下标**
+  （误用 index 会挂不上；例：`ATAMA` 用 `0xE` 而非 `0x23`）。
+  完整规则与 Rebellion 实机例见 `docs/exvs-msc-syscall-4b-notes.md`。
+- `sys_4B(0x3)` 解除全部装备；`sys_4B(0x3, modelId)` 只卸一个模型。
 - `sys_47(0x10/0x11/0x12)` 对模型/bone 做 rotate/translate/scale。
 
 结论：`func_887/888` 是 shell/loadout 层，但它必须和 `global170` 的 motion group 一起理解，否则只看到“挂组件”，看不到“为什么某些格斗切另一组动作”。

@@ -198,6 +198,16 @@ action-local segment output > action setup > runtime helper > dispatch > loop > 
   func_44/52 -> sys_0(0x10002,0x2,activeActionHash) -> sys_2(... callback)
 ```
 
+**结果 pose（稳定 hash，勿与主射混用）：**
+
+| hash | 注册 | 语义 |
+|---|---|---|
+| `0xf32aa1ba` | `func_241(0xf32aa1ba, func_480)` | **胜利 pose 1**（`func_480` → state `0x34`） |
+| `0x900ab393` | `func_241(0x900ab393, func_482)` | **失败 pose 1**（`func_482` → state `0x35`） |
+
+详见 `docs/msc-research/2c-call-chain-runtime-flow.md` 与
+`docs/exvs-msc-input-action-weapon-pipeline.md`（Result poses 节）。
+
 `func_44 2.c:2615-2668` 做的是 action commit：
 
 ```text

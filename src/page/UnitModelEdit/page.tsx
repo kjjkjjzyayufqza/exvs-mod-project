@@ -20,6 +20,7 @@ import {
   type DaeExportTarget,
 } from "@/page/SceneEdit/components/DaeExportDialog";
 import {
+  buildUnitModelDiskExportDialogState,
   buildUnitModelExportDialogState,
   exportUnitModelsAsFbx,
   filterUnitModelInstancesByLabel,
@@ -261,6 +262,8 @@ function UnitModelEditWorkspace({
     return set;
   }, [editors.editingPaths, toRelKey]);
 
+  // SHL `folder_index` is the DFS order of model-group folders in `_structure.json`
+  // (not Windows/models directory enumeration order).
   const structureModelNames = useMemo(() => {
     if (structureJson == null) return [];
     try {
@@ -274,6 +277,7 @@ function UnitModelEditWorkspace({
 
   useEffect(() => {
     let cancelled = false;
+    // Disk list is only for models not yet registered in structure JSON.
     if (!workspace.activeRoot) {
       setDiskModelNames([]);
       return;
@@ -290,10 +294,14 @@ function UnitModelEditWorkspace({
     };
   }, [workspace.activeRoot, structureJson]);
 
-  // Structure order defines `folder_index`; append disk-only models so SHL can target new folders.
+  // Authoritative order: structure JSON. Append disk-only folder names (same identity
+  // key: models/<folder>) so newly dropped folders can still be selected in SHL.
   const shlModelFolderNames = useMemo(() => {
-    const merged = mergeShlModelFolderNames(structureModelNames, diskModelNames);
-    return merged.length > 0 ? merged : undefined;
+    if (structureModelNames.length > 0) {
+      return mergeShlModelFolderNames(structureModelNames, diskModelNames);
+    }
+    // No structure model groups yet — best-effort disk folder names only.
+    return diskModelNames.length > 0 ? diskModelNames : undefined;
   }, [structureModelNames, diskModelNames]);
 
   const handleOpenEditor = useCallback(
@@ -310,7 +318,12 @@ function UnitModelEditWorkspace({
   const handleRevealNode = useCallback(
     (node: UnitModelTreeNode) => {
       if (!workspace.structurePath || !node.fileUrl) return;
-      void revealItemInDir(resolveUnitModelNodeAbsPath(workspace.structurePath, node.fileUrl));
+      const abs = resolveUnitModelNodeAbsPath(workspace.structurePath, node.fileUrl);
+      void revealItemInDir(abs).catch((error) => {
+        toast.error("Failed to reveal in Explorer", {
+          description: `${abs}: ${String(error)}`,
+        });
+      });
     },
     [workspace.structurePath],
   );
@@ -427,14 +440,34 @@ function UnitModelEditWorkspace({
 
   const openSingleModelExportDialog = useCallback(
     (modelLabel: string) => {
+      // Match by models/<folder> identity (structure / Model Manager), not only
+      // the preview displayLabel (.numdlb stem can differ after renames).
       const filtered = filterUnitModelInstancesByLabel(preview.previewInstances, modelLabel);
-      if (filtered.length === 0) {
-        toast.error(`Model "${modelLabel}" is not loaded in the preview`);
+      if (filtered.length > 0) {
+        openDaeExportDialogForInstances(filtered);
         return;
       }
-      openDaeExportDialogForInstances(filtered);
+
+      // Fallback: export from disk even when this model is not currently loaded
+      // in the 3D preview (e.g. load cap, failed mesh, or label/stem mismatch).
+      void (async () => {
+        const diskState = workspace.activeRoot
+          ? buildUnitModelDiskExportDialogState(workspace.activeRoot, modelLabel)
+          : null;
+        const diskPath = diskState?.targets[0]?.rootPath;
+        if (diskState && diskPath && (await exists(diskPath))) {
+          setDaeExportDialog({
+            open: true,
+            targets: diskState.targets,
+          });
+          return;
+        }
+        toast.error(
+          `Model "${modelLabel}" is not available for export (not in preview and no disk folder)`,
+        );
+      })();
     },
-    [openDaeExportDialogForInstances, preview.previewInstances],
+    [openDaeExportDialogForInstances, preview.previewInstances, workspace.activeRoot],
   );
 
   const handleDaeExport = useCallback(
@@ -681,7 +714,11 @@ export default function UnitModelEdit() {
   const previewSuspended = !isPageActive || modelImportViewportSuspend;
 
   return (
-    <SsbhModelPreviewProvider workspaceRoot={unitRoot} previewSuspended={previewSuspended}>
+    <SsbhModelPreviewProvider
+      workspaceRoot={unitRoot}
+      previewSuspended={previewSuspended}
+      defaultLightingPreset="softCharacter"
+    >
       <TooltipProvider>
         <div className="flex h-full min-h-0 min-w-0 flex-col bg-background">
           <UnitModelEditWorkspace

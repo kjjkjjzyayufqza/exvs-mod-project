@@ -119,6 +119,42 @@ describe("fhm2dNameMapping", () => {
     expect(entry?.character?.characterId).toBe(1005001);
   });
 
+  it("maps OB-only ν Gundam HWS motion 0x006044D2 from the shipped dictionary", () => {
+    const entry = findFhm2dNameMapping("0x006044D2", { routeId: "unit.motion" });
+
+    expect(entry?.name).toBe("017gyakch_006newhws_001");
+    expect(entry?.routeId).toBe("unit.motion");
+    expect(entry?.routePrefix).toBe("003motion");
+    expect(entry?.character?.characterId).toBe(17006001);
+    expect(entry?.name).not.toBe("000common_000common_001");
+  });
+
+  it("maps other 7-hex ob_unit hashes that the 8-hex normalizer used to drop", () => {
+    const param = findFhm2dNameMapping("0x0031807C", { routeId: "unit.param" });
+    const rgnjla = findFhm2dNameMapping("0x00DB34FD", { routeId: "unit.model" });
+    const domClone = findFhm2dNameMapping("0x00BC54B9", { routeId: "unit.model" });
+    const acguy = findFhm2dNameMapping("0x00ACD4C4", { routeId: "unit.model" });
+    const gnaocm = findFhm2dNameMapping("0x003CDD4D", { routeId: "unit.param" });
+    const unknownParam = findFhm2dNameMapping("0x00FF1FC0", { routeId: "unit.param" });
+    const phantom = findFhm2dNameMapping("0x00D6A795", { routeId: "unit.motion" });
+
+    expect(param?.name).toBe("756gndmnt_002jststb_001");
+    expect(param?.character?.characterId).toBe(756002001);
+    expect(param?.name).not.toBe("ob_0031807c");
+    expect(rgnjla?.name).toBe("749orphn2_005rgnjla_001");
+    expect(rgnjla?.character?.characterId).toBe(749005001);
+    expect(domClone?.name).toBe("001gundam_017dom000_001_00bc54b9");
+    expect(domClone?.character?.characterId).toBe(501705001);
+    expect(acguy?.name).toBe("701gundam_007acguy0_001");
+    expect(acguy?.character?.characterId).toBe(701007001);
+    expect(gnaocm?.name).toBe("733gndage_017gnaocm_001");
+    expect(gnaocm?.character?.characterId).toBe(733017001);
+    expect(unknownParam?.name).toBe("unit_505707001");
+    expect(unknownParam?.character?.characterId).toBe(505707001);
+    expect(phantom?.name).toBe("023crosgn_005phantm_001");
+    expect(phantom?.character?.characterId).toBe(23005001);
+  });
+
   it("maps real OB dplcache hashes from internal FHM2D names", () => {
     const entry = findFhm2dNameMapping("0x002AB482", { routePrefix: "009gui" });
 
@@ -131,8 +167,8 @@ describe("fhm2dNameMapping", () => {
     const entry = findFhm2dNameMapping("0x00DB34FD", { routePrefix: "002chara" });
 
     expect(entry?.name).toBe("749orphn2_005rgnjla_001");
-    expect(entry?.confidence).toBe("ob-dplcache-internal");
     expect(entry?.packagePath).toBe("002chara/749orphn2_005rgnjla_001");
+    expect(entry?.character?.characterId).toBe(749005001);
   });
 
   it("keeps low-confidence fallback entries for real OB hashes without internal names", () => {

@@ -6,11 +6,6 @@ export interface EffectFolderHash {
   hex: string;
 }
 
-export interface EfxbnIdPair {
-  flag: number;
-  id: number;
-}
-
 export interface EfxbnControlLookupEntry {
   index: number;
   keyF32Bits: number;
@@ -28,38 +23,164 @@ export interface EfxbnControlReferenceSummary {
   lookupIndex: number;
 }
 
-export interface EfxbnMetaConfigHeaderSummary {
-  number: number;
-  unkFloatA: number;
-  unkIntA: number;
-  unkFloatB: number;
-  unkIntB: number;
-  unkBytes12: number[];
-  unkFloats4: [number, number, number, number];
-}
-
-export interface EfxbnMetaParsedSummary {
-  unkConfigInfo: number[];
-  configHeader: EfxbnMetaConfigHeaderSummary;
-  idTablePairs: EfxbnIdPair[];
-  controlReferences: EfxbnControlReferenceSummary[];
-  modelId: number;
-  modelHash: EffectFolderHash;
-  animationId: number;
-  animationHash: EffectFolderHash;
-  unk32: number;
-  unkConfigInfo2: number[];
-}
-
 export interface EfxbnEffectSummary {
   index: number;
+  /** Tree depth. 0 is a root emitter; children carry the parent depth plus one. */
+  level: number;
+  /** Number of valid entries in `childIndexArray`. */
+  childIndexSize: number;
+  /** Block indices spawned by this block. Unused slots are -1. */
+  childIndexArray: [number, number, number, number, number, number, number, number];
+  /** First child index, retained for callers that predate `childIndexArray`. */
+  referencedEffectIndex: number;
+  effectType: number;
+  lifeTimeBase: number;
+  lifeTimeRandom: number;
+  intervalBase: number;
+  intervalRandom: number;
+  numEmit: number;
+  actionFlags: number;
+  spawnFormType: number;
+  spawnFormLength: [number, number, number, number];
+  speedRandom: [number, number, number, number];
+  sizeBase: [number, number, number, number];
+  sizeRandom: [number, number, number, number];
+  rotationBase: [number, number, number, number];
+  rotationRandom: [number, number, number, number];
+  rotationSpeed: [number, number, number, number];
+  internalElementDataIndex: number;
+  enableDataFlag: number;
+  /** Model resource handle. Mirrors `modelId`/`modelHash`. */
+  nudHandle: number;
+  /** Texture handle bound directly to the block, independent of the parameter slots. */
+  textureHandle: number;
+  /** Reflected as `pad01[2]`; carried so a rebuilt file stays byte-identical. */
+  pad01: [number, number];
+  /** Primary and pass-2 color-map parameter slots. */
+  colorTextureParameterIndex: [number, number];
+  /** Primary and pass-2 UV-offset parameter slots. */
+  uvTextureParameterIndex: [number, number];
+  centerPivot: [number, number];
+  deleteSettings: number;
+  fadeTimeBase: number;
+  cullingType: number;
+  zWriteEnable: number;
+  zTestEnable: number;
+  blendState: number;
+  drawRepositoryIndex: number;
+  instanceAmountType: number;
+  drawAmountIndex: number;
+  enableSoftParticle: number;
+  positionOffset: [number, number, number, number];
+  delayEmitTimeBase: number;
+  emitAreaType: number;
+  enableZSort: number;
+  deleteEffectId: number;
+  deleteEndScale: [number, number, number, number];
+  lightAttenuationRadius: number;
+  lightingFlags: number;
+  normalMapHash: number;
+  worldWindApplyRate: number;
+  stripSegmentInterval: number;
+  /** Reflected as `stripSegmentLength_NotUse`; declared by the engine and never read. */
+  stripSegmentLengthNotUse: number;
+  stripSegmentLife: number;
+  /** Reflected as `stripSegmentNum_NotUse`; declared and never read. */
+  stripSegmentNumNotUse: number;
+  stripSegmentSplitNum: number;
+  drawerId: number;
+  worldWindApplyRateRandom: number;
+  softParticleRange: number;
+  cameraFadeRange: number;
+  extraFlags: number;
+  noiseDirectionMaxRot: number;
+  noiseDirectionAreaRange: number;
+  blurStartColor: [number, number, number, number];
+  blurEndColor: [number, number, number, number];
+  blurEnableRange: number;
+  blurFadePower: number;
+  lightType: number;
+  lightBaseRadius: number;
+  rotationSpeedRandom: [number, number, number, number];
+  cameraOffset: number;
+  postEffectType: number;
+  postEffectBlendRate: number;
+  stripTailAlphaRate: number;
+  stripHeadAlphaRate: number;
+  emitInterpolateDistance: number;
+  noiseRotatePosOffset: number;
+  zSortOffset: number;
+  specialShaderType: number;
+  reflectionPower: number;
+  pass2BlendType: number;
+  animationDelayFrame: number;
+  animationLoopStartFrame: number;
+  animationLoopEndFrame: number;
+  animationDeleteFrame: number;
+  animationSpeedRate: number;
+  animationBlendDeleteFrame: number;
+  emitterLodType: number;
+  animationStartFrame: number;
+  boundingSphereInfo: [number, number, number, number];
+  postEffectShapeRadius: number;
+  worldWaterApplyRate: number;
+  numEmitCountRandom: number;
+  depthEmissionRange: number;
+  depthEmissionPower: number;
+  highlightPower: number;
+  emitInterpolateType: number;
+  meshEmitterIndex: number;
+  meshEmitterCount: number;
+  fieldEffectType: number;
+  fieldEffectPower: number;
+  fieldEffectInterval: number;
+  fieldEffectAngle: number;
+  fieldEffectFrequency: number;
+  fieldEffectOffset: number;
+  fieldEffectRecieveRate: number;
+  fieldEffectExtraValue1: number;
   modelId: number;
   modelHash: EffectFolderHash;
   animationId: number;
   animationHash: EffectFolderHash;
-  idTable: EfxbnIdPair[];
   controlReferences: EfxbnControlReferenceSummary[];
-  metaParsed: EfxbnMetaParsedSummary;
+  /** `reserve_area[31]` at reflected offset 756; carried verbatim for the byte-faithful writer. */
+  reserveArea: number[];
+  /**
+   * Loader-derived values from `sub_140146590`. Anything that renders or simulates
+   * should read these; the sibling fields keep the authored record for round-tripping.
+   */
+  runtime?: EfxbnRuntimeNormalization;
+}
+
+export interface EfxbnRuntimeNormalization {
+  /** Type-9 wrappers adopt a type derived from their first child. */
+  elementType: number;
+  actionFlags: number;
+  deleteSettings: number;
+  /** Derived from `blendState` and `enableSoftParticle`, never read from the file. */
+  zWriteEnable: number;
+  softParticleRange: number;
+  stripSegmentLife: number;
+  stripTailAlphaRate: number;
+  stripHeadAlphaRate: number;
+  internalElementDataIndex: number;
+  drawScheme: EfxbnDrawScheme;
+}
+
+/**
+ * The runtime draw-scheme flag word at element `+0x390`, synthesized by `sub_1401470F0` and
+ * consumed by `sub_140188E30` to pick the pixel-shader variant. Never stored in the file.
+ */
+export interface EfxbnDrawScheme {
+  /** Every bit the EFXBN alone determines. Zero for blocks the loader never enables. */
+  flag: number;
+  /**
+   * The multi-UV group, which applies only when the block's model mesh carries two or more
+   * vertex attribute streams of type 17. The backend has no mesh, so it reports the group
+   * separately; OR it into `flag` once the mesh is known.
+   */
+  meshMultiUvFlag: number;
 }
 
 export interface EfxbnModelControlSummary {
@@ -114,20 +235,15 @@ export interface EfxbnSummary {
   fileSize: number;
   actualSize: number;
   effectCount: number;
-  controlConfigRegionParam: number;
+  /** Number of `(time, value)` curve keys stored after the effect blocks. */
+  curveKeyCount: number;
   controlLookupRegionOffset: number;
   controlLookupRegionSize: number;
   controlLookupRegionEnd: number;
-  controlBlockSize: number | null;
-  controlRemainderSize: number;
   modelControlConfigCount: number;
   modelControlRegionOffset: number;
   modelControlRegionSize: number;
   trailingOffset: number;
-  unk0x18: number;
-  unk0x1C: number;
-  unknown18: number;
-  unknown1c: number;
   modelIds: EffectFolderHash[];
   animationIds: EffectFolderHash[];
   modelControlTextureIds: EffectFolderHash[];
@@ -159,6 +275,20 @@ export interface EffectFolderModel {
   folderUnk3: number;
   files: EffectFolderFileItem[];
   missingRequiredExts: string[];
+  materialTextureIds?: EffectFolderHash[];
+}
+
+/**
+ * The resource half of `000common_001`, indexed alongside whichever pack was opened.
+ *
+ * A `.efxbn` names its model and colour map by CRC32, so most references resolve against the
+ * shared pack rather than the opened one. See `effectFolderCommonPack.ts` for the corpus shares.
+ */
+export interface EffectFolderCommonPack {
+  effectRoot: string;
+  structureJsonPath: string;
+  models: EffectFolderModel[];
+  textures: EffectFolderFileItem[];
 }
 
 export interface EffectFolderInventory {
@@ -169,12 +299,21 @@ export interface EffectFolderInventory {
     efxbnCount: number;
     modelCount: number;
     textureCount: number;
+    /** Model IDs found in neither this pack nor the shared pack. A real defect. */
     unresolvedModelIds: EffectFolderHash[];
+    /** Texture IDs found in neither this pack nor the shared pack. A real defect. */
+    unresolvedTextureIds: EffectFolderHash[];
+    /** Model IDs that resolve only through the shared pack. Expected, not a defect. */
+    commonModelIds: EffectFolderHash[];
+    /** Texture IDs that resolve only through the shared pack. Expected, not a defect. */
+    commonTextureIds: EffectFolderHash[];
   };
   efxbns: EffectFolderFileItem[];
   models: EffectFolderModel[];
   textures: EffectFolderFileItem[];
   otherFiles: EffectFolderFileItem[];
+  /** Null when the opened pack is the shared pack, or when no shared pack sits beside it. */
+  commonPack: EffectFolderCommonPack | null;
   warnings: string[];
 }
 
@@ -279,19 +418,65 @@ export function inferEffectFolderModOutputPath(modFolder: string, structurePath:
   return `${normalizedModFolder}\\${normalizeEffectPackStem(stem)}.fhm2d`;
 }
 
+/**
+ * Reject an inventory whose summary predates shared-pack resolution.
+ *
+ * Without these fields every reference that lives in `000common_001` silently reads as
+ * unresolved, and the preview quietly swaps proxy geometry in for the real model — a flat disc
+ * where a sphere belongs, with nothing on screen to say why. A desktop build that still returns
+ * the old shape is a stale binary, so say that instead of degrading.
+ */
+function assertResolvedInventoryShape(inventory: EffectFolderInventory): EffectFolderInventory {
+  const missing = (["commonModelIds", "commonTextureIds", "unresolvedTextureIds"] as const).filter(
+    (field) => !Array.isArray(inventory.summary?.[field]),
+  );
+  if (missing.length > 0 || inventory.commonPack === undefined) {
+    throw new Error(
+      "inspect_effect_folder returned an inventory without shared-pack resolution " +
+        `(missing: ${[...missing, ...(inventory.commonPack === undefined ? ["commonPack"] : [])].join(", ")}). ` +
+        "The Rust backend is out of date — rebuild the desktop app.",
+    );
+  }
+  return inventory;
+}
+
 export async function inspectEffectFolder(
   effectRoot: string,
   structureJsonPath = inferEffectFolderStructurePath(effectRoot),
 ): Promise<EffectFolderInventory> {
-  return await invoke<EffectFolderInventory>("inspect_effect_folder", {
-    effectRoot: toWindowsPath(effectRoot),
-    structureJsonPath: toWindowsPath(structureJsonPath),
-  });
+  return assertResolvedInventoryShape(
+    await invoke<EffectFolderInventory>("inspect_effect_folder", {
+      effectRoot: toWindowsPath(effectRoot),
+      structureJsonPath: toWindowsPath(structureJsonPath),
+    }),
+  );
 }
 
 export async function parseEffectEfxbnFile(path: string): Promise<EfxbnSummary> {
   return await invoke<EfxbnSummary>("parse_effect_efxbn_file", {
     path: toWindowsPath(path),
+  });
+}
+
+export interface EfxbnControlConstantPatch {
+  lookupIndex: number;
+  value: number;
+}
+
+export interface EfxbnControlConstantWriteResult {
+  path: string;
+  patchedCount: number;
+  summary: EfxbnSummary;
+}
+
+/** Surgical write of constant curve-key value floats. Does not rewrite blocks. */
+export async function patchEffectEfxbnControlConstants(
+  path: string,
+  patches: readonly EfxbnControlConstantPatch[],
+): Promise<EfxbnControlConstantWriteResult> {
+  return await invoke<EfxbnControlConstantWriteResult>("patch_effect_efxbn_control_constants", {
+    path: toWindowsPath(path),
+    patches: [...patches],
   });
 }
 
@@ -335,6 +520,23 @@ export async function importEffectFolderFile(params: {
   });
 }
 
+/** Update structure Item `unk3` (resource hash). Stored as JSON number (i32). */
+export async function updateEffectFolderItemHash(params: {
+  effectRoot: string;
+  structureJsonPath?: string;
+  fileIndex: number;
+  hashId: number;
+}): Promise<EffectFolderMutationResult> {
+  return await invoke<EffectFolderMutationResult>("update_effect_folder_item_hash", {
+    effectRoot: toWindowsPath(params.effectRoot),
+    structureJsonPath: params.structureJsonPath
+      ? toWindowsPath(params.structureJsonPath)
+      : null,
+    fileIndex: params.fileIndex,
+    hashId: params.hashId | 0,
+  });
+}
+
 export async function importEffectFolderModel(params: {
   effectRoot: string;
   structureJsonPath?: string;
@@ -365,12 +567,20 @@ export async function deleteEffectFolderEntries(params: {
   });
 }
 
+export interface EffectFolderCopyEfxbnPolicy {
+  fileIndex: number;
+  destFileName?: string | null;
+  overwrite?: boolean;
+  skip?: boolean;
+}
+
 export async function copyEffectFolderSelection(params: {
   sourceEffectRoot: string;
   sourceStructureJsonPath?: string;
   destinationEffectRoot: string;
   destinationStructureJsonPath?: string;
   selections: EffectFolderSelection[];
+  policies?: EffectFolderCopyEfxbnPolicy[];
 }): Promise<EffectFolderCopyResult> {
   return await invoke<EffectFolderCopyResult>("copy_effect_folder_selection", {
     sourceEffectRoot: toWindowsPath(params.sourceEffectRoot),
@@ -382,5 +592,6 @@ export async function copyEffectFolderSelection(params: {
       ? toWindowsPath(params.destinationStructureJsonPath)
       : null,
     selections: params.selections,
+    policies: params.policies ?? [],
   });
 }

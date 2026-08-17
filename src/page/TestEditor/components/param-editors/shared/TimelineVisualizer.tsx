@@ -10,6 +10,7 @@ export interface TimelineSegment {
 interface TimelineVisualizerProps {
   segments: TimelineSegment[];
   totalFrames?: number;
+  title?: string;
   height?: number;
   showLabels?: boolean;
   showFrameCounts?: boolean;
@@ -21,6 +22,7 @@ const SEGMENT_MIN_WIDTH_PX = 24;
 export function TimelineVisualizer({
   segments,
   totalFrames: overrideTotalFrames,
+  title = "Action Timeline",
   height = 32,
   showLabels = true,
   showFrameCounts = true,
@@ -35,7 +37,7 @@ export function TimelineVisualizer({
       <div
         className={`rounded-md border bg-card p-3 text-center text-[11px] text-muted-foreground ${className ?? ""}`}
       >
-        No timeline data
+        {title}: no timeline data
       </div>
     );
   }
@@ -44,7 +46,7 @@ export function TimelineVisualizer({
     <div className={`rounded-md border bg-card p-3 shadow-sm ${className ?? ""}`}>
       <div className="mb-1.5 flex items-center justify-between">
         <h4 className="text-[11px] font-semibold text-muted-foreground">
-          Action Timeline
+          {title}
         </h4>
         <span className="font-mono text-[10px] text-muted-foreground">
           {totalFrames}f ({totalSeconds.toFixed(2)}s)
@@ -207,21 +209,3 @@ export function buildMeleeTimeline(
   ];
 }
 
-export function buildReloadTimeline(
-  reloadType: number,
-  reloadTimeTotal: number,
-  reloadPerShotFrame: number,
-  _ammoCount: number,
-  overheatFrame: number,
-  chargeFrame: number,
-): TimelineSegment[] {
-  // AI decision (2026-06-19): do not convert enum values into behavior until
-  // native branches are proven. Render non-zero raw frame fields independently.
-  const tooltip = `Raw field; reload type ${reloadType}`;
-  return [
-    { label: "0x103171AE", frames: reloadTimeTotal, color: "#64748b", tooltip },
-    { label: "0xA502BCF2", frames: reloadPerShotFrame, color: "#2563eb", tooltip },
-    { label: "0xAB9AEF6C", frames: overheatFrame, color: "#dc2626", tooltip },
-    { label: "0xABC33F14", frames: chargeFrame, color: "#16a34a", tooltip },
-  ].filter((segment) => segment.frames > 0);
-}

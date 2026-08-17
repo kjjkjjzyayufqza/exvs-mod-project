@@ -1,13 +1,27 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { SsbhModelCanvas, type SsbhModelCanvasExportHandle } from "./SsbhModelCanvas";
+import {
+  SsbhModelCanvas,
+  type PreviewInstanceHostTransform,
+  type SsbhModelCanvasExportHandle,
+} from "./SsbhModelCanvas";
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
 import { SsbhModelPreviewLoadingOverlay } from "./SsbhModelPreviewLoadingOverlay";
 import { SsbhModelPreviewQuickActions } from "./SsbhModelPreviewQuickActions";
 import { SsbhModelViewportTimeline } from "./SsbhModelViewportTimeline";
 import { Fhm2dMemoryPreviewModal } from "./Fhm2dMemoryPreviewModal";
 import { shouldRenderPreviewSkeletonLines } from "./ssbhPreviewSkeletonVisibility";
+import { resolveViewportActiveInstancePick } from "./viewportSelectionPolicy";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
 export type SsbhModelPreviewViewportHandle = SsbhModelCanvasExportHandle;
@@ -18,9 +32,30 @@ export const SsbhModelPreviewViewport = forwardRef<
     /** Match Scene Editor when "unreal"; legacy Blender orbit when "default". */
     viewportControls?: "default" | "unreal";
     onExportObjectIdsChange?: (ids: string[]) => void;
+    /** Hides source-picking actions when the viewport is hosted by another editor. */
+    embedded?: boolean;
+    /** Keeps the shared motion transport visible when an embedded host has animation. */
+    showTimeline?: boolean;
+    /** Host-owned R3F content rendered in the same fitted scene as SSBH models. */
+    sceneOverlay?: ReactNode;
+    sceneOverlayAnimating?: boolean;
+    sceneOverlayLabel?: string;
+    hostInstanceTransformsRef?: RefObject<ReadonlyMap<string, PreviewInstanceHostTransform>>;
+    /** Host-local visibility override that does not mutate the shared preview collection service. */
+    hostHiddenPreviewInstanceIds?: ReadonlySet<string>;
   }
 >(function SsbhModelPreviewViewport(
-  { viewportControls = "unreal", onExportObjectIdsChange },
+  {
+    viewportControls = "unreal",
+    onExportObjectIdsChange,
+    embedded = false,
+    showTimeline = true,
+    sceneOverlay,
+    sceneOverlayAnimating = false,
+    sceneOverlayLabel,
+    hostInstanceTransformsRef,
+    hostHiddenPreviewInstanceIds,
+  },
   ref,
 ) {
   const p = useSsbhModelPreview();
@@ -66,47 +101,125 @@ export const SsbhModelPreviewViewport = forwardRef<
   const onMotionScrubPreview = useCallback((frame: number) => {
     motionScrubFrameRef.current = frame;
   }, []);
+  // Scrub end only commits the frame. Playback resume/pause is owned by the
+  // timeline so accidental scrub no longer permanently cancels play.
   const onMotionScrubEnd = useCallback(
     (frame: number) => {
       motionScrubFrameRef.current = null;
       setMotionScrubbing(false);
       p.setMotionFrame(frame);
-      p.setMotionPlaying(false);
     },
     [p],
   );
 
+  // Empty 3D-view clicks must not clear the active model. Motion timeline / Target
+  // model bind to activePreviewInstanceId — clearing it drops the whole transport UI.
+  // 3D picks never enable Inspect yellow outline (motion/preview stay clean).
   const handleViewportSelectInstance = useCallback(
     (id: string | null) => {
-      if (id) {
-        p.setActivePreviewInstanceId(id);
-        return;
+      const resolution = resolveViewportActiveInstancePick(
+        id ? [id] : [],
+        p.activePreviewInstanceId,
+      );
+      if (resolution.nextActiveId !== p.activePreviewInstanceId) {
+        p.setActivePreviewInstanceId(resolution.nextActiveId);
       }
-      p.setActivePreviewInstanceId(null);
-      p.setSelectedBoneIndex(null);
+      if (resolution.clearBoneSelection) {
+        p.setSelectedBoneIndex(null);
+      }
+      p.setSelectionOutlineEnabled(false);
     },
     [p],
   );
 
   const handleViewportSelectInstances = useCallback(
     (ids: string[]) => {
-      if (ids.length === 0) {
-        p.setActivePreviewInstanceId(null);
-        p.setSelectedBoneIndex(null);
-        return;
+      const resolution = resolveViewportActiveInstancePick(ids, p.activePreviewInstanceId);
+      if (resolution.nextActiveId !== p.activePreviewInstanceId) {
+        p.setActivePreviewInstanceId(resolution.nextActiveId);
       }
-      p.setActivePreviewInstanceId(ids[ids.length - 1] ?? null);
+      if (resolution.clearBoneSelection) {
+        p.setSelectedBoneIndex(null);
+      }
+      p.setSelectionOutlineEnabled(false);
     },
     [p],
   );
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 shrink-0 px-1">
-        <Button type="button" size="sm" variant="default" disabled={p.loading} onClick={() => void p.pickFolder()}>
-          Open model folder
-        </Button>
-        <Button type="button" size="sm" variant="secondary" disabled={p.loading} onClick={() => void p.pickNumdlb()}>
+      {embedded ? (
+        <div className="flex min-h-8 shrink-0 items-center gap-2 px-1 text-[11px]" aria-live="polite">
+          <span className="font-medium">3D preview</span>
+          {p.loading ? (
+            <span className="text-muted-foreground">Loading model...</span>
+          ) : p.textureDecoding && p.textureDecodeProgress ? (
+            <span className="truncate text-muted-foreground tabular-nums">
+              Textures {p.textureDecodeProgress.done}/{p.textureDecodeProgress.total}
+            </span>
+          ) : p.loadError ? (
+            <span className="min-w-0 truncate text-destructive" title={p.loadError}>
+              {p.loadError}
+            </span>
+          ) : p.drawError ? (
+            <span className="min-w-0 truncate text-destructive" title={p.drawError}>
+              {p.drawError}
+            </span>
+          ) : (
+            <span className="text-muted-foreground tabular-nums">
+              {p.previewInstances.length > 0
+                ? `${p.previewInstances.length} model${p.previewInstances.length === 1 ? "" : "s"}`
+                : sceneOverlayLabel ?? "Empty scene"}
+            </span>
+          )}
+          <div className="min-w-0 flex-1" />
+          <Button
+            type="button"
+            size="sm"
+            variant={p.showGrid ? "secondary" : "ghost"}
+            className="h-7 px-2 text-[10px]"
+            onClick={() => p.setShowGrid(!p.showGrid)}
+            aria-pressed={p.showGrid}
+            title="Toggle ground grid"
+          >
+            Grid
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={p.wireframe ? "secondary" : "ghost"}
+            className="h-7 px-2 text-[10px]"
+            onClick={() => p.setWireframe(!p.wireframe)}
+            aria-pressed={p.wireframe}
+            title="Toggle model wireframe"
+          >
+            Wire
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={p.showAxesGizmo ? "secondary" : "ghost"}
+            className="h-7 px-2 text-[10px]"
+            onClick={() => p.setShowAxesGizmo(!p.showAxesGizmo)}
+            aria-pressed={p.showAxesGizmo}
+            title="Toggle axis gizmo"
+          >
+            Axis
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-[11px]"
+            disabled={!p.draws.length && !sceneOverlay}
+            onClick={p.requestCameraFit}
+          >
+            Fit
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 shrink-0 px-1">
+        <Button type="button" size="sm" variant="default" disabled={p.loading} onClick={() => void p.pickNumdlb()}>
           Open .numdlb
         </Button>
         <Button
@@ -133,10 +246,24 @@ export const SsbhModelPreviewViewport = forwardRef<
           type="button"
           size="sm"
           variant="secondary"
-          disabled={p.loading}
+          disabled={p.loading || p.previewBusy || !p.activePreviewInstanceId}
           onClick={() => void p.pickMotionNuanmbFile()}
         >
           Open .nuanmb
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          disabled={p.loading || p.previewBusy || !p.activePreviewInstanceId}
+          onClick={() =>
+            void p.pickMotionFbxPreview().catch(() => {
+              /* toast already shown in context */
+            })
+          }
+          title="Preview a pure animation FBX on the active model (no save dialog)"
+        >
+          Preview FBX
         </Button>
         <SsbhModelPreviewQuickActions />
         <div
@@ -170,10 +297,11 @@ export const SsbhModelPreviewViewport = forwardRef<
         ) : null}
         {p.loadError ? <span className="text-destructive max-w-[240px] truncate">{p.loadError}</span> : null}
         {p.drawError ? <span className="text-destructive max-w-[240px] truncate">{p.drawError}</span> : null}
-      </div>
+        </div>
+      )}
 
       <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
-        <ResizablePanel defaultSize={90} minSize={45}>
+        <ResizablePanel defaultSize={showTimeline ? 90 : 100} minSize={45}>
           <div className="relative h-full min-h-0 px-1 pb-1">
             <SsbhModelCanvas
               exportHandleRef={canvasExportHandleRef}
@@ -200,9 +328,13 @@ export const SsbhModelPreviewViewport = forwardRef<
               normalMapEnabled={p.normalMapEnabled}
               fitRequestId={p.fitRequestId}
               previewInstances={p.previewInstances}
+              sceneOverlay={sceneOverlay}
+              hostInstanceTransformsRef={hostInstanceTransformsRef}
+              sceneOverlayAnimating={sceneOverlayAnimating}
               activePreviewInstanceId={p.activePreviewInstanceId}
               previewViewMode={p.previewViewMode}
-              hiddenPreviewInstanceIds={p.hiddenPreviewInstanceIds}
+              selectionOutlineEnabled={p.selectionOutlineEnabled}
+              hiddenPreviewInstanceIds={hostHiddenPreviewInstanceIds ?? p.hiddenPreviewInstanceIds}
               selectedBoneIndex={p.selectedBoneIndex}
               bonePointSize={p.bonePointSize}
               boneTransformMode={p.boneTransformMode}
@@ -237,19 +369,23 @@ export const SsbhModelPreviewViewport = forwardRef<
           </div>
         </ResizablePanel>
 
-        <ResizableHandle withHandle className="bg-border hover:bg-primary/20 transition-colors" />
+        {showTimeline ? (
+          <>
+            <ResizableHandle withHandle className="bg-border hover:bg-primary/20 transition-colors" />
 
-        <ResizablePanel defaultSize={10} minSize={6}>
-          <div className="h-full min-h-0 overflow-y-auto px-1 pb-1">
-            <SsbhModelViewportTimeline
-              onScrubStart={onMotionScrubStart}
-              onScrubPreview={onMotionScrubPreview}
-              onScrubEnd={onMotionScrubEnd}
-            />
-          </div>
-        </ResizablePanel>
+            <ResizablePanel defaultSize={10} minSize={6}>
+              <div className="h-full min-h-0 overflow-y-auto px-1 pb-1">
+                <SsbhModelViewportTimeline
+                  onScrubStart={onMotionScrubStart}
+                  onScrubPreview={onMotionScrubPreview}
+                  onScrubEnd={onMotionScrubEnd}
+                />
+              </div>
+            </ResizablePanel>
+          </>
+        ) : null}
       </ResizablePanelGroup>
-      <Fhm2dMemoryPreviewModal />
+      {embedded ? null : <Fhm2dMemoryPreviewModal />}
     </div>
   );
 });

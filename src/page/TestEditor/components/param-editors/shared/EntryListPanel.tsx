@@ -13,6 +13,8 @@ interface EntryListPanelProps {
   selectedIndex: number;
   onSelect: (index: number) => void;
   renderLabel?: (row: EditorEntryRow) => React.ReactNode;
+  /** Fixed row height for virtualization. Increase when renderLabel is multi-line. */
+  rowHeight?: number;
   className?: string;
 }
 
@@ -21,6 +23,7 @@ export function EntryListPanel({
   selectedIndex,
   onSelect,
   renderLabel,
+  rowHeight = ENTRY_ROW_HEIGHT,
   className,
 }: EntryListPanelProps) {
   const [searchDraft, setSearchDraft] = useState("");
@@ -36,7 +39,10 @@ export function EntryListPanel({
   const rowVirtualizer = useVirtualizer({
     count: filteredRows.length,
     getScrollElement: getListScrollElement,
-    estimateSize: () => ENTRY_ROW_HEIGHT,
+    estimateSize: () => rowHeight,
+    // Measure real row height so long unbroken labels (break-all wrap) don't clip.
+    measureElement: (element) =>
+      element?.getBoundingClientRect().height ?? rowHeight,
     overscan: 12,
   });
 
@@ -83,21 +89,29 @@ export function EntryListPanel({
                 <button
                   key={`${index}-${entryId}`}
                   type="button"
+                  data-index={virtualRow.index}
+                  ref={rowVirtualizer.measureElement}
                   className={`absolute left-0 top-0 flex w-full flex-col border-b border-border/40 px-3 py-2 text-left text-xs transition-colors hover:bg-muted/50 ${
                     selectedIndex === index
                       ? "border-l-2 border-l-primary bg-primary/10"
                       : "border-l-2 border-l-transparent"
                   }`}
-                  style={{ height: virtualRow.size, transform: `translateY(${virtualRow.start}px)` }}
+                  style={{
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
                   onClick={() => onSelect(index)}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="truncate font-mono font-medium">
-                      {renderLabel
-                        ? renderLabel({ entry, index, entryId })
-                        : formatHash(entryId)}
-                    </span>
-                    <span className="font-mono text-[10px] text-muted-foreground">
+                  <div className="flex min-w-0 items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1 overflow-hidden">
+                      {renderLabel ? (
+                        renderLabel({ entry, index, entryId })
+                      ) : (
+                        <span className="block truncate font-mono font-medium">
+                          {formatHash(entryId)}
+                        </span>
+                      )}
+                    </div>
+                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
                       #{index}
                     </span>
                   </div>

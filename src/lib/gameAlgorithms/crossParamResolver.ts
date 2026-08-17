@@ -53,14 +53,17 @@ export const BULLET_CROSS_REFERENCES: CrossReferenceMap[] = [
   { sourceField: "muzzleFlashHash", targetKind: "projectileDepictionTable" },
 ];
 
+// Binary-proven (docs/hitbox-research/01 §2, 02 §6): hitgroupiddef 0xC3656A99
+// ("interactionId") is a foreign key to interactionid.entryId. "boneId" is a
+// skeleton bone id and "modelHash" an actor/model selector — neither references
+// another param table, so they are not cross-references.
 export const HITGROUP_CROSS_REFERENCES: CrossReferenceMap[] = [
-  { sourceField: "boneHash", targetKind: "hitgroupiddef" },
-  { sourceField: "parentBoneHash", targetKind: "hitgroupiddef" },
-  { sourceField: "modelHash", targetKind: "hitgroupiddef" },
+  { sourceField: "interactionId", targetKind: "interactionid" },
 ];
 
+// interactTargetHash is a subsystem selector (docs/hitbox-research/01 §3.5),
+// not a reference into interactionid, so it is not listed here.
 export const INTERACTION_CROSS_REFERENCES: CrossReferenceMap[] = [
-  { sourceField: "interactTargetHash", targetKind: "interactionid" },
   { sourceField: "seHash", targetKind: "projectileDepictionTable" },
 ];
 

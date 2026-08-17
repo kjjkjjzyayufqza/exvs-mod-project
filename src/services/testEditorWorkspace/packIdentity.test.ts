@@ -92,6 +92,15 @@ describe("classifyWorkspacePackPath", () => {
     expect(classify("E:/workspace/test_editor_workspace.json")).toBeNull();
   });
 
+  it("ignores any path under a .git directory", () => {
+    expect(classify("E:/workspace/.git/index")).toBeNull();
+    expect(classify("E:/workspace/002chara/0xBDBE6FEA/.git/HEAD")).toBeNull();
+    expect(classify("E:\\workspace\\002chara\\0xBDBE6FEA\\.git\\objects\\aa")).toBeNull();
+    expect(classify("E:/workspace/002chara/0xBDBE6FEA/.gitignore")?.packKey).toBe(
+      "002chara/0xBDBE6FEA",
+    );
+  });
+
   it("maps duplicate prefixes to a null route id while keeping the physical pack key", () => {
     const identity = classify("E:/workspace/012list/0x036B9E67/character_id_table.bin");
     expect(identity?.routeId).toBeNull();

@@ -4,13 +4,15 @@
 //! effect FHM2D folder plus its sibling `_structure.json`, and exposes small
 //! command-friendly structs for Test Editor tooling.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::fhm2d_memory_preview::{collect_texture_refs, load_matl_data};
 use crate::format::fhm2d::SubFileStructureEntry;
 
 #[derive(Clone, Debug, Deserialize)]
@@ -20,6 +22,17 @@ pub struct EffectFolderSelection {
     pub file_index: Option<i32>,
     pub hash_id: Option<i32>,
     pub name: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectFolderCopyEfxbnPolicy {
+    pub file_index: i32,
+    pub dest_file_name: Option<String>,
+    #[serde(default)]
+    pub overwrite: bool,
+    #[serde(default)]
+    pub skip: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -67,6 +80,28 @@ pub struct EffectFolderModel {
     pub folder_unk3: i32,
     pub files: Vec<EffectFolderFileItem>,
     pub missing_required_exts: Vec<String>,
+    pub material_texture_ids: Vec<EffectFolderHash>,
+}
+
+/// The pack every other effect pack draws shared models and colour maps from.
+///
+/// A `.efxbn` names a model or texture by CRC32, never by path, so a reference resolves against
+/// the whole `006effect` tree rather than the opened folder. Across the shipped corpus 59.4% of
+/// model references (523 of 880) and 69.5% of texture references (1,191 of 1,714) exist only
+/// here, so a pack indexed on its own leaves the majority of its effects with nothing to draw.
+pub const EFFECT_FOLDER_COMMON_PACK_NAME: &str = "000common_001";
+
+/// The resource half of the shared pack, indexed alongside whichever pack was opened.
+///
+/// Only models and textures: the shared pack's own ~1,000 files include `.efxbn` payloads that
+/// nothing in this inventory reads, and parsing them would dominate every inspection.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectFolderCommonPack {
+    pub effect_root: String,
+    pub structure_json_path: String,
+    pub models: Vec<EffectFolderModel>,
+    pub textures: Vec<EffectFolderFileItem>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -76,7 +111,14 @@ pub struct EffectFolderInventorySummary {
     pub efxbn_count: usize,
     pub model_count: usize,
     pub texture_count: usize,
+    /// Model IDs found in neither this pack nor the shared pack. A real defect.
     pub unresolved_model_ids: Vec<EffectFolderHash>,
+    /// Texture IDs found in neither this pack nor the shared pack. A real defect.
+    pub unresolved_texture_ids: Vec<EffectFolderHash>,
+    /// Model IDs that resolve only through the shared pack. Expected, not a defect.
+    pub common_model_ids: Vec<EffectFolderHash>,
+    /// Texture IDs that resolve only through the shared pack. Expected, not a defect.
+    pub common_texture_ids: Vec<EffectFolderHash>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -89,14 +131,10 @@ pub struct EffectFolderInventory {
     pub models: Vec<EffectFolderModel>,
     pub textures: Vec<EffectFolderFileItem>,
     pub other_files: Vec<EffectFolderFileItem>,
+    /// None when the opened pack *is* the shared pack, or when no shared pack sits beside it —
+    /// the latter also raises a warning, since references into it can no longer be resolved.
+    pub common_pack: Option<EffectFolderCommonPack>,
     pub warnings: Vec<String>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EfxbnIdPair {
-    pub flag: i32,
-    pub id: i32,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -120,44 +158,404 @@ pub struct EfxbnControlReferenceSummary {
     pub lookup_index: u32,
 }
 
+/// Values the loader derives before a block is used, reproduced from `sub_140146590`.
+///
+/// The authored fields stay untouched so a pack still round-trips byte for byte; anything
+/// that renders or simulates should read these instead.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct EfxbnMetaConfigHeaderSummary {
-    pub number: u32,
-    pub unk_float_a: f32,
-    pub unk_int_a: u32,
-    pub unk_float_b: f32,
-    pub unk_int_b: u32,
-    pub unk_bytes12: Vec<i8>,
-    pub unk_floats4: [f32; 4],
+pub struct EfxbnRuntimeNormalization {
+    /// Type-9 wrappers adopt a type derived from their first child.
+    pub element_type: u32,
+    pub action_flags: u32,
+    pub delete_settings: u32,
+    /// Derived from `blendState` and `enableSoftParticle`, never read from the file.
+    pub z_write_enable: u32,
+    pub soft_particle_range: f32,
+    pub strip_segment_life: f32,
+    pub strip_tail_alpha_rate: f32,
+    pub strip_head_alpha_rate: f32,
+    pub internal_element_data_index: u32,
+    pub draw_scheme: EfxbnDrawScheme,
 }
 
-#[derive(Clone, Debug, Serialize)]
+/// The runtime draw-scheme flag word at element `+0x390`.
+///
+/// `sub_1401470F0` synthesizes it from the loaded record; `sub_140188E30` then picks the
+/// pixel-shader variant with any-bit-hit masks (`0x40` AddMix, `0x280` ColorEx, `0x20804`
+/// Light, `0x1000` MultiUV, `0x10001` Soft, `0x20000` HLight). It is never stored in the
+/// file, so nothing downstream can choose a variant without this.
+#[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct EfxbnMetaParsedSummary {
-    pub unk_config_info: Vec<i32>,
-    pub config_header: EfxbnMetaConfigHeaderSummary,
-    pub id_table_pairs: Vec<EfxbnIdPair>,
-    pub control_references: Vec<EfxbnControlReferenceSummary>,
-    pub model_id: i32,
-    pub model_hash: EffectFolderHash,
-    pub animation_id: i32,
-    pub animation_hash: EffectFolderHash,
-    pub unk32: i32,
-    pub unk_config_info2: Vec<i32>,
+pub struct EfxbnDrawScheme {
+    /// Every bit the EFXBN alone determines. Zero for blocks the loader never enables.
+    pub flag: u32,
+    /// The multi-UV group, which applies only when the block's model mesh carries two or more
+    /// vertex attribute streams of type 17 (a second UV set). `sub_1401470F0` walks the mesh
+    /// to decide; the parser has no mesh, so it reports the group separately rather than
+    /// guessing. Callers that resolved the model OR it into `flag`; the rest must not.
+    pub mesh_multi_uv_flag: u32,
+}
+
+/// `sub_140145DF0` writes the draw-scheme enable byte at element `+0x394` for authored element
+/// types 1, 3 and 5 only, before `sub_140146590` rewrites the type. Everything else keeps a
+/// zero flag word.
+const EFXBN_DRAW_SCHEME_ENABLED_TYPES: [u32; 3] = [1, 3, 5];
+
+// Producer bits, in the order `sub_1401470F0` applies them.
+const DRAW_SCHEME_SOFT_PARTICLE: u32 = 0x1;
+const DRAW_SCHEME_ACTION_800: u32 = 0x2;
+const DRAW_SCHEME_LIGHTING_1: u32 = 0x4;
+const DRAW_SCHEME_NORMAL_MAP: u32 = 0x8;
+const DRAW_SCHEME_Z_TEST: u32 = 0x10;
+const DRAW_SCHEME_Z_WRITE: u32 = 0x20;
+const DRAW_SCHEME_ADD_MIX: u32 = 0x40;
+const DRAW_SCHEME_UV_OFFSET_MAP: u32 = 0x80;
+const DRAW_SCHEME_ACTION_1000000: u32 = 0x100;
+const DRAW_SCHEME_COLOR_MAP_SOURCED: u32 = 0x200;
+const DRAW_SCHEME_ACTION_2000000: u32 = 0x400;
+const DRAW_SCHEME_LIGHTING_4: u32 = 0x800;
+const DRAW_SCHEME_MULTI_UV: u32 = 0x1000;
+const DRAW_SCHEME_MULTI_UV_OFFSET_MAP: u32 = 0x2000;
+const DRAW_SCHEME_MULTI_UV_COLOR_MAP: u32 = 0x4000;
+const DRAW_SCHEME_EXTRA_2000: u32 = 0x8000;
+const DRAW_SCHEME_EXTRA_40000: u32 = 0x10000;
+const DRAW_SCHEME_LIGHTING_8: u32 = 0x20000;
+/// Skips the `rgb * 0.5` the base Face and Model pixel shaders otherwise apply. Driven by the
+/// same `extraFlags & 0x2000` test as `DRAW_SCHEME_EXTRA_2000`, so the two always agree.
+const DRAW_SCHEME_FULL_BRIGHTNESS: u32 = 0x40000;
+
+const EFXBN_ACTION_FLAG_DRAW_800: u32 = 0x800;
+const EFXBN_ACTION_FLAG_DRAW_1000000: u32 = 0x0100_0000;
+const EFXBN_ACTION_FLAG_DRAW_2000000: u32 = 0x0200_0000;
+const EFXBN_EXTRA_FLAG_FULL_BRIGHTNESS: u32 = 0x2000;
+const EFXBN_EXTRA_FLAG_DEPTH_EMISSION: u32 = 0x0004_0000;
+const EFXBN_LIGHTING_FLAG_DIRECTIONAL: u32 = 0x1;
+const EFXBN_LIGHTING_FLAG_REFLECTION: u32 = 0x4;
+const EFXBN_LIGHTING_FLAG_NORMAL_MAP: u32 = 0x8;
+/// `blendState` value that selects the AddMix pixel shader.
+const EFXBN_BLEND_STATE_ADD_MIX: u32 = 4;
+/// A model-control parameter only contributes its color-map bit when it is this input source.
+const EFXBN_MODEL_CONTROL_INPUT_SOURCE_BOUND: u32 = 1;
+
+/// Reproduces `sub_1401470F0`.
+///
+/// `element_type` is the value at `+0x28` as the producer sees it, i.e. after
+/// `sub_140146590` wrote the normalized type back. The enable gate upstream keys off the
+/// authored type instead, and the two only differ for type-9 wrappers, which the gate rejects.
+fn efxbn_draw_scheme(
+    effect: &EfxbnEffectSummary,
+    element_type: u32,
+    model_controls: &[EfxbnModelControlSummary],
+) -> EfxbnDrawScheme {
+    if !EFXBN_DRAW_SCHEME_ENABLED_TYPES.contains(&effect.effect_type) {
+        return EfxbnDrawScheme {
+            flag: 0,
+            mesh_multi_uv_flag: 0,
+        };
+    }
+
+    let bound_color_map = |slot: i32| {
+        usize::try_from(slot).ok().is_some_and(|index| {
+            model_controls.get(index).is_some_and(|control| {
+                control.input_source_type == EFXBN_MODEL_CONTROL_INPUT_SOURCE_BOUND
+            })
+        })
+    };
+
+    let mut flag = 0u32;
+    if effect.enable_soft_particle != 0 {
+        flag |= DRAW_SCHEME_SOFT_PARTICLE;
+    }
+    if effect.action_flags & EFXBN_ACTION_FLAG_DRAW_800 != 0 {
+        flag |= DRAW_SCHEME_ACTION_800;
+    }
+    if effect.lighting_flags & EFXBN_LIGHTING_FLAG_DIRECTIONAL != 0 {
+        flag |= DRAW_SCHEME_LIGHTING_1;
+    }
+    if effect.normal_map_hash != 0 {
+        flag |= DRAW_SCHEME_NORMAL_MAP;
+    }
+    if effect.z_test_enable != 0 {
+        flag |= DRAW_SCHEME_Z_TEST;
+    }
+    if effect.z_write_enable != 0 {
+        flag |= DRAW_SCHEME_Z_WRITE;
+    }
+    if effect.blend_state == EFXBN_BLEND_STATE_ADD_MIX {
+        flag |= DRAW_SCHEME_ADD_MIX;
+    }
+    if effect.uv_texture_parameter_index[0] != -1 {
+        flag |= DRAW_SCHEME_UV_OFFSET_MAP;
+    }
+    if effect.action_flags & EFXBN_ACTION_FLAG_DRAW_1000000 != 0 {
+        flag |= DRAW_SCHEME_ACTION_1000000;
+    }
+    if effect.action_flags & EFXBN_ACTION_FLAG_DRAW_2000000 != 0 {
+        flag |= DRAW_SCHEME_ACTION_2000000;
+    }
+    if effect.lighting_flags & EFXBN_LIGHTING_FLAG_REFLECTION != 0 {
+        flag |= DRAW_SCHEME_LIGHTING_4;
+    }
+    if effect.extra_flags & EFXBN_EXTRA_FLAG_FULL_BRIGHTNESS != 0 {
+        flag |= DRAW_SCHEME_EXTRA_2000 | DRAW_SCHEME_FULL_BRIGHTNESS;
+    }
+    if effect.extra_flags & EFXBN_EXTRA_FLAG_DEPTH_EMISSION != 0 {
+        flag |= DRAW_SCHEME_EXTRA_40000;
+    }
+    if effect.lighting_flags & EFXBN_LIGHTING_FLAG_NORMAL_MAP != 0 {
+        flag |= DRAW_SCHEME_LIGHTING_8;
+    }
+    if bound_color_map(effect.color_texture_parameter_index[0]) {
+        flag |= DRAW_SCHEME_COLOR_MAP_SOURCED;
+    }
+
+    // Only model blocks can reach the mesh walk, and its two dependent bits are gated on it.
+    let mut mesh_multi_uv_flag = 0u32;
+    if element_type == 3 {
+        mesh_multi_uv_flag |= DRAW_SCHEME_MULTI_UV;
+        if effect.uv_texture_parameter_index[1] != -1 {
+            mesh_multi_uv_flag |= DRAW_SCHEME_MULTI_UV_OFFSET_MAP;
+        }
+        if bound_color_map(effect.color_texture_parameter_index[1]) {
+            mesh_multi_uv_flag |= DRAW_SCHEME_MULTI_UV_COLOR_MAP;
+        }
+    }
+
+    EfxbnDrawScheme {
+        flag,
+        mesh_multi_uv_flag,
+    }
+}
+
+const EFXBN_NORMALIZE_EPSILON: f32 = 0.000_001;
+const EFXBN_ACTION_FLAG_LOOP: u32 = 1;
+/// Forces the loop flag on.
+const EFXBN_ACTION_FLAG_FORCE_LOOP: u32 = 0x0800_0000;
+/// Clears the loop flag and the second delete-setting bit.
+const EFXBN_ACTION_FLAG_CLEAR_LOOP: u32 = 0x0080_0000;
+const EFXBN_DEFAULT_SOFT_PARTICLE_RANGE: f32 = 8.0;
+const EFXBN_DEFAULT_STRIP_ALPHA_RATE: f32 = 0.3;
+const EFXBN_STRIP_SEGMENT_LIFE_FACTOR: f32 = 16.0;
+
+fn normalize_efxbn_block(
+    effect: &EfxbnEffectSummary,
+    first_child: Option<&EfxbnEffectSummary>,
+    model_controls: &[EfxbnModelControlSummary],
+) -> EfxbnRuntimeNormalization {
+    let mut element_type = effect.effect_type;
+    if effect.child_index_size != 0 && element_type == 9 {
+        if let Some(child) = first_child {
+            match child.effect_type {
+                1 => element_type = 0,
+                3 => element_type = 2,
+                5 => element_type = 4,
+                6 => element_type = 7,
+                _ => {}
+            }
+        }
+    }
+
+    let mut z_write_enable = effect.z_write_enable;
+    if effect.blend_state == 0 {
+        z_write_enable = 1;
+    }
+    if effect.enable_soft_particle != 0 {
+        z_write_enable = 0;
+    }
+
+    let soft_particle_range = if effect.soft_particle_range.abs() < EFXBN_NORMALIZE_EPSILON {
+        EFXBN_DEFAULT_SOFT_PARTICLE_RANGE
+    } else {
+        effect.soft_particle_range
+    };
+
+    let mut action_flags = effect.action_flags;
+    let mut delete_settings = effect.delete_settings;
+    if action_flags & EFXBN_ACTION_FLAG_FORCE_LOOP != 0 {
+        action_flags |= EFXBN_ACTION_FLAG_LOOP;
+    }
+    if action_flags & EFXBN_ACTION_FLAG_CLEAR_LOOP != 0 {
+        delete_settings &= !2;
+        action_flags &= !EFXBN_ACTION_FLAG_LOOP;
+    }
+
+    let (strip_segment_life, strip_tail_alpha_rate, strip_head_alpha_rate) = if element_type == 5 {
+        (
+            if effect.strip_segment_life < 0.0 {
+                effect.strip_segment_interval * EFXBN_STRIP_SEGMENT_LIFE_FACTOR
+            } else {
+                effect.strip_segment_life
+            },
+            if effect.strip_tail_alpha_rate.abs() < EFXBN_NORMALIZE_EPSILON {
+                EFXBN_DEFAULT_STRIP_ALPHA_RATE
+            } else {
+                effect.strip_tail_alpha_rate
+            },
+            if effect.strip_head_alpha_rate.abs() < EFXBN_NORMALIZE_EPSILON {
+                EFXBN_DEFAULT_STRIP_ALPHA_RATE
+            } else {
+                effect.strip_head_alpha_rate
+            },
+        )
+    } else {
+        (
+            effect.strip_segment_life,
+            effect.strip_tail_alpha_rate,
+            effect.strip_head_alpha_rate,
+        )
+    };
+
+    if element_type == 10 && effect.post_effect_type != 2 {
+        action_flags &= !EFXBN_ACTION_FLAG_LOOP;
+    }
+
+    EfxbnRuntimeNormalization {
+        element_type,
+        action_flags,
+        delete_settings,
+        z_write_enable,
+        soft_particle_range,
+        strip_segment_life,
+        strip_tail_alpha_rate,
+        strip_head_alpha_rate,
+        internal_element_data_index: effect.index as u32,
+        // `sub_1401470F0` runs after this pass and reads the rewritten type at `+0x28`.
+        draw_scheme: efxbn_draw_scheme(effect, element_type, model_controls),
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EfxbnEffectSummary {
     pub index: usize,
+    /// Tree depth. `0` is a root emitter; children carry the parent depth plus one.
+    pub level: u32,
+    /// Number of valid entries in `child_index_array`.
+    pub child_index_size: u32,
+    /// Block indices spawned by this block. Unused slots are `-1`.
+    pub child_index_array: [i32; 8],
+    /// First child index, retained for callers that predate `child_index_array`.
+    pub referenced_effect_index: i32,
+    pub effect_type: u32,
+    pub life_time_base: f32,
+    pub life_time_random: f32,
+    pub interval_base: f32,
+    pub interval_random: f32,
+    pub num_emit: u32,
+    pub action_flags: u32,
+    pub spawn_form_type: u32,
+    pub spawn_form_length: [f32; 4],
+    pub speed_random: [f32; 4],
+    pub size_base: [f32; 4],
+    pub size_random: [f32; 4],
+    pub rotation_base: [f32; 4],
+    pub rotation_random: [f32; 4],
+    pub rotation_speed: [f32; 4],
+    pub internal_element_data_index: u32,
+    pub enable_data_flag: u32,
+    /// Model resource handle. Mirrors `model_id`/`model_hash`.
+    pub nud_handle: u32,
+    /// Texture resource handle bound directly to the block, independent of the
+    /// four model-control parameter slots.
+    pub texture_handle: u32,
+    /// Reflected as `pad01[2]`. Carried so the writer can reproduce a file byte for byte.
+    pub pad01: [u32; 2],
+    /// Primary and pass-2 color-map parameter slots.
+    pub color_texture_parameter_index: [i32; 2],
+    /// Primary and pass-2 UV-offset parameter slots.
+    pub uv_texture_parameter_index: [i32; 2],
+    pub center_pivot: [f32; 2],
+    pub delete_settings: u32,
+    pub fade_time_base: f32,
+    pub culling_type: u32,
+    pub z_write_enable: u32,
+    pub z_test_enable: u32,
+    pub blend_state: u32,
+    pub draw_repository_index: u32,
+    pub instance_amount_type: u32,
+    pub draw_amount_index: u32,
+    pub enable_soft_particle: u32,
+    pub position_offset: [f32; 4],
+    pub delay_emit_time_base: f32,
+    pub emit_area_type: u32,
+    pub enable_z_sort: u32,
+    pub delete_effect_id: u32,
+    pub delete_end_scale: [f32; 4],
+    pub light_attenuation_radius: f32,
+    pub lighting_flags: u32,
+    pub normal_map_hash: u32,
+    pub world_wind_apply_rate: f32,
+    pub strip_segment_interval: f32,
+    /// Reflected as `stripSegmentLength_NotUse`; the engine declares it and never reads it.
+    pub strip_segment_length_not_use: f32,
+    pub strip_segment_life: f32,
+    /// Reflected as `stripSegmentNum_NotUse`; declared and never read.
+    pub strip_segment_num_not_use: u32,
+    pub strip_segment_split_num: u32,
+    pub drawer_id: u32,
+    pub world_wind_apply_rate_random: f32,
+    pub soft_particle_range: f32,
+    pub camera_fade_range: f32,
+    pub extra_flags: u32,
+    pub noise_direction_max_rot: f32,
+    pub noise_direction_area_range: f32,
+    pub blur_start_color: [f32; 4],
+    pub blur_end_color: [f32; 4],
+    pub blur_enable_range: f32,
+    pub blur_fade_power: f32,
+    pub light_type: u32,
+    pub light_base_radius: f32,
+    pub rotation_speed_random: [f32; 4],
+    pub camera_offset: f32,
+    pub post_effect_type: u32,
+    pub post_effect_blend_rate: f32,
+    /// Reflected as `stripTaleAlphaRate`; the game misspells "tail".
+    pub strip_tail_alpha_rate: f32,
+    pub strip_head_alpha_rate: f32,
+    pub emit_interpolate_distance: f32,
+    pub noise_rotate_pos_offset: f32,
+    pub z_sort_offset: f32,
+    pub special_shader_type: u32,
+    pub reflection_power: f32,
+    pub pass2_blend_type: u32,
+    pub animation_delay_frame: f32,
+    pub animation_loop_start_frame: f32,
+    pub animation_loop_end_frame: f32,
+    pub animation_delete_frame: f32,
+    pub animation_speed_rate: f32,
+    pub animation_blend_delete_frame: u32,
+    pub emitter_lod_type: u32,
+    pub animation_start_frame: f32,
+    pub bounding_sphere_info: [f32; 4],
+    pub post_effect_shape_radius: f32,
+    pub world_water_apply_rate: f32,
+    pub num_emit_count_random: u32,
+    pub depth_emission_range: f32,
+    pub depth_emission_power: f32,
+    pub highlight_power: f32,
+    pub emit_interpolate_type: u32,
+    pub mesh_emitter_index: u32,
+    pub mesh_emitter_count: u32,
+    pub field_effect_type: u32,
+    pub field_effect_power: f32,
+    pub field_effect_interval: f32,
+    pub field_effect_angle: f32,
+    pub field_effect_frequency: f32,
+    pub field_effect_offset: f32,
+    pub field_effect_recieve_rate: f32,
+    pub field_effect_extra_value1: f32,
     pub model_id: i32,
     pub model_hash: EffectFolderHash,
     pub animation_id: i32,
     pub animation_hash: EffectFolderHash,
-    pub id_table: Vec<EfxbnIdPair>,
     pub control_references: Vec<EfxbnControlReferenceSummary>,
-    pub meta_parsed: EfxbnMetaParsedSummary,
+    /// `reserve_area[31]` at reflected offset 756. No shader or CPU consumer reads it, but the
+    /// bytes are carried verbatim so `build_efxbn_bytes` reproduces a file exactly.
+    pub reserve_area: Vec<u32>,
+    /// Loader-derived values. Always populated by `parse_efxbn_bytes`; it stays optional
+    /// only because wrapper type resolution needs a second pass over every block.
+    pub runtime: Option<EfxbnRuntimeNormalization>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -220,22 +618,15 @@ pub struct EfxbnSummary {
     pub file_size: u32,
     pub actual_size: usize,
     pub effect_count: u32,
-    pub control_config_region_param: u32,
+    /// Number of `(time, value)` curve keys stored after the effect blocks.
+    pub curve_key_count: u32,
     pub control_lookup_region_offset: u32,
     pub control_lookup_region_size: u32,
     pub control_lookup_region_end: u32,
-    pub control_block_size: Option<u32>,
-    pub control_remainder_size: u32,
     pub model_control_config_count: u32,
     pub model_control_region_offset: u32,
     pub model_control_region_size: u32,
     pub trailing_offset: u32,
-    #[serde(rename = "unk0x18")]
-    pub unk0x18: u32,
-    #[serde(rename = "unk0x1C")]
-    pub unk0x1c: u32,
-    pub unknown18: u32,
-    pub unknown1c: u32,
     pub model_ids: Vec<EffectFolderHash>,
     pub animation_ids: Vec<EffectFolderHash>,
     pub model_control_texture_ids: Vec<EffectFolderHash>,
@@ -344,12 +735,20 @@ pub fn inspect_effect_folder(
     let data_by_index = build_file_record_map(&structure.sub_file_data, &json_dir)?;
     let forest = parse_forest(&structure.sub_file_structure)?;
     let mut warnings = Vec::new();
-
     let mut efxbns = Vec::new();
     let mut textures = Vec::new();
     let mut others = Vec::new();
     let mut models = Vec::new();
     collect_models(&forest, &data_by_index, &mut models);
+    for model in &mut models {
+        match collect_model_material_texture_ids(&model.files) {
+            Ok(ids) => model.material_texture_ids = ids,
+            Err(error) => warnings.push(format!(
+                "Failed to read material textures for model {}: {error}",
+                model.name
+            )),
+        }
+    }
     let model_hashes: HashSet<i32> = models.iter().map(|m| m.hash.signed).collect();
 
     for item in collect_items(&forest) {
@@ -381,20 +780,55 @@ pub fn inspect_effect_folder(
         }
     }
 
-    let mut unresolved = BTreeSet::new();
+    let common_pack = collect_common_pack(&root_path, &mut warnings)?;
+    let texture_hashes = texture_hash_set(&textures);
+    let common_model_hashes: HashSet<i32> = common_pack
+        .as_ref()
+        .map(|pack| pack.models.iter().map(|model| model.hash.signed).collect())
+        .unwrap_or_default();
+    let common_texture_hashes = common_pack
+        .as_ref()
+        .map(|pack| texture_hash_set(&pack.textures))
+        .unwrap_or_default();
+
+    let mut unresolved_models = BTreeSet::new();
+    let mut unresolved_textures = BTreeSet::new();
+    let mut common_models = BTreeSet::new();
+    let mut common_textures = BTreeSet::new();
     for item in &efxbns {
-        if let Some(summary) = &item.efxbn {
-            for hash in &summary.model_ids {
-                if hash.signed != 0 && !model_hashes.contains(&hash.signed) {
-                    unresolved.insert(hash.signed);
-                }
-            }
+        let Some(summary) = &item.efxbn else {
+            continue;
+        };
+        for hash in &summary.model_ids {
+            classify_resource_reference(
+                hash.signed,
+                &model_hashes,
+                &common_model_hashes,
+                &mut common_models,
+                &mut unresolved_models,
+            );
+        }
+        for hash in &summary.model_control_texture_ids {
+            classify_resource_reference(
+                hash.signed,
+                &texture_hashes,
+                &common_texture_hashes,
+                &mut common_textures,
+                &mut unresolved_textures,
+            );
         }
     }
-    let unresolved_model_ids = unresolved
-        .into_iter()
-        .map(EffectFolderHash::from_i32)
-        .collect::<Vec<_>>();
+    let unresolved_model_ids = hash_list(unresolved_models);
+    let unresolved_texture_ids = hash_list(unresolved_textures);
+    let common_model_ids = hash_list(common_models);
+    let common_texture_ids = hash_list(common_textures);
+    push_reference_warnings(
+        &mut warnings,
+        &common_model_ids,
+        &common_texture_ids,
+        &unresolved_model_ids,
+        &unresolved_texture_ids,
+    );
 
     Ok(EffectFolderInventory {
         effect_root: root_path.to_string_lossy().to_string(),
@@ -404,14 +838,157 @@ pub fn inspect_effect_folder(
             efxbn_count: efxbns.len(),
             model_count: models.len(),
             texture_count: textures.len(),
-            unresolved_model_ids: unresolved_model_ids.clone(),
+            unresolved_model_ids,
+            unresolved_texture_ids,
+            common_model_ids,
+            common_texture_ids,
         },
         efxbns,
         models,
         textures,
         other_files: others,
+        common_pack,
         warnings,
     })
+}
+
+fn texture_hash_set(textures: &[EffectFolderFileItem]) -> HashSet<i32> {
+    textures
+        .iter()
+        .filter_map(|texture| texture.hash.as_ref().map(|hash| hash.signed))
+        .collect()
+}
+
+fn hash_list(hashes: BTreeSet<i32>) -> Vec<EffectFolderHash> {
+    hashes.into_iter().map(EffectFolderHash::from_i32).collect()
+}
+
+/// Sort one referenced resource ID into "resolved here", "resolved in the shared pack", or
+/// "resolved nowhere". A zero ID means the block binds no resource at all.
+fn classify_resource_reference(
+    hash: i32,
+    own: &HashSet<i32>,
+    common: &HashSet<i32>,
+    from_common: &mut BTreeSet<i32>,
+    unresolved: &mut BTreeSet<i32>,
+) {
+    if hash == 0 || own.contains(&hash) {
+        return;
+    }
+    if common.contains(&hash) {
+        from_common.insert(hash);
+        return;
+    }
+    unresolved.insert(hash);
+}
+
+/// State where every cross-pack reference landed.
+///
+/// Shared-pack hits are aggregated because they are the common case — the majority of every
+/// pack's references — while anything unresolved is listed one ID at a time, because each one is
+/// a resource the game will fail to draw.
+fn push_reference_warnings(
+    warnings: &mut Vec<String>,
+    common_model_ids: &[EffectFolderHash],
+    common_texture_ids: &[EffectFolderHash],
+    unresolved_model_ids: &[EffectFolderHash],
+    unresolved_texture_ids: &[EffectFolderHash],
+) {
+    if !common_model_ids.is_empty() || !common_texture_ids.is_empty() {
+        warnings.push(format!(
+            "Resolved {} model and {} texture reference(s) from the shared pack {EFFECT_FOLDER_COMMON_PACK_NAME}.",
+            common_model_ids.len(),
+            common_texture_ids.len()
+        ));
+    }
+    for hash in unresolved_model_ids {
+        warnings.push(format!(
+            "EFXBN references modelId {} that exists in neither this pack nor {EFFECT_FOLDER_COMMON_PACK_NAME}.",
+            hash.hex
+        ));
+    }
+    for hash in unresolved_texture_ids {
+        warnings.push(format!(
+            "EFXBN references textureId {} that exists in neither this pack nor {EFFECT_FOLDER_COMMON_PACK_NAME}.",
+            hash.hex
+        ));
+    }
+}
+
+/// The shared pack that sits next to `root`, or None when `root` is that pack.
+fn common_pack_root(root: &Path) -> Result<Option<PathBuf>, String> {
+    let name = root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("Invalid effect root name: {}", root.display()))?;
+    if name.eq_ignore_ascii_case(EFFECT_FOLDER_COMMON_PACK_NAME) {
+        return Ok(None);
+    }
+    let parent = root.parent().ok_or_else(|| {
+        format!(
+            "Cannot resolve the shared effect pack next to {}",
+            root.display()
+        )
+    })?;
+    Ok(Some(parent.join(EFFECT_FOLDER_COMMON_PACK_NAME)))
+}
+
+/// Index the shared pack's models and textures so references into it can be resolved.
+///
+/// An absent shared pack is reported as a warning rather than an error: a pack extracted or
+/// copied on its own is still worth inspecting, and every reference it cannot resolve is then
+/// listed by ID. A shared pack that exists but cannot be read is an error, because silently
+/// dropping half the resources would make the inventory lie.
+fn collect_common_pack(
+    root: &Path,
+    warnings: &mut Vec<String>,
+) -> Result<Option<EffectFolderCommonPack>, String> {
+    let Some(common_root) = common_pack_root(root)? else {
+        return Ok(None);
+    };
+    let structure_path = resolve_structure_path(&common_root, None)?;
+    if !common_root.is_dir() || !structure_path.is_file() {
+        warnings.push(format!(
+            "Shared effect pack {EFFECT_FOLDER_COMMON_PACK_NAME} is not next to {}; references that live there cannot be resolved.",
+            root.display()
+        ));
+        return Ok(None);
+    }
+    let (models, textures) = collect_effect_folder_resources(&structure_path)?;
+    Ok(Some(EffectFolderCommonPack {
+        effect_root: common_root.to_string_lossy().to_string(),
+        structure_json_path: structure_path.to_string_lossy().to_string(),
+        models,
+        textures,
+    }))
+}
+
+/// The models and textures a pack publishes for other packs to reference by hash.
+fn collect_effect_folder_resources(
+    structure_path: &Path,
+) -> Result<(Vec<EffectFolderModel>, Vec<EffectFolderFileItem>), String> {
+    let json_dir = structure_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .to_path_buf();
+    let structure = read_structure_file(structure_path)?;
+    let data_by_index = build_file_record_map(&structure.sub_file_data, &json_dir)?;
+    let forest = parse_forest(&structure.sub_file_structure)?;
+    let mut models = Vec::new();
+    collect_models(&forest, &data_by_index, &mut models);
+    let mut textures = Vec::new();
+    for item in collect_items(&forest) {
+        let Some(record) = item
+            .file_index()
+            .and_then(|index| data_by_index.get(&index))
+        else {
+            continue;
+        };
+        if record.actual_ext == ".nutexb" {
+            textures.push(file_item_from_node(record, item.item_entry()));
+        }
+    }
+    Ok((models, textures))
 }
 
 pub fn parse_efxbn_file(path: &str) -> Result<EfxbnSummary, String> {
@@ -419,58 +996,493 @@ pub fn parse_efxbn_file(path: &str) -> Result<EfxbnSummary, String> {
     parse_efxbn_bytes(&bytes, path)
 }
 
-const EFXBN_CONTROL_REFERENCE_FIELDS: [u32; 18] = [
-    0x50, 0x58, 0x60, 0x68, 0x70, 0x78, 0x80, 0x88, 0x90, 0x98, 0xa0, 0xa8, 0xb0, 0xb8, 0xc0, 0xc8,
-    0x1c4, 0x1cc,
+/// Element types the loader will actually accept.
+///
+/// Drawables are 1 / 3 / 5; 6, 8, 9, 10 and 11 are containers. Type 2 occurs in none of the
+/// 40,309 blocks of the shipped corpus and the loader has no branch for it, so a file that
+/// declares one would render nothing.
+const EFXBN_KNOWN_ELEMENT_TYPES: [u32; 8] = [1, 3, 5, 6, 8, 9, 10, 11];
+
+/// Structural problems inside a single `.efxbn`, independent of the pack around it.
+///
+/// These are the invariants an edit can break without changing the file's size, so they are
+/// checked before a repack rather than discovered by the game.
+pub fn validate_efxbn_summary(summary: &EfxbnSummary) -> Vec<String> {
+    let mut problems = Vec::new();
+    let block_count = summary.effects.len();
+    let control_count = summary.model_controls.len();
+    let key_count = summary.control_lookup_entries.len();
+
+    for effect in &summary.effects {
+        let index = effect.index;
+        if !EFXBN_KNOWN_ELEMENT_TYPES.contains(&effect.effect_type) {
+            problems.push(format!(
+                "Block {index} declares unknown elementType {}.",
+                effect.effect_type
+            ));
+        }
+        let child_count = effect.child_index_size as usize;
+        if child_count > effect.child_index_array.len() {
+            problems.push(format!(
+                "Block {index} declares childIndexSize {child_count}, but only {} slots exist.",
+                effect.child_index_array.len()
+            ));
+        }
+        for child in effect
+            .child_index_array
+            .iter()
+            .take(child_count.min(effect.child_index_array.len()))
+        {
+            if *child >= 0 && *child as usize >= block_count {
+                problems.push(format!(
+                    "Block {index} references child block {child}, but the file holds {block_count}."
+                ));
+            }
+        }
+        for (slot, parameter) in effect
+            .color_texture_parameter_index
+            .iter()
+            .chain(effect.uv_texture_parameter_index.iter())
+            .enumerate()
+        {
+            if *parameter >= 0 && *parameter as usize >= control_count {
+                problems.push(format!(
+                    "Block {index} texture slot {slot} references model control {parameter}, but the file holds {control_count}."
+                ));
+            }
+        }
+        for reference in &effect.control_references {
+            if reference.selector == 0 {
+                continue;
+            }
+            let end = reference.lookup_index as usize + reference.selector as usize;
+            if end > key_count {
+                problems.push(format!(
+                    "Block {index} curve `{}` reads keys {}..{end}, past curveKeyCount {key_count}.",
+                    reference.name, reference.lookup_index
+                ));
+            }
+        }
+    }
+    problems
+}
+
+/// One constant-lane write: store `value` as the high dword of curve key `lookup_index`.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EfxbnControlConstantPatch {
+    pub lookup_index: u32,
+    pub value: f32,
+}
+
+/// Result of a surgical constant-lane write.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EfxbnControlConstantWriteResult {
+    pub path: String,
+    pub patched_count: usize,
+    pub summary: EfxbnSummary,
+}
+
+/// Surgically patch curve-key **value** floats in an on-disk `.efxbn`.
+///
+/// Layout (confirmed by `parse_efxbn_bytes`): each key is 8 bytes at
+/// `control_lookup_region_offset + index * 8`, with `value` at +4.
+/// Only the value dword is rewritten; keys, blocks, and model-controls stay byte-identical.
+pub fn patch_efxbn_control_constants(
+    path: &str,
+    patches: &[EfxbnControlConstantPatch],
+) -> Result<EfxbnControlConstantWriteResult, String> {
+    if patches.is_empty() {
+        return Err("No EFXBN control constant patches provided.".to_string());
+    }
+    let mut bytes = fs::read(path).map_err(|e| format!("Failed to read efxbn {path}: {e}"))?;
+    let summary = parse_efxbn_bytes(&bytes, path)?;
+    let region_offset = summary.control_lookup_region_offset as usize;
+    let key_count = summary.curve_key_count as usize;
+
+    // Last patch wins for a repeated lookup index.
+    let mut by_index = BTreeMap::<u32, f32>::new();
+    for patch in patches {
+        if !patch.value.is_finite() {
+            return Err(format!(
+                "EFXBN control patch value for lookup index {} is not finite.",
+                patch.lookup_index
+            ));
+        }
+        if patch.lookup_index as usize >= key_count {
+            return Err(format!(
+                "EFXBN control patch lookup index {} is out of range (curveKeyCount={key_count}).",
+                patch.lookup_index
+            ));
+        }
+        by_index.insert(patch.lookup_index, patch.value);
+    }
+
+    for (lookup_index, value) in &by_index {
+        let offset = region_offset + (*lookup_index as usize) * EFXBN_CURVE_KEY_STRIDE + 4;
+        if offset + 4 > bytes.len() {
+            return Err(format!(
+                "EFXBN control patch offset 0x{offset:X} is past file size {}.",
+                bytes.len()
+            ));
+        }
+        bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+    }
+
+    fs::write(path, &bytes).map_err(|e| format!("Failed to write efxbn {path}: {e}"))?;
+    let rewritten = parse_efxbn_bytes(&bytes, path)?;
+    Ok(EfxbnControlConstantWriteResult {
+        path: path.to_string(),
+        patched_count: by_index.len(),
+        summary: rewritten,
+    })
+}
+
+/// Serializes a parsed summary back to EFXBN bytes.
+///
+/// Every byte of the container is covered by a typed field — the 880-byte block through the
+/// reflected `SEfxElementData` layout including `pad01`, the two `*_NotUse` slots,
+/// `worldWindApplyRateRandom` and `reserve_area[31]`, and the 184-byte model control through
+/// its own `reserve_area[12]`. Nothing is copied from a raw image, so a parsed-then-built file
+/// is byte-identical only when the parser really did read everything.
+pub fn build_efxbn_bytes(summary: &EfxbnSummary) -> Result<Vec<u8>, String> {
+    if summary.effects.len() != summary.effect_count as usize {
+        return Err(format!(
+            "EFXBN effectCount is {} but {} blocks are present.",
+            summary.effect_count,
+            summary.effects.len()
+        ));
+    }
+    if summary.control_lookup_entries.len() != summary.curve_key_count as usize {
+        return Err(format!(
+            "EFXBN curveKeyCount is {} but {} curve keys are present.",
+            summary.curve_key_count,
+            summary.control_lookup_entries.len()
+        ));
+    }
+    if summary.model_controls.len() != summary.model_control_config_count as usize {
+        return Err(format!(
+            "EFXBN modelControlCount is {} but {} model controls are present.",
+            summary.model_control_config_count,
+            summary.model_controls.len()
+        ));
+    }
+
+    let block_region = summary.effects.len() * EFXBN_BLOCK_STRIDE;
+    let key_region = summary.control_lookup_entries.len() * EFXBN_CURVE_KEY_STRIDE;
+    let control_region = summary.model_controls.len() * EFXBN_MODEL_CONTROL_STRIDE;
+    let total = EFXBN_BLOCK_REGION_OFFSET + block_region + key_region + control_region;
+    let mut bytes = vec![0u8; total];
+    bytes[0..4].copy_from_slice(b"EFXB");
+    write_u32_le(&mut bytes, 0x04, summary.version_or_flags);
+    write_u32_le(&mut bytes, 0x08, total as u32);
+    write_u32_le(&mut bytes, 0x0c, summary.effect_count);
+    write_u32_le(&mut bytes, 0x10, summary.curve_key_count);
+    write_u32_le(&mut bytes, 0x14, summary.model_control_config_count);
+
+    for (index, effect) in summary.effects.iter().enumerate() {
+        let base = EFXBN_BLOCK_REGION_OFFSET + index * EFXBN_BLOCK_STRIDE;
+        write_efxbn_block(&mut bytes, base, effect)?;
+    }
+
+    let key_base = EFXBN_BLOCK_REGION_OFFSET + block_region;
+    for (index, entry) in summary.control_lookup_entries.iter().enumerate() {
+        let offset = key_base + index * EFXBN_CURVE_KEY_STRIDE;
+        write_u32_le(&mut bytes, offset, entry.key_f32_bits);
+        write_u32_le(&mut bytes, offset + 4, entry.value_f32_bits);
+    }
+
+    let control_base = key_base + key_region;
+    for (index, control) in summary.model_controls.iter().enumerate() {
+        let base = control_base + index * EFXBN_MODEL_CONTROL_STRIDE;
+        write_efxbn_model_control(&mut bytes, base, control)?;
+    }
+
+    Ok(bytes)
+}
+
+fn write_efxbn_block(
+    bytes: &mut [u8],
+    base: usize,
+    effect: &EfxbnEffectSummary,
+) -> Result<(), String> {
+    if effect.control_references.len() != EFXBN_CONTROL_REFERENCE_FIELDS.len() {
+        return Err(format!(
+            "EFXBN block {} carries {} control references, expected {}.",
+            effect.index,
+            effect.control_references.len(),
+            EFXBN_CONTROL_REFERENCE_FIELDS.len()
+        ));
+    }
+    if effect.reserve_area.len() != EFXBN_BLOCK_RESERVE_AREA_LEN {
+        return Err(format!(
+            "EFXBN block {} carries {} reserve dwords, expected {EFXBN_BLOCK_RESERVE_AREA_LEN}.",
+            effect.index,
+            effect.reserve_area.len()
+        ));
+    }
+
+    write_u32_le(bytes, base, effect.level);
+    write_u32_le(bytes, base + 0x04, effect.child_index_size);
+    for (slot, child) in effect.child_index_array.iter().enumerate() {
+        write_i32_le(bytes, base + 0x08 + slot * 4, *child);
+    }
+    write_u32_le(bytes, base + 0x28, effect.effect_type);
+    write_f32_le(bytes, base + 0x2c, effect.life_time_base);
+    write_f32_le(bytes, base + 0x30, effect.life_time_random);
+    write_f32_le(bytes, base + 0x34, effect.interval_base);
+    write_f32_le(bytes, base + 0x38, effect.interval_random);
+    write_u32_le(bytes, base + 0x3c, effect.num_emit);
+    write_u32_le(bytes, base + 0x40, effect.action_flags);
+    write_u32_le(bytes, base + 0x44, effect.spawn_form_type);
+    write_f32x4_le(bytes, base + 0x48, &effect.spawn_form_length);
+    for (reference, (_, raw_offset)) in effect
+        .control_references
+        .iter()
+        .zip(EFXBN_CONTROL_REFERENCE_FIELDS.iter())
+    {
+        let offset = base + *raw_offset as usize;
+        write_u32_le(bytes, offset, reference.selector);
+        write_u32_le(bytes, offset + 4, reference.lookup_index);
+    }
+    write_u32_le(bytes, base + 0xd8, effect.internal_element_data_index);
+    write_u32_le(bytes, base + 0xdc, effect.enable_data_flag);
+    write_f32x4_le(bytes, base + 0xe0, &effect.speed_random);
+    write_f32x4_le(bytes, base + 0xf0, &effect.size_base);
+    write_f32x4_le(bytes, base + 0x100, &effect.size_random);
+    write_f32x4_le(bytes, base + 0x110, &effect.rotation_base);
+    write_f32x4_le(bytes, base + 0x120, &effect.rotation_random);
+    write_f32x4_le(bytes, base + 0x130, &effect.rotation_speed);
+    write_u32_le(bytes, base + 0x140, effect.nud_handle);
+    write_u32_le(bytes, base + 0x144, effect.texture_handle);
+    write_u32_le(bytes, base + 0x148, effect.pad01[0]);
+    write_u32_le(bytes, base + 0x14c, effect.pad01[1]);
+    write_i32_le(bytes, base + 0x150, effect.color_texture_parameter_index[0]);
+    write_i32_le(bytes, base + 0x154, effect.color_texture_parameter_index[1]);
+    write_i32_le(bytes, base + 0x158, effect.uv_texture_parameter_index[0]);
+    write_i32_le(bytes, base + 0x15c, effect.uv_texture_parameter_index[1]);
+    write_f32_le(bytes, base + 0x160, effect.center_pivot[0]);
+    write_f32_le(bytes, base + 0x164, effect.center_pivot[1]);
+    write_u32_le(bytes, base + 0x168, effect.delete_settings);
+    write_f32_le(bytes, base + 0x16c, effect.fade_time_base);
+    write_u32_le(bytes, base + 0x170, effect.culling_type);
+    write_u32_le(bytes, base + 0x174, effect.z_write_enable);
+    write_u32_le(bytes, base + 0x178, effect.z_test_enable);
+    write_u32_le(bytes, base + 0x17c, effect.blend_state);
+    write_u32_le(bytes, base + 0x180, effect.draw_repository_index);
+    write_u32_le(bytes, base + 0x184, effect.instance_amount_type);
+    write_u32_le(bytes, base + 0x188, effect.draw_amount_index);
+    write_u32_le(bytes, base + 0x18c, effect.enable_soft_particle);
+    write_f32x4_le(bytes, base + 0x190, &effect.position_offset);
+    write_f32_le(bytes, base + 0x1a0, effect.delay_emit_time_base);
+    write_u32_le(bytes, base + 0x1a4, effect.emit_area_type);
+    write_u32_le(bytes, base + 0x1a8, effect.enable_z_sort);
+    write_u32_le(bytes, base + 0x1ac, effect.delete_effect_id);
+    write_f32x4_le(bytes, base + 0x1b0, &effect.delete_end_scale);
+    write_f32_le(bytes, base + 0x1c0, effect.light_attenuation_radius);
+    write_u32_le(bytes, base + 0x1c4, effect.lighting_flags);
+    write_u32_le(bytes, base + 0x1c8, effect.normal_map_hash);
+    write_f32_le(bytes, base + 0x1dc, effect.world_wind_apply_rate);
+    write_f32_le(bytes, base + 0x1e0, effect.strip_segment_interval);
+    write_f32_le(bytes, base + 0x1e4, effect.strip_segment_length_not_use);
+    write_f32_le(bytes, base + 0x1e8, effect.strip_segment_life);
+    write_u32_le(bytes, base + 0x1ec, effect.strip_segment_num_not_use);
+    write_u32_le(bytes, base + 0x1f0, effect.strip_segment_split_num);
+    write_u32_le(bytes, base + 0x1f4, effect.drawer_id);
+    write_f32_le(bytes, base + 0x1f8, effect.world_wind_apply_rate_random);
+    write_f32_le(bytes, base + 0x1fc, effect.soft_particle_range);
+    write_f32_le(bytes, base + 0x200, effect.camera_fade_range);
+    write_u32_le(bytes, base + 0x204, effect.extra_flags);
+    write_f32_le(bytes, base + 0x208, effect.noise_direction_max_rot);
+    write_f32_le(bytes, base + 0x20c, effect.noise_direction_area_range);
+    write_f32x4_le(bytes, base + 0x210, &effect.blur_start_color);
+    write_f32x4_le(bytes, base + 0x220, &effect.blur_end_color);
+    write_f32_le(bytes, base + 0x230, effect.blur_enable_range);
+    write_f32_le(bytes, base + 0x234, effect.blur_fade_power);
+    write_u32_le(bytes, base + 0x238, effect.light_type);
+    write_f32_le(bytes, base + 0x23c, effect.light_base_radius);
+    write_f32x4_le(bytes, base + 0x240, &effect.rotation_speed_random);
+    write_f32_le(bytes, base + 0x250, effect.camera_offset);
+    write_u32_le(bytes, base + 0x254, effect.post_effect_type);
+    write_f32_le(bytes, base + 0x258, effect.post_effect_blend_rate);
+    write_f32_le(bytes, base + 0x25c, effect.strip_tail_alpha_rate);
+    write_f32_le(bytes, base + 0x260, effect.strip_head_alpha_rate);
+    write_f32_le(bytes, base + 0x264, effect.emit_interpolate_distance);
+    write_f32_le(bytes, base + 0x268, effect.noise_rotate_pos_offset);
+    write_f32_le(bytes, base + 0x26c, effect.z_sort_offset);
+    write_u32_le(bytes, base + 0x270, effect.special_shader_type);
+    write_f32_le(bytes, base + 0x274, effect.reflection_power);
+    write_u32_le(bytes, base + 0x278, effect.pass2_blend_type);
+    write_f32_le(bytes, base + 0x27c, effect.animation_delay_frame);
+    write_f32_le(bytes, base + 0x280, effect.animation_loop_start_frame);
+    write_f32_le(bytes, base + 0x284, effect.animation_loop_end_frame);
+    write_f32_le(bytes, base + 0x288, effect.animation_delete_frame);
+    write_f32_le(bytes, base + 0x28c, effect.animation_speed_rate);
+    write_i32_le(bytes, base + 0x290, effect.animation_id);
+    write_u32_le(bytes, base + 0x294, effect.animation_blend_delete_frame);
+    write_u32_le(bytes, base + 0x298, effect.emitter_lod_type);
+    write_f32_le(bytes, base + 0x29c, effect.animation_start_frame);
+    write_f32x4_le(bytes, base + 0x2a0, &effect.bounding_sphere_info);
+    write_f32_le(bytes, base + 0x2b0, effect.post_effect_shape_radius);
+    write_f32_le(bytes, base + 0x2b4, effect.world_water_apply_rate);
+    write_u32_le(bytes, base + 0x2b8, effect.num_emit_count_random);
+    write_f32_le(bytes, base + 0x2bc, effect.depth_emission_range);
+    write_f32_le(bytes, base + 0x2c0, effect.depth_emission_power);
+    write_f32_le(bytes, base + 0x2c4, effect.highlight_power);
+    write_u32_le(bytes, base + 0x2c8, effect.mesh_emitter_index);
+    write_u32_le(bytes, base + 0x2cc, effect.mesh_emitter_count);
+    write_u32_le(bytes, base + 0x2d0, effect.field_effect_type);
+    write_f32_le(bytes, base + 0x2d4, effect.field_effect_power);
+    write_f32_le(bytes, base + 0x2d8, effect.field_effect_interval);
+    write_f32_le(bytes, base + 0x2dc, effect.field_effect_angle);
+    write_f32_le(bytes, base + 0x2e0, effect.field_effect_frequency);
+    write_f32_le(bytes, base + 0x2e4, effect.field_effect_offset);
+    write_f32_le(bytes, base + 0x2e8, effect.field_effect_recieve_rate);
+    write_f32_le(bytes, base + 0x2ec, effect.field_effect_extra_value1);
+    write_u32_le(bytes, base + 0x2f0, effect.emit_interpolate_type);
+    for (slot, value) in effect.reserve_area.iter().enumerate() {
+        write_u32_le(
+            bytes,
+            base + EFXBN_BLOCK_RESERVE_AREA_OFFSET + slot * 4,
+            *value,
+        );
+    }
+    Ok(())
+}
+
+fn write_efxbn_model_control(
+    bytes: &mut [u8],
+    base: usize,
+    control: &EfxbnModelControlSummary,
+) -> Result<(), String> {
+    if control.reserve_area.len() != EFXBN_MODEL_CONTROL_RESERVE_AREA_LEN {
+        return Err(format!(
+            "EFXBN model control {} carries {} reserve dwords, expected {EFXBN_MODEL_CONTROL_RESERVE_AREA_LEN}.",
+            control.index,
+            control.reserve_area.len()
+        ));
+    }
+    write_u32_le(bytes, base, control.input_source_type);
+    write_i32_le(bytes, base + 0x04, control.color_map_id);
+    write_u32_le(bytes, base + 0x08, control.addressing_mode);
+    write_u32_le(bytes, base + 0x0c, control.reverse_u);
+    write_u32_le(bytes, base + 0x10, control.reverse_v);
+    write_u32_le(bytes, base + 0x14, control.texture_width);
+    write_u32_le(bytes, base + 0x18, control.texture_height);
+    write_u32_le(bytes, base + 0x1c, control.uv_pattern_type);
+    write_f32x4_le(bytes, base + 0x20, &control.uv_u);
+    write_f32x4_le(bytes, base + 0x30, &control.uv_v);
+    write_f32_le(bytes, base + 0x40, control.uv_scroll_speed);
+    write_f32_le(bytes, base + 0x44, control.uv_scroll_limit);
+    write_f32_le(bytes, base + 0x48, control.uv_scroll_direction);
+    write_u32_le(bytes, base + 0x4c, control.uv_animation_random);
+    write_u32_le(bytes, base + 0x50, control.uv_animation_frame_num);
+    write_u32_le(bytes, base + 0x54, control.uv_animation_frame_width);
+    write_u32_le(bytes, base + 0x58, control.uv_animation_frame_height);
+    write_u32_le(bytes, base + 0x5c, control.uv_animation_frame_num_by_line);
+    write_u32_le(bytes, base + 0x60, control.uv_animation_frame_time);
+    write_u32_le(bytes, base + 0x64, control.uv_animation_3d_texture);
+    write_f32_le(bytes, base + 0x68, control.uv_scroll_model_speed_u);
+    write_f32_le(bytes, base + 0x6c, control.uv_scroll_model_speed_v);
+    write_f32_le(bytes, base + 0x70, control.uv_distortion_power_u);
+    write_f32_le(bytes, base + 0x74, control.uv_distortion_power_v);
+    write_u32_le(bytes, base + 0x78, control.texture_setting_flags);
+    write_u32_le(bytes, base + 0x7c, control.uv_animation_start_frame);
+    write_f32_le(bytes, base + 0x80, control.uv_random_offset_u);
+    write_f32_le(bytes, base + 0x84, control.uv_random_offset_v);
+    for (slot, value) in control.reserve_area.iter().enumerate() {
+        write_u32_le(
+            bytes,
+            base + EFXBN_MODEL_CONTROL_RESERVE_AREA_OFFSET + slot * 4,
+            *value,
+        );
+    }
+    Ok(())
+}
+
+fn write_u32_le(bytes: &mut [u8], offset: usize, value: u32) {
+    bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+}
+
+fn write_i32_le(bytes: &mut [u8], offset: usize, value: i32) {
+    bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+}
+
+/// Floats round-trip through their bit pattern, so a signalling NaN or a negative zero in the
+/// source file survives the rebuild unchanged.
+fn write_f32_le(bytes: &mut [u8], offset: usize, value: f32) {
+    bytes[offset..offset + 4].copy_from_slice(&value.to_bits().to_le_bytes());
+}
+
+fn write_f32x4_le(bytes: &mut [u8], offset: usize, values: &[f32; 4]) {
+    for (slot, value) in values.iter().enumerate() {
+        write_f32_le(bytes, offset + slot * 4, *value);
+    }
+}
+
+/// Byte offset of the first effect block, i.e. the size of the EFXBN header.
+/// Native reference: `sub_140145DF0` reads block `i` from `payload + 0x18 + i * 0x370`.
+const EFXBN_BLOCK_REGION_OFFSET: usize = 0x18;
+
+/// Size of one effect block. Identical to the shader-reflected `SEfxElementData`,
+/// so block offsets and reflected offsets are the same number.
+const EFXBN_BLOCK_STRIDE: usize = 0x370;
+
+/// `SEfxElementData.reserve_area[31]` at reflected offset 756, filling the block to `0x370`.
+const EFXBN_BLOCK_RESERVE_AREA_OFFSET: usize = 0x2f4;
+const EFXBN_BLOCK_RESERVE_AREA_LEN: usize = 31;
+
+/// Size of one model-control (texture parameter) record.
+const EFXBN_MODEL_CONTROL_STRIDE: usize = 0xb8;
+
+/// The model control's own trailing reserve dwords, filling the record to `0xb8`.
+const EFXBN_MODEL_CONTROL_RESERVE_AREA_OFFSET: usize = 0x88;
+const EFXBN_MODEL_CONTROL_RESERVE_AREA_LEN: usize = 12;
+
+/// One curve key is an `(time, value)` float pair. Times run from 0 to 100.
+const EFXBN_CURVE_KEY_STRIDE: usize = 8;
+
+/// Curve references declared by `SEfxElementData` as `EfxElementKeyArrayInfo`
+/// (`{ uint size; uint curveIndex; }`) at their reflected offsets.
+const EFXBN_CONTROL_REFERENCE_FIELDS: [(&str, u32); 18] = [
+    ("spawnForm0", 0x58),
+    ("spawnForm1", 0x60),
+    ("spawnForm2", 0x68),
+    ("spawnForm3", 0x70),
+    ("spreadX", 0x78),
+    ("spreadY", 0x80),
+    ("speedBaseX", 0x88),
+    ("speedBaseY", 0x90),
+    ("speedBaseZ", 0x98),
+    ("scaleBaseX", 0xa0),
+    ("scaleBaseY", 0xa8),
+    ("scaleBaseZ", 0xb0),
+    ("colorR", 0xb8),
+    ("colorG", 0xc0),
+    ("colorB", 0xc8),
+    ("colorA", 0xd0),
+    ("worldGravityAccel", 0x1cc),
+    ("directionAccel", 0x1d4),
 ];
 
 fn efxbn_unknown_todo() -> EfxbnTodo {
     EfxbnTodo {
         unknowns: vec![
             EfxbnUnknownTodo {
-                field: "header.unk0x18".to_string(),
+                field: "effects[].reserveArea".to_string(),
                 status: "unk".to_string(),
-                reason: "Header u32 at 0x18 is preserved; current EXVS2 corpus keeps it zero."
+                reason: "SEfxElementData declares reserve_area[31] at offset 756; the corpus keeps it zero and no shader or CPU consumer reads it."
                     .to_string(),
-                follow_up: "Only rename after a runtime reader or nonzero corpus example proves meaning."
-                    .to_string(),
+                follow_up: "Only name entries after a nonzero corpus example appears.".to_string(),
             },
             EfxbnUnknownTodo {
-                field: "header.unk0x1C".to_string(),
+                field: "effects[].pad01".to_string(),
                 status: "unk".to_string(),
-                reason: "Header u32 at 0x1C has small corpus distribution, but no proven runtime semantic."
+                reason: "SEfxElementData declares pad01[2] at offset 328 between textureHandle and the parameter slots; no shader reads it."
                     .to_string(),
-                follow_up: "Map against loader/corpus once a consumer is anchored.".to_string(),
-            },
-            EfxbnUnknownTodo {
-                field: "effects[].metaParsed.unkConfigInfo".to_string(),
-                status: "unk".to_string(),
-                reason: "First eight meta dwords are parsed and writable, but individual authoring labels are incomplete."
+                follow_up: "Carried verbatim by build_efxbn_bytes; name it only if a nonzero corpus example appears."
                     .to_string(),
-                follow_up: "Rename entries one by one only after anchored runtime consumers are found."
-                    .to_string(),
-            },
-            EfxbnUnknownTodo {
-                field: "effects[].metaParsed.configHeader.unk*".to_string(),
-                status: "unk".to_string(),
-                reason: "0x20..0x4F config header is structured, but unkFloat/unkInt/unkBytes/unkFloats entries are not fully semantically named."
-                    .to_string(),
-                follow_up: "Keep editable and byte-preserved; avoid deep IDA until conversion work needs exact names."
-                    .to_string(),
-            },
-            EfxbnUnknownTodo {
-                field: "effects[].metaParsed.unkConfigInfo2".to_string(),
-                status: "unk".to_string(),
-                reason: "Meta 0x140..0x15F dwords overlap known model-control refs but not every slot is named."
-                    .to_string(),
-                follow_up: "Split into named fields later after tail-bit and model-control consumer map is complete."
-                    .to_string(),
-            },
-            EfxbnUnknownTodo {
-                field: "effects[].metaParsed.unk32".to_string(),
-                status: "unk".to_string(),
-                reason: "Meta 0x13C is preserved as signed int32; meaning unresolved.".to_string(),
-                follow_up: "Rename only with anchored runtime read.".to_string(),
             },
             EfxbnUnknownTodo {
                 field: "effects[].controlReferences".to_string(),
@@ -610,9 +1622,19 @@ pub fn validate_effect_folder_for_repack(
     }
 
     let model_hashes: HashSet<i32> = models.iter().map(|m| m.hash.signed).collect();
+    let common_model_hashes: HashSet<i32> = match collect_common_pack(&root_path, &mut warnings) {
+        Ok(pack) => pack
+            .map(|pack| pack.models.iter().map(|model| model.hash.signed).collect())
+            .unwrap_or_default(),
+        Err(error) => {
+            push_error(&mut errors, "structure", None, error, Some(&structure_path));
+            HashSet::new()
+        }
+    };
     let mut efxbn_count = 0usize;
     let mut texture_count = 0usize;
     let mut unresolved = BTreeSet::new();
+    let mut from_common = BTreeSet::new();
     let mut seen_hash_by_kind: HashSet<(String, i32)> = HashSet::new();
     for item in collect_items(&forest) {
         let Some(file_index) = item.file_index() else {
@@ -643,10 +1665,23 @@ pub fn validate_effect_folder_for_repack(
             }
             match parse_efxbn_file(record.path.to_string_lossy().as_ref()) {
                 Ok(summary) => {
+                    for problem in validate_efxbn_summary(&summary) {
+                        push_error(
+                            &mut errors,
+                            "efxbn",
+                            Some(&record.file_url),
+                            problem,
+                            Some(&record.path),
+                        );
+                    }
                     for hash in summary.model_ids {
-                        if hash.signed != 0 && !model_hashes.contains(&hash.signed) {
-                            unresolved.insert(hash.signed);
-                        }
+                        classify_resource_reference(
+                            hash.signed,
+                            &model_hashes,
+                            &common_model_hashes,
+                            &mut from_common,
+                            &mut unresolved,
+                        );
                     }
                 }
                 Err(error) => push_error(
@@ -669,9 +1704,15 @@ pub fn validate_effect_folder_for_repack(
             }
         }
     }
+    if !from_common.is_empty() {
+        warnings.push(format!(
+            "Resolved {} model reference(s) from the shared pack {EFFECT_FOLDER_COMMON_PACK_NAME}.",
+            from_common.len()
+        ));
+    }
     for hash in &unresolved {
         warnings.push(format!(
-            "EFXBN references missing modelId {}.",
+            "EFXBN references modelId {} that exists in neither this pack nor {EFFECT_FOLDER_COMMON_PACK_NAME}.",
             EffectFolderHash::from_i32(*hash).hex
         ));
     }
@@ -885,6 +1926,39 @@ pub fn import_effect_model_folder(
     })
 }
 
+/// Update the structure Item hash (`unk3`) for one file index.
+///
+/// The value is always stored as a JSON number (i32). Callers may compute it
+/// from a direct hex/decimal edit or from an IEEE CRC32 of a string seed.
+pub fn update_effect_folder_item_hash(
+    effect_root: &str,
+    structure_json_path: Option<&str>,
+    file_index: i32,
+    hash_id: i32,
+) -> Result<EffectFolderMutationResult, String> {
+    let root_path = validate_dir(effect_root)?;
+    let structure_path = resolve_structure_path(&root_path, structure_json_path)?;
+    let mut structure = read_structure_file(&structure_path)?;
+    let mut forest = parse_forest(&structure.sub_file_structure)?;
+
+    if !set_item_hash_in_forest(&mut forest, file_index, hash_id) {
+        return Err(format!(
+            "No structure Item found for fileIndex {file_index}."
+        ));
+    }
+
+    write_structure_file(&structure_path, &mut structure, &forest)?;
+
+    Ok(EffectFolderMutationResult {
+        effect_root: root_path.to_string_lossy().to_string(),
+        structure_json_path: structure_path.to_string_lossy().to_string(),
+        total_files: structure.sub_file_data.len(),
+        added_files: vec![],
+        removed_files: vec![],
+        warnings: vec![],
+    })
+}
+
 pub fn delete_effect_folder_entries(
     effect_root: &str,
     structure_json_path: Option<&str>,
@@ -945,6 +2019,24 @@ pub fn copy_effect_folder_selection(
     destination_structure_json_path: Option<&str>,
     selections: &[EffectFolderSelection],
 ) -> Result<EffectFolderCopyResult, String> {
+    copy_effect_folder_selection_with_policies(
+        source_effect_root,
+        source_structure_json_path,
+        destination_effect_root,
+        destination_structure_json_path,
+        selections,
+        &[],
+    )
+}
+
+pub fn copy_effect_folder_selection_with_policies(
+    source_effect_root: &str,
+    source_structure_json_path: Option<&str>,
+    destination_effect_root: &str,
+    destination_structure_json_path: Option<&str>,
+    selections: &[EffectFolderSelection],
+    policies: &[EffectFolderCopyEfxbnPolicy],
+) -> Result<EffectFolderCopyResult, String> {
     let source_root = validate_dir(source_effect_root)?;
     let source_structure_path = resolve_structure_path(&source_root, source_structure_json_path)?;
     let source_json_dir = source_structure_path
@@ -980,6 +2072,7 @@ pub fn copy_effect_folder_selection(
             &mut copied,
             &mut skipped,
             &mut copied_keys,
+            None,
         )?;
     }
     for model in closure.model_nodes {
@@ -996,7 +2089,31 @@ pub fn copy_effect_folder_selection(
             &mut copied_keys,
         )?;
     }
+    for animation in closure.animation_items {
+        append_source_item_to_destination(
+            &source_root,
+            &dest_root,
+            dest_json_dir,
+            &mut dest_structure,
+            &mut dest_forest,
+            &mut dest_data,
+            &animation,
+            &mut copied,
+            &mut skipped,
+            &mut copied_keys,
+            None,
+        )?;
+    }
     for efxbn in closure.efxbn_items {
+        let file_index = efxbn.file_index();
+        let policy = file_index.and_then(|idx| policies.iter().find(|item| item.file_index == idx));
+        if policy.is_some_and(|item| item.skip) {
+            skipped.push(format!(
+                "Kept existing efxbn fileIndex {}.",
+                file_index.unwrap_or(-1)
+            ));
+            continue;
+        }
         append_source_item_to_destination(
             &source_root,
             &dest_root,
@@ -1008,6 +2125,7 @@ pub fn copy_effect_folder_selection(
             &mut copied,
             &mut skipped,
             &mut copied_keys,
+            policy,
         )?;
     }
 
@@ -1057,6 +2175,7 @@ struct CopyClosure {
     efxbn_items: Vec<Node>,
     model_nodes: Vec<Node>,
     texture_items: Vec<Node>,
+    animation_items: Vec<Node>,
 }
 
 fn build_copy_closure(
@@ -1070,7 +2189,46 @@ fn build_copy_closure(
     let all_models = collect_model_nodes(forest, data_by_index);
     let mut wanted_model_hashes = BTreeSet::new();
     let mut wanted_texture_hashes = BTreeSet::new();
+    let mut wanted_animation_hashes = BTreeSet::new();
+    let mut efxbn_in_closure: HashSet<i32> = HashSet::new();
+    let mut texture_in_closure: HashSet<i32> = HashSet::new();
+    let mut model_in_closure: HashSet<i32> = HashSet::new();
 
+    let push_efxbn =
+        |item: &Node, closure: &mut CopyClosure, efxbn_in_closure: &mut HashSet<i32>| {
+            let Some(file_index) = item.file_index() else {
+                return;
+            };
+            if efxbn_in_closure.insert(file_index) {
+                closure.efxbn_items.push(item.clone());
+            }
+        };
+
+    let push_texture =
+        |item: &Node, closure: &mut CopyClosure, texture_in_closure: &mut HashSet<i32>| {
+            let Some(file_index) = item.file_index() else {
+                return;
+            };
+            if texture_in_closure.insert(file_index) {
+                closure.texture_items.push(item.clone());
+            }
+        };
+
+    let push_model =
+        |model: &Node, closure: &mut CopyClosure, model_in_closure: &mut HashSet<i32>| {
+            let key = folder_hash(model).unwrap_or_else(|| {
+                // Fallback: first child file index keeps uniqueness when hash is missing.
+                collect_items(std::slice::from_ref(model))
+                    .first()
+                    .and_then(|item| item.file_index())
+                    .unwrap_or(0)
+            });
+            if model_in_closure.insert(key) {
+                closure.model_nodes.push(model.clone());
+            }
+        };
+
+    // Seed from user selection.
     for item in &all_items {
         let Some(file_index) = item.file_index() else {
             continue;
@@ -1078,59 +2236,81 @@ fn build_copy_closure(
         let Some(record) = data_by_index.get(&file_index) else {
             continue;
         };
-        if selections
+        if !selections
             .iter()
             .any(|selection| selection_matches_item(selection, item, record))
         {
-            match record.actual_ext.as_str() {
-                ".efxbn" => {
-                    closure.efxbn_items.push((*item).clone());
-                    if let Some(hash) = item.item_entry().and_then(item_hash) {
-                        wanted_texture_hashes.insert(hash);
-                    }
-                    match parse_efxbn_file(record.path.to_string_lossy().as_ref()) {
-                        Ok(summary) => {
-                            for hash in summary.model_ids {
-                                if hash.signed != 0 {
-                                    wanted_model_hashes.insert(hash.signed);
-                                    wanted_texture_hashes.insert(hash.signed);
-                                }
-                            }
-                        }
-                        Err(error) => warnings.push(format!(
-                            "Failed to parse selected efxbn {}: {error}",
-                            record.file_url
-                        )),
-                    }
-                }
-                ".nutexb" => closure.texture_items.push((*item).clone()),
-                _ => {}
+            continue;
+        }
+        match record.actual_ext.as_str() {
+            ".efxbn" => {
+                push_efxbn(item, &mut closure, &mut efxbn_in_closure);
             }
+            ".nutexb" => push_texture(item, &mut closure, &mut texture_in_closure),
+            _ => {}
         }
     }
 
     for model in &all_models {
-        let model_hash = folder_hash(model);
         if selections
             .iter()
             .any(|selection| selection_matches_model(selection, model, data_by_index))
-            || model_hash.is_some_and(|hash| wanted_model_hashes.contains(&hash))
         {
-            closure.model_nodes.push((*model).clone());
+            push_model(model, &mut closure, &mut model_in_closure);
         }
     }
 
-    let copied_model_hashes: HashSet<i32> =
-        closure.model_nodes.iter().filter_map(folder_hash).collect();
-    for hash in wanted_model_hashes {
-        if !copied_model_hashes.contains(&hash) {
-            warnings.push(format!(
-                "Selected efxbn references missing modelId {}.",
-                EffectFolderHash::from_i32(hash).hex
-            ));
+    // Read direct EFXBN resource IDs. Control references are curve selectors,
+    // not FHM2D file indices, so they must never expand the copy set.
+    for item in closure.efxbn_items.clone() {
+        let Some(efxbn_index) = item.file_index() else {
+            continue;
+        };
+        let Some(record) = data_by_index.get(&efxbn_index) else {
+            continue;
+        };
+        if record.actual_ext != ".efxbn" {
+            continue;
+        }
+        match parse_efxbn_file(record.path.to_string_lossy().as_ref()) {
+            Ok(summary) => {
+                absorb_efxbn_summary_refs(
+                    &summary,
+                    &mut wanted_model_hashes,
+                    &mut wanted_texture_hashes,
+                    &mut wanted_animation_hashes,
+                );
+            }
+            Err(error) => warnings.push(format!(
+                "Failed to parse efxbn {}: {error}",
+                record.file_url
+            )),
         }
     }
 
+    // Models referenced by hash (meta modelId).
+    for model in &all_models {
+        let model_hash = folder_hash(model);
+        if model_hash.is_some_and(|hash| wanted_model_hashes.contains(&hash)) {
+            push_model(model, &mut closure, &mut model_in_closure);
+        }
+    }
+
+    // Material textures are transitive dependencies of source-owned models.
+    // Missing resource IDs stay silent because EXVS2 may use global pools.
+    for model in &closure.model_nodes {
+        let model_files = model_from_node(model, data_by_index).files;
+        match collect_model_material_texture_ids(&model_files) {
+            Ok(ids) => {
+                wanted_texture_hashes.extend(ids.into_iter().map(|hash| hash.signed));
+            }
+            Err(error) => warnings.push(format!(
+                "Failed to read copied model material textures: {error}"
+            )),
+        }
+    }
+
+    // Textures referenced by model-control blocks or copied model materials.
     for item in &all_items {
         let Some(file_index) = item.file_index() else {
             continue;
@@ -1138,20 +2318,72 @@ fn build_copy_closure(
         let Some(record) = data_by_index.get(&file_index) else {
             continue;
         };
-        if record.actual_ext == ".nutexb"
+        if record.actual_ext != ".nutexb" {
+            continue;
+        }
+        if item
+            .item_entry()
+            .and_then(item_hash)
+            .is_some_and(|hash| wanted_texture_hashes.contains(&hash))
+        {
+            push_texture(item, &mut closure, &mut texture_in_closure);
+        }
+    }
+
+    // Animation IDs are filename-stem CRC32 values. Copy only matching source
+    // NUANMB files; globally resolved animations are intentionally ignored.
+    let copied_model_file_indices: HashSet<i32> = closure
+        .model_nodes
+        .iter()
+        .flat_map(|model| collect_items(std::slice::from_ref(model)))
+        .filter_map(|item| item.file_index())
+        .collect();
+    let mut animation_in_closure = HashSet::new();
+    for item in &all_items {
+        let Some(file_index) = item.file_index() else {
+            continue;
+        };
+        if copied_model_file_indices.contains(&file_index) {
+            continue;
+        }
+        let Some(record) = data_by_index.get(&file_index) else {
+            continue;
+        };
+        if record.actual_ext == ".nuanmb"
             && item
                 .item_entry()
                 .and_then(item_hash)
-                .is_some_and(|hash| wanted_texture_hashes.contains(&hash))
-            && !closure
-                .texture_items
-                .iter()
-                .any(|existing| existing.file_index() == Some(file_index))
+                .is_some_and(|hash| wanted_animation_hashes.contains(&hash))
+            && animation_in_closure.insert(file_index)
         {
-            closure.texture_items.push((*item).clone());
+            closure.animation_items.push((*item).clone());
         }
     }
+
     closure
+}
+
+fn absorb_efxbn_summary_refs(
+    summary: &EfxbnSummary,
+    wanted_model_hashes: &mut BTreeSet<i32>,
+    wanted_texture_hashes: &mut BTreeSet<i32>,
+    wanted_animation_hashes: &mut BTreeSet<i32>,
+) {
+    for hash in &summary.model_ids {
+        if hash.signed != 0 {
+            wanted_model_hashes.insert(hash.signed);
+        }
+    }
+    for hash in &summary.model_control_texture_ids {
+        if hash.signed != 0 {
+            wanted_texture_hashes.insert(hash.signed);
+        }
+    }
+    for hash in &summary.animation_ids {
+        if hash.signed != 0 {
+            wanted_animation_hashes.insert(hash.signed);
+        }
+    }
 }
 
 fn append_source_item_to_destination(
@@ -1165,6 +2397,7 @@ fn append_source_item_to_destination(
     copied: &mut Vec<String>,
     skipped: &mut Vec<String>,
     copied_keys: &mut HashSet<String>,
+    policy: Option<&EffectFolderCopyEfxbnPolicy>,
 ) -> Result<(), String> {
     let Node::Item {
         entry, file_index, ..
@@ -1181,7 +2414,37 @@ fn append_source_item_to_destination(
     if !copied_keys.insert(key.clone()) {
         return Ok(());
     }
+    let overwrite = policy.is_some_and(|item| item.overwrite);
+    let dest_name = match policy.and_then(|item| {
+        item.dest_file_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(ToOwned::to_owned)
+    }) {
+        Some(name) => Some(sanitize_effect_copy_dest_file_name(&name)?),
+        None => None,
+    };
     if destination_has_item_hash(dest_forest, dest_data, &source_record.actual_ext, hash) {
+        if overwrite {
+            let dest_record = find_dest_record_by_hash(
+                dest_forest,
+                dest_data,
+                &source_record.actual_ext,
+                hash,
+            )
+            .ok_or_else(|| {
+                format!(
+                    "Destination already has {} hash {} but the file record is missing.",
+                    source_record.actual_ext,
+                    EffectFolderHash::from_i32(hash).hex
+                )
+            })?;
+            let dest_path = dest_record.path.clone();
+            copy_one_file_replace(&source_record.path, &dest_path)?;
+            copied.push(dest_path.to_string_lossy().to_string());
+            return Ok(());
+        }
         skipped.push(format!(
             "Destination already has {} hash {}.",
             source_record.actual_ext,
@@ -1189,14 +2452,38 @@ fn append_source_item_to_destination(
         ));
         return Ok(());
     }
+    if overwrite {
+        return Err(format!(
+            "Overwrite requested for {} hash {}, but the destination pack does not have it.",
+            source_record.actual_ext,
+            EffectFolderHash::from_i32(hash).hex
+        ));
+    }
 
     let target_dir = primary_file_dir(dest_root, dest_data);
-    let filename = source_record
+    let source_filename = source_record
         .path
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("effect_file.bin");
-    let target = unique_child_path(&target_dir, filename);
+    let filename = dest_name.as_deref().unwrap_or(source_filename);
+    let filename = if source_record.actual_ext == ".efxbn" {
+        ensure_extension(filename, ".efxbn")
+    } else {
+        filename.to_string()
+    };
+    let target = if dest_name.is_some() {
+        let candidate = target_dir.join(&filename);
+        if candidate.exists() {
+            return Err(format!(
+                "Destination already has file {}.",
+                candidate.display()
+            ));
+        }
+        candidate
+    } else {
+        unique_child_path(&target_dir, &filename)
+    };
     copy_one_file(&source_record.path, &target)?;
     let new_file_index = next_file_index(&dest_structure.sub_file_data);
     let file_url = file_url_for_target(dest_json_dir, &target);
@@ -1649,12 +2936,14 @@ fn file_record_from_value(entry: &Value, json_dir: &Path) -> Result<FileRecord, 
         .and_then(Value::as_str)
         .map(str::to_string)
         .unwrap_or_else(|| stem(&file_basename(&file_url)));
-    let actual_ext = actual_ext(&file_type, &file_url);
+    let path = resolve_file_path(json_dir, &file_url);
+    let declared_ext = actual_ext(&file_type, &file_url);
+    let actual_ext = content_aware_effect_ext(&path, declared_ext);
     Ok(FileRecord {
         file_index,
         file_type,
         actual_ext,
-        path: resolve_file_path(json_dir, &file_url),
+        path,
         file_url,
         file_base_name,
     })
@@ -1782,7 +3071,31 @@ fn model_from_node(node: &Node, data_by_index: &HashMap<i32, FileRecord>) -> Eff
         folder_unk3,
         files,
         missing_required_exts,
+        material_texture_ids: Vec::new(),
     }
+}
+
+fn collect_model_material_texture_ids(
+    files: &[EffectFolderFileItem],
+) -> Result<Vec<EffectFolderHash>, String> {
+    let mut hashes = BTreeSet::new();
+    for file in files
+        .iter()
+        .filter(|file| file.actual_ext == ".numatb" && !file.missing)
+    {
+        let bytes = fs::read(&file.path)
+            .map_err(|e| format!("Failed to read numatb {}: {e}", file.path))?;
+        let matl = load_matl_data(&bytes)
+            .map_err(|e| format!("Failed to parse numatb {}: {e}", file.path))?;
+        for reference in collect_texture_refs(&matl) {
+            let base_name = file_basename(reference.trim());
+            let resource_stem = stem(&base_name);
+            if !resource_stem.is_empty() {
+                hashes.insert(crc32fast::hash(resource_stem.as_bytes()) as i32);
+            }
+        }
+    }
+    Ok(hashes.into_iter().map(EffectFolderHash::from_i32).collect())
 }
 
 fn file_item_from_node(
@@ -1826,7 +3139,7 @@ fn is_inside_model(models: &[EffectFolderModel], file_index: i32) -> bool {
 }
 
 fn parse_efxbn_bytes(bytes: &[u8], path: &str) -> Result<EfxbnSummary, String> {
-    if bytes.len() < 0x20 {
+    if bytes.len() < EFXBN_BLOCK_REGION_OFFSET {
         return Err(format!("EFXBN file too small: {} bytes", bytes.len()));
     }
     if &bytes[0..4] != b"EFXB" {
@@ -1835,52 +3148,38 @@ fn parse_efxbn_bytes(bytes: &[u8], path: &str) -> Result<EfxbnSummary, String> {
     let version_or_flags = read_u32_le(bytes, 0x04)?;
     let file_size = read_u32_le(bytes, 0x08)?;
     let effect_count = read_u32_le(bytes, 0x0c)?;
-    let control_config_region_param = read_u32_le(bytes, 0x10)?;
+    let curve_key_count = read_u32_le(bytes, 0x10)?;
     let model_control_config_count = read_u32_le(bytes, 0x14)?;
-    let unknown18 = read_u32_le(bytes, 0x18)?;
-    let unknown1c = read_u32_le(bytes, 0x1c)?;
     if file_size as usize != bytes.len() {
         return Err(format!(
             "EFXBN header fileSize is {file_size}, actual size is {}.",
             bytes.len()
         ));
     }
-    let meta_size = effect_count as usize * 0x370;
-    if bytes.len() < 0x20 + meta_size {
+    let meta_size = effect_count as usize * EFXBN_BLOCK_STRIDE;
+    if bytes.len() < EFXBN_BLOCK_REGION_OFFSET + meta_size {
         return Err("EFXBN meta region extends past file size.".to_string());
     }
-    let control_region_offset = 0x20 + meta_size;
-    let (control_lookup_region_offset, control_lookup_region_size, control_lookup_region_end);
-    let (control_block_size, control_remainder_size) = if effect_count == 0 {
-        control_lookup_region_offset = control_region_offset;
-        control_lookup_region_size = 0usize;
-        control_lookup_region_end = control_region_offset;
-        (None, 0usize)
-    } else {
-        let total = control_config_region_param
-            .checked_mul(8)
-            .ok_or_else(|| "Invalid controlConfigRegionParam.".to_string())?;
-        let usable = total
-            .checked_sub(8)
-            .ok_or_else(|| "Invalid controlConfigRegionParam.".to_string())?;
-        control_lookup_region_offset = control_region_offset - 8;
-        control_lookup_region_size = total as usize;
-        control_lookup_region_end = control_lookup_region_offset + control_lookup_region_size;
-        (
-            Some(usable / effect_count),
-            (usable % effect_count) as usize,
-        )
-    };
+    // Native layout, confirmed at sub_140145DF0: the header is six dwords, block `i`
+    // starts at `payload + 0x18 + i * 0x370`, the curve key array follows the blocks,
+    // and the model-control region follows the keys.
+    let control_lookup_region_offset = EFXBN_BLOCK_REGION_OFFSET + meta_size;
+    let control_lookup_region_size = curve_key_count as usize * EFXBN_CURVE_KEY_STRIDE;
+    let control_lookup_region_end = control_lookup_region_offset + control_lookup_region_size;
+    if control_lookup_region_end > bytes.len() {
+        return Err("EFXBN curve key region extends past file size.".to_string());
+    }
     let model_control_region_offset = control_lookup_region_end;
-    let model_control_region_size = model_control_config_count as usize * 0xb8;
+    let model_control_region_size =
+        model_control_config_count as usize * EFXBN_MODEL_CONTROL_STRIDE;
     let trailing_offset = model_control_region_offset + model_control_region_size;
     if trailing_offset > bytes.len() {
         return Err("EFXBN model-control region extends past file size.".to_string());
     }
 
-    let mut control_lookup_entries = Vec::with_capacity(control_config_region_param as usize);
-    for index in 0..control_config_region_param as usize {
-        let off = control_lookup_region_offset + index * 8;
+    let mut control_lookup_entries = Vec::with_capacity(curve_key_count as usize);
+    for index in 0..curve_key_count as usize {
+        let off = control_lookup_region_offset + index * EFXBN_CURVE_KEY_STRIDE;
         control_lookup_entries.push(EfxbnControlLookupEntry {
             index,
             key_f32_bits: read_u32_le(bytes, off)?,
@@ -1894,95 +3193,245 @@ fn parse_efxbn_bytes(bytes: &[u8], path: &str) -> Result<EfxbnSummary, String> {
     let mut model_ids = BTreeSet::new();
     let mut animation_ids = BTreeSet::new();
     for i in 0..effect_count as usize {
-        let base = 0x20 + i * 0x370;
-        let model_id = read_i32_le(bytes, base + 0x138)?;
-        let animation_id = read_i32_le(bytes, base + 0x288)?;
+        let base = EFXBN_BLOCK_REGION_OFFSET + i * EFXBN_BLOCK_STRIDE;
+        // `nudHandle` and `animationHash` in the reflected struct.
+        let model_id = read_i32_le(bytes, base + 0x140)?;
+        let animation_id = read_i32_le(bytes, base + 0x290)?;
         model_ids.insert(model_id);
         animation_ids.insert(animation_id);
-        let mut id_table = Vec::new();
-        for slot in 0..16 {
-            let off = base + 0x50 + slot * 8;
-            id_table.push(EfxbnIdPair {
-                flag: read_i32_le(bytes, off)?,
-                id: read_i32_le(bytes, off + 4)?,
-            });
-        }
         let mut control_references = Vec::with_capacity(EFXBN_CONTROL_REFERENCE_FIELDS.len());
-        for (index, raw_offset) in EFXBN_CONTROL_REFERENCE_FIELDS.iter().enumerate() {
+        for (index, (name, raw_offset)) in EFXBN_CONTROL_REFERENCE_FIELDS.iter().enumerate() {
             let off = base + *raw_offset as usize;
             control_references.push(EfxbnControlReferenceSummary {
                 index,
-                name: format!("ctrl{index:02}"),
+                name: (*name).to_string(),
                 raw_offset: *raw_offset,
-                runtime_offset: *raw_offset + 8,
+                // Block offsets and reflected `SEfxElementData` offsets are identical.
+                runtime_offset: *raw_offset,
                 selector: read_u32_le(bytes, off)?,
                 lookup_index: read_u32_le(bytes, off + 4)?,
             });
         }
-        let mut unk_config_info = Vec::with_capacity(8);
-        for slot in 0..8 {
-            unk_config_info.push(read_i32_le(bytes, base + slot * 4)?);
+        let mut reserve_area = Vec::with_capacity(EFXBN_BLOCK_RESERVE_AREA_LEN);
+        for slot in 0..EFXBN_BLOCK_RESERVE_AREA_LEN {
+            reserve_area.push(read_u32_le(
+                bytes,
+                base + EFXBN_BLOCK_RESERVE_AREA_OFFSET + slot * 4,
+            )?);
         }
-        let config_header_base = base + 0x20;
-        let mut unk_bytes12 = Vec::with_capacity(12);
-        for slot in 0..12 {
-            let offset = config_header_base + 0x14 + slot;
-            let value = *bytes
-                .get(offset)
-                .ok_or_else(|| format!("Read i8 out of range at 0x{offset:X}"))?;
-            unk_bytes12.push(value as i8);
-        }
-        let config_header = EfxbnMetaConfigHeaderSummary {
-            number: read_u32_le(bytes, config_header_base)?,
-            unk_float_a: read_f32_le(bytes, config_header_base + 0x04)?,
-            unk_int_a: read_u32_le(bytes, config_header_base + 0x08)?,
-            unk_float_b: read_f32_le(bytes, config_header_base + 0x0c)?,
-            unk_int_b: read_u32_le(bytes, config_header_base + 0x10)?,
-            unk_bytes12,
-            unk_floats4: [
-                read_f32_le(bytes, config_header_base + 0x20)?,
-                read_f32_le(bytes, config_header_base + 0x24)?,
-                read_f32_le(bytes, config_header_base + 0x28)?,
-                read_f32_le(bytes, config_header_base + 0x2c)?,
-            ],
-        };
-        let mut unk_config_info2 = Vec::with_capacity(8);
-        for slot in 0..8 {
-            unk_config_info2.push(read_i32_le(bytes, base + 0x140 + slot * 4)?);
-        }
-        let meta_parsed = EfxbnMetaParsedSummary {
-            unk_config_info,
-            config_header,
-            id_table_pairs: id_table.clone(),
-            control_references: control_references.clone(),
-            model_id,
-            model_hash: EffectFolderHash::from_i32(model_id),
-            animation_id,
-            animation_hash: EffectFolderHash::from_i32(animation_id),
-            unk32: read_i32_le(bytes, base + 0x13c)?,
-            unk_config_info2,
-        };
         effects.push(EfxbnEffectSummary {
             index: i,
+            level: read_u32_le(bytes, base)?,
+            child_index_size: read_u32_le(bytes, base + 0x04)?,
+            child_index_array: [
+                read_i32_le(bytes, base + 0x08)?,
+                read_i32_le(bytes, base + 0x0c)?,
+                read_i32_le(bytes, base + 0x10)?,
+                read_i32_le(bytes, base + 0x14)?,
+                read_i32_le(bytes, base + 0x18)?,
+                read_i32_le(bytes, base + 0x1c)?,
+                read_i32_le(bytes, base + 0x20)?,
+                read_i32_le(bytes, base + 0x24)?,
+            ],
+            referenced_effect_index: read_i32_le(bytes, base + 0x08)?,
+            effect_type: read_u32_le(bytes, base + 0x28)?,
+            life_time_base: read_f32_le(bytes, base + 0x2c)?,
+            life_time_random: read_f32_le(bytes, base + 0x30)?,
+            interval_base: read_f32_le(bytes, base + 0x34)?,
+            interval_random: read_f32_le(bytes, base + 0x38)?,
+            num_emit: read_u32_le(bytes, base + 0x3c)?,
+            action_flags: read_u32_le(bytes, base + 0x40)?,
+            spawn_form_type: read_u32_le(bytes, base + 0x44)?,
+            spawn_form_length: [
+                read_f32_le(bytes, base + 0x48)?,
+                read_f32_le(bytes, base + 0x4c)?,
+                read_f32_le(bytes, base + 0x50)?,
+                read_f32_le(bytes, base + 0x54)?,
+            ],
+            speed_random: [
+                read_f32_le(bytes, base + 0xe0)?,
+                read_f32_le(bytes, base + 0xe4)?,
+                read_f32_le(bytes, base + 0xe8)?,
+                read_f32_le(bytes, base + 0xec)?,
+            ],
+            size_base: [
+                read_f32_le(bytes, base + 0xf0)?,
+                read_f32_le(bytes, base + 0xf4)?,
+                read_f32_le(bytes, base + 0xf8)?,
+                read_f32_le(bytes, base + 0xfc)?,
+            ],
+            size_random: [
+                read_f32_le(bytes, base + 0x100)?,
+                read_f32_le(bytes, base + 0x104)?,
+                read_f32_le(bytes, base + 0x108)?,
+                read_f32_le(bytes, base + 0x10c)?,
+            ],
+            rotation_base: [
+                read_f32_le(bytes, base + 0x110)?,
+                read_f32_le(bytes, base + 0x114)?,
+                read_f32_le(bytes, base + 0x118)?,
+                read_f32_le(bytes, base + 0x11c)?,
+            ],
+            rotation_random: [
+                read_f32_le(bytes, base + 0x120)?,
+                read_f32_le(bytes, base + 0x124)?,
+                read_f32_le(bytes, base + 0x128)?,
+                read_f32_le(bytes, base + 0x12c)?,
+            ],
+            rotation_speed: [
+                read_f32_le(bytes, base + 0x130)?,
+                read_f32_le(bytes, base + 0x134)?,
+                read_f32_le(bytes, base + 0x138)?,
+                read_f32_le(bytes, base + 0x13c)?,
+            ],
+            internal_element_data_index: read_u32_le(bytes, base + 0xd8)?,
+            enable_data_flag: read_u32_le(bytes, base + 0xdc)?,
+            nud_handle: read_u32_le(bytes, base + 0x140)?,
+            texture_handle: read_u32_le(bytes, base + 0x144)?,
+            pad01: [
+                read_u32_le(bytes, base + 0x148)?,
+                read_u32_le(bytes, base + 0x14c)?,
+            ],
+            color_texture_parameter_index: [
+                read_i32_le(bytes, base + 0x150)?,
+                read_i32_le(bytes, base + 0x154)?,
+            ],
+            uv_texture_parameter_index: [
+                read_i32_le(bytes, base + 0x158)?,
+                read_i32_le(bytes, base + 0x15c)?,
+            ],
+            center_pivot: [
+                read_f32_le(bytes, base + 0x160)?,
+                read_f32_le(bytes, base + 0x164)?,
+            ],
+            delete_settings: read_u32_le(bytes, base + 0x168)?,
+            fade_time_base: read_f32_le(bytes, base + 0x16c)?,
+            culling_type: read_u32_le(bytes, base + 0x170)?,
+            z_write_enable: read_u32_le(bytes, base + 0x174)?,
+            z_test_enable: read_u32_le(bytes, base + 0x178)?,
+            blend_state: read_u32_le(bytes, base + 0x17c)?,
+            draw_repository_index: read_u32_le(bytes, base + 0x180)?,
+            instance_amount_type: read_u32_le(bytes, base + 0x184)?,
+            draw_amount_index: read_u32_le(bytes, base + 0x188)?,
+            enable_soft_particle: read_u32_le(bytes, base + 0x18c)?,
+            position_offset: [
+                read_f32_le(bytes, base + 0x190)?,
+                read_f32_le(bytes, base + 0x194)?,
+                read_f32_le(bytes, base + 0x198)?,
+                read_f32_le(bytes, base + 0x19c)?,
+            ],
+            delay_emit_time_base: read_f32_le(bytes, base + 0x1a0)?,
+            emit_area_type: read_u32_le(bytes, base + 0x1a4)?,
+            enable_z_sort: read_u32_le(bytes, base + 0x1a8)?,
+            delete_effect_id: read_u32_le(bytes, base + 0x1ac)?,
+            delete_end_scale: [
+                read_f32_le(bytes, base + 0x1b0)?,
+                read_f32_le(bytes, base + 0x1b4)?,
+                read_f32_le(bytes, base + 0x1b8)?,
+                read_f32_le(bytes, base + 0x1bc)?,
+            ],
+            light_attenuation_radius: read_f32_le(bytes, base + 0x1c0)?,
+            lighting_flags: read_u32_le(bytes, base + 0x1c4)?,
+            normal_map_hash: read_u32_le(bytes, base + 0x1c8)?,
+            world_wind_apply_rate: read_f32_le(bytes, base + 0x1dc)?,
+            strip_segment_interval: read_f32_le(bytes, base + 0x1e0)?,
+            strip_segment_length_not_use: read_f32_le(bytes, base + 0x1e4)?,
+            strip_segment_life: read_f32_le(bytes, base + 0x1e8)?,
+            strip_segment_num_not_use: read_u32_le(bytes, base + 0x1ec)?,
+            strip_segment_split_num: read_u32_le(bytes, base + 0x1f0)?,
+            drawer_id: read_u32_le(bytes, base + 0x1f4)?,
+            world_wind_apply_rate_random: read_f32_le(bytes, base + 0x1f8)?,
+            soft_particle_range: read_f32_le(bytes, base + 0x1fc)?,
+            camera_fade_range: read_f32_le(bytes, base + 0x200)?,
+            extra_flags: read_u32_le(bytes, base + 0x204)?,
+            noise_direction_max_rot: read_f32_le(bytes, base + 0x208)?,
+            noise_direction_area_range: read_f32_le(bytes, base + 0x20c)?,
+            blur_start_color: [
+                read_f32_le(bytes, base + 0x210)?,
+                read_f32_le(bytes, base + 0x214)?,
+                read_f32_le(bytes, base + 0x218)?,
+                read_f32_le(bytes, base + 0x21c)?,
+            ],
+            blur_end_color: [
+                read_f32_le(bytes, base + 0x220)?,
+                read_f32_le(bytes, base + 0x224)?,
+                read_f32_le(bytes, base + 0x228)?,
+                read_f32_le(bytes, base + 0x22c)?,
+            ],
+            blur_enable_range: read_f32_le(bytes, base + 0x230)?,
+            blur_fade_power: read_f32_le(bytes, base + 0x234)?,
+            light_type: read_u32_le(bytes, base + 0x238)?,
+            light_base_radius: read_f32_le(bytes, base + 0x23c)?,
+            rotation_speed_random: [
+                read_f32_le(bytes, base + 0x240)?,
+                read_f32_le(bytes, base + 0x244)?,
+                read_f32_le(bytes, base + 0x248)?,
+                read_f32_le(bytes, base + 0x24c)?,
+            ],
+            camera_offset: read_f32_le(bytes, base + 0x250)?,
+            post_effect_type: read_u32_le(bytes, base + 0x254)?,
+            post_effect_blend_rate: read_f32_le(bytes, base + 0x258)?,
+            strip_tail_alpha_rate: read_f32_le(bytes, base + 0x25c)?,
+            strip_head_alpha_rate: read_f32_le(bytes, base + 0x260)?,
+            emit_interpolate_distance: read_f32_le(bytes, base + 0x264)?,
+            noise_rotate_pos_offset: read_f32_le(bytes, base + 0x268)?,
+            z_sort_offset: read_f32_le(bytes, base + 0x26c)?,
+            special_shader_type: read_u32_le(bytes, base + 0x270)?,
+            reflection_power: read_f32_le(bytes, base + 0x274)?,
+            pass2_blend_type: read_u32_le(bytes, base + 0x278)?,
+            animation_delay_frame: read_f32_le(bytes, base + 0x27c)?,
+            animation_loop_start_frame: read_f32_le(bytes, base + 0x280)?,
+            animation_loop_end_frame: read_f32_le(bytes, base + 0x284)?,
+            animation_delete_frame: read_f32_le(bytes, base + 0x288)?,
+            animation_speed_rate: read_f32_le(bytes, base + 0x28c)?,
+            animation_blend_delete_frame: read_u32_le(bytes, base + 0x294)?,
+            emitter_lod_type: read_u32_le(bytes, base + 0x298)?,
+            animation_start_frame: read_f32_le(bytes, base + 0x29c)?,
+            bounding_sphere_info: [
+                read_f32_le(bytes, base + 0x2a0)?,
+                read_f32_le(bytes, base + 0x2a4)?,
+                read_f32_le(bytes, base + 0x2a8)?,
+                read_f32_le(bytes, base + 0x2ac)?,
+            ],
+            post_effect_shape_radius: read_f32_le(bytes, base + 0x2b0)?,
+            world_water_apply_rate: read_f32_le(bytes, base + 0x2b4)?,
+            num_emit_count_random: read_u32_le(bytes, base + 0x2b8)?,
+            depth_emission_range: read_f32_le(bytes, base + 0x2bc)?,
+            depth_emission_power: read_f32_le(bytes, base + 0x2c0)?,
+            highlight_power: read_f32_le(bytes, base + 0x2c4)?,
+            emit_interpolate_type: read_u32_le(bytes, base + 0x2f0)?,
+            mesh_emitter_index: read_u32_le(bytes, base + 0x2c8)?,
+            mesh_emitter_count: read_u32_le(bytes, base + 0x2cc)?,
+            field_effect_type: read_u32_le(bytes, base + 0x2d0)?,
+            field_effect_power: read_f32_le(bytes, base + 0x2d4)?,
+            field_effect_interval: read_f32_le(bytes, base + 0x2d8)?,
+            field_effect_angle: read_f32_le(bytes, base + 0x2dc)?,
+            field_effect_frequency: read_f32_le(bytes, base + 0x2e0)?,
+            field_effect_offset: read_f32_le(bytes, base + 0x2e4)?,
+            field_effect_recieve_rate: read_f32_le(bytes, base + 0x2e8)?,
+            field_effect_extra_value1: read_f32_le(bytes, base + 0x2ec)?,
             model_id,
             model_hash: EffectFolderHash::from_i32(model_id),
             animation_id,
             animation_hash: EffectFolderHash::from_i32(animation_id),
-            id_table,
             control_references,
-            meta_parsed,
+            reserve_area,
+            runtime: None,
         });
     }
 
     let mut model_control_texture_ids = BTreeSet::new();
     let mut model_controls = Vec::with_capacity(model_control_config_count as usize);
     for i in 0..model_control_config_count as usize {
-        let base = model_control_region_offset + i * 0xb8;
+        let base = model_control_region_offset + i * EFXBN_MODEL_CONTROL_STRIDE;
         let input_source_type = read_u32_le(bytes, base)?;
         let color_map_id = read_i32_le(bytes, base + 0x04)?;
-        let mut reserve_area = Vec::with_capacity(12);
-        for index in 0..12 {
-            reserve_area.push(read_u32_le(bytes, base + 0x88 + index * 4)?);
+        let mut reserve_area = Vec::with_capacity(EFXBN_MODEL_CONTROL_RESERVE_AREA_LEN);
+        for index in 0..EFXBN_MODEL_CONTROL_RESERVE_AREA_LEN {
+            reserve_area.push(read_u32_le(
+                bytes,
+                base + EFXBN_MODEL_CONTROL_RESERVE_AREA_OFFSET + index * 4,
+            )?);
         }
         model_control_texture_ids.insert(color_map_id);
         model_controls.push(EfxbnModelControlSummary {
@@ -2030,6 +3479,24 @@ fn parse_efxbn_bytes(bytes: &[u8], path: &str) -> Result<EfxbnSummary, String> {
         });
     }
 
+    // Second pass. Wrapper type resolution reads the first child and the draw scheme reads
+    // the model-control table, so both blocks and controls must already be parsed.
+    let normalized: Vec<EfxbnRuntimeNormalization> = effects
+        .iter()
+        .map(|effect| {
+            let first_child = effect
+                .child_index_array
+                .first()
+                .copied()
+                .filter(|index| *index >= 0)
+                .and_then(|index| effects.get(index as usize));
+            normalize_efxbn_block(effect, first_child, &model_controls)
+        })
+        .collect();
+    for (effect, runtime) in effects.iter_mut().zip(normalized) {
+        effect.runtime = Some(runtime);
+    }
+
     Ok(EfxbnSummary {
         path: path.to_string(),
         magic: "EFXB".to_string(),
@@ -2037,20 +3504,14 @@ fn parse_efxbn_bytes(bytes: &[u8], path: &str) -> Result<EfxbnSummary, String> {
         file_size,
         actual_size: bytes.len(),
         effect_count,
-        control_config_region_param,
+        curve_key_count,
         control_lookup_region_offset: control_lookup_region_offset as u32,
         control_lookup_region_size: control_lookup_region_size as u32,
         control_lookup_region_end: control_lookup_region_end as u32,
-        control_block_size,
-        control_remainder_size: control_remainder_size as u32,
         model_control_config_count,
         model_control_region_offset: model_control_region_offset as u32,
         model_control_region_size: model_control_region_size as u32,
         trailing_offset: trailing_offset as u32,
-        unk0x18: unknown18,
-        unk0x1c: unknown1c,
-        unknown18,
-        unknown1c,
         model_ids: model_ids
             .into_iter()
             .map(EffectFolderHash::from_i32)
@@ -2308,11 +3769,23 @@ fn destination_has_item_hash(
     ext: &str,
     hash: i32,
 ) -> bool {
-    collect_items(forest).into_iter().any(|item| {
-        item.file_index()
-            .and_then(|idx| data_by_index.get(&idx))
-            .is_some_and(|record| record.actual_ext == ext)
-            && item.item_entry().and_then(item_hash) == Some(hash)
+    find_dest_record_by_hash(forest, data_by_index, ext, hash).is_some()
+}
+
+fn find_dest_record_by_hash<'a>(
+    forest: &[Node],
+    data_by_index: &'a HashMap<i32, FileRecord>,
+    ext: &str,
+    hash: i32,
+) -> Option<&'a FileRecord> {
+    collect_items(forest).into_iter().find_map(|item| {
+        let file_index = item.file_index()?;
+        let record = data_by_index.get(&file_index)?;
+        if record.actual_ext == ext && item.item_entry().and_then(item_hash) == Some(hash) {
+            Some(record)
+        } else {
+            None
+        }
     })
 }
 
@@ -2337,6 +3810,28 @@ fn item_hash(entry: &SubFileStructureEntry) -> Option<i32> {
         SubFileStructureEntry::Item { unk3, .. } => Some(*unk3),
         _ => None,
     }
+}
+
+fn set_item_hash_in_forest(nodes: &mut [Node], file_index: i32, hash_id: i32) -> bool {
+    for node in nodes {
+        match node {
+            Node::Item {
+                file_index: item_file_index,
+                entry: SubFileStructureEntry::Item { unk3, .. },
+                ..
+            } if *item_file_index == file_index => {
+                *unk3 = hash_id;
+                return true;
+            }
+            Node::Folder { children, .. } => {
+                if set_item_hash_in_forest(children, file_index, hash_id) {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
 }
 
 fn folder_hash(node: &Node) -> Option<i32> {
@@ -2480,6 +3975,28 @@ fn actual_ext(file_type: &str, file_url: &str) -> String {
     }
 }
 
+fn content_aware_effect_ext(path: &Path, declared_ext: String) -> String {
+    if declared_ext != ".efxbn" && declared_ext != ".nuanmb" {
+        return declared_ext;
+    }
+
+    let mut prefix = [0u8; 0x14];
+    let Some(detected_ext) = fs::File::open(path).ok().and_then(|mut file| {
+        file.read_exact(&mut prefix).ok()?;
+        if &prefix[0..4] == b"EFXB" {
+            Some(".efxbn")
+        } else if &prefix[0..4] == b"HBSS" && &prefix[0x10..0x14] == b"MINA" {
+            Some(".nuanmb")
+        } else {
+            None
+        }
+    }) else {
+        return declared_ext;
+    };
+
+    detected_ext.to_string()
+}
+
 fn resolve_file_path(json_dir: &Path, file_url: &str) -> PathBuf {
     let cleaned = file_url.replace('\\', "/");
     let cleaned = cleaned.trim_start_matches("./");
@@ -2495,14 +4012,18 @@ fn file_url_for_target(json_dir: &Path, target: &Path) -> String {
 }
 
 fn copy_one_file(source: &Path, destination: &Path) -> Result<(), String> {
-    if !source.is_file() {
-        return Err(format!("Source file does not exist: {}", source.display()));
-    }
     if destination.exists() {
         return Err(format!(
             "Import destination already exists and will not be overwritten: {}",
             destination.display()
         ));
+    }
+    copy_one_file_replace(source, destination)
+}
+
+fn copy_one_file_replace(source: &Path, destination: &Path) -> Result<(), String> {
+    if !source.is_file() {
+        return Err(format!("Source file does not exist: {}", source.display()));
     }
     if let Some(parent) = destination.parent() {
         fs::create_dir_all(parent)
@@ -2569,6 +4090,23 @@ fn delete_file_if_under(root: &Path, path: &Path) {
     }
 }
 
+pub fn sanitize_effect_copy_dest_file_name(name: &str) -> Result<String, String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("Destination file name is empty.".to_string());
+    }
+    if trimmed == "."
+        || trimmed == ".."
+        || trimmed.contains("..")
+        || trimmed.contains('/')
+        || trimmed.contains('\\')
+        || Path::new(trimmed).is_absolute()
+    {
+        return Err("Destination file name must be a single file name inside the pack.".to_string());
+    }
+    Ok(ensure_extension(trimmed, ".efxbn"))
+}
+
 fn ensure_extension(name: &str, ext: &str) -> String {
     if name.to_ascii_lowercase().ends_with(ext) {
         name.to_string()
@@ -2619,33 +4157,101 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_minimal_zero_effect_efxbn() {
-        let mut bytes = vec![0u8; 0x20];
+    fn patch_efxbn_control_constants_rewrites_value_dwords_only() {
+        let curve_key_count = 4usize;
+        let file_size = EFXBN_BLOCK_REGION_OFFSET + curve_key_count * EFXBN_CURVE_KEY_STRIDE;
+        let mut bytes = vec![0u8; file_size];
         bytes[0..4].copy_from_slice(b"EFXB");
         bytes[0x04..0x08].copy_from_slice(&2u32.to_le_bytes());
-        bytes[0x08..0x0c].copy_from_slice(&(0x20u32).to_le_bytes());
+        bytes[0x08..0x0c].copy_from_slice(&(file_size as u32).to_le_bytes());
+        bytes[0x0c..0x10].copy_from_slice(&0u32.to_le_bytes());
+        bytes[0x10..0x14].copy_from_slice(&(curve_key_count as u32).to_le_bytes());
+        let key_region = EFXBN_BLOCK_REGION_OFFSET;
+        // key=0 value=1.0 at index 1
+        bytes[key_region + 8..key_region + 12].copy_from_slice(&0f32.to_le_bytes());
+        bytes[key_region + 12..key_region + 16].copy_from_slice(&1.0f32.to_le_bytes());
+        // preserve key dword at index 2 while we patch value
+        bytes[key_region + 16..key_region + 20].copy_from_slice(&50f32.to_le_bytes());
+        bytes[key_region + 20..key_region + 24].copy_from_slice(&0.25f32.to_le_bytes());
+
+        let dir = std::env::temp_dir().join(format!(
+            "efxbn_patch_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("sample.efxbn");
+        fs::write(&path, &bytes).unwrap();
+
+        let result = patch_efxbn_control_constants(
+            path.to_str().unwrap(),
+            &[
+                EfxbnControlConstantPatch {
+                    lookup_index: 1,
+                    value: 0.5,
+                },
+                EfxbnControlConstantPatch {
+                    lookup_index: 2,
+                    value: 1.75,
+                },
+            ],
+        )
+        .unwrap();
+
+        assert_eq!(result.patched_count, 2);
+        assert_eq!(result.summary.control_lookup_entries[1].value, 0.5);
+        assert_eq!(result.summary.control_lookup_entries[2].value, 1.75);
+        assert_eq!(result.summary.control_lookup_entries[2].key, 50.0);
+
+        let rewritten = fs::read(&path).unwrap();
+        assert_eq!(&rewritten[0..key_region + 8], &bytes[0..key_region + 8]);
+        assert_eq!(
+            f32::from_le_bytes(
+                rewritten[key_region + 12..key_region + 16]
+                    .try_into()
+                    .unwrap()
+            ),
+            0.5
+        );
+        assert_eq!(
+            f32::from_le_bytes(
+                rewritten[key_region + 16..key_region + 20]
+                    .try_into()
+                    .unwrap()
+            ),
+            50.0
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn parses_minimal_zero_effect_efxbn() {
+        // The header is six dwords; a file with no blocks, keys, or model controls
+        // is exactly that header.
+        let mut bytes = vec![0u8; EFXBN_BLOCK_REGION_OFFSET];
+        bytes[0..4].copy_from_slice(b"EFXB");
+        bytes[0x04..0x08].copy_from_slice(&2u32.to_le_bytes());
+        bytes[0x08..0x0c].copy_from_slice(&(EFXBN_BLOCK_REGION_OFFSET as u32).to_le_bytes());
 
         let parsed = parse_efxbn_bytes(&bytes, "memory").unwrap();
 
         assert_eq!(parsed.magic, "EFXB");
         assert_eq!(parsed.effect_count, 0);
-        assert!(parsed.control_block_size.is_none());
-        assert_eq!(parsed.unk0x18, 0);
-        assert_eq!(parsed.unk0x1c, 0);
-        assert!(parsed
-            .todo
-            .unknowns
-            .iter()
-            .any(|item| item.field == "header.unk0x18"));
+        assert_eq!(parsed.curve_key_count, 0);
+        assert_eq!(
+            parsed.control_lookup_region_offset,
+            EFXBN_BLOCK_REGION_OFFSET as u32
+        );
+        assert_eq!(parsed.trailing_offset, EFXBN_BLOCK_REGION_OFFSET as u32);
         let json = serde_json::to_value(&parsed).unwrap();
-        assert_eq!(json["unk0x18"], 0);
-        assert_eq!(json["unk0x1C"], 0);
         assert!(json["todo"]["unknowns"].is_array());
     }
 
     #[test]
     fn parses_model_and_animation_ids_from_effect_meta() {
-        let mut bytes = vec![0u8; 0x20 + 0x370 + 160];
+        let mut bytes = vec![0u8; EFXBN_BLOCK_REGION_OFFSET + EFXBN_BLOCK_STRIDE + 21 * 8];
         bytes[0..4].copy_from_slice(b"EFXB");
         bytes[0x04..0x08].copy_from_slice(&2u32.to_le_bytes());
         let len = bytes.len() as u32;
@@ -2654,10 +4260,11 @@ mod tests {
         bytes[0x10..0x14].copy_from_slice(&21u32.to_le_bytes());
         let model_id = -1085699015i32;
         let animation_id = 0x3E87E9B8i32;
-        let model_off = 0x20 + 0x138;
-        let animation_off = 0x20 + 0x288;
-        let first_control_ref_off = 0x20 + 0x50;
-        let first_lookup_entry_off = 0x20 + 0x370 - 8;
+        // Reflected offsets: nudHandle 320, animationHash 656, spawnForm0 88.
+        let model_off = EFXBN_BLOCK_REGION_OFFSET + 320;
+        let animation_off = EFXBN_BLOCK_REGION_OFFSET + 656;
+        let first_control_ref_off = EFXBN_BLOCK_REGION_OFFSET + 88;
+        let first_lookup_entry_off = EFXBN_BLOCK_REGION_OFFSET + EFXBN_BLOCK_STRIDE;
         bytes[model_off..model_off + 4].copy_from_slice(&model_id.to_le_bytes());
         bytes[animation_off..animation_off + 4].copy_from_slice(&animation_id.to_le_bytes());
         bytes[first_control_ref_off..first_control_ref_off + 4]
@@ -2677,23 +4284,22 @@ mod tests {
         assert_eq!(parsed.animation_ids[0].signed, animation_id);
         assert_eq!(parsed.effects[0].animation_id, animation_id);
         assert_eq!(parsed.effects[0].animation_hash.hex, "0x3E87E9B8");
-        assert_eq!(parsed.control_block_size, Some(160));
+        assert_eq!(parsed.curve_key_count, 21);
         assert_eq!(parsed.control_lookup_entries.len(), 21);
         assert_eq!(parsed.control_lookup_entries[0].key_f32_bits, 0x42C80000);
         assert_eq!(parsed.control_lookup_entries[0].key, 100.0);
         assert_eq!(parsed.control_lookup_entries[0].value_f32_bits, 0x3FC00000);
         assert_eq!(parsed.control_lookup_entries[0].value, 1.5);
         assert_eq!(parsed.effects[0].control_references.len(), 18);
-        assert_eq!(parsed.effects[0].control_references[0].name, "ctrl00");
-        assert_eq!(parsed.effects[0].control_references[0].raw_offset, 0x50);
-        assert_eq!(parsed.effects[0].control_references[0].runtime_offset, 0x58);
+        assert_eq!(parsed.effects[0].control_references[0].name, "spawnForm0");
+        // Block offsets equal the reflected SEfxElementData offsets: spawnForm0 at 88,
+        // worldGravityAccel at 460, directionAccel at 468.
+        assert_eq!(parsed.effects[0].control_references[0].raw_offset, 88);
+        assert_eq!(parsed.effects[0].control_references[0].runtime_offset, 88);
         assert_eq!(parsed.effects[0].control_references[0].selector, 1);
         assert_eq!(parsed.effects[0].control_references[0].lookup_index, 0);
-        assert_eq!(parsed.effects[0].control_references[16].raw_offset, 0x1c4);
-        assert_eq!(
-            parsed.effects[0].control_references[17].runtime_offset,
-            0x1d4
-        );
+        assert_eq!(parsed.effects[0].control_references[16].raw_offset, 460);
+        assert_eq!(parsed.effects[0].control_references[17].runtime_offset, 468);
         assert_eq!(parsed.effects[0].meta_parsed.unk_config_info.len(), 8);
         assert_eq!(
             parsed.effects[0]
@@ -2720,14 +4326,157 @@ mod tests {
     }
 
     #[test]
-    fn efxbn_model_control_offset_uses_control_lookup_remainder() {
+    fn copy_closure_uses_resource_hashes_not_control_lookup_indexes() {
+        fn item_node(file_index: i32, hash: i32) -> Node {
+            Node::Item {
+                entry_index: file_index as usize,
+                entry: SubFileStructureEntry::Item {
+                    unk1: String::new(),
+                    file_index,
+                    unk2: String::new(),
+                    unk2_1: 0,
+                    unk3: hash,
+                    unk4: 0,
+                    original_file_index: file_index,
+                    display_name: None,
+                },
+                file_index,
+            }
+        }
+
+        fn record(root: &Path, file_index: i32, ext: &str, stem: &str) -> FileRecord {
+            let path = root.join(format!("{stem}{ext}"));
+            if !path.exists() {
+                fs::write(&path, b"stub").unwrap();
+            }
+            FileRecord {
+                file_index,
+                file_type: ext.to_string(),
+                actual_ext: ext.to_string(),
+                file_url: path.to_string_lossy().to_string(),
+                file_base_name: stem.to_string(),
+                path,
+            }
+        }
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let model_id = 100i32;
+        let texture_id = 200i32;
+        let animation_id = 300i32;
+        let efxbn_hash = 999i32;
+
+        let control_lookup_offset = EFXBN_BLOCK_REGION_OFFSET + EFXBN_BLOCK_STRIDE;
+        let model_control_offset = control_lookup_offset + EFXBN_CURVE_KEY_STRIDE;
+        let mut bytes = vec![0u8; model_control_offset + 0xb8];
+        let file_size = bytes.len() as u32;
+        bytes[0..4].copy_from_slice(b"EFXB");
+        bytes[0x04..0x08].copy_from_slice(&2u32.to_le_bytes());
+        bytes[0x08..0x0c].copy_from_slice(&file_size.to_le_bytes());
+        bytes[0x0c..0x10].copy_from_slice(&1u32.to_le_bytes());
+        bytes[0x10..0x14].copy_from_slice(&1u32.to_le_bytes());
+        bytes[0x14..0x18].copy_from_slice(&1u32.to_le_bytes());
+        bytes[0x20 + 0x138..0x20 + 0x13c].copy_from_slice(&model_id.to_le_bytes());
+        bytes[0x20 + 0x288..0x20 + 0x28c].copy_from_slice(&animation_id.to_le_bytes());
+        bytes[0x20 + 0x50..0x20 + 0x54].copy_from_slice(&1u32.to_le_bytes());
+        // This is a control lookup index, deliberately equal to an unrelated fileIndex.
+        bytes[0x20 + 0x54..0x20 + 0x58].copy_from_slice(&6u32.to_le_bytes());
+        bytes[model_control_offset + 4..model_control_offset + 8]
+            .copy_from_slice(&texture_id.to_le_bytes());
+        let efxbn_path = root.join("effect.efxbn");
+        fs::write(&efxbn_path, bytes).unwrap();
+
+        let model_file = item_node(10, 0);
+        let model = Node::Folder {
+            entry_index: 7,
+            entry: SubFileStructureEntry::Folder {
+                unk1: String::new(),
+                folder_count: 1,
+                unk2: String::new(),
+                unk2_1: 0,
+                unk3: 2,
+                unk4: 0,
+                unk5: model_id,
+                unk6: 0,
+            },
+            children: vec![model_file],
+        };
+        let forest = vec![
+            item_node(1, efxbn_hash),
+            item_node(2, texture_id),
+            item_node(3, model_id),
+            item_node(4, efxbn_hash),
+            item_node(5, animation_id),
+            item_node(6, 6),
+            model,
+        ];
+        let mut records = HashMap::new();
+        let mut efxbn_record = record(root, 1, ".efxbn", "effect");
+        efxbn_record.path = efxbn_path;
+        records.insert(1, efxbn_record);
+        records.insert(2, record(root, 2, ".nutexb", "direct_texture"));
+        records.insert(3, record(root, 3, ".nutexb", "model_hash_false_positive"));
+        records.insert(4, record(root, 4, ".nutexb", "efxbn_hash_false_positive"));
+        records.insert(5, record(root, 5, ".nuanmb", "animation"));
+        records.insert(6, record(root, 6, ".bin", "control_index_false_positive"));
+        records.insert(10, record(root, 10, ".numdlb", "model"));
+
+        let mut warnings = Vec::new();
+        let closure = build_copy_closure(
+            &forest,
+            &records,
+            &[EffectFolderSelection {
+                kind: "efxbn".to_string(),
+                file_index: Some(1),
+                hash_id: None,
+                name: None,
+            }],
+            &mut warnings,
+        );
+
+        assert_eq!(
+            closure
+                .efxbn_items
+                .iter()
+                .filter_map(Node::file_index)
+                .collect::<Vec<_>>(),
+            vec![1]
+        );
+        assert_eq!(
+            closure
+                .texture_items
+                .iter()
+                .filter_map(Node::file_index)
+                .collect::<Vec<_>>(),
+            vec![2]
+        );
+        assert_eq!(
+            closure
+                .animation_items
+                .iter()
+                .filter_map(Node::file_index)
+                .collect::<Vec<_>>(),
+            vec![5]
+        );
+        assert_eq!(
+            closure
+                .model_nodes
+                .iter()
+                .filter_map(folder_hash)
+                .collect::<Vec<_>>(),
+            vec![model_id]
+        );
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn efxbn_regions_follow_header_blocks_keys_model_controls() {
         let effect_count = 3usize;
         let control_config_region_param = 65u32;
         let model_control_count = 1usize;
-        let meta_size = effect_count * 0x370;
-        let control_region_offset = 0x20 + meta_size;
-        let control_lookup_offset = control_region_offset - 8;
-        let control_lookup_size = control_config_region_param as usize * 8;
+        let meta_size = effect_count * EFXBN_BLOCK_STRIDE;
+        let control_lookup_offset = EFXBN_BLOCK_REGION_OFFSET + meta_size;
+        let control_lookup_size = control_config_region_param as usize * EFXBN_CURVE_KEY_STRIDE;
         let model_control_offset = control_lookup_offset + control_lookup_size;
         let file_size = model_control_offset + model_control_count * 0xb8;
         let mut bytes = vec![0u8; file_size];
@@ -2737,6 +4486,58 @@ mod tests {
         bytes[0x0c..0x10].copy_from_slice(&(effect_count as u32).to_le_bytes());
         bytes[0x10..0x14].copy_from_slice(&control_config_region_param.to_le_bytes());
         bytes[0x14..0x18].copy_from_slice(&(model_control_count as u32).to_le_bytes());
+        let first_effect_offset = 0x20usize;
+        bytes[first_effect_offset..first_effect_offset + 4].copy_from_slice(&2i32.to_le_bytes());
+        bytes[first_effect_offset + 0x20..first_effect_offset + 0x24]
+            .copy_from_slice(&9u32.to_le_bytes());
+        bytes[first_effect_offset + 0x24..first_effect_offset + 0x28]
+            .copy_from_slice(&1.0f32.to_le_bytes());
+        bytes[first_effect_offset + 0x28..first_effect_offset + 0x2c]
+            .copy_from_slice(&0.25f32.to_le_bytes());
+        bytes[first_effect_offset + 0x2c..first_effect_offset + 0x30]
+            .copy_from_slice(&3.0f32.to_le_bytes());
+        bytes[first_effect_offset + 0x30..first_effect_offset + 0x34]
+            .copy_from_slice(&0.5f32.to_le_bytes());
+        bytes[first_effect_offset + 0x34..first_effect_offset + 0x38]
+            .copy_from_slice(&4u32.to_le_bytes());
+        bytes[first_effect_offset + 0x38..first_effect_offset + 0x3c]
+            .copy_from_slice(&0x800u32.to_le_bytes());
+        bytes[first_effect_offset + 0x3c..first_effect_offset + 0x40]
+            .copy_from_slice(&10u32.to_le_bytes());
+        bytes[first_effect_offset + 0x40..first_effect_offset + 0x44]
+            .copy_from_slice(&128.0f32.to_le_bytes());
+        bytes[first_effect_offset + 0xe8..first_effect_offset + 0xec]
+            .copy_from_slice(&2.0f32.to_le_bytes());
+        bytes[first_effect_offset + 0x16c..first_effect_offset + 0x170]
+            .copy_from_slice(&1u32.to_le_bytes());
+        bytes[first_effect_offset + 0x170..first_effect_offset + 0x174]
+            .copy_from_slice(&1u32.to_le_bytes());
+        bytes[first_effect_offset + 0x174..first_effect_offset + 0x178]
+            .copy_from_slice(&2u32.to_le_bytes());
+        bytes[first_effect_offset + 0x188..first_effect_offset + 0x18c]
+            .copy_from_slice(&5.0f32.to_le_bytes());
+        bytes[first_effect_offset + 0x1d8..first_effect_offset + 0x1dc]
+            .copy_from_slice(&2.0f32.to_le_bytes());
+        bytes[first_effect_offset + 0x1e0..first_effect_offset + 0x1e4]
+            .copy_from_slice(&8.0f32.to_le_bytes());
+        bytes[first_effect_offset + 0x1e8..first_effect_offset + 0x1ec]
+            .copy_from_slice(&3u32.to_le_bytes());
+        bytes[first_effect_offset + 0x254..first_effect_offset + 0x258]
+            .copy_from_slice(&0.25f32.to_le_bytes());
+        bytes[first_effect_offset + 0x258..first_effect_offset + 0x25c]
+            .copy_from_slice(&0.75f32.to_le_bytes());
+        bytes[first_effect_offset + 0x25c..first_effect_offset + 0x260]
+            .copy_from_slice(&4.0f32.to_le_bytes());
+        bytes[first_effect_offset + 0x2e8..first_effect_offset + 0x2ec]
+            .copy_from_slice(&2u32.to_le_bytes());
+        bytes[first_effect_offset + 0x2c0..first_effect_offset + 0x2c4]
+            .copy_from_slice(&12u32.to_le_bytes());
+        bytes[first_effect_offset + 0x2c4..first_effect_offset + 0x2c8]
+            .copy_from_slice(&34u32.to_le_bytes());
+        for (offset, value) in [(0x148usize, 0i32), (0x14c, -1), (0x150, -1), (0x154, -1)] {
+            bytes[first_effect_offset + offset..first_effect_offset + offset + 4]
+                .copy_from_slice(&value.to_le_bytes());
+        }
         bytes[model_control_offset..model_control_offset + 4].copy_from_slice(&1u32.to_le_bytes());
         let texture_id = 0x6AF9B19Fu32 as i32;
         bytes[model_control_offset + 4..model_control_offset + 8]
@@ -2791,8 +4592,11 @@ mod tests {
 
         let parsed = parse_efxbn_bytes(&bytes, "memory").unwrap();
 
-        assert_eq!(parsed.control_block_size, Some(170));
-        assert_eq!(parsed.control_remainder_size, 2);
+        assert_eq!(parsed.curve_key_count, control_config_region_param);
+        assert_eq!(
+            parsed.control_lookup_region_size,
+            control_lookup_size as u32
+        );
         assert_eq!(
             parsed.control_lookup_region_offset,
             control_lookup_offset as u32
@@ -2802,6 +4606,32 @@ mod tests {
             model_control_offset as u32
         );
         assert_eq!(parsed.trailing_offset, file_size as u32);
+        assert_eq!(parsed.effects[0].referenced_effect_index, 2);
+        assert_eq!(parsed.effects[0].effect_type, 9);
+        assert_eq!(parsed.effects[0].life_time_base, 1.0);
+        assert_eq!(parsed.effects[0].life_time_random, 0.25);
+        assert_eq!(parsed.effects[0].interval_base, 3.0);
+        assert_eq!(parsed.effects[0].interval_random, 0.5);
+        assert_eq!(parsed.effects[0].num_emit, 4);
+        assert_eq!(parsed.effects[0].action_flags, 0x800);
+        assert_eq!(parsed.effects[0].spawn_form_type, 10);
+        assert_eq!(parsed.effects[0].spawn_form_length[0], 128.0);
+        assert_eq!(parsed.effects[0].size_base[0], 2.0);
+        assert_eq!(parsed.effects[0].z_write_enable, 1);
+        assert_eq!(parsed.effects[0].z_test_enable, 1);
+        assert_eq!(parsed.effects[0].blend_state, 2);
+        assert_eq!(parsed.effects[0].position_offset[0], 5.0);
+        assert_eq!(parsed.effects[0].strip_segment_interval, 2.0);
+        assert_eq!(parsed.effects[0].strip_segment_life, 8.0);
+        assert_eq!(parsed.effects[0].strip_segment_split_num, 3);
+        assert_eq!(parsed.effects[0].strip_tail_alpha_rate, 0.25);
+        assert_eq!(parsed.effects[0].strip_head_alpha_rate, 0.75);
+        assert_eq!(parsed.effects[0].emit_interpolate_distance, 4.0);
+        assert_eq!(parsed.effects[0].emit_interpolate_type, 2);
+        assert_eq!(parsed.effects[0].mesh_emitter_index, 12);
+        assert_eq!(parsed.effects[0].mesh_emitter_count, 34);
+        assert_eq!(parsed.effects[0].color_texture_parameter_index, [0, -1]);
+        assert_eq!(parsed.effects[0].uv_texture_parameter_index, [-1, -1]);
         assert_eq!(parsed.model_control_texture_ids[0].signed, texture_id);
         assert_eq!(parsed.model_controls[0].index, 0);
         assert_eq!(parsed.model_controls[0].input_source_type, 1);

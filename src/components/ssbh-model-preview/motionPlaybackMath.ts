@@ -141,13 +141,25 @@ export function advanceMotionFrame(
 ): AdvanceMotionFrameResult {
   let next = frame + deltaSeconds * 60 * speed;
   if (loop) {
-    next = maxFrameIndex > 0 ? ((next % maxFrameIndex) + maxFrameIndex) % maxFrameIndex : 0;
+    next = normalizeMotionFrame(next, maxFrameIndex, Math.max(1, Math.ceil(maxFrameIndex) + 1), true);
     return { nextFrame: next, shouldStopPlayback: false };
   }
   if (next >= maxFrameIndex) {
     return { nextFrame: maxFrameIndex, shouldStopPlayback: true };
   }
   return { nextFrame: next, shouldStopPlayback: false };
+}
+
+export function normalizeMotionFrame(
+  frame: number,
+  finalFrameIndex: number,
+  frameCount: number,
+  loop: boolean,
+): number {
+  const maxIndex = Math.max(0, frameCount - 1);
+  if (!loop) return Math.min(maxIndex, Math.max(0, frame));
+  const span = Math.max(1, Math.min(frameCount, Math.max(0, finalFrameIndex) + 1));
+  return ((frame % span) + span) % span;
 }
 
 export function sampleMotionClipFrame(
@@ -160,16 +172,7 @@ export function sampleMotionClipFrame(
     throw new Error("Motion clip has no sampled frames");
   }
   const maxIndex = count - 1;
-  let f = frame;
-  if (loop) {
-    f = clip.finalFrameIndex > 0
-      ? ((f % clip.finalFrameIndex) + clip.finalFrameIndex) % clip.finalFrameIndex
-      : 0;
-  } else if (f < 0) {
-    f = 0;
-  } else if (f > maxIndex) {
-    f = maxIndex;
-  }
+  const f = normalizeMotionFrame(frame, clip.finalFrameIndex, count, loop);
   const currentIndex = Math.floor(f);
   const current = clip.frames[currentIndex];
   if (!current) {

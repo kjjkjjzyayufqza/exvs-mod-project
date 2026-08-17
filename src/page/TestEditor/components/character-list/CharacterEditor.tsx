@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import type { CharacterListData, CharacterListEntry } from "@/models/characterListEntry";
 import { CharacterForm } from "./CharacterForm";
 import { CharacterList } from "./CharacterList";
+import { pickNextCharacterUniqueId } from "./characterUniqueId";
 import type { SeriesIdPickerItem } from "./SeriesIdPickerPopover";
 import type { CardIconIndexPickerItem } from "./CardIconIndexPickerPopover";
 
@@ -171,10 +172,19 @@ export function CharacterEditor({
 
   const entries = characterListData?.entries ?? [];
 
-  const getNextCharacterUniqueId = useCallback(() => {
-    if (!entries.length) return 1;
-    return Math.max(...entries.map((c) => c.characterUniqueId || 0), 0) + 1;
-  }, [entries]);
+  const uniqueIdEntries = useMemo(
+    () =>
+      entries.map((entry) => ({
+        entryId: entry.entryId,
+        characterUniqueId: entry.characterUniqueId || 0,
+      })),
+    [entries],
+  );
+
+  const getNextCharacterUniqueId = useCallback(
+    () => pickNextCharacterUniqueId(uniqueIdEntries),
+    [uniqueIdEntries],
+  );
 
   const selectedCharacter = useMemo<CharacterListEntry | null>(() => {
     if (selectedIndex < 0) return null;
@@ -326,6 +336,7 @@ export function CharacterEditor({
           <CharacterForm
             character={selectedCharacter}
             characterId={selectedCharacter.entryId}
+            uniqueIdEntries={uniqueIdEntries}
             seriesIdPickerItems={seriesIdPickerItems}
             seriesIdPickerLoading={seriesIdPickerLoading}
             seriesIdPickerError={seriesIdPickerError}

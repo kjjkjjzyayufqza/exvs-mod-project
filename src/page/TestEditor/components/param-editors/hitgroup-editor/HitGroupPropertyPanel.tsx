@@ -8,21 +8,25 @@ interface HitGroupPropertyPanelProps {
   onFieldChange: (key: string, value: number) => void;
 }
 
+// Field grouping per the binary-proven schema (docs/hitbox-research/02):
+// a row is one sphere in bone space, linked to interactionid by a foreign key.
 const HITGROUP_GROUPS: Record<string, string[]> = {
-  "Collision Body": [
-    "hitType",
-    "radius",
-    "offsetX",
-    "offsetY",
-    "offsetZ",
-    "scaleX",
-    "scaleY",
-    "scaleZ",
-    "jointOffset",
-    "groupId",
+  Sphere: [
+    "sphereRadius",
+    "centerX",
+    "centerY",
+    "centerZ",
+    "shapeMode",
   ],
-  Bones: ["boneHash", "parentBoneHash"],
-  State: ["enableState", "collisionFlags", "modelHash"],
+  Linkage: ["interactionId", "boneId", "modelHash"],
+  Classification: ["collisionFlags", "hitType"],
+  "Unused (engine never reads)": [
+    "unused3284a82d",
+    "unused42ee5ca2",
+    "unused458398bb",
+    "unusedAce03d8e",
+    "unusedDbe70d18",
+  ],
 };
 
 export function HitGroupPropertyPanel({

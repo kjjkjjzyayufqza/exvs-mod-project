@@ -598,7 +598,7 @@ Notion 经验：
 
 | 调用 | 脚本侧含义 |
 |---|---|
-| `sys_4B(0x2, modelHash, boneIndex, actionHash, targetModel)` | 模型接到模型 / bone |
+| `sys_4B(0x2, modelId, boneHash, actionHash[, parentModel])` | 挂模型；第三参 body `.jnttbl` `boneHash`（非 nusktb index），见 `docs/exvs-msc-syscall-4b-notes.md` |
 | `sys_4B(0x3)` | 解除装备 / detach |
 | `sys_47(0x10,...)` | rotate |
 | `sys_47(0x11,...)` | translate |

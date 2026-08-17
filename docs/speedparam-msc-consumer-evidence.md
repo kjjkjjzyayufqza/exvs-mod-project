@@ -1,5 +1,11 @@
 # speedparam MSC consumer evidence (full corpus)
 
+> **Corpus identity caveat (2026-08-01):** the stored crosscheck snapshot lacks
+> a version/path/SHA manifest, counts parent-directory basenames rather than
+> physical files, and predates the current corpus contents. Its MSC call-site
+> arithmetic remains useful; its file counts and constant/varying claims must
+> be regenerated before reuse.
+
 Date: 2026-07-25
 Method: mechanical extraction of every `sys_0(0x60006, entry, fieldHash)` call
 site in the decompiled MSC corpus, plus real-file value spread. No AI reading,
@@ -141,9 +147,9 @@ names were treated as hypotheses throughout.
 
 | Verdict | Count | Share |
 |---|---:|---:|
-| CONFIRM | **4** | 6% |
-| REJECT | **46** | 72% |
-| OPEN | **14** | 22% |
+| CONFIRM | **8** | 12.5% |
+| REJECT | **49** | 76.5% |
+| OPEN | **7** | 11% |
 
 > **Read this correctly: the 46 REJECT verdicts are against
 > `docs/speedparam-semantic-ledger.md`, not against shipped code.** That ledger is
@@ -164,13 +170,14 @@ Combined with the 10 unread fields, the picture for all 74 speedparam fields is:
 
 | Class | Count | Meaning |
 |---|---:|---|
-| CONFIRM | 4 | name not contradicted, role matches, ≥2 unrelated units |
-| REJECT | 46 | arithmetic contradicts the name |
-| OPEN | 14 | consumer exists, arithmetic does not discriminate |
+| CONFIRM | 8 | name not contradicted, role matches, ≥2 unrelated units |
+| REJECT | 49 | arithmetic contradicts the name |
+| OPEN | 7 | consumer exists, arithmetic does not discriminate |
 | U | 8 | no reader anywhere in ~400 units; 6 also constant in all 21 real files |
 | S | 2 | kind-7 label offsets, structurally legitimate |
 
-**At most 6 of 74 speedparam field names are defensible.** The dominant failure
+**At most 10 of 74 speedparam field roles are defensible (8 numeric + 2
+structural labels).** The dominant failure
 mode is dimensional: fields named `*_frame` that are multipliers, fields named
 `*_speed` or `*_distance` that are magnitude accumulator seeds or floors, fields
 named `*_type` that are never equality-tested, and fields named `*_rate` that are
@@ -200,10 +207,30 @@ against the evidence file demoted both:
 - The handler's only consumers are Gedlav, Bertigo, GP01FB and G-Arcane; the rows
   previously cited as corroboration belong to units that do not run it.
 
-Both are now **OPEN**. The pre-audit name `air_steer_limit` for `0x7BF44A41` is
-positively unsupported: the limit slot in that expression is `0x95FA2B6D`.
+The later open-14 regrade supersedes that intermediate result. `0x7BF44A41` is
+CONFIRM for the accumulator seed/re-seed role, while `0x0CF37AD7` remains a
+REJECT of its historical timer name and is fixed to the per-update delta role.
+Neither report proves the former `alternate_free_flight` qualifier, so the
+canonical keys are now `floored_move_magnitude_seed` and
+`floored_move_magnitude_delta`. The pre-audit name `air_steer_limit` is
+positively unsupported: the limit/floor slot in this expression is
+`0x95FA2B6D`.
 
 ## Status of the remaining fields
+
+### 2026-08-01 native closure of five former OPEN fields
+
+The native `sys_46` handler now closes both previously unknown modes. Case 4
+scales the selected movement channel's engine-owned base vector by the third
+argument as a percentage. Case F initializes a current-vector-to-zero-vector
+transition whose third argument is the duration and whose fourth argument is a
+curve selector. This resolves `0x06D1922D`, `0x3BF9E21E`, `0x7CD3A712`,
+`0xB20B67C9`, and `0x9A378388` at the mechanism level. The former two-field
+heading-ladder OPEN set is also closed: native `sys_0(0x40003, 1)` returns the
+current target's horizontal X/Z distance multiplied by 100. The two fields are
+therefore middle/high distance thresholds, and their paired outputs are heading
+step sizes. See the two `2026-08-01-speedparam-native-*` reports under
+`docs/param-research/`. No MSC-read speedparam field remains grade C.
 
 Each of the 64 MSC-read hashes has a self-contained evidence file at
 `tmp/param-evidence/full/fields/t60006_<hash>.txt` containing every distinct call

@@ -11,7 +11,10 @@ fn should_skip_tools_entry(path: &Path) -> bool {
         return true;
     }
 
-    matches!(path.extension().and_then(|value| value.to_str()), Some("pyc" | "pyo"))
+    matches!(
+        path.extension().and_then(|value| value.to_str()),
+        Some("pyc" | "pyo")
+    )
 }
 
 fn copy_tools_dir(source: &Path, destination: &Path) -> io::Result<()> {
@@ -41,7 +44,9 @@ fn copy_tools_dir(source: &Path, destination: &Path) -> io::Result<()> {
 
 fn repo_tools_dir() -> Option<PathBuf> {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir.parent().map(|repo_root| repo_root.join("tools"))
+    manifest_dir
+        .parent()
+        .map(|repo_root| repo_root.join("tools"))
 }
 
 pub fn sync_debug_tools_to_resource_dir(resource_dir: &Path) -> io::Result<()> {

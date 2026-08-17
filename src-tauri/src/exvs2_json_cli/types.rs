@@ -9,6 +9,9 @@ pub enum InspectType {
     BulletParam,
     SpeedParam,
     ProjectileDepictionTable,
+    HitGroupIdDef,
+    InteractionId,
+    GrapParam,
     NaviList,
     PilotList,
     Nusktb,
@@ -26,6 +29,9 @@ impl InspectType {
             InspectType::BulletParam => "bulletparam",
             InspectType::SpeedParam => "speedparam",
             InspectType::ProjectileDepictionTable => "projectile_depiction_table",
+            InspectType::HitGroupIdDef => "hitgroupiddef",
+            InspectType::InteractionId => "interactionid",
+            InspectType::GrapParam => "grapparam",
             InspectType::NaviList => "navi_list",
             InspectType::PilotList => "pilot_list",
             InspectType::Nusktb => "nusktb",
@@ -43,6 +49,9 @@ impl InspectType {
             "bulletparam" => Ok(InspectType::BulletParam),
             "speedparam" => Ok(InspectType::SpeedParam),
             "projectile_depiction_table" => Ok(InspectType::ProjectileDepictionTable),
+            "hitgroupiddef" | "hitgroup_id_def" | "hitgroup" => Ok(InspectType::HitGroupIdDef),
+            "interactionid" | "interaction_id" | "interaction" => Ok(InspectType::InteractionId),
+            "grapparam" | "grap_param" | "grap" => Ok(InspectType::GrapParam),
             "navi_list" | "navilist" => Ok(InspectType::NaviList),
             "pilot_list" | "pilotlist" => Ok(InspectType::PilotList),
             "nusktb" | "skel" | "ssbh_skel" => Ok(InspectType::Nusktb),
@@ -65,6 +74,9 @@ impl InspectType {
                 | InspectType::BulletParam
                 | InspectType::SpeedParam
                 | InspectType::ProjectileDepictionTable
+                | InspectType::HitGroupIdDef
+                | InspectType::InteractionId
+                | InspectType::GrapParam
                 | InspectType::NaviList
                 | InspectType::PilotList
         )

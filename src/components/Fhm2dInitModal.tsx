@@ -39,9 +39,8 @@ import { AppRndModalShell } from "@/components/AppRndModalShell";
 import {
     Fhm2dMetadataSummary,
     Fhm2dNameField,
-    joinPreviewPath,
 } from "@/components/fhm2d-metadata";
-import { useConfigStore } from "@/store/configStore";
+import { TEST_EDITOR_FOLDER_STORE_KEY, useConfigStore } from "@/store/configStore";
 import { IOReadFile } from "@/IO/fileSystem";
 import { ExtractFHMData, ExtractType, Fhm2d_type_format } from "@/models/fhm2d";
 import { cn } from "@/lib/utils";
@@ -49,7 +48,12 @@ import {
     normalizeFhm2dHashName,
     sanitizeFhm2dStructureName,
 } from "@/utils/fhm2dStructureMetadata";
-import { suggestFhm2dStructureName } from "@/utils/fhm2dNameMapping";
+import {
+    buildFhm2dInitExtractOutput,
+    defaultInitPackName,
+    resolveInitRouteTarget,
+    type Fhm2dInitExtractOutput,
+} from "@/utils/fhm2dInitExtractPaths";
 
 interface Fhm2dInitModalProps {
     isOpen: boolean;
@@ -60,8 +64,15 @@ type InitListItem = {
     id: string;
     name: string;
     hash: string;
+    /** Workspace route id (TestEditor assetRoutes). */
+    routeId: string;
     format?: Fhm2d_type_format;
     formatLabel: string;
+    /**
+     * When set, overrides name-map default for the extract folder stem.
+     * e.g. common effect uses 000common_001 instead of the long meta path name.
+     */
+    fixedPackName?: string;
     /** English note shown in expanded row (optional). */
     description?: string;
 };
@@ -83,21 +94,93 @@ type ExtractionHistory = {
 type SortOption = "name" | "type" | "status" | "lastUsed";
 type FilterOption = "all" | "available" | "list" | "nutexb";
 
+/**
+ * Global bootstrap packs for FHM2D Init.
+ * Output layout matches TestEditor workspace + exemplar E:\XB\mod:
+ *   012list/*  |  041cpm/for_outgame  |  009gui/*  |  006effect/000common_001
+ */
 const FHM2D_ITEMS: InitListItem[] = [
-    { id: "series_list", name: "Series List", hash: "0xb7367090", formatLabel: "list" },
-    { id: "stage_list", name: "Stage List", hash: "0xCE74091E", format: Fhm2d_type_format.fhm2d_stage_list, formatLabel: "list" },
-    { id: "stage_image_list", name: "Stage Image List", hash: "0x3CC8B10B", format: Fhm2d_type_format.fhm2d_all_nutexb, formatLabel: "all_nutexb" },
-    { id: "stage_image_list_2", name: "Stage Image List 2", hash: "0x0CEE3991", format: Fhm2d_type_format.fhm2d_all_nutexb, formatLabel: "all_nutexb" },
-    { id: "series_image_list", name: "Series Image List", hash: "0xA0253AA0", format: Fhm2d_type_format.fhm2d_all_nutexb, formatLabel: "all_nutexb" },
-    { id: "card_icon_list", name: "Card Icon List", hash: "0x49235031", format: Fhm2d_type_format.fhm2d_all_nutexb, formatLabel: "all_nutexb" },
+    {
+        id: "character_id_table",
+        name: "Character ID Table",
+        hash: "0x036B9E67",
+        routeId: "list.character",
+        formatLabel: "list",
+        description: "character_id_table.bin under 012list",
+    },
+    {
+        id: "character_list",
+        name: "Character List",
+        hash: "0xDFD38C70",
+        routeId: "list.character",
+        formatLabel: "list",
+        description: "character_list.bin under 012list",
+    },
+    {
+        id: "series_list",
+        name: "Series List",
+        hash: "0xb7367090",
+        routeId: "list.series",
+        formatLabel: "list",
+    },
+    {
+        id: "stage_list",
+        name: "Stage List",
+        hash: "0xCE74091E",
+        routeId: "list.stage",
+        format: Fhm2d_type_format.fhm2d_stage_list,
+        formatLabel: "list",
+    },
+    {
+        id: "stage_image_list",
+        name: "Stage Image List",
+        hash: "0x3CC8B10B",
+        routeId: "gui.stage-icons",
+        format: Fhm2d_type_format.fhm2d_all_nutexb,
+        formatLabel: "all_nutexb",
+    },
+    {
+        id: "stage_image_list_2",
+        name: "Stage Image List 2",
+        hash: "0x0CEE3991",
+        routeId: "gui.stage-icons",
+        format: Fhm2d_type_format.fhm2d_all_nutexb,
+        formatLabel: "all_nutexb",
+    },
+    {
+        id: "series_image_list",
+        name: "Series Image List",
+        hash: "0xA0253AA0",
+        routeId: "gui.series-icons",
+        format: Fhm2d_type_format.fhm2d_all_nutexb,
+        formatLabel: "all_nutexb",
+    },
+    {
+        id: "card_icon_list",
+        name: "Card Icon List",
+        hash: "0x49235031",
+        routeId: "gui.card-icons",
+        format: Fhm2d_type_format.fhm2d_all_nutexb,
+        formatLabel: "all_nutexb",
+    },
     {
         id: "character_cost",
         name: "Character Cost",
         hash: "0xFF832E7F",
+        routeId: "param.for-outgame",
         format: Fhm2d_type_format.fhm2d_character_cost,
         formatLabel: "character_cost",
-        description:
-            "unit cost, HP"
+        description: "unit cost, HP → 041cpm/for_outgame",
+    },
+    {
+        id: "common_effect",
+        name: "Common Effect",
+        hash: "0x1587139A",
+        routeId: "unit.effect",
+        format: Fhm2d_type_format.fhm2d_effect,
+        formatLabel: "effect",
+        fixedPackName: "000common_001",
+        description: "shared unit FX → 006effect/000common_001",
     },
 ];
 
@@ -110,10 +193,10 @@ const FHM2D_INIT_MODAL_DIMENSIONS = {
 };
 
 const FHM2D_EXTRACT_NAME_DIMENSIONS = {
-    width: 560,
-    height: 480,
-    minWidth: 440,
-    minHeight: 360,
+    width: 620,
+    height: 560,
+    minWidth: 480,
+    minHeight: 420,
 };
 
 function buildHashFileName(hash: string): string {
@@ -122,12 +205,39 @@ function buildHashFileName(hash: string): string {
     return trimmed.toLowerCase().startsWith("0x") ? trimmed : `0x${trimmed}`;
 }
 
+function getItemRoute(item: InitListItem) {
+    return resolveInitRouteTarget(item.routeId);
+}
+
 function defaultExtractName(item: InitListItem): string {
-    return (
-        suggestFhm2dStructureName(item.hash, {
-            fallbackName: item.name || item.id || buildHashFileName(item.hash),
-        }) ?? sanitizeFhm2dStructureName(item.name || item.id || buildHashFileName(item.hash))
-    );
+    if (item.fixedPackName?.trim()) {
+        return sanitizeFhm2dStructureName(item.fixedPackName);
+    }
+    return defaultInitPackName(item.hash, {
+        routeId: item.routeId,
+        fallbackName: item.name || item.id || buildHashFileName(item.hash),
+    });
+}
+
+function previewExtractOutput(
+    item: InitListItem,
+    exportRoot: string,
+    packName: string,
+): Fhm2dInitExtractOutput | null {
+    const root = exportRoot.trim();
+    if (!root) return null;
+    try {
+        const route = getItemRoute(item);
+        return buildFhm2dInitExtractOutput({
+            exportRoot: root,
+            routeId: route.routeId,
+            routePrefix: route.routePrefix,
+            packName,
+            hashHex: item.hash,
+        });
+    } catch {
+        return null;
+    }
 }
 
 function getFhm2dFullPath(sourceFolder: string, hash: string): string {
@@ -184,6 +294,8 @@ function getFormatBadgeColor(formatLabel: string): string {
             return "bg-purple-500/10 text-purple-600 border-purple-500/20 hover:bg-purple-500/20";
         case "character_cost":
             return "bg-amber-500/10 text-amber-800 border-amber-500/25 hover:bg-amber-500/20";
+        case "effect":
+            return "bg-emerald-500/10 text-emerald-700 border-emerald-500/25 hover:bg-emerald-500/20";
         default:
             return "bg-muted text-muted-foreground";
     }
@@ -222,7 +334,11 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
     const [pendingExtractName, setPendingExtractName] = useState("");
 
     const obDplCachePath = useConfigStore((s) => s.obDplCachePath);
-    const extractOutputPath = useConfigStore((s) => s.extractOutputPath);
+    /**
+     * Test Editor workspace root (`testEditorFolder`, e.g. E:\XB\mod).
+     * Not obModPath (game inject) and not extractOutputPath (secondary dump).
+     */
+    const testEditorFolder = useConfigStore((s) => s.testEditorFolder);
 
     const isExtracting = extractingId !== null || batchProgress.total > 0;
 
@@ -385,9 +501,9 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
             return;
         }
 
-        const outBase = (extractOutputPath ?? "").trim();
+        const outBase = (testEditorFolder ?? "").trim();
         if (!outBase) {
-            toast.error("Please set export folder first");
+            toast.error("Please set Test Editor folder first (workspace root, e.g. E:\\XB\\mod)");
             return;
         }
 
@@ -409,7 +525,15 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
             return;
         }
 
-        const outputName = sanitizeFhm2dStructureName(nameOverride);
+        const route = getItemRoute(item);
+        const extractOutput = buildFhm2dInitExtractOutput({
+            exportRoot: outBase,
+            routeId: route.routeId,
+            routePrefix: route.routePrefix,
+            packName: nameOverride,
+            hashHex: item.hash,
+        });
+        const outDir = extractOutput.folderPath;
 
         setExtractingId(item.id);
         setLastExtractedId(null);
@@ -421,7 +545,6 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
 
         try {
             await assertFhm2dMagic(inputPath);
-            const outDir = `${outBase}\\${outputName}`;
             const listOutputFileName =
                 item.format === Fhm2d_type_format.fhm2d_stage_list ? `${item.id}.bin` : undefined;
 
@@ -452,7 +575,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                 });
             } else {
                 toast.success(`Extract completed: ${item.name}`, {
-                    description: `Output: ${outDir}`,
+                    description: `Output: ${extractOutput.relativeFolderPath}\n${outDir}`,
                     action: {
                         label: "Open Folder",
                         onClick: () => openFolder(outDir),
@@ -545,7 +668,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
             <AppRndModalShell
                 titleId="fhm2d-init-modal-title"
                 title="FHM2D Init"
-                subtitle="Extract game data files"
+                subtitle="Extract into workspace prefixes (012list / 041cpm / 009gui / 006effect)"
                 headerIcon={<FileCode2 className="h-5 w-5 text-primary" />}
                 dimensions={FHM2D_INIT_MODAL_DIMENSIONS}
                 storageKey="app.rnd-size.fhm2d-init"
@@ -581,19 +704,30 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                             className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"
                                         >
                                             <FolderOutput className="h-3.5 w-3.5" />
-                                            Export Folder
+                                            Test Editor Folder (workspace root)
                                         </Label>
                                         <FilePathInput
                                             id="fhm2d-init-export"
-                                            placeholder="Select export folder..."
-                                            value={extractOutputPath}
+                                            placeholder="e.g. E:\XB\mod"
+                                            value={testEditorFolder ?? ""}
                                             readOnly
-                                            storeKey="extractOutputPath"
+                                            storeKey={TEST_EDITOR_FOLDER_STORE_KEY}
                                             picker={{ kind: "folder", multiple: false }}
                                             className="h-9 cursor-pointer bg-background"
                                         />
                                     </div>
                                 </div>
+                                <p className="text-[11px] text-muted-foreground">
+                                    Uses Tauri config{" "}
+                                    <span className="font-mono">{TEST_EDITOR_FOLDER_STORE_KEY}</span>{" "}
+                                    (same as Test Editor open folder), not{" "}
+                                    <span className="font-mono">obModPath</span> (game inject) or{" "}
+                                    <span className="font-mono">extractOutputPath</span>. Packs write
+                                    under <span className="font-mono">012list/</span>,{" "}
+                                    <span className="font-mono">041cpm/</span>,{" "}
+                                    <span className="font-mono">009gui/</span>,{" "}
+                                    <span className="font-mono">006effect/</span>.
+                                </p>
 
                                 {/* Quick Stats */}
                                 <div className="flex items-center gap-4 text-xs">
@@ -772,6 +906,13 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                                 const isSelected = selectedIds.has(item.id);
                                                 const isExpanded = expandedId === item.id;
                                                 const lastUsed = getLastExtractionTime(item.id);
+                                                const route = getItemRoute(item);
+                                                const defaultName = defaultExtractName(item);
+                                                const outputPreview = previewExtractOutput(
+                                                    item,
+                                                    testEditorFolder ?? "",
+                                                    defaultName,
+                                                );
 
                                                 return (
                                                     <Collapsible
@@ -819,7 +960,9 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                                                                 ? "bg-blue-500/10 text-blue-600"
                                                                                 : item.formatLabel === "character_cost"
                                                                                     ? "bg-amber-500/10 text-amber-700"
-                                                                                    : "bg-purple-500/10 text-purple-600",
+                                                                                    : item.formatLabel === "effect"
+                                                                                        ? "bg-emerald-500/10 text-emerald-700"
+                                                                                        : "bg-purple-500/10 text-purple-600",
                                                                             isItemExtracting && "bg-primary/20 text-primary",
                                                                             !status?.exists && "grayscale"
                                                                         )}
@@ -855,7 +998,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                                                             )}
                                                                         </div>
 
-                                                                        <div className="flex items-center gap-3 text-xs">
+                                                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                                                                             <Tooltip>
                                                                                 <TooltipTrigger asChild>
                                                                                     <span className="font-mono text-muted-foreground cursor-help">
@@ -868,6 +1011,17 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                                                                     </p>
                                                                                 </TooltipContent>
                                                                             </Tooltip>
+
+                                                                            <Badge
+                                                                                variant="secondary"
+                                                                                className="h-5 max-w-full truncate px-1.5 font-mono text-[10px]"
+                                                                                title={
+                                                                                    outputPreview?.folderPath ??
+                                                                                    `${route.routePrefix}/${defaultName}`
+                                                                                }
+                                                                            >
+                                                                                → {outputPreview?.relativeFolderPath ?? `${route.routePrefix}/${defaultName}`}
+                                                                            </Badge>
 
                                                                             {lastUsed && (
                                                                                 <span className="text-muted-foreground flex items-center gap-1">
@@ -1023,7 +1177,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
             <ExtractNameDialog
                 item={pendingNameItem}
                 value={pendingExtractName}
-                outputRoot={extractOutputPath ?? ""}
+                outputRoot={testEditorFolder ?? ""}
                 onChange={setPendingExtractName}
                 onCancel={() => {
                     setPendingNameItem(null);
@@ -1056,19 +1210,21 @@ function ExtractNameDialog({
     onCancel: () => void;
     onConfirm: () => void;
 }) {
-    const sanitizedName = sanitizeFhm2dStructureName(value || (item ? defaultExtractName(item) : ""));
-    const folderPath = outputRoot.trim() ? joinPreviewPath(outputRoot, sanitizedName) : null;
-    const structureJsonPath = folderPath ? `${folderPath}_structure.json` : null;
-    const hashName = normalizeFhm2dHashName(item?.hash);
-    const repackOutputPath = outputRoot.trim() && hashName ? joinPreviewPath(outputRoot, `${hashName}.fhm2d`) : null;
-
     if (!item) return null;
+
+    const route = getItemRoute(item);
+    const sanitizedName = sanitizeFhm2dStructureName(value || defaultExtractName(item));
+    const extractOutput = previewExtractOutput(item, outputRoot, sanitizedName);
+    const folderPath = extractOutput?.folderPath ?? null;
+    const structureJsonPath = extractOutput?.structureJsonPath ?? null;
+    const hashName = extractOutput?.hashName ?? normalizeFhm2dHashName(item.hash);
+    const repackOutputPath = extractOutput?.repackOutputPath ?? null;
 
     return (
         <AppRndModalShell
             titleId="fhm2d-init-extract-name-title"
             title="Name extracted FHM2D pack"
-            subtitle="Pick a readable workspace name. The game hash is kept in HashName for repack output."
+            subtitle="Writes under the workspace route prefix (same layout as TestEditor / mod folders)."
             headerIcon={<FolderOutput className="h-5 w-5 text-primary" />}
             dimensions={FHM2D_EXTRACT_NAME_DIMENSIONS}
             storageKey="app.rnd-size.fhm2d-init-extract-name"
@@ -1078,7 +1234,7 @@ function ExtractNameDialog({
                     <Button variant="outline" onClick={onCancel}>
                         Cancel
                     </Button>
-                    <Button disabled={!outputRoot.trim()} onClick={onConfirm}>
+                    <Button disabled={!outputRoot.trim() || !extractOutput} onClick={onConfirm}>
                         <FolderOutput className="mr-2 h-4 w-4" />
                         Extract
                     </Button>
@@ -1089,7 +1245,53 @@ function ExtractNameDialog({
                 <div className="rounded-md border bg-muted/20 p-3 text-sm">
                     <div className="font-medium">{item.name}</div>
                     <div className="mt-1 font-mono text-xs text-muted-foreground">{item.hash}</div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        <span>
+                            Route: <span className="font-mono text-foreground">{route.routeId}</span>
+                        </span>
+                        <span>
+                            Prefix: <span className="font-mono text-foreground">{route.routePrefix}</span>
+                        </span>
+                    </div>
                 </div>
+
+                <section
+                    className="space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm"
+                    aria-label="Output path review"
+                >
+                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
+                        <FolderOutput className="h-3.5 w-3.5" />
+                        Output path (review before extract)
+                    </div>
+                    {extractOutput ? (
+                        <div className="space-y-2">
+                            <div>
+                                <div className="text-[11px] font-medium text-muted-foreground">Relative</div>
+                                <div className="break-all rounded-md border bg-background px-2 py-1.5 font-mono text-xs">
+                                    {extractOutput.relativeFolderPath}
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-[11px] font-medium text-muted-foreground">Full folder</div>
+                                <div className="break-all rounded-md border bg-background px-2 py-1.5 font-mono text-xs">
+                                    {extractOutput.folderPath}
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-[11px] font-medium text-muted-foreground">Structure JSON</div>
+                                <div className="break-all rounded-md border bg-background px-2 py-1.5 font-mono text-xs text-muted-foreground">
+                                    {extractOutput.structureJsonPath}
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <p className="text-xs text-muted-foreground">
+                            Set Export Folder first. Expected layout: {"{export}"}/{route.routePrefix}/
+                            {sanitizedName}
+                        </p>
+                    )}
+                </section>
+
                 <Fhm2dNameField
                     id="fhm2d-init-extract-name"
                     value={value}

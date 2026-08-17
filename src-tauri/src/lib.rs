@@ -4,9 +4,10 @@ mod character_id_preview;
 pub mod collision_mesh;
 mod commands;
 mod console_color;
-pub mod exvs2_json_cli;
 #[cfg(debug_assertions)]
 mod dev_tools_sync;
+pub mod exvs2_json_cli;
+pub mod fhm2d_extract_cli;
 mod fhm2d_memory_preview;
 pub mod format;
 pub mod havok_cli;
@@ -15,6 +16,7 @@ pub mod havok_mesh_encode;
 pub mod havok_mesh_export;
 mod jnttbl_cmd;
 mod jnttbl_format;
+mod msc_roundtrip;
 pub mod numshb_collision;
 pub mod nutexb_lib;
 mod preview_collection_state;
@@ -78,9 +80,10 @@ pub fn run() {
             ssbh_motion::ssbh_nuanmb_manifest,
             ssbh_motion::ssbh_load_motion_clip,
             ssbh_motion::ssbh_sample_motion_frame,
-            ssbh_motion_interchange::ssbh_export_nuanmb_to_cascadeur_bridge,
-            ssbh_motion_interchange::ssbh_import_cascadeur_bridge_to_nuanmb,
-            ssbh_motion_interchange::ssbh_inspect_cascadeur_bridge,
+            ssbh_motion_interchange::ssbh_export_complete_motion_fbx,
+            ssbh_motion_interchange::ssbh_inspect_motion_fbx,
+            ssbh_motion_interchange::ssbh_import_motion_fbx,
+            ssbh_motion_interchange::ssbh_transform_nuanmb_clip,
             ssbh_dae_cmd::ssbh_analyze_dae,
             ssbh_dae_cmd::ssbh_analyze_fbx,
             ssbh_dae_cmd::ssbh_export_folder_to_dae,
@@ -109,6 +112,7 @@ pub fn run() {
             commands::write_files_batch_base64,
             commands::extract_fhm2d_to_folder,
             commands::bulk_extract_msc_fhm2d_to_folder,
+            msc_roundtrip::compare_msc_roundtrip,
             commands::analyze_fhm2d_structure_migration,
             commands::migrate_fhm2d_structure_metadata,
             character_id_preview::character_id_memory_preview_rows,
@@ -156,10 +160,12 @@ pub fn run() {
             stage_commands::repack_unit_model_fhm2d,
             stage_commands::inspect_effect_folder,
             stage_commands::parse_effect_efxbn_file,
+            stage_commands::patch_effect_efxbn_control_constants,
             stage_commands::validate_effect_folder_for_repack,
             stage_commands::repack_effect_folder_fhm2d,
             stage_commands::import_effect_folder_file,
             stage_commands::import_effect_folder_model,
+            stage_commands::update_effect_folder_item_hash,
             stage_commands::delete_effect_folder_entries,
             stage_commands::copy_effect_folder_selection,
             stage_commands::repack_stage_fhm2d_preserving_shared_textures,
@@ -175,6 +181,8 @@ pub fn run() {
             stage_commands::list_unit_model_textures,
             stage_commands::sync_unit_model_texture_containers,
             stage_commands::add_unit_model_nutexb,
+            stage_commands::analyze_unit_model_numatb_profiles,
+            stage_commands::fix_unit_model_numatb_profiles,
             stage_commands::register_unit_model_pool_orphans,
             stage_commands::remove_unit_model_nutexb,
             stage_commands::extract_unit_model_fhm2d_to_folder,
@@ -183,7 +191,9 @@ pub fn run() {
             stage_commands::remove_unit_model_model,
             stage_commands::add_unit_model_model,
             stage_commands::replace_unit_model_model,
+            stage_commands::replace_unit_model_numshb,
             stage_commands::preview_unit_model_model_replacement,
+            stage_commands::preview_unit_model_numshb_replacement,
             stage_commands::validate_unit_model_source_folder,
             scene_session_commands::scene_session_create,
             scene_session_commands::scene_session_destroy,
@@ -229,9 +239,17 @@ pub fn run() {
             havok_mesh_export::convert_hkt_to_obj
         ]);
 
+    // Debug-only MCP bridge for AI tooling. Prefer 127.0.0.1 and a base port outside
+    // Windows dynamic-port exclusion ranges (often 9181-9680 from Hyper-V/WSL), which
+    // make the plugin default 9223-9322 fail with os error 10013.
     #[cfg(debug_assertions)]
     {
-        builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+        builder = builder.plugin(
+            tauri_plugin_mcp_bridge::Builder::new()
+                .bind_address("127.0.0.1")
+                .base_port(11_000)
+                .build(),
+        );
     }
 
     builder
@@ -240,7 +258,9 @@ pub fn run() {
             {
                 match app.path().resource_dir() {
                     Ok(resource_dir) => {
-                        if let Err(error) = dev_tools_sync::sync_debug_tools_to_resource_dir(&resource_dir) {
+                        if let Err(error) =
+                            dev_tools_sync::sync_debug_tools_to_resource_dir(&resource_dir)
+                        {
                             eprintln!("failed to sync debug tools resources: {error}");
                         }
                     }

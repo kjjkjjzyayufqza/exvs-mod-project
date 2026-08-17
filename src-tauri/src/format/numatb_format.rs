@@ -6,10 +6,40 @@ pub enum NumatbProfileKind {
     Nust,
 }
 
-/// Heuristic: `__maya__` in basename selects Maya profile; otherwise Nust.
-pub fn detect_numatb_profile_from_name(name: &str) -> NumatbProfileKind {
-    if name.to_ascii_lowercase().contains("__maya__") {
+/// Content-based profile identity (preferred when matl is available).
+///
+/// EXVS authoring convention:
+/// - **Nust** materials carry a non-empty `shader_label` (e.g. `vsngCharaBasic`,
+///   `vstgStandard_VertexColor`).
+/// - **Maya** materials leave `shader_label` empty.
+///
+/// Rule: if **any** entry has a non-empty (trimmed) `shader_label` → [`NumatbProfileKind::Nust`];
+/// if every entry is empty (or the file has no entries) → [`NumatbProfileKind::Maya`].
+pub fn detect_numatb_profile_from_matl(matl: &MatlData) -> NumatbProfileKind {
+    if matl
+        .entries
+        .iter()
+        .any(|entry| !entry.shader_label.trim().is_empty())
+    {
+        NumatbProfileKind::Nust
+    } else {
         NumatbProfileKind::Maya
+    }
+}
+
+/// Filename heuristic when only a path/basename is known.
+///
+/// - Contains `__maya__` → Maya
+/// - Contains `__nust__` → Nust
+/// - Otherwise → Nust (legacy default for unmarked names)
+///
+/// Prefer [`detect_numatb_profile_from_matl`] whenever the matl can be parsed.
+pub fn detect_numatb_profile_from_name(name: &str) -> NumatbProfileKind {
+    let lower = name.to_ascii_lowercase();
+    if lower.contains("__maya__") {
+        NumatbProfileKind::Maya
+    } else if lower.contains("__nust__") {
+        NumatbProfileKind::Nust
     } else {
         NumatbProfileKind::Nust
     }
@@ -592,6 +622,51 @@ mod tests {
         assert_eq!(
             super::detect_numatb_profile_from_name("001stage001_sky__nust__.numatb"),
             NumatbProfileKind::Nust
+        );
+        assert_eq!(
+            super::detect_numatb_profile_from_name("unmarked.numatb"),
+            NumatbProfileKind::Nust
+        );
+    }
+
+    #[test]
+    fn detect_numatb_profile_from_matl_empty_shader_is_maya() {
+        let matl = MatlData {
+            major_version: 1,
+            minor_version: 6,
+            entries: vec![empty_entry("m1"), empty_entry("m2")],
+        };
+        assert_eq!(
+            super::detect_numatb_profile_from_matl(&matl),
+            NumatbProfileKind::Maya
+        );
+    }
+
+    #[test]
+    fn detect_numatb_profile_from_matl_any_shader_is_nust() {
+        let mut entry = empty_entry("m1");
+        entry.shader_label = "vsngCharaBasic".into();
+        let matl = MatlData {
+            major_version: 1,
+            minor_version: 6,
+            entries: vec![empty_entry("blank"), entry],
+        };
+        assert_eq!(
+            super::detect_numatb_profile_from_matl(&matl),
+            NumatbProfileKind::Nust
+        );
+    }
+
+    #[test]
+    fn detect_numatb_profile_from_matl_no_entries_is_maya() {
+        let matl = MatlData {
+            major_version: 1,
+            minor_version: 6,
+            entries: vec![],
+        };
+        assert_eq!(
+            super::detect_numatb_profile_from_matl(&matl),
+            NumatbProfileKind::Maya
         );
     }
 }

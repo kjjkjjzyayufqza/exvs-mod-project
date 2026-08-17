@@ -67,6 +67,88 @@ fn normalize_modl_relative_path_str(raw: &str) -> String {
         .join("/")
 }
 
+/// When the exact material basename from numdlb is missing, look for a same-folder
+/// `.numatb` with the same profile marker (`__maya__` / `__nust__`).
+///
+/// Does **not** change numdlb — only softens disk layout drift (e.g. `*_m001__maya__.numatb`
+/// when the modl still lists `*__maya__.numatb`). Prefer stem-compatible names, then any
+/// unused same-profile file.
+fn find_numatb_profile_fallback(
+    model_root_canon: &Path,
+    wanted_basename: &str,
+    claimed: &HashSet<PathBuf>,
+    searched: &mut Vec<PathBuf>,
+) -> Option<PathBuf> {
+    let wanted_lower = wanted_basename.to_ascii_lowercase();
+    if !wanted_lower.ends_with(".numatb") {
+        return None;
+    }
+    let profile_suffix = if wanted_lower.contains("__maya__") {
+        "__maya__.numatb"
+    } else if wanted_lower.contains("__nust__") {
+        "__nust__.numatb"
+    } else {
+        return None;
+    };
+    let wanted_stem = wanted_lower
+        .trim_end_matches(".numatb")
+        .replace("__maya__", "")
+        .replace("__nust__", "");
+
+    let mut same_profile: Vec<PathBuf> = Vec::new();
+    let Ok(entries) = fs::read_dir(model_root_canon) else {
+        return None;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+        if !name.ends_with(profile_suffix) {
+            continue;
+        }
+        searched.push(path.clone());
+        if let Ok(canon) = fs::canonicalize(&path) {
+            if claimed.contains(&canon) {
+                continue;
+            }
+        }
+        same_profile.push(path);
+    }
+    if same_profile.is_empty() {
+        return None;
+    }
+
+    // Prefer names that share the model stem, allowing optional `_mNNN` before the marker.
+    let mut ranked = same_profile;
+    ranked.sort_by_key(|path| {
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_default();
+        let stem = name
+            .trim_end_matches(".numatb")
+            .replace("__maya__", "")
+            .replace("__nust__", "");
+        let stem_core = stem
+            .rsplit_once("_m")
+            .filter(|(_, rest)| rest.chars().all(|c| c.is_ascii_digit()))
+            .map(|(prefix, _)| prefix.to_string())
+            .unwrap_or_else(|| stem.clone());
+        let exact_stem = stem_core == wanted_stem;
+        // false sorts before true for key... use 0 for better match
+        if exact_stem {
+            0u8
+        } else if stem.starts_with(&wanted_stem) || wanted_stem.starts_with(&stem_core) {
+            1
+        } else {
+            2
+        }
+    });
+    ranked.into_iter().next()
+}
+
 /// Tries the path as recorded in the modl first; if that file is missing, tries the same basename
 /// directly under the model folder (directory containing the `.numdlb`).
 fn resolve_modl_sidecar_path(
@@ -240,11 +322,14 @@ pub(crate) fn dir_name_should_skip(name: &str) -> bool {
 }
 
 /// Recursively collects files with extension `want_ext` under `root`, sorted lexicographically.
+///
+/// `max_files`: `Some(n)` caps the result at `n` paths; `None` returns every match under the
+/// depth limit (needed for full unit motion packs that often exceed a few hundred `.nuanmb`).
 pub(crate) fn collect_paths_recursive(
     root: &Path,
     want_ext: &str,
     max_depth: usize,
-    max_files: usize,
+    max_files: Option<usize>,
     skip_dir: fn(&str) -> bool,
 ) -> Result<Vec<PathBuf>, String> {
     let t0 = Instant::now();
@@ -254,6 +339,8 @@ pub(crate) fn collect_paths_recursive(
         want_ext,
         max_depth,
         max_files
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "unlimited".to_string())
     ));
     let root_canon = fs::canonicalize(root)
         .map_err(|e| format!("Failed to canonicalize {}: {e}", root.display()))?;
@@ -265,17 +352,21 @@ pub(crate) fn collect_paths_recursive(
     let mut visited_dirs: HashSet<PathBuf> = HashSet::new();
     let want = want_ext.to_ascii_lowercase();
 
+    fn at_file_cap(out_len: usize, max_files: Option<usize>) -> bool {
+        max_files.is_some_and(|cap| out_len >= cap)
+    }
+
     fn walk(
         dir: &Path,
         depth: usize,
         max_depth: usize,
-        max_files: usize,
+        max_files: Option<usize>,
         want_ext_lc: &str,
         out: &mut Vec<PathBuf>,
         visited_dirs: &mut HashSet<PathBuf>,
         skip_dir: fn(&str) -> bool,
     ) -> Result<(), String> {
-        if out.len() >= max_files {
+        if at_file_cap(out.len(), max_files) {
             return Ok(());
         }
         if depth > max_depth {
@@ -297,7 +388,7 @@ pub(crate) fn collect_paths_recursive(
         entries.sort_by_key(|e| e.file_name());
 
         for ent in entries {
-            if out.len() >= max_files {
+            if at_file_cap(out.len(), max_files) {
                 break;
             }
             let p = ent.path();
@@ -376,7 +467,13 @@ fn collect_numdlb_paths_recursive(
     max_depth: usize,
     max_files: usize,
 ) -> Result<Vec<PathBuf>, String> {
-    collect_paths_recursive(root, "numdlb", max_depth, max_files, dir_name_should_skip)
+    collect_paths_recursive(
+        root,
+        "numdlb",
+        max_depth,
+        Some(max_files),
+        dir_name_should_skip,
+    )
 }
 
 fn find_numdlb_in_dir(dir: &Path) -> Result<PathBuf, String> {
@@ -487,6 +584,20 @@ fn is_nust_numatb_path(path: &Path) -> bool {
         None => return false,
     };
     file.ends_with("__nust__.numatb")
+}
+
+/// True when the modl records the `__nust__` runtime material profile.
+///
+/// Material files come in an authoring/runtime pair (`__maya__` + `__nust__`) and the
+/// runtime half is what the game actually binds — the unit-model reader uses the same
+/// profile pair to decide whether a model folder is complete. Effect models are the one
+/// family that records the authoring half alone: their material lives in the EFXBN
+/// model-control parameters and reaches the GPU through the unlit `efxDrawModel` path, so
+/// no `.numatb` is ever shipped beside them.
+fn declares_nust_material_profile(material_file_names: &[String]) -> bool {
+    material_file_names
+        .iter()
+        .any(|name| is_nust_numatb_path(Path::new(name.trim())))
 }
 
 fn select_preferred_matl_paths(matl_paths: &[String]) -> (Vec<String>, Vec<String>) {
@@ -928,6 +1039,30 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
 
     let mut matl_paths: Vec<String> = Vec::new();
     let mut matl_combined: Option<MatlData> = None;
+    // Paths already claimed by earlier material slots (avoid double-bind on fallbacks).
+    let mut claimed_matl_paths: HashSet<PathBuf> = HashSet::new();
+
+    // Effect models list a `nusubf/<name>__maya__.numatb` that no shipped pack contains and
+    // that extraction never produces either, because their material comes from the EFXBN
+    // model-control parameters instead. Reporting that as a defect fired once per model in
+    // an effect preview that loads dozens of them.
+    //
+    // The discriminator is the material profile pair the modl declares, matching how the
+    // unit-model reader identifies a complete model folder. Survey of the 8,767 `.numdlb`
+    // under the game tree: 2,583 declare no `__nust__` runtime profile and hold no `.numatb`
+    // anywhere under the model folder, and every one of them is an `eff_*` model; every
+    // model that does declare `__nust__` without shipping it is genuinely unresolved.
+    let folder_has_any_numatb = !collect_paths_recursive(
+        &root_canon,
+        "numatb",
+        NUMDLB_RECURSE_MAX_DEPTH,
+        Some(1),
+        dir_name_should_skip,
+    )
+    .unwrap_or_default()
+    .is_empty();
+    let authored_without_runtime_material =
+        !folder_has_any_numatb && !declares_nust_material_profile(&modl.material_file_names);
 
     for name in &modl.material_file_names {
         let name_trim = name.trim();
@@ -941,6 +1076,7 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
             ));
             continue;
         }
+        let mut searched: Vec<PathBuf> = Vec::new();
         let mut p_lex = match resolve_relative_from_model_folder(&root_canon, &mat_rel) {
             Ok(p) => p,
             Err(_) => {
@@ -954,19 +1090,50 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
                 }
             }
         };
+        searched.push(p_lex.clone());
         if !p_lex.is_file() {
+            // Extraction flattens `nusubf`, so the basename beside the modl is the real
+            // location for every effect pack.
             if let Some(fname) = Path::new(&mat_rel).file_name() {
                 let alt = root_canon.join(fname);
+                if alt != p_lex {
+                    searched.push(alt.clone());
+                }
                 if alt.is_file() {
                     p_lex = alt;
                 }
             }
         }
+        // numdlb names are authoritative; never rewrite numdlb. When the exact basename
+        // is missing on disk (e.g. only `*_m001__maya__.numatb` remains), fall back to a
+        // same-folder profile match so preview still loads.
         if !p_lex.is_file() {
-            warnings.push(format!(
-                "Material file listed in model but missing: {}",
-                p_lex.display()
-            ));
+            if let Some(fname) = Path::new(&mat_rel).file_name().and_then(|s| s.to_str()) {
+                if let Some(fallback) = find_numatb_profile_fallback(
+                    &root_canon,
+                    fname,
+                    &claimed_matl_paths,
+                    &mut searched,
+                ) {
+                    p_lex = fallback;
+                    warnings.push(format!(
+                        "Material '{name_trim}' not at exact path; using profile fallback {}",
+                        preview_path_to_frontend(&p_lex)
+                    ));
+                }
+            }
+        }
+        if !p_lex.is_file() {
+            if !authored_without_runtime_material {
+                let candidates = searched
+                    .iter()
+                    .map(|path| preview_path_to_frontend(path))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                warnings.push(format!(
+                    "Material file listed in model but missing: {name_trim} (searched: {candidates})"
+                ));
+            }
             continue;
         }
         let p = verify_preview_path_under_model_tree(&root_canon, &p_lex)?;
@@ -981,6 +1148,9 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
                 continue;
             }
         };
+        if let Ok(canon) = fs::canonicalize(&p) {
+            claimed_matl_paths.insert(canon);
+        }
         matl_paths.push(preview_path_to_frontend(&p));
         match matl_combined.as_mut() {
             None => matl_combined = Some(data),
@@ -1061,7 +1231,9 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
         let v = serde_json::to_value(m).map_err(|e| format!("Failed to serialize Matl: {e}"))?;
         (refs, resolved, resolve_rows, Some(v))
     } else {
-        if !modl.material_file_names.is_empty() {
+        // A model authored without a runtime material has nothing to report: the neutral
+        // material is the expected result, not a degraded one.
+        if !modl.material_file_names.is_empty() && !authored_without_runtime_material {
             warnings.push(
                 "No material files could be loaded; meshes render with a neutral material.".into(),
             );

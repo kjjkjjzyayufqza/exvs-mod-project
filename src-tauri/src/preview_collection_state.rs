@@ -157,6 +157,11 @@ impl PreviewCollectionStore {
         &mut self,
         source_items: Vec<PreviewCollectionSourceItem>,
     ) -> Result<PreviewCollectionSnapshot, String> {
+        // Open folder / full reload must restore the default multi-model workspace:
+        // every item visible, no active focus, view range = all models.
+        self.query = String::new();
+        self.view_range = PreviewCollectionRange::All;
+        self.control_range = PreviewCollectionRange::Single;
         self.items = source_items
             .into_iter()
             .map(|item| PreviewCollectionEntry {
@@ -443,6 +448,34 @@ mod tests {
             .expect("replace should succeed");
         assert_eq!(snapshot.active_item_id, None);
         assert!(!snapshot.items.iter().any(|item| item.active));
+    }
+
+    #[test]
+    fn collection_replace_resets_view_range_to_all_and_shows_every_item() {
+        let mut store = PreviewCollectionStore::default();
+        let _ = store
+            .replace_items(sample_items())
+            .expect("replace should succeed");
+        let _ = store
+            .set_active(String::from("inst-a"))
+            .expect("set active");
+        let _ = store
+            .set_view_range(String::from("single"))
+            .expect("solo view");
+        let _ = store
+            .toggle_item_visibility(String::from("inst-b"))
+            .expect("hide b");
+
+        let snapshot = store
+            .replace_items(sample_items())
+            .expect("open folder replace");
+
+        assert_eq!(snapshot.view_range, "all");
+        assert_eq!(snapshot.active_item_id, None);
+        assert!(snapshot.all_visible);
+        assert!(snapshot.hidden_item_ids.is_empty());
+        assert_eq!(snapshot.items.len(), 3);
+        assert!(snapshot.items.iter().all(|item| item.visible));
     }
 
     #[test]

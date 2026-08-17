@@ -636,6 +636,7 @@ export function resolveMaterialTexturePaths(
   const aoRef =
     exvs.ao ?? textureRefForParam(entry, "AmbientOcclusionMap") ?? null;
   const cubeRef =
+    textureRefForParam(entry, "DiffuseCubeMap") ??
     textureRefForParam(entry, "Texture7") ??
     textureRefForParam(entry, "Texture8") ??
     iterTextureRefs(entry).find((x) => isLikelyCubeMapTextureRef(x.ref))?.ref ??
@@ -1238,6 +1239,21 @@ export function buildDrawListFromBundle(
     });
   }
   return out;
+}
+
+/** Reuses immutable geometry/skin payloads for another rendered model instance. */
+export function cloneBuiltMeshDrawsForInstance(
+  source: readonly BuiltMeshDraw[],
+  instanceId: string,
+  instanceLabel: string,
+): BuiltMeshDraw[] {
+  const labelPrefix = instanceLabel.trim() ? `${instanceLabel.trim()} — ` : "";
+  return source.map((draw) => ({
+    ...draw,
+    key: `${instanceId}::${draw.meshObjectName}_${draw.meshObjectSubindex}`,
+    label: `${labelPrefix}${draw.meshObjectName} [${draw.meshObjectSubindex}]`,
+    previewInstanceId: instanceId,
+  }));
 }
 
 export function buildMatlLookup(matl: MatlDataJson | null | undefined): Map<string, MatlEntryJson> {

@@ -161,16 +161,17 @@ export default function ListeningRepackDialog({
           });
           if (removeVgsht2InMod) {
             try {
-              const removed = await removeMatchingModVgsht2(modDir, entry.hashFolderName);
+              // Use written .fhm2d path stem (HashName), not workspace folder name.
+              const removed = await removeMatchingModVgsht2(modDir, repackResult.outputPath);
               if (removed) {
                 toast.success(`Repacked to mod: ${repackResult.outputPath}`, {
-                  description: `Removed ${entry.hashFolderName}.vgsht2`,
+                  description: "Removed matching .vgsht2 (same stem as .fhm2d)",
                 });
               } else {
                 toast.success(`Repacked to mod: ${repackResult.outputPath}`);
               }
             } catch (removeErr) {
-              console.error(`Failed to remove mod/${entry.hashFolderName}.vgsht2`, removeErr);
+              console.error(`Failed to remove matching .vgsht2 beside ${repackResult.outputPath}`, removeErr);
               toast.error(
                 `Repacked to mod but failed to remove .vgsht2: ${(removeErr as Error).message}`,
               );
@@ -239,8 +240,10 @@ export default function ListeningRepackDialog({
             onCheckedChange={(checked) => setRemoveVgsht2InMod(Boolean(checked))}
           />
           <span>
-            After repack, remove matching <code>.vgsht2</code> in the same OB Mod folder (e.g. pack{" "}
-            <code>0x49235031.fhm2d</code> → remove <code>0x49235031.vgsht2</code>). Requires OB Mod path in
+            After repack, remove the <code>.vgsht2</code> with the same stem as the written{" "}
+            <code>.fhm2d</code> (HashName) in the OB Mod folder (e.g. folder{" "}
+            <code>Gyan_model</code> → <code>0x49235031.fhm2d</code> → remove{" "}
+            <code>0x49235031.vgsht2</code>). Requires OB Mod path in
             Config.
           </span>
         </label>

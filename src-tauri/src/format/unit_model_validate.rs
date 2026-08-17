@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -7,6 +7,11 @@ use serde::{Deserialize, Serialize};
 use tempfile::Builder;
 
 use crate::format::fhm2d::SubFileStructureEntry;
+
+/// Appended to every texture-name finding so the report carries its own justification.
+const CASE_RULE: &str = "The game matches texture names byte for byte, so this reference \
+does not resolve: the material fails to load, model setup aborts, and the game crashes on \
+a null resource the first time the model is drawn. Make the two spellings identical.";
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -179,6 +184,8 @@ pub fn validate_unit_model_for_repack(
         );
     }
 
+    // Asset paths resolve against the package parent (sibling of model root / real structure),
+    // never against a working copy under %TEMP%.
     let json_dir = structure_path.parent().unwrap_or_else(|| Path::new("."));
     let mut input = match read_structure_json(&structure_path) {
         Ok(v) => v,
@@ -195,6 +202,27 @@ pub fn validate_unit_model_for_repack(
     };
     let mut synced_temp = None;
 
+    // Resolve against the package tree, the same base the texture-container sync uses.
+    let asset_model_root =
+        crate::format::unit_model_models::infer_model_root_from_structure_path(&structure_path)
+            .unwrap_or_else(|_| model_root_path.to_path_buf());
+    let name_errors = collect_numatb_texture_name_errors(
+        &input.sub_file_data,
+        &asset_model_root,
+        json_dir,
+        &mut warnings,
+    );
+    if !name_errors.is_empty() {
+        errors.extend(name_errors);
+        return finish_result(
+            model_root,
+            &structure_path.to_string_lossy(),
+            summary,
+            errors,
+            warnings,
+        );
+    }
+
     let should_sync = !input.sub_file_structure.is_empty()
         && input
             .sub_file_data
@@ -204,11 +232,19 @@ pub fn validate_unit_model_for_repack(
         let sync_model_root =
             crate::format::unit_model_models::infer_model_root_from_structure_path(&structure_path)
                 .unwrap_or_else(|_| model_root_path.to_path_buf());
+        // Keep working structure copies out of the package tree so UI scanners do not
+        // treat `.unit-model-validate-*_structure.json` as real packs.
+        let system_temp = std::env::temp_dir();
         let temp = Builder::new()
             .prefix(".unit-model-validate-")
             .suffix("_structure.json")
-            .tempfile_in(json_dir)
-            .map_err(|e| format!("Failed to create temporary validation structure: {e}"));
+            .tempfile_in(&system_temp)
+            .map_err(|e| {
+                format!(
+                    "Failed to create temporary validation structure in {}: {e}",
+                    system_temp.display()
+                )
+            });
         let temp = match temp {
             Ok(temp) => temp,
             Err(error) => {
@@ -982,12 +1018,27 @@ fn validate_numatb_container_pairing(
         let refs = collect_numatb_texture_refs(&numatb_path, warnings, errors, model_name);
         summary.texture_reference_count += refs.len();
         for ref_name in refs {
-            let key = ref_name.to_ascii_lowercase();
-            if key.is_empty() || key == ".nutexb" {
+            if ref_name.is_empty() || ref_name == ".nutexb" || texture_names.contains(&ref_name) {
                 continue;
             }
-            if !texture_names.contains(&key) {
-                push_model_error(
+            // Separate "wrong spelling" from "absent" so the operator is told what to type.
+            match texture_names
+                .iter()
+                .find(|name| name.eq_ignore_ascii_case(&ref_name))
+            {
+                Some(actual) => push_model_error(
+                    errors,
+                    "texture-case",
+                    model_name,
+                    format!(
+                        "Paired numatb '{}' references '{}' but the texture in its container is named '{}'. {CASE_RULE}",
+                        file_basename(&numatb_file.file_url),
+                        ref_name,
+                        actual
+                    ),
+                    Some(numatb_path.clone()),
+                ),
+                None => push_model_error(
                     errors,
                     "textures",
                     model_name,
@@ -997,7 +1048,7 @@ fn validate_numatb_container_pairing(
                         ref_name
                     ),
                     Some(numatb_path.clone()),
-                );
+                ),
             }
         }
     }
@@ -1019,39 +1070,12 @@ fn validate_numatb_container_pairing(
     }
 }
 
-fn collect_numatb_texture_refs(
-    path: &Path,
-    warnings: &mut Vec<String>,
-    errors: &mut Vec<UnitModelValidationError>,
-    model_name: &str,
-) -> Vec<String> {
-    let data = match fs::read(path) {
-        Ok(v) => v,
-        Err(e) => {
-            push_model_error(
-                errors,
-                "numatb",
-                model_name,
-                format!("Failed to read numatb {}: {e}", path.display()),
-                Some(path),
-            );
-            return Vec::new();
-        }
-    };
+fn read_numatb_texture_refs(path: &Path) -> Result<Vec<String>, String> {
+    let data =
+        fs::read(path).map_err(|e| format!("Failed to read numatb {}: {e}", path.display()))?;
     let mut cursor = Cursor::new(&data);
-    let matl = match ssbh_data::prelude::MatlData::read(&mut cursor) {
-        Ok(v) => v,
-        Err(e) => {
-            push_model_error(
-                errors,
-                "numatb",
-                model_name,
-                format!("Failed to parse numatb {}: {e}", path.display()),
-                Some(path),
-            );
-            return Vec::new();
-        }
-    };
+    let matl = ssbh_data::prelude::MatlData::read(&mut cursor)
+        .map_err(|e| format!("Failed to parse numatb {}: {e}", path.display()))?;
 
     let mut seen = HashSet::new();
     let mut out = Vec::new();
@@ -1063,6 +1087,22 @@ fn collect_numatb_texture_refs(
             push_texture_ref(tex.data.as_str(), &mut seen, &mut out);
         }
     }
+    Ok(out)
+}
+
+fn collect_numatb_texture_refs(
+    path: &Path,
+    warnings: &mut Vec<String>,
+    errors: &mut Vec<UnitModelValidationError>,
+    model_name: &str,
+) -> Vec<String> {
+    let out = match read_numatb_texture_refs(path) {
+        Ok(v) => v,
+        Err(e) => {
+            push_model_error(errors, "numatb", model_name, e, Some(path));
+            return Vec::new();
+        }
+    };
     if out.is_empty() {
         warnings.push(format!(
             "Model '{}': numatb '{}' has no non-empty texture references.",
@@ -1073,25 +1113,138 @@ fn collect_numatb_texture_refs(
     out
 }
 
+/// The texture names this package can offer a numatb, mapped to the file each one came
+/// from.
+///
+/// fhm2d records carry no names of their own — the packed metadata contains no strings at
+/// all — so a numatb reference is resolved against the name stored inside the nutexb
+/// footer. Neither the file name nor the structure entry has any say in it. Collect from
+/// the entries in `SubFileData` plus the `textures/` pool on disk, which the
+/// texture-container sync can still pull unregistered files in from.
+fn available_texture_names(
+    sub_file_data: &[InputSubFileData],
+    model_root: &Path,
+    json_dir: &Path,
+) -> BTreeMap<String, PathBuf> {
+    let mut out = BTreeMap::new();
+    for file in sub_file_data
+        .iter()
+        .filter(|file| actual_ext(file) == ".nutexb")
+    {
+        record_texture_name(&mut out, resolve_file_path(json_dir, &file.file_url));
+    }
+    if let Ok(entries) = fs::read_dir(model_root.join("textures")) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("nutexb"))
+            {
+                record_texture_name(&mut out, path);
+            }
+        }
+    }
+    out
+}
+
+fn record_texture_name(out: &mut BTreeMap<String, PathBuf>, path: PathBuf) {
+    // A texture whose footer cannot be read offers no name; the per-model pass still
+    // reports it through the paired-container check.
+    if let Ok(name) = crate::nutexb_lib::read_nutexb_name(&path) {
+        if !name.is_empty() {
+            out.entry(name).or_insert(path);
+        }
+    }
+}
+
+/// Reports numatb texture references that resolve only if names are compared
+/// case-insensitively.
+///
+/// This runs before the texture-container auto-sync because that sync binds a reference to
+/// a pool entry by file name and would leave a structure that looks consistent while the
+/// packed archive still cannot be loaded.
+fn collect_numatb_texture_name_errors(
+    sub_file_data: &[InputSubFileData],
+    model_root: &Path,
+    json_dir: &Path,
+    warnings: &mut Vec<String>,
+) -> Vec<UnitModelValidationError> {
+    let available = available_texture_names(sub_file_data, model_root, json_dir);
+
+    // Every other check in this file reasons about textures by file name, which only holds
+    // while a texture's stored name matches its stem. Say so when it does not.
+    for (name, path) in &available {
+        let stem = file_stem(&path.to_string_lossy());
+        if stem != *name {
+            warnings.push(format!(
+                "Texture '{}' stores the name '{name}'. The game only ever sees the stored name, so keep the two identical.",
+                path.display()
+            ));
+        }
+    }
+
+    let mut errors = Vec::new();
+    for file in sub_file_data
+        .iter()
+        .filter(|file| actual_ext(file) == ".numatb")
+    {
+        let numatb_path = resolve_file_path(json_dir, &file.file_url);
+        let Ok(refs) = read_numatb_texture_refs(&numatb_path) else {
+            // A numatb that cannot be read or parsed is reported by the per-model pass.
+            continue;
+        };
+        for ref_name in refs {
+            let wanted = file_stem(&ref_name);
+            if available.contains_key(&wanted) {
+                continue;
+            }
+            // A reference with no case-insensitive counterpart is a genuinely missing
+            // texture, which the per-model pass reports with its model context.
+            let Some((actual, source)) = available
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case(&wanted))
+            else {
+                continue;
+            };
+            errors.push(UnitModelValidationError {
+                phase: "texture-name".to_string(),
+                model: Some(file_stem(&file.file_url)),
+                message: format!(
+                    "numatb '{}' references texture '{wanted}', but '{}' stores the name '{actual}'. {CASE_RULE}",
+                    file_basename(&file.file_url),
+                    source.display()
+                ),
+                path: Some(numatb_path.to_string_lossy().into()),
+            });
+        }
+    }
+    errors
+}
+
 fn push_texture_ref(raw: &str, seen: &mut HashSet<String>, out: &mut Vec<String>) {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return;
     }
-    let base = trimmed
-        .replace('\\', "/")
-        .split('/')
-        .last()
-        .unwrap_or(trimmed)
-        .to_string();
-    let nutexb = if base.to_ascii_lowercase().ends_with(".nutexb") {
-        base
-    } else {
-        format!("{base}.nutexb")
-    };
-    if seen.insert(nutexb.to_ascii_lowercase()) {
-        out.push(nutexb);
+    let name = texture_name_key(trimmed);
+    if name.is_empty() || name == ".nutexb" {
+        return;
     }
+    // Deduplicate on the exact name: the game tells two refs that differ only in case
+    // apart, so collapsing them here would hide one of them from validation.
+    if seen.insert(name.clone()) {
+        out.push(name);
+    }
+}
+
+/// Basename with a canonical lowercase `.nutexb` extension, stem case preserved.
+///
+/// The game resolves a numatb texture reference against the package's nutexb entries by
+/// basename, compared with `memcmp` plus an exact length check (`sub_1401186E0`, called
+/// from the material loader `sub_140114D60` in `vsac27_Release.exe`). The stem is what has
+/// to match byte for byte; the extension only exists on the tooling side.
+fn texture_name_key(name: &str) -> String {
+    crate::format::unit_model_models::normalize_texture_filename(name)
 }
 
 fn validate_nuhlpb_files(
@@ -1272,7 +1425,7 @@ fn texture_names_in_container(
             continue;
         };
         if actual_ext(file) == ".nutexb" {
-            out.insert(file_basename(&file.file_url).to_ascii_lowercase());
+            out.insert(texture_name_key(&file.file_url));
         }
     }
     out
@@ -1417,6 +1570,20 @@ mod tests {
     use ssbh_data::matl_data::ParamId;
     use ssbh_data::matl_data::{MatlData, MatlEntryData, TextureParam};
 
+    /// Minimal v1.2 nutexb: stand-in payload plus the 112-byte footer the game reads the
+    /// texture name from.
+    fn write_nutexb(path: &Path, stored_name: &str) {
+        let mut bytes = vec![0u8; 16];
+        let mut footer = vec![0u8; 112];
+        footer[..4].copy_from_slice(b"46XT");
+        footer[4..4 + stored_name.len()].copy_from_slice(stored_name.as_bytes());
+        footer[104..108].copy_from_slice(b" XET");
+        footer[108..110].copy_from_slice(&1u16.to_le_bytes());
+        footer[110..112].copy_from_slice(&2u16.to_le_bytes());
+        bytes.extend_from_slice(&footer);
+        fs::write(path, bytes).unwrap();
+    }
+
     fn write_sync_fixture(parent: &Path, folder_name: &str) -> (PathBuf, PathBuf) {
         let model_root = parent.join(folder_name);
         let model_dir = model_root.join("models").join("alpha");
@@ -1495,7 +1662,7 @@ mod tests {
         nust.write_to_file(model_dir.join("alpha__nust__.numatb"))
             .unwrap();
 
-        fs::write(textures_dir.join("color_palette.nutexb"), b"nutexb").unwrap();
+        write_nutexb(&textures_dir.join("color_palette.nutexb"), "color_palette");
 
         let structure = parent.join(format!("{folder_name}_structure.json"));
         let value = json!({
@@ -1753,6 +1920,123 @@ mod tests {
         assert!(
             result.valid,
             "expected validate to auto-sync stale texture containers, errors={}",
+            serde_json::to_string_pretty(&result.errors).unwrap()
+        );
+    }
+
+    #[test]
+    fn numatb_texture_reference_that_only_differs_in_case_is_reported() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (model_root, structure) = write_sync_fixture(tmp.path(), "0xCASE");
+        let numatb_path = model_root
+            .join("models")
+            .join("alpha")
+            .join("alpha__nust__.numatb");
+
+        // The texture keeps storing `color_palette`; only the reference is recapitalised,
+        // which is exactly the shape that makes the game abort material setup.
+        let mut matl = MatlData::from_file(&numatb_path).unwrap();
+        matl.entries[0].textures[0].data = "Color_Palette".to_string();
+        matl.write_to_file(&numatb_path).unwrap();
+
+        let result = validate_unit_model_for_repack(
+            model_root.to_str().unwrap(),
+            Some(structure.to_str().unwrap()),
+        );
+
+        assert!(!result.valid, "case-only mismatch must block repack");
+        let name_errors: Vec<&UnitModelValidationError> = result
+            .errors
+            .iter()
+            .filter(|error| error.phase == "texture-name")
+            .collect();
+        assert_eq!(
+            name_errors.len(),
+            1,
+            "errors={}",
+            serde_json::to_string_pretty(&result.errors).unwrap()
+        );
+        assert!(name_errors[0].message.contains("Color_Palette"));
+        assert!(name_errors[0].message.contains("color_palette"));
+    }
+
+    #[test]
+    fn texture_whose_stored_name_differs_from_its_file_name_is_warned_about() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (model_root, structure) = write_sync_fixture(tmp.path(), "0xSTORED");
+        // Same file, different stored name: the numatb still resolves, but every file-name
+        // based check in this module has silently stopped meaning anything.
+        write_nutexb(
+            &model_root.join("textures").join("color_palette.nutexb"),
+            "Color_Palette",
+        );
+        let numatb_dir = model_root.join("models").join("alpha");
+        for name in ["alpha__maya__.numatb", "alpha__nust__.numatb"] {
+            let path = numatb_dir.join(name);
+            let mut matl = MatlData::from_file(&path).unwrap();
+            matl.entries[0].textures[0].data = "Color_Palette".to_string();
+            matl.write_to_file(&path).unwrap();
+        }
+
+        let result = validate_unit_model_for_repack(
+            model_root.to_str().unwrap(),
+            Some(structure.to_str().unwrap()),
+        );
+
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("stores the name 'Color_Palette'")),
+            "warnings={}",
+            serde_json::to_string_pretty(&result.warnings).unwrap()
+        );
+    }
+
+    #[test]
+    fn texture_reference_case_is_checked_before_the_container_sync_can_absorb_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (model_root, structure) = write_sync_fixture(tmp.path(), "0xPRESYNC");
+        let numatb_path = model_root
+            .join("models")
+            .join("alpha")
+            .join("alpha__maya__.numatb");
+        let mut matl = MatlData::from_file(&numatb_path).unwrap();
+        matl.entries[0].textures[0].data = "COLOR_PALETTE".to_string();
+        matl.write_to_file(&numatb_path).unwrap();
+
+        // Drop every texture container so the sync would otherwise rebuild them from the
+        // numatb refs and silently bind the miscased name to the real pool texture.
+        let mut value: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&structure).unwrap()).unwrap();
+        value["SubFileStructure"] = json!([
+            { "type": "Folder", "unk1": "00000000", "folderCount": 2, "unk2": "00000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "unk5": 0, "unk6": 0 },
+            { "type": "Folder", "unk1": "00000000", "folderCount": 6, "unk2": "00000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "unk5": 0, "unk6": 0 },
+            { "type": "Item", "unk1": "00000000", "fileIndex": 0, "unk2": "10000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "originalFileIndex": 0, "Name": "alpha" },
+            { "type": "Item", "unk1": "00000000", "fileIndex": 4, "unk2": "21000000", "unk2_1": 0, "unk3": 1, "unk4": 0, "originalFileIndex": 4, "Name": "alpha__maya__" },
+            { "type": "Item", "unk1": "00000000", "fileIndex": 5, "unk2": "21000000", "unk2_1": 0, "unk3": 1, "unk4": 0, "originalFileIndex": 5, "Name": "alpha__nust__" },
+            { "type": "Item", "unk1": "00000000", "fileIndex": 1, "unk2": "30000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "originalFileIndex": 1, "Name": "alpha" },
+            { "type": "Item", "unk1": "00000000", "fileIndex": 2, "unk2": "40000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "originalFileIndex": 2, "Name": "alpha" },
+            { "type": "Item", "unk1": "00000000", "fileIndex": 3, "unk2": "50000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "originalFileIndex": 3, "Name": "alpha" },
+            { "type": "EndMark", "endMarkCount": 1 },
+            { "type": "Item", "unk1": "00000000", "fileIndex": 7, "unk2": "00000000", "unk2_1": 0, "unk3": 0, "unk4": 0, "originalFileIndex": 7, "Name": "alpha" },
+            { "type": "EndMark", "endMarkCount": 1 }
+        ]);
+        fs::write(&structure, serde_json::to_string_pretty(&value).unwrap()).unwrap();
+
+        let result = validate_unit_model_for_repack(
+            model_root.to_str().unwrap(),
+            Some(structure.to_str().unwrap()),
+        );
+
+        assert!(!result.valid);
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|error| error.phase == "texture-name"
+                    && error.message.contains("COLOR_PALETTE")),
+            "errors={}",
             serde_json::to_string_pretty(&result.errors).unwrap()
         );
     }

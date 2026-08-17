@@ -13,6 +13,9 @@ E:\XB\解包\com\file\0xBDBE6FEA\
 2.c 更像 depiction/action output 层。
 ```
 
+**Form / 变形态武器表：** 只在 `0.c` `func_143` 按 form id 分流 input bit → action hash（TV Zero 模式）。不要在 `2.c` `ACTION_*` 里按 form early-return。  
+**Bit 语义 per-unit：** 例如 Rebellion 主射是 bit `0x1`，TV 主射是 bit `0x100`。完整案例见 [Wing Zero Rebellion 鸟形态 0.c 输入映射](./wing-zero-rebellion-bird-form-0c-input-map.md)。
+
 这能解释一个之前容易混掉的问题：
 
 ```text

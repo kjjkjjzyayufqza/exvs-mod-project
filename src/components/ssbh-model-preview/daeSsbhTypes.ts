@@ -202,6 +202,53 @@ function coerceMatlJsonBool(value: unknown): boolean {
   throw new Error(`MatlData JSON bool field must be boolean or a finite number (0/1), got ${typeof value}`);
 }
 
+function coerceFiniteNumber(value: unknown, field: string): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  throw new Error(`MatlData JSON ${field} must be a finite number, got ${typeof value}`);
+}
+
+/**
+ * ssbh_data MatlData expects Vector4/Color4 as a JSON sequence of 4 f32 values.
+ * UI/fixtures often store `{x,y,z,w}` or `{r,g,b,a}` maps — convert before write.
+ */
+export function coerceMatlJsonVec4(value: unknown): [number, number, number, number] {
+  if (Array.isArray(value)) {
+    if (value.length !== 4) {
+      throw new Error(`MatlData JSON vec4 array must have length 4, got ${value.length}`);
+    }
+    return [
+      coerceFiniteNumber(value[0], "vec4[0]"),
+      coerceFiniteNumber(value[1], "vec4[1]"),
+      coerceFiniteNumber(value[2], "vec4[2]"),
+      coerceFiniteNumber(value[3], "vec4[3]"),
+    ];
+  }
+  if (value && typeof value === "object") {
+    const o = value as Record<string, unknown>;
+    if ("x" in o || "y" in o || "z" in o || "w" in o) {
+      return [
+        coerceFiniteNumber(o.x, "vec4.x"),
+        coerceFiniteNumber(o.y, "vec4.y"),
+        coerceFiniteNumber(o.z, "vec4.z"),
+        coerceFiniteNumber(o.w, "vec4.w"),
+      ];
+    }
+    if ("r" in o || "g" in o || "b" in o || "a" in o) {
+      return [
+        coerceFiniteNumber(o.r, "vec4.r"),
+        coerceFiniteNumber(o.g, "vec4.g"),
+        coerceFiniteNumber(o.b, "vec4.b"),
+        coerceFiniteNumber(o.a, "vec4.a"),
+      ];
+    }
+  }
+  throw new Error(
+    `MatlData JSON vec4 must be [f32;4] or {x,y,z,w}/{r,g,b,a}, got ${typeof value}`,
+  );
+}
+
 /**
  * Rust `MatlEntryData` serde requires several Vec fields to be present (no `default` on blend_states, floats, etc.).
  * Merge partial UI/session JSON into a shape that round-trips to `MatlData::write_to_file`.
@@ -230,6 +277,34 @@ export function ensureMatlEntrySerdeFields(entry: MatlEntryJson): MatlEntryJson 
     data: coerceMatlJsonBool((row as { data: unknown }).data),
   }));
 
+  const vectors = (entry.vectors ?? []).map((row) => ({
+    ...row,
+    data: coerceMatlJsonVec4((row as { data: unknown }).data),
+  }));
+
+  const colors = (entry.colors ?? []).map((row) => ({
+    ...row,
+    data: coerceMatlJsonVec4((row as { data: unknown }).data),
+  }));
+
+  const samplers = (entry.samplers ?? []).map((row) => {
+    const data = row.data;
+    if (!data || typeof data !== "object") {
+      return row;
+    }
+    const d = data as Record<string, unknown>;
+    if (!("border_color" in d)) {
+      return row;
+    }
+    return {
+      ...row,
+      data: {
+        ...d,
+        border_color: coerceMatlJsonVec4(d.border_color),
+      },
+    };
+  });
+
   return {
     material_label: entry.material_label,
     shader_label: entry.shader_label,
@@ -237,10 +312,10 @@ export function ensureMatlEntrySerdeFields(entry: MatlEntryJson): MatlEntryJson 
     floats: entry.floats ?? [],
     float1s: entry.float1s ?? [],
     booleans,
-    vectors: entry.vectors ?? [],
-    colors: entry.colors ?? [],
+    vectors,
+    colors,
     rasterizer_states: entry.rasterizer_states ?? [],
-    samplers: entry.samplers ?? [],
+    samplers,
     textures: entry.textures ?? [],
     textures2: entry.textures2 ?? [],
     type4_v16: entry.type4_v16 ?? [],

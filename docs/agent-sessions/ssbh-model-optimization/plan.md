@@ -1,5 +1,16 @@
 # SSBH Model Canonical Write Optimization Plan
 
+> **STATUS (2026-07-26): IMPLEMENTED IN FORK, REVERTED IN PRODUCTION.**
+> The `MeshWriteProfile` work was implemented in the fork (now on the pinned
+> dependency branch `wmmt2-merge`) and the application opt-in shipped in
+> commit 5375831 — but canonical output broke in-game meshes (skin stretching,
+> missing mesh objects), so the app change was deliberately REVERTED in
+> commit a60621f. Production hard-codes legacy `write_to_file`; see the
+> "Do NOT switch to Vs2Canonical" comment at
+> `src-tauri/src/ssbh_dae/dae_to_ssbh.rs:103-107` and the `#[ignore]`d
+> canonical-profile test (~line 979). Any revival requires root-cause
+> investigation (in-game capture + IDA) and explicit user approval first.
+
 > **For implementation agents:** Execute this plan in order. Do not enable the
 > optimized writer in the application until the dependency-level semantic
 > equivalence tests pass. Keep the legacy writer available for rollback.

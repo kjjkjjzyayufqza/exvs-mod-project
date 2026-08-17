@@ -442,8 +442,13 @@ export function useEffectFolderEditor({
   );
 
   const runCopy = useCallback(
-    async (destination: { effectRoot: string; structureJsonPath: string }) => {
-      if (selectedItems.length === 0) return;
+    async (destination: {
+      effectRoot: string;
+      structureJsonPath: string;
+    }): Promise<Awaited<ReturnType<typeof copyEffectFolderSelection>>> => {
+      if (selectedItems.length === 0) {
+        throw new Error("No effect entries selected to copy.");
+      }
       setBusyAction("copy");
       try {
         const result = await copyEffectFolderSelection({
@@ -458,8 +463,10 @@ export function useEffectFolderEditor({
         if (result.skipped.length > 0) {
           toast.message(`${result.skipped.length} item(s) skipped`);
         }
+        return result;
       } catch (error) {
         toast.error(String(error));
+        throw error;
       } finally {
         setBusyAction(null);
       }
@@ -486,6 +493,7 @@ export function useEffectFolderEditor({
     validation,
     busyAction,
     reload,
+    markMutated,
     runValidate,
     runRepack,
     runDelete,

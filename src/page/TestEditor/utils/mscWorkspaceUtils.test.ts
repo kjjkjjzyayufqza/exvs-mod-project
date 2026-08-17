@@ -1,9 +1,33 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  getMscConvertLogPath,
+  getMscConvertOutputPath,
+  getMscRepackOutputPath,
+  isMscFolderMarkerFile,
   resolveMscWorkspaceFolderPathForSelection,
   shouldAutoActivateMscWorkspaceTab,
 } from "./mscWorkspaceUtils";
+
+describe("traditional MSC paths", () => {
+  it("accepts arbitrary bin names and creates same-basename sidecars", () => {
+    const source = "E:/workspace/0x67AF23FA/000triad_battle_b004_001_r2.bin";
+
+    expect(isMscFolderMarkerFile("000triad_battle_b004_001_r2.bin", "traditional")).toBe(true);
+    expect(getMscConvertOutputPath(source, "traditional")).toBe(
+      "E:/workspace/0x67AF23FA/000triad_battle_b004_001_r2.c",
+    );
+    expect(getMscConvertLogPath(source, "traditional")).toBe(
+      "E:/workspace/0x67AF23FA/000triad_battle_b004_001_r2.txt",
+    );
+  });
+
+  it("repacks any C file to a same-basename bin", () => {
+    expect(getMscRepackOutputPath("E:/workspace/side7_battle.c", "traditional")).toBe(
+      "E:/workspace/side7_battle.bin",
+    );
+  });
+});
 
 describe("resolveMscWorkspaceFolderPathForSelection", () => {
   it("uses the selected MSC pack folder when it contains script files", async () => {

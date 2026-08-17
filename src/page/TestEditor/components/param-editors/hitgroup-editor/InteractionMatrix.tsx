@@ -15,6 +15,12 @@ const SVG_H = 300;
 const CX = SVG_W / 2;
 const CY = SVG_H / 2;
 
+/**
+ * Top-down sphere visualizer for the binary-proven hitgroupiddef schema
+ * (docs/hitbox-research/02): a row is one sphere in bone space with center
+ * (centerX, centerY, centerZ-forward) and radius sphereRadius, attached to
+ * bone boneId and keyed by the interactionid foreign key.
+ */
 export function InteractionMatrix({ entry }: HitboxVisualizerProps) {
   if (!entry) {
     return (
@@ -24,20 +30,21 @@ export function InteractionMatrix({ entry }: HitboxVisualizerProps) {
     );
   }
 
-  const radius = num(entry, "radius");
-  const offsetX = num(entry, "offsetX");
-  const offsetY = num(entry, "offsetY");
-  const offsetZ = num(entry, "offsetZ");
-  const boneHash = num(entry, "boneHash");
-  const parentBoneHash = num(entry, "parentBoneHash");
+  const sphereRadius = num(entry, "sphereRadius");
+  const centerX = num(entry, "centerX");
+  const centerY = num(entry, "centerY");
+  const centerZ = num(entry, "centerZ");
+  const interactionId = num(entry, "interactionId");
+  const boneId = num(entry, "boneId");
+  const shapeMode = num(entry, "shapeMode");
   const hitType = num(entry, "hitType");
 
-  const displayRadius = Math.min(Math.max(radius * 10, 5), 120);
+  const displayRadius = Math.min(Math.max(sphereRadius * 10, 5), 120);
 
   return (
     <div className="rounded-md border bg-card p-3 shadow-sm">
       <h4 className="mb-2 text-[11px] font-semibold text-muted-foreground">
-        Hitbox Visualizer
+        Hitbox Sphere (top-down: X right, Z forward)
       </h4>
       <svg
         viewBox={`0 0 ${SVG_W} ${SVG_H}`}
@@ -77,12 +84,12 @@ export function InteractionMatrix({ entry }: HitboxVisualizerProps) {
           fontSize={7}
           fill="#94a3b8"
         >
-          ORIGIN
+          BONE
         </text>
 
         <circle
-          cx={CX + offsetX * 10}
-          cy={CY - offsetY * 10}
+          cx={CX + centerX * 10}
+          cy={CY - centerZ * 10}
           r={displayRadius}
           fill="hsl(210 80% 60%)"
           fillOpacity={0.15}
@@ -91,29 +98,32 @@ export function InteractionMatrix({ entry }: HitboxVisualizerProps) {
         />
 
         <text
-          x={CX + offsetX * 10}
-          y={CY - offsetY * 10 - displayRadius - 6}
+          x={CX + centerX * 10}
+          y={CY - centerZ * 10 - displayRadius - 6}
           textAnchor="middle"
           fontSize={10}
           fill="hsl(210 80% 55%)"
           fontFamily="monospace"
         >
-          r={radius.toFixed(2)}
+          r={sphereRadius.toFixed(2)}
         </text>
 
         <g fontSize={9} fill="#94a3b8" fontFamily="monospace">
           <text x={8} y={16}>
-            Type: {hitType}
+            Center: ({centerX.toFixed(1)}, {centerY.toFixed(1)},{" "}
+            {centerZ.toFixed(1)})
           </text>
           <text x={8} y={30}>
-            Offset: ({offsetX.toFixed(1)}, {offsetY.toFixed(1)},{" "}
-            {offsetZ.toFixed(1)})
+            Shape: {shapeMode === 1 ? "Frame-swept capsule" : "Static sphere"}
           </text>
           <text x={8} y={44}>
-            Bone: {formatHash(boneHash >>> 0)}
+            Interaction FK: {formatHash(interactionId >>> 0)}
           </text>
           <text x={8} y={58}>
-            Parent: {formatHash(parentBoneHash >>> 0)}
+            Bone ID: {boneId}
+          </text>
+          <text x={8} y={72}>
+            Hit type: {hitType}
           </text>
         </g>
 

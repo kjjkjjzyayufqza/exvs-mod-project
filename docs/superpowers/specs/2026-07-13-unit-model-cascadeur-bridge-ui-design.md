@@ -2,6 +2,12 @@
 
 ## Status
 
+**Superseded (2026-07-25).** Product surface is now one-way
+**MotionFbxExport** via BlenderCompose. See
+`docs/superpowers/specs/2026-07-25-motion-fbx-export-blender-compose-design.md`,
+`docs/adr/0001-motion-fbx-export-via-blender-compose.md`, and root
+`CONTEXT.md`. Historical text below is retained for archaeology only.
+
 Approved by direct user instruction on 2026-07-13. The user requested the
 existing Rust NUANMB and CascadeurBridge converter be reachable from the Unit
 Model Editor Motion surface.

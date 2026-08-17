@@ -1,5 +1,10 @@
 # characterparam damage-multiplier audit
 
+> **Superseded for per-slot F/S/C/V/R labels (2026-08-01).** The consumer
+> families below remain valid, but exact native data flow proves only selector
+> slots. Current canonical keys use `_slot_0..4`; the older lettered names are
+> compatibility aliases and historical claims.
+
 Date: 2026-07-15
 Binary: OB `vsac27_Release.exe`, SHA-256
 `cae3636aa4870d356eb25837badeb83482a71e290961442dec13cf87e1baa76`
@@ -10,9 +15,10 @@ Safety: executable, IDB, and original parameter files were inspected read-only
 The earlier audit grouped five 5-field families as F/S/C/V/R Burst bonuses.
 Two of those conclusions were too broad. Exact OB caller analysis now proves:
 
-1. `F25A5100/85C483F0/1E61CF9F/6AF92610/F15C6A7F` is selected by the
-   active Burst controller's type `0..4`, but its native consumer is the HP
-   incoming-damage path, not the Boost-gauge consumption path.
+1. `F25A5100/85C483F0/1E61CF9F/6AF92610/F15C6A7F` is selected by a state-record
+   value `0..4` while that record's `+0xC` member is 2 or 3. Its native consumer
+   is the HP incoming-damage path. The state value's F/S/C/V/R identity is not
+   address-level proven.
 2. `8A902D5F/9BED4726/22169CCE/B91793D4/00EC483C` is multiplied into the
    final native damage scalar. At the sole call site, a selected hit subrecord
    is required to have type `2` or `3` at `+0x0C`, and its first `dword` is
@@ -32,11 +38,11 @@ Burst names; this correction concerns only the two families above.
 
 | Selector | Hash | Canonical JSON |
 |---:|---|---|
-| 0 | `0xF25A5100` | `burstFIncomingDamageMultiplier` |
-| 1 | `0x85C483F0` | `burstSIncomingDamageMultiplier` |
-| 2 | `0x1E61CF9F` | `burstCIncomingDamageMultiplier` |
-| 3 | `0x6AF92610` | `burstVIncomingDamageMultiplier` |
-| 4 | `0xF15C6A7F` | `burstRIncomingDamageMultiplier` |
+| 0 | `0xF25A5100` | `conditionalIncomingDamageMultiplierSlot0` |
+| 1 | `0x85C483F0` | `conditionalIncomingDamageMultiplierSlot1` |
+| 2 | `0x1E61CF9F` | `conditionalIncomingDamageMultiplierSlot2` |
+| 3 | `0x6AF92610` | `conditionalIncomingDamageMultiplierSlot3` |
+| 4 | `0xF15C6A7F` | `conditionalIncomingDamageMultiplierSlot4` |
 
 The only caller, `sub_1405F89C0`, reads the unit's Burst controller. When the
 controller state is `2` or `3` and its type is not `-1`, the selected value is

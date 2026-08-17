@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 use tempfile::Builder;
 
-use crate::format::fhm2d_pack::{repack_fhm2d_from_structure, RepackProgress, RepackResult};
+use crate::format::fhm2d_pack::{
+    repack_fhm2d_from_structure_with_asset_base, RepackProgress, RepackResult,
+};
 
 pub fn repack_unit_model_from_structure(
     structure_json_path: &str,
@@ -17,6 +19,7 @@ pub fn repack_unit_model_from_structure(
     let structure_path = Path::new(structure_json_path);
     let model_root =
         crate::format::unit_model_models::infer_model_root_from_structure_path(structure_path)?;
+    // Real package assets resolve against the original structure parent, not %TEMP%.
     let json_dir = structure_path
         .parent()
         .ok_or_else(|| "Cannot determine parent directory of structure json".to_string())?;
@@ -32,14 +35,17 @@ pub fn repack_unit_model_from_structure(
             .get("SubFileData")
             .and_then(Value::as_array)
             .is_some_and(|entries| entries.iter().any(entry_is_numatb));
+    // Keep working structure copies in the system temp dir so package folders
+    // are not polluted with `.unit-model-repack-*_structure.json` pseudo-packs.
+    let system_temp = std::env::temp_dir();
     let working = Builder::new()
         .prefix(".unit-model-repack-working-")
         .suffix("_structure.json")
-        .tempfile_in(json_dir)
+        .tempfile_in(&system_temp)
         .map_err(|e| {
             format!(
                 "Failed to create working Unit Model structure in {}: {e}",
-                json_dir.display()
+                system_temp.display()
             )
         })?;
     fs::copy(structure_path, working.path()).map_err(|e| {
@@ -63,8 +69,9 @@ pub fn repack_unit_model_from_structure(
 
     let skip_indices = missing_legacy_root_file_indices(&root, json_dir)?;
     if skip_indices.is_empty() {
-        return repack_fhm2d_from_structure(
+        return repack_fhm2d_from_structure_with_asset_base(
             &working.path().to_string_lossy(),
+            Some(json_dir),
             output_path,
             atomic_write,
             progress_callback,
@@ -76,11 +83,11 @@ pub fn repack_unit_model_from_structure(
     let mut temp = Builder::new()
         .prefix(".unit-model-repack-")
         .suffix("_structure.json")
-        .tempfile_in(json_dir)
+        .tempfile_in(&system_temp)
         .map_err(|e| {
             format!(
                 "Failed to create temporary Unit Model structure in {}: {e}",
-                json_dir.display()
+                system_temp.display()
             )
         })?;
     let sanitized = serde_json::to_vec_pretty(&root)
@@ -99,7 +106,13 @@ pub fn repack_unit_model_from_structure(
     })?;
 
     let temp_path = temp.path().to_string_lossy().to_string();
-    repack_fhm2d_from_structure(&temp_path, output_path, atomic_write, progress_callback)
+    repack_fhm2d_from_structure_with_asset_base(
+        &temp_path,
+        Some(json_dir),
+        output_path,
+        atomic_write,
+        progress_callback,
+    )
 }
 
 /// Collect the `fileIndex` of any *legacy root control bin* (characterid / shell / vernier_table

@@ -15,6 +15,7 @@ import { FilePathInput } from "@/components/ui/filePathInput";
 import { EntryListPanel } from "../shared/EntryListPanel";
 import { EditorStatusBar } from "../shared/EditorStatusBar";
 import { BulletTrajectoryCanvas } from "./BulletTrajectoryCanvas";
+import { BulletCrossRefPanel } from "./BulletCrossRefPanel";
 import { useBulletEditorStore } from "./BulletEditorStore";
 import { getMoveTypeLabel } from "@/lib/gameAlgorithms/moveTypes";
 import { formatHash } from "@/models/commandTable";
@@ -397,6 +398,12 @@ export function BulletEditorView({ onUnsavedChanges, workspaceDefaultPath }: Bul
           <TimelineBar />
         </div>
 
+        {/* Right: cross-reference sidebar */}
+        {data && (
+          <div className="w-[280px] min-w-[280px] overflow-y-auto border-l p-2">
+            <BulletCrossRefPanel workspaceDefaultPath={workspaceDefaultPath} />
+          </div>
+        )}
       </div>
 
       <EditorStatusBar

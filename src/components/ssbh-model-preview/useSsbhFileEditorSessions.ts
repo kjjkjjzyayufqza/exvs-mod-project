@@ -50,6 +50,7 @@ import {
   cloneNumatbBundle,
   collectMaterialLabels,
   deriveNumatbSisterPathCandidates,
+  detectNumatbProfileFromMatl,
   detectNumatbProfileFromPath,
   resolveNumatbProfilePaths,
   type NumatbModalBundle,
@@ -93,11 +94,22 @@ function normalizePathKey(path: string): string {
 
 async function loadNumatbProfileBundle(
   filePath: string,
-  primaryProfile: NumatbProfileKind,
-): Promise<{ bundle: NumatbModalBundle; profilePaths: NumatbProfilePaths }> {
+  pathProfile: NumatbProfileKind,
+): Promise<{
+  bundle: NumatbModalBundle;
+  profilePaths: NumatbProfilePaths;
+  /** Content-based profile of the opened file (shader_label heuristic). */
+  primaryProfile: NumatbProfileKind;
+}> {
   const primaryFile = await ssbhTemplateReadNumatb(filePath);
+  // Prefer matl content (any non-empty shader_label → nust) over path suffix.
+  const primaryProfile = detectNumatbProfileFromMatl(primaryFile);
+  // Sister discovery still follows path markers when present; otherwise swap from content.
   const sisterProfile: NumatbProfileKind = primaryProfile === "maya" ? "nust" : "maya";
-  const sisterCandidates = deriveNumatbSisterPathCandidates(filePath, sisterProfile);
+  const sisterCandidates =
+    deriveNumatbSisterPathCandidates(filePath, sisterProfile).length > 0
+      ? deriveNumatbSisterPathCandidates(filePath, sisterProfile)
+      : deriveNumatbSisterPathCandidates(filePath, pathProfile === "maya" ? "nust" : "maya");
   let sisterFile: MatlDataJson | null = null;
   let sisterPath = sisterCandidates[0] ?? null;
 
@@ -111,15 +123,38 @@ async function loadNumatbProfileBundle(
     }
   }
 
-  const profilePaths: NumatbProfilePaths =
-    primaryProfile === "maya"
-      ? { maya: filePath, nust: sisterPath }
-      : { maya: sisterPath, nust: filePath };
-  const bundle = buildNumatbModalBundleFromProfiles(
-    primaryProfile === "maya" ? primaryFile : sisterFile,
-    primaryProfile === "nust" ? primaryFile : sisterFile,
-  );
-  return { bundle, profilePaths };
+  // If sister was loaded, trust its content too when placing into the opposite slot.
+  let mayaFile: MatlDataJson | null = null;
+  let nustFile: MatlDataJson | null = null;
+  let mayaPath: string | null = null;
+  let nustPath: string | null = null;
+
+  if (primaryProfile === "maya") {
+    mayaFile = primaryFile;
+    mayaPath = filePath;
+  } else {
+    nustFile = primaryFile;
+    nustPath = filePath;
+  }
+
+  if (sisterFile) {
+    const sisterContentProfile = detectNumatbProfileFromMatl(sisterFile);
+    if (sisterContentProfile === "maya") {
+      mayaFile = sisterFile;
+      mayaPath = sisterPath;
+    } else {
+      nustFile = sisterFile;
+      nustPath = sisterPath;
+    }
+  } else if (primaryProfile === "maya") {
+    nustPath = sisterPath;
+  } else {
+    mayaPath = sisterPath;
+  }
+
+  const profilePaths: NumatbProfilePaths = { maya: mayaPath, nust: nustPath };
+  const bundle = buildNumatbModalBundleFromProfiles(mayaFile, nustFile);
+  return { bundle, profilePaths, primaryProfile };
 }
 
 export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOptions = {}) {
@@ -798,7 +833,7 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
         zIndex: nextZ,
       };
       void loadNumatbProfileBundle(filePath, primaryProfile)
-        .then(({ bundle, profilePaths }) => {
+        .then(({ bundle, profilePaths, primaryProfile: contentProfile }) => {
           const base = cloneNumatbBundle(bundle);
           const draft = cloneNumatbBundle(bundle);
           setNumatbSessions((p) =>
@@ -806,6 +841,7 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
               s.id === id
                 ? {
                     ...s,
+                    primaryProfile: contentProfile,
                     profilePaths,
                     loading: false,
                     loadError: null,
@@ -909,7 +945,8 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
     });
     if (!fp) return;
     try {
-      const { bundle, profilePaths } = await loadNumatbProfileBundle(fp, profile);
+      const { bundle, profilePaths, primaryProfile: contentProfile } =
+        await loadNumatbProfileBundle(fp, profile);
       const base = cloneNumatbBundle(bundle);
       const draft = cloneNumatbBundle(bundle);
       setNumatbSessions((prev) =>
@@ -917,6 +954,7 @@ export function useSsbhFileEditorSessions(options: UseSsbhFileEditorSessionsOpti
           s.id === sessionId
             ? {
                 ...s,
+                primaryProfile: contentProfile,
                 profilePaths,
                 loading: false,
                 loadError: null,

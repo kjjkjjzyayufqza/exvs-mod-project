@@ -1,24 +1,28 @@
-import { useDeferredValue, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import {
+  useDeferredValue,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Ref,
+  type RefObject,
+} from "react";
+import { Check, ChevronDown, FolderOpen, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-
-const MAX_OPTIONS_WITHOUT_QUERY = 120;
-const MAX_OPTIONS_FILTERED = 400;
-
-function normalizePathForSearch(path: string): string {
-  return path.replace(/\\/g, "/").toLowerCase();
-}
-
-function basename(path: string): string {
-  const n = path.replace(/\\/g, "/");
-  const parts = n.split("/");
-  return parts[parts.length - 1] ?? path;
-}
+import {
+  buildMotionClipCatalog,
+  filterMotionClipCatalog,
+  findMotionClipGroup,
+  formatMotionClipTrigger,
+  type MotionClipEntry,
+  type MotionClipFolderGroup,
+} from "./motionClipPathGroups";
 
 type MotionClipPathSearchSelectProps = {
   paths: readonly string[];
@@ -39,64 +43,59 @@ export function MotionClipPathSearchSelect({
   const instanceId = `motion-clip-${reactId.replace(/:/g, "")}`;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const deferredQuery = useDeferredValue(query);
 
   const searchInputId = `${instanceId}-search`;
   const triggerId = `${instanceId}-trigger`;
   const selectedOptionRef = useRef<HTMLButtonElement | null>(null);
+  const selectedFolderRef = useRef<HTMLButtonElement | null>(null);
 
-  const options = useMemo(() => {
-    const q = deferredQuery.trim().toLowerCase();
-    const rows = paths.map((path) => ({
-      path,
-      base: basename(path),
-      norm: normalizePathForSearch(path),
-    }));
-    if (!q) {
-      if (rows.length <= MAX_OPTIONS_WITHOUT_QUERY) {
-        return rows;
-      }
-      if (!value) {
-        return rows.slice(0, MAX_OPTIONS_WITHOUT_QUERY);
-      }
-      const idx = paths.indexOf(value);
-      if (idx < 0) {
-        return rows.slice(0, MAX_OPTIONS_WITHOUT_QUERY);
-      }
-      const half = Math.floor(MAX_OPTIONS_WITHOUT_QUERY / 2);
-      const start = Math.max(0, Math.min(idx - half, rows.length - MAX_OPTIONS_WITHOUT_QUERY));
-      return rows.slice(start, start + MAX_OPTIONS_WITHOUT_QUERY);
-    }
-    const filtered = rows.filter(
-      ({ base, norm }) => base.toLowerCase().includes(q) || norm.includes(q),
-    );
-    return filtered.slice(0, MAX_OPTIONS_FILTERED);
-  }, [paths, deferredQuery, value]);
+  const catalog = useMemo(() => buildMotionClipCatalog(paths), [paths]);
+  const visibleGroups = useMemo(
+    () => filterMotionClipCatalog(catalog, deferredQuery),
+    [catalog, deferredQuery],
+  );
+  const qTrim = deferredQuery.trim();
+  const searching = qTrim.length > 0;
+
+  const activeGroup = useMemo(
+    () => findMotionClipGroup(catalog.groups, value),
+    [catalog.groups, value],
+  );
+  const trigger = useMemo(
+    () => formatMotionClipTrigger({ groups: catalog.groups, path: value }),
+    [catalog.groups, value],
+  );
 
   useLayoutEffect(() => {
-    if (!open || !value) {
+    if (!open) return;
+    if (searching) {
+      setExpandedId(visibleGroups[0]?.id ?? null);
       return;
     }
+    setExpandedId(activeGroup?.id ?? visibleGroups[0]?.id ?? null);
+    // Only re-sync expansion when the popover opens or the search text changes.
+    // visibleGroups / value updates must not yank the user back to the selected folder.
+  }, [open, qTrim, searching]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
     const id = requestAnimationFrame(() => {
-      selectedOptionRef.current?.scrollIntoView({ block: "center", behavior: "instant" });
+      selectedOptionRef.current?.scrollIntoView({ block: "nearest", behavior: "instant" });
     });
     return () => cancelAnimationFrame(id);
-  }, [open, value, deferredQuery]);
+  }, [open, deferredQuery]);
 
-  const totalPaths = paths.length;
-  const qTrim = deferredQuery.trim().toLowerCase();
+  const pickClip = (path: string) => {
+    onChange(path);
+    setOpen(false);
+    setQuery("");
+  };
 
-  const filteredSearchTruncated = useMemo(() => {
-    if (!qTrim) return false;
-    const n = paths.filter((path) => {
-      const base = basename(path).toLowerCase();
-      const norm = normalizePathForSearch(path);
-      return base.includes(qTrim) || norm.includes(qTrim);
-    }).length;
-    return n > MAX_OPTIONS_FILTERED;
-  }, [paths, qTrim]);
-
-  const triggerLabel = value ? basename(value) : "Select .nuanmb";
+  const toggleFolder = (group: MotionClipFolderGroup) => {
+    setExpandedId((current) => (current === group.id ? null : group.id));
+  };
 
   return (
     <Popover
@@ -118,67 +117,180 @@ export function MotionClipPathSearchSelect({
           aria-controls={open ? `${instanceId}-listbox` : undefined}
           disabled={disabled}
           title={value ?? undefined}
-          className={cn("h-8 w-full justify-between px-2 text-[10px] font-mono", className)}
+          className={cn(
+            "h-auto min-h-8 w-full items-center justify-between gap-2 px-2 py-1 text-left transition-colors duration-200",
+            "hover:bg-accent/70 active:scale-[0.99] focus-visible:ring-1",
+            className,
+          )}
         >
-          <span className="truncate text-left">{triggerLabel}</span>
-          <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+          <span className="flex min-w-0 flex-1 items-start gap-1.5">
+            <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1">
+              <span className="block break-all font-mono text-[10px] font-medium leading-snug">
+                {trigger.title}
+              </span>
+              {trigger.subtitle ? (
+                <span className="mt-0.5 block truncate font-mono text-[9px] tabular-nums text-muted-foreground">
+                  {trigger.subtitle}
+                </span>
+              ) : null}
+            </span>
+          </span>
+          <ChevronDown
+            className={cn(
+              "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
+              open && "rotate-180",
+            )}
+          />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[min(100vw-24px,22rem)] p-0" align="start">
-        <div className="flex flex-col gap-1 border-b p-2">
+      <PopoverContent
+        align="start"
+        className="w-[var(--radix-popover-trigger-width)] min-w-[min(100vw-24px,20rem)] overflow-hidden p-0"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          document.getElementById(searchInputId)?.focus();
+        }}
+      >
+        <div className="flex items-center gap-1.5 border-b border-border/70 px-2 py-1.5">
+          <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <Label htmlFor={searchInputId} className="sr-only">
             Search motion clips
           </Label>
           <Input
             id={searchInputId}
             name={`${instanceId}-search`}
-            placeholder="Search by file name or path…"
-            className="h-8 text-[10px]"
+            placeholder={`Search ${paths.length} clips in ${catalog.groups.length} folders`}
+            className="h-7 border-0 bg-transparent px-0 text-[11px] shadow-none focus-visible:ring-0"
             value={query}
             autoComplete="off"
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              const first = visibleGroups[0]?.clips[0];
+              if (!first) return;
+              event.preventDefault();
+              pickClip(first.path);
+            }}
           />
         </div>
-        <ScrollArea className="h-[min(280px,40vh)]">
+        <ScrollArea className="h-[min(22rem,50vh)]">
           <div id={`${instanceId}-listbox`} className="p-1" role="listbox" aria-label="Motion clips">
-            {totalPaths > MAX_OPTIONS_WITHOUT_QUERY && !qTrim && (
-              <p className="px-2 py-1 text-[10px] text-muted-foreground">
-                Showing first {MAX_OPTIONS_WITHOUT_QUERY} of {totalPaths} clips. Type to search.
-              </p>
-            )}
-            {filteredSearchTruncated && (
-              <p className="px-2 py-1 text-[10px] text-muted-foreground">
-                List capped for performance. Narrow your search.
-              </p>
-            )}
-            {options.map(({ path, base }) => (
-              <button
-                key={path}
-                ref={path === value ? selectedOptionRef : undefined}
-                type="button"
-                role="option"
-                aria-selected={path === value}
-                className={cn(
-                  "flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left text-[10px] hover:bg-accent",
-                  path === value && "bg-accent",
-                )}
-                title={path}
-                onClick={() => {
-                  onChange(path);
-                  setOpen(false);
-                  setQuery("");
-                }}
-              >
-                <Check className={cn("mt-0.5 h-3.5 w-3.5 shrink-0", path === value ? "opacity-100" : "opacity-0")} />
-                <span className="min-w-0 break-all font-mono">{base}</span>
-              </button>
-            ))}
-            {options.length === 0 && (
-              <p className="px-2 py-4 text-center text-[10px] text-muted-foreground">No matches.</p>
+            {visibleGroups.length === 0 ? (
+              <p className="px-2 py-6 text-center text-[11px] text-muted-foreground">No clips match.</p>
+            ) : (
+              visibleGroups.map((group) => {
+                const expanded = searching || expandedId === group.id;
+                return (
+                  <FolderBlock
+                    key={group.id || group.label}
+                    group={group}
+                    expanded={expanded}
+                    selectedPath={value}
+                    selectedFolderRef={group.id === activeGroup?.id ? selectedFolderRef : undefined}
+                    selectedOptionRef={selectedOptionRef}
+                    onToggle={() => toggleFolder(group)}
+                    onPick={pickClip}
+                  />
+                );
+              })
             )}
           </div>
         </ScrollArea>
       </PopoverContent>
     </Popover>
+  );
+}
+
+function FolderBlock({
+  group,
+  expanded,
+  selectedPath,
+  selectedFolderRef,
+  selectedOptionRef,
+  onToggle,
+  onPick,
+}: {
+  group: MotionClipFolderGroup;
+  expanded: boolean;
+  selectedPath: string | null;
+  selectedFolderRef?: Ref<HTMLButtonElement>;
+  selectedOptionRef: RefObject<HTMLButtonElement | null>;
+  onToggle: () => void;
+  onPick: (path: string) => void;
+}) {
+  const containsSelected = group.clips.some((clip) => clip.path === selectedPath);
+
+  return (
+    <section className="mb-0.5">
+      <button
+        ref={selectedFolderRef}
+        type="button"
+        aria-expanded={expanded}
+        aria-label={`${group.label}, ${group.clips.length} clips`}
+        className={cn(
+          "flex w-full items-center gap-1 rounded-sm px-1.5 py-1 text-left transition-colors duration-200",
+          "hover:bg-accent/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+          containsSelected && "bg-primary/10",
+        )}
+        style={{ paddingLeft: `${6 + group.depth * 10}px` }}
+        onClick={onToggle}
+      >
+        <ChevronDown
+          className={cn(
+            "h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-200",
+            !expanded && "-rotate-90",
+          )}
+        />
+        <span className="min-w-0 flex-1 truncate font-mono text-[10px] tabular-nums">{group.label}</span>
+        <span className="shrink-0 font-mono text-[9px] tabular-nums text-muted-foreground">{group.clips.length}</span>
+      </button>
+      {expanded
+        ? group.clips.map((clip) => (
+            <ClipRow
+              key={clip.path}
+              clip={clip}
+              group={group}
+              selected={clip.path === selectedPath}
+              optionRef={clip.path === selectedPath ? selectedOptionRef : undefined}
+              onPick={onPick}
+            />
+          ))
+        : null}
+    </section>
+  );
+}
+
+function ClipRow({
+  clip,
+  group,
+  selected,
+  optionRef,
+  onPick,
+}: {
+  clip: MotionClipEntry;
+  group: MotionClipFolderGroup;
+  selected: boolean;
+  optionRef?: Ref<HTMLButtonElement>;
+  onPick: (path: string) => void;
+}) {
+  return (
+    <button
+      ref={optionRef}
+      type="button"
+      role="option"
+      aria-selected={selected}
+      title={clip.path}
+      className={cn(
+        "flex w-full items-start gap-1.5 rounded-sm px-2 py-1 text-left transition-colors duration-200",
+        "hover:bg-accent/80 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+        selected && "bg-accent",
+      )}
+      style={{ paddingLeft: `${18 + group.depth * 10}px` }}
+      onClick={() => onPick(clip.path)}
+    >
+      <Check className={cn("mt-0.5 h-3 w-3 shrink-0", selected ? "opacity-100" : "opacity-0")} />
+      <span className="min-w-0 break-all font-mono text-[10px] leading-snug">{clip.fileName}</span>
+    </button>
   );
 }
