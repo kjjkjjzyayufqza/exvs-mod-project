@@ -39,7 +39,7 @@ import {
 import {
   resolveEfxbnBillboardBasis,
   resolveEfxbnEmitterPairs,
-  simulateEfxbnEmitterPair,
+  simulateEfxbnPreviewFrame,
   type EfxbnEmitterPair,
   isEfxbnStripBlock,
   efxbnRuntime,
@@ -608,7 +608,7 @@ function EfxbnParticleLayer({
     const mesh = meshRef.current;
     if (!mesh) return;
     const frame = (progressRef.current / 100) * frameCount;
-    const particles = simulateEfxbnEmitterPair(
+    const particles = simulateEfxbnPreviewFrame(
       pair,
       livePlan(plan, controlLookupEntriesRef),
       frame,

@@ -18,6 +18,8 @@ export type EffectFolderPackSelectionState = {
 export type EffectFolderWorkspaceState = {
   folderPath: string;
   packSelections?: Record<string, EffectFolderPackSelectionState>;
+  /** `.numdlb` of the opaque model the effect preview plays the effect against. */
+  hostModelPath?: string;
 };
 
 export type EffectFolderEditorStoreDocument = Record<string, EffectFolderWorkspaceState>;
@@ -49,7 +51,7 @@ function parsePackSelection(raw: unknown): EffectFolderPackSelectionState | null
   return { focusedKey, selectedKeys, category, searchQuery };
 }
 
-function parseWorkspaceState(raw: unknown): EffectFolderWorkspaceState | null {
+export function parseEffectFolderWorkspaceState(raw: unknown): EffectFolderWorkspaceState | null {
   if (!raw || typeof raw !== "object") return null;
   const record = raw as Record<string, unknown>;
   const folderPath = typeof record.folderPath === "string" ? record.folderPath.trim() : "";
@@ -63,9 +65,13 @@ function parseWorkspaceState(raw: unknown): EffectFolderWorkspaceState | null {
     }
   }
 
+  const hostModelPath =
+    typeof record.hostModelPath === "string" ? record.hostModelPath.trim() : "";
+
   return {
     folderPath,
     packSelections: Object.keys(packSelections).length > 0 ? packSelections : undefined,
+    hostModelPath: hostModelPath || undefined,
   };
 }
 
@@ -87,7 +93,7 @@ export async function getEffectFolderWorkspaceState(
   const key = workspaceStoreKey(workspaceRoot);
   if (!key) return undefined;
   const document = await readStoreDocument();
-  const parsed = parseWorkspaceState(document[key]);
+  const parsed = parseEffectFolderWorkspaceState(document[key]);
   return parsed ?? undefined;
 }
 
@@ -101,10 +107,34 @@ export async function rememberEffectFolderPath(
 
   const key = workspaceStoreKey(trimmedRoot);
   const document = await readStoreDocument();
-  const existing = parseWorkspaceState(document[key]);
+  const existing = parseEffectFolderWorkspaceState(document[key]);
   document[key] = {
+    ...existing,
     folderPath: trimmedFolder,
-    packSelections: existing?.packSelections,
+  };
+  await writeStoreDocument(document);
+}
+
+/**
+ * Persists the opaque model the preview plays effects against. Passing `null` clears it, which
+ * is how the user returns to an empty scene.
+ */
+export async function rememberEffectFolderHostModelPath(
+  workspaceRoot: string,
+  hostModelPath: string | null,
+): Promise<void> {
+  const trimmedRoot = workspaceRoot.trim();
+  if (!trimmedRoot) return;
+
+  const key = workspaceStoreKey(trimmedRoot);
+  const document = await readStoreDocument();
+  const existing = parseEffectFolderWorkspaceState(document[key]);
+  if (!existing) return;
+
+  const trimmedHost = hostModelPath?.trim() ?? "";
+  document[key] = {
+    ...existing,
+    hostModelPath: trimmedHost || undefined,
   };
   await writeStoreDocument(document);
 }
@@ -129,11 +159,12 @@ export async function rememberEffectFolderPackSelection(
 
   const key = workspaceStoreKey(trimmedRoot);
   const document = await readStoreDocument();
-  const existing = parseWorkspaceState(document[key]);
+  const existing = parseEffectFolderWorkspaceState(document[key]);
   const folderPath = existing?.folderPath ?? "";
   if (!folderPath) return;
 
   document[key] = {
+    ...existing,
     folderPath,
     packSelections: {
       ...(existing?.packSelections ?? {}),

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
-import { confirm } from "@tauri-apps/plugin-dialog";
-import { Box, Pause, Play, RotateCcw } from "lucide-react";
+import { confirm, open } from "@tauri-apps/plugin-dialog";
+import { Box, Pause, PersonStanding, Play, RotateCcw, X } from "lucide-react";
+import type { Texture } from "three";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -9,7 +10,10 @@ import {
   useSsbhModelPreview,
 } from "@/components/ssbh-model-preview/SsbhModelPreviewContext";
 import { SsbhModelPreviewViewport } from "@/components/ssbh-model-preview/SsbhModelPreviewViewport";
-import type { PreviewInstanceHostTransform } from "@/components/ssbh-model-preview/SsbhModelCanvas";
+import {
+  previewInstanceGroupName,
+  type PreviewInstanceHostTransform,
+} from "@/components/ssbh-model-preview/SsbhModelCanvas";
 import {
   patchEffectEfxbnControlConstants,
   type EffectFolderInventory,
@@ -35,6 +39,14 @@ import {
 } from "./efxbnDraftSession";
 import { EfxbnDiagnosticOverlay } from "./EfxbnDiagnosticOverlay";
 import { EfxbnPreviewInspector } from "./EfxbnPreviewInspector";
+import {
+  getEffectFolderWorkspaceState,
+  rememberEffectFolderHostModelPath,
+} from "./effectFolderEditorSettings";
+import {
+  effectPreviewHostModelLabel,
+  planEffectPreviewModelLoad,
+} from "./effectPreviewHostModel";
 import {
   EFXBN_PREVIEW_FRAME_COUNT,
   efxbnChildIndexes,
@@ -64,12 +76,17 @@ function EffectFolderPreviewScene({
   onInstanceMapChange,
   hostInstanceTransformsRef,
   modelPoolPlan,
+  hostModelPath,
+  onHostInstanceIdChange,
 }: {
   plan: EffectFolderPreviewPlan;
   selectedEffectIndex: number | null;
   onInstanceMapChange: (mapping: ReadonlyMap<number, readonly string[]>) => void;
   hostInstanceTransformsRef: MutableRefObject<ReadonlyMap<string, PreviewInstanceHostTransform>>;
   modelPoolPlan: EfxbnModelPoolPlan | null;
+  /** Opaque model the effect is played against; supplies the scene depth soft particles need. */
+  hostModelPath: string | null;
+  onHostInstanceIdChange: (instanceId: string | null) => void;
 }) {
   const {
     loadModelSetAt,
@@ -94,24 +111,36 @@ function EffectFolderPreviewScene({
     });
   }, [modelPoolPlan, plan]);
 
+  const loadPlan = useMemo(
+    () => planEffectPreviewModelLoad(
+      modelLoadSlots.map((slot) => slot.target.modelPath),
+      hostModelPath,
+    ),
+    [hostModelPath, modelLoadSlots],
+  );
+  // The host is part of the model set, so swapping it has to reload just like a new effect does.
+  const loadKey = `${plan.key}|host:${hostModelPath ?? ""}`;
+
   useEffect(() => {
-    if (loadedPlanKeyRef.current === plan.key) return;
-    loadedPlanKeyRef.current = plan.key;
+    if (loadedPlanKeyRef.current === loadKey) return;
+    loadedPlanKeyRef.current = loadKey;
     instanceIdsByEffectIndexRef.current = new Map();
     hostInstanceTransformsRef.current = new Map();
     onInstanceMapChange(new Map());
+    onHostInstanceIdChange(null);
     let cancelled = false;
 
-    if (modelLoadSlots.length === 0) {
+    if (loadPlan.paths.length === 0) {
       requestCameraFit();
       return;
     }
 
-    void loadModelSetAt(modelLoadSlots.map((slot) => slot.target.modelPath))
+    void loadModelSetAt(loadPlan.paths)
       .then((instances) => {
         if (cancelled) return;
         instances.forEach((instance, index) => {
           const slot = modelLoadSlots[index];
+          // The host is appended past the last effect slot and is driven by nothing.
           if (!slot) return;
           const { target } = slot;
           if (target.effectIndex !== null) {
@@ -124,18 +153,29 @@ function EffectFolderPreviewScene({
             loadMotionNuanmbPathForInstance(instance.id, target.animationPath);
           }
         });
+        // Effect instances start hidden and are revealed per particle; the host must stay out of
+        // this map entirely so the canvas leaves its own opaque materials alone.
         hostInstanceTransformsRef.current = new Map(
-          instances.map((instance) => [
-            instance.id,
-            {
-              position: [0, 0, 0],
-              rotation: [0, 0, 0],
-              scale: [1, 1, 1],
-              visible: plan.kind === "model",
-            } satisfies PreviewInstanceHostTransform,
-          ]),
+          instances.flatMap((instance, index) =>
+            index === loadPlan.hostPathIndex
+              ? []
+              : [[
+                  instance.id,
+                  {
+                    position: [0, 0, 0],
+                    rotation: [0, 0, 0],
+                    scale: [1, 1, 1],
+                    visible: plan.kind === "model",
+                  } satisfies PreviewInstanceHostTransform,
+                ] as const],
+          ),
         );
         onInstanceMapChange(new Map(instanceIdsByEffectIndexRef.current));
+        onHostInstanceIdChange(
+          loadPlan.hostPathIndex === null
+            ? null
+            : instances[loadPlan.hostPathIndex]?.id ?? null,
+        );
         const selectedInstanceId =
           selectedEffectIndexRef.current === null
             ? null
@@ -152,10 +192,13 @@ function EffectFolderPreviewScene({
       hostInstanceTransformsRef.current = new Map();
     };
   }, [
+    loadKey,
     loadModelSetAt,
     loadMotionNuanmbPathForInstance,
+    loadPlan,
     modelLoadSlots,
-    plan,
+    plan.kind,
+    onHostInstanceIdChange,
     onInstanceMapChange,
     requestCameraFit,
     setActivePreviewInstanceId,
@@ -261,6 +304,11 @@ export function EffectFolder3dPreview({
     () => new Map(),
   );
   const hostInstanceTransformsRef = useRef<ReadonlyMap<string, PreviewInstanceHostTransform>>(new Map());
+  // Scene context: an opaque model to play the effect against. Without it the scene has no
+  // depth for a soft particle to fade against and no scale reference at all.
+  const [hostModelPath, setHostModelPath] = useState<string | null>(null);
+  const [hostInstanceId, setHostInstanceId] = useState<string | null>(null);
+  const sceneDepthTextureRef = useRef<Texture | null>(null);
   // The playback window is the effect's own length, not a fixed 120 frames — see
   // `resolveEfxbnPreviewFrameCount`. Structural, so it never recomputes from colour draft identity.
   const frameCount = useMemo(
@@ -402,6 +450,59 @@ export function EffectFolder3dPreview({
     setEffectPlaying(firstEffectIndex !== null && allowsAutomaticPreviewMotion());
   }, [plan?.key]);
 
+  // Restore the workspace's host model. A stored path that is no longer a .numdlb is reported
+  // rather than dropped, so a hand-edited store never silently loses the setting.
+  useEffect(() => {
+    let cancelled = false;
+    void getEffectFolderWorkspaceState(inventory.effectRoot)
+      .then((state) => {
+        if (cancelled) return;
+        const stored = state?.hostModelPath ?? null;
+        if (stored && !/\.numdlb$/i.test(stored)) {
+          toast.error("Stored host model is not a .numdlb file", { description: stored });
+          return;
+        }
+        setHostModelPath(stored);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        toast.error("Failed to read the stored host model", {
+          description: error instanceof Error ? error.message : String(error),
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [inventory.effectRoot]);
+
+  const handlePickHostModel = useCallback(async () => {
+    const selected = await open({
+      directory: false,
+      multiple: false,
+      filters: [{ name: "NUMDLB", extensions: ["numdlb"] }],
+    });
+    if (typeof selected !== "string") return;
+    setHostModelPath(selected);
+    try {
+      await rememberEffectFolderHostModelPath(inventory.effectRoot, selected);
+    } catch (error) {
+      toast.error("Failed to remember the host model", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [inventory.effectRoot]);
+
+  const handleClearHostModel = useCallback(async () => {
+    setHostModelPath(null);
+    try {
+      await rememberEffectFolderHostModelPath(inventory.effectRoot, null);
+    } catch (error) {
+      toast.error("Failed to clear the host model", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [inventory.effectRoot]);
+
   const handleEffectProgressChange = useCallback((progress: number) => {
     setEffectProgress(progress);
   }, []);
@@ -501,6 +602,8 @@ export function EffectFolder3dPreview({
               onInstanceMapChange={setInstanceIdsByEffectIndex}
               hostInstanceTransformsRef={hostInstanceTransformsRef}
               modelPoolPlan={modelPoolPlan}
+              hostModelPath={hostModelPath}
+              onHostInstanceIdChange={setHostInstanceId}
             />
             {hasDiagnosticBlocks && basePlan?.kind === "efxbn" ? (
               <ResizablePanelGroup orientation="horizontal" className="min-h-0">

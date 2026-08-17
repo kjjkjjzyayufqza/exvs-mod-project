@@ -11,8 +11,8 @@
 
 **Goal.** A preview that can be trusted to predict what the game draws.
 
-**Where we stand.** Roughly 55–60% of visual fidelity, measured as "provably matches the
-decompiled shader logic", up from the ~20–30% the user reported on 2026-08-15. Appearance cannot
+**Where we stand.** Roughly 60% of visual fidelity, measured as "provably matches the decompiled
+shader logic", up from the ~20–30% the user reported on 2026-08-15. Appearance cannot
 be compared against the game — see §7 K1 — so every claim here is a claim about matching decoded
 logic, never about looking identical.
 
@@ -56,7 +56,20 @@ Added 2026-08-16, each from a defect found this session:
 10. **Guard every `normalize` and every divide in vertex/fragment code.** A NaN in a vertex colour
     drops the whole primitive for that frame. That reads as flicker, not as a wrong colour, so it
     is easy to misattribute.
-11. **A stale binary must fail loudly, not degrade.** The Rust backend and the TypeScript frontend
+11. **Half-implemented is the dangerous state, and a coverage audit cannot see it.** The two
+    largest bugs this project has found — `actionFlags & 0x10` uniform size (31.3% of drawable
+    blocks) and the emitter's `rotationBase` (24.6% of emitter pairs) — were both inside features
+    this plan listed as **done**. Uniform size copied the random factor but not the base; rotation
+    read the target block but not the emitter. Ranking unimplemented features by corpus share is
+    structurally incapable of finding either. When auditing something already implemented, put the
+    shader lines and the TypeScript side by side and check they compute the same expression — do
+    not ask "is the feature present".
+12. **Drive from the user's symptom before the backlog.** Both of those bugs came from single words
+    in a user report ("椭圆形", "2D 屏幕特效"), each resolving to a cause within an hour. Nothing
+    the ranked backlog produced in the same session was as valuable or as visible. Ask for a precise
+    description — shape, position, colour, timing — and treat the corpus ranking as what fills the
+    gaps between symptom reports, not as the primary driver.
+13. **A stale binary must fail loudly, not degrade.** The Rust backend and the TypeScript frontend
     ship separately during development. When the frontend depends on a new backend field, assert it
     at the service boundary (`assertResolvedInventoryShape` is the precedent) so an unrebuilt
     backend says so instead of silently rendering placeholder geometry.
@@ -91,9 +104,15 @@ the editing track.
 | Loop wraps curve phase without rebuilding position | `efxKineticParticleBillboard3rd` |
 | Spawn basis so `speedBase*` is spawn-local | `efxSpawnParticleCommon3rd` |
 | Mesh emitters (spawn form 9/10) from decoded draws | `efxbnMeshEmitter.ts` |
+| **Spawn forms 0 / 5 on a sphere of `spawnFormLength[0]`** | `efxSpawnParticleCommon3rd` + the `efxbnSpawnBasis` column-2 derivation |
+| **`actionFlags & 0x10` copies the X spawn size into Y and Z** | `efxSpawnParticleCommon3rd` lines 1443–1445 |
+| **Emitter `rotationBase` orients everything it spawns** (position, direction, particle euler) | same file, read at line 273, composed at 1194–1212; `positionOffset` stays outside per line 794 |
+| **Spawn form 2 as a flat ring** (form 3 minus the cylinder height) | same, `_643 = (type == 3)` gates the height alone |
+| **`emitAreaType == 1` area sampling `r * sqrt(U)`** on forms 0/2/3/5 | same, `_1506` |
 | **Per-particle deterministic RNG** — each particle owns `particleSeed(pairSeed, id)` | rule 9 |
 | **Model instance pool slots held across frames** — `bindEfxbnModelInstanceSlots` | rule 9 |
 | **Playback window derived per effect** — `resolveEfxbnPreviewFrameCount` | §5 P3 background |
+| **Looping warm-up so progress 0 is steady state** — `resolveEfxbnWarmUpFrames` / `simulateEfxbnPreviewFrame` | §5 P3 |
 
 ### Geometry — ~85%
 
@@ -103,6 +122,7 @@ the editing track.
 | Billboard `centerPivot`: quad offset by `right*(sizeX*pivotX*0.5) + up*(sizeY*pivotY*0.5)` | same file lines 196–198 and 227–232 |
 | Face culling `0/1/2 → DoubleSide/FrontSide/BackSide` | **measured**, see §7 T3 |
 | Strip per-node history (own width and colour per node) | `EfxExtractedDrawInfoStrip3rd` |
+| **Strip `centerPivot.x` slides the ribbon off its path** (magnitude proven, side unproven) | `efxExtractDrawInfoStrip3rd` lines 223, 362–363 |
 | Per-particle depth sort, front-to-back only for opaque + `extraFlags & 0x2000` | `efxMakeSortInfoBillboardDrawerID3rd`, `efxSortParticle3rd` |
 
 ### Shading — ~45%
@@ -266,18 +286,52 @@ stated. Rank = the order to work in.
 
 | Rank | Gap | Share | Phase |
 | --- | --- | --- | --- |
-| P0 | Soft particle depth fade not implemented | **66.3%** (2495) | shading |
-| P1 | Spawn forms 2 / 5 / 7 fall through to a generic point emitter | **36.5% of emitters** | simulation |
-| P2 | Strip `centerPivot.x` ignored | **20.0% of strips** | geometry |
-| P3 | Looping effects restart from tick 0 at the wrap | **57.4% of files** contain a looping block | simulation |
-| P4 | Lighting variants (`lightingFlags`) | 5.5% (207) | shading |
-| P4 | Normal map (`normalMapHash`) | 4.3% (162) | shading |
-| P5 | Strip UV axes transposed | all 290 strips | geometry |
+| ~~S1~~ | ~~`actionFlags & 0x10` uniform size only equalised the random factor, not the base~~ — **done 2026-08-16** | was **31.3% of drawable blocks** | simulation |
+| ~~S2~~ | ~~Emitter `rotationBase` ignored, so everything it spawns stayed unrotated~~ — **done 2026-08-16** | was **24.6% of emitter pairs / 40.0% of files** | simulation |
+| ~~P1~~ | ~~Spawn forms 2 / 5 ignore their radius~~ — **done 2026-08-16**, forms 0/2/5 + area sampling | was 17.4% of emitters | simulation |
+| ~~P2~~ | ~~Strip `centerPivot.x` ignored~~ — **done 2026-08-16** | was 20.0% of strips | geometry |
+| P1b | Spawn form 7 still falls through to the unproven fallback | **3.0% of emitters** (97 with a radius) | simulation |
+| P1c | Box forms 4 / 8 fill the volume; the shader picks one of six **faces** | 4.9% of emitters | simulation |
+| ~~P3~~ | ~~Looping effects restart from tick 0 at the wrap~~ — **done 2026-08-16** | was 49.1% of files (measured, not the 57.4% flag count) | simulation |
+| **BLOCKED** | Lighting variants (`lightingFlags`) — needs a scene environment cube | 5.5% (207) | scene-coupled |
+| **BLOCKED** | Normal map (`normalMapHash`) — feeds the same lighting path | 4.3% (162) | scene-coupled |
+| P5 | Strip UV axes — the transpose was already fixed; what the shader's 4-component vertex UV actually means is **unresolved** | all 290 strips | geometry |
 | P5 | UV scroll semantics not split by draw type | 7,320 scroll parameters | shading |
 | P6 | Four-corner `uvU/uvV` collapsed to a min/max rectangle | all | shading |
 | P6 | Curve LUT quantization (16-column texture) not reproduced | all curves | shading |
 | P7 | `blendState 1` rendered as Normal, unverified | 18.1% | render state |
-| P7 | MultiUV, HLight, ColorEx `0x200` framebuffer grab | small | shading |
+| P7 | MultiUV — self-contained, needs the mesh's second UV stream | model blocks with a 2nd UV set | shading |
+| **BLOCKED** | ColorEx `0x200` framebuffer grab | 1.8% | scene-coupled |
+| ~~—~~ | ~~HLight~~ — **closed as a phantom**: `efxDrawModelHLightPS` is byte-identical to `efxDrawModelPS` | was 2.4% | — |
+| **Deferred** | Soft particle depth fade — see §5 P0 | flag set on 66.3%, **visible on ≤4.6% of files** | shading |
+
+### The remaining shading gaps are one blocked group, not five items
+
+Reading the texture registers each pixel-shader variant binds splits the whole shading backlog
+cleanly, and the split is more useful than any individual percentage:
+
+| variant | texture slots | needs a scene input? |
+| --- | --- | --- |
+| `efxDrawModelPS` (base) | t0 | no — done |
+| `efxDrawModelAddMixPS` | t0 | no — done |
+| `efxDrawModelHLightPS` | t0 | no — **byte-identical to the base shader**, phantom |
+| `efxDrawModelColorExPS` | t0, t1, t8 | no — t1/t8 are the block's own offset map, done |
+| `efxDrawModelMultiUVPS` | t0, t3, t4, t8 | no — effect textures plus the mesh's 2nd UV set |
+| `efxDrawModelSoftPS` | t0, **t7** | **yes — scene depth** |
+| `efxDrawModelLightPS` | t0, t2, **t5 cube** | **yes — environment cube map** |
+
+Everything self-contained is done or is a phantom. Everything still open below the self-contained
+tier — Soft, Light, normal map, the ColorEx `0x200` framebuffer grab — waits on **one** thing:
+
+> **The preview has no scene context.** No opaque geometry to occlude against, no depth buffer, no
+> environment cube, no framebuffer to sample. In game these terms are computed against the stage
+> and the unit the effect is attached to.
+
+So the correct next infrastructure step is not any single shading term but *giving the preview the
+game's scene context* — the host unit or stage model, a depth pre-pass, and an environment map.
+That one feature unblocks 5.5% + 4.3% + 1.8% of blocks plus soft particle's real (if small) share,
+and it is also the only way to make the preview's framing and scale trustworthy. It is deliberately
+**not** ranked in the ledger above, because it is a preview feature rather than a fidelity gap.
 
 **Closed as not-a-gap:** `fieldEffectType` is **0** across the whole tree, so the four
 `efxKineticParticle*FieldEffect3rd` shaders describe behaviour no shipped effect uses. Do not
@@ -287,18 +341,59 @@ spend time on them.
 
 ## 5. Tasks
 
-### P0 — Soft particle depth fade · 66.3% of drawable blocks
+### P0 — Soft particle depth fade · DEFERRED, and here is why
 
-Two thirds of every drawable block sets `enableSoftParticle`, and the preview reads the field only
-to derive `zWriteEnable`. Nothing fades. This is the single largest remaining appearance gap.
+**This task was ranked first on 2026-08-16 and demoted the same day. Read this before reinstating
+it.** The 66.3% is the share of drawable blocks that *set* `enableSoftParticle`. It is not the
+share where implementing the fade changes a pixel, and the gap between those two numbers is the
+whole story:
 
-**Evidence.** `tmp/efxbn-preview/efxDrawModelSoftPS.yyadorigi.hlsl`, `frag_main`. Transcribed:
+| measurement | value |
+| --- | --- |
+| blocks with `enableSoftParticle` set | 2495 / 3761 = **66.3%** |
+| blocks that **write depth** after runtime normalization | 69 / 3761 = **1.8%** |
+| files containing a soft block | 492 / 678 = 72.6% |
+| files containing any depth writer | 43 / 678 = 6.3% |
+| files where **both** coexist | 31 / 678 = **4.6%** |
+
+A soft particle fades against whatever wrote depth. The effect preview scene contains **no opaque
+geometry at all**: the only non-effect object is drei's `Grid`, which is an alpha-blended shader
+plane (and is preview furniture, so fading against it would be actively wrong). Effect blocks
+themselves almost never write depth, because the runtime normalization is
+
+```text
+blendState == 0            -> zWriteEnable = 1
+enableSoftParticle != 0    -> zWriteEnable = 0     // applied second, wins
+```
+
+so a block that opts into soft particles simultaneously opts out of writing depth. The two are
+mutually exclusive by construction.
+
+With an empty depth buffer the fade computes `clamp((far - fragDepth) / range, 0, 1) = 1` and
+multiplies alpha by 1. **No visible change on 95.4% of files**, and on the remaining 4.6% only
+where a soft particle intersects one of those 69 depth-writing blocks.
+
+**The real prerequisite** is putting the host character or stage model into the preview scene —
+in game that is what soft particles fade against. That is a separate feature with its own value
+(seeing an effect at the right scale on the unit it belongs to), and soft particles should be
+implemented as part of it, not before it.
+
+**Two findings worth keeping for whoever does implement it.**
+
+*The naive depth-texture path is wrong here.* `SsbhModelCanvas` creates its `<Canvas>` with
+`logarithmicDepthBuffer: true`. The shader's linearization `CB0_m0[1].x / (sceneDepth - CB0_m0[0].w)`
+assumes a standard perspective depth buffer; three.js writes `log2(w+1)`-encoded depth via
+`gl_FragDepth` instead. Either linearize with the log formula or — better — render a dedicated
+linear view-depth pass into a colour target so the encoding is under your own control. The override
+material has to handle GPU skinning and instancing, both of which the model path uses.
+
+*The maths itself is fully decoded already*, from
+`tmp/efxbn-preview/efxDrawModelSoftPS.yyadorigi.hlsl`, `frag_main`:
 
 ```text
 screenUv    = (clip.xy / clip.w) * (0.5, -0.5) + 0.5
 sceneDepth  = depthTexture.Sample(screenUv).x
-linearScene = CB0_m0[1].x / (sceneDepth - CB0_m0[0].w)      // A / (z - B)
-                                                            // CB0_m0 is the camera block
+linearScene = CB0_m0[1].x / (sceneDepth - CB0_m0[0].w)      // A / (z - B), camera block
 
 if (drawScheme & 0x1)        // soft alpha term
     alpha *= clamp((linearScene - clip.w) / CB1_m0[1].z, 0, 1)
@@ -313,163 +408,212 @@ rgb *= (drawScheme & 0x40000) ? 1.0 : 0.5                   // already implement
 
 `CB1_m0[1].x` is the draw-scheme flag word, which confirms the existing constants:
 `DRAW_SCHEME_SOFT_PARTICLE = 0x1`, `DRAW_SCHEME_EXTRA_40000 = 0x10000`,
-`DRAW_SCHEME_FULL_BRIGHTNESS = 0x40000`. The `Soft` variant mask in
-`EFXBN_SHADER_VARIANT_MASKS` is `0x10001` — both terms, consistent with this shader.
-
-`CB1_m0[1].z` should be the block's `softParticleRange` at `0x1fc`. The runtime normalizes a zero
-range to `8`, so read `efxbnRuntime(block).softParticleRange`, never the authored field (rule 4).
+`DRAW_SCHEME_FULL_BRIGHTNESS = 0x40000`. `CB1_m0[1].z` is the block's `softParticleRange` at
+`0x1fc`; read `efxbnRuntime(block).softParticleRange` so the 0 → 8 normalization applies (rule 4).
 `CB1_m0[2].w` and `CB1_m0[3].x` drive the second term and have no obvious authored counterpart —
-identify them before implementing that half, and ship the alpha term alone if they resist.
+identify them before implementing that half.
 
-**Blocker to solve first.** The preview has no depth texture. `SsbhModelCanvas` never allocates
-one — `grep -rn "depthTexture" src/components/ssbh-model-preview/` returns nothing. This task is
-therefore two pieces:
+**Reinstate when:** the preview can show the host unit/stage geometry. Until then the work is
+invisible by construction.
 
-*P0a — depth pre-pass.* Render the opaque scene into a `WebGLRenderTarget` with a `DepthTexture`
-before the transparent effect pass, and expose it on the preview context. Effect layers already
-render after models, so ordering is in place. Watch for: resize handling, `previewSuspended`, and
-the cost on the 64/128-instance model pools.
+### P0-old — the ranking mistake this task records
 
-*P0b — the fade itself.* Add the two terms to the billboard fragment shader
-(`EfxbnParticlePreview.tsx`), the strip fragment shader (`EfxbnStripPreview.tsx`) and the model
-override material (`SsbhModelCanvas.tsx`, driven from `EfxbnDiagnosticOverlay`'s
-`PreviewInstanceHostTransform`). Keep the maths in **one** exported pure function per rule 6 —
-extend `efxbnBillboardShading.ts` with `efxbnSoftParticleAlpha(linearScene, fragmentDepth, range)`
-and unit-test it, then call the same formula from all three GLSL sites.
-
-**Files.** `src/components/ssbh-model-preview/SsbhModelCanvas.tsx`,
-`src/components/ssbh-model-preview/SsbhModelPreviewContext.tsx`,
-`src/page/TestEditor/components/effect-folder-editor/EfxbnParticlePreview.tsx`,
-`EfxbnStripPreview.tsx`, `EfxbnDiagnosticOverlay.tsx`, `efxbnBillboardShading.ts`.
-
-**Test.** Unit-test the pure fade against hand-computed values including the clamp at both ends and
-a zero range (must use the normalized `8`). Add an inspector row so the value is visible per block.
-
-**Done when.** The pure function is tested, all three draw sites call it, `tsc` is at baseline, the
-effect-folder suite is green, and the inspector shows the soft range for the selected block.
+Kept deliberately as a worked example of rule 3. "66.3% of blocks set the flag" and "66.3% of
+blocks look different if I implement it" are different claims, and only the second one ranks work.
+Before promoting any shading gap, ask what it is measured *against* and whether that input exists
+in the preview at all.
 
 ---
 
-### P1 — Spawn forms 2 / 5 / 7 · 36.5% of emitter blocks
+### P1 — Spawn forms · DONE 2026-08-16, with two remainders
 
-`spawnPositionAndDirection` in `efxbnSimulation.ts` (the `switch` at ~line 296) handles
-1, 3, 4, 6, 8, 9, 10. Everything else falls into `default`, which puts the particle at the origin
-with a uniformly random direction. Measured distribution over the 3213 emitter blocks:
+**What the headline share got wrong.** The plan first ranked this at "36.5% of emitters fall into
+the generic `default` branch". That counts emitters whose form is unhandled, not emitters the
+preview actually places wrongly — and most unhandled emitters author a zero radius, so the generic
+"origin + random direction" already matched them. Measuring `spawnFormLength[0]` per form:
 
-| `spawnFormType` | share | status |
-| --- | --- | --- |
-| 0 | 49.9% | falls through, but a point emitter is plausibly exactly this — **verify, then record** |
-| 5 | 18.6% | falls through — wrong shape |
-| 2 | 12.1% | falls through — wrong shape |
-| 7 | 5.8% | falls through — wrong shape |
-| 3 | 7.2% | implemented (ring) |
-| 4 + 8 | 4.9% | implemented (box) |
-| 1 + 6 | 1.5% | implemented (line) |
-| 9 + 10 | 0.2% | implemented (mesh emitter) |
+| form | emitters | radius == 0 | radius != 0 | max radius |
+| --- | --- | --- | --- | --- |
+| 0 | 1602 | 1568 (97.9%) | 34 | 10 |
+| 2 | 388 | 47 | **341 (87.9%)** | **150** |
+| 5 | 597 | 412 | 185 | 10 |
+| 7 | 186 | 89 | 97 | 80 |
 
-Particles emerging from the wrong shape is directly visible, and unlike shading it needs no new
-rendering infrastructure.
+The honest figure was **657 / 3213 = 20.4%** of emitters spawning in the wrong place, and type 2 —
+not type 5 — carried most of it, with radii up to 150 units collapsed onto a point.
 
-**Evidence.** `tmp/efxbn-preview/efxSpawnParticleCommon3rd.yyadorigi.hlsl`. The type is read at
-line 260 (`(_171 * 220u) + 17u` → `0x44`) into `_573`; dispatch sites at lines 285 (`== 5`),
-429 (`== 7 || == 2`), 635 (`== 6 || == 8 || == 7 || == 5`). `_640` in the same region is
-`emitAreaType` (`0x1a4`) and selects edge vs area-uniform sampling — the roadmap's C3 note about
-`R * sqrt(U)` belongs here.
+**What shipped.**
 
-**Approach.** Do one type per commit, largest first (5, then 2, then 7), each with its own test.
-Confirm type 0 before changing it: if the shader's default branch matches the current code, close
-it as verified and say so in §2 rather than leaving it ambiguous.
+*Forms 0 and 5 — sphere.* `efxSpawnParticleCommon3rd` routes both through one branch that draws two
+angles as `float(lcg) * 2pi / 2^32 - pi` and rotates the shared local offset `(0, 0, radius)`.
+Rotating `(0, 0, r)` by the spawn-system matrix is its third column times r, and `efxbnSpawnBasis`
+already documented that column as `(cos A sin B, -sin A, cos A cos B)` — an independent
+corroboration from prior work on the same shader. Form 0 still behaves as a point emitter because
+97.9% of its blocks author a zero radius.
 
-**Files.** `efxbnSimulation.ts`, `efxbnSimulation.test.ts`.
+*`emitAreaType == 1` — area sampling.* The shader takes `sqrt((r * r * 0.5) * u)` with `u` over
+`[0, 2)`, which is `r * sqrt(U)`. Applied to forms 0, 2, 3 and 5. **This also fixed form 3**, which
+had been using a fixed radius on all 230 of its emitters including the 65 that ask for area
+sampling.
 
-**Done when.** Each implemented type has a test asserting a distribution property that the generic
-branch would fail (e.g. all sampled positions lie on the declared surface within epsilon), and the
-share of emitters reaching `default` is re-measured and recorded in §4.
+*Form 2 — flat ring.* Forms 2, 3 and 7 share the curve-driven angle from `spawnForm0`/`spawnForm1`
+and the shared radius; `_643 = (type == 3)` gates the cylinder-height term **alone**, so form 2 is
+form 3 without the height.
 
----
+**P1b — form 7 remains.** 186 emitters, 97 of them with a radius up to 80. It takes the same
+curve-driven angle path as forms 2 and 3 but additionally evaluates `spawnForm2` / `spawnForm3`
+(the branch at `efxSpawnParticleCommon3rd.yyadorigi.hlsl:635`, reading element dword 26 = `0x68`).
+What those two curves feed is not decoded. It stays in the explicit unproven fallback rather than
+being guessed — rule 1.
 
-### P2 — Strip `centerPivot.x` · 20% of strips
+**P1c — box forms 4 and 8 are a surface, not a volume.** The preview picks a uniform point inside
+the box. The shader draws `_640 = lcg % 6` and uses it to pick one of six face directions,
+sign-flipping the half-extents `_1512/_1514/_1516` accordingly (the constants decode as
+`1070141403 = pi/2`, `3217625051 = -pi/2`, `1078530011 = pi`). 156 emitters, 4.9%.
 
-Billboards honour `centerPivot`; strips do not. A non-zero pivot slides the whole ribbon off the
-path its particles travelled.
+### P2 — Strip `centerPivot.x` · DONE 2026-08-16
 
-**Evidence.** `tmp/efxbn-preview/efxExtractDrawInfoStrip3rd.yyadorigi.hlsl`. `_1569` is read at
-line 223 from element dword 88 (`0x160` = `centerPivot.x`) and used at lines 362–363 and 391–392:
+Billboards honoured `centerPivot`; strips did not, so a non-zero pivot left the ribbon centred on a
+path the game draws it beside. Non-zero on 20.0% of shipped strips.
+
+From `efxExtractDrawInfoStrip3rd.yyadorigi.hlsl` — `_1569` read at line 223 from element dword 88
+(`0x160`), used at lines 362-363 and 391-392:
 
 ```text
 edgeA = centre - side * halfWidth * (pivotX + 1)
 edgeB = centre - side * halfWidth * (pivotX - 1)
 ```
 
-With `pivotX = 0` this is the symmetric `centre ± side*halfWidth`. With `pivotX = -1` the ribbon
-lies entirely on one side of the path. Equivalently: the ribbon centre shifts by
-`-halfWidth * pivotX` along `side`, and the width is unchanged.
+which is the symmetric `centre +/- halfWidth` shifted by `halfWidth * pivotX` along the side
+vector. The preview's strip vertex shader multiplies `ribbonSide * ribbonWidth`, so the shift folds
+into the side value: `sides.push(side - pivotX)`.
 
-**Note the sign differs from the billboard rule** (`+hx*pivotX` there). Do not assume they share a
-convention — transcribe each from its own shader.
+**Left unproven on purpose.** The magnitude is proven; which of the two edges the shader's side
+vector calls positive is not, so a mirrored pivot would slide the ribbon to the opposite side of
+its path. Centred ribbons are unaffected either way and an off-centre ribbon beats a centred one
+regardless of sign, but settling it needs the UV write traced through
+`efxConstructDrawBufferStrip3rd`. The code comment says so at the call site.
 
-**Files.** `efxbnStripGeometry.ts`, `efxbnStripGeometry.test.ts`.
+### P3 — Looping warm-up · DONE 2026-08-16
 
-**Done when.** A test builds a straight ribbon with `pivotX = -1` and asserts both edges sit on one
-side of the path, and `pivotX = 0` still produces the symmetric ribbon.
+**Background.** `resolveEfxbnPreviewFrameCount` derives the timeline from the longest root-to-leaf
+`delay + life` chain (25.4% of files shortened, 8.7% extended, 65.9% unchanged), and looping
+effects keep a 120-frame floor so they do not restart once per cycle.
 
----
+**The measured gap.** "57.4% of files contain a looping block" is a flag count. The visible
+quantity is how far the population falls at the wrap, which is static-computable as
+`rampRatio = childLifeTime / max(1, intervalBase)` — steady state over the first tick's burst:
 
-### P3 — Looping effects restart from tick 0 · 57.4% of files
+| rampRatio | share of looping emitter/child pairs |
+| --- | --- |
+| > 1.5 | 65.1% |
+| **> 3** | **52.3%** (median 4.0, p90 30, max 120) |
+| > 10 | 26.4% |
 
-**Background.** `resolveEfxbnPreviewFrameCount` now derives the timeline from the longest
-root-to-leaf `delay + life` chain. Corpus impact: 25.4% of files shortened (they were playing into
-dead air), 8.7% extended (they were being cut off), 65.9% unchanged. One-shot effects are now
-correct.
+**49.1% of files** (333/678) hold at least one pair above 3x, i.e. the cloud visibly collapses and
+rebuilds once per window. Unlike soft particle, the flag count and the visible share broadly agree
+here, so the item survived re-measurement.
 
-**What is still wrong.** A looping effect has no natural end, so it keeps a 120-frame floor —
-otherwise it would restart once per cycle and pulse. But at the wrap the simulation still replays
-from tick 0, so the effect ramps up from nothing instead of continuing. That is one visible
-discontinuity per window for 57.4% of files.
+**What shipped.** `resolveEfxbnWarmUpFrames(pair)` returns `delay + targetLife` for a looping
+emitter and **0 for everything else**; `simulateEfxbnPreviewFrame` adds it to the timeline frame.
+The population saturates exactly when the first particle emitted reaches its lifetime, so that is
+both sufficient and minimal.
 
-**The fix and why it is not trivial.** Simulate `warmUp + timelineFrame` instead of
-`timelineFrame`, with `warmUp` large enough that the system is already in steady state at progress
-0, and a window that is a whole number of emitter cycles so the phase matches at the wrap. Two
-complications:
+Per-pair rather than per-effect, which is what makes a mixed file work: the looping half starts in
+steady state, the one-shot half still starts from nothing. A global warm-up would have finished the
+one-shot half before progress 0.
 
-- With several looping emitters of different cycle lengths there is no exact common window. Pick
-  the dominant cycle and accept phase drift on the others; say so in the code comment.
-- An effect that mixes looping and one-shot blocks would have its one-shot parts already finished
-  at progress 0 and never visible. Warm-up must therefore be per-pair, not global — or the window
-  must cover the one-shot span as well.
+All four call sites go through the wrapper — the three preview surfaces plus
+`resolveEfxbnModelPoolPlan`, which must size the pool for steady state rather than for the ramp.
+`simulateEfxbnEmitterPair` stays a pure "state at frame N" function so the emission-mechanics tests
+can still drive it directly.
 
-**Files.** `efxbnSimulation.ts` (`resolveEfxbnPreviewFrameCount` and a new warm-up resolver),
-`EfxbnDiagnosticOverlay.tsx`, `EfxbnParticlePreview.tsx`, `EfxbnStripPreview.tsx`,
-`EffectFolder3dPreview.tsx`.
+**Cost, measured rather than assumed.** Warm-up frames over looping pairs: p50 = 8, p75 = 23,
+p90 = 38, p99 = 100, max = 207. Only 0.1% exceed 120 and nothing reaches the 600 clamp, so the
+typical addition is single-digit ticks per rendered frame.
 
-**Done when.** For a looping fixture, the live particle set at `warmUp` and at `warmUp + window` is
-equal within epsilon, and a mixed looping/one-shot fixture still shows its one-shot blocks at
-progress 0.
+**Still imperfect.** Both ends of the window are now in steady state, so the population no longer
+jumps — but the particles themselves are different particles across the wrap, because the window is
+not constrained to a whole number of emitter cycles. For a dense cloud that is far less visible
+than the collapse it replaces. Making the window an exact multiple of the dominant cycle would
+close it, and is worth doing only if the residual proves visible.
 
----
+### S3 — Expression-diff the "done" table · UNSTARTED, and the open worry
 
-### P4 — Lighting and normal map · 5.5% and 4.3%
+Two half-implementations were found by accident from one user sentence. Nobody has looked for the
+rest. Every row in §2 marked done should be checked by putting its shader anchor and its TypeScript
+side by side and confirming they compute the same expression — not merely that the feature exists.
 
-`lightingFlags` (`0x1c4`) and `normalMapHash` (`0x1c8`) both feed the draw-scheme word and select
-the `Light` / normal-map variants. Anchors: `efxDrawModelLightPS.yyadorigi.hlsl` (5.3K) and the
-`DRAW_SCHEME_LIGHTING_1 / _4 / _8` and `DRAW_SCHEME_NORMAL_MAP` bits already derived in
-`effect_folder.rs`. The preview renders the base variant and the inspector already warns that it
-will not match. Low share; do after P0–P3.
+Highest-suspicion rows, because they are multi-component rules where implementing one component and
+missing another produces exactly the "looks plausible, wrong pixels" failure the two known bugs had:
 
----
+- `sizeRandom` / `rotationRandom` — is the shader's exact `base * (1 + signedRand * rate)` form
+  applied on every component?
+- the UV pattern 1/2/3 transforms, which have per-draw-type branches (see P5)
+- the draw-scheme producer bits — every bit is derived, but is each gated on the same condition?
+- `stripTailAlphaRate` / `stripHeadAlphaRate` interpolation direction
+- billboard basis selection versus the quad construction that consumes it
 
-### P5 — Strip UV axes, UV scroll per draw type
+Unglamorous, and probably where the next 20% of fidelity is. See
+`docs/agent-sessions/2026-08-16-efxbn-preview-session-reflection.md` §2 for why the ranked backlog
+cannot surface these.
 
-**Strip UV axes.** `efxConstructDrawBufferStrip3rd` stores `u` along the ribbon length and the
-other axis across the width; the builder writes `[side, t]` — transposed. Affects all 290 strips.
+### P4 — Lighting and normal map · BLOCKED on scene context
 
-**UV scroll by draw type.** Three corrections against the `fxc` output, carried over from the
-2026-08-09 roadmap C1 and still open: Billboard and Strip read offsets 36/52/68 (speed, direction,
-limit) while only Model reads 104/108; Model pattern 1 does not apply `uvScrollLimit`; Billboard
-and Strip subtract the limit once when exceeded rather than applying a positive modulo. The current
-`evaluateEfxbnUvTransform` has a `modelParticle` flag but applies a modulo everywhere.
+`lightingFlags` (`0x1c4`, 5.5% / 207 blocks, values `{1,3,5,13,4,12,8}`) and `normalMapHash`
+(`0x1c8`, 4.3% / 162 blocks; 108 blocks set both) select the `Light` variant.
 
----
+`efxDrawModelLightPS.yyadorigi.hlsl` binds `T2 : TextureCube : register(t5)` and samples it at
+line 121 with a reflection vector, plus `T1 : register(t2)` for the normal map, and consumes
+`NORMAL` and `TANGENT` vertex inputs. The effect preview has no environment map to bind. Lighting
+the effect against the viewport's `softCharacter` light preset would be preview furniture, exactly
+the mistake the soft-particle deferral avoids.
+
+Same prerequisite as P0 — see "The remaining shading gaps are one blocked group" in §4.
+
+### P5 — Strip UV axes (row corrected 2026-08-16), UV scroll per draw type
+
+**Strip UV axes — the inherited row was stale; the replacement is honest about not knowing.**
+The 2026-08-09 roadmap's B2 said the builder wrote `[side, t]` transposed. That has since been
+fixed: `efxbnStripGeometry.ts` writes `U = t` (along the ribbon) and `V = edge` (across the width),
+with a shader-citing comment and a passing test. **The row is stale — do not re-do B2.**
+
+Re-deriving it on 2026-08-16 advanced the picture but did not settle it. Two solid new facts:
+
+*The vertex layout is pinned.* `efxDrawFaceVS`'s input struct is
+`float4 POSITION; float4 COLOR; float2 TEXCOORD; float2 TEXCOORD_1;` — 12 floats, exactly the three
+float4s per vertex that `efxConstructDrawBufferStrip3rd` writes. So float4 #1 is position, #2 is
+colour, and #3 is `(TEXCOORD.xy, TEXCOORD_1.xy)` — two UV sets.
+
+*The two emitted vertices differ in a specific way.* Per invocation the shader writes exactly two
+vertices:
+
+```text
+vertexA: colour = (_175, _176, _177, _120)   uv = (_137.y, _201)   uv2 = (_137.w, _206)
+vertexB: colour = (_175, _176, _177, _121)   uv = (_137.x, _201)   uv2 = (_137.z, _206)
+```
+
+They share RGB and both V components, and differ in alpha and both U components. `_137` is the
+per-node record at dwords 25–28; `_201` / `_206` are `base` / `base + 1` chosen by the reverse-U and
+reverse-V flags (`_148 & 2`, `_148 & 16`).
+
+**The unresolved question is what those two vertices are.** If they are the ribbon's two *edges*,
+then U varies across the width and the current implementation is transposed after all. If they are
+*consecutive nodes* along the ribbon — which the differing alpha supports, since
+`EfxExtractedDrawInfoStrip3rd` gives a node its own `prevColorAlpha` / `currentColorAlpha` — then U
+runs along the length and the current implementation is right.
+
+Settling it needs the index buffer traced: find how quads are assembled from the per-invocation
+vertex pairs. **Do not change `efxbnStripGeometry.ts` before doing that** — it has a test and a
+plausible reading, and flipping it on this evidence would be trading one guess for another.
+
+Also noticed and unimplemented: `_148 & 2` and `_148 & 16` are reverse-U and reverse-V flags.
+
+**UV scroll by draw type.** Three corrections carried over from the 2026-08-09 roadmap C1 and still
+open: Billboard and Strip read offsets 36/52/68 (speed, direction, limit) while only Model reads
+104/108; Model pattern 1 does not apply `uvScrollLimit`; Billboard and Strip subtract the limit once
+when exceeded rather than applying a positive modulo. The current `evaluateEfxbnUvTransform` has a
+`modelParticle` flag but applies a modulo everywhere.
 
 ### P6 — Four-corner UVs, curve LUT quantization
 
@@ -498,7 +642,7 @@ if yours differ, explain why in the same message.
 ./node_modules/.bin/tsc --noEmit -p tsconfig.json        # 2 errors, both pre-existing:
                                                           #   daeSsbhTypes.ts:318
                                                           #   BulletPropertyPanel.tsx:227
-./node_modules/.bin/vitest run --no-file-parallelism      # 910 passed / 6 failed
+./node_modules/.bin/vitest run --no-file-parallelism      # 955 passed / 6 failed
                                                           # the 6: Fhm2dMemoryPreviewModal x2,
                                                           # useSsbhFileEditorSessions x3,
                                                           # ListeningRepackDialog x1
@@ -560,10 +704,22 @@ flat proxy quad, check the inventory first: `EffectFolder3dPreview` names the un
 the viewport, and `EffectFolderResolutionPanel` lists them. If the payload lacks the shared-pack
 fields at all, `assertResolvedInventoryShape` throws — that means the Rust backend was not rebuilt.
 
-**T5 — `33.efxbn` reference case.** `wing_gundam_zero_rebellion_effect/0/0/33.efxbn` is a sphere
-wrapped in three rings: six blocks, zero billboards, blocks 1/3/5 are rings resolving in the pack's
-own files and block 0 is the sphere from the shared pack. "I see a flat circle" means the rings
-drew and the sphere did not — i.e. T4, not a geometry bug. Good smoke test for shared-pack work.
+**T5 — `33.efxbn` is the reference case, and it has caught three separate bugs.**
+`wing_gundam_zero_rebellion_effect/0/0/33.efxbn` is a sphere wrapped in three rings: six blocks,
+zero billboards; blocks 1/3/5 are rings resolving in the pack's own files and block 0 is the sphere
+from the shared pack. The EXVS2 wiki describes the move as deploying a blue **spherical** effect
+that jams guidance, which is independent corroboration of the geometry.
+
+| symptom the user reported | cause |
+| --- | --- |
+| "flat circle" | shared-pack model unresolved — T4, not geometry |
+| "**椭圆形**" (oval) | `actionFlags & 0x10` uniform size not applied: `sizeBase (2.5, 1, 1)` rendered as an ellipsoid instead of a 2.5x sphere |
+| "**2D screen effect**" | emitter `rotationBase` ignored, so the 45-degree and (-55, 25)-degree ring emitters left all three rings coplanar |
+
+Expected geometry after the fixes: a uniform 2.5x sphere, ring_001 at 0 degrees, ring_002 at 45
+degrees, and a flattened ring_002 at (-55, 25) degrees — block 5 keeps its non-uniform
+`(2.5, 0.5, 2.5)` because its `0x10` flag is clear, which is a useful consistency check that the
+flag reading is right. Re-derive this table before trusting any new "33 looks wrong" report.
 
 **T6 — Bash heredocs break on markdown.** Writing doc sections through a shell heredoc fails on
 backticks and quotes. Write the section to a scratchpad `.md` with the Write tool and append it

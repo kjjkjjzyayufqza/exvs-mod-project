@@ -206,6 +206,14 @@ function useRenderDebug(name: string, tracked: Record<string, unknown>): void {
   });
 }
 
+/**
+ * Scene-graph name of an instance's root group, so a host overlay can find the Object3D it
+ * needs (the effect preview's depth pre-pass renders one instance and nothing else).
+ */
+export function previewInstanceGroupName(instanceId: string): string {
+  return `preview-instance:${instanceId}`;
+}
+
 export type PreviewInstanceHostTransform = {
   position: readonly [number, number, number];
   rotation: readonly [number, number, number];
@@ -2076,6 +2084,7 @@ const Scene = memo(function Scene({
           return (
             <group
               key={inst.id}
+              name={previewInstanceGroupName(inst.id)}
               position={pos}
               onClick={unrealSelectionEnabled ? handleInstanceViewportClick(inst.id) : undefined}
               ref={(el) => {

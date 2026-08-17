@@ -9,11 +9,15 @@ import type { EffectFolderPreviewPlan } from "./effectFolderPreviewPlan";
 import { makeEfxbnEffectBlock, makeEfxbnRuntime } from "./efxbnTestFactory";
 import {
   bindEfxbnModelInstanceSlots,
+  composeEfxbnEulerXyz,
+  efxbnRotateByEulerXyz,
   EFXBN_PREVIEW_FRAME_COUNT,
   EFXBN_PREVIEW_MAX_FRAME_COUNT,
   EFXBN_PREVIEW_MIN_FRAME_COUNT,
   efxbnParticleLifeCount,
   resolveEfxbnPreviewFrameCount,
+  resolveEfxbnWarmUpFrames,
+  simulateEfxbnPreviewFrame,
   efxbnSpawnBasis,
   resolveEfxbnEmitCount,
   resolveEfxbnEmitterPairs,
@@ -569,6 +573,508 @@ describe("EFXBN Phase A simulation semantics", () => {
     // along +Z and leaves world Y alone.
     expect(particle.position[2]).toBeGreaterThan(4);
     expect(particle.position[1]).toBeCloseTo(0, 6);
+  });
+});
+
+describe("EFXBN spawn forms (efxSpawnParticleCommon3rd)", () => {
+  const spawnControls = () =>
+    directControls({
+      speedBaseX: 0,
+      speedBaseY: 0,
+      speedBaseZ: 0,
+      scaleBaseX: 1,
+      scaleBaseY: 1,
+      scaleBaseZ: 1,
+      colorR: 1,
+      colorG: 1,
+      colorB: 1,
+      colorA: 1,
+    });
+
+  /** Every particle at age 0, so `position` is exactly what the spawn form produced. */
+  function spawnPositions(
+    emitterOverrides: Partial<EfxbnEffectSummary>,
+    count = 240,
+  ): [number, number, number][] {
+    const controls = spawnControls();
+    const emitter = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 100,
+      intervalBase: 100,
+      numEmit: count,
+      controlReferences: controls.references,
+      ...emitterOverrides,
+    });
+    const target = block({ index: 1, lifeTimeBase: 100, controlReferences: controls.references });
+    const sourcePlan = plan([emitter, target], controls.entries);
+    const pair = resolveEfxbnEmitterPairs(sourcePlan)[0];
+    return simulateEfxbnEmitterPair(pair, sourcePlan, 0).map((particle) => particle.position);
+  }
+
+  const length = (p: readonly [number, number, number]) => Math.hypot(p[0], p[1], p[2]);
+  const radiusXZ = (p: readonly [number, number, number]) => Math.hypot(p[0], p[2]);
+
+  it("spawns form 5 on a sphere of spawnFormLength[0], not at the origin", () => {
+    const positions = spawnPositions({ spawnFormType: 5, spawnFormLength: [10, 0, 0, 0] });
+
+    expect(positions.length).toBeGreaterThan(200);
+    for (const position of positions) {
+      expect(length(position)).toBeCloseTo(10, 4);
+    }
+    // A sphere, not a ring: the samples have to spread over all three axes.
+    for (const axis of [0, 1, 2] as const) {
+      const spread = Math.max(...positions.map((p) => p[axis])) -
+        Math.min(...positions.map((p) => p[axis]));
+      expect(spread).toBeGreaterThan(5);
+    }
+  });
+
+  it("samples form 5 by area when emitAreaType is 1, filling the sphere instead of its shell", () => {
+    const positions = spawnPositions({
+      spawnFormType: 5,
+      spawnFormLength: [10, 0, 0, 0],
+      emitAreaType: 1,
+    });
+
+    const radii = positions.map(length);
+    expect(Math.max(...radii)).toBeLessThanOrEqual(10.0001);
+    // r * sqrt(U) has mean 2r/3, well above the r/2 a uniform radius would give.
+    const mean = radii.reduce((sum, r) => sum + r, 0) / radii.length;
+    expect(mean).toBeGreaterThan(5.5);
+    expect(mean).toBeLessThan(8);
+  });
+
+  it("keeps a zero-radius form 0 emitter at the origin", () => {
+    const positions = spawnPositions({ spawnFormType: 0, spawnFormLength: [0, 0, 0, 0] });
+
+    for (const position of positions) {
+      expect(length(position)).toBeCloseTo(0, 6);
+    }
+  });
+
+  it("spawns form 2 on a flat ring — the height offset belongs to form 3 alone", () => {
+    const controls = directControls({ spawnForm0: 0, spawnForm1: Math.PI * 2 });
+    const emitter = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 100,
+      intervalBase: 100,
+      numEmit: 120,
+      spawnFormType: 2,
+      spawnFormLength: [7, 40, 0, 0],
+      controlReferences: controls.references,
+    });
+    const target = block({ index: 1, lifeTimeBase: 100 });
+    const sourcePlan = plan([emitter, target], controls.entries);
+    const positions = simulateEfxbnEmitterPair(resolveEfxbnEmitterPairs(sourcePlan)[0], sourcePlan, 0)
+      .map((particle) => particle.position);
+
+    expect(positions.length).toBeGreaterThan(100);
+    for (const position of positions) {
+      expect(position[1]).toBeCloseTo(0, 6);
+      expect(radiusXZ(position)).toBeCloseTo(7, 4);
+    }
+  });
+
+  it("keeps a zero-radius form 2 emitter finite instead of normalizing a zero vector", () => {
+    // 47 shipped form-2 emitters author a zero radius. Routing them through the ring branch makes
+    // `normalize3([0, 0, 0])` reachable, and a NaN direction would put every particle nowhere.
+    const controls = directControls({ spawnForm0: 0, spawnForm1: Math.PI * 2 });
+    const emitter = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 100,
+      intervalBase: 100,
+      numEmit: 40,
+      spawnFormType: 2,
+      spawnFormLength: [0, 0, 0, 0],
+      controlReferences: controls.references,
+    });
+    const target = block({ index: 1, lifeTimeBase: 100 });
+    const sourcePlan = plan([emitter, target], controls.entries);
+    const particles = simulateEfxbnEmitterPair(resolveEfxbnEmitterPairs(sourcePlan)[0], sourcePlan, 0);
+
+    expect(particles.length).toBeGreaterThan(30);
+    for (const particle of particles) {
+      expect(particle.position.every(Number.isFinite)).toBe(true);
+      expect(length(particle.position)).toBeCloseTo(0, 6);
+    }
+  });
+
+  it("still gives form 3 its cylinder height", () => {
+    const controls = directControls({ spawnForm0: 0, spawnForm1: Math.PI * 2 });
+    const emitter = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 100,
+      intervalBase: 100,
+      numEmit: 120,
+      spawnFormType: 3,
+      spawnFormLength: [7, 40, 0, 0],
+      controlReferences: controls.references,
+    });
+    const target = block({ index: 1, lifeTimeBase: 100 });
+    const sourcePlan = plan([emitter, target], controls.entries);
+    const positions = simulateEfxbnEmitterPair(resolveEfxbnEmitterPairs(sourcePlan)[0], sourcePlan, 0)
+      .map((particle) => particle.position);
+
+    const heights = positions.map((position) => position[1]);
+    expect(Math.max(...heights)).toBeGreaterThan(5);
+    expect(Math.min(...heights)).toBeLessThan(-5);
+    for (const position of positions) {
+      expect(radiusXZ(position)).toBeCloseTo(7, 4);
+    }
+  });
+
+  it("applies area sampling to form 3 as well, which previously used a fixed radius", () => {
+    const controls = directControls({ spawnForm0: 0, spawnForm1: Math.PI * 2 });
+    const emitter = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 100,
+      intervalBase: 100,
+      numEmit: 120,
+      spawnFormType: 3,
+      spawnFormLength: [7, 0, 0, 0],
+      emitAreaType: 1,
+      controlReferences: controls.references,
+    });
+    const target = block({ index: 1, lifeTimeBase: 100 });
+    const sourcePlan = plan([emitter, target], controls.entries);
+    const radii = simulateEfxbnEmitterPair(resolveEfxbnEmitterPairs(sourcePlan)[0], sourcePlan, 0)
+      .map((particle) => radiusXZ(particle.position));
+
+    expect(Math.max(...radii)).toBeLessThanOrEqual(7.0001);
+    expect(Math.max(...radii) - Math.min(...radii)).toBeGreaterThan(2);
+  });
+});
+
+describe("EFXBN uniform scale (actionFlags & 0x10)", () => {
+  const scaleControls = () =>
+    directControls({
+      speedBaseX: 0,
+      speedBaseY: 0,
+      speedBaseZ: 0,
+      scaleBaseX: 1,
+      scaleBaseY: 1,
+      scaleBaseZ: 1,
+      colorR: 1,
+      colorG: 1,
+      colorB: 1,
+      colorA: 1,
+    });
+
+  function soloParticle(overrides: Partial<EfxbnEffectSummary>): EfxbnPreviewParticle {
+    const controls = scaleControls();
+    const solo = block({
+      index: 0,
+      effectType: 3,
+      lifeTimeBase: 100,
+      numEmit: 1,
+      controlReferences: controls.references,
+      ...overrides,
+    });
+    const sourcePlan = plan([solo], controls.entries);
+    return simulateEfxbnEmitterPair(resolveEfxbnEmitterPairs(sourcePlan)[0], sourcePlan, 0)[0];
+  }
+
+  it("copies the X spawn size into Y and Z — the 33.efxbn sphere case", () => {
+    // Block 0 of wing_gundam_zero_rebellion_effect/0/0/33.efxbn authors sizeBase (2.5, 1, 1) with
+    // actionFlags 0x060A0011. `efxSpawnParticleCommon3rd` writes the randomised X result into all
+    // three components under `actionFlags & 0x10`, so the game draws a 2.5x sphere. Scaling only
+    // X turned it into an ellipsoid.
+    const particle = soloParticle({
+      sizeBase: [2.5, 1, 1, 0],
+      actionFlags: 0x10,
+    });
+
+    expect(particle.scale[0]).toBeCloseTo(2.5, 6);
+    expect(particle.scale[1]).toBeCloseTo(2.5, 6);
+    expect(particle.scale[2]).toBeCloseTo(2.5, 6);
+  });
+
+  it("leaves a non-uniform sizeBase alone when the flag is clear", () => {
+    // Block 5 of the same file: sizeBase (2.5, 0.5, 2.5) with actionFlags 0x000E0001 — a
+    // deliberately flattened ring, which must stay flattened.
+    const particle = soloParticle({
+      sizeBase: [2.5, 0.5, 2.5, 0],
+      actionFlags: 0,
+    });
+
+    expect(particle.scale[0]).toBeCloseTo(2.5, 6);
+    expect(particle.scale[1]).toBeCloseTo(0.5, 6);
+    expect(particle.scale[2]).toBeCloseTo(2.5, 6);
+  });
+
+  it("forces the billboard quad square too, since size comes from the same spawn record", () => {
+    const particle = soloParticle({
+      effectType: 1,
+      sizeBase: [3, 0.25, 1, 0],
+      actionFlags: 0x10,
+    });
+
+    expect(particle.size[0]).toBeCloseTo(particle.size[1], 6);
+  });
+
+  it("equalises the randomised size, not just the random factor", () => {
+    // sizeRandom differs per axis; under the flag every axis must land on the X result exactly.
+    const particle = soloParticle({
+      sizeBase: [4, 1, 9, 0],
+      sizeRandom: [0.5, 0.9, 0.1, 0],
+      actionFlags: 0x10,
+    });
+
+    expect(particle.scale[1]).toBeCloseTo(particle.scale[0], 9);
+    expect(particle.scale[2]).toBeCloseTo(particle.scale[0], 9);
+  });
+});
+
+describe("EFXBN emitter orientation", () => {
+  const HALF_PI = Math.PI / 2;
+  const orientControls = () =>
+    directControls({
+      speedBaseX: 0,
+      speedBaseY: 0,
+      speedBaseZ: 0,
+      scaleBaseX: 1,
+      scaleBaseY: 1,
+      scaleBaseZ: 1,
+      colorR: 1,
+      colorG: 1,
+      colorB: 1,
+      colorA: 1,
+      spawnForm0: 0,
+      spawnForm1: 0,
+    });
+
+  function firstParticle(
+    emitterOverrides: Partial<EfxbnEffectSummary>,
+    targetOverrides: Partial<EfxbnEffectSummary> = {},
+  ): EfxbnPreviewParticle {
+    const controls = orientControls();
+    const emitter = block({
+      index: 0,
+      effectType: 6,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 100,
+      intervalBase: 100,
+      numEmit: 1,
+      controlReferences: controls.references,
+      ...emitterOverrides,
+    });
+    const target = block({
+      index: 1,
+      effectType: 3,
+      lifeTimeBase: 100,
+      controlReferences: controls.references,
+      ...targetOverrides,
+    });
+    const sourcePlan = plan([emitter, target], controls.entries);
+    return simulateEfxbnEmitterPair(resolveEfxbnEmitterPairs(sourcePlan)[0], sourcePlan, 0)[0];
+  }
+
+  it("composes an XYZ euler with identity in both directions", () => {
+    const euler: [number, number, number] = [0.3, -0.7, 1.1];
+
+    expect(composeEfxbnEulerXyz([0, 0, 0], euler)[0]).toBeCloseTo(euler[0], 9);
+    expect(composeEfxbnEulerXyz([0, 0, 0], euler)[1]).toBeCloseTo(euler[1], 9);
+    expect(composeEfxbnEulerXyz([0, 0, 0], euler)[2]).toBeCloseTo(euler[2], 9);
+    expect(composeEfxbnEulerXyz(euler, [0, 0, 0])[0]).toBeCloseTo(euler[0], 9);
+    expect(composeEfxbnEulerXyz(euler, [0, 0, 0])[1]).toBeCloseTo(euler[1], 9);
+    expect(composeEfxbnEulerXyz(euler, [0, 0, 0])[2]).toBeCloseTo(euler[2], 9);
+  });
+
+  it("composes so that rotating by the result equals inner then outer", () => {
+    const outer: [number, number, number] = [0.4, 0.9, -0.2];
+    const inner: [number, number, number] = [-1.1, 0.25, 0.6];
+    const point: [number, number, number] = [0.3, -0.8, 1.7];
+
+    const stepwise = efxbnRotateByEulerXyz(efxbnRotateByEulerXyz(point, inner), outer);
+    const composed = efxbnRotateByEulerXyz(point, composeEfxbnEulerXyz(outer, inner));
+
+    for (const axis of [0, 1, 2] as const) {
+      expect(composed[axis]).toBeCloseTo(stepwise[axis], 9);
+    }
+  });
+
+  it("orients a particle by its emitter's rotationBase — the 33.efxbn ring case", () => {
+    // Blocks 2 and 4 of wing_gundam_zero_rebellion_effect/0/0/33.efxbn tilt their rings by 45 deg
+    // and (-55, 25) deg while the ring blocks themselves author no rotation. Ignoring the emitter
+    // left all three rings coplanar, which reads as flat overlapping circles.
+    const particle = firstParticle({ rotationBase: [Math.PI / 4, 0, 0, 0] });
+
+    expect(particle.rotationEuler[0]).toBeCloseTo(Math.PI / 4, 6);
+    expect(particle.rotationEuler[1]).toBeCloseTo(0, 6);
+    expect(particle.rotationEuler[2]).toBeCloseTo(0, 6);
+  });
+
+  it("keeps the particle's own rotation when its emitter is unrotated", () => {
+    const particle = firstParticle({}, { rotationBase: [0.5, -0.25, 0.75, 0] });
+
+    expect(particle.rotationEuler[0]).toBeCloseTo(0.5, 6);
+    expect(particle.rotationEuler[1]).toBeCloseTo(-0.25, 6);
+    expect(particle.rotationEuler[2]).toBeCloseTo(0.75, 6);
+  });
+
+  it("applies the emitter's rotation outside the particle's own", () => {
+    const outer: [number, number, number] = [Math.PI / 4, 0, 0];
+    const inner: [number, number, number] = [0, Math.PI / 3, 0];
+    const particle = firstParticle(
+      { rotationBase: [outer[0], outer[1], outer[2], 0] },
+      { rotationBase: [inner[0], inner[1], inner[2], 0] },
+    );
+
+    const expected = composeEfxbnEulerXyz(outer, inner);
+    for (const axis of [0, 1, 2] as const) {
+      expect(particle.rotationEuler[axis]).toBeCloseTo(expected[axis], 6);
+    }
+  });
+
+  it("rotates the spawn position into the emitter's frame", () => {
+    // Spawn form 3 lays a ring in XZ. A quarter turn about Z tips it into XY, so the sampled
+    // point must gain a Y component and lose its Z one.
+    const flat = firstParticle({ spawnFormType: 3, spawnFormLength: [5, 0, 0, 0] });
+    const tipped = firstParticle({
+      spawnFormType: 3,
+      spawnFormLength: [5, 0, 0, 0],
+      rotationBase: [0, 0, HALF_PI, 0],
+    });
+
+    expect(Math.hypot(...flat.position)).toBeCloseTo(5, 4);
+    expect(Math.hypot(...tipped.position)).toBeCloseTo(5, 4);
+    expect(Math.abs(flat.position[1])).toBeCloseTo(0, 6);
+    expect(Math.abs(tipped.position[1])).toBeGreaterThan(0.5);
+  });
+
+  it("leaves positionOffset outside the rotation, as the shader adds it last", () => {
+    // efxSpawnParticleCommon3rd line 794: position = emitterWorld + positionOffset + rotatedLocal.
+    const particle = firstParticle({
+      spawnFormType: 0,
+      spawnFormLength: [0, 0, 0, 0],
+      positionOffset: [3, 0, 0, 0],
+      rotationBase: [0, 0, HALF_PI, 0],
+    });
+
+    expect(particle.position[0]).toBeCloseTo(3, 6);
+    expect(particle.position[1]).toBeCloseTo(0, 6);
+    expect(particle.position[2]).toBeCloseTo(0, 6);
+  });
+});
+
+describe("EFXBN looping warm-up", () => {
+  const warmUpControls = () =>
+    directControls({
+      speedBaseX: 0,
+      speedBaseY: 0,
+      speedBaseZ: 0,
+      scaleBaseX: 1,
+      scaleBaseY: 1,
+      scaleBaseZ: 1,
+      colorR: 1,
+      colorG: 1,
+      colorB: 1,
+      colorA: 1,
+    });
+
+  function loopingPair(overrides: Partial<EfxbnEffectSummary> = {}) {
+    const controls = warmUpControls();
+    const emitter = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 20,
+      intervalBase: 1,
+      numEmit: 2,
+      actionFlags: 1,
+      controlReferences: controls.references,
+      ...overrides,
+    });
+    // A 40-frame particle emitted every frame saturates at 40x the first tick's burst — squarely
+    // in the corpus range where the wrap collapse is visible (median 4x, p90 30x).
+    const target = block({ index: 1, lifeTimeBase: 40, controlReferences: controls.references });
+    const sourcePlan = plan([emitter, target], controls.entries);
+    return { pair: resolveEfxbnEmitterPairs(sourcePlan)[0], sourcePlan };
+  }
+
+  it("warms a looping emitter to its saturation point so progress 0 is already steady state", () => {
+    const { pair } = loopingPair();
+
+    // delay 0 + target life 40: the first particle emitted dies exactly then, so the population
+    // has saturated.
+    expect(resolveEfxbnWarmUpFrames(pair)).toBe(40);
+  });
+
+  it("gives a one-shot emitter no warm-up so it is still watched from its start", () => {
+    const { pair } = loopingPair({ actionFlags: 0 });
+
+    expect(resolveEfxbnWarmUpFrames(pair)).toBe(0);
+  });
+
+  it("gives an emitter-less drawable no warm-up", () => {
+    const controls = warmUpControls();
+    const solo = block({ index: 0, lifeTimeBase: 30, controlReferences: controls.references });
+    const sourcePlan = plan([solo], controls.entries);
+
+    expect(resolveEfxbnWarmUpFrames(resolveEfxbnEmitterPairs(sourcePlan)[0])).toBe(0);
+  });
+
+  it("counts the emitter's delay into the warm-up", () => {
+    const { pair } = loopingPair({ delayEmitTimeBase: 12 });
+
+    expect(resolveEfxbnWarmUpFrames(pair)).toBe(52);
+  });
+
+  it("clamps a runaway warm-up to the maximum preview window", () => {
+    const controls = warmUpControls();
+    const emitter = block({
+      index: 0,
+      effectType: 9,
+      childIndexSize: 1,
+      childIndexArray: [1, -1, -1, -1, -1, -1, -1, -1],
+      lifeTimeBase: 20,
+      intervalBase: 1,
+      actionFlags: 1,
+      controlReferences: controls.references,
+    });
+    const target = block({ index: 1, lifeTimeBase: 90_000, controlReferences: controls.references });
+    const sourcePlan = plan([emitter, target], controls.entries);
+
+    expect(resolveEfxbnWarmUpFrames(resolveEfxbnEmitterPairs(sourcePlan)[0]))
+      .toBe(EFXBN_PREVIEW_MAX_FRAME_COUNT);
+  });
+
+  it("no longer collapses the population at the timeline wrap", () => {
+    const { pair, sourcePlan } = loopingPair();
+
+    const atStart = simulateEfxbnPreviewFrame(pair, sourcePlan, 0).length;
+    const atWrap = simulateEfxbnPreviewFrame(pair, sourcePlan, 120).length;
+
+    // Without the warm-up the timeline restarted at the first emission tick, so `atStart` was a
+    // fraction of `atWrap` and the whole cloud blinked out once per window.
+    expect(atStart).toBeGreaterThan(50);
+    expect(atStart).toBe(atWrap);
+  });
+
+  it("still lets a one-shot pair build up from nothing across the timeline", () => {
+    const { pair, sourcePlan } = loopingPair({ actionFlags: 0, lifeTimeBase: 200 });
+
+    const atStart = simulateEfxbnPreviewFrame(pair, sourcePlan, 0).length;
+    const later = simulateEfxbnPreviewFrame(pair, sourcePlan, 30).length;
+
+    expect(atStart).toBeLessThan(later);
   });
 });
 

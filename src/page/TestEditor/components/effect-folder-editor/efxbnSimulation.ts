@@ -124,6 +124,8 @@ const EFXBN_ACTION_FLAG_LOOP = 0x1;
 const EFXBN_ACTION_FLAG_FORCE_LOOP = 0x0800_0000;
 /** `actionFlags & 0x200` — suppresses the emitter's delay restart on a loop cycle. */
 const EFXBN_ACTION_FLAG_KEEP_DELAY = 0x200;
+/** `actionFlags & 0x10` — the spawn size's Y and Z take the X result, making the shape uniform. */
+const EFXBN_ACTION_FLAG_UNIFORM_SIZE = 0x10;
 
 /**
  * Number of frames one life cycle spans.
@@ -275,6 +277,93 @@ function rotateDirection(
   ];
 }
 
+/**
+ * Rotation matrix for an intrinsic XYZ euler, row-major, matching three.js `Euler` order `"XYZ"`.
+ *
+ * The preview feeds `rotationEuler` straight to a three.js object, so composing in any other
+ * convention would land the particle somewhere the renderer never puts it.
+ */
+function eulerXyzMatrix(euler: readonly [number, number, number]): number[] {
+  const [sx, sy, sz] = [Math.sin(euler[0]), Math.sin(euler[1]), Math.sin(euler[2])];
+  const [cx, cy, cz] = [Math.cos(euler[0]), Math.cos(euler[1]), Math.cos(euler[2])];
+  return [
+    cy * cz, -cy * sz, sy,
+    cx * sz + sx * sy * cz, cx * cz - sx * sy * sz, -sx * cy,
+    sx * sz - cx * sy * cz, sx * cz + cx * sy * sz, cx * cy,
+  ];
+}
+
+function multiply3x3(left: readonly number[], right: readonly number[]): number[] {
+  const out = new Array<number>(9).fill(0);
+  for (let row = 0; row < 3; row += 1) {
+    for (let column = 0; column < 3; column += 1) {
+      out[row * 3 + column] =
+        left[row * 3] * right[column] +
+        left[row * 3 + 1] * right[3 + column] +
+        left[row * 3 + 2] * right[6 + column];
+    }
+  }
+  return out;
+}
+
+/** Rotate a vector by an intrinsic XYZ euler. */
+export function efxbnRotateByEulerXyz(
+  value: readonly [number, number, number],
+  euler: readonly [number, number, number],
+): [number, number, number] {
+  const m = eulerXyzMatrix(euler);
+  return [
+    m[0] * value[0] + m[1] * value[1] + m[2] * value[2],
+    m[3] * value[0] + m[4] * value[1] + m[5] * value[2],
+    m[6] * value[0] + m[7] * value[1] + m[8] * value[2],
+  ];
+}
+
+/**
+ * Compose two intrinsic XYZ eulers, `outer` applied after `inner`, back into a single XYZ euler.
+ *
+ * Componentwise addition would be wrong whenever both rotations are non-zero, which is 35% of the
+ * shipped emitter/child pairs that need this — too many to fudge.
+ */
+export function composeEfxbnEulerXyz(
+  outer: readonly [number, number, number],
+  inner: readonly [number, number, number],
+): [number, number, number] {
+  const m = multiply3x3(eulerXyzMatrix(outer), eulerXyzMatrix(inner));
+  // three.js `Euler.setFromRotationMatrix` for order "XYZ".
+  const y = Math.asin(Math.min(1, Math.max(-1, m[2])));
+  if (Math.abs(m[2]) < 0.9999999) {
+    return [Math.atan2(-m[5], m[8]), y, Math.atan2(-m[1], m[0])];
+  }
+  return [Math.atan2(m[7], m[4]), y, 0];
+}
+
+/** `spawnFormType == 3` — the ring that also spreads along its own up axis. */
+const EFXBN_SPAWN_FORM_CYLINDER = 3;
+/**
+ * `emitAreaType == 1` fills the shape instead of seeding its edge.
+ *
+ * The shader picks the radius as `sqrt((r * r * 0.5) * u)` with `u` drawn over `[0, 2)`, which is
+ * `r * sqrt(U)` — the area-uniform sample. Any other value keeps the authored radius, putting
+ * every particle on the shell. The name is this file's, not the engine's: there is no enum table.
+ */
+const EFXBN_EMIT_AREA_UNIFORM = 1;
+
+/** The emitter's authored orientation, which every particle it spawns inherits. */
+function emitterRotationEuler(emitter: EfxbnEffectSummary): [number, number, number] {
+  return [emitter.rotationBase[0], emitter.rotationBase[1], emitter.rotationBase[2]];
+}
+
+function spawnFormRadius(
+  emitter: EfxbnEffectSummary,
+  authoredRadius: number,
+  random: RandomSource,
+): number {
+  return emitter.emitAreaType === EFXBN_EMIT_AREA_UNIFORM
+    ? authoredRadius * Math.sqrt(random.nextUnit())
+    : authoredRadius;
+}
+
 function spawnPositionAndDirection(
   emitter: EfxbnEffectSummary,
   plan: EffectFolderPreviewPlan,
@@ -298,16 +387,39 @@ function spawnPositionAndDirection(
     case 6:
       position = [0, (random.nextUnit() - 0.5) * lengths[0], 0];
       break;
+    case 0:
+    case 5: {
+      // `efxSpawnParticleCommon3rd` sends forms 0 and 5 down one branch that draws two angles as
+      // `float(lcg) * 2pi / 2^32 - pi`, then rotates the local offset `(0, 0, radius)` that every
+      // non-box form shares. Rotating `(0, 0, r)` by the spawn-system matrix is just its third
+      // column times r, and `efxbnSpawnBasis` above already documents that column as
+      // `(cos A sin B, -sin A, cos A cos B)` — so the spawn point lands on a sphere and the
+      // emission direction is the same unit vector. Form 0 keeps behaving as a point emitter
+      // because 97.9% of its shipped blocks author a zero radius.
+      const pitch = (random.nextUnit() * 2 - 1) * Math.PI;
+      const yaw = (random.nextUnit() * 2 - 1) * Math.PI;
+      const radius = spawnFormRadius(emitter, lengths[0], random);
+      direction = [
+        Math.cos(pitch) * Math.sin(yaw),
+        -Math.sin(pitch),
+        Math.cos(pitch) * Math.cos(yaw),
+      ];
+      position = [direction[0] * radius, direction[1] * radius, direction[2] * radius];
+      break;
+    }
+    case 2:
     case 3: {
       const angleStart = controlValue(emitter, plan, "spawnForm0", emitterProgress);
       const angleEnd = controlValue(emitter, plan, "spawnForm1", emitterProgress);
       const angle = angleStart + (angleEnd - angleStart) * random.nextUnit();
-      const radius = lengths[0];
-      position = [
-        Math.cos(angle) * radius,
-        (random.nextUnit() - 0.5) * lengths[1],
-        Math.sin(angle) * radius,
-      ];
+      const radius = spawnFormRadius(emitter, lengths[0], random);
+      // Only form 3 lifts the ring into a cylinder: the shader gates that term on `type == 3`
+      // alone, while forms 2, 3 and 7 share the curve-driven angle and the radius.
+      const height =
+        emitter.spawnFormType === EFXBN_SPAWN_FORM_CYLINDER
+          ? (random.nextUnit() - 0.5) * lengths[1]
+          : 0;
+      position = [Math.cos(angle) * radius, height, Math.sin(angle) * radius];
       direction = normalize3([position[0], 0, position[2]]);
       break;
     }
@@ -336,6 +448,10 @@ function spawnPositionAndDirection(
       break;
     }
     default:
+      // Only `spawnFormType == 7` still lands here (186 emitters, 5.8%). The shader routes it
+      // through the same curve-driven angle path as forms 2 and 3, but it additionally evaluates
+      // the `spawnForm2` / `spawnForm3` curves, and what those two feed is not decoded yet —
+      // so this stays an explicit unproven fallback rather than a guessed shape.
       direction = normalize3([
         random.nextSigned(),
         random.nextSigned(),
@@ -344,13 +460,27 @@ function spawnPositionAndDirection(
       break;
   }
 
+  // `efxSpawnParticleCommon3rd` reads the EMITTER's rotationBase (element dword 68 = `0x110`, at
+  // line 273) and composes it with the spawn-form rotation into the spawn-system matrix that the
+  // local offset is multiplied by. The emitter is the outer transform, so its rotation orients the
+  // whole shape — including the spread that was applied inside its own frame. Ignoring it left
+  // every emitter-tilted shape flat: 24.6% of shipped emitter/child pairs across 40.0% of files.
+  //
+  // `positionOffset` stays outside the rotation because the shader adds it last, at line 794:
+  // `position = emitterWorld + positionOffset + rotatedLocalOffset`.
+  const emitterRotation = emitterRotationEuler(emitter);
+  const orientedPosition = efxbnRotateByEulerXyz(position, emitterRotation);
+  const orientedDirection = efxbnRotateByEulerXyz(
+    rotateDirection(direction, spreadX, spreadY),
+    emitterRotation,
+  );
   return {
     position: [
-      position[0] + emitter.positionOffset[0],
-      position[1] + emitter.positionOffset[1],
-      position[2] + emitter.positionOffset[2],
+      orientedPosition[0] + emitter.positionOffset[0],
+      orientedPosition[1] + emitter.positionOffset[1],
+      orientedPosition[2] + emitter.positionOffset[2],
     ],
-    direction: normalize3(rotateDirection(direction, spreadX, spreadY)),
+    direction: normalize3(orientedDirection),
     color,
   };
 }
@@ -407,10 +537,6 @@ function simulateParticle(
     1 + random.nextSigned() * target.sizeRandom[1],
     1 + random.nextSigned() * target.sizeRandom[2],
   ];
-  if ((target.actionFlags & 0x10) !== 0) {
-    sizeRandom[1] = sizeRandom[0];
-    sizeRandom[2] = sizeRandom[0];
-  }
   const rotationBase: [number, number, number] = [
     target.rotationBase[0] + random.nextSigned() * target.rotationRandom[0],
     target.rotationBase[1] + random.nextSigned() * target.rotationRandom[1],
@@ -499,16 +625,45 @@ function simulateParticle(
   const scaleX = controlValue(target, plan, "scaleBaseX", progress);
   const scaleY = controlValue(target, plan, "scaleBaseY", progress);
   const scaleZ = controlValue(target, plan, "scaleBaseZ", progress);
+  // `efxSpawnParticleCommon3rd` stores the randomised spawn size at instance `+44` and, under
+  // `actionFlags & 0x10`, writes the **X result** into Y and Z as well (lines 1443-1445):
+  //
+  //     U2[+44]   = sizeBase.x * (1 + signedRand * sizeRandom.x)
+  //     U2[+44+1] = uniform ? U2[+44] : sizeBase.y * (1 + signedRand * sizeRandom.y)
+  //     U2[+44+2] = uniform ? U2[+44] : sizeBase.z * (1 + signedRand * sizeRandom.z)
+  //
+  // Equalising only the random factor, as this did before, still let a non-uniform `sizeBase`
+  // through — which stretched 31.3% of all shipped drawable blocks (501 models, 456 billboards,
+  // 219 strips). `33.efxbn` block 0 is the reference case: `sizeBase (2.5, 1, 1)` with the flag
+  // set is a 2.5x sphere in game, and was an ellipsoid here. The `scaleBase*` curves multiply
+  // per axis afterwards, so they stay outside the copy.
+  const spawnSize: [number, number, number] = [
+    target.sizeBase[0] * sizeRandom[0],
+    target.sizeBase[1] * sizeRandom[1],
+    target.sizeBase[2] * sizeRandom[2],
+  ];
+  if ((target.actionFlags & EFXBN_ACTION_FLAG_UNIFORM_SIZE) !== 0) {
+    spawnSize[1] = spawnSize[0];
+    spawnSize[2] = spawnSize[0];
+  }
   const scale: [number, number, number] = [
-    target.sizeBase[0] * sizeRandom[0] * scaleX,
-    target.sizeBase[1] * sizeRandom[1] * scaleY,
-    target.sizeBase[2] * sizeRandom[2] * scaleZ,
+    spawnSize[0] * scaleX,
+    spawnSize[1] * scaleY,
+    spawnSize[2] * scaleZ,
   ];
-  const rotationEuler: [number, number, number] = [
-    rotationBase[0] + target.rotationSpeed[0] * age,
-    rotationBase[1] + target.rotationSpeed[1] * age,
-    rotationBase[2] + target.rotationSpeed[2] * age,
-  ];
+  // The instance matrix the model draw path consumes is built from the spawn system, which the
+  // emitter's rotation is composed into, times the particle's own rotation — so the emitter is the
+  // outer transform here too. `33.efxbn` is the reference case: its two ring emitters tilt by 45
+  // and (-55, 25) degrees while the ring blocks author no rotation of their own, so dropping the
+  // emitter left all three rings coplanar.
+  const rotationEuler = composeEfxbnEulerXyz(
+    pair.emitter ? emitterRotationEuler(pair.emitter) : [0, 0, 0],
+    [
+      rotationBase[0] + target.rotationSpeed[0] * age,
+      rotationBase[1] + target.rotationSpeed[1] * age,
+      rotationBase[2] + target.rotationSpeed[2] * age,
+    ],
+  );
   return {
     id: particleId,
     emitterEffectIndex: pair.emitter?.index ?? null,
@@ -877,6 +1032,54 @@ export function resolveEfxbnPreviewFrameCount(blocks: readonly EfxbnEffectSummar
   return Math.min(EFXBN_PREVIEW_MAX_FRAME_COUNT, Math.max(floor, Math.ceil(longest)));
 }
 
+/**
+ * Frames to run a pair through before the timeline's first frame.
+ *
+ * A looping emitter never restarts in game, but the preview replays from tick 0 at every wrap, so
+ * its population falls back to whatever one emission tick produces and then rebuilds. Across the
+ * shipped corpus the steady-state population is more than 3x that first burst on 52.3% of looping
+ * emitter/child edges (median 4x, p90 30x, max 120x), which is the cloud visibly blinking out once
+ * per window on 49.1% of files.
+ *
+ * The population saturates exactly when the first particle emitted reaches its lifetime, so
+ * warming up by the emitter's delay plus the target's full randomised life is enough — and no
+ * more, because every warm-up frame is replayed on every rendered frame.
+ *
+ * One-shot pairs deliberately get nothing. They are meant to be watched from their start, which is
+ * also what keeps a file that mixes looping and one-shot blocks honest: warming the whole effect
+ * would finish its one-shot half before progress 0.
+ */
+export function resolveEfxbnWarmUpFrames(pair: EfxbnEmitterPair): number {
+  const emitter = pair.emitter;
+  if (!emitter) return 0;
+  if ((efxbnRuntime(emitter).actionFlags & EFXBN_ACTION_FLAG_LOOP) === 0) return 0;
+  const saturation = Math.max(0, emitter.delayEmitTimeBase) + maxBlockLifeTime(pair.target);
+  return Math.min(EFXBN_PREVIEW_MAX_FRAME_COUNT, Math.ceil(saturation));
+}
+
+/**
+ * Simulate a pair at a timeline frame, warming a looping emitter into steady state first.
+ *
+ * Every preview surface goes through here so the warm-up rule lives in one place;
+ * `simulateEfxbnEmitterPair` stays a pure "state at frame N" function that the emission-mechanics
+ * tests can drive directly.
+ */
+export function simulateEfxbnPreviewFrame(
+  pair: EfxbnEmitterPair,
+  plan: EffectFolderPreviewPlan,
+  timelineFrame: number,
+  maxParticles = 2_048,
+  meshEmitterPointsByEffectIndex?: ReadonlyMap<number, readonly EfxbnMeshEmitterPoint[]>,
+): EfxbnPreviewParticle[] {
+  return simulateEfxbnEmitterPair(
+    pair,
+    plan,
+    Math.max(0, timelineFrame) + resolveEfxbnWarmUpFrames(pair),
+    maxParticles,
+    meshEmitterPointsByEffectIndex,
+  );
+}
+
 export type EfxbnModelPoolRequirement = {
   pair: EfxbnEmitterPair;
   required: number;
@@ -915,7 +1118,7 @@ export function resolveEfxbnModelPoolPlan(
     for (let frame = 0; frame <= frameCount; frame += 1) {
       required = Math.max(
         required,
-        simulateEfxbnEmitterPair(pair, plan, frame, EFXBN_SIMULATION_LIMIT).length,
+        simulateEfxbnPreviewFrame(pair, plan, frame, EFXBN_SIMULATION_LIMIT).length,
       );
       if (required >= EFXBN_SIMULATION_LIMIT) break;
     }

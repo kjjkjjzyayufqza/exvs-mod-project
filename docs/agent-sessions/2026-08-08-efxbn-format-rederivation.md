@@ -879,3 +879,259 @@ resolves through the shared pack, its `.numdlb` and `.numshb` exist on disk and 
 missing, and block 0 binds exactly that hash. A frontend that still draws proxy geometry for it is
 running an `inspect_effect_folder` that predates shared-pack resolution, which
 `assertResolvedInventoryShape` now rejects by name instead of letting the preview degrade.
+
+## 2026-08-16 Spawn shapes, the strip pivot, and a ranking mistake worth keeping
+
+### Soft particles rank far lower than the flag count suggests
+
+`enableSoftParticle` is set on 66.3% of drawable blocks, which made it look like the largest
+remaining shading gap. It is not, because the fade needs something to fade *against*:
+
+| measurement | value |
+| --- | --- |
+| blocks with `enableSoftParticle` set | 2495 / 3761 = 66.3% |
+| blocks that **write depth** after runtime normalization | 69 / 3761 = 1.8% |
+| files containing a soft block | 492 / 678 = 72.6% |
+| files containing any depth writer | 43 / 678 = 6.3% |
+| files where **both** coexist | 31 / 678 = 4.6% |
+
+The preview scene holds no opaque geometry — the only non-effect object is drei's `Grid`, an
+alpha-blended shader plane. And the two states are mutually exclusive by construction: the
+normalization sets `zWriteEnable = 1` for `blendState == 0`, then clears it whenever
+`enableSoftParticle != 0`. A block that opts into soft particles opts out of writing depth.
+
+So the fade would read an empty depth buffer, compute `clamp((far - fragDepth) / range, 0, 1) = 1`,
+and multiply alpha by 1 — no visible change on 95.4% of files. The real prerequisite is putting the
+host character or stage model into the preview, which is what soft particles fade against in game.
+
+Two findings kept for whoever implements it: the canvas is created with
+`logarithmicDepthBuffer: true`, so the shader's `A / (z - B)` linearization does not apply to
+three's depth encoding; and the maths itself is fully transcribed in the plan from
+`efxDrawModelSoftPS`.
+
+### Spawn shapes: the same lesson, measured
+
+"36.5% of emitters fall into the unhandled `default` branch" was also the wrong number. Most
+unhandled emitters author a zero radius, where the generic "origin plus random direction" already
+matched. Measuring `spawnFormLength[0]` per form:
+
+| form | emitters | radius == 0 | radius != 0 | max radius |
+| --- | --- | --- | --- | --- |
+| 0 | 1602 | 1568 (97.9%) | 34 | 10 |
+| 2 | 388 | 47 | **341 (87.9%)** | **150** |
+| 5 | 597 | 412 | 185 | 10 |
+| 7 | 186 | 89 | 97 | 80 |
+
+The honest figure is **657 / 3213 = 20.4%** of emitters spawning in the wrong place — and form 2,
+not form 5, carries most of it, with radii up to 150 units collapsed onto a single point.
+
+### What the shader actually does
+
+`efxSpawnParticleCommon3rd` dispatches on element dword 17 (`0x44`) read at line 260:
+
+```text
+type 0, 5      two angles as float(lcg) * 2pi / 2^32 - pi
+type 4, 8      _640 = lcg % 6 picks one of six face directions
+type 1, 6      one angle
+type 9, 10     mesh emitter point
+otherwise      types 2, 3, 7 — curve-driven angle from spawnForm0 / spawnForm1
+```
+
+Every non-box, non-mesh form then shares one local offset, `(0, 0, radius)`, with
+
+```text
+radius = emitAreaType == 1 ? sqrt((r * r * 0.5) * u)   // u over [0, 2), i.e. r * sqrt(U)
+                           : r
+```
+
+Rotating `(0, 0, r)` by the spawn-system matrix is simply its third column times r, and that column
+was already documented in `efxbnSimulation.ts` from the same shader as
+`(cos A sin B, -sin A, cos A cos B)` — an independent corroboration of the sphere formula from
+earlier work rather than a fresh guess.
+
+`_643 = (type == 3)` gates the cylinder-height term **and nothing else**, which makes form 2 exactly
+form 3 without the height: a flat ring.
+
+Shipped: forms 0 and 5 as spheres, form 2 as a flat ring, and area sampling on forms 0/2/3/5. The
+area rule also corrected form 3, which had been using a fixed radius on all 230 of its emitters
+including the 65 that ask for area sampling.
+
+Left alone deliberately: form 7 (186 emitters) additionally evaluates `spawnForm2` / `spawnForm3`
+at line 635 and what those feed is not decoded, so it stays in an explicit unproven fallback; and
+box forms 4/8, where the preview fills the volume but the shader picks one of six faces.
+
+### Strip `centerPivot.x`
+
+Billboards honoured `centerPivot`, strips did not, so a non-zero pivot — 20.0% of shipped strips —
+left the ribbon centred on a path the game draws it beside.
+`efxExtractDrawInfoStrip3rd` reads `_1569` at line 223 from element dword 88 (`0x160`) and places
+the edges at
+
+```text
+edgeA = centre - side * halfWidth * (pivotX + 1)
+edgeB = centre - side * halfWidth * (pivotX - 1)
+```
+
+which is the symmetric `centre +/- halfWidth` shifted by `halfWidth * pivotX`. The preview's strip
+vertex shader multiplies `ribbonSide * ribbonWidth`, so the shift folds into the side value.
+
+The magnitude is proven; which edge the shader's side vector calls positive is not, so a mirrored
+pivot would slide the ribbon to the other side of its path. Recorded at the call site rather than
+papered over — a centred ribbon is wrong for certain, an off-centre one is right in magnitude.
+
+## 2026-08-16 (later) Looping warm-up, and the shading backlog collapses to one blocker
+
+### Looping warm-up
+
+"57.4% of files contain a looping block" is a flag count. The visible quantity is how far the
+population falls at the timeline wrap, and that is static-computable:
+
+```text
+steadyState ~= numEmit * (childLifeTime / interval)
+firstTick    = numEmit
+rampRatio    = childLifeTime / max(1, intervalBase)
+```
+
+| rampRatio | share of looping emitter/child pairs |
+| --- | --- |
+| > 1.5 | 65.1% |
+| **> 3** | **52.3%** (median 4.0, p90 30, max 120) |
+| > 10 | 26.4% |
+
+**49.1% of files** hold at least one pair above 3x — the cloud visibly collapses to a fraction and
+rebuilds, once per window. Unlike the soft-particle case the flag count and the visible share
+broadly agree, so the item survived re-measurement.
+
+`resolveEfxbnWarmUpFrames(pair)` returns `delay + targetLife` for a looping emitter and 0 for
+everything else; `simulateEfxbnPreviewFrame` adds it to the timeline frame. The population
+saturates exactly when the first particle emitted reaches its lifetime, so that is both sufficient
+and minimal. Per-pair rather than per-effect is what makes a mixed file work: the looping half
+starts in steady state, the one-shot half still starts from nothing.
+
+Cost, measured rather than assumed: warm-up frames over looping pairs are p50 = 8, p90 = 38,
+p99 = 100, max = 207. Nothing reaches the 600 clamp, so the typical addition is single-digit ticks
+per rendered frame.
+
+Residual: both ends of the window are now in steady state so the population no longer jumps, but
+the particles across the wrap are different particles, because the window is not constrained to a
+whole number of emitter cycles.
+
+### The whole remaining shading backlog is one blocked group
+
+Reading which texture registers each pixel-shader variant binds splits the backlog far more
+usefully than any individual percentage:
+
+| variant | texture slots | needs a scene input? |
+| --- | --- | --- |
+| `efxDrawModelPS` (base) | t0 | no — done |
+| `efxDrawModelAddMixPS` | t0 | no — done |
+| `efxDrawModelHLightPS` | t0 | no — **byte-identical to the base shader** |
+| `efxDrawModelColorExPS` | t0, t1, t8 | no — the block's own offset map, done |
+| `efxDrawModelMultiUVPS` | t0, t3, t4, t8 | no — effect textures plus the mesh's 2nd UV set |
+| `efxDrawModelSoftPS` | t0, **t7** | **yes — scene depth** |
+| `efxDrawModelLightPS` | t0, t2, **t5 cube** | **yes — environment cube map** |
+
+Two findings fall out of this.
+
+**HLight is a phantom.** `diff` of `efxDrawModelHLightPS` against `efxDrawModelPS` is empty — the
+variant adds nothing at the pixel level, so selecting it can never look different from the base
+shader the preview already draws. The 2.4% ledger row was measuring a variant name, not a
+behaviour.
+
+**Everything still open below the self-contained tier waits on one prerequisite.** Soft needs a
+depth buffer, Light needs an environment cube (it samples `TextureCube` at t5 with a reflection
+vector at line 121), the normal map feeds that same lighting path, and the ColorEx `0x200` grab
+needs the framebuffer. The effect preview has none of them: no opaque geometry, no depth pre-pass,
+no environment map. In game all four are computed against the stage and the unit the effect is
+attached to.
+
+So the next infrastructure step is not any single shading term — it is giving the preview the
+game's scene context. That one feature unblocks 5.5% + 4.3% + 1.8% of blocks plus soft particle's
+real share, and is also the only way to make the preview's framing and scale trustworthy.
+
+### Strip UV axes: stale row, partially advanced
+
+The 2026-08-09 roadmap's "strip UV axes transposed" no longer describes the code — the transpose
+was fixed and has a test. Re-deriving it pinned the vertex layout: `efxDrawFaceVS` takes
+`float4 POSITION; float4 COLOR; float2 TEXCOORD; float2 TEXCOORD_1`, exactly the three float4s per
+vertex that `efxConstructDrawBufferStrip3rd` writes.
+
+Per invocation the shader emits two vertices that share RGB and both V components and differ in
+alpha and both U components. Whether those two vertices are the ribbon's two *edges* (making U run
+across the width, i.e. the current code is transposed) or two *consecutive nodes* (making the
+current code right) is not settled; the differing alpha argues for consecutive nodes, since a node
+carries its own `prevColorAlpha` / `currentColorAlpha`. Settling it needs the index buffer traced.
+Recorded rather than acted on — flipping the implementation on this evidence would trade one guess
+for another.
+
+## 2026-08-16 (later still) What `33.efxbn` was actually showing
+
+The user's description sharpened from "a flat circle" to "**an oval and 2D screen effects**", and
+those two words turned out to name two separate, large bugs — neither of them the shared-pack
+resolution that the earlier "flat circle" report was.
+
+`wing_gundam_zero_rebellion_effect/0/0/33.efxbn` is six blocks, zero billboards: a sphere from the
+shared pack plus three rings from the pack's own files. The EXVS2 wiki describes the move as
+deploying a blue **spherical** effect that jams guidance, which independently corroborates the
+geometry this file encodes.
+
+### "椭圆形" — the uniform-size flag
+
+Block 0 authors `sizeBase = (2.5, 1.0, 1.0)` and all three `scaleBase*` curves are constant 1.0, so
+the preview scaled the sphere 2.5x on X alone: an ellipsoid. Blocks 1 and 3 carry the *same* triple,
+which is the tell — a designer does not stretch a sphere and two rings identically on one axis.
+
+`efxSpawnParticleCommon3rd` lines 1443-1445 store the randomised spawn size and gate it on
+`actionFlags & 0x10`:
+
+```text
+U2[+44]   = sizeBase.x * (1 + signedRand * sizeRandom.x)
+U2[+44+1] = uniform ? U2[+44] : sizeBase.y * (1 + signedRand * sizeRandom.y)
+U2[+44+2] = uniform ? U2[+44] : sizeBase.z * (1 + signedRand * sizeRandom.z)
+```
+
+Y and Z take the **X result** — the whole randomised size, not just its random factor. The preview
+had implemented only half of that, copying `sizeRandom[0]` into `sizeRandom[1..2]` and leaving the
+non-uniform `sizeBase` to come through anyway.
+
+Corpus impact: `actionFlags & 0x10` is set on 37.3% of drawable blocks, and **31.3% of all drawable
+blocks (1176 — 501 models, 456 billboards, 219 strips) also carry a non-uniform `sizeBase`**, so
+they were all rendered stretched. The most common distortions are 2x, 5x, 1.5x and 10x on two axes.
+
+Block 5 of the same file is the control: `sizeBase (2.5, 0.5, 2.5)` with `actionFlags 0x000E0001` —
+flag clear, so it stays a deliberately flattened ring. The flag reading is consistent with both
+halves of the file.
+
+### "2D 屏幕特效" — the emitter's own orientation
+
+Blocks 2 and 4 are emitters with `rotationBase` of 45 degrees and (-55, 25) degrees; the ring blocks
+they spawn author no rotation at all. The preview built a particle's `rotationEuler` from the
+**target** block only, so all three rings came out coplanar — a stack of flat circles.
+
+`efxSpawnParticleCommon3rd` reads the **emitter's** `rotationBase` at line 273 (element dword 68 =
+`0x110`), builds a rotation matrix from it at lines 459-476, and composes it with the spawn-form
+rotation at lines 1194-1212 into the spawn-system matrix that the local offset is multiplied by.
+`efxExtractDrawInfoModel3rd` reads only the translation (dwords 3/7/11) out of a per-instance 4x4
+matrix buffer, so a model's orientation rides on that instance matrix — which the spawn system,
+emitter rotation included, builds.
+
+The emitter is the **outer** transform: it orients the spawn shape, the spread applied inside its
+own frame, and the particle's own rotation. `positionOffset` stays outside it, because the shader
+adds it last (line 794: `position = emitterWorld + positionOffset + rotatedLocalOffset`).
+
+Corpus impact: **24.6% of emitter/child pairs across 40.0% of files** have a rotated emitter. Of
+those, 65% have a child with no rotation of its own (composition is trivial) but 35% have both —
+too many to fake with componentwise euler addition, so the composition goes through real matrices
+in three.js's `"XYZ"` convention, which is what the renderer consumes.
+
+### Result
+
+| block | model | before | after |
+| --- | --- | --- | --- |
+| 0 | sphere_001 | scale (2.5, 1, 1) — ellipsoid | (2.5, 2.5, 2.5) — sphere |
+| 1 | ring_001 | (2.5, 1, 1), 0 deg | (2.5, 2.5, 2.5), 0 deg |
+| 3 | ring_002 | (2.5, 1, 1), **0 deg** | (2.5, 2.5, 2.5), **45 deg** |
+| 5 | ring_002 | (2.5, 0.5, 2.5), **0 deg** | unchanged scale, **(-55, 25) deg** |
+
+An X-stretched blob with three coplanar flat rings becomes a uniform sphere wrapped by three rings
+on distinct axes.

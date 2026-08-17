@@ -117,6 +117,17 @@ export function buildEfxbnStripMeshData(
     const offsetOffsetY = finiteOr(offsetUvTransform.offset[1], 0);
     const baseVertex = data.sides.length;
     const runtime = efxbnRuntime(target);
+    // `efxExtractDrawInfoStrip3rd` places the two ribbon edges at
+    // `centre - side * halfWidth * (pivotX + 1)` and `centre - side * halfWidth * (pivotX - 1)`,
+    // i.e. the symmetric `centre +/- halfWidth` shifted by `halfWidth * pivotX` along the ribbon's
+    // side vector. The vertex shader multiplies `ribbonSide * ribbonWidth`, so folding the shift
+    // into the side value reproduces the offset exactly. Non-zero on 20.0% of shipped strips.
+    //
+    // Proven: the magnitude, `halfWidth * |pivotX|`. Unproven: which of the two edges the shader's
+    // side vector calls positive, so a mirrored pivot would slide the ribbon to the opposite side
+    // of its path. Centred ribbons (pivotX == 0) are unaffected either way, and an off-centre
+    // ribbon is closer to the game than a centred one regardless of the sign.
+    const sidePivot = finiteOr(target.centerPivot[0], 0);
     history.forEach((node, index) => {
       const previous = history[Math.max(0, index - 1)].position;
       const next = history[Math.min(history.length - 1, index + 1)].position;
@@ -128,7 +139,7 @@ export function buildEfxbnStripMeshData(
         data.centers.push(...node.position);
         data.previousCenters.push(...previous);
         data.nextCenters.push(...next);
-        data.sides.push(side);
+        data.sides.push(side - sidePivot);
         data.widths.push(node.width);
         // `efxConstructDrawBufferStrip3rd` writes the per-node `uv_*_u` into the vertex's U and
         // the two ribbon edges into V, so U runs along the length and V across the width.

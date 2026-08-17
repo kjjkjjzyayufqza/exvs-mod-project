@@ -26,7 +26,7 @@ import {
   bindEfxbnModelInstanceSlots,
   EFXBN_PREVIEW_FPS,
   isEfxbnEmitterBlock,
-  simulateEfxbnEmitterPair,
+  simulateEfxbnPreviewFrame,
   type EfxbnModelPoolRequirement,
   efxbnRuntime,
   DRAW_SCHEME_FULL_BRIGHTNESS,
@@ -283,7 +283,7 @@ export function EfxbnDiagnosticOverlay({
       const effectAddMix = target.blendState === EFXBN_BLEND_STATE_ADD_MIX;
       const effectColorBorder = usesEfxbnBorderAddressing(textureBinding?.parameter.addressingMode);
       const effectOffsetBorder = usesEfxbnBorderAddressing(offsetBinding?.parameter.addressingMode);
-      const particles = simulateEfxbnEmitterPair(
+      const particles = simulateEfxbnPreviewFrame(
         requirement.pair,
         livePlan,
         frame,

@@ -65,6 +65,48 @@ describe("EFXBN strip ribbon geometry", () => {
     expect(data.colors.at(-1)).toBeCloseTo(0.8, 6);
   });
 
+  it("slides both ribbon edges to one side when centerPivot.x is -1", () => {
+    const particle = {
+      history: [
+        stripNode([0, 0, 0], 0.5, [1, 1, 1, 1]),
+        stripNode([1, 0, 0], 0.5, [1, 1, 1, 1]),
+      ],
+      size: [0.2, 0.1],
+      color: [1, 1, 1, 1],
+    } as EfxbnPreviewParticle;
+    const centred = makeEfxbnEffectBlock({ effectType: 5, stripSegmentSplitNum: 1 });
+    const anchored = makeEfxbnEffectBlock({
+      effectType: 5,
+      stripSegmentSplitNum: 1,
+      centerPivot: [-1, 0],
+    });
+
+    // `efxExtractDrawInfoStrip3rd` puts the edges at centre - side*halfWidth*(pivotX +/- 1), so a
+    // zero pivot straddles the path and -1 pushes the whole ribbon onto one side of it.
+    expect(buildEfxbnStripMeshData([particle], centred, 100).sides).toEqual([-1, 1, -1, 1]);
+    expect(buildEfxbnStripMeshData([particle], anchored, 100).sides).toEqual([0, 2, 0, 2]);
+  });
+
+  it("keeps ribbon UVs spanning the full width regardless of the pivot", () => {
+    const particle = {
+      history: [
+        stripNode([0, 0, 0], 0.5, [1, 1, 1, 1]),
+        stripNode([1, 0, 0], 0.5, [1, 1, 1, 1]),
+      ],
+      size: [0.2, 0.1],
+      color: [1, 1, 1, 1],
+    } as EfxbnPreviewParticle;
+    const anchored = makeEfxbnEffectBlock({
+      effectType: 5,
+      stripSegmentSplitNum: 1,
+      centerPivot: [0.5, 0],
+    });
+
+    const data = buildEfxbnStripMeshData([particle], anchored, 100);
+    // V still runs 0..1 across the ribbon; the pivot moves the geometry, not the texture.
+    expect([data.uvs[1], data.uvs[3]]).toEqual([0, 1]);
+  });
+
   /**
    * `efxConstructDrawBufferStrip3rd` emits one quad per node pair and writes
    * `(uv_prev_u | uv_current_u, edgeV)` into each vertex's UV, where the two edge V values are

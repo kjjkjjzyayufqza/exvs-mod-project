@@ -22,7 +22,7 @@ import type { EfxbnMeshEmitterPoint } from "./efxbnMeshEmitter";
 import {
   DRAW_SCHEME_FULL_BRIGHTNESS,
   resolveEfxbnEmitterPairs,
-  simulateEfxbnEmitterPair,
+  simulateEfxbnPreviewFrame,
   type EfxbnEmitterPair,
   isEfxbnStripBlock,
   efxbnRuntime,
@@ -241,7 +241,7 @@ function EfxbnStripLayer({
     const mesh = meshRef.current;
     if (!mesh) return;
     const frame = (progressRef.current / 100) * frameCount;
-    const particles = simulateEfxbnEmitterPair(
+    const particles = simulateEfxbnPreviewFrame(
       pair,
       livePlan(plan, controlLookupEntriesRef),
       frame,

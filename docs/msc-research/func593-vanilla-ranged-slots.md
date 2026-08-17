@@ -92,6 +92,10 @@ if (global252 && global722)
 
 这看起来像“取消”，所以旧文档会误写成 cancel。调用条件是 **没弹药**，不是玩家 BD cancel。
 
+招内「点按后停掉当前照射、再打下一发」不要塞进 `678`。`func_596` 从 shoot 置 `global252` 只会进 `679`。  
+照射停法、点按窗、以及为什么 `0x12` 不够，见
+[alt2-gerobi-stop-and-followup](./alt2-gerobi-stop-and-followup.md)。
+
 ## 命名
 
 新写 `func_593` 动作时用：
