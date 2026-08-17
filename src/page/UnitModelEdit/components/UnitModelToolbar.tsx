@@ -1,5 +1,6 @@
 import {
   Activity,
+  ArchiveRestore,
   Axis3D,
   Boxes,
   ClipboardCopy,
@@ -39,6 +40,7 @@ type UnitModelToolbarProps = {
   canExportModels: boolean;
   onOpenFolder: () => void;
   onExtractFhm2d: () => void;
+  onOpenExvsCommon: () => void;
   onUseLoadedRoot: () => void;
   onValidate: () => void;
   onRepack: () => void;
@@ -67,6 +69,7 @@ export function UnitModelToolbar({
   canExportModels,
   onOpenFolder,
   onExtractFhm2d,
+  onOpenExvsCommon,
   onUseLoadedRoot,
   onValidate,
   onRepack,
@@ -106,6 +109,10 @@ export function UnitModelToolbar({
           <DropdownMenuItem onClick={onExtractFhm2d}>
             <PackageOpen className="mr-2 h-3.5 w-3.5" />
             Extract .fhm2d to folders
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onOpenExvsCommon}>
+            <ArchiveRestore className="mr-2 h-3.5 w-3.5" />
+            Open / Extract EXVS Common
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={onUseLoadedRoot} disabled={!canUseLoadedRoot}>

@@ -43,6 +43,7 @@ type ShlEditorModalWindowProps = {
   skipActivate?: boolean;
   viewportSuspend?: ModalViewportSuspendInteraction;
   modelFolderNames?: string[];
+  bodySlotRequired?: boolean;
 };
 
 export function ShlEditorModalWindow({
@@ -57,6 +58,7 @@ export function ShlEditorModalWindow({
   skipActivate,
   viewportSuspend,
   modelFolderNames,
+  bodySlotRequired = true,
 }: ShlEditorModalWindowProps) {
   const dirty = isShlDraftDirty(session.baseData, session.draftData);
   const titleId = `shl-editor-title-${session.id}`;
@@ -89,7 +91,7 @@ export function ShlEditorModalWindow({
           const draft = draftRef.current;
           if (!savingRef.current && draft && !loadingRef.current) {
             try {
-              assertShlValidForSave(draft);
+              assertShlValidForSave(draft, { requireBody: bodySlotRequired });
             } catch (err) {
               toast.error(String(err));
               return;
@@ -101,7 +103,7 @@ export function ShlEditorModalWindow({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onSave, titleId]);
+  }, [bodySlotRequired, onSave, titleId]);
 
   const title = fileBasename(session.filePath);
   const footer =
@@ -151,7 +153,7 @@ export function ShlEditorModalWindow({
             const d = session.draftData;
             if (!d) return;
             try {
-              assertShlValidForSave(d);
+              assertShlValidForSave(d, { requireBody: bodySlotRequired });
             } catch (e) {
               toast.error(String(e));
               return;
@@ -209,6 +211,7 @@ export function ShlEditorModalWindow({
             onChange={onDraftChange}
             disabled={session.saving}
             modelFolderNames={modelFolderNames}
+            bodySlotRequired={bodySlotRequired}
           />
         </div>
       ) : (

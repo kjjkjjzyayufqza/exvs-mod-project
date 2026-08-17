@@ -156,6 +156,8 @@ mod tests {
         let cases = [
             ("character", Fhm2dFormat::Character),
             ("fhm2d_character", Fhm2dFormat::Character),
+            ("exvs_common", Fhm2dFormat::ExvsCommon),
+            ("fhm2d_exvs_common", Fhm2dFormat::ExvsCommon),
             ("effect", Fhm2dFormat::Effect),
             ("fhm2d_effect", Fhm2dFormat::Effect),
             ("motion", Fhm2dFormat::Motion),

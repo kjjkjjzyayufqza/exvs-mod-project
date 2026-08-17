@@ -22,6 +22,7 @@ type SsbhFileEditorHostsProps = SsbhFileEditorHostProps & {
   viewportSuspend?: ModalViewportSuspendInteraction;
   /** Structure-JSON model folder names in order; index = folder_index. Enables SHL model resolution. */
   shlModelFolderNames?: string[];
+  shlBodySlotRequired?: boolean;
 };
 
 type GuardDialogProps = {
@@ -82,6 +83,7 @@ export function SsbhFileEditorHosts({
   vernier,
   viewportSuspend,
   shlModelFolderNames,
+  shlBodySlotRequired = true,
 }: SsbhFileEditorHostsProps) {
   return (
     <>
@@ -172,6 +174,7 @@ export function SsbhFileEditorHosts({
         onReset={shl.onReset}
         viewportSuspend={viewportSuspend}
         modelFolderNames={shlModelFolderNames}
+        bodySlotRequired={shlBodySlotRequired}
       />
       <GuardDialog
         label="SHL"

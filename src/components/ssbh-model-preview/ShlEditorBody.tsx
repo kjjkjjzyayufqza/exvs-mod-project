@@ -78,6 +78,7 @@ type ShlEditorBodyProps = {
   disabled?: boolean;
   /** Structure-JSON model folder names in order; index = folder_index. */
   modelFolderNames?: string[];
+  bodySlotRequired?: boolean;
 };
 
 export function ShlEditorBody({
@@ -85,6 +86,7 @@ export function ShlEditorBody({
   onChange,
   disabled = false,
   modelFolderNames,
+  bodySlotRequired = true,
 }: ShlEditorBodyProps) {
   const reactId = useId();
   const fid = formIdPart(reactId);
@@ -162,12 +164,12 @@ export function ShlEditorBody({
             )}
           >
             {bodyCount === 0 && <TriangleAlert className="h-3.5 w-3.5" />}
-            {bodyCount} required
+            {bodyCount} {bodySlotRequired ? "required" : "allowed"}
           </div>
         </div>
       </div>
 
-      {bodyCount === 0 && (
+      {bodyCount === 0 && bodySlotRequired && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-600 dark:text-amber-400">
           At least one Body (type 0) slot is required, or the game will error on this package.
         </p>

@@ -495,29 +495,16 @@ fn collect_numatb_references(
     {
         let path = resolve_file_path(&doc.json_dir, &entry.file_url);
         let label = file_basename(&entry.file_url);
-        let bytes = match fs::read(&path) {
-            Ok(bytes) => bytes,
+        let texture_names = match read_numatb_texture_names(&path) {
+            Ok(names) => names,
             Err(e) => {
-                warnings.push(format!("Failed to read numatb {}: {e}", path.display()));
-                continue;
-            }
-        };
-        let mut cursor = Cursor::new(bytes);
-        let matl = match ssbh_data::prelude::MatlData::read(&mut cursor) {
-            Ok(matl) => matl,
-            Err(e) => {
-                warnings.push(format!("Failed to parse numatb {}: {e}", path.display()));
+                warnings.push(e);
                 continue;
             }
         };
         let mut seen_for_file = HashSet::new();
-        for mat in &matl.entries {
-            for tex in &mat.textures {
-                push_numatb_ref(tex.data.as_str(), &label, &mut seen_for_file, &mut out);
-            }
-            for tex in &mat.textures2 {
-                push_numatb_ref(tex.data.as_str(), &label, &mut seen_for_file, &mut out);
-            }
+        for texture_name in texture_names {
+            push_numatb_ref(&texture_name, &label, &mut seen_for_file, &mut out);
         }
     }
     for refs in out.values_mut() {
@@ -525,6 +512,29 @@ fn collect_numatb_references(
         refs.dedup();
     }
     out
+}
+
+/// Read the exact texture names referenced by a NUMATB using the shared SSBH
+/// parser. Domain-specific validators use this instead of implementing a
+/// second material parser.
+pub(crate) fn read_numatb_texture_names(path: &Path) -> Result<Vec<String>, String> {
+    let bytes = fs::read(path)
+        .map_err(|error| format!("Failed to read numatb {}: {error}", path.display()))?;
+    let mut cursor = Cursor::new(bytes);
+    let matl = ssbh_data::prelude::MatlData::read(&mut cursor)
+        .map_err(|error| format!("Failed to parse numatb {}: {error}", path.display()))?;
+    let mut names = Vec::new();
+    let mut seen = HashSet::new();
+    for entry in &matl.entries {
+        for texture in entry.textures.iter().chain(entry.textures2.iter()) {
+            let normalized = normalize_texture_filename(&texture.data);
+            if !normalized.is_empty() && normalized != ".nutexb" && seen.insert(normalized.clone())
+            {
+                names.push(normalized);
+            }
+        }
+    }
+    Ok(names)
 }
 
 fn push_numatb_ref(

@@ -839,6 +839,7 @@ impl Fhm2dMemorySession {
             source_name,
             format_label: extraction.format.map(|fmt| match fmt {
                 Fhm2dFormat::Character => "fhm2d_character".to_string(),
+                Fhm2dFormat::ExvsCommon => "fhm2d_exvs_common".to_string(),
                 Fhm2dFormat::Effect => "fhm2d_effect".to_string(),
                 Fhm2dFormat::AllNutexb => "fhm2d_all_nutexb".to_string(),
                 Fhm2dFormat::StageList => "fhm2d_stage_list".to_string(),

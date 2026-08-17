@@ -6,6 +6,10 @@ export const SHL_MODEL_TYPE_OPTIONS: ReadonlyArray<{ value: number; label: strin
   { value: 1, label: "Type 1" },
   { value: 2, label: "Assist (援护)" },
   { value: 3, label: "Part (部件)" },
+  { value: 4, label: "Rigid shell" },
+  { value: 5, label: "Dormant body" },
+  { value: 6, label: "Shared / global" },
+  { value: 7, label: "Reserved" },
 ];
 
 export function shlModelTypeLabel(modelType: number): string {
@@ -104,7 +108,10 @@ function isU32(n: number): boolean {
   return Number.isFinite(n) && n === Math.trunc(n) && n >= 0 && n <= 0xffffffff;
 }
 
-export function assertShlValidForSave(d: ShlFileData): void {
+export function assertShlValidForSave(
+  d: ShlFileData,
+  options: { requireBody?: boolean } = {},
+): void {
   if (!isU32(d.version)) {
     throw new Error("Invalid SHL version (expected unsigned 32-bit integer)");
   }
@@ -127,7 +134,7 @@ export function assertShlValidForSave(d: ShlFileData): void {
     }
   }
   // The game errors without a main body slot (type 0); block save to fail fast.
-  if (!d.records.some((r) => (r.modelType >>> 0) === 0)) {
+  if (options.requireBody !== false && !d.records.some((r) => (r.modelType >>> 0) === 0)) {
     throw new Error("SHL must contain at least one Body (type 0) slot, or the game will error");
   }
 }

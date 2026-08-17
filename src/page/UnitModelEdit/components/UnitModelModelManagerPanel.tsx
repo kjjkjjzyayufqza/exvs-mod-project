@@ -92,6 +92,7 @@ import {
   UNIT_MODEL_REPLACE_NUMSHB_SOURCE_DIALOG_PATH_KEY,
   UNIT_MODEL_REPLACE_SSBH_FOLDER_DIALOG_PATH_KEY,
 } from "../utils/unitModelEditorSettings";
+import { parseExvsCommonRuntimeModelId } from "../utils/exvsCommonService";
 
 interface UnitModelModelManagerPanelProps {
   structureJson: unknown | null;
@@ -108,6 +109,7 @@ interface UnitModelModelManagerPanelProps {
   onViewportSuspendChange?: (suspended: boolean) => void;
   onExportModel?: (modelLabel: string) => void;
   className?: string;
+  profile?: "unit" | "exvsCommon";
 }
 
 interface ModelSummary {
@@ -306,13 +308,17 @@ export function UnitModelModelManagerPanel({
   onViewportSuspendChange,
   onExportModel,
   className,
+  profile = "unit",
 }: UnitModelModelManagerPanelProps) {
+  const isExvsCommon = profile === "exvsCommon";
   const [busy, setBusy] = useState<string | null>(null);
   const [addFolderPreview, setAddFolderPreview] = useState<{
     source: string;
     validation: UnitModelSourceValidation;
     texturePlan: UnitModelSourceTexturePlan;
   } | null>(null);
+  const [commonModelIdText, setCommonModelIdText] = useState("");
+  const [commonStaticMeshModelId, setCommonStaticMeshModelId] = useState<number | null>(null);
   const [replaceTarget, setReplaceTarget] = useState<{
     label: string;
     index: number;
@@ -394,15 +400,26 @@ export function UnitModelModelManagerPanel({
     }
     setBusy("add-folder");
     try {
-      const result = await addUnitModelModel(modelRoot, source, structureJsonPath);
+      const commonModelId = isExvsCommon
+        ? parseExvsCommonRuntimeModelId(commonModelIdText)
+        : undefined;
+      const result = await addUnitModelModel(
+        modelRoot,
+        source,
+        structureJsonPath,
+        commonModelId,
+      );
       toast.success(`Model '${validation.modelName}' added`, {
-        description: `${result.modelCount} models, ${result.totalFiles} files. Empty NUHLPB created automatically.`,
+        description: isExvsCommon
+          ? `${result.modelCount} models, ${result.totalFiles} files. Type-6 SHL record added automatically.`
+          : `${result.modelCount} models, ${result.totalFiles} files. Empty NUHLPB created automatically.`,
       });
       showMutationSyncWarning(result.syncWarning);
-      if (validation.ignoredSourceNuhlpb) {
+      if (validation.ignoredSourceNuhlpb && !isExvsCommon) {
         toast.info("The source NUHLPB was ignored; a new empty NUHLPB was created.");
       }
       setAddFolderPreview(null);
+      setCommonModelIdText("");
       emitUnitModelTexturesChanged();
       onMutated?.();
     } catch (error) {
@@ -419,6 +436,16 @@ export function UnitModelModelManagerPanel({
     }
     setBusy("analyze");
     try {
+      if (isExvsCommon) {
+        const entered = window.prompt(
+          "Enter a unique runtime u32 model ID (hex), for example 0x48415431:",
+          "",
+        );
+        if (entered === null) return;
+        setCommonStaticMeshModelId(parseExvsCommonRuntimeModelId(entered));
+      } else {
+        setCommonStaticMeshModelId(null);
+      }
       const selected = await open({
         multiple: false,
         title: "Select FBX or DAE for Unit model import",
@@ -587,14 +614,18 @@ export function UnitModelModelManagerPanel({
           sourcePath: entry.filePath,
           config: importConfig,
           includeGeometryNames: [...session.includeGeometryNames],
+          exvsCommonModelId: commonStaticMeshModelId ?? undefined,
         },
         handleStaticMeshProgress,
       );
       toast.success(`Unit model '${baseFilename}' added`, {
-        description: `${result.modelCount} models, ${result.totalFiles} files. Empty NUHLPB created automatically.`,
+        description: isExvsCommon
+          ? `${result.modelCount} models, ${result.totalFiles} files. Type-6 SHL record added automatically.`
+          : `${result.modelCount} models, ${result.totalFiles} files. Empty NUHLPB created automatically.`,
       });
       showMutationSyncWarning(result.syncWarning);
       setImportEntries([]);
+      setCommonStaticMeshModelId(null);
       emitUnitModelTexturesChanged();
       onMutated?.();
     } catch (error) {
@@ -612,7 +643,12 @@ export function UnitModelModelManagerPanel({
     if (!modelRoot || !structureJsonPath) return;
     setBusy(`remove:${label}`);
     try {
-      const result = await removeUnitModelModel(modelRoot, label, structureJsonPath);
+      const result = await removeUnitModelModel(
+        modelRoot,
+        label,
+        structureJsonPath,
+        isExvsCommon,
+      );
       toast.success("Model removed", {
         description: `${result.modelCount} models, ${result.removedFiles.length} files deleted`,
       });
@@ -1021,6 +1057,7 @@ export function UnitModelModelManagerPanel({
         targetName,
         source,
         structureJsonPath,
+        isExvsCommon,
       );
       toast.success(`Model '${targetName}' replaced`, {
         description: `${result.modelCount} models, ${result.totalFiles} files. ${result.removedFiles.length} old file(s) removed.`,
@@ -1263,6 +1300,9 @@ export function UnitModelModelManagerPanel({
         duplicateName={addFolderDuplicate}
         texturePlan={addFolderPreview?.texturePlan ?? null}
         busy={busy === "add-folder"}
+        exvsCommon={isExvsCommon}
+        modelIdText={commonModelIdText}
+        onModelIdTextChange={setCommonModelIdText}
         onConfirm={() => void handleConfirmAddFolder()}
         onCancel={() => setAddFolderPreview(null)}
       />

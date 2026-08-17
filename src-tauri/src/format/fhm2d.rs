@@ -47,6 +47,8 @@ pub struct InMemoryFhm2dExtraction {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Fhm2dFormat {
     Character,
+    /// Fixed OB v27 global common bundle (`0xCB665375`).
+    ExvsCommon,
     /// Model subset + nutexb (no character-package steps: nuhlpb 0\\3, folder 0 bins, 0\\1 magic).
     Effect,
     AllNutexb,
@@ -109,6 +111,7 @@ impl Fhm2dFormat {
             .unwrap_or(normalized.as_str());
         match key {
             "character" => Ok(Self::Character),
+            "exvs_common" | "exvscommon" => Ok(Self::ExvsCommon),
             "effect" => Ok(Self::Effect),
             "all_nutexb" | "allnutexb" => Ok(Self::AllNutexb),
             "stage_list" | "stagelist" => Ok(Self::StageList),
@@ -125,12 +128,13 @@ impl Fhm2dFormat {
     }
 
     pub fn supported_type_list() -> &'static str {
-        "character, effect, motion, msc, sound, character_param, character_cost, all_nutexb, stage_list"
+        "character, exvs_common, effect, motion, msc, sound, character_param, character_cost, all_nutexb, stage_list"
     }
 
     pub fn as_cli_str(self) -> &'static str {
         match self {
             Self::Character => "character",
+            Self::ExvsCommon => "exvs_common",
             Self::Effect => "effect",
             Self::AllNutexb => "all_nutexb",
             Self::StageList => "stage_list",
@@ -623,7 +627,9 @@ fn build_output_structure(
     }
     // Seed fileUrl with SubFileStructure folders when writing a folder layout, or for
     // effect (historical: effect naming always assumes archive folders in fileUrl).
-    let folder_map = if layout == ExtractLayout::Folder || format == Some(Fhm2dFormat::Effect) {
+    let folder_map = if (layout == ExtractLayout::Folder && format != Some(Fhm2dFormat::ExvsCommon))
+        || format == Some(Fhm2dFormat::Effect)
+    {
         Some(build_folder_map(&sub_file_parse_structure)?)
     } else {
         None
@@ -1016,6 +1022,7 @@ fn apply_naming(
             )?;
             apply_nutexb_names(&mut output.sub_file_data, files)
         }
+        Some(Fhm2dFormat::ExvsCommon) => apply_exvs_common_names(&mut output.sub_file_data, files),
         Some(Fhm2dFormat::Effect) => {
             numdlb_character_enrich::apply_numdlb_base_name_to_structure(
                 &mut output.sub_file_data,
@@ -1279,6 +1286,32 @@ fn apply_nutexb_names(
     Ok(())
 }
 
+fn apply_exvs_common_names(
+    sub: &mut [OutputSubFileData],
+    files: &[DecodedSubFile],
+) -> Result<(), String> {
+    let data_by_file_index = files
+        .iter()
+        .map(|file| (file.file_index, file.data.as_slice()))
+        .collect::<HashMap<_, _>>();
+    for item in sub {
+        let data = data_by_file_index.get(&item.file_index).ok_or_else(|| {
+            format!(
+                "EXVS common naming missing decoded data for fileIndex {}",
+                item.file_index
+            )
+        })?;
+        let classified =
+            crate::format::exvs_common::classify_common_payload(item.file_type.as_str(), data);
+        item.file_base_name = classified
+            .relative_path
+            .file_stem()
+            .map(|name| name.to_string_lossy().to_string());
+        item.file_url = crate::format::exvs_common::relative_file_url(&classified.relative_path);
+    }
+    Ok(())
+}
+
 /// Names loose resources next to numbered effect group folders from their binary signatures.
 /// Parent paths from `build_folder_map` include both `["0"]` (from items whose folder path is `0\0\`)
 /// and `["0","0"]` (from items under `0\0\0\`); using **max** depth keeps `["0","0"]` so loose bins match.
@@ -1370,7 +1403,7 @@ fn build_file_index_map(sub: &[OutputSubFileData]) -> Result<HashMap<i32, usize>
     Ok(map)
 }
 
-fn parse_nutexb_name(bytes: &[u8]) -> Result<String, String> {
+pub(super) fn parse_nutexb_name(bytes: &[u8]) -> Result<String, String> {
     let size = bytes.len();
     if size < 8 {
         return Err("Invalid nutexb size".to_string());

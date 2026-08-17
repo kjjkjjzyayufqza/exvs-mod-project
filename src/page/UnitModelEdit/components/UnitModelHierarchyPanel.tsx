@@ -17,6 +17,7 @@ type UnitModelHierarchyPanelProps = {
   onExportModel?: (modelLabel: string) => void;
   editingPaths?: ReadonlySet<string>;
   modifiedPaths?: ReadonlySet<string>;
+  profile?: "unit" | "exvsCommon";
 };
 
 /**
@@ -36,6 +37,7 @@ export function UnitModelHierarchyPanel({
   onExportModel,
   editingPaths,
   modifiedPaths,
+  profile = "unit",
 }: UnitModelHierarchyPanelProps) {
   return (
     <ResizablePanelGroup orientation="vertical" className="h-full min-h-0">
@@ -66,6 +68,7 @@ export function UnitModelHierarchyPanel({
           onViewportSuspendChange={onModelImportViewportSuspendChange}
           onExportModel={onExportModel}
           className="h-full border-r-0"
+          profile={profile}
         />
       </ResizablePanel>
     </ResizablePanelGroup>

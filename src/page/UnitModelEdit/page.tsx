@@ -34,6 +34,8 @@ import { UnitModelRepackDialog } from "./components/UnitModelRepackDialog";
 import { UnitModelExtractDialog } from "./components/UnitModelExtractDialog";
 import { UnitModelTexturePanel } from "./components/UnitModelTexturePanel";
 import { UnitModelToolbar } from "./components/UnitModelToolbar";
+import { ExvsCommonBundleDialog } from "./components/ExvsCommonBundleDialog";
+import { ExvsCommonRepackDialog } from "./components/ExvsCommonRepackDialog";
 import { useUnitModelWorkspace } from "./hooks/useUnitModelWorkspace";
 import {
   UNIT_MODEL_EDIT_DEFAULT_LAYOUT,
@@ -62,6 +64,11 @@ import {
 } from "./utils/unitModelStructureTree";
 import { useSsbhFileEditorSessions } from "@/components/ssbh-model-preview/useSsbhFileEditorSessions";
 import { SsbhFileEditorHosts } from "@/components/ssbh-model-preview/SsbhFileEditorHosts";
+import {
+  isExvsCommonStructure,
+  saveExvsCommonShl,
+  syncExvsCommonTextureContainers,
+} from "./utils/exvsCommonService";
 
 function UnitModelEditWorkspace({
   unitRoot,
@@ -88,12 +95,14 @@ function UnitModelEditWorkspace({
   const workspace = useUnitModelWorkspace(unitRoot, onUnitRootChange, {
     clearScheduledPreviewReload: clearPreviewReloadTimer,
   });
+  const isExvsCommon = isExvsCommonStructure(structureJson);
   const preview = useSsbhModelPreview();
   const [daeExportDialog, setDaeExportDialog] = useState<{
     open: boolean;
     targets: DaeExportTarget[];
   }>({ open: false, targets: [] });
   const [leftTab, setLeftTab] = useState<"structure" | "textures">("structure");
+  const [commonDialogOpen, setCommonDialogOpen] = useState(false);
   const [textureCount, setTextureCount] = useState(0);
   // Package nutexb pool fed to the NUMATB texture-path picker (DAE/FBX to SSBH flows),
   // so its dropdown lists this Unit model's textures instead of "No scene textures yet".
@@ -218,11 +227,18 @@ function UnitModelEditWorkspace({
         void (async () => {
           try {
             if (workspace.activeRoot && workspace.structurePath) {
-              const result = await syncUnitModelTextureContainers(
-                workspace.activeRoot,
-                workspace.structurePath,
-              );
-              if (result.changed) {
+              const changed = isExvsCommon
+                ? await syncExvsCommonTextureContainers({
+                    modelRoot: workspace.activeRoot,
+                    structureJsonPath: workspace.structurePath,
+                  })
+                : (
+                    await syncUnitModelTextureContainers(
+                      workspace.activeRoot,
+                      workspace.structurePath,
+                    )
+                  ).changed;
+              if (changed) {
                 handleStructureMutated();
                 return;
               }
@@ -247,10 +263,24 @@ function UnitModelEditWorkspace({
       workspace.activeRoot,
       workspace.markValidationStale,
       workspace.structurePath,
+      isExvsCommon,
     ],
   );
 
-  const editors = useSsbhFileEditorSessions({ onSaved: handleEditorSaved });
+  const editors = useSsbhFileEditorSessions({
+    onSaved: handleEditorSaved,
+    allowBodylessShl: isExvsCommon,
+    writeShl:
+      isExvsCommon && workspace.activeRoot && workspace.structurePath
+        ? async (_filePath, shl) => {
+            await saveExvsCommonShl({
+              modelRoot: workspace.activeRoot!,
+              structureJsonPath: workspace.structurePath!,
+              shl,
+            });
+          }
+        : undefined,
+  });
 
   // Editor `editingPaths` are absolute; the tree compares relative fileUrls.
   const editingRelPaths = useMemo(() => {
@@ -394,6 +424,16 @@ function UnitModelEditWorkspace({
     [preview.previewInstances],
   );
   const canExportModels = exportCapabilities.canExport;
+  const handleOpenCommonRoot = useCallback(
+    async (root: string) => {
+      clearPreviewReloadTimer();
+      onUnitRootChange(root);
+      await preview.loadModelAt(root);
+      preview.requestCameraFit();
+      workspace.markValidationStale();
+    },
+    [clearPreviewReloadTimer, onUnitRootChange, preview, workspace.markValidationStale],
+  );
 
   const daeExportDialogSubtitle = useMemo(() => {
     if (daeExportDialog.targets.length === 1) {
@@ -519,7 +559,7 @@ function UnitModelEditWorkspace({
     <NumatbTextureOptionsProvider value={numatbTextureOptions}>
       <UnitModelToolbar
         folderName={workspace.folderName}
-        statusLabel={workspace.statusLabel}
+        statusLabel={isExvsCommon ? `EXVS Common · ${workspace.statusLabel}` : workspace.statusLabel}
         hasErrors={workspace.hasErrors}
         validationValid={Boolean(workspace.validation?.valid)}
         isValidating={workspace.isValidating}
@@ -529,6 +569,7 @@ function UnitModelEditWorkspace({
         canExportModels={canExportModels}
         onOpenFolder={() => void workspace.pickUnitFolder()}
         onExtractFhm2d={() => workspace.openExtractDialog()}
+        onOpenExvsCommon={() => setCommonDialogOpen(true)}
         onUseLoadedRoot={workspace.useLoadedRoot}
         onValidate={() => void workspace.runValidation()}
         onRepack={workspace.openRepackDialog}
@@ -591,6 +632,7 @@ function UnitModelEditWorkspace({
                   onExportModel={openSingleModelExportDialog}
                   editingPaths={editingRelPaths}
                   modifiedPaths={modifiedPaths}
+                  profile={isExvsCommon ? "exvsCommon" : "unit"}
                 />
               </TabsContent>
               <TabsContent value="textures" className="mt-0 min-h-0 flex-1 overflow-hidden">
@@ -654,18 +696,30 @@ function UnitModelEditWorkspace({
         onCancel={() => setDaeExportDialog((prev) => ({ ...prev, open: false }))}
       />
 
-      <UnitModelRepackDialog
-        open={workspace.repackDialogOpen}
-        onOpenChange={workspace.setRepackDialogOpen}
-        modelRoot={workspace.activeRoot}
-        structurePath={workspace.structurePath}
-        modFolder={workspace.obModPath}
-        folderName={workspace.folderName}
-        validation={workspace.validation}
-        isValidating={workspace.isValidating}
-        onValidationResult={workspace.acceptValidationResult}
-        onRepacked={workspace.setLastRepack}
-      />
+      {isExvsCommon ? (
+        <ExvsCommonRepackDialog
+          open={workspace.repackDialogOpen}
+          onOpenChange={workspace.setRepackDialogOpen}
+          modelRoot={workspace.activeRoot}
+          structurePath={workspace.structurePath}
+          modFolder={workspace.obModPath}
+          onValidationResult={workspace.acceptValidationResult}
+          onRepacked={workspace.setLastRepack}
+        />
+      ) : (
+        <UnitModelRepackDialog
+          open={workspace.repackDialogOpen}
+          onOpenChange={workspace.setRepackDialogOpen}
+          modelRoot={workspace.activeRoot}
+          structurePath={workspace.structurePath}
+          modFolder={workspace.obModPath}
+          folderName={workspace.folderName}
+          validation={workspace.validation}
+          isValidating={workspace.isValidating}
+          onValidationResult={workspace.acceptValidationResult}
+          onRepacked={workspace.setLastRepack}
+        />
+      )}
 
       <UnitModelExtractDialog
         open={workspace.extractDialogOpen}
@@ -673,7 +727,17 @@ function UnitModelEditWorkspace({
         onExtracted={(result) => workspace.handleExtracted(result)}
       />
 
-      <SsbhFileEditorHosts {...editors.hostProps} shlModelFolderNames={shlModelFolderNames} />
+      <ExvsCommonBundleDialog
+        open={commonDialogOpen}
+        onOpenChange={setCommonDialogOpen}
+        onOpened={handleOpenCommonRoot}
+      />
+
+      <SsbhFileEditorHosts
+        {...editors.hostProps}
+        shlModelFolderNames={shlModelFolderNames}
+        shlBodySlotRequired={!isExvsCommon}
+      />
     </NumatbTextureOptionsProvider>
   );
 }

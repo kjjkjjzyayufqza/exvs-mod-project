@@ -8,6 +8,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::fhm2d_memory_preview::Fhm2dMemorySessionState;
 use crate::format::effect_folder;
+use crate::format::exvs_common;
 use crate::format::fhm2d::{extract_fhm2d_to_memory_impl, InMemoryFhm2dExtraction};
 use crate::format::fhm2d_stage;
 use crate::format::fhm2d_stage_validate;
@@ -1163,6 +1164,174 @@ pub async fn validate_unit_model_for_repack(
     .await
     .map_err(|e| format!("Task join error: {e}"))?;
     Ok(result)
+}
+
+#[tauri::command]
+pub async fn resolve_exvs_common_bundle_paths(
+    extract_output_path: String,
+    ob_dpl_cache_path: String,
+    ob_mod_path: String,
+) -> Result<exvs_common::ExvsCommonBundlePaths, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        exvs_common::resolve_exvs_common_bundle_paths(
+            &extract_output_path,
+            &ob_dpl_cache_path,
+            &ob_mod_path,
+        )
+    })
+    .await
+    .map_err(|error| format!("Task join error: {error}"))?
+}
+
+#[tauri::command]
+pub async fn extract_exvs_common_bundle(
+    extract_output_path: String,
+    ob_dpl_cache_path: String,
+    overwrite: Option<bool>,
+) -> Result<exvs_common::ExvsCommonExtractResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        exvs_common::extract_exvs_common_bundle_impl(
+            &extract_output_path,
+            &ob_dpl_cache_path,
+            overwrite.unwrap_or(false),
+        )
+    })
+    .await
+    .map_err(|error| format!("Task join error: {error}"))?
+}
+
+#[tauri::command]
+pub async fn validate_exvs_common_bundle(
+    model_root: String,
+    structure_json_path: String,
+) -> Result<exvs_common::ExvsCommonValidationResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        exvs_common::validate_exvs_common_bundle(&model_root, &structure_json_path)
+    })
+    .await
+    .map_err(|error| format!("Task join error: {error}"))
+}
+
+#[tauri::command]
+pub async fn repack_exvs_common_bundle(
+    model_root: String,
+    structure_json_path: String,
+    ob_mod_path: String,
+    confirm_high_risk: Option<bool>,
+) -> Result<exvs_common::ExvsCommonRepackResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        exvs_common::repack_exvs_common_bundle_impl(
+            &model_root,
+            &structure_json_path,
+            &ob_mod_path,
+            confirm_high_risk.unwrap_or(false),
+        )
+    })
+    .await
+    .map_err(|error| format!("Task join error: {error}"))?
+}
+
+#[tauri::command]
+pub async fn add_exvs_common_model(
+    model_root: String,
+    structure_json_path: String,
+    source_dir: String,
+    model_id: u32,
+) -> Result<exvs_common::ExvsCommonMutationResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        exvs_common::add_exvs_common_model(&model_root, &structure_json_path, &source_dir, model_id)
+    })
+    .await
+    .map_err(|error| format!("Task join error: {error}"))?
+}
+
+#[tauri::command]
+pub async fn remove_exvs_common_model(
+    model_root: String,
+    structure_json_path: String,
+    model_name: String,
+) -> Result<exvs_common::ExvsCommonMutationResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        exvs_common::remove_exvs_common_model(&model_root, &structure_json_path, &model_name)
+    })
+    .await
+    .map_err(|error| format!("Task join error: {error}"))?
+}
+
+#[tauri::command]
+pub async fn replace_exvs_common_model(
+    model_root: String,
+    structure_json_path: String,
+    target_model_name: String,
+    source_dir: String,
+) -> Result<exvs_common::ExvsCommonMutationResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        exvs_common::replace_exvs_common_model(
+            &model_root,
+            &structure_json_path,
+            &target_model_name,
+            &source_dir,
+        )
+    })
+    .await
+    .map_err(|error| format!("Task join error: {error}"))?
+}
+
+#[tauri::command]
+pub async fn add_exvs_common_texture(
+    model_root: String,
+    structure_json_path: String,
+    source_path: String,
+    target_filename: String,
+) -> Result<exvs_common::ExvsCommonMutationResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        exvs_common::add_exvs_common_texture(
+            &model_root,
+            &structure_json_path,
+            &source_path,
+            &target_filename,
+        )
+    })
+    .await
+    .map_err(|error| format!("Task join error: {error}"))?
+}
+
+#[tauri::command]
+pub async fn remove_exvs_common_texture(
+    model_root: String,
+    structure_json_path: String,
+    file_index: i32,
+) -> Result<exvs_common::ExvsCommonMutationResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        exvs_common::remove_exvs_common_texture(&model_root, &structure_json_path, file_index)
+    })
+    .await
+    .map_err(|error| format!("Task join error: {error}"))?
+}
+
+#[tauri::command]
+pub async fn save_exvs_common_shl(
+    model_root: String,
+    structure_json_path: String,
+    shl: crate::format::shl::ShlFile,
+) -> Result<exvs_common::ExvsCommonMutationResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        exvs_common::save_exvs_common_shl(&model_root, &structure_json_path, &shl)
+    })
+    .await
+    .map_err(|error| format!("Task join error: {error}"))?
+}
+
+#[tauri::command]
+pub async fn sync_exvs_common_texture_containers(
+    model_root: String,
+    structure_json_path: String,
+) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        exvs_common::sync_exvs_common_texture_containers(&model_root, &structure_json_path)
+    })
+    .await
+    .map_err(|error| format!("Task join error: {error}"))?
 }
 
 #[tauri::command]

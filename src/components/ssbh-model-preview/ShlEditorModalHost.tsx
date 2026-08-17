@@ -15,6 +15,7 @@ type ShlEditorModalHostProps = {
   viewportSuspend?: ModalViewportSuspendInteraction;
   /** Structure-JSON model folder names in order; index = folder_index. */
   modelFolderNames?: string[];
+  bodySlotRequired?: boolean;
 };
 
 export function ShlEditorModalHost({
@@ -27,6 +28,7 @@ export function ShlEditorModalHost({
   onReset,
   viewportSuspend,
   modelFolderNames,
+  bodySlotRequired = true,
 }: ShlEditorModalHostProps) {
   const topZIndex = useMemo(
     () => (sessions.length === 0 ? 0 : Math.max(...sessions.map((session) => session.zIndex))),
@@ -52,6 +54,7 @@ export function ShlEditorModalHost({
             skipActivate={session.zIndex >= topZIndex}
             viewportSuspend={viewportSuspend}
             modelFolderNames={modelFolderNames}
+            bodySlotRequired={bodySlotRequired}
           />
         ))}
       </div>

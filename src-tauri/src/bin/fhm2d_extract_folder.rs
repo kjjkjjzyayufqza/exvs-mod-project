@@ -4,6 +4,7 @@ fn parse_format(value: &str) -> Result<Option<Fhm2dFormat>, String> {
     match value {
         "none" => Ok(None),
         "fhm2d_character" => Ok(Some(Fhm2dFormat::Character)),
+        "fhm2d_exvs_common" => Ok(Some(Fhm2dFormat::ExvsCommon)),
         "fhm2d_effect" => Ok(Some(Fhm2dFormat::Effect)),
         "fhm2d_all_nutexb" => Ok(Some(Fhm2dFormat::AllNutexb)),
         "fhm2d_stage_list" => Ok(Some(Fhm2dFormat::StageList)),
