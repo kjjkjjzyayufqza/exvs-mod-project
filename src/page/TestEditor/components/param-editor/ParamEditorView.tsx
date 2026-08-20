@@ -1,22 +1,13 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { writeFile } from "@tauri-apps/plugin-fs"
 import { Download, FileUp, RefreshCw, Save } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import { FilePathInput } from "@/components/ui/filePathInput"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { cn } from "@/lib/utils"
 import { useConfigStore } from "@/store/configStore"
 import { FILE_TYPE_LABELS } from "@/models/commandTable"
 import { ChrSysDataPanel } from "./ChrSysDataPanel"
@@ -26,6 +17,35 @@ import { TypedParamDataPanel } from "./TypedParamDataPanel"
 import type { TypedParamFile } from "./typedParamTypes"
 import { isProjectileDepictionTableFileType } from "./projectileDepictionCopy"
 import { sortTypedParamFileByUnsignedEntryId } from "./paramEntryUtils"
+
+type TypedKindSession = {
+  path: string
+  fileType: string
+  data: TypedParamFile
+}
+
+type ChrKindSession = {
+  path: string
+  data: ChrSysParamFile
+}
+
+type KindSession = {
+  typed: TypedKindSession | null
+  chr: ChrKindSession | null
+  selectedEntry: number
+  dirty: boolean
+  err: string | null
+  loadSession: number
+}
+
+const EMPTY_KIND_SESSION: KindSession = {
+  typed: null,
+  chr: null,
+  selectedEntry: 0,
+  dirty: false,
+  err: null,
+  loadSession: 0,
+}
 
 interface ParamEditorViewProps {
   onUnsavedChanges?: (hasChanges: boolean) => void
@@ -39,23 +59,34 @@ export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath
   const kind = getParamKind(kindId)
   const pathKey = kind?.pathKey ?? "paramEditor.v2.fp.armsparam"
 
-  const [typed, setTyped] = useState<{
-    path: string
-    fileType: string
-    data: TypedParamFile
-  } | null>(null)
-  const [chr, setChr] = useState<{ path: string; data: ChrSysParamFile } | null>(null)
-  const [selectedEntry, setSelectedEntry] = useState(0)
-  const [err, setErr] = useState<string | null>(null)
+  const [sessions, setSessions] = useState<Partial<Record<ParamKindId, KindSession>>>({})
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [dirty, setDirty] = useState(false)
-  const [loadSession, setLoadSession] = useState(0)
-  const [pendingKindId, setPendingKindId] = useState<ParamKindId | null>(null)
+
+  const session = sessions[kindId] ?? EMPTY_KIND_SESSION
+  const typed = session.typed
+  const chr = session.chr
+  const dirty = session.dirty
+  const err = session.err
+  const hasAnyUnsaved = useMemo(
+    () => Object.values(sessions).some((item) => item?.dirty),
+    [sessions],
+  )
+
+  const patchKindSession = useCallback(
+    (id: ParamKindId, patch: Partial<KindSession> | ((prev: KindSession) => KindSession)) => {
+      setSessions((prev) => {
+        const current = prev[id] ?? EMPTY_KIND_SESSION
+        const next = typeof patch === "function" ? patch(current) : { ...current, ...patch }
+        return { ...prev, [id]: next }
+      })
+    },
+    [],
+  )
 
   useEffect(() => {
-    onUnsavedChanges?.(dirty)
-  }, [dirty, onUnsavedChanges])
+    onUnsavedChanges?.(hasAnyUnsaved)
+  }, [hasAnyUnsaved, onUnsavedChanges])
 
   useEffect(() => {
     void (async () => {
@@ -68,67 +99,52 @@ export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath
     })()
   }, [getSetting, pathKey])
 
-  const changeKind = useCallback((next: ParamKindId) => {
-    setDirty(false)
-    setTyped(null)
-    setChr(null)
-    setErr(null)
-    setSelectedEntry(0)
-    setKindId(next)
-  }, [])
-
-  const tryChangeKind = useCallback(
-    (next: string) => {
-      const nextKindId = next as ParamKindId
-      if (nextKindId === kindId) return
-      if (dirty) {
-        setPendingKindId(nextKindId)
-        return
-      }
-      changeKind(nextKindId)
-    },
-    [changeKind, dirty, kindId]
-  )
-
-  const confirmKindChange = useCallback(() => {
-    if (pendingKindId) {
-      changeKind(pendingKindId)
-      setPendingKindId(null)
-    }
-  }, [changeKind, pendingKindId])
-
-  const cancelKindChange = useCallback(() => {
-    setPendingKindId(null)
-  }, [])
+  const tryChangeKind = useCallback((next: string) => {
+    const nextKindId = next as ParamKindId
+    if (nextKindId === kindId) return
+    setKindId(nextKindId)
+  }, [kindId])
 
   const loadFile = useCallback(
     async (path: string) => {
       if (!path.trim() || !kind) return
+      const targetKindId = kindId
       setLoading(true)
-      setErr(null)
+      patchKindSession(targetKindId, { err: null })
       try {
         if (kind.mode === "chrsys") {
           const data = await invoke<ChrSysParamFile>("parse_chrsysparam_file", { path })
-          setChr({ path, data })
-          setTyped(null)
+          patchKindSession(targetKindId, (prev) => ({
+            ...prev,
+            chr: { path, data },
+            typed: null,
+            dirty: false,
+            selectedEntry: 0,
+            err: null,
+            loadSession: prev.loadSession + 1,
+          }))
         } else {
           const fileType = resolveTypedFileTypeForPath(kind, path)
           const data = await invoke<TypedParamFile>("parse_typed_param_file", { path, paramType: fileType })
-          setTyped({ path, fileType, data })
-          setChr(null)
+          patchKindSession(targetKindId, (prev) => ({
+            ...prev,
+            typed: { path, fileType, data },
+            chr: null,
+            dirty: false,
+            selectedEntry: 0,
+            err: null,
+            loadSession: prev.loadSession + 1,
+          }))
         }
-        setDirty(false)
-        setSelectedEntry(0)
-        setLoadSession((session) => session + 1)
         toast.success("Loaded")
       } catch (e) {
-        setErr(String(e))
+        patchKindSession(targetKindId, { err: String(e) })
         toast.error(String(e))
       } finally {
         setLoading(false)
       }
     },
-    [kind]
+    [kind, kindId, patchKindSession],
   )
 
   const save = useCallback(async () => {
@@ -139,14 +155,16 @@ export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath
           ? sortTypedParamFileByUnsignedEntryId(typed.data)
           : typed.data
         if (dataJson !== typed.data) {
-          setTyped((prev) => (prev ? { ...prev, data: dataJson } : prev))
+          patchKindSession(kindId, (prev) =>
+            prev.typed ? { ...prev, typed: { ...prev.typed, data: dataJson } } : prev,
+          )
         }
         await invoke("build_typed_param_file", {
           dataJson,
           outputPath: typed.path,
           paramType: typed.fileType,
         })
-        setDirty(false)
+        patchKindSession(kindId, { dirty: false })
         toast.success("Saved")
       } catch (e) {
         toast.error(String(e))
@@ -159,7 +177,7 @@ export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath
       setSaving(true)
       try {
         await invoke("build_chrsysparam_file", { fileJson: chr.data, outputPath: chr.path })
-        setDirty(false)
+        patchKindSession(kindId, { dirty: false })
         toast.success("Saved")
       } catch (e) {
         toast.error(String(e))
@@ -167,7 +185,7 @@ export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath
         setSaving(false)
       }
     }
-  }, [typed, chr])
+  }, [typed, chr, kindId, patchKindSession])
 
   const exportJson = useCallback(async () => {
     try {
@@ -300,36 +318,55 @@ export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath
             <span className="font-medium text-foreground">{title}</span>
             {typed && <span> · {typed.path}</span>}
             {chr && <span> · {chr.path}</span>}
-            {dirty && <span className="ml-2 font-medium text-amber-500">• Unsaved changes</span>}
+            {hasAnyUnsaved && <span className="ml-2 font-medium text-amber-500">• Unsaved changes</span>}
           </p>
         )}
         {err && <p className="text-xs text-destructive">{err}</p>}
         {loading && <p className="text-xs text-muted-foreground">Loading…</p>}
-        <div className="min-h-0 flex-1">
-          {typed && (
-            <TypedParamDataPanel
-              key={`${typed.path}:${loadSession}`}
-              fileType={typed.fileType}
-              data={typed.data}
-              selectedEntryIndex={selectedEntry}
-              onSelectEntry={setSelectedEntry}
-              workspaceDefaultPath={workspaceDefaultPath}
-              sourceFilePath={typed.path}
-              onChange={(nextData) => {
-                setTyped((prev) => (prev ? { ...prev, data: nextData } : prev))
-                setDirty(true)
-              }}
-            />
-          )}
-          {chr && (
-            <ChrSysDataPanel
-              data={chr.data}
-              onChange={(d) => {
-                setChr({ ...chr, data: d })
-                setDirty(true)
-              }}
-            />
-          )}
+        <div className="relative min-h-0 flex-1">
+          {PARAM_KINDS.map((kindRow) => {
+            const kindSession = sessions[kindRow.id]
+            if (!kindSession || (!kindSession.typed && !kindSession.chr)) return null
+            const isActive = kindRow.id === kindId
+            return (
+              <div
+                key={kindRow.id}
+                className={cn("h-full min-h-0", isActive ? "relative" : "hidden")}
+                aria-hidden={!isActive}
+                {...(!isActive ? { inert: true } : {})}
+              >
+                {kindSession.typed ? (
+                  <TypedParamDataPanel
+                    key={`${kindRow.id}:${kindSession.loadSession}`}
+                    fileType={kindSession.typed.fileType}
+                    data={kindSession.typed.data}
+                    selectedEntryIndex={kindSession.selectedEntry}
+                    onSelectEntry={(index) => patchKindSession(kindRow.id, { selectedEntry: index })}
+                    workspaceDefaultPath={workspaceDefaultPath}
+                    sourceFilePath={kindSession.typed.path}
+                    onChange={(nextData) =>
+                      patchKindSession(kindRow.id, (prev) =>
+                        prev.typed
+                          ? { ...prev, typed: { ...prev.typed, data: nextData }, dirty: true }
+                          : prev,
+                      )
+                    }
+                  />
+                ) : kindSession.chr ? (
+                  <ChrSysDataPanel
+                    data={kindSession.chr.data}
+                    onChange={(nextData) =>
+                      patchKindSession(kindRow.id, (prev) =>
+                        prev.chr
+                          ? { ...prev, chr: { ...prev.chr, data: nextData }, dirty: true }
+                          : prev,
+                      )
+                    }
+                  />
+                ) : null}
+              </div>
+            )
+          })}
           {!hasData && !loading && (
             <div className="flex h-48 flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-muted/5 text-sm text-muted-foreground">
               <FileUp className="h-8 w-8 opacity-50" />
@@ -338,30 +375,6 @@ export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath
           )}
         </div>
       </div>
-
-      <AlertDialog
-        open={pendingKindId !== null}
-        onOpenChange={(open) => {
-          if (!open) setPendingKindId(null)
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Discard unsaved changes and switch type?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Switching the table type will close the current data and discard edits that have not been saved.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel type="button" onClick={cancelKindChange}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction type="button" onClick={confirmKindChange}>
-              Discard Changes
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }

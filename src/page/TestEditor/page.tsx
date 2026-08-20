@@ -117,6 +117,7 @@ const TestEditorPage = () => {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [dirtyPacks, setDirtyPacks] = useState<Map<string, WorkspacePackIdentity>>(() => new Map());
   const [isRepackDialogOpen, setIsRepackDialogOpen] = useState(false);
+  const [repackDialogPacks, setRepackDialogPacks] = useState<WorkspacePackIdentity[] | null>(null);
   const [isWorkspaceLayoutOpen, setIsWorkspaceLayoutOpen] = useState(false);
   const [obModPath, setObModPath] = useState("");
   const isPageActive = useTestEditorPageActive();
@@ -391,6 +392,24 @@ const TestEditorPage = () => {
 
   const handleRepackComplete = useCallback(() => {
     setIsRepackDialogOpen(false);
+    setRepackDialogPacks(null);
+  }, []);
+
+  const openRepackChangesDialog = useCallback(() => {
+    setRepackDialogPacks(null);
+    setIsRepackDialogOpen(true);
+  }, []);
+
+  const handleRepackDialogOpenChange = useCallback((open: boolean) => {
+    setIsRepackDialogOpen(open);
+    if (!open) {
+      setRepackDialogPacks(null);
+    }
+  }, []);
+
+  const requestFhm2dRepack = useCallback((pack: WorkspacePackIdentity) => {
+    setRepackDialogPacks([pack]);
+    setIsRepackDialogOpen(true);
   }, []);
 
   const openNumdlbSession = useCallback((filePath: string) => {
@@ -1524,7 +1543,7 @@ const TestEditorPage = () => {
         onPickFolder={loadFolder}
         onRefresh={refreshFolder}
         onOpenWorkspaceLayout={() => setIsWorkspaceLayoutOpen(true)}
-        onRepack={() => setIsRepackDialogOpen(true)}
+        onRepack={openRepackChangesDialog}
         onClearDirty={() => setDirtyPacks(new Map())}
       />
       </div>
@@ -1546,7 +1565,7 @@ const TestEditorPage = () => {
           workspaceTreeData={treeData}
           dirtyPacks={dirtyPackList}
           obModPath={obModPath}
-          onPackRepacked={handleRepackSuccess}
+          onRequestFhm2dRepack={requestFhm2dRepack}
           onPackMutated={handlePackMutated}
           starredPathSet={starredPathSet}
           onToggleStar={toggleStar}
@@ -1565,8 +1584,8 @@ const TestEditorPage = () => {
 
       <ListeningRepackDialog
         open={isRepackDialogOpen}
-        onOpenChange={setIsRepackDialogOpen}
-        dirtyPacks={dirtyPackList}
+        onOpenChange={handleRepackDialogOpenChange}
+        dirtyPacks={repackDialogPacks ?? dirtyPackList}
         modFolderPath={obModPath || undefined}
         onPackRepacked={handleRepackSuccess}
         onComplete={handleRepackComplete}

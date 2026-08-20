@@ -1,10 +1,19 @@
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import {
   HitboxParamAnalysisContent,
+  HitboxParamAnalysisPanel,
   type HitboxParamFileType,
 } from "./HitboxParamAnalysisPanel"
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}))
+
+vi.mock("@/components/ui/filePathInput", () => ({
+  FilePathInput: () => <input aria-label="Related table file" />,
+}))
 import type { TypedParamEntry, TypedParamFile } from "./typedParamTypes"
 
 function paramFile(entries: TypedParamEntry[]): TypedParamFile {
@@ -103,6 +112,25 @@ describe("HitboxParamAnalysisContent", () => {
     const goToButtons = screen.getAllByRole("button", { name: "Go to" })
     await user.click(goToButtons[1]!)
     expect(screen.getByText("r=6.00")).toBeInTheDocument()
+  })
+})
+
+describe("HitboxParamAnalysisPanel", () => {
+  it("keeps the related table collapsed until the header is opened", async () => {
+    const user = userEvent.setup()
+    render(
+      <HitboxParamAnalysisPanel
+        fileType="interactionid"
+        data={paramFile([stunInteractionEntry])}
+        selectedEntryIndex={0}
+      />,
+    )
+
+    expect(screen.getByRole("button", { name: /Related Hit Group ID Def table/i })).toBeInTheDocument()
+    expect(screen.queryByTestId("interaction-param-analysis")).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: /Related Hit Group ID Def table/i }))
+    expect(screen.getByTestId("interaction-param-analysis")).toBeInTheDocument()
   })
 })
 

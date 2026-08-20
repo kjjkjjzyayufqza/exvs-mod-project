@@ -24,9 +24,12 @@ import {
   readTypedEntryId,
   readTypedEntryLabels,
   removeEntryEditorMetaAt,
-  shiftHighlightedEntryIndices,
   type TypedParamEntryEditorMeta,
 } from "./paramEntryUtils"
+import {
+  loadParamEntryHighlights,
+  saveParamEntryHighlights,
+} from "./paramEditorHighlightCache"
 import { ParamEntryListBadges } from "./ParamEntryListBadges"
 import { ParamEntryListRow } from "./ParamEntryListRow"
 import {
@@ -201,10 +204,29 @@ export function TypedParamDataPanel({
   const [entryEditorMeta, setEntryEditorMeta] = useState<TypedParamEntryEditorMeta[]>(() =>
     createInitialEntryEditorMeta(data.entries.length),
   )
-  const [highlightedEntryIndices, setHighlightedEntryIndices] = useState<Set<number>>(() => new Set())
+  const [highlightedEntryIds, setHighlightedEntryIds] = useState<Set<number>>(() => {
+    if (!sourceFilePath?.trim()) return new Set()
+    return new Set(loadParamEntryHighlights(sourceFilePath))
+  })
   const entry = data.entries[selectedEntryIndex] ?? null
   const entryListRef = useRef<HTMLDivElement | null>(null)
   const fieldListRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!sourceFilePath?.trim()) {
+      setHighlightedEntryIds(new Set())
+      return
+    }
+    setHighlightedEntryIds(new Set(loadParamEntryHighlights(sourceFilePath)))
+  }, [sourceFilePath])
+
+  const persistHighlightedEntryIds = useCallback(
+    (next: Set<number>) => {
+      if (!sourceFilePath?.trim()) return
+      saveParamEntryHighlights(sourceFilePath, next)
+    },
+    [sourceFilePath],
+  )
 
   const filteredKeys = useMemo(() => {
     if (!entry) return []
@@ -384,11 +406,18 @@ export function TypedParamDataPanel({
 
   const deleteEntry = () => {
     if (!data.entries.length) return
+    const deletedEntryId = readTypedEntryId(data.entries[selectedEntryIndex]!, selectedEntryIndex)
     const nextEntries = data.entries.filter((_, idx) => idx !== selectedEntryIndex)
     const nextEntryIds = nextEntries.map((item, idx) => readTypedEntryId(item, idx))
     onChange({ ...data, entries: nextEntries, entryIds: nextEntryIds })
     setEntryEditorMeta((prev) => removeEntryEditorMetaAt(prev, selectedEntryIndex))
-    setHighlightedEntryIndices((prev) => shiftHighlightedEntryIndices(prev, selectedEntryIndex))
+    setHighlightedEntryIds((prev) => {
+      if (!prev.has(deletedEntryId)) return prev
+      const next = new Set(prev)
+      next.delete(deletedEntryId)
+      persistHighlightedEntryIds(next)
+      return next
+    })
     if (!nextEntries.length) {
       onSelectEntry(0)
       return
@@ -407,6 +436,9 @@ export function TypedParamDataPanel({
   }
 
   const entryLegendCounts = useMemo(() => {
+    const highlightedVisible = data.entries.reduce((count, item, index) => {
+      return highlightedEntryIds.has(readTypedEntryId(item, index)) ? count + 1 : count
+    }, 0)
     return entryEditorMeta.reduce(
       (acc, meta) => {
         if (meta.origin === "copied") acc.copied += 1
@@ -415,21 +447,25 @@ export function TypedParamDataPanel({
         if (meta.isDirty) acc.edited += 1
         return acc
       },
-      { file: 0, copied: 0, blank: 0, edited: 0, highlighted: highlightedEntryIndices.size },
+      { file: 0, copied: 0, blank: 0, edited: 0, highlighted: highlightedVisible },
     )
-  }, [entryEditorMeta, highlightedEntryIndices])
+  }, [data.entries, entryEditorMeta, highlightedEntryIds])
 
-  const toggleEntryHighlight = useCallback((index: number) => {
-    setHighlightedEntryIndices((prev) => {
-      const next = new Set(prev)
-      if (next.has(index)) {
-        next.delete(index)
-      } else {
-        next.add(index)
-      }
-      return next
-    })
-  }, [])
+  const toggleEntryHighlight = useCallback(
+    (entryId: number) => {
+      setHighlightedEntryIds((prev) => {
+        const next = new Set(prev)
+        if (next.has(entryId)) {
+          next.delete(entryId)
+        } else {
+          next.add(entryId)
+        }
+        persistHighlightedEntryIds(next)
+        return next
+      })
+    },
+    [persistHighlightedEntryIds],
+  )
 
   const copySelectedEntryJson = useCallback(() => {
     void copyTypedParamEntryJsonToClipboard(fileType, data, selectedEntryIndex)
@@ -512,7 +548,7 @@ export function TypedParamDataPanel({
                 const { index: i, entryId: id, entry: listEntry } = row
                 const meta = entryEditorMeta[i]
                 const isSelected = selectedEntryIndex === i
-                const isHighlighted = highlightedEntryIndices.has(i)
+                const isHighlighted = highlightedEntryIds.has(id)
                 const { actionLabel, resourceLabel } = readTypedEntryLabels(
                   listEntry,
                   trailingFileBytes,
@@ -528,7 +564,7 @@ export function TypedParamDataPanel({
                     isSelected={isSelected}
                     isHighlighted={isHighlighted}
                     onSelect={() => onSelectEntry(i)}
-                    onToggleHighlight={() => toggleEntryHighlight(i)}
+                    onToggleHighlight={() => toggleEntryHighlight(id)}
                     measureRef={entryVirtualizer.measureElement}
                     dataIndex={virtualRow.index}
                     style={{ transform: `translateY(${virtualRow.start}px)` }}
@@ -675,15 +711,13 @@ export function TypedParamDataPanel({
           </div>
         </div>
         {entry && isHitboxParamFileType(fileType) ? (
-          <div className="max-h-[48%] shrink-0 overflow-y-auto border-b bg-muted/5 px-3 py-3">
-            <HitboxParamAnalysisPanel
-              key={fileType}
-              fileType={fileType}
-              data={data}
-              selectedEntryIndex={selectedEntryIndex}
-              workspaceDefaultPath={workspaceDefaultPath}
-            />
-          </div>
+          <HitboxParamAnalysisPanel
+            key={fileType}
+            fileType={fileType}
+            data={data}
+            selectedEntryIndex={selectedEntryIndex}
+            workspaceDefaultPath={workspaceDefaultPath}
+          />
         ) : null}
         <div
           ref={fieldListRef}

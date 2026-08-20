@@ -43,10 +43,9 @@ type EffectFolderEditorViewProps = {
   workspaceRoot: string;
   structureJsonPath: string | null;
   workspaceDocument: TestEditorWorkspaceDocument;
-  modFolderPath: string;
   isActive: boolean;
   onPackMutated?: (pack: WorkspacePackIdentity) => void;
-  onPackRepacked?: (packKey: string) => void;
+  onRequestFhm2dRepack?: (pack: WorkspacePackIdentity) => void;
   onOpenAsEffectProject?: (filePath: string) => void;
 };
 
@@ -66,10 +65,9 @@ export default function EffectFolderEditorView({
   workspaceRoot,
   structureJsonPath,
   workspaceDocument,
-  modFolderPath,
   isActive,
   onPackMutated,
-  onPackRepacked,
+  onRequestFhm2dRepack,
   onOpenAsEffectProject,
 }: EffectFolderEditorViewProps) {
   const store = useConfigStore((state) => state.store);
@@ -102,9 +100,7 @@ export default function EffectFolderEditorView({
     workspaceRoot,
     pack: activePack ?? EMPTY_PACK,
     isActive: isActive && activePack != null,
-    modFolderPath,
     onPackMutated,
-    onPackRepacked,
     onActivePackChange: activatePack,
   });
 
@@ -316,8 +312,11 @@ export default function EffectFolderEditorView({
                   type="button"
                   size="sm"
                   variant="outline"
-                  disabled={busy}
-                  onClick={() => void editor.runRepack()}
+                  disabled={busy || !activePack}
+                  onClick={() => {
+                    if (!activePack) return;
+                    onRequestFhm2dRepack?.(activePack);
+                  }}
                   className={toolbarButtonClass}
                 >
                   <Package className="h-4 w-4" />

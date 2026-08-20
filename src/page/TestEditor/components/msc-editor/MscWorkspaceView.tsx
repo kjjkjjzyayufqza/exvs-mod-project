@@ -72,6 +72,7 @@ import { MscFileRow, type MscFileActionDescriptor } from "./MscFileRow";
 import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
 import { applyFhm2dStructureMigrationToPack, resolveMigratedFhm2dFolderPath } from "@/utils/fhm2dFolderPathResolution";
 import { repackFolderUsingStructureToModFolder } from "@/utils/repackRunner";
+import { removeMatchingModVgsht2 } from "../../utils/modVgsht2";
 import {
   decompileMscScript,
   openFileInExternalEditor,
@@ -350,7 +351,28 @@ export default function MscWorkspaceView({
         inputFolderPath: normalized,
         modFolderPath: resolvedModFolderPath,
       });
-      toast.success(`Repacked to mod: ${result.outputPath}`);
+      // Game may keep loading same-stem .vgsht2 over the freshly written .fhm2d.
+      try {
+        const removed = await removeMatchingModVgsht2(
+          resolvedModFolderPath,
+          result.outputPath,
+        );
+        if (removed) {
+          toast.success(`Repacked to mod: ${result.outputPath}`, {
+            description: "Removed matching .vgsht2 (same stem as .fhm2d)",
+          });
+        } else {
+          toast.success(`Repacked to mod: ${result.outputPath}`);
+        }
+      } catch (removeErr) {
+        console.error(
+          `Failed to remove matching .vgsht2 beside ${result.outputPath}`,
+          removeErr,
+        );
+        toast.error(
+          `Repacked to mod but failed to remove .vgsht2: ${(removeErr as Error).message}`,
+        );
+      }
     } catch (error) {
       console.error("Error during repack folder:", error);
       toast.error(`Repack Folder failed: ${error instanceof Error ? error.message : String(error)}`);

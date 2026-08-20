@@ -21,6 +21,7 @@ const {
   readTextFileMock,
   writeTextFileMock,
   applyMscResolvedOverlayToScript2Mock,
+  removeMatchingModVgsht2Mock,
 } = vi.hoisted(() => ({
   openMock: vi.fn(),
   invokeMock: vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => undefined),
@@ -44,6 +45,7 @@ const {
     updatedScript2Content: null,
     renamedCallbackCount: 0,
   })),
+  removeMatchingModVgsht2Mock: vi.fn(async () => false),
 }));
 
 const resolvedOverlayResult: MscResolvedScript2ApplyResult = {
@@ -128,6 +130,10 @@ vi.mock("../../utils/mscResolvedOverlay", () => ({
   applyMscResolvedOverlayToScript2: applyMscResolvedOverlayToScript2Mock,
 }));
 
+vi.mock("../../utils/modVgsht2", () => ({
+  removeMatchingModVgsht2: removeMatchingModVgsht2Mock,
+}));
+
 describe("MscWorkspaceView", () => {
   beforeEach(() => {
     const elementPrototype = Element.prototype as Element & {
@@ -149,6 +155,7 @@ describe("MscWorkspaceView", () => {
     readDirMock.mockResolvedValue([]);
     readTextFileMock.mockResolvedValue("");
     writeTextFileMock.mockResolvedValue(undefined);
+    removeMatchingModVgsht2Mock.mockResolvedValue(false);
     applyMscResolvedOverlayToScript2Mock.mockReturnValue({
       status: "skipped",
       evidence: {
@@ -345,8 +352,47 @@ describe("MscWorkspaceView", () => {
         outputPath: "E:\\OB_MOD\\0x12345678.fhm2d",
         atomicWrite: true,
       });
+      expect(removeMatchingModVgsht2Mock).toHaveBeenCalledWith(
+        "E:/OB_MOD",
+        "E:\\OB_MOD\\0x12345678.fhm2d",
+      );
       expect(toastSuccessMock).toHaveBeenCalledWith(
         "Repacked to mod: E:\\OB_MOD\\0x12345678.fhm2d",
+      );
+    });
+  });
+
+  it("removes matching .vgsht2 after MSC FHM2D folder repack", async () => {
+    const user = userEvent.setup();
+    readDirMock.mockResolvedValue([{ isFile: true, name: "0.c" }]);
+    invokeMock.mockResolvedValueOnce({
+      outputPath: "E:\\OB_MOD\\0x12345678.fhm2d",
+      totalFiles: 1,
+      outputSize: 4096,
+    });
+    removeMatchingModVgsht2Mock.mockResolvedValueOnce(true);
+
+    render(
+      <MscWorkspaceView
+        workspaceRoot="E:/workspace"
+        workspaceDefaultPath="E:/workspace/040msc"
+        mscFolderPath="E:/workspace/040msc/0x12345678"
+        onMscFolderChange={() => {}}
+        isActive
+        modFolderPath="E:/OB_MOD"
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /repack \.fhm2d/i }));
+
+    await waitFor(() => {
+      expect(removeMatchingModVgsht2Mock).toHaveBeenCalledWith(
+        "E:/OB_MOD",
+        "E:\\OB_MOD\\0x12345678.fhm2d",
+      );
+      expect(toastSuccessMock).toHaveBeenCalledWith(
+        "Repacked to mod: E:\\OB_MOD\\0x12345678.fhm2d",
+        { description: "Removed matching .vgsht2 (same stem as .fhm2d)" },
       );
     });
   });

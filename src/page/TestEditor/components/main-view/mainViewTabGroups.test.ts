@@ -21,6 +21,7 @@ describe("mainViewTabGroups", () => {
 
   it("keeps Param Editor mounted after the first visit even without unsaved changes", () => {
     expect(shouldKeepMainViewTabMounted("param-editor", false, false)).toBe(true);
+    expect(shouldKeepMainViewTabMounted("interaction-editor", false, false)).toBe(true);
     expect(shouldKeepMainViewTabMounted("folder-structure", false, false)).toBe(false);
     expect(shouldKeepMainViewTabMounted("folder-structure", false, true)).toBe(true);
   });

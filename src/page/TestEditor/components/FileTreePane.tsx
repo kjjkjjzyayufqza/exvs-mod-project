@@ -1,30 +1,13 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Tree, type NodeApi } from "react-arborist";
-import { ArrowUpDown, Search, FolderOpen, Loader2 } from "lucide-react";
+import { ArrowUpDown, Search, FolderOpen } from "lucide-react";
 import { exists } from "@tauri-apps/plugin-fs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
-import { repackFolderUsingStructureToModFolder } from "@/utils/repackRunner";
-import { promptAndMigrateFhm2dStructureIfNeeded } from "@/utils/fhm2dStructureMetadata";
-import {
-  applyFhm2dStructureMigrationToPack,
-  resolveMigratedFhm2dPackPaths,
-} from "@/utils/fhm2dFolderPathResolution";
-import { removeMatchingModVgsht2 } from "../utils/modVgsht2";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -39,7 +22,6 @@ import { pathAncestorSetFromRoot } from "../utils/fileTreePathHighlight";
 import { FileTreeNodeRow, type FileTreeNodeRowContext } from "./FileTreeNodeRow";
 import {
   collectStructureJsonPathKeys,
-  normalizeStructureJsonPathKey,
   parseWorkspacePackNodeTarget,
 } from "./fileTreeNodeRowUtils";
 
@@ -59,8 +41,7 @@ type FileTreePaneProps = {
   hasUnsavedChanges?: boolean;
   workspaceDocument: TestEditorWorkspaceDocument;
   dirtyPacks?: WorkspacePackIdentity[];
-  modFolderPath?: string;
-  onPackRepacked?: (packKey: string) => void;
+  onRequestFhm2dRepack: (pack: WorkspacePackIdentity) => void;
   starredPathSet: Set<string>;
   onToggleStar: (path: string) => void;
   viewOptions: FileTreeViewOptions;
@@ -84,8 +65,7 @@ function FileTreePaneImpl({
   hasUnsavedChanges = false,
   workspaceDocument,
   dirtyPacks = [],
-  modFolderPath,
-  onPackRepacked,
+  onRequestFhm2dRepack,
   starredPathSet,
   onToggleStar,
   viewOptions,
@@ -95,10 +75,6 @@ function FileTreePaneImpl({
   const empty = data.length === 0;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [treeHeight, setTreeHeight] = useState(480);
-  const [repackDialogOpen, setRepackDialogOpen] = useState(false);
-  const [repackRunning, setRepackRunning] = useState(false);
-  const [repackRemoveVgsht2InMod, setRepackRemoveVgsht2InMod] = useState(true);
-  const [repackTarget, setRepackTarget] = useState<WorkspacePackIdentity | null>(null);
   const structureJsonPathKeys = useMemo(
     () => collectStructureJsonPathKeys(workspaceTreeData),
     [workspaceTreeData],
@@ -203,17 +179,8 @@ function FileTreePaneImpl({
     [getParentDirPath, openAnyPath]
   );
 
-  const beginRepackFlow = useCallback(
-    (target: WorkspacePackIdentity) => {
-      setRepackTarget(target);
-      setRepackRemoveVgsht2InMod(true);
-      setRepackDialogOpen(true);
-    },
-    []
-  );
-
   const openRepackDialogForNode = useCallback(
-    async (node: TestTreeNode) => {
+    (node: TestTreeNode) => {
       if (!currentDir) {
         toast.error("No workspace root selected");
         return;
@@ -223,91 +190,10 @@ function FileTreePaneImpl({
         toast.error("Cannot resolve workspace pack target");
         return;
       }
-      const remappedTarget = await resolveMigratedFhm2dPackPaths(target);
-      const structurePathKey = normalizeStructureJsonPathKey(remappedTarget.structureJsonPath);
-      if (node.isDir && !structureJsonPathKeys.has(structurePathKey)) {
-        toast.error(`Missing structure JSON: ${remappedTarget.structureJsonPath}`);
-        return;
-      }
-      const structureOk = await exists(remappedTarget.structureJsonPath);
-      if (!structureOk) {
-        toast.error(`Missing structure JSON: ${remappedTarget.structureJsonPath}`);
-        return;
-      }
-      const metadataMigration = await promptAndMigrateFhm2dStructureIfNeeded({
-        structureJsonPath: remappedTarget.structureJsonPath,
-      });
-      beginRepackFlow(
-        metadataMigration
-          ? applyFhm2dStructureMigrationToPack(remappedTarget, metadataMigration)
-          : remappedTarget,
-      );
+      onRequestFhm2dRepack(target);
     },
-    [beginRepackFlow, currentDir, structureJsonPathKeys, workspaceDocument]
+    [currentDir, onRequestFhm2dRepack, workspaceDocument],
   );
-
-  const handleRepackDialogOpenChange = useCallback(
-    (open: boolean) => {
-      if (repackRunning) return;
-      setRepackDialogOpen(open);
-      if (!open) setRepackTarget(null);
-    },
-    [repackRunning]
-  );
-
-  const handleConfirmRepack = useCallback(async () => {
-    if (!repackTarget) return;
-    const modDir = modFolderPath?.trim();
-    if (!modDir) {
-      toast.error("Configure OB Mod path in Config before repacking");
-      return;
-    }
-    setRepackRunning(true);
-    try {
-      const folderExists = await exists(repackTarget.folderPath);
-      if (!folderExists) {
-        throw new Error(`Input folder does not exist: ${repackTarget.folderPath}`);
-      }
-      const structureOk = await exists(repackTarget.structureJsonPath);
-      if (!structureOk) {
-        throw new Error("Structure JSON file is missing");
-      }
-      const repackResult = await repackFolderUsingStructureToModFolder({
-        structurePath: repackTarget.structureJsonPath,
-        inputFolderPath: repackTarget.folderPath,
-        modFolderPath: modDir,
-      });
-      // Delete by written .fhm2d stem (HashName), not workspace folder name.
-      // Custom packs like Gyan_model repack to 0xHASH.fhm2d / 0xHASH.vgsht2.
-      if (repackRemoveVgsht2InMod) {
-        try {
-          const removed = await removeMatchingModVgsht2(modDir, repackResult.outputPath);
-          if (removed) {
-            toast.success(`Repacked to mod: ${repackResult.outputPath}`, {
-              description: "Removed matching .vgsht2 (same stem as .fhm2d)",
-            });
-          } else {
-            toast.success(`Repacked to mod: ${repackResult.outputPath}`);
-          }
-        } catch (removeErr) {
-          console.error(`Failed to remove matching .vgsht2 beside ${repackResult.outputPath}`, removeErr);
-          toast.error(
-            `Repacked to mod but failed to remove .vgsht2: ${(removeErr as Error).message}`,
-          );
-        }
-      } else {
-        toast.success(`Repacked to mod: ${repackResult.outputPath}`);
-      }
-      onPackRepacked?.(repackTarget.packKey);
-    } catch (error) {
-      console.error(`Repack failed for ${repackTarget.packKey}`, error);
-      toast.error(`Repack failed: ${(error as Error).message}`);
-    } finally {
-      setRepackRunning(false);
-      setRepackDialogOpen(false);
-      setRepackTarget(null);
-    }
-  }, [repackTarget, repackRemoveVgsht2InMod, modFolderPath, onPackRepacked]);
 
   const fileTreeNodeRowCtx = useMemo<FileTreeNodeRowContext>(
     () => ({
@@ -345,7 +231,6 @@ function FileTreePaneImpl({
   );
 
   return (
-    <>
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div className="flex h-full min-h-0 flex-col outline-none">
@@ -426,68 +311,6 @@ function FileTreePaneImpl({
         </div>
       </ContextMenuContent>
     </ContextMenu>
-
-    <AlertDialog open={repackDialogOpen} onOpenChange={handleRepackDialogOpenChange}>
-      <AlertDialogContent className="max-w-lg">
-        <AlertDialogHeader>
-          <AlertDialogTitle>Repack this pack?</AlertDialogTitle>
-          <AlertDialogDescription asChild>
-            <div className="space-y-3 text-sm text-muted-foreground">
-              <p>
-                Runs the same repack as <span className="font-medium text-foreground">Repack Changes</span> for folder{" "}
-                <code className="rounded bg-muted px-1 py-0.5 text-foreground">
-                  {repackTarget?.packKey ?? "-"}
-                </code>{" "}
-                using its <code className="rounded bg-muted px-1 py-0.5 text-foreground">_structure.json</code>. Output
-                is written to the OB Mod folder as <code className="rounded bg-muted px-1 py-0.5">0xHASH.fhm2d</code>.
-              </p>
-              {!modFolderPath?.trim() ? (
-                <p className="text-amber-600 dark:text-amber-500">
-                  OB Mod path is not configured. Set it in Config before repacking.
-                </p>
-              ) : null}
-              {hasUnsavedChanges && repackTarget && currentJsonPath === repackTarget.structureJsonPath ? (
-                <p className="text-amber-600 dark:text-amber-500">
-                  This structure file is open with unsaved changes. Save in the editor first if you need those edits in
-                  the repack.
-                </p>
-              ) : null}
-              <label className="flex cursor-pointer items-start gap-2 text-foreground">
-                <Checkbox
-                  checked={repackRemoveVgsht2InMod}
-                  disabled={repackRunning}
-                  onCheckedChange={(checked) => setRepackRemoveVgsht2InMod(Boolean(checked))}
-                  className="mt-0.5"
-                />
-                <span>
-                  After repack, remove the <code className="rounded bg-muted px-1 py-0.5">.vgsht2</code> with the same stem as the written{" "}
-                  <code className="rounded bg-muted px-1 py-0.5">.fhm2d</code> (HashName) in the same
-                  OB Mod folder.
-                </span>
-              </label>
-            </div>
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={repackRunning}>Cancel</AlertDialogCancel>
-          <Button
-            type="button"
-            disabled={repackRunning || !repackTarget || !modFolderPath?.trim()}
-            onClick={() => void handleConfirmRepack()}
-          >
-            {repackRunning ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Repacking...
-              </>
-            ) : (
-              "Repack"
-            )}
-          </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-    </>
   );
 }
 

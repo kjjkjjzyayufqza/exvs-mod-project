@@ -48,7 +48,7 @@ interface MainViewProps {
   workspaceRouteRoots: Record<string, string>;
   modFolderPath?: string;
   onPackMutated?: (pack: WorkspacePackIdentity) => void;
-  onPackRepacked?: (packKey: string) => void;
+  onRequestFhm2dRepack?: (pack: WorkspacePackIdentity) => void;
   onOpenAsEffectProject?: (filePath: string) => void;
 }
 
@@ -270,10 +270,9 @@ const tabs: StageTab[] = [
         workspaceRoot={props.folderPath ?? ""}
         structureJsonPath={props.jsonFilePath ?? null}
         workspaceDocument={props.workspaceDocument}
-        modFolderPath={props.modFolderPath ?? ""}
         isActive={false}
         onPackMutated={props.onPackMutated}
-        onPackRepacked={props.onPackRepacked}
+        onRequestFhm2dRepack={props.onRequestFhm2dRepack}
         onOpenAsEffectProject={props.onOpenAsEffectProject}
       />
     ),
@@ -305,7 +304,7 @@ const MainView = ({
   workspaceRouteRoots,
   modFolderPath,
   onPackMutated,
-  onPackRepacked,
+  onRequestFhm2dRepack,
   onOpenAsEffectProject,
 }: MainViewProps) => {
   const initialTab = tabs[0]?.value ?? "folder-structure";
@@ -626,10 +625,9 @@ const MainView = ({
               workspaceRoot={props.folderPath ?? ""}
               structureJsonPath={props.jsonFilePath ?? null}
               workspaceDocument={props.workspaceDocument}
-              modFolderPath={props.modFolderPath ?? ""}
               isActive={activeTab === "effect-folder"}
               onPackMutated={props.onPackMutated}
-              onPackRepacked={props.onPackRepacked}
+              onRequestFhm2dRepack={props.onRequestFhm2dRepack}
               onOpenAsEffectProject={props.onOpenAsEffectProject}
             />
           ),
@@ -695,7 +693,7 @@ const MainView = ({
       workspaceRouteRoots,
       modFolderPath,
       onPackMutated,
-      onPackRepacked,
+      onRequestFhm2dRepack,
       onOpenAsEffectProject,
     };
     if (tab.render) return tab.render(props);

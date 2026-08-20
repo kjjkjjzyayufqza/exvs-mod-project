@@ -1,5 +1,11 @@
 # MSC Research 入口：以真实 `.c` 与 raw Param 为证据
 
+> Agent / CodeGraph 分簇索引（只增加、不改写本目录既有笔记）：
+> [INDEX.md](./INDEX.md)，由 `tools/msc_research_catalog.py` 生成。
+> 路由 skill：`.cursor/skills/msc-research-index/SKILL.md`。
+> 先 `python tools/msc_research_catalog.py --match "<关键词>"`，不要把本 README 当 cluster catalog 扫目录。
+
+
 > Provenance warning：本目录多数早期深挖文档基于 BDBE patch 前快照；当前 `E:\XB\解包\com\file\0xBDBE6FEA\2.c/2.dscex` 已含 2026-06-19 Delta Kai AI patch。旧 generated analysis/overlay/resolved-label 工作流已删除并废弃；除非有明确必要，不再用 generated JSON 作为研究输入。当前研究直接读取 `.c`、原始 Param 与资源二进制；真实 OB v27 Delta Plus 证据改用 `0x04AD9F33 + 0x5556A52B`。
 
 这组笔记用于继续研究 EXVS MSC 系统，当前样本是：

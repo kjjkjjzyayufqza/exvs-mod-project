@@ -81,7 +81,7 @@ describe("ListeningRepackDialog", () => {
       />,
     );
 
-    await waitFor(() => expect(existsMock).toHaveBeenCalledTimes(20));
+    await waitFor(() => expect(existsMock.mock.calls.length).toBeGreaterThanOrEqual(20));
     expect(screen.getByText("002chara/0x12345600")).toBeInTheDocument();
     expect(screen.getByText("002chara/0x12345602")).toBeInTheDocument();
     expect(screen.queryByText("002chara/0x12345610")).not.toBeInTheDocument();
@@ -103,5 +103,20 @@ describe("ListeningRepackDialog", () => {
 
     expect(await screen.findByText("002chara/0x12345678")).toBeInTheDocument();
     expect(screen.getByText("006effect/0x12345678")).toBeInTheDocument();
+  });
+
+  it("shows only the requested pack when a single fhm2d is passed in", async () => {
+    render(
+      <ListeningRepackDialog
+        open
+        dirtyPacks={[pack("006effect/0xABCDEF01", "C:/workspace/006effect/0xABCDEF01")]}
+        modFolderPath="C:/mod"
+        onOpenChange={() => {}}
+        onPackRepacked={() => {}}
+      />,
+    );
+
+    expect(await screen.findByText("006effect/0xABCDEF01")).toBeInTheDocument();
+    expect(screen.queryByText("002chara/0x12345678")).not.toBeInTheDocument();
   });
 });

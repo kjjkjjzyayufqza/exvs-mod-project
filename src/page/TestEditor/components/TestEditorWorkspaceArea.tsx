@@ -23,7 +23,7 @@ type Props = {
   workspaceTreeData: TestTreeNode[];
   dirtyPacks: WorkspacePackIdentity[];
   obModPath: string;
-  onPackRepacked: (packKey: string) => void;
+  onRequestFhm2dRepack: (pack: WorkspacePackIdentity) => void;
   onPackMutated?: (pack: WorkspacePackIdentity) => void;
   starredPathSet: Set<string>;
   onToggleStar: (path: string) => void;
@@ -55,7 +55,7 @@ export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
   workspaceTreeData,
   dirtyPacks,
   obModPath,
-  onPackRepacked,
+  onRequestFhm2dRepack,
   onPackMutated,
   starredPathSet,
   onToggleStar,
@@ -89,8 +89,7 @@ export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
           hasUnsavedChanges={hasUnsavedChanges}
           workspaceDocument={workspaceDocument}
           dirtyPacks={dirtyPacks}
-          modFolderPath={obModPath || undefined}
-          onPackRepacked={onPackRepacked}
+          onRequestFhm2dRepack={onRequestFhm2dRepack}
           starredPathSet={starredPathSet}
           onToggleStar={onToggleStar}
           viewOptions={viewOptions}
@@ -110,7 +109,7 @@ export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
           workspaceRouteRoots={workspaceRouteRoots}
           modFolderPath={obModPath}
           onPackMutated={onPackMutated}
-          onPackRepacked={onPackRepacked}
+          onRequestFhm2dRepack={onRequestFhm2dRepack}
           onOpenAsEffectProject={onOpenAsEffectProject}
         />
       }

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
-import { LoaderCircle } from "lucide-react"
+import { ChevronDown, LoaderCircle } from "lucide-react"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { FilePathInput } from "@/components/ui/filePathInput"
+import { cn } from "@/lib/utils"
 import {
   findReferencingEntries,
   resolveSingleReference,
@@ -200,6 +202,7 @@ function LoadedHitboxParamAnalysisPanel({
   const [siblingData, setSiblingData] = useState<TypedParamFile | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [analysisOpen, setAnalysisOpen] = useState(false)
 
   useEffect(() => {
     const path = siblingPath.trim()
@@ -237,65 +240,102 @@ function LoadedHitboxParamAnalysisPanel({
     }
   }, [relatedConfig.paramType, siblingPath])
 
+  const statusLabel = loading
+    ? "Loading…"
+    : siblingData
+      ? `${siblingData.entries.length} rows`
+      : loadError
+        ? "Load failed"
+        : "Optional"
+
   return (
-    <section className="space-y-3" aria-label="Hitbox analysis">
-      <div className="flex flex-col gap-2 2xl:flex-row 2xl:items-end">
-        <div className="min-w-0 flex-1 space-y-1">
-          <label
-            htmlFor={`hitbox-related-${relatedConfig.paramType}`}
-            className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+    <Collapsible open={analysisOpen} onOpenChange={setAnalysisOpen}>
+      <section className="shrink-0 border-b bg-muted/5" aria-label="Hitbox analysis">
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              "flex w-full items-center gap-2 px-3 py-2 text-left",
+              "transition-[background-color,color] duration-150 hover:bg-muted/40",
+              "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+              "active:translate-y-px",
+            )}
           >
-            Related {relatedConfig.label} table
-          </label>
-          <FilePathInput
-            key={relatedConfig.paramType}
-            id={`hitbox-related-${relatedConfig.paramType}`}
-            className="h-7 w-full font-mono text-[10px]"
-            storeKey={relatedConfig.storeKey}
-            value={siblingPath}
-            onChange={(event) => setSiblingPath(event.target.value)}
-            picker={{
-              kind: "file",
-              title: `Select ${relatedConfig.paramType} file`,
-              filters: [{ name: "Param", extensions: ["bin"] }],
-              defaultPath: workspaceDefaultPath,
-            }}
-          />
-        </div>
-        <div
-          className="min-h-7 shrink-0 rounded-md border bg-background/70 px-2 py-1 text-[10px] text-muted-foreground"
-          aria-live="polite"
-        >
-          {loading ? (
-            <span className="flex items-center gap-1">
-              <LoaderCircle className="h-3 w-3 animate-spin" aria-hidden="true" />
-              Loading related table…
+            <ChevronDown
+              className={cn(
+                "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-150",
+                !analysisOpen && "-rotate-90",
+              )}
+              aria-hidden
+            />
+            <span className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Related {relatedConfig.label} table
             </span>
-          ) : siblingData ? (
-            <span className="text-emerald-600 dark:text-emerald-300">
-              {siblingData.entries.length} related rows loaded
+            <span
+              className={cn(
+                "shrink-0 font-mono text-[10px] tabular-nums",
+                loadError
+                  ? "text-destructive"
+                  : siblingData
+                    ? "text-emerald-600 dark:text-emerald-300"
+                    : "text-muted-foreground",
+              )}
+              aria-live="polite"
+            >
+              {loading ? (
+                <span className="inline-flex items-center gap-1">
+                  <LoaderCircle className="h-3 w-3 animate-spin" aria-hidden="true" />
+                  {statusLabel}
+                </span>
+              ) : (
+                statusLabel
+              )}
             </span>
-          ) : loadError ? (
-            <span className="text-destructive">Failed to load related table</span>
-          ) : (
-            "Optional — select the paired param file"
-          )}
-        </div>
-      </div>
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="max-h-[min(42vh,28rem)] space-y-3 overflow-y-auto px-3 pb-3">
+            <div className="flex flex-col gap-2 2xl:flex-row 2xl:items-end">
+              <div className="min-w-0 flex-1 space-y-1">
+                <label
+                  htmlFor={`hitbox-related-${relatedConfig.paramType}`}
+                  className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                >
+                  Paired {relatedConfig.label} file
+                </label>
+                <FilePathInput
+                  key={relatedConfig.paramType}
+                  id={`hitbox-related-${relatedConfig.paramType}`}
+                  className="h-7 w-full font-mono text-[10px]"
+                  storeKey={relatedConfig.storeKey}
+                  value={siblingPath}
+                  onChange={(event) => setSiblingPath(event.target.value)}
+                  picker={{
+                    kind: "file",
+                    title: `Select ${relatedConfig.paramType} file`,
+                    filters: [{ name: "Param", extensions: ["bin"] }],
+                    defaultPath: workspaceDefaultPath,
+                  }}
+                />
+              </div>
+            </div>
 
-      {loadError ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-[10px] text-destructive">
-          {loadError}
-        </p>
-      ) : null}
+            {loadError ? (
+              <p className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-[10px] text-destructive">
+                {loadError}
+              </p>
+            ) : null}
 
-      <HitboxParamAnalysisContent
-        fileType={fileType}
-        data={data}
-        selectedEntryIndex={selectedEntryIndex}
-        siblingData={siblingData}
-      />
-    </section>
+            <HitboxParamAnalysisContent
+              fileType={fileType}
+              data={data}
+              selectedEntryIndex={selectedEntryIndex}
+              siblingData={siblingData}
+            />
+          </div>
+        </CollapsibleContent>
+      </section>
+    </Collapsible>
   )
 }
 

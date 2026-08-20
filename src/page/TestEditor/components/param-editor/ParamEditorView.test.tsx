@@ -117,7 +117,7 @@ describe("ParamEditorView table type changes", () => {
     })
   })
 
-  it("keeps the current type until dirty changes are explicitly discarded", async () => {
+  it("caches loaded typed data when switching table types", async () => {
     const user = userEvent.setup()
     const onUnsavedChanges = vi.fn()
 
@@ -128,22 +128,21 @@ describe("ParamEditorView table type changes", () => {
     await screen.findByText("Make dirty")
 
     await user.click(screen.getByText("Make dirty"))
+    expect(onUnsavedChanges).toHaveBeenLastCalledWith(true)
+
     await user.selectOptions(screen.getByLabelText("Table type"), "bulletparam")
-
-    expect(screen.getByText("Discard unsaved changes and switch type?")).toBeInTheDocument()
-    expect(screen.getByLabelText("Table type")).toHaveValue("armsparam")
-
-    await user.click(screen.getByRole("button", { name: /cancel/i }))
 
     expect(screen.queryByText("Discard unsaved changes and switch type?")).not.toBeInTheDocument()
-    expect(screen.getByLabelText("Table type")).toHaveValue("armsparam")
-
-    await user.selectOptions(screen.getByLabelText("Table type"), "bulletparam")
-    await user.click(screen.getByRole("button", { name: /discard changes/i }))
-
     expect(screen.getByLabelText("Table type")).toHaveValue("bulletparam")
-    expect(screen.queryByText("Make dirty")).not.toBeInTheDocument()
-    expect(onUnsavedChanges).toHaveBeenLastCalledWith(false)
+    expect(screen.getByText("Choose a type, set a file path, then Load.")).toBeInTheDocument()
+    expect(screen.getByText("Make dirty").closest("[aria-hidden='true']")).not.toBeNull()
+    expect(onUnsavedChanges).toHaveBeenLastCalledWith(true)
+
+    await user.selectOptions(screen.getByLabelText("Table type"), "armsparam")
+
+    expect(screen.getByLabelText("Table type")).toHaveValue("armsparam")
+    expect(screen.getByText("Make dirty").closest("[aria-hidden='true']")).toBeNull()
+    expect(onUnsavedChanges).toHaveBeenLastCalledWith(true)
   })
 
   it("passes the workspace route root as the file picker default path", async () => {

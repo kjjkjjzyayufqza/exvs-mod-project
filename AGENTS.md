@@ -29,6 +29,12 @@ Before doing any task, every AI agent must:
 3. Use one scoped filename search for relevant `docs/` Markdown, then read only
    the most relevant specification before touching code or assets. Skip broad
    docs scans when the user names the exact file or the task is rules-only.
+   **MSC exception:** for MSC research, MSC `X.c` edits, or named unit script
+   ports, do not list `docs/msc-research/`. Load
+   `.cursor/skills/msc-research-index/SKILL.md` and match a cluster with
+   `python tools/msc_research_catalog.py --match "<keywords>"`, then read
+   `read_first`. Canonical catalog: `tools/msc_research_catalog.py`. Markdown
+   projection: `docs/msc-research/INDEX.md`.
 
 ## GPT/Codex Fast Path (Mandatory)
 
@@ -91,6 +97,14 @@ matches a registered trigger, read the linked bootstrap **before** CodeGraph,
 settled findings as the starting state; do not reproduce them merely to gain
 confidence.
 
+All other MSC clusters (global `2.c`, `0.c` input, Gyan, Delta Plus, syscalls,
+toolchain, per-unit pages) live in `tools/msc_research_catalog.py`. Match first;
+do not rediscover `docs/msc-research/`. Do not rewrite existing MSC notes to
+improve indexing — add aliases/clusters to the catalog instead. The Wing Zero
+Rebellion bootstrap below stays inlined because it is an active port; still
+`--match` so alt2 gerobi / `SUB_SHOT_CUSTOM` are not mixed into the transform
+port.
+
 ### Wing Zero Rebellion transformation port
 
 **Triggers:** `Wing Gundam Zero Rebellion`, `wing_gundam_zero_rebellion`,
@@ -135,6 +149,10 @@ Reuse rules:
 
 Use `docs/` as the first source of project truth:
 
+- `tools/msc_research_catalog.py` — MSC research cluster catalog (agent/CodeGraph
+  index). Markdown projection: `docs/msc-research/INDEX.md`. Skill:
+  `.cursor/skills/msc-research-index/SKILL.md`. Rule:
+  `.cursor/rules/msc-research-index.mdc`.
 - `docs/msc-binary-format-spec.md` — MSC bytecode format specification (header,
   opcodes, pushBit, script offset table, string table, EXVS2 vs Smash differences).
 - `docs/msc-research/func593-vanilla-ranged-slots.md` — vanilla / old-style
@@ -362,12 +380,14 @@ Current project rule entry points:
 - `exvs2-json` artifact isolation: `.cursor/rules/exvs2-json-artifacts.mdc`
 - `fhm2d-extract` artifact isolation: `.cursor/rules/fhm2d-extract-artifacts.mdc`
 - No release builds: `.cursor/rules/no-release-builds.mdc`
+- MSC research cluster routing: `.cursor/rules/msc-research-index.mdc`
 - Cross-agent hub: `AGENTS.md`
 
 Project skills (domain):
 
 - GPT shortest execution path: `.agents/skills/gpt-fast-path/SKILL.md`
 - GPT one-command semantic gate: `.agents/skills/gpt-fast-verify/SKILL.md`
+- MSC research cluster index: `.cursor/skills/msc-research-index/SKILL.md`
 - FHM2D stage pack/extract: `.cursor/skills/fhm2d-format/SKILL.md`
 - Stage numatb color-only materials: `.cursor/skills/exvs-stage-numatb/SKILL.md`
 - Tauri large binary IPC: `.cursor/skills/tauri-ipc-large-binary/SKILL.md`

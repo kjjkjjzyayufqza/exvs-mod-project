@@ -19,6 +19,12 @@ Before making code, asset, documentation, or command changes:
 4. If `AGENTS.md` has an **Active Research Bootstrap** whose triggers match the
    task, read that bootstrap before any discovery. Reuse its settled evidence;
    repeat research only when one of its explicit restart conditions is met.
+5. If the task is MSC research, MSC `X.c` editing, or a named unit script
+   port, load `.cursor/skills/msc-research-index/SKILL.md` and match a
+   cluster with `python tools/msc_research_catalog.py --match "..."` before
+   listing `docs/msc-research/`. Do not rewrite existing MSC research notes
+   to improve indexing; add clusters/aliases in the catalog instead. Full
+   rule: `.cursor/rules/msc-research-index.mdc`.
 
 When working on NUANMB / motion FBX import or homemade animation conversion,
 also read `docs/nuanmb-ath-helper-bone-policy.md`: **`ATH_*` helper bones must

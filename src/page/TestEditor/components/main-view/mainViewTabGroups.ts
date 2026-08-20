@@ -49,12 +49,9 @@ export const MAIN_VIEW_TAB_META: MainViewTabMeta[] = [
 ];
 
 /** Tabs that stay mounted after the first visit so returning does not remount/rerender. */
-export const KEEP_MOUNTED_MAIN_VIEW_TABS = new Set([
-  "param-editor",
-  "bullet-editor",
-  "speed-editor",
-  "depiction-editor",
-]);
+export const KEEP_MOUNTED_MAIN_VIEW_TABS = new Set(
+  MAIN_VIEW_TAB_META.filter((tab) => tab.group === "param").map((tab) => tab.value),
+);
 
 export function shouldKeepMainViewTabMounted(
   tabValue: string,

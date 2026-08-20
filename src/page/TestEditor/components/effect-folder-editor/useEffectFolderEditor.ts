@@ -11,7 +11,6 @@ import {
   importEffectFolderFile,
   importEffectFolderModel,
   inspectEffectFolder,
-  repackEffectFolderToModFolder,
   validateEffectFolderForRepack,
 } from "@/services/effectFolder/effectFolderService";
 import {
@@ -46,9 +45,7 @@ type UseEffectFolderEditorParams = {
   workspaceRoot: string;
   pack: WorkspacePackIdentity;
   isActive: boolean;
-  modFolderPath: string;
   onPackMutated?: (pack: WorkspacePackIdentity) => void;
-  onPackRepacked?: (packKey: string) => void;
   onActivePackChange?: (pack: WorkspacePackIdentity) => void;
 };
 
@@ -87,9 +84,7 @@ export function useEffectFolderEditor({
   workspaceRoot,
   pack,
   isActive,
-  modFolderPath,
   onPackMutated,
-  onPackRepacked,
   onActivePackChange,
 }: UseEffectFolderEditorParams) {
   const [metadataPack, setMetadataPack] = useState<WorkspacePackIdentity | null>(null);
@@ -330,31 +325,6 @@ export function useEffectFolderEditor({
     }
   }, [effectRoot, structureJsonPath]);
 
-  const runRepack = useCallback(async () => {
-    if (!modFolderPath.trim()) {
-      toast.error("Configure OB Mod path in Config before repacking");
-      return;
-    }
-    setBusyAction("repack");
-    try {
-      const validationResult = await validateEffectFolderForRepack(effectRoot, structureJsonPath);
-      setValidation(validationResult);
-      if (!validationResult.valid) {
-        toast.error("Fix validation errors before repacking");
-        return;
-      }
-      const result = await repackEffectFolderToModFolder(modFolderPath, structureJsonPath);
-      toast.success(`Repacked to ${result.outputPath}`);
-      if (loadState.status === "ready") {
-        onPackRepacked?.(loadState.pack.packKey);
-      }
-    } catch (error) {
-      toast.error(String(error));
-    } finally {
-      setBusyAction(null);
-    }
-  }, [effectRoot, loadState, modFolderPath, onPackRepacked, structureJsonPath]);
-
   const runDelete = useCallback(
     async (deleteFiles: boolean) => {
       if (selectedItems.length === 0) return;
@@ -495,7 +465,6 @@ export function useEffectFolderEditor({
     reload,
     markMutated,
     runValidate,
-    runRepack,
     runDelete,
     runImportFile,
     runImportModel,
