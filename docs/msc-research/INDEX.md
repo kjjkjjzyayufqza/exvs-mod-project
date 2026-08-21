@@ -46,6 +46,7 @@ Existing research notes are not rewritten by this index.
   - MSC headers are LE; script-body opcode parameters are BE.
   - Function pointers in 0.c/2.c must be symbols (func_143), never raw offsets like 0x5fef.
   - AI-edited X.c blocks need // AI decision and // End, origin is ... pairs.
+  - AI-block comments explain original global/func/sys traps; do not restate AI semantic names.
 - **read_first:**
   - `docs/msc-binary-format-spec.md`
   - `docs/msc-research/msc-ai-edit-block-rule.md`
@@ -65,6 +66,7 @@ Existing research notes are not rewritten by this index.
   - `tools/check_msc_opaque_func_ptrs.py`
 - **do_not:**
   - Do not invent global777/var42 names for AI-added MSC state.
+  - Do not write AI-block comments that only narrate AI semantic names.
   - Do not use generated analysis JSON / overlays as evidence.
 
 ### `syscall` — Native MSC syscall notes
@@ -236,11 +238,12 @@ Existing research notes are not rewritten by this index.
 ### `wing-zero-rebellion` — Wing Zero Rebellion MSC / bird-form transform port
 
 - **kind:** unit
-- **aliases:** `Wing Gundam Zero Rebellion`, `wing_gundam_zero_rebellion`, `900000004`, `kamaesht2neo`, `Neo Bird`, `bird form`, `鸟形态`, `飞翼零式叛乱`, `零式叛乱`, `Rebellion`, `FORCED_RECOVERY`, `0x77b100ff`, `alt2 gerobi`, `N特射`, `SUB_SHOT_CUSTOM`, `rebellion_hiv_lock_aim`, `0x7cd11119`
-- **notes:** AGENTS.md still inlines this bootstrap. Sibling Rebellion MSC edits: alt2-gerobi, sub-shot-custom.
+- **aliases:** `Wing Gundam Zero Rebellion`, `wing_gundam_zero_rebellion`, `900000004`, `kamaesht2neo`, `Neo Bird`, `bird form`, `鸟形态`, `飞翼零式叛乱`, `零式叛乱`, `Rebellion`, `FORCED_RECOVERY`, `0x77b100ff`, `alt2 gerobi`, `N特射`, `SUB_SHOT_CUSTOM`, `rebellion_hiv_lock_aim`, `0x7cd11119`, `0x928ca34f`, `func_937`, `bird melee`, `鸟近战`
+- **notes:** AGENTS.md still inlines this bootstrap. Sibling Rebellion MSC edits: alt2-gerobi, sub-shot-custom, bird-melee-n-followup.
 - **settled:**
   - Bird arsenal is gated in 0.c func_143 only, not 2.c ACTION_*.
   - Rebellion main-shot bit is 0x1 (not TV 0x100); bird form id is 0x2 (TV 0x1).
+  - Bird melee 0x2 maps to 0x928ca34f (special-melee N followup func_937); do not split 0x8b97920e; do not add that hash to the func_41 flight allowlist; do not copy Delta Plus func_888(0x8) model switch.
   - Hit/interrupt is FORCED_RECOVERY; do not requeue 0x77b100ff.
   - Action hash is not form; form lives in global143.
   - Do not tear form only on standing idle 0x6d00aeaa.
@@ -254,6 +257,7 @@ Existing research notes are not rewritten by this index.
   - `docs/msc-research/2026-08-09-wing-zero-rebellion-transform-port-plan.md`
   - `docs/msc-research/alt2-gerobi-stop-and-followup.md`
   - `docs/msc-research/sub-shot-custom-start-only-aim.md`
+  - `docs/msc-research/wing-zero-rebellion-bird-melee-n-followup.md`
 - **related:**
   - `docs/msc-research/tv-wing-zero-flight-double-forward-aim.md`
   - `docs/msc-research/tv-wing-zero-flight-special-melee-landing-copy-list.md`
@@ -265,7 +269,8 @@ Existing research notes are not rewritten by this index.
 - **do_not:**
   - Do not unpack FHM2D for this case; named sources already exist.
   - Do not reopen the legacy '85 model assets missing' hash manifests.
-  - Do not mix transform-port notes with alt2 gerobi followup or SUB_SHOT_CUSTOM aim.
+  - Do not mix transform-port notes with alt2 gerobi followup, SUB_SHOT_CUSTOM aim, or bird N melee 0x928ca34f.
+  - Do not mix bird N melee 0x928ca34f with TV bird special-melee landing hashes.
   - Do not restart from package discovery unless a bootstrap restart condition is met.
 
 ### `wing-zero-tv` — TV Wing Zero source behavior for the Rebellion port

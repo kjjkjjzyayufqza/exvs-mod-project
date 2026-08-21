@@ -149,9 +149,11 @@ CLUSTERS: tuple[Cluster, ...] = (
             "MSC headers are LE; script-body opcode parameters are BE.",
             "Function pointers in 0.c/2.c must be symbols (func_143), never raw offsets like 0x5fef.",
             "AI-edited X.c blocks need // AI decision and // End, origin is ... pairs.",
+            "AI-block comments explain original global/func/sys traps; do not restate AI semantic names.",
         ),
         do_not=(
             "Do not invent global777/var42 names for AI-added MSC state.",
+            "Do not write AI-block comments that only narrate AI semantic names.",
             "Do not use generated analysis JSON / overlays as evidence.",
         ),
     ),
@@ -470,6 +472,10 @@ CLUSTERS: tuple[Cluster, ...] = (
             "SUB_SHOT_CUSTOM",
             "rebellion_hiv_lock_aim",
             "0x7cd11119",
+            "0x928ca34f",
+            "func_937",
+            "bird melee",
+            "鸟近战",
         ),
         read_first=(
             "docs/agent-sessions/2026-08-09-wing-zero-rebellion-transform-handoff.md",
@@ -480,6 +486,7 @@ CLUSTERS: tuple[Cluster, ...] = (
             R("2026-08-09-wing-zero-rebellion-transform-port-plan.md"),
             R("alt2-gerobi-stop-and-followup.md"),
             R("sub-shot-custom-start-only-aim.md"),
+            R("wing-zero-rebellion-bird-melee-n-followup.md"),
         ),
         related=(
             R("tv-wing-zero-flight-double-forward-aim.md"),
@@ -493,6 +500,7 @@ CLUSTERS: tuple[Cluster, ...] = (
         settled=(
             "Bird arsenal is gated in 0.c func_143 only, not 2.c ACTION_*.",
             "Rebellion main-shot bit is 0x1 (not TV 0x100); bird form id is 0x2 (TV 0x1).",
+            "Bird melee 0x2 maps to 0x928ca34f (special-melee N followup func_937); do not split 0x8b97920e; do not add that hash to the func_41 flight allowlist; do not copy Delta Plus func_888(0x8) model switch.",
             "Hit/interrupt is FORCED_RECOVERY; do not requeue 0x77b100ff.",
             "Action hash is not form; form lives in global143.",
             "Do not tear form only on standing idle 0x6d00aeaa.",
@@ -502,10 +510,11 @@ CLUSTERS: tuple[Cluster, ...] = (
         do_not=(
             "Do not unpack FHM2D for this case; named sources already exist.",
             "Do not reopen the legacy '85 model assets missing' hash manifests.",
-            "Do not mix transform-port notes with alt2 gerobi followup or SUB_SHOT_CUSTOM aim.",
+            "Do not mix transform-port notes with alt2 gerobi followup, SUB_SHOT_CUSTOM aim, or bird N melee 0x928ca34f.",
+            "Do not mix bird N melee 0x928ca34f with TV bird special-melee landing hashes.",
             "Do not restart from package discovery unless a bootstrap restart condition is met.",
         ),
-        notes="AGENTS.md still inlines this bootstrap. Sibling Rebellion MSC edits: alt2-gerobi, sub-shot-custom.",
+        notes="AGENTS.md still inlines this bootstrap. Sibling Rebellion MSC edits: alt2-gerobi, sub-shot-custom, bird-melee-n-followup.",
     ),
     Cluster(
         id=CLUSTER_WING_ZERO_TV,

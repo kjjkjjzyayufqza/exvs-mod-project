@@ -16,6 +16,7 @@ Source  E:\XB\mod\040msc\028gunwtv_001gunwtv_001\
 - Agent 前置：`docs/agent-sessions/2026-08-09-wing-zero-rebellion-transform-handoff.md`
 - Thinker 偏移雷区：`docs/agent-sessions/2026-08-13-msc-0c-function-pointer-offset-bug.md`
 - 0.c→2.c 边界：`docs/msc-research/0c-to-2c-input-action-boundary.md`
+- 鸟近战全走 N：`docs/msc-research/wing-zero-rebellion-bird-melee-n-followup.md`
 
 ---
 
@@ -142,7 +143,7 @@ Rebellion 的 `func_143` 用 `global39 != 0`（或显式 `== 0x2`）进鸟分支
 |------|------|
 | 普通形态 `global39 == 0` | 保留完整 `func_95` 表 |
 | 鸟形态 `0x1` 主射 | `0x476fac14` `ACTION_A_SHOT_BIRD`（空弹 `func_98(0)`）。**不要**接地面 `0x7cd11119`（`func_884` 会卸鸟挂件）。`2.c` 必须按 TV `ALT_2` 关对锁、禁止 `func_76(0x38)` |
-| 鸟形态 `0x2` 近战 | **全部走 N**：`0x928ca34f` `func_937`（地面「特格后再按格斗」那套，不分流 `0x8b97920e`）。不映射 `0x4/0x8/0x10/0x20`。拆鸟交给 `2.c` `func_41`（不要把该 hash 加进飞行白名单，不要抄 Delta `func_888(0x8)` 切模型） |
+| 鸟形态近战 | **全部走 N**：`global48 & 0x3e` → `0x928ca34f` `func_937`。飞行中按格斗时 `func_81` 会清掉 `0x2`，必须连 `0x4/0x8/0x10/0x20` 一起收。不分流 `0x8b97920e`。拆鸟交给 `func_41`，不要抄 Delta 切模型 |
 | 鸟形态其它武装 | 仍不映射副射/特射/蓄力；`0x200` 仍是解除 `0xa02d57dc` |
 | 可选保留 | partner/`0x400` + `0xc0000` 条件那条 |
 | 不在本文件做的事 | 不在 `2.c` `ACTION_*` 加 form `return` |
@@ -155,7 +156,7 @@ Rebellion 的 `func_143` 用 `global39 != 0`（或显式 `== 0x2`）进鸟分支
 - 相位结束用 `func_91()`，被打断才能离开 shoot / no_ammo。
 - 弹体仍是 `sys_4F(0, 0, 0x860a72cd)`。不要 `func_884`。
 
-TV 鸟分支（`global39 == 0x1`）会给 `0x100`/`0x200`/`0x80` 等换 **另一套 hash**；那是“有飞行武装”的完整产品。Rebellion 在没有对应 bird action hash 之前，用 **空映射** 等价于硬禁普通武装，且仍符合 **只改 0.c selector** 的架构。
+TV 鸟分支（`global39 == 0x1`）会给 `0x100`/`0x200`/`0x80` 等换 **另一套 hash**；那是“有飞行武装”的完整产品。Rebellion 副射/特射/蓄力在没有对应 bird hash 之前仍用 **空映射** 硬禁；近战已接 `0x928ca34f`。武装表仍只改 `0.c` selector。
 
 受击 / 倒地走移植计划的 **FORCED_RECOVERY**。完整证据、hash 表、作废修法和 TV 对照见
 [飞行打断后动作≠形态](./wing-zero-rebellion-flight-interrupt-form.md)。

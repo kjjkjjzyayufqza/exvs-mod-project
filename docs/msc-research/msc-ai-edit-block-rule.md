@@ -20,6 +20,7 @@
 
 ```c
 // AI decision (YYYY-MM-DD): short reason in English.
+// Extra English lines may name the original global / func / sys trap.
 // Origin: AI-assisted MSC edit; evidence/source in English.
 modified_or_added_code();
 // End, origin is AI-assisted MSC edit; evidence/source in English.
@@ -29,6 +30,8 @@ modified_or_added_code();
 
 - 开头必须是 `// AI decision (YYYY-MM-DD): ...`。
 - 结束必须是 `// End, origin is ...`。
+- 每个 block 都必须有一行 `// Origin: ...`。
+- 第一行是短标题。标题下面可以再写若干行英文，说明这段逻辑依赖哪些原始 `global` / `func_*` / `sys_*`，以及不能每 tick 重跑什么。
 - block 内可以是 1 行或多行代码。
 - 注释必须使用英文，因为项目规则要求代码和代码注释不写中文。
 - 不要在代码里写项目禁用标记。未完成事项用 `Future work:`，不要用禁用词。
@@ -57,6 +60,73 @@ modified_or_added_code();
 // Origin: AI-assisted MSC edit; source is func_593 runtime guard audit.
 // End, origin is AI-assisted MSC edit; source is func_593 runtime guard audit.
 ```
+
+## 逻辑注释：写 original `global` / `func_*` / `sys_*`
+
+AI 新增的语义名（例如 `rebellion_bird_n_melee_pending`）本身就是注释，不要再写
+“set pending so we melee” 这种复述。人类真正需要的是原始反编译符号在这段
+patch 里做什么：`global143`、`func_167`、`sys_46`、syscall 参数。
+
+规则：
+
+- 标题行之后、以及具体语句旁边，优先注释 **original** 符号：`globalNN`、
+  `func_N`、`sys_XX`，以及它们的 flag / 参数（例如 `sys_46(0xF)`、
+  `global143 == 0x2`）。
+- 不要给 AI 自己起的语义名再加旁白。赋值、清零、one-shot flag 靠名字表达。
+- 危险路径要写清楚 **不要做什么**：例如不要每 tick 重跑 `func_167` /
+  `sys_46` 的清零参数，否则会把刚设的空中状态打掉。
+- 对照来源写进注释（例如 `like ACTION_BC_SPECIAL_MELEE`），不要只写
+  “fix movement”。
+- 行内注释贴在 original 符号那一行，不要贴在语义名那一行。
+
+反例（复述自己起的名字，original 符号没有任何说明）：
+
+```c
+// AI decision (2026-08-20): bird N melee setup.
+// Origin: AI-assisted MSC edit; source is bird melee N followup.
+if (global143 == 0x2)
+{
+    // Set pending so we remember to melee.
+    rebellion_bird_n_melee_pending = 0x1;
+}
+if (rebellion_bird_n_melee_pending)
+{
+    // Now we are coming from flight.
+    rebellion_bird_n_melee_from_flight = 0x1;
+    // Clear pending.
+    rebellion_bird_n_melee_pending = 0;
+}
+// End, origin is AI-assisted MSC edit; source is bird melee N followup.
+```
+
+正例（注释打在 `global143` / `func_167` / `sys_46` 上；语义名不旁白）：
+
+```c
+// AI decision (2026-08-20): bird N melee one-shot air setup + WR FX.
+// Do NOT re-run func_167 / sys_46 zeros every tick; that resets air
+// state each frame so the attack never plays. Brake leftover fly
+// speed once with sys_46(0xF) like ACTION_BC_SPECIAL_MELEE.
+// Origin: AI-assisted MSC edit; user: no reaction after per-tick hold.
+if (global143 == 0x2)
+{
+    rebellion_bird_n_melee_pending = 0x1;
+}
+if (rebellion_bird_n_melee_pending)
+{
+    // global143: Rebellion bird form id (0x2). This gate is form, not action hash.
+    // func_167: one-shot air setup. Recalling it every tick zeros the attack.
+    func_167();
+    // sys_46(0xF): brake leftover fly speed once, same as ACTION_BC_SPECIAL_MELEE.
+    sys_46(0xF);
+    rebellion_bird_n_melee_from_flight = 0x1;
+    rebellion_bird_n_melee_pending = 0;
+}
+// End, origin is AI-assisted MSC edit; user: no reaction after per-tick hold.
+```
+
+上面的 `func_167()` / `sys_46(0xF)` 只是注释落点示范，真实 patch 要用该函数
+里的实际参数。检查器仍然只校验 `AI decision` / `Origin:` / `End, origin is`
+成对，不检查注释质量。
 
 ## 语义命名强制规则
 
@@ -97,6 +167,8 @@ int deltaKaiFunnelShell1ReturnTimer;
 
 ## 示例
 
+命名示例（AI 新增状态用语义名，不要 `global777`）：
+
 ```c
 // AI decision (2026-06-19): cloned Delta Kai funnels need script-side dock state.
 // Origin: AI-assisted MSC edit; source is Delta Kai slot-2 funnel shell sync research; shell order is known, side is not.
@@ -106,6 +178,8 @@ deltaKaiFunnelShell0ReturnTimer = 0;
 deltaKaiFunnelShell1ReturnTimer = 0;
 // End, origin is AI-assisted MSC edit; source is Delta Kai slot-2 funnel shell sync research.
 ```
+
+逻辑注释示例见上一节：标题说明 trap，行内注释打在 `global` / `func_*` / `sys_*` 上。
 
 ## 为什么必须这样做
 
@@ -142,4 +216,7 @@ python .\tools\msclang.py "<modified X.c>" -o "$env:TEMP\msc_ai_edit_check.mscsb
 - 每个 AI block 都应尽量包住最小必要代码。
 - 每个 AI 新增符号都必须有语义名；搜索到新出现的 `globalNN` / `varNN`
   应当视为需要返工，除非同段 AI block 明确说明工具链兼容原因。
+- 只要 patch 碰到 original `global` / `func_*` / `sys_*`，block 里就要写出
+  这些符号在这段逻辑里的作用，以及不能每 tick 重跑的路径。
+- 不要写只复述 AI 语义名的旁白（`set pending`、`clear the flag`）。
 - 如果一段 AI block 已经被实机验证为正式方案，可以保留 block，并在研究文档里记录验证结果；不要直接删掉来源信息。

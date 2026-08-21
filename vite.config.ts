@@ -18,8 +18,10 @@ export default defineConfig(async () => ({
     strictPort: true,
     // Don't watch the Rust crate / build artifacts — avoids needless dev-server
     // churn and full reloads triggered by cargo writing into src-tauri/target.
+    // Research Markdown under docs/ is not part of the frontend graph; watching
+    // it makes `tauri dev` full-reload on every note edit.
     watch: {
-      ignored: ["**/src-tauri/**"],
+      ignored: ["**/src-tauri/**", "**/docs/**"],
     },
     // Pre-transform the always-loaded shell so first paint isn't blocked on a
     // cold request waterfall.

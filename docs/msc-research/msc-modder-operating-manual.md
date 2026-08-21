@@ -22,6 +22,8 @@ E:\XB\解包\com\file\0xBDBE6FEA\2.c
 `// AI decision (YYYY-MM-DD): ...` 和 `// End, origin is ...` 成对包住。
 具体格式见 [MSC AI 修改块注释规范](./msc-ai-edit-block-rule.md)。AI 新增状态名
 必须像逆向标签一样有意义；不要新增 `global777` 这种只能让人类更难读的占位名。
+block 内注释优先写原始 `global` / `func_*` / `sys_*` 在这段逻辑里做什么，
+不要复述 AI 自己起的语义名。
 
 先把 `2.c` 当成一台机器，不要当成 1,047 个孤立函数。你每次只需要回答四个问题：
 

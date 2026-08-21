@@ -137,6 +137,7 @@ TV 对照：
 
 - `0x1` → `0x476fac14`（有弹）/ `func_98(0)`（空弹）
 - `0x200` → `0xa02d57dc`（官方解除）
+- `0x2` → `0x928ca34f`（特格后 N 格 `func_937`；全方向同一 hash。不进飞行白名单，拆鸟交给 `func_41`）
 - `0x400` + burst 条件保留
 - **禁止** else 补交 `0x77b100ff`
 
@@ -149,7 +150,8 @@ TV 对照：
 - `0xa02d57dc` exit
 - `0x476fac14` 鸟主射
 
-则立刻 `rebellion_interrupt_bird_form_to_ground()`。
+则立刻 `rebellion_interrupt_bird_form_to_ground()`。  
+鸟近战 `0x928ca34f` **不要**加进这张白名单。
 
 覆盖：站立 `0x6d00aeaa`、空中 idle `0xf5f21169`、受击 `0x4cdc9902`、`0x1ad4e055`、倒地 `0xef809e66`，以及其它地面动作。
 

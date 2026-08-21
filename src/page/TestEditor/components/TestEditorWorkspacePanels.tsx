@@ -37,13 +37,13 @@ export const TestEditorWorkspacePanels = memo(function TestEditorWorkspacePanels
       orientation="horizontal"
       className="h-full min-h-0 rounded-lg border bg-card shadow-sm"
     >
-      <ResizablePanel defaultSize={20} minSize={15}>
+      <ResizablePanel defaultSize="20%" minSize="15%">
         <div className="h-full">{left}</div>
       </ResizablePanel>
 
       <ResizableHandle withHandle className="w-1 bg-border hover:bg-primary/20 transition-colors" />
 
-      <ResizablePanel defaultSize={60} minSize={40}>
+      <ResizablePanel defaultSize="60%" minSize="40%">
         <div className="h-full min-h-0 bg-muted/30">{center}</div>
       </ResizablePanel>
 

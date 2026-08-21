@@ -121,6 +121,8 @@ Read order:
 3. `docs/msc-research/wing-zero-rebellion-bird-form-0c-input-map.md`
    — bird-form input map: **0.c `func_143` only** (not `2.c` `ACTION_*`);
    Rebellion main-shot bit = **`0x1`** (not TV `0x100`); bird form id = **`0x2`**.
+   Bird melee `0x2` → `0x928ca34f` `func_937` (N followup, no model switch):
+   `docs/msc-research/wing-zero-rebellion-bird-melee-n-followup.md`.
 4. `docs/msc-research/wing-zero-rebellion-flight-interrupt-form.md`
    — hit/interrupt is **FORCED_RECOVERY**, not TV requeue of `0x77b100ff`.
    Action hash ≠ form (`global143`). Do not tear form only on standing idle.
@@ -134,6 +136,8 @@ Reuse rules:
   table hashes are validation values after name resolution.
 - Do not re-derive Rebellion vs TV input-bit semantics or re-litigate “gate
   bird arsenal in 2.c ACTION_*” — settled in the bird-form input-map note.
+- Do not re-derive bird melee: `0x2` is `0x928ca34f` only (not `0x8b97920e`,
+  not Delta `func_888(0x8)`). Do not mix with TV bird special-melee landing.
 - Do not repeat source file counting, six-resource inventory, three transform
   motion lookup, SHL model-folder mapping, or body/wing skeleton comparison
   unless a restart condition in the bootstrap is met.
@@ -398,9 +402,10 @@ Project skills (domain):
 - Do not leave `TODO` / `FIXME` markers in code.
 - When modifying MSC decompiled `X.c` files, wrap every AI-added or AI-modified
   code block with the required `// AI decision (YYYY-MM-DD): ...` and
-  `// End, origin is ...` comments. See
-  `docs/msc-research/msc-ai-edit-block-rule.md`. Verify with
-  `python .\tools\check_msc_ai_blocks.py "<modified X.c>"`.
+  `// End, origin is ...` comments. Inside the block, comment original
+  `global` / `func_*` / `sys_*` behavior and traps; do not restate AI
+  semantic names. See `docs/msc-research/msc-ai-edit-block-rule.md`. Verify
+  with `python .\tools\check_msc_ai_blocks.py "<modified X.c>"`.
 - **MSC function pointers must be symbols, not decompiled script offsets.**
   Default `msclang` relocates `func_143` but keeps bare ints like `0x5fef`
   forever; growing any earlier function then breaks the action thinker and the

@@ -12,6 +12,9 @@
 3. **鸟形态武装 / 主射封锁 / 0.c 输入 bit（2026-08-14 已实机确认）：**
    `docs/msc-research/wing-zero-rebellion-bird-form-0c-input-map.md`
    — 只改 `0.c` `func_143`；Rebellion 主射 bit=`0x1` 不是 TV 的 `0x100`；鸟 form=`0x2`。
+3b. **鸟近战全走 N（2026-08-20）：**
+   `docs/msc-research/wing-zero-rebellion-bird-melee-n-followup.md`
+   — 鸟 `0x2` → `0x928ca34f` `func_937`；不切模型；不进 `func_41` 白名单。
 4. **飞行打断 / 动作≠形态（2026-08-16）：**
    `docs/msc-research/wing-zero-rebellion-flight-interrupt-form.md`
    — 打断只换动作 hash，不清 `global143`。Rebellion 受击必须 FORCED_RECOVERY，
