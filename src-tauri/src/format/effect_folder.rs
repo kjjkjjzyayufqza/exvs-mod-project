@@ -4,7 +4,7 @@
 //! effect FHM2D folder plus its sibling `_structure.json`, and exposes small
 //! command-friendly structs for Test Editor tooling.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -35,7 +35,7 @@ pub struct EffectFolderCopyEfxbnPolicy {
     pub skip: bool,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EffectFolderHash {
     pub signed: i32,
@@ -137,7 +137,7 @@ pub struct EffectFolderInventory {
     pub warnings: Vec<String>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EfxbnControlLookupEntry {
     pub index: usize,
@@ -147,7 +147,7 @@ pub struct EfxbnControlLookupEntry {
     pub value: f32,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EfxbnControlReferenceSummary {
     pub index: usize,
@@ -162,7 +162,7 @@ pub struct EfxbnControlReferenceSummary {
 ///
 /// The authored fields stay untouched so a pack still round-trips byte for byte; anything
 /// that renders or simulates should read these instead.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EfxbnRuntimeNormalization {
     /// Type-9 wrappers adopt a type derived from their first child.
@@ -185,7 +185,7 @@ pub struct EfxbnRuntimeNormalization {
 /// pixel-shader variant with any-bit-hit masks (`0x40` AddMix, `0x280` ColorEx, `0x20804`
 /// Light, `0x1000` MultiUV, `0x10001` Soft, `0x20000` HLight). It is never stored in the
 /// file, so nothing downstream can choose a variant without this.
-#[derive(Clone, Copy, Debug, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EfxbnDrawScheme {
     /// Every bit the EFXBN alone determines. Zero for blocks the loader never enables.
@@ -425,7 +425,7 @@ fn normalize_efxbn_block(
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EfxbnEffectSummary {
     pub index: usize,
@@ -558,7 +558,7 @@ pub struct EfxbnEffectSummary {
     pub runtime: Option<EfxbnRuntimeNormalization>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EfxbnModelControlSummary {
     pub index: usize,
@@ -594,7 +594,7 @@ pub struct EfxbnModelControlSummary {
     pub reserve_area: Vec<u32>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EfxbnUnknownTodo {
     pub field: String,
@@ -603,13 +603,13 @@ pub struct EfxbnUnknownTodo {
     pub follow_up: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EfxbnTodo {
     pub unknowns: Vec<EfxbnUnknownTodo>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EfxbnSummary {
     pub path: String,
@@ -1067,76 +1067,93 @@ pub fn validate_efxbn_summary(summary: &EfxbnSummary) -> Vec<String> {
     problems
 }
 
-/// One constant-lane write: store `value` as the high dword of curve key `lookup_index`.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct EfxbnControlConstantPatch {
-    pub lookup_index: u32,
-    pub value: f32,
-}
-
-/// Result of a surgical constant-lane write.
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EfxbnControlConstantWriteResult {
+pub struct EfxbnFileWriteResult {
     pub path: String,
-    pub patched_count: usize,
+    pub byte_len: usize,
     pub summary: EfxbnSummary,
 }
 
-/// Surgically patch curve-key **value** floats in an on-disk `.efxbn`.
+/// Writes a whole edited `.efxbn` back to disk through `build_efxbn_bytes`.
 ///
-/// Layout (confirmed by `parse_efxbn_bytes`): each key is 8 bytes at
-/// `control_lookup_region_offset + index * 8`, with `value` at +4.
-/// Only the value dword is rewritten; keys, blocks, and model-controls stay byte-identical.
-pub fn patch_efxbn_control_constants(
+/// This is the only EFXBN write path. It replaced a byte patcher that poked four bytes per curve
+/// key and therefore could not resize the key table, retopologise the block tree, or rebind a
+/// model; `build_efxbn_bytes` lays out all three regions from their own lengths and rewrites the
+/// header counts, so every one of those edits works here. Two write paths that can disagree is
+/// the worst failure mode this format has, which is why the patcher was deleted rather than kept.
+///
+/// Three guards, all deliberate:
+///
+/// * The target must sit under `effect_root`. A path escaping the inspected pack is a bug in the
+///   caller, and the blast radius of a stray write to a shipped game file is not recoverable.
+/// * The target must already exist and be a `.efxbn`. This command edits; it does not create.
+/// * The bytes land in a sibling temp file that is renamed into place, so a failure part-way
+///   leaves the original intact rather than truncated.
+///
+/// The written bytes are re-parsed before returning, so the caller's document is refreshed from
+/// what is actually on disk rather than from what it believed it wrote.
+pub fn write_efxbn_file(
+    effect_root: &str,
     path: &str,
-    patches: &[EfxbnControlConstantPatch],
-) -> Result<EfxbnControlConstantWriteResult, String> {
-    if patches.is_empty() {
-        return Err("No EFXBN control constant patches provided.".to_string());
+    summary: &EfxbnSummary,
+) -> Result<EfxbnFileWriteResult, String> {
+    let target = Path::new(path);
+    if !target.is_file() {
+        return Err(format!("EFXBN target is not an existing file: {path}"));
     }
-    let mut bytes = fs::read(path).map_err(|e| format!("Failed to read efxbn {path}: {e}"))?;
-    let summary = parse_efxbn_bytes(&bytes, path)?;
-    let region_offset = summary.control_lookup_region_offset as usize;
-    let key_count = summary.curve_key_count as usize;
-
-    // Last patch wins for a repeated lookup index.
-    let mut by_index = BTreeMap::<u32, f32>::new();
-    for patch in patches {
-        if !patch.value.is_finite() {
-            return Err(format!(
-                "EFXBN control patch value for lookup index {} is not finite.",
-                patch.lookup_index
-            ));
-        }
-        if patch.lookup_index as usize >= key_count {
-            return Err(format!(
-                "EFXBN control patch lookup index {} is out of range (curveKeyCount={key_count}).",
-                patch.lookup_index
-            ));
-        }
-        by_index.insert(patch.lookup_index, patch.value);
+    if !target
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("efxbn"))
+    {
+        return Err(format!("EFXBN target is not a .efxbn file: {path}"));
     }
+    ensure_efxbn_write_target_inside_root(Path::new(effect_root), target)?;
 
-    for (lookup_index, value) in &by_index {
-        let offset = region_offset + (*lookup_index as usize) * EFXBN_CURVE_KEY_STRIDE + 4;
-        if offset + 4 > bytes.len() {
-            return Err(format!(
-                "EFXBN control patch offset 0x{offset:X} is past file size {}.",
-                bytes.len()
-            ));
-        }
-        bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+    let bytes = build_efxbn_bytes(summary)?;
+    let parent = target
+        .parent()
+        .ok_or_else(|| format!("EFXBN target has no parent directory: {path}"))?;
+    let temp = parent.join(format!(
+        "{}.efxbn-write-tmp",
+        target
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("effect")
+    ));
+    fs::write(&temp, &bytes)
+        .map_err(|e| format!("Failed to stage efxbn write {}: {e}", temp.display()))?;
+    if let Err(error) = fs::rename(&temp, target) {
+        let _ = fs::remove_file(&temp);
+        return Err(format!("Failed to replace efxbn {path}: {error}"));
     }
 
-    fs::write(path, &bytes).map_err(|e| format!("Failed to write efxbn {path}: {e}"))?;
     let rewritten = parse_efxbn_bytes(&bytes, path)?;
-    Ok(EfxbnControlConstantWriteResult {
+    Ok(EfxbnFileWriteResult {
         path: path.to_string(),
-        patched_count: by_index.len(),
+        byte_len: bytes.len(),
         summary: rewritten,
     })
+}
+
+/// Rejects a write target that does not resolve inside the inspected effect root.
+///
+/// Canonicalizing both sides is what makes this meaningful on Windows, where the same file is
+/// reachable through short names, differing case and `..` segments.
+fn ensure_efxbn_write_target_inside_root(root: &Path, target: &Path) -> Result<(), String> {
+    let canonical_root = fs::canonicalize(root)
+        .map_err(|e| format!("Failed to resolve effect root {}: {e}", root.display()))?;
+    let canonical_target = fs::canonicalize(target)
+        .map_err(|e| format!("Failed to resolve efxbn path {}: {e}", target.display()))?;
+    if !canonical_target.starts_with(&canonical_root) {
+        return Err(format!(
+            "Refusing to write {} because it is outside the effect root {}.",
+            canonical_target.display(),
+            canonical_root.display()
+        ));
+    }
+    Ok(())
 }
 
 /// Serializes a parsed summary back to EFXBN bytes.
@@ -4155,76 +4172,6 @@ fn sanitize_stem(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn patch_efxbn_control_constants_rewrites_value_dwords_only() {
-        let curve_key_count = 4usize;
-        let file_size = EFXBN_BLOCK_REGION_OFFSET + curve_key_count * EFXBN_CURVE_KEY_STRIDE;
-        let mut bytes = vec![0u8; file_size];
-        bytes[0..4].copy_from_slice(b"EFXB");
-        bytes[0x04..0x08].copy_from_slice(&2u32.to_le_bytes());
-        bytes[0x08..0x0c].copy_from_slice(&(file_size as u32).to_le_bytes());
-        bytes[0x0c..0x10].copy_from_slice(&0u32.to_le_bytes());
-        bytes[0x10..0x14].copy_from_slice(&(curve_key_count as u32).to_le_bytes());
-        let key_region = EFXBN_BLOCK_REGION_OFFSET;
-        // key=0 value=1.0 at index 1
-        bytes[key_region + 8..key_region + 12].copy_from_slice(&0f32.to_le_bytes());
-        bytes[key_region + 12..key_region + 16].copy_from_slice(&1.0f32.to_le_bytes());
-        // preserve key dword at index 2 while we patch value
-        bytes[key_region + 16..key_region + 20].copy_from_slice(&50f32.to_le_bytes());
-        bytes[key_region + 20..key_region + 24].copy_from_slice(&0.25f32.to_le_bytes());
-
-        let dir = std::env::temp_dir().join(format!(
-            "efxbn_patch_test_{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("sample.efxbn");
-        fs::write(&path, &bytes).unwrap();
-
-        let result = patch_efxbn_control_constants(
-            path.to_str().unwrap(),
-            &[
-                EfxbnControlConstantPatch {
-                    lookup_index: 1,
-                    value: 0.5,
-                },
-                EfxbnControlConstantPatch {
-                    lookup_index: 2,
-                    value: 1.75,
-                },
-            ],
-        )
-        .unwrap();
-
-        assert_eq!(result.patched_count, 2);
-        assert_eq!(result.summary.control_lookup_entries[1].value, 0.5);
-        assert_eq!(result.summary.control_lookup_entries[2].value, 1.75);
-        assert_eq!(result.summary.control_lookup_entries[2].key, 50.0);
-
-        let rewritten = fs::read(&path).unwrap();
-        assert_eq!(&rewritten[0..key_region + 8], &bytes[0..key_region + 8]);
-        assert_eq!(
-            f32::from_le_bytes(
-                rewritten[key_region + 12..key_region + 16]
-                    .try_into()
-                    .unwrap()
-            ),
-            0.5
-        );
-        assert_eq!(
-            f32::from_le_bytes(
-                rewritten[key_region + 16..key_region + 20]
-                    .try_into()
-                    .unwrap()
-            ),
-            50.0
-        );
-        let _ = fs::remove_dir_all(&dir);
-    }
 
     #[test]
     fn parses_minimal_zero_effect_efxbn() {

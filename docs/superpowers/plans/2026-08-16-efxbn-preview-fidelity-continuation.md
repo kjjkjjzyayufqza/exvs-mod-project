@@ -18,6 +18,10 @@ logic, never about looking identical.
 
 ---
 
+> **Editing lives elsewhere.** This document is the authority on making the preview *look* right.
+> Making the file *editable* — models, textures, curves, topology — is
+> `2026-08-21-efxbn-real-editing-architecture.md`.
+
 ## 0. How to use this document
 
 1. Read §1 (working rules) and §7 (traps). Both exist because breaking them already cost a session.
@@ -293,8 +297,9 @@ stated. Rank = the order to work in.
 | P1b | Spawn form 7 still falls through to the unproven fallback | **3.0% of emitters** (97 with a radius) | simulation |
 | P1c | Box forms 4 / 8 fill the volume; the shader picks one of six **faces** | 4.9% of emitters | simulation |
 | ~~P3~~ | ~~Looping effects restart from tick 0 at the wrap~~ — **done 2026-08-16** | was 49.1% of files (measured, not the 57.4% flag count) | simulation |
-| **BLOCKED** | Lighting variants (`lightingFlags`) — needs a scene environment cube | 5.5% (207) | scene-coupled |
-| **BLOCKED** | Normal map (`normalMapHash`) — feeds the same lighting path | 4.3% (162) | scene-coupled |
+| **BLOCKED** | Lighting variants (`lightingFlags`) — needs a scene environment cube | 5.5% of blocks / **14.6% of files** (207; model 124, billboard 83) | scene-coupled |
+| **BLOCKED** | Normal map (`normalMapHash`) — feeds the same lighting path. Re-measured: it is a **billboard** feature (135) far more than a model one (27) | 4.3% of blocks / **11.1% of files** (162) | scene-coupled |
+| **BLOCKED (evidence)** | Soft particle *colour* term, draw-scheme `0x10000`. `CB1_m0[2].w` and `CB1_m0[3].x` have no identified authored counterpart; needs IDA on the CB1 upload site | **0.5%** (19 blocks, 9 files) — measured, so the blocked half is negligible | shading |
 | P5 | Strip UV axes — the transpose was already fixed; what the shader's 4-component vertex UV actually means is **unresolved** | all 290 strips | geometry |
 | P5 | UV scroll semantics not split by draw type | 7,320 scroll parameters | shading |
 | P6 | Four-corner `uvU/uvV` collapsed to a min/max rectangle | all | shading |
@@ -303,7 +308,7 @@ stated. Rank = the order to work in.
 | P7 | MultiUV — self-contained, needs the mesh's second UV stream | model blocks with a 2nd UV set | shading |
 | **BLOCKED** | ColorEx `0x200` framebuffer grab | 1.8% | scene-coupled |
 | ~~—~~ | ~~HLight~~ — **closed as a phantom**: `efxDrawModelHLightPS` is byte-identical to `efxDrawModelPS` | was 2.4% | — |
-| **Deferred** | Soft particle depth fade — see §5 P0 | flag set on 66.3%, **visible on ≤4.6% of files** | shading |
+| ~~Soft particle depth fade~~ | **done 2026-08-21** — the host-model feature turned this from the smallest item into the largest | was ≤4.6% of files with no host; **66.3% of drawable blocks / 72.6% of files** with one | shading |
 
 ### The remaining shading gaps are one blocked group, not five items
 
@@ -341,12 +346,11 @@ spend time on them.
 
 ## 5. Tasks
 
-### P0 — Soft particle depth fade · DEFERRED, and here is why
+### P0 — Soft particle depth fade · DONE 2026-08-21, by building what it was blocked on
 
-**This task was ranked first on 2026-08-16 and demoted the same day. Read this before reinstating
-it.** The 66.3% is the share of drawable blocks that *set* `enableSoftParticle`. It is not the
-share where implementing the fade changes a pixel, and the gap between those two numbers is the
-whole story:
+**Ranked first on 2026-08-16, demoted the same day, then shipped on 2026-08-21 once its actual
+prerequisite existed. The whole arc is the point.** The 66.3% is the share of drawable blocks that
+*set* `enableSoftParticle`. On an empty scene that is not the share where a pixel changes:
 
 | measurement | value |
 | --- | --- |
@@ -413,8 +417,52 @@ rgb *= (drawScheme & 0x40000) ? 1.0 : 0.5                   // already implement
 `CB1_m0[2].w` and `CB1_m0[3].x` drive the second term and have no obvious authored counterpart —
 identify them before implementing that half.
 
-**Reinstate when:** the preview can show the host unit/stage geometry. Until then the work is
-invisible by construction.
+**What actually shipped, 2026-08-21.**
+
+The deferral was correct and its stated condition — "reinstate when the preview can show the host
+unit/stage geometry" — was met by building that feature. Once a host model is in the scene the
+measured share inverts completely:
+
+| | without host geometry | with host geometry |
+| --- | --- | --- |
+| soft particle | ≤4.6% of files | **66.3% of drawable blocks / 72.6% of files** |
+
+so this went from the smallest remaining item to the largest, without the corpus changing. A
+deferral whose blocker is a feature you can build is a *sequencing* decision, not a rejection.
+
+Shipped pieces:
+
+- **Host model** — `effectPreviewHostModel.ts` composes the model set (`planEffectPreviewModelLoad`
+  appends the host last so effect slots keep their indices), persisted per workspace as
+  `hostModelPath`, picked from a `.numdlb` dialog in the preview toolbar. The host is deliberately
+  kept out of `hostInstanceTransformsRef` so `SsbhModelCanvas` leaves its own opaque materials
+  alone.
+- **Linear view-depth pre-pass** — `EffectSceneDepthPass.tsx`. Runs from `scene.onBeforeRender`
+  with a re-entrancy guard, which is the only hook guaranteed to fire after every `useFrame` and
+  after `updateMatrixWorld`. It renders **only** the host, selected with
+  `EFFECT_SCENE_DEPTH_LAYER` on the pass camera rather than by toggling visibility, under
+  `scene.overrideMaterial`. `scene.background` is nulled during the pass — a solid background
+  colour would otherwise be written into the target as if every pixel held that much depth.
+- **Why a colour target, not the depth buffer** — the canvas runs `logarithmicDepthBuffer: true`,
+  so the hardware buffer holds `log2(w + 1)`, not the perspective `z/w` the shader's
+  `A / (z - B)` reconstruction assumes. Writing `-mvPosition.z` into an `R32F` target skips the
+  reconstruction entirely and yields exactly the value it was there to produce. The pass throws if
+  `EXT_color_buffer_float` is missing rather than silently producing garbage.
+- **The term itself** — `efxbnSoftParticleAlphaFactor` plus GLSL in all three draw paths
+  (billboard, strip, and the injected model material). A texel the pass never wrote reads 0 and is
+  treated as infinitely far, which is what a cleared depth buffer means; that also doubles as the
+  NaN guard for a fragment at `w == 0`.
+- **The Face-variant inference, stated openly** — the extracted shader set has no
+  `efxDrawFaceSoftPS`. `sub_140188E30` does build that name from the same `0x10001` mask, and
+  `efxDrawFacePS` is byte-identical to `efxDrawModelPS` apart from which constant-buffer component
+  holds the flag word, so the Model term is applied to billboards and strips too. That is a
+  derivation with one unverified step, not a guess — but it is the weakest link in this task and
+  should be checked if a billboard ever fades wrongly.
+
+**Deliberately not implemented:** the second, colour-scaling term (`0x10000`). Its two constants
+`CB1_m0[2].w` and `CB1_m0[3].x` have no identified authored counterpart. Measured share: **19
+blocks across 9 files, 0.5%** — so the unimplementable half is negligible, which is why splitting
+the variant was worth doing rather than deferring the whole thing again.
 
 ### P0-old — the ranking mistake this task records
 
@@ -642,13 +690,14 @@ if yours differ, explain why in the same message.
 ./node_modules/.bin/tsc --noEmit -p tsconfig.json        # 2 errors, both pre-existing:
                                                           #   daeSsbhTypes.ts:318
                                                           #   BulletPropertyPanel.tsx:227
-./node_modules/.bin/vitest run --no-file-parallelism      # 955 passed / 6 failed
-                                                          # the 6: Fhm2dMemoryPreviewModal x2,
-                                                          # useSsbhFileEditorSessions x3,
-                                                          # ListeningRepackDialog x1
+./node_modules/.bin/vitest run --no-file-parallelism      # 2026-08-21: 1008 passed / 5 failed
+                                                          # the 5: Fhm2dMemoryPreviewModal x2,
+                                                          # useSsbhFileEditorSessions x3.
+                                                          # ListeningRepackDialog was in the old
+                                                          # baseline of 6 and now passes.
 
 # Rust (from src-tauri/)
-cargo test --test effect_folder_real_data_test            # 14 passed
+cargo test --test effect_folder_real_data_test            # 2026-08-21: 18 passed (E1 added 4)
 cargo fmt -- --check                                      # pre-existing diffs in bulletparam.rs,
                                                           # unit_model_models.rs, exvs2_json_cli_test.rs
                                                           # — your files must add none

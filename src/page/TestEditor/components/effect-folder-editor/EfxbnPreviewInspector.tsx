@@ -1,9 +1,26 @@
-import { Activity, Box, CornerDownRight, Eye, EyeOff, ImageIcon, Layers3, RotateCcw, Save } from "lucide-react";
+import {
+  Activity,
+  Box,
+  CopyPlus,
+  CornerDownRight,
+  Eye,
+  EyeOff,
+  ImageIcon,
+  Layers3,
+  Redo2,
+  RotateCcw,
+  Save,
+  Trash2,
+  Undo2,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import type { EfxbnEffectSummary } from "@/services/effectFolder/effectFolderService";
+import type {
+  EffectFolderInventory,
+  EfxbnEffectSummary,
+} from "@/services/effectFolder/effectFolderService";
 import { EFFECT_FOLDER_COMMON_PACK_NAME } from "@/services/effectFolder/effectFolderCommonPack";
 import {
   evaluateEfxbnControl,
@@ -23,11 +40,16 @@ import {
   resolveEfxbnViewAngleRamp,
 } from "./efxbnBillboardShading";
 import {
-  efxbnDraftDirtyCount,
-  isEfxbnBlockDirty,
-  isEfxbnDraftDirty,
-  type EfxbnDraftSession,
-} from "./efxbnDraftSession";
+  addEfxbnBlock,
+  canRedoEfxbn,
+  canUndoEfxbn,
+  deleteEfxbnBlock,
+  efxbnDirtyBlockIndexes,
+  isEfxbnDocumentDirty,
+  reparentEfxbnBlock,
+  type EfxbnDocument,
+} from "./efxbnDocument";
+import { EfxbnBlockEditor } from "./EfxbnBlockEditor";
 import {
   efxbnChildIndexes,
   findEfxbnParentBlocks,
@@ -54,14 +76,21 @@ type EfxbnPreviewInspectorProps = {
   onSetEffectVisible: (effectIndex: number, visible: boolean) => void;
   onShowAll: () => void;
   onSolo: (effectIndex: number) => void;
-  draft?: EfxbnDraftSession | null;
+  document?: EfxbnDocument | null;
+  inventory?: EffectFolderInventory | null;
+  /** Playback window, so an inserted keyframe defaults inside the effect. */
+  frameCount?: number;
   writing?: boolean;
+  onDocumentChange?: (next: EfxbnDocument) => void;
+  onEditorError?: (message: string) => void;
   onPatchColor?: (
     blockIndex: number,
     color: { r?: number; g?: number; b?: number; a?: number },
   ) => void;
-  onRevertDraft?: () => void;
-  onWriteDraft?: () => void;
+  onRevert?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  onWrite?: () => void;
 };
 
 function typeName(block: EfxbnEffectSummary): string {
@@ -89,6 +118,11 @@ function resourceSourceTitle(source: EffectFolderResourceSource | null): string 
     : `Resolved in the shared pack ${EFFECT_FOLDER_COMMON_PACK_NAME}`;
 }
 
+/** The block that lists `index` as a child, or null when it is a root. */
+function parentIndexOf(blocks: readonly EfxbnEffectSummary[], index: number): number | null {
+  return findEfxbnParentBlocks(blocks, index)[0]?.index ?? null;
+}
+
 function InspectorRow({ label, value, mono = true }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex items-start justify-between gap-2 border-b border-border/45 py-1.5 last:border-b-0">
@@ -107,11 +141,17 @@ export function EfxbnPreviewInspector({
   onSetEffectVisible,
   onShowAll,
   onSolo,
-  draft = null,
+  document: doc = null,
+  inventory = null,
+  frameCount = 120,
   writing = false,
+  onDocumentChange,
+  onEditorError,
   onPatchColor,
-  onRevertDraft,
-  onWriteDraft,
+  onRevert,
+  onUndo,
+  onRedo,
+  onWrite,
 }: EfxbnPreviewInspectorProps) {
   const selectedBlock =
     plan.effectBlocks.find((block) => block.index === selectedEffectIndex) ?? plan.effectBlocks[0] ?? null;
@@ -160,9 +200,20 @@ export function EfxbnPreviewInspector({
     : selectedBlock.modelHash.signed === 0
       ? "none"
       : `${selectedBlock.modelHash.hex} · ${modelTarget ? resourceSourceLabel(modelTarget.source) : "unresolved"}`;
-  const draftDirty = draft ? isEfxbnDraftDirty(draft) : false;
-  const dirtyCount = draft ? efxbnDraftDirtyCount(draft) : 0;
-  const liveAuthor = Boolean(draft && onPatchColor);
+  const draftDirty = doc ? isEfxbnDocumentDirty(doc) : false;
+  const dirtyBlocks = doc ? efxbnDirtyBlockIndexes(doc) : new Set<number>();
+  const dirtyCount = dirtyBlocks.size;
+  const liveAuthor = Boolean(doc && onPatchColor);
+  const canEdit = Boolean(doc && inventory && onDocumentChange && onEditorError);
+
+  const runCommand = (run: (current: EfxbnDocument) => EfxbnDocument) => {
+    if (!doc || !onDocumentChange) return;
+    try {
+      onDocumentChange(run(doc));
+    } catch (error) {
+      onEditorError?.(error instanceof Error ? error.message : String(error));
+    }
+  };
 
   return (
     <aside
@@ -214,16 +265,65 @@ export function EfxbnPreviewInspector({
             Solo
           </Button>
         ) : null}
+        {canEdit && selectedBlock ? (
+          <>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6 shrink-0"
+              disabled={writing}
+              onClick={() =>
+                runCommand((current) =>
+                  addEfxbnBlock(
+                    current,
+                    selectedBlock.index,
+                    parentIndexOf(plan.effectBlocks, selectedBlock.index),
+                    selectedBlock.effectType,
+                  ),
+                )
+              }
+              title="Duplicate the selected block under the same parent, with its own curve keys"
+              aria-label="Duplicate the selected EFXBN block"
+            >
+              <CopyPlus className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6 shrink-0 text-destructive"
+              disabled={writing || plan.effectBlocks.length <= 1}
+              onClick={() => runCommand((current) => deleteEfxbnBlock(current, selectedBlock.index))}
+              title="Delete the selected block and renumber every index that pointed past it"
+              aria-label="Delete the selected EFXBN block"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </>
+        ) : null}
       </div>
 
-      <div className="custom-scrollbar-thin max-h-[42%] shrink-0 overflow-y-auto border-b p-1">
+      <div
+        className="custom-scrollbar-thin max-h-[42%] shrink-0 overflow-y-auto border-b p-1"
+        onDragOver={(event) => {
+          if (canEdit && event.dataTransfer.types.includes("text/efxbn-block")) event.preventDefault();
+        }}
+        onDrop={(event) => {
+          if (!canEdit) return;
+          const moved = Number(event.dataTransfer.getData("text/efxbn-block"));
+          if (!Number.isInteger(moved)) return;
+          event.preventDefault();
+          runCommand((current) => reparentEfxbnBlock(current, moved, null));
+        }}
+      >
         {plan.effectBlocks.map((block) => {
           const selected = block.index === selectedBlock?.index;
           const visible = !hiddenEffectIndexes.has(block.index);
           const target = plan.targets.find((candidate) => candidate.effectIndex === block.index);
           const blockTextures = plan.textureBindings.filter((binding) => binding.effectIndex === block.index);
           const linkedFrom = findEfxbnParentBlocks(plan.effectBlocks, block.index)[0];
-          const blockDirty = draft ? isEfxbnBlockDirty(draft, block.index) : false;
+          const blockDirty = dirtyBlocks.has(block.index);
           return (
             <div
               key={block.index}
@@ -243,6 +343,27 @@ export function EfxbnPreviewInspector({
               >
                 {visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
               </Button>
+              {canEdit ? (
+                <div
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.setData("text/efxbn-block", String(block.index));
+                    event.dataTransfer.effectAllowed = "move";
+                  }}
+                  onDragOver={(event) => {
+                    if (event.dataTransfer.types.includes("text/efxbn-block")) event.preventDefault();
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const moved = Number(event.dataTransfer.getData("text/efxbn-block"));
+                    if (!Number.isInteger(moved) || moved === block.index) return;
+                    runCommand((current) => reparentEfxbnBlock(current, moved, block.index));
+                  }}
+                  className="h-7 w-2 shrink-0 cursor-grab rounded-sm bg-border/60 active:cursor-grabbing"
+                  title="Drag onto another block to reparent it, or onto the header strip to make it a root"
+                  aria-hidden
+                />
+              ) : null}
               <button
                 type="button"
                 className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -282,13 +403,23 @@ export function EfxbnPreviewInspector({
       </div>
 
       {selectedBlock ? (
-        <Tabs defaultValue={liveAuthor ? "color" : "block"} className="flex min-h-0 flex-1 flex-col p-2">
+        <Tabs
+          defaultValue={canEdit ? "edit" : liveAuthor ? "color" : "block"}
+          className="flex min-h-0 flex-1 flex-col p-2"
+        >
           <TabsList
             className={cn(
               "grid h-7 w-full shrink-0 rounded-md p-0.5",
-              liveAuthor ? "grid-cols-4" : "grid-cols-3",
+              canEdit && liveAuthor
+                ? "grid-cols-5"
+                : canEdit || liveAuthor
+                  ? "grid-cols-4"
+                  : "grid-cols-3",
             )}
           >
+            {canEdit ? (
+              <TabsTrigger value="edit" className="h-6 rounded px-1 text-[9px]">Edit</TabsTrigger>
+            ) : null}
             {liveAuthor ? (
               <TabsTrigger value="color" className="h-6 rounded px-1 text-[9px]">Color</TabsTrigger>
             ) : null}
@@ -297,10 +428,24 @@ export function EfxbnPreviewInspector({
             <TabsTrigger value="material" className="h-6 rounded px-1 text-[9px]">Material</TabsTrigger>
           </TabsList>
 
-          {liveAuthor && draft && onPatchColor ? (
+          {canEdit && doc && inventory && onDocumentChange && onEditorError ? (
+            <TabsContent value="edit" className="custom-scrollbar-thin min-h-0 flex-1 overflow-y-auto">
+              <EfxbnBlockEditor
+                document={doc}
+                blockIndex={selectedBlock.index}
+                inventory={inventory}
+                frameCount={frameCount}
+                disabled={writing}
+                onChange={onDocumentChange}
+                onError={onEditorError}
+              />
+            </TabsContent>
+          ) : null}
+
+          {liveAuthor && doc && onPatchColor ? (
             <TabsContent value="color" className="custom-scrollbar-thin min-h-0 flex-1 overflow-y-auto">
               <EfxbnColorAuthor
-                draft={draft}
+                document={doc}
                 block={selectedBlock}
                 plan={plan}
                 progress={progress}
@@ -464,26 +609,52 @@ export function EfxbnPreviewInspector({
           </div>
           <p
             className="mb-2 truncate font-mono text-[9px] text-muted-foreground"
-            title={draft?.path}
+            title={doc?.path}
           >
-            {draft?.path || "No draft path"}
+            {doc?.path || "No document"}
           </p>
           <div className="flex flex-wrap items-center gap-1.5">
-            {onRevertDraft ? (
+            {onUndo ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 shrink-0"
+                disabled={!doc || !canUndoEfxbn(doc) || writing}
+                onClick={onUndo}
+                title={doc && canUndoEfxbn(doc) ? `Undo ${doc.changeLog.at(-1) ?? ""}` : "Nothing to undo"}
+              >
+                <Undo2 className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
+            {onRedo ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 shrink-0"
+                disabled={!doc || !canRedoEfxbn(doc) || writing}
+                onClick={onRedo}
+                title="Redo"
+              >
+                <Redo2 className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
+            {onRevert ? (
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
                 className="h-8 shrink-0 gap-1.5 px-2.5 text-[11px]"
                 disabled={!draftDirty || writing}
-                onClick={onRevertDraft}
-                title="Discard all unsaved constant edits in this efxbn draft"
+                onClick={onRevert}
+                title="Discard every unsaved change and return to the file on disk"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 Reset
               </Button>
             ) : null}
-            {onWriteDraft ? (
+            {onWrite ? (
               <Button
                 type="button"
                 size="sm"
@@ -492,11 +663,11 @@ export function EfxbnPreviewInspector({
                   draftDirty && "bg-amber-600 text-white hover:bg-amber-500",
                 )}
                 disabled={!draftDirty || writing}
-                onClick={onWriteDraft}
+                onClick={onWrite}
                 title={
-                  draft?.path
-                    ? `Write all dirty constant lanes to ${draft.path}`
-                    : "Write all dirty constant lanes to the efxbn file"
+                  doc?.path
+                    ? `Rewrite ${doc.path} from the edited document`
+                    : "Rewrite the efxbn file from the edited document"
                 }
               >
                 <Save className="h-3.5 w-3.5" />

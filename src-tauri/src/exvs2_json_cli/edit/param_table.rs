@@ -340,10 +340,10 @@ where
         {
             table.entries_mut()[index] = new_entry;
         } else {
-            table.entries_mut().push(new_entry);
+            insert_param_entry_sorted(table.entries_mut(), new_entry);
         }
     } else {
-        table.entries_mut().push(new_entry);
+        insert_param_entry_sorted(table.entries_mut(), new_entry);
     }
     applied.push(json!({
         "op": "copyParamEntry",
@@ -410,13 +410,12 @@ where
             "replaceCommands": replace_commands
         }));
     } else {
-        table
-            .entries_mut()
-            .push(T::Entry::from_parts(entry_id, commands));
-        if let Some(last) = table.entries_mut().last_mut() {
-            for (hash, value) in label_strings {
-                let _ = last.set_string_field(hash, value);
-            }
+        let insert_index = insert_param_entry_sorted(
+            table.entries_mut(),
+            T::Entry::from_parts(entry_id, commands),
+        );
+        for (hash, value) in label_strings {
+            let _ = table.entries_mut()[insert_index].set_string_field(hash, value);
         }
         applied.push(json!({
             "op": "upsertParamEntry",
@@ -468,6 +467,12 @@ fn find_param_entry_index<E: ParamEntryAccess>(
     }
 }
 
+fn insert_param_entry_sorted<E: ParamEntryAccess>(entries: &mut Vec<E>, entry: E) -> usize {
+    let insert_index = entries.partition_point(|existing| existing.entry_id() < entry.entry_id());
+    entries.insert(insert_index, entry);
+    insert_index
+}
+
 fn resolve_param_field(
     field_specs: &[ParamFieldSpec],
     pool: ParamCommandPool,
@@ -499,4 +504,119 @@ fn zero_commands_for_specs(field_specs: &[ParamFieldSpec]) -> HashMap<u32, u32> 
         .iter()
         .map(|spec| (spec.hash, 0u32))
         .collect::<HashMap<_, _>>()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Clone)]
+    struct TestEntry {
+        entry_id: u32,
+        commands: HashMap<u32, u32>,
+    }
+
+    impl ParamEntryAccess for TestEntry {
+        fn entry_id(&self) -> u32 {
+            self.entry_id
+        }
+
+        fn set_entry_id(&mut self, entry_id: u32) {
+            self.entry_id = entry_id;
+        }
+
+        fn commands(&self) -> &HashMap<u32, u32> {
+            &self.commands
+        }
+
+        fn commands_mut(&mut self) -> &mut HashMap<u32, u32> {
+            &mut self.commands
+        }
+
+        fn from_parts(entry_id: u32, commands: HashMap<u32, u32>) -> Self {
+            Self { entry_id, commands }
+        }
+    }
+
+    struct TestTable {
+        entries: Vec<TestEntry>,
+        field_specs: Vec<ParamFieldSpec>,
+    }
+
+    impl ParamTableAccess for TestTable {
+        type Entry = TestEntry;
+
+        fn entries(&self) -> &Vec<Self::Entry> {
+            &self.entries
+        }
+
+        fn entries_mut(&mut self) -> &mut Vec<Self::Entry> {
+            &mut self.entries
+        }
+
+        fn field_specs(&self) -> &[ParamFieldSpec] {
+            &self.field_specs
+        }
+    }
+
+    fn entry(entry_id: u32) -> TestEntry {
+        TestEntry {
+            entry_id,
+            commands: HashMap::new(),
+        }
+    }
+
+    fn entry_ids(table: &TestTable) -> Vec<u32> {
+        table.entries.iter().map(|entry| entry.entry_id).collect()
+    }
+
+    #[test]
+    fn copy_param_entry_inserts_new_id_in_unsigned_order() {
+        let mut table = TestTable {
+            entries: vec![entry(0x0d7f_cde2), entry(0x55b0_3548), entry(0xfa64_e4d0)],
+            field_specs: Vec::new(),
+        };
+        let mut applied = Vec::new();
+
+        copy_param_entry(
+            &mut table,
+            &json!({
+                "op": "copyParamEntry",
+                "fromEntryId": 0x55b0_3548u32,
+                "newEntryId": 0x233c_4626u32
+            }),
+            &mut applied,
+        )
+        .expect("copy param entry");
+
+        assert_eq!(
+            entry_ids(&table),
+            vec![0x0d7f_cde2, 0x233c_4626, 0x55b0_3548, 0xfa64_e4d0]
+        );
+    }
+
+    #[test]
+    fn upsert_param_entry_inserts_new_id_in_unsigned_order() {
+        let mut table = TestTable {
+            entries: vec![entry(0x0d7f_cde2), entry(0x55b0_3548), entry(0xfa64_e4d0)],
+            field_specs: Vec::new(),
+        };
+        let mut applied = Vec::new();
+
+        upsert_param_entry(
+            &mut table,
+            &[],
+            &json!({
+                "op": "upsertParamEntry",
+                "entry": { "entryId": 0x233c_4626u32 }
+            }),
+            &mut applied,
+        )
+        .expect("upsert param entry");
+
+        assert_eq!(
+            entry_ids(&table),
+            vec![0x0d7f_cde2, 0x233c_4626, 0x55b0_3548, 0xfa64_e4d0]
+        );
+    }
 }

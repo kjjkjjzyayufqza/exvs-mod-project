@@ -32,6 +32,8 @@ import {
   DRAW_SCHEME_FULL_BRIGHTNESS,
 } from "./efxbnSimulation";
 import { extractEfxbnMeshEmitterPoints, type EfxbnMeshEmitterPoint } from "./efxbnMeshEmitter";
+import { EffectSceneDepthPass } from "./EffectSceneDepthPass";
+import { efxbnUsesSoftParticle, resolveEfxbnSoftParticleRange } from "./efxbnSoftParticle";
 
 type EfxbnDiagnosticOverlayProps = {
   plan: EffectFolderPreviewPlan;
@@ -50,6 +52,8 @@ type EfxbnDiagnosticOverlayProps = {
   instanceIdsByEffectIndex: ReadonlyMap<number, readonly string[]>;
   modelRequirements: readonly EfxbnModelPoolRequirement[];
   hostInstanceTransformsRef: MutableRefObject<ReadonlyMap<string, PreviewInstanceHostTransform>>;
+  /** Scene-graph name of the host model group, or null when the scene has no opaque geometry. */
+  hostObjectName: string | null;
   onSelectEffect: (effectIndex: number) => void;
   onProgressChange: (progress: number) => void;
 };
@@ -192,6 +196,7 @@ export function EfxbnDiagnosticOverlay({
   instanceIdsByEffectIndex,
   modelRequirements,
   hostInstanceTransformsRef,
+  hostObjectName,
   onSelectEffect,
   onProgressChange,
 }: EfxbnDiagnosticOverlayProps) {
@@ -228,6 +233,8 @@ export function EfxbnDiagnosticOverlay({
   const modelSlotsByPairRef = useRef(new Map<string, ReadonlyMap<number, number>>());
   const meshEmitterPointsByEffectIndexRef = useRef(new Map<number, readonly EfxbnMeshEmitterPoint[]>());
   const meshEmitterPointsByEffectIndex = meshEmitterPointsByEffectIndexRef.current;
+  // Published by the depth pre-pass and read by every draw path that fades against the scene.
+  const sceneDepthTextureRef = useRef<Texture | null>(null);
 
   useEffect(() => {
     progressRef.current = progress;
@@ -281,6 +288,13 @@ export function EfxbnDiagnosticOverlay({
       const effectFullBrightness =
         (efxbnRuntime(target).drawScheme.flag & DRAW_SCHEME_FULL_BRIGHTNESS) !== 0;
       const effectAddMix = target.blendState === EFXBN_BLEND_STATE_ADD_MIX;
+      // efxDrawModelSoftPS bit 0x1. The range is only meaningful while the term is enabled, so
+      // it is resolved behind the flag rather than on every block.
+      const effectSoftParticle = efxbnUsesSoftParticle(target);
+      const effectSoftParticleRange = effectSoftParticle
+        ? resolveEfxbnSoftParticleRange(target)
+        : 0;
+      const effectSceneDepthTexture = sceneDepthTextureRef.current;
       const effectColorBorder = usesEfxbnBorderAddressing(textureBinding?.parameter.addressingMode);
       const effectOffsetBorder = usesEfxbnBorderAddressing(offsetBinding?.parameter.addressingMode);
       const particles = simulateEfxbnPreviewFrame(
@@ -326,6 +340,9 @@ export function EfxbnDiagnosticOverlay({
           effectAddMix,
           effectColorBorder,
           effectOffsetBorder,
+          effectSoftParticle,
+          effectSoftParticleRange,
+          effectSceneDepthTexture,
           motionFrame: particle.age,
           visible: true,
           depthWrite: efxbnRuntime(target).zWriteEnable !== 0,
@@ -348,6 +365,9 @@ export function EfxbnDiagnosticOverlay({
           effectAddMix,
           effectColorBorder,
           effectOffsetBorder,
+          effectSoftParticle,
+          effectSoftParticleRange,
+          effectSceneDepthTexture,
           motionFrame: 0,
           visible: false,
         });
@@ -358,6 +378,10 @@ export function EfxbnDiagnosticOverlay({
 
   return (
     <group name="efxbn-preview">
+      <EffectSceneDepthPass
+        hostObjectName={hostObjectName}
+        sceneDepthTextureRef={sceneDepthTextureRef}
+      />
       {Array.from(modelEffectTexturePaths, ([effectIndex, entry]) => (
         <EfxbnModelTextureRegistration
           key={`color:${effectIndex}:${entry.path}`}
@@ -399,6 +423,7 @@ export function EfxbnDiagnosticOverlay({
         selectedEffectIndex={selectedEffectIndex}
         hiddenEffectIndexes={hiddenEffectIndexes}
         meshEmitterPointsByEffectIndex={meshEmitterPointsByEffectIndex}
+        sceneDepthTextureRef={sceneDepthTextureRef}
         onSelectEffect={onSelectEffect}
       />
       <EfxbnStripPreview
@@ -408,6 +433,7 @@ export function EfxbnDiagnosticOverlay({
         frameCount={frameCount}
         hiddenEffectIndexes={hiddenEffectIndexes}
         meshEmitterPointsByEffectIndex={meshEmitterPointsByEffectIndex}
+        sceneDepthTextureRef={sceneDepthTextureRef}
       />
       {plan.effectBlocks.map((block) =>
         !isEfxbnEmitterBlock(block) || hiddenEffectIndexes.has(block.index) ? null : (

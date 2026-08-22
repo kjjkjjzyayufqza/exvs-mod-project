@@ -54,6 +54,7 @@ import {
   resolveEfxbnCameraFadeRange,
   resolveEfxbnViewAngleRamp,
 } from "./efxbnBillboardShading";
+import { efxbnUsesSoftParticle, resolveEfxbnSoftParticleRange } from "./efxbnSoftParticle";
 
 type EfxbnParticlePreviewProps = {
   plan: EffectFolderPreviewPlan;
@@ -64,6 +65,8 @@ type EfxbnParticlePreviewProps = {
   selectedEffectIndex: number | null;
   hiddenEffectIndexes: ReadonlySet<number>;
   meshEmitterPointsByEffectIndex: ReadonlyMap<number, readonly EfxbnMeshEmitterPoint[]>;
+  /** Linear view depth of the opaque scene; null while no host model contributes any. */
+  sceneDepthTextureRef: MutableRefObject<Texture | null>;
   onSelectEffect: (effectIndex: number) => void;
 };
 
@@ -365,6 +368,13 @@ function createMaterial(pair: EfxbnEmitterPair, externalModelProxy: boolean) {
       viewAnglePower: { value: viewAngleRamp?.power ?? 1 },
       hasCameraFade: { value: cameraFadeRange === null ? 0 : 1 },
       cameraFadeRange: { value: cameraFadeRange ?? 0 },
+      sceneDepth: { value: null },
+      hasSceneDepth: { value: 0 },
+      softParticleRange: {
+        value: efxbnUsesSoftParticle(pair.target)
+          ? resolveEfxbnSoftParticleRange(pair.target)
+          : 0,
+      },
     },
     vertexShader: `
       attribute vec3 particleCenter;
@@ -391,6 +401,7 @@ function createMaterial(pair: EfxbnEmitterPair, externalModelProxy: boolean) {
       varying vec2 vOffsetUv;
       varying vec2 vQuadUv;
       varying vec4 vColor;
+      varying vec4 vClipPosition;
 
       // Intrinsic XYZ order, matching how the model-particle path hands rotationEuler to three.js.
       mat3 efxRotation(vec3 euler) {
@@ -435,6 +446,7 @@ function createMaterial(pair: EfxbnEmitterPair, externalModelProxy: boolean) {
           viewCenter.xy += spun + pivot;
           gl_Position = projectionMatrix * viewCenter;
         }
+        vClipPosition = gl_Position;
         vUv = uv * particleUvScale + particleUvOffset;
         vOffsetUv = uv * particleOffsetUvScale + particleOffsetUvOffset;
         vQuadUv = uv;
@@ -477,10 +489,14 @@ function createMaterial(pair: EfxbnEmitterPair, externalModelProxy: boolean) {
       uniform float addMix;
       uniform float selected;
       uniform float externalModelProxy;
+      uniform sampler2D sceneDepth;
+      uniform float hasSceneDepth;
+      uniform float softParticleRange;
       varying vec2 vUv;
       varying vec2 vOffsetUv;
       varying vec2 vQuadUv;
       varying vec4 vColor;
+      varying vec4 vClipPosition;
 
       // hkImageAddressMode BORDER has no WebGL2 equivalent: the texture clamps and this zeroes
       // alpha outside the authored range, which is the D3D transparent-black border.
@@ -507,6 +523,19 @@ function createMaterial(pair: EfxbnEmitterPair, externalModelProxy: boolean) {
           : vec4(1.0, 1.0, 1.0, fallbackAlpha);
         vec4 color = texel * vColor;
         color.a *= offsetAlpha * efxBorderAlpha(colorUv, colorBorder);
+        // efxDrawModelSoftPS.yyadorigi.hlsl:66. The Face pixel shaders were extracted without
+        // a Soft variant, but sub_140188E30 builds efxDrawFaceSoft names from the same
+        // 0x10001 mask, and efxDrawFacePS is identical to efxDrawModelPS apart from which
+        // constant-buffer component holds the flag word — so the Model term applies here.
+        if (hasSceneDepth > 0.5 && softParticleRange > 0.0) {
+          // D3D samples with V flipped; a WebGL render target is bottom-up, so V is not.
+          vec2 screenUv = vClipPosition.xy / vClipPosition.w * 0.5 + 0.5;
+          float sceneViewDepth = texture2D(sceneDepth, screenUv).r;
+          // A texel the pre-pass never wrote is infinitely far, like a cleared depth buffer.
+          if (sceneViewDepth > 0.0) {
+            color.a *= clamp((sceneViewDepth - vClipPosition.w) / softParticleRange, 0.0, 1.0);
+          }
+        }
         if (color.a < 0.01) discard;
       // efxDrawFaceAddMixPS (drawSchemeFlag 0x40, i.e. blendState 4): premultiply rgb by alpha
       // and drop alpha entirely once the texel is bright, so highlights add instead of blend.
@@ -525,6 +554,35 @@ function createMaterial(pair: EfxbnEmitterPair, externalModelProxy: boolean) {
   });
 }
 
+/**
+ * Everything `createMaterial` bakes in, as one string.
+ *
+ * The plan is rebuilt on every document edit so the preview shows the edit immediately, which
+ * means `pair` is a fresh object each time. Keying the material on the pair would rebuild a
+ * `ShaderMaterial` — and reset its GPU program — on every keystroke. Keying it on the render
+ * state rebuilds only when the render state actually changed, which is exactly when it must.
+ */
+function materialSignature(pair: EfxbnEmitterPair, externalModelProxy: boolean): string {
+  const target = pair.target;
+  const runtime = efxbnRuntime(target);
+  const ramp = resolveEfxbnViewAngleRamp(target);
+  return [
+    externalModelProxy ? 1 : 0,
+    runtime.zWriteEnable,
+    target.zTestEnable,
+    target.blendState,
+    target.cullingType,
+    runtime.drawScheme.flag,
+    runtime.softParticleRange,
+    resolveEfxbnBillboardBasis(target),
+    target.centerPivot.join(","),
+    resolveEfxbnCameraFadeRange(target) ?? "none",
+    ramp
+      ? [ramp.startColor.join(","), ramp.endColor.join(","), ramp.threshold, ramp.power].join("|")
+      : "none",
+  ].join("/");
+}
+
 function EfxbnParticleLayer({
   pair,
   plan,
@@ -534,6 +592,7 @@ function EfxbnParticleLayer({
   selected,
   externalModelProxy,
   meshEmitterPointsByEffectIndex,
+  sceneDepthTextureRef,
   onSelectEffect,
 }: {
   pair: EfxbnEmitterPair;
@@ -544,12 +603,16 @@ function EfxbnParticleLayer({
   selected: boolean;
   externalModelProxy: boolean;
   meshEmitterPointsByEffectIndex: ReadonlyMap<number, readonly EfxbnMeshEmitterPoint[]>;
+  sceneDepthTextureRef: MutableRefObject<Texture | null>;
   onSelectEffect: (effectIndex: number) => void;
 }) {
   const geometry = useMemo(() => createGeometry(), []);
+  const signature = materialSignature(pair, externalModelProxy);
   const material = useMemo(
     () => createMaterial(pair, externalModelProxy),
-    [externalModelProxy, pair],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the baked render state,
+    // not on the pair, so a value edit does not rebuild the GPU program. See materialSignature.
+    [signature],
   );
   const meshRef = useRef<Mesh>(null);
   const worldToLocalRef = useRef(new Matrix4());
@@ -607,6 +670,10 @@ function EfxbnParticleLayer({
   useFrame((state) => {
     const mesh = meshRef.current;
     if (!mesh) return;
+    const sceneDepthTexture = sceneDepthTextureRef.current;
+    material.uniforms.sceneDepth.value = sceneDepthTexture;
+    material.uniforms.hasSceneDepth.value =
+      sceneDepthTexture && (material.uniforms.softParticleRange.value as number) > 0 ? 1 : 0;
     const frame = (progressRef.current / 100) * frameCount;
     const particles = simulateEfxbnPreviewFrame(
       pair,
@@ -700,6 +767,7 @@ export function EfxbnParticlePreview({
   selectedEffectIndex,
   hiddenEffectIndexes,
   meshEmitterPointsByEffectIndex,
+  sceneDepthTextureRef,
   onSelectEffect,
 }: EfxbnParticlePreviewProps) {
   const pairs = useMemo(() => resolveEfxbnEmitterPairs(plan), [plan]);
@@ -734,6 +802,7 @@ export function EfxbnParticlePreview({
             selected={selectedEffectIndex === pair.target.index || selectedEffectIndex === emitterIndex}
             externalModelProxy={externalModelProxy}
             meshEmitterPointsByEffectIndex={meshEmitterPointsByEffectIndex}
+            sceneDepthTextureRef={sceneDepthTextureRef}
             onSelectEffect={onSelectEffect}
           />
         );

@@ -1,7 +1,7 @@
 # Wing Zero Rebellion：鸟形态近战全走 N（特格后格斗 `0x928ca34f`）
 
 **Date:** 2026-08-20  
-**Status:** 脚本已改；2026-08-20 补悬停/清惯性。实机待确认方向格斗位  
+**Status:** 脚本已改；2026-08-21 实机确认 effect group 分流及持枪空中左 Step 修复
 **Kind:** MSC `0.c` bird selector（对照 Delta Plus WR 近战，不切模型）  
 **Primary tree:** `E:\XB\mod\040msc\wing_gundam_zero_rebellion_msc\`
 
@@ -31,7 +31,7 @@ Rebellion 只有一个模型，**不抄** Delta Plus `func_888(0x8)` 切主 body
 | Selector | WR `0x2` → **唯一** `0x1b89c323`（无方向分流） | 鸟 `0x2` → **唯一** `0x928ca34f` |
 | 入口 | `func_241(..., func_1032)` | 已有 `func_241(0x928ca34f, func_937)`，不新建入口 |
 | 回身 | `func_1034` 首帧 `func_888(0x8)` → `func_1038`：WR shell `0xcb05586` → 主 body `0xab9c3043`，`global143=0` | **不做**。单模型，只换动作 |
-| Effect | `sys_4A(0, 0xdc4314cd, 0xab9c3043, …)` 挂主 body | 鸟进 N 时同样 `0xdc4314cd`，挂 `global20`（单模型）。刀光仍是 `func_939` 的 `0x2133778d` |
+| Effect | `sys_4A(0, 0xdc4314cd, 0xab9c3043, …)` 挂主 body | `0xdc4314cd` 挂 `global20`，使用 group `0x6` / slot `0`；`func_939` 的 `0x2133778d` 保持 group `0x7` / slot `0` |
 | 近战动作 | `func_308(…, 0x426c761b)` → `func_1035` / `0x9ffaaf9e` | `func_937` / `func_939`：`0xf105c00f` 等 |
 
 Delta `func_1034` 关键序（不要搬到 Rebellion `func_937`）：
@@ -61,6 +61,146 @@ func_531(func_1035)
 产品决定（2026-08-20）：鸟形态 **全走 N**，不分流 `0x8b97920e`。
 
 `func_937` 是完整 action 入口（`func_488` + `func_219(0x68c7334e)` + `func_939`），不是必须先播特格才能接的残段。首帧会 `func_884()` / `func_1027(0x2)` 重建手武器，并挂 `0x2133778d`。
+
+---
+
+## `sys_4A` effect group 冲突（2026-08-21 实机已证）
+
+`0xdc4314cd` 位于 common effect，资源可由 Rebellion 生成。此前看不到它的
+原因不是资源缺失、model 绑定失败或没有进入 `func_937`，而是它与第一刀
+`0x2133778d` 在同一 tick 使用了相同的 effect group `0x7`。后生成的
+`0x2133778d` 覆盖先生成的 `0xdc4314cd`。
+
+本项目当前已证的调用形态是：
+
+```text
+sys_4A(0, effectHash, model, bind, group, slot)
+```
+
+因此这里的冲突维度是第五参 `group`，不是最后一参 `slot`。仅把
+`0xdc4314cd` 从 `0x7/0` 改成 `0x7/1` 仍不足以隔离；该方案已被实机结果
+作废。通过实机验证的分流是：
+
+```c
+sys_4A(0, 0xdc4314cd, global20, 0x1, 0x6, 0);
+sys_4A(0, 0x2133778d, global20, 0x1, 0x7, 0);
+```
+
+所有权：
+
+| Effect | Group | Slot | 生命周期 |
+|--------|------:|-----:|----------|
+| 飞行近战入口 `0xdc4314cd` | `0x6` | `0` | from-flight 入口 effect |
+| 第一刀 `0x2133778d` | `0x7` | `0` | `func_939` 生成，`func_940` 清理 |
+
+硬规则：这两个 effect 不要复用 group `0x7`。common 只保证 effect 资源可用，
+不会避免同一 group 内的后写覆盖。
+
+---
+
+## 持枪空中左 Step 结束闪变形动作（2026-08-21 实机已修）
+
+实机特征：面向锁定目标、持枪、空中双击左方向触发 Step，随后完全松开
+方向键；Step body 结束切入收招时闪出变形动作再恢复。持刀、地面和其它
+方向不复现。
+
+逐函数对比当前 Rebellion 与原版 `016gundmw_001wgzero_001\2.c`：
+
+```text
+func_69 / func_79 / func_99 / func_100
+func_423 / func_424 / func_425 / func_426
+func_861 / func_862
+```
+
+以上 Step 方向、位移、结束与 motion callback 函数全部相同。实际链路为：
+
+```text
+0xff098547 / func_423                 Step body
+  -> 0x506ac760 / func_425            Step end
+  -> air: callback 0x19 + direction
+  -> left direction 1: func_862
+  -> air motion 0x22 + 1 = slot 0x23
+  -> func_79: table 0x3 + global170
+```
+
+决定性差异只有持枪表的该槽：
+
+```text
+original 016 table 0x3 / slot 0x23 = 0xfd853f6b
+Rebellion   table 0x3 / slot 0x23 = 0xa621fd5e
+Rebellion transform enter slot 0x37 = 0xa621fd5e
+```
+
+所以 Step action 没有提交 `0x9475130e`；其结束 callback 直接播放了与变形
+enter 相同的 motion。只有 `global170=0` 的枪表、空中左方向会命中
+`0x3/0x23`，与全部实机限定一致。此前修改 `0.c func_124()` 的 transform
+gate 实机无效，现已撤回。
+
+当前唯一修改：恢复 table `0x3/0x23 = 0xfd853f6b`；table `0x3/0x37`、
+`0x4/0x37` 均保持用户确认存在的 `0xa621fd5e`。此前崩溃测试同时使用了
+不存在的 `0x5efd21a6`，无法隔离变量；本次不再使用该值。未新增或修改
+NUANMB/FHM2D。
+
+### 最终实机结论与硬规则
+
+2026-08-21 用户重新 compile/repack 后确认：持枪、空中、面向锁定目标，
+双击左方向并完全松开，Step 收招不再闪变形动作。
+
+必须保持：
+
+```text
+table 0x3 / slot 0x23 = 0xfd853f6b  gun air-left Step end
+table 0x3 / slot 0x37 = 0xa621fd5e  transform enter
+table 0x4 / slot 0x37 = 0xa621fd5e  transform enter
+```
+
+后续移植或整理 `func_1042` 时：
+
+1. `0x3/0x23` 是原版持枪空中左 Step 收招槽，禁止覆盖为变形 motion。
+2. 新变形 motion 只占新增的 `0x37/0x38/0x3b`；不得复用原有 Step 槽。
+3. 本问题不改 `0.c func_124()`。它是方向双击 transform gate，不是本次
+   松键后闪动作的根因。
+4. 禁止把 `slot 0x37` 改成不存在的 `0x5efd21a6`；已证工作值是
+   `0xa621fd5e`。
+5. 禁止为此新增、替换或重新打包 NUANMB/FHM2D；修复只需恢复 MSC
+   motion table 映射。
+6. 最窄实机回归：持枪空中左 Step 松键无闪；其它方向、持刀不变；正常
+   变形 enter 仍播放。
+
+### 前后输入防御起手闪变形动作（2026-08-21，脚本已修）
+
+实机现象：空中输入前后防御时，先闪一次变形动作，再进入正常防御；地面
+未观察到同样现象。
+
+当前 Rebellion 与原版 `016gundmw_001wgzero_001\2.c` 的防御链逐函数一致：
+
+```text
+0.c func_67 / func_68
+  -> 0xdabb0543 / 2.c func_427
+  -> func_69(0x2b)
+  -> callback func_866
+  -> ground: motion slot 0x46
+  -> air:    motion slot 0x49
+  -> func_79: table 0x3 + global170
+```
+
+`func_67/68/427/428/429/866/867/868` 与原版完全相同。决定性差异只在
+`global170=1` 的持刀 motion table：
+
+```text
+original table 0x4 / slot 0x46 = 0xd87e3617  guardbgn_stk_air_fr
+current  table 0x4 / slot 0x46 = 0xa621fd5e  transform enter (broken)
+original table 0x4 / slot 0x49 = 0xd87e3617  guardbgn_stk_air_fr
+current  table 0x4 / slot 0x49 = 0xa621fd5e  transform enter (broken)
+```
+
+修复：恢复 `0x4/0x46`、`0x4/0x49` 为原版 `0xd87e3617`。持枪表
+`0x3/0x46`、`0x3/0x49` 保持 `0x3711a4f5`；变形 enter `0x37` 保持
+`0xa621fd5e`。未新增或修改 NUANMB/FHM2D。
+
+硬规则：transform motion 只写新增 `0x37/0x38/0x3b`，禁止覆盖原版
+`0x46/0x49` 防御起手槽。最窄实机回归：持刀空中前后防御直接进入防御；
+地面防御、持枪防御、正常变形均不变。
 
 ---
 
@@ -159,7 +299,7 @@ func_491 -> func_516(global507, global175)
 | 位置 | 做法 |
 |------|------|
 | latch | `rebellion_bird_n_melee_pending`：interrupt 时 `global3` 或 `global5` 已是 `0x928ca34f`，或 `func_937` 见 `global143==2` |
-| `func_937` from-flight | 按 `func_935` 装 `global609=func_939`、`global452/453/454=0x64`、`func_167(0x1000000)`。`sys_4A(0, 0xdc4314cd, global20, …)` 挂本机 body |
+| `func_937` from-flight | 按 `func_935` 装 `global609=func_939`、`global452/453/454=0x64`、`func_167(0x1000000)`。`sys_4A(0, 0xdc4314cd, global20, 0x1, 0x6, 0)` 挂本机 body，避开第一刀的 group `0x7` |
 | `func_938` | from-flight：**只** `func_502`（不要 `func_489`）。地面特格→N 仍 `func_489` |
 | `hold_air` | 一次：去 fly bit、开 `0x30001`、`global142=0xc2b19d12`、清 `sys_46(0x8)`。**不**写 `-90°`，**不**把 `global507` 置 0 再喂给 `func_516` |
 | interrupt | from-flight **换** `global142`，**不** `func_296(0x3e8,0)`。受击/站立仍关悬停并清 latch |
@@ -226,6 +366,7 @@ python .\tools\check_msc_opaque_func_ptrs.py "e:\XB\mod\040msc\wing_gundam_zero_
 1. 飞行中格 → `func_937` 刀光/位移，立刻拆鸟。
 2. 方向+格斗：若无招，见开放项。
 3. 鸟主射中按格斗：`func_16`–`func_20` 仍可能挡 cancel，不在本改范围。
+4. 2026-08-21 实机：`0xdc4314cd` 使用 `0x6/0`、`0x2133778d` 使用 `0x7/0` 时，两者不再发生后写覆盖。
 
 ---
 

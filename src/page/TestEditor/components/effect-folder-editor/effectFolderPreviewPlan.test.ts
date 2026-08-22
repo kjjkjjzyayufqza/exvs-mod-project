@@ -94,6 +94,50 @@ function commonPack(
 }
 
 describe("buildEffectFolderPreviewPlan", () => {
+  it("keeps the preview scene mounted while live scalar and curve edits update its plan", () => {
+    const localModelHash = hash(101);
+    const localModel = model(localModelHash, "E:\\effect\\model\\main.numdlb");
+    const summary = {
+      effects: [
+        {
+          index: 0,
+          modelHash: localModelHash,
+          animationHash: hash(0),
+          lifeTimeBase: 30,
+          colorTextureParameterIndex: [-1, -1],
+          uvTextureParameterIndex: [-1, -1],
+        },
+      ],
+      modelControls: [],
+      controlLookupEntries: [
+        { index: 0, keyF32Bits: 0, key: 0, valueF32Bits: 0, value: 1 },
+      ],
+      textureParameters: [],
+    } as unknown as EfxbnSummary;
+    const efxbnFile = { ...file("E:\\effect\\live.efxbn", "efxbn"), efxbn: summary };
+    const sourceInventory = inventory([localModel], []);
+    const initial = buildEffectFolderPreviewPlan(
+      { category: "efxbn", item: efxbnFile },
+      sourceInventory,
+      summary,
+    );
+    const editedSummary = {
+      ...summary,
+      effects: [{ ...summary.effects[0], lifeTimeBase: 90 }],
+      controlLookupEntries: [{ ...summary.controlLookupEntries[0], value: 0.25 }],
+    } as unknown as EfxbnSummary;
+
+    const edited = buildEffectFolderPreviewPlan(
+      { category: "efxbn", item: efxbnFile },
+      sourceInventory,
+      editedSummary,
+    );
+
+    expect(edited?.effectBlocks[0].lifeTimeBase).toBe(90);
+    expect(edited?.controlLookupEntries[0].value).toBe(0.25);
+    expect(edited?.key).toBe(initial?.key);
+  });
+
   it("preserves repeated effect instances and resolves only source-local models and animations", () => {
     const localModelHash = hash(101);
     const externalModelHash = hash(202);

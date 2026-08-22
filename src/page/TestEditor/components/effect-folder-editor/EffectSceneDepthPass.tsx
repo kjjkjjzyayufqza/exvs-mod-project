@@ -169,10 +169,10 @@ export function EffectSceneDepthPass({
       camera,
       ...rest
     ) {
+      // The nested render below re-enters this hook. That pass is an implementation detail,
+      // so it is hidden from any handler chained here rather than reported twice.
+      if (rendering) return;
       previousOnBeforeRender.call(this, renderer, renderScene, camera, ...rest);
-      // The nested render below re-enters this hook, and the axes gizmo renders to its own
-      // target; neither should refresh the depth.
-      if (rendering || renderer.getRenderTarget() !== null) return;
 
       const host = renderScene.getObjectByName(hostObjectName) ?? null;
       // Draws stream in after the group mounts, so re-stamp every frame rather than once.

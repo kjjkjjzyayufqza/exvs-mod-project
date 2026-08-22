@@ -458,25 +458,33 @@ export async function parseEffectEfxbnFile(path: string): Promise<EfxbnSummary> 
   });
 }
 
-export interface EfxbnControlConstantPatch {
-  lookupIndex: number;
-  value: number;
-}
-
-export interface EfxbnControlConstantWriteResult {
+export interface EfxbnFileWriteResult {
   path: string;
-  patchedCount: number;
+  byteLen: number;
   summary: EfxbnSummary;
 }
 
-/** Surgical write of constant curve-key value floats. Does not rewrite blocks. */
-export async function patchEffectEfxbnControlConstants(
+/**
+ * Writes a whole edited EFXBN document back to disk.
+ *
+ * Unlike {@link patchEffectEfxbnControlConstants}, which pokes four bytes per curve key, this
+ * rebuilds the entire container from the summary. That is what makes real editing possible:
+ * resizing the curve key table, retopologising the block tree, and rebinding models and textures
+ * all change region lengths and header counts, which a byte patch cannot express.
+ *
+ * The backend refuses a target that is missing, is not a `.efxbn`, or resolves outside
+ * `effectRoot`, and stages the bytes in a temp file so a failed write cannot truncate the
+ * original.
+ */
+export async function writeEffectEfxbnFile(
+  effectRoot: string,
   path: string,
-  patches: readonly EfxbnControlConstantPatch[],
-): Promise<EfxbnControlConstantWriteResult> {
-  return await invoke<EfxbnControlConstantWriteResult>("patch_effect_efxbn_control_constants", {
+  summary: EfxbnSummary,
+): Promise<EfxbnFileWriteResult> {
+  return await invoke<EfxbnFileWriteResult>("write_effect_efxbn_file", {
+    effectRoot: toWindowsPath(effectRoot),
     path: toWindowsPath(path),
-    patches: [...patches],
+    summary,
   });
 }
 

@@ -250,6 +250,14 @@ export type PreviewInstanceHostTransform = {
    */
   effectColorBorder?: boolean;
   effectOffsetBorder?: boolean;
+  /**
+   * Draw-scheme bit `0x1` (`efxDrawModelSoftPS`): fade alpha out as the surface approaches
+   * whatever wrote scene depth behind it, over `effectSoftParticleRange` world units.
+   */
+  effectSoftParticle?: boolean;
+  effectSoftParticleRange?: number;
+  /** Linear view depth of the opaque scene, produced by the effect preview's depth pre-pass. */
+  effectSceneDepthTexture?: Texture | null;
   /** Host-owned motion frame, used for per-particle animation phase. */
   motionFrame?: number;
 };
@@ -264,6 +272,9 @@ type EfxColorExUniforms = {
   efxColorBorder: { value: number };
   efxOffsetBorder: { value: number };
   efxAddMix: { value: number };
+  efxSceneDepth: { value: Texture | null };
+  efxHasSceneDepth: { value: number };
+  efxSoftParticleRange: { value: number };
 };
 
 /**
@@ -280,6 +291,9 @@ function attachEfxColorExUniforms(material: MeshBasicMaterial): EfxColorExUnifor
     efxColorBorder: { value: 0 },
     efxOffsetBorder: { value: 0 },
     efxAddMix: { value: 0 },
+    efxSceneDepth: { value: null },
+    efxHasSceneDepth: { value: 0 },
+    efxSoftParticleRange: { value: 0 },
   };
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
@@ -289,12 +303,18 @@ function attachEfxColorExUniforms(material: MeshBasicMaterial): EfxColorExUnifor
         `#include <common>
 uniform vec2 efxOffsetUvScale;
 uniform vec2 efxOffsetUvOffset;
-varying vec2 vEfxOffsetUv;`,
+varying vec2 vEfxOffsetUv;
+varying vec4 vEfxClipPosition;`,
       )
       .replace(
         "#include <uv_vertex>",
         `#include <uv_vertex>
 vEfxOffsetUv = uv * efxOffsetUvScale + efxOffsetUvOffset;`,
+      )
+      .replace(
+        "#include <fog_vertex>",
+        `#include <fog_vertex>
+vEfxClipPosition = gl_Position;`,
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
@@ -306,7 +326,11 @@ uniform vec2 efxDistortion;
 uniform float efxColorBorder;
 uniform float efxOffsetBorder;
 uniform float efxAddMix;
+uniform sampler2D efxSceneDepth;
+uniform float efxHasSceneDepth;
+uniform float efxSoftParticleRange;
 varying vec2 vEfxOffsetUv;
+varying vec4 vEfxClipPosition;
 float efxBorderAlpha( vec2 uvValue, float enabled ) {
   if ( enabled < 0.5 ) return 1.0;
   vec2 inside = step( vec2( 0.0 ), uvValue ) * step( uvValue, vec2( 1.0 ) );
@@ -332,6 +356,24 @@ float efxBorderAlpha( vec2 uvValue, float enabled ) {
     diffuseColor.a = mix( diffuseColor.a, 0.0, efxBright );
   }
 #endif`,
+      )
+      .replace(
+        "#include <alphatest_fragment>",
+        `// efxDrawModelSoftPS.yyadorigi.hlsl:66 — fade alpha out as the surface approaches
+// whatever wrote scene depth behind it. Placed after <color_fragment> so it scales the
+// composed alpha, and before the alpha test, which the engine also runs on the faded value.
+if ( efxHasSceneDepth > 0.5 && efxSoftParticleRange > 0.0 ) {
+  // The engine's V is ( y / w ) * -0.5 + 0.5 because D3D textures start at the top; a WebGL
+  // render target starts at the bottom, so the same texel is at + 0.5.
+  vec2 efxScreenUv = vEfxClipPosition.xy / vEfxClipPosition.w * 0.5 + 0.5;
+  float efxSceneViewDepth = texture2D( efxSceneDepth, efxScreenUv ).r;
+  // A texel the pre-pass never wrote is infinitely far, exactly like a cleared depth buffer.
+  if ( efxSceneViewDepth > 0.0 ) {
+    diffuseColor.a *= clamp(
+      ( efxSceneViewDepth - vEfxClipPosition.w ) / efxSoftParticleRange, 0.0, 1.0 );
+  }
+}
+#include <alphatest_fragment>`,
       );
   };
   return uniforms;
@@ -1854,6 +1896,10 @@ const Scene = memo(function Scene({
       const effectAddMix = hostTransform?.effectAddMix ? 1 : 0;
       const effectColorBorder = hostTransform?.effectColorBorder ? 1 : 0;
       const effectOffsetBorder = hostTransform?.effectOffsetBorder ? 1 : 0;
+      const effectSceneDepthTexture = hostTransform?.effectSceneDepthTexture ?? null;
+      const effectSoftParticle =
+        hostTransform?.effectSoftParticle && effectSceneDepthTexture ? 1 : 0;
+      const effectSoftParticleRange = hostTransform?.effectSoftParticleRange ?? 0;
       group.visible = hostTransform?.visible ?? true;
       if (hostTransform) {
         group.matrixAutoUpdate = true;
@@ -1917,6 +1963,9 @@ const Scene = memo(function Scene({
               uniforms.efxColorBorder.value = effectColorBorder;
               uniforms.efxOffsetBorder.value = effectOffsetBorder;
               uniforms.efxAddMix.value = effectAddMix;
+              uniforms.efxSceneDepth.value = effectSceneDepthTexture;
+              uniforms.efxHasSceneDepth.value = effectSoftParticle;
+              uniforms.efxSoftParticleRange.value = effectSoftParticleRange;
             }
           }
           materials = override.overrides;

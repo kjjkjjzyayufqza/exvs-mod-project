@@ -126,6 +126,12 @@ Supported operations:
 - typed param tables: `setParamField`, `copyParamEntry`, `upsertParamEntry`,
   `deleteParamEntry`
 
+For typed param tables, `copyParamEntry` and newly inserted `upsertParamEntry`
+rows are inserted by unsigned `entryId` order. Official Param samples keep the
+entry-id table sorted, and native lookup may assume that order. Do not append a
+new CRC row after larger IDs merely because the rebuilt file parses or passes a
+tool-side round-trip.
+
 ## Supported Inspect Types
 
 | `--type` alias | `detectedType` | Auto-detect signal |
@@ -330,6 +336,10 @@ The CLI avoids overclaiming:
   model availability.
 - Parser field names are not runtime proof. For projectile collision changes,
   confirm the native task/vtable consumer before relying on a field label.
+- `roundtripCheck.byteIdentical` proves parser/builder self-consistency, not
+  native runtime validity. In particular, an older `exvs2-json` build could
+  append copied Param rows out of unsigned `entryId` order and still round-trip;
+  current copy/upsert insertion preserves sorted order.
 - Hitbox tables: only fields marked PROVEN in `docs/hitbox-research/` have
   binary-verified consumers. UNVERIFIED interactionid fields keep legacy guessed
   names and may do nothing. The five `unused*` hitgroupiddef fields are dead.

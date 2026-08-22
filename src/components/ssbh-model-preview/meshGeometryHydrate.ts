@@ -23,6 +23,8 @@ type BundleLike = { mesh?: unknown } | null | undefined;
 type BinaryMeshHeader = MeshGeometryHeaderJson & {
   /** Runtime guard so a re-rendered bundle is not fetched twice. */
   __hydrated?: boolean;
+  /** One-shot registry buffers must also be protected while the first fetch is in flight. */
+  __hydratePromise?: Promise<void>;
 };
 
 function isBinaryHeader(mesh: unknown): mesh is BinaryMeshHeader {
@@ -61,11 +63,21 @@ function attachViews(headerObj: MeshObjectGeometryHeaderJson, buffer: ArrayBuffe
 export async function hydrateBundleGeometry(bundle: BundleLike): Promise<void> {
   const mesh = bundle?.mesh;
   if (!isBinaryHeader(mesh) || mesh.__hydrated) return;
-  const buffer = await invoke<ArrayBuffer>("take_mesh_geometry", {
-    geometryId: mesh.geometryId,
-  });
-  for (const obj of mesh.objects) attachViews(obj, buffer);
-  mesh.__hydrated = true;
+  if (mesh.__hydratePromise) return mesh.__hydratePromise;
+
+  const hydration = (async () => {
+    const buffer = await invoke<ArrayBuffer>("take_mesh_geometry", {
+      geometryId: mesh.geometryId,
+    });
+    for (const obj of mesh.objects) attachViews(obj, buffer);
+    mesh.__hydrated = true;
+  })();
+  mesh.__hydratePromise = hydration;
+  try {
+    await hydration;
+  } finally {
+    delete mesh.__hydratePromise;
+  }
 }
 
 /** Hydrates a base model and a list of sub-model bundles in sequence. */

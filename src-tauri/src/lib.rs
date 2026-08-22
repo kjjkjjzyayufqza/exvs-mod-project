@@ -160,7 +160,7 @@ pub fn run() {
             stage_commands::repack_unit_model_fhm2d,
             stage_commands::inspect_effect_folder,
             stage_commands::parse_effect_efxbn_file,
-            stage_commands::patch_effect_efxbn_control_constants,
+            stage_commands::write_effect_efxbn_file,
             stage_commands::validate_effect_folder_for_repack,
             stage_commands::repack_effect_folder_fhm2d,
             stage_commands::import_effect_folder_file,

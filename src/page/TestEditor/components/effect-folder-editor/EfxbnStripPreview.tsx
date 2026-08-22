@@ -9,6 +9,7 @@ import {
   ShaderMaterial,
   Vector3,
   type Mesh,
+  type Texture,
 } from "three";
 import type { EfxbnControlLookupEntry } from "@/services/effectFolder/effectFolderService";
 import type { EffectFolderPreviewPlan } from "./effectFolderPreviewPlan";
@@ -44,6 +45,7 @@ import {
   efxbnParticleSortsFrontToBack,
   efxbnRequiresParticleDepthSort,
 } from "./efxbnBillboardShading";
+import { efxbnUsesSoftParticle, resolveEfxbnSoftParticleRange } from "./efxbnSoftParticle";
 
 const MAX_STRIP_PARTICLES = 256;
 const MAX_STRIP_INDICES = (EFXBN_STRIP_VERTEX_LIMIT / 2) * 6;
@@ -100,6 +102,13 @@ function createStripMaterial(pair: EfxbnEmitterPair) {
         value: (efxbnRuntime(pair.target).drawScheme.flag & DRAW_SCHEME_FULL_BRIGHTNESS) !== 0 ? 1 : 0,
       },
       addMix: { value: pair.target.blendState === EFXBN_BLEND_STATE_ADD_MIX ? 1 : 0 },
+      sceneDepth: { value: null },
+      hasSceneDepth: { value: 0 },
+      softParticleRange: {
+        value: efxbnUsesSoftParticle(pair.target)
+          ? resolveEfxbnSoftParticleRange(pair.target)
+          : 0,
+      },
     },
     vertexShader: `
       attribute vec3 previousCenter;
@@ -111,6 +120,7 @@ function createStripMaterial(pair: EfxbnEmitterPair) {
       varying vec2 vUv;
       varying vec2 vOffsetUv;
       varying vec4 vColor;
+      varying vec4 vClipPosition;
       void main() {
         vec4 center = modelViewMatrix * vec4(position, 1.0);
         vec2 previous = (modelViewMatrix * vec4(previousCenter, 1.0)).xy;
@@ -119,6 +129,7 @@ function createStripMaterial(pair: EfxbnEmitterPair) {
         tangent = length(tangent) < 0.00001 ? vec2(0.0, 1.0) : normalize(tangent);
         center.xy += vec2(-tangent.y, tangent.x) * ribbonSide * ribbonWidth;
         gl_Position = projectionMatrix * center;
+        vClipPosition = gl_Position;
         vUv = uv;
         vOffsetUv = offsetUv;
         vColor = ribbonColor;
@@ -134,9 +145,13 @@ function createStripMaterial(pair: EfxbnEmitterPair) {
       uniform float offsetBorder;
       uniform float fullBrightness;
       uniform float addMix;
+      uniform sampler2D sceneDepth;
+      uniform float hasSceneDepth;
+      uniform float softParticleRange;
       varying vec2 vUv;
       varying vec2 vOffsetUv;
       varying vec4 vColor;
+      varying vec4 vClipPosition;
       float efxBorderAlpha(vec2 uvValue, float enabled) {
         if (enabled < 0.5) return 1.0;
         vec2 inside = step(vec2(0.0), uvValue) * step(uvValue, vec2(1.0));
@@ -155,6 +170,14 @@ function createStripMaterial(pair: EfxbnEmitterPair) {
         vec4 texel = hasColorMap > 0.5 ? texture2D(colorMap, colorUv) : vec4(1.0);
         vec4 color = texel * vColor;
         color.a *= offsetAlpha * efxBorderAlpha(colorUv, colorBorder);
+        // Same soft-particle term as the billboard shader; see EfxbnParticlePreview.
+        if (hasSceneDepth > 0.5 && softParticleRange > 0.0) {
+          vec2 screenUv = vClipPosition.xy / vClipPosition.w * 0.5 + 0.5;
+          float sceneViewDepth = texture2D(sceneDepth, screenUv).r;
+          if (sceneViewDepth > 0.0) {
+            color.a *= clamp((sceneViewDepth - vClipPosition.w) / softParticleRange, 0.0, 1.0);
+          }
+        }
         if (color.a < 0.01) discard;
         // Same AddMix 0x40 path as the billboard shader; see EfxbnParticlePreview.
         if (addMix > 0.5) {
@@ -178,6 +201,20 @@ function livePlan(
   return { ...plan, controlLookupEntries: entries };
 }
 
+/** Same reasoning as the billboard path: key the material on render state, not on the pair. */
+function stripMaterialSignature(pair: EfxbnEmitterPair): string {
+  const target = pair.target;
+  const runtime = efxbnRuntime(target);
+  return [
+    runtime.zWriteEnable,
+    target.zTestEnable,
+    target.blendState,
+    target.cullingType,
+    runtime.drawScheme.flag,
+    runtime.softParticleRange,
+  ].join("/");
+}
+
 function EfxbnStripLayer({
   pair,
   plan,
@@ -185,6 +222,7 @@ function EfxbnStripLayer({
   progressRef,
   frameCount,
   meshEmitterPointsByEffectIndex,
+  sceneDepthTextureRef,
 }: {
   pair: EfxbnEmitterPair;
   plan: EffectFolderPreviewPlan;
@@ -192,9 +230,15 @@ function EfxbnStripLayer({
   progressRef: MutableRefObject<number>;
   frameCount: number;
   meshEmitterPointsByEffectIndex: ReadonlyMap<number, readonly EfxbnMeshEmitterPoint[]>;
+  sceneDepthTextureRef: MutableRefObject<Texture | null>;
 }) {
   const geometry = useMemo(createStripGeometry, []);
-  const material = useMemo(() => createStripMaterial(pair), [pair]);
+  const stripSignature = stripMaterialSignature(pair);
+  const material = useMemo(
+    () => createStripMaterial(pair),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see stripMaterialSignature.
+    [stripSignature],
+  );
   const meshRef = useRef<Mesh>(null);
   const worldToLocalRef = useRef(new Matrix4());
   const cameraLocalRef = useRef(new Vector3());
@@ -240,6 +284,10 @@ function EfxbnStripLayer({
   useFrame((state) => {
     const mesh = meshRef.current;
     if (!mesh) return;
+    const sceneDepthTexture = sceneDepthTextureRef.current;
+    material.uniforms.sceneDepth.value = sceneDepthTexture;
+    material.uniforms.hasSceneDepth.value =
+      sceneDepthTexture && (material.uniforms.softParticleRange.value as number) > 0 ? 1 : 0;
     const frame = (progressRef.current / 100) * frameCount;
     const particles = simulateEfxbnPreviewFrame(
       pair,
@@ -303,6 +351,7 @@ export function EfxbnStripPreview({
   frameCount,
   hiddenEffectIndexes,
   meshEmitterPointsByEffectIndex,
+  sceneDepthTextureRef,
 }: {
   plan: EffectFolderPreviewPlan;
   controlLookupEntriesRef: MutableRefObject<readonly EfxbnControlLookupEntry[]>;
@@ -311,6 +360,8 @@ export function EfxbnStripPreview({
   frameCount: number;
   hiddenEffectIndexes: ReadonlySet<number>;
   meshEmitterPointsByEffectIndex: ReadonlyMap<number, readonly EfxbnMeshEmitterPoint[]>;
+  /** Linear view depth of the opaque scene; null while no host model contributes any. */
+  sceneDepthTextureRef: MutableRefObject<Texture | null>;
 }) {
   const pairs = useMemo(
     () => resolveEfxbnEmitterPairs(plan).filter((pair) => isEfxbnStripBlock(pair.target)),
@@ -328,6 +379,7 @@ export function EfxbnStripPreview({
       progressRef={progressRef}
       frameCount={frameCount}
       meshEmitterPointsByEffectIndex={meshEmitterPointsByEffectIndex}
+      sceneDepthTextureRef={sceneDepthTextureRef}
     />;
   })}</group>;
 }

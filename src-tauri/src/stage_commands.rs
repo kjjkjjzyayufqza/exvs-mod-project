@@ -651,12 +651,13 @@ pub async fn parse_effect_efxbn_file(path: String) -> Result<effect_folder::Efxb
 }
 
 #[tauri::command]
-pub async fn patch_effect_efxbn_control_constants(
+pub async fn write_effect_efxbn_file(
+    effect_root: String,
     path: String,
-    patches: Vec<effect_folder::EfxbnControlConstantPatch>,
-) -> Result<effect_folder::EfxbnControlConstantWriteResult, String> {
+    summary: effect_folder::EfxbnSummary,
+) -> Result<effect_folder::EfxbnFileWriteResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        effect_folder::patch_efxbn_control_constants(&path, &patches)
+        effect_folder::write_efxbn_file(&effect_root, &path, &summary)
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))?

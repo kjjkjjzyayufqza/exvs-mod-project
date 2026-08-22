@@ -4,6 +4,9 @@ use std::io::Cursor;
 use app_lib::exvs2_json_cli::{
     edit_bytes, inspect_bytes, EditBytesOptions, InspectOptions, InspectType,
 };
+use app_lib::format::armsparam::{
+    build_armsparam, parse_armsparam, ArmsParamData, ArmsParamEntry,
+};
 use app_lib::format::bulletparam::{
     build_bulletparam, bulletparam_entry_from_json_value, bulletparam_entry_to_json_value,
     parse_bulletparam, BulletParamData, BulletParamEntry,
@@ -165,6 +168,102 @@ fn bulletparam_fixture_bytes() -> Vec<u8> {
         source_entries_raw: Vec::new(),
     })
     .expect("build bulletparam fixture")
+}
+
+fn armsparam_fixture_bytes() -> Vec<u8> {
+    let ammo_count_hash = 0x4961_274c;
+    let entries = [0x0d7f_cde2, 0x55b0_3548, 0xfa64_e4d0]
+        .into_iter()
+        .map(|entry_id| ArmsParamEntry {
+            entry_id,
+            commands: HashMap::from([(ammo_count_hash, 1)]),
+            strings: HashMap::new(),
+        })
+        .collect::<Vec<_>>();
+
+    build_armsparam(&ArmsParamData {
+        header: ParamBinaryHeader {
+            magic: PARAM_BIN_MAGIC,
+            unk_04: 0,
+            file_size: 0,
+            unk_0c: 0,
+            entry_count: entries.len() as u32,
+            commands_count: 1,
+            entry_size: 4,
+            unk_1c: 0,
+        },
+        field_specs: vec![ParamFieldSpec {
+            hash: ammo_count_hash,
+            entry_offset: 0,
+            flags: 0,
+            kind: 2,
+        }],
+        entry_ids: entries.iter().map(|entry| entry.entry_id).collect(),
+        entries,
+        trailing_data: Vec::new(),
+        source_entries_raw: Vec::new(),
+    })
+    .expect("build armsparam fixture")
+}
+
+#[test]
+fn edit_armsparam_copy_inserts_entry_id_in_unsigned_order() {
+    let bytes = armsparam_fixture_bytes();
+    let outcome = edit_bytes(
+        r"E:\fixture\armsparam.bin",
+        &bytes,
+        &json!({
+            "type": "armsparam",
+            "operations": [{
+                "op": "copyParamEntry",
+                "fromEntryId": 0x55b0_3548u32,
+                "newEntryId": 0x233c_4626u32
+            }]
+        }),
+        EditBytesOptions {
+            inspect_type: Some(InspectType::ArmsParam),
+            output_path: None,
+            dry_run: true,
+        },
+    )
+    .expect("copy armsparam entry");
+    let edited = parse_armsparam(&outcome.bytes).expect("parse copied armsparam");
+
+    assert_eq!(
+        edited.entry_ids,
+        vec![0x0d7f_cde2, 0x233c_4626, 0x55b0_3548, 0xfa64_e4d0]
+    );
+}
+
+#[test]
+fn edit_armsparam_upsert_inserts_entry_id_in_unsigned_order() {
+    let bytes = armsparam_fixture_bytes();
+    let outcome = edit_bytes(
+        r"E:\fixture\armsparam.bin",
+        &bytes,
+        &json!({
+            "type": "armsparam",
+            "operations": [{
+                "op": "upsertParamEntry",
+                "entry": {
+                    "entryId": 0x233c_4626u32,
+                    "ammoCount": 1
+                }
+            }]
+        }),
+        EditBytesOptions {
+            inspect_type: Some(InspectType::ArmsParam),
+            output_path: None,
+            dry_run: true,
+        },
+    )
+    .expect("upsert armsparam entry");
+    let edited = parse_armsparam(&outcome.bytes).expect("parse upserted armsparam");
+
+    assert_eq!(
+        edited.entry_ids,
+        vec![0x0d7f_cde2, 0x233c_4626, 0x55b0_3548, 0xfa64_e4d0]
+    );
 }
 
 // Real hitbox-table samples (docs/hitbox-research). Mod build of custom Gyan and the

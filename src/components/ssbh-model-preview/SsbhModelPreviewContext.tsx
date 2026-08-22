@@ -37,7 +37,7 @@ import {
   type TexturePreviewSlotKey,
 } from "./meshFromSsbh";
 
-import { clearMeshGeometryRegistry, hydrateBundleGeometry } from "./meshGeometryHydrate";
+import { hydrateBundleGeometry } from "./meshGeometryHydrate";
 import { shouldStartMotionClipLoad } from "./motionClipLoadPolicy";
 import { inspectMotionFbx, previewMotionFbx } from "./motionFbxImportService";
 import {
@@ -909,7 +909,6 @@ export function SsbhModelPreviewProvider({
     setDrawMaterialBindingsByDrawKey(new Map());
     setTextureDecodeProgressBatched(null);
     clearAllMotion();
-    void clearMeshGeometryRegistry();
   }, [clearAllMotion, setTextureDecodeProgressBatched]);
 
   const bumpLoadGeneration = useCallback(() => {

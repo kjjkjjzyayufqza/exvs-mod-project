@@ -6,6 +6,7 @@ import type {
   EfxbnControlReferenceSummary,
   EfxbnEffectSummary,
   EfxbnModelControlSummary,
+  EfxbnSummary,
 } from "@/services/effectFolder/effectFolderService";
 import type { EffectListItem } from "./effectFolderEditorUtils";
 
@@ -50,6 +51,7 @@ export type EffectFolderPreviewTextureBinding = {
 
 export type EffectFolderPreviewPlan = {
   kind: "efxbn" | "model";
+  /** Model-scene load identity. Live EFXBN property edits must keep this stable. */
   key: string;
   targets: EffectFolderPreviewTarget[];
   localAnimationCount: number;
@@ -322,7 +324,7 @@ function planKey(
   targets: readonly EffectFolderPreviewTarget[],
   unresolvedModelHashes: readonly EffectFolderHash[],
   unresolvedAnimationHashes: readonly EffectFolderHash[],
-  revisionSignature: string,
+  revisionSignature?: string,
 ): string {
   return [
     kind,
@@ -333,13 +335,19 @@ function planKey(
     ),
     ...unresolvedModelHashes.map((hash) => `model:${hash.signed}`),
     ...unresolvedAnimationHashes.map((hash) => `animation:${hash.signed}`),
-    `revision:${revisionSignature}`,
+    ...(revisionSignature ? [`revision:${revisionSignature}`] : []),
   ].join("|");
 }
 
 export function buildEffectFolderPreviewPlan(
   item: EffectListItem,
   inventory: EffectFolderInventory,
+  /**
+   * Live edited summary, when the editor holds one. The preview must render what the document
+   * says rather than what was last read from disk, or every edit would look like a no-op until
+   * the file is saved.
+   */
+  editedSummary?: EfxbnSummary | null,
 ): EffectFolderPreviewPlan | null {
   if (item.category === "textures" || item.category === "other") return null;
 
@@ -383,7 +391,7 @@ export function buildEffectFolderPreviewPlan(
     };
   }
 
-  const summary = item.item.efxbn;
+  const summary = editedSummary ?? item.item.efxbn;
   const modelsByHash = resourcesByHash(
     inventory.models,
     inventory.commonPack?.models ?? [],
@@ -464,21 +472,6 @@ export function buildEffectFolderPreviewPlan(
     });
   }
   const unresolvedTextureHashes = uniqueHashes(unresolvedTextures);
-  const revisionSignature = compactRevisionSignature({
-    summary,
-    modelSlots: targets.map((target) => ({
-      effectIndex: target.effectIndex,
-      modelPath: target.modelPath,
-      animationPath: target.animationPath,
-    })),
-    textureSlots: textureBindings.map((binding) => ({
-      effectIndex: binding.effectIndex,
-      slot: binding.slot,
-      controlIndex: binding.controlIndex,
-      fileIndex: binding.file?.fileIndex ?? null,
-      path: binding.file?.path ?? null,
-    })),
-  });
   return {
     kind: "efxbn",
     key: planKey(
@@ -487,7 +480,6 @@ export function buildEffectFolderPreviewPlan(
       targets,
       unresolvedModelHashes,
       unresolvedAnimationHashes,
-      revisionSignature,
     ),
     targets,
     localAnimationCount: targets.filter((target) => target.animationPath !== null).length,

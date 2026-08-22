@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
 import { Box, Pause, PersonStanding, Play, RotateCcw, X } from "lucide-react";
-import type { Texture } from "three";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -15,7 +22,7 @@ import {
   type PreviewInstanceHostTransform,
 } from "@/components/ssbh-model-preview/SsbhModelCanvas";
 import {
-  patchEffectEfxbnControlConstants,
+  writeEffectEfxbnFile,
   type EffectFolderInventory,
   type EfxbnControlLookupEntry,
 } from "@/services/effectFolder/effectFolderService";
@@ -27,16 +34,18 @@ import {
   type EffectFolderPreviewPlan,
 } from "./effectFolderPreviewPlan";
 import {
-  acceptWrittenPatches,
-  createEfxbnDraft,
-  efxbnDraftDirtyCount,
-  isEfxbnDraftDirty,
-  listControlConstantPatches,
-  patchColorConstants,
-  revertEfxbnDraft,
-  sameEfxbnPath,
-  type EfxbnDraftSession,
-} from "./efxbnDraftSession";
+  acceptEfxbnDocumentWrite,
+  canRedoEfxbn,
+  canUndoEfxbn,
+  createEfxbnDocument,
+  isEfxbnDocumentDirty,
+  prepareEfxbnDocumentForWrite,
+  redoEfxbn,
+  revertEfxbnDocument,
+  setEfxbnCurveKey,
+  undoEfxbn,
+  type EfxbnDocument,
+} from "./efxbnDocument";
 import { EfxbnDiagnosticOverlay } from "./EfxbnDiagnosticOverlay";
 import { EfxbnPreviewInspector } from "./EfxbnPreviewInspector";
 import {
@@ -95,7 +104,6 @@ function EffectFolderPreviewScene({
     setInstanceModelId,
     setActivePreviewInstanceId,
   } = useSsbhModelPreview();
-  const loadedPlanKeyRef = useRef<string | null>(null);
   const instanceIdsByEffectIndexRef = useRef<Map<number, string[]>>(new Map());
   const selectedEffectIndexRef = useRef(selectedEffectIndex);
   selectedEffectIndexRef.current = selectedEffectIndex;
@@ -120,26 +128,49 @@ function EffectFolderPreviewScene({
   );
   // The host is part of the model set, so swapping it has to reload just like a new effect does.
   const loadKey = `${plan.key}|host:${hostModelPath ?? ""}`;
+  const loadRequestRef = useRef({
+    loadModelSetAt,
+    loadMotionNuanmbPathForInstance,
+    requestCameraFit,
+    setInstanceModelId,
+    setActivePreviewInstanceId,
+    loadPlan,
+    modelLoadSlots,
+    planKind: plan.kind,
+    onInstanceMapChange,
+    onHostInstanceIdChange,
+  });
+  loadRequestRef.current = {
+    loadModelSetAt,
+    loadMotionNuanmbPathForInstance,
+    requestCameraFit,
+    setInstanceModelId,
+    setActivePreviewInstanceId,
+    loadPlan,
+    modelLoadSlots,
+    planKind: plan.kind,
+    onInstanceMapChange,
+    onHostInstanceIdChange,
+  };
 
   useEffect(() => {
-    if (loadedPlanKeyRef.current === loadKey) return;
-    loadedPlanKeyRef.current = loadKey;
+    const request = loadRequestRef.current;
     instanceIdsByEffectIndexRef.current = new Map();
     hostInstanceTransformsRef.current = new Map();
-    onInstanceMapChange(new Map());
-    onHostInstanceIdChange(null);
+    request.onInstanceMapChange(new Map());
+    request.onHostInstanceIdChange(null);
     let cancelled = false;
 
-    if (loadPlan.paths.length === 0) {
-      requestCameraFit();
+    if (request.loadPlan.paths.length === 0) {
+      request.requestCameraFit();
       return;
     }
 
-    void loadModelSetAt(loadPlan.paths)
+    void request.loadModelSetAt(request.loadPlan.paths)
       .then((instances) => {
         if (cancelled) return;
         instances.forEach((instance, index) => {
-          const slot = modelLoadSlots[index];
+          const slot = request.modelLoadSlots[index];
           // The host is appended past the last effect slot and is driven by nothing.
           if (!slot) return;
           const { target } = slot;
@@ -148,9 +179,9 @@ function EffectFolderPreviewScene({
             ids.push(instance.id);
             instanceIdsByEffectIndexRef.current.set(target.effectIndex, ids);
           }
-          if (slot.poolIndex === 0) setInstanceModelId(instance.id, target.modelHash.hex);
+          if (slot.poolIndex === 0) request.setInstanceModelId(instance.id, target.modelHash.hex);
           if (target.animationPath) {
-            loadMotionNuanmbPathForInstance(instance.id, target.animationPath);
+            request.loadMotionNuanmbPathForInstance(instance.id, target.animationPath);
           }
         });
         // Effect instances start hidden and are revealed per particle; the host must stay out of
@@ -165,23 +196,23 @@ function EffectFolderPreviewScene({
                     position: [0, 0, 0],
                     rotation: [0, 0, 0],
                     scale: [1, 1, 1],
-                    visible: plan.kind === "model",
+                    visible: request.planKind === "model",
                   } satisfies PreviewInstanceHostTransform,
                 ] as const],
           ),
         );
-        onInstanceMapChange(new Map(instanceIdsByEffectIndexRef.current));
-        onHostInstanceIdChange(
-          loadPlan.hostPathIndex === null
+        request.onInstanceMapChange(new Map(instanceIdsByEffectIndexRef.current));
+        request.onHostInstanceIdChange(
+          request.loadPlan.hostPathIndex === null
             ? null
-            : instances[loadPlan.hostPathIndex]?.id ?? null,
+            : instances[request.loadPlan.hostPathIndex]?.id ?? null,
         );
         const selectedInstanceId =
           selectedEffectIndexRef.current === null
             ? null
             : instanceIdsByEffectIndexRef.current.get(selectedEffectIndexRef.current)?.[0];
-        if (selectedInstanceId) setActivePreviewInstanceId(selectedInstanceId);
-        requestCameraFit();
+        if (selectedInstanceId) request.setActivePreviewInstanceId(selectedInstanceId);
+        request.requestCameraFit();
       })
       .catch(() => {
         // The shared preview surface owns the actionable load error.
@@ -191,20 +222,7 @@ function EffectFolderPreviewScene({
       cancelled = true;
       hostInstanceTransformsRef.current = new Map();
     };
-  }, [
-    loadKey,
-    loadModelSetAt,
-    loadMotionNuanmbPathForInstance,
-    loadPlan,
-    modelLoadSlots,
-    plan.kind,
-    onHostInstanceIdChange,
-    onInstanceMapChange,
-    requestCameraFit,
-    setActivePreviewInstanceId,
-    setInstanceModelId,
-    hostInstanceTransformsRef,
-  ]);
+  }, [hostInstanceTransformsRef, loadKey]);
 
   useEffect(() => {
     if (selectedEffectIndex === null) return;
@@ -222,78 +240,50 @@ export function EffectFolder3dPreview({
   previewSuspended = false,
   onEfxbnWritten,
 }: EffectFolder3dPreviewProps) {
-  const basePlan = useMemo(() => buildEffectFolderPreviewPlan(item, inventory), [inventory, item]);
   const sourceSummary = item.category === "efxbn" ? item.item.efxbn ?? null : null;
-  const [draft, setDraft] = useState<EfxbnDraftSession | null>(null);
-  const [writing, setWriting] = useState(false);
-  const draftRef = useRef<EfxbnDraftSession | null>(null);
-  draftRef.current = draft;
-
   const efxbnPath = item.category === "efxbn" ? item.item.path : null;
-  // Recreate the live draft when the focused file changes. Inventory reloads keep a dirty
-  // draft so concurrent edits are not silently discarded.
+  const [document, setDocument] = useState<EfxbnDocument | null>(null);
+  const [writing, setWriting] = useState(false);
+  const documentRef = useRef<EfxbnDocument | null>(null);
+  documentRef.current = document;
+  const previewDocument = useDeferredValue(document);
+
+  // Recreate the document when the focused file changes. An inventory reload keeps a dirty
+  // document so concurrent edits are not silently discarded.
   useEffect(() => {
     if (!sourceSummary || !efxbnPath) {
-      setDraft(null);
+      setDocument(null);
       return;
     }
-    setDraft((current) => {
-      if (!current || !sameEfxbnPath(current.path, efxbnPath)) {
-        try {
-          return createEfxbnDraft(sourceSummary, efxbnPath);
-        } catch (error) {
-          toast.error(error instanceof Error ? error.message : String(error));
-          return null;
-        }
-      }
-      if (isEfxbnDraftDirty(current)) {
-        // Keep the inventory file path as the write target even if the draft was older.
-        return sameEfxbnPath(current.path, efxbnPath) ? current : { ...current, path: efxbnPath };
-      }
+    setDocument((current) => {
+      if (current && current.path === efxbnPath && isEfxbnDocumentDirty(current)) return current;
       try {
-        return createEfxbnDraft(sourceSummary, efxbnPath);
+        return createEfxbnDocument(sourceSummary, efxbnPath, inventory.effectRoot);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : String(error));
-        return current;
+        return null;
       }
     });
-  }, [sourceSummary, efxbnPath]);
+  }, [sourceSummary, efxbnPath, inventory.effectRoot]);
 
-  // Structural plan for 3D (stable identity while colour drafts change).
-  // Live curve values flow through controlLookupEntriesRef so R3F does not remount.
+  // The preview renders the document, not the last thing read from disk, so an edit is visible
+  // immediately. `planKey` is built from the resolved model set, so a scalar or curve edit reuses
+  // the same key and the R3F scene is updated rather than remounted; rebinding a model changes
+  // the target list, which is exactly when a reload is wanted.
+  const basePlan = useMemo(
+    () => buildEffectFolderPreviewPlan(item, inventory, previewDocument?.summary ?? null),
+    [inventory, item, previewDocument],
+  );
+  const plan = basePlan;
+
+  // The particle layers read live curve values off this ref every frame, so dragging a value does
+  // not have to wait for React to re-render the R3F tree.
   const controlLookupEntriesRef = useRef<readonly EfxbnControlLookupEntry[]>(
     basePlan?.kind === "efxbn" ? basePlan.controlLookupEntries : [],
   );
-  const draftCommitRafRef = useRef(0);
-
-  // Inspector still needs draft values overlaid for evaluated control rows / colour UI.
-  const plan = useMemo(() => {
-    if (!basePlan || basePlan.kind !== "efxbn" || !draft) return basePlan;
-    return {
-      ...basePlan,
-      controlLookupEntries: draft.controlLookupEntries,
-    };
-  }, [basePlan, draft]);
-
   useEffect(() => {
-    if (draft) {
-      controlLookupEntriesRef.current = draft.controlLookupEntries;
-      return;
-    }
-    if (basePlan?.kind === "efxbn") {
-      controlLookupEntriesRef.current = basePlan.controlLookupEntries;
-    }
-  }, [basePlan, draft]);
-
-  useEffect(
-    () => () => {
-      if (draftCommitRafRef.current) {
-        cancelAnimationFrame(draftCommitRafRef.current);
-        draftCommitRafRef.current = 0;
-      }
-    },
-    [],
-  );
+    if (basePlan?.kind === "efxbn") controlLookupEntriesRef.current = basePlan.controlLookupEntries;
+  }, [basePlan]);
 
   const [effectProgress, setEffectProgress] = useState(0);
   const [effectPlaying, setEffectPlaying] = useState(false);
@@ -308,9 +298,8 @@ export function EffectFolder3dPreview({
   // depth for a soft particle to fade against and no scale reference at all.
   const [hostModelPath, setHostModelPath] = useState<string | null>(null);
   const [hostInstanceId, setHostInstanceId] = useState<string | null>(null);
-  const sceneDepthTextureRef = useRef<Texture | null>(null);
   // The playback window is the effect's own length, not a fixed 120 frames — see
-  // `resolveEfxbnPreviewFrameCount`. Structural, so it never recomputes from colour draft identity.
+  // `resolveEfxbnPreviewFrameCount`.
   const frameCount = useMemo(
     () => (basePlan ? resolveEfxbnPreviewFrameCount(basePlan.effectBlocks) : EFXBN_PREVIEW_FRAME_COUNT),
     [basePlan],
@@ -321,74 +310,98 @@ export function EffectFolder3dPreview({
     [basePlan, frameCount],
   );
 
+  const handleDocumentChange = useCallback((next: EfxbnDocument) => {
+    documentRef.current = next;
+    controlLookupEntriesRef.current = next.summary.controlLookupEntries;
+    setDocument(next);
+  }, []);
+
+  const handleEditorError = useCallback((message: string) => {
+    toast.error(message);
+  }, []);
+
+  /** The colour authoring panel writes the four colour curves as plain constants. */
   const handlePatchColor = useCallback(
     (blockIndex: number, color: { r?: number; g?: number; b?: number; a?: number }) => {
       // Freeze authoring while a disk write is in flight so the snapshot stays honest.
       if (writing) return;
-      const current = draftRef.current;
+      const current = documentRef.current;
       if (!current) return;
       try {
-        const next = patchColorConstants(current, blockIndex, color);
+        let next = current;
+        const channels: [keyof typeof color, string][] = [
+          ["r", "colorR"],
+          ["g", "colorG"],
+          ["b", "colorB"],
+          ["a", "colorA"],
+        ];
+        for (const [channel, controlName] of channels) {
+          const value = color[channel];
+          if (value === undefined) continue;
+          next = setEfxbnCurveKey(next, blockIndex, controlName, 0, { value });
+        }
         if (next === current) return;
-        // 3D sim reads this ref on the next frame — no React re-render required.
-        draftRef.current = next;
-        controlLookupEntriesRef.current = next.controlLookupEntries;
-        // Coalesce React state commits to at most once per animation frame so the
-        // colour picker / sliders stay responsive while dirty badges still update.
-        if (draftCommitRafRef.current) return;
-        draftCommitRafRef.current = requestAnimationFrame(() => {
-          draftCommitRafRef.current = 0;
-          const pending = draftRef.current;
-          if (pending) setDraft(pending);
-        });
+        handleDocumentChange(next);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : String(error));
       }
     },
-    [writing],
+    [handleDocumentChange, writing],
   );
 
-  const handleRevertDraft = useCallback(() => {
-    setDraft((current) => {
-      if (!current) return current;
-      const next = revertEfxbnDraft(current);
-      draftRef.current = next;
-      controlLookupEntriesRef.current = next.controlLookupEntries;
-      return next;
-    });
-  }, []);
+  const handleRevertDocument = useCallback(() => {
+    const current = documentRef.current;
+    if (!current) return;
+    handleDocumentChange(revertEfxbnDocument(current));
+  }, [handleDocumentChange]);
 
-  const handleWriteDraft = useCallback(async () => {
+  const handleUndo = useCallback(() => {
+    const current = documentRef.current;
+    if (!current || !canUndoEfxbn(current)) return;
+    handleDocumentChange(undoEfxbn(current));
+  }, [handleDocumentChange]);
+
+  const handleRedo = useCallback(() => {
+    const current = documentRef.current;
+    if (!current || !canRedoEfxbn(current)) return;
+    handleDocumentChange(redoEfxbn(current));
+  }, [handleDocumentChange]);
+
+  const handleWriteDocument = useCallback(async () => {
     if (writing) return;
-    const live = draftRef.current;
+    const live = documentRef.current;
     if (!live) {
-      toast.error("No live EFXBN draft to write");
+      toast.error("No EFXBN document is open");
       return;
     }
-    // Prefer the currently focused inventory path — it is the file the UI is showing.
-    const writePath = (efxbnPath?.trim() || live.path).trim();
-    if (!writePath) {
-      toast.error("EFXBN file path is empty; cannot write");
-      return;
-    }
-
-    let patches;
-    try {
-      patches = listControlConstantPatches(live);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-      return;
-    }
-    if (patches.length === 0) {
-      toast.error("No dirty constant lanes to write", {
-        description: "Change a colour channel first, then use Save EFXBN in the panel footer.",
+    if (!isEfxbnDocumentDirty(live)) {
+      toast.error("Nothing to save", {
+        description: "Change a field, a curve, a resource binding or the block tree first.",
       });
       return;
     }
 
-    const dirtyCount = efxbnDraftDirtyCount(live);
+    // Recompact the key table and prove the tree, the counts and curve exclusivity BEFORE the
+    // confirmation dialog, so a document a command corrupted never reaches the disk and the user
+    // is not asked to approve a write that is going to fail.
+    let payload;
+    try {
+      payload = prepareEfxbnDocumentForWrite(live);
+    } catch (error) {
+      toast.error("EFXBN document failed validation", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+
+    const changes = live.changeLog.slice(-8);
+    const more = live.changeLog.length - changes.length;
     const confirmed = await confirm(
-      `Write ${patches.length} control value${patches.length === 1 ? "" : "s"} (${dirtyCount} dirty lane${dirtyCount === 1 ? "" : "s"}) to disk?\n\n${writePath}`,
+      `Rewrite ${payload.effects.length} block${payload.effects.length === 1 ? "" : "s"} and ` +
+        `${payload.controlLookupEntries.length} curve key${payload.controlLookupEntries.length === 1 ? "" : "s"}?\n\n` +
+        `${live.path}\n\n` +
+        `${changes.map((entry) => `• ${entry}`).join("\n")}` +
+        `${more > 0 ? `\n… and ${more} earlier change${more === 1 ? "" : "s"}` : ""}`,
       {
         title: "Save EFXBN",
         kind: "warning",
@@ -400,27 +413,15 @@ export function EffectFolder3dPreview({
 
     setWriting(true);
     try {
-      const result = await patchEffectEfxbnControlConstants(writePath, patches);
-      // Re-baseline only the written indices so concurrent edits during await stay dirty.
-      setDraft((current) => {
-        if (
-          !current ||
-          (!sameEfxbnPath(current.path, writePath) && !sameEfxbnPath(current.path, live.path))
-        ) {
-          return current;
-        }
-        const aligned = sameEfxbnPath(current.path, writePath)
-          ? current
-          : { ...current, path: writePath };
-        const next = acceptWrittenPatches(aligned, patches);
-        draftRef.current = next;
-        controlLookupEntriesRef.current = next.controlLookupEntries;
+      const result = await writeEffectEfxbnFile(live.effectRoot, live.path, payload);
+      // Re-baseline from what the backend read back off disk, not from what we believed we wrote.
+      setDocument((current) => {
+        if (!current || current.path !== live.path) return current;
+        const next = acceptEfxbnDocumentWrite(current, result.summary);
+        documentRef.current = next;
         return next;
       });
-      toast.success(
-        `Wrote ${result.patchedCount} control value${result.patchedCount === 1 ? "" : "s"}`,
-        { description: result.path || writePath },
-      );
+      toast.success(`Wrote ${result.byteLen} bytes`, { description: result.path });
       onEfxbnWritten?.();
     } catch (error) {
       toast.error("Failed to write EFXBN", {
@@ -429,7 +430,7 @@ export function EffectFolder3dPreview({
     } finally {
       setWriting(false);
     }
-  }, [efxbnPath, onEfxbnWritten, writing]);
+  }, [onEfxbnWritten, writing]);
   const externalModelEffectCount = useMemo(() => {
     if (plan?.kind !== "efxbn") return 0;
     const localEffectIndexes = new Set(
@@ -572,6 +573,37 @@ export function EffectFolder3dPreview({
         <h4 className="mr-auto text-xs font-medium">Preview</h4>
         {previewCounts ? <span className="text-[10px] tabular-nums text-muted-foreground">{previewCounts}</span> : null}
       </div>
+      <div className="flex flex-wrap items-center gap-1.5 rounded-md border bg-muted/10 px-2 py-1">
+        <PersonStanding className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="shrink-0 text-[10px] font-medium text-muted-foreground">Host model</span>
+        <span
+          className="min-w-0 flex-1 truncate font-mono text-[10px] text-muted-foreground"
+          title={hostModelPath ?? undefined}
+        >
+          {hostModelPath ? effectPreviewHostModelLabel(hostModelPath) : "none — soft particles cannot fade"}
+        </span>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-6 shrink-0 px-2 text-[10px]"
+          onClick={() => void handlePickHostModel()}
+        >
+          {hostModelPath ? "Change" : "Choose .numdlb"}
+        </Button>
+        {hostModelPath ? (
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-6 w-6 shrink-0"
+            onClick={() => void handleClearHostModel()}
+            aria-label="Remove the host model from the preview scene"
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        ) : null}
+      </div>
       {previewDiagnostics.length > 0 ? (
         <p className="text-[10px] text-amber-600 dark:text-amber-400" role="status">
           {previewDiagnostics.join(" ")}
@@ -625,6 +657,9 @@ export function EffectFolder3dPreview({
                         instanceIdsByEffectIndex={instanceIdsByEffectIndex}
                         modelRequirements={modelPoolPlan?.requirements ?? []}
                         hostInstanceTransformsRef={hostInstanceTransformsRef}
+                        hostObjectName={
+                          hostInstanceId ? previewInstanceGroupName(hostInstanceId) : null
+                        }
                         onSelectEffect={setSelectedEffectIndex}
                         onProgressChange={handleEffectProgressChange}
                       />
@@ -646,11 +681,17 @@ export function EffectFolder3dPreview({
                     onSetEffectVisible={handleSetEffectVisible}
                     onShowAll={handleShowAllEffects}
                     onSolo={handleSoloEffect}
-                    draft={draft}
+                    document={document}
+                    inventory={inventory}
+                    frameCount={frameCount}
                     writing={writing}
-                    onPatchColor={draft ? handlePatchColor : undefined}
-                    onRevertDraft={draft ? handleRevertDraft : undefined}
-                    onWriteDraft={draft ? () => void handleWriteDraft() : undefined}
+                    onDocumentChange={handleDocumentChange}
+                    onEditorError={handleEditorError}
+                    onPatchColor={document ? handlePatchColor : undefined}
+                    onRevert={document ? handleRevertDocument : undefined}
+                    onUndo={document ? handleUndo : undefined}
+                    onRedo={document ? handleRedo : undefined}
+                    onWrite={document ? () => void handleWriteDocument() : undefined}
                   />
                 </ResizablePanel>
               </ResizablePanelGroup>

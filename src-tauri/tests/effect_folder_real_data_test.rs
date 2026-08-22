@@ -1058,3 +1058,183 @@ fn sanitize_effect_copy_dest_file_name_rejects_path_escapes() {
     assert!(sanitize_effect_copy_dest_file_name("../evil.efxbn").is_err());
     assert!(sanitize_effect_copy_dest_file_name("sub/107.efxbn").is_err());
 }
+
+/// The first real corpus `.efxbn` this machine can reach, or `None` when the game tree is absent.
+fn first_real_efxbn() -> Option<std::path::PathBuf> {
+    let mut paths = Vec::new();
+    for root in [r"E:\XB\mod\006effect", r"E:\XB\解包"] {
+        collect_efxbn_paths(Path::new(root), &mut paths);
+    }
+    paths.sort();
+    paths.into_iter().next()
+}
+
+/// E1: a whole-file write of an unmodified document must not change a single byte.
+///
+/// This is the guard that stands between "the parser missed a field" and "the first save silently
+/// zeroed it". It runs against a copy in a tempdir; the game tree is asserted untouched.
+#[test]
+fn write_efxbn_file_round_trips_an_unmodified_document() {
+    let Some(source) = first_real_efxbn() else {
+        eprintln!("SKIP: no real .efxbn fixture is available");
+        return;
+    };
+    let original = fs::read(&source).expect("read the corpus sample");
+    let source_len = original.len();
+
+    let temp = tempfile::tempdir().expect("create temporary target");
+    let root = temp.path().join("effect_root");
+    fs::create_dir_all(&root).expect("create effect root");
+    let target = root.join("107.efxbn");
+    fs::write(&target, &original).expect("stage the sample");
+
+    let target_text = target.to_string_lossy().to_string();
+    let summary = app_lib::format::effect_folder::parse_efxbn_file(&target_text)
+        .expect("parse the staged sample");
+    let result = app_lib::format::effect_folder::write_efxbn_file(
+        &root.to_string_lossy(),
+        &target_text,
+        &summary,
+    )
+    .expect("write the unmodified document");
+
+    assert_eq!(result.byte_len, original.len());
+    assert_eq!(
+        fs::read(&target).expect("read back"),
+        original,
+        "an unmodified document must rebuild byte for byte"
+    );
+    assert_eq!(result.summary.effect_count, summary.effect_count);
+    assert!(
+        !root.join("107.efxbn.efxbn-write-tmp").exists(),
+        "the staging file must be renamed away, not left behind"
+    );
+    assert_eq!(
+        fs::read(&source).expect("re-read the corpus sample").len(),
+        source_len,
+        "the read-only game tree must be untouched"
+    );
+}
+
+/// E1: an edited document must change exactly the lanes the edit targeted.
+///
+/// Comparing bytes rather than structs is the point: a struct comparison cannot see a field the
+/// parser drops, which is precisely the failure mode a whole-file writer introduces.
+#[test]
+fn write_efxbn_file_changes_only_the_edited_bytes() {
+    let Some(source) = first_real_efxbn() else {
+        eprintln!("SKIP: no real .efxbn fixture is available");
+        return;
+    };
+    let original = fs::read(&source).expect("read the corpus sample");
+
+    let temp = tempfile::tempdir().expect("create temporary target");
+    let root = temp.path().join("effect_root");
+    fs::create_dir_all(&root).expect("create effect root");
+    let target = root.join("107.efxbn");
+    fs::write(&target, &original).expect("stage the sample");
+
+    let target_text = target.to_string_lossy().to_string();
+    let mut summary = app_lib::format::effect_folder::parse_efxbn_file(&target_text)
+        .expect("parse the staged sample");
+    // `lifeTimeBase` sits at block offset 0x2C; blocks start at 0x18 with a 0x370 stride.
+    summary.effects[0].life_time_base = 123.5;
+
+    app_lib::format::effect_folder::write_efxbn_file(
+        &root.to_string_lossy(),
+        &target_text,
+        &summary,
+    )
+    .expect("write the edited document");
+
+    let rewritten = fs::read(&target).expect("read back");
+    assert_eq!(rewritten.len(), original.len());
+    let differing: Vec<usize> = rewritten
+        .iter()
+        .zip(original.iter())
+        .enumerate()
+        .filter(|(_, (a, b))| a != b)
+        .map(|(offset, _)| offset)
+        .collect();
+    let expected = 0x18 + 0x2C;
+    assert!(
+        differing
+            .iter()
+            .all(|offset| (expected..expected + 4).contains(offset)),
+        "only lifeTimeBase should differ, but these offsets changed: {differing:?}"
+    );
+    let reparsed = app_lib::format::effect_folder::parse_efxbn_file(&target_text)
+        .expect("re-parse the edited file");
+    assert_eq!(reparsed.effects[0].life_time_base, 123.5);
+}
+
+/// E1: the writer refuses a target outside the inspected effect root.
+#[test]
+fn write_efxbn_file_refuses_a_target_outside_the_effect_root() {
+    let Some(source) = first_real_efxbn() else {
+        eprintln!("SKIP: no real .efxbn fixture is available");
+        return;
+    };
+    let original = fs::read(&source).expect("read the corpus sample");
+
+    let temp = tempfile::tempdir().expect("create temporary target");
+    let root = temp.path().join("effect_root");
+    let outside = temp.path().join("elsewhere");
+    fs::create_dir_all(&root).expect("create effect root");
+    fs::create_dir_all(&outside).expect("create the sibling directory");
+    let target = outside.join("107.efxbn");
+    fs::write(&target, &original).expect("stage the sample");
+
+    let target_text = target.to_string_lossy().to_string();
+    let summary = app_lib::format::effect_folder::parse_efxbn_file(&target_text)
+        .expect("parse the staged sample");
+    let error = app_lib::format::effect_folder::write_efxbn_file(
+        &root.to_string_lossy(),
+        &target_text,
+        &summary,
+    )
+    .expect_err("a target outside the effect root must be refused");
+    assert!(
+        error.contains("outside the effect root"),
+        "unexpected error: {error}"
+    );
+    assert_eq!(
+        fs::read(&target).expect("read back"),
+        original,
+        "a refused write must not touch the file"
+    );
+}
+
+/// E1: the writer edits, it does not create.
+#[test]
+fn write_efxbn_file_refuses_a_target_that_does_not_exist() {
+    let Some(source) = first_real_efxbn() else {
+        eprintln!("SKIP: no real .efxbn fixture is available");
+        return;
+    };
+    let original = fs::read(&source).expect("read the corpus sample");
+
+    let temp = tempfile::tempdir().expect("create temporary target");
+    let root = temp.path().join("effect_root");
+    fs::create_dir_all(&root).expect("create effect root");
+    let existing = root.join("107.efxbn");
+    fs::write(&existing, &original).expect("stage the sample");
+    let summary = app_lib::format::effect_folder::parse_efxbn_file(&existing.to_string_lossy())
+        .expect("parse the staged sample");
+
+    let missing = root.join("does_not_exist.efxbn");
+    let error = app_lib::format::effect_folder::write_efxbn_file(
+        &root.to_string_lossy(),
+        &missing.to_string_lossy(),
+        &summary,
+    )
+    .expect_err("a missing target must be refused");
+    assert!(
+        error.contains("not an existing file"),
+        "unexpected error: {error}"
+    );
+    assert!(
+        !missing.exists(),
+        "a refused write must not create the file"
+    );
+}

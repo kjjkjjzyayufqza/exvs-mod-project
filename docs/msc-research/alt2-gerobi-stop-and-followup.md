@@ -217,7 +217,37 @@ sys_4E(0);                 // 收掉残留照射 / 当前射击段
 不要靠把 `0x190` 改回 `0x3e8` 来「修好不转」。不转先查停顿入口有没有 `func_121` + 快照。  
 不要靠每帧读活锁或一直开着 `func_300` 来「修好对准」。对准用快照；开火后清 `693/689/79`。
 
----
+### 4.5 首段原生瞄准窗口：`global689`
+
+`ACTION_AC_SPECIAL_SHOT_ALT_2` 参数块中，首段身体对准时长不是
+`global681/682/683/686/698`，而是 `global689`：
+
+```text
+ACTION_AC_SPECIAL_SHOT_ALT_2: global689
+  -> func_594: global715 = global689 * 0x64
+  -> func_595: func_102(global265, global715, 0) + sys_46(0)
+  -> every tick: global715 -= func_274()
+  -> global715 <= 0: global722 = 1
+  -> global252 && global722: enter shoot/677 (func_923)
+```
+
+参数职责：
+
+| 参数 | 本招含义 |
+|------|----------|
+| `global681 = 0x2` | ammo slot |
+| `global682/683 = 1` | shoot/no-ammo 段次数门 |
+| `global686 = 0x100` | 特射输入 bit |
+| `global689` | **首段原生身体 yaw 瞄准帧数** |
+| `global698 = 0x14` | driver 后续状态时长 |
+
+2026-08-21 调整：`global689 = 0xa`（10f）改为 `0x19`（25f），即原生
+瞄准窗口增加 15 帧。它会推迟进入 `func_923` 的自制 15f hold；不会在
+hold 内额外写 live yaw，也不改变第二发 followup 的快照瞄准。
+
+硬规则：要调“进入 15f hold 前还能对准多久”，只改本 action 的
+`global689`。不要在 `func_921` / `func_923` 后写 `func_103`，该绕过
+`func_593` driver 的方案已按用户反馈撤销。
 
 ## 5. 点按窗：运动帧 34–50，不是 14–50
 

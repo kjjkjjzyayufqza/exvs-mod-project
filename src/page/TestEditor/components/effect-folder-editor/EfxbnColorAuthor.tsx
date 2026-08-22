@@ -8,16 +8,16 @@ import { cn } from "@/lib/utils";
 import type { EfxbnEffectSummary } from "@/services/effectFolder/effectFolderService";
 import {
   type EfxbnColorControlName,
-  type EfxbnDraftSession,
+  type EfxbnDocument,
   EFXBN_COLOR_CONTROL_NAMES,
   isEfxbnBlockDirty,
-  tryGetControlConstant,
-} from "./efxbnDraftSession";
+  tryReadEfxbnCurveConstant,
+} from "./efxbnDocument";
 import { evaluateEfxbnControl } from "./effectFolderPreviewPlan";
 import type { EffectFolderPreviewPlan } from "./effectFolderPreviewPlan";
 
 type EfxbnColorAuthorProps = {
-  draft: EfxbnDraftSession;
+  document: EfxbnDocument;
   block: EfxbnEffectSummary;
   plan: EffectFolderPreviewPlan;
   progress: number;
@@ -126,7 +126,7 @@ function ChannelRow({
 }
 
 export function EfxbnColorAuthor({
-  draft,
+  document: doc,
   block,
   plan,
   progress,
@@ -145,10 +145,10 @@ export function EfxbnColorAuthor({
 
   // Draft-derived colour (source of truth after commit / external revert).
   const draftColor = useMemo(() => {
-    const r = tryGetControlConstant(draft, block.index, "colorR");
-    const g = tryGetControlConstant(draft, block.index, "colorG");
-    const b = tryGetControlConstant(draft, block.index, "colorB");
-    const a = tryGetControlConstant(draft, block.index, "colorA");
+    const r = tryReadEfxbnCurveConstant(doc.summary, block.index, "colorR");
+    const g = tryReadEfxbnCurveConstant(doc.summary, block.index, "colorG");
+    const b = tryReadEfxbnCurveConstant(doc.summary, block.index, "colorB");
+    const a = tryReadEfxbnCurveConstant(doc.summary, block.index, "colorA");
     return {
       r: r ?? evaluateEfxbnControl(
         block.controlReferences.find((entry) => entry.name === "colorR"),
@@ -177,7 +177,7 @@ export function EfxbnColorAuthor({
         a: a !== null,
       },
     };
-  }, [block.controlReferences, block.index, draft, plan.controlLookupEntries, progress]);
+  }, [block.controlReferences, block.index, doc, plan.controlLookupEntries, progress]);
 
   /**
    * Local paint while dragging. 3D/draft only update on commit (slider release,
@@ -202,13 +202,13 @@ export function EfxbnColorAuthor({
       }
       return draftColor;
     });
-  }, [block.index, draft.path, draftColor]);
+  }, [block.index, doc.path, draftColor]);
 
   const anyEditable = color.editable.r || color.editable.g || color.editable.b || color.editable.a;
   const allConst = EFXBN_COLOR_CONTROL_NAMES.every((name) => laneModes[name].mode === "const");
   const anyCurve = EFXBN_COLOR_CONTROL_NAMES.some((name) => laneModes[name].mode === "curve");
   const rgbLinkable = color.editable.r && color.editable.g && color.editable.b;
-  const dirty = isEfxbnBlockDirty(draft, block.index);
+  const dirty = isEfxbnBlockDirty(doc, block.index);
   const hex = rgbToHex(color.r, color.g, color.b);
   const swatchAlpha = clamp(color.a, 0, 1);
   const controlsLocked = writing;
