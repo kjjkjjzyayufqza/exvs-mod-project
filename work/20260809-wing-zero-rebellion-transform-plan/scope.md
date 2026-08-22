@@ -20,20 +20,27 @@
 ## in_scope
 - assets:
   - E:\XB\mod\002chara\wing_gundam_zero_rebellion_model
+  - E:\XB\mod\040msc\wing_gundam_zero_rebellion_msc\0.c
+  - E:\XB\mod\040msc\wing_gundam_zero_rebellion_msc\0.bscex
+  - E:\XB\mod\040msc\wing_gundam_zero_rebellion_msc\2.c
+  - E:\XB\mod\040msc\wing_gundam_zero_rebellion_msc\2.dscex
+  - E:\XB\mod\041cpm\wing_gundam_zero_rebellion_param\armsparam.bin
   - E:\TAURI_PROJECT
   - reference unit 28001001 resources already unpacked or later organized by the user
   - target unit tentatively identified by the user as 900000004, pending filename evidence
 - surfaces: [local_files, decompiled_msc, unpacked_motion, unpacked_model_resources, documentation]
-- activities: [read_only_inventory, static_text_analysis, resource_dependency_mapping, plan_authoring]
+- activities: [read_only_inventory, static_text_analysis, resource_dependency_mapping, plan_authoring, msc_source_edit, local_msc_compile, target_msc_repack, local_static_verification]
 
 ## out_of_scope
 - assets: [network_targets, third_party_services]
-- activities: [fhm2d_unpacking, source_asset_overwrite, msc_compilation, binary_patch, game_installation, in_game_test, network_access]
+- activities: [fhm2d_unpacking, unrelated_source_asset_overwrite, binary_patch, game_installation, in_game_test, network_access]
 
 ## network_profile
 - mode: offline
 - notes: |
-    Only local read-only inspection and Markdown authoring are authorized for this case.
+    Local inspection, the user-requested target MSC source edit, local compile
+    output under E:\TAURI_PROJECT\tmp, and repacking the named target 0.bscex /
+    2.dscex are authorized. No game installation or network access is authorized.
 
 ## deliverables
 - report: true
@@ -45,7 +52,7 @@
 - timebox: {}
 - stealth: low
 - data_handling: no_user_pii
-- user_boundary: Do not unpack FHM2D; request missing unpacked resources from the user.
+- user_boundary: Do not unpack FHM2D or install generated MSC into the game; edit/repack only the named target MSC source/binaries and keep recovery/compile artifacts under tmp/.
 
 ## signoff
 - ready_for_act: true

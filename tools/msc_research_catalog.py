@@ -48,6 +48,7 @@ CLUSTER_REGISTRY = "registry"
 CLUSTER_CROSS_UNIT = "cross-unit"
 CLUSTER_PARAM_MSC = "param-msc"
 CLUSTER_NATIVE_UNIT_TASK = "native-unit-task"
+CLUSTER_CHARGE = "charge"
 CLUSTER_WING_ZERO_REBELLION = "wing-zero-rebellion"
 CLUSTER_WING_ZERO_TV = "wing-zero-tv"
 CLUSTER_GYAN = "gyan"
@@ -235,6 +236,40 @@ CLUSTERS: tuple[Cluster, ...] = (
         do_not=(
             "Do not treat 2.c as original C source; it is decompiled MSC.",
             "Do not start a 2.c patch at shell loadout unless the goal is shell/loadout.",
+        ),
+    ),
+    Cluster(
+        id=CLUSTER_CHARGE,
+        title="CS charge-slot consumption at action entry",
+        kind="global",
+        aliases=(
+            "CSA",
+            "CSB",
+            "charge slot",
+            "charge consume",
+            "charge reset",
+            "sys_4F(0xA)",
+            "ACTION_CHARGE_SHOT",
+            "ACTION_MASK_1000",
+            "0x800",
+            "0x1000",
+            "infinite charge shot",
+        ),
+        read_first=(
+            R("cs-action-charge-slot-consumption.md"),
+        ),
+        related=(
+            "docs/exvs-msc-syscall-4f-native-handler.md",
+            R("wing-zero-rebellion-bird-form-0c-input-map.md"),
+        ),
+        settled=(
+            "A selected CS action must consume/reset its native charge slot once at action entry.",
+            "Direct CSA on slot 0 uses sys_4F(0xA, 0); Rebellion CSB slot 4 is already consumed by func_1031.",
+            "Do not put CSA charge clearing in an uncharged action alias or a per-tick callback.",
+        ),
+        do_not=(
+            "Do not assume selecting or playing a CS action automatically consumes native charge state.",
+            "Do not delay charge consumption until projectile fire; an interrupted startup would preserve a reusable full charge.",
         ),
     ),
     Cluster(

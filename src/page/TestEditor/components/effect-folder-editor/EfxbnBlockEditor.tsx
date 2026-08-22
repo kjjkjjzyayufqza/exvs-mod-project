@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Diamond, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Diamond } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -15,16 +15,15 @@ import type { EffectFolderInventory } from "@/services/effectFolder/effectFolder
 import { EFFECT_FOLDER_COMMON_PACK_NAME } from "@/services/effectFolder/effectFolderCommonPack";
 import {
   EFXBN_CONTROL_NAMES,
-  deleteEfxbnCurveKey,
   efxbnDirtyFieldIds,
-  insertEfxbnCurveKey,
-  isEfxbnCurveConstant,
   readEfxbnCurve,
+  replaceEfxbnCurves,
   setEfxbnBlockModel,
   setEfxbnBlockTextureSlot,
   setEfxbnCurveKey,
   setEfxbnField,
   type EfxbnCurve,
+  type EfxbnControlName,
   type EfxbnDocument,
   type EfxbnTextureSlotKey,
 } from "./efxbnDocument";
@@ -38,6 +37,12 @@ import {
   type EfxbnFieldDescriptor,
   type EfxbnFieldGroup,
 } from "./efxbnFieldSchema";
+import {
+  evaluateEfxbnCurve,
+  findEfxbnKeyAtProgress,
+  insertSampledEfxbnKey,
+  progressToEfxbnFrame,
+} from "./efxbnCurveMath";
 
 /**
  * The property editor for one block.
@@ -54,6 +59,9 @@ type EfxbnBlockEditorProps = {
   inventory: EffectFolderInventory;
   /** Playback window, so an inserted key defaults to a time inside the effect. */
   frameCount: number;
+  progress: number;
+  focusedControlName: EfxbnControlName;
+  onFocusedControlNameChange: (name: EfxbnControlName) => void;
   disabled?: boolean;
   onChange: (next: EfxbnDocument) => void;
   onError: (message: string) => void;
@@ -303,23 +311,31 @@ function CurveRow({
   document: doc,
   blockIndex,
   frameCount,
+  progress,
+  focused,
   disabled,
   baselineKeys,
   onChange,
   onError,
+  onFocus,
 }: {
   curve: EfxbnCurve;
   document: EfxbnDocument;
   blockIndex: number;
   frameCount: number;
+  progress: number;
+  focused: boolean;
   disabled?: boolean;
   baselineKeys: string;
   onChange: (next: EfxbnDocument) => void;
   onError: (message: string) => void;
+  onFocus: (name: EfxbnControlName) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const constant = isEfxbnCurveConstant(curve);
+  const constant = curve.keys.length === 1;
   const dirty = JSON.stringify(curve.keys) !== baselineKeys;
+  const keyIndex = findEfxbnKeyAtProgress(curve.keys, progress);
+  const evaluated = evaluateEfxbnCurve(curve.keys, progress);
+  const frame = progressToEfxbnFrame(progress, frameCount) ?? progress;
 
   const guard = (run: () => EfxbnDocument) => {
     try {
@@ -329,121 +345,60 @@ function CurveRow({
     }
   };
 
-  const addKey = () => {
-    const last = curve.keys[curve.keys.length - 1];
-    if (!last) return;
-    // A new key lands after the last one, inside the playback window when there is room.
-    const spare = Math.max(1, Math.round(frameCount / 4));
-    guard(() => insertEfxbnCurveKey(doc, blockIndex, curve.name, last.key + spare, last.value));
+  const focusOrInsertKey = () => {
+    onFocus(curve.name);
+    if (keyIndex !== null) return;
+    guard(() =>
+      replaceEfxbnCurves(
+        doc,
+        blockIndex,
+        [{ controlName: curve.name, keys: insertSampledEfxbnKey(curve.keys, progress) }],
+        `${curve.name} + key @ ${progress}`,
+      ),
+    );
   };
 
   return (
-    <div className={cn("rounded", expanded && "bg-muted/10")}>
-      <div className="flex items-center gap-1.5 py-0.5">
-        <DirtyDot dirty={dirty} />
-        <button
-          type="button"
-          className="flex min-w-0 flex-1 items-center gap-1 text-left"
-          onClick={() => setExpanded((open) => !open)}
-          title={
-            constant
-              ? "One key — a plain constant. Expand to add keyframes."
-              : `${curve.keys.length} keys`
-          }
-        >
-          {expanded ? (
-            <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
-          ) : (
-            <ChevronRight className="h-3 w-3 shrink-0 opacity-60" />
-          )}
-          <Diamond
-            className={cn(
-              "h-2.5 w-2.5 shrink-0",
-              constant ? "opacity-25" : "fill-amber-500 text-amber-500",
-            )}
-          />
-          <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">
-            {curve.name}
-          </span>
-        </button>
-        <div className="flex w-[7.5rem] shrink-0 items-center justify-end gap-1">
-          {constant ? (
-            <NumberInput
-              value={curve.keys[0]?.value ?? 0}
-              integral={false}
-              disabled={disabled}
-              onCommit={(next) =>
-                guard(() => setEfxbnCurveKey(doc, blockIndex, curve.name, 0, { value: next }))
-              }
-            />
-          ) : (
-            <span className="font-mono text-[10px] text-muted-foreground">
-              {curve.keys.length} keys
-            </span>
-          )}
-        </div>
-      </div>
-
-      {expanded ? (
-        <div className="space-y-0.5 border-t px-1.5 py-1">
-          <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
-            <span className="w-[3.5rem]">frame</span>
-            <span className="flex-1">value</span>
-            <span className="w-6" />
-          </div>
-          {curve.keys.map((entry, keyIndex) => (
-            <div key={`${entry.key}:${keyIndex}`} className="flex items-center gap-1">
-              <NumberInput
-                value={entry.key}
-                integral={false}
-                disabled={disabled}
-                className="w-[3.5rem]"
-                onCommit={(next) =>
-                  guard(() =>
-                    setEfxbnCurveKey(doc, blockIndex, curve.name, keyIndex, { key: next }),
-                  )
-                }
-              />
-              <NumberInput
-                value={entry.value}
-                integral={false}
-                disabled={disabled}
-                className="flex-1"
-                onCommit={(next) =>
-                  guard(() =>
-                    setEfxbnCurveKey(doc, blockIndex, curve.name, keyIndex, { value: next }),
-                  )
-                }
-              />
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 shrink-0"
-                disabled={disabled || curve.keys.length <= 1}
-                title={
-                  curve.keys.length <= 1
-                    ? "A control always evaluates, so its last key cannot be removed"
-                    : "Delete this key"
-                }
-                onClick={() => guard(() => deleteEfxbnCurveKey(doc, blockIndex, curve.name, keyIndex))}
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-          ))}
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-6 w-full justify-start px-1 text-[10px]"
+    <div className={cn("flex items-center gap-1.5 rounded py-0.5", focused && "bg-muted/60")}>
+      <DirtyDot dirty={dirty} />
+      <button
+        type="button"
+        className="min-w-0 flex-1 truncate text-left font-mono text-[10px] text-muted-foreground"
+        onClick={() => onFocus(curve.name)}
+      >
+        {curve.name}
+      </button>
+      <span className="w-12 shrink-0 text-right font-mono text-[9px] text-muted-foreground">
+        {constant ? "const" : `${curve.keys.length} keys`}
+      </span>
+      <div className="w-[6rem] shrink-0">
+        {constant ? (
+          <NumberInput
+            value={curve.keys[0]?.value ?? 0}
+            integral={false}
             disabled={disabled}
-            onClick={addKey}
-          >
-            <Plus className="mr-1 h-3 w-3" /> Add key
-          </Button>
-        </div>
-      ) : null}
+            onCommit={(next) =>
+              guard(() => setEfxbnCurveKey(doc, blockIndex, curve.name, 0, { value: next }))
+            }
+          />
+        ) : (
+          <span className="block truncate text-right font-mono text-[9px] text-muted-foreground">
+            {evaluated.toFixed(4)}
+          </span>
+        )}
+      </div>
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        className="h-6 w-6 shrink-0"
+        disabled={disabled}
+        aria-label={`${keyIndex === null ? "Insert" : "Select"} key for ${curve.name} at frame ${Number(frame.toFixed(4))}`}
+        title={keyIndex === null ? "Insert a key at the playhead" : "Key exists at the playhead"}
+        onClick={focusOrInsertKey}
+      >
+        <Diamond className={cn("h-3 w-3", keyIndex !== null && "fill-amber-400 text-amber-400")} />
+      </Button>
     </div>
   );
 }
@@ -711,6 +666,9 @@ export function EfxbnBlockEditor({
   blockIndex,
   inventory,
   frameCount,
+  progress,
+  focusedControlName,
+  onFocusedControlNameChange,
   disabled,
   onChange,
   onError,
@@ -752,7 +710,7 @@ export function EfxbnBlockEditor({
         <h5 className="py-1 text-[10px] font-medium">
           Curves
           <span className="ml-1 font-normal text-muted-foreground">
-            — a filled diamond means the channel is animated
+            - a filled diamond means a key exists at the playhead
           </span>
         </h5>
         {curves.map(({ curve, baselineKeys }) => (
@@ -762,10 +720,13 @@ export function EfxbnBlockEditor({
             document={doc}
             blockIndex={blockIndex}
             frameCount={frameCount}
+            progress={progress}
+            focused={focusedControlName === curve.name}
             disabled={disabled}
             baselineKeys={baselineKeys}
             onChange={onChange}
             onError={onError}
+            onFocus={onFocusedControlNameChange}
           />
         ))}
       </section>

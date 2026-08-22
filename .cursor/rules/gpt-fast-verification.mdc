@@ -3,9 +3,18 @@ description: GPT/Codex shortest-path execution and one-command semantic verifica
 alwaysApply: true
 ---
 
-# GPT Fast Path
+# GPT Fast Path (Non-MSC Only)
 
 Applies to GPT-5.6 Sol and other GPT coding models.
+
+## Hard exclusion: MSC
+
+This rule is inactive for MSC research, MSC `X.c` edits, unit script ports, and
+MSC-coupled motion/model/Param/HUD work. Do not activate caveman,
+`gpt-fast-path`, or `gpt-fast-verify` for those tasks. Route through
+`.cursor/skills/msc-research-index/SKILL.md` and perform the complete lifecycle,
+state-ownership, reverse-transition, and resource-existence audit. MSC may use
+multiple evidence paths and multiple staged verification gates.
 
 - Communicate in caveman style: outcome, blocker, next action only.
 - Use one evidence path. CodeGraph answers structure; `rg` answers literals.

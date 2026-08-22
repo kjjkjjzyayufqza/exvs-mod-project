@@ -43,9 +43,12 @@ type EfxbnDiagnosticOverlayProps = {
    */
   controlLookupEntriesRef: MutableRefObject<readonly EfxbnControlLookupEntry[]>;
   progress: number;
+  /** Live playhead. Scrubbing writes this immediately so the overlay does not wait for React. */
+  progressRef: MutableRefObject<number>;
   /** Playback window in frames, derived from the effect's own length. */
   frameCount: number;
   playing: boolean;
+  playingRef: MutableRefObject<boolean>;
   speed: number;
   selectedEffectIndex: number | null;
   hiddenEffectIndexes: ReadonlySet<number>;
@@ -187,9 +190,9 @@ function EmitterShape({
 export function EfxbnDiagnosticOverlay({
   plan,
   controlLookupEntriesRef,
-  progress,
+  progressRef,
   frameCount,
-  playing,
+  playingRef,
   speed,
   selectedEffectIndex,
   hiddenEffectIndexes,
@@ -200,7 +203,6 @@ export function EfxbnDiagnosticOverlay({
   onSelectEffect,
   onProgressChange,
 }: EfxbnDiagnosticOverlayProps) {
-  const progressRef = useRef(progress);
   const lastUiUpdateRef = useRef(0);
   const onProgressChangeRef = useRef(onProgressChange);
   const modelEffectTexturePaths = useMemo(() => new Map(
@@ -237,9 +239,6 @@ export function EfxbnDiagnosticOverlay({
   const sceneDepthTextureRef = useRef<Texture | null>(null);
 
   useEffect(() => {
-    progressRef.current = progress;
-  }, [progress]);
-  useEffect(() => {
     onProgressChangeRef.current = onProgressChange;
   }, [onProgressChange]);
   useEffect(() => () => {
@@ -252,7 +251,7 @@ export function EfxbnDiagnosticOverlay({
   }, [plan.key]);
 
   useFrame((state, delta) => {
-    if (playing) {
+    if (playingRef.current) {
       const progressPerSecond = (EFXBN_PREVIEW_FPS / frameCount) * 100;
       progressRef.current = (progressRef.current + delta * progressPerSecond * speed) % 100;
       const now = state.clock.elapsedTime;

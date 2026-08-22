@@ -3,6 +3,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
   type MutableRefObject,
@@ -42,12 +43,18 @@ import {
   prepareEfxbnDocumentForWrite,
   redoEfxbn,
   revertEfxbnDocument,
-  setEfxbnCurveKey,
   undoEfxbn,
+  type EfxbnControlName,
   type EfxbnDocument,
 } from "./efxbnDocument";
 import { EfxbnDiagnosticOverlay } from "./EfxbnDiagnosticOverlay";
+import { EfxbnGraphEditor } from "./EfxbnGraphEditor";
 import { EfxbnPreviewInspector } from "./EfxbnPreviewInspector";
+import {
+  createLatestAnimationFrameScheduler,
+  reduceEfxbnTransport,
+  type EfxbnTransportAction,
+} from "./efxbnProgressScrub";
 import {
   getEffectFolderWorkspaceState,
   rememberEffectFolderHostModelPath,
@@ -77,6 +84,110 @@ type EffectFolder3dPreviewProps = {
 
 function allowsAutomaticPreviewMotion(): boolean {
   return typeof window === "undefined" || !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function EfxbnPlaybackTransport({
+  progress,
+  playing,
+  frameCount,
+  speed,
+  onTogglePlaying,
+  onReset,
+  onCycleSpeed,
+  onScrubStart,
+  onScrub,
+  onScrubEnd,
+}: {
+  progress: number;
+  playing: boolean;
+  frameCount: number;
+  speed: number;
+  onTogglePlaying: () => void;
+  onReset: () => void;
+  onCycleSpeed: () => void;
+  onScrubStart: () => void;
+  onScrub: (progress: number) => void;
+  onScrubEnd: (progress: number) => void;
+}) {
+  const draggingRef = useRef(false);
+  const draftRef = useRef(progress);
+  const [draft, setDraft] = useState(progress);
+
+  useEffect(() => {
+    if (playing) draggingRef.current = false;
+    if (draggingRef.current) return;
+    draftRef.current = progress;
+    setDraft(progress);
+  }, [playing, progress]);
+
+  return (
+    <div className="flex h-10 shrink-0 items-center gap-2 border-t bg-muted/15 px-3">
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        className="h-8 w-8"
+        onClick={onTogglePlaying}
+        aria-label={playing ? "Pause EFXBN control preview" : "Play EFXBN control preview"}
+      >
+        {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+      </Button>
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        className="h-8 w-8"
+        onClick={onReset}
+        aria-label="Reset EFXBN control progress"
+      >
+        <RotateCcw className="h-4 w-4" />
+      </Button>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={0.1}
+        value={draft}
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          draggingRef.current = true;
+          onScrubStart();
+        }}
+        onPointerUp={(event) => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
+          draggingRef.current = false;
+          onScrubEnd(draftRef.current);
+        }}
+        onPointerCancel={() => {
+          draggingRef.current = false;
+          onScrubEnd(draftRef.current);
+        }}
+        onChange={(event) => {
+          const next = Number(event.target.value);
+          draftRef.current = next;
+          setDraft(next);
+          onScrub(next);
+        }}
+        className="h-1.5 min-w-32 flex-1 cursor-pointer accent-primary"
+        aria-label="EFXBN control progress"
+      />
+      <span className="w-24 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+        {Math.round((draft / 100) * frameCount)}f / {frameCount}f
+      </span>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="h-8 w-12 px-1 font-mono text-[11px]"
+        onClick={onCycleSpeed}
+        aria-label={`EFXBN preview speed ${speed} times`}
+      >
+        {speed}x
+      </Button>
+    </div>
+  );
 }
 
 function EffectFolderPreviewScene({
@@ -285,10 +396,40 @@ export function EffectFolder3dPreview({
     if (basePlan?.kind === "efxbn") controlLookupEntriesRef.current = basePlan.controlLookupEntries;
   }, [basePlan]);
 
-  const [effectProgress, setEffectProgress] = useState(0);
-  const [effectPlaying, setEffectPlaying] = useState(false);
+  const [transport, dispatchTransport] = useReducer(reduceEfxbnTransport, {
+    progress: 0,
+    playing: false,
+    scrubbing: false,
+  });
+  const transportRef = useRef(transport);
+  transportRef.current = transport;
+  const effectProgressRef = useRef(0);
+  const effectPlayingRef = useRef(false);
+  const commitTransport = useCallback((action: EfxbnTransportAction) => {
+    if (action.type === "togglePlay" && effectPlayingRef.current) {
+      const snapped = reduceEfxbnTransport(transportRef.current, {
+        type: "setProgress",
+        progress: effectProgressRef.current,
+      });
+      transportRef.current = snapped;
+      dispatchTransport({ type: "setProgress", progress: effectProgressRef.current });
+    }
+    const next = reduceEfxbnTransport(transportRef.current, action);
+    transportRef.current = next;
+    effectPlayingRef.current = next.playing;
+    if (action.type === "scrubTo" || action.type === "scrubEnd" || action.type === "reset" || action.type === "load") {
+      effectProgressRef.current = next.progress;
+    }
+    dispatchTransport(action);
+  }, []);
+  const uiProgressSchedulerRef = useRef(
+    createLatestAnimationFrameScheduler((value: number) => {
+      dispatchTransport({ type: "setProgress", progress: value });
+    }),
+  );
   const [effectSpeed, setEffectSpeed] = useState(1);
   const [selectedEffectIndex, setSelectedEffectIndex] = useState<number | null>(null);
+  const [graphControlName, setGraphControlName] = useState<EfxbnControlName>("colorR");
   const [hiddenEffectIndexes, setHiddenEffectIndexes] = useState<Set<number>>(() => new Set());
   const [instanceIdsByEffectIndex, setInstanceIdsByEffectIndex] = useState<ReadonlyMap<number, readonly string[]>>(
     () => new Map(),
@@ -319,35 +460,6 @@ export function EffectFolder3dPreview({
   const handleEditorError = useCallback((message: string) => {
     toast.error(message);
   }, []);
-
-  /** The colour authoring panel writes the four colour curves as plain constants. */
-  const handlePatchColor = useCallback(
-    (blockIndex: number, color: { r?: number; g?: number; b?: number; a?: number }) => {
-      // Freeze authoring while a disk write is in flight so the snapshot stays honest.
-      if (writing) return;
-      const current = documentRef.current;
-      if (!current) return;
-      try {
-        let next = current;
-        const channels: [keyof typeof color, string][] = [
-          ["r", "colorR"],
-          ["g", "colorG"],
-          ["b", "colorB"],
-          ["a", "colorA"],
-        ];
-        for (const [channel, controlName] of channels) {
-          const value = color[channel];
-          if (value === undefined) continue;
-          next = setEfxbnCurveKey(next, blockIndex, controlName, 0, { value });
-        }
-        if (next === current) return;
-        handleDocumentChange(next);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : String(error));
-      }
-    },
-    [handleDocumentChange, writing],
-  );
 
   const handleRevertDocument = useCallback(() => {
     const current = documentRef.current;
@@ -447,9 +559,15 @@ export function EffectFolder3dPreview({
     setHiddenEffectIndexes(new Set());
     setInstanceIdsByEffectIndex(new Map());
     hostInstanceTransformsRef.current = new Map();
-    setEffectProgress(0);
-    setEffectPlaying(firstEffectIndex !== null && allowsAutomaticPreviewMotion());
-  }, [plan?.key]);
+    commitTransport({
+      type: "load",
+      autoPlay: firstEffectIndex !== null && allowsAutomaticPreviewMotion(),
+    });
+  }, [commitTransport, plan?.key]);
+
+  useEffect(() => {
+    setGraphControlName("colorR");
+  }, [selectedEffectIndex, efxbnPath]);
 
   // Restore the workspace's host model. A stored path that is no longer a .numdlb is reported
   // rather than dropped, so a hand-edited store never silently loses the setting.
@@ -505,8 +623,28 @@ export function EffectFolder3dPreview({
   }, [inventory.effectRoot]);
 
   const handleEffectProgressChange = useCallback((progress: number) => {
-    setEffectProgress(progress);
+    effectProgressRef.current = progress;
+    dispatchTransport({ type: "setProgress", progress });
   }, []);
+  const handleManualEffectProgressChange = useCallback((progress: number) => {
+    effectProgressRef.current = progress;
+    dispatchTransport({ type: "setProgress", progress });
+  }, []);
+  const handleScrubStart = useCallback(() => {
+    commitTransport({ type: "scrubStart" });
+  }, [commitTransport]);
+  const handleTransportScrub = useCallback((progress: number) => {
+    effectProgressRef.current = progress;
+    uiProgressSchedulerRef.current.schedule(progress);
+  }, []);
+  const handleScrubEnd = useCallback((progress: number) => {
+    uiProgressSchedulerRef.current.cancel();
+    commitTransport({ type: "scrubEnd", progress });
+  }, [commitTransport]);
+  const handleGraphScrubbingChange = useCallback((active: boolean) => {
+    if (active) commitTransport({ type: "scrubStart" });
+    else commitTransport({ type: "scrubEnd", progress: effectProgressRef.current });
+  }, [commitTransport]);
   const handleSetEffectVisible = useCallback((effectIndex: number, visible: boolean) => {
     setHiddenEffectIndexes((current) => {
       const next = new Set(current);
@@ -567,26 +705,49 @@ export function EffectFolder3dPreview({
         `${unresolvedModelList ? ` (${unresolvedModelList})` : ""}, so a flat proxy quad is drawn instead of the real mesh.`
       : null,
   ].filter((message): message is string => message !== null);
+  const isEfxbnWorkspace = hasDiagnosticBlocks && basePlan?.kind === "efxbn";
+  const inspectorSharedProps = {
+    plan,
+    progress: transport.progress,
+    selectedEffectIndex,
+    hiddenEffectIndexes,
+    onSelectEffect: setSelectedEffectIndex,
+    onSetEffectVisible: handleSetEffectVisible,
+    onShowAll: handleShowAllEffects,
+    onSolo: handleSoloEffect,
+    document,
+    inventory,
+    frameCount,
+    writing,
+    focusedControlName: graphControlName,
+    onFocusedControlNameChange: setGraphControlName,
+    onDocumentChange: handleDocumentChange,
+    onEditorError: handleEditorError,
+    onRevert: document ? handleRevertDocument : undefined,
+    onUndo: document ? handleUndo : undefined,
+    onRedo: document ? handleRedo : undefined,
+    onWrite: document ? () => void handleWriteDocument() : undefined,
+  };
+
   return (
-    <section className="space-y-2" aria-label={plan.kind === "efxbn" ? "EFXBN 3D preview" : "Model 3D preview"}>
-      <div className="flex flex-wrap items-center gap-2">
-        <h4 className="mr-auto text-xs font-medium">Preview</h4>
-        {previewCounts ? <span className="text-[10px] tabular-nums text-muted-foreground">{previewCounts}</span> : null}
-      </div>
-      <div className="flex flex-wrap items-center gap-1.5 rounded-md border bg-muted/10 px-2 py-1">
-        <PersonStanding className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="shrink-0 text-[10px] font-medium text-muted-foreground">Host model</span>
+    <section
+      className={cn("flex min-h-0 flex-col", isEfxbnWorkspace ? "h-full min-h-0 flex-1 gap-0" : "space-y-2")}
+      aria-label={plan.kind === "efxbn" ? "EFXBN 3D preview" : "Model 3D preview"}
+    >
+      <div className="flex h-10 shrink-0 items-center gap-2 border-b bg-muted/15 px-3">
+        <PersonStanding className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="shrink-0 text-[11px] font-medium text-muted-foreground">Host model</span>
         <span
-          className="min-w-0 flex-1 truncate font-mono text-[10px] text-muted-foreground"
+          className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground"
           title={hostModelPath ?? undefined}
         >
-          {hostModelPath ? effectPreviewHostModelLabel(hostModelPath) : "none — soft particles cannot fade"}
+          {hostModelPath ? effectPreviewHostModelLabel(hostModelPath) : "none - soft particles cannot fade"}
         </span>
         <Button
           type="button"
           size="sm"
           variant="ghost"
-          className="h-6 shrink-0 px-2 text-[10px]"
+          className="h-8 shrink-0 px-2.5 text-[11px]"
           onClick={() => void handlePickHostModel()}
         >
           {hostModelPath ? "Change" : "Choose .numdlb"}
@@ -596,30 +757,37 @@ export function EffectFolder3dPreview({
             type="button"
             size="icon"
             variant="ghost"
-            className="h-6 w-6 shrink-0"
+            className="h-8 w-8 shrink-0"
             onClick={() => void handleClearHostModel()}
             aria-label="Remove the host model from the preview scene"
           >
-            <X className="h-3 w-3" />
+            <X className="h-3.5 w-3.5" />
           </Button>
+        ) : null}
+        {previewCounts ? (
+          <span className="hidden shrink-0 text-[11px] tabular-nums text-muted-foreground lg:inline">
+            {previewCounts}
+          </span>
         ) : null}
       </div>
       {previewDiagnostics.length > 0 ? (
-        <p className="text-[10px] text-amber-600 dark:text-amber-400" role="status">
+        <p className="shrink-0 border-b px-3 py-1.5 text-[11px] text-amber-600 dark:text-amber-400" role="status">
           {previewDiagnostics.join(" ")}
         </p>
       ) : null}
 
       {!hasRenderableScene ? (
-        <div className="flex min-h-32 flex-col items-center justify-center rounded-md border border-dashed bg-muted/10 px-4 text-center">
+        <div className="flex min-h-32 flex-1 flex-col items-center justify-center rounded-md border border-dashed bg-muted/10 px-4 text-center">
           <Box className="mb-2 h-6 w-6 text-muted-foreground/60" aria-hidden />
           <p className="text-xs text-muted-foreground">No preview data.</p>
         </div>
       ) : (
         <div
           className={cn(
-            "min-h-[460px] overflow-hidden rounded-md border bg-muted/5",
-            previewExpanded ? "h-[min(80vh,900px)]" : "h-[min(64vh,620px)]",
+            "min-h-0 overflow-hidden bg-muted/5",
+            isEfxbnWorkspace
+              ? "h-full min-h-0 flex-1"
+              : cn("min-h-[460px] rounded-md border", previewExpanded ? "h-[min(80vh,900px)]" : "h-[min(64vh,620px)]"),
           )}
         >
           <SsbhModelPreviewProvider
@@ -637,62 +805,78 @@ export function EffectFolder3dPreview({
               hostModelPath={hostModelPath}
               onHostInstanceIdChange={setHostInstanceId}
             />
-            {hasDiagnosticBlocks && basePlan?.kind === "efxbn" ? (
-              <ResizablePanelGroup orientation="horizontal" className="min-h-0">
-                <ResizablePanel defaultSize={72} minSize={50} className="min-h-0 p-1">
-                  <SsbhModelPreviewViewport
-                    embedded
-                    showTimeline={basePlan.localAnimationCount > 0}
-                    viewportControls="unreal"
-                    sceneOverlay={
-                      <EfxbnDiagnosticOverlay
-                        plan={basePlan}
-                        controlLookupEntriesRef={controlLookupEntriesRef}
-                        progress={effectProgress}
-                        frameCount={frameCount}
-                        playing={effectPlaying}
-                        speed={effectSpeed}
-                        selectedEffectIndex={selectedEffectIndex}
-                        hiddenEffectIndexes={hiddenEffectIndexes}
-                        instanceIdsByEffectIndex={instanceIdsByEffectIndex}
-                        modelRequirements={modelPoolPlan?.requirements ?? []}
-                        hostInstanceTransformsRef={hostInstanceTransformsRef}
-                        hostObjectName={
-                          hostInstanceId ? previewInstanceGroupName(hostInstanceId) : null
+            {isEfxbnWorkspace && basePlan?.kind === "efxbn" ? (
+              <ResizablePanelGroup orientation="vertical" className="h-full min-h-0">
+                <ResizablePanel defaultSize={62} minSize={40} className="min-h-0">
+                  <ResizablePanelGroup orientation="horizontal" className="min-h-0">
+                    <ResizablePanel defaultSize={22} minSize={16} className="min-h-0 border-r">
+                      <EfxbnPreviewInspector pane="outliner" {...inspectorSharedProps} />
+                    </ResizablePanel>
+                    <ResizableHandle withHandle />
+                    <ResizablePanel defaultSize={50} minSize={34} className="min-h-0 px-1 pt-1">
+                      <SsbhModelPreviewViewport
+                        embedded
+                        showTimeline={false}
+                        viewportControls="unreal"
+                        sceneOverlay={
+                          <EfxbnDiagnosticOverlay
+                            plan={basePlan}
+                            controlLookupEntriesRef={controlLookupEntriesRef}
+                            progress={transport.progress}
+                            progressRef={effectProgressRef}
+                            frameCount={frameCount}
+                            playing={transport.playing}
+                            playingRef={effectPlayingRef}
+                            speed={effectSpeed}
+                            selectedEffectIndex={selectedEffectIndex}
+                            hiddenEffectIndexes={hiddenEffectIndexes}
+                            instanceIdsByEffectIndex={instanceIdsByEffectIndex}
+                            modelRequirements={modelPoolPlan?.requirements ?? []}
+                            hostInstanceTransformsRef={hostInstanceTransformsRef}
+                            hostObjectName={hostInstanceId ? previewInstanceGroupName(hostInstanceId) : null}
+                            onSelectEffect={setSelectedEffectIndex}
+                            onProgressChange={handleEffectProgressChange}
+                          />
                         }
-                        onSelectEffect={setSelectedEffectIndex}
-                        onProgressChange={handleEffectProgressChange}
+                        sceneOverlayAnimating={true}
+                        sceneOverlayLabel={`${basePlan.effectBlocks.length - hiddenEffectIndexes.size} visible blocks`}
+                        hostHiddenPreviewInstanceIds={hiddenPreviewInstanceIds}
+                        hostInstanceTransformsRef={hostInstanceTransformsRef}
                       />
-                    }
-                    sceneOverlayAnimating={effectPlaying}
-                    sceneOverlayLabel={`${basePlan.effectBlocks.length - hiddenEffectIndexes.size} visible blocks`}
-                    hostHiddenPreviewInstanceIds={hiddenPreviewInstanceIds}
-                    hostInstanceTransformsRef={hostInstanceTransformsRef}
-                  />
+                    </ResizablePanel>
+                    <ResizableHandle withHandle />
+                    <ResizablePanel defaultSize={28} minSize={22} className="min-h-0 border-l">
+                      <EfxbnPreviewInspector pane="properties" {...inspectorSharedProps} />
+                    </ResizablePanel>
+                  </ResizablePanelGroup>
                 </ResizablePanel>
                 <ResizableHandle withHandle />
-                <ResizablePanel defaultSize={28} minSize={22} className="min-h-0">
-                  <EfxbnPreviewInspector
-                    plan={plan ?? basePlan}
-                    progress={effectProgress}
-                    selectedEffectIndex={selectedEffectIndex}
-                    hiddenEffectIndexes={hiddenEffectIndexes}
-                    onSelectEffect={setSelectedEffectIndex}
-                    onSetEffectVisible={handleSetEffectVisible}
-                    onShowAll={handleShowAllEffects}
-                    onSolo={handleSoloEffect}
-                    document={document}
-                    inventory={inventory}
-                    frameCount={frameCount}
-                    writing={writing}
-                    onDocumentChange={handleDocumentChange}
-                    onEditorError={handleEditorError}
-                    onPatchColor={document ? handlePatchColor : undefined}
-                    onRevert={document ? handleRevertDocument : undefined}
-                    onUndo={document ? handleUndo : undefined}
-                    onRedo={document ? handleRedo : undefined}
-                    onWrite={document ? () => void handleWriteDocument() : undefined}
-                  />
+                <ResizablePanel
+                  defaultSize={38}
+                  minSize={24}
+                  collapsible
+                  collapsedSize={8}
+                  className="min-h-0 border-t"
+                >
+                  {document && selectedEffectIndex !== null ? (
+                    <EfxbnGraphEditor
+                      document={document}
+                      blockIndex={selectedEffectIndex}
+                      progress={transport.progress}
+                      frameCount={frameCount}
+                      writing={writing}
+                      focusedControlName={graphControlName}
+                      onFocusedControlNameChange={setGraphControlName}
+                      onProgressChange={handleManualEffectProgressChange}
+                      onScrubbingChange={handleGraphScrubbingChange}
+                      onDocumentChange={handleDocumentChange}
+                      onError={handleEditorError}
+                    />
+                  ) : (
+                    <p className="flex h-full items-center justify-center px-4 text-xs text-muted-foreground">
+                      Select a block to edit its curves.
+                    </p>
+                  )}
                 </ResizablePanel>
               </ResizablePanelGroup>
             ) : (
@@ -705,57 +889,21 @@ export function EffectFolder3dPreview({
       )}
 
       {hasDiagnosticBlocks ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/10 px-2 py-1.5">
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            onClick={() => setEffectPlaying((playing) => !playing)}
-            aria-label={effectPlaying ? "Pause EFXBN control preview" : "Play EFXBN control preview"}
-          >
-            {effectPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-          </Button>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            onClick={() => {
-              setEffectPlaying(false);
-              setEffectProgress(0);
-            }}
-            aria-label="Reset EFXBN control progress"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-          </Button>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={0.1}
-            value={effectProgress}
-            onChange={(event) => {
-              setEffectPlaying(false);
-              setEffectProgress(Number(event.target.value));
-            }}
-            className="h-1.5 min-w-32 flex-1 cursor-pointer accent-primary"
-            aria-label="EFXBN control progress"
-          />
-          <span className="w-11 text-right font-mono text-[10px] tabular-nums text-muted-foreground">
-            {Math.round((effectProgress / 100) * frameCount)}f / {frameCount}f
-          </span>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-7 w-12 px-1 font-mono text-[10px]"
-            onClick={() => setEffectSpeed((speed) => (speed >= 2 ? 0.5 : speed * 2))}
-            aria-label={`EFXBN preview speed ${effectSpeed} times`}
-          >
-            {effectSpeed}x
-          </Button>
-        </div>
+        <EfxbnPlaybackTransport
+          progress={transport.progress}
+          playing={transport.playing}
+          frameCount={frameCount}
+          speed={effectSpeed}
+          onTogglePlaying={() => commitTransport({ type: "togglePlay" })}
+          onReset={() => {
+            uiProgressSchedulerRef.current.cancel();
+            commitTransport({ type: "reset" });
+          }}
+          onCycleSpeed={() => setEffectSpeed((speed) => (speed >= 2 ? 0.5 : speed * 2))}
+          onScrubStart={handleScrubStart}
+          onScrub={handleTransportScrub}
+          onScrubEnd={handleScrubEnd}
+        />
       ) : null}
     </section>
   );

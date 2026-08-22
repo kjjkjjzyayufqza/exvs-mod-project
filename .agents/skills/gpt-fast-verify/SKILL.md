@@ -1,11 +1,19 @@
 ---
 name: gpt-fast-verify
-description: Enforce one shortest high-signal semantic verification path before completion. Use for GPT/Codex code, config, rule, documentation, or skill changes, especially with GPT-5.6 Sol, or whenever the user asks to minimize tests, validation time, tool calls, or tokens while retaining fresh evidence.
+description: Use when verifying non-MSC GPT/Codex code, config, rules, docs, or skills under a requested shortest-path or low-token workflow.
 ---
 
 # GPT Fast Verify
 
 Fresh evidence stays mandatory. One smallest semantic proof is sufficient by default.
+
+## Hard exclusion
+
+Do not use this skill for MSC research, MSC `X.c` edits, unit script ports, or
+MSC-coupled motion/model/Param/HUD work. MSC completion requires all applicable
+domain gates, not one shortest command: lifecycle/state audit, resource
+existence, reverse-transition symmetry, static MSC checks, authorized compile/
+repack, and scoped in-game verification.
 
 ## Gate
 

@@ -174,6 +174,7 @@ export type TextureWrapModeJson = "Repeat" | "ClampToEdge" | "MirroredRepeat" | 
 export type SamplerDataJson = {
   wraps?: TextureWrapModeJson;
   wrapt?: TextureWrapModeJson;
+  border_color?: Color4Json;
 };
 
 export type UvTransformJson = {

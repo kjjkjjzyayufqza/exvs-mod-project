@@ -1,7 +1,7 @@
 # Wing Zero Rebellion：鸟形态近战全走 N（特格后格斗 `0x928ca34f`）
 
 **Date:** 2026-08-20  
-**Status:** 脚本已改；2026-08-21 实机确认 effect group 分流及持枪空中左 Step 修复
+**Status:** 2026-08-22 实机确认飞行近战不再下坠；effect group 与相关 Step 修复亦已实机确认
 **Kind:** MSC `0.c` bird selector（对照 Delta Plus WR 近战，不切模型）  
 **Primary tree:** `E:\XB\mod\040msc\wing_gundam_zero_rebellion_msc\`
 
@@ -19,6 +19,259 @@
 
 鸟形态按格斗（`global48 & 0x2`）一律提交地面「特格后再按格斗」的 **N 段** `0x928ca34f` → `2.c` `func_937`。  
 Rebellion 只有一个模型，**不抄** Delta Plus `func_888(0x8)` 切主 body。拆飞行态交给现有 `func_41`。
+
+最终实机结论（2026-08-22）：飞行形态按近战进入 `0x928CA34F` 后，机体
+不再因拆除鸟形态而立刻受重力下坠。决定性修复不是新造一条飞行移动，
+而是让 form teardown 只为这个动作保留空中状态，同时恢复动作原本的
+`func_489` 格斗推进 driver。
+
+---
+
+## 最终实机闭环：为什么现在不再下坠（2026-08-22）
+
+### 实机结果
+
+用户在重新 compile/repack 后明确确认：**飞行模式近战会下坠的问题已经修好**。
+本结论把此前“source 已修、待实机”升级为 runtime-confirmed。该次确认针对
+不下坠问题；同批加入的飞行 CSA/CSB 仍需分别记录实机结果。
+
+### 原始失败链
+
+鸟形态近战不是在原地修改 `global143` 后继续飞，而是提交一个普通近战
+action，再通过 `func_41` 的 FORCED_RECOVERY 拆除形态：
+
+```text
+0.c func_143
+  global48 & 0x3E
+  -> func_95(0x928CA34F, 1, 2, 1)
+
+2.c action commit
+  -> global3 = 0x928CA34F
+  -> func_41 sees global143 == 2 and a non-flight action
+  -> rebellion_interrupt_bird_form_to_ground()
+```
+
+旧 teardown 无条件执行：
+
+```c
+func_169(0x4000);
+func_296(0x3e8, 0);
+```
+
+第一句清除飞行专用 `global24 & 0x4000` 是正确的；第二句把
+`sys_1(0x30001, ...)` movement/air-hold 状态也关掉。问题在于 action
+切换与 `func_489` 初始化存在帧序：若 teardown 在 `func_490` 已完成之后
+关闭 `0x30001`，后续只跑 `func_491`，没有第二次初始化来重新打开空中状态，
+于是动作和刀光继续播放，机体却开始受重力下坠。
+
+### 第一版修复为何又造成“不前进”
+
+第一版保住了空中状态，却把 `func_938` 从 `func_489` 换成 `func_502`，
+并尝试首 tick 写一次 `sys_46(0x5)`。静态检查全部通过，但用户实机确认
+机体不再朝敌人前进。
+
+根因是两个 driver 的职责不同：
+
+```text
+func_489 melee runtime
+  -> func_490
+      -> func_526
+          global507 = global379
+          global508 = global380
+      -> func_491
+          -> func_516(global507, global175)
+              target yaw/pitch + forward magnitude -> sys_46
+
+func_502 special-movement runtime
+  -> func_503/504
+      steering delta / facing interpolation
+```
+
+`func_502` 可以转向，但不会替代 `func_526/func_516` 的普通格斗前进状态机。
+一次性的 `sys_46(0x5)` 也没有成为该 action 的持续推进 owner。这说明
+“能朝向目标”与“每帧向目标推进”是两条不同状态链。
+
+### Param 证据排除了错误的换-row方案
+
+当前目标 `grapparam.bin` 已用 `exvs2-json` 实际解析，共 12 rows：
+
+- 当前 N 派生 row `0x68C7334E`：`trackingFrame=180`；
+- 普通 N 格 row `0x159D8BC7`：`trackingFrame=180`。
+
+因此此前“`0x68C7334E` 导致 `global507==0`”的推断是错的。把动作换成
+`0x159D8BC7` 不会增加追踪量，反而会改 `grapTotalFrame`、起手、收招等
+动作参数。最终实现保留 `0x68C7334E`，不修改 grapparam。
+
+### 最终正确实现
+
+#### 1. 在 teardown 前保存动作来源
+
+`func_41` 在 `global143` 仍为鸟形态 `2`、`global3` 已经是
+`0x928CA34F` 时设置：
+
+```c
+rebellion_bird_n_melee_from_flight = 0x1;
+```
+
+任何其他 action 都先清除此状态。这样记录的是“本次 `func_937` 从鸟形态
+进入”，而不是把 action hash 错当成 form。
+
+#### 2. 拆 form，但只为鸟来源近战保留 air hold
+
+`rebellion_interrupt_bird_form_to_ground()` 仍完整执行：
+
+- `global143 = 0`；
+- `global142 = 0xC2B19D12` 普通 speed row；
+- `func_169(0x4000)` 清旧飞控 bit；
+- 卸载鸟挂件并恢复普通手持武器和武装栏。
+
+唯一例外是：
+
+```c
+if (rebellion_bird_n_melee_from_flight == 0)
+{
+    func_296(0x3e8, 0);
+}
+```
+
+所以近战依然真正退出鸟形态，但不会在 action 初始化的边界把空中保持关掉。
+受击、倒地、站立、其他 cancel 因为 latch 已清，仍执行原来的关闭逻辑。
+
+#### 3. 保留动作自己的 grapparam 与 motion owner
+
+`func_937` 最终保持：
+
+```c
+func_488();
+func_219(0x68c7334e);
+global602 = func_939;
+callFunc3(func_938);
+```
+
+`func_939/940/941` 继续拥有原有 motion、刀光、连段和判定；没有复制
+Delta Plus 模型切换，也没有换成普通 N 格 Param。
+
+#### 4. 恢复 `func_489` 每帧推进
+
+最终 `func_938` 只有：
+
+```c
+func_489();
+```
+
+`func_488` 先把 `global612` 清零。`func_490` 初始化时因此走空中分支，
+调用 `func_168(0x1000000)` 与 `func_296(0x3e8,1)`；`func_526` 从
+`0x68C7334E` 加载追踪时间/推进状态，随后 `func_491 -> func_516` 每帧按
+锁定目标的 yaw/pitch 与 `global507` 写移动。旧 flight channel `0x8` 也由
+该正常 melee runtime 清理，不再需要自制 seed。
+
+#### 5. EXIT / INTERRUPT / RESPAWN 对称清理
+
+| 生命周期 | 所有权与行为 |
+|---|---|
+| ENTER | `func_41` 在清 form 前记录 bird origin；`func_937` 还有一次幂等兜底 |
+| ACTIVE | `func_489`、`func_526`、`func_491/516` 拥有空中追踪与推进；`func_939+` 拥有动作表现 |
+| NATURAL EXIT | 下一 action 进入 `func_41`，因 hash 不再是 `0x928CA34F` 而清 latch |
+| HIT/CANCEL/DOWN | 新 action 先清 latch，再走统一 teardown，`func_296(0x3e8,0)` 恢复执行 |
+| RESPAWN/REINITIALIZE | `func_874` 显式清 latch，`func_1034(0)` 重建正常武装 bank |
+
+### 为什么静态 GREEN 不能提前宣称修好
+
+失败的第一版同样通过 AI block、opaque pointer、`msclang` 编译与代码形态
+测试，但这些只能证明脚本结构合法，不能证明 `sys_46` native movement bus
+的运行结果。最终闭环依赖三类证据同时成立：
+
+1. 当前 target `grapparam.bin` 的真实 row 值；
+2. TV Wing / Delta Plus 都使用的 `func_489` 完整推进链；
+3. 用户重新 repack 后的实机“不再下坠”确认。
+
+以后 movement 类 MSC 修改必须保留“静态通过”和“实机通过”的证据等级差异。
+
+### Git 历史证明：这不是一次就成功的修改
+
+MSC 仓库根目录是 `E:\XB\mod\040msc`。对
+`wing_gundam_zero_rebellion_msc/0.c`、`2.c` 使用 `git log --follow` 与
+逐 commit diff 后，可以把失败过程钉到真实版本，而不是只靠聊天记忆。
+
+| 阶段 | Git / 快照证据 | 实际改动 | 结果与判定 |
+|---|---|---|---|
+| V1 复杂悬停方案 | `760f14a`，2026-08-21 21:36，MSC diff `+155/-22` | 新增 `from_flight + pending` 两个 latch；`func_41` 隐藏 `0x4000`；`func_937/938` 每帧重写 `func_168/func_296`，另加 `rebellion_bird_n_melee_hold_air()`、`sys_46(0x5)` 与垂直通道清零 | 逻辑过度耦合 movement bus；下一版本整套撤回，证明没有成为稳定解 |
+| V2 全量回退 | `4a90ac1`，2026-08-22 13:39，MSC diff `+171/-232` | 删除两个 latch、hold helper、每帧 air 写入和自制 seed；`func_937/938` 回到原始 `func_219(0x68C7334E) + func_489`；teardown 恢复无条件 `func_296(0x3E8,0)` | 推进 driver 回来了，但下坠根因也随无条件 teardown 一起回来 |
+| V3 转去处理另一条鸟特格 | `e9239b5`，2026-08-22 14:27，MSC diff `+95/-20` | 新增 `0xC0B814FF` 单阶段鸟特格与 `0x1192E91E` motion handler | 这是 `0x200` 鸟特格，不是 `0x928CA34F` 飞行近战重力解法；不能混为一次成功 |
+| V4 `func_502` 失败版 | `tmp/msc/20260822-wing-rebellion-flight-charge-melee-fix/2.before.c`，SHA-256 `C1FD55C8...B9919EB`；E-009 | 单 latch 保留 air hold，但把 `func_938` 换为 `func_502`，首 tick 写 `sys_46(0x5)` | 静态全绿，实机却不朝敌人前进；该设计已作废 |
+| V5 最终成功版 | 当前 working tree `2.c`，SHA-256 `660B20D2...040403F`；E-010 | 保留单 latch 与 conditional teardown；删除 `func_502`/自制 seed；恢复原 row 与 `func_489` | 用户实机确认不再下坠；这是当前 runtime truth |
+
+#### `760f14a` 为什么值得保留
+
+这个 commit 很重要，因为它显示我们早已碰到正确问题——bird action 需要在
+拆 form 后保留 air hold——但当时把太多职责塞进同一个补丁：
+
+```text
+func_41 发布假 global24
++ pending/from_flight 双 latch
++ func_937 手工改 global379/global390/global613
++ hold_air helper
++ sys_46(0x5) seed
++ func_938 每帧 func_168/func_296
++ 动作后再清垂直通道
+```
+
+这使“状态穿越 teardown”和“动作推进算法”纠缠在一起。即使某一帧看起来
+不下坠，也难判断是谁生效、谁覆盖谁。`4a90ac1` 把整套删掉，是这条路线
+没有收敛的直接 Git 证据。
+
+#### `4a90ac1` 为什么仍然没有解决
+
+回退恢复了 `func_489`，所以普通格斗推进 owner 回来了；但同时把
+`rebellion_interrupt_bird_form_to_ground()` 恢复成：
+
+```c
+func_169(0x4000);
+func_296(0x3e8, 0);
+```
+
+也就是说，它撤掉了错误复杂度，却连“鸟来源近战必须保留 air hold”这个
+正确条件一起删掉。这个版本很适合作为反例：**恢复动作 driver 不等于恢复
+跨 form 的空中状态。**
+
+#### 为什么最终方案比历史版本小
+
+最终成功版只保留两个不可替代的职责：
+
+1. `func_41` 在 form 尚未清除时记录 `0x928CA34F` 的 bird origin；
+2. teardown 只对这个来源跳过 `func_296(0x3E8,0)`，随后仍用原始
+   `func_219(0x68C7334E) -> func_489`。
+
+推进、朝向、motion、判定都交还原系统；补丁只解决生命周期边界。这也是
+经过多次失败后真正收敛出来的原则：**修 state ownership，不重写 movement
+algorithm。**
+
+#### Git 边界说明
+
+当前 `git status` 仍显示 `0.bscex / 0.c / 2.c / 2.dscex` 为 modified，
+所以最终成功版目前是 working-tree truth，还不是一个新 commit。最新
+`func_502` 失败版也没有独立 commit；它由精确 `2.before.c`、E-009、E-010
+和用户实机反馈补齐。完整证据链因此是：
+
+```text
+Git commits
+  + exact before snapshots
+  + Param inspection
+  + static/compile gates
+  + user in-game results
+```
+
+不能只看最后一份 `2.c`，也不能只看 commit subject（其中多个 subject 只有
+`c` / `ｃ`）；判断某次尝试做了什么必须以 diff 为准。
+
+### 禁止回退的硬规则
+
+1. 禁止再次把鸟来源 `func_938` 改成 `func_502`。
+2. 禁止用一次 `sys_46(0x5)` 代替 `func_489` 每帧推进。
+3. 禁止把 `0x68C7334E` 换成 `0x159D8BC7` 来修重力。
+4. 禁止把 `0x928CA34F` 加进 flight allowlist；动作必须拆 form/挂件。
+5. 禁止恢复 teardown 对该来源动作的无条件 `func_296(0x3e8,0)`。
+6. 禁止删除“其他 action / func_874 清 latch”的反向清理。
 
 ---
 
@@ -282,31 +535,33 @@ sys_46(0x1, 0x4, 0, 0, 0);                   // 垂直通道清零
 
 地面特格接 N 能站住，是因为特格已经 `func_168(0x1000000)` + `func_296(0x3e8, 1)`（`func_502` 空中分支 / `func_933`），`func_44` 不清这些旗。
 
-### 补丁（`2.c`，不是改 selector；2026-08-21）
+### 2026-08-22 第一版 source（实机失败，已作废）
 
-只跳过 `func_296(0x3e8,0)`、只种一次 `sys_46` **不够**。`func_937` 若仍走地面 `func_489`：
+第一版把鸟来源 `func_938` 从 `func_489` 改成 `func_502`，并尝试首 tick
+写一次 `sys_46(0x5)`。用户实机确认结果是：动作不再朝敌人前进。
 
-```text
-func_491 -> func_516(global507, global175)
-  sys_46(0x1, 0x2, yaw, pitch, global507)
-  sys_46(0x8, 0, 0, 0)
-```
+失败原因已经用当前 target Param 与调用链闭合：
 
-`global507==0` 时每帧把面内推力写成 0，并清飞行 `0x8`。入口种的 `0x5` / `-90°` 最多活一帧，看起来和没补丁一模一样。拆鸟后身体是立着的，`-90°` 还会变成俯冲。
+- `func_502` 负责 special-movement 转向，不执行普通格斗的
+  `func_526 -> global507/global508 -> func_516` 前进状态机。
+- `0x68C7334E` grapparam row 真实存在，`trackingFrame=180`，不是此前文档
+  推断的 `global507==0`；换成普通 N 格 row `0x159D8BC7` 的同字段仍是 180，
+  只会额外改变动作总帧、起手、收招等无关参数。
+- 所以“换 row”与“继续补 `sys_46(0x5)`”都不是根因修复。
 
-对照：同机 `ACTION_BC_SPECIAL_MELEE_ALT_2` / `func_935` 每帧 `func_296(0x3e8,1)` + `func_502`。
+### 当前 source 修正（2026-08-22 实机确认不再下坠）
 
-| 位置 | 做法 |
-|------|------|
-| latch | `rebellion_bird_n_melee_pending`：interrupt 时 `global3` 或 `global5` 已是 `0x928ca34f`，或 `func_937` 见 `global143==2` |
-| `func_937` from-flight | 按 `func_935` 装 `global609=func_939`、`global452/453/454=0x64`、`func_167(0x1000000)`。`sys_4A(0, 0xdc4314cd, global20, 0x1, 0x6, 0)` 挂本机 body，避开第一刀的 group `0x7` |
-| `func_938` | from-flight：**只** `func_502`（不要 `func_489`）。地面特格→N 仍 `func_489` |
-| `hold_air` | 一次：去 fly bit、开 `0x30001`、`global142=0xc2b19d12`、清 `sys_46(0x8)`。**不**写 `-90°`，**不**把 `global507` 置 0 再喂给 `func_516` |
-| interrupt | from-flight **换** `global142`，**不** `func_296(0x3e8,0)`。受击/站立仍关悬停并清 latch |
+- `func_41` 仍在拆 form 前记录 `rebellion_bird_n_melee_from_flight`；其他 action 与 `func_874` 清除它。
+- `rebellion_interrupt_bird_form_to_ground()` 对鸟来源近战保留空中状态；受击、倒地和其他 cancel 仍关闭。
+- `func_937` 保持原 `func_219(0x68C7334E)`、原 motion callback `func_939`。
+- `func_938` 已恢复 `func_489()`，不再调用 `func_502`，也不再写自制 `sys_46(0x5)` seed。
 
-地面特格→N 不置 latch，不吃 WR FX，也不改 `func_167`。
+这使前进/朝向重新由 TV Wing、Delta Plus 同样使用的 `func_489` 家族负责，
+同时避免 teardown 把空中状态提前关掉。`0x928CA34F` 仍不加入 flight
+allowlist；鸟挂件和 form 会正常拆除。
 
-**不要**把 `0x928ca34f` 加进 `func_41` 白名单（那会保留鸟 form + 飞控）。
+静态测试、Param row 验证、AI block、opaque pointer 与编译均通过；用户
+随后实机确认飞行近战不再下坠。该结果是本页最终 runtime 结论。
 
 ---
 
@@ -337,7 +592,9 @@ func_491 -> func_516(global507, global175)
 | `0x200` | `0xa02d57dc` | `func_464` | 官方解除 |
 | `0x400` + burst | `0x888d9b7d` / `0x7bba02e9` | 觉醒 | 可选保留 |
 | `0x4/0x8/0x10/0x20` | （无） | — | **故意未接** |
-| `0x80` / `0x100` / `0x800` | （无） | — | 仍空映射 |
+| `0x800` | `0x2194f05d` | `ACTION_CHARGE_SHOT_BIRD` | CSA，复用鸟主射逻辑 |
+| `0x1000` | `0x616971ce` | `ACTION_MASK_1000` | CSB，拆鸟后执行普通 Zero System |
+| `0x80` / `0x100` | （无） | — | 仍空映射 |
 
 ---
 
@@ -375,5 +632,5 @@ python .\tools\check_msc_opaque_func_ptrs.py "e:\XB\mod\040msc\wing_gundam_zero_
 | ID | 项 | 状态 |
 |----|----|------|
 | O1 | `func_81` 在有方向时清 `0x2`。鸟分支已改为 `global48 & 0x3e` 全进 `0x928ca34f` | 已改 2026-08-20 |
-| O2 | 同帧拆鸟若闪挂件：`func_937` 入口显式 `rebellion_interrupt_bird_form_to_ground()` | 未做 |
+| O2 | 同帧拆鸟若闪挂件：`func_937` 入口显式 `rebellion_interrupt_bird_form_to_ground()` | source 已做，待实机 |
 | O3 | TV 鸟特格落地三 hash | 未做；别和本页混 |

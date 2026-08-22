@@ -8,6 +8,13 @@ description: Route EXVS2 MSC research notes by cluster so agents read the right 
 CodeGraph indexes `tools/msc_research_catalog.py`, not the Markdown notes.
 Existing research notes stay as-is. This skill only routes.
 
+## Fast rules are forbidden
+
+MSC work is exempt from `caveman`, `gpt-fast-path`, `gpt-fast-verify`,
+single-discovery-path limits, single-verifier limits, and stop-on-first-pass.
+Correctness requires cross-stage and cross-asset evidence. This rule applies to
+research, `X.c` edits, unit ports, and motion/model/Param/HUD integration.
+
 ## Protocol
 
 1. Load this skill for any MSC research / `X.c` edit / unit script port.
@@ -20,6 +27,100 @@ python tools/msc_research_catalog.py --match "<task keywords>"
 3. Read `read_first` only. Open extra `docs` / `related` if the answer is still missing.
 4. Treat `settled` and `do_not` as starting state. Do not re-derive them for confidence.
 5. If two clusters print, keep both (example: Rebellion transform vs TV source).
+
+## Mandatory MSC change audit
+
+Complete this audit before editing any MSC source or coupled asset.
+
+### 1. Lifecycle matrix
+
+Trace every affected state through all rows, not only the reported trigger:
+
+| Phase | Required evidence |
+|-------|-------------------|
+| ENTER | selector/action hash, registry, first callback, first resource/Param writes |
+| ACTIVE | per-tick owners, timers, HUD/ammo writers, motion/model ownership |
+| EXIT | natural exit, reverse mapping, state restoration, inherited values |
+| INTERRUPT | hit/cancel/down/death paths, idempotent cleanup, partial-entry safety |
+| RESPAWN/REINITIALIZE | default bank/table/model/form reconstruction |
+
+An ENTER-only fix is incomplete. Every write introduced on ENTER must have an
+explicit preserve, inherit, reset, or restore policy on EXIT and INTERRUPT.
+
+### 2. State ownership matrix
+
+Record each affected state before implementation:
+
+| State | Owner/writer | Readers | Normal value | Alternate value | ENTER policy | EXIT policy | INTERRUPT policy |
+|-------|--------------|---------|--------------|-----------------|--------------|-------------|------------------|
+
+Include, when applicable: action hash, form global, motion slots, model root,
+speed row, armsparam/HUD slots, ammo/reload timers, charge bars, effects, and
+shared globals. Shared state must say whether it is **preserved**, **inherited**,
+**reset**, or **restored**. “Rebind same row” is not inheritance if it resets a
+native timer/state machine.
+
+### 3. Current-target resource proof
+
+For every new or existing reference, verify against current target assets:
+
+- action hash vs handler registry;
+- motion Runtime numeric value vs raw structure `unk1` byte order;
+- Folder/Item children, fileIndex, channel ids, and non-empty files;
+- Param row existence, unsigned ID ordering, and active schema;
+- model/shell/bone dependencies and form-specific ownership;
+- HUD slot index and the native state machine that updates it.
+
+Do not treat documentation, a CRC calculation, roundtrip byte identity, or a
+source-unit asset as proof that the current target contains a valid reference.
+
+### 4. Reference comparison
+
+Compare the complete working reference transition, including its reverse path
+and state adapter. If the target lacks the reference's dual table/state adapter,
+design a target-specific equivalent; do not copy only ENTER calls or add guards
+that freeze native maintenance.
+
+### 5. Pre-edit self-audit
+
+Before writing, state:
+
+1. intended transition and unchanged behavior;
+2. lifecycle rows inspected;
+3. state owners and inheritance policy;
+4. verified resource IDs and missing dependencies;
+5. rollback boundary;
+6. remaining unknowns requiring user choice or runtime evidence.
+
+If any affected phase or shared-state owner is unknown, continue investigation
+or ask the user. Do not patch around the unknown.
+
+### 6. Post-edit gates
+
+Run every applicable gate; MSC is not limited to one command:
+
+- repeat the lifecycle and state-ownership audit on the resulting code;
+- `check_msc_ai_blocks.py` and `check_msc_opaque_func_ptrs.py` for each changed
+  `X.c`;
+- verify resource/Param references again after edits;
+- compile/repack only when authorized, then report whether it was run;
+- test normal→alternate→normal, ready/loading inheritance, interrupt at each
+  phase, and respawn/reinitialize in the scoped in-game matrix;
+- update the routed research note with actual runtime evidence.
+
+Do not declare a bug fixed from a static pass when the failure is runtime-only.
+
+## Self-audit red flags
+
+- Only the failing direction was inspected; reverse/exit was assumed.
+- A stateful slot was rebound instead of inherited.
+- A guard stops a native timer/HUD writer without replacing its ownership.
+- A referenced ID exists in docs but not in the current target asset.
+- Param rows parse or roundtrip but violate native ordering/invariants.
+- One successful checker is used to stop before resource or runtime gates.
+
+Any red flag means return to the lifecycle/state ownership matrices before
+editing further.
 
 Exact id:
 

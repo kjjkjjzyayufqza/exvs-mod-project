@@ -115,6 +115,23 @@ Existing research notes are not rewritten by this index.
   - Do not treat 2.c as original C source; it is decompiled MSC.
   - Do not start a 2.c patch at shell loadout unless the goal is shell/loadout.
 
+### `charge` — CS charge-slot consumption at action entry
+
+- **kind:** global
+- **aliases:** `CSA`, `CSB`, `charge slot`, `charge consume`, `charge reset`, `sys_4F(0xA)`, `ACTION_CHARGE_SHOT`, `ACTION_MASK_1000`, `0x800`, `0x1000`, `infinite charge shot`
+- **settled:**
+  - A selected CS action must consume/reset its native charge slot once at action entry.
+  - Direct CSA on slot 0 uses sys_4F(0xA, 0); Rebellion CSB slot 4 is already consumed by func_1031.
+  - Do not put CSA charge clearing in an uncharged action alias or a per-tick callback.
+- **read_first:**
+  - `docs/msc-research/cs-action-charge-slot-consumption.md`
+- **related:**
+  - `docs/exvs-msc-syscall-4f-native-handler.md`
+  - `docs/msc-research/wing-zero-rebellion-bird-form-0c-input-map.md`
+- **do_not:**
+  - Do not assume selecting or playing a CS action automatically consumes native charge state.
+  - Do not delay charge consumption until projectile fire; an interrupted startup would preserve a reusable full charge.
+
 ### `input-0c` — 0.c input selector to 2.c action hash boundary
 
 - **kind:** global

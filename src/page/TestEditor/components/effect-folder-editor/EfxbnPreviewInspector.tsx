@@ -44,9 +44,12 @@ import {
   canRedoEfxbn,
   canUndoEfxbn,
   deleteEfxbnBlock,
+  EFXBN_COLOR_CONTROL_NAMES,
   efxbnDirtyBlockIndexes,
   isEfxbnDocumentDirty,
   reparentEfxbnBlock,
+  type EfxbnColorControlName,
+  type EfxbnControlName,
   type EfxbnDocument,
 } from "./efxbnDocument";
 import { EfxbnBlockEditor } from "./EfxbnBlockEditor";
@@ -67,6 +70,8 @@ const EFXBN_TEXTURE_SLOT_LABELS: Record<EfxbnTextureSlot, string> = {
   uv1: "Pass-2 UV offset",
 };
 
+export type EfxbnPreviewInspectorPane = "all" | "outliner" | "properties";
+
 type EfxbnPreviewInspectorProps = {
   plan: EffectFolderPreviewPlan;
   progress: number;
@@ -76,17 +81,17 @@ type EfxbnPreviewInspectorProps = {
   onSetEffectVisible: (effectIndex: number, visible: boolean) => void;
   onShowAll: () => void;
   onSolo: (effectIndex: number) => void;
+  /** Split the block tree from the property editor so they do not share one cramped column. */
+  pane?: EfxbnPreviewInspectorPane;
   document?: EfxbnDocument | null;
   inventory?: EffectFolderInventory | null;
   /** Playback window, so an inserted keyframe defaults inside the effect. */
   frameCount?: number;
   writing?: boolean;
+  focusedControlName?: EfxbnControlName;
+  onFocusedControlNameChange?: (name: EfxbnControlName) => void;
   onDocumentChange?: (next: EfxbnDocument) => void;
   onEditorError?: (message: string) => void;
-  onPatchColor?: (
-    blockIndex: number,
-    color: { r?: number; g?: number; b?: number; a?: number },
-  ) => void;
   onRevert?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
@@ -125,9 +130,9 @@ function parentIndexOf(blocks: readonly EfxbnEffectSummary[], index: number): nu
 
 function InspectorRow({ label, value, mono = true }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-2 border-b border-border/45 py-1.5 last:border-b-0">
-      <span className="shrink-0 text-[10px] text-muted-foreground">{label}</span>
-      <span className={cn("min-w-0 break-all text-right text-[10px]", mono && "font-mono tabular-nums")}>{value}</span>
+    <div className="flex items-start justify-between gap-3 border-b border-border/45 py-2 last:border-b-0">
+      <span className="shrink-0 text-[11px] text-muted-foreground">{label}</span>
+      <span className={cn("min-w-0 break-all text-right text-[11px]", mono && "font-mono tabular-nums")}>{value}</span>
     </div>
   );
 }
@@ -141,13 +146,15 @@ export function EfxbnPreviewInspector({
   onSetEffectVisible,
   onShowAll,
   onSolo,
+  pane = "all",
   document: doc = null,
   inventory = null,
   frameCount = 120,
   writing = false,
+  focusedControlName = "colorR",
+  onFocusedControlNameChange,
   onDocumentChange,
   onEditorError,
-  onPatchColor,
   onRevert,
   onUndo,
   onRedo,
@@ -203,8 +210,12 @@ export function EfxbnPreviewInspector({
   const draftDirty = doc ? isEfxbnDocumentDirty(doc) : false;
   const dirtyBlocks = doc ? efxbnDirtyBlockIndexes(doc) : new Set<number>();
   const dirtyCount = dirtyBlocks.size;
-  const liveAuthor = Boolean(doc && onPatchColor);
+  const liveAuthor = Boolean(doc && onDocumentChange && onEditorError);
   const canEdit = Boolean(doc && inventory && onDocumentChange && onEditorError);
+  const showOutliner = pane !== "properties";
+  const showProperties = pane !== "outliner";
+  const asideLabel =
+    pane === "outliner" ? "EFXBN block outliner" : pane === "properties" ? "EFXBN properties" : "EFXBN live author";
 
   const runCommand = (run: (current: EfxbnDocument) => EfxbnDocument) => {
     if (!doc || !onDocumentChange) return;
@@ -217,95 +228,104 @@ export function EfxbnPreviewInspector({
 
   return (
     <aside
-      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-muted/10"
-      aria-label="EFXBN live author"
+      className={cn(
+        "flex h-full min-h-0 min-w-0 flex-col overflow-hidden",
+        pane === "outliner" ? "bg-muted/15" : "bg-background",
+      )}
+      aria-label={asideLabel}
     >
-      <div className="flex h-9 shrink-0 items-center gap-1 overflow-hidden border-b px-2">
-        <Layers3 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="min-w-0 truncate text-[11px] font-medium">
-          {liveAuthor ? "Live author" : "Blocks"}
-        </span>
-        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
-          {plan.effectBlocks.length}
-        </span>
-        {liveAuthor ? (
-          <Badge
-            variant="outline"
-            className={cn(
-              "ml-1 h-4 shrink-0 px-1.5 text-[8px]",
-              draftDirty
-                ? "border-amber-500/40 text-amber-400"
-                : "border-emerald-500/35 text-emerald-400",
-            )}
-          >
-            {draftDirty ? `${dirtyCount} unsaved` : "live draft"}
-          </Badge>
-        ) : null}
-        <div className="min-w-0 flex-1" />
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          className="h-6 w-6 shrink-0"
-          onClick={onShowAll}
-          title="Show all blocks"
-          aria-label="Show all EFXBN blocks"
-        >
-          <Eye className="h-3.5 w-3.5" />
-        </Button>
-        {selectedBlock ? (
+      {showOutliner ? (
+      <>
+      <div className="shrink-0 border-b px-2.5 py-2">
+        <div className="flex items-center gap-1.5">
+          <Layers3 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          <span className="min-w-0 truncate text-xs font-medium">Blocks</span>
+          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+            {plan.effectBlocks.length}
+          </span>
+          {liveAuthor ? (
+            <Badge
+              variant="outline"
+              className={cn(
+                "ml-auto h-5 shrink-0 px-1.5 text-[10px]",
+                draftDirty
+                  ? "border-amber-500/40 text-amber-400"
+                  : "border-emerald-500/35 text-emerald-400",
+              )}
+            >
+              {draftDirty ? `${dirtyCount} unsaved` : "live draft"}
+            </Badge>
+          ) : null}
+        </div>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
           <Button
             type="button"
-            size="sm"
+            size="icon"
             variant="ghost"
-            className="h-6 shrink-0 px-1.5 text-[10px]"
-            onClick={() => onSolo(selectedBlock.index)}
-            title="Hide every block except the selected block"
+            className="h-8 w-8 shrink-0"
+            onClick={onShowAll}
+            title="Show all blocks"
+            aria-label="Show all EFXBN blocks"
           >
-            Solo
+            <Eye className="h-4 w-4" />
           </Button>
-        ) : null}
-        {canEdit && selectedBlock ? (
-          <>
+          {selectedBlock ? (
             <Button
               type="button"
-              size="icon"
+              size="sm"
               variant="ghost"
-              className="h-6 w-6 shrink-0"
-              disabled={writing}
-              onClick={() =>
-                runCommand((current) =>
-                  addEfxbnBlock(
-                    current,
-                    selectedBlock.index,
-                    parentIndexOf(plan.effectBlocks, selectedBlock.index),
-                    selectedBlock.effectType,
-                  ),
-                )
-              }
-              title="Duplicate the selected block under the same parent, with its own curve keys"
-              aria-label="Duplicate the selected EFXBN block"
+              className="h-8 shrink-0 px-2 text-[11px]"
+              onClick={() => onSolo(selectedBlock.index)}
+              title="Hide every block except the selected block"
             >
-              <CopyPlus className="h-3.5 w-3.5" />
+              Solo
             </Button>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-6 w-6 shrink-0 text-destructive"
-              disabled={writing || plan.effectBlocks.length <= 1}
-              onClick={() => runCommand((current) => deleteEfxbnBlock(current, selectedBlock.index))}
-              title="Delete the selected block and renumber every index that pointed past it"
-              aria-label="Delete the selected EFXBN block"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </>
-        ) : null}
+          ) : null}
+          {canEdit && selectedBlock ? (
+            <>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 shrink-0"
+                disabled={writing}
+                onClick={() =>
+                  runCommand((current) =>
+                    addEfxbnBlock(
+                      current,
+                      selectedBlock.index,
+                      parentIndexOf(plan.effectBlocks, selectedBlock.index),
+                      selectedBlock.effectType,
+                    ),
+                  )
+                }
+                title="Duplicate the selected block under the same parent, with its own curve keys"
+                aria-label="Duplicate the selected EFXBN block"
+              >
+                <CopyPlus className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 shrink-0 text-destructive"
+                disabled={writing || plan.effectBlocks.length <= 1}
+                onClick={() => runCommand((current) => deleteEfxbnBlock(current, selectedBlock.index))}
+                title="Delete the selected block and renumber every index that pointed past it"
+                aria-label="Delete the selected EFXBN block"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          ) : null}
+        </div>
       </div>
 
       <div
-        className="custom-scrollbar-thin max-h-[42%] shrink-0 overflow-y-auto border-b p-1"
+        className={cn(
+          "custom-scrollbar-thin min-h-0 overflow-y-auto p-1.5",
+          showProperties ? "max-h-[42%] shrink-0 border-b" : "flex-1",
+        )}
         onDragOver={(event) => {
           if (canEdit && event.dataTransfer.types.includes("text/efxbn-block")) event.preventDefault();
         }}
@@ -328,7 +348,7 @@ export function EfxbnPreviewInspector({
             <div
               key={block.index}
               className={cn(
-                "group flex min-h-9 items-center gap-1 border-l-2 px-1",
+                "group flex min-h-10 items-center gap-1.5 border-l-2 px-1.5",
                 selected ? "border-l-amber-500/80 bg-amber-500/10" : "border-l-transparent hover:bg-muted/60",
               )}
             >
@@ -380,7 +400,7 @@ export function EfxbnPreviewInspector({
                   )}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5 truncate text-[10px] font-medium">
+                  <span className="flex items-center gap-1.5 truncate text-[11px] font-medium">
                     Block {String(block.index).padStart(2, "0")}
                     {blockDirty ? (
                       <span
@@ -390,7 +410,7 @@ export function EfxbnPreviewInspector({
                       />
                     ) : null}
                   </span>
-                  <span className="block truncate text-[9px] text-muted-foreground">{typeName(block)}</span>
+                  <span className="block truncate text-[10px] text-muted-foreground">{typeName(block)}</span>
                 </span>
                 {target?.animationPath ? <span className="text-[9px] text-muted-foreground">A</span> : null}
                 {blockTextures.some((binding) => binding.file) ? (
@@ -401,40 +421,44 @@ export function EfxbnPreviewInspector({
           );
         })}
       </div>
+      </>
+      ) : null}
 
-      {selectedBlock ? (
+      {showProperties && selectedBlock ? (
         <Tabs
           defaultValue={canEdit ? "edit" : liveAuthor ? "color" : "block"}
-          className="flex min-h-0 flex-1 flex-col p-2"
+          className="flex min-h-0 flex-1 flex-col px-3 py-2"
         >
-          <TabsList
-            className={cn(
-              "grid h-7 w-full shrink-0 rounded-md p-0.5",
-              canEdit && liveAuthor
-                ? "grid-cols-5"
-                : canEdit || liveAuthor
-                  ? "grid-cols-4"
-                  : "grid-cols-3",
-            )}
-          >
+          {pane === "properties" ? (
+            <div className="mb-2 flex min-w-0 items-baseline gap-2">
+              <span className="truncate text-xs font-medium">
+                Block {String(selectedBlock.index).padStart(2, "0")}
+              </span>
+              <span className="truncate text-[11px] text-muted-foreground">{typeName(selectedBlock)}</span>
+            </div>
+          ) : null}
+          <TabsList className="flex h-8 w-full shrink-0 justify-start gap-0.5 overflow-x-auto rounded-md p-0.5">
             {canEdit ? (
-              <TabsTrigger value="edit" className="h-6 rounded px-1 text-[9px]">Edit</TabsTrigger>
+              <TabsTrigger value="edit" className="h-7 shrink-0 rounded px-2.5 text-[11px]">Edit</TabsTrigger>
             ) : null}
             {liveAuthor ? (
-              <TabsTrigger value="color" className="h-6 rounded px-1 text-[9px]">Color</TabsTrigger>
+              <TabsTrigger value="color" className="h-7 shrink-0 rounded px-2.5 text-[11px]">Color</TabsTrigger>
             ) : null}
-            <TabsTrigger value="block" className="h-6 rounded px-1 text-[9px]">Block</TabsTrigger>
-            <TabsTrigger value="controls" className="h-6 rounded px-1 text-[9px]">Controls</TabsTrigger>
-            <TabsTrigger value="material" className="h-6 rounded px-1 text-[9px]">Material</TabsTrigger>
+            <TabsTrigger value="block" className="h-7 shrink-0 rounded px-2.5 text-[11px]">Block</TabsTrigger>
+            <TabsTrigger value="controls" className="h-7 shrink-0 rounded px-2.5 text-[11px]">Controls</TabsTrigger>
+            <TabsTrigger value="material" className="h-7 shrink-0 rounded px-2.5 text-[11px]">Material</TabsTrigger>
           </TabsList>
 
           {canEdit && doc && inventory && onDocumentChange && onEditorError ? (
-            <TabsContent value="edit" className="custom-scrollbar-thin min-h-0 flex-1 overflow-y-auto">
+            <TabsContent value="edit" className="custom-scrollbar-thin mt-2 min-h-0 flex-1 overflow-y-auto">
               <EfxbnBlockEditor
                 document={doc}
                 blockIndex={selectedBlock.index}
                 inventory={inventory}
                 frameCount={frameCount}
+                progress={progress}
+                focusedControlName={focusedControlName}
+                onFocusedControlNameChange={onFocusedControlNameChange ?? (() => undefined)}
                 disabled={writing}
                 onChange={onDocumentChange}
                 onError={onEditorError}
@@ -442,20 +466,27 @@ export function EfxbnPreviewInspector({
             </TabsContent>
           ) : null}
 
-          {liveAuthor && doc && onPatchColor ? (
-            <TabsContent value="color" className="custom-scrollbar-thin min-h-0 flex-1 overflow-y-auto">
+          {liveAuthor && doc && onDocumentChange && onEditorError ? (
+            <TabsContent value="color" className="custom-scrollbar-thin mt-2 min-h-0 flex-1 overflow-y-auto">
               <EfxbnColorAuthor
                 document={doc}
                 block={selectedBlock}
-                plan={plan}
                 progress={progress}
+                frameCount={frameCount}
                 writing={writing}
-                onPatchColor={onPatchColor}
+                focusedControlName={
+                  EFXBN_COLOR_CONTROL_NAMES.includes(focusedControlName as EfxbnColorControlName)
+                    ? (focusedControlName as EfxbnColorControlName)
+                    : "colorR"
+                }
+                onFocusedControlNameChange={onFocusedControlNameChange ?? (() => undefined)}
+                onDocumentChange={onDocumentChange}
+                onError={onEditorError}
               />
             </TabsContent>
           ) : null}
 
-          <TabsContent value="block" className="custom-scrollbar-thin min-h-0 flex-1 overflow-y-auto">
+          <TabsContent value="block" className="custom-scrollbar-thin mt-2 min-h-0 flex-1 overflow-y-auto">
             <InspectorRow label="Index" value={String(selectedBlock.index)} />
             <InspectorRow label="Runtime type" value={`${selectedBlock.effectType} (${typeName(selectedBlock)})`} />
             <InspectorRow label="Tree level" value={String(selectedBlock.level)} />
@@ -491,7 +522,7 @@ export function EfxbnPreviewInspector({
             <InspectorRow label="Animation" value={selectedBlock.animationHash.signed === 0 ? "none" : selectedBlock.animationHash.hex} />
           </TabsContent>
 
-          <TabsContent value="controls" className="custom-scrollbar-thin min-h-0 flex-1 overflow-y-auto">
+          <TabsContent value="controls" className="custom-scrollbar-thin mt-2 min-h-0 flex-1 overflow-y-auto">
             {activeControls.length > 0 ? (
               activeControls.map((reference) => (
                 <div key={reference.index} className="flex items-center gap-2 overflow-hidden border-b border-border/45 py-1.5 last:border-b-0">
@@ -509,7 +540,7 @@ export function EfxbnPreviewInspector({
             )}
           </TabsContent>
 
-          <TabsContent value="material" className="custom-scrollbar-thin min-h-0 flex-1 overflow-y-auto">
+          <TabsContent value="material" className="custom-scrollbar-thin mt-2 min-h-0 flex-1 overflow-y-auto">
             <div className="border-b border-border/45 py-1.5">
               <div className="flex items-center gap-2 overflow-hidden">
                 <span className="min-w-0 truncate text-[9px] font-medium">Shader variants</span>
@@ -574,10 +605,10 @@ export function EfxbnPreviewInspector({
         </Tabs>
       ) : null}
 
-      {liveAuthor ? (
+      {showProperties && liveAuthor ? (
         <footer
           className={cn(
-            "shrink-0 border-t px-2 py-2",
+            "shrink-0 border-t px-3 py-2.5",
             draftDirty
               ? "border-amber-500/25 bg-amber-500/[0.06]"
               : "border-border/60 bg-muted/15",

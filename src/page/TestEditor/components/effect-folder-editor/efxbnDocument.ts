@@ -69,8 +69,11 @@ export type EfxbnControlName = (typeof EFXBN_CONTROL_NAMES)[number];
 
 export type EfxbnCurveKey = { key: number; value: number };
 
+/** Native progress values closer than this are indistinguishable to editor interactions. */
+export const EFXBN_KEY_EPSILON = 1e-5;
+
 export type EfxbnCurve = {
-  name: string;
+  name: EfxbnControlName;
   referenceIndex: number;
   /** `selector` is the key count and `lookupIndex` the first key index. */
   lookupIndex: number;
@@ -91,7 +94,7 @@ function requireBlock(summary: EfxbnSummary, blockIndex: number): EfxbnEffectSum
 
 function requireReference(
   block: EfxbnEffectSummary,
-  controlName: string,
+  controlName: EfxbnControlName,
 ): { reference: EfxbnControlReferenceSummary; referenceIndex: number } {
   const referenceIndex = block.controlReferences.findIndex((entry) => entry.name === controlName);
   const reference = block.controlReferences[referenceIndex];
@@ -105,7 +108,7 @@ function requireReference(
 export function readEfxbnCurve(
   summary: EfxbnSummary,
   blockIndex: number,
-  controlName: string,
+  controlName: EfxbnControlName,
 ): EfxbnCurve {
   const block = requireBlock(summary, blockIndex);
   const { reference, referenceIndex } = requireReference(block, controlName);
@@ -141,7 +144,7 @@ export type EfxbnColorControlName = (typeof EFXBN_COLOR_CONTROL_NAMES)[number];
 export function tryReadEfxbnCurveConstant(
   summary: EfxbnSummary,
   blockIndex: number,
-  controlName: string,
+  controlName: EfxbnControlName,
 ): number | null {
   const curve = readEfxbnCurve(summary, blockIndex, controlName);
   return curve.keys.length === 1 ? (curve.keys[0]?.value ?? null) : null;
@@ -430,7 +433,7 @@ export function setEfxbnBlockTextureSlot(
 function replaceCurveKeys(
   summary: EfxbnSummary,
   blockIndex: number,
-  controlName: string,
+  controlName: EfxbnControlName,
   keys: readonly EfxbnCurveKey[],
 ): EfxbnSummary {
   if (keys.length === 0) {
@@ -483,10 +486,89 @@ function floatToBits(value: number): number {
 }
 
 /** Edits one key's time and/or value in place; the key count is unchanged. */
+export type EfxbnCurveReplacement = {
+  controlName: EfxbnControlName;
+  keys: readonly EfxbnCurveKey[];
+};
+
+function validatedCurveKeys(
+  controlName: EfxbnControlName,
+  keys: readonly EfxbnCurveKey[],
+): EfxbnCurveKey[] {
+  if (keys.length === 0) {
+    throw new Error(`EFXBN curve ${controlName} must keep at least one key`);
+  }
+  const ordered = keys
+    .map((entry) => {
+      if (!Number.isFinite(entry.key) || !Number.isFinite(entry.value)) {
+        throw new Error(
+          `EFXBN curve ${controlName} rejects a non-finite key (${entry.key}, ${entry.value})`,
+        );
+      }
+      return { key: entry.key, value: entry.value };
+    })
+    .sort((left, right) => left.key - right.key);
+  assertEfxbnCurveKeySequence(controlName, ordered);
+  return ordered;
+}
+
+function assertEfxbnCurveKeySequence(
+  controlName: string,
+  keys: readonly EfxbnCurveKey[],
+): void {
+  if (keys.length === 0) {
+    throw new Error(`EFXBN curve ${controlName} must keep at least one key`);
+  }
+  for (const entry of keys) {
+    if (!Number.isFinite(entry.key) || !Number.isFinite(entry.value)) {
+      throw new Error(
+        `EFXBN curve ${controlName} rejects a non-finite key (${entry.key}, ${entry.value})`,
+      );
+    }
+  }
+  for (let index = 1; index < keys.length; index += 1) {
+    const previous = keys[index - 1]!.key;
+    const current = keys[index]!.key;
+    if (current < previous) {
+      throw new Error(`EFXBN curve ${controlName} keys are not sorted by progress`);
+    }
+    if (Math.abs(previous - current) <= EFXBN_KEY_EPSILON) {
+      throw new Error(`EFXBN curve ${controlName} has duplicate progress ${current}`);
+    }
+  }
+}
+
+/** Replaces one or more curves as one undoable document command. */
+export function replaceEfxbnCurves(
+  document: EfxbnDocument,
+  blockIndex: number,
+  replacements: readonly EfxbnCurveReplacement[],
+  label: string,
+): EfxbnDocument {
+  requireBlock(document.summary, blockIndex);
+  if (replacements.length === 0) return document;
+  const names = new Set<EfxbnControlName>();
+  let next = document.summary;
+  for (const replacement of replacements) {
+    if (names.has(replacement.controlName)) {
+      throw new Error(`EFXBN graph edit replaces ${replacement.controlName} more than once`);
+    }
+    names.add(replacement.controlName);
+    next = replaceCurveKeys(
+      next,
+      blockIndex,
+      replacement.controlName,
+      validatedCurveKeys(replacement.controlName, replacement.keys),
+    );
+  }
+  return commit(document, next, label.trim() || "Edit EFXBN curves");
+}
+
+/** Edits one key's time and/or value in place; the key count is unchanged. */
 export function setEfxbnCurveKey(
   document: EfxbnDocument,
   blockIndex: number,
-  controlName: string,
+  controlName: EfxbnControlName,
   keyIndex: number,
   patch: { key?: number; value?: number },
 ): EfxbnDocument {
@@ -501,9 +583,8 @@ export function setEfxbnCurveKey(
     throw new Error(`EFXBN curve ${controlName} rejects a non-finite key (${key}, ${value})`);
   }
   const keys = curve.keys.map((entry, index) => (index === keyIndex ? { key, value } : entry));
-  const next = replaceCurveKeys(document.summary, blockIndex, controlName, keys);
   const label = curve.keys.length === 1 ? `${controlName} = ${value}` : `${controlName} key ${keyIndex}`;
-  return commit(document, next, label);
+  return replaceEfxbnCurves(document, blockIndex, [{ controlName, keys }], label);
 }
 
 /**
@@ -515,7 +596,7 @@ export function setEfxbnCurveKey(
 export function insertEfxbnCurveKey(
   document: EfxbnDocument,
   blockIndex: number,
-  controlName: string,
+  controlName: EfxbnControlName,
   key: number,
   value: number,
 ): EfxbnDocument {
@@ -523,19 +604,23 @@ export function insertEfxbnCurveKey(
     throw new Error(`EFXBN curve ${controlName} rejects a non-finite key (${key}, ${value})`);
   }
   const curve = readEfxbnCurve(document.summary, blockIndex, controlName);
-  if (curve.keys.some((entry) => entry.key === key)) {
+  if (curve.keys.some((entry) => Math.abs(entry.key - key) <= EFXBN_KEY_EPSILON)) {
     throw new Error(`EFXBN curve ${controlName} already has a key at time ${key}`);
   }
   const keys = [...curve.keys, { key, value }].sort((left, right) => left.key - right.key);
-  const next = replaceCurveKeys(document.summary, blockIndex, controlName, keys);
-  return commit(document, next, `${controlName} + key @ ${key}`);
+  return replaceEfxbnCurves(
+    document,
+    blockIndex,
+    [{ controlName, keys }],
+    `${controlName} + key @ ${key}`,
+  );
 }
 
 /** Removes a key. The last remaining key cannot be removed — a control always evaluates. */
 export function deleteEfxbnCurveKey(
   document: EfxbnDocument,
   blockIndex: number,
-  controlName: string,
+  controlName: EfxbnControlName,
   keyIndex: number,
 ): EfxbnDocument {
   const curve = readEfxbnCurve(document.summary, blockIndex, controlName);
@@ -546,8 +631,12 @@ export function deleteEfxbnCurveKey(
     throw new Error(`EFXBN curve ${controlName} must keep at least one key`);
   }
   const keys = curve.keys.filter((_entry, index) => index !== keyIndex);
-  const next = replaceCurveKeys(document.summary, blockIndex, controlName, keys);
-  return commit(document, next, `${controlName} − key ${keyIndex}`);
+  return replaceEfxbnCurves(
+    document,
+    blockIndex,
+    [{ controlName, keys }],
+    `${controlName} - key ${keyIndex}`,
+  );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -865,11 +954,17 @@ export function normalizeEfxbnSummaryForWrite(summary: EfxbnSummary): EfxbnSumma
         );
       }
       const lookupIndex = entries.length;
+      const ownedKeys: EfxbnCurveKey[] = [];
       for (let offset = 0; offset < reference.selector; offset += 1) {
         const entry = summary.controlLookupEntries[reference.lookupIndex + offset];
         if (!entry) {
           throw new Error(`EFXBN curve key ${reference.lookupIndex + offset} is missing`);
         }
+        ownedKeys.push({ key: entry.key, value: entry.value });
+      }
+      assertEfxbnCurveKeySequence(reference.name, ownedKeys);
+      for (let offset = 0; offset < reference.selector; offset += 1) {
+        const entry = summary.controlLookupEntries[reference.lookupIndex + offset]!;
         entries.push({ ...entry, index: entries.length });
       }
       return { ...reference, lookupIndex };

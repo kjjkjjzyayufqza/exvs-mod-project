@@ -33,6 +33,21 @@ python tools/msc_research_catalog.py --match "<task keywords>"
 3. Reuse `settled` bullets. Repeat research only when a listed restart/`do_not` exception applies.
 4. CodeGraph answers **code** structure. MSC **notes** are clustered in the Python catalog.
 
+## Mandatory full audit; no fast path
+
+MSC tasks are excluded from caveman, `gpt-fast-path`, `gpt-fast-verify`,
+single-discovery-path limits, single-verifier limits, and stop-on-first-pass.
+Before edits, use `.cursor/skills/msc-research-index/SKILL.md` to complete:
+
+- ENTER / ACTIVE / EXIT / INTERRUPT / RESPAWN-REINITIALIZE lifecycle matrix;
+- state ownership matrix with preserve/inherit/reset/restore policy;
+- current-target action/motion/Param/model/HUD resource proof;
+- working-reference forward and reverse transition comparison;
+- post-edit static, resource, authorized compile/repack, and in-game gates.
+
+An ENTER-only audit is incomplete. Rebinding a stateful row is not inheritance
+when it resets native loading, ammo, charge, or HUD state.
+
 ## Additive docs only
 
 Do not rewrite, merge, or delete existing MSC research Markdown to improve indexing.

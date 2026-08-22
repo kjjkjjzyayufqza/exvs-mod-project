@@ -224,7 +224,12 @@ export function BulletPropertyPanel({
     <GameAccuratePropertyPanel
       entry={entry}
       fieldSpecs={fieldSpecs}
-      onFieldChange={onFieldChange}
+      onFieldChange={(key, value) => {
+        if (typeof value !== "number") {
+          throw new Error(`Bullet field ${key} requires a numeric value`);
+        }
+        onFieldChange(key, value);
+      }}
       groups={BULLET_GROUPS}
       computedSections={computedSections}
     />

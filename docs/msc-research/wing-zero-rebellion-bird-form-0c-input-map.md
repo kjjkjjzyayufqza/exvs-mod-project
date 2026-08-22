@@ -1,7 +1,7 @@
 # Wing Zero Rebellion：鸟形态输入映射（0.c only，对照 TV Zero）
 
 **Date:** 2026-08-14  
-**Status:** 主射、鸟近战、单阶段鸟特格 N 均已实机确认（2026-08-22）
+**Status:** 主射、鸟近战输入、单阶段鸟特格 N 已实机确认；飞行 CSA/CSB 已接 source，待实机（2026-08-22）
 **Kind:** MSC form / input-map 规范（可复用）  
 **Primary trees:**
 
@@ -144,7 +144,8 @@ Rebellion 的 `func_143` 用 `global39 != 0`（或显式 `== 0x2`）进鸟分支
 | 普通形态 `global39 == 0` | 保留完整 `func_95` 表 |
 | 鸟形态 `0x1` 主射 | `0x476fac14` `ACTION_A_SHOT_BIRD`（空弹 `func_98(0)`）。**不要**接地面 `0x7cd11119`（`func_884` 会卸鸟挂件）。`2.c` 必须按 TV `ALT_2` 关对锁、禁止 `func_76(0x38)` |
 | 鸟形态近战 | **全部走 N**：`global48 & 0x3e` → `0x928ca34f` `func_937`。飞行中按格斗时 `func_81` 会清掉 `0x2`，必须连 `0x4/0x8/0x10/0x20` 一起收。不分流 `0x8b97920e`。拆鸟交给 `func_41`，不要抄 Delta 切模型 |
-| 鸟形态其它武装 | 副射/特射/蓄力仍不映射；`0x200` → `0xC0B814FF` 单阶段鸟特格 N，handler 先拆鸟再播 `0x1192E91E` |
+| 鸟形态蓄力 | `0x800` CSA → `0x2194F05D` `ACTION_CHARGE_SHOT_BIRD`，selector 必须与鸟主射同为 `(0,1,0)`，直接复用鸟主射四段逻辑并保持 form；`0x1000` CSB → 普通 `0x616971CE` Zero System，`func_41` 先拆鸟并清 `func_104/107` 两层 body 旋转 |
+| 鸟形态其它武装 | 副射/特射仍不映射；`0x200` → `0xC0B814FF` 单阶段鸟特格 N，handler 先拆鸟再播 `0x1192E91E` |
 | 可选保留 | partner/`0x400` + `0xc0000` 条件那条 |
 | 不在本文件做的事 | 不在 `2.c` `ACTION_*` 加 form `return` |
 
@@ -155,6 +156,14 @@ Rebellion 的 `func_143` 用 `global39 != 0`（或显式 `== 0x2`）进鸟分支
 - **不要** `func_76(0x38)`。TV 用 `func_308` 在本 action handle 上播鸟 loop（TV `0xcf3250eb`，Rebellion `0x9de587ce`）。占用变形 loop 槽时，被打取消会卡在飞行态。
 - 相位结束用 `func_91()`，被打断才能离开 shoot / no_ammo。
 - 弹体仍是 `sys_4F(0, 0, 0x860a72cd)`。不要 `func_884`。
+- 普通 10 发 / 鸟 2 发主射的 row swap 必须双向使用
+  `sys_4F(0xB,0,new,old,0x4)`；这是 Delta Plus 4 发 / WR 2 发且共享 charge
+  的官方模式。省略最后的 `0x4` 会把鸟形态 raw ammo 写回普通槽。
+- CSA action 被 selector 提交后不会自动消费满蓄状态。普通、方向与飞行 CSA
+  都必须在 action 入口一次调用 `sys_4F(0xA,0)`；飞行 CSA 要写在
+  `ACTION_CHARGE_SHOT_BIRD` wrapper，不能写进未蓄力主射共用的
+  `ACTION_A_SHOT_BIRD`。完整规则见
+  [CS charge-slot consumption](./cs-action-charge-slot-consumption.md)。
 
 TV 鸟分支（`global39 == 0x1`）会给 `0x100`/`0x200`/`0x80` 等换 **另一套 hash**。Rebellion 当前仅补了主射、近战与 N 特格：`0x200` 复用 TV action hash `0xC0B814FF`，但 `2.c` 是单阶段 target handler，只播放现有 body+wing Folder `0x1192E91E`；N 落地第二段、左右特格、TV effect/SE 尚未移植。副射/特射/蓄力继续空映射。武装表仍只改 `0.c` selector。
 
@@ -191,8 +200,12 @@ TV 鸟分支（`global39 == 0x1`）会给 `0x100`/`0x200`/`0x80` 等换 **另一
 | 形态 | 期望 |
 |------|------|
 | 普通 `global143==0` | 主射/副射/格斗正常 |
-| 鸟 `global143==0x2` | 主射进 `ACTION_A_SHOT_BIRD`；近战 `0x2` 进 `0x928ca34f` `func_937`（全 N）；`0x200` 进 `0xC0B814FF` 单阶段鸟特格 N；副射/特射仍不从 thinker 进入 |
+| 鸟 `global143==0x2` | 主射进 `ACTION_A_SHOT_BIRD`；CSA `0x800` 进同逻辑 clone；CSB `0x1000` 退出飞行并进普通 Zero System；近战 `0x2` 进 `0x928ca34f` `func_937`（全 N）；`0x200` 进 `0xC0B814FF`；副射/特射仍不进入 |
 | 变形进出 | form 清回 0 后武装恢复 |
+
+附加门槛：普通主射 ammo 与鸟主射 ammo 各自保持；两方向切形态只继承 CSA
+蓄力。飞行 CSA 不能停住，飞行 CSB 进入 Zero System 时 body yaw/pitch/roll
+必须回到普通姿态。
 
 **2026-08-14：** 用户确认按 §4 修掉鸟分支 `0x1 → 0x7cd11119` 后，鸟形态主射已正确被挡。
 
@@ -216,7 +229,7 @@ TV 鸟分支（`global39 == 0x1`）会给 `0x100`/`0x200`/`0x80` 等换 **另一
 
 | ID | 项 | 状态 |
 |----|----|------|
-| O1 | Port TV 鸟形态专用主射/副射 hash 到 Rebellion | 主射薄壳已接（单 hash / 单弹，无三态蓄力）；副射未做 |
+| O1 | Port TV 鸟形态专用主射/副射 hash 到 Rebellion | 主射与 CSA clone 已接；副射未做 |
 | O2 | Port TV `sys_1(0x10001,0x3/0x4,…)` 资源表切换 | 未做 |
 | O3 | 是否把 Rebellion 鸟 id 从 `0x2` 改成 TV `0x1` 以对齐表下标 | 开放；当前保持 `0x2` |
 | O4 | 鸟形态是否允许 boost/step（`func_42` 全挡的副作用） | 按产品再调 |

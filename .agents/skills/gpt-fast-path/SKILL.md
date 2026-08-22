@@ -1,11 +1,18 @@
 ---
 name: gpt-fast-path
-description: Minimize GPT/Codex tool calls, context growth, latency, and token use without losing required correctness. Use for GPT-5.6 Sol and other GPT coding models, or when the user asks for caveman mode, shortest path, fast execution, low token use, no redundant search, or reduced verification overhead.
+description: Use when GPT/Codex performs non-MSC work and the user requests fast execution, low token use, shortest path, caveman mode, or reduced verification overhead.
 ---
 
 # GPT Fast Path
 
 Operate like smart caveman: keep technical substance; delete process theater.
+
+## Hard exclusion
+
+Do not use this skill for MSC research, MSC `X.c` edits, unit script ports, or
+MSC-coupled motion/model/Param/HUD state changes. Do not apply its single-path,
+low-context, or stop-after-one-proof rules to MSC. Use `msc-research-index` and
+complete the full lifecycle/state-ownership audit instead.
 
 ## Rules
 

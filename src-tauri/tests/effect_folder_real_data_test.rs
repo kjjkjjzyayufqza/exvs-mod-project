@@ -1069,6 +1069,49 @@ fn first_real_efxbn() -> Option<std::path::PathBuf> {
     paths.into_iter().next()
 }
 
+/// A real file with at least one animated control. Prefer the task fixture so the test avoids a
+/// broad corpus walk on machines that have the Wing Zero Rebellion workspace.
+fn first_real_multikey_efxbn() -> Option<std::path::PathBuf> {
+    let preferred = Path::new(
+        r"E:\XB\mod\006effect\wing_gundam_zero_rebellion_effect\0\0\30.efxbn",
+    );
+    if preferred.is_file() {
+        let path_text = preferred.to_string_lossy();
+        if app_lib::format::effect_folder::parse_efxbn_file(&path_text)
+            .map(|summary| {
+                summary.effects.iter().any(|effect| {
+                    effect
+                        .control_references
+                        .iter()
+                        .any(|reference| reference.selector > 1)
+                })
+            })
+            .unwrap_or(false)
+        {
+            return Some(preferred.to_path_buf());
+        }
+    }
+
+    let mut paths = Vec::new();
+    for root in [r"E:\XB\mod\006effect", r"E:\XB\解包"] {
+        collect_efxbn_paths(Path::new(root), &mut paths);
+    }
+    paths.sort();
+    paths.into_iter().find(|path| {
+        let path_text = path.to_string_lossy();
+        app_lib::format::effect_folder::parse_efxbn_file(&path_text)
+            .map(|summary| {
+                summary.effects.iter().any(|effect| {
+                    effect
+                        .control_references
+                        .iter()
+                        .any(|reference| reference.selector > 1)
+                })
+            })
+            .unwrap_or(false)
+    })
+}
+
 /// E1: a whole-file write of an unmodified document must not change a single byte.
 ///
 /// This is the guard that stands between "the parser missed a field" and "the first save silently
@@ -1166,6 +1209,90 @@ fn write_efxbn_file_changes_only_the_edited_bytes() {
     let reparsed = app_lib::format::effect_folder::parse_efxbn_file(&target_text)
         .expect("re-parse the edited file");
     assert_eq!(reparsed.effects[0].life_time_base, 123.5);
+}
+
+/// E4: selector values above one remain editable through the whole-file writer.
+#[test]
+fn write_efxbn_file_round_trips_a_multikey_curve_edit() {
+    let Some(source) = first_real_multikey_efxbn() else {
+        eprintln!("SKIP: no real multi-key .efxbn fixture is available");
+        return;
+    };
+    let original = fs::read(&source).expect("read the corpus sample");
+
+    let temp = tempfile::tempdir().expect("create temporary target");
+    let root = temp.path().join("effect_root");
+    fs::create_dir_all(&root).expect("create effect root");
+    let target = root.join("multikey.efxbn");
+    fs::write(&target, &original).expect("stage the sample");
+
+    let target_text = target.to_string_lossy().to_string();
+    let mut summary = app_lib::format::effect_folder::parse_efxbn_file(&target_text)
+        .expect("parse the staged sample");
+    let before = summary.clone();
+    let (effect_index, reference_index, selector, lookup_index) = summary
+        .effects
+        .iter()
+        .enumerate()
+        .find_map(|(effect_index, effect)| {
+            effect
+                .control_references
+                .iter()
+                .enumerate()
+                .find(|(_, reference)| reference.selector > 1)
+                .map(|(reference_index, reference)| {
+                    (
+                        effect_index,
+                        reference_index,
+                        reference.selector,
+                        reference.lookup_index,
+                    )
+                })
+        })
+        .expect("fixture contains a multi-key control");
+    let edited_index = lookup_index as usize + 1;
+    let original_key = summary.control_lookup_entries[edited_index].key;
+    let original_value = summary.control_lookup_entries[edited_index].value;
+    let edited_value: f32 = if original_value == 37.25 { 38.25 } else { 37.25 };
+    summary.control_lookup_entries[edited_index].value = edited_value;
+    summary.control_lookup_entries[edited_index].value_f32_bits = edited_value.to_bits();
+
+    app_lib::format::effect_folder::write_efxbn_file(
+        &root.to_string_lossy(),
+        &target_text,
+        &summary,
+    )
+    .expect("write the multi-key edit");
+
+    let reparsed = app_lib::format::effect_folder::parse_efxbn_file(&target_text)
+        .expect("re-parse the multi-key edit");
+    let reference = &reparsed.effects[effect_index].control_references[reference_index];
+    assert_eq!(reference.selector, selector);
+    assert_eq!(reference.lookup_index, lookup_index);
+    assert_eq!(reparsed.control_lookup_entries[edited_index].key, original_key);
+    assert_eq!(reparsed.control_lookup_entries[edited_index].value, edited_value);
+    assert_eq!(
+        reparsed.control_lookup_entries[edited_index].value_f32_bits,
+        edited_value.to_bits()
+    );
+    for (index, entry) in reparsed.control_lookup_entries.iter().enumerate() {
+        if index == edited_index {
+            continue;
+        }
+        assert_eq!(
+            entry.key_f32_bits, before.control_lookup_entries[index].key_f32_bits,
+            "key bits changed at lookup entry {index}"
+        );
+        assert_eq!(
+            entry.value_f32_bits, before.control_lookup_entries[index].value_f32_bits,
+            "value bits changed at lookup entry {index}"
+        );
+    }
+    assert_eq!(
+        fs::read(&source).expect("re-read the corpus sample"),
+        original,
+        "the source game or mod tree must remain untouched"
+    );
 }
 
 /// E1: the writer refuses a target outside the inspected effect root.

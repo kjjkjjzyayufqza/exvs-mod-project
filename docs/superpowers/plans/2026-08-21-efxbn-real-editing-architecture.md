@@ -153,8 +153,8 @@ assume it (§4.4).
 | **Outliner** — scene tree, select / rename / reparent | block tree from `level` + `childIndexSize` + `childIndexArray[8]` | tree exists in the inspector; no reparenting |
 | **Properties editor** — tabbed, context-sensitive | per-block field tabs (emission / shape / motion / material / render state) | partially exists; read-only apart from colour |
 | **Keyframe diamond** on a property | `selector == 1` vs `selector > 1` | not surfaced |
-| **Graph Editor** — F-Curves, key handles, interpolation | the 18 control references into the key table | not built |
-| **Dope Sheet** — all keys of a selection on one timeline | all 18 curves of a block, or of the whole file | not built |
+| **Graph Editor** — F-Curves, key handles, interpolation | the 18 control references into the key table | implemented for the selected block |
+| **Dope Sheet** — all keys of a selection on one timeline | all 18 curves of a block, or of the whole file | covered by the selected-block graph key surface |
 | **Data-blocks with users** — mesh, material, image | model by `nudHandle`, textures by `colorTexParam` / `uvTexParam` into the model-control and texture-parameter tables | resolution exists (incl. the shared pack); rebinding does not |
 | **Viewport gizmos** — move / rotate / scale the selected object | `positionOffset`, `rotationBase`, emitter `spawnFormLength` | render exists; no manipulation |
 | **Undo stack** (`Ctrl+Z`), non-destructive edits | — | draft session has revert-all only |
@@ -317,17 +317,19 @@ file.
 - Enum lanes get dropdowns whose entries come from the decoded tables that already exist
   (`EFXBN_BLEND_STATE_LABELS`, `EFXBN_CULLING_TYPE_LABELS`, spawn form types, element types).
 
-### E4 — Curve editing (Dope Sheet, then Graph Editor)
+### E4 — Curve editing (Dope Sheet and Graph Editor) · **DONE 2026-08-22**
 
-- Keyframe affordance on every one of the 18 controls: constant ⇄ animated.
-- Dope sheet first: keys as diamonds on the derived playback window, drag to retime, delete.
-  Retiming is already possible byte-wise (the key's `time` is the first 4 bytes of the pair and
-  nothing today writes it).
-- Graph editor second: value curves with the engine's own interpolation.
-- **Unresolved and must stay unresolved until derived:** the interpolation the runtime applies
-  between keys, and the 16-column `floatKeyTableTexture` quantisation (P6 of the fidelity plan). A
-  graph editor that draws a different curve from the one the game evaluates is worse than no graph
-  editor. Ship the dope sheet, which does not depend on interpolation, first.
+- All 18 controls render in one selected-block SVG Graph Editor.
+- Manual key insertion, deletion, retiming, value editing, box selection, pan, zoom, and
+  frame/progress precision input are implemented.
+- Constants remain one-key numeric properties and promote to animated curves only through an
+  explicit key insertion. Auto Key is intentionally absent.
+- The graph uses the confirmed native linear interpolation with endpoint clamping. EFXBN stores no
+  tangent handles, so the editor does not invent Bezier controls.
+- One pointer gesture becomes one atomic document command and one undo entry.
+- A real selector-greater-than-one edit is verified through the existing whole-file writer on a
+  temporary copy; no second save path was added.
+- Multi-block editing, curve modifiers, and Bezier interpolation remain outside scope.
 
 ### E5 — Resource rebinding
 
@@ -402,8 +404,6 @@ Every phase must additionally prove:
 
 ## 8. What is unknown, and blocks specific work
 
-- **Curve interpolation between keys.** Blocks the Graph Editor (E4 second half), not the dope
-  sheet. Needs `efxKineticParticle*3rd` re-read or IDA.
 - **`actionFlags` bit names.** 444 distinct values are authored; only a handful of bits are derived
   (`0x1` loop, `0x10` uniform size, `0x800_0000` and `0x80_0000` from the normaliser). Unnamed bits
   stay numbered.

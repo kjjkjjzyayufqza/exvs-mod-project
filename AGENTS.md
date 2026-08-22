@@ -36,10 +36,31 @@ Before doing any task, every AI agent must:
    `read_first`. Canonical catalog: `tools/msc_research_catalog.py`. Markdown
    projection: `docs/msc-research/INDEX.md`.
 
-## GPT/Codex Fast Path (Mandatory)
+## GPT/Codex Fast Path (Mandatory For Non-MSC Work)
 
 For GPT-5.6 Sol and other GPT coding models, minimize elapsed time, tool calls,
 and tokens as an explicit correctness constraint:
+
+### Hard MSC exclusion
+
+The fast path does **not** apply to MSC research, MSC `X.c` edits, unit script
+ports, or changes that couple MSC to motion/model/Param/HUD state. For those
+tasks:
+
+- Do not activate `caveman`, `gpt-fast-path`, or `gpt-fast-verify`.
+- Do not enforce one discovery path, one tool, one verifier command, or
+  stop-on-first-pass behavior.
+- Use `.cursor/skills/msc-research-index/SKILL.md` and complete its mandatory
+  lifecycle/state-ownership audit before editing.
+- Trace ENTER, ACTIVE, EXIT, INTERRUPT, and RESPAWN/REINITIALIZE paths, including
+  reverse transitions and shared state inheritance.
+- Verify every referenced action hash, motion Runtime ID/raw `unk1`, Param row,
+  model/shell dependency, HUD slot, and state-machine owner against current
+  target assets.
+
+This exclusion overrides model/speed defaults and every generic fast-rule
+instruction below. MSC work may use multiple focused reads and multiple staged
+verification gates when the domain audit requires them.
 
 - Use `caveman`, `gpt-fast-path`, and `gpt-fast-verify` for routine work.
 - Use one discovery path: CodeGraph for structure or `rg` for literal text.
@@ -443,8 +464,14 @@ Project skills (domain):
 
 ## Verification And Handoff
 
-- Run exactly one narrowest reliable semantic verifier for each change, then
-  stop on pass. Do not add generic build/lint/type/full-suite checks afterward.
+- For non-MSC changes, run exactly one narrowest reliable semantic verifier for
+  each change, then stop on pass. Do not add generic build/lint/type/full-suite
+  checks afterward.
+- For MSC `X.c` or MSC-coupled asset changes, the single-verifier rule is
+  disabled. Complete all applicable staged gates: lifecycle/state audit,
+  resource/Param existence, AI-block and opaque-pointer checks, compile/repack
+  when authorized, and the scoped in-game transition matrix. Report every
+  unauthorized or unrun gate explicitly.
 - For MSC tool changes, prefer one targeted real-file round-trip command or
   test that covers function pointer resolution, `try.` pushBit counts, and
   header flags together. Do not verify those as three separate workflows.

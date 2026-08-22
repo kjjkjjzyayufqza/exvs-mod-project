@@ -23,6 +23,7 @@ import {
   normalizeEfxbnSummaryForWrite,
   prepareEfxbnDocumentForWrite,
   readEfxbnCurve,
+  replaceEfxbnCurves,
   redoEfxbn,
   reparentEfxbnBlock,
   revertEfxbnDocument,
@@ -30,6 +31,8 @@ import {
   setEfxbnBlockTextureSlot,
   setEfxbnCurveKey,
   setEfxbnField,
+  type EfxbnControlName,
+  type EfxbnDocument,
   undoEfxbn,
 } from "./efxbnDocument";
 import { EFXBN_FIELD_SCHEMA, type EfxbnFieldDescriptor } from "./efxbnFieldSchema";
@@ -232,6 +235,65 @@ describe("dirty tracking", () => {
 });
 
 describe("curve commands", () => {
+  it("replaces several curves in one undo entry", () => {
+    const document = makeDocument(1);
+    const next = replaceEfxbnCurves(
+      document,
+      0,
+      [
+        { controlName: "colorR", keys: [{ key: 0, value: 1 }, { key: 100, value: 0.5 }] },
+        {
+          controlName: "colorA",
+          keys: [{ key: 0, value: 0 }, { key: 20, value: 0.75 }, { key: 100, value: 0 }],
+        },
+      ],
+      "Edit 5 graph keys",
+    );
+
+    expect(readEfxbnCurve(next.summary, 0, "colorR").keys).toHaveLength(2);
+    expect(readEfxbnCurve(next.summary, 0, "colorA").keys).toHaveLength(3);
+    expect(next.past).toHaveLength(1);
+    expect(undoEfxbn(next).summary).toEqual(document.summary);
+  });
+
+  it("refuses duplicate progress before changing the document", () => {
+    const document = makeDocument(1);
+    expect(() =>
+      replaceEfxbnCurves(
+        document,
+        0,
+        [{ controlName: "colorR", keys: [{ key: 25, value: 1 }, { key: 25, value: 2 }] }],
+        "Invalid graph edit",
+      ),
+    ).toThrow(/duplicate progress/);
+    expect(document.past).toHaveLength(0);
+  });
+
+  it("refuses progress values closer than the editor key tolerance", () => {
+    expect(() =>
+      replaceEfxbnCurves(
+        makeDocument(1),
+        0,
+        [{ controlName: "colorR", keys: [{ key: 0, value: 1 }, { key: 0.000001, value: 2 }] }],
+        "Invalid graph edit",
+      ),
+    ).toThrow(/duplicate progress/);
+    expect(() => insertEfxbnCurveKey(makeDocument(1), 0, "colorR", 0.000001, 2)).toThrow(
+      /already has a key/,
+    );
+  });
+
+  it("refuses an empty replacement", () => {
+    expect(() =>
+      replaceEfxbnCurves(
+        makeDocument(1),
+        0,
+        [{ controlName: "colorR", keys: [] }],
+        "Invalid graph edit",
+      ),
+    ).toThrow(/at least one key/);
+  });
+
   it("reads a control's keys out of the shared table", () => {
     const curve = readEfxbnCurve(makeDocument().summary, 1, "colorG");
     expect(curve.keys).toHaveLength(1);
@@ -293,7 +355,9 @@ describe("curve commands", () => {
   });
 
   it("refuses an unknown control name", () => {
-    expect(() => readEfxbnCurve(makeDocument().summary, 0, "notAControl")).toThrow(/no control named/);
+    expect(() =>
+      readEfxbnCurve(makeDocument().summary, 0, "notAControl" as EfxbnControlName),
+    ).toThrow(/no control named/);
   });
 
   it("leaves every curve exclusively owned after an insert", () => {
@@ -469,6 +533,24 @@ describe("normalizeEfxbnSummaryForWrite", () => {
       ),
     };
     expect(() => normalizeEfxbnSummaryForWrite(broken)).toThrow(/past curveKeyCount/);
+  });
+
+  it("refuses near-duplicate progress before a document reaches the writer", () => {
+    const document = insertEfxbnCurveKey(makeDocument(1), 0, "colorR", 10, 2);
+    const reference = document.summary.effects[0]!.controlReferences.find(
+      (entry) => entry.name === "colorR",
+    )!;
+    const secondKeyIndex = reference.lookupIndex + 1;
+    const broken: EfxbnDocument = {
+      ...document,
+      summary: {
+        ...document.summary,
+        controlLookupEntries: document.summary.controlLookupEntries.map((entry, index) =>
+          index === secondKeyIndex ? { ...entry, key: 0.000001 } : entry,
+        ),
+      },
+    };
+    expect(() => prepareEfxbnDocumentForWrite(broken)).toThrow(/duplicate progress/);
   });
 });
 

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Download, ExternalLink, FolderOpen, Loader2, Replace } from "lucide-react";
+import { ChevronDown, Download, ExternalLink, FolderOpen, Loader2, Replace } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -309,6 +310,18 @@ export function EffectFolderDetailPanel({
   onEfxbnWritten,
   onStructureMutated,
 }: EffectFolderDetailPanelProps) {
+  const [fileDetailsOpen, setFileDetailsOpen] = useState(false);
+  const focusedItemKey =
+    item == null
+      ? ""
+      : item.category === "models"
+        ? `models:${item.model.entryIndex}:${item.model.name}`
+        : item.item.path;
+
+  useEffect(() => {
+    setFileDetailsOpen(false);
+  }, [focusedItemKey]);
+
   if (!item) {
     return (
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -330,11 +343,53 @@ export function EffectFolderDetailPanel({
         }
       : null;
 
+  if (item.category === "efxbn" && inventory) {
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <EffectFolder3dPreview
+            item={item}
+            inventory={inventory}
+            previewExpanded={previewExpanded}
+            previewSuspended={previewSuspended}
+            onEfxbnWritten={onEfxbnWritten}
+          />
+        </div>
+        <Collapsible open={fileDetailsOpen} onOpenChange={setFileDetailsOpen} className="shrink-0 border-t bg-background">
+          <div className="flex h-9 items-center gap-2 px-3">
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs">
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition-transform ${fileDetailsOpen ? "rotate-0" : "-rotate-90"}`}
+                />
+                File details
+              </Button>
+            </CollapsibleTrigger>
+            <Badge variant="secondary" className="text-[10px]">
+              efxbn
+            </Badge>
+          </div>
+          <CollapsibleContent>
+            <div className="custom-scrollbar-thin max-h-[min(40vh,360px)] space-y-4 overflow-y-auto overscroll-contain px-4 pb-4">
+              <EfxbnDetail
+                item={item}
+                onOpenAsEffectProject={onOpenAsEffectProject}
+                hashEdit={hashEditContext}
+              />
+              <EffectFolderResolutionPanel inventory={inventory} />
+              {validation ? <ValidationResultPanel validation={validation} /> : null}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
       <div className="custom-scrollbar-thin min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="flex flex-col gap-4 p-4">
-          {inventory && (item.category === "efxbn" || item.category === "models") ? (
+          {inventory && item.category === "models" ? (
             <EffectFolder3dPreview
               item={item}
               inventory={inventory}
@@ -351,13 +406,6 @@ export function EffectFolderDetailPanel({
               </Badge>
             </div>
 
-            {item.category === "efxbn" ? (
-              <EfxbnDetail
-                item={item}
-                onOpenAsEffectProject={onOpenAsEffectProject}
-                hashEdit={hashEditContext}
-              />
-            ) : null}
             {item.category === "models" ? <ModelDetail item={item} /> : null}
             {item.category === "textures" || item.category === "other" ? (
               <FileDetail
