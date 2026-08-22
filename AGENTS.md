@@ -395,6 +395,7 @@ Project skills (domain):
 - FHM2D stage pack/extract: `.cursor/skills/fhm2d-format/SKILL.md`
 - Stage numatb color-only materials: `.cursor/skills/exvs-stage-numatb/SKILL.md`
 - Tauri large binary IPC: `.cursor/skills/tauri-ipc-large-binary/SKILL.md`
+- Body/wing motion FBX split export: `.cursor/skills/exvs2-body-wing-fbx-export/SKILL.md`
 
 ## Development Conduct
 

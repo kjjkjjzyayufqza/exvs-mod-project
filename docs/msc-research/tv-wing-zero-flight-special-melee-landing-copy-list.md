@@ -1,7 +1,7 @@
 # TV Wing Zero 飞形态特格落地：要对到 Rebellion 的复制清单
 
 **Date:** 2026-08-17  
-**Status:** 清单已冻结。复制/改名/加翅膀按 [landing-todo](./tv-wing-zero-flight-special-melee-landing-todo.md) 做；Folder id 用新 CRC，不再用本节 TV Runtime ID。  
+**Status:** 2026-08-22 Rebellion N 空中单阶段已实机通过；完整落地/左右仍待做。
 **Kind:** 闭包 B 武装移植前置  
 **Primary trees:**
 
@@ -19,7 +19,7 @@ Target Motion  E:\XB\mod\003motion\wing_gundam_zero_rebellion_motion
 ## 一句话
 
 TV 飞形态「特格落地」在 `0.c` 里是 **3 个 action hash**（左 / 右 / N），动作资源能清楚数出 **4 组要复制的 motion**。  
-Rebellion 鸟形态现在把 `0x200` 接到解除 `0xa02d57dc`，motion 包里也还没有这 4 组。
+Rebellion 鸟形态 `0x200` 已接 TV N action hash `0xC0B814FF`。当前只有一组 target body+wing Folder：`trans_te_motion_stk_air_fr_out`，structure raw `unk1=1ee99211`，MSC Runtime `0x1192E91E`；N 落地、左右俯冲和收招仍未完成。
 
 不是地面 4 向特格（`0xe35b996c` / `0xd55f840` / `0x2f5f1a92` / `0x22051a36`），也不是 Rebellion 现成的跳起特格 `15flight11a` / `35flight11a` / `maenobori11a`。
 
@@ -50,6 +50,16 @@ TV `0.c` 鸟 `0x200` 没有单独的「后」hash：`0x4` 前进和松开都进 
 
 `func_308` 播 Folder 的 runtime ID（`0x72394A81` / `0x63327DCF`），不是单个 nuanmb。
 
+### Rebellion 当前 N 空中单阶段（2026-08-22）
+
+| 用途 | Target Folder | structure raw `unk1` | MSC Runtime | 通道 |
+|------|---------------|----------------------|-------------|------|
+| 鸟特格 N 空中 | `trans_te_motion_stk_air_fr_out` | `1ee99211` | `0x1192E91E` | body `9c5e24c7` + wing `c1a9c1f6` |
+
+身体动作源自 `001hito_028gunwtv_001gunwtv_001_40tkkneo2stk11a_stk_air_fr`，翼使用 Rebellion 自制 `wing00` clip。当前 handler 在 motion 结束时直接退出；不会调用 TV N 落地 `0x63327DCF`。
+
+实机确认：鸟形态特格可进入 `0xC0B814FF`，新 Folder `0x1192E91E` 的 body 与 wing 同步播放，motion 结束后安全退出。
+
 ### 3 / 4：左右是 `body_tf` 单 Item
 
 和变形 enter/loop/exit 一类：`type=Item`、`unk2=00000000`、前缀 `032gwtvTR`。  
@@ -77,20 +87,20 @@ TV `0.c` 鸟 `0x200` 没有单独的「后」hash：`0x4` 前进和松开都进 
 | 鸟特格 + 右 `0x20` | `0x279F0DA4` | 同上，`global781` 分流 | `0xF5A3A97C` → 拆鸟 → `0xFBC136EF` |
 | 鸟特格 其它（N / 前 / 后） | `0xC0B814FF` | `ACTION_BC_SPECIAL_MELEE_ALT_7` | 先拆鸟 → `0x72394A81` → `0x63327DCF` |
 
-Rebellion 现在：
+Rebellion 当前：
 
 ```c
 // 鸟分支 0x200
-func_95(0xa02d57dc, ...);   // 干净解除，不是特格落地
+func_95(0xc0b814ff, ...);   // TV N special-melee action hash
 ```
 
-`2.c` `func_241` 也没有上面三个 hash。地面特格 `0xC805DC33` / `0x66EB879F` 不要动。
+`2.c` 已只注册 `0xC0B814FF → ACTION_BC_SPECIAL_MELEE_BIRD_N`。左右 `0x8D96C52F` / `0x279F0DA4` 尚未注册；地面特格 `0xC805DC33` / `0x66EB879F` 不动。
 
 接线顺序（授权后再做）：
 
-1. motion 包追加上表 4 组（+ 附属 Folder）。
-2. `2.c` 注册 3 hash，handler 按 TV `ALT_5` / `ALT_7` 语义搬，拆鸟换成 Rebellion restore。
-3. 鸟 `func_143` 的 `0x200` 改成 TV 那三路 `func_95`。干净解除仍留给 slot `0x19` / `0xa02d57dc`，不要再占特格键。
+1. 已完成：N 空中 body+wing Folder `0x1192E91E`。
+2. 已完成：`0xC0B814FF` 单阶段 target handler，拆鸟使用 Rebellion 幂等 restore。
+3. 待做：N 落地、左右、收招资源完成后，再扩成 TV 完整两 handler/三 hash。官方解除仍留给 slot `0x19` / `0xA02D57DC`。
 
 ---
 

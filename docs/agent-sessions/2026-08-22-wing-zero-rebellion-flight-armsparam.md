@@ -79,9 +79,13 @@ GREEN 为 2 passed。
 0x8D5B747A, 0x9398CED9, 0xFA64E4D0
 ```
 
-当前目标路径 `armsparam.bin` 已由用户恢复为原版 SHA
-`A4665B7C...`。MSC 已引用三个新 ID；在安装有序修正版 Param 之前，不要
-用这套 MSC 进入鸟形态，否则 entry 缺失仍可能崩溃。
+当前目标路径 `armsparam.bin` 已安装有序修正版，SHA-256 为
+`2388C188437646B25C397FFD27E0CBC86D43F356198671918C6952609DB7D406`，
+共 11 rows，entry ID 严格按 unsigned u32 升序。原版 8-row 备份仍保留在
+`tmp/exvs2-json/20260822-wing-rebellion-flight-arms/armsparam.original.A4665B7C63951980.bin`。
+
+最终状态：工具有序插入修复、修正版 Param 安装、MSC 三个飞行 ID 绑定三者
+已经一致。此前“MSC 引用新 ID、目标 Param 却恢复为原版”的崩溃窗口已关闭。
 
 ## MSC 接线（2026-08-22）
 
@@ -105,3 +109,76 @@ slot 4 -> 0
 - `func_876` / `func_879`：鸟形态禁止普通 slot 3 availability/entry 回写。
 
 当前功能边界：现有鸟主射已消费 ammo slot 0；slot 1/2 只完成 HUD/ammo entry 接入，尚未配置新的输入 action 与 projectile。slot 3 按产品决定显示共享 Zero System entry；其鸟形态输入动作仍需单独实机确认。
+
+## 端到端复盘：变形闪退与鸟特格（2026-08-22）
+
+### 现象
+
+1. 按住 boost 并双击前进触发 `0x9475130E` 变形进入时，游戏立即崩溃。
+2. 用户完成 Rebellion body+wing Folder `trans_te_motion_stk_air_fr_out`，希望把它接成飞行形态 N 特格。
+
+### 排除的错误假设
+
+闪退不是 motion/action ID 不存在。当前 motion structure 与磁盘均存在：
+
+```text
+transform enter  runtime 0xA621FD5E  raw unk1 5efd21a6
+transform loop   runtime 0x9DE587CE  raw unk1 ce87e59d
+transform exit   runtime 0x67A17368  raw unk1 6873a167
+bird N special   runtime 0x1192E91E  raw unk1 1ee99211
+```
+
+四个 Folder 的 body/wing NUANMB 文件均存在且非空。`0x9475130E` 也已在
+`2.c` registry 接到 `func_450`。因此不能通过替换 transform slot 来处理这次
+崩溃。
+
+### 决定性根因
+
+`func_450 → slot 0x23 → rebellion_transform_start()` 的首帧顺序是：
+
+```text
+global142 = 0xC2B19D13
+global143 = 2
+rebellion_install_bird_weapon_bar()
+...
+func_74(0x37, 0)
+```
+
+motion 播放前，MSC 已尝试绑定三个独立飞行 armsparam ID。目标文件曾被恢复
+为原版 8-row Param，因此三个 ID 全部缺失；这与“进入时、动画播放前立即崩”
+的时序完全吻合。`0xC2B19D13` flight speed row 则真实存在。
+
+另一 session 的首版 11-row Param 也会崩：三个低 CRC row 被追加到
+`0xFA64E4D0` 后，破坏了 native 查表所需的 unsigned ID 升序。roundtrip
+byte-identical 只能证明 builder 可逆，不能证明 native 接受无序表。
+
+### 最终修复
+
+1. `exvs2-json` 的 `copyParamEntry` / `upsertParamEntry` 改为 unsigned
+   `entryId` 有序插入，并加入回归测试。
+2. 安装 11-row sorted-fixed `armsparam.bin`，SHA-256：
+   `2388C188437646B25C397FFD27E0CBC86D43F356198671918C6952609DB7D406`。
+3. `rebellion_install_bird_weapon_bar()` 恢复独立绑定：
+   `0x77A3426B / 0x04DC0DEE / 0x233C4626 / 0x0D7FCDE2`。
+4. 鸟形态 `0x200` 改为 TV N 特格 action hash `0xC0B814FF`；Rebellion
+   单阶段 handler 先幂等拆鸟，再播放 Folder runtime `0x1192E91E`，motion
+   结束后退出。
+
+### 实机结论
+
+用户确认：
+
+- boost + 双击前进可正常进入飞行，不再崩溃；
+- 飞行形态特格可触发 `0xC0B814FF`；
+- 新 body+wing Folder `0x1192E91E` 正常播放。
+
+这同时验证了 Param row 顺序、MSC row 引用、鸟输入 selector、action registry
+和 motion Folder Runtime 五层接线。
+
+### 尚未移植
+
+- TV N 落地第二段 `0x63327DCF`；
+- 左右飞行特格 `0x8D96C52F / 0x279F0DA4`；
+- 左右收招、TV 专用 effect 与 SE。
+
+当前只可称为“已实机验证的 N 空中单阶段”，不能写成完整 TV `ALT_7` 移植。

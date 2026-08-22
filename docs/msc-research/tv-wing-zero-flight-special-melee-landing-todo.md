@@ -1,7 +1,7 @@
 # TODO：TV 飞形态特格落地 → Rebellion motion 包
 
 **Date:** 2026-08-17  
-**Status:** 等人复制 / 加翅膀 / 登记 Folder；**先不动 MSC**  
+**Status:** #1 N 空中 body+wing Folder 与单阶段 MSC 已实机通过；完整落地/左右仍待做
 **Pack:** `E:\XB\mod\003motion\wing_gundam_zero_rebellion_motion`  
 **对照清单:** [tv-wing-zero-flight-special-melee-landing-copy-list.md](./tv-wing-zero-flight-special-melee-landing-copy-list.md)
 
@@ -13,6 +13,14 @@
 - 子 clip：`unk1=00000000`，`unk2` 用 Rebellion 通道 id，不要抄 TV
 
 官方 TV Folder id（`0x72394A81` 等）**作废**。MSC `func_308` 以后写本页的新 CRC，不要再写 TV 原值。
+
+### 2026-08-22 实际 #1 Folder
+
+| 用途 | Folder | structure raw `unk1` | MSC Runtime | child |
+|------|--------|----------------------|-------------|-------|
+| N 空中单阶段 | `trans_te_motion_stk_air_fr_out` | `1ee99211` | `0x1192E91E` | body `9c5e24c7` + wing `c1a9c1f6` |
+
+CRC seed 是 `wing_gundam_zero_rebellion_motion_trans_te_motion_stk_air_fr_out`；CRC32 显示值为 `0x1EE99211`，写入 structure raw bytes 后，MSC/engine little-endian Runtime 是 `0x1192E91E`。不要把两者互换。
 
 ---
 
@@ -100,7 +108,7 @@ Folder  Name=<136..140>  unk1=<上表 LE>  unk3=2
 
 ### A. 复制并改名
 
-- [ ] #1 身体改名为 `wing_gundam_zero_rebellion_motion_40tkkneo2stk11a_stk_air_fr.nuanmb`
+- [x] #1 body `trans_te_motion_stk_air_fr_out_body.nuanmb`（源：`001hito_028gunwtv_..._40tkkneo2stk11a_stk_air_fr`）
 - [ ] #2 身体改名为 `wing_gundam_zero_rebellion_motion_40tkkneo2stk11a_stk_gnd_fr.nuanmb`
 - [ ] #3 身体改名为 `wing_gundam_zero_rebellion_motion_35tkkneo2kam_sht_air_lf.nuanmb`
 - [ ] #4 身体改名为 `wing_gundam_zero_rebellion_motion_35tkkneo2kam_sht_air_rt.nuanmb`
@@ -108,7 +116,7 @@ Folder  Name=<136..140>  unk1=<上表 LE>  unk3=2
 
 ### B. 翅膀（每组至少一条）
 
-- [ ] #1 wing `..._wing00_40tkkneo2stk11a_stk_air_fr.nuanmb`
+- [x] #1 wing `trans_te_motion_stk_air_fr_out_wing.nuanmb`
 - [ ] #2 wing `..._wing00_40tkkneo2stk11a_stk_gnd_fr.nuanmb`
 - [ ] #3 wing `..._wing00_35tkkneo2kam_sht_air_lf.nuanmb`
 - [ ] #4 wing `..._wing00_35tkkneo2kam_sht_air_rt.nuanmb`
@@ -132,9 +140,11 @@ Folder  Name=<136..140>  unk1=<上表 LE>  unk3=2
 
 ---
 
-## 5. 先不要做
+## 5. 当前 MSC 边界
 
-- 不要改 `0.c` 鸟 `0x200`，也不要注册 `0x8D96C52F` / `0x279F0DA4` / `0xC0B814FF`。
+- 已授权并完成：鸟 `0x200 → 0xC0B814FF`，`2.c` 注册 N 单阶段 handler，播放 `0x1192E91E`。
+- 已实机确认：新动作正常播放；有序 11-row armsparam 安装后，双击前进变形不再崩溃。
+- 不要注册左右 `0x8D96C52F` / `0x279F0DA4`，直到对应 Folder 与收招资源完成。
 - 不要在 `func_308` 里继续写 TV 旧 id。
 - 不要覆盖 `15flight11a` / `35flight11a` / `maenobori11a`。
 - 不要把 TV `482gwtvwing` 的 `unk2` 写进 Rebellion Folder。

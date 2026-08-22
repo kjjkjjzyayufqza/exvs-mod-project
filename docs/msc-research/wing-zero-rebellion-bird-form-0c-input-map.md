@@ -1,7 +1,7 @@
 # Wing Zero Rebellion：鸟形态输入映射（0.c only，对照 TV Zero）
 
 **Date:** 2026-08-14  
-**Status:** 实机确认主射已在鸟形态被挡住（0.c `func_143` 修正后）  
+**Status:** 主射、鸟近战、单阶段鸟特格 N 均已实机确认（2026-08-22）
 **Kind:** MSC form / input-map 规范（可复用）  
 **Primary trees:**
 
@@ -144,7 +144,7 @@ Rebellion 的 `func_143` 用 `global39 != 0`（或显式 `== 0x2`）进鸟分支
 | 普通形态 `global39 == 0` | 保留完整 `func_95` 表 |
 | 鸟形态 `0x1` 主射 | `0x476fac14` `ACTION_A_SHOT_BIRD`（空弹 `func_98(0)`）。**不要**接地面 `0x7cd11119`（`func_884` 会卸鸟挂件）。`2.c` 必须按 TV `ALT_2` 关对锁、禁止 `func_76(0x38)` |
 | 鸟形态近战 | **全部走 N**：`global48 & 0x3e` → `0x928ca34f` `func_937`。飞行中按格斗时 `func_81` 会清掉 `0x2`，必须连 `0x4/0x8/0x10/0x20` 一起收。不分流 `0x8b97920e`。拆鸟交给 `func_41`，不要抄 Delta 切模型 |
-| 鸟形态其它武装 | 仍不映射副射/特射/蓄力；`0x200` 仍是解除 `0xa02d57dc` |
+| 鸟形态其它武装 | 副射/特射/蓄力仍不映射；`0x200` → `0xC0B814FF` 单阶段鸟特格 N，handler 先拆鸟再播 `0x1192E91E` |
 | 可选保留 | partner/`0x400` + `0xc0000` 条件那条 |
 | 不在本文件做的事 | 不在 `2.c` `ACTION_*` 加 form `return` |
 
@@ -156,13 +156,13 @@ Rebellion 的 `func_143` 用 `global39 != 0`（或显式 `== 0x2`）进鸟分支
 - 相位结束用 `func_91()`，被打断才能离开 shoot / no_ammo。
 - 弹体仍是 `sys_4F(0, 0, 0x860a72cd)`。不要 `func_884`。
 
-TV 鸟分支（`global39 == 0x1`）会给 `0x100`/`0x200`/`0x80` 等换 **另一套 hash**；那是“有飞行武装”的完整产品。Rebellion 副射/特射/蓄力在没有对应 bird hash 之前仍用 **空映射** 硬禁；近战已接 `0x928ca34f`。武装表仍只改 `0.c` selector。
+TV 鸟分支（`global39 == 0x1`）会给 `0x100`/`0x200`/`0x80` 等换 **另一套 hash**。Rebellion 当前仅补了主射、近战与 N 特格：`0x200` 复用 TV action hash `0xC0B814FF`，但 `2.c` 是单阶段 target handler，只播放现有 body+wing Folder `0x1192E91E`；N 落地第二段、左右特格、TV effect/SE 尚未移植。副射/特射/蓄力继续空映射。武装表仍只改 `0.c` selector。
 
 受击 / 倒地走移植计划的 **FORCED_RECOVERY**。完整证据、hash 表、作废修法和 TV 对照见
 [飞行打断后动作≠形态](./wing-zero-rebellion-flight-interrupt-form.md)。
 
 - `func_15` 的 `var1` 中断块：鸟形态直接回站立 slot `0x2`，不要回 `0x18`。
-- `func_143` **禁止**在离开飞行动作后补交 `0x77b100ff`。鸟 `0x200` 仍是官方解除 `0xa02d57dc`。
+- `func_143` **禁止**在离开飞行动作后补交 `0x77b100ff`。鸟 `0x200` 现提交 `0xC0B814FF`；官方解除 `0xA02D57DC` 仍保留在 slot `0x19` 和其它恢复路径。
 - `2.c` `func_41`：`global143==2` 且当前动作不是 enter/loop/exit/鸟主射时，立刻拆 form。
 - `2.c` `func_882`（对应 TV `func_888` → `func_1077`）：鸟形态同样拆 form。
 
@@ -191,10 +191,12 @@ TV 鸟分支（`global39 == 0x1`）会给 `0x100`/`0x200`/`0x80` 等换 **另一
 | 形态 | 期望 |
 |------|------|
 | 普通 `global143==0` | 主射/副射/格斗正常 |
-| 鸟 `global143==0x2` | 主射进 `ACTION_A_SHOT_BIRD`；近战 `0x2` 进 `0x928ca34f` `func_937`（全 N）；副射/特射仍不从 thinker 进入；`0x200` 仍解除 |
+| 鸟 `global143==0x2` | 主射进 `ACTION_A_SHOT_BIRD`；近战 `0x2` 进 `0x928ca34f` `func_937`（全 N）；`0x200` 进 `0xC0B814FF` 单阶段鸟特格 N；副射/特射仍不从 thinker 进入 |
 | 变形进出 | form 清回 0 后武装恢复 |
 
 **2026-08-14：** 用户确认按 §4 修掉鸟分支 `0x1 → 0x7cd11119` 后，鸟形态主射已正确被挡。
+
+**2026-08-22：** 用户确认 `0x200 → 0xC0B814FF → 0x1192E91E` 可正常播放新 body+wing 动作；安装有序 11-row armsparam 后，boost + 双击前进进入飞行不再崩溃。
 
 ---
 

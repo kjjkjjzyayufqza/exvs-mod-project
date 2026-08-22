@@ -29,7 +29,10 @@ Before making code, asset, documentation, or command changes:
 When working on NUANMB / motion FBX import or homemade animation conversion,
 also read `docs/nuanmb-ath-helper-bone-policy.md`: **`ATH_*` helper bones must
 not be authored, edited, or converted** into custom motion files (omit whole
-Transform nodes; NUHLPB + rest only).
+Transform nodes; NUHLPB + rest only). When the Blender scene has a separate
+body armature and wing armature (`001hito` vs `410wzerowing`, `CENTER_RT` vs
+`LMAIN_1`), use skill `.cursor/skills/exvs2-body-wing-fbx-export/SKILL.md` and
+export two isolated `_out.fbx` files.
 
 Legacy per-topic note folders under `docs/` are a **separate, older workflow**
 (auxiliary reference only). Do not treat them as the primary task manager;
