@@ -33,7 +33,7 @@
 
 ```ts
 // pilotVoiceResourceKey: 反解成 "VO_0001_P01_0" 展示
-// 全空间只有 200 * 2 * 80 * 10 = 320,000 项，构建一次 Map 即可
+// Vanilla 空间是 work 0..199。自定义 stem（本次 VO_1000）要额外扫 900/1000。
 function buildVoiceKeyNames(): Map<number, string> {
   const map = new Map<number, string>();
   for (let work = 0; work < 200; work++) {
@@ -237,6 +237,24 @@ vs2 count：82 / 318 / 48。
 | `0x147BC38E` | `x64/091waveform/voice/dummy`（vrtbl 全表常量） |
 | `0x48B99707` | `x64/090sound/voicetable` → `vo_0001_p01_0_01.vot` |
 | `0x87D4809B` | `x64/091waveform/voice/pilot` → `VO_0001_P01_0_01_ST_01.nus3bank` |
+
+## Test Editor 落地（2026-08-23）
+
+索引链已经能在 Test Editor 里改，不要再做第二套前端解包/改表。
+
+| 包 | Test Editor | 备注 |
+|---|---|---|
+| `0x264D1CA7` | Raw Path ID | JSON 为准整表重建 `.vgsht1` |
+| `0x8C428AF2` | Pilot Voice Table | 新行全空；stem 只填 `voiceKey`/`streamPathId`；无 copy-from |
+| `0xDFD38C70` | Character List | `pilotPresentationHash` 走 DualValueProperty；高位 hash 按 int32 位型写回 u32 |
+| `0x5E92AAEC` | BGM Table | 独立 `.vgsht2`，**不是** 090sound 根包的 `bgmstemstable`。cue 名派生 CRC；`record_id` 升序插入；route 抄同组行 |
+| `0x0C568109` | Init only | group 6 `BGM_AC27_UPDATE_02` 的 `.nus3bank`。Test Editor 不解/改 nus3 内容，只 Unpack + Repack |
+
+`.nus3audio` / `.nus3bank` 加曲仍用 EXVS2-Audio-Editor。POC 里「没有 nus3bank 写入器」已过时。Character List 的 Primary/Secondary BGM 字段从工作区 BGM Table 选 `cueHash`。HUD `bgm_list`（`0xC91627E8`）尚未做。
+
+Sound FHM2D 解包在 Rust 里按 magic 命名（`apply_raw_path_id_names` → `apply_090sound_root_names`），前端只渲染。vrtbl stem 反查在 0..199 之外包含 work `900` 和 `1000`。
+
+闭环先例：机体 `900000004` ← `VO_1000_P01_0`（`voiceKey=0x80B7036E`），cue 复用 work 16 的 vot/bank。完整值表与约束见 `docs/agent-sessions/2026-08-23-custom-pilot-voice-vo-1000.md`。2026-08-23 游戏实测通过。
 
 ## 参考解析器
 

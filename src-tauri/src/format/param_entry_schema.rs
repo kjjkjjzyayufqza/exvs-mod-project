@@ -130,7 +130,7 @@ pub fn raw_u32_to_json_for_kind(kind: u32, raw: u32) -> Value {
     }
 }
 
-fn json_to_raw_u32_for_kind(kind: u32, v: &Value) -> Result<u32, String> {
+pub fn json_to_raw_u32_for_kind(kind: u32, v: &Value) -> Result<u32, String> {
     match kind {
         KIND_U32 => match v {
             Value::Number(n) => {

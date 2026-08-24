@@ -11,8 +11,9 @@ use crate::format::param_bin_format::{
 };
 use crate::format::param_entry_schema::{
     entry_row_matches_command_map, hash_and_kind_for_camel_key, is_hash_in_pool,
-    min_entry_data_size_for_specs, parse_commands_map_from_entry_row, raw_u32_to_json_for_kind,
-    snake_to_camel, validate_file_specs_kind_match_pool, ParamCommandPool, KIND_U32,
+    json_to_raw_u32_for_kind, min_entry_data_size_for_specs, parse_commands_map_from_entry_row,
+    raw_u32_to_json_for_kind, snake_to_camel, validate_file_specs_kind_match_pool,
+    ParamCommandPool, KIND_U32,
 };
 
 const KIND_STRING: u32 = 7;
@@ -208,10 +209,8 @@ pub fn characterlist_entry_from_json_value(v: &Value) -> Result<CharacterListEnt
                         hash_str.parse()
                     }
                     .map_err(|e| e.to_string())?;
-                    let raw = v_ex
-                        .as_u64()
-                        .map(|u| u as u32)
-                        .ok_or_else(|| format!("extraCommands.{hash_str}: expected u32"))?;
+                    let raw = json_to_raw_u32_for_kind(KIND_U32, v_ex)
+                        .map_err(|e| format!("extraCommands.{hash_str}: {e}"))?;
                     commands.insert(h, raw);
                 }
             }
@@ -225,18 +224,7 @@ pub fn characterlist_entry_from_json_value(v: &Value) -> Result<CharacterListEnt
                     commands.insert(h, n as u32);
                 }
             } else {
-                let raw = match knd {
-                    KIND_U32 => val.as_u64().map(|u| u as u32).ok_or("expected u32")?,
-                    2 => {
-                        let x = val.as_i64().ok_or("expected i32")?;
-                        i32::try_from(x).map_err(|_| "i32 out of range")? as u32
-                    }
-                    5 => {
-                        let f = val.as_f64().ok_or("expected f32")? as f32;
-                        f32::to_bits(f)
-                    }
-                    _ => val.as_u64().map(|u| u as u32).ok_or("expected number")?,
-                };
+                let raw = json_to_raw_u32_for_kind(knd, val).map_err(|e| format!("{k}: {e}"))?;
                 commands.insert(h, raw);
             }
         }
@@ -493,6 +481,21 @@ mod tests {
         let parsed = parse_characterlist(&source).expect("failed to parse character_list");
         let rebuilt = build_characterlist(&parsed).expect("failed to rebuild character_list");
         assert_eq!(rebuilt, source, "byte-exact roundtrip failed");
+    }
+
+    #[test]
+    fn characterlist_json_accepts_signed_pilot_presentation_hash() {
+        // DualValueProperty commits hashes via int32, so 0x80B7036E arrives as a
+        // negative JSON number. KIND_U32 must keep the same 32-bit pattern.
+        let expected: u32 = 0x80B7036E;
+        let json_val = json!({
+            "entryId": 900000004u32,
+            "pilotPresentationHash": expected as i32,
+        });
+        let entry = characterlist_entry_from_json_value(&json_val)
+            .expect("signed DualValueProperty hash should deserialize");
+        assert_eq!(entry.entry_id, 900000004);
+        assert_eq!(entry.commands.get(&0x3573AED2).copied(), Some(expected));
     }
 
     #[test]

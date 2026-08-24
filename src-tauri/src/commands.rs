@@ -244,6 +244,12 @@ pub fn nutexb_preview_base64(input_path: String) -> Result<String, String> {
     crate::nutexb_lib::nutexb_preview_base64(&input_path)
 }
 
+/// Recursively lists `.nutexb` files under `root` (skips `__convert` and dot-directories).
+#[tauri::command]
+pub fn list_nutexb_folder(root: String) -> Result<crate::nutexb_lib::NutexbFolderScan, String> {
+    crate::nutexb_lib::list_nutexb_folder(root.as_str())
+}
+
 /// Returns raw PNG bytes via IPC [`InvokeBody::Raw`] (no base64); prefer for large textures vs [`nutexb_png_base64`].
 #[tauri::command]
 pub fn nutexb_png_bytes(input_path: String) -> Result<Response, String> {
@@ -435,6 +441,27 @@ pub async fn card_icon_replace_from_png(
             nutexb_path.as_str(),
             convert_dir.as_str(),
             png_path.as_str(),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn image_to_nutexb(
+    image_path: String,
+    output_nutexb_path: String,
+    nutexb_name: String,
+    dds_format: String,
+    generate_mipmaps: bool,
+) -> Result<crate::nutexb_lib::SeriesImageReplaceSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::nutexb_lib::image_to_nutexb(
+            image_path.as_str(),
+            output_nutexb_path.as_str(),
+            nutexb_name.as_str(),
+            dds_format.as_str(),
+            generate_mipmaps,
         )
     })
     .await
@@ -2058,8 +2085,14 @@ fn validate_command_table_file_type(data: &[u8], file_type: &str) -> Result<(), 
         "characterlist" => {
             crate::format::characterlist::parse_characterlist(data)?;
         }
+        "bgmtable" => {
+            crate::format::bgm_table::parse_bytes(data)?;
+        }
         "serieslist" => {
             crate::format::serieslist::parse_serieslist(data)?;
+        }
+        "navilist" | "navi_list" => {
+            crate::format::navilist::parse_navilist_data(data)?;
         }
         "stagelist" => {
             crate::format::stagelist::parse_stagelist(data)?;
@@ -2170,8 +2203,17 @@ pub fn parse_typed_param_file(path: &str, param_type: &str) -> Result<Value, Str
         "characterlist" => {
             serde_json::to_value(crate::format::characterlist::parse_characterlist(&data)?)
         }
+        "bgmtable" => {
+            return crate::format::list_command_pool::list_data_to_json(
+                &crate::format::bgm_table::parse_bytes(&data)?,
+                crate::format::bgm_table::BGM_TABLE_COMMAND_POOL,
+            );
+        }
         "serieslist" => {
             return crate::format::serieslist::parse_serieslist(&data);
+        }
+        "navilist" | "navi_list" => {
+            return crate::format::navilist::parse_navilist(&data);
         }
         "stagelist" => {
             return crate::format::stagelist::parse_stagelist(&data);
@@ -2228,7 +2270,9 @@ pub fn build_typed_param_file(
                 serde_json::from_value(data_json).map_err(|e| e.to_string())?;
             crate::format::characterlist::build_characterlist(&d)?
         }
+        "bgmtable" => crate::format::bgm_table::build_sorted_bytes(&data_json)?,
         "serieslist" => crate::format::serieslist::build_serieslist(&data_json)?,
+        "navilist" | "navi_list" => crate::format::navilist::build_navilist(&data_json)?,
         "stagelist" => crate::format::stagelist::build_stagelist(&data_json)?,
         "characterparam" => {
             let d: crate::format::characterparam::CharacterParamData =
@@ -2318,6 +2362,122 @@ pub fn build_shl_file(file_json: Value, output_path: &str) -> Result<(), String>
         serde_json::from_value(file_json).map_err(|e| format!("Deserialize failed: {e}"))?;
     let bytes = crate::format::shl::build_shl(&file)?;
     fs::write(output_path, &bytes).map_err(|e| format!("Write failed: {e}"))
+}
+
+#[tauri::command]
+pub fn parse_raw_path_id_pack(folder_path: &str) -> Result<Value, String> {
+    let parsed = crate::format::raw_path_id::parse_pack(folder_path)?;
+    serde_json::to_value(&parsed).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[tauri::command]
+pub fn finalize_raw_path_id_entry(entry_json: Value) -> Result<Value, String> {
+    let input: crate::format::raw_path_id::FinalizeRawPathIdInput =
+        serde_json::from_value(entry_json).map_err(|e| format!("Deserialize failed: {e}"))?;
+    let entry = crate::format::raw_path_id::finalize_entry(input)?;
+    serde_json::to_value(&entry).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[tauri::command]
+pub fn derive_pilot_voice_source(voice_stem: &str) -> Result<Value, String> {
+    let entry = crate::format::raw_path_id::derive_pilot_voice_entry(voice_stem)?;
+    serde_json::to_value(&entry).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[tauri::command]
+pub fn build_raw_path_id_pack(
+    data_json: Value,
+    json_path: &str,
+    vgsht1_path: &str,
+) -> Result<Value, String> {
+    let document: crate::format::raw_path_id::RawPathIdDocument =
+        serde_json::from_value(data_json).map_err(|e| format!("Deserialize failed: {e}"))?;
+    let written = crate::format::raw_path_id::write_pack(&document, json_path, vgsht1_path)?;
+    serde_json::to_value(&written).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[tauri::command]
+pub fn parse_pilot_voice_resource_pack(folder_path: &str) -> Result<Value, String> {
+    let parsed = crate::format::pilot_voice_resource::parse_pack(folder_path)?;
+    serde_json::to_value(&parsed).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[tauri::command]
+pub fn finalize_pilot_voice_resource_entry(entry_json: Value) -> Result<Value, String> {
+    let record: crate::format::pilot_voice_resource::PilotVoiceResourceRecord =
+        serde_json::from_value(entry_json).map_err(|e| format!("Deserialize failed: {e}"))?;
+    let next = crate::format::pilot_voice_resource::apply_stem_keys(&record)?;
+    serde_json::to_value(&next).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[tauri::command]
+pub fn build_pilot_voice_resource_pack(
+    data_json: Value,
+    file_path: &str,
+) -> Result<Value, String> {
+    let table: crate::format::pilot_voice_resource::PilotVoiceResourceTable =
+        serde_json::from_value(data_json).map_err(|e| format!("Deserialize failed: {e}"))?;
+    let written = crate::format::pilot_voice_resource::write_pack(&table, file_path)?;
+    serde_json::to_value(&written).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[tauri::command]
+pub fn parse_bgm_table_pack(folder_path: &str) -> Result<Value, String> {
+    crate::format::bgm_table::parse_pack(folder_path)
+}
+
+#[tauri::command]
+pub fn finalize_bgm_table_entry(entry_json: Value, table_json: Value) -> Result<Value, String> {
+    crate::format::bgm_table::finalize_entry(&entry_json, &table_json)
+}
+
+#[tauri::command]
+pub fn build_bgm_table_pack(data_json: Value, file_path: &str) -> Result<Value, String> {
+    crate::format::bgm_table::write_pack(&data_json, file_path)
+}
+
+#[tauri::command]
+pub fn bgm_table_group_assets(bank_group: u32) -> Result<Value, String> {
+    let Some(assets) = crate::format::bgm_table::assets_for_bank_group(bank_group) else {
+        return Err(format!("No workspace assets registered for bank group {bank_group}"));
+    };
+    Ok(serde_json::json!({
+        "bankPackHash": assets.bank_pack_hash,
+        "audioRelative": assets.audio_relative,
+    }))
+}
+
+#[tauri::command]
+pub fn clone_fhm2d_pack(
+    source_path: String,
+    new_hash: u32,
+    output_fhm2d_path: String,
+) -> Result<Value, String> {
+    let cloned = crate::format::gui_pack_clone::clone_gui_pack_extract(
+        std::path::Path::new(&source_path),
+        new_hash,
+        std::path::Path::new(&output_fhm2d_path),
+        None,
+    )?;
+    serde_json::to_value(&cloned).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[tauri::command]
+pub async fn clone_character_gui_set(
+    request: crate::format::gui_pack_clone::CloneGuiSetRequest,
+) -> Result<crate::format::gui_pack_clone::CloneGuiSetResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::format::gui_pack_clone::clone_character_gui_set(request)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn list_workspace_gui_packs(
+    workspace_root: String,
+) -> Result<Vec<crate::format::gui_pack_clone::WorkspaceGuiPack>, String> {
+    crate::format::gui_pack_clone::list_workspace_gui_packs(std::path::Path::new(&workspace_root))
 }
 
 #[cfg(test)]

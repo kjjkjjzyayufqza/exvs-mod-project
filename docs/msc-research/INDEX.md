@@ -283,6 +283,7 @@ Existing research notes are not rewritten by this index.
   - `work/20260809-wing-zero-rebellion-transform-plan/evidence/E-007.md`
   - `work/20260809-wing-zero-rebellion-transform-plan/evidence/E-008.md`
   - `docs/agent-sessions/2026-08-13-msc-0c-function-pointer-offset-bug.md`
+  - `docs/agent-sessions/2026-08-23-wing-zero-flight-special-melee-debug.md`
 - **do_not:**
   - Do not unpack FHM2D for this case; named sources already exist.
   - Do not reopen the legacy '85 model assets missing' hash manifests.

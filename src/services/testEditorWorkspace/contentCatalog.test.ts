@@ -39,12 +39,17 @@ describe("workspace content catalog", () => {
     ["character-id-table", "list.character", "0x036B9E67", "character_id_table.bin"],
     ["character-list", "list.character", "0xDFD38C70", "character_list.bin"],
     ["series-list", "list.series", "0xB7367090", "series_list.bin"],
+    ["navi-list", "list.navi", "0x6FCC0FBA", "navi_list.bin"],
     ["character-cost", "param.for-outgame", "0xFF832E7F", null],
     ["card-icons", "gui.card-icons", "0x49235031", null],
     ["series-icons", "gui.series-icons", "0xA0253AA0", null],
     ["stage-list", "list.stage", "0xCE74091E", "stage_list.bin"],
     ["stage-icons-primary", "gui.stage-icons", "0x3CC8B10B", null],
     ["stage-icons-secondary", "gui.stage-icons", "0x0CEE3991", null],
+    ["raw-path-id", "unit.sound", "0x264D1CA7", null],
+    ["pilot-voice-resource", "unit.sound", "0x8C428AF2", "pilotvoiceresourcetable.vrtbl"],
+    ["bgm-table", "unit.sound", "0x5E92AAEC", "bgm_table.vgsht2"],
+    ["bgm-bank-update-02", "unit.sound", "0x0C568109", null],
   ] as const)("defines %s", (id, routeId, hashHex, relativeFilePath) => {
     expect(getWorkspaceContentDescriptor(id)).toMatchObject({
       id,
@@ -116,5 +121,75 @@ describe("workspace content catalog", () => {
     );
     expect(result.sourceLayout).toBe("legacy");
     expect(result.writable).toBe(false);
+  });
+
+  it("resolves Raw Path ID under 090sound/raw_path_id", async () => {
+    withExistingPaths([]);
+
+    const result = await resolveWorkspaceContent(
+      "E:/workspace",
+      DEFAULT_TEST_EDITOR_WORKSPACE,
+      "raw-path-id",
+    );
+
+    expect(result.descriptor.defaultPackName).toBe("raw_path_id");
+    expect(result.configured.folderPath).toBe("E:/workspace/090sound/raw_path_id");
+    expect(result.configured.structureJsonPath).toBe(
+      "E:/workspace/090sound/raw_path_id_structure.json",
+    );
+    expect(result.configured.packKey).toBe("090sound/raw_path_id");
+    expect(result.sourceLayout).toBe("missing");
+  });
+
+  it("resolves Pilot Voice Table under 090sound/090sound", async () => {
+    withExistingPaths([]);
+
+    const result = await resolveWorkspaceContent(
+      "E:/workspace",
+      DEFAULT_TEST_EDITOR_WORKSPACE,
+      "pilot-voice-resource",
+    );
+
+    expect(result.descriptor.defaultPackName).toBe("090sound");
+    expect(result.configured.folderPath).toBe("E:/workspace/090sound/090sound");
+    expect(result.configured.filePath).toBe(
+      "E:/workspace/090sound/090sound/pilotvoiceresourcetable.vrtbl",
+    );
+    expect(result.configured.structureJsonPath).toBe(
+      "E:/workspace/090sound/090sound_structure.json",
+    );
+    expect(result.sourceLayout).toBe("missing");
+  });
+
+  it("resolves BGM Table under 090sound/bgm_table", async () => {
+    withExistingPaths([]);
+
+    const result = await resolveWorkspaceContent(
+      "E:/workspace",
+      DEFAULT_TEST_EDITOR_WORKSPACE,
+      "bgm-table",
+    );
+
+    expect(result.descriptor.defaultPackName).toBe("bgm_table");
+    expect(result.configured.folderPath).toBe("E:/workspace/090sound/bgm_table");
+    expect(result.configured.filePath).toBe(
+      "E:/workspace/090sound/bgm_table/bgm_table.vgsht2",
+    );
+    expect(result.sourceLayout).toBe("missing");
+  });
+
+  it("resolves BGM AC27 Update 02 bank under 090sound/bgm_ac27_update_02", async () => {
+    withExistingPaths([]);
+
+    const result = await resolveWorkspaceContent(
+      "E:/workspace",
+      DEFAULT_TEST_EDITOR_WORKSPACE,
+      "bgm-bank-update-02",
+    );
+
+    expect(result.descriptor.defaultPackName).toBe("bgm_ac27_update_02");
+    expect(result.configured.folderPath).toBe("E:/workspace/090sound/bgm_ac27_update_02");
+    expect(result.configured.filePath).toBeNull();
+    expect(result.sourceLayout).toBe("missing");
   });
 });

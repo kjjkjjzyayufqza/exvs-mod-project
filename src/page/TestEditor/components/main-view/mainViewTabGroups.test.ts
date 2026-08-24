@@ -19,6 +19,37 @@ describe("mainViewTabGroups", () => {
     expect(grouped.map((group) => group.id)).toEqual(MAIN_VIEW_TAB_GROUP_ORDER);
   });
 
+  it("places Navi List under Character after Series List", () => {
+    const tab = MAIN_VIEW_TAB_META.find((entry) => entry.value === "navi-list");
+    expect(tab).toMatchObject({ group: "character", name: "Navi List" });
+    const characterTabs = MAIN_VIEW_TAB_META.filter((entry) => entry.group === "character").map((entry) => entry.value);
+    expect(characterTabs).toEqual([
+      "character-id-table",
+      "character-cost",
+      "character-list",
+      "series-list",
+      "navi-list",
+    ]);
+  });
+
+  it("places Raw Path ID under Sound", () => {
+    const tab = MAIN_VIEW_TAB_META.find((entry) => entry.value === "raw-path-id");
+    expect(tab).toMatchObject({ group: "sound", name: "Voice file path" });
+    expect(MAIN_VIEW_TAB_GROUP_ORDER).toContain("sound");
+  });
+
+  it("places Pilot Voice Table under Sound", () => {
+    const tab = MAIN_VIEW_TAB_META.find((entry) => entry.value === "pilot-voice-resource");
+    expect(tab).toMatchObject({ group: "sound", name: "Voice slot" });
+  });
+
+  it("places BGM Table under Sound after Voice slot", () => {
+    const tab = MAIN_VIEW_TAB_META.find((entry) => entry.value === "bgm-table");
+    expect(tab).toMatchObject({ group: "sound", name: "BGM table" });
+    const soundTabs = MAIN_VIEW_TAB_META.filter((entry) => entry.group === "sound").map((entry) => entry.value);
+    expect(soundTabs).toEqual(["raw-path-id", "pilot-voice-resource", "bgm-table"]);
+  });
+
   it("keeps Param Editor mounted after the first visit even without unsaved changes", () => {
     expect(shouldKeepMainViewTabMounted("param-editor", false, false)).toBe(true);
     expect(shouldKeepMainViewTabMounted("interaction-editor", false, false)).toBe(true);

@@ -9,6 +9,8 @@ export const DialogLastPathKey = {
   ssbhPreviewOpenModelFolder: "ssbhPreview.openModelFolder",
   ssbhPreviewOpenNumdlb: "ssbhPreview.openNumdlb",
   ssbhPreviewOpenFhm2dMemory: "ssbhPreview.openFhm2dMemory",
+  miscFhm2dImageView: "miscTools.fhm2dImageView",
+  miscNutexbView: "miscTools.nutexbView",
   ssbhPreviewOpenNuanmb: "ssbhPreview.openNuanmb",
   ssbhPreviewOpenMotionFolder: "ssbhPreview.openMotionFolder",
   ssbhPreviewOpenMotionFbx: "ssbhPreview.openMotionFbx",

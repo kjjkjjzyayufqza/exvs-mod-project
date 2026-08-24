@@ -211,6 +211,24 @@ TV 鸟分支（`global39 == 0x1`）会给 `0x100`/`0x200`/`0x80` 等换 **另一
 
 **2026-08-22：** 用户确认 `0x200 → 0xC0B814FF → 0x1192E91E` 可正常播放新 body+wing 动作；安装有序 11-row armsparam 后，boost + 双击前进进入飞行不再崩溃。
 
+**2026-08-23 隔离诊断：** 三个鸟特格 hash直接别名到完整 `ACTION_AC_SPECIAL_SHOT`，并同步正常特射selector后，用户确认能完整执行特射；但该组合会原地制动、切普通形态，不能证明 `(1,4,9)`有错，因为handler与selector同时变化。恢复custom `func_488/func_502`后即使使用特射selector仍只执行1帧，锁定custom框架为独立问题。当前恢复TV特格类别 `(1,4,9)`以继承惯性，动作持续改由 `func_586/func_593`负责。
+
+同日继续隔离：三个方向进入 `func_586/func_593`单阶段probe，分别播放 `0x1192E91E/0x99ED237A/0x728EFF43`。三个hash重新加入bird allowlist，首段保持`global143=2`与飞行惯性，motion结束后才恢复普通形态；待实机确认。
+
+首次惯性probe仍立即恢复普通形态，说明target normal body/wing Folder在当前bird视觉owner上启动失败并快速进入EXIT。probe现于`func_593`首段先调用“恢复普通视觉但保留form”的adapter，刷新`global20`后再播；结束判断还要求motion时间至少进入第1帧，避免旧end flag。
+
+**2026-08-23 TV源码复核后的最终回归：** 上述`func_593`/特射probe均已删除。TV事实为：三个hash使用`(1,4,9)`；`func_41`不按hash拆form；ALT_5/ALT_7使用`func_488/func_502`；自然`func_1077`会恢复normal form/model/speed/owner，但不会清`global24 & 0x4000`或调用`func_296(...,0)`。Target现恢复同一ownership：三hash在bird allowlist，前后首段入口与左右收招调用不清惯性的target自然adapter，FORCED_RECOVERY只用于真正中断。
+
+**2026-08-23 用户指定基线：** 为停止多变量调试，三方向hash暂时全部注册到e9239b5单阶段handler，只播放`0x1192E91E`。三个hash从bird allowlist移除，handler按旧实现先FORCED_RECOVERY，再由`func_91()`等待唯一motion结束；方向分流、落地B和左右收招均不可达。
+
+基线下一步仅恢复ALT_7三段callback接线：三个方向仍共享同一handler，先播`0x1192E91E`，A结束后等待`!func_287(0x3ED)`接地判断，再播`0x33B742CD`；左右独立motion仍不可达。
+
+实机发现接地判断只在wait阶段导致A即使已碰地仍播完。现将`!func_287(0x3ED)`前移到A callback逐帧检查：A期间接地立即清`0x1000000`并转段，使第三阶段选择B；空中自然播完仍进入wait。
+
+前移后实机仍无效；源码确认`func_287(0x3ED)`仅等于`sys_0(0x30000)==1`，飞行控制持有期间视觉碰地不一定更新该state。A与wait现改用本机/TV其它落地动作的组合谓词：`sys_0(0x80002) || sys_0(0x30000) != 1`。
+
+组合谓词实机在空中误触发并导致无B退出，已撤销。当前按TV时序在A第18帧转wait；wait先关闭飞行移动，再只等待`!func_287(0x3ED)`。Target不采用TV第24帧超时，避免尚未接地时走air fallback退出。
+
 ---
 
 ## 6. 给后续 Agent 的硬规则

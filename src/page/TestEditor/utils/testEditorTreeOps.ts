@@ -256,12 +256,14 @@ export function getDirtyPackFromPath(
   rootPath: string,
   nodeIsDirectory: boolean | undefined,
   document: TestEditorWorkspaceDocument,
+  structureJsonPathKeys?: ReadonlySet<string>,
 ): WorkspacePackIdentity | null {
   return classifyWorkspacePackPath({
     workspaceRoot: rootPath,
     nodePath,
     nodeIsDirectory,
     document,
+    structureJsonPathKeys,
   });
 }
 

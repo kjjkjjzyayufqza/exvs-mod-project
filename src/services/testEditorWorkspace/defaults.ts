@@ -63,6 +63,11 @@ export const DEFAULT_TEST_EDITOR_WORKSPACE: TestEditorWorkspaceDocument = Object
       kind: "fhm2d-pack",
       label: "Stage List",
     }),
+    "list.navi": freezeRoute({
+      prefix: "012list",
+      kind: "fhm2d-pack",
+      label: "Navi List",
+    }),
     "gui.card-icons": freezeRoute({
       prefix: "009gui",
       kind: "fhm2d-pack",

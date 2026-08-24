@@ -103,4 +103,23 @@ describe("getDirtyPackFromPath", () => {
       "E:/workspace/002chara/0xBDBE6FEA_structure.json",
     );
   });
+
+  it("classifies nested 009gui extract changes against the leaf pack, not image", () => {
+    const keys = new Set([
+      "e:/workspace/009gui/image/pilot/vs_p_l/wing_gundam_zero_rebellion_image_vs_p_l_016_001_c01_structure.json",
+    ]);
+    const identity = getDirtyPackFromPath(
+      "E:/workspace/009gui/image/pilot/vs_p_l/wing_gundam_zero_rebellion_image_vs_p_l_016_001_c01/VS_P_L.nutexb",
+      "E:/workspace",
+      false,
+      DEFAULT_TEST_EDITOR_WORKSPACE,
+      keys,
+    );
+    expect(identity?.packKey).toBe(
+      "009gui/image/pilot/vs_p_l/wing_gundam_zero_rebellion_image_vs_p_l_016_001_c01",
+    );
+    expect(identity?.structureJsonPath).toBe(
+      "E:/workspace/009gui/image/pilot/vs_p_l/wing_gundam_zero_rebellion_image_vs_p_l_016_001_c01_structure.json",
+    );
+  });
 });

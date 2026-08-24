@@ -68,6 +68,40 @@ describe("parseWorkspacePackNodeTarget", () => {
       ),
     ).toBeNull();
   });
+
+  it("resolves a nested 009gui extract folder when its sibling structure JSON is indexed", () => {
+    const packFolder =
+      "E:/workspace/009gui/image/pilot/vs_p_l/wing_gundam_zero_rebellion_image_vs_p_l_016_001_c01";
+    const structureJson = `${packFolder}_structure.json`;
+    const keys = new Set([structureJson.replace(/\\/g, "/").toLowerCase()]);
+    const target = parseWorkspacePackNodeTarget(
+      dir(packFolder),
+      "E:/workspace",
+      DEFAULT_TEST_EDITOR_WORKSPACE,
+      keys,
+    );
+    expect(target).toMatchObject({
+      packKey:
+        "009gui/image/pilot/vs_p_l/wing_gundam_zero_rebellion_image_vs_p_l_016_001_c01",
+      folderPath: packFolder,
+      structureJsonPath: structureJson,
+    });
+  });
+
+  it("resolves a nested 009gui structure JSON to the extract folder", () => {
+    const packFolder =
+      "E:/workspace/009gui/image/pilot/vs_p_l/wing_gundam_zero_rebellion_image_vs_p_l_016_001_c01";
+    const structureJson = `${packFolder}_structure.json`;
+    const keys = new Set([structureJson.replace(/\\/g, "/").toLowerCase()]);
+    const target = parseWorkspacePackNodeTarget(
+      file(structureJson),
+      "E:/workspace",
+      DEFAULT_TEST_EDITOR_WORKSPACE,
+      keys,
+    );
+    expect(target?.folderPath).toBe(packFolder);
+    expect(target?.structureJsonPath).toBe(structureJson);
+  });
 });
 
 describe("collectStructureJsonPathKeys", () => {

@@ -35,6 +35,25 @@ describe("fhm2dInitExtractPaths", () => {
     );
   });
 
+  it("maps Navi List to 012list/navi_list", () => {
+    const route = resolveInitRouteTarget("list.navi");
+    expect(route.routePrefix).toBe("012list");
+
+    const out = buildFhm2dInitExtractOutput({
+      exportRoot: "E:/XB/mod",
+      routeId: route.routeId,
+      routePrefix: route.routePrefix,
+      packName: "navi_list",
+      hashHex: "0x6FCC0FBA",
+    });
+
+    expect(out.relativeFolderPath).toBe("012list/navi_list");
+    expect(out.folderPath.replace(/\\/g, "/")).toBe("E:/XB/mod/012list/navi_list");
+    expect(out.repackOutputPath?.replace(/\\/g, "/")).toBe(
+      "E:/XB/mod/012list/0x6FCC0FBA.fhm2d",
+    );
+  });
+
   it("maps Series List to 012list/series_list", () => {
     const route = resolveInitRouteTarget("list.series");
     const packName = defaultInitPackName("0xB7367090", {
@@ -96,6 +115,59 @@ describe("fhm2dInitExtractPaths", () => {
     );
     expect(out.repackOutputPath?.replace(/\\/g, "/")).toBe(
       "E:/XB/mod/006effect/0x1587139A.fhm2d",
+    );
+  });
+
+  it("maps Raw Path ID to 090sound/raw_path_id", () => {
+    const route = resolveInitRouteTarget("unit.sound");
+    expect(route.routePrefix).toBe("090sound");
+
+    const out = buildFhm2dInitExtractOutput({
+      exportRoot: "E:/XB/mod",
+      routeId: route.routeId,
+      routePrefix: route.routePrefix,
+      packName: "raw_path_id",
+      hashHex: "0x264D1CA7",
+    });
+
+    expect(out.relativeFolderPath).toBe("090sound/raw_path_id");
+    expect(out.folderPath.replace(/\\/g, "/")).toBe("E:/XB/mod/090sound/raw_path_id");
+    expect(out.structureJsonPath.replace(/\\/g, "/")).toBe(
+      "E:/XB/mod/090sound/raw_path_id_structure.json",
+    );
+    expect(out.repackOutputPath?.replace(/\\/g, "/")).toBe(
+      "E:/XB/mod/090sound/0x264D1CA7.fhm2d",
+    );
+  });
+
+  it("maps Pilot Voice Table to 090sound/090sound", () => {
+    const route = resolveInitRouteTarget("unit.sound");
+    const out = buildFhm2dInitExtractOutput({
+      exportRoot: "E:/XB/mod",
+      routeId: route.routeId,
+      routePrefix: route.routePrefix,
+      packName: "090sound",
+      hashHex: "0x8C428AF2",
+    });
+    expect(out.relativeFolderPath).toBe("090sound/090sound");
+    expect(out.folderPath.replace(/\\/g, "/")).toBe("E:/XB/mod/090sound/090sound");
+    expect(out.repackOutputPath?.replace(/\\/g, "/")).toBe(
+      "E:/XB/mod/090sound/0x8C428AF2.fhm2d",
+    );
+  });
+
+  it("maps BGM Table to 090sound/bgm_table", () => {
+    const route = resolveInitRouteTarget("unit.sound");
+    const out = buildFhm2dInitExtractOutput({
+      exportRoot: "E:/XB/mod",
+      routeId: route.routeId,
+      routePrefix: route.routePrefix,
+      packName: "bgm_table",
+      hashHex: "0x5E92AAEC",
+    });
+    expect(out.relativeFolderPath).toBe("090sound/bgm_table");
+    expect(out.repackOutputPath?.replace(/\\/g, "/")).toBe(
+      "E:/XB/mod/090sound/0x5E92AAEC.fhm2d",
     );
   });
 

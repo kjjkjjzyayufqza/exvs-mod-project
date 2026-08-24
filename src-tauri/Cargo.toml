@@ -147,6 +147,30 @@ name = "exvs_common_bundle_test"
 path = "tests/exvs_common_bundle_test.rs"
 
 [[test]]
+name = "raw_path_id_format_test"
+path = "tests/raw_path_id_format_test.rs"
+
+[[test]]
+name = "pilot_voice_resource_format_test"
+path = "tests/pilot_voice_resource_format_test.rs"
+
+[[test]]
+name = "characterlist_json_signed_hash_test"
+path = "tests/characterlist_json_signed_hash_test.rs"
+
+[[test]]
+name = "bgm_table_format_test"
+path = "tests/bgm_table_format_test.rs"
+
+[[test]]
+name = "gui_pack_clone_test"
+path = "tests/gui_pack_clone_test.rs"
+
+[[test]]
+name = "image_to_nutexb_test"
+path = "tests/image_to_nutexb_test.rs"
+
+[[test]]
 name = "effect_folder_real_data_test"
 path = "tests/effect_folder_real_data_test.rs"
 
@@ -214,6 +238,7 @@ tempfile = "3"
 uuid = { version = "1", features = ["v4"] }
 rayon = "1.10"
 chull = "0.2.4"
+sha1 = "0.10"
 sha2 = "0.10"
 
 # --- Build profiles -------------------------------------------------------
@@ -353,8 +378,6 @@ required-features = ["nuanmb-examples"]
 name = "nuanmb_dump_rot_hdr"
 path = "examples/nuanmb_dump_rot_hdr.rs"
 required-features = ["nuanmb-examples"]
-
-
 
 
 

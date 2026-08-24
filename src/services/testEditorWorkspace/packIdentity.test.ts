@@ -106,4 +106,53 @@ describe("classifyWorkspacePackPath", () => {
     expect(identity?.routeId).toBeNull();
     expect(identity?.packKey).toBe("012list/0x036B9E67");
   });
+
+  it("classifies nested GUI structure JSON without treating image as the pack", () => {
+    expect(
+      classify(
+        "E:/workspace/009gui/image/pilot/vs_p_l/wing_gundam_zero_rebellion_image_vs_p_l_016_001_c01_structure.json",
+      ),
+    ).toMatchObject({
+      packKey:
+        "009gui/image/pilot/vs_p_l/wing_gundam_zero_rebellion_image_vs_p_l_016_001_c01",
+      prefix: "009gui/image/pilot/vs_p_l",
+      hashFolderName: "wing_gundam_zero_rebellion_image_vs_p_l_016_001_c01",
+      folderPath:
+        "E:/workspace/009gui/image/pilot/vs_p_l/wing_gundam_zero_rebellion_image_vs_p_l_016_001_c01",
+      structureJsonPath:
+        "E:/workspace/009gui/image/pilot/vs_p_l/wing_gundam_zero_rebellion_image_vs_p_l_016_001_c01_structure.json",
+    });
+  });
+
+  it("uses the deepest sibling structure JSON when classifying nested GUI files", () => {
+    const keys = new Set([
+      "e:/workspace/009gui/image/pilot/vs_p_l/wing_gundam_zero_rebellion_image_vs_p_l_016_001_c01_structure.json",
+    ]);
+    const identity = classifyWorkspacePackPath({
+      workspaceRoot: "E:/workspace",
+      nodePath:
+        "E:/workspace/009gui/image/pilot/vs_p_l/wing_gundam_zero_rebellion_image_vs_p_l_016_001_c01/VS_P_L.nutexb",
+      nodeIsDirectory: false,
+      document: DEFAULT_TEST_EDITOR_WORKSPACE,
+      structureJsonPathKeys: keys,
+    });
+    expect(identity?.packKey).toBe(
+      "009gui/image/pilot/vs_p_l/wing_gundam_zero_rebellion_image_vs_p_l_016_001_c01",
+    );
+    expect(identity?.folderPath).toBe(
+      "E:/workspace/009gui/image/pilot/vs_p_l/wing_gundam_zero_rebellion_image_vs_p_l_016_001_c01",
+    );
+  });
+
+  it("keeps character inner folders from stealing the pack when structure JSON keys exist", () => {
+    const keys = new Set(["e:/workspace/002chara/0xbdbe6fea_structure.json"]);
+    const identity = classifyWorkspacePackPath({
+      workspaceRoot: "E:/workspace",
+      nodePath: "E:/workspace/002chara/0xBDBE6FEA/001/body.numdlb",
+      nodeIsDirectory: false,
+      document: DEFAULT_TEST_EDITOR_WORKSPACE,
+      structureJsonPathKeys: keys,
+    });
+    expect(identity?.packKey).toBe("002chara/0xBDBE6FEA");
+  });
 });

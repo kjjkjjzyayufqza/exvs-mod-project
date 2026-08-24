@@ -94,7 +94,12 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
   const depth = node.level;
   const indentPadding = depth * 12;
 
-  const packTarget = parseWorkspacePackNodeTarget(node.data, currentDir, workspaceDocument);
+  const packTarget = parseWorkspacePackNodeTarget(
+    node.data,
+    currentDir,
+    workspaceDocument,
+    structureJsonPathKeys,
+  );
   const isPackDirty = Boolean(packTarget && dirtyPackKeys.has(packTarget.packKey));
   const isStarred = starredPathSet.has(normalizePathForStar(node.data.path));
 

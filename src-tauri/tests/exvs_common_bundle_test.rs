@@ -1,9 +1,10 @@
 use app_lib::format::exvs_common::{
     add_common_shl_model_record, add_exvs_common_model, add_exvs_common_texture,
-    classify_common_resource, extract_exvs_common_bundle_impl, materialize_exvs_common_extraction,
-    remove_common_shl_model_records, remove_exvs_common_model, remove_exvs_common_texture,
-    repack_exvs_common_bundle_impl, resolve_exvs_common_bundle_paths, validate_exvs_common_bundle,
-    CommonResourceKind, EXVS_COMMON_HASH_NAME, EXVS_COMMON_NEW_MODEL_TYPE, EXVS_COMMON_PACKAGE_NAME,
+    classify_common_resource, extract_exvs_common_bundle_impl, install_repacked_mod_output,
+    materialize_exvs_common_extraction, remove_common_shl_model_records, remove_exvs_common_model,
+    remove_exvs_common_texture, repack_exvs_common_bundle_impl, resolve_exvs_common_bundle_paths,
+    validate_exvs_common_bundle, CommonResourceKind, EXVS_COMMON_HASH_NAME,
+    EXVS_COMMON_NEW_MODEL_TYPE, EXVS_COMMON_PACKAGE_NAME,
 };
 use app_lib::format::fhm2d::Fhm2dFormat;
 use app_lib::format::fhm2d::{InMemoryFhm2dExtraction, InMemoryFhm2dFile};
@@ -49,6 +50,35 @@ fn common_paths_are_fixed_to_the_singleton_package() {
     );
     assert_eq!(EXVS_COMMON_HASH_NAME, "0xCB665375");
     assert_eq!(EXVS_COMMON_PACKAGE_NAME, "000common_000common_001");
+}
+
+#[test]
+fn common_repack_overwrites_existing_mod_output_without_backup() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    let output = temp.path().join("0xCB665375.fhm2d");
+    std::fs::write(&output, b"old-common").expect("write existing mod output");
+    let staging_dir = temp.path().join(".exvs-common-repack-stage");
+    std::fs::create_dir(&staging_dir).expect("create staging dir");
+    let staging = staging_dir.join("0xCB665375.fhm2d");
+    std::fs::write(&staging, b"new-common").expect("write staging output");
+
+    install_repacked_mod_output(&staging, &output).expect("overwrite existing mod output");
+
+    assert_eq!(
+        std::fs::read(&output).expect("read overwritten output"),
+        b"new-common"
+    );
+    assert!(!staging.exists());
+    let leftover: Vec<String> = std::fs::read_dir(temp.path())
+        .expect("read mod parent")
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.contains("_backup_"))
+        .collect();
+    assert!(
+        leftover.is_empty(),
+        "repack must not leave backup files: {leftover:?}"
+    );
 }
 
 #[test]

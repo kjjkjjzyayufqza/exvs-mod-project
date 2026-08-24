@@ -185,14 +185,19 @@ function FileTreePaneImpl({
         toast.error("No workspace root selected");
         return;
       }
-      const target = parseWorkspacePackNodeTarget(node, currentDir, workspaceDocument);
+      const target = parseWorkspacePackNodeTarget(
+        node,
+        currentDir,
+        workspaceDocument,
+        structureJsonPathKeys,
+      );
       if (!target) {
         toast.error("Cannot resolve workspace pack target");
         return;
       }
       onRequestFhm2dRepack(target);
     },
-    [currentDir, onRequestFhm2dRepack, workspaceDocument],
+    [currentDir, onRequestFhm2dRepack, structureJsonPathKeys, workspaceDocument],
   );
 
   const fileTreeNodeRowCtx = useMemo<FileTreeNodeRowContext>(

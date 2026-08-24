@@ -8,24 +8,6 @@ export function normalizeStructureJsonPathKey(path: string): string {
   return path.trim().replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 }
 
-function parentPathOf(rawPath: string): string | null {
-  const trimmed = rawPath.replace(/[\\/]+$/, "");
-  const lastSlash = trimmed.lastIndexOf("/");
-  const lastBackslash = trimmed.lastIndexOf("\\");
-  const idx = Math.max(lastSlash, lastBackslash);
-  if (idx < 0) return null;
-
-  const parent = trimmed.slice(0, idx);
-  if (/^[a-zA-Z]:$/.test(parent)) return `${parent}\\`;
-  if (parent === "" && trimmed.startsWith("/")) return "/";
-  return parent;
-}
-
-function joinSiblingPath(parentPath: string, fileName: string): string {
-  const separator = parentPath.includes("\\") ? "\\" : "/";
-  return `${parentPath.replace(/[\\/]+$/, "")}${separator}${fileName}`;
-}
-
 function structureBaseName(fileName: string): string | null {
   const lower = fileName.toLowerCase();
   if (!lower.endsWith(STRUCTURE_JSON_SUFFIX)) return null;
@@ -37,6 +19,7 @@ export function parseWorkspacePackNodeTarget(
   node: TestTreeNode,
   workspaceRoot: string | undefined,
   document: TestEditorWorkspaceDocument,
+  structureJsonPathKeys?: ReadonlySet<string>,
 ): WorkspacePackIdentity | null {
   if (!workspaceRoot) return null;
 
@@ -46,6 +29,7 @@ export function parseWorkspacePackNodeTarget(
       nodePath: node.path,
       nodeIsDirectory: true,
       document,
+      structureJsonPathKeys,
     });
     if (!identity) return null;
     return normalizeStructureJsonPathKey(identity.folderPath) === normalizeStructureJsonPathKey(node.path)
@@ -53,16 +37,13 @@ export function parseWorkspacePackNodeTarget(
       : null;
   }
 
-  const baseName = structureBaseName(node.name);
-  if (!baseName) return null;
-  const parentPath = parentPathOf(node.path);
-  if (!parentPath) return null;
-  const syntheticFolderPath = joinSiblingPath(parentPath, baseName);
+  if (!structureBaseName(node.name)) return null;
   const identity = classifyWorkspacePackPath({
     workspaceRoot,
-    nodePath: syntheticFolderPath,
-    nodeIsDirectory: true,
+    nodePath: node.path,
+    nodeIsDirectory: false,
     document,
+    structureJsonPathKeys,
   });
   if (!identity) return null;
   return normalizeStructureJsonPathKey(identity.structureJsonPath) === normalizeStructureJsonPathKey(node.path)

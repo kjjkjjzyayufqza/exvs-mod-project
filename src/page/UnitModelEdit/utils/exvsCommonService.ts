@@ -63,7 +63,6 @@ export interface ExvsCommonMutationResult {
 
 export interface ExvsCommonRepackResult extends UnitModelRepackResult {
   warnings: string[];
-  backupOutputPath: string | null;
 }
 
 export function isExvsCommonStructure(structureJson: unknown): boolean {

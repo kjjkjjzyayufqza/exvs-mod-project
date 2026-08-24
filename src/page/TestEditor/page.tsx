@@ -25,6 +25,7 @@ import {
 } from "./utils/testEditorTreeOps";
 import { useTestEditorPageActive } from "./hooks/useTestEditorPageActive";
 import { useTestEditorFolderWatch } from "./hooks/useTestEditorFolderWatch";
+import { collectStructureJsonPathKeys, normalizeStructureJsonPathKey } from "./components/fileTreeNodeRowUtils";
 import { TestEditorWorkspaceArea } from "./components/TestEditorWorkspaceArea";
 import { TEST_EDITOR_FOLDER_STORE_KEY, useConfigStore } from "@/store/configStore";
 import { TestEditorToolbar } from "./components/TestEditorToolbar";
@@ -122,6 +123,8 @@ const TestEditorPage = () => {
   const [obModPath, setObModPath] = useState("");
   const isPageActive = useTestEditorPageActive();
   const workspaceLayout = useTestEditorWorkspace(currentDir || null);
+  const treeDataRef = useRef<TestTreeNode[]>([]);
+  treeDataRef.current = treeData;
   const workspaceDocumentRef = useRef<TestEditorWorkspaceDocument>(workspaceLayout.document);
   useEffect(() => {
     workspaceDocumentRef.current = workspaceLayout.document;
@@ -188,10 +191,20 @@ const TestEditorPage = () => {
 
     const nextDirty = new Map<string, WorkspacePackIdentity>();
     const workspaceDocument = workspaceDocumentRef.current;
+    const structureJsonPathKeys = collectStructureJsonPathKeys(treeDataRef.current);
     queued.forEach((payload) => {
       payload.ops?.forEach((op) => {
         const isDir = (op.node as { isDir?: boolean; is_dir?: boolean }).isDir ?? (op.node as { is_dir?: boolean }).is_dir;
-        const pack = getDirtyPackFromPath(op.node.path, currentDir, isDir, workspaceDocument);
+        if (!isDir && op.node.name.toLowerCase().endsWith("_structure.json")) {
+          structureJsonPathKeys.add(normalizeStructureJsonPathKey(op.node.path));
+        }
+        const pack = getDirtyPackFromPath(
+          op.node.path,
+          currentDir,
+          isDir,
+          workspaceDocument,
+          structureJsonPathKeys,
+        );
         if (!pack) return;
         nextDirty.set(pack.packKey, pack);
       });

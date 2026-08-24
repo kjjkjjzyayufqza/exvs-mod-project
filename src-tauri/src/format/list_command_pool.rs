@@ -20,8 +20,9 @@ use crate::format::param_bin_format::{
 };
 use crate::format::param_entry_schema::{
     entry_row_matches_command_map, hash_and_kind_for_camel_key, is_hash_in_pool,
-    min_entry_data_size_for_specs, parse_commands_map_from_entry_row, raw_u32_to_json_for_kind,
-    snake_to_camel, validate_file_specs_kind_match_pool, ParamCommandPool, KIND_U32,
+    json_to_raw_u32_for_kind, min_entry_data_size_for_specs, parse_commands_map_from_entry_row,
+    raw_u32_to_json_for_kind, snake_to_camel, validate_file_specs_kind_match_pool,
+    ParamCommandPool, KIND_U32,
 };
 
 const KIND_STRING: u32 = 7;
@@ -106,10 +107,8 @@ pub fn list_entry_from_json_value(v: &Value, pool: ParamCommandPool) -> Result<L
             if let Some(ex) = val.as_object() {
                 for (hash_str, v_ex) in ex {
                     let h = parse_hash_key(hash_str)?;
-                    let raw = v_ex
-                        .as_u64()
-                        .map(|u| u as u32)
-                        .ok_or_else(|| format!("extraCommands.{hash_str}: expected u32"))?;
+                    let raw = json_to_raw_u32_for_kind(KIND_U32, v_ex)
+                        .map_err(|e| format!("extraCommands.{hash_str}: {e}"))?;
                     commands.insert(h, raw);
                 }
             }
@@ -123,18 +122,7 @@ pub fn list_entry_from_json_value(v: &Value, pool: ParamCommandPool) -> Result<L
                     commands.insert(h, n as u32);
                 }
             } else {
-                let raw = match knd {
-                    KIND_U32 => val.as_u64().map(|u| u as u32).ok_or("expected u32")?,
-                    2 => {
-                        let x = val.as_i64().ok_or("expected i32")?;
-                        i32::try_from(x).map_err(|_| "i32 out of range")? as u32
-                    }
-                    5 => {
-                        let f = val.as_f64().ok_or("expected f32")? as f32;
-                        f32::to_bits(f)
-                    }
-                    _ => val.as_u64().map(|u| u as u32).ok_or("expected number")?,
-                };
+                let raw = json_to_raw_u32_for_kind(knd, val).map_err(|e| format!("{k}: {e}"))?;
                 commands.insert(h, raw);
             }
         }
@@ -145,6 +133,12 @@ pub fn list_entry_from_json_value(v: &Value, pool: ParamCommandPool) -> Result<L
         commands,
         strings,
     })
+}
+
+fn json_number_as_u32(v: &Value) -> Option<u32> {
+    v.as_u64()
+        .map(|n| n as u32)
+        .or_else(|| v.as_i64().map(|n| n as u32))
 }
 
 fn parse_hash_key(hash_str: &str) -> Result<u32, String> {
@@ -446,7 +440,7 @@ fn parse_header(v: Option<&Value>) -> Result<ParamBinaryHeader, String> {
     let obj = v
         .and_then(|h| h.as_object())
         .ok_or("list JSON: missing header object")?;
-    let get = |k: &str| obj.get(k).and_then(|n| n.as_u64()).map(|n| n as u32);
+    let get = |k: &str| obj.get(k).and_then(json_number_as_u32);
     Ok(ParamBinaryHeader {
         magic: get("magic").unwrap_or(0),
         unk_04: get("unk04").unwrap_or(0),
@@ -461,7 +455,7 @@ fn parse_header(v: Option<&Value>) -> Result<ParamBinaryHeader, String> {
 
 fn parse_field_spec(v: &Value) -> Result<ParamFieldSpec, String> {
     let obj = v.as_object().ok_or("fieldSpecs: expected object")?;
-    let get = |k: &str| obj.get(k).and_then(|n| n.as_u64()).map(|n| n as u32);
+    let get = |k: &str| obj.get(k).and_then(json_number_as_u32);
     Ok(ParamFieldSpec {
         hash: get("hash").ok_or("fieldSpec: missing hash")?,
         entry_offset: get("entryOffset").ok_or("fieldSpec: missing entryOffset")?,

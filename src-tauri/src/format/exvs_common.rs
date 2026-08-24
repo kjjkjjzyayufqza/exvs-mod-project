@@ -122,7 +122,6 @@ pub struct ExvsCommonRepackResult {
     pub total_files: usize,
     pub output_size: usize,
     pub warnings: Vec<String>,
-    pub backup_output_path: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -797,36 +796,13 @@ pub fn repack_exvs_common_bundle_impl(
         false,
         None,
     )?;
-
-    let backup_output = if output_path.exists() {
-        let backup = unique_mod_backup_path(&output_path)?;
-        if let Err(error) = fs::rename(&output_path, &backup) {
-            let _ = fs::remove_file(&staging_output);
-            return Err(format!(
-                "Failed to back up existing EXVS common mod output {}: {error}",
-                output_path.display()
-            ));
-        }
-        Some(backup)
-    } else {
-        None
-    };
-    if let Err(error) = fs::rename(&staging_output, &output_path) {
-        if let Some(backup) = &backup_output {
-            let _ = fs::rename(backup, &output_path);
-        }
-        return Err(format!(
-            "Failed to atomically install EXVS common mod output {}: {error}",
-            output_path.display()
-        ));
-    }
+    install_repacked_mod_output(&staging_output, &output_path)?;
 
     Ok(ExvsCommonRepackResult {
         output_path: output_path.to_string_lossy().to_string(),
         total_files: repacked.total_files,
         output_size: repacked.output_size,
         warnings: validation.warnings,
-        backup_output_path: backup_output.map(|path| path.to_string_lossy().to_string()),
     })
 }
 
@@ -1779,31 +1755,24 @@ fn unique_backup_paths(model_root: &Path) -> Result<(PathBuf, PathBuf), String> 
     Err("Could not allocate unique EXVS common backup names.".to_string())
 }
 
-fn unique_mod_backup_path(output_path: &Path) -> Result<PathBuf, String> {
-    let parent = output_path.parent().ok_or_else(|| {
+pub fn install_repacked_mod_output(
+    staging_output: &Path,
+    output_path: &Path,
+) -> Result<(), String> {
+    if output_path.exists() {
+        fs::remove_file(output_path).map_err(|error| {
+            format!(
+                "Failed to replace existing EXVS common mod output {}: {error}",
+                output_path.display()
+            )
+        })?;
+    }
+    fs::rename(staging_output, output_path).map_err(|error| {
         format!(
-            "Cannot determine EXVS common mod output parent for {}",
+            "Failed to install EXVS common mod output {}: {error}",
             output_path.display()
         )
-    })?;
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|error| format!("System clock is before Unix epoch: {error}"))?
-        .as_millis();
-    for suffix in 0..1000u32 {
-        let discriminator = if suffix == 0 {
-            timestamp.to_string()
-        } else {
-            format!("{timestamp}-{suffix}")
-        };
-        let candidate = parent.join(format!(
-            "{EXVS_COMMON_HASH_NAME}_backup_{discriminator}.fhm2d"
-        ));
-        if !candidate.exists() {
-            return Ok(candidate);
-        }
-    }
-    Err("Could not allocate a unique EXVS common mod backup name.".to_string())
+    })
 }
 
 fn restore_backups(

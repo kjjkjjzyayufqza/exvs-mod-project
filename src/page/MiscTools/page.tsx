@@ -9,6 +9,8 @@ import { NumatbEditor } from "./components/numatb-editor/NumatbEditor"
 import { ImageCompressTool } from "./components/image-compress/ImageCompressTool"
 import { ImageResizeTool } from "./components/image-resize/ImageResizeTool"
 import { GvsMapToVs2Tool } from "./components/gvs-map-to-vs2/GvsMapToVs2Tool"
+import { Fhm2dImageViewTool } from "./components/fhm2d-image-view/Fhm2dImageViewTool"
+import { NutexbViewTool } from "./components/nutexb-view/NutexbViewTool"
 
 export default function MiscToolsPage() {
   return (
@@ -189,6 +191,36 @@ export default function MiscToolsPage() {
             </CardHeader>
             <CardContent>
               <ImageResizeTool />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <ImageIcon className="h-5 w-5" />
+                FHM2D Image View
+              </CardTitle>
+              <CardDescription>
+                Open an FHM2D in memory, browse every texture, and list the other files
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Fhm2dImageViewTool />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <ImageIcon className="h-5 w-5" />
+                Nutexb View
+              </CardTitle>
+              <CardDescription>
+                Open a folder, recursively load every .nutexb, and browse them in a tree
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <NutexbViewTool />
             </CardContent>
           </Card>
 

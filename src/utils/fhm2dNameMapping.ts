@@ -55,6 +55,7 @@ const ROUTE_PREFIX_BY_ROUTE_ID: Record<string, string> = {
   "list.character": "012list",
   "list.series": "012list",
   "list.stage": "012list",
+  "list.navi": "012list",
   "gui.card-icons": "009gui",
   "gui.series-icons": "009gui",
   "gui.stage-icons": "009gui",
@@ -116,6 +117,10 @@ function confidenceScore(entry: Fhm2dNameMappingEntry): number {
   if (entry.confidence === "inferred-ob-ai-string") return 1;
   if (entry.confidence === "ob-dplcache-fallback") return 0;
   return 0;
+}
+
+export function listFhm2dNameMappingEntries(): readonly Fhm2dNameMappingEntry[] {
+  return mappingEntries;
 }
 
 export function findFhm2dNameMapping(

@@ -197,8 +197,9 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
 
             return outputPathFull;
           } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
             console.error(`Failed to convert ${fileInfo.displayName}:`, error);
-            failedFiles.push(fileInfo.displayName);
+            failedFiles.push(`${fileInfo.displayName}: ${message}`);
             return null;
           }
         });

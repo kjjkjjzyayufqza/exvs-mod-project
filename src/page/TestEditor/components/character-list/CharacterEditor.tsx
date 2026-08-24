@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { Copy, Plus } from "lucide-react";
 
 import {
   AlertDialog,
@@ -18,6 +18,11 @@ import { CharacterList } from "./CharacterList";
 import { pickNextCharacterUniqueId } from "./characterUniqueId";
 import type { SeriesIdPickerItem } from "./SeriesIdPickerPopover";
 import type { CardIconIndexPickerItem } from "./CardIconIndexPickerPopover";
+import type { BgmCuePickerItem } from "./BgmCuePickerPopover";
+import { CloneGuiDialog } from "./CloneGuiDialog";
+import type { CloneGuiSetResult } from "./guiClonePlan";
+import type { GuiPackPickerItem } from "./guiPackIndex";
+import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 
 interface CharacterEditorProps {
   characterListData?: CharacterListData;
@@ -30,11 +35,24 @@ interface CharacterEditorProps {
   cardIconIndexPickerItems: CardIconIndexPickerItem[];
   cardIconIndexPickerLoading?: boolean;
   cardIconIndexPickerError?: string | null;
+  bgmCuePickerItems?: BgmCuePickerItem[];
+  bgmCuePickerLoading?: boolean;
+  bgmCuePickerError?: string | null;
+  guiPackItems?: GuiPackPickerItem[];
+  guiPackLoading?: boolean;
+  guiPackError?: string | null;
+  onOpenGuiPackFolder?: (hash: number) => void;
   jumpToCharacterIdTable?: {
     disabled: boolean;
     tooltip: string;
     onClick: () => void;
   };
+  cloneGuiWritable?: boolean;
+  onPackMutated?: (pack: WorkspacePackIdentity) => void;
+  onRevealTreeFolder?: (path: string) => void;
+  onJumpToNaviList?: (uniqueId: number) => void;
+  onCloneApplied?: () => void;
+  workspaceDocument?: TestEditorWorkspaceDocument;
   onChange: (data: CharacterListData) => void;
   onSelectChange?: (index: number) => void;
 }
@@ -159,13 +177,28 @@ export function CharacterEditor({
   cardIconIndexPickerItems,
   cardIconIndexPickerLoading,
   cardIconIndexPickerError,
+  bgmCuePickerItems,
+  bgmCuePickerLoading,
+  bgmCuePickerError,
+  guiPackItems,
+  guiPackLoading,
+  guiPackError,
+  onOpenGuiPackFolder,
   jumpToCharacterIdTable,
+  cloneGuiWritable = true,
+  onPackMutated,
+  onRevealTreeFolder,
+  onJumpToNaviList,
+  onCloneApplied,
+  workspaceDocument,
   onChange,
   onSelectChange,
 }: CharacterEditorProps) {
   const [internalSelectedIndex, setInternalSelectedIndex] = useState<number>(-1);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteCandidateIndex, setDeleteCandidateIndex] = useState<number | null>(null);
+  const [cloneGuiOpen, setCloneGuiOpen] = useState(false);
+  const [formSyncKey, setFormSyncKey] = useState(0);
 
   const isControlled = controlledSelectedIndex !== undefined && onSelectChange !== undefined;
   const selectedIndex = isControlled ? controlledSelectedIndex : internalSelectedIndex;
@@ -286,6 +319,15 @@ export function CharacterEditor({
     [characterListData, entries, getNextCharacterUniqueId, isControlled, onSelectChange, updateList]
   );
 
+  const handleCloneGuiApplied = useCallback(
+    (next: CharacterListData, _result: CloneGuiSetResult) => {
+      onChange(next);
+      setFormSyncKey((key) => key + 1);
+      onCloneApplied?.();
+    },
+    [onChange, onCloneApplied],
+  );
+
   const handleAdd = useCallback(() => {
     if (!characterListData) return;
     const newEntryId = entries.length > 0 ? Math.max(...entries.map((c) => c.entryId), 0) + 1 : 1;
@@ -314,10 +356,22 @@ export function CharacterEditor({
       <div className="w-1/3 border rounded-lg p-3 overflow-hidden flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-3">
           <div className="font-semibold text-sm">Characters ({entries.length})</div>
-          <Button size="sm" onClick={handleAdd} className="inline-flex items-center gap-2">
-            <Plus className="w-4 h-4" />
-            Add
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCloneGuiOpen(true)}
+              disabled={!selectedCharacter || !cloneGuiWritable}
+              className="inline-flex items-center gap-2"
+            >
+              <Copy className="w-4 h-4" />
+              Clone GUI
+            </Button>
+            <Button size="sm" onClick={handleAdd} className="inline-flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              Add
+            </Button>
+          </div>
         </div>
 
         <CharacterList
@@ -334,6 +388,7 @@ export function CharacterEditor({
       <div className="flex-1 border rounded-lg p-4 overflow-hidden flex flex-col min-h-0">
         {selectedCharacter ? (
           <CharacterForm
+            key={formSyncKey}
             character={selectedCharacter}
             characterId={selectedCharacter.entryId}
             uniqueIdEntries={uniqueIdEntries}
@@ -343,6 +398,13 @@ export function CharacterEditor({
             cardIconIndexPickerItems={cardIconIndexPickerItems}
             cardIconIndexPickerLoading={cardIconIndexPickerLoading}
             cardIconIndexPickerError={cardIconIndexPickerError}
+            bgmCuePickerItems={bgmCuePickerItems}
+            bgmCuePickerLoading={bgmCuePickerLoading}
+            bgmCuePickerError={bgmCuePickerError}
+            guiPackItems={guiPackItems}
+            guiPackLoading={guiPackLoading}
+            guiPackError={guiPackError}
+            onOpenGuiPackFolder={onOpenGuiPackFolder}
             jumpToCharacterIdTable={jumpToCharacterIdTable}
             onChange={handleUpdateCharacter}
           />
@@ -350,6 +412,21 @@ export function CharacterEditor({
           <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">Select a character to edit</div>
         )}
       </div>
+
+      {characterListData ? (
+        <CloneGuiDialog
+          open={cloneGuiOpen}
+          targetEntry={selectedCharacter}
+          characterList={characterListData}
+          writable={cloneGuiWritable}
+          onOpenChange={setCloneGuiOpen}
+          onApplied={handleCloneGuiApplied}
+          onPackMutated={onPackMutated}
+          onRevealTreeFolder={onRevealTreeFolder}
+          onJumpToNaviList={onJumpToNaviList}
+          workspaceDocument={workspaceDocument}
+        />
+      ) : null}
 
       <AlertDialog
         open={deleteDialogOpen}

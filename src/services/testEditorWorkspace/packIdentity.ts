@@ -146,6 +146,7 @@ function classifyConfiguredPath(params: {
   relativePath: string;
   nodeIsDirectory?: boolean;
   document: TestEditorWorkspaceDocument;
+  structureJsonPathKeys?: ReadonlySet<string>;
 }): WorkspacePackIdentity | null {
   const relativeSegments = params.relativePath.split("/").filter(Boolean);
   if (relativeSegments.length === 0) return null;
@@ -157,9 +158,48 @@ function classifyConfiguredPath(params: {
     );
     if (!isPrefixMatch) continue;
 
-    const packSegment = relativeSegments[entry.segments.length];
+    const afterPrefix = relativeSegments.slice(entry.segments.length);
+    const lastSegment = afterPrefix[afterPrefix.length - 1];
+    const nestedStructureBase =
+      params.nodeIsDirectory === false ? stripStructureJsonSuffix(lastSegment ?? "") : null;
+    if (nestedStructureBase) {
+      const nestedPrefixSegments = [...entry.segments, ...afterPrefix.slice(0, -1)];
+      if (!isPackFolderName(nestedStructureBase)) return null;
+      return buildIdentity({
+        workspaceRoot: params.workspaceRoot,
+        routeId: entry.routeId,
+        prefix: nestedPrefixSegments.join("/"),
+        hashFolderName: nestedStructureBase,
+        sourceLayout: "configured",
+      });
+    }
+
+    const folderSegments =
+      params.nodeIsDirectory === false ? afterPrefix.slice(0, -1) : afterPrefix;
+    if (params.structureJsonPathKeys && params.structureJsonPathKeys.size > 0) {
+      for (let depth = folderSegments.length; depth >= 1; depth -= 1) {
+        const packName = folderSegments[depth - 1];
+        if (!packName || !isPackFolderName(packName)) continue;
+        const nestedPrefixSegments = [...entry.segments, ...folderSegments.slice(0, depth - 1)];
+        const structurePath = joinDisplayPath(params.workspaceRoot, [
+          ...nestedPrefixSegments,
+          `${packName}${STRUCTURE_JSON_SUFFIX}`,
+        ]);
+        if (params.structureJsonPathKeys.has(normalizePathForCompare(structurePath))) {
+          return buildIdentity({
+            workspaceRoot: params.workspaceRoot,
+            routeId: entry.routeId,
+            prefix: nestedPrefixSegments.join("/"),
+            hashFolderName: packName,
+            sourceLayout: "configured",
+          });
+        }
+      }
+    }
+
+    const packSegment = afterPrefix[0];
     const structureBase =
-      params.nodeIsDirectory === false && relativeSegments.length === entry.segments.length + 1
+      params.nodeIsDirectory === false && afterPrefix.length === 1
         ? stripStructureJsonSuffix(packSegment)
         : null;
     const hashFolderName = structureBase ?? packSegment;
@@ -220,6 +260,7 @@ export function classifyWorkspacePackPath(params: {
   nodePath: string;
   nodeIsDirectory?: boolean;
   document: TestEditorWorkspaceDocument;
+  structureJsonPathKeys?: ReadonlySet<string>;
 }): WorkspacePackIdentity | null {
   if (pathHasGitDirectory(params.nodePath)) return null;
 
@@ -232,6 +273,7 @@ export function classifyWorkspacePackPath(params: {
       relativePath,
       nodeIsDirectory: params.nodeIsDirectory,
       document: params.document,
+      structureJsonPathKeys: params.structureJsonPathKeys,
     }) ??
     classifyLegacyPath({
       workspaceRoot: params.workspaceRoot,

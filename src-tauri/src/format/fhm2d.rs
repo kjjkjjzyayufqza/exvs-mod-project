@@ -10,7 +10,7 @@ use std::io::{Cursor, Read};
 use std::path::{Component, Path, PathBuf};
 
 use crate::format::fhm2d_structure_metadata::{
-    metadata_from_source, metadata_from_source_strict, sanitize_structure_name,
+    metadata_from_source, metadata_from_source_strict, normalize_hash_name, sanitize_structure_name,
 };
 
 const MAGIC_OB: [u8; 4] = [0xB9, 0xB7, 0xB2, 0xCD];
@@ -298,6 +298,8 @@ pub struct Fhm2dExtractor<'a> {
     list_output_file_name: Option<String>,
     write_meta_bin: bool,
     layout: ExtractLayout,
+    hash_name_override: Option<String>,
+    structure_name_override: Option<String>,
 }
 
 impl<'a> Fhm2dExtractor<'a> {
@@ -333,7 +335,19 @@ impl<'a> Fhm2dExtractor<'a> {
             list_output_file_name,
             write_meta_bin,
             layout,
+            hash_name_override: None,
+            structure_name_override: None,
         }
+    }
+
+    pub fn with_hash_name(mut self, hash_name: impl Into<String>) -> Self {
+        self.hash_name_override = Some(hash_name.into());
+        self
+    }
+
+    pub fn with_structure_name(mut self, structure_name: impl Into<String>) -> Self {
+        self.structure_name_override = Some(structure_name.into());
+        self
     }
 
     pub fn extract(self) -> Result<ExtractFhm2dResult, String> {
@@ -346,8 +360,23 @@ impl<'a> Fhm2dExtractor<'a> {
             .and_then(|s| s.to_str())
             .ok_or_else(|| format!("Invalid output directory: {}", self.out_dir))?
             .to_string();
-        let (structure_name, hash_name) =
-            metadata_from_source_strict(self.source_path, out_name.as_str())?;
+        let (structure_name, hash_name) = if let Some(override_hash) = self.hash_name_override.as_deref()
+        {
+            let hash_name = normalize_hash_name(override_hash).ok_or_else(|| {
+                format!(
+                    "Invalid HashName override \"{override_hash}\"; expected an 8-digit game hash"
+                )
+            })?;
+            let structure_name = self
+                .structure_name_override
+                .as_deref()
+                .map(sanitize_structure_name)
+                .filter(|name| !name.is_empty())
+                .unwrap_or_else(|| sanitize_structure_name(out_name.as_str()));
+            (structure_name, hash_name)
+        } else {
+            metadata_from_source_strict(self.source_path, out_name.as_str())?
+        };
         fs::create_dir_all(self.out_dir)
             .map_err(|e| format!("Failed to create output directory: {e}"))?;
 
@@ -453,6 +482,28 @@ pub fn extract_fhm2d_to_folder_with_layout(
         layout,
     )
     .extract()
+}
+
+/// Extract a GUI pack with folder layout, no card-icon/sound naming, and an explicit HashName.
+pub fn extract_fhm2d_gui_clone(
+    source_path: &str,
+    out_dir: &str,
+    hash_name: &str,
+    structure_name: Option<&str>,
+) -> Result<ExtractFhm2dResult, String> {
+    let mut extractor = Fhm2dExtractor::with_layout(
+        source_path,
+        out_dir,
+        None,
+        None,
+        false,
+        ExtractLayout::Folder,
+    )
+    .with_hash_name(hash_name);
+    if let Some(name) = structure_name {
+        extractor = extractor.with_structure_name(name);
+    }
+    extractor.extract()
 }
 
 /// Write decompressed OB meta section to `<out_dir>/meta.bin`.
@@ -1038,7 +1089,11 @@ fn apply_naming(
                 &output.sub_file_parse_structure,
             )
         }
-        Some(Fhm2dFormat::Sound) => apply_sound_names(&mut output.sub_file_data, files),
+        Some(Fhm2dFormat::Sound) => {
+            apply_sound_names(&mut output.sub_file_data, files)?;
+            apply_raw_path_id_names(&mut output.sub_file_data, files)?;
+            apply_090sound_root_names(&mut output.sub_file_data, files)
+        }
         None => Ok(()),
     }?;
     ensure_unique_file_urls(output.sub_file_data.as_slice())
@@ -1123,6 +1178,136 @@ fn apply_character_cost_names(sub: &mut [OutputSubFileData]) -> Result<(), Strin
         item.file_url = build_file_url(prefix.as_slice(), name.as_str());
     }
     Ok(())
+}
+
+/// Names the OB `0x264D1CA7` stream-path table from vs2 meta inner paths.
+///
+/// vs2 `0x264D1CA7_meta.bin` records, in SubFileData index order:
+/// `raw_path_id_release.vgsht1` then `raw_path_id_release.json`.
+/// Sound packs that are not this two-file table are left unchanged.
+fn apply_raw_path_id_names(
+    sub: &mut [OutputSubFileData],
+    files: &[DecodedSubFile],
+) -> Result<(), String> {
+    const NAMES: [&str; 2] = [
+        "raw_path_id_release.vgsht1",
+        "raw_path_id_release.json",
+    ];
+    if sub.len() != 2 || files.len() != 2 {
+        return Ok(());
+    }
+    if !is_vgsht1_payload(files[0].data.as_slice())
+        || !is_json_object_payload(files[1].data.as_slice())
+    {
+        return Ok(());
+    }
+    for (idx, item) in sub.iter_mut().enumerate() {
+        let name = NAMES[idx];
+        let prefix = parent_segments(item.file_url.as_str())?;
+        item.file_type = extension_with_dot(name);
+        item.file_base_name = Some(strip_extension(name));
+        item.file_url = build_file_url(prefix.as_slice(), name);
+    }
+    Ok(())
+}
+
+fn is_vgsht1_payload(bytes: &[u8]) -> bool {
+    bytes.len() >= 4 && u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) == 0xCEABB8A9
+}
+
+fn is_json_object_payload(bytes: &[u8]) -> bool {
+    bytes
+        .iter()
+        .copied()
+        .find(|b| !b.is_ascii_whitespace())
+        == Some(b'{')
+}
+
+/// Names the OB `0x8C428AF2` 090sound root tables from vs2 plaintext names.
+/// Classification uses payload magic / table header, not vs2 meta string order
+/// (meta dump order does not match SubFileData index).
+fn apply_090sound_root_names(
+    sub: &mut [OutputSubFileData],
+    files: &[DecodedSubFile],
+) -> Result<(), String> {
+    if sub.len() != 7 || files.len() != 7 {
+        return Ok(());
+    }
+    let mut classified: Vec<(usize, &'static str)> = Vec::with_capacity(7);
+    let mut vgsht1 = Vec::new();
+    for (idx, file) in files.iter().enumerate() {
+        if let Some(name) = classify_090sound_root_payload(file.data.as_slice()) {
+            classified.push((idx, name));
+        } else if is_vgsht1_payload(file.data.as_slice()) {
+            vgsht1.push((idx, file.data.len()));
+        } else {
+            return Ok(());
+        }
+    }
+    if vgsht1.len() != 2 {
+        return Ok(());
+    }
+    vgsht1.sort_by_key(|(_, len)| *len);
+    classified.push((vgsht1[0].0, "stageambientseparamtable.vgsht1"));
+    classified.push((vgsht1[1].0, "bgmstemstable.vgsht1"));
+    if classified.len() != 7 {
+        return Ok(());
+    }
+    let mut seen = HashSet::new();
+    for (_, name) in &classified {
+        if !seen.insert(*name) {
+            return Ok(());
+        }
+    }
+    let mut names = ["", "", "", "", "", "", ""];
+    for (idx, name) in classified {
+        names[idx] = name;
+    }
+    for (idx, item) in sub.iter_mut().enumerate() {
+        let name = names[idx];
+        let prefix = parent_segments(item.file_url.as_str())?;
+        item.file_type = extension_with_dot(name);
+        item.file_base_name = Some(strip_extension(name));
+        item.file_url = build_file_url(prefix.as_slice(), name);
+    }
+    Ok(())
+}
+
+fn classify_090sound_root_payload(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.len() >= 4 {
+        let magic = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        if magic == 0xCDAB_B8A9 {
+            return Some("charaseparamtable.vgsht2");
+        }
+    }
+    if bytes.len() < 0x14 {
+        return None;
+    }
+    let version = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+    let field04 = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
+    let count = u32::from_le_bytes([bytes[0x10], bytes[0x11], bytes[0x12], bytes[0x13]]);
+    if version == 3 {
+        let expect = 0x14usize.saturating_add((count as usize).saturating_mul(20));
+        if expect == bytes.len() {
+            return Some("pilotvoiceresourcetable.vrtbl");
+        }
+    }
+    if version == 2 {
+        return match field04 {
+            30_000 => Some("voicecategorytable_character.vctbl"),
+            31_000 => Some("voicecategorytable_pilot.vctbl"),
+            32_000 => Some("voicecategorytable_condition.vctbl"),
+            _ => None,
+        };
+    }
+    None
+}
+
+fn extension_with_dot(file_name: &str) -> String {
+    match file_name.rfind('.') {
+        Some(idx) if idx > 0 => file_name[idx..].to_string(),
+        _ => ".bin".to_string(),
+    }
 }
 
 fn apply_msc_names(sub: &mut [OutputSubFileData]) -> Result<(), String> {
@@ -1770,6 +1955,72 @@ mod tests {
             unk3: None,
             children: Some(children),
         }
+    }
+
+    #[test]
+    fn raw_path_id_sound_table_uses_vs2_meta_inner_names() {
+        let mut vgsht1 = vec![0u8; 32];
+        vgsht1[0..4].copy_from_slice(&0xCEABB8A9u32.to_le_bytes());
+        let files = vec![
+            DecodedSubFile {
+                file_index: 0,
+                data: vgsht1,
+            },
+            DecodedSubFile {
+                file_index: 1,
+                data: b"{\"STREAMPATH_ST_VO_1000_P01_0\":{}}\n".to_vec(),
+            },
+        ];
+        let mut sub = vec![
+            output_file(0, 0, ".\\raw_path_id\\0.bin"),
+            output_file(1, 1, ".\\raw_path_id\\1.bin"),
+        ];
+        apply_raw_path_id_names(&mut sub, &files).expect("name raw_path_id");
+        assert_eq!(sub[0].file_url, ".\\raw_path_id\\raw_path_id_release.vgsht1");
+        assert_eq!(sub[0].file_type, ".vgsht1");
+        assert_eq!(
+            sub[0].file_base_name.as_deref(),
+            Some("raw_path_id_release")
+        );
+        assert_eq!(sub[1].file_url, ".\\raw_path_id\\raw_path_id_release.json");
+        assert_eq!(sub[1].file_type, ".json");
+    }
+
+    #[test]
+    fn sound_root_tables_use_vs2_plaintext_names() {
+        fn table(version: u32, field04: u32, count: u32, record: usize) -> Vec<u8> {
+            let mut bytes = vec![0u8; 0x14 + count as usize * record];
+            bytes[0..4].copy_from_slice(&version.to_le_bytes());
+            bytes[4..8].copy_from_slice(&field04.to_le_bytes());
+            bytes[0x10..0x14].copy_from_slice(&count.to_le_bytes());
+            bytes
+        }
+        let mut bgm = vec![0u8; 144];
+        bgm[0..4].copy_from_slice(&0xCEABB8A9u32.to_le_bytes());
+        let mut ambient = vec![0u8; 72];
+        ambient[0..4].copy_from_slice(&0xCEABB8A9u32.to_le_bytes());
+        let mut chara_se = vec![0u8; 32];
+        chara_se[0..4].copy_from_slice(&0xCDABB8A9u32.to_le_bytes());
+        let files = vec![
+            DecodedSubFile { file_index: 0, data: bgm },
+            DecodedSubFile { file_index: 1, data: table(2, 30_000, 1, 8) },
+            DecodedSubFile { file_index: 2, data: chara_se },
+            DecodedSubFile { file_index: 3, data: table(3, 0, 1, 20) },
+            DecodedSubFile { file_index: 4, data: ambient },
+            DecodedSubFile { file_index: 5, data: table(2, 31_000, 1, 8) },
+            DecodedSubFile { file_index: 6, data: table(2, 32_000, 1, 0x20) },
+        ];
+        let mut sub: Vec<OutputSubFileData> = (0..7)
+            .map(|i| output_file(i, i as i32, &format!(".\\090sound\\{i}.bin")))
+            .collect();
+        apply_090sound_root_names(&mut sub, &files).expect("name 090sound");
+        assert_eq!(sub[0].file_url, ".\\090sound\\bgmstemstable.vgsht1");
+        assert_eq!(sub[1].file_url, ".\\090sound\\voicecategorytable_character.vctbl");
+        assert_eq!(sub[2].file_url, ".\\090sound\\charaseparamtable.vgsht2");
+        assert_eq!(sub[3].file_url, ".\\090sound\\pilotvoiceresourcetable.vrtbl");
+        assert_eq!(sub[4].file_url, ".\\090sound\\stageambientseparamtable.vgsht1");
+        assert_eq!(sub[5].file_url, ".\\090sound\\voicecategorytable_pilot.vctbl");
+        assert_eq!(sub[6].file_url, ".\\090sound\\voicecategorytable_condition.vctbl");
     }
 
     fn output_file(index: usize, file_index: i32, file_url: &str) -> OutputSubFileData {

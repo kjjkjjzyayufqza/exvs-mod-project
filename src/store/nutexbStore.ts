@@ -1,11 +1,36 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import { exists, mkdir, readTextFile } from "@tauri-apps/plugin-fs";
-import { resourceDir, dirname, basename, join } from "@tauri-apps/api/path";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { exists, mkdir } from "@tauri-apps/plugin-fs";
+import { dirname, join } from "@tauri-apps/api/path";
+import { open } from "@tauri-apps/plugin-dialog";
 import { readNutexbTextureName } from "../utils/nutexbUtils";
 
-const CONVERT_DIR_NAME = ".\\__convert";
+const CONVERT_DIR_NAME = "__convert";
+
+type NutexbInfoDto = {
+  name: string;
+  width: number;
+  height: number;
+  depth: number;
+  imageFormat: string;
+  mipmapCount: number;
+  layerCount: number;
+  dataSize: number;
+  isSwizzled: boolean;
+};
+
+function footerFromNutexbInfo(info: NutexbInfoDto): NutexbFooter {
+  return {
+    string: info.name,
+    width: info.width,
+    height: info.height,
+    depth: info.depth,
+    image_format: info.imageFormat,
+    mipmap_count: info.mipmapCount,
+    layer_count: info.layerCount,
+    data_size: info.dataSize,
+  };
+}
 
 export interface FileInfo extends Partial<NutexbFooter> {
   name: string;
@@ -77,9 +102,6 @@ interface NutexbStore {
   checkToolExists: () => Promise<boolean>;
 }
 
-const resourcePath = await resourceDir();
-const toolPath = resourcePath + "/tools/ultimate_tex_cli.exe";
-
 export const useNutexbStore = create<NutexbStore>((set, get) => ({
   selectedFile: null,
   nutexbData: null,
@@ -133,14 +155,8 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
         // Always fetch fresh data - no time-based caching
         // (Cache is only used for duplicate requests within the same batch)
 
-        const command = `${toolPath} ${filePath} --info`;
-        const result = await invoke("exec_shell_command", { command });
-
-        if (typeof result !== "string") {
-          throw new Error("Invalid command result");
-        }
-
-        const { nutexbInfo } = get().parseNutexbInfo(result);
+        const info = await invoke<NutexbInfoDto>("nutexb_read_info", { inputPath: filePath });
+        const nutexbInfo = footerFromNutexbInfo(info);
         const fileInfo = { ...file, ...nutexbInfo };
         
         // Store result without time-based caching (only for deduplication within same batch)
@@ -192,63 +208,25 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
         throw new Error(`Input file not found: ${file.path}`);
       }
 
-      // Check if the tool exists
-      const toolExists = await exists(toolPath);
-      if (!toolExists) {
-        throw new Error(`Tool not found: ${toolPath}`);
-      }
-
-      // Read the real texture name from the nutexb file
-      const textureName = await get().readNutexbTextureName(file.path);
-      console.log("Real texture name:", textureName);
-
-      // Prepare output directory and file path
+      const info = await invoke<NutexbInfoDto>("nutexb_read_info", { inputPath: file.path });
+      const textureName = info.name || (await get().readNutexbTextureName(file.path));
       const dirPath = await dirname(file.path);
       const convertDirPath = await join(dirPath, CONVERT_DIR_NAME);
-
-      // Create convert directory if it doesn't exist
-      const convertExists = await exists(convertDirPath);
-      if (!convertExists) {
-        try {
-          await mkdir(convertDirPath, { recursive: true });
-        } catch (error) {
-          throw new Error(`Failed to create convert directory: ${error}`);
-        }
+      if (!(await exists(convertDirPath))) {
+        await mkdir(convertDirPath, { recursive: true });
       }
-
-      const outputFileName = `${textureName}.png`;
-      const outputPath = await join(convertDirPath, outputFileName);
-
-      // Execute command
-      const commandPromise = invoke("exec_shell_command", {
-        command: `${toolPath} ${file.path} ${outputPath}`,
+      const outputPath = await join(convertDirPath, `${textureName}.png`);
+      await invoke("nutexb_export_png", { inputPath: file.path, outputPath });
+      const footer = footerFromNutexbInfo(info);
+      set({
+        nutexbData: {
+          footer,
+          imageFormat: info.imageFormat,
+        },
+        previewImagePath: outputPath,
+        selectedFormat: info.imageFormat.replace(/"/g, "") as ImageFormat,
+        hasMipmaps: (info.mipmapCount || 0) > 1,
       });
-
-      // Race between command execution and timeout
-      const result = await Promise.race([commandPromise, new Promise((_, reject) => setTimeout(() => reject(new Error("Command execution timed out")), 10000))]);
-
-      if (typeof result === "string") {
-        const { nutexbInfo, imageFormat } = get().parseNutexbInfo(result);
-        console.log("Nutexb Info:", nutexbInfo);
-        // Verify output file exists
-        const outputExists = await exists(outputPath);
-        if (!outputExists) {
-          throw new Error("Output PNG file not found after command execution");
-        }
-        console.log("Output Path:", outputPath);
-        set({
-          nutexbData: {
-            footer: nutexbInfo as NutexbFooter,
-            imageFormat,
-          },
-          previewImagePath: outputPath,
-          selectedFormat: imageFormat.replace(/"/g, "") as ImageFormat,
-          hasMipmaps: (nutexbInfo.mipmap_count || 0) > 1,
-        });
-      } else {
-        throw new Error("Invalid command result");
-      }
-      console.log("Conversion successful");
     } catch (error) {
       let errorMessage = "Unknown error occurred";
       if (error instanceof Error) {
@@ -306,21 +284,14 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
 
       // Construct the output path to overwrite the original file
       const outputPath = selectedFile.path;
-      console.log("nutexbData.footer.string:", nutexbData.footer.string);
-      // Build command with format and mipmaps options
-      let command = `${toolPath} ${imageFile} ${outputPath} --format ${selectedFormat} --nutexb-name=${nutexbData.footer.string}`;
-      if (!hasMipmaps) {
-        command += " --no-mipmaps";
-      }
-      console.log("Command:", command);
-      // Execute command
-      const result = await invoke("exec_shell_command", { command });
-      if (typeof result === "string") {
-        // After successful replacement, reload the file to update the UI
-        await get().convertFile(selectedFile);
-      } else {
-        throw new Error("Failed to replace texture");
-      }
+      await invoke("image_to_nutexb", {
+        imagePath: imageFile,
+        outputNutexbPath: outputPath,
+        nutexbName: nutexbData.footer.string,
+        ddsFormat: selectedFormat,
+        generateMipmaps: hasMipmaps,
+      });
+      await get().convertFile(selectedFile);
     } catch (error) {
       console.error("Error in texture replacement:", error);
       let errorMessage = "Failed to replace texture";
@@ -344,58 +315,21 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
         return null;
       }
 
-      // Check if the tool exists
-      const toolExists = await exists(toolPath);
-      if (!toolExists) {
-        console.error(`Tool not found for caching: ${toolPath}`);
-        return null;
-      }
-
-      // Read the real texture name from the nutexb file
-      const textureName = await get().readNutexbTextureName(file.path);
-
-      // Prepare output directory and file path
+      const info = await invoke<NutexbInfoDto>("nutexb_read_info", { inputPath: file.path });
+      const textureName = info.name || (await get().readNutexbTextureName(file.path));
       const dirPath = await dirname(file.path);
       const convertDirPath = await join(dirPath, CONVERT_DIR_NAME);
-
-      // Create convert directory if it doesn't exist
-      const convertExists = await exists(convertDirPath);
-      if (!convertExists) {
-        try {
-          await mkdir(convertDirPath, { recursive: true });
-        } catch (error) {
-          console.error(`Failed to create convert directory for caching: ${error}`);
-          return null;
-        }
+      if (!(await exists(convertDirPath))) {
+        await mkdir(convertDirPath, { recursive: true });
       }
-
-      const outputFileName = `${textureName}.png`;
-      const outputPath = await join(convertDirPath, outputFileName);
-
-      // Execute command to generate the preview
-      const commandPromise = invoke("exec_shell_command", {
-        command: `${toolPath} ${file.path} ${outputPath}`,
-      });
-
-      // Race between command execution and timeout (use a shorter timeout for caching)
-      const result = await Promise.race([commandPromise, new Promise((_, reject) => setTimeout(() => reject(new Error("Caching timed out")), 5000))]);
-      if (typeof result === "string") {
-        // Verify output file exists
-        const { nutexbInfo } = get().parseNutexbInfo(result);
-        const outputExists = await exists(outputPath);
-        if (!outputExists) {
-          console.error("Output PNG file not found after caching");
-          return null;
-        }
-        return {
-          nutexbInfo: nutexbInfo,
-          imageFormat: nutexbInfo.image_format || "",
-          outputPath,
-        };
-      } else {
-        console.error("Invalid command result during caching");
-        return null;
-      }
+      const outputPath = await join(convertDirPath, `${textureName}.png`);
+      await invoke("nutexb_export_png", { inputPath: file.path, outputPath });
+      const nutexbInfo = footerFromNutexbInfo(info);
+      return {
+        nutexbInfo,
+        imageFormat: info.imageFormat,
+        outputPath,
+      };
     } catch (error) {
       console.error("Error during texture caching:", error);
       return null;
@@ -414,36 +348,15 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
         throw new Error(`Image file not found: ${imagePath}`);
       }
 
-      // Check if the tool exists
-      const toolExists = await exists(toolPath);
-      if (!toolExists) {
-        throw new Error(`Tool not found: ${toolPath}`);
-      }
-
-      // Build command with format and mipmaps options
-      let command = `${toolPath} ${imagePath} ${outputPath} --format ${selectedFormat} --nutexb-name=${nutexbName}`;
-      if (!hasMipmaps) {
-        command += " --no-mipmaps";
-      }
-
-      console.log("Converting image to nutexb:", command);
-
-      // Execute command with timeout
-      const commandPromise = invoke("exec_shell_command", { command });
-      const result = await Promise.race([
-        commandPromise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Conversion timed out")), 15000))
-      ]);
-
-      if (typeof result === "string") {
-        // Verify output file exists
-        const outputExists = await exists(outputPath);
-        if (!outputExists) {
-          throw new Error("Output nutexb file not found after conversion");
-        }
-        console.log("Image to nutexb conversion successful");
-      } else {
-        throw new Error("Invalid command result during conversion");
+      await invoke("image_to_nutexb", {
+        imagePath,
+        outputNutexbPath: outputPath,
+        nutexbName,
+        ddsFormat: selectedFormat,
+        generateMipmaps: hasMipmaps,
+      });
+      if (!(await exists(outputPath))) {
+        throw new Error("Output nutexb file not found after conversion");
       }
     } catch (error) {
       console.error("Error in image to nutexb conversion:", error);
@@ -474,36 +387,15 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
         throw new Error(`Image file not found: ${imagePath}`);
       }
 
-      // Check if the tool exists
-      const toolExists = await exists(toolPath);
-      if (!toolExists) {
-        throw new Error(`Tool not found: ${toolPath}`);
-      }
-
-      // Build command with format and mipmaps options
-      let command = `${toolPath} ${imagePath} ${outputPath} --format ${selectedFormat} --nutexb-name=${nutexbName}`;
-      if (!hasMipmaps) {
-        command += " --no-mipmaps";
-      }
-
-      console.log("Converting image to nutexb (internal):", command);
-
-      // Execute command with timeout
-      const commandPromise = invoke("exec_shell_command", { command });
-      const result = await Promise.race([
-        commandPromise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Conversion timed out")), 15000))
-      ]);
-
-      if (typeof result === "string") {
-        // Verify output file exists
-        const outputExists = await exists(outputPath);
-        if (!outputExists) {
-          throw new Error("Output nutexb file not found after conversion");
-        }
-        console.log("Image to nutexb conversion successful (internal)");
-      } else {
-        throw new Error("Invalid command result during conversion");
+      await invoke("image_to_nutexb", {
+        imagePath,
+        outputNutexbPath: outputPath,
+        nutexbName,
+        ddsFormat: selectedFormat,
+        generateMipmaps: hasMipmaps,
+      });
+      if (!(await exists(outputPath))) {
+        throw new Error("Output nutexb file not found after conversion");
       }
     } catch (error) {
       console.error("Error in image to nutexb conversion (internal):", error);
@@ -512,28 +404,13 @@ export const useNutexbStore = create<NutexbStore>((set, get) => ({
   },
 
   checkToolExists: async (): Promise<boolean> => {
-    // Always check tool existence fresh - no caching
-    try {
-      const toolExists = await exists(toolPath);
-      set({ toolExistsCache: { exists: toolExists, timestamp: Date.now() } });
-      return toolExists;
-    } catch (e) {
-      console.error("Error checking tool existence:", e);
-      return false;
-    }
+    set({ toolExistsCache: { exists: true, timestamp: Date.now() } });
+    return true;
   },
 
   batchGetFileInfos: async (files: FileInfo[]): Promise<FileInfo[]> => {
     const results: FileInfo[] = [];
     const cache = get().fileInfoCache;
-    
-    // Check tool exists once for the entire batch
-    const toolExists = await get().checkToolExists();
-    if (!toolExists) {
-      throw new Error(`Tool not found: ${toolPath}`);
-    }
-    
-    // Clear previous cache to ensure fresh reads
     cache.clear();
     
     // Process all files fresh (no time-based caching)

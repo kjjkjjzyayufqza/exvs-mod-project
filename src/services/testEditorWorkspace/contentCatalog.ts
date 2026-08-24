@@ -1,7 +1,11 @@
 import { join } from "@tauri-apps/api/path";
 import { suggestFhm2dStructureName } from "@/utils/fhm2dNameMapping";
 import { resolveExistingFhm2dPack, type ResolvedFhm2dPackPaths } from "./paths";
-import type { TestEditorWorkspaceDocument, WorkspaceAssetRouteId } from "./types";
+import type {
+  TestEditorWorkspaceDocument,
+  WorkspaceAssetRouteId,
+  WorkspacePackIdentity,
+} from "./types";
 
 export const WORKSPACE_CONTENT_CATALOG = Object.freeze({
   "character-id-table": {
@@ -24,6 +28,14 @@ export const WORKSPACE_CONTENT_CATALOG = Object.freeze({
     hashHex: "0xB7367090",
     relativeFilePath: "series_list.bin",
     label: "Series List",
+  },
+  "navi-list": {
+    id: "navi-list",
+    routeId: "list.navi",
+    hashHex: "0x6FCC0FBA",
+    relativeFilePath: "navi_list.bin",
+    defaultPackName: "navi_list",
+    label: "Navi List",
   },
   "character-cost": {
     id: "character-cost",
@@ -67,6 +79,38 @@ export const WORKSPACE_CONTENT_CATALOG = Object.freeze({
     relativeFilePath: null,
     label: "Stage Icons Secondary",
   },
+  "raw-path-id": {
+    id: "raw-path-id",
+    routeId: "unit.sound",
+    hashHex: "0x264D1CA7",
+    relativeFilePath: null,
+    defaultPackName: "raw_path_id",
+    label: "Raw Path ID",
+  },
+  "pilot-voice-resource": {
+    id: "pilot-voice-resource",
+    routeId: "unit.sound",
+    hashHex: "0x8C428AF2",
+    relativeFilePath: "pilotvoiceresourcetable.vrtbl",
+    defaultPackName: "090sound",
+    label: "Pilot Voice Table",
+  },
+  "bgm-table": {
+    id: "bgm-table",
+    routeId: "unit.sound",
+    hashHex: "0x5E92AAEC",
+    relativeFilePath: "bgm_table.vgsht2",
+    defaultPackName: "bgm_table",
+    label: "BGM Table",
+  },
+  "bgm-bank-update-02": {
+    id: "bgm-bank-update-02",
+    routeId: "unit.sound",
+    hashHex: "0x0C568109",
+    relativeFilePath: null,
+    defaultPackName: "bgm_ac27_update_02",
+    label: "BGM AC27 Update 02 Bank",
+  },
 } as const);
 
 export type WorkspaceContentId = keyof typeof WORKSPACE_CONTENT_CATALOG;
@@ -77,6 +121,7 @@ export interface WorkspaceContentDescriptor {
   hashHex: string;
   relativeFilePath: string | null;
   label: string;
+  defaultPackName?: string;
 }
 
 export interface ResolvedWorkspaceContentPack extends ResolvedFhm2dPackPaths {
@@ -95,7 +140,24 @@ export interface ResolvedWorkspaceContentLocation {
 export function getWorkspaceContentDescriptor(
   id: WorkspaceContentId,
 ): WorkspaceContentDescriptor {
-  return WORKSPACE_CONTENT_CATALOG[id];
+  return WORKSPACE_CONTENT_CATALOG[id] as WorkspaceContentDescriptor;
+}
+
+export function workspacePackIdentityFromResolved(
+  pack: ResolvedWorkspaceContentPack,
+  sourceLayout: "configured" | "legacy",
+): WorkspacePackIdentity {
+  const normalized = pack.folderPath.replace(/\\/g, "/");
+  const hashFolderName = normalized.split("/").filter(Boolean).at(-1) ?? pack.hashHex;
+  return {
+    packKey: pack.packKey,
+    routeId: pack.routeId,
+    prefix: pack.prefix,
+    hashFolderName,
+    folderPath: pack.folderPath,
+    structureJsonPath: pack.structureJsonPath,
+    sourceLayout,
+  };
 }
 
 async function withFilePath(
@@ -119,6 +181,7 @@ export async function resolveWorkspaceContent(
   const descriptor = getWorkspaceContentDescriptor(id);
   const packName = suggestFhm2dStructureName(descriptor.hashHex, {
     routeId: descriptor.routeId,
+    fallbackName: descriptor.defaultPackName ?? undefined,
   }) ?? undefined;
   const pack = await resolveExistingFhm2dPack(
     workspaceRoot,

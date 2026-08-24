@@ -312,6 +312,84 @@ pub struct SeriesImageReplaceSummary {
     pub nutexb_name: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NutexbScanFile {
+    pub relative_path: String,
+    pub path: String,
+    pub size: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NutexbFolderScan {
+    pub root: String,
+    pub files: Vec<NutexbScanFile>,
+}
+
+pub fn list_nutexb_folder(root: &str) -> Result<NutexbFolderScan, String> {
+    let root_path = PathBuf::from(root.trim());
+    if root_path.as_os_str().is_empty() {
+        return Err("Folder path is empty".to_string());
+    }
+    if !root_path.is_dir() {
+        return Err(format!("Not a directory: {}", root_path.display()));
+    }
+    let mut files = Vec::new();
+    collect_nutexb_files_recursive(&root_path, &root_path, &mut files)?;
+    files.sort_by(|a, b| a.relative_path.to_lowercase().cmp(&b.relative_path.to_lowercase()));
+    Ok(NutexbFolderScan {
+        root: root_path.display().to_string(),
+        files,
+    })
+}
+
+fn collect_nutexb_files_recursive(
+    root: &Path,
+    dir: &Path,
+    out: &mut Vec<NutexbScanFile>,
+) -> Result<(), String> {
+    let entries = fs::read_dir(dir).map_err(|e| format!("Read dir {} failed: {e}", dir.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Read dir entry failed: {e}"))?;
+        let path = entry.path();
+        let file_type = entry.file_type().map_err(|e| format!("Stat {} failed: {e}", path.display()))?;
+        if file_type.is_dir() {
+            let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+            if name.eq_ignore_ascii_case("__convert") || name.starts_with('.') {
+                continue;
+            }
+            collect_nutexb_files_recursive(root, &path, out)?;
+            continue;
+        }
+        if !file_type.is_file() {
+            continue;
+        }
+        let is_nutexb = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("nutexb"))
+            .unwrap_or(false);
+        if !is_nutexb {
+            continue;
+        }
+        let relative_path = path
+            .strip_prefix(root)
+            .map_err(|_| format!("Path {} is not under {}", path.display(), root.display()))?
+            .to_string_lossy()
+            .replace('\\', "/");
+        let size = fs::metadata(&path)
+            .map(|meta| meta.len())
+            .unwrap_or(0);
+        out.push(NutexbScanFile {
+            relative_path,
+            path: path.display().to_string(),
+            size,
+        });
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum OutputMode {
     RootConvert,
@@ -835,6 +913,97 @@ pub fn card_icon_replace_from_png_with_dds_format(
         output_nutexb_path: out_nutexb_path.to_string_lossy().to_string(),
         preview_png_path: preview_png_path.to_string_lossy().to_string(),
         nutexb_name,
+    })
+}
+
+fn dds_format_needs_block_alignment(format: DdsImageFormat) -> bool {
+    matches!(
+        format,
+        DdsImageFormat::BC1RgbaUnorm
+            | DdsImageFormat::BC1RgbaUnormSrgb
+            | DdsImageFormat::BC2RgbaUnorm
+            | DdsImageFormat::BC2RgbaUnormSrgb
+            | DdsImageFormat::BC3RgbaUnorm
+            | DdsImageFormat::BC3RgbaUnormSrgb
+            | DdsImageFormat::BC4RUnorm
+            | DdsImageFormat::BC4RSnorm
+            | DdsImageFormat::BC5RgUnorm
+            | DdsImageFormat::BC5RgSnorm
+            | DdsImageFormat::BC6hRgbUfloat
+            | DdsImageFormat::BC6hRgbSfloat
+            | DdsImageFormat::BC7RgbaUnorm
+            | DdsImageFormat::BC7RgbaUnormSrgb
+    )
+}
+
+fn pad_rgba_to_block_size(img: RgbaImage) -> RgbaImage {
+    let width = img.width();
+    let height = img.height();
+    let padded_width = width.div_ceil(4) * 4;
+    let padded_height = height.div_ceil(4) * 4;
+    if padded_width == width && padded_height == height {
+        return img;
+    }
+    let mut padded = RgbaImage::new(padded_width, padded_height);
+    for (x, y, pixel) in img.enumerate_pixels() {
+        padded.put_pixel(x, y, *pixel);
+    }
+    padded
+}
+
+/// Create a new nutexb from any image the `image` crate can open (PNG/JPEG/BMP/WebP/TIFF).
+/// Internal footer name is `nutexb_name`. Block-compressed formats are padded to 4x4.
+pub fn image_to_nutexb(
+    image_path: &str,
+    output_nutexb_path: &str,
+    nutexb_name: &str,
+    dds_format_str: &str,
+    generate_mipmaps: bool,
+) -> Result<SeriesImageReplaceSummary, String> {
+    let dds_format = DdsImageFormat::from_str(dds_format_str)
+        .map_err(|_| format!("Invalid DDS format: {dds_format_str}"))?;
+    let out_nutexb_path = PathBuf::from(output_nutexb_path);
+    if let Some(parent) = out_nutexb_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Create output directory failed: {e}"))?;
+    }
+
+    let dyn_img = image::open(image_path)
+        .map_err(|e| format!("Failed to open image {}: {e}", image_path))?;
+    let mut rgba: RgbaImage = dyn_img.to_rgba8();
+    if dds_format_needs_block_alignment(dds_format) {
+        rgba = pad_rgba_to_block_size(rgba);
+    }
+
+    let name = {
+        let trimmed = nutexb_name.trim();
+        if trimmed.is_empty() {
+            sanitize_file_name(
+                out_nutexb_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("texture"),
+            )
+        } else {
+            sanitize_file_name(trimmed)
+        }
+    };
+    let mipmaps = if generate_mipmaps {
+        Mipmaps::GeneratedAutomatic
+    } else {
+        Mipmaps::Disabled
+    };
+    let dds = dds_from_image(&rgba, dds_format, Quality::Normal, mipmaps)
+        .map_err(|e| format!("DDS encode failed: {e}"))?;
+    let nutexb = NutexbFile::from_dds(&dds, name.clone())
+        .map_err(|e| format!("Nutexb encode failed: {e}"))?;
+    nutexb
+        .write_to_file(&out_nutexb_path)
+        .map_err(|e| format!("Write nutexb failed: {e}"))?;
+
+    Ok(SeriesImageReplaceSummary {
+        output_nutexb_path: out_nutexb_path.to_string_lossy().to_string(),
+        preview_png_path: String::new(),
+        nutexb_name: name,
     })
 }
 

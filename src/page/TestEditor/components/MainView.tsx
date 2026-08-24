@@ -7,6 +7,7 @@ import CharacterIdTableView from "./CharacterIdTableView";
 import CharacterCostView from "./CharacterCostView";
 import CharacterListView from "./CharacterListView";
 import SeriesListView from "./SeriesListView";
+import NaviListView from "./NaviListView";
 import CardIconListView from "./CardIconListView";
 import StageIconListView from "./StageIconListView";
 import StageListView from "./StageListView";
@@ -25,6 +26,9 @@ import EffectFolderEditorView from "./effect-folder-editor/EffectFolderEditorVie
 import { resolveEffectPackFromStructureJson } from "./effect-folder-editor/effectFolderEditorUtils";
 import MotionFolderEditorView from "./motion-folder-editor/MotionFolderEditorView";
 import { resolveMotionPackFromStructureJson } from "./motion-folder-editor/motionFolderEditorUtils";
+import RawPathIdView from "./raw-path-id/RawPathIdView";
+import PilotVoiceResourceView from "./pilot-voice-resource/PilotVoiceResourceView";
+import BgmTableView from "./bgm-table/BgmTableView";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import { shouldAutoActivateMscWorkspaceTab } from "../utils/mscWorkspaceUtils";
 import { shouldKeepMainViewTabMounted } from "./main-view/mainViewTabGroups";
@@ -107,6 +111,58 @@ const tabs: StageTab[] = [
         folderPath={props.folderPath ?? ""}
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDocument={props.workspaceDocument}
+      />
+    ),
+  },
+  {
+    name: "Navi List",
+    value: "navi-list",
+    render: (props: MainViewProps) => (
+      <NaviListView
+        folderPath={props.folderPath ?? ""}
+        isActive={false}
+        onUnsavedChanges={props.onUnsavedChanges}
+        onPackMutated={props.onPackMutated}
+        workspaceDocument={props.workspaceDocument}
+      />
+    ),
+  },
+  {
+    name: "Voice file path",
+    value: "raw-path-id",
+    render: (props: MainViewProps) => (
+      <RawPathIdView
+        folderPath={props.folderPath ?? ""}
+        isActive={false}
+        onUnsavedChanges={props.onUnsavedChanges}
+        onPackMutated={props.onPackMutated}
+        workspaceDocument={props.workspaceDocument}
+      />
+    ),
+  },
+  {
+    name: "Voice slot",
+    value: "pilot-voice-resource",
+    render: (props: MainViewProps) => (
+      <PilotVoiceResourceView
+        folderPath={props.folderPath ?? ""}
+        isActive={false}
+        onUnsavedChanges={props.onUnsavedChanges}
+        onPackMutated={props.onPackMutated}
+        workspaceDocument={props.workspaceDocument}
+      />
+    ),
+  },
+  {
+    name: "BGM table",
+    value: "bgm-table",
+    render: (props: MainViewProps) => (
+      <BgmTableView
+        folderPath={props.folderPath ?? ""}
+        isActive={false}
+        onUnsavedChanges={props.onUnsavedChanges}
+        onPackMutated={props.onPackMutated}
         workspaceDocument={props.workspaceDocument}
       />
     ),
@@ -334,6 +390,11 @@ const MainView = ({
   const [characterCostHasUnsaved, setCharacterCostHasUnsaved] = useState(false);
   const [characterListHasUnsaved, setCharacterListHasUnsaved] = useState(false);
   const [seriesListHasUnsaved, setSeriesListHasUnsaved] = useState(false);
+  const [naviListHasUnsaved, setNaviListHasUnsaved] = useState(false);
+  const [pendingNaviUniqueId, setPendingNaviUniqueId] = useState<number | null>(null);
+  const [rawPathIdHasUnsaved, setRawPathIdHasUnsaved] = useState(false);
+  const [pilotVoiceResourceHasUnsaved, setPilotVoiceResourceHasUnsaved] = useState(false);
+  const [bgmTableHasUnsaved, setBgmTableHasUnsaved] = useState(false);
   const [stageListHasUnsaved, setStageListHasUnsaved] = useState(false);
   const [stageIconListHasUnsaved, setStageIconListHasUnsaved] = useState(false);
   const [mscWorkspaceHasUnsaved, setMscWorkspaceHasUnsaved] = useState(false);
@@ -408,6 +469,21 @@ const MainView = ({
     setSeriesListHasUnsaved(hasChanges);
   }, []);
 
+  const handleNaviListUnsaved = useCallback((hasChanges: boolean) => {
+    setNaviListHasUnsaved(hasChanges);
+  }, []);
+
+  const handleRawPathIdUnsaved = useCallback((hasChanges: boolean) => {
+    setRawPathIdHasUnsaved(hasChanges);
+  }, []);
+
+  const handlePilotVoiceResourceUnsaved = useCallback((hasChanges: boolean) => {
+    setPilotVoiceResourceHasUnsaved(hasChanges);
+  }, []);
+  const handleBgmTableUnsaved = useCallback((hasChanges: boolean) => {
+    setBgmTableHasUnsaved(hasChanges);
+  }, []);
+
   const handleStageListUnsaved = useCallback((hasChanges: boolean) => {
     setStageListHasUnsaved(hasChanges);
   }, []);
@@ -435,6 +511,10 @@ const MainView = ({
       "character-cost": characterCostHasUnsaved,
       "character-list": characterListHasUnsaved,
       "series-list": seriesListHasUnsaved,
+      "navi-list": naviListHasUnsaved,
+      "raw-path-id": rawPathIdHasUnsaved,
+      "pilot-voice-resource": pilotVoiceResourceHasUnsaved,
+      "bgm-table": bgmTableHasUnsaved,
       "card-icon-list": stageIconListHasUnsaved,
       "stage-icon-list": stageIconListHasUnsaved,
       "stage-list": stageListHasUnsaved,
@@ -448,6 +528,10 @@ const MainView = ({
       characterCostHasUnsaved,
       characterListHasUnsaved,
       seriesListHasUnsaved,
+      naviListHasUnsaved,
+      rawPathIdHasUnsaved,
+      pilotVoiceResourceHasUnsaved,
+      bgmTableHasUnsaved,
       stageIconListHasUnsaved,
       stageListHasUnsaved,
       mscWorkspaceHasUnsaved,
@@ -469,6 +553,21 @@ const MainView = ({
 
   const handleConsumePendingCharacterIdTableSelection = useCallback(() => {
     setPendingCharacterIdTableSelection(null);
+  }, []);
+
+  const handleJumpToNaviList = useCallback((uniqueId: number) => {
+    setPendingNaviUniqueId(uniqueId);
+    setActiveTab("navi-list");
+    setVisitedTabs((prev) => {
+      if (prev.has("navi-list")) return prev;
+      const next = new Set(prev);
+      next.add("navi-list");
+      return next;
+    });
+  }, []);
+
+  const handleConsumePendingNaviSelection = useCallback(() => {
+    setPendingNaviUniqueId(null);
   }, []);
 
   const resolvedTabs = useMemo<StageTab[]>(() => {
@@ -525,6 +624,9 @@ const MainView = ({
               isActive={activeTab === "character-list"}
               onUnsavedChanges={handleCharacterListUnsaved}
               onJumpToCharacterIdTable={handleJumpToCharacterIdTable}
+              onJumpToNaviList={handleJumpToNaviList}
+              onPackMutated={props.onPackMutated}
+              onRevealTreeFolder={props.onRevealTreeFolder}
               workspaceDocument={props.workspaceDocument}
             />
           ),
@@ -539,6 +641,68 @@ const MainView = ({
               folderPath={props.folderPath ?? ""}
               isActive={activeTab === "series-list"}
               onUnsavedChanges={handleSeriesListUnsaved}
+              workspaceDocument={props.workspaceDocument}
+            />
+          ),
+        };
+      }
+
+      if (tab.value === "navi-list") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <NaviListView
+              folderPath={props.folderPath ?? ""}
+              isActive={activeTab === "navi-list"}
+              onUnsavedChanges={handleNaviListUnsaved}
+              onPackMutated={props.onPackMutated}
+              pendingSelectUniqueId={pendingNaviUniqueId}
+              onConsumePendingSelect={handleConsumePendingNaviSelection}
+              workspaceDocument={props.workspaceDocument}
+            />
+          ),
+        };
+      }
+
+      if (tab.value === "raw-path-id") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <RawPathIdView
+              folderPath={props.folderPath ?? ""}
+              isActive={activeTab === "raw-path-id"}
+              onUnsavedChanges={handleRawPathIdUnsaved}
+              onPackMutated={props.onPackMutated}
+              workspaceDocument={props.workspaceDocument}
+            />
+          ),
+        };
+      }
+
+      if (tab.value === "pilot-voice-resource") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <PilotVoiceResourceView
+              folderPath={props.folderPath ?? ""}
+              isActive={activeTab === "pilot-voice-resource"}
+              onUnsavedChanges={handlePilotVoiceResourceUnsaved}
+              onPackMutated={props.onPackMutated}
+              workspaceDocument={props.workspaceDocument}
+            />
+          ),
+        };
+      }
+
+      if (tab.value === "bgm-table") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <BgmTableView
+              folderPath={props.folderPath ?? ""}
+              isActive={activeTab === "bgm-table"}
+              onUnsavedChanges={handleBgmTableUnsaved}
+              onPackMutated={props.onPackMutated}
               workspaceDocument={props.workspaceDocument}
             />
           ),
@@ -659,7 +823,13 @@ const MainView = ({
     handleCharacterListUnsaved,
     handleConsumePendingCharacterIdTableSelection,
     handleJumpToCharacterIdTable,
+    handleJumpToNaviList,
+    handleConsumePendingNaviSelection,
+    handleNaviListUnsaved,
     handleSeriesListUnsaved,
+    handleRawPathIdUnsaved,
+    handlePilotVoiceResourceUnsaved,
+    handleBgmTableUnsaved,
     handleStageIconListUnsaved,
     handleStageListUnsaved,
     handleMscWorkspaceUnsaved,
@@ -669,6 +839,7 @@ const MainView = ({
     mscWorkspaceFolderPath,
     onMscWorkspaceFolderChange,
     pendingCharacterIdTableSelection,
+    pendingNaviUniqueId,
   ]);
 
   const handleTabChange = useCallback((value: string) => {

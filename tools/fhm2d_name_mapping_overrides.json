@@ -131,6 +131,38 @@
       "references": [
         "E:\\OBHK0.3_v27\\data\\x64\\050ai\\aiscript\\ai_CHR_733GNDAGE_017GNAOCM_001.aimsexcd"
       ]
+    },
+    {
+      "hashName": "0x264D1CA7",
+      "name": "raw_path_id",
+      "routePrefix": "090sound",
+      "routeId": "unit.sound",
+      "source": "manual-research-note",
+      "confidence": "manual-research-note",
+      "aliases": [
+        "raw_path_id_release",
+        "800etcetera_raw_path_id"
+      ],
+      "notes": "Official vs2 plaintext lives at 800etcetera/raw_path_id. TestEditor / E:\\XB\\mod sound packs use 090sound/raw_path_id. Game loads the pack by HashName 0x264D1CA7.",
+      "references": [
+        "docs/exvs2-audio-voice-bgm-indexing.md"
+      ]
+    },
+    {
+      "hashName": "0x8C428AF2",
+      "name": "090sound",
+      "routePrefix": "090sound",
+      "routeId": "unit.sound",
+      "source": "manual-research-note",
+      "confidence": "manual-research-note",
+      "aliases": [
+        "pilotvoiceresourcetable",
+        "090sound_root"
+      ],
+      "notes": "Official vs2 plaintext is x64/090sound (7 root tables). Workspace uses 090sound/090sound so it does not mix with 090sound/raw_path_id. Game loads HashName 0x8C428AF2.",
+      "references": [
+        "docs/exvs2-audio-voice-bgm-indexing.md"
+      ]
     }
   ]
 }

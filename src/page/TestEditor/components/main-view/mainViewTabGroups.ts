@@ -1,8 +1,9 @@
-export type MainViewTabGroupId = "pack" | "character" | "stage" | "msc" | "param";
+export type MainViewTabGroupId = "pack" | "character" | "sound" | "stage" | "msc" | "param";
 
 export const MAIN_VIEW_TAB_GROUP_ORDER: MainViewTabGroupId[] = [
   "pack",
   "character",
+  "sound",
   "stage",
   "msc",
   "param",
@@ -11,6 +12,7 @@ export const MAIN_VIEW_TAB_GROUP_ORDER: MainViewTabGroupId[] = [
 export const MAIN_VIEW_TAB_GROUP_LABELS: Record<MainViewTabGroupId, string> = {
   pack: "Pack",
   character: "Character",
+  sound: "Sound",
   stage: "Stage",
   msc: "MSC",
   param: "Param",
@@ -31,6 +33,10 @@ export const MAIN_VIEW_TAB_META: MainViewTabMeta[] = [
   { value: "character-cost", name: "Character Cost", shortName: "Cost", group: "character" },
   { value: "character-list", name: "Character list", shortName: "List", group: "character" },
   { value: "series-list", name: "Series List", shortName: "Series", group: "character" },
+  { value: "navi-list", name: "Navi List", shortName: "Navi", group: "character" },
+  { value: "raw-path-id", name: "Voice file path", shortName: "Path", group: "sound" },
+  { value: "pilot-voice-resource", name: "Voice slot", shortName: "Slot", group: "sound" },
+  { value: "bgm-table", name: "BGM table", shortName: "BGM", group: "sound" },
   { value: "card-icon-list", name: "Card Icon List", shortName: "Card icons", group: "stage" },
   { value: "stage-icon-list", name: "Stage Icon List", shortName: "Stage icons", group: "stage" },
   { value: "stage-list", name: "Stage List", shortName: "Stages", group: "stage" },

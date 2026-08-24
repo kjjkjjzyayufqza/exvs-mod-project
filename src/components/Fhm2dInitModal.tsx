@@ -43,6 +43,16 @@ import {
 import { TEST_EDITOR_FOLDER_STORE_KEY, useConfigStore } from "@/store/configStore";
 import { IOReadFile } from "@/IO/fileSystem";
 import { ExtractFHMData, ExtractType, Fhm2d_type_format } from "@/models/fhm2d";
+import { initPilotVoiceResourcePack } from "@/page/TestEditor/components/pilot-voice-resource/initPilotVoiceResourcePack";
+import { PILOT_VOICE_RESOURCE_PACK_NAME } from "@/page/TestEditor/components/pilot-voice-resource/pilotVoiceResourceDocument";
+import { initRawPathIdPack } from "@/page/TestEditor/components/raw-path-id/initRawPathIdPack";
+import { RAW_PATH_ID_PACK_NAME } from "@/page/TestEditor/components/raw-path-id/rawPathIdDocument";
+import { initBgmTablePack } from "@/page/TestEditor/components/bgm-table/initBgmTablePack";
+import { initBgmBankUpdate02Pack } from "@/page/TestEditor/components/bgm-table/initBgmBankUpdate02Pack";
+import {
+  BGM_BANK_UPDATE_02_PACK_NAME,
+  BGM_TABLE_PACK_NAME,
+} from "@/page/TestEditor/components/bgm-table/bgmTableDocument";
 import { cn } from "@/lib/utils";
 import {
     normalizeFhm2dHashName,
@@ -124,6 +134,15 @@ const FHM2D_ITEMS: InitListItem[] = [
         formatLabel: "list",
     },
     {
+        id: "navi_list",
+        name: "Navi List",
+        hash: "0x6FCC0FBA",
+        routeId: "list.navi",
+        formatLabel: "list",
+        fixedPackName: "navi_list",
+        description: "support navi table → 012list/navi_list",
+    },
+    {
         id: "stage_list",
         name: "Stage List",
         hash: "0xCE74091E",
@@ -181,6 +200,46 @@ const FHM2D_ITEMS: InitListItem[] = [
         formatLabel: "effect",
         fixedPackName: "000common_001",
         description: "shared unit FX → 006effect/000common_001",
+    },
+    {
+        id: "raw_path_id",
+        name: "Raw Path ID",
+        hash: "0x264D1CA7",
+        routeId: "unit.sound",
+        format: Fhm2d_type_format.fhm2d_sound,
+        formatLabel: "sound",
+        fixedPackName: "raw_path_id",
+        description: "unpack 0x264D1CA7 and name inner files from vs2 meta → 090sound/raw_path_id",
+    },
+    {
+        id: "pilot_voice_resource",
+        name: "Pilot Voice Table",
+        hash: "0x8C428AF2",
+        routeId: "unit.sound",
+        format: Fhm2d_type_format.fhm2d_sound,
+        formatLabel: "sound",
+        fixedPackName: "090sound",
+        description: "unpack 0x8C428AF2 and name 7 root tables → 090sound/090sound",
+    },
+    {
+        id: "bgm_table",
+        name: "BGM Table",
+        hash: "0x5E92AAEC",
+        routeId: "unit.sound",
+        format: Fhm2d_type_format.fhm2d_sound,
+        formatLabel: "sound",
+        fixedPackName: BGM_TABLE_PACK_NAME,
+        description: "unpack 0x5E92AAEC bgm_table.vgsht2 → 090sound/bgm_table",
+    },
+    {
+        id: "bgm_bank_update_02",
+        name: "BGM AC27 Update 02 Bank",
+        hash: "0x0C568109",
+        routeId: "unit.sound",
+        format: Fhm2d_type_format.fhm2d_sound,
+        formatLabel: "sound",
+        fixedPackName: BGM_BANK_UPDATE_02_PACK_NAME,
+        description: "unpack 0x0C568109 group 6 nus3bank → 090sound/bgm_ac27_update_02",
     },
 ];
 
@@ -296,6 +355,8 @@ function getFormatBadgeColor(formatLabel: string): string {
             return "bg-amber-500/10 text-amber-800 border-amber-500/25 hover:bg-amber-500/20";
         case "effect":
             return "bg-emerald-500/10 text-emerald-700 border-emerald-500/25 hover:bg-emerald-500/20";
+        case "sound":
+            return "bg-cyan-500/10 text-cyan-700 border-cyan-500/25 hover:bg-cyan-500/20";
         default:
             return "bg-muted text-muted-foreground";
     }
@@ -496,6 +557,23 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
     async function handleExtract(item: InitListItem, nameOverride?: string) {
         if (isExtracting) return;
 
+        if (item.id === "raw_path_id" && nameOverride === undefined) {
+            await handleExtract(item, item.fixedPackName ?? RAW_PATH_ID_PACK_NAME);
+            return;
+        }
+        if (item.id === "pilot_voice_resource" && nameOverride === undefined) {
+            await handleExtract(item, item.fixedPackName ?? PILOT_VOICE_RESOURCE_PACK_NAME);
+            return;
+        }
+        if (item.id === "bgm_table" && nameOverride === undefined) {
+            await handleExtract(item, item.fixedPackName ?? BGM_TABLE_PACK_NAME);
+            return;
+        }
+        if (item.id === "bgm_bank_update_02" && nameOverride === undefined) {
+            await handleExtract(item, item.fixedPackName ?? BGM_BANK_UPDATE_02_PACK_NAME);
+            return;
+        }
+
         if (nameOverride === undefined) {
             openExtractNameDialog(item);
             return;
@@ -548,7 +626,27 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
             const listOutputFileName =
                 item.format === Fhm2d_type_format.fhm2d_stage_list ? `${item.id}.bin` : undefined;
 
-            const extractResult = await ExtractFHMData(inputPath, outDir, ExtractType.SingleFolder, item.format, listOutputFileName);
+            const extractResult = item.id === "raw_path_id"
+                ? await initRawPathIdPack({
+                    sourceFhm2dPath: inputPath,
+                    workspaceRoot: outBase,
+                })
+                : item.id === "pilot_voice_resource"
+                    ? await initPilotVoiceResourcePack({
+                        sourceFhm2dPath: inputPath,
+                        workspaceRoot: outBase,
+                    })
+                : item.id === "bgm_table"
+                    ? await initBgmTablePack({
+                        sourceFhm2dPath: inputPath,
+                        workspaceRoot: outBase,
+                    })
+                : item.id === "bgm_bank_update_02"
+                    ? await initBgmBankUpdate02Pack({
+                        sourceFhm2dPath: inputPath,
+                        workspaceRoot: outBase,
+                    })
+                : await ExtractFHMData(inputPath, outDir, ExtractType.SingleFolder, item.format, listOutputFileName);
 
             clearInterval(progressInterval);
             setExtractionProgress(100);
@@ -564,9 +662,10 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
             saveHistory(newHistory);
 
             setLastExtractedId(item.id);
-            if (extractResult.namingError) {
+            const namingError = "namingError" in extractResult ? extractResult.namingError : undefined;
+            if (namingError) {
                 toast.error(`Extract finished but FHM naming failed: ${item.name}`, {
-                    description: extractResult.namingError,
+                    description: namingError,
                     duration: 20_000,
                     action: {
                         label: "Open Folder",

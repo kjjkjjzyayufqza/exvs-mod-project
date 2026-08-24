@@ -58,6 +58,18 @@ export async function getMemoryNutexbPngBytes(params: {
   return invoke<ArrayBuffer | Uint8Array>("fhm2d_memory_nutexb_png_bytes", params);
 }
 
+export async function getMemoryNutexbRgbaBytes(params: {
+  sessionId: string;
+  virtualPath: string;
+  maxDimension?: number;
+}): Promise<ArrayBuffer | Uint8Array> {
+  return invoke<ArrayBuffer | Uint8Array>("fhm2d_memory_nutexb_rgba_bytes", {
+    sessionId: params.sessionId,
+    virtualPath: params.virtualPath,
+    maxDimension: params.maxDimension,
+  });
+}
+
 export async function listCharacterIdMemoryPreviewRows(params: {
   workspaceRoot: string;
   obDplCachePath: string;

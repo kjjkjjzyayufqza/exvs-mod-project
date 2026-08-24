@@ -24,6 +24,8 @@ import {
 } from "./series-list/seriesImage";
 import { CharacterEditor } from "./character-list/CharacterEditor";
 import type { SeriesIdPickerItem } from "./character-list/SeriesIdPickerPopover";
+import type { BgmCuePickerItem } from "./character-list/BgmCuePickerPopover";
+import { bgmEntryLabel, parseBgmTablePack } from "./bgm-table/bgmTableDocument";
 import {
   pickCharaJsonImportPreview,
   type CharaJsonImportPreview,
@@ -39,10 +41,21 @@ import {
 } from "./character-list/FontCoverageErrorDialog";
 import {
   resolveWorkspaceContent,
+  workspacePackIdentityFromResolved,
   type WorkspaceContentId,
 } from "@/services/testEditorWorkspace/contentCatalog";
 import { promptAndMigrateWorkspaceContentIfNeeded } from "@/services/testEditorWorkspace/contentMigration";
-import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
+import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
+import { findFhm2dNameMapping, listFhm2dNameMappingEntries } from "@/utils/fhm2dNameMapping";
+import { formatGuiHashHex } from "./character-list/guiClonePlan";
+import {
+  collectCharacterGuiUsages,
+  expectedWorkspaceGuiFolder,
+  mergeGuiPackPickerItems,
+  resolveGuiPackFolder,
+  type GuiPackPickerItem,
+  type WorkspaceGuiPack,
+} from "./character-list/guiPackIndex";
 import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
 
 interface CharacterListViewProps {
@@ -50,6 +63,9 @@ interface CharacterListViewProps {
   isActive: boolean;
   onUnsavedChanges?: (hasChanges: boolean) => void;
   onJumpToCharacterIdTable?: (characterId: number) => void;
+  onJumpToNaviList?: (uniqueId: number) => void;
+  onPackMutated?: (pack: WorkspacePackIdentity) => void;
+  onRevealTreeFolder?: (path: string) => void;
   workspaceDocument: TestEditorWorkspaceDocument;
 }
 
@@ -86,6 +102,12 @@ type SeriesPickerState =
   | { status: "error"; filePath: string; convertDirPath: string; message: string }
   | { status: "ready"; filePath: string; convertDirPath: string; items: SeriesIdPickerItem[] };
 
+type BgmPickerState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "ready"; items: BgmCuePickerItem[] };
+
 type CardIconMapState =
   | { status: "idle"; filePath: string; convertDirPath: string }
   | { status: "loading"; filePath: string; convertDirPath: string }
@@ -103,6 +125,9 @@ export default function CharacterListView({
   isActive,
   onUnsavedChanges,
   onJumpToCharacterIdTable,
+  onJumpToNaviList,
+  onPackMutated,
+  onRevealTreeFolder,
   workspaceDocument,
 }: CharacterListViewProps) {
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
@@ -111,6 +136,7 @@ export default function CharacterListView({
     filePath: "",
     convertDirPath: "",
   });
+  const [bgmPickerState, setBgmPickerState] = useState<BgmPickerState>({ status: "idle" });
   const [cardIconMapState, setCardIconMapState] = useState<CardIconMapState>({
     status: "idle",
     filePath: "",
@@ -128,6 +154,9 @@ export default function CharacterListView({
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [characterIdTableIdSet, setCharacterIdTableIdSet] = useState<Set<number> | null>(null);
   const [characterIdTableIdsError, setCharacterIdTableIdsError] = useState<string | null>(null);
+  const [workspaceGuiPacks, setWorkspaceGuiPacks] = useState<WorkspaceGuiPack[]>([]);
+  const [guiPackLoading, setGuiPackLoading] = useState(false);
+  const [guiPackError, setGuiPackError] = useState<string | null>(null);
   const lastLoadedKeyRef = useRef<string>("");
 
   const resolveContent = useCallback(
@@ -224,6 +253,31 @@ export default function CharacterListView({
     }
   }, [folderPath, resetEditorState, resolveContentFilePath]);
 
+  const loadBgmPicker = useCallback(async () => {
+    if (!folderPath) {
+      setBgmPickerState({ status: "error", message: "Folder path is empty" });
+      return;
+    }
+    setBgmPickerState({ status: "loading" });
+    try {
+      const { pack } = await resolveContentPackPaths("bgm-table");
+      const table = await parseBgmTablePack(pack.folderPath);
+      setBgmPickerState({
+        status: "ready",
+        items: table.entries.map((entry) => ({
+          cueHash: entry.entryId >>> 0,
+          cueName: bgmEntryLabel(entry),
+          bankGroup: entry.bankGroup,
+        })),
+      });
+    } catch (error) {
+      setBgmPickerState({
+        status: "error",
+        message: error instanceof Error ? error.message : "BGM table is not unpacked",
+      });
+    }
+  }, [folderPath, resolveContentPackPaths]);
+
   const loadSeriesPicker = useCallback(async () => {
     if (!folderPath) {
       setSeriesPickerState({ status: "error", filePath: "", convertDirPath: "", message: "Folder path is empty" });
@@ -317,6 +371,35 @@ export default function CharacterListView({
     }
   }, [folderPath, resolveContentPackPaths]);
 
+  const loadGuiPacks = useCallback(async () => {
+    if (!folderPath) return;
+    setGuiPackLoading(true);
+    setGuiPackError(null);
+    try {
+      const workspacePacks = await invoke<WorkspaceGuiPack[]>("list_workspace_gui_packs", {
+        workspaceRoot: folderPath,
+      });
+      setWorkspaceGuiPacks(workspacePacks);
+    } catch (error) {
+      setWorkspaceGuiPacks([]);
+      setGuiPackError(error instanceof Error ? error.message : "Failed to list 009gui packs");
+    } finally {
+      setGuiPackLoading(false);
+    }
+  }, [folderPath]);
+
+  const guiPackItems = useMemo<GuiPackPickerItem[]>(() => {
+    const usages =
+      loadState.status === "ready"
+        ? collectCharacterGuiUsages(loadState.list.entries as unknown as Array<Record<string, unknown>>)
+        : [];
+    return mergeGuiPackPickerItems({
+      workspacePacks: workspaceGuiPacks,
+      nameMappings: listFhm2dNameMappingEntries(),
+      characterUsages: usages,
+    });
+  }, [loadState, workspaceGuiPacks]);
+
   useEffect(() => {
     if (!isActive) return;
     const routeKey = [
@@ -325,15 +408,18 @@ export default function CharacterListView({
       workspaceDocument.assetRoutes["list.series"]?.prefix ?? "",
       workspaceDocument.assetRoutes["gui.series-icons"]?.prefix ?? "",
       workspaceDocument.assetRoutes["gui.card-icons"]?.prefix ?? "",
+      workspaceDocument.assetRoutes["unit.sound"]?.prefix ?? "",
     ].join("|");
     const key = `${folderPath}::characterlist::${routeKey}`;
     if (key === lastLoadedKeyRef.current) return;
     lastLoadedKeyRef.current = key;
     void load();
     void loadSeriesPicker();
+    void loadBgmPicker();
     void loadCardIconMap();
     void loadCharacterIdTableIds();
-  }, [folderPath, isActive, load, loadCardIconMap, loadCharacterIdTableIds, loadSeriesPicker, workspaceDocument]);
+    void loadGuiPacks();
+  }, [folderPath, isActive, load, loadBgmPicker, loadCardIconMap, loadCharacterIdTableIds, loadGuiPacks, loadSeriesPicker, workspaceDocument]);
 
   useEffect(() => {
     if (loadState.status !== "ready") return;
@@ -393,6 +479,25 @@ export default function CharacterListView({
     }
   }, []);
 
+  const handleOpenGuiPackFolder = useCallback(
+    async (hash: number) => {
+      let folder = resolveGuiPackFolder(hash, guiPackItems);
+      if (!folder) {
+        const mapping = findFhm2dNameMapping(formatGuiHashHex(hash), { routePrefix: "009gui" });
+        if (mapping?.packagePath && mapping.name && folderPath) {
+          folder = expectedWorkspaceGuiFolder(folderPath, mapping.packagePath, mapping.name);
+        }
+      }
+      if (!folder) {
+        toast.error("No extracted 009gui folder for this hash");
+        return;
+      }
+      onRevealTreeFolder?.(folder);
+      await handleOpenPath(folder);
+    },
+    [folderPath, guiPackItems, handleOpenPath, onRevealTreeFolder],
+  );
+
   const handleOpenCharacterListFolder = useCallback(async () => {
     if (loadState.status !== "ready") return;
     const folderPathToOpen = await dirname(loadState.filePath);
@@ -430,15 +535,31 @@ export default function CharacterListView({
       toast.success("Saved character_list.bin");
       setHasChanges(false);
       onUnsavedChanges?.(false);
+      try {
+        const content = await resolveContent("character-list");
+        onPackMutated?.(
+          workspacePackIdentityFromResolved(
+            content.existing ?? content.configured,
+            content.sourceLayout === "legacy" ? "legacy" : "configured",
+          ),
+        );
+      } catch {
+        // File is saved; listening repack list can still be filled from Folder structure.
+      }
       setLoadState((prev) => {
         if (prev.status !== "ready") return prev;
         return { ...prev, list: sortedList };
       });
     } catch (error) {
       console.error(error);
-      toast.error("Failed to save character_list.bin");
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(
+        message
+          ? `Failed to save character_list.bin: ${message}`
+          : "Failed to save character_list.bin",
+      );
     }
-  }, [loadState, onUnsavedChanges]);
+  }, [loadState, onPackMutated, onUnsavedChanges, resolveContent]);
 
   const handleSaveFile = useCallback(async () => {
     if (loadState.status !== "ready") return;
@@ -573,9 +694,11 @@ export default function CharacterListView({
   const handleReloadAll = useCallback(() => {
     void load();
     void loadSeriesPicker();
+    void loadBgmPicker();
     void loadCardIconMap();
     void loadCharacterIdTableIds();
-  }, [load, loadCardIconMap, loadCharacterIdTableIds, loadSeriesPicker]);
+    void loadGuiPacks();
+  }, [load, loadBgmPicker, loadCardIconMap, loadCharacterIdTableIds, loadGuiPacks, loadSeriesPicker]);
 
   const jumpToCharacterIdTable = useMemo(() => {
     if (!onJumpToCharacterIdTable) {
@@ -781,7 +904,20 @@ export default function CharacterListView({
             cardIconIndexPickerItems={cardIconMapState.status === "ready" ? cardIconMapState.pickerItems : []}
             cardIconIndexPickerLoading={cardIconMapState.status === "loading" || cardIconMapState.status === "idle"}
             cardIconIndexPickerError={cardIconMapState.status === "error" ? cardIconMapState.message : null}
+            bgmCuePickerItems={bgmPickerState.status === "ready" ? bgmPickerState.items : []}
+            bgmCuePickerLoading={bgmPickerState.status === "loading" || bgmPickerState.status === "idle"}
+            bgmCuePickerError={bgmPickerState.status === "error" ? bgmPickerState.message : null}
+            guiPackItems={guiPackItems}
+            guiPackLoading={guiPackLoading}
+            guiPackError={guiPackError}
+            onOpenGuiPackFolder={(hash) => void handleOpenGuiPackFolder(hash)}
             jumpToCharacterIdTable={jumpToCharacterIdTable}
+            cloneGuiWritable={loadState.writable}
+            onPackMutated={onPackMutated}
+            onRevealTreeFolder={onRevealTreeFolder}
+            onJumpToNaviList={onJumpToNaviList}
+            onCloneApplied={() => void loadGuiPacks()}
+            workspaceDocument={workspaceDocument}
             onChange={handleEditorChange}
             onSelectChange={handleEditorSelectChange}
           />

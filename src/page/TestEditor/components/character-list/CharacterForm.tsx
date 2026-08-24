@@ -12,7 +12,10 @@ import type { CharacterListEntry } from "@/models/characterListEntry";
 import { CHARACTERLIST_STRING_FIELDS } from "@/models/characterListEntry";
 import { StringFieldGroup } from "./StringFieldGroup";
 import { SeriesIdPickerItem, SeriesIdPickerPopover } from "./SeriesIdPickerPopover";
+import { BgmCuePickerItem, BgmCuePickerPopover } from "./BgmCuePickerPopover";
 import { CardIconIndexPickerItem, CardIconIndexPickerPopover } from "./CardIconIndexPickerPopover";
+import { GuiHashFieldExtras } from "./GuiHashFieldExtras";
+import { isCharacterGuiHashField, type GuiPackPickerItem } from "./guiPackIndex";
 import {
   findCharacterUniqueIdConflicts,
   isCharacterUniqueIdUnique,
@@ -31,6 +34,13 @@ interface CharacterFormProps {
   cardIconIndexPickerItems: CardIconIndexPickerItem[];
   cardIconIndexPickerLoading?: boolean;
   cardIconIndexPickerError?: string | null;
+  bgmCuePickerItems?: BgmCuePickerItem[];
+  bgmCuePickerLoading?: boolean;
+  bgmCuePickerError?: string | null;
+  guiPackItems?: GuiPackPickerItem[];
+  guiPackLoading?: boolean;
+  guiPackError?: string | null;
+  onOpenGuiPackFolder?: (hash: number) => void;
   jumpToCharacterIdTable?: {
     disabled: boolean;
     tooltip: string;
@@ -49,6 +59,13 @@ export function CharacterForm({
   cardIconIndexPickerItems,
   cardIconIndexPickerLoading,
   cardIconIndexPickerError,
+  bgmCuePickerItems = [],
+  bgmCuePickerLoading,
+  bgmCuePickerError,
+  guiPackItems = [],
+  guiPackLoading,
+  guiPackError,
+  onOpenGuiPackFolder,
   jumpToCharacterIdTable,
   onChange,
 }: CharacterFormProps) {
@@ -56,6 +73,9 @@ export function CharacterForm({
   const [stringFormData, setStringFormData] = useState<Record<string, string>>({});
   const [seriesIdPickerOpen, setSeriesIdPickerOpen] = useState(false);
   const [cardIconIndexPickerOpen, setCardIconIndexPickerOpen] = useState(false);
+  const [bgmPrimaryPickerOpen, setBgmPrimaryPickerOpen] = useState(false);
+  const [bgmSecondaryPickerOpen, setBgmSecondaryPickerOpen] = useState(false);
+  const [guiPickerField, setGuiPickerField] = useState<string | null>(null);
   const formDataRef = useRef<Record<string, number>>({});
   const stringFormDataRef = useRef<Record<string, string>>({});
 
@@ -412,6 +432,26 @@ export function CharacterForm({
                           open={seriesIdPickerOpen}
                           onOpenChange={setSeriesIdPickerOpen}
                         />
+                      ) : field.name === "pairedBgmMusicIdPrimary" ? (
+                        <BgmCuePickerPopover
+                          onSelect={(cueHash) => handleFieldChange("pairedBgmMusicIdPrimary", cueHash)}
+                          items={bgmCuePickerItems}
+                          selectedValue={formData.pairedBgmMusicIdPrimary}
+                          isLoading={bgmCuePickerLoading}
+                          error={bgmCuePickerError}
+                          open={bgmPrimaryPickerOpen}
+                          onOpenChange={setBgmPrimaryPickerOpen}
+                        />
+                      ) : field.name === "pairedBgmMusicIdSecondary" ? (
+                        <BgmCuePickerPopover
+                          onSelect={(cueHash) => handleFieldChange("pairedBgmMusicIdSecondary", cueHash)}
+                          items={bgmCuePickerItems}
+                          selectedValue={formData.pairedBgmMusicIdSecondary}
+                          isLoading={bgmCuePickerLoading}
+                          error={bgmCuePickerError}
+                          open={bgmSecondaryPickerOpen}
+                          onOpenChange={setBgmSecondaryPickerOpen}
+                        />
                       ) : field.name === "msCardIconIndex" ? (
                         <CardIconIndexPickerPopover
                           onSelect={(idx) => handleFieldChange("msCardIconIndex", idx)}
@@ -421,6 +461,18 @@ export function CharacterForm({
                           error={cardIconIndexPickerError}
                           open={cardIconIndexPickerOpen}
                           onOpenChange={setCardIconIndexPickerOpen}
+                        />
+                      ) : isCharacterGuiHashField(field.name) ? (
+                        <GuiHashFieldExtras
+                          fieldKey={field.name}
+                          value={formData[field.name] ?? 0}
+                          items={guiPackItems}
+                          isLoading={guiPackLoading}
+                          error={guiPackError}
+                          open={guiPickerField === field.name}
+                          onOpenChange={(open) => setGuiPickerField(open ? field.name : null)}
+                          onSelect={(hash) => handleFieldChange(field.name, hash >>> 0)}
+                          onOpenFolder={onOpenGuiPackFolder}
                         />
                       ) : field.name === "characterUniqueId" ? (
                         <TooltipProvider delayDuration={100}>
