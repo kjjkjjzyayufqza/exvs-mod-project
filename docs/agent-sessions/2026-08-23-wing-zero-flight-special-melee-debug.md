@@ -288,3 +288,58 @@ legacy `msclang.py` 已写入
 回编译确认：两个特格窗口 else 分支 `global789=1` 后提交 `0x928CA34F`；
 `func_937` 在 request 时 `return`；teardown 在 dash/loop owner 下跳过。
 MSC行为只能由游戏实测确认。
+
+## 11. 2026-08-25 特格接 N 鸟冲刺已实机成功
+
+现行方案不要继续改本文件 §9/§10 的实验路径。完整记录：
+
+`docs/msc-research/wing-zero-rebellion-special-n-bird-dash.md`
+
+要点：`func_241(0x928ca34f, rebellion_enter_normal_special_n_bird_dash)`；`func_916`/`func_593` 四槽；676 里调 `rebellion_transform_start`；679 置 `global252` 并在无杆时拆鸟。禁止 `0x3d` 强制 enter、禁止 679 假飞行。
+
+## 10. 2026-08-24：按星际凯旋飞行特射改 30 帧后交接（待实机）
+
+用户实机：进入飞行后缓慢飞 30 帧，然后卡住保持前进、无法操控。
+希望 30 帧快冲后进入可自由操控的飞行；不按键则按原游戏逻辑回普通形态。
+
+对照 `053gbftry_004strwin_001` 飞行特射 `func_1073`：
+
+- `func_167(0x1004000)` 保持飞行 bit
+- 每 tick `sys_46(0x1, 0x1, 0, 0, speed)` 锁定前冲
+- 动作自然结束，不 `func_81` 去 slot 0x17 enter
+
+已作废路径：30 帧后 `func_81(0x9475130e)` + `func_143` 0x3d 强制 enter。
+`0x928ca34f` 没有 `func_13` resolver，enter 不会提交，人停在格斗 hash 上继续前冲。
+
+当前交接：
+
+```text
+30-frame rush (5x bird 0x459455ea, sys_46 0x1/0x1)
+  -> func_167(0x1004000)
+  -> 0x3d = 1
+  -> func_65()
+  -> 0.c rebellion_special_n_dash_action_end
+       func_73/func_74 no stick+boost -> slot 0x19 / 0xa02d57dc / 回普通
+       else -> slot 0x18 / 0x77b100ff / analog
+```
+
+`func_143` 遇到 0x3d 只 return，不再 `func_95(0x9475130e)`。
+静态门通过；legacy msclang 已写入 `0.bscex` / `2.dscex`。待实机。
+
+## 11. 2026-08-25 特格接 N 鸟冲刺已实机成功
+
+§9/§10 是失败实验，不要当现行方案改。完整记录：
+
+`docs/msc-research/wing-zero-rebellion-special-n-bird-dash.md`
+
+要点：`func_241(0x928ca34f, rebellion_enter_normal_special_n_bird_dash)`；对标星际凯旋 `func_916`/`func_593` 四槽；676 里直接调 `rebellion_transform_start`；679 必须 `global252=1`，无杆拆鸟。禁止 `0x3d` 强制 enter，禁止 679 假飞行。
+
+## 12. 2026-08-25 原地不动：锁冲必须在 593 之后
+
+用户实机：变形成功但 30 帧期间钉在原地。对照 `func_917`→`func_862`→`func_1073`：
+
+- 677 里的 `sys_46` 会被随后的 `func_300(global714)` 吃掉。
+- ENTER 把 `global453`/`global454` 置 0 时 `global714=0`，倍率直接归零。
+- `func_1073` 只写 `sys_46(0x1, 0x1, 0, 0, mag)`，不写 channel `0x2` 幅值 0。
+
+现行：tick 在 `func_593()` 之后直接调 `locked_loop_move`；初速 `S(0x5e8caf43)-S(0xff7a9c8b)*0x1e`。完整记录仍以 special-n-bird-dash 页为准。

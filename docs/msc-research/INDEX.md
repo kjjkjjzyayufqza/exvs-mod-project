@@ -255,12 +255,14 @@ Existing research notes are not rewritten by this index.
 ### `wing-zero-rebellion` — Wing Zero Rebellion MSC / bird-form transform port
 
 - **kind:** unit
-- **aliases:** `Wing Gundam Zero Rebellion`, `wing_gundam_zero_rebellion`, `900000004`, `kamaesht2neo`, `Neo Bird`, `bird form`, `鸟形态`, `飞翼零式叛乱`, `零式叛乱`, `Rebellion`, `FORCED_RECOVERY`, `0x77b100ff`, `alt2 gerobi`, `N特射`, `SUB_SHOT_CUSTOM`, `rebellion_hiv_lock_aim`, `0x7cd11119`, `0x928ca34f`, `func_937`, `bird melee`, `鸟近战`
-- **notes:** AGENTS.md still inlines this bootstrap. Sibling Rebellion MSC edits: alt2-gerobi, sub-shot-custom, bird-melee-n-followup.
+- **aliases:** `Wing Gundam Zero Rebellion`, `wing_gundam_zero_rebellion`, `900000004`, `kamaesht2neo`, `Neo Bird`, `bird form`, `鸟形态`, `飞翼零式叛乱`, `零式叛乱`, `Rebellion`, `FORCED_RECOVERY`, `0x77b100ff`, `alt2 gerobi`, `N特射`, `SUB_SHOT_CUSTOM`, `rebellion_hiv_lock_aim`, `0x7cd11119`, `0x928ca34f`, `func_937`, `bird melee`, `鸟近战`, `特格接N`, `bird dash`, `rebellion_enter_normal_special_n_bird_dash`, `cut_in_loop`, `rebellion_transform_cut_in_loop`, `dash global143`
+- **notes:** AGENTS.md still inlines this bootstrap. Sibling Rebellion MSC edits: alt2-gerobi, sub-shot-custom, bird-melee-n-followup, special-n-bird-dash.
 - **settled:**
   - Bird arsenal is gated in 0.c func_143 only, not 2.c ACTION_*.
   - Rebellion main-shot bit is 0x1 (not TV 0x100); bird form id is 0x2 (TV 0x1).
   - Bird melee 0x2 maps to 0x928ca34f (special-melee N followup func_937); do not split 0x8b97920e; do not add that hash to the func_41 flight allowlist; do not copy Delta Plus func_888(0x8) model switch.
+  - Ground special-N dash also uses 0x928ca34f but func_241 wires rebellion_enter_normal_special_n_bird_dash; bird-form same hash still func_937. Vanilla special plays first. Cancel melee mask is 0x7e (includes forward 0x40); 0x3e missed 前格 because 0.c 0x40 is before 0x200 as 0x3ac14535. 2.c func_233(0x7e, 0). Do not cancel on stick 0x3c. Do not hijack standing melee into the dash.
+  - Ground special-N dash must keep global143=0. Do not copy transform_start's global143=0x2 into cut_in_loop/676/677. Publishing form 0x2 on hash 0x928ca34f switches 0.c to the bird table, re-ENTERS func_937, and func_41 tears form: detach looks like it never ran, and 30f stick cannot pick native 0x77b100ff. 0x2 belongs only to 0x9475130e transform_start/loop.
   - Hit/interrupt is FORCED_RECOVERY; do not requeue 0x77b100ff.
   - Action hash is not form; form lives in global143.
   - Do not tear form only on standing idle 0x6d00aeaa.
@@ -275,6 +277,7 @@ Existing research notes are not rewritten by this index.
   - `docs/msc-research/alt2-gerobi-stop-and-followup.md`
   - `docs/msc-research/sub-shot-custom-start-only-aim.md`
   - `docs/msc-research/wing-zero-rebellion-bird-melee-n-followup.md`
+  - `docs/msc-research/wing-zero-rebellion-special-n-bird-dash.md`
 - **related:**
   - `docs/msc-research/tv-wing-zero-flight-double-forward-aim.md`
   - `docs/msc-research/tv-wing-zero-flight-special-melee-landing-copy-list.md`
@@ -289,6 +292,12 @@ Existing research notes are not rewritten by this index.
   - Do not reopen the legacy '85 model assets missing' hash manifests.
   - Do not mix transform-port notes with alt2 gerobi followup, SUB_SHOT_CUSTOM aim, or bird N melee 0x928ca34f.
   - Do not mix bird N melee 0x928ca34f with TV bird special-melee landing hashes.
+  - Do not mix bird-form 0x928ca34f melee with the ground special-N dash ENTER.
+  - Do not cancel dash on analog new-press (2.c global48 0x4 is 前进). Require melee: 2.c global242 && func_233(0x7e, 0); 0.c global48 & 0x42 (N 0x2, 前格 0x40). Do not use global4 & 0x7e. Do not hijack standing melee into the dash.
+  - Do not write global143=0x2 from the ground special-N dash (cut_in_loop, 676 start, 677 shoot). Form stays 0; 0x2 belongs only to 0x9475130e transform_start/loop.
+  - Do not callFunc3(transform_start) or func_81(0x9475130e) from the dash; do not leave analog running in 679 without global252.
+  - Do not write the dash sys_46 inside 677; func_596 then func_300 overwrites it. Do not zero global453/global454 on ENTER (Star Winning only zeros global452). Do not follow the 0x1 write with sys_46(0x1, 0x2, ..., 0).
+  - Do not use transform_loop/ensure_mounted as the dash mount; clone loop and splice start attach_in. Do not func_81(0x77b100ff) from the dash melee hash (fake stuck flight). With global143 kept 0, 0.c ground table picks native analog after 30f stick.
   - Do not restart from package discovery unless a bootstrap restart condition is met.
 
 ### `wing-zero-tv` — TV Wing Zero source behavior for the Rebellion port

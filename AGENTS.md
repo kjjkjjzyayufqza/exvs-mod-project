@@ -159,6 +159,11 @@ Reuse rules:
   bird arsenal in 2.c ACTION_*” — settled in the bird-form input-map note.
 - Do not re-derive bird melee: `0x2` is `0x928ca34f` only (not `0x8b97920e`,
   not Delta `func_888(0x8)`). Do not mix with TV bird special-melee landing.
+- Ground special-N dash (`cut_in_loop` / 676 / 677 on hash `0x928ca34f`) must
+  **not** write `global143 = 0x2`. That value belongs only to transform
+  `0x9475130e`. Publishing form on the dash switches `0.c` to the bird table:
+  detach looks like it never ran, and 30-frame stick cannot pick native
+  `0x77b100ff`. See `docs/msc-research/wing-zero-rebellion-special-n-bird-dash.md`.
 - Do not repeat source file counting, six-resource inventory, three transform
   motion lookup, SHL model-folder mapping, or body/wing skeleton comparison
   unless a restart condition in the bootstrap is met.
