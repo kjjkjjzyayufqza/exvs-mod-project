@@ -145,7 +145,7 @@ export function Fhm2dImageViewTool() {
         const nextFiles = collectVirtualFiles(created.virtualTree);
         const nextImages = partitionFhm2dImageViewFiles(nextFiles).images;
         setSelectedImageId(nextImages[0]?.id ?? null);
-        rememberDialogSelection(DialogLastPathKey.miscFhm2dImageView, path);
+        rememberDialogSelection(DialogLastPathKey.miscFhm2dImageView, path, "file");
         if (created.namingWarning) {
           toast.error("FHM2D naming warning", { description: created.namingWarning });
         } else {

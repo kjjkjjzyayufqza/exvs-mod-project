@@ -80,7 +80,7 @@ function normalizePathKey(s: string): string {
 
 interface CharacterAssetFieldProps {
   asset: AssetRefInfo;
-  /** Test Editor workspace root (e.g. com\file): hash folder + *_structure.json */
+  /** EXVS2 Workspace root (e.g. com\file): hash folder + *_structure.json */
   projectRootDir: string;
   /** Extract output folder from settings: same layout as workspace root */
   extractOutputPath: string;
@@ -750,7 +750,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
               <div className="space-y-3 text-left text-sm text-muted-foreground">
                 <p>
                   Choose what to delete for <span className="font-mono text-foreground">{asset.hashHex}</span>.
-                  Clearing the Test Editor workspace field or the same path as extract output sets this table
+                  Clearing the EXVS2 Workspace field or the same path as extract output sets this table
                   column to 0 (None).
                 </p>
                 <div className="space-y-2 rounded-md border border-border p-2">
@@ -762,7 +762,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
                       className="mt-0.5"
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="font-medium text-foreground">Test Editor workspace</span>
+                      <span className="font-medium text-foreground">EXVS2 Workspace</span>
                       <span className="block break-all font-mono text-xs">{canRemoveWorkspace ? workspaceAssetRootPath : "(not set)"}</span>
                       <span className="block text-[11px]">Remove {asset.hashHex} folder and {asset.hashHex}_structure.json</span>
                     </span>
@@ -862,7 +862,7 @@ export const CharacterAssetField: React.FC<CharacterAssetFieldProps> = ({
           }
           subtitle={
             extractDestination === "workspace"
-              ? "Extract into the Test Editor workspace. Choose a readable Name; HashName stays the game hash."
+              ? "Extract into the EXVS2 Workspace. Choose a readable Name; HashName stays the game hash."
               : "Extract into the configured Extract Output Path. Choose a readable Name; HashName stays the game hash."
           }
           headerIcon={<Download className="h-5 w-5 text-primary" />}

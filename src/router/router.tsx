@@ -1,66 +1,31 @@
 import { lazy } from "react"
-import { Home, List, Settings, FileCode, Package, Map, Wrench, Box, Database } from "lucide-react"
+import { Box, Database, FileArchive, FolderTree, Map, Settings, Wrench } from "lucide-react"
 import { SIDEBAR_ROUTE_URLS } from "./sidebarRouteUrls"
 
 // Pages are code-split via React.lazy so the initial app shell loads without
 // pulling every page (and heavy deps like three.js) into the first bundle.
 // KeepAliveOutlet renders each element inside a Suspense boundary.
-const MainPage = lazy(() => import("../page/Main/Page"))
-const ExtractFilePage = lazy(() => import("../page/Extract/page"))
-const RepackPage = lazy(() => import("../page/Repack/page"))
-const UnitEdit = lazy(() => import("../page/UnitEdit/page"))
-const FilesEdit = lazy(() => import("../page/FilesEdit/page"))
-const UnitList = lazy(() => import("../page/UnitList/page"))
+const Exvs2WorkspacePage = lazy(() => import("../page/TestEditor/page"))
+const SingleFhm2dPage = lazy(() => import("../page/Extract/page"))
 const ConfigPage = lazy(() => import("../page/Config/page"))
 const SceneEdit = lazy(() => import("../page/SceneEdit/page"))
 const UnitModelEdit = lazy(() => import("../page/UnitModelEdit/page"))
 const MiscToolsPage = lazy(() => import("../page/MiscTools/page"))
-const TestEditorPage = lazy(() => import("../page/TestEditor/page"))
 const ResourceRegistryPage = lazy(() => import("../page/ResourceRegistry/page"))
 
 // Menu items.
 export const RouterItems = [
     {
-        title: "Home",
+        title: "EXVS2 Workspace",
         url: "/",
-        icon: Home,
-        element: <MainPage />
+        icon: FolderTree,
+        element: <Exvs2WorkspacePage />
     },
     {
-        title: "Extract",
-        url: "/Extract",
-        icon: Home,
-        element: <ExtractFilePage />
-    },
-    {
-        title: "Repack",
-        url: "/Repack",
-        icon: Package,
-        element: <RepackPage />
-    },
-    {
-        title: "Unit Edit",
-        url: "/UnitEdit",
-        icon: Home,
-        element: <UnitEdit />
-    },
-    {
-        title: "Files Edit",
-        url: "/FilesEdit",
-        icon: Home,
-        element: <FilesEdit />
-    },
-    {
-        title: "Unit List",
-        url: "/UnitList",
-        icon: List,
-        element: <UnitList />
-    },
-    {
-        title: "Config",
-        url: "/Config",
-        icon: Settings,
-        element: <ConfigPage />
+        title: "Single FHM2D",
+        url: "/SingleFhm2d",
+        icon: FileArchive,
+        element: <SingleFhm2dPage />
     },
     {
         title: "Scene Edit",
@@ -75,22 +40,22 @@ export const RouterItems = [
         element: <UnitModelEdit />
     },
     {
+        title: "Resource Registry",
+        url: "/ResourceRegistry",
+        icon: Database,
+        element: <ResourceRegistryPage />
+    },
+    {
         title: "Misc Tools",
         url: "/MiscTools",
         icon: Wrench,
         element: <MiscToolsPage />
     },
     {
-        title: "Test editor",
-        url: "/TestEditor",
-        icon: FileCode,
-        element: <TestEditorPage />
-    },
-    {
-        title: "Resource Registry",
-        url: "/ResourceRegistry",
-        icon: Database,
-        element: <ResourceRegistryPage />
+        title: "Config",
+        url: "/Config",
+        icon: Settings,
+        element: <ConfigPage />
     }
 ]
 

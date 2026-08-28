@@ -4,15 +4,10 @@
  */
 export const SIDEBAR_ROUTE_URLS: readonly string[] = [
   "/",
-  "/Extract",
-  "/Repack",
-  "/UnitEdit",
-  "/FilesEdit",
-  "/UnitList",
-  "/Config",
+  "/SingleFhm2d",
   "/SceneEdit",
   "/UnitModelEdit",
-  "/MiscTools",
-  "/TestEditor",
   "/ResourceRegistry",
+  "/MiscTools",
+  "/Config",
 ];

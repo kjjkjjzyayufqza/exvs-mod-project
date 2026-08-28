@@ -13,7 +13,7 @@ import { suggestFhm2dStructureName } from "@/utils/fhm2dNameMapping";
  *   {exportRoot}/012list/series_list
  *   {exportRoot}/009gui/ms_ms_s
  *
- * Export root is Test Editor workspace (`testEditorFolder`, e.g. E:\XB\mod),
+ * Export root is EXVS2 Workspace (`testEditorFolder`, e.g. E:\XB\mod),
  * not game inject `obModPath`.
  */
 

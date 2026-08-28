@@ -491,7 +491,7 @@ export function useSsbhModelPreview(): SsbhModelPreviewContextValue {
 
 type ProviderProps = {
   workspaceRoot: string | null | undefined;
-  /** When true, pause the Three.js render loop while the Test Editor route stays mounted in the background. */
+  /** When true, pause the Three.js render loop while the EXVS2 Workspace route stays mounted in the background. */
   previewSuspended?: boolean;
   /**
    * Initial lighting preset. Unit Model Editor uses `softCharacter` so low-poly
@@ -2517,7 +2517,7 @@ export function SsbhModelPreviewProvider({
     const defaultDir = getDialogDefaultPath(DialogLastPathKey.ssbhPreviewOpenModelFolder, root);
     const defaultPath = defaultDir ? `${defaultDir.replace(/[/\\]+$/, "")}\\scene-config.json` : "scene-config.json";
     const outputPath = await save({
-      title: "Export Test Editor scene config",
+      title: "Export EXVS2 Workspace scene config",
       defaultPath,
       filters: [{ name: "JSON", extensions: ["json"] }],
     });

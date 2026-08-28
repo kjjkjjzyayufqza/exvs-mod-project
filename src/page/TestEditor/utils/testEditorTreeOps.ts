@@ -225,7 +225,7 @@ export function applyPayload(current: TestTreeNode[], payload?: FolderChangePayl
   }, current);
 }
 
-/** Applies a batch of watcher payloads in order (same contract as the Test Editor folder-change queue flush). */
+/** Applies a batch of watcher payloads in order (same contract as the EXVS2 Workspace folder-change queue flush). */
 export function applyPayloadQueue(current: TestTreeNode[], queued: FolderChangePayload[]): TestTreeNode[] {
   return queued.reduce((acc, payload) => applyPayload(acc, payload), current);
 }

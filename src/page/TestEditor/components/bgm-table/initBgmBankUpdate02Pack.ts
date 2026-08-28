@@ -21,7 +21,7 @@ export async function initBgmBankUpdate02Pack(input: InitBgmBankUpdate02PackInpu
   const sourceFhm2dPath = input.sourceFhm2dPath.trim();
   const workspaceRoot = input.workspaceRoot.trim();
   if (!sourceFhm2dPath) throw new Error("Source FHM2D path is required");
-  if (!workspaceRoot) throw new Error("Test Editor workspace root is required");
+  if (!workspaceRoot) throw new Error("EXVS2 Workspace root is required");
   if (!(await exists(sourceFhm2dPath))) {
     throw new Error(`Source FHM2D not found: ${sourceFhm2dPath}`);
   }

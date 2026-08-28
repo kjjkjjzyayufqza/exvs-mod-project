@@ -92,7 +92,7 @@ export function inferUnitModelOutputPath(modelRoot: string, structurePath?: stri
  * Resolve the repack destination inside the configured OB Mod folder.
  * The packed `.fhm2d` is named after the structure JSON stem (e.g.
  * `0xAF73362C_structure.json` → `<modFolder>\0xAF73362C.fhm2d`), matching the
- * pack naming used by the Test Editor "Repack Changes" flow.
+ * pack naming used by the EXVS2 Workspace "Repack Changes" flow.
  */
 export function inferUnitModelModOutputPath(modFolder: string, structurePath: string): string {
   const normalizedModFolder = trimTrailingSeparators(toWindowsPath(modFolder));
@@ -119,7 +119,7 @@ export async function validateUnitModelForRepack(
 /**
  * After writing `<stem>.fhm2d`, remove a same-stem `<stem>.vgsht2` in the same
  * directory when present (game may still load the old `.vgsht2` over the new pack).
- * Mirrors Test Editor {@link removeMatchingModVgsht2}.
+ * Mirrors EXVS2 Workspace {@link removeMatchingModVgsht2}.
  */
 export async function removeSiblingVgsht2ForFhm2dOutput(
   fhm2dOutputPath: string,
@@ -161,7 +161,7 @@ export async function repackValidatedUnitModelFolder(
 
 /**
  * Repack the validated unit-model folder directly into the configured OB Mod
- * folder, mirroring the Test Editor "Repack Changes" destination instead of
+ * folder, mirroring the EXVS2 Workspace "Repack Changes" destination instead of
  * writing the `.fhm2d` next to the source `_structure.json`.
  */
 export async function repackValidatedUnitModelFolderToModFolder(

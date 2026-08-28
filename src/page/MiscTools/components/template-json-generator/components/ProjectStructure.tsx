@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Plus, Download } from "lucide-react"
 import { TreeDataItem } from "@/lib/utils"
 import { useTemplateStore } from "@/store/templateStore"
-import { NodePropertiesPanel } from "../../../../Repack/components/NodePropertiesPanel"
+import { NodePropertiesPanel } from "@/components/repack-structure/NodePropertiesPanel"
 
 
 interface FileInfo {

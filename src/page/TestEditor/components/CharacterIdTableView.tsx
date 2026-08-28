@@ -529,7 +529,7 @@ export default function CharacterIdTableView({
 
     const handleExtractAll = useCallback(async () => {
         if (!selectedRow || isExtractingAll) return;
-        // Default: extract into Test Editor workspace (WS), not Extract Output Path.
+        // Default: extract into EXVS2 Workspace (WS), not Extract Output Path.
         const workspaceRoot = folderPath.trim();
         if (!workspaceRoot) {
             toast.error("Workspace path not configured");
@@ -1475,7 +1475,7 @@ export default function CharacterIdTableView({
                                             variant="secondary"
                                             onClick={() => setIsExtractConfirmOpen(true)}
                                             disabled={isExtractingAll || !obDplCachePath || !folderPath.trim()}
-                                            title="Extract all non-zero assets into the Test Editor workspace"
+                                            title="Extract all non-zero assets into the EXVS2 Workspace"
                                         >
                                             <PackageOpen className="w-4 h-4 mr-2" />
                                             {isExtractingAll ? "Extracting..." : "Extract All to Workspace"}
@@ -1705,7 +1705,7 @@ export default function CharacterIdTableView({
                         <AlertDialogTitle>Extract All to Workspace</AlertDialogTitle>
                         <AlertDialogDescription>
                             Extract all non-zero assets for Character ID {selectedRow?.CharacterId} into the
-                            Test Editor workspace
+                            EXVS2 Workspace
                             {folderPath.trim() ? (
                                 <>
                                     {" "}

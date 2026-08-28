@@ -209,9 +209,29 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
             </span>
           </div>
 
-          {isStarred && (
-            <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500" aria-hidden />
-          )}
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleStar(node.data.path);
+            }}
+            title={isStarred ? "Unstar (remove from top)" : "Star (pin to top)"}
+            aria-label={isStarred ? "Unstar" : "Star"}
+            aria-pressed={isStarred}
+            className={cn(
+              "flex h-5 w-5 shrink-0 items-center justify-center rounded-sm transition-opacity",
+              "hover:bg-muted-foreground/10 focus-visible:opacity-100 focus-visible:outline-none",
+              "focus-visible:ring-1 focus-visible:ring-ring active:translate-y-px",
+              isStarred ? "opacity-100" : "opacity-0 group-hover:opacity-60",
+            )}
+          >
+            <Star
+              className={cn(
+                "h-3.5 w-3.5",
+                isStarred ? "fill-amber-400 text-amber-500" : "text-muted-foreground",
+              )}
+            />
+          </button>
 
           {extLabel && (
             <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">

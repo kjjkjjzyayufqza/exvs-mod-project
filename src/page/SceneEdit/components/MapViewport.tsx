@@ -327,7 +327,7 @@ export interface MapViewportProps {
   onImportedDaeTransformFrame?: (nodeId: string, t: TransformData) => void;
   onImportedDaeTransformChange?: (nodeId: string, t: TransformData) => void;
   clickPickSelectionEnabled?: boolean;
-  /** Test Editor-style anime pipeline: bloom + warm lights + cel-tinted PBR when "anime". */
+  /** EXVS2 Workspace-style anime pipeline: bloom + warm lights + cel-tinted PBR when "anime". */
   previewRenderStyle?: PreviewRenderStyle;
   /** Placement manipulator mode for OBJECT rows selected in hierarchy/placement list */
   placementGizmoMode?: PlacementGizmoMode;

@@ -12,7 +12,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     defaultTheme="system"
     enableSystem
     disableTransitionOnChange
-    storageKey="tauri-app-theme"
+    storageKey="exvs-mod-project-theme"
   >
     <Fhm2dStructureMigrationProvider>
       <App />

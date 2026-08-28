@@ -121,7 +121,7 @@ export function NutexbViewTool() {
       setSelectedId("");
       setCollapsedFolderIds(new Set());
       setSearch("");
-      rememberDialogSelection(DialogLastPathKey.miscNutexbView, folderPath);
+      rememberDialogSelection(DialogLastPathKey.miscNutexbView, folderPath, "directory");
       toast.success(`Found ${next.files.length} nutexb file${next.files.length === 1 ? "" : "s"}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));

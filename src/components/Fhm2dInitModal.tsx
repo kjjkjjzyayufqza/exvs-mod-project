@@ -396,7 +396,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
 
     const obDplCachePath = useConfigStore((s) => s.obDplCachePath);
     /**
-     * Test Editor workspace root (`testEditorFolder`, e.g. E:\XB\mod).
+     * EXVS2 Workspace root (`testEditorFolder`, e.g. E:\XB\mod).
      * Not obModPath (game inject) and not extractOutputPath (secondary dump).
      */
     const testEditorFolder = useConfigStore((s) => s.testEditorFolder);
@@ -581,7 +581,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
 
         const outBase = (testEditorFolder ?? "").trim();
         if (!outBase) {
-            toast.error("Please set Test Editor folder first (workspace root, e.g. E:\\XB\\mod)");
+            toast.error("Please set EXVS2 Workspace folder first (workspace root, e.g. E:\\XB\\mod)");
             return;
         }
 
@@ -803,7 +803,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                             className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"
                                         >
                                             <FolderOutput className="h-3.5 w-3.5" />
-                                            Test Editor Folder (workspace root)
+                                            EXVS2 Workspace Folder (workspace root)
                                         </Label>
                                         <FilePathInput
                                             id="fhm2d-init-export"
@@ -819,7 +819,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                 <p className="text-[11px] text-muted-foreground">
                                     Uses Tauri config{" "}
                                     <span className="font-mono">{TEST_EDITOR_FOLDER_STORE_KEY}</span>{" "}
-                                    (same as Test Editor open folder), not{" "}
+                                    (same as EXVS2 Workspace open folder), not{" "}
                                     <span className="font-mono">obModPath</span> (game inject) or{" "}
                                     <span className="font-mono">extractOutputPath</span>. Packs write
                                     under <span className="font-mono">012list/</span>,{" "}

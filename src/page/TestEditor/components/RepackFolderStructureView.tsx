@@ -24,7 +24,7 @@ import {
 } from "@/page/TestEditor/components/repack-folder-structure/QuickAddFilesModal";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { CustomTreeNode } from "@/components/CustomTreeNode";
-import { NodePropertiesPanel } from "@/page/Repack/components/NodePropertiesPanel";
+import { NodePropertiesPanel } from "@/components/repack-structure/NodePropertiesPanel";
 import type { TreeDataItem } from "@/lib/utils";
 import { useRepackStore } from "@/store/repackStore";
 import { convertSubFileStructureToTreeData } from "@/lib/utils";

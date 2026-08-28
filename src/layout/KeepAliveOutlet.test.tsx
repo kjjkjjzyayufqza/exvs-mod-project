@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => {
   // Factory must not depend on top-level ESM imports (Vitest mock hoisting).
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const React = require("react") as typeof import("react");
-  const secondRoute = "/TestEditor" as const;
+  // Must be a real sidebar route: pathMatch resolves against the live SIDEBAR_ROUTE_URLS.
+  const secondRoute = "/SingleFhm2d" as const;
 
   function StatefulHome() {
     const [n, setN] = React.useState(0);
@@ -28,12 +29,12 @@ const mocks = vi.hoisted(() => {
     secondRoute,
     RouterItems: [
       {
-        title: "Home",
+        title: "EXVS2 Workspace",
         url: "/",
         element: React.createElement(StatefulHome),
       },
       {
-        title: "Test editor",
+        title: "Single FHM2D",
         url: secondRoute,
         element: React.createElement("div", { "data-testid": "second-page" }, "second-page"),
       },

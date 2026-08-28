@@ -98,7 +98,7 @@ export async function repackFolderUsingStructureToDir({
 
 /**
  * Repack a workspace hash folder into the configured OB Mod directory
- * (e.g. data\x64\mod\0xCE74091E.fhm2d). Used by Test Editor "Repack Changes".
+ * (e.g. data\x64\mod\0xCE74091E.fhm2d). Used by EXVS2 Workspace "Repack Changes".
  */
 export async function repackFolderUsingStructureToModFolder({
   structurePath,

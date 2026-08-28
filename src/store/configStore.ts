@@ -14,7 +14,7 @@ import {
 const SIDEBAR_OPEN_STORE_KEY = "sidebarOpen";
 const SIDEBAR_OPEN_MIRROR_KEY = "sidebar:open";
 export const CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY = "characterIdDebugMscOutputPath";
-/** Test Editor open-folder root; also FHM2D Init workspace extract root. */
+/** EXVS2 Workspace open-folder root; also FHM2D Init workspace extract root. */
 export const TEST_EDITOR_FOLDER_STORE_KEY = "testEditorFolder";
 
 export function readSidebarOpenMirror(): boolean {

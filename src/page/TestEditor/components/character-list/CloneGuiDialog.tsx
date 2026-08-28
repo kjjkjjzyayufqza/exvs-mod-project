@@ -139,7 +139,7 @@ export function CloneGuiDialog({
       throw new Error("Set OB dplcache path in Config");
     }
     if (!previewRequest.workspaceRoot) {
-      throw new Error("Set Test Editor folder first");
+      throw new Error("Set EXVS2 Workspace folder first");
     }
     if (!previewRequest.targetEntryId) {
       throw new Error("Select a character first");
@@ -307,7 +307,7 @@ export function CloneGuiDialog({
         <DialogHeader>
           <DialogTitle>Clone Wing Zero GUI</DialogTitle>
           <DialogDescription>
-            Select rows to unpack. Inner files extract into the Test Editor mod workspace 009gui folders
+            Select rows to unpack. Inner files extract into the EXVS2 Workspace mod root 009gui folders
             with a new HashName for later Repack. Inner .lm / textures are not edited.
           </DialogDescription>
         </DialogHeader>
@@ -328,7 +328,7 @@ export function CloneGuiDialog({
           </div>
 
           <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            <div>Workspace output folder: {workspaceGuiRoot || "(set Test Editor folder)"}</div>
+            <div>Workspace output folder: {workspaceGuiRoot || "(set EXVS2 Workspace folder)"}</div>
             <div>
               Unpack donor FHM2D into mod workspace folders under 009gui. Structure HashName becomes 0xNEW for Repack.
             </div>

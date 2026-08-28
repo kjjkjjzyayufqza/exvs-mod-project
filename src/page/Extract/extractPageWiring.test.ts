@@ -21,10 +21,10 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
 }));
 
 /**
- * Structural + shipped-function wiring for the Extract page repack path:
+ * Structural + shipped-function wiring for the Single FHM2D page repack path:
  * folder → sibling structure JSON → HashName output → repack_fhm2d invoke.
  */
-describe("Extract page wiring", () => {
+describe("Single FHM2D page wiring", () => {
   const pageSource = readFileSync(resolve(__dirname, "page.tsx"), "utf8");
 
   beforeEach(() => {

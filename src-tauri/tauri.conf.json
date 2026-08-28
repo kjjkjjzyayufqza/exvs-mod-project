@@ -1,5 +1,5 @@
 {
-  "productName": "tauri-app",
+  "productName": "EXVS Mod Project",
   "version": "0.1.0",
   "identifier": "com.tauri.app.extract",
   "build": {
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "tauri-app",
+        "title": "EXVS Mod Project",
         "width": 1920,
         "height": 1080,
         "resizable": true,

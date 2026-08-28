@@ -1,13 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import JsonView from "@uiw/react-json-view";
-import { vscodeTheme } from "@uiw/react-json-view/vscode";
-import {
-  Archive,
-  FolderArchive,
-  Loader2,
-  PackageOpen,
-  RefreshCw,
-} from "lucide-react";
+import { ArrowRight, FolderArchive, Loader2, PackageOpen } from "lucide-react";
 import { toast } from "sonner";
 import { Buffer } from "buffer";
 
@@ -35,7 +27,6 @@ import {
 } from "@/components/fhm2d-metadata";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { Label } from "@/components/ui/label";
@@ -46,9 +37,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { discoverStructureJsonBesideFolder, type StructureJsonDiscovery } from "./findStructureJson";
+import { cn } from "@/lib/utils";
+import {
+  discoverStructureJsonBesideFolder,
+  type StructureJsonDiscovery,
+} from "./findStructureJson";
+import { SectionBlock, SectionPanel } from "./components/SectionPanel";
+import {
+  ArchivePreviewPanel,
+  type ArchivePreviewState,
+} from "./components/ArchivePreviewPanel";
 
 /** Formats currently supported by Rust `extract_fhm2d_to_folder` naming pipelines. */
 const EXTRACT_FORMAT_OPTIONS: Array<{
@@ -118,12 +117,6 @@ const EXTRACT_FORMAT_OPTIONS: Array<{
   },
 ];
 
-type PreviewState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "ready"; data: Record<string, unknown>; typeLabel: string }
-  | { status: "error"; message: string };
-
 function buildArchivePreview(
   data: Fhm2dData | PS4FhmData,
   inputPath: string,
@@ -147,10 +140,26 @@ function buildArchivePreview(
   };
 }
 
-export default function ExtractFilePage() {
-  const { store, getSetting } = useConfigStore();
+/** Compact source-to-destination strip so the exact effect of the action is visible up front. */
+function FlowStrip({ from, to }: { from: string | null; to: string | null }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 font-mono text-[11px]">
+      <span className={cn("min-w-0 break-all", from ? "text-foreground" : "text-muted-foreground")}>
+        {from ?? "no source selected"}
+      </span>
+      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      <span className={cn("min-w-0 break-all", to ? "text-foreground" : "text-muted-foreground")}>
+        {to ?? "no destination resolved"}
+      </span>
+    </div>
+  );
+}
 
-  // --- Extract tab state ---
+export default function SingleFhm2dPage() {
+  const store = useConfigStore((s) => s.store);
+  const getSetting = useConfigStore((s) => s.getSetting);
+
+  // --- Unpack state ---
   const [inputFilePath, setInputFilePath] = useState("");
   const [outputFolderPath, setOutputFolderPath] = useState("");
   const [structureName, setStructureName] = useState("");
@@ -158,9 +167,9 @@ export default function ExtractFilePage() {
   const [writeMetaBin, setWriteMetaBin] = useState(false);
   const [formatKey, setFormatKey] = useState<string>("generic");
   const [isExtracting, setIsExtracting] = useState(false);
-  const [preview, setPreview] = useState<PreviewState>({ status: "idle" });
+  const [preview, setPreview] = useState<ArchivePreviewState>({ status: "idle" });
 
-  // --- Repack tab state ---
+  // --- Repack state ---
   const [repackFolderPath, setRepackFolderPath] = useState("");
   const [repackDiscovery, setRepackDiscovery] = useState<StructureJsonDiscovery | null>(null);
   const [isDiscovering, setIsDiscovering] = useState(false);
@@ -194,6 +203,24 @@ export default function ExtractFilePage() {
     hashPreview && effectiveOutputFolderPath
       ? joinPreviewPath(parentFromPath(effectiveOutputFolderPath), `${hashPreview}.fhm2d`)
       : null;
+
+  const extractBlockedReason = !inputFilePath.trim()
+    ? "Select a .fhm2d file."
+    : !outputFolderPath.trim()
+      ? "Select an output folder."
+      : createSubfolder && !requestedName
+        ? "Enter an extract name, or turn off subfolder creation."
+        : null;
+
+  const repackBlockedReason = !repackFolderPath.trim()
+    ? "Select an extracted asset folder."
+    : isDiscovering
+      ? "Resolving the sibling structure JSON..."
+      : !repackDiscovery
+        ? "Structure JSON has not been resolved yet."
+        : !repackDiscovery.ok
+          ? repackDiscovery.error
+          : null;
 
   const loadArchivePreview = useCallback(async (filePath: string) => {
     if (!filePath.trim()) {
@@ -281,22 +308,14 @@ export default function ExtractFilePage() {
 
   const handleExtract = async () => {
     if (isExtracting) return;
-    if (!inputFilePath.trim()) {
-      toast.error("Select a .fhm2d file first");
-      return;
-    }
-    if (!outputFolderPath.trim()) {
-      toast.error("Select an output folder first");
+    if (extractBlockedReason) {
+      toast.error(extractBlockedReason);
       return;
     }
 
     const outputName = sanitizeFhm2dStructureName(structureName || inputStem);
     let targetOutDir = outputFolderPath.trim();
     if (createSubfolder) {
-      if (!outputName) {
-        toast.error("Extract name is required when creating a subfolder");
-        return;
-      }
       targetOutDir = joinPreviewPath(targetOutDir, outputName);
     }
 
@@ -311,18 +330,18 @@ export default function ExtractFilePage() {
         writeMetaBin,
       );
       if (extractResult.namingError) {
-        toast.error("Extract finished but FHM naming step failed (files were written)", {
+        toast.error("Unpack finished but FHM naming step failed (files were written)", {
           description: extractResult.namingError,
           duration: 20_000,
         });
       } else {
-        toast.success("Extract completed", {
+        toast.success("Unpack completed", {
           description: `${targetOutDir}\nStructure: ${targetOutDir}_structure.json`,
           duration: 12_000,
         });
       }
     } catch (error) {
-      toast.error("Extract failed", {
+      toast.error("Unpack failed", {
         description: error instanceof Error ? error.message : String(error),
         duration: 15_000,
       });
@@ -333,18 +352,8 @@ export default function ExtractFilePage() {
 
   const handleRepack = async () => {
     if (isRepacking) return;
-    const folder = repackFolderPath.trim();
-    if (!folder) {
-      toast.error("Select an extracted asset folder first");
-      return;
-    }
-    if (!repackDiscovery || !repackDiscovery.ok) {
-      toast.error("Cannot repack", {
-        description:
-          repackDiscovery && !repackDiscovery.ok
-            ? repackDiscovery.error
-            : "Structure JSON has not been resolved yet",
-      });
+    if (repackBlockedReason || !repackDiscovery?.ok) {
+      toast.error("Cannot repack", { description: repackBlockedReason ?? "Structure unresolved" });
       return;
     }
 
@@ -352,7 +361,7 @@ export default function ExtractFilePage() {
     try {
       const result = await repackFolderUsingStructure({
         structurePath: repackDiscovery.structureJsonPath,
-        inputFolderPath: folder,
+        inputFolderPath: repackFolderPath.trim(),
       });
       toast.success("Repack completed", {
         description: `Structure: ${repackDiscovery.structureJsonPath}\nOutput: ${result.outputPath}\nFiles: ${result.totalFiles}, size: ${result.outputSize}`,
@@ -370,46 +379,58 @@ export default function ExtractFilePage() {
 
   return (
     <div className="h-full min-h-0 overflow-auto">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 md:p-6">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 pb-16">
         <header className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Extract &amp; Repack FHM2D</h1>
-          <p className="text-sm text-muted-foreground max-w-3xl">
-            Unpack game archives into a named folder with a sibling structure JSON, or repack a
-            previously extracted folder using the structure JSON in its parent directory.
+          <h1 className="text-2xl font-semibold tracking-tight">Single FHM2D</h1>
+          <p className="max-w-3xl text-sm text-muted-foreground">
+            Handle one archive at a time: unpack a .fhm2d into a named folder plus its sibling
+            structure JSON, or pack an already extracted folder back using that JSON.
           </p>
         </header>
 
-        <Tabs defaultValue="extract" className="flex min-h-0 flex-1 flex-col gap-4">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
-            <TabsTrigger value="extract" className="gap-2">
-              <PackageOpen className="h-4 w-4" />
-              Extract
+        <Tabs defaultValue="unpack" className="flex min-h-0 flex-col gap-4">
+          <TabsList className="grid w-full max-w-sm grid-cols-2">
+            <TabsTrigger value="unpack" className="gap-2 text-xs">
+              <PackageOpen className="h-3.5 w-3.5" />
+              Unpack
             </TabsTrigger>
-            <TabsTrigger value="repack" className="gap-2">
-              <FolderArchive className="h-4 w-4" />
+            <TabsTrigger value="repack" className="gap-2 text-xs">
+              <FolderArchive className="h-3.5 w-3.5" />
               Repack
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="extract" className="mt-0 space-y-4 focus-visible:outline-none">
-            <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Source &amp; output</CardTitle>
-                  <CardDescription>
-                    Uses the Rust extractor (<code className="text-xs">extract_fhm2d_to_folder</code>
-                    ). Choose a format so naming matches the asset type.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="extract-input">FHM2D file</Label>
+          <TabsContent
+            value="unpack"
+            className="mt-0 space-y-4 focus-visible:outline-none"
+          >
+            <FlowStrip
+              from={inputFilePath || null}
+              to={effectiveOutputFolderPath || null}
+            />
+
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)]">
+              <SectionPanel>
+                <SectionBlock
+                  title="Source"
+                  description={
+                    <>
+                      Unpacked by the Rust{" "}
+                      <code className="font-mono">extract_fhm2d_to_folder</code> command, not by
+                      the JS parser used for the preview.
+                    </>
+                  }
+                >
+                  <div className="space-y-1.5">
+                    <Label htmlFor="extract-input" className="text-xs">
+                      FHM2D file
+                    </Label>
                     <FilePathInput
                       id="extract-input"
                       value={inputFilePath}
                       onChange={(e) => setInputFilePath(e.target.value)}
                       storeKey="inputFilePath"
-                      placeholder="Select .fhm2d…"
+                      placeholder="Select .fhm2d..."
                       picker={{ kind: "file", multiple: false }}
                       onPickedValue={(picked) => {
                         if (Array.isArray(picked)) return;
@@ -419,15 +440,22 @@ export default function ExtractFilePage() {
                       }}
                     />
                   </div>
+                </SectionBlock>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="extract-output">Output folder</Label>
+                <SectionBlock
+                  title="Destination"
+                  description="Files land here; the structure JSON is written beside the folder."
+                >
+                  <div className="space-y-1.5">
+                    <Label htmlFor="extract-output" className="text-xs">
+                      Output folder
+                    </Label>
                     <FilePathInput
                       id="extract-output"
                       value={outputFolderPath}
                       onChange={(e) => setOutputFolderPath(e.target.value)}
                       storeKey="outputFolderPath"
-                      placeholder="Select output directory…"
+                      placeholder="Select output directory..."
                       picker={{ kind: "folder", multiple: false }}
                     />
                   </div>
@@ -442,13 +470,32 @@ export default function ExtractFilePage() {
                     structureJsonPath={effectiveStructureJsonPath || null}
                     description={
                       createSubfolder
-                        ? "Used for the output folder and sibling structure JSON name."
+                        ? "Used for the output folder and the sibling structure JSON name."
                         : "Subfolder creation is off, so the selected output folder name becomes Name."
                     }
                   />
 
-                  <div className="space-y-2">
-                    <Label>Asset format</Label>
+                  <label className="flex items-start gap-2 text-xs">
+                    <Checkbox
+                      checked={createSubfolder}
+                      onCheckedChange={(v) => setCreateSubfolder(v === true)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="font-medium">Create subfolder using name</span>
+                      <span className="block text-muted-foreground">
+                        Writes into output/name/ and name_structure.json beside it.
+                      </span>
+                    </span>
+                  </label>
+                </SectionBlock>
+
+                <SectionBlock
+                  title="Naming"
+                  description="Picks the rename pipeline the extractor applies to inner files."
+                >
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Asset format</Label>
                     <Select value={formatKey} onValueChange={setFormatKey}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select format" />
@@ -464,167 +511,109 @@ export default function ExtractFilePage() {
                     <p className="text-xs text-muted-foreground">{selectedFormat.description}</p>
                   </div>
 
-                  <Separator />
-
-                  <div className="space-y-3">
-                    <p className="text-sm font-medium">Options</p>
-                    <label className="flex items-start gap-2 text-sm">
-                      <Checkbox
-                        checked={createSubfolder}
-                        onCheckedChange={(v) => setCreateSubfolder(v === true)}
-                        className="mt-0.5"
-                      />
-                      <span>
-                        <span className="font-medium">Create subfolder using name</span>
-                        <span className="block text-xs text-muted-foreground">
-                          Writes into output/name/ and name_structure.json beside it.
-                        </span>
+                  <label className="flex items-start gap-2 text-xs">
+                    <Checkbox
+                      checked={writeMetaBin}
+                      onCheckedChange={(v) => setWriteMetaBin(v === true)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="font-medium">Write meta.bin</span>
+                      <span className="block text-muted-foreground">
+                        Handled by the Rust extractor when supported for this archive.
                       </span>
-                    </label>
-                    <label className="flex items-start gap-2 text-sm">
-                      <Checkbox
-                        checked={writeMetaBin}
-                        onCheckedChange={(v) => setWriteMetaBin(v === true)}
-                        className="mt-0.5"
-                      />
-                      <span>
-                        <span className="font-medium">Write meta.bin</span>
-                        <span className="block text-xs text-muted-foreground">
-                          Handled by the Rust extractor when supported for this archive.
-                        </span>
-                      </span>
-                    </label>
-                  </div>
+                    </span>
+                  </label>
+                </SectionBlock>
 
-                  <Fhm2dMetadataSummary
-                    name={effectiveName}
-                    hashName={hashPreview}
-                    folderPath={effectiveOutputFolderPath || null}
-                    structureJsonPath={effectiveStructureJsonPath || null}
-                    repackOutputPath={repackOutputPreview}
-                    compact
-                  />
-
+                <div className="flex flex-wrap items-center gap-3 p-4">
                   <Button
-                    className="w-full sm:w-auto"
                     onClick={() => void handleExtract()}
-                    disabled={isExtracting || !inputFilePath.trim() || !outputFolderPath.trim()}
+                    disabled={isExtracting || extractBlockedReason !== null}
                   >
                     {isExtracting ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Extracting…
+                        Unpacking...
                       </>
                     ) : (
                       <>
                         <PackageOpen className="h-4 w-4" />
-                        Extract
+                        Unpack
                       </>
                     )}
                   </Button>
-                </CardContent>
-              </Card>
+                  {extractBlockedReason && (
+                    <p className="text-xs text-muted-foreground">{extractBlockedReason}</p>
+                  )}
+                </div>
+              </SectionPanel>
 
-              <Card className="min-h-[320px] flex flex-col">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <Archive className="h-4 w-4" />
-                        Archive preview
-                      </CardTitle>
-                      <CardDescription>
-                        Header and structure from the selected FHM2D (JS parse for inspection only).
-                      </CardDescription>
-                    </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={!inputFilePath.trim() || preview.status === "loading"}
-                      onClick={() => void loadArchivePreview(inputFilePath)}
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                      Reload
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="min-h-0 flex-1 overflow-hidden">
-                  {preview.status === "idle" && (
-                    <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-                      Select a FHM2D file to preview archive metadata.
-                    </div>
-                  )}
-                  {preview.status === "loading" && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground p-4">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Reading archive…
-                    </div>
-                  )}
-                  {preview.status === "error" && (
-                    <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
-                      {preview.message}
-                    </div>
-                  )}
-                  {preview.status === "ready" && (
-                    <div className="h-[min(480px,50vh)] overflow-auto rounded-md border bg-muted/10 p-2">
-                      <p className="px-2 pb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Type: {preview.typeLabel}
-                      </p>
-                      <JsonView
-                        style={vscodeTheme}
-                        value={preview.data}
-                        displayDataTypes={false}
-                        collapsed={true}
-                      />
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              <div className="space-y-4">
+                <Fhm2dMetadataSummary
+                  name={effectiveName}
+                  hashName={hashPreview}
+                  folderPath={effectiveOutputFolderPath || null}
+                  structureJsonPath={effectiveStructureJsonPath || null}
+                  repackOutputPath={repackOutputPreview}
+                  compact
+                />
+                <ArchivePreviewPanel
+                  preview={preview}
+                  canReload={Boolean(inputFilePath.trim())}
+                  onReload={() => void loadArchivePreview(inputFilePath)}
+                />
+              </div>
             </div>
           </TabsContent>
 
-          <TabsContent value="repack" className="mt-0 space-y-4 focus-visible:outline-none">
-            <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Extracted folder</CardTitle>
-                  <CardDescription>
-                    Select a folder produced by Extract. The app looks in the parent directory for
-                    <code className="mx-1 text-xs">{"{folder}_structure.json"}</code>
-                    (or legacy
-                    <code className="mx-1 text-xs">{"{folder}.json"}</code>
-                    with SubFileStructure), then packs via
-                    <code className="mx-1 text-xs">repack_fhm2d</code>.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="repack-folder">Asset folder</Label>
+          <TabsContent
+            value="repack"
+            className="mt-0 space-y-4 focus-visible:outline-none"
+          >
+            <FlowStrip
+              from={repackFolderPath || null}
+              to={repackDiscovery?.ok ? repackDiscovery.repackOutputPath : null}
+            />
+
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)]">
+              <SectionPanel>
+                <SectionBlock
+                  title="Extracted folder"
+                  description={
+                    <>
+                      The parent directory is searched for{" "}
+                      <code className="font-mono">{"{folder}_structure.json"}</code> (or legacy{" "}
+                      <code className="font-mono">{"{folder}.json"}</code> carrying
+                      SubFileStructure), then the folder is packed through{" "}
+                      <code className="font-mono">repack_fhm2d</code>.
+                    </>
+                  }
+                >
+                  <div className="space-y-1.5">
+                    <Label htmlFor="repack-folder" className="text-xs">
+                      Asset folder
+                    </Label>
                     <FilePathInput
                       id="repack-folder"
                       value={repackFolderPath}
                       onChange={(e) => setRepackFolderPath(e.target.value)}
                       storeKey="repackInputPath"
-                      placeholder="Select extracted folder…"
+                      placeholder="Select extracted folder..."
                       picker={{ kind: "folder", multiple: false }}
                     />
                   </div>
+                </SectionBlock>
 
+                <div className="flex flex-wrap items-center gap-3 p-4">
                   <Button
-                    className="w-full sm:w-auto"
                     onClick={() => void handleRepack()}
-                    disabled={
-                      isRepacking ||
-                      isDiscovering ||
-                      !repackFolderPath.trim() ||
-                      !repackDiscovery?.ok
-                    }
+                    disabled={isRepacking || repackBlockedReason !== null}
                   >
                     {isRepacking ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Repacking…
+                        Repacking...
                       </>
                     ) : (
                       <>
@@ -633,66 +622,76 @@ export default function ExtractFilePage() {
                       </>
                     )}
                   </Button>
-                </CardContent>
-              </Card>
+                  {repackBlockedReason && (
+                    <p className="text-xs text-muted-foreground">{repackBlockedReason}</p>
+                  )}
+                </div>
+              </SectionPanel>
 
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Resolved structure</CardTitle>
-                  <CardDescription>
-                    Structure path and HashName-aware output next to the folder.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
+              <SectionPanel>
+                <SectionBlock
+                  title="Resolved structure"
+                  description="Structure path and HashName-aware output written next to the folder."
+                >
                   {!repackFolderPath.trim() && (
-                    <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
+                    <p className="rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground">
                       Choose an extracted folder to resolve its structure JSON.
-                    </div>
+                    </p>
                   )}
+
                   {repackFolderPath.trim() && isDiscovering && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <p className="flex items-center gap-2 rounded-md border border-dashed p-6 text-xs text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Looking for structure JSON in parent directory…
-                    </div>
+                      Looking for structure JSON in the parent directory...
+                    </p>
                   )}
+
                   {repackDiscovery && !repackDiscovery.ok && !isDiscovering && (
-                    <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+                    <p className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
                       {repackDiscovery.error}
-                    </div>
+                    </p>
                   )}
+
                   {repackDiscovery && repackDiscovery.ok && !isDiscovering && (
-                    <>
+                    <div className="space-y-3">
                       <Fhm2dMetadataSummary
                         name={repackDiscovery.name}
                         hashName={repackDiscovery.hashName}
                         folderPath={repackDiscovery.folderPath}
                         structureJsonPath={repackDiscovery.structureJsonPath}
                         repackOutputPath={repackDiscovery.repackOutputPath}
+                        compact
                       />
                       {repackDiscovery.missingMetadata && (
-                        <p className="text-xs text-amber-600 dark:text-amber-400">
-                          Structure JSON is missing Name and/or HashName. Output will use the structure
-                          file stem instead of a hash-based name.
+                        <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-400">
+                          Structure JSON has no Name and/or HashName. Output falls back to the
+                          structure file stem instead of a hash-based name.
                         </p>
                       )}
-                      <dl className="grid gap-2 text-xs font-mono text-muted-foreground">
+                      <dl className="space-y-2 text-[11px]">
                         <div>
-                          <dt className="font-sans font-medium text-foreground">Match</dt>
-                          <dd>{repackDiscovery.matchKind}</dd>
+                          <dt className="font-medium text-foreground">Match</dt>
+                          <dd className="font-mono text-muted-foreground">
+                            {repackDiscovery.matchKind}
+                          </dd>
                         </div>
                         <div>
-                          <dt className="font-sans font-medium text-foreground">Structure</dt>
-                          <dd className="break-all">{repackDiscovery.structureJsonPath}</dd>
+                          <dt className="font-medium text-foreground">Structure</dt>
+                          <dd className="break-all font-mono text-muted-foreground">
+                            {repackDiscovery.structureJsonPath}
+                          </dd>
                         </div>
                         <div>
-                          <dt className="font-sans font-medium text-foreground">Output</dt>
-                          <dd className="break-all">{repackDiscovery.repackOutputPath}</dd>
+                          <dt className="font-medium text-foreground">Output</dt>
+                          <dd className="break-all font-mono text-muted-foreground">
+                            {repackDiscovery.repackOutputPath}
+                          </dd>
                         </div>
                       </dl>
-                    </>
+                    </div>
                   )}
-                </CardContent>
-              </Card>
+                </SectionBlock>
+              </SectionPanel>
             </div>
           </TabsContent>
         </Tabs>

@@ -1,10 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Tree, type NodeApi } from "react-arborist";
-import { ArrowUpDown, Search, FolderOpen } from "lucide-react";
+import { ArrowUpDown, FolderOpen, Search, X } from "lucide-react";
 import { exists } from "@tauri-apps/plugin-fs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
@@ -248,8 +249,24 @@ function FileTreePaneImpl({
                     value={searchTerm}
                     onChange={(e) => onSearchChange(e.target.value)}
                     placeholder="Search files..."
+                    title="Filter is remembered per workspace root"
                     className="h-8 bg-background/50 pl-8 pr-8 text-xs transition-colors focus-visible:bg-background"
                   />
+                  {searchTerm ? (
+                    <button
+                      type="button"
+                      onClick={() => onSearchChange("")}
+                      title="Clear search"
+                      aria-label="Clear search"
+                      className={cn(
+                        "absolute right-1.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center",
+                        "rounded-sm text-muted-foreground transition-colors hover:bg-muted-foreground/10",
+                        "hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                      )}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
                 </div>
                 <Popover>
                   <PopoverTrigger asChild>

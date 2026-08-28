@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parseCharaJsonImportPreview } from "./CharaJson";
 
 describe("parseCharaJsonImportPreview", () => {
-  it("accepts Test Editor export rows that use entryId", () => {
+  it("accepts EXVS2 Workspace export rows that use entryId", () => {
     const text = JSON.stringify([
       {
         entryId: 1001001,

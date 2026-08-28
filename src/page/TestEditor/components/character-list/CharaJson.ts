@@ -121,7 +121,7 @@ function coerceId(value: unknown): number | null {
 
 /**
  * Accept id aliases used by different exporters:
- * - entryId: Test Editor Character List export (CharacterListEntry)
+ * - entryId: EXVS2 Workspace Character List export (CharacterListEntry)
  * - id: legacy Chara JSON export
  * - CharacterId: older CharacterDataOB export
  */

@@ -2,21 +2,21 @@ import { describe, expect, it } from "vitest";
 import { findMatchedRouteUrl, pathMatchesRoute } from "./pathMatch";
 
 describe("pathMatchesRoute", () => {
-  it("matches home only for exact / or empty", () => {
+  it("matches the workspace root only for exact / or empty", () => {
     expect(pathMatchesRoute("/", "/")).toBe(true);
     expect(pathMatchesRoute("", "/")).toBe(true);
-    expect(pathMatchesRoute("/TestEditor", "/")).toBe(false);
+    expect(pathMatchesRoute("/SingleFhm2d", "/")).toBe(false);
   });
 
   it("matches other routes by exact path only", () => {
-    expect(pathMatchesRoute("/TestEditor", "/TestEditor")).toBe(true);
-    expect(pathMatchesRoute("/TestEditor/extra", "/TestEditor")).toBe(false);
+    expect(pathMatchesRoute("/SingleFhm2d", "/SingleFhm2d")).toBe(true);
+    expect(pathMatchesRoute("/SingleFhm2d/extra", "/SingleFhm2d")).toBe(false);
   });
 });
 
 describe("findMatchedRouteUrl", () => {
   it("resolves known sidebar paths", () => {
-    expect(findMatchedRouteUrl("/TestEditor")).toBe("/TestEditor");
+    expect(findMatchedRouteUrl("/SingleFhm2d")).toBe("/SingleFhm2d");
     expect(findMatchedRouteUrl("/")).toBe("/");
   });
 

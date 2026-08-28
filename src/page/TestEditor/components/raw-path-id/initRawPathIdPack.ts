@@ -31,7 +31,7 @@ export async function initRawPathIdPack(input: InitRawPathIdPackInput): Promise<
     throw new Error("Source FHM2D path is required");
   }
   if (!workspaceRoot) {
-    throw new Error("Test Editor workspace root is required");
+    throw new Error("EXVS2 Workspace root is required");
   }
   if (!(await exists(sourceFhm2dPath))) {
     throw new Error(`Source FHM2D not found: ${sourceFhm2dPath}`);

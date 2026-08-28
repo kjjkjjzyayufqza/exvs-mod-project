@@ -35,7 +35,7 @@ type UnitModelRepackDialogProps = {
 };
 
 /**
- * Confirmation dialog mirroring the Test Editor "Repack Changes" flow, but
+ * Confirmation dialog mirroring the EXVS2 Workspace "Repack Changes" flow, but
  * targeting a single unit-model folder. Validates first, then packs the
  * `.fhm2d` into the configured OB Mod folder.
  */

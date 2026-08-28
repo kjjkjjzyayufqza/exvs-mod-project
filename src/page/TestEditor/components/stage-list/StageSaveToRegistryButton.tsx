@@ -50,7 +50,7 @@ export function StageSaveToRegistryButton({
 
   const persistStage = useCallback(async () => {
     if (!workspacePath.trim()) {
-      toast.error("Select a workspace folder in Resource Registry or Test Editor first");
+      toast.error("Select a workspace folder in Resource Registry or EXVS2 Workspace first");
       return;
     }
 
@@ -83,7 +83,7 @@ export function StageSaveToRegistryButton({
 
   const handleClick = useCallback(() => {
     if (!workspacePath.trim()) {
-      toast.error("Select a workspace folder in Resource Registry or Test Editor first");
+      toast.error("Select a workspace folder in Resource Registry or EXVS2 Workspace first");
       return;
     }
 

@@ -34,6 +34,7 @@ import { resolveMscWorkspaceFolderPathForSelection } from "./utils/mscWorkspaceU
 import { applyFileTreeViewSort } from "./utils/fileTreeViewSort";
 import { sortTreeByStarOrder, useFileTreeStarOrder } from "./utils/fileTreeStars";
 import { useFileTreeViewOptions } from "./hooks/useFileTreeViewOptions";
+import { useFileTreeSearchTerm } from "./hooks/useFileTreeSearchTerm";
 import { useTestEditorWorkspace } from "@/hooks/useTestEditorWorkspace";
 import { WorkspaceLayoutDialog } from "./components/workspace-layout/WorkspaceLayoutDialog";
 import { NumdlbEditorModalHost } from "@/components/ssbh-model-preview/NumdlbEditorModalHost";
@@ -108,9 +109,10 @@ const TestEditorPage = () => {
   const store = useConfigStore((s) => s.store);
   const getSetting = useConfigStore((s) => s.getSetting);
   const [treeData, setTreeData] = useState<TestTreeNode[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentDir, setCurrentDir] = useState("");
+  // Persisted per workspace root so the filter survives reload, hot reload, and app restart.
+  const { searchTerm, setSearchTerm } = useFileTreeSearchTerm(currentDir || undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedJsonPath, setSelectedJsonPath] = useState<string | null>(null);
   const [pendingJsonPath, setPendingJsonPath] = useState<string | null>(null);
@@ -268,7 +270,7 @@ const TestEditorPage = () => {
     const searchValue = buildFileTreeRevealSearchValue(targetPath);
     if (!searchValue) return;
     setSearchTerm(searchValue);
-  }, []);
+  }, [setSearchTerm]);
 
   useEffect(() => {
     const hydrate = async () => {
