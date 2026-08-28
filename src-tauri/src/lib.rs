@@ -16,7 +16,8 @@ pub mod havok_mesh_encode;
 pub mod havok_mesh_export;
 mod jnttbl_cmd;
 mod jnttbl_format;
-mod msc_roundtrip;
+pub mod msc_roundtrip;
+pub mod msc_toolchain;
 pub mod numshb_collision;
 pub mod nutexb_lib;
 mod preview_collection_state;
@@ -115,6 +116,9 @@ pub fn run() {
             commands::extract_fhm2d_to_folder,
             commands::bulk_extract_msc_fhm2d_to_folder,
             msc_roundtrip::compare_msc_roundtrip,
+            msc_roundtrip::verify_msc_roundtrip_from_c,
+            msc_toolchain::decompile_msc,
+            msc_toolchain::compile_msc,
             commands::analyze_fhm2d_structure_migration,
             commands::migrate_fhm2d_structure_metadata,
             character_id_preview::character_id_memory_preview_rows,

@@ -1,9 +1,11 @@
 //! Byte-level round-trip verification for MSC scripts.
 //!
-//! The MSC workspace recompiles a decompiled `.c` file to a temporary output
-//! and compares it against the original pack script. The compare is a plain
-//! byte comparison: any divergence (content or size) is reported with the
-//! first divergent offset plus a small hex context window from both files.
+//! Backend callers compile C in-process through `crate::msc_toolchain`
+//! (`compile_in_process`) and compare the packed bytes against the
+//! original script. The compare is a plain byte comparison: any divergence
+//! (content or size) is reported with the first divergent offset plus a
+//! small hex context window from both files. This module never spawns
+//! `msclang.exe` / `mscdec.exe`.
 
 use serde::Serialize;
 use std::fs;
@@ -103,6 +105,32 @@ pub fn compare_msc_roundtrip(
     let original = read_existing_file(&original_path, "original")?;
     let recompiled = read_existing_file(&recompiled_path, "recompiled")?;
     Ok(compare_msc_roundtrip_bytes(&original, &recompiled))
+}
+
+/// Compile `c_source` in-process and compare packed bytes to `original_msc`.
+pub fn verify_c_source_against_original(
+    c_source: &str,
+    original_msc: &[u8],
+) -> Result<MscRoundtripCompareReport, String> {
+    let recompiled = crate::msc_toolchain::compile_in_process(c_source)?;
+    Ok(compare_msc_roundtrip_bytes(original_msc, &recompiled))
+}
+
+/// Tauri adapter: read C + original from disk, compile in-process, compare.
+#[tauri::command]
+pub fn verify_msc_roundtrip_from_c(
+    c_path: String,
+    original_path: String,
+) -> Result<MscRoundtripCompareReport, String> {
+    let c_file = Path::new(&c_path);
+    if !c_file.is_file() {
+        return Err(format!("MSC round-trip verify: C file not found: {c_path}"));
+    }
+    let c_source = fs::read_to_string(c_file).map_err(|error| {
+        format!("MSC round-trip verify: failed to read C file {c_path}: {error}")
+    })?;
+    let original = read_existing_file(&original_path, "original")?;
+    verify_c_source_against_original(&c_source, &original)
 }
 
 #[cfg(test)]

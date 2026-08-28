@@ -99,18 +99,7 @@ export function getMscPackSlotIndexForCFile(name: string): number {
   return Number.parseInt(name, 10);
 }
 
-/**
- * Temp recompile target used by round-trip verify. Lives next to the C file
- * but uses a non-script extension so it is never picked up as a pack source.
- */
-export function getMscRoundtripTempPath(cFilePath: string): string {
-  const normalized = cFilePath.replace(/\\/g, "/");
-  const fileName = normalized.split("/").pop() ?? "";
-  const slotIndex = getMscPackSlotIndexForCFile(fileName);
-  return cFilePath.slice(0, cFilePath.length - fileName.length) + `${slotIndex}.roundtrip.tmp`;
-}
-
-/** Shape returned by the `compare_msc_roundtrip` Tauri command. */
+/** Shape returned by in-process MSC round-trip verify (`verify_msc_roundtrip_from_c`). */
 export interface MscRoundtripCompareReport {
   isMatch: boolean;
   originalSize: number;

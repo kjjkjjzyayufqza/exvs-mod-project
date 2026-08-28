@@ -9,6 +9,31 @@ import {
   shouldAutoActivateMscWorkspaceTab,
 } from "./mscWorkspaceUtils";
 
+describe("unit MSC pack slots", () => {
+  const folder = "E:/workspace/040msc/0x605245CC";
+
+  it("converts 0/1/2 scripts to sibling .c and .txt", () => {
+    expect(getMscConvertOutputPath(`${folder}/0.bscex`)).toBe(`${folder}/0.c`);
+    expect(getMscConvertLogPath(`${folder}/0.bscex`)).toBe(`${folder}/0.txt`);
+    expect(getMscConvertOutputPath(`${folder}/1.cscex`)).toBe(`${folder}/1.c`);
+    expect(getMscConvertLogPath(`${folder}/1.cscex`)).toBe(`${folder}/1.txt`);
+    expect(getMscConvertOutputPath(`${folder}/2.dscex`)).toBe(`${folder}/2.c`);
+    expect(getMscConvertLogPath(`${folder}/2.dscex`)).toBe(`${folder}/2.txt`);
+  });
+
+  it("repacks 0.c/1.c/2.c back onto the Unit MSC script extensions", () => {
+    expect(getMscRepackOutputPath(`${folder}/0.c`)).toBe(`${folder}/0.bscex`);
+    expect(getMscRepackOutputPath(`${folder}/1.c`)).toBe(`${folder}/1.cscex`);
+    expect(getMscRepackOutputPath(`${folder}/2.c`)).toBe(`${folder}/2.dscex`);
+  });
+
+  it("rejects helper C files that are not pack-root slots", () => {
+    expect(() => getMscRepackOutputPath(`${folder}/func_143.c`)).toThrow(
+      "unsupported repack file name",
+    );
+  });
+});
+
 describe("traditional MSC paths", () => {
   it("accepts arbitrary bin names and creates same-basename sidecars", () => {
     const source = "E:/workspace/0x67AF23FA/000triad_battle_b004_001_r2.bin";

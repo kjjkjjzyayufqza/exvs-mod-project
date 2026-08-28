@@ -1,75 +1,48 @@
-import { exists, readTextFile, remove, writeTextFile } from "@tauri-apps/plugin-fs";
+import { exists, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { Command } from "@tauri-apps/plugin-shell";
 import { invoke } from "@tauri-apps/api/core";
-import { join, resourceDir } from "@tauri-apps/api/path";
+import { join } from "@tauri-apps/api/path";
 import {
   applyMscResolvedOverlayToScript2,
   type MscResolvedOverlayStatus,
 } from "../../utils/mscResolvedOverlay";
 import { getMscRepackOutputPath } from "../../utils/mscWorkspaceUtils";
-import { getMscRoundtripTempPath, type MscRoundtripCompareReport } from "./mscPipeline";
+import { type MscRoundtripCompareReport } from "./mscPipeline";
 
 export async function decompileMscScript(params: {
   inputPath: string;
   outputPath: string;
   logPath: string;
-  mscFolderPath?: string | null;
 }): Promise<void> {
-  const resourcePath = await resourceDir();
-
-  const command = await Command.create("exec-python", [
-    resourcePath + "/tools/mscdec.py",
-    params.inputPath,
-    "-o",
-    params.outputPath,
-    "-log",
-    params.logPath,
-  ]).execute();
-
-  if (command.code !== 0) {
-    throw new Error(command.stderr || `mscdec failed for ${params.inputPath}`);
-  }
+  await invoke("decompile_msc", {
+    inputPath: params.inputPath,
+    outputPath: params.outputPath,
+    logPath: params.logPath,
+  });
 }
 
 export async function repackMscScript(params: {
   inputPath: string;
   outputPath: string;
-  mscFolderPath?: string | null;
 }): Promise<void> {
-  const resourcePath = await resourceDir();
-
-  const command = await Command.create(
-    "exec-python",
-    [
-      resourcePath + "/tools/msclang.py",
-      params.inputPath,
-      "-o",
-      params.outputPath,
-      "-i",
-    ],
-    { encoding: "utf-8" },
-  ).execute();
-
-  if (command.code !== 0) {
-    throw new Error(command.stderr || `msclang failed for ${params.inputPath}`);
-  }
+  await invoke("compile_msc", {
+    inputPath: params.inputPath,
+    outputPath: params.outputPath,
+  });
 }
 
 export interface MscRoundtripVerifyResult {
   report: MscRoundtripCompareReport;
   originalPath: string;
-  tempOutputPath: string;
-  /** Non-null when the temp recompile output could not be deleted afterwards. */
-  tempCleanupError: string | null;
 }
 
 /**
- * Round-trip verify: recompile a pack root C file to a temp path (the
- * original script is never touched) and byte-compare it against the original.
+ * Round-trip verify: the Tauri backend compiles the C file in-process
+ * (`crate::msc_toolchain`) and byte-compares against the original script.
+ * The original script is never written.
  */
 export async function verifyMscRoundtrip(params: {
   cFilePath: string;
-  mscFolderPath?: string | null;
 }): Promise<MscRoundtripVerifyResult> {
   const originalPath = getMscRepackOutputPath(params.cFilePath);
   if (!(await exists(originalPath))) {
@@ -78,31 +51,11 @@ export async function verifyMscRoundtrip(params: {
     );
   }
 
-  const tempOutputPath = getMscRoundtripTempPath(params.cFilePath);
-  await repackMscScript({
-    inputPath: params.cFilePath,
-    outputPath: tempOutputPath,
-    mscFolderPath: params.mscFolderPath,
+  const report = await invoke<MscRoundtripCompareReport>("verify_msc_roundtrip_from_c", {
+    cPath: params.cFilePath,
+    originalPath,
   });
-
-  try {
-    const report = await invoke<MscRoundtripCompareReport>("compare_msc_roundtrip", {
-      originalPath,
-      recompiledPath: tempOutputPath,
-    });
-    let tempCleanupError: string | null = null;
-    try {
-      await remove(tempOutputPath);
-    } catch (cleanupError) {
-      tempCleanupError =
-        cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
-    }
-    return { report, originalPath, tempOutputPath, tempCleanupError };
-  } catch (error) {
-    // Best-effort cleanup on compare failure; the compare error stays primary.
-    await remove(tempOutputPath).catch(() => undefined);
-    throw error;
-  }
+  return { report, originalPath };
 }
 
 /**

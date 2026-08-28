@@ -115,16 +115,15 @@ vi.mock("sonner", () => ({
   },
 }));
 
-vi.mock("../../utils/mscWorkspaceUtils", () => ({
-  folderContainsMscScriptFiles: folderContainsMscScriptFilesMock,
-  getMscConvertLogPath: (path: string, mode = "unit") =>
-    mode === "traditional" ? path.replace(/\.bin$/i, ".txt") : `${path}.log`,
-  getMscConvertOutputPath: (path: string, mode = "unit") =>
-    mode === "traditional" ? path.replace(/\.bin$/i, ".c") : `${path}.c`,
-  getMscRepackOutputPath: (path: string, mode = "unit") =>
-    mode === "traditional" ? path.replace(/\.c$/i, ".bin") : `${path}.mscsb`,
-  getMscResolvedOverlayPath: (path: string) => path.replace(/\.c$/i, ".resolved.md"),
-}));
+vi.mock("../../utils/mscWorkspaceUtils", async () => {
+  const actual = await vi.importActual<typeof import("../../utils/mscWorkspaceUtils")>(
+    "../../utils/mscWorkspaceUtils",
+  );
+  return {
+    ...actual,
+    folderContainsMscScriptFiles: folderContainsMscScriptFilesMock,
+  };
+});
 
 vi.mock("../../utils/mscResolvedOverlay", () => ({
   applyMscResolvedOverlayToScript2: applyMscResolvedOverlayToScript2Mock,
@@ -168,6 +167,27 @@ describe("MscWorkspaceView", () => {
       legacyAliasCount: 0,
       updatedScript2Content: null,
       renamedCallbackCount: 0,
+    });
+    invokeMock.mockImplementation(async (cmd: unknown) => {
+      if (cmd === "verify_msc_roundtrip_from_c") {
+        return {
+          isMatch: true,
+          originalSize: 128,
+          recompiledSize: 128,
+          firstDivergenceOffset: null,
+          contextStartOffset: null,
+          originalContextHex: null,
+          recompiledContextHex: null,
+        };
+      }
+      if (cmd === "repack_fhm2d") {
+        return {
+          outputPath: "E:\\OB_MOD\\0x12345678.fhm2d",
+          totalFiles: 1,
+          outputSize: 4096,
+        };
+      }
+      return undefined;
     });
   });
 
@@ -326,11 +346,6 @@ describe("MscWorkspaceView", () => {
   it("automatically repacks the FHM2D after compiling C when enabled", async () => {
     const user = userEvent.setup();
     readDirMock.mockResolvedValue([{ isFile: true, name: "0.c" }]);
-    invokeMock.mockResolvedValueOnce({
-      outputPath: "E:\\OB_MOD\\0x12345678.fhm2d",
-      totalFiles: 1,
-      outputSize: 4096,
-    });
 
     render(
       <MscWorkspaceView
@@ -347,6 +362,10 @@ describe("MscWorkspaceView", () => {
     await user.click(screen.getByRole("button", { name: /^repack$/i }));
 
     await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("compile_msc", {
+        inputPath: "E:/workspace/040msc/0x12345678/0.c",
+        outputPath: "E:/workspace/040msc/0x12345678/0.bscex",
+      });
       expect(invokeMock).toHaveBeenCalledWith("repack_fhm2d", {
         structureJsonPath: "E:\\workspace\\040msc\\0x12345678_structure.json",
         outputPath: "E:\\OB_MOD\\0x12345678.fhm2d",
@@ -503,5 +522,136 @@ describe("MscWorkspaceView", () => {
       expect(screen.getByText("Decompiled C")).toBeInTheDocument();
       expect(screen.getByText("2.c")).toBeInTheDocument();
     });
+  });
+
+  it("converts a Unit MSC script through decompile_msc and writes the sibling txt log", async () => {
+    const user = userEvent.setup();
+    readDirMock.mockResolvedValue([{ isFile: true, name: "2.dscex" }]);
+
+    render(
+      <MscWorkspaceView
+        workspaceRoot="E:/workspace"
+        workspaceDefaultPath="E:/workspace/040msc"
+        mscFolderPath="E:/workspace/040msc/0x12345678"
+        onMscFolderChange={() => {}}
+        isActive
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /^convert$/i }));
+    await user.click(await screen.findByRole("button", { name: /^continue$/i }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("decompile_msc", {
+        inputPath: "E:/workspace/040msc/0x12345678/2.dscex",
+        outputPath: "E:/workspace/040msc/0x12345678/2.c",
+        logPath: "E:/workspace/040msc/0x12345678/2.txt",
+      });
+    });
+    expect(JSON.stringify(invokeMock.mock.calls)).not.toContain("mscdec.py");
+  });
+
+  it("repacks Unit MSC 0.c/1.c/2.c through compile_msc onto the pack scripts", async () => {
+    const user = userEvent.setup();
+    readDirMock.mockResolvedValue([
+      { isFile: true, name: "0.c" },
+      { isFile: true, name: "1.c" },
+      { isFile: true, name: "2.c" },
+    ]);
+
+    render(
+      <MscWorkspaceView
+        workspaceRoot="E:/workspace"
+        workspaceDefaultPath="E:/workspace/040msc"
+        mscFolderPath="E:/workspace/040msc/0x12345678"
+        onMscFolderChange={() => {}}
+        isActive
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /^repack all$/i }));
+    await user.click(await screen.findByRole("button", { name: /^continue$/i }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("compile_msc", {
+        inputPath: "E:/workspace/040msc/0x12345678/0.c",
+        outputPath: "E:/workspace/040msc/0x12345678/0.bscex",
+      });
+      expect(invokeMock).toHaveBeenCalledWith("compile_msc", {
+        inputPath: "E:/workspace/040msc/0x12345678/1.c",
+        outputPath: "E:/workspace/040msc/0x12345678/1.cscex",
+      });
+      expect(invokeMock).toHaveBeenCalledWith("compile_msc", {
+        inputPath: "E:/workspace/040msc/0x12345678/2.c",
+        outputPath: "E:/workspace/040msc/0x12345678/2.dscex",
+      });
+    });
+    expect(JSON.stringify(invokeMock.mock.calls)).not.toContain("msclang.py");
+  });
+
+  it("decompiles all Unit MSC scripts through decompile_msc", async () => {
+    const user = userEvent.setup();
+    readDirMock.mockResolvedValue([
+      { isFile: true, name: "0.bscex" },
+      { isFile: true, name: "1.cscex" },
+      { isFile: true, name: "2.dscex" },
+    ]);
+
+    render(
+      <MscWorkspaceView
+        workspaceRoot="E:/workspace"
+        workspaceDefaultPath="E:/workspace/040msc"
+        mscFolderPath="E:/workspace/040msc/0x12345678"
+        onMscFolderChange={() => {}}
+        isActive
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /^decompile all$/i }));
+    await user.click(await screen.findByRole("button", { name: /^continue$/i }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("decompile_msc", {
+        inputPath: "E:/workspace/040msc/0x12345678/0.bscex",
+        outputPath: "E:/workspace/040msc/0x12345678/0.c",
+        logPath: "E:/workspace/040msc/0x12345678/0.txt",
+      });
+      expect(invokeMock).toHaveBeenCalledWith("decompile_msc", {
+        inputPath: "E:/workspace/040msc/0x12345678/1.cscex",
+        outputPath: "E:/workspace/040msc/0x12345678/1.c",
+        logPath: "E:/workspace/040msc/0x12345678/1.txt",
+      });
+      expect(invokeMock).toHaveBeenCalledWith("decompile_msc", {
+        inputPath: "E:/workspace/040msc/0x12345678/2.dscex",
+        outputPath: "E:/workspace/040msc/0x12345678/2.c",
+        logPath: "E:/workspace/040msc/0x12345678/2.txt",
+      });
+    });
+  });
+
+  it("verifies a Unit MSC C file in-process against the original pack script", async () => {
+    const user = userEvent.setup();
+    readDirMock.mockResolvedValue([{ isFile: true, name: "1.c" }]);
+    existsMock.mockImplementation(async (path: string) => path.endsWith("1.cscex"));
+
+    render(
+      <MscWorkspaceView
+        workspaceRoot="E:/workspace"
+        workspaceDefaultPath="E:/workspace/040msc"
+        mscFolderPath="E:/workspace/040msc/0x12345678"
+        onMscFolderChange={() => {}}
+        isActive
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /^verify$/i }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("verify_msc_roundtrip_from_c", {
+        cPath: "E:/workspace/040msc/0x12345678/1.c",
+        originalPath: "E:/workspace/040msc/0x12345678/1.cscex",
+      });
+    });
+    expect(invokeMock).not.toHaveBeenCalledWith("compile_msc", expect.anything());
   });
 });
