@@ -4,7 +4,6 @@ import {
   computeMscSlotStatuses,
   getMscFileRole,
   getMscPackSlotIndexForCFile,
-  getMscRoundtripTempPath,
   groupMscFiles,
   isMscPackScriptCFile,
   isMscRepackableCFile,
@@ -79,18 +78,6 @@ describe("getMscPackSlotIndexForCFile", () => {
   it("throws for non pack root files", () => {
     expect(() => getMscPackSlotIndexForCFile("3.c")).toThrow("not a pack root C file");
     expect(() => getMscPackSlotIndexForCFile("helper.c")).toThrow("not a pack root C file");
-  });
-});
-
-describe("getMscRoundtripTempPath", () => {
-  it("builds a sibling temp path with a non-script extension", () => {
-    expect(getMscRoundtripTempPath("C:/work/msc/1.c")).toBe("C:/work/msc/1.roundtrip.tmp");
-    expect(getMscRoundtripTempPath("C:\\work\\msc\\0.c")).toBe("C:\\work\\msc\\0.roundtrip.tmp");
-  });
-
-  it("throws for files that are not pack root C files", () => {
-    expect(() => getMscRoundtripTempPath("C:/work/msc/helper.c")).toThrow("not a pack root C file");
-    expect(() => getMscRoundtripTempPath("C:/work/msc/0.bscex")).toThrow("not a pack root C file");
   });
 });
 

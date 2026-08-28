@@ -391,7 +391,6 @@ export default function MscWorkspaceView({
         inputPath,
         outputPath,
         logPath,
-        mscFolderPath: activeFolderPath,
       });
 
       // Snapshot the freshly decompiled C so later edits can be diffed, and
@@ -412,7 +411,7 @@ export default function MscWorkspaceView({
 
       return `${file.name} converted to raw C`;
     },
-    [activeFolderPath, workspaceMode, setSlotVerifyState],
+    [workspaceMode, setSlotVerifyState],
   );
 
   /** Recompile one C file back to its source pack extension. Throws on tool failure. */
@@ -420,7 +419,7 @@ export default function MscWorkspaceView({
     async (file: MscFileInfo): Promise<string> => {
       const inputPath = file.path;
       const outputPath = getMscRepackOutputPath(inputPath, workspaceMode);
-      await repackMscScript({ inputPath, outputPath, mscFolderPath: activeFolderPath });
+      await repackMscScript({ inputPath, outputPath });
       // The original script changed, so any previous verify verdict is stale.
       const slotIndex = Number.parseInt(file.name, 10);
       if (Number.isInteger(slotIndex)) {
@@ -428,7 +427,7 @@ export default function MscWorkspaceView({
       }
       return `${file.name} to ${outputPath.replace(/^.*[\\/]/, "")}`;
     },
-    [activeFolderPath, workspaceMode, setSlotVerifyState],
+    [workspaceMode, setSlotVerifyState],
   );
 
   const handleConvertOne = useCallback(
@@ -543,7 +542,7 @@ export default function MscWorkspaceView({
       try {
         setProcessingFile(file.name);
         setSlotVerifyState(slotIndex, { status: "verifying" });
-        const result = await verifyMscRoundtrip({ cFilePath: file.path, mscFolderPath: activeFolderPath });
+        const result = await verifyMscRoundtrip({ cFilePath: file.path });
         setSlotVerifyState(slotIndex, verifyStateFromReport(result.report));
         const summary = summarizeMscRoundtripReport(result.report);
         if (result.report.isMatch) {
@@ -554,11 +553,6 @@ export default function MscWorkspaceView({
             : "";
           toast.warning(`Round-trip verify ${file.name}: ${summary}.${context}`);
         }
-        if (result.tempCleanupError) {
-          toast.warning(
-            `Verify temp file ${result.tempOutputPath} could not be removed: ${result.tempCleanupError}`,
-          );
-        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setSlotVerifyState(slotIndex, { status: "error", message });
@@ -568,7 +562,7 @@ export default function MscWorkspaceView({
         await fetchFiles();
       }
     },
-    [activeFolderPath, setSlotVerifyState, fetchFiles],
+    [setSlotVerifyState, fetchFiles],
   );
 
   const runBatch = useCallback(

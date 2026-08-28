@@ -43,6 +43,7 @@ vi.mock("@tauri-apps/api/path", () => ({
 import {
   decompileMscScript,
   openFileInExternalEditor,
+  repackMscScript,
   resolveMscActionOverlayForFolder,
   verifyMscRoundtrip,
 } from "./mscWorkspaceActions";
@@ -54,21 +55,77 @@ describe("decompileMscScript", () => {
     commandCreateMock.mockReturnValue({ execute: commandExecuteMock });
   });
 
-  it("does not enable unstable EXVS2 text postprocessing by default", async () => {
+  it("decompiles through the Rust Tauri command instead of Python mscdec.py", async () => {
+    invokeMock.mockResolvedValue(undefined);
     await decompileMscScript({
       inputPath: "E:/msc/unit/2.dscex",
       outputPath: "E:/msc/unit/2.c",
       logPath: "E:/msc/unit/2.txt",
     });
 
-    expect(commandCreateMock).toHaveBeenCalledWith("exec-python", [
-      "E:/app/resources/tools/mscdec.py",
-      "E:/msc/unit/2.dscex",
-      "-o",
-      "E:/msc/unit/2.c",
-      "-log",
-      "E:/msc/unit/2.txt",
-    ]);
+    expect(invokeMock).toHaveBeenCalledWith("decompile_msc", {
+      inputPath: "E:/msc/unit/2.dscex",
+      outputPath: "E:/msc/unit/2.c",
+      logPath: "E:/msc/unit/2.txt",
+    });
+    expect(commandCreateMock).not.toHaveBeenCalled();
+    expect(JSON.stringify(invokeMock.mock.calls)).not.toContain("mscdec.py");
+    expect(JSON.stringify(invokeMock.mock.calls)).not.toContain("msclang.py");
+  });
+
+  it("does not pass a Python tools directory into decompile", async () => {
+    invokeMock.mockResolvedValue(undefined);
+    await decompileMscScript({
+      inputPath: "E:/msc/unit/0.bscex",
+      outputPath: "E:/msc/unit/0.c",
+      logPath: "E:/msc/unit/0.txt",
+    });
+    const payload = invokeMock.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty("pythonPath");
+    expect(payload).not.toHaveProperty("toolsDir");
+    expect(payload).not.toHaveProperty("mscFolderPath");
+    expect(commandCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("always sends a sibling .txt log path with decompile_msc", async () => {
+    invokeMock.mockResolvedValue(undefined);
+    await decompileMscScript({
+      inputPath: "E:/msc/unit/1.cscex",
+      outputPath: "E:/msc/unit/1.c",
+      logPath: "E:/msc/unit/1.txt",
+    });
+    expect(invokeMock).toHaveBeenCalledWith("decompile_msc", {
+      inputPath: "E:/msc/unit/1.cscex",
+      outputPath: "E:/msc/unit/1.c",
+      logPath: "E:/msc/unit/1.txt",
+    });
+  });
+});
+
+describe("repackMscScript", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    invokeMock.mockResolvedValue(undefined);
+    commandExecuteMock.mockResolvedValue({ code: 0, stderr: "" });
+    commandCreateMock.mockReturnValue({ execute: commandExecuteMock });
+  });
+
+  it.each([
+    ["0.c", "0.bscex"],
+    ["1.c", "1.cscex"],
+    ["2.c", "2.dscex"],
+  ] as const)("repacks Unit MSC %s through compile_msc to %s", async (cName, outName) => {
+    await repackMscScript({
+      inputPath: `E:/msc/unit/${cName}`,
+      outputPath: `E:/msc/unit/${outName}`,
+    });
+    expect(invokeMock).toHaveBeenCalledWith("compile_msc", {
+      inputPath: `E:/msc/unit/${cName}`,
+      outputPath: `E:/msc/unit/${outName}`,
+    });
+    expect(commandCreateMock).not.toHaveBeenCalled();
+    expect(JSON.stringify(invokeMock.mock.calls)).not.toContain("msclang.py");
+    expect(JSON.stringify(invokeMock.mock.calls)).not.toContain("mscdec.py");
   });
 });
 
@@ -92,28 +149,20 @@ describe("verifyMscRoundtrip", () => {
     commandCreateMock.mockReturnValue({ execute: commandExecuteMock });
   });
 
-  it("recompiles to a temp path and compares against the untouched original", async () => {
+  it("verifies in-process through the Rust backend instead of writing a temp pack", async () => {
     const result = await verifyMscRoundtrip({ cFilePath: "E:/msc/unit/0.c" });
 
-    expect(commandCreateMock).toHaveBeenCalledWith(
-      "exec-python",
-      [
-        "E:/app/resources/tools/msclang.py",
-        "E:/msc/unit/0.c",
-        "-o",
-        "E:/msc/unit/0.roundtrip.tmp",
-        "-i",
-      ],
-      { encoding: "utf-8" },
-    );
-    expect(invokeMock).toHaveBeenCalledWith("compare_msc_roundtrip", {
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(invokeMock).toHaveBeenCalledWith("verify_msc_roundtrip_from_c", {
+      cPath: "E:/msc/unit/0.c",
       originalPath: "E:/msc/unit/0.bscex",
-      recompiledPath: "E:/msc/unit/0.roundtrip.tmp",
     });
-    expect(removeMock).toHaveBeenCalledWith("E:/msc/unit/0.roundtrip.tmp");
+    expect(invokeMock).not.toHaveBeenCalledWith("compile_msc", expect.anything());
+    expect(invokeMock).not.toHaveBeenCalledWith("compare_msc_roundtrip", expect.anything());
+    expect(removeMock).not.toHaveBeenCalled();
+    expect(commandCreateMock).not.toHaveBeenCalled();
     expect(result.report).toEqual(matchReport);
     expect(result.originalPath).toBe("E:/msc/unit/0.bscex");
-    expect(result.tempCleanupError).toBeNull();
   });
 
   it("fails with an explicit error when the original script is missing", async () => {
@@ -126,13 +175,11 @@ describe("verifyMscRoundtrip", () => {
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
-  it("reports a cleanup error without failing the verify", async () => {
-    removeMock.mockRejectedValue(new Error("file is locked"));
-
-    const result = await verifyMscRoundtrip({ cFilePath: "E:/msc/unit/1.c" });
-
-    expect(result.report).toEqual(matchReport);
-    expect(result.tempCleanupError).toContain("file is locked");
+  it("does not spawn Python tools for in-process verify", async () => {
+    await verifyMscRoundtrip({ cFilePath: "E:/msc/unit/1.c" });
+    expect(commandCreateMock).not.toHaveBeenCalled();
+    expect(JSON.stringify(invokeMock.mock.calls)).not.toContain("msclang.py");
+    expect(JSON.stringify(invokeMock.mock.calls)).not.toContain("mscdec.py");
   });
 });
 

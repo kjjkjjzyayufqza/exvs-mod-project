@@ -344,7 +344,6 @@ export function MscSourceBatchDecompileView({
                 inputPath: script.path,
                 outputPath: script.outputPath,
                 logPath: script.logPath,
-                mscFolderPath: folder.path,
               });
             } catch (error) {
               mutateStats((current) => ({

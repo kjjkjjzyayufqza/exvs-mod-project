@@ -129,7 +129,25 @@ path = "src/bin/unit_model_repack_roundtrip.rs"
 test = false
 required-features = ["legacy-cli-tools"]
 
+[[bin]]
+name = "mscdec"
+path = "src/bin/mscdec.rs"
+test = false
+
+[[bin]]
+name = "msclang"
+path = "src/bin/msclang.rs"
+test = false
+
 # Default `cargo test` suite (agent-facing CLIs only — keep this list short).
+[[test]]
+name = "msc_toolchain_identity_test"
+path = "tests/msc_toolchain_identity_test.rs"
+
+[[test]]
+name = "msc_toolchain_tdd_test"
+path = "tests/msc_toolchain_tdd_test.rs"
+
 [[test]]
 name = "replace_unit_model_numshb"
 path = "tests/replace_unit_model_numshb.rs"
