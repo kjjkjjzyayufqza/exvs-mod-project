@@ -10,14 +10,23 @@ cross-agent hub for Cursor, Claude, Codex, Copilot, and other coding agents.
 - **Domain**: EXVS2 Over Boost game asset editing — MSC script decompilation/
   recompilation, binary format parsing, 3D model/animation editing, and modding
   workflows.
+- **Target version scope (mandatory)**: this project targets **Over Boost (OB) and
+  earlier** revisions only. OB (`vsac27_Release.exe`, `OBHK0.3_v27`) is the primary
+  reference image; XB / VS2 / MBON / FB appear only as historical context.
+  **Any later revision than OB is out of scope**: do not target it, do not research
+  it, and never commit native addresses, field hashes, binary identities, corpus
+  samples or evidence sourced from it. Every native anchor committed here must be
+  traceable to an in-scope binary; if a finding can only be sourced from an
+  out-of-scope revision, leave it unproven rather than importing it.
 - **Key subsystems**:
   - `tools/` — Python-based MSC bytecode toolchain (`mscdec.py`, `msclang.py`,
     `disasmlib.py`, `msc_core.py`, `msc_cfg.py`).
   - `src-tauri/` — Tauri Rust backend, including agent-facing CLIs `exvs2-json`
     (`exvs2_json`) and `fhm2d-extract` (`fhm2d_extract`); see
     [CLI Tools](#cli-tools-agent-facing).
-  - `src/page/` — React page components (TestEditor with MSC workspace, UnitEdit,
-    FilesEdit, SceneEdit, etc.).
+  - `src/page/` — React page components. `TestEditor/` is the EXVS2 Workspace page
+    (route `/`, MSC workspace and all pack editors); also `Extract/` (Single FHM2D),
+    `SceneEdit/`, `UnitModelEdit/`, `ResourceRegistry/`, `MiscTools/`, `Config/`.
   - `docs/` — Format specifications and research notes.
 
 ## Mandatory Task Startup Protocol
@@ -247,20 +256,19 @@ Use `docs/` as the first source of project truth:
 - `docs/fhm2d-extract-cli.md` — `fhm2d-extract` CLI for unpacking OB `.fhm2d`
   with required `--type` / `--layout`; agent outputs must stay under `tmp/`
   (see `.cursor/rules/fhm2d-extract-artifacts.mdc`).
-- `docs/characterparam-field-notes.md` — characterparam empirical field
-  identity (`lockOnDistanceMax` + `alertRangeDistance` = 红锁,
-  `boostGaugeInitial` = HP); prefer over stale pool names when they conflict.
-  **Superseded on the lock question** by
-  `docs/lock-on-range-native-resolution-ob.md`: the red-lock boundary is
-  `min(Family1, Family2*scale + offset - 1)`, so no single field owns it.
+- characterparam empirical field identity: `lockOnDistanceMax` +
+  `alertRangeDistance` = 红锁, `boostGaugeInitial` = HP; prefer these over stale
+  pool names when they conflict. **Superseded on the lock question**: the
+  red-lock boundary is `min(Family1, Family2*scale + offset - 1)`, so no single
+  field owns it. (Detail write-ups are local-only and not tracked here.)
 - `docs/param-evidence-registry.tsv` — machine-readable evidence state for every
   `speedparam` / `characterparam` field hash: grade, consumption mechanism, value
   spread, citation. Generated; validated by `tools/check_param_name_evidence.py`.
-- `docs/lock-on-range-native-resolution-ob.md` — full decompiled lock-on chain
-  (band resolver, inner/outer radius formulas, slot-selection gate).
-- `docs/characterparam-native-consumer-map-ob.md` — all 197 characterparam fields
-  classified by consumption mechanism (128 code / 32 `.rdata` hash array / 37
-  absent), with the `find immediate` false-negative trap documented.
+- Lock-on chain (band resolver, inner/outer radius formulas, slot-selection
+  gate) and the characterparam consumer classification (197 fields: 128 code /
+  32 `.rdata` hash array / 37 absent, plus the `find immediate` false-negative
+  trap) are recorded in local-only param research notes, not tracked here. Use
+  `docs/param-evidence-registry.tsv` as the tracked source of evidence state.
 - `docs/speedparam-msc-consumer-evidence.md` — per-hash MSC call-site arithmetic
   for all 74 speedparam fields.
 - `docs/param-table-id-file-binding-proof.md` — proven `sys_0` table id → param
@@ -531,11 +539,22 @@ Project skills (domain):
 - For non-MSC changes, run exactly one narrowest reliable semantic verifier for
   each change, then stop on pass. Do not add generic build/lint/type/full-suite
   checks afterward.
-- For MSC `X.c` or MSC-coupled asset changes, the single-verifier rule is
-  disabled. Complete all applicable staged gates: lifecycle/state audit,
-  resource/Param existence, AI-block and opaque-pointer checks, compile/repack
-  when authorized, and the scoped in-game transition matrix. Report every
-  unauthorized or unrun gate explicitly.
+- **MSC runtime-first verification budget (mandatory):** automated checks only
+  protect source/bytecode integrity; they cannot validate gameplay. After the
+  minimum relevant source guard and a successful legacy compile/repack, stop
+  running additional MSC checkers and hand the build to the user for the
+  pre-registered in-game H/P/F matrix. Do not automatically add
+  decompile/recompile roundtrips, full-doc evidence scans, corpus scans,
+  unrelated checkers, or repeated hash/readback confirmation. Run
+  `check_msc_ai_blocks.py` and `check_msc_opaque_func_ptrs.py` when their
+  corresponding source risks exist; run `check_msc_action_shape.py` only when
+  action wiring/phase shape changed. Expand static verification only after a
+  relevant failure, an artifact-identity dispute, a compiler/toolchain change,
+  or an explicit user request.
+- For MSC `X.c` or MSC-coupled asset changes, complete the lifecycle/state audit
+  and current-target resource proof, then use the runtime-first budget above.
+  Runtime behaviour remains unverified until the user tests the scoped in-game
+  transition matrix. Report every unauthorized or unrun runtime gate explicitly.
 - For MSC tool changes, prefer one targeted real-file round-trip command or
   test that covers function pointer resolution, `try.` pushBit counts, and
   header flags together. Do not verify those as three separate workflows.

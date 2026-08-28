@@ -40,3 +40,41 @@ __pycache__/
 
 # Agent-generated MCP tool schema dumps (not project source)
 mcps/
+
+# Out-of-scope version research (see .cursor/rules/version-scope.mdc).
+# These notes reference a revision this project does not target. They stay on
+# local disk only and must never be committed.
+
+/docs/agent-sessions/2026-07-14-param-ida-audit.md
+/docs/agent-sessions/2026-07-22-param-deep-reverify-goal.md
+/docs/agent-sessions/2026-07-22-param-deep-reverify-results.md
+/docs/agent-sessions/2026-07-25-param-evidence-rebuild.md
+/docs/agent-sessions/2026-07-25-param-full-closure-goal.md
+/docs/agent-sessions/2026-08-01-param-deep-reaudit-complete-session-report.md
+/docs/agent-sessions/2026-08-01-param-evidence-followup.md
+/docs/characterparam-field-notes.md
+/docs/characterparam-native-consumer-map-ob.md
+/docs/characterparam-native-coverage-ledger.md
+/docs/lock-on-range-native-resolution-ob.md
+/docs/msc-research/sys46-script-parameter-atlas.md
+/docs/param-field-name-migration.md
+/docs/param-ida-version-matrix.md
+/docs/param-ob-corpus-validation.md
+/docs/param-research/2026-08-01-characterparam-burst-gauge-event-delta.md
+/docs/param-research/2026-08-01-characterparam-camera-vertical-height-correction.md
+/docs/param-research/2026-08-01-characterparam-lock-band-cached-state-gate.md
+/docs/param-research/2026-08-01-characterparam-runtime-progress-denominator.md
+/docs/param-research/2026-08-01-characterparam-target-position-resolver-mode.md
+/docs/param-research/2026-08-01-characterparam-target-relative-camera-curve.md
+/docs/param-research/2026-08-01-characterparam-target-tracking-response.md
+/docs/param-research/2026-08-01-characterparam-unit-cost-and-state-event-coefficient.md
+/docs/param-research/2026-08-01-characterparam-unit-numeric-id.md
+/docs/param-research/2026-08-01-characterparam-unit-position-query-offset.md
+/docs/param-research/2026-08-01-characterparam-unresolved-burst-event-buckets.md
+/docs/param-research/2026-08-01-characterparam-unresolved-query-and-radius-coefficients.md
+/docs/param-research/2026-08-01-characterparam-unresolved-runtime-capacity-pair.md
+/docs/param-research/2026-08-01-param-static-exhaustion-audit.md
+/docs/param-research/2026-08-01-speedparam-native-sys0-40003-regrade.md
+/docs/param-research/2026-08-01-speedparam-native-sys46-regrade.md
+/docs/speedparam-field-notes.md
+/docs/speedparam-msc-consumer-audit.md

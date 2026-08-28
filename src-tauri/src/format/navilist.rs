@@ -3,7 +3,7 @@
 //
 // Game role (EXVS2):
 //   - Player navi: left-side character after card swipe / login / result talk
-//   - Battle navi: mid-battle callouts (merged into サポートナビ)
+//   - Battle navi: mid-battle callouts
 //
 // Layout (entrySize 0x34, commandsCount 12):
 //   0x00 shared resource hashes...

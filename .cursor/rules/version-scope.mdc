@@ -1,0 +1,42 @@
+---
+description: Target version scope — Over Boost and earlier only; later revisions are out of scope
+alwaysApply: true
+---
+
+# Target Version Scope (Mandatory)
+
+This project targets **EXVS2 Over Boost (OB) and earlier revisions only**.
+
+## In scope
+
+- **OB** — `vsac27_Release.exe`, `OBHK0.3_v27`. Primary reference image for all
+  native evidence, corpus validation and address anchors.
+- **XB / VS2 / MBON / FB** — historical context only. Usable for cross-generation
+  comparison; never as the sole proof for a shipped field name or constant.
+
+## Out of scope
+
+**Any revision later than OB.** For those revisions:
+
+- Do not target them, do not open, decompile or research their binaries.
+- Do not commit native addresses, function names, field hashes, offsets, binary
+  identities (path, size, SHA-256), corpus samples or field evidence from them.
+- Do not use them as a validation or cross-check reference, and do not cite them
+  as an evidence tier in `docs/`.
+- Do not add their name, abbreviation or executable name to source, comments,
+  tests, fixtures, docs or commit messages.
+
+## Evidence rule
+
+Every native anchor committed to this repository must be traceable to an in-scope
+binary. If a finding can only be sourced from an out-of-scope revision, leave it
+**unproven** and mark it as pending in-scope revalidation. Do not import the
+out-of-scope anchor "temporarily".
+
+## When you encounter an existing reference
+
+Treat it as a defect. Re-anchor the claim to OB if possible, otherwise downgrade
+it to unproven and remove the out-of-scope reference. Report it rather than
+silently leaving it in place.
+
+Related: `AGENTS.md` → Project Identity → Target version scope; `README.md`.
