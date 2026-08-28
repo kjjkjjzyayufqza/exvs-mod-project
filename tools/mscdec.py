@@ -1,6 +1,8 @@
 from mscdec_msc import *
 from xml_info import MscXmlInfo, getXmlInfoPath
 from argparse import ArgumentParser
+
+from msc_ai_header import banner as msc_ai_banner
 import ast2str as c_ast
 from disasmlib import disasm as mscsb_disasm
 from disasmlib import Label, ScriptRef
@@ -977,10 +979,12 @@ def main(args):
         with open("stdlib.c", "w") as f:
             printC(globalVarDecls, stdlibFuncs, f)
         with open(args.filename if args.filename != None else (os.path.basename(os.path.splitext(args.file)[0]) + '.c'), "w") as f:
+            f.write(msc_ai_banner())
             print('#include "stdlib.c"', file=f)
             printC([], funcs, f)
     else:
         with open(args.filename if args.filename != None else (os.path.basename(os.path.splitext(args.file)[0]) + '.c'), "w") as f:
+            f.write(msc_ai_banner())
             printC(globalVarDecls, funcs, f)
 
 def read_function_pointer_map(log_file):

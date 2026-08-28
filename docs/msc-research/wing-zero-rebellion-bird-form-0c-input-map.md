@@ -1,7 +1,7 @@
 # Wing Zero Rebellion：鸟形态输入映射（0.c only，对照 TV Zero）
 
 **Date:** 2026-08-14  
-**Status:** 主射、鸟近战输入、单阶段鸟特格 N 已实机确认；飞行 CSA/CSB 已接 source，待实机（2026-08-22）
+**Status:** 主射、鸟近战输入、单阶段鸟特格 N 已实机确认；鸟主射三档 CS 已接 TV 三 hash（E1，待实机 2026-08-28）；飞行 CSB 已接 source
 **Kind:** MSC form / input-map 规范（可复用）  
 **Primary trees:**
 
@@ -142,9 +142,9 @@ Rebellion 的 `func_143` 用 `global39 != 0`（或显式 `== 0x2`）进鸟分支
 | 策略 | 内容 |
 |------|------|
 | 普通形态 `global39 == 0` | 保留完整 `func_95` 表 |
-| 鸟形态 `0x1` 主射 | `0x476fac14` `ACTION_A_SHOT_BIRD`（空弹 `func_98(0)`）。**不要**接地面 `0x7cd11119`（`func_884` 会卸鸟挂件）。`2.c` 必须按 TV `ALT_2` 关对锁、禁止 `func_76(0x38)` |
+| 鸟形态 `0x1` 主射 | 读场 `0x100`（`sys_0(0x10000,0,0x100)`）三档：`0` → `0x476fac14` `ACTION_A_SHOT_BIRD`（`CDA9F561/562`）；`1` → `0x16ed34c0` `ACTION_A_SHOT_BIRD_CS1`（`CDA9F55A/B`）；`2` → `0x2194f05d` `ACTION_A_SHOT_BIRD_CS2`（`CDA9F55C/D`）。空弹 `func_98(0)`。**不要**接地面 `0x7cd11119`（`func_884` 会卸鸟挂件）。**不要**复用 Rebellion `global157`（`func_44` 会写成 `global27`）。`2.c` 必须按 TV `ALT_2` 关对锁、禁止 `func_76(0x38)` |
 | 鸟形态近战 | **全部走 N**：`global48 & 0x3e` → `0x928ca34f` `func_937`。飞行中按格斗时 `func_81` 会清掉 `0x2`，必须连 `0x4/0x8/0x10/0x20` 一起收。不分流 `0x8b97920e`。拆鸟交给 `func_41`，不要抄 Delta 切模型 |
-| 鸟形态蓄力 | `0x800` CSA → `0x2194F05D` `ACTION_CHARGE_SHOT_BIRD`，selector 必须与鸟主射同为 `(0,1,0)`，直接复用鸟主射四段逻辑并保持 form；`0x1000` CSB → 普通 `0x616971CE` Zero System，`func_41` 先拆鸟并清 `func_104/107` 两层 body 旋转 |
+| 鸟形态蓄力 | `0x800` 与 `0x1` **同一套三档 selector**（TV 鸟没有单独 0x800）。不要再把 `0x2194f05d` 当 CSA alias 去打未蓄力主射。`0x1000` CSB → 普通 `0x616971CE` Zero System，`func_41` 先拆鸟并清 `func_104/107` 两层 body 旋转 |
 | 鸟形态其它武装 | 副射/特射仍不映射；`0x200` → `0xC0B814FF` 单阶段鸟特格 N，handler 先拆鸟再播 `0x1192E91E` |
 | 可选保留 | partner/`0x400` + `0xc0000` 条件那条 |
 | 不在本文件做的事 | 不在 `2.c` `ACTION_*` 加 form `return` |
@@ -159,20 +159,31 @@ Rebellion 的 `func_143` 用 `global39 != 0`（或显式 `== 0x2`）进鸟分支
 - 普通 10 发 / 鸟 2 发主射的 row swap 必须双向使用
   `sys_4F(0xB,0,new,old,0x4)`；这是 Delta Plus 4 发 / WR 2 发且共享 charge
   的官方模式。省略最后的 `0x4` 会把鸟形态 raw ammo 写回普通槽。
-- CSA action 被 selector 提交后不会自动消费满蓄状态。普通、方向与飞行 CSA
-  都必须在 action 入口一次调用 `sys_4F(0xA,0)`；飞行 CSA 要写在
-  `ACTION_CHARGE_SHOT_BIRD` wrapper，不能写进未蓄力主射共用的
-  `ACTION_A_SHOT_BIRD`。完整规则见
+- 鸟 CS 档位：`2.c` `rebellion_bird_cs_tick` 在 `global143==0x2` 时看
+  `sys_0(0x90003,0)==1` 升 0→1→2，并 `sys_4F(0xA,0)`（TV `func_1074`，让条能再蓄）。
+  `func_43` 每帧 `sys_1(0x10000,0,0x100, stage)`。CS1/CS2 **ENTER** 再消费一次 slot 0
+  并清档。未蓄力 `ACTION_A_SHOT_BIRD` **禁止** `sys_4F(0xA,0)`。离开鸟形态清档，
+  地面 CSA 仍是 `0x800` `ACTION_CHARGE_SHOT`。完整规则见
   [CS charge-slot consumption](./cs-action-charge-slot-consumption.md)。
 
-TV 鸟分支（`global39 == 0x1`）会给 `0x100`/`0x200`/`0x80` 等换 **另一套 hash**。Rebellion 当前仅补了主射、近战与 N 特格：`0x200` 复用 TV action hash `0xC0B814FF`，但 `2.c` 是单阶段 target handler，只播放现有 body+wing Folder `0x1192E91E`；N 落地第二段、左右特格、TV effect/SE 尚未移植。副射/特射/蓄力继续空映射。武装表仍只改 `0.c` selector。
+TV 鸟分支（`global39 == 0x1`）会给 `0x100`/`0x200`/`0x80` 等换 **另一套 hash**。Rebellion 鸟主射已按 TV 三档接 `0x476fac14` / `0x16ed34c0` / `0x2194f05d`。`0x200` 复用 TV action hash `0xC0B814FF`，但 `2.c` 是单阶段 target handler，只播放现有 body+wing Folder `0x1192E91E`；N 落地第二段、左右特格、TV effect/SE 尚未移植。武装表仍只改 `0.c` selector。
+
+In-game gate (E1 until packed):
+
+```text
+H  hypothesis: bird 0x1/0x800 pick 0/1/2 hashes from field 0x100
+P  prediction: no notch = CDA9F561/562; one notch = CDA9F55A/B; two = CDA9F55C/D;
+               CS ENTER empties slot 0; hit/untransform does not leak stage to ground CSA
+F  falsifier: uncharged gerobi OR charged pellet OR ground CSA is gerobi OR
+              after hit the next bird shot is still CS without recharging
+```
 
 受击 / 倒地走移植计划的 **FORCED_RECOVERY**。完整证据、hash 表、作废修法和 TV 对照见
 [飞行打断后动作≠形态](./wing-zero-rebellion-flight-interrupt-form.md)。
 
 - `func_15` 的 `var1` 中断块：鸟形态直接回站立 slot `0x2`，不要回 `0x18`。
 - `func_143` **禁止**在离开飞行动作后补交 `0x77b100ff`。鸟 `0x200` 现提交 `0xC0B814FF`；官方解除 `0xA02D57DC` 仍保留在 slot `0x19` 和其它恢复路径。
-- `2.c` `func_41`：`global143==2` 且当前动作不是 enter/loop/exit/鸟主射时，立刻拆 form。
+- `2.c` `func_41`：`global143==2` 且当前动作不是 enter/loop/exit/鸟主射/CS1/CS2/飞行特射时，立刻拆 form。
 - `2.c` `func_882`（对应 TV `func_888` → `func_1077`）：鸟形态同样拆 form。
 
 `func_16`–`func_20` / `func_41` / `func_42` 的鸟形态 `return 0` 仍保留，只挡地面武装解析，不能用来代替拆形态。

@@ -36,6 +36,25 @@ Before doing any task, every AI agent must:
    `read_first`. Canonical catalog: `tools/msc_research_catalog.py`. Markdown
    projection: `docs/msc-research/INDEX.md`.
 
+   **MSC evidence gate (mandatory, non-negotiable).** Before proposing *any*
+   MSC change:
+   1. Run `--match`. Listing the folder and picking notes by filename is how the
+      owner note gets missed — see `docs/msc-research/2026-08-27-msc-architecture-audit.md` F3/F7.
+   2. Grep every hash / `func_N` / `globalN` you intend to touch against
+      `docs/msc-research/msc-falsified-negatives-registry.md`. A hit means that
+      design already failed in-game; stop and read the owner note instead of
+      re-deriving it.
+   3. Grade your claim. Reading `X.c` establishes **E1 only**. Engine-ABI and
+      player-behaviour claims need E2/E3. Never publish behaviour policy from a
+      source-only reading, and never write `Status: E3` without a real in-game run.
+   4. Before each repack write down H (hypothesis) / P (prediction) /
+      F (falsifier), and change **one** judgement-affecting variable per build.
+      When two internal states look identical in game, add an SE/effect probe
+      (protocol §3.4) instead of more source reading.
+
+   Protocol: `docs/msc-research/msc-evidence-grade-and-ingame-audit-protocol.md`.
+   Checker: `python tools/check_msc_doc_evidence.py`.
+
 ## GPT/Codex Fast Path (Mandatory For Non-MSC Work)
 
 For GPT-5.6 Sol and other GPT coding models, minimize elapsed time, tool calls,
@@ -52,6 +71,11 @@ tasks:
   stop-on-first-pass behavior.
 - Use `.cursor/skills/msc-research-index/SKILL.md` and complete its mandatory
   lifecycle/state-ownership audit before editing.
+- Also load `.cursor/skills/msc-ingame-audit/SKILL.md` before asserting any
+  runtime behaviour or building a repack. Reading `X.c` grades a claim E1 only;
+  behaviour claims need E3 (in-game). Grep the falsified-negatives registry
+  first, pre-register H/P/F, change one variable per build, and ship an SE probe
+  rather than asking the user to introspect.
 - Trace ENTER, ACTIVE, EXIT, INTERRUPT, and RESPAWN/REINITIALIZE paths, including
   reverse transitions and shared state inheritance.
 - Verify every referenced action hash, motion Runtime ID/raw `unk1`, Param row,
@@ -164,6 +188,17 @@ Reuse rules:
   `0x9475130e`. Publishing form on the dash switches `0.c` to the bird table:
   detach looks like it never ran, and 30-frame stick cannot pick native
   `0x77b100ff`. See `docs/msc-research/wing-zero-rebellion-special-n-bird-dash.md`.
+- No-stick after the 30f dash: keep writing `sys_46(0x1, 0x1)` with
+  `func_296(0x3e8, 1)` and `func_167(0x1004000)`. Do not inherit via
+  `func_296(0)` + channel `0x2` (air idle/jump), `sys_46(0xf)` then `252`,
+  `func_169(0x4000)` on 679 start, or `func_287(0x3ed)` as ground. Visual
+  untransform must follow `natural_exit` (no `0x4000` clear). Runtime
+  2026-08-27. Full process/audit: same dash note.
+- Homemade clip duration (`SUB_SHOT_CUSTOM` / `tks11a` / `0xa0cd8d56`) is
+  **not** this transform bootstrap. `--match "homemade motion clock"`.
+  Do not copy stock `func_309` / `sys_47(0x7)` waits onto homemade folders;
+  do not use `func_310` as homemade rate. See
+  `docs/msc-research/homemade-motion-clock-vs-game-frame.md`.
 - Do not repeat source file counting, six-resource inventory, three transform
   motion lookup, SHL model-folder mapping, or body/wing skeleton comparison
   unless a restart condition in the bootstrap is met.
@@ -188,6 +223,12 @@ Use `docs/` as the first source of project truth:
 - `docs/msc-research/func593-vanilla-ranged-slots.md` — vanilla / old-style
   `func_593` ranged quartet: `676` start, `677` shoot, `678` **no-ammo
   (not cancel)**, `679` end. Do not confuse with `func_587` (`677`+`680` fire).
+- `docs/msc-research/homemade-motion-clock-vs-game-frame.md` — homemade
+  NUANMB folder clock ≠ game-frame clock. Phase length is
+  `global244 -= func_274()` (1 frame = `0x64`). Do **not** wait homemade
+  folders on `func_309` / `sys_47(0x7)`; do **not** use `func_310` as a
+  homemade rate knob. Rule: `.cursor/rules/msc-homemade-motion-clock.mdc`.
+  Registry: `docs/msc-research/msc-falsified-negatives-registry.md` §H.
 - `docs/exvs-stage-numatb-simple-color.md` — stage map props with only a color
   texture: use `FeRendererMovableVertexColor` → `vstgStandard_VertexColor`, strip
   unused PBR slots (avoids in-game overexposure).
@@ -411,6 +452,7 @@ Current project rule entry points:
 - `fhm2d-extract` artifact isolation: `.cursor/rules/fhm2d-extract-artifacts.mdc`
 - No release builds: `.cursor/rules/no-release-builds.mdc`
 - MSC research cluster routing: `.cursor/rules/msc-research-index.mdc`
+- Homemade NUANMB motion clock: `.cursor/rules/msc-homemade-motion-clock.mdc`
 - Cross-agent hub: `AGENTS.md`
 
 Project skills (domain):
@@ -418,6 +460,7 @@ Project skills (domain):
 - GPT shortest execution path: `.agents/skills/gpt-fast-path/SKILL.md`
 - GPT one-command semantic gate: `.agents/skills/gpt-fast-verify/SKILL.md`
 - MSC research cluster index: `.cursor/skills/msc-research-index/SKILL.md`
+- MSC evidence grading + in-game audit: `.cursor/skills/msc-ingame-audit/SKILL.md`
 - FHM2D stage pack/extract: `.cursor/skills/fhm2d-format/SKILL.md`
 - Stage numatb color-only materials: `.cursor/skills/exvs-stage-numatb/SKILL.md`
 - Tauri large binary IPC: `.cursor/skills/tauri-ipc-large-binary/SKILL.md`
@@ -442,6 +485,22 @@ Project skills (domain):
   `sys_1(0x10001, 0, 0x1, func_143)`. Optional rewrite:
   `python .\tools\check_msc_opaque_func_ptrs.py "<file>" --fix --write`.
   Full bug report: `docs/agent-sessions/2026-08-13-msc-0c-function-pointer-offset-bug.md`.
+- **MSC action shape is corpus-measured, not opinion.** After editing any `2.c`,
+  run `python .	ools\check_msc_action_shape.py "<modified 2.c>"`. It errors only
+  on invariants with zero counterexamples across 538 vanilla units / 1881 action
+  bodies: `callFunc3` at most once per action body, its argument a bare function
+  identifier defined in the same file, no `callFunc` / `callFunc2` / `set_main`
+  in an action body, and `func_586()` before the first `global676` write.
+  Everything else is an informational note, because vanilla violates it.
+  Before writing down any new MSC prohibition, look for counterexamples with
+  `python .	ools\check_msc_action_shape.py --corpus-report --scan-dir E:\XB\mod msc`.
+- **Every decompiled `X.c` carries a reading contract banner.** `mscdec.py` emits
+  it; it is comment-only, so the compiled bytecode is byte-identical (verified by
+  recompiling a stamped and an unstamped copy of the same file). Do not delete it
+  — skills and rules stay in this harness, but the banner travels with the file to
+  any external model. Stamp older files with
+  `python .	ools\msc_ai_header.py --stamp "<X.c>"`; verify with `--check`.
+  The full paste-able version is `docs/msc-research/MSC_AI_PRIMER.md`.
 - When adding symbols to MSC decompiled `X.c` files, work as a reverse engineer:
   preserve existing decompiler names when reading old code, but never invent new
   opaque names like `global777` / `var42` for AI-added state. Use semantic names

@@ -15,7 +15,7 @@
 | CS | 输入 bit | Rebellion action | Native slot | 动作入口政策 |
 |---|---:|---|---:|---|
 | 普通 CSA | `0x800` | `ACTION_CHARGE_SHOT` / `ACTION_CHARGE_SHOT_DIRECTIONAL` | `0` | `sys_4F(0xA, 0)`，再进入 `func_586` |
-| 飞行 CSA | `0x800` | `ACTION_CHARGE_SHOT_BIRD` | `0` | `sys_4F(0xA, 0)`，再调用鸟主射 alias |
+| 飞行 CSA / 鸟主射三档 | `0x1` 与 `0x800` | `ACTION_A_SHOT_BIRD_CS1` / `CS2`（档 1/2）；档 0 仍是未蓄力 `ACTION_A_SHOT_BIRD` | `0` | 升档脉冲 `sys_0(0x90003,0)==1` 时 `sys_4F(0xA,0)`（TV `func_1074`）；CS1/CS2 **ENTER** 再消费一次。禁止写进未蓄力 `ACTION_A_SHOT_BIRD` |
 | Zero System CSB | `0x1000` | `ACTION_MASK_1000` | `4` | 已由入口 `func_1031()` 的 `0x11/0x5/0x3` 链消费并关闭 charge 状态 |
 
 `sys_4F(0xA, slot)` 的 native handler 会把该 entry 的 charge 累计/计时值
@@ -41,19 +41,21 @@ per-tick callback 每帧清零，这会干扰 native charge state machine。
 
 ## 共享 handler 陷阱
 
-飞行 CSA 复用 `ACTION_A_SHOT_BIRD`，但普通飞行主射也调用这个 handler。
-因此 charge clear 必须写在 CSA 专用 wrapper：
+鸟形态现在按 TV 三档选 hash，不再用 `ACTION_CHARGE_SHOT_BIRD` 去 alias 未蓄力主射。
+`0.c` `0x1` 和 `0x800` 都读场 `0x100`。升档消费（TV `func_1074`）让蓄力条能填第二档；
+CS 动作入口消费避免起手被打断后满蓄还能再用。
 
 ```c
-void ACTION_CHARGE_SHOT_BIRD()
+void ACTION_A_SHOT_BIRD_CS1()
 {
     sys_4F(0xa, 0);
-    ACTION_A_SHOT_BIRD();
+    rebellion_bird_cs_stage = 0;
+    ...
 }
 ```
 
-禁止把 `sys_4F(0xA,0)` 放进 `ACTION_A_SHOT_BIRD`，否则未蓄力的飞行主射
-也会错误清除正在积累的 CSA。
+禁止把 `sys_4F(0xA,0)` 放进未蓄力 `ACTION_A_SHOT_BIRD`，否则普通鸟主射
+也会清掉正在积累的 CSA。地面 `0x800` 仍走 `ACTION_CHARGE_SHOT`。
 
 ## 生命周期与所有权
 

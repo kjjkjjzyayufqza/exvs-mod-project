@@ -1,0 +1,57 @@
+---
+description: Homemade NUANMB phase length uses game-frame countdown, not stock motion-complete or func_310 rate.
+globs:
+  - docs/msc-research/**
+  - docs/msc-*.md
+  - docs/exvs-msc-syscall-47*
+  - docs/nuanmb-*.md
+  - tools/msc*.py
+  - tools/check_msc*.py
+alwaysApply: false
+---
+
+# Homemade Motion Clock ≠ Game-Frame Clock
+
+Hub: `AGENTS.md`. Owner note: `docs/msc-research/homemade-motion-clock-vs-game-frame.md`.
+Registry: `docs/msc-research/msc-falsified-negatives-registry.md` §H.
+Catalog: `python tools/msc_research_catalog.py --match "homemade motion clock"`.
+
+Applies when MSC plays a **homemade** NUANMB / motion folder (DCC FBX import, `*_out_body` / `*_out_wing`, Rebellion `tks11a` / `0xa0cd8d56`). Stock vanilla hashes may still use `func_309`.
+
+## Required
+
+Phase length on a homemade folder:
+
+```c
+global244 = (end_frame - start_frame) * 0x64;   // 1 frame = 0x64
+// per tick after the enter latch:
+global244 = global244 - func_274();             // global457 game-frame delta
+if (global244 <= 0) { global252 = 0x1; }
+```
+
+`func_308` / 9-arg `sys_47(0x2, …)` only play or seek (last `func_308` arg is **startTime** in `0x64` units, not rate).
+
+`func_73` clears `global240`–`253` and calls `func_110(0x64)` on phase enter. Re-arm `global244` in each phase's `global240 == 0` enter.
+
+Keep the `func_593` quartet (`676/677/678/679`). This rule is how those bodies **wait**, not a new action shape.
+
+## Forbidden
+
+- Wait homemade folders on `func_309` / `sys_47(0xf)` / `sys_47(0x7)`.
+- Use `func_310` / `sys_47(0x5)` / per-tick `func_110` as homemade duration or playback-speed.
+- Copy stock ALT_2 (`0x6d149828`) **complete** waits onto a homemade hash. Seek + `global244` hold is the part that transfers.
+- After `func_241(hash, 0)` vs the real handler already proves ACTION entry, do not spend the session on packing / stale `2.dscex`.
+- Trust `2c-runtime-system-map-for-modding.md` naming `func_308`'s last arg `rate`.
+
+## Discriminator
+
+| Symptom | Cause | Next |
+|---------|-------|------|
+| Homemade clip ~3s, Blender/header ~1.8s | Waiting stock motion clock | `global244 -= func_274()` |
+| Changing `func_309` frame gate does not change wall clock | Same | Same |
+| Frozen last frame | `func_116` then wait `sys_47(0x7)` | Set `global252`; do not wait `0x7` |
+| `func_310(1000)` does nothing | Not a homemade rate knob | Delete the experiment |
+| `func_241(hash, 0)` skips the move | Not packed / not registered | Pack or fix the handler |
+| `func_241(hash, HANDLER)` still runs, duration wrong | Packed; clock is wrong | This rule |
+
+E3 sample (2026-08-27): Rebellion `SUB_SHOT_CUSTOM` folder `0xa0cd8d56`, 26+55+26 = 107f ≈ 1.8s. Other homemade folders follow this until E3-proven to honor the stock motion clock.

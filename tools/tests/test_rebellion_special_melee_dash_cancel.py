@@ -24,7 +24,9 @@ N_MELEE = 0x2
 # Analog 前进 is 0x4 on raw global2/global4. 前格/VARIANT is 0x40.
 # L/R melee is 0x8/0x10. Do not treat analog 0x4 as melee.
 DIR_MELEE_BITS = (0x8, 0x10, 0x40)
+FRONT_MELEE_CANCEL = 0x4
 ANALOG_FORWARD = 0x4
+OC_SPECIAL_MELEE_MASK = 0x5E
 
 
 def _read(path: Path) -> str:
@@ -169,18 +171,18 @@ class RebellionSpecialMeleeDashCancelTest(unittest.TestCase):
         code = _strip_c_comments(self.func_143)
         self.assertRegex(
             code,
-            r"global8\s*==\s*0xc805dc33\s*\|\|\s*global8\s*==\s*0x66eb879f\s*\)\s*&&\s*\(\s*global48\s*&\s*0x42\s*\)",
+            r"global8\s*==\s*0xc805dc33\s*\|\|\s*global8\s*==\s*0x66eb879f",
         )
+        self.assertIn("global48 & 0x5e", code)
         self.assertNotIn("global4 & 0x7e", code)
         self.assertIn("func_95(0x928ca34f, 0x1, 0x2, 0x1)", code)
-        packed_forward_melee = 0x80000040
-        packed_analog_forward = 0x80000004
-        self.assertTrue(packed_forward_melee & 0x42)
-        self.assertFalse(packed_analog_forward & 0x42)
-        dash_at = code.find("global48 & 0x42")
-        variant_at = code.find("else if (global48 & 0x40)")
+        self.assertTrue(FRONT_MELEE_CANCEL & OC_SPECIAL_MELEE_MASK)
+        self.assertTrue(0x40 & OC_SPECIAL_MELEE_MASK)
+        self.assertTrue(N_MELEE & OC_SPECIAL_MELEE_MASK)
+        dash_at = code.find("global48 & 0x5e")
+        dir1_at = code.find("func_95(0xa2236f44")
         self.assertGreater(dash_at, 0)
-        self.assertGreater(variant_at, dash_at)
+        self.assertGreater(dir1_at, dash_at)
 
     def test_analog_forward_alone_is_not_melee_cancel(self) -> None:
         want, exclude = _parse_func_233_call(self.func_933)
@@ -188,6 +190,100 @@ class RebellionSpecialMeleeDashCancelTest(unittest.TestCase):
         self.assertNotIn("global48 & 0x7e", code933)
         self.assertTrue(_func_233_from_source(0x40, want, exclude))
         self.assertTrue(_func_233_from_source(N_MELEE, want, exclude))
+
+    def test_special_windows_drop_front_melee_from_cancel_allow(self) -> None:
+        """0x9a5 bit 0x4 is 前格. That native cancel plays 0xa2236f44."""
+        for name, body in (("func_933", self.func_933), ("func_936", self.func_936)):
+            with self.subTest(window=name):
+                code = _strip_c_comments(body)
+                self.assertIn("func_123(0x9a1)", code)
+                self.assertNotIn("func_123(0x9a5)", code)
+                self.assertEqual(0x9A1 & FRONT_MELEE_CANCEL, 0)
+                self.assertEqual(0x9A5 & FRONT_MELEE_CANCEL, FRONT_MELEE_CANCEL)
+                self.assertTrue(_func_233_from_source(FRONT_MELEE_CANCEL, 0x7E, 0))
+
+    def test_dir1_enter_redirects_front_melee_cancel_from_special(self) -> None:
+        body = _strip_c_comments(_function_body(self.src2, "ACTION_B_MELEE_DIR_1"))
+        self.assertRegex(
+            body,
+            r"global7\s*==\s*0xc805dc33\s*\|\|\s*global7\s*==\s*0x66eb879f",
+        )
+        self.assertIn("func_81(0x928ca34f, 0x1, 0x2, 0x1)", body)
+        vanilla_at = body.find("func_488()")
+        steal_at = body.find("func_81(0x928ca34f")
+        self.assertGreater(vanilla_at, 0)
+        self.assertGreater(vanilla_at, steal_at)
+
+    def test_locked_loop_move_homes_on_lock_yaw_not_body_forward(self) -> None:
+        body = _strip_c_comments(
+            _function_body(self.src2, "rebellion_normal_special_n_bird_dash_locked_loop_move")
+        )
+        self.assertIn("sys_0(0x40000, 0x5)", body)
+        self.assertIn("sys_46(0, global265)", body)
+        self.assertIn("sys_46(0x1, 0x1, yaw, 0,", body)
+        self.assertIn("peak = 0x1194", body)
+        self.assertIn("home = 0x4b0", body)
+        self.assertNotIn("sys_46(0x2, 0x3, 0, 0, 0x1)", body)
+        self.assertNotIn("facing_ready", body)
+        self.assertNotIn("func_102(global265, 0xf, 0x1)", body)
+        self.assertNotIn("func_101(global265 - turn + yaw)", body)
+        self.assertNotIn("arc = 0x7d0 * remain / 0xbb8", body)
+        self.assertNotIn("arc = 0x2328 * remain / 0xbb8", body)
+        self.assertNotIn("sys_0(0x40003, 0x6)", body)
+        self.assertIn("orbit_side == 0x1", body)
+        self.assertIn("orbit_side == 0x2", body)
+        self.assertNotIn("func_516(", body)
+        self.assertNotIn("global265 += arc", body)
+        self.assertNotIn("func_102(global265, 0x64, 0)", body)
+        enter = _strip_c_comments(
+            _function_body(self.src2, "rebellion_enter_normal_special_n_bird_dash")
+        )
+        self.assertIn("global92 & 0x8", enter)
+        self.assertIn("global92 & 0x10", enter)
+        self.assertIn("global87 & 0x10", enter)
+        self.assertIn("global87 & 0x20", enter)
+        self.assertIn("global166 = 0", enter)
+        self.assertIn("func_104(0, 0, 0)", enter)
+        self.assertIn("global624 = 0x1", enter)
+        self.assertIn("sys_46(0, global265)", enter)
+
+    def test_dash_end_coasts_on_no_stick_instead_of_snap_stop(self) -> None:
+        shoot = _strip_c_comments(
+            _function_body(self.src2, "rebellion_normal_special_n_bird_dash_shoot")
+        )
+        end = _strip_c_comments(
+            _function_body(self.src2, "rebellion_normal_special_n_bird_dash_end")
+        )
+        land = _strip_c_comments(
+            _function_body(self.src2, "rebellion_dash_land_keep_move")
+        )
+        self.assertIn("elapsed >= 0xbb8", shoot)
+        self.assertIn("global252 = 0x1", shoot)
+        self.assertNotIn("0xfa0", shoot)
+        # Inherit is the 677 channel: sys_46(0x1, 0x1) with func_296(1).
+        # 296(0)+channel 0x2 is air-idle/jump, not dash leftover.
+        self.assertIn("coast = rebellion_normal_special_n_bird_dash_speed", end)
+        self.assertIn("rebellion_dash_untransform_keep_move()", end)
+        self.assertNotIn("rebellion_dash_land_keep_move()", end)
+        self.assertIn("func_296(0x3e8, 0x1)", end)
+        self.assertIn("sys_46(0x1, 0x1, 0, 0xfffff830, global508)", end)
+        self.assertIn("global508 = global508 * 0x5a / 0x64", end)
+        self.assertNotIn("sys_46(0x1, 0x2,", end)
+        self.assertNotIn("func_287(0x3ed)", end)
+        self.assertNotIn("sys_46(0xf,", end)
+        self.assertNotIn("func_81(0x77b100ff", end)
+        self.assertNotIn("func_296(0x3e8, 0)", land)
+
+    def test_0c_steals_dir1_hash_when_previous_action_was_special(self) -> None:
+        code = _strip_c_comments(self.func_143)
+        self.assertRegex(
+            code,
+            r"global8\s*==\s*0xa2236f44",
+        )
+        self.assertRegex(
+            code,
+            r"global7\s*==\s*0xc805dc33\s*\|\|\s*global7\s*==\s*0x66eb879f",
+        )
 
 
 if __name__ == "__main__":

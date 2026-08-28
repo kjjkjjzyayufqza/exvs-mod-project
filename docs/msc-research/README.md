@@ -1,5 +1,14 @@
 # MSC Research 入口：以真实 `.c` 与 raw Param 为证据
 
+> **改任何 MSC 之前先读这两份**（2026-08-27 审计后新增）：
+> 1. [证据分级与实机审计协议](./msc-evidence-grade-and-ingame-audit-protocol.md)
+>    —— 读 `X.c` 只能得到 **E1**；行为结论必须 **E3 实机**。
+> 2. [被证伪做法总登记](./msc-falsified-negatives-registry.md)
+>    —— 提改法前用你要动的 hash / `func_N` 在里面 grep 一遍，命中即停。
+>
+> 体系层审计结论见 [2026-08-27-msc-architecture-audit](./2026-08-27-msc-architecture-audit.md)。
+> 文档证据等级由 `python tools/check_msc_doc_evidence.py` 棘轮检查。
+
 > Agent / CodeGraph 分簇索引（只增加、不改写本目录既有笔记）：
 > [INDEX.md](./INDEX.md)，由 `tools/msc_research_catalog.py` 生成。
 > 路由 skill：`.cursor/skills/msc-research-index/SKILL.md`。
@@ -35,6 +44,15 @@ AI 新增符号还必须使用逆向语义名，不能新建 `global777` 这类�
 如果当前问题是“`global676/677/678/679` 四个 callback 分别是什么”，看
 [`func_593` 旧版 / 正常班 ranged 四槽](./func593-vanilla-ranged-slots.md)。
 **`678` 是没子弹分支，不是 cancel。** `func_587` 主射用的是 `677+680`，不要和这套混。
+
+如果当前问题是“`func_158(0xfa)` / 射击后坐力 / 自然后退”，看
+[`func_158` 射击后坐力](./func158-shot-recoil-sys46.md)。
+它写 `sys_46(0x2, 0x3, …, arg0)`，**不是** `sys_46(0x1)` 锁冲。常见开火值 `0xfa`。
+
+如果当前问题是“自制动作被拉长 / 放慢 / 卡最后一帧 / `func_310` 没用”，看
+[自制 NUANMB：motion 时钟 ≠ 游戏帧时钟](./homemade-motion-clock-vs-game-frame.md)。
+阶段时长用 `global244 -= func_274()`，不要用 `func_309` / `sys_47(0x7)`，不要把
+`func_310` 当速度旋钮。
 
 如果当前问题是“这个玩家系统到底在哪一层控制，应该改资源、脚本 segment 还是 native syscall”，看 [MSC 系统控制面矩阵：BD / 移动 / 镜头 / 动作 / 射击 / 格斗怎么改](./system-control-surface-matrix.md)。它把每个系统拆成玩家语义、`2.c` 控制面、资源层、syscall 层、patch 点和实机验证。
 

@@ -55,3 +55,8 @@ Indexing changes belong in the catalog, this rule, and the skill.
 
 New MSC notes must be registered in `tools/msc_research_catalog.py`.
 After catalog edits run `python tools/msc_research_catalog.py --check` and `--write-index`.
+
+Homemade NUANMB phase length: `.cursor/rules/msc-homemade-motion-clock.mdc`
+and `docs/msc-research/homemade-motion-clock-vs-game-frame.md`. Do not wait
+homemade folders on `func_309` / `sys_47(0x7)`. Do not use `func_310` as a
+homemade rate knob.

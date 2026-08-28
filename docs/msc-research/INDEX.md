@@ -27,15 +27,32 @@ Existing research notes are not rewritten by this index.
 ### `meta` — MSC research folder meta / coverage
 
 - **kind:** global
-- **aliases:** `msc-research README`, `gap map`, `notion msc`, `msc research summary`, `docs/msc-research`
-- **notes:** Human README remains; INDEX.md is the cluster projection of this catalog.
+- **aliases:** `msc-research README`, `gap map`, `notion msc`, `msc research summary`, `docs/msc-research`, `primer`, `onboard an AI`, `grok`, `external model`, `reading contract`, `action shape`, `how to read 2.c`
+- **notes:** Human README remains; INDEX.md is the cluster projection of this catalog. 2026-08-27 audit: 65/68 notes ungraded, only 7 record in-game failures, 16/31 clusters still have empty settled+do_not.
+- **settled:**
+  - Evidence grades are E0 guess / E1 source-pinned / E2 cross-source / E3 in-game / E3- in-game falsified.
+  - A claim is capped by the weakest link in its chain: reading X.c can never establish behaviour.
+  - Routing works (5/5 real queries hit the right cluster); the failure mode is not calling --match at all.
+  - Action-shape invariants are corpus-measured over 538 vanilla units / 1881 action bodies: callFunc3 at most once, bare-identifier argument, no callFunc/callFunc2/set_main, func_586 before the first global676 write. Zero counterexamples each.
+  - MSC_AI_PRIMER.md is self-contained and paste-able into a model with no repo access; mscdec now stamps the same contract into every decompiled X.c, and the banner is comment-only so the compiled bytecode is byte-identical.
 - **read_first:**
+  - `docs/msc-research/MSC_AI_PRIMER.md`
+  - `docs/msc-research/msc-evidence-grade-and-ingame-audit-protocol.md`
+  - `docs/msc-research/msc-falsified-negatives-registry.md`
   - `docs/msc-research/INDEX.md`
   - `docs/msc-research/README.md`
 - **docs:**
+  - `docs/msc-research/2026-08-27-msc-architecture-audit.md`
   - `docs/msc-research/msc-research-gap-map.md`
   - `docs/msc-research/notion-msc-cross-reference.md`
   - `docs/msc-research/20260621-215819-msc-research-summary.md`
+- **do_not:**
+  - Do not list docs/msc-research/ and pick notes by filename; match a cluster first.
+  - Do not publish behaviour-level policy from a source-only (E1) note.
+  - Do not propose an MSC change before grepping the falsified-negatives registry.
+  - Do not backfill Status: E3 on old notes without a real in-game run; that fabricates evidence.
+  - Do not promote a single failed build into a general prohibition without running check_msc_action_shape.py --corpus-report for counterexamples; the sys_46-in-677 ban was wrong (229 vanilla uses) and has been withdrawn.
+  - Do not delete the mscdec reading-contract banner from an X.c; it is the only guidance that travels with the file to an external model.
 
 ### `toolchain` — MSC format, decompile, repack, AI edit blocks
 
@@ -74,6 +91,8 @@ Existing research notes are not rewritten by this index.
 - **kind:** global
 - **aliases:** `sys_46`, `sys_4F`, `sys_4E`, `sys_4B`, `sys_47`, `sys_51`, `sys_53`, `sys_54`, `sys_55`, `syscall`, `sys_0`
 - **notes:** Syscall notes live under docs/, not docs/msc-research/.
+- **settled:**
+  - Homemade NUANMB folders may not honor sys_47(0xf) / sys_47(0x7) the way stock clips do. Phase length then uses global244 -= func_274(), not func_309. See homemade-motion-clock-vs-game-frame.md.
 - **read_first:**
   - `docs/exvs-msc-syscall-4f-native-handler.md`
   - `docs/exvs-msc-syscall-4f-notes.md`
@@ -87,6 +106,9 @@ Existing research notes are not rewritten by this index.
   - `docs/exvs-msc-syscall-55-notes.md`
   - `docs/exvs-native-truth-mapping-workflow.md`
   - `docs/exvs-native-truth-verification.md`
+  - `docs/msc-research/homemade-motion-clock-vs-game-frame.md`
+- **do_not:**
+  - Do not treat sys_47(0x5) (func_310) as a homemade clip duration or playback-speed knob. Do not wait homemade folders on sys_47(0x7).
 
 ### `runtime-2c` — Global 2.c runtime / action depiction architecture
 
@@ -118,11 +140,12 @@ Existing research notes are not rewritten by this index.
 ### `charge` — CS charge-slot consumption at action entry
 
 - **kind:** global
-- **aliases:** `CSA`, `CSB`, `charge slot`, `charge consume`, `charge reset`, `sys_4F(0xA)`, `ACTION_CHARGE_SHOT`, `ACTION_MASK_1000`, `0x800`, `0x1000`, `infinite charge shot`
+- **aliases:** `CSA`, `CSB`, `charge slot`, `charge consume`, `charge reset`, `sys_4F(0xA)`, `ACTION_CHARGE_SHOT`, `ACTION_MASK_1000`, `0x800`, `0x1000`, `infinite charge shot`, `0x90003`, `ACTION_A_SHOT_BIRD_CS1`, `bird CS`
 - **settled:**
   - A selected CS action must consume/reset its native charge slot once at action entry.
   - Direct CSA on slot 0 uses sys_4F(0xA, 0); Rebellion CSB slot 4 is already consumed by func_1031.
   - Do not put CSA charge clearing in an uncharged action alias or a per-tick callback.
+  - Bird CS notches consume slot 0 when sys_0(0x90003,0)==1 (TV func_1074) so the bar can refill; CS1/CS2 still consume at ENTER. That tick consume is charge-complete, not the CSA action consume. Uncharged ACTION_A_SHOT_BIRD must not consume.
 - **read_first:**
   - `docs/msc-research/cs-action-charge-slot-consumption.md`
 - **related:**
@@ -165,27 +188,69 @@ Existing research notes are not rewritten by this index.
 ### `movement` — BD / boost / sys_46 / func_11 movement
 
 - **kind:** global
-- **aliases:** `BD`, `boost dash`, `step`, `sys_46`, `func_11`, `0xc000`, `boost gate`, `global23`, `speedparam movement`
+- **aliases:** `BD`, `boost dash`, `step`, `sys_46`, `func_11`, `0xc000`, `boost gate`, `global23`, `speedparam movement`, `func_158`, `recoil`, `后坐力`
 - **settled:**
   - Ordinary BD/step is mostly speed_param + 0.c, not a 2.c ACTION_* authoring job.
+  - func_158(arg0) is shot recoil: natural backward via sys_46(0x2, 0x3, heading, pitch, arg0). Common fire value 0xfa. Operator E3 2026-08-28. No-op unless global174==1 or global180. Call once on shoot ENTER, not every tick.
 - **read_first:**
   - `docs/msc-research/movement-bd-modding-workbook.md`
   - `docs/msc-research/movement-boost-sys46-func11-map.md`
+  - `docs/msc-research/func158-shot-recoil-sys46.md`
 - **docs:**
   - `docs/msc-research/sys46-script-parameter-atlas.md`
   - `docs/msc-research/func11-c000-boost-gate-map.md`
+- **do_not:**
+  - Do not use sys_46(0x1) dash/mag writes as shot recoil. Do not call func_158 every tick. Do not treat func_158 as 足止 or analog.
 
 ### `ranged` — func_593 vanilla ranged quartet
 
 - **kind:** global
-- **aliases:** `func_593`, `func_587`, `global676`, `global677`, `global678`, `global679`, `global680`, `no-ammo`, `ranged slots`, `start shoot end`
+- **aliases:** `func_593`, `func_587`, `global676`, `global677`, `global678`, `global679`, `global680`, `no-ammo`, `ranged slots`, `start shoot end`, `callFunc`, `callFunc2`, `callFunc3`, `set_main`, `func_71`, `func_72`, `func_586`, `action tick`, `phase machine`, `func_158`
 - **settled:**
   - func_593 quartet: 676 start, 677 shoot, 678 no-ammo (not cancel), 679 end.
+  - func_158(arg0) on shoot ENTER is recoil (sys_46 0x2/0x3), not a fire id. Common 0xfa. See func158-shot-recoil-sys46.md.
   - func_587 main shot uses 677+680 fire; do not mix with the 593 quartet.
+  - The quartet is the universal EXVS2 action shape; mods must follow it. Only the four phase bodies differ per unit.
+  - Standard ENTER: func_586(); assign 676/677/678/679; exactly one callFunc3(tick); tick body is func_593().
+  - The driver advances phases via func_71(slot) = func_73 reset + global225 + func_72 dispatch. Script code only fills phase bodies and sets global252.
+  - Opcodes are E1 toolchain-pinned: callFunc 0x2f, callFunc2/set_main 0x30, callFunc3 0x31; args pushed before the function pointer, N excludes it.
+  - E2 corpus scan of 040msc/**: every 2.c uses callFunc3 (~50-120x), 0.c/1.c exactly once; set_main is rare (Rebellion 2.c has 2, both after motor-off).
 - **read_first:**
   - `docs/msc-research/func593-vanilla-ranged-slots.md`
+- **related:**
+  - `docs/msc-research/homemade-motion-clock-vs-game-frame.md`
+  - `docs/msc-research/func158-shot-recoil-sys46.md`
 - **do_not:**
   - Do not treat 678 as cancel.
+  - Do not invent a phase state machine in a callFunc3 tick to replace the 676-679 quartet.
+  - Do not callFunc3 anything but the action's own per-frame tick, and never more than once per ENTER.
+  - Do not confuse func_71 (global225 phase slot) with callFunc3 (VM opcode 0x31).
+  - callFunc/callFunc2/callFunc3 native semantics are E0 unknown. Copy the vanilla shape; do not reason from guessed behaviour.
+  - Do not copy stock func_309 / sys_47(0x7) motion-complete waits onto homemade NUANMB folders. Homemade phase length is global244 -= func_274() until that clip is E3-proven to honor the stock motion clock. See homemade-motion-clock-vs-game-frame.md.
+
+### `homemade-motion-clock` — Homemade NUANMB motion clock vs game-frame countdown
+
+- **kind:** global
+- **aliases:** `func_308`, `func_309`, `func_310`, `func_274`, `func_110`, `func_116`, `sys_47(0x2)`, `sys_47(0x5)`, `sys_47(0x7)`, `sys_47(0xf)`, `homemade motion`, `homemade motion clock`, `homemade nuanmb`, `tks11a`, `0xa0cd8d56`, `global244`, `global457`, `global276`, `motion complete`, `game-frame countdown`, `自制动作时钟`, `自制动作`, `放慢`
+- **notes:** E3 sample is Rebellion SUB_SHOT_CUSTOM folder 0xa0cd8d56. Other homemade folders follow the same rule until E3-proven to honor the stock motion clock. Do not mix this cluster into the transform-port bootstrap.
+- **settled:**
+  - Homemade NUANMB folders do not honor stock motion-complete the way vanilla hashes do. Phase length is global244 -= func_274() (global457, 1 frame = 0x64). Runtime 2026-08-27: Rebellion tks11a / 0xa0cd8d56 107f ≈ 1.8s.
+  - func_308 / 9-arg sys_47(0x2) only play or seek. Last func_308 arg is startTime in 0x64 units, not rate.
+  - func_73 clears global240-253 and calls func_110(0x64) on phase enter; re-arm global244 in each phase enter.
+  - Keep the func_593 quartet. This is how phase bodies wait, not a new action shape.
+- **read_first:**
+  - `docs/msc-research/homemade-motion-clock-vs-game-frame.md`
+- **related:**
+  - `docs/msc-research/func593-vanilla-ranged-slots.md`
+  - `docs/msc-research/msc-falsified-negatives-registry.md`
+  - `docs/msc-research/sub-shot-custom-start-only-aim.md`
+  - `docs/nuanmb-exvs2-import-in-game-layout.md`
+  - `docs/exvs-msc-syscall-47-notes.md`
+- **do_not:**
+  - Do not wait homemade folders on func_309 / sys_47(0xf) / sys_47(0x7). E3-: ~3s wall clock; changing the frame gate does not shorten it; freeze then wait 0x7 sticks the last frame.
+  - Do not use func_310 / sys_47(0x5) / per-tick func_110 as homemade duration or playback-speed. E3-: func_310(1000) did nothing on tks11a.
+  - Do not copy stock ALT_2 0x6d149828 complete waits onto a homemade hash. Seek + global244 hold transfers; motion-complete does not.
+  - Do not diagnose packing after func_241(hash, 0) vs the real handler already proves ACTION entry.
 
 ### `registry` — Action/slot registry and shell loadout
 
@@ -255,34 +320,45 @@ Existing research notes are not rewritten by this index.
 ### `wing-zero-rebellion` — Wing Zero Rebellion MSC / bird-form transform port
 
 - **kind:** unit
-- **aliases:** `Wing Gundam Zero Rebellion`, `wing_gundam_zero_rebellion`, `900000004`, `kamaesht2neo`, `Neo Bird`, `bird form`, `鸟形态`, `飞翼零式叛乱`, `零式叛乱`, `Rebellion`, `FORCED_RECOVERY`, `0x77b100ff`, `alt2 gerobi`, `N特射`, `SUB_SHOT_CUSTOM`, `rebellion_hiv_lock_aim`, `0x7cd11119`, `0x928ca34f`, `func_937`, `bird melee`, `鸟近战`, `特格接N`, `bird dash`, `rebellion_enter_normal_special_n_bird_dash`, `cut_in_loop`, `rebellion_transform_cut_in_loop`, `dash global143`
-- **notes:** AGENTS.md still inlines this bootstrap. Sibling Rebellion MSC edits: alt2-gerobi, sub-shot-custom, bird-melee-n-followup, special-n-bird-dash.
+- **aliases:** `Wing Gundam Zero Rebellion`, `wing_gundam_zero_rebellion`, `900000004`, `kamaesht2neo`, `Neo Bird`, `bird form`, `鸟形态`, `飞翼零式叛乱`, `零式叛乱`, `Rebellion`, `FORCED_RECOVERY`, `0x77b100ff`, `alt2 gerobi`, `N特射`, `SUB_SHOT_CUSTOM`, `SUB_SHOT_TYPE1`, `SUB_SHOT_TYPE2`, `SUB_SHOT_ASSIST`, `SUB_SHOT_FLIGHT`, `SPECIAL_SHOT_FLIGHT`, `flight sub shot`, `flight special gerobi`, `0x53554243`, `0x7e08fcc9`, `0xd94d608f`, `ltngfb`, `闪电高达`, `rebellion_hiv_lock_aim`, `0x7cd11119`, `0x928ca34f`, `func_937`, `bird melee`, `鸟近战`, `特格接N`, `bird dash`, `rebellion_enter_normal_special_n_bird_dash`, `cut_in_loop`, `rebellion_transform_cut_in_loop`, `dash global143`, `dash inertia`, `无杆惯性`, `rebellion_dash_untransform_keep_move`, `tks11a`, `0xa0cd8d56`, `homemade motion clock`, `0x16ed34c0`, `0x2194f05d`, `0x476fac14`, `ACTION_A_SHOT_BIRD_CS1`, `ACTION_A_SHOT_BIRD_CS2`, `rebellion_bird_cs_stage`, `bird CS`, `鸟CS`, `鸟照射`
+- **notes:** AGENTS.md still inlines this bootstrap. Sibling Rebellion MSC edits: alt2-gerobi, sub-shot-custom, bird-melee-n-followup, special-n-bird-dash, 2026-08-26 subshot-split-and-flight-weapons plan.
 - **settled:**
   - Bird arsenal is gated in 0.c func_143 only, not 2.c ACTION_*.
   - Rebellion main-shot bit is 0x1 (not TV 0x100); bird form id is 0x2 (TV 0x1).
   - Bird melee 0x2 maps to 0x928ca34f (special-melee N followup func_937); do not split 0x8b97920e; do not add that hash to the func_41 flight allowlist; do not copy Delta Plus func_888(0x8) model switch.
-  - Ground special-N dash also uses 0x928ca34f but func_241 wires rebellion_enter_normal_special_n_bird_dash; bird-form same hash still func_937. Vanilla special plays first. Cancel melee mask is 0x7e (includes forward 0x40); 0x3e missed 前格 because 0.c 0x40 is before 0x200 as 0x3ac14535. 2.c func_233(0x7e, 0). Do not cancel on stick 0x3c. Do not hijack standing melee into the dash.
+  - Ground special-N dash also uses 0x928ca34f but func_241 wires rebellion_enter_normal_special_n_bird_dash; bird-form same hash still func_937. Vanilla special plays first. 2.c func_233(0x7e, 0). Special windows must func_123(0x9a1) not 0x9a5: vanilla 0x9a5 bit 0x4 native-cancels 前格 to 0xa2236f44 DIR_1 and skips the window. ACTION_B_MELEE_DIR_1 redirects to dash only when global7 is still special. Do not cancel on stick 0x3c. Do not hijack standing melee into the dash.
   - Ground special-N dash must keep global143=0. Do not copy transform_start's global143=0x2 into cut_in_loop/676/677. Publishing form 0x2 on hash 0x928ca34f switches 0.c to the bird table, re-ENTERS func_937, and func_41 tears form: detach looks like it never ran, and 30f stick cannot pick native 0x77b100ff. 0x2 belongs only to 0x9475130e transform_start/loop.
+  - No-stick dash inertia (runtime 2026-08-27): keep writing sys_46(0x1, 0x1) with func_296(0x3e8,1) and func_167(0x1004000). Decay mag 90%/frame, pitch -20deg. Visual untransform like natural_exit (do not func_169(0x4000) on 679 start). Stick 679 only sets 252 so 0.c picks analog. Wiki BD inertia is engine BD leftover; this dash never used BD.
   - Hit/interrupt is FORCED_RECOVERY; do not requeue 0x77b100ff.
+  - Runtime 2026-08-28: generic hit returns body/form/control to normal but wing can retain trans_loop. func_41 bypasses func_882's wing refresh; current E1 build adds func_1025(2) + sys_47(0x43,0xf6c1a9c1) after normal shell rebuild.
   - Action hash is not form; form lives in global143.
   - Do not tear form only on standing idle 0x6d00aeaa.
   - 678 is no-ammo, not cancel.
   - Locate resources by canonical names, never by package hash.
+  - Flight-special custom foot-stop/restore adapters were E3- and are historical only. Current 2026-08-28 candidate copies Messala 0x9a74bce6: native quartet plus func_593(); func_167(0x1004000); every tick, keeping flight ownership continuous through 679/598. See messala-flight-sub-shot-flow.md.
+  - Homemade SUB_SHOT_CUSTOM folder 0xa0cd8d56 (tks11a) phase length is global244 -= func_274(), not func_309/sys_47(0x7). func_308 seeks pose. func_310 is not a homemade rate knob. Runtime 2026-08-27: 107f ≈ 1.8s. See homemade-motion-clock-vs-game-frame.md.
+  - Bird CS is TV three hashes via field 0x100 (rebellion_bird_cs_stage), not a 0x800 alias. 0=0x476fac14 CDA9F561/562, 1=0x16ed34c0 CDA9F55A/B, 2=0x2194f05d CDA9F55C/D. 0.c 0x1 and 0x800 share the selector. Do not reuse global157 (func_44 writes global27).
 - **read_first:**
   - `docs/agent-sessions/2026-08-09-wing-zero-rebellion-transform-handoff.md`
   - `docs/msc-research/wing-zero-rebellion-bird-form-0c-input-map.md`
   - `docs/msc-research/wing-zero-rebellion-flight-interrupt-form.md`
 - **docs:**
   - `docs/msc-research/2026-08-09-wing-zero-rebellion-transform-port-plan.md`
+  - `docs/msc-research/2026-08-26-wing-zero-rebellion-subshot-split-and-flight-weapons-plan.md`
   - `docs/msc-research/alt2-gerobi-stop-and-followup.md`
   - `docs/msc-research/sub-shot-custom-start-only-aim.md`
   - `docs/msc-research/wing-zero-rebellion-bird-melee-n-followup.md`
   - `docs/msc-research/wing-zero-rebellion-special-n-bird-dash.md`
+  - `docs/msc-research/wing-zero-rebellion-flight-special-footstop-handbook-audit.md`
+  - `docs/msc-research/homemade-motion-clock-vs-game-frame.md`
 - **related:**
   - `docs/msc-research/tv-wing-zero-flight-double-forward-aim.md`
   - `docs/msc-research/tv-wing-zero-flight-special-melee-landing-copy-list.md`
   - `docs/msc-research/tv-wing-zero-flight-special-melee-landing-todo.md`
   - `docs/msc-research/func593-vanilla-ranged-slots.md`
+  - `docs/msc-research/sys46-script-parameter-atlas.md`
+  - `docs/msc-research/movement-boost-sys46-func11-map.md`
+  - `docs/param-research/2026-08-01-speedparam-native-sys46-regrade.md`
   - `work/20260809-wing-zero-rebellion-transform-plan/evidence/E-007.md`
   - `work/20260809-wing-zero-rebellion-transform-plan/evidence/E-008.md`
   - `docs/agent-sessions/2026-08-13-msc-0c-function-pointer-offset-bug.md`
@@ -291,14 +367,23 @@ Existing research notes are not rewritten by this index.
   - Do not unpack FHM2D for this case; named sources already exist.
   - Do not reopen the legacy '85 model assets missing' hash manifests.
   - Do not mix transform-port notes with alt2 gerobi followup, SUB_SHOT_CUSTOM aim, or bird N melee 0x928ca34f.
+  - Do not copy Lightning sys_41 / 0x700000 / func_873 opaque offsets into Rebellion flight special. Do not use sys_46(0x5) as 足止: atlas names it dash/rush seed. Rebellion analog leftover is func_167(0x1004000) global24 0x4000 + sys_1(0x30001) + func_453 sys_46(0x1,mag). Foot-stop after func_593 uses func_169(0x4000), func_296(0x3e8,0), func_351(0,0x4), channel 1/2 clears and sys_46(0x4,0x4,0). Do not add the long-lived sys_46(0xF) interpolator; it previously fought EXIT analog. See wing-zero-rebellion-flight-special-footstop-handbook-audit.md.
+  - Do not rely on func_595 alone for Rebellion flight-special yaw after the custom foot-stop; runtime E3- was stationary but player-steerable and did not face lock. Use TV func_1042 direct lock yaw as the last ACTIVE writer.
+  - Do not restore only global24 0x4000 + the 0x30001 motor on natural flight-special EXIT. Leaving func_351 profile 0 produced air idle with bird visuals and no flight; restore profile 2 before func_598. INTERRUPT still uses FORCED_RECOVERY.
+  - Do not fix hit-stuck wing by calling func_74(0x3b): trans_end is a body+wing Folder and would override the hit body motion. Use the original wing-only func_1025(2) + sys_47(0x43,0xf6c1a9c1) refresh after func_884.
+  - Do not reintroduce rebellion_flight_special_foot_stop/lock_aim/restore_analog or private seg/frames into the current Messala port. Its load-bearing invariant is func_167(0x1004000) immediately after func_593 on every tick.
+  - Flight sub 0x7e08fcc9 untransforms at ENTER via rebellion_interrupt_bird_form_to_ground; keep it off the func_41 allowlist. Flight special 0xd94d608f keeps form; add only that hash to the allowlist. Do not use rebellion_bird_special_melee_natural_exit for flight sub.
   - Do not mix bird N melee 0x928ca34f with TV bird special-melee landing hashes.
   - Do not mix bird-form 0x928ca34f melee with the ground special-N dash ENTER.
-  - Do not cancel dash on analog new-press (2.c global48 0x4 is 前进). Require melee: 2.c global242 && func_233(0x7e, 0); 0.c global48 & 0x42 (N 0x2, 前格 0x40). Do not use global4 & 0x7e. Do not hijack standing melee into the dash.
+  - Do not cancel dash on analog new-press (2.c global48 0x4 is 前进). 前格 is packed 0x4 / 0xa2236f44 via special func_123(0x9a5). Drop that bit (0x9a1) and redirect DIR_1 ENTER only when global7 is special. 2.c global242 && func_233(0x7e, 0). Do not hijack standing melee into the dash.
   - Do not write global143=0x2 from the ground special-N dash (cut_in_loop, 676 start, 677 shoot). Form stays 0; 0x2 belongs only to 0x9475130e transform_start/loop.
   - Do not callFunc3(transform_start) or func_81(0x9475130e) from the dash; do not leave analog running in 679 without global252.
   - Do not write the dash sys_46 inside 677; func_596 then func_300 overwrites it. Do not zero global453/global454 on ENTER (Star Winning only zeros global452). Do not follow the 0x1 write with sys_46(0x1, 0x2, ..., 0).
   - Do not use transform_loop/ensure_mounted as the dash mount; clone loop and splice start attach_in. Do not func_81(0x77b100ff) from the dash melee hash (fake stuck flight). With global143 kept 0, 0.c ground table picks native analog after 30f stick.
+  - Do not inherit no-stick dash leftover via func_296(0)+sys_46(0x1, 0x2) (air idle/jump in-plane), sys_46(0xf) then 252 (func_44 mag 0), func_169(0x4000) on 679 start, or func_287(0x3ed) as ground after 296(0). Those yield vertical drop, fake flight pose, snap stop. Keep the 677 channel 0x1 with motor on. See wing-zero-rebellion-special-n-bird-dash.md.
   - Do not restart from package discovery unless a bootstrap restart condition is met.
+  - Do not wait homemade SUB_SHOT_CUSTOM / tks11a / 0xa0cd8d56 on func_309 or sys_47(0x7). Do not use func_310 as homemade duration/rate. Do not diagnose packing after func_241(0x23df217e, 0) already proves ACTION entry. See homemade-motion-clock-vs-game-frame.md.
+  - Do not reuse Rebellion global157 as bird CS stage; func_44 sets it to global27 on action enter. Publish sys_1(0x10000,0,0x100). Do not keep 0x2194f05d as ACTION_CHARGE_SHOT_BIRD alias of uncharged bird main.
 
 ### `wing-zero-tv` — TV Wing Zero source behavior for the Rebellion port
 
@@ -313,6 +398,28 @@ Existing research notes are not rewritten by this index.
   - `docs/agent-sessions/2026-08-09-wing-zero-rebellion-transform-handoff.md`
 - **do_not:**
   - Do not copy TV input bits or TV interrupt requeue onto Rebellion as-is.
+
+### `unit-messala` — Messala flight-mode sub-shot MSC flow
+
+- **kind:** unit
+- **aliases:** `Messala`, `メッサーラ`, `002zgundm_003mesala_001`, `flight sub shot`, `0x9a74bce6`, `ACTION_AB_SUB_LOCK_SWITCH`, `func_970`
+- **settled:**
+  - Messala flight gate is global20 & 0x4000; flight sub input 0x80 selects 0x9a74bce6 ACTION_AB_SUB_LOCK_SWITCH.
+  - The complete tick is func_593(); func_167(0x1004000); on every phase, so flight ownership is continuous through 679/598 rather than reconstructed on EXIT.
+  - Messala and Rebellion func_167/308/351/586/593-598 are text-identical, so the quartet/tick shape is directly portable.
+  - Messala func_893/894/895/896 are model-part sys_47 TRS only, not movement or handoff owners.
+  - Rebellion runtime 2026-08-28: continuous owner gives correct lock, firing, and natural EXIT, but target translation remains. Target adapter clears ch1/ch2, case-4 vector and func_300(0) after func_167; it preserves 0x4000/motor/global714 and skips global184==4.
+  - Rebellion runtime follow-up: translation clamp stops position and preserves EXIT; left/right input still changes body-local bank. Pose adapter zeros func_104/107 during ACTIVE only, preserving sys_46 world yaw and skipping 679.
+  - Rebellion loop-motion runtime: a synthetic 10f 679 wait leaves player control active while action lock/pose still owns the unit. Target 679 must cleanup then set global252 immediately; Messala motion-end wait requires a real recovery clip.
+- **read_first:**
+  - `docs/msc-research/messala-flight-sub-shot-flow.md`
+- **related:**
+  - `docs/msc-research/func593-vanilla-ranged-slots.md`
+- **do_not:**
+  - Do not copy Messala motion/projectile hashes, form id 1, speed row c2b19d12, or opaque func_893-896 into Rebellion.
+  - Do not copy only Messala ENTER calls; the load-bearing behavior is func_167(0x1004000) after func_593 on every tick including EXIT.
+  - Do not use Messala's motion-end 679 predicate with Rebellion's intentionally looping 0x9de587ce motion; keep a bounded target recovery timer.
+  - Do not claim full visual/resource Messala equivalence from a green lifecycle contract; motion c8fd1afb and private TRS/weapon resources are absent. For the confirmed movement-only delta, do not destroy continuous flight ownership: clamp translation after func_167 and skip 679.
 
 ### `gyan` — Gyan MSC: melee, Dodai special shot, auto-turn
 

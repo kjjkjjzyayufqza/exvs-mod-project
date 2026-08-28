@@ -25,6 +25,8 @@ Related:
 - `docs/nuanmb-ath-helper-bone-policy.md` — never author `ATH_*` tracks  
 - `docs/adr/0002-motion-fbx-import-direct-ufbx.md` — direct ufbx import  
 - `docs/ssbh-wmmt2-merge-animation-regression.md` — TransformFlags semantics  
+- `docs/msc-research/homemade-motion-clock-vs-game-frame.md` — MSC **playback**
+  of a homemade clip: game-frame countdown, not `func_309` / `func_310`
 - Code: `src-tauri/src/ssbh_motion_interchange/nuanmb.rs`  
   (`write_motion_clip_as_nuanmb`, `write_anim_data_exvs2_uncompressed`)  
 - UI: `src/components/ssbh-model-preview/components/MotionFbxImportPanel.tsx`  

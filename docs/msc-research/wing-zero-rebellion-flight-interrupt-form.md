@@ -1,7 +1,7 @@
 # Wing Zero Rebellion：飞行打断后「动作不是飞、操作还是飞」
 
 **Date:** 2026-08-16  
-**Status:** 源码钉死；实机需随 0.c+2.c 一起 repack 再验 T-08/T-09  
+**Status:** Form/operation FORCED_RECOVERY works; 2026-08-28 runtime found wing animation owner not refreshed on generic hit. Wing-only refresh built E1, retest pending.  
 **Kind:** MSC form / interrupt 规范  
 **Primary trees:**
 
@@ -168,6 +168,49 @@ TV 对照：
 - `func_296(0x3e8, 0)`（`sys_1(0x30001, 0)`，关飞行移动）
 - 拆鸟挂件
 - `rebellion_restore_normal_hand_weapons()` / `func_884()`
+
+### 5.6 受击后 wing 仍停在飞行姿态（2026-08-28）
+
+实机确认：飞行中受击后 body/form/操作已经正确回到 normal，但 wing 没有回到
+normal 姿态。
+
+当前目标 motion structure 证明：
+
+- `0x9de587ce` `trans_loop` 是二子项 Folder：body file 536 + wing file 537；
+- `0x67a17368` `trans_end` 是二子项 Folder：body file 538 + wing file 539；
+- wing model id 是 `0xf6c1a9c1`。
+
+自然解除通过 `func_74(0x3b,0)` 播放完整 body+wing end Folder；受击的
+`rebellion_interrupt_bird_form_to_ground()` 跳过 exit motion，只执行
+`func_884()` shell rebuild。`rebellion_bird_props_detach_after_shrink()` 只拆
+盾、枪、剑柄，不处理 wing animation owner。
+
+原版 `016gundmw_001wgzero_001 func_882` 与目标保留的 `func_882` 均使用：
+
+```c
+func_884();
+func_1025(0x2);
+sys_47(0x43, 0xf6c1a9c1);
+```
+
+但 `func_41` 的通用受击路径直接调用 FORCED_RECOVERY helper，因此漏掉后两
+步。目标修复应在 `rebellion_restore_normal_hand_weapons()` 后补同一
+wing-only refresh。该序列不播放 body motion，可保留真正的受击动作。
+
+禁止用 `func_74(0x3b,0)` 修受击：它会同时启动 transform-end body motion，
+覆盖 hit/down body owner。禁止只改 `global143` 或重复 `func_884()`；运行时已
+证明 form 与 shell rebuild 正常，缺的是 wing refresh owner。
+
+构建检查点：
+
+```text
+2.c MD5       0137E0E70C496FDC9446C8BCD9ACE763
+2.dscex MD5   2F62A4D55FF413402632D6177E849FD6
+2.dscex SHA   877865D338EB7D57BBC4A21C8A52BE6DE27F97AD88DB130A11B927E6689478EF
+```
+
+Source contract 2/2、全相关契约 8/8、AI block、opaque pointer、legacy pack
+和 byte-identical round-trip 均通过。wing 视觉仍需实机才可升 E3。
 
 ---
 

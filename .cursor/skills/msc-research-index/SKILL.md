@@ -1,12 +1,21 @@
 ---
 name: msc-research-index
-description: Route EXVS2 MSC research notes by cluster so agents read the right docs instead of listing docs/msc-research. Use when MSC, 0.c, 2.c, func_143, ACTION_*, sys_46, sys_4F, mscdec, msclang, Wing Zero Rebellion, Gyan, Delta Plus, Delta Kai, Hyaku Shiki, Unicorn, Aerial, msc-research, or a unit script port.
+description: Route EXVS2 MSC research notes by cluster so agents read the right docs instead of listing docs/msc-research. Use when MSC, 0.c, 2.c, func_143, ACTION_*, sys_46, sys_4F, mscdec, msclang, Wing Zero Rebellion, Gyan, Delta Plus, Delta Kai, Hyaku Shiki, Unicorn, Aerial, msc-research, homemade motion, func_309, func_310, func_274, tks11a, or a unit script port.
 ---
 
 # MSC Research Index
 
 CodeGraph indexes `tools/msc_research_catalog.py`, not the Markdown notes.
 Existing research notes stay as-is. This skill only routes.
+
+## Load `msc-ingame-audit` alongside this skill
+
+This skill's audit is **static**. It cannot tell you whether a claim is strong
+enough to act on, and reading `X.c` establishes source structure only — never
+engine ABI or player behaviour. Before asserting runtime behaviour or building a
+repack, load `.cursor/skills/msc-ingame-audit/SKILL.md`: evidence grades E0-E3,
+the falsified-negatives registry to grep before proposing a design,
+pre-registered falsifiers, one-variable builds, and SE/effect probes.
 
 ## Fast rules are forbidden
 
@@ -100,8 +109,8 @@ or ask the user. Do not patch around the unknown.
 Run every applicable gate; MSC is not limited to one command:
 
 - repeat the lifecycle and state-ownership audit on the resulting code;
-- `check_msc_ai_blocks.py` and `check_msc_opaque_func_ptrs.py` for each changed
-  `X.c`;
+- `check_msc_ai_blocks.py`, `check_msc_opaque_func_ptrs.py` and
+  `check_msc_action_shape.py` for each changed `X.c`;
 - verify resource/Param references again after edits;
 - compile/repack only when authorized, then report whether it was run;
 - test normal→alternate→normal, ready/loading inheritance, interrupt at each
@@ -138,8 +147,9 @@ python tools/msc_research_catalog.py --list
 | Gyan / 强人 / 后格 / Dodai特射 | `gyan` |
 | How `2.c` works globally | `runtime-2c` |
 | Input bits / `0.c func_143` | `input-0c` |
-| BD / `sys_46` / `func_11` | `movement` |
+| BD / `sys_46` / `func_11` / `func_158` recoil | `movement` |
 | `func_593` 676-679 | `ranged` |
+| Homemade clip duration / `func_309` / `func_310` | `homemade-motion-clock` |
 | `func_1044` / `func_887` shell | `registry` |
 | Format / repack / AI blocks / opaque ptrs | `toolchain` |
 | `sys_4F` / other syscalls | `syscall` |
@@ -153,6 +163,7 @@ python tools/msc_research_catalog.py --list
 - Do not use generated analysis JSON / overlays as evidence.
 - New MSC note: write the note, **then add it to** `tools/msc_research_catalog.py`, then `--check` and `--write-index`.
 - Wing Zero Rebellion transform still has an AGENTS.md bootstrap; also `--match` so alt2 gerobi / `SUB_SHOT_CUSTOM` do not get mixed into the transform port.
+- Homemade NUANMB phase length is `global244 -= func_274()`, not `func_309` / `sys_47(0x7)`, not `func_310` rate. Owner: `docs/msc-research/homemade-motion-clock-vs-game-frame.md`.
 
 ## Verify catalog edits
 

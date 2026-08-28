@@ -32,7 +32,11 @@ not be authored, edited, or converted** into custom motion files (omit whole
 Transform nodes; NUHLPB + rest only). When the Blender scene has a separate
 body armature and wing armature (`001hito` vs `410wzerowing`, `CENTER_RT` vs
 `LMAIN_1`), use skill `.cursor/skills/exvs2-body-wing-fbx-export/SKILL.md` and
-export two isolated `_out.fbx` files.
+export two isolated `_out.fbx` files. When MSC **plays** a homemade clip,
+phase length is **game-frame countdown** (`global244 -= func_274()`), not
+stock `func_309` / `sys_47(0x7)` and not `func_310` rate. Owner:
+`docs/msc-research/homemade-motion-clock-vs-game-frame.md`. Rule:
+`.cursor/rules/msc-homemade-motion-clock.mdc`.
 
 Legacy per-topic note folders under `docs/` are a **separate, older workflow**
 (auxiliary reference only). Do not treat them as the primary task manager;
@@ -59,6 +63,7 @@ do not create or update them unless the user explicitly requests it.
 7c. **`fhm2d-extract` 产物隔离与入口**：解包 OB `.fhm2d` 时优先使用默认构建的 agent CLI `fhm2d_extract`（必填 `--type` 与 `--layout`；文档 `docs/fhm2d-extract-cli.md`）。准备、运行或验证时创建的所有持久化产物（`--output` 目录、`*_structure.json`、`meta.bin`、日志、报告）必须写入仓库根目录的 `tmp/`（推荐 `tmp/fhm2d-extract/<task>/`），不得写到源 `.fhm2d` 旁、游戏/workspace 树、`docs/`、`src-tauri/` 或仓库根目录。完整规则见 `.cursor/rules/fhm2d-extract-artifacts.mdc`。
 7d. **GPT 最短路径（仅非 MSC）**：GPT-5.6 Sol 与其他 GPT 编码模型在非 MSC 任务默认启用 caveman、单一发现路径、单命令语义验证；成功后立即停止。禁止自动串联 build/typecheck/lint/test/coverage/audit/E2E/full-suite。完整优先级与例外见 `.cursor/rules/gpt-fast-verification.mdc` 和 `AGENTS.md`。
 7e. **MSC 禁用 fast rules（强制）**：MSC 研究、`0.c/1.c/2.c` 修改、机体脚本移植，以及 MSC 与 motion/model/Param/HUD 状态耦合的任务，禁止启用 `caveman`、`gpt-fast-path`、`gpt-fast-verify`，也不受单一发现路径/单命令验证/首个 pass 即停止的限制。编辑前必须按 `.cursor/skills/msc-research-index/SKILL.md` 完成 ENTER、ACTIVE、EXIT、INTERRUPT、RESPAWN/REINITIALIZE 生命周期和 state ownership 自审计；进入与退出必须成对检查，共享栏位必须明确 preserve/inherit/reset 所有权。
+7f. **自制 motion 时钟 ≠ 游戏帧时钟（强制）**：MSC 播放自制 NUANMB / folder hash（DCC `*_out.fbx` 导入、Rebellion `tks11a` / `0xa0cd8d56`）时，阶段时长用 `global244 -= func_274()`（`global457`，1 帧 = `0x64`）。禁止用 `func_309` / `sys_47(0xf)` / `sys_47(0x7)` 等 stock motion-complete 等待自制 folder；禁止把 `func_310` / `sys_47(0x5)` 当自制片速度或时长旋钮。`func_308` 只 play/seek，最后一参是 startTime 不是 rate。`func_241(hash, 0)` 已证明 ACTION 进入时不要再猜打包。Owner：`docs/msc-research/homemade-motion-clock-vs-game-frame.md`。Rule：`.cursor/rules/msc-homemade-motion-clock.mdc`。登记：`docs/msc-research/msc-falsified-negatives-registry.md` §H。
 8. **一致性优先**：新增功能/修改逻辑时，优先复用现有工具函数、组件与数据模型；避免引入重复实现；文件命名、导出方式、目录组织保持与周边代码一致。
 9. **useTransition（React）性能优化**：当用户交互会触发较重的 UI 更新（例如：大列表渲染、复杂计算/过滤/排序、树结构重建、图表/3D 视图重算）且该更新不需要阻塞输入/点击反馈时，优先将对应的 `setState`/路由切换包进 `startTransition`（或使用 `useTransition`）以降低卡顿；但**不要**用 `useTransition` 替代 I/O 的等待（例如文件读写/网络请求的 `await`），I/O 的 loading/错误处理仍应使用显式状态管理（如 `isLoading`）。
 10. **Endian 计算规则（Effect Project）**：涉及 `bone_index`、hash、jnttbl 命中、nusktb 名称映射等后端/业务计算时，一律使用 **LE 数值** 进行匹配；`BE/LE` 切换仅用于 UI 展示，不得改变计算结果。

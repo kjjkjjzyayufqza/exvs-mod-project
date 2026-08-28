@@ -1,7 +1,8 @@
 # `func_593` 旧版 / 正常班 ranged 四槽
 
 **Date:** 2026-08-16  
-**Status:** 已用 `func_593` / `func_595` 源码钉死  
+**Status:** E1 `func_593` / `func_595` 源码钉死（阶段流程）；E2 四槽形状跨机体一致；
+`callFunc*` native 语义 **E0 未知**（见文末「callFunc 系列」）  
 **Kind:** MSC 2.c ranged runtime 规范  
 **Supersedes:** older notes that call `global678` a cancel / branch / mid callback
 
@@ -113,3 +114,84 @@ if (global252 && global722)
 
 - 百式反编译里 `global678` 有时是 start（全局编号漂移，见 Gyan Dodai 移植笔记）。
 - `docs/exvs-msc-input-action-weapon-pipeline.md` 的 BDBE 试验名 `global678 -> actionInitCallback` 不是这套 `func_593` 四槽。
+
+---
+
+## 这是通用范式，模组必须跟随
+
+**用户约束（2026-08-27）：** EXVS2 MSC 的动作脚本是**一个 action 函数 + 四个阶段函数**
+（start / shoot / no_ammo / end）。每台机体这四个函数的**内容**不同，
+但**结构必须跟随**。不要为了实现新招式自创另一套阶段机。
+
+标准形状：
+
+```c
+void ACTION_X()            // func_241 注册的 depiction 入口，只跑一次
+{
+    func_586();            // 复位整张 ranged 参数表
+    global676 = X_start;
+    global677 = X_shoot;
+    global678 = X_no_ammo; // 0 / 0xffffffff = 本招不实现空弹段
+    global679 = X_end;
+    callFunc3(X_tick);     // 恰好一次，目标必须是本动作主 tick
+}
+
+void X_tick()              // 每帧
+{
+    func_593();            // driver 自己按 global184 推进四槽
+}
+```
+
+阶段推进**不由你写**：`func_593` → `func_594/595/596/597/598` 用
+`func_71(globalNNN)` 换阶段（`func_73` 复位 + 写 `global225` + `func_72` 立即派发一次），
+tick 内的 `func_72()` 每帧重跑当前阶段函数。
+你只负责四个阶段函数的**内容**，以及在合适时机置 `global252` 让 driver 往下走。
+
+### 禁止（每条都实机失败过，见负面登记表 E 组）
+
+| 禁止 | 后果 |
+|------|------|
+| 自建 phase 状态机（`callFunc3(my_tick)` 里自己跑 `phase == 0/1/2`）替代四槽 | 与 driver 用法相反，拿不到原生阶段所有权 |
+| `callFunc3` 挂非 tick 的东西（如 `transform_start`、`func_1073` 这类每帧状态机） | 只被调一次，停在第一段 |
+| 一个 ENTER 里多次 `callFunc3` | 未知行为，corpus 里没有先例 |
+| 把 `func_71` 当 `callFunc3` 用，或反过来 | 两者层不同：`func_71` 写 `global225`（阶段），`callFunc3` 是 VM opcode |
+| 在 `677` 函数体里写 `sys_46` 锁冲 | `func_596` 随后 `func_300(global714)`，453/454=0 时倍率 0，原地不动 |
+| 把 `678` 当 cancel | 它是空弹段，调用条件是没弹药 |
+
+---
+
+## `callFunc` 系列：只抄形状，不要推测语义
+
+### 已钉死（E1，工具链）
+
+`tools/msclang_msc.py` / `tools/mscdec_msc.py` 的 opcode 表：
+
+| 源码名 | opcode |
+|--------|--------|
+| `callFunc` | `0x2f` |
+| `callFunc2` / 编译器暴露为 `set_main` | `0x30` |
+| `callFunc3` | `0x31` |
+
+`tools/msclang.py` 的下降形式（`callFunc3` 与 `set_main` 相同）：
+先压参数，再压函数指针，最后 `Command(0x31, [N])`，**N 不含函数指针**。
+`tools/mscdec.py` 反向解码时把参数逆序还原。
+
+### 实测分布（E2，跨约 180 台机体 `040msc/**/*.c`）
+
+| 形式 | 出现情况 |
+|------|----------|
+| `callFunc3(...)` | 每台 `2.c` 约 50–120 处；`0.c` / `1.c` 各恰好 1 处（主循环安装） |
+| `set_main(...)` | **稀有**。Rebellion `2.c` 仅 2 处，都在 `func_296(0x3e8, 0)` + `func_169(0x1000000)`（关飞行电机 + 清空中位）之后 `set_main(func_446)` |
+| `callFunc(...)` | 抽样机体中未见 |
+
+### 未知（E0，native 侧，**禁止基于推测写代码**）
+
+- VM 收到 `0x31` 之后把函数指针写进哪个槽、和 `sys_2(0, 0x2/0x3, cb)` 的动作层回调是什么关系
+- 同一动作内调用两次是替换还是叠加
+- 能否从 tick 内部调用
+- 参数 `a1..aN` 传到哪里（corpus 里全部只传函数指针，N=0）
+- `set_main`(0x30) 与 `callFunc3`(0x31) 的差别；上面那个「关电机后 `set_main`」只是**观察到的位置**，不是已知语义
+
+在 IDA 把 `0x2f/0x30/0x31` 的 native handler 钉死之前，
+**唯一安全做法是照抄 vanilla 形状**：一个 ENTER 末尾恰好一次 `callFunc3(本动作 tick)`，
+N=0，其余一律不动。

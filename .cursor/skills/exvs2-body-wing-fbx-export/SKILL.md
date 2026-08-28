@@ -109,7 +109,9 @@ Do **not** unparent wing.
 3. Hide every other view-layer object. Show only the export set.
 4. Set scene `frame_start` / `frame_end` from **that armature's current Action** key range (not the other armature).
 5. `export_scene.fbx` with `use_visible=True`, `use_selection=False`, kwargs from the script (`FBX_EXPORT_KWARGS`).
-6. Restore hide flags and frame range.
+6. Restore hide flags, frame range, object/pose mode, and the user's
+   previous object + pose-bone selection. Isolation is temporary; do not
+   leave Object Mode with nothing selected while they are keying.
 7. Repeat for the other armature.
 
 If view-layer / context override fails, fall back to `use_selection=True` on the same export set. Do not fall back to exporting the whole scene.
@@ -237,5 +239,6 @@ Print a two-row table (path, size, frames, marker checks) in the user reply.
 - `references/bone-mapping.md`
 - `docs/nuanmb-ath-helper-bone-policy.md`
 - `docs/nuanmb-exvs2-import-in-game-layout.md`
+- `docs/msc-research/homemade-motion-clock-vs-game-frame.md` — after import, MSC phase length is `global244 -= func_274()`, not `func_309`
 - `docs/adr/0002-motion-fbx-import-direct-ufbx.md`
 - Blender FBX pitfalls (connected bones, constant-channel cull, declared axes): Claude project memory `blender-fbx-motion-pitfalls` / `docs/superpowers/specs/2026-07-26-motion-fbx-import-roundtrip-design.md`

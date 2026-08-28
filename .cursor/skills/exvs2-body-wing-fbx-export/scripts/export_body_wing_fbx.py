@@ -189,6 +189,66 @@ def _object_mode():
         pass
 
 
+def _capture_editor_state():
+    """Object/pose selection the user is keying. Isolation must restore this."""
+    vl = bpy.context.view_layer
+    active = vl.objects.active
+    selected = [obj.name for obj in vl.objects if obj.select_get()]
+    mode = active.mode if active else "OBJECT"
+    pose_sel = []
+    pose_active = None
+    if active is not None and active.type == "ARMATURE" and active.pose:
+        # Blender 5: selection lives on PoseBone.select, not Bone.select.
+        pose_sel = [pb.name for pb in active.pose.bones if getattr(pb, "select", False)]
+        if active.data.bones.active is not None:
+            pose_active = active.data.bones.active.name
+    return {
+        "active": active.name if active else None,
+        "selected": selected,
+        "mode": mode,
+        "pose_sel": pose_sel,
+        "pose_active": pose_active,
+    }
+
+
+def _restore_editor_state(state):
+    vl = bpy.context.view_layer
+    _object_mode()
+    names = set(state.get("selected") or [])
+    for obj in vl.objects:
+        try:
+            obj.select_set(obj.name in names)
+        except Exception:
+            pass
+    active = None
+    if state.get("active"):
+        active = bpy.data.objects.get(state["active"])
+    if active is not None:
+        try:
+            vl.objects.active = active
+        except Exception:
+            pass
+    mode = state.get("mode") or "OBJECT"
+    if active is not None and mode != "OBJECT":
+        try:
+            bpy.ops.object.mode_set(mode=mode)
+        except Exception:
+            pass
+    if (
+        active is not None
+        and active.type == "ARMATURE"
+        and active.pose
+        and mode == "POSE"
+    ):
+        pose_sel = set(state.get("pose_sel") or [])
+        for pb in active.pose.bones:
+            if hasattr(pb, "select"):
+                pb.select = pb.name in pose_sel
+        pose_active = state.get("pose_active")
+        if pose_active and pose_active in active.data.bones:
+            active.data.bones.active = active.data.bones[pose_active]
+
+
 def _view3d_override(arm):
     win = bpy.context.window
     scr = win.screen if win else None
@@ -220,55 +280,57 @@ def export_arm(arm, filepath, isolation="visible"):
         raise RuntimeError("isolation must be visible or selection")
 
     os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
+    editor = _capture_editor_state()
     _object_mode()
     export_objs = collect_export_objects(arm)
     export_set = set(export_objs)
     hide_state = {}
-
-    for obj in bpy.context.view_layer.objects:
-        hide_state[obj.name] = _hide_state(obj)
-        obj.select_set(False)
-
-    for obj in bpy.context.view_layer.objects:
-        if obj in export_set:
-            obj.hide_set(False)
-            obj.hide_viewport = False
-            obj.hide_render = False
-            obj.hide_select = False
-            obj.select_set(True)
-        elif isolation == "visible":
-            obj.select_set(False)
-            obj.hide_set(True)
-            obj.hide_viewport = True
-
-    bpy.context.view_layer.objects.active = arm
-    act = current_action(arm)
-    fr_s, fr_e = action_frame_range(act)
     sc = bpy.context.scene
     old_frames = (sc.frame_start, sc.frame_end, sc.frame_current)
-    sc.frame_start, sc.frame_end, sc.frame_current = fr_s, fr_e, fr_s
+    act = current_action(arm)
+    fr_s, fr_e = action_frame_range(act)
 
-    kwargs = dict(FBX_EXPORT_KWARGS)
-    kwargs["filepath"] = filepath
-    if isolation == "visible":
-        kwargs["use_selection"] = False
-        kwargs["use_visible"] = True
-    else:
-        kwargs["use_selection"] = True
-        kwargs["use_visible"] = False
-
-    override = _view3d_override(arm)
     try:
-        with bpy.context.temp_override(**override):
-            bpy.ops.export_scene.fbx(**kwargs)
-    except Exception:
-        bpy.ops.export_scene.fbx(**kwargs)
-
-    for obj in bpy.context.view_layer.objects:
-        if obj.name in hide_state:
-            _restore_hide(obj, hide_state[obj.name])
+        for obj in bpy.context.view_layer.objects:
+            hide_state[obj.name] = _hide_state(obj)
             obj.select_set(False)
-    sc.frame_start, sc.frame_end, sc.frame_current = old_frames
+
+        for obj in bpy.context.view_layer.objects:
+            if obj in export_set:
+                obj.hide_set(False)
+                obj.hide_viewport = False
+                obj.hide_render = False
+                obj.hide_select = False
+                obj.select_set(True)
+            elif isolation == "visible":
+                obj.select_set(False)
+                obj.hide_set(True)
+                obj.hide_viewport = True
+
+        bpy.context.view_layer.objects.active = arm
+        sc.frame_start, sc.frame_end, sc.frame_current = fr_s, fr_e, fr_s
+
+        kwargs = dict(FBX_EXPORT_KWARGS)
+        kwargs["filepath"] = filepath
+        if isolation == "visible":
+            kwargs["use_selection"] = False
+            kwargs["use_visible"] = True
+        else:
+            kwargs["use_selection"] = True
+            kwargs["use_visible"] = False
+
+        override = _view3d_override(arm)
+        try:
+            with bpy.context.temp_override(**override):
+                bpy.ops.export_scene.fbx(**kwargs)
+        except Exception:
+            bpy.ops.export_scene.fbx(**kwargs)
+    finally:
+        for obj in bpy.context.view_layer.objects:
+            if obj.name in hide_state:
+                _restore_hide(obj, hide_state[obj.name])
+        sc.frame_start, sc.frame_end, sc.frame_current = old_frames
+        _restore_editor_state(editor)
 
     if not os.path.exists(filepath):
         raise RuntimeError("FBX was not written: " + filepath)
