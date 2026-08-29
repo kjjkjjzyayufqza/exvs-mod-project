@@ -845,6 +845,7 @@ impl Fhm2dMemorySession {
                 Fhm2dFormat::StageList => "fhm2d_stage_list".to_string(),
                 Fhm2dFormat::CharacterParam => "fhm2d_character_param".to_string(),
                 Fhm2dFormat::CharacterCost => "fhm2d_character_cost".to_string(),
+                Fhm2dFormat::StrikerTable => "fhm2d_striker_table".to_string(),
                 Fhm2dFormat::Msc => "fhm2d_msc".to_string(),
                 Fhm2dFormat::Motion => "fhm2d_motion".to_string(),
                 Fhm2dFormat::Sound => "fhm2d_sound".to_string(),

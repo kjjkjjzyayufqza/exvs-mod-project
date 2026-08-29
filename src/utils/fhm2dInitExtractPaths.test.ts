@@ -35,6 +35,31 @@ describe("fhm2dInitExtractPaths", () => {
     );
   });
 
+  it("maps Striker Table to 041cpm/strikertable", () => {
+    const route = resolveInitRouteTarget("unit.param");
+    expect(route.routePrefix).toBe("041cpm");
+
+    const packName = defaultInitPackName("0xFEEB79F0", {
+      routeId: "unit.param",
+      fallbackName: "strikertable",
+    });
+    expect(packName).toBe("strikertable");
+
+    const out = buildFhm2dInitExtractOutput({
+      exportRoot: "E:/XB/mod",
+      routeId: route.routeId,
+      routePrefix: route.routePrefix,
+      packName,
+      hashHex: "0xFEEB79F0",
+    });
+
+    expect(out.relativeFolderPath).toBe("041cpm/strikertable");
+    expect(out.folderPath.replace(/\\/g, "/")).toBe("E:/XB/mod/041cpm/strikertable");
+    expect(out.repackOutputPath?.replace(/\\/g, "/")).toBe(
+      "E:/XB/mod/041cpm/0xFEEB79F0.fhm2d",
+    );
+  });
+
   it("maps Navi List to 012list/navi_list", () => {
     const route = resolveInitRouteTarget("list.navi");
     expect(route.routePrefix).toBe("012list");

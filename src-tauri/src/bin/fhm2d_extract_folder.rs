@@ -10,6 +10,7 @@ fn parse_format(value: &str) -> Result<Option<Fhm2dFormat>, String> {
         "fhm2d_stage_list" => Ok(Some(Fhm2dFormat::StageList)),
         "fhm2d_character_param" => Ok(Some(Fhm2dFormat::CharacterParam)),
         "fhm2d_character_cost" => Ok(Some(Fhm2dFormat::CharacterCost)),
+        "fhm2d_striker_table" => Ok(Some(Fhm2dFormat::StrikerTable)),
         "fhm2d_msc" => Ok(Some(Fhm2dFormat::Msc)),
         "fhm2d_motion" => Ok(Some(Fhm2dFormat::Motion)),
         "fhm2d_sound" => Ok(Some(Fhm2dFormat::Sound)),

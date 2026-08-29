@@ -220,6 +220,7 @@ Owner note: `docs/msc-research/func593-vanilla-ranged-slots.md`.
 | flying but standing animation | action changed, form global not cleared | form cleared, movement channel still written | press melee: bird melee = form alive |
 | dash ends dead-stopped | magnitude written to 0 | flight motor turned off | still sinking slowly? slow = mag 0, straight drop = motor off |
 | move never comes out | cancel window never opened | hash submitted but never committed | did the vanilla move finish normally? yes = window |
+| assist clip plays, independent striker never appears | `0.c` skipped `sys_0(0x90000,1)` / `d0001 && !d000b` before `ACTION_AB_SUB` | `sys_51` treated as automata / empty strikertable slot | restore the EW `0.c` gate on that submit path only. Registry J2 vs J1 |
 | homemade clip ~3s, DCC/header ~1.8s | waiting `func_309` / `sys_47(0x7)` | game-frame countdown missing | change `func_309` gate: wall clock unchanged = stock motion clock. Registry H1 |
 | `func_310(1000)` does nothing | homemade folder ignores `sys_47(0x5)` as duration | `func_73` rewrote `global276` | delete the rate experiment; use `global244 -= func_274()`. Registry H2 |
 | still the old duration after edit | not packed / stale `2.dscex` | clock still stock-complete | `func_241(hash, 0)` skips the move? yes = pack. no = H1, not packing. Registry H3 |
@@ -277,6 +278,10 @@ Five lines make the conclusion **determined**. Anything less restarts guessing.
   Registry H2.
 - Diagnosed "not packed" after `func_241(hash, 0)` vs the real handler already
   proved ACTION entry. Registry H3.
+- Diagnosed a missing independent striker (`5xxxxxxxx` / `516001001`) as the
+  wrong syscall class, or by adding automata / host `bulletparam` summon rows,
+  after the host clip already played. Registry J1. If motion ran and the unit
+  did not, check the `0.c` `0x90000` / `d0001` gate first. Registry J2.
 
 Any red flag → stop, return to §3, re-grade.
 

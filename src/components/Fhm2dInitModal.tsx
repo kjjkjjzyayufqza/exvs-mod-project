@@ -49,6 +49,8 @@ import { initRawPathIdPack } from "@/page/TestEditor/components/raw-path-id/init
 import { RAW_PATH_ID_PACK_NAME } from "@/page/TestEditor/components/raw-path-id/rawPathIdDocument";
 import { initBgmTablePack } from "@/page/TestEditor/components/bgm-table/initBgmTablePack";
 import { initBgmBankUpdate02Pack } from "@/page/TestEditor/components/bgm-table/initBgmBankUpdate02Pack";
+import { initStrikerTablePack } from "@/page/TestEditor/components/striker-table/initStrikerTablePack";
+import { STRIKER_TABLE_PACK_NAME } from "@/page/TestEditor/components/striker-table/strikerTableDocument";
 import {
   BGM_BANK_UPDATE_02_PACK_NAME,
   BGM_TABLE_PACK_NAME,
@@ -107,7 +109,7 @@ type FilterOption = "all" | "available" | "list" | "nutexb";
 /**
  * Global bootstrap packs for FHM2D Init.
  * Output layout matches TestEditor workspace + exemplar E:\XB\mod:
- *   012list/*  |  041cpm/for_outgame  |  009gui/*  |  006effect/000common_001
+ *   012list/*  |  041cpm/for_outgame  |  041cpm/strikertable  |  009gui/*  |  006effect/000common_001
  */
 const FHM2D_ITEMS: InitListItem[] = [
     {
@@ -190,6 +192,16 @@ const FHM2D_ITEMS: InitListItem[] = [
         format: Fhm2d_type_format.fhm2d_character_cost,
         formatLabel: "character_cost",
         description: "unit cost, HP → 041cpm/for_outgame",
+    },
+    {
+        id: "striker_table",
+        name: "Striker Table",
+        hash: "0xFEEB79F0",
+        routeId: "unit.param",
+        format: Fhm2d_type_format.fhm2d_striker_table,
+        formatLabel: "striker_table",
+        fixedPackName: STRIKER_TABLE_PACK_NAME,
+        description: "host unit → striker slot1/slot2 → 041cpm/strikertable",
     },
     {
         id: "common_effect",
@@ -573,6 +585,10 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
             await handleExtract(item, item.fixedPackName ?? BGM_BANK_UPDATE_02_PACK_NAME);
             return;
         }
+        if (item.id === "striker_table" && nameOverride === undefined) {
+            await handleExtract(item, item.fixedPackName ?? STRIKER_TABLE_PACK_NAME);
+            return;
+        }
 
         if (nameOverride === undefined) {
             openExtractNameDialog(item);
@@ -646,16 +662,30 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                         sourceFhm2dPath: inputPath,
                         workspaceRoot: outBase,
                     })
+                : item.id === "striker_table"
+                    ? await initStrikerTablePack({
+                        sourceFhm2dPath: inputPath,
+                        workspaceRoot: outBase,
+                    })
                 : await ExtractFHMData(inputPath, outDir, ExtractType.SingleFolder, item.format, listOutputFileName);
 
             clearInterval(progressInterval);
             setExtractionProgress(100);
 
+            const resultFolderPath =
+                extractResult &&
+                typeof extractResult === "object" &&
+                "folderPath" in extractResult &&
+                typeof extractResult.folderPath === "string" &&
+                extractResult.folderPath.trim()
+                    ? extractResult.folderPath
+                    : outDir;
+
             const newEntry: ExtractionHistory = {
                 id: item.id,
                 timestamp: Date.now(),
                 success: true,
-                outputPath: outDir,
+                outputPath: resultFolderPath,
             };
             const newHistory = [...history, newEntry];
             setHistory(newHistory);
@@ -669,15 +699,15 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                     duration: 20_000,
                     action: {
                         label: "Open Folder",
-                        onClick: () => openFolder(outDir),
+                        onClick: () => openFolder(resultFolderPath),
                     },
                 });
             } else {
                 toast.success(`Extract completed: ${item.name}`, {
-                    description: `Output: ${extractOutput.relativeFolderPath}\n${outDir}`,
+                    description: `Output: ${extractOutput.relativeFolderPath}\n${resultFolderPath}`,
                     action: {
                         label: "Open Folder",
-                        onClick: () => openFolder(outDir),
+                        onClick: () => openFolder(resultFolderPath),
                     },
                 });
             }

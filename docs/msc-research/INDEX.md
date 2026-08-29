@@ -109,6 +109,7 @@ Existing research notes are not rewritten by this index.
   - `docs/msc-research/homemade-motion-clock-vs-game-frame.md`
 - **do_not:**
   - Do not treat sys_47(0x5) (func_310) as a homemade clip duration or playback-speed knob. Do not wait homemade folders on sys_47(0x7).
+  - Do not treat sys_51(0x20000, 0, 0x2, slot, type) as unit-task automata. Independent 5xxxxxxxx strikers spawn only through that call. See striker-sys51.
 
 ### `runtime-2c` — Global 2.c runtime / action depiction architecture
 
@@ -162,11 +163,15 @@ Existing research notes are not rewritten by this index.
 - **settled:**
   - Player buttons are selected in 0.c func_143, then consumed by 2.c ACTION_*.
   - Input-bit meaning is unit-specific; do not copy TV bits onto Rebellion.
+  - EW independent-striker sub-shot must keep sys_0(0x90000,1) and d0001 && !d000b before func_95(ACTION_AB_SUB). Skipping that gate plays the clip but native drops sys_51. Rebellion 2026-08-29 E3. See striker-sys51.
 - **read_first:**
   - `docs/msc-research/0c-to-2c-input-action-boundary.md`
 - **related:**
   - `docs/exvs-msc-input-action-weapon-pipeline.md`
   - `docs/agent-sessions/2026-08-13-msc-0c-function-pointer-offset-bug.md`
+  - `docs/msc-research/sys51-independent-striker-vs-automata.md`
+- **do_not:**
+  - Do not submit 0x53554243 without the EW 0.c 0x90000/d0001 gate. Do not copy that gate onto N/left/right homemade 0x23df217e.
 
 ### `modding` — Global MSC modding manuals and control surfaces
 
@@ -303,8 +308,8 @@ Existing research notes are not rewritten by this index.
 ### `native-unit-task` — Native unit-task automata (not MSC 0.c/2.c)
 
 - **kind:** global
-- **aliases:** `unit-task`, `automata`, `summon`, `throwshield`, `hammershot`, `vtable`
-- **notes:** Native C++ unit-task layer. Do not route these questions into 2.c ACTION_* first.
+- **aliases:** `unit-task`, `automata`, `automata summon`, `throwshield`, `hammershot`, `vtable`
+- **notes:** Native C++ unit-task layer for host weapons (throwshield, hammershot). Independent strikertable units are cluster striker-sys51.
 - **read_first:**
   - `docs/unit-task-automata-deep-analysis.md`
   - `docs/unit-task-automata-process.md`
@@ -316,6 +321,31 @@ Existing research notes are not rewritten by this index.
   - `docs/unit-task-automata-summon-analysis.md`
   - `docs/unit-task-automata-vtable-reference.md`
   - `docs/001gundam-throwshield-hammershot-analysis.md`
+- **do_not:**
+  - Do not route independent 5xxxxxxxx strikers or sys_51(0x20000, 0, 0x2, slot, type) here. That is cluster striker-sys51, not automata.
+
+### `striker-sys51` — Independent striker units summoned by sys_51
+
+- **kind:** global
+- **aliases:** `sys_51`, `strikertable`, `striker table`, `516001001`, `0xFEEB79F0`, `independent striker`, `CBattleStrikerManager`, `完全独立援护`, `独立机体召唤`, `d0001`, `d000b`, `0xd0001`, `0xd000b`, `ACTION_AB_SUB`, `0x53554243`, `d0003`, `0xd0003`, `ACTION_MASK_UNKNOWN`, `0x4ac375c7`, `0x2a253f72`, `sys_51 type`, `action index`
+- **notes:** Owner-settled 2026-08-29 after a routing mix-up with native-unit-task.
+- **settled:**
+  - Independent 5xxxxxxxx strikers have their own model/MSC/param packs and are spawned only by MSC sys_51(0x20000, 0, 0x2, slot_index, type). They do not need a host bulletparam summon row.
+  - Weapon automata (CUnitTaskAutomata) are a second system: host weapons, no striker id, not strikertable.
+  - 0.c must keep EW sys_0(0x90000,1) and d0001 && !d000b before submitting ACTION_AB_SUB. Skipping that gate plays the clip but native drops sys_51 spawn. Rebellion 2026-08-29 E3: restoring the gate on front/back only spawned 516001001. sys_4F consume is not required for spawn.
+  - sys_51 arg5 is the action index the spawned striker enters (sys_0(0xd0003) / ACTION_MASK_UNKNOWN_*). EW host 前后/左右/N = 0x4/0x5/0x6 for Tallgeese. 516001001 only registers index 0 -> 0x2a253f72. See sys51-striker-action-index.md.
+- **read_first:**
+  - `docs/msc-research/sys51-independent-striker-vs-automata.md`
+  - `docs/msc-research/sys51-striker-action-index.md`
+  - `docs/striker-research/exvs2-striker-system.md`
+- **related:**
+  - `docs/msc-research/delta-kai-funnel-assist-slot2.md`
+  - `docs/unit-task-automata-summon-analysis.md`
+- **do_not:**
+  - Do not explain a missing 516001001 spawn by calling sys_51 the wrong class or by adding automata/bulletparam summon rows.
+  - Do not assume sys_51 slot_index 0 reads strikertable slot2.
+  - Do not submit 0x53554243 without the EW 0.c 0x90000/d0001 gate. Do not put that gate on N/left/right 0x23df217e.
+  - Do not copy EW host arg5 0x4/0x5/0x6 onto 516001001 and expect a unique attack; that id only wires index 0. Do not treat arg5 as approach-type.
 
 ### `wing-zero-rebellion` — Wing Zero Rebellion MSC / bird-form transform port
 
@@ -363,6 +393,7 @@ Existing research notes are not rewritten by this index.
   - `work/20260809-wing-zero-rebellion-transform-plan/evidence/E-008.md`
   - `docs/agent-sessions/2026-08-13-msc-0c-function-pointer-offset-bug.md`
   - `docs/agent-sessions/2026-08-23-wing-zero-flight-special-melee-debug.md`
+  - `docs/msc-research/sys51-independent-striker-vs-automata.md`
 - **do_not:**
   - Do not unpack FHM2D for this case; named sources already exist.
   - Do not reopen the legacy '85 model assets missing' hash manifests.
@@ -383,6 +414,7 @@ Existing research notes are not rewritten by this index.
   - Do not inherit no-stick dash leftover via func_296(0)+sys_46(0x1, 0x2) (air idle/jump in-plane), sys_46(0xf) then 252 (func_44 mag 0), func_169(0x4000) on 679 start, or func_287(0x3ed) as ground after 296(0). Those yield vertical drop, fake flight pose, snap stop. Keep the 677 channel 0x1 with motor on. See wing-zero-rebellion-special-n-bird-dash.md.
   - Do not restart from package discovery unless a bootstrap restart condition is met.
   - Do not wait homemade SUB_SHOT_CUSTOM / tks11a / 0xa0cd8d56 on func_309 or sys_47(0x7). Do not use func_310 as homemade duration/rate. Do not diagnose packing after func_241(0x23df217e, 0) already proves ACTION entry. See homemade-motion-clock-vs-game-frame.md.
+  - Do not skip EW 0.c sys_0(0x90000,1) and d0001 && !d000b when submitting 0x53554243 ACTION_AB_SUB. Clip then plays with no 516001001. Do not put that gate on N/left/right 0x23df217e. Cluster striker-sys51, not this transform bootstrap.
   - Do not reuse Rebellion global157 as bird CS stage; func_44 sets it to global27 on action enter. Publish sys_1(0x10000,0,0x100). Do not keep 0x2194f05d as ACTION_CHARGE_SHOT_BIRD alias of uncharged bird main.
 
 ### `wing-zero-tv` — TV Wing Zero source behavior for the Rebellion port

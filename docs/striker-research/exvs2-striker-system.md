@@ -300,11 +300,18 @@ vanilla OB v27 里 strikertable 引用的 154 台援护，**153 台**都是这�
 
 > 需要澄清的一点：**「和主机体打包进同一个 fhm2d」在 vanilla 里查不到**。
 > 对已解包的 chara 包做扫描，没有任何一个机体包内含别的机体的 `numdlb`。
-> 真正「寄生在主机体里」的东西是另一套系统：**unit-task automata 召唤物**
-> （`CUnitTaskAutomata*`，见 `docs/unit-task-automata-*.md`），它是主机体的一件
-> **武器**，没有 striker id、不进 strikertable，由主机体的 `armsparam` + MSC 驱动。
-> 想要「按援护键召唤」就必须走 striker id 这条路；想要「某个武器射出一个会打人的
-> 僚机」才走 automata 那条路。**[PROVEN 前半 / INFERRED 后半]**
+>
+> EXVS2 有两套特殊召唤，不要混：
+> 1. **独立援护机体**（`5xxxxxxxx`，例如 `516001001`）：自己的模型 / MSC / param
+>    / 全部六包，进 `strikertable`。**只通过 MSC `sys_51(0x20000, 0, 0x2, slot, type)`
+>    召唤**，不依赖宿主 `bulletparam` 里的召唤类条目。
+> 2. **武器 automata**（`CUnitTaskAutomata*`）：宿主的一件武器，没有 striker id、
+>    不进 strikertable，由宿主 `armsparam` / `bulletparam` 驱动。
+>
+> Owner-settled 2026-08-29：独立机体 **不是**「只靠 `CBattleStrikerManager`、MSC
+> 不用 `sys_51`」。详见
+> `docs/msc-research/sys51-independent-striker-vs-automata.md`。
+> 包扫描「主机体 fhm2d 里没有另一台机体的 numdlb」仍是 **[PROVEN]**。
 
 ---
 
@@ -547,15 +554,14 @@ vanilla OB v27 `strikertable`：
 $OB = "E:\OBHK0.3_v27\data\x64\dplcache_release"
 $T  = "tmp\striker-research"
 
-.\src-tauri\target\debug\fhm2d_extract.exe "$OB\0xFEEB79F0.fhm2d" -o "$T\strikertable"  -t character_param -l flat
+.\src-tauri\target\debug\fhm2d_extract.exe "$OB\0xFEEB79F0.fhm2d" -o "$T\strikertable"  -t striker_table -l flat
 .\src-tauri\target\debug\fhm2d_extract.exe "$OB\0xA8FCC349.fhm2d" -o "$T\outgame"       -t character_param -l flat
 .\src-tauri\target\debug\fhm2d_extract.exe "$OB\0x036B9E67.fhm2d" -o "$T\characteridtable" -t stage_list -l flat
 ```
 
-> `--type` 只影响输出文件名，不影响字节（实测同一个包用
-> `stage_list` / `character` 出 `0.bin`，用 `character_param` 出 `grapparam.bin`，
-> 26 940 字节完全一致）。`strikertable` 会被命名成 `grapparam.bin`，
-> 别被吓到 —— magic 仍是 `0xCEABB8A9`。
+> `--type` 只影响输出文件名，不影响字节。`striker_table` names the inner file
+> `strikertable.vgsht1`. `character_param` now detects the same stride-8 vgsht1
+> payload and uses that name instead of `grapparam.bin`.
 
 ### 10.2 改 `character_id_table`
 
@@ -575,8 +581,11 @@ $T  = "tmp\striker-research"
 
 ### 10.4 改 `strikertable`
 
-找到 id 数组里 `16001001` 的下标 `i`，把记录区 `0x20 + count*4 + i*8 + 4`
-处的 u32 从 `0` 改成 `516005001`。**行数不变，长度不变**，这是风险最低的一步。
+Prefer **EXVS2 Workspace → Striker Table**: load `041cpm/strikertable/strikertable.vgsht1`,
+set host `16001001` slot2 to `516005001`, Save, then repack to `0xFEEB79F0.fhm2d`.
+
+Binary equivalent: find id `16001001` at index `i`, write u32 `516005001` at
+`0x20 + count*4 + i*8 + 4`. **Row count and file length stay the same.**
 
 ### 10.5 重打包
 
@@ -653,20 +662,44 @@ dplcache_release\0xDFD38C70.fhm2d -> 解出 0.bin  216.7 KB
 
 ---
 
-## 13. 未证实 / 待研究
+## 13. 召唤触发链（MSC 已 E3；native 内部仍未证实）
+
+独立机体（`5xxxxxxxx`）宿主侧 MSC 链，Rebellion 前后副射 2026-08-29 **E3**：
+
+```text
+0.c  global48 & 0x80
+     sys_0(0x90000, 1) != 0
+     sys_0(0xd0001, 0) && !sys_0(0xd000b, 0)
+     func_95(ACTION_AB_SUB)
+2.c  clip
+     sys_51(0x20000, 0, 0x2, slot_index, type)   // slot 0 = strikertable slot1
+```
+
+* 独立机体 **只通过 MSC `sys_51(0x20000, 0, 0x2, slot, type)`** 召唤，不走宿主
+  `bulletparam` 召唤行。`sys_4F(0x7, …)` 是消耗，不是选机体。
+  第 5 参 `type` 是援护进哪一个 ACTION 的 **index**（`sys_0(0xd0003)`），
+  不是「接近方式」。Owner：
+  `docs/msc-research/sys51-striker-action-index.md`。
+  `516001001` 只注册了 index `0` → `0x2a253f72`；EW 宿主前后/左右/N 用的是
+  `0x4`/`0x5`/`0x6`（给 Tallgeese III 用的）。
+* 拿掉 `0.c` 的 `0x90000` / `d0001` 门：动作播了、援护机体不出。
+* Owner：`docs/msc-research/sys51-independent-striker-vs-automata.md`。
+  武器 automata 是另一套，见 `docs/unit-task-automata-summon-analysis.md`。
+
+仍未证实（不要把下面当成已解决）：
 
 1. **`0x4961274C` 的确切语义**（取值 1–5）。目前推测是每场使用次数。
    验证方法：改一台援护的值，进游戏数次数。
-2. **主机体呼叫援护的具体触发链**。已知：
-   * 原生类 `CBattleStrikerManager`（`.?AVCBattleStrikerManager@GAM@VDK@@`，
-     在 OB v27 的 RTTI 字符串里）。
-   * 部分主机体的 anime 包里有 `*_striker_sht_air_fr` / `*_striker_stk_air_fr`
-     召唤动作（如 RX-78-2 的 `0xC992FAFF`），但 **Wing Zero EW 的 `0xAC9FE2E9`
-     里没有** —— 说明召唤动作是可选的。
-   * 尚未确认：呼叫按键是在 `0.c` 选择器里，还是完全由原生层接管。
-3. **援护机的 AI 由谁驱动**。`516001001` 的 `0.c` 有 156 个函数（比主机体还多），
+2. **`sys_51` native 内部**怎么解析 `strikertable`，以及
+   `CBattleStrikerManager` 在 spawn 之后做什么。RTTI 里有这个类，但它不是
+   「MSC 不调 `sys_51`」的证据。
+3. **宿主召唤动作 clip 是否必须**。部分主机体 anime 包里有
+   `*_striker_sht_air_fr` / `*_striker_stk_air_fr`（如 RX-78-2 的
+   `0xC992FAFF`），**Wing Zero EW 的 `0xAC9FE2E9` 里没有** —— 说明该 clip
+   对 EW 式 `sys_51` 是可选的。
+4. **援护机的 AI 由谁驱动**。`516001001` 的 `0.c` 有 156 个函数（比主机体还多），
    但没有确认它是否读玩家输入。
-4. **援护的名字/图标在编成 UI 里从哪来** —— 仍未解决，但已排除两条路：
+5. **援护的名字/图标在编成 UI 里从哪来** —— 仍未解决，但已排除两条路：
    * strikers **不在** `character_list`（684 行，全是可选机体）里。**[PROVEN]**
    * `009gui/image/ms/*` 的九类图标（`ms_crs / ms_igh_r / ms_mn / ms_ms_l /
      ms_ms_s / ms_vs_l / ms_vs_r / ms_vs_s_l / ms_vs_s_r`）一律按
@@ -677,8 +710,11 @@ dplcache_release\0xDFD38C70.fhm2d -> 解出 0.bin  216.7 KB
      但对 `528705001` 这种没有可选版本的就不成立），要么另有一套没找到的资产。
    * **对路线 A / B 无影响** —— 复用已存在的 striker id 时，UI 本来就显示正常。
      只有做全新 striker id 时才需要解决。
-5. **`5SS7NN001`（第 4 位为 7）这一段是否有额外规则**。目前只知道它们没有
+6. **`5SS7NN001`（第 4 位为 7）这一段是否有额外规则**。目前只知道它们没有
    对应的可选机体。
-6. 项目里**还没有 strikertable 编辑器** —— `vgsht1` 的 `stride=8` 变体没被
-   `raw_path_id.rs` 覆盖（那里硬编码 `RECORD_STRIDE = 0x18`）。
-   要做的话，最小改动是把 stride 变成参数。
+7. Workspace **Striker Table** editor is at TestEditor → Character → Striker Table
+   (`src/page/TestEditor/components/StrikerTableView.tsx`). Init unpacks
+   `0xFEEB79F0.fhm2d` into `041cpm/strikertable/strikertable.vgsht1` (FHM2D Init or
+   `--type striker_table`). Save writes the vgsht1 and marks the pack dirty for
+   repack. `raw_path_id.rs` still hardcodes `RECORD_STRIDE = 0x18` and is not
+   this table.

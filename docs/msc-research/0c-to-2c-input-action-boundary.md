@@ -648,6 +648,14 @@ sys_0(0xd0001/d000b)
 func_95(0x23df217e,...)
 ```
 
+独立援护机体（`5xxxxxxxx` / `sys_51(0x20000, …)`）的副射进门同理：EW 要
+`sys_0(0x90000, 1)` 且 `d0001 && !d000b` 才交 `ACTION_AB_SUB`。拿掉这道门会
+**动作播了、人不出**。Rebellion 2026-08-29 **E3** 只补在前后
+（`global2 & 0xc`）；左右/N 自制副射不要套这道门。Owner：
+[sys51-independent-striker-vs-automata](./sys51-independent-striker-vs-automata.md)。
+`sys_51` 第 5 参是援护进哪个 ACTION 的 index，见
+[sys51-striker-action-index](./sys51-striker-action-index.md)。
+
 ### 改“按出来后做什么”
 
 再看 `2.c`：

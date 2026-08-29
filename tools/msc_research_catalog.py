@@ -49,6 +49,7 @@ CLUSTER_REGISTRY = "registry"
 CLUSTER_CROSS_UNIT = "cross-unit"
 CLUSTER_PARAM_MSC = "param-msc"
 CLUSTER_NATIVE_UNIT_TASK = "native-unit-task"
+CLUSTER_STRIKER_SYS51 = "striker-sys51"
 CLUSTER_CHARGE = "charge"
 CLUSTER_WING_ZERO_REBELLION = "wing-zero-rebellion"
 CLUSTER_WING_ZERO_TV = "wing-zero-tv"
@@ -231,6 +232,7 @@ CLUSTERS: tuple[Cluster, ...] = (
         ),
         do_not=(
             "Do not treat sys_47(0x5) (func_310) as a homemade clip duration or playback-speed knob. Do not wait homemade folders on sys_47(0x7).",
+            "Do not treat sys_51(0x20000, 0, 0x2, slot, type) as unit-task automata. Independent 5xxxxxxxx strikers spawn only through that call. See striker-sys51.",
         ),
         notes="Syscall notes live under docs/, not docs/msc-research/.",
     ),
@@ -336,10 +338,15 @@ CLUSTERS: tuple[Cluster, ...] = (
         related=(
             "docs/exvs-msc-input-action-weapon-pipeline.md",
             "docs/agent-sessions/2026-08-13-msc-0c-function-pointer-offset-bug.md",
+            R("sys51-independent-striker-vs-automata.md"),
         ),
         settled=(
             "Player buttons are selected in 0.c func_143, then consumed by 2.c ACTION_*.",
             "Input-bit meaning is unit-specific; do not copy TV bits onto Rebellion.",
+            "EW independent-striker sub-shot must keep sys_0(0x90000,1) and d0001 && !d000b before func_95(ACTION_AB_SUB). Skipping that gate plays the clip but native drops sys_51. Rebellion 2026-08-29 E3. See striker-sys51.",
+        ),
+        do_not=(
+            "Do not submit 0x53554243 without the EW 0.c 0x90000/d0001 gate. Do not copy that gate onto N/left/right homemade 0x23df217e.",
         ),
     ),
     Cluster(
@@ -599,7 +606,7 @@ CLUSTERS: tuple[Cluster, ...] = (
         aliases=(
             "unit-task",
             "automata",
-            "summon",
+            "automata summon",
             "throwshield",
             "hammershot",
             "vtable",
@@ -617,7 +624,61 @@ CLUSTERS: tuple[Cluster, ...] = (
             "docs/unit-task-automata-vtable-reference.md",
             "docs/001gundam-throwshield-hammershot-analysis.md",
         ),
-        notes="Native C++ unit-task layer. Do not route these questions into 2.c ACTION_* first.",
+        do_not=(
+            "Do not route independent 5xxxxxxxx strikers or sys_51(0x20000, 0, 0x2, slot, type) here. That is cluster striker-sys51, not automata.",
+        ),
+        notes="Native C++ unit-task layer for host weapons (throwshield, hammershot). Independent strikertable units are cluster striker-sys51.",
+    ),
+    Cluster(
+        id=CLUSTER_STRIKER_SYS51,
+        title="Independent striker units summoned by sys_51",
+        kind="global",
+        aliases=(
+            "sys_51",
+            "strikertable",
+            "striker table",
+            "516001001",
+            "0xFEEB79F0",
+            "independent striker",
+            "CBattleStrikerManager",
+            "完全独立援护",
+            "独立机体召唤",
+            "d0001",
+            "d000b",
+            "0xd0001",
+            "0xd000b",
+            "ACTION_AB_SUB",
+            "0x53554243",
+            "d0003",
+            "0xd0003",
+            "ACTION_MASK_UNKNOWN",
+            "0x4ac375c7",
+            "0x2a253f72",
+            "sys_51 type",
+            "action index",
+        ),
+        read_first=(
+            R("sys51-independent-striker-vs-automata.md"),
+            R("sys51-striker-action-index.md"),
+            "docs/striker-research/exvs2-striker-system.md",
+        ),
+        related=(
+            R("delta-kai-funnel-assist-slot2.md"),
+            "docs/unit-task-automata-summon-analysis.md",
+        ),
+        settled=(
+            "Independent 5xxxxxxxx strikers have their own model/MSC/param packs and are spawned only by MSC sys_51(0x20000, 0, 0x2, slot_index, type). They do not need a host bulletparam summon row.",
+            "Weapon automata (CUnitTaskAutomata) are a second system: host weapons, no striker id, not strikertable.",
+            "0.c must keep EW sys_0(0x90000,1) and d0001 && !d000b before submitting ACTION_AB_SUB. Skipping that gate plays the clip but native drops sys_51 spawn. Rebellion 2026-08-29 E3: restoring the gate on front/back only spawned 516001001. sys_4F consume is not required for spawn.",
+            "sys_51 arg5 is the action index the spawned striker enters (sys_0(0xd0003) / ACTION_MASK_UNKNOWN_*). EW host 前后/左右/N = 0x4/0x5/0x6 for Tallgeese. 516001001 only registers index 0 -> 0x2a253f72. See sys51-striker-action-index.md.",
+        ),
+        do_not=(
+            "Do not explain a missing 516001001 spawn by calling sys_51 the wrong class or by adding automata/bulletparam summon rows.",
+            "Do not assume sys_51 slot_index 0 reads strikertable slot2.",
+            "Do not submit 0x53554243 without the EW 0.c 0x90000/d0001 gate. Do not put that gate on N/left/right 0x23df217e.",
+            "Do not copy EW host arg5 0x4/0x5/0x6 onto 516001001 and expect a unique attack; that id only wires index 0. Do not treat arg5 as approach-type.",
+        ),
+        notes="Owner-settled 2026-08-29 after a routing mix-up with native-unit-task.",
     ),
     Cluster(
         id=CLUSTER_WING_ZERO_REBELLION,
@@ -706,6 +767,7 @@ CLUSTERS: tuple[Cluster, ...] = (
             "work/20260809-wing-zero-rebellion-transform-plan/evidence/E-008.md",
             "docs/agent-sessions/2026-08-13-msc-0c-function-pointer-offset-bug.md",
             "docs/agent-sessions/2026-08-23-wing-zero-flight-special-melee-debug.md",
+            R("sys51-independent-striker-vs-automata.md"),
         ),
         settled=(
             "Bird arsenal is gated in 0.c func_143 only, not 2.c ACTION_*.",
@@ -729,7 +791,10 @@ CLUSTERS: tuple[Cluster, ...] = (
             "Do not reopen the legacy '85 model assets missing' hash manifests.",
             "Do not mix transform-port notes with alt2 gerobi followup, SUB_SHOT_CUSTOM aim, or bird N melee 0x928ca34f.",
             "Do not copy Lightning sys_41 / 0x700000 / func_873 opaque offsets into Rebellion flight special. Do not use sys_46(0x5) as 足止: atlas names it dash/rush seed. Rebellion analog leftover is func_167(0x1004000) global24 0x4000 + sys_1(0x30001) + func_453 sys_46(0x1,mag). Foot-stop after func_593 uses func_169(0x4000), func_296(0x3e8,0), func_351(0,0x4), channel 1/2 clears and sys_46(0x4,0x4,0). Do not add the long-lived sys_46(0xF) interpolator; it previously fought EXIT analog. See wing-zero-rebellion-flight-special-footstop-handbook-audit.md.",
-            "Do not rely on func_595 alone for Rebellion flight-special yaw after the custom foot-stop; runtime E3- was stationary but player-steerable and did not face lock. Use TV func_1042 direct lock yaw as the last ACTIVE writer.",
+            "Do not rely on func_595 alone for Rebellion flight-special yaw, add the TV func_1042 START-tail yaw step, or add Bird-CS global47 |= 0x40: all three produced initial lock -> held-direction drift -> SHOOT re-lock, and the two added writers/flags had no observable effect. Remove them. func_586 resets global73 and this action never rewrites it. Before another candidate, confirm the loaded build via the existing START charge FX and 10f/40f timing markers.",
+            "Do not clear flight-special direction through 2.c global87 0x3c or 0.c neutral field-0x7 republish: the combined pair produced no observable change. Remove both. The transient is not proven to be input yaw; require video or an explicit motion/effect discriminator to separate world yaw, body-local pose, motion, and camera before another edit.",
+            "Do not pair the shortened flight-special 10f START with global689=0x3. Runtime showed initial lock, held-direction drift during the remaining START frames, then SHOOT re-lock; direction/shared-field masks did not help. Match Messala global689=0xa so native func_595 aim ownership spans the complete 10f START, and remove all extra input/yaw overrides.",
+            "Messala global689=0xa plus the Rebellion translation/pose clamp still retained the reported entry-facing transient. The next isolated comparison removes every target tick adapter and uses literal Messala func_970: func_593(); func_167(0x1004000);. Target translation may return; do not call this full resource equivalence because Messala motion/TRS assets remain absent.",
             "Do not restore only global24 0x4000 + the 0x30001 motor on natural flight-special EXIT. Leaving func_351 profile 0 produced air idle with bird visuals and no flight; restore profile 2 before func_598. INTERRUPT still uses FORCED_RECOVERY.",
             "Do not fix hit-stuck wing by calling func_74(0x3b): trans_end is a body+wing Folder and would override the hit body motion. Use the original wing-only func_1025(2) + sys_47(0x43,0xf6c1a9c1) refresh after func_884.",
             "Do not reintroduce rebellion_flight_special_foot_stop/lock_aim/restore_analog or private seg/frames into the current Messala port. Its load-bearing invariant is func_167(0x1004000) immediately after func_593 on every tick.",
@@ -744,6 +809,7 @@ CLUSTERS: tuple[Cluster, ...] = (
             "Do not inherit no-stick dash leftover via func_296(0)+sys_46(0x1, 0x2) (air idle/jump in-plane), sys_46(0xf) then 252 (func_44 mag 0), func_169(0x4000) on 679 start, or func_287(0x3ed) as ground after 296(0). Those yield vertical drop, fake flight pose, snap stop. Keep the 677 channel 0x1 with motor on. See wing-zero-rebellion-special-n-bird-dash.md.",
             "Do not restart from package discovery unless a bootstrap restart condition is met.",
             "Do not wait homemade SUB_SHOT_CUSTOM / tks11a / 0xa0cd8d56 on func_309 or sys_47(0x7). Do not use func_310 as homemade duration/rate. Do not diagnose packing after func_241(0x23df217e, 0) already proves ACTION entry. See homemade-motion-clock-vs-game-frame.md.",
+            "Do not skip EW 0.c sys_0(0x90000,1) and d0001 && !d000b when submitting 0x53554243 ACTION_AB_SUB. Clip then plays with no 516001001. Do not put that gate on N/left/right 0x23df217e. Cluster striker-sys51, not this transform bootstrap.",
             "Do not reuse Rebellion global157 as bird CS stage; func_44 sets it to global27 on action enter. Publish sys_1(0x10000,0,0x100). Do not keep 0x2194f05d as ACTION_CHARGE_SHOT_BIRD alias of uncharged bird main.",
         ),
         notes="AGENTS.md still inlines this bootstrap. Sibling Rebellion MSC edits: alt2-gerobi, sub-shot-custom, bird-melee-n-followup, special-n-bird-dash, 2026-08-26 subshot-split-and-flight-weapons plan.",

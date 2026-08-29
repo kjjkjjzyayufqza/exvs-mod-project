@@ -67,7 +67,7 @@ New-Item -ItemType Directory -Force $task | Out-Null
 ### Types
 
 `character`, `effect`, `motion`, `msc`, `sound`, `character_param`,
-`character_cost`, `all_nutexb`, `stage_list`
+`character_cost`, `striker_table`, `all_nutexb`, `stage_list`
 
 Legacy `fhm2d_*` ids (e.g. `fhm2d_motion`) are also accepted.
 

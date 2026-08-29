@@ -56,6 +56,8 @@ pub enum Fhm2dFormat {
     CharacterParam,
     /// Out-of-game character balance data (cost, HP, etc.): `0xFF832E7F.fhm2d`.
     CharacterCost,
+    /// Host unit → striker slot pair table (`0xFEEB79F0.fhm2d`, vgsht1 stride 8).
+    StrikerTable,
     Msc,
     Motion,
     Sound,
@@ -117,6 +119,7 @@ impl Fhm2dFormat {
             "stage_list" | "stagelist" => Ok(Self::StageList),
             "character_param" | "characterparam" | "param" => Ok(Self::CharacterParam),
             "character_cost" | "charactercost" | "cost" => Ok(Self::CharacterCost),
+            "striker_table" | "strikertable" | "striker" => Ok(Self::StrikerTable),
             "msc" => Ok(Self::Msc),
             "motion" => Ok(Self::Motion),
             "sound" => Ok(Self::Sound),
@@ -128,7 +131,7 @@ impl Fhm2dFormat {
     }
 
     pub fn supported_type_list() -> &'static str {
-        "character, exvs_common, effect, motion, msc, sound, character_param, character_cost, all_nutexb, stage_list"
+        "character, exvs_common, effect, motion, msc, sound, character_param, character_cost, striker_table, all_nutexb, stage_list"
     }
 
     pub fn as_cli_str(self) -> &'static str {
@@ -140,6 +143,7 @@ impl Fhm2dFormat {
             Self::StageList => "stage_list",
             Self::CharacterParam => "character_param",
             Self::CharacterCost => "character_cost",
+            Self::StrikerTable => "striker_table",
             Self::Msc => "msc",
             Self::Motion => "motion",
             Self::Sound => "sound",
@@ -1054,8 +1058,17 @@ fn apply_naming(
         Some(Fhm2dFormat::StageList) => {
             apply_stage_list_name(output, list_output_file_name, out_name)
         }
-        Some(Fhm2dFormat::CharacterParam) => apply_param_names(&mut output.sub_file_data),
+        Some(Fhm2dFormat::CharacterParam) => {
+            if try_apply_striker_table_names(&mut output.sub_file_data, files)? {
+                Ok(())
+            } else {
+                apply_param_names(&mut output.sub_file_data)
+            }
+        }
         Some(Fhm2dFormat::CharacterCost) => apply_character_cost_names(&mut output.sub_file_data),
+        Some(Fhm2dFormat::StrikerTable) => {
+            apply_striker_table_names(&mut output.sub_file_data, files)
+        }
         Some(Fhm2dFormat::Msc) => apply_msc_names(&mut output.sub_file_data),
         Some(Fhm2dFormat::Motion) => apply_motion_names(
             &mut output.sub_file_data,
@@ -1185,6 +1198,39 @@ fn apply_character_cost_names(sub: &mut [OutputSubFileData]) -> Result<(), Strin
 /// vs2 `0x264D1CA7_meta.bin` records, in SubFileData index order:
 /// `raw_path_id_release.vgsht1` then `raw_path_id_release.json`.
 /// Sound packs that are not this two-file table are left unchanged.
+fn try_apply_striker_table_names(
+    sub: &mut [OutputSubFileData],
+    files: &[DecodedSubFile],
+) -> Result<bool, String> {
+    if sub.len() != 1 || files.len() != 1 {
+        return Ok(false);
+    }
+    if !is_striker_table_payload(files[0].data.as_slice()) {
+        return Ok(false);
+    }
+    const NAME: &str = "strikertable.vgsht1";
+    let item = &mut sub[0];
+    let prefix = parent_segments(item.file_url.as_str())?;
+    item.file_type = extension_with_dot(NAME);
+    item.file_base_name = Some(strip_extension(NAME));
+    item.file_url = build_file_url(prefix.as_slice(), NAME);
+    Ok(true)
+}
+
+fn apply_striker_table_names(
+    sub: &mut [OutputSubFileData],
+    files: &[DecodedSubFile],
+) -> Result<(), String> {
+    if try_apply_striker_table_names(sub, files)? {
+        Ok(())
+    } else {
+        Err(
+            "striker_table extract requires a single vgsht1 file with stride 8 (0xFEEB79F0 strikertable)"
+                .to_string(),
+        )
+    }
+}
+
 fn apply_raw_path_id_names(
     sub: &mut [OutputSubFileData],
     files: &[DecodedSubFile],
@@ -1213,6 +1259,35 @@ fn apply_raw_path_id_names(
 
 fn is_vgsht1_payload(bytes: &[u8]) -> bool {
     bytes.len() >= 4 && u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) == 0xCEABB8A9
+}
+
+fn read_le_u32_at(bytes: &[u8], offset: usize) -> Option<u32> {
+    let slice = bytes.get(offset..offset + 4)?;
+    Some(u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]))
+}
+
+/// `0xFEEB79F0` strikertable: vgsht1 header, stride 8, size = 0x20 + count*4 + count*8.
+fn is_striker_table_payload(bytes: &[u8]) -> bool {
+    if bytes.len() < 0x20 || !is_vgsht1_payload(bytes) {
+        return false;
+    }
+    let Some(file_size) = read_le_u32_at(bytes, 0x08) else {
+        return false;
+    };
+    let Some(count) = read_le_u32_at(bytes, 0x10) else {
+        return false;
+    };
+    let Some(stride) = read_le_u32_at(bytes, 0x14) else {
+        return false;
+    };
+    if stride != 8 {
+        return false;
+    }
+    let count = count as usize;
+    let expected = 0x20usize
+        .saturating_add(count.saturating_mul(4))
+        .saturating_add(count.saturating_mul(8));
+    file_size as usize == expected && bytes.len() == expected
 }
 
 fn is_json_object_payload(bytes: &[u8]) -> bool {
@@ -2031,6 +2106,64 @@ mod tests {
             file_url: file_url.to_string(),
             file_base_name: Some(file_index.to_string()),
         }
+    }
+
+    fn striker_table_bytes(ids: &[u32]) -> Vec<u8> {
+        let count = ids.len();
+        let expected = 0x20 + count * 4 + count * 8;
+        let mut bytes = vec![0u8; expected];
+        bytes[0..4].copy_from_slice(&0xCEABB8A9u32.to_le_bytes());
+        bytes[8..12].copy_from_slice(&(expected as u32).to_le_bytes());
+        bytes[0x10..0x14].copy_from_slice(&(count as u32).to_le_bytes());
+        bytes[0x14..0x18].copy_from_slice(&8u32.to_le_bytes());
+        for (i, id) in ids.iter().enumerate() {
+            let id_off = 0x20 + i * 4;
+            bytes[id_off..id_off + 4].copy_from_slice(&id.to_le_bytes());
+            let rec_off = 0x20 + count * 4 + i * 8;
+            bytes[rec_off..rec_off + 4].copy_from_slice(&((500_000_000 + id) % (1 << 30)).to_le_bytes());
+        }
+        bytes
+    }
+
+    #[test]
+    fn striker_table_names_single_stride8_vgsht1() {
+        let files = vec![DecodedSubFile {
+            file_index: 0,
+            data: striker_table_bytes(&[16_001_001, 16_002_001]),
+        }];
+        let mut sub = vec![output_file(0, 0, ".\\striker\\0.bin")];
+        apply_striker_table_names(&mut sub, &files).expect("name strikertable");
+        assert_eq!(sub[0].file_url, ".\\striker\\strikertable.vgsht1");
+        assert_eq!(sub[0].file_type, ".vgsht1");
+        assert_eq!(sub[0].file_base_name.as_deref(), Some("strikertable"));
+    }
+
+    #[test]
+    fn character_param_renames_striker_table_instead_of_grapparam() {
+        let files = vec![DecodedSubFile {
+            file_index: 0,
+            data: striker_table_bytes(&[16_001_001]),
+        }];
+        let mut sub = vec![output_file(0, 0, ".\\0xFEEB79F0\\0.bin")];
+        assert!(try_apply_striker_table_names(&mut sub, &files).expect("detect"));
+        assert_eq!(sub[0].file_url, ".\\0xFEEB79F0\\strikertable.vgsht1");
+    }
+
+    #[test]
+    fn striker_table_naming_rejects_stride_0x18() {
+        let mut bytes = vec![0u8; 0x20 + 4 + 0x18];
+        let file_size = bytes.len() as u32;
+        bytes[0..4].copy_from_slice(&0xCEABB8A9u32.to_le_bytes());
+        bytes[8..12].copy_from_slice(&file_size.to_le_bytes());
+        bytes[0x10..0x14].copy_from_slice(&1u32.to_le_bytes());
+        bytes[0x14..0x18].copy_from_slice(&0x18u32.to_le_bytes());
+        let files = vec![DecodedSubFile {
+            file_index: 0,
+            data: bytes,
+        }];
+        let mut sub = vec![output_file(0, 0, ".\\pack\\0.bin")];
+        let err = apply_striker_table_names(&mut sub, &files).expect_err("reject stride 0x18");
+        assert!(err.contains("stride 8"), "{err}");
     }
 
     #[test]

@@ -41,6 +41,7 @@ describe("workspace content catalog", () => {
     ["series-list", "list.series", "0xB7367090", "series_list.bin"],
     ["navi-list", "list.navi", "0x6FCC0FBA", "navi_list.bin"],
     ["character-cost", "param.for-outgame", "0xFF832E7F", null],
+    ["striker-table", "unit.param", "0xFEEB79F0", "strikertable.vgsht1"],
     ["card-icons", "gui.card-icons", "0x49235031", null],
     ["series-icons", "gui.series-icons", "0xA0253AA0", null],
     ["stage-list", "list.stage", "0xCE74091E", "stage_list.bin"],
@@ -96,6 +97,27 @@ describe("workspace content catalog", () => {
     );
     expect(result.configured.packKey).toBe("041cpm/for_outgame");
     expect(result.existing).toBeNull();
+    expect(result.sourceLayout).toBe("missing");
+  });
+
+  it("resolves Striker Table under 041cpm/strikertable", async () => {
+    withExistingPaths([]);
+
+    const result = await resolveWorkspaceContent(
+      "E:/workspace",
+      DEFAULT_TEST_EDITOR_WORKSPACE,
+      "striker-table",
+    );
+
+    expect(result.descriptor.defaultPackName).toBe("strikertable");
+    expect(result.configured.folderPath).toBe("E:/workspace/041cpm/strikertable");
+    expect(result.configured.filePath).toBe(
+      "E:/workspace/041cpm/strikertable/strikertable.vgsht1",
+    );
+    expect(result.configured.structureJsonPath).toBe(
+      "E:/workspace/041cpm/strikertable_structure.json",
+    );
+    expect(result.configured.packKey).toBe("041cpm/strikertable");
     expect(result.sourceLayout).toBe("missing");
   });
 

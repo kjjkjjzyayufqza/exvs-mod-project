@@ -208,6 +208,10 @@ Reuse rules:
   Do not copy stock `func_309` / `sys_47(0x7)` waits onto homemade folders;
   do not use `func_310` as homemade rate. See
   `docs/msc-research/homemade-motion-clock-vs-game-frame.md`.
+- Independent striker spawn (`516001001` / `sys_51(0x20000)` / front-back
+  `0x53554243`) is **not** this transform bootstrap. `--match "striker-sys51"`.
+  Keep the EW `0.c` `0x90000` / `d0001` gate on front/back only; do not put
+  it on N/left/right homemade sub-shot. Do not mix with unit-task automata.
 - Do not repeat source file counting, six-resource inventory, three transform
   motion lookup, SHL model-folder mapping, or body/wing skeleton comparison
   unless a restart condition in the bootstrap is met.
@@ -238,6 +242,12 @@ Use `docs/` as the first source of project truth:
   folders on `func_309` / `sys_47(0x7)`; do **not** use `func_310` as a
   homemade rate knob. Rule: `.cursor/rules/msc-homemade-motion-clock.mdc`.
   Registry: `docs/msc-research/msc-falsified-negatives-registry.md` §H.
+- `docs/msc-research/sys51-independent-striker-vs-automata.md` — independent
+  `5xxxxxxxx` strikers spawn **only** via MSC `sys_51(0x20000, 0, 0x2,
+  slot_index, type)` + `strikertable[host][slot]`. EW `0.c` must keep
+  `sys_0(0x90000, 1)` and `d0001 && !d000b` before `ACTION_AB_SUB` (skip =
+  motion yes, unit no). Not automata / host `bulletparam` summon. Cluster
+  `striker-sys51`. Registry J.
 - `docs/exvs-stage-numatb-simple-color.md` — stage map props with only a color
   texture: use `FeRendererMovableVertexColor` → `vstgStandard_VertexColor`, strip
   unused PBR slots (avoids in-game overexposure).
@@ -441,7 +451,7 @@ New-Item -ItemType Directory -Force $task | Out-Null
 
 **Required flags (no silent defaults):** `--type` / `-t` and `--layout` / `-l`
 (`folder` | `flat`). Types: `character`, `effect`, `motion`, `msc`, `sound`,
-`character_param`, `character_cost`, `all_nutexb`, `stage_list` (also `fhm2d_*`).
+`character_param`, `character_cost`, `striker_table`, `all_nutexb`, `stage_list` (also `fhm2d_*`).
 
 Writes files under `--output` and `<out_dir>_structure.json` beside that folder
 name (still under `tmp/` when `--output` is under `tmp/...`). Layout is

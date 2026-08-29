@@ -1,5 +1,8 @@
 # EXVS2 MSC Primer for AI Agents
 
+**Status:** E1 methodology (protocol text; not a unit-behaviour claim)
+**Kind:** MSC reading contract for agents without repo skills
+
 **Self-contained. Paste this whole file into any model (Grok, ChatGPT, Gemini,
 a fresh Claude session, a subagent) before showing it an EXVS2 `X.c`.**
 
@@ -232,6 +235,7 @@ Five lines make the conclusion determined. Anything less restarts guessing.
 | flying but standing animation | action changed, form global not cleared | form cleared, movement channel still written | press melee: bird melee = form alive |
 | dash ends dead-stopped | magnitude written to 0 | flight motor turned off | still sinking slowly = magnitude 0; straight drop = motor off |
 | move never comes out | cancel window never opened | hash submitted but never committed | did the vanilla move finish normally? yes = window |
+| assist clip plays, independent striker never appears | `0.c` skipped `sys_0(0x90000,1)` / `d0001 && !d000b` before `ACTION_AB_SUB` | `sys_51` treated as automata / empty strikertable slot | restore the EW `0.c` gate on that submit path only; do not graft a host `bulletparam` summon |
 
 ---
 

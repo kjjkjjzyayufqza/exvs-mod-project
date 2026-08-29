@@ -18,6 +18,7 @@ fn help_mentions_required_type_and_layout() {
     assert!(help.contains("flat"));
     assert!(help.contains("character"));
     assert!(help.contains("motion"));
+    assert!(help.contains("striker_table"));
 }
 
 #[test]
@@ -67,6 +68,20 @@ fn invalid_type_is_hard_error() {
 }
 
 #[test]
+fn striker_table_type_is_accepted() {
+    assert_eq!(
+        Fhm2dFormat::parse_cli("striker_table").unwrap(),
+        Fhm2dFormat::StrikerTable
+    );
+    assert_eq!(
+        Fhm2dFormat::parse_cli("fhm2d_striker_table").unwrap(),
+        Fhm2dFormat::StrikerTable
+    );
+    assert_eq!(Fhm2dFormat::StrikerTable.as_cli_str(), "striker_table");
+    assert!(Fhm2dFormat::supported_type_list().contains("striker_table"));
+}
+
+#[test]
 fn all_documented_types_parse_via_cli_flag() {
     let types = [
         "character",
@@ -76,10 +91,12 @@ fn all_documented_types_parse_via_cli_flag() {
         "sound",
         "character_param",
         "character_cost",
+        "striker_table",
         "all_nutexb",
         "stage_list",
         "fhm2d_motion",
         "fhm2d_effect",
+        "fhm2d_striker_table",
     ];
     for ty in types {
         // Source file need not exist: parse succeeds, extract fails later.

@@ -26,10 +26,16 @@ describe("mainViewTabGroups", () => {
     expect(characterTabs).toEqual([
       "character-id-table",
       "character-cost",
+      "striker-table",
       "character-list",
       "series-list",
       "navi-list",
     ]);
+  });
+
+  it("places Striker Table under Character after Character Cost", () => {
+    const tab = MAIN_VIEW_TAB_META.find((entry) => entry.value === "striker-table");
+    expect(tab).toMatchObject({ group: "character", name: "Striker Table" });
   });
 
   it("places Raw Path ID under Sound", () => {

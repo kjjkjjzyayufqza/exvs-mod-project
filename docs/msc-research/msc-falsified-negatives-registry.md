@@ -70,6 +70,13 @@
 | D8 | `sys_46(0, lock_err + arc)` 再沿机头飞 | `0x40000/5` 相对机头，一帧后 `command≈0`，变成**固定斜线**不是绕锁 | 同上 §左右绕飞 |
 | D9 | 飞行特射只清平移通道，依赖 `func_595` 自己接管朝向 | 足止成功，但不对锁；玩家仍能用飞行输入改变朝向 | [flight-special-footstop audit](./wing-zero-rebellion-flight-special-footstop-handbook-audit.md) 2026-08-27 runtime：足止后按 TV `func_1042` 在 tick 尾写 `func_102(...,0x1f4,0x2)` → `sys_46(0,step)` |
 | D10 | 自然 EXIT 只恢复 `global24 & 0x4000` + `sys_1(0x30001,1)`，不恢复 `func_351(0x2,0x4)` | 进入空中 idle，外观仍是鸟但不能飞，自动落地（伪普通） | 同上：`rebellion_transform_loop` 的 profile-2 one-shot 不保证重跑；679 必须在 `func_598` 前成对恢复 profile 2 |
+| D11 | Messala 连续 owner tick 中只缩短 `global689`，仍让 `func_595` 在 `func_167(0x1004000)` 之前写 yaw | 按下特射先对敌；START 按住方向后数帧偏向输入方向；进入 SHOOT 时又突然对敌 | 保留 `func_593 → func_167 → clamp`；仅在 676 START 的 tick 尾按 TV `func_1042` 写 `func_102(func_626(),0x1f4,0x2)` → `sys_46(0,step)`。禁止扩到 SHOOT/679，避免照射跟踪或退出竞争 |
+| D12 | 在 Messala 连续 owner 的 676 START 尾部追加 TV `func_1042` 形状的 `func_102(func_626(),0x1f4,0x2)` → `sys_46(0,step)` | 与 D11 完全相同，无任何可观察变化 | 该竞争不是 MSC 内 yaw 最后写入顺序；删除额外 yaw。下一单变量候选复用同目标 Bird CS / TV 飞行射击 tick 的 `global47 |= 0x40`，测试后续输入/动作处理是否才是 owner |
+| D13 | 在 Messala 连续 owner tick 尾部复用 Bird CS / TV 飞行射击的 `global47 |= 0x40` | 与 D11/D12 完全相同，无任何可观察变化 | 删除该 flag；`global73` 也被 `func_586` 清零且本 action 不重写。先用已存在的 START charge FX 与 10f/40f 时长确认实际加载的 `2.dscex`，再做下一状态探针 |
+| D14 | 只在 `2.c SPECIAL_SHOT_FLIGHT` ENTER/START 清 `global87 & 0x3c` | START 后续方向漂移收窄，但 ACTION commit 仍有一帧朝 held direction | `0.c func_6` 已先把 `global2` 发布到共享 field `0x7`；在 bird `0x100` 调 `func_95(0xd94d608f)` 前，重新发布 `(global2 & ~0x3c) | 0x2`，再由 `2.c` mask 维护后续 START 帧 |
+| D15 | D14 再加 `0.c` bird-special 提交前重发 neutral shared field `0x7` | 仍与原现象完全相同 | `global87/global2` 方向快照不是已证实 owner；撤销 0.c/2.c mask。必须用录像或显式 motion/effect discriminator 区分 world yaw、body-local pose、motion 与 camera，禁止继续叠输入/yaw修补 |
+| D16 | 10f START 仍使用缩短后的 `global689=0x3`，再叠每帧 shared field `0x7` / local `global87` 中和 | 仍出现先对锁、START 中段朝 held direction、SHOOT 再对锁 | 删除所有方向覆盖；按 Messala 恢复 `global689=0xa`，让原生 `func_595` 的 10f aim ownership 覆盖完整 10f START。10f/40f phase timing与 target clamp 保持 |
+| D17 | 按 Messala 恢复 `global689=0xa`，但继续保留 Rebellion tick 尾 translation/pose clamp | 用户报告进入特射时仍有 held-direction 朝向瞬间 | 不再混合 owner；下一候选把 tick 收成 Messala `func_970` 原文：仅 `func_593(); func_167(0x1004000);`。接受 target translation 可能回归，以隔离朝向行为 |
 
 ## E. 生命周期 / `callFunc3`
 
@@ -117,6 +124,13 @@ Homemade NUANMB folder（DCC `*_out.fbx` 导入、Rebellion `tks11a` / `0xa0cd8d
 | I1 | Messala 连续 owner tick 直接用于 Rebellion，但不加 target translation clamp | 对锁、射击、自然收招均正常；ACTIVE 仍持续位移，而 Messala 停住 | `func_593` → `func_167(0x1004000)` 后仅清 ch1/ch2、case-4 vector、`func_300(0)`；禁止清 `0x4000`/motor/`global714`，且 679 (`global184==4`) 跳过 | [messala-flight-sub-shot-flow](./messala-flight-sub-shot-flow.md) §2026-08-28 runtime |
 | I2 | translation clamp 只清移动通道，不清 body-local rotation bank | 位置已停、收招正常，但左右方向键仍改变机体倾斜角 | ACTIVE 最后 `func_104(0,0,0)` + `func_107(0,0,0)` 清 `global268–273` 对应的 body channel-1 姿态；不改 `sys_46(0)` 世界 yaw，679 跳过 | 同上 §Runtime refinement |
 | I3 | Rebellion 使用 loop motion，却在 Messala-style 679 人工等待 10 帧 | 射击已结束且玩家已可自由操控，但 action 仍锁敌并以奇怪姿势离开 | 679 只做一次 cleanup 后立即 `global252=1`；Messala 的 motion-end wait 仅适用于真实 recovery clip | 同上 §looping motion 679 tail |
+
+## J. Independent striker / `sys_51`
+
+| # | 被证伪的做法 | 实机症状 | 正确方向 | 来源 |
+|---|--------------|----------|----------|------|
+| J1 | 把 `sys_51(0x20000, 0, 0x2, slot, type)` 当成 unit-task automata / 宿主 `bulletparam` 召唤 | 独立 `5xxxxxxxx` 被带去改错层 | 独立机体只走 `sys_51` + `strikertable[host][slot]` | [sys51-independent-striker-vs-automata](./sys51-independent-striker-vs-automata.md) |
+| J2 | `2.c` 已调 `sys_51`，但 `0.c` 去掉 EW 的 `sys_0(0x90000, 1)` + `d0001 && !d000b` 再交 `ACTION_AB_SUB` | **动作播了、援护机体不出** | 前后副射进门必须带这两道 native ready 门；不要套到左右/N 自制副射 | 同上 §`0.c` gate；Rebellion 2026-08-29 **E3** 补门后 `516001001` 出现 |
 
 ---
 

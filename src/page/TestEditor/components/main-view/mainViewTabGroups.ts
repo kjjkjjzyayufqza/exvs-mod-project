@@ -31,6 +31,7 @@ export const MAIN_VIEW_TAB_META: MainViewTabMeta[] = [
   { value: "motion-folder", name: "Motion Folder", shortName: "Motion", group: "pack" },
   { value: "character-id-table", name: "Character ID Table", shortName: "ID table", group: "character" },
   { value: "character-cost", name: "Character Cost", shortName: "Cost", group: "character" },
+  { value: "striker-table", name: "Striker Table", shortName: "Striker", group: "character" },
   { value: "character-list", name: "Character list", shortName: "List", group: "character" },
   { value: "series-list", name: "Series List", shortName: "Series", group: "character" },
   { value: "navi-list", name: "Navi List", shortName: "Navi", group: "character" },

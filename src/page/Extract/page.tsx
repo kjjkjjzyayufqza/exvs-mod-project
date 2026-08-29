@@ -104,6 +104,12 @@ const EXTRACT_FORMAT_OPTIONS: Array<{
     format: Fhm2d_type_format.fhm2d_character_cost,
   },
   {
+    value: Fhm2d_type_format.fhm2d_striker_table,
+    label: "Striker table",
+    description: "Host unit → striker slot table (0xFEEB79F0, vgsht1 stride 8).",
+    format: Fhm2d_type_format.fhm2d_striker_table,
+  },
+  {
     value: Fhm2d_type_format.fhm2d_stage_list,
     label: "Stage list",
     description: "Stage list binary naming.",

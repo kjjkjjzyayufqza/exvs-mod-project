@@ -5,6 +5,7 @@ import { MainViewTabNav } from "./main-view/MainViewTabNav";
 import RepackFolderStructureView from "./RepackFolderStructureView";
 import CharacterIdTableView from "./CharacterIdTableView";
 import CharacterCostView from "./CharacterCostView";
+import StrikerTableView from "./StrikerTableView";
 import CharacterListView from "./CharacterListView";
 import SeriesListView from "./SeriesListView";
 import NaviListView from "./NaviListView";
@@ -87,6 +88,19 @@ const tabs: StageTab[] = [
         folderPath={props.folderPath ?? ""}
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDocument={props.workspaceDocument}
+      />
+    ),
+  },
+  {
+    name: "Striker Table",
+    value: "striker-table",
+    render: (props: MainViewProps) => (
+      <StrikerTableView
+        folderPath={props.folderPath ?? ""}
+        isActive={false}
+        onUnsavedChanges={props.onUnsavedChanges}
+        onPackMutated={props.onPackMutated}
         workspaceDocument={props.workspaceDocument}
       />
     ),
@@ -388,6 +402,7 @@ const MainView = ({
   const [folderStructureHasUnsaved, setFolderStructureHasUnsaved] = useState(false);
   const [characterIdTableHasUnsaved, setCharacterIdTableHasUnsaved] = useState(false);
   const [characterCostHasUnsaved, setCharacterCostHasUnsaved] = useState(false);
+  const [strikerTableHasUnsaved, setStrikerTableHasUnsaved] = useState(false);
   const [characterListHasUnsaved, setCharacterListHasUnsaved] = useState(false);
   const [seriesListHasUnsaved, setSeriesListHasUnsaved] = useState(false);
   const [naviListHasUnsaved, setNaviListHasUnsaved] = useState(false);
@@ -461,6 +476,10 @@ const MainView = ({
     setCharacterCostHasUnsaved(hasChanges);
   }, []);
 
+  const handleStrikerTableUnsaved = useCallback((hasChanges: boolean) => {
+    setStrikerTableHasUnsaved(hasChanges);
+  }, []);
+
   const handleCharacterListUnsaved = useCallback((hasChanges: boolean) => {
     setCharacterListHasUnsaved(hasChanges);
   }, []);
@@ -509,6 +528,7 @@ const MainView = ({
       "folder-structure": folderStructureHasUnsaved,
       "character-id-table": characterIdTableHasUnsaved,
       "character-cost": characterCostHasUnsaved,
+      "striker-table": strikerTableHasUnsaved,
       "character-list": characterListHasUnsaved,
       "series-list": seriesListHasUnsaved,
       "navi-list": naviListHasUnsaved,
@@ -526,6 +546,7 @@ const MainView = ({
       folderStructureHasUnsaved,
       characterIdTableHasUnsaved,
       characterCostHasUnsaved,
+      strikerTableHasUnsaved,
       characterListHasUnsaved,
       seriesListHasUnsaved,
       naviListHasUnsaved,
@@ -609,6 +630,21 @@ const MainView = ({
               folderPath={props.folderPath ?? ""}
               isActive={activeTab === "character-cost"}
               onUnsavedChanges={handleCharacterCostUnsaved}
+              workspaceDocument={props.workspaceDocument}
+            />
+          ),
+        };
+      }
+
+      if (tab.value === "striker-table") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <StrikerTableView
+              folderPath={props.folderPath ?? ""}
+              isActive={activeTab === "striker-table"}
+              onUnsavedChanges={handleStrikerTableUnsaved}
+              onPackMutated={props.onPackMutated}
               workspaceDocument={props.workspaceDocument}
             />
           ),
@@ -820,6 +856,7 @@ const MainView = ({
     activeTab,
     handleCharacterIdTableUnsaved,
     handleCharacterCostUnsaved,
+    handleStrikerTableUnsaved,
     handleCharacterListUnsaved,
     handleConsumePendingCharacterIdTableSelection,
     handleJumpToCharacterIdTable,

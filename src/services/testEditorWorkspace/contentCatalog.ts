@@ -44,6 +44,14 @@ export const WORKSPACE_CONTENT_CATALOG = Object.freeze({
     relativeFilePath: null,
     label: "Character Cost",
   },
+  "striker-table": {
+    id: "striker-table",
+    routeId: "unit.param",
+    hashHex: "0xFEEB79F0",
+    relativeFilePath: "strikertable.vgsht1",
+    defaultPackName: "strikertable",
+    label: "Striker Table",
+  },
   "card-icons": {
     id: "card-icons",
     routeId: "gui.card-icons",

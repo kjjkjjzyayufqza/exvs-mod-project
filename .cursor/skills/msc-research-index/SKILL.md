@@ -155,6 +155,7 @@ python tools/msc_research_catalog.py --list
 | `sys_4F` / other syscalls | `syscall` |
 | speedparam / characterparam / red-lock | `param-msc` |
 | Native unit-task automata | `native-unit-task` |
+| Independent striker / `sys_51(0x20000)` / `516001001` / arg5 action index / `d0003` | `striker-sys51` |
 | Per-unit OB v27 page | `unit-<slug>` (`--match` the id) |
 
 ## Hard rules
