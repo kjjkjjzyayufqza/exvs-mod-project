@@ -301,6 +301,10 @@ CLUSTERS: tuple[Cluster, ...] = (
             "0x90003",
             "ACTION_A_SHOT_BIRD_CS1",
             "bird CS",
+            "SUB_SHOT_CUSTOM",
+            "homemade sub-shot",
+            "N副射",
+            "sys_4F(0, slot, hash, 1)",
         ),
         read_first=(
             R("cs-action-charge-slot-consumption.md"),
@@ -314,10 +318,13 @@ CLUSTERS: tuple[Cluster, ...] = (
             "Direct CSA on slot 0 uses sys_4F(0xA, 0); Rebellion CSB slot 4 is already consumed by func_1031.",
             "Do not put CSA charge clearing in an uncharged action alias or a per-tick callback.",
             "Bird CS notches consume slot 0 when sys_0(0x90003,0)==1 (TV func_1074) so the bar can refill; CS1/CS2 still consume at ENTER. That tick consume is charge-complete, not the CSA action consume. Uncharged ACTION_A_SHOT_BIRD must not consume.",
+            "sys_4F(0, slot, hash, 1) zeros that slot's +0xF0/+0xF8 when +0x7C is set, same as sys_4F(0xA). CSA fire uses the bool on purpose. Uncharged fire and homemade SUB_SHOT_CUSTOM must use 3-arg sys_4F(0, slot, hash).",
         ),
         do_not=(
             "Do not assume selecting or playing a CS action automatically consumes native charge state.",
             "Do not delay charge consumption until projectile fire; an interrupted startup would preserve a reusable full charge.",
+            "Do not copy CSA func_899 sys_4F(0, 0, hash, 1) onto homemade N/left/right sub-shot. The 4th arg consumes charge on that slot; a 681 of 0 dumps the CSA bar.",
+            "Do not treat 3-arg slot-1 homemade sub-shot fire as enough to keep a held CSA bar. Runtime 2026-08-30: dump is the bullet frame, not press. Isolated next: do not sys_4A(0x1, 0x7) on 677; ACTION_A_SHOT CSA muzzle lives on group 7.",
         ),
     ),
     Cluster(
@@ -833,6 +840,7 @@ CLUSTERS: tuple[Cluster, ...] = (
             "Do not sys_4F(0x16, 3, 0/1) on FLYING to hide HUD. Vanilla EW never writes slot-3 0x16; 0x16=1 shows as red disable. Gyan 0x16 is optional assist, not 飛翔. Hide with 0xB unbind. Registry I5.",
             "Do not write func_351(0x2,0x4), func_167(0x1004000), or per-tick sys_46(0x2) climb from sys_0(0x40000,0x3,global39) on standing BD 前派生 (func_990/func_991). Runtime 2026-08-29: 突然冲到天上. Keep ground func_351(0) and planar chase. Registry E12.",
             "Do not set global184=1 from BD 前派生 loop slashes to reopen func_516. Runtime 2026-08-29: 1 never connects to 2, infinite 1. func_492 then func_71(global629=func_990) and func_530 clears mash. Stay in func_493; chase with func_517. Registry E13.",
+            "Do not put per-tick sys_46(0) lock yaw plus channel-1 mag 0x320 on DIR_2 final slash func_974. Runtime 2026-08-30: magnet tracking. Registry E18. Do not ENTER-sys_46 mag from frame 0 (E19). Start ch1 mag 0x190 at 0xc8 (E21), clear at 0xbb8 (E23). One-shot face at func_148 (E22). Ch1 pitch 0xffffdcd8 climbs (E25); 0x7d0 (+20) still high; in-game winner is 1000 (+10deg). Do not sys_46(0x2) or func_351(0x2) (E12).",
         ),
         notes="AGENTS.md still inlines this bootstrap. Sibling Rebellion MSC edits: alt2-gerobi, sub-shot-custom, bird-melee-n-followup, special-n-bird-dash, 2026-08-26 subshot-split-and-flight-weapons plan.",
     ),

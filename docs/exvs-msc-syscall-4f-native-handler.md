@@ -225,10 +225,12 @@
   - `arg3`: optional bool
   - `arg4`: optional u32
 - native 行为：
-  - 调用 `sub_1405DEBD0(v7, arg1, arg2, bool, extra)`
+  - 调用 `sub_1405DEBD0(v7, arg1, arg2, bool, extra)` → `sub_1405BCF00(entry, hash, bool, extra)`
+  - 当 `bool != 0` 且 `entry+0x7C != 0` 时，把 `entry+0xF0` / `entry+0xF8` 写成 0。这与 `sys_4F(0xA)` / `CArmsController_ResetCharge` 清蓄力是同一组栏位。
 - 结论：
   - **High confidence**
   - 用于向 `depiction` 管理器中创建/绑定/激活一个按 hash 标识的 entry
+  - 第 4 参 `1` 会在该 **slot** 上消费/清零蓄力。未蓄力开火必须用三参 `sys_4F(0, slot, hash)`。CSA `func_899` 四参是故意消费 slot 0；副射抄这个 bool 会把正在积的 CSA 条清掉
 
 ### `subcmd 0x01`
 

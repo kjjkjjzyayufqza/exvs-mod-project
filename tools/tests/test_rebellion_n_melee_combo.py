@@ -94,13 +94,15 @@ class RebellionNMeleeComboTest(unittest.TestCase):
             0x10,
             "16f approach was still a long BD1 to DIR_2 third gap",
         )
-        self.assertIn("global385 = 0x190", code)
+        self.assertIn("global385 = 0x320", code)
 
-    def test_bd1_n_combo_submits_dir2_at_hit_not_clip_end_only(self) -> None:
+    def test_bd1_n_combo_requires_melee_window_for_dir2_final(self) -> None:
         code = _strip_c_comments(_function_body(self.source, "func_980"))
         self.assertIn(f"func_309(global20, {hex(BD1_HIT_TIME)})", code)
+        self.assertIn("rebellion_n_combo_need_melee_release", code)
         self.assertIn(f"func_81({hex(DIR_2_HASH)}, 0x1, 0x2, 0x3)", code)
-        self.assertIn("rebellion_n_combo_want_dir2_third = 1", code)
+        self.assertIn("rebellion_n_combo_want_dir2_third = 0x1", code)
+        self.assertNotIn("rebellion_n_submit_dir2_third", code)
 
     def test_n_combo_uses_variant_enter_not_spliced_bd_body(self) -> None:
         n2 = _strip_c_comments(_function_body(self.source, "func_954"))
@@ -112,8 +114,20 @@ class RebellionNMeleeComboTest(unittest.TestCase):
 
     def test_dir2_third_slash_does_not_self_follow(self) -> None:
         code = _strip_c_comments(_function_body(self.source, "func_974"))
-        self.assertIn("func_532(0x1f, 0x2a, 0x50)", code)
+        self.assertIn("func_532(0x14, 0x28, 0x50)", code)
         self.assertIn("global385 = 0x190", code)
+        enter = code[: code.index("if (func_309")]
+        self.assertNotIn("sys_46(0x1, 0x1, 0, 0, 0x190)", enter)
+        self.assertIn("func_309(global20, 0xc8)", code)
+        self.assertIn("func_309(global20, 0xbb8)", code)
+        self.assertNotIn("func_309(global20, 0xe10)", code)
+        self.assertIn("sys_46(0x1, 0x1, 0, 1000, 0x190)", code)
+        self.assertNotIn("sys_46(0x1, 0x1, 0, 0xffffdcd8, 0x190)", code)
+        self.assertNotIn("sys_46(0x1, 0x1, 0, 0x7d0, 0x190)", code)
+        self.assertIn("sys_46(0x1, 0x1, 0, 0, 0)", code)
+        self.assertIn("rebellion_dir2_fourth_aimed = 0", enter)
+        self.assertIn("rebellion_dir2_fourth_aimed == 0", code)
+        self.assertIn("sys_46(0, func_102", code)
         self.assertNotIn("func_535", code)
         self.assertNotIn("func_536", code)
         self.assertNotIn("rebellion_dir2_third_slash_visits", code)
@@ -126,48 +140,38 @@ class RebellionNMeleeComboTest(unittest.TestCase):
         self.assertIn("func_955()", enter)
         self.assertIn("if (rebellion_dir2_n3_bridge != 0)", n3)
         follow = re.search(
-            r"func_536\(\s*0x1\s*,\s*(0x[0-9a-fA-F]+)\s*,\s*func_974\s*\)",
+            r"func_536\(\s*0x1\s*,\s*(0x[0-9a-fA-F]+|\d+)\s*,\s*func_974\s*\)",
             n3,
         )
         window = re.search(
-            r"func_535\(\s*(0x[0-9a-fA-F]+)\s*,\s*(0x[0-9a-fA-F]+)\s*\)",
+            r"func_535\(\s*(0x[0-9a-fA-F]+|\d+)\s*,\s*(0x[0-9a-fA-F]+|\d+)\s*\)",
             n3,
         )
         chase = re.search(
-            r"func_532\(\s*(0x[0-9a-fA-F]+)\s*,\s*(0x[0-9a-fA-F]+)\s*,\s*(0x[0-9a-fA-F]+)\s*\)",
-            n3[n3.index("rebellion_dir2_n3_bridge") :],
-        )
-        hold = re.search(
-            r"func_89\(\s*(0x[0-9a-fA-F]+)\s*,\s*0\s*\)",
-            n3[n3.index("rebellion_dir2_n3_bridge") :],
+            r"func_532\(\s*0x8\s*,\s*0x1e\s*,\s*0x5f\s*\)",
+            n3,
         )
         self.assertIsNotNone(follow, "bridged N3 must still 536 to func_974")
         self.assertIsNotNone(window)
-        self.assertIsNotNone(chase)
-        self.assertIsNotNone(hold)
+        self.assertIsNotNone(chase, "bridged N3 must keep the 8f strike chase")
         follow_at = _int_lit(follow.group(1))
         win_start = _int_lit(window.group(1))
         win_end = _int_lit(window.group(2))
-        chase_frames = _int_lit(chase.group(1))
-        hold_frames = _int_lit(hold.group(1))
-        self.assertGreaterEqual(follow_at, 0x1c)
-        self.assertGreaterEqual(win_start, 0x1c)
+        self.assertGreaterEqual(follow_at, 0x12)
+        self.assertLessEqual(follow_at, 0x14)
+        self.assertEqual(win_start, follow_at)
         self.assertGreater(win_end, follow_at)
-        self.assertGreaterEqual(chase_frames, follow_at)
-        self.assertGreater(hold_frames, win_end)
-        self.assertIn("global385 = 0x190", n3)
+        self.assertIn("func_89(0x2c, 0)", n3)
+        self.assertNotIn("func_89(0x40, 0)", n3)
+        self.assertIn("sys_46(0x1, 0x1, 0, 0, 0x190)", n3)
+        self.assertIn("sys_46(0x1, 0x1, 0, 0, 0)", n3)
 
-    def test_standing_bd1_clip_enters_bd2_not_action_end(self) -> None:
+    def test_standing_bd1_uses_input_window_for_bd2_then_ends(self) -> None:
         code = _strip_c_comments(_function_body(self.source, "func_980"))
         self.assertIn("func_536(0x1, 0x18, func_981)", code)
-        self.assertIn("func_71(func_981)", code)
         clip = code[code.rindex("sys_47(0x7, sys_4B(0x1))") :]
-        self.assertIn("func_71(func_981)", clip)
-        self.assertRegex(
-            clip,
-            r"else\s*\{[^}]*func_71\(func_981\)",
-            "standing BD1 clip must enter BD2 instead of global252",
-        )
+        self.assertIn("global252 = 0x1", clip)
+        self.assertNotIn("func_81", clip)
 
     def test_standing_bd2_turn_hands_off_cutback_action(self) -> None:
         turn = _strip_c_comments(_function_body(self.source, "func_981"))
@@ -177,11 +181,9 @@ class RebellionNMeleeComboTest(unittest.TestCase):
         self.assertNotIn(hex(FWD_DERIV_HASH), turn)
         self.assertNotIn(hex(DIR_2_HASH), turn)
         cut = _strip_c_comments(_function_body(self.source, "func_985"))
-        self.assertIn("rebellion_bd_submit_extra_bd1", cut)
-        self.assertIn("func_536(0x1, 0x8, rebellion_bd_submit_extra_bd1)", cut)
         clip = cut[cut.rindex("sys_47(0x7, sys_4B(0x1))") :]
-        self.assertIn("rebellion_bd_combo_want_extra_bd1 = 1", clip)
-        self.assertIn(f"func_81({hex(VARIANT_HASH)}, 0x1, 0x2, 0x6)", clip)
+        self.assertIn("global252 = 0x1", clip)
+        self.assertNotIn("func_81", clip)
         self.assertNotIn(hex(FWD_DERIV_HASH), clip)
         hit = cut[cut.index("func_309(global20, 0x2bc)") : cut.rindex("sys_47(0x7, sys_4B(0x1))")]
         self.assertNotIn("func_81", hit)
@@ -189,34 +191,15 @@ class RebellionNMeleeComboTest(unittest.TestCase):
         enter = _strip_c_comments(_function_body(self.source, "func_982"))
         self.assertIn("global602 = func_984", enter)
 
-    def test_bd_combo_two_extra_bd1_then_dir2_third(self) -> None:
-        variant = _strip_c_comments(_function_body(self.source, "ACTION_B_MELEE_VARIANT"))
-        self.assertIn("rebellion_bd_combo_want_extra_bd1", variant)
-        self.assertIn("global602 = func_980", variant)
-        self.assertIn("global602 = func_979", variant)
-        submit = _strip_c_comments(
-            _function_body(self.source, "rebellion_bd_submit_extra_bd1")
-        )
-        self.assertIn(f"func_81({hex(VARIANT_HASH)}, 0x1, 0x2, 0x6)", submit)
-        self.assertNotIn(hex(FWD_DERIV_HASH), submit)
-        bd1 = _strip_c_comments(_function_body(self.source, "func_980"))
-        self.assertIn("rebellion_bd_extra_bd1_count++", bd1)
-        self.assertIn("func_536(0x1, 0x8, func_980)", bd1)
-        self.assertIn("func_536(0x1, 0x8, rebellion_n_submit_dir2_third)", bd1)
-        self.assertIn("func_536(0x1, 0x18, func_981)", bd1)
-        clip = bd1[bd1.rindex("sys_47(0x7, sys_4B(0x1))") :]
-        self.assertIn("func_71(func_980)", clip)
-        self.assertIn(f"func_81({hex(DIR_2_HASH)}, 0x1, 0x2, 0x3)", clip)
-        self.assertIn("func_71(func_981)", clip)
-        fwd = _strip_c_comments(_function_body(self.source, "func_987"))
-        self.assertIn("global602 = func_989", fwd)
-        self.assertNotIn("rebellion_bd_fwd_first_start", fwd)
-        first = _strip_c_comments(_function_body(self.source, "func_990"))
-        self.assertIn("func_536(0x200, 0x5, func_991)", first)
-        self.assertNotIn("rebellion_bd_fwd_reopen_chase", first)
-        second = _strip_c_comments(_function_body(self.source, "func_991"))
-        self.assertIn("func_536(0x200, 0xf, func_992)", second)
-        self.assertNotIn("rebellion_n_submit_dir2_third", second)
+    def test_reverted_extra_bd_branch_stays_absent(self) -> None:
+        for symbol in (
+            "rebellion_bd_combo_want_extra_bd1",
+            "rebellion_bd_submit_extra_bd1",
+            "rebellion_bd_extra_bd1_count",
+            "rebellion_bd_fwd_reopen_chase",
+        ):
+            with self.subTest(symbol=symbol):
+                self.assertNotIn(symbol, self.source)
 
     def test_standing_dir2_first_slash_still_goes_to_second(self) -> None:
         slash = _strip_c_comments(_function_body(self.source, "func_972"))

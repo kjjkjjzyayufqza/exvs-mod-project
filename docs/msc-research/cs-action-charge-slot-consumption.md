@@ -1,7 +1,7 @@
 # MSC CS 动作必须在入口消费 charge slot
 
 **Date:** 2026-08-22  
-**Status:** Rebellion source/target MSC 已修并回读；实机复验待完成  
+**Status:** Rebellion CSA 入口消费 E3（历史）；自制副射出弹 E3 in-game confirmed (2026-08-30) `sys_4F(0, 0x5, CDA9F563/564)` 三参不打正在蓄的 CSA；4th-arg 消费为 OB native E2（`sub_1405BCF00`）；slot-1 三参 / slot-0 四参 E3-  
 **Kind:** 可复用的 charge lifecycle 规则
 
 ## 一句话
@@ -56,6 +56,34 @@ void ACTION_A_SHOT_BIRD_CS1()
 
 禁止把 `sys_4F(0xA,0)` 放进未蓄力 `ACTION_A_SHOT_BIRD`，否则普通鸟主射
 也会清掉正在积累的 CSA。地面 `0x800` 仍走 `ACTION_CHARGE_SHOT`。
+
+`sys_4F(0, slot, hash, 1)` 的第 4 参不是“多发一发”，也**不是 CS 槽编号**。
+OB `sub_1405BCF00` 在 `bool != 0` 且 `entry+0x7C != 0` 时清掉 **arg2 那个
+slot** 的 `+0xF0/+0xF8`，与 `sys_4F(0xA)` 相同。CSA 蓄力在 slot `0`，所以
+`sys_4F(0, 0, hash, 1)` 等于开火消费 CSA。CSA `func_899` 对 slot 0 传 `1`
+是故意的。未蓄力 `ACTION_A_SHOT` `func_895` 只有三参。
+
+自制 `SUB_SHOT_CUSTOM` 出弹（2026-08-30 **E3**，已打包进游戏）：
+
+```c
+sys_4F(0, 0x5, 0xCDA9F563);
+sys_4F(0, 0x5, 0xCDA9F564);
+```
+
+| `sys_4F(0)` 参数 | 含义 | 自制副射 |
+|---|---|---|
+| arg1 `0` | 子命令：出弹 | 不变 |
+| arg2 slot | 武装 entry。`0` = CSA；`1` = `global681` 弹药槽；`0x5` = `func_589` 跳过 `0x90000` 的虚拟槽 | **必须 `0x5`** |
+| arg3 hash | 弹哈希 | `CDA9F563` / `CDA9F564` |
+| 第 4 参 | 该 slot 的蓄力消费 bool，不是槽号 | **不要传** |
+
+ENTER 仍写 `global681 = 0x1`，让 `func_593` / `0x90000` 继续扣副射弹药。
+不要把 `global681` 改成 `0x5`（那会跳过空弹检查，变成无限副射）。鸟 CS 出弹
+也走 slot `0x5`，但它是 CS 动作，入口另外 `sys_4F(0xA, 0)` 清条。
+
+**E3-：** `sys_4F(0, 0, hash, 1)`、`sys_4F(0, 0x1, hash)`、去掉起手
+`0x436f1f0a`、去掉 677 `sys_4A(0x1, 0x7)` 都不能保出弹帧的 CSA 条。
+登记 K1–K4。早期部分回报混了未进游戏的 `2.dscex`；K4 以打包后实机为准。
 
 ## 生命周期与所有权
 
