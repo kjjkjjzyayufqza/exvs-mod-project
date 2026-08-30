@@ -33,6 +33,7 @@ import { UnitModelPropertiesPanel } from "./components/UnitModelPropertiesPanel"
 import { UnitModelRepackDialog } from "./components/UnitModelRepackDialog";
 import { UnitModelExtractDialog } from "./components/UnitModelExtractDialog";
 import { UnitModelTexturePanel } from "./components/UnitModelTexturePanel";
+import { UnitModelWeaponIconPanel } from "./components/UnitModelWeaponIconPanel";
 import { UnitModelToolbar } from "./components/UnitModelToolbar";
 import { ExvsCommonBundleDialog } from "./components/ExvsCommonBundleDialog";
 import { ExvsCommonRepackDialog } from "./components/ExvsCommonRepackDialog";
@@ -50,6 +51,7 @@ import {
   syncUnitModelTextureContainers,
   unitTextureToManagerEntry,
 } from "./utils/unitModelTextureService";
+import { isWeaponIconFileUrl, listUnitModelWeaponIcons } from "./utils/unitModelWeaponIconService";
 import type { TextureManagerEntry } from "@/page/SceneEdit/store/sceneTextureManagerStore";
 import { NumatbTextureOptionsProvider } from "@/components/ssbh-model-preview/numatbTextureOptionsContext";
 import { getParentDir, inferUnitModelStructurePath } from "./utils/unitModelRepackService";
@@ -101,9 +103,10 @@ function UnitModelEditWorkspace({
     open: boolean;
     targets: DaeExportTarget[];
   }>({ open: false, targets: [] });
-  const [leftTab, setLeftTab] = useState<"structure" | "textures">("structure");
+  const [leftTab, setLeftTab] = useState<"structure" | "textures" | "icons">("structure");
   const [commonDialogOpen, setCommonDialogOpen] = useState(false);
   const [textureCount, setTextureCount] = useState(0);
+  const [weaponIconCount, setWeaponIconCount] = useState(0);
   // Package nutexb pool fed to the NUMATB texture-path picker (DAE/FBX to SSBH flows),
   // so its dropdown lists this Unit model's textures instead of "No scene textures yet".
   const [textureManagerEntries, setTextureManagerEntries] = useState<TextureManagerEntry[]>([]);
@@ -112,6 +115,7 @@ function UnitModelEditWorkspace({
     let cancelled = false;
     if (!workspace.activeRoot || !workspace.structurePath) {
       setTextureCount(0);
+      setWeaponIconCount(0);
       setTextureManagerEntries([]);
       return;
     }
@@ -125,6 +129,15 @@ function UnitModelEditWorkspace({
         if (cancelled) return;
         setTextureCount(0);
         setTextureManagerEntries([]);
+      });
+    void listUnitModelWeaponIcons(workspace.activeRoot, workspace.structurePath)
+      .then((inventory) => {
+        if (cancelled) return;
+        setWeaponIconCount(inventory.icons.length);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setWeaponIconCount(0);
       });
     return () => {
       cancelled = true;
@@ -143,6 +156,13 @@ function UnitModelEditWorkspace({
           setTextureCount(0);
           setTextureManagerEntries([]);
         });
+      void listUnitModelWeaponIcons(workspace.activeRoot, workspace.structurePath)
+        .then((inventory) => {
+          setWeaponIconCount(inventory.icons.length);
+        })
+        .catch(() => {
+          setWeaponIconCount(0);
+        });
     };
     window.addEventListener("unit-model-textures-changed", onTexturesChanged);
     return () => window.removeEventListener("unit-model-textures-changed", onTexturesChanged);
@@ -156,6 +176,7 @@ function UnitModelEditWorkspace({
   // --- SSBH file editing (numatb / numdlb / nuhlpb / jnttbl) ------------------
   const [modifiedPaths, setModifiedPaths] = useState<Set<string>>(new Set());
   const [focusTextureFilename, setFocusTextureFilename] = useState<string | null>(null);
+  const [focusWeaponIconFilename, setFocusWeaponIconFilename] = useState<string | null>(null);
 
   // Clear "modified this session" markers when the workspace root changes.
   useEffect(() => {
@@ -372,6 +393,11 @@ function UnitModelEditWorkspace({
   const handleShowTextureInPanel = useCallback((node: UnitModelTreeNode) => {
     const ref = node.fileUrl ?? node.label;
     const name = ref.replace(/\\/g, "/").split("/").pop() ?? node.label;
+    if (isWeaponIconFileUrl(node.fileUrl) || node.role === "weapon-icon") {
+      setLeftTab("icons");
+      setFocusWeaponIconFilename(name);
+      return;
+    }
     setLeftTab("textures");
     setFocusTextureFilename(name);
   }, []);
@@ -604,7 +630,7 @@ function UnitModelEditWorkspace({
           <div className="flex h-full min-w-0 flex-col overflow-hidden border-r">
             <Tabs
               value={leftTab}
-              onValueChange={(value) => setLeftTab(value as "structure" | "textures")}
+              onValueChange={(value) => setLeftTab(value as "structure" | "textures" | "icons")}
               className="flex h-full flex-col"
             >
               <TabsList className={UNIT_MODEL_HIERARCHY_TABS_LIST}>
@@ -615,6 +641,12 @@ function UnitModelEditWorkspace({
                   Textures
                   {textureCount > 0 ? (
                     <span className={UNIT_MODEL_HIERARCHY_TAB_BADGE}>{textureCount}</span>
+                  ) : null}
+                </TabsTrigger>
+                <TabsTrigger value="icons" className={UNIT_MODEL_HIERARCHY_TAB_TRIGGER}>
+                  Icons
+                  {weaponIconCount > 0 ? (
+                    <span className={UNIT_MODEL_HIERARCHY_TAB_BADGE}>{weaponIconCount}</span>
                   ) : null}
                 </TabsTrigger>
               </TabsList>
@@ -641,6 +673,14 @@ function UnitModelEditWorkspace({
                   embedded
                   focusTextureFilename={leftTab === "textures" ? focusTextureFilename : null}
                   onOpenReferencingNumatb={handleOpenReferencingNumatb}
+                />
+              </TabsContent>
+              <TabsContent value="icons" className="mt-0 min-h-0 flex-1 overflow-hidden">
+                <UnitModelWeaponIconPanel
+                  unitRoot={workspace.activeRoot}
+                  onMutated={handleStructureMutated}
+                  focusFilename={leftTab === "icons" ? focusWeaponIconFilename : null}
+                  readOnly={isExvsCommon}
                 />
               </TabsContent>
             </Tabs>

@@ -61,6 +61,10 @@ fn list_nutexb_folder_walks_nested_and_skips_convert() {
     fs::write(tmp.path().join("__convert/hidden.nutexb"), b"x").unwrap();
     fs::write(tmp.path().join(".hidden/dot.nutexb"), b"x").unwrap();
     let scan = list_nutexb_folder(tmp.path().to_str().unwrap()).expect("scan");
-    let rel: Vec<_> = scan.files.iter().map(|file| file.relative_path.as_str()).collect();
+    let rel: Vec<_> = scan
+        .files
+        .iter()
+        .map(|file| file.relative_path.as_str())
+        .collect();
     assert_eq!(rel, vec!["a.nutexb", "gui/p_l/vs.nutexb"]);
 }

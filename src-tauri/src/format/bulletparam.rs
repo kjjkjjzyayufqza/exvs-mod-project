@@ -8,9 +8,8 @@ use crate::format::param_bin_format::{
 };
 use crate::format::param_entry_schema::{
     entry_commands_from_named_json, entry_commands_to_named_json, entry_row_matches_command_map,
-    expected_field_specs_ordered, min_entry_data_size_for_specs,
-    parse_commands_map_from_entry_row, snake_to_camel, validate_file_specs_kind_match_pool,
-    ParamCommandPool,
+    expected_field_specs_ordered, min_entry_data_size_for_specs, parse_commands_map_from_entry_row,
+    snake_to_camel, validate_file_specs_kind_match_pool, ParamCommandPool,
 };
 
 // Please keep comments for analysis.
@@ -86,7 +85,7 @@ pub const BULLETPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0xA5364F08, 5, "aim_correction_angle"), // [D:-300~440]
     (0xA68F0209, 5, "reserved_0e8"),  // PHANTOM — not in any file
     (0xA8987774, 1, "ammo_type_hash"), // [D:HASH] 153 unique
-    (0xAB606D9E, 5, "bullet_size"), // [D:0~640] was "initial_speed"
+    (0xAB606D9E, 5, "bullet_size"),   // [D:0~640] was "initial_speed"
     (0xABEDC73A, 5, "launch_angle_horizontal"), // [D:-140~500]
     (0xAF2B7098, 5, "tracking_angle"), // [D:0~180] degrees
     (0xB306BEE8, 5, "min_homing_distance"), // [D:0~360]
@@ -453,10 +452,7 @@ mod tests {
             "initialSpeed": 12.5
         });
         let entry = bulletparam_entry_from_json_value(&legacy).expect("parse legacy alias");
-        let raw = *entry
-            .commands
-            .get(&0xAB606D9E)
-            .expect("bullet_size hash");
+        let raw = *entry.commands.get(&0xAB606D9E).expect("bullet_size hash");
         assert!((f32::from_bits(raw) - 12.5).abs() < 1e-5);
 
         let canonical = bulletparam_entry_to_json_value(&entry);

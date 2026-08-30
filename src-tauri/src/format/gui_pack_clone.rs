@@ -202,7 +202,9 @@ pub fn parse_hash_name_token(value: &str) -> Option<u32> {
         .strip_suffix(".fhm2d")
         .or_else(|| trimmed.strip_suffix(".FHM2D"))
         .unwrap_or(trimmed);
-    let hex = stem.strip_prefix("0x").or_else(|| stem.strip_prefix("0X"))?;
+    let hex = stem
+        .strip_prefix("0x")
+        .or_else(|| stem.strip_prefix("0X"))?;
     if hex.len() != 8 {
         return None;
     }
@@ -226,7 +228,9 @@ pub fn vs2_gui_extract_relative(package_path: &str, donor_name: &str) -> String 
     if segments.is_empty() {
         return donor_name.to_string();
     }
-    if segments.len() >= 2 && segments[segments.len() - 1] == donor_name && segments[segments.len() - 2] == donor_name
+    if segments.len() >= 2
+        && segments[segments.len() - 1] == donor_name
+        && segments[segments.len() - 2] == donor_name
     {
         segments.pop();
     } else if segments[segments.len() - 1] != donor_name {
@@ -311,10 +315,7 @@ pub fn resolve_dplcache_pack(dpl_cache_path: &Path, hash: u32) -> Result<PathBuf
     if lower.is_file() {
         return Ok(lower);
     }
-    Err(format!(
-        "Donor pack not found: {}",
-        upper.display()
-    ))
+    Err(format!("Donor pack not found: {}", upper.display()))
 }
 
 pub fn dplcache_has_pack(dpl_cache_path: &Path, hash: u32) -> bool {
@@ -412,8 +413,8 @@ pub fn clone_gui_pack_extract(
     extract_fhm2d_gui_clone(source_str, out_str, hash_name.as_str(), structure_name)?;
     let structure_json_path = format!("{out_str}_structure.json");
     let (payload_bytes, inner_file_count) = extracted_payload_stats(extract_dir)?;
-    let written_name = structure_display_name(Path::new(&structure_json_path))
-        .unwrap_or_else(|_| {
+    let written_name =
+        structure_display_name(Path::new(&structure_json_path)).unwrap_or_else(|_| {
             structure_name
                 .map(sanitize_structure_name)
                 .filter(|name| !name.is_empty())
@@ -623,8 +624,11 @@ fn decorate_cloned_pack(
     if pack.structure_name.is_empty() {
         pack.structure_name = job.donor_name.clone();
     }
-    pack.ob_mod_output_path =
-        ob_mod.map(|dir| dir.join(pack_file_name(pack.new_hash)).display().to_string());
+    pack.ob_mod_output_path = ob_mod.map(|dir| {
+        dir.join(pack_file_name(pack.new_hash))
+            .display()
+            .to_string()
+    });
 }
 
 pub fn clone_character_gui_set(request: CloneGuiSetRequest) -> Result<CloneGuiSetResult, String> {
@@ -717,9 +721,11 @@ pub fn clone_character_gui_set(request: CloneGuiSetRequest) -> Result<CloneGuiSe
         if jobs.is_empty() {
             return Err("Selected GUI rows did not match any donor packs".to_string());
         }
-        clone_navi = jobs
-            .iter()
-            .any(|job| NAVI_GUI_PACKS.iter().any(|field| field.camel_key == job.field_key));
+        clone_navi = jobs.iter().any(|job| {
+            NAVI_GUI_PACKS
+                .iter()
+                .any(|field| field.camel_key == job.field_key)
+        });
     }
 
     for job in &jobs {
@@ -729,7 +735,8 @@ pub fn clone_character_gui_set(request: CloneGuiSetRequest) -> Result<CloneGuiSe
     let mut packs = Vec::with_capacity(jobs.len());
     let mut character_field_updates = HashMap::new();
     let mut navi_remap: HashMap<u32, u32> = HashMap::new();
-    let navi_field_keys: HashSet<&str> = NAVI_GUI_PACKS.iter().map(|field| field.camel_key).collect();
+    let navi_field_keys: HashSet<&str> =
+        NAVI_GUI_PACKS.iter().map(|field| field.camel_key).collect();
 
     for job in &jobs {
         if job.donor_hash == 0 {
@@ -768,8 +775,7 @@ pub fn clone_character_gui_set(request: CloneGuiSetRequest) -> Result<CloneGuiSe
                 ));
             }
             let mut pack = if request.preview {
-                let meta = fs::metadata(&source)
-                    .map_err(|e| format!("Stat donor failed: {e}"))?;
+                let meta = fs::metadata(&source).map_err(|e| format!("Stat donor failed: {e}"))?;
                 ClonedPack {
                     field_key: job.field_key.clone(),
                     donor_name: job.donor_name.clone(),
@@ -810,7 +816,9 @@ pub fn clone_character_gui_set(request: CloneGuiSetRequest) -> Result<CloneGuiSe
                         .map_err(|e| format!("Create OB mod dir failed: {e}"))?;
                     crate::format::fhm2d_pack::repack_fhm2d_from_structure(
                         pack.structure_json_path.as_str(),
-                        mod_out.to_str().ok_or("OB mod output path is not valid UTF-8")?,
+                        mod_out
+                            .to_str()
+                            .ok_or("OB mod output path is not valid UTF-8")?,
                         true,
                         None,
                     )?;
@@ -900,8 +908,8 @@ fn pilot_jobs_from_character_list(
 
     let mut jobs = Vec::new();
     for field in PILOT_GUI_FIELDS {
-        let donor_hash = json_value_as_u32(donor.get(field.camel_key).unwrap_or(&Value::Null))
-            .unwrap_or(0);
+        let donor_hash =
+            json_value_as_u32(donor.get(field.camel_key).unwrap_or(&Value::Null)).unwrap_or(0);
         if donor_hash == 0 {
             continue;
         }
@@ -954,7 +962,13 @@ fn discover_navi_list_file(workspace_root: &Path) -> Option<PathBuf> {
 fn next_navi_unique_id(entries: &[ListEntry]) -> u32 {
     entries
         .iter()
-        .map(|entry| entry.commands.get(&NAVI_UNIQUE_ID_HASH).copied().unwrap_or(0))
+        .map(|entry| {
+            entry
+                .commands
+                .get(&NAVI_UNIQUE_ID_HASH)
+                .copied()
+                .unwrap_or(0)
+        })
         .max()
         .unwrap_or(0)
         .saturating_add(1)

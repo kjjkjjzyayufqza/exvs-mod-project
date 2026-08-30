@@ -2411,10 +2411,7 @@ pub fn finalize_pilot_voice_resource_entry(entry_json: Value) -> Result<Value, S
 }
 
 #[tauri::command]
-pub fn build_pilot_voice_resource_pack(
-    data_json: Value,
-    file_path: &str,
-) -> Result<Value, String> {
+pub fn build_pilot_voice_resource_pack(data_json: Value, file_path: &str) -> Result<Value, String> {
     let table: crate::format::pilot_voice_resource::PilotVoiceResourceTable =
         serde_json::from_value(data_json).map_err(|e| format!("Deserialize failed: {e}"))?;
     let written = crate::format::pilot_voice_resource::write_pack(&table, file_path)?;
@@ -2439,7 +2436,9 @@ pub fn build_bgm_table_pack(data_json: Value, file_path: &str) -> Result<Value, 
 #[tauri::command]
 pub fn bgm_table_group_assets(bank_group: u32) -> Result<Value, String> {
     let Some(assets) = crate::format::bgm_table::assets_for_bank_group(bank_group) else {
-        return Err(format!("No workspace assets registered for bank group {bank_group}"));
+        return Err(format!(
+            "No workspace assets registered for bank group {bank_group}"
+        ));
     };
     Ok(serde_json::json!({
         "bankPackHash": assets.bank_pack_hash,

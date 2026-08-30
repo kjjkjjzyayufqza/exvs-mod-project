@@ -103,6 +103,13 @@ SHOOT and 679 remain excluded.
 - correction: restore target translation/pose clamp after func_167, excluding global184==4
 - scope: rollback only; no aim/timing/FX/form/EXIT changes
 
+### Same-hash TV Zero aim candidate
+- lifecycle owner: Messala func_593 -> func_167
+- stop owner: Rebellion target clamp, excluded from 679
+- aim owner: TV Zero 0xd94d608f func_1042 target-indexed yaw writer during START only
+- key correction: use sys_0(0x40000,0x3,global39), not the previously failed func_626 helper
+- evidence grade: E1/E2 source candidate pending runtime
+
 ## Lifecycle
 
 | Phase | Current owner | Result |
@@ -176,3 +183,176 @@ SHOOT and 679 remain excluded.
   3. action: finish target SHOOT timer and immediate 679 cleanup; evidence: E-002; finding: F-002
   4. action: native resolver commits analog while keep-form latch prevents teardown; evidence: E-002; finding: F-002
 - residual_risks: exact preferred turn window and minimum safe beam lifetime are player-feel/runtime questions and cannot be settled from source alone.
+
+## Next-run decision tree (2026-08-29 EXIT build)
+
+This build deliberately stops at four changes so one run is attributable. The
+remaining structural difference from the working reference is recorded here as
+the pre-registered next lever, NOT applied.
+
+Build contents:
+
+1. motor lifetime split from clamp lifetime; motor restored at the START of the
+   679 hold instead of at its end
+2. `global698` 0 -> 0x14 and `global452/453/454` -> 0/0/0, matching
+   `ACTION_A_SHOT_BIRD`
+3. `func_41` re-arms flight bit + motor if native lands on `0xf5f21169` /
+   `0x6d00aeaa` while the keep-form latch is set
+4. 25f windup / 40f beam / 25f follow-through
+
+Verified as NOT gaps: `func_413` never touches `global24` or the motor, so the
+re-arm is not fought per frame; `global693` is read only by the `func_587`
+family, so `ACTION_A_SHOT_BIRD`'s `global693 = 0` is irrelevant here; `global213`
+has no consumer besides `global65` and `func_93`; `global142 = 0xc2b19d13` is
+already the bird row so setting it is a no-op.
+
+| Observation | Reading | Next single variable |
+|---|---|---|
+| Still airborne and flying after the shot | Goal met | none; tune `global698` only if the post-shot lock feels long |
+| Still falls, and control returns immediately | The commit window is not the owner | NOT the tick's `func_167` and NOT `global689`/`func_595` - both excluded below. The only remaining difference from `ACTION_A_SHOT_BIRD` is that the motor was down at all for the 65 windup+beam frames, so the next lever is to stop dropping it and find heading ownership elsewhere |
+| Still falls, but control is now locked for a beat first | `global698` worked, the flight state is still wrong at handoff | restore the motor one phase earlier, at the 677 -> 679 transition rather than in the 679 one-shot |
+| Flies, but the stop or the lock regressed | `global452/453/454` = 0 changed the clamp's baseline | put `global452` back to `0x64` alone and re-run |
+| Falls only when no direction is held | The resolver needs an input to pick flight | this is the 0.c selector, not the action; look at `func_143`'s bird branch gating |
+
+### Ruled out by source: the tick's `func_167(0x1004000)` is not the EXIT owner
+
+`rebellion_bird_main_shot_tick()` is only `func_593();` and keeps flying, so the
+extra `func_167(0x1004000)` in `special_shot_flight_tick` was the last structural
+difference and was registered as a candidate. It is now excluded.
+
+On the resolving tick the chain is
+`tick -> func_593 -> func_598 -> func_143(global212); func_93(...)`, and `func_93`
+does not enter the next action:
+
+```c
+void func_66()          { global13 = 0x1; }
+void func_97(int arg0)  { sys_47(0x4, global20, arg0); }   // motion blend-out
+```
+
+`global13` is only cleared at the top of the next frame's read phase
+(`func_25`), so it is a "pick the next action next frame" request. The next
+action's ENTER therefore runs on a later frame, and the `func_167(0x1004000)`
+that follows `func_593()` cannot stomp it. What it does do is leave `global24`
+holding the flight bits at exactly the moment the engine is about to select -
+which is the desired state, not a hazard. `ACTION_A_SHOT_BIRD` does not need the
+call because it never disturbs the flight state to begin with.
+
+### Ruled out by source: `global689` / `func_595` is not an EXIT owner either
+
+`ACTION_A_SHOT_BIRD` uses `global689 = 0xffffffff`, which sets `global722 = 1` at
+once and skips the `global624` branch, so `func_145(0x2)` is unreachable there but
+reachable here. `func_145` only walks the shell slots and calls
+`func_318(global20, slot, arg0)`; it touches no movement, flight or motor state.
+Everything else `func_595` does is `sys_46(0, ...)` yaw and the `func_300` ramp,
+and the clamp overrides the ramp. Both units run `func_595` either way.
+
+### Verified: the handoff frame already carries a healthy flight state
+
+Traced precisely, the resolving tick is:
+
+```text
+func_593()  -> func_598()
+                 func_72() -> END body -> end_hold = 0; global252 = 1
+                 if (global252) -> func_143(global212); func_93(...)   // request
+func_167(0x1004000)                                                    // flight bit set
+gate: global184 == 4 && end_hold == 0  -> clamp and motor write both skipped
+```
+
+So at the moment the next action is requested: flight bit just set, motor on
+(written on the previous hold frame, nothing turned it off this tick), analog
+profile 2, and the clamp already stopped. That is the state
+`ACTION_A_SHOT_BIRD` hands off with, and it is reached without the clamp being
+active on the handoff frame. This is a positive check, not just an absence of
+faults - the remaining uncertainty is whether the engine also needs the motor to
+have been continuously on, which only a run can answer.
+
+### State machine closure (checked before handing the build over)
+
+Every read and write of the two flags, so the test run cannot be wasted on a
+stuck action:
+
+```text
+end_hold         ENTER -> 0 | 679 one-shot -> 1 | hold expiry -> 0 | func_41 -> 0 (unconditional)
+profile_swapped  ENTER -> 0 | 676 one-shot -> 1 | release_flight_owner -> 0 | func_41 -> 0
+```
+
+- The hold cannot stall: `global244 += global457` with a threshold is the same
+  idiom 676/677/678 and every other action in the file use. `global457` is never
+  written as 0 (`func_283` yields `0x64`, `sys_0(0x60010)`, `0x14` or `0x2`).
+- `end_hold` cannot be set outside 679: `func_593` never returns to phases 1-3
+  after `global184 = 4`, and `func_41` clears it unconditionally for any hash
+  other than this action's, so an interrupt during the recovery hold cannot
+  strand it.
+- The motor cannot be left down because it is never taken down - the action only
+  ever asserts `func_167(0x1004000)` and leaves `sys_1(0x30001)` alone.
+- The analog profile cannot be left at 0: `release_flight_owner` restores
+  profile 2 in the 679 one-shot, and `func_41` restores it on any exit that
+  never reached 679. Teardown paths intentionally end flight-off via
+  `rebellion_interrupt_bird_form_to_ground`, which runs after the `func_41`
+  restore, so hit and forced recovery still demount correctly.
+
+### Structural confirmation: state re-arm is the only lever that exists
+
+`0.c:604-606` registers the native class table entries that matter:
+
+```text
+0x17  0x9475130e   transform enter (2.c func_450)
+0x18  0x77b100ff   flight loop     (2.c func_452)
+0x0a  0xf5f21169   air idle        (2.c func_412)
+```
+
+Neither `0x9475130e` nor `0x77b100ff` is ever submitted through `func_95` - the
+only mention in `0.c` is a comment forbidding it. Both are chosen by the native
+resolver from engine state alone. Therefore re-arming `global24`'s flight bits
+plus the motor is not one option among several; it is the **only** lever the
+script has for getting back into flight, which is what makes the `func_41`
+re-arm the right mechanism and `global698` the thing that gives the resolver a
+frame in which to use it. `func_452`, the handler behind index `0x18`, asserts
+`func_167(0x1004000)` and `func_296(0x3e8, 0x1)` itself, so that pair is the
+state the resolver is expected to see.
+
+Source-side analysis is now exhausted: every EXIT candidate is either
+implemented or excluded with a source citation, the flag state machine is closed,
+and the only remaining unknown - whether the engine also requires the motor to
+have been continuously on rather than merely on at handoff - is not decidable
+from the scripts.
+
+### Round-trip verification of the shipped bytecode
+
+`msclang.py` output was decompiled back with `mscdec.py` and every piece of the
+action was checked against intent. Renamed symbols: `func_946` = ACTION,
+`func_947` = tick, `func_943` = clamp, `func_944` = release, `func_945` = lock
+writer, `func_951` = 679; `global797/798/799` = keep_form / end_hold /
+profile_swapped.
+
+```c
+void func_947()                       // tick: no motor call anywhere
+{
+    func_593();
+    func_167(0x1004000);
+    if (global184 != 0x4 || global798 != 0) { func_943(); func_945(); }
+}
+
+void func_943()                       // clamp: no func_296, no func_169
+{
+    sys_46(0x8, 0, 0, 0); func_113();
+    sys_46(0x1, 0x1, 0, 0, 0); sys_46(0x1, 0x2, 0, 0, 0);
+    sys_46(0x1, 0x3, 0, 0, 0); sys_46(0x1, 0x4, 0, 0, 0);
+    sys_46(0x4, 0x4, 0); func_300(0); func_104(0, 0, 0); func_107(0, 0, 0);
+}
+
+void func_951()                       // 679: owner handed back on frame one
+{
+    if (global240 == 0) { ... global798 = 0x1; func_944(); }
+    global244 += global457;
+    if (global244 >= 0x19 * 0x64) { global798 = 0; global252 = 0x1; }
+}
+```
+
+ENTER carries `global698 = 0x14` and `global452/453/454 = 0`; `func_41` carries
+both the unconditional `end_hold` clear with the `profile_swapped`-gated restore
+and the idle re-arm `func_167(0x1004000); func_296(0x3e8, 0x1);` in its else
+branch. This confirms the compiler emitted the intended semantics, not merely
+that the source text reads correctly. It is the strongest evidence obtainable
+without running the game; there is no MSC interpreter in the toolchain, only
+`msclang.py`, `mscdec.py`, `msc_cfg.py` and the static checkers.

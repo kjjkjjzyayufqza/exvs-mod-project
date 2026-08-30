@@ -1072,9 +1072,8 @@ fn first_real_efxbn() -> Option<std::path::PathBuf> {
 /// A real file with at least one animated control. Prefer the task fixture so the test avoids a
 /// broad corpus walk on machines that have the Wing Zero Rebellion workspace.
 fn first_real_multikey_efxbn() -> Option<std::path::PathBuf> {
-    let preferred = Path::new(
-        r"E:\XB\mod\006effect\wing_gundam_zero_rebellion_effect\0\0\30.efxbn",
-    );
+    let preferred =
+        Path::new(r"E:\XB\mod\006effect\wing_gundam_zero_rebellion_effect\0\0\30.efxbn");
     if preferred.is_file() {
         let path_text = preferred.to_string_lossy();
         if app_lib::format::effect_folder::parse_efxbn_file(&path_text)
@@ -1253,7 +1252,11 @@ fn write_efxbn_file_round_trips_a_multikey_curve_edit() {
     let edited_index = lookup_index as usize + 1;
     let original_key = summary.control_lookup_entries[edited_index].key;
     let original_value = summary.control_lookup_entries[edited_index].value;
-    let edited_value: f32 = if original_value == 37.25 { 38.25 } else { 37.25 };
+    let edited_value: f32 = if original_value == 37.25 {
+        38.25
+    } else {
+        37.25
+    };
     summary.control_lookup_entries[edited_index].value = edited_value;
     summary.control_lookup_entries[edited_index].value_f32_bits = edited_value.to_bits();
 
@@ -1269,8 +1272,14 @@ fn write_efxbn_file_round_trips_a_multikey_curve_edit() {
     let reference = &reparsed.effects[effect_index].control_references[reference_index];
     assert_eq!(reference.selector, selector);
     assert_eq!(reference.lookup_index, lookup_index);
-    assert_eq!(reparsed.control_lookup_entries[edited_index].key, original_key);
-    assert_eq!(reparsed.control_lookup_entries[edited_index].value, edited_value);
+    assert_eq!(
+        reparsed.control_lookup_entries[edited_index].key,
+        original_key
+    );
+    assert_eq!(
+        reparsed.control_lookup_entries[edited_index].value,
+        edited_value
+    );
     assert_eq!(
         reparsed.control_lookup_entries[edited_index].value_f32_bits,
         edited_value.to_bits()

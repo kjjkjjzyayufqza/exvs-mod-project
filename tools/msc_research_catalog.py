@@ -395,6 +395,8 @@ CLUSTERS: tuple[Cluster, ...] = (
             "func_158",
             "recoil",
             "后坐力",
+            "func_351",
+            "冲到天上",
         ),
         read_first=(
             R("movement-bd-modding-workbook.md"),
@@ -411,6 +413,7 @@ CLUSTERS: tuple[Cluster, ...] = (
         ),
         do_not=(
             "Do not use sys_46(0x1) dash/mag writes as shot recoil. Do not call func_158 every tick. Do not treat func_158 as 足止 or analog.",
+            "Do not put func_351(0x2,0x4), func_167(0x1004000), or per-tick sys_46(0x2,0x3,0,sys_0(0x40000,0x3,global39),...) on ground melee. Flight analog plus that offset as climb mag skyrockets. Keep planar func_532/global385/func_528. Registry E12.",
         ),
     ),
     Cluster(
@@ -739,11 +742,25 @@ CLUSTERS: tuple[Cluster, ...] = (
             "bird CS",
             "鸟CS",
             "鸟照射",
+            "slot 3",
+            "slot3",
+            "FLYING",
+            "FLYING_EX",
+            "0xfa64e4d0",
+            "0x8d5b747a",
+            "飛翔",
+            "着地リロード",
+            "sys_4F(0xb, 0x3, 0)",
+            "前派生",
+            "func_990",
+            "func_991",
+            "突然冲到天上",
         ),
         read_first=(
             "docs/agent-sessions/2026-08-09-wing-zero-rebellion-transform-handoff.md",
             R("wing-zero-rebellion-bird-form-0c-input-map.md"),
             R("wing-zero-rebellion-flight-interrupt-form.md"),
+            R("wing-zero-rebellion-slot3-flying-land-reload.md"),
         ),
         docs=(
             R("2026-08-09-wing-zero-rebellion-transform-port-plan.md"),
@@ -785,6 +802,7 @@ CLUSTERS: tuple[Cluster, ...] = (
             "Flight-special custom foot-stop/restore adapters were E3- and are historical only. Current 2026-08-28 candidate copies Messala 0x9a74bce6: native quartet plus func_593(); func_167(0x1004000); every tick, keeping flight ownership continuous through 679/598. See messala-flight-sub-shot-flow.md.",
             "Homemade SUB_SHOT_CUSTOM folder 0xa0cd8d56 (tks11a) phase length is global244 -= func_274(), not func_309/sys_47(0x7). func_308 seeks pose. func_310 is not a homemade rate knob. Runtime 2026-08-27: 107f ≈ 1.8s. See homemade-motion-clock-vs-game-frame.md.",
             "Bird CS is TV three hashes via field 0x100 (rebellion_bird_cs_stage), not a 0x800 alias. 0=0x476fac14 CDA9F561/562, 1=0x16ed34c0 CDA9F55A/B, 2=0x2194f05d CDA9F55C/D. 0.c 0x1 and 0x800 share the selector. Do not reuse global157 (func_44 writes global27).",
+            "Rebellion HUD slot 3 is EW 飛翔 FLYING 0xFA64E4D0 (awakening FLYING_EX 0x8D5B747A): type-2 300f, land gate sys_4F(0x15,3)+global772+global24 0x1000000. Bird ENTER may sys_4F(0xb,3,0) like TV HUD. EXIT must rebind 0xFA64E4D0 and if global772==1 immediately sys_4F(0x15,3,0) (func_1034(4)). Runtime 2026-08-29 E3. See wing-zero-rebellion-slot3-flying-land-reload.md.",
         ),
         do_not=(
             "Do not unpack FHM2D for this case; named sources already exist.",
@@ -811,6 +829,10 @@ CLUSTERS: tuple[Cluster, ...] = (
             "Do not wait homemade SUB_SHOT_CUSTOM / tks11a / 0xa0cd8d56 on func_309 or sys_47(0x7). Do not use func_310 as homemade duration/rate. Do not diagnose packing after func_241(0x23df217e, 0) already proves ACTION entry. See homemade-motion-clock-vs-game-frame.md.",
             "Do not skip EW 0.c sys_0(0x90000,1) and d0001 && !d000b when submitting 0x53554243 ACTION_AB_SUB. Clip then plays with no 516001001. Do not put that gate on N/left/right 0x23df217e. Cluster striker-sys51, not this transform bootstrap.",
             "Do not reuse Rebellion global157 as bird CS stage; func_44 sets it to global27 on action enter. Publish sys_1(0x10000,0,0x100). Do not keep 0x2194f05d as ACTION_CHARGE_SHOT_BIRD alias of uncharged bird main.",
+            "Do not unbind Rebellion slot 3 and restore FLYING without re-pause: BindSlot forces byte 318=1 and empty 飛翔 starts 5s in air. After sys_4F(0xb,3,0xfa64e4d0), if global772==1 write sys_4F(0x15,3,0). Registry I4.",
+            "Do not sys_4F(0x16, 3, 0/1) on FLYING to hide HUD. Vanilla EW never writes slot-3 0x16; 0x16=1 shows as red disable. Gyan 0x16 is optional assist, not 飛翔. Hide with 0xB unbind. Registry I5.",
+            "Do not write func_351(0x2,0x4), func_167(0x1004000), or per-tick sys_46(0x2) climb from sys_0(0x40000,0x3,global39) on standing BD 前派生 (func_990/func_991). Runtime 2026-08-29: 突然冲到天上. Keep ground func_351(0) and planar chase. Registry E12.",
+            "Do not set global184=1 from BD 前派生 loop slashes to reopen func_516. Runtime 2026-08-29: 1 never connects to 2, infinite 1. func_492 then func_71(global629=func_990) and func_530 clears mash. Stay in func_493; chase with func_517. Registry E13.",
         ),
         notes="AGENTS.md still inlines this bootstrap. Sibling Rebellion MSC edits: alt2-gerobi, sub-shot-custom, bird-melee-n-followup, special-n-bird-dash, 2026-08-26 subshot-split-and-flight-weapons plan.",
     ),
@@ -837,6 +859,7 @@ CLUSTERS: tuple[Cluster, ...] = (
         ),
         do_not=(
             "Do not copy TV input bits or TV interrupt requeue onto Rebellion as-is.",
+            "Do not treat TV func_1078 sys_4F(0xb, 0x3, 0) as a generic 'hide HUD slot 3 in bird form' rule. TV slot 3 is ROLLING_BUSTER 0xF44BB746; Rebellion slot 3 is EW 飛翔. See wing-zero-rebellion-slot3-flying-land-reload.md.",
         ),
     ),
     Cluster(

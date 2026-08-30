@@ -27,7 +27,9 @@ export const UNIT_MODEL_REPLACE_NUMSHB_DIALOG_PATH_KEY = "unitModelEdit.replaceN
 export const UNIT_MODEL_REPLACE_NUMSHB_SOURCE_DIALOG_PATH_KEY = "unitModelEdit.replaceNumshbSource";
 export const UNIT_MODEL_IMPORT_STATIC_MESH_DIALOG_PATH_KEY = "unitModelEdit.importStaticMesh";
 export const UNIT_MODEL_ADD_TEXTURE_DIALOG_PATH_KEY = "unitModelEdit.addTexture";
+export const UNIT_MODEL_ADD_WEAPON_ICON_DIALOG_PATH_KEY = "unitModelEdit.addWeaponIcon";
 export const UNIT_MODEL_REPLACE_TEXTURE_DIALOG_PATH_KEY = "unitModelEdit.replaceTexture";
+export const UNIT_MODEL_REPLACE_WEAPON_ICON_DIALOG_PATH_KEY = "unitModelEdit.replaceWeaponIcon";
 export const UNIT_MODEL_BATCH_EXPORT_TEXTURES_DIALOG_PATH_KEY = "unitModelEdit.batchExportTextures";
 export const UNIT_MODEL_EXPORT_TEXTURE_DIALOG_PATH_KEY = "unitModelEdit.exportTexture";
 export const UNIT_MODEL_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY = "unitModelEdit.exportDaeFolder";
@@ -39,7 +41,7 @@ export type UnitModelEditRndSizeStorageKey =
   (typeof UNIT_MODEL_EDIT_RND_SIZE_KEYS)[keyof typeof UNIT_MODEL_EDIT_RND_SIZE_KEYS];
 
 export const UNIT_MODEL_HIERARCHY_TABS_LIST =
-  "shrink-0 grid h-8 w-full grid-cols-2 gap-0 rounded-none border-b bg-muted/30 p-0";
+  "shrink-0 grid h-8 w-full grid-cols-3 gap-0 rounded-none border-b bg-muted/30 p-0";
 
 export const UNIT_MODEL_HIERARCHY_TAB_BADGE =
   "ml-0.5 inline-block min-w-[1rem] text-center text-[8px] font-mono leading-none opacity-60";

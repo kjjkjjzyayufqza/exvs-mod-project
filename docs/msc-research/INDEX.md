@@ -193,7 +193,7 @@ Existing research notes are not rewritten by this index.
 ### `movement` — BD / boost / sys_46 / func_11 movement
 
 - **kind:** global
-- **aliases:** `BD`, `boost dash`, `step`, `sys_46`, `func_11`, `0xc000`, `boost gate`, `global23`, `speedparam movement`, `func_158`, `recoil`, `后坐力`
+- **aliases:** `BD`, `boost dash`, `step`, `sys_46`, `func_11`, `0xc000`, `boost gate`, `global23`, `speedparam movement`, `func_158`, `recoil`, `后坐力`, `func_351`, `冲到天上`
 - **settled:**
   - Ordinary BD/step is mostly speed_param + 0.c, not a 2.c ACTION_* authoring job.
   - func_158(arg0) is shot recoil: natural backward via sys_46(0x2, 0x3, heading, pitch, arg0). Common fire value 0xfa. Operator E3 2026-08-28. No-op unless global174==1 or global180. Call once on shoot ENTER, not every tick.
@@ -206,6 +206,7 @@ Existing research notes are not rewritten by this index.
   - `docs/msc-research/func11-c000-boost-gate-map.md`
 - **do_not:**
   - Do not use sys_46(0x1) dash/mag writes as shot recoil. Do not call func_158 every tick. Do not treat func_158 as 足止 or analog.
+  - Do not put func_351(0x2,0x4), func_167(0x1004000), or per-tick sys_46(0x2,0x3,0,sys_0(0x40000,0x3,global39),...) on ground melee. Flight analog plus that offset as climb mag skyrockets. Keep planar func_532/global385/func_528. Registry E12.
 
 ### `ranged` — func_593 vanilla ranged quartet
 
@@ -350,7 +351,7 @@ Existing research notes are not rewritten by this index.
 ### `wing-zero-rebellion` — Wing Zero Rebellion MSC / bird-form transform port
 
 - **kind:** unit
-- **aliases:** `Wing Gundam Zero Rebellion`, `wing_gundam_zero_rebellion`, `900000004`, `kamaesht2neo`, `Neo Bird`, `bird form`, `鸟形态`, `飞翼零式叛乱`, `零式叛乱`, `Rebellion`, `FORCED_RECOVERY`, `0x77b100ff`, `alt2 gerobi`, `N特射`, `SUB_SHOT_CUSTOM`, `SUB_SHOT_TYPE1`, `SUB_SHOT_TYPE2`, `SUB_SHOT_ASSIST`, `SUB_SHOT_FLIGHT`, `SPECIAL_SHOT_FLIGHT`, `flight sub shot`, `flight special gerobi`, `0x53554243`, `0x7e08fcc9`, `0xd94d608f`, `ltngfb`, `闪电高达`, `rebellion_hiv_lock_aim`, `0x7cd11119`, `0x928ca34f`, `func_937`, `bird melee`, `鸟近战`, `特格接N`, `bird dash`, `rebellion_enter_normal_special_n_bird_dash`, `cut_in_loop`, `rebellion_transform_cut_in_loop`, `dash global143`, `dash inertia`, `无杆惯性`, `rebellion_dash_untransform_keep_move`, `tks11a`, `0xa0cd8d56`, `homemade motion clock`, `0x16ed34c0`, `0x2194f05d`, `0x476fac14`, `ACTION_A_SHOT_BIRD_CS1`, `ACTION_A_SHOT_BIRD_CS2`, `rebellion_bird_cs_stage`, `bird CS`, `鸟CS`, `鸟照射`
+- **aliases:** `Wing Gundam Zero Rebellion`, `wing_gundam_zero_rebellion`, `900000004`, `kamaesht2neo`, `Neo Bird`, `bird form`, `鸟形态`, `飞翼零式叛乱`, `零式叛乱`, `Rebellion`, `FORCED_RECOVERY`, `0x77b100ff`, `alt2 gerobi`, `N特射`, `SUB_SHOT_CUSTOM`, `SUB_SHOT_TYPE1`, `SUB_SHOT_TYPE2`, `SUB_SHOT_ASSIST`, `SUB_SHOT_FLIGHT`, `SPECIAL_SHOT_FLIGHT`, `flight sub shot`, `flight special gerobi`, `0x53554243`, `0x7e08fcc9`, `0xd94d608f`, `ltngfb`, `闪电高达`, `rebellion_hiv_lock_aim`, `0x7cd11119`, `0x928ca34f`, `func_937`, `bird melee`, `鸟近战`, `特格接N`, `bird dash`, `rebellion_enter_normal_special_n_bird_dash`, `cut_in_loop`, `rebellion_transform_cut_in_loop`, `dash global143`, `dash inertia`, `无杆惯性`, `rebellion_dash_untransform_keep_move`, `tks11a`, `0xa0cd8d56`, `homemade motion clock`, `0x16ed34c0`, `0x2194f05d`, `0x476fac14`, `ACTION_A_SHOT_BIRD_CS1`, `ACTION_A_SHOT_BIRD_CS2`, `rebellion_bird_cs_stage`, `bird CS`, `鸟CS`, `鸟照射`, `slot 3`, `slot3`, `FLYING`, `FLYING_EX`, `0xfa64e4d0`, `0x8d5b747a`, `飛翔`, `着地リロード`, `sys_4F(0xb, 0x3, 0)`, `前派生`, `func_990`, `func_991`, `突然冲到天上`
 - **notes:** AGENTS.md still inlines this bootstrap. Sibling Rebellion MSC edits: alt2-gerobi, sub-shot-custom, bird-melee-n-followup, special-n-bird-dash, 2026-08-26 subshot-split-and-flight-weapons plan.
 - **settled:**
   - Bird arsenal is gated in 0.c func_143 only, not 2.c ACTION_*.
@@ -368,10 +369,12 @@ Existing research notes are not rewritten by this index.
   - Flight-special custom foot-stop/restore adapters were E3- and are historical only. Current 2026-08-28 candidate copies Messala 0x9a74bce6: native quartet plus func_593(); func_167(0x1004000); every tick, keeping flight ownership continuous through 679/598. See messala-flight-sub-shot-flow.md.
   - Homemade SUB_SHOT_CUSTOM folder 0xa0cd8d56 (tks11a) phase length is global244 -= func_274(), not func_309/sys_47(0x7). func_308 seeks pose. func_310 is not a homemade rate knob. Runtime 2026-08-27: 107f ≈ 1.8s. See homemade-motion-clock-vs-game-frame.md.
   - Bird CS is TV three hashes via field 0x100 (rebellion_bird_cs_stage), not a 0x800 alias. 0=0x476fac14 CDA9F561/562, 1=0x16ed34c0 CDA9F55A/B, 2=0x2194f05d CDA9F55C/D. 0.c 0x1 and 0x800 share the selector. Do not reuse global157 (func_44 writes global27).
+  - Rebellion HUD slot 3 is EW 飛翔 FLYING 0xFA64E4D0 (awakening FLYING_EX 0x8D5B747A): type-2 300f, land gate sys_4F(0x15,3)+global772+global24 0x1000000. Bird ENTER may sys_4F(0xb,3,0) like TV HUD. EXIT must rebind 0xFA64E4D0 and if global772==1 immediately sys_4F(0x15,3,0) (func_1034(4)). Runtime 2026-08-29 E3. See wing-zero-rebellion-slot3-flying-land-reload.md.
 - **read_first:**
   - `docs/agent-sessions/2026-08-09-wing-zero-rebellion-transform-handoff.md`
   - `docs/msc-research/wing-zero-rebellion-bird-form-0c-input-map.md`
   - `docs/msc-research/wing-zero-rebellion-flight-interrupt-form.md`
+  - `docs/msc-research/wing-zero-rebellion-slot3-flying-land-reload.md`
 - **docs:**
   - `docs/msc-research/2026-08-09-wing-zero-rebellion-transform-port-plan.md`
   - `docs/msc-research/2026-08-26-wing-zero-rebellion-subshot-split-and-flight-weapons-plan.md`
@@ -399,7 +402,10 @@ Existing research notes are not rewritten by this index.
   - Do not reopen the legacy '85 model assets missing' hash manifests.
   - Do not mix transform-port notes with alt2 gerobi followup, SUB_SHOT_CUSTOM aim, or bird N melee 0x928ca34f.
   - Do not copy Lightning sys_41 / 0x700000 / func_873 opaque offsets into Rebellion flight special. Do not use sys_46(0x5) as 足止: atlas names it dash/rush seed. Rebellion analog leftover is func_167(0x1004000) global24 0x4000 + sys_1(0x30001) + func_453 sys_46(0x1,mag). Foot-stop after func_593 uses func_169(0x4000), func_296(0x3e8,0), func_351(0,0x4), channel 1/2 clears and sys_46(0x4,0x4,0). Do not add the long-lived sys_46(0xF) interpolator; it previously fought EXIT analog. See wing-zero-rebellion-flight-special-footstop-handbook-audit.md.
-  - Do not rely on func_595 alone for Rebellion flight-special yaw after the custom foot-stop; runtime E3- was stationary but player-steerable and did not face lock. Use TV func_1042 direct lock yaw as the last ACTIVE writer.
+  - Do not rely on func_595 alone for Rebellion flight-special yaw, add the TV func_1042 START-tail yaw step, or add Bird-CS global47 |= 0x40: all three produced initial lock -> held-direction drift -> SHOOT re-lock, and the two added writers/flags had no observable effect. Remove them. func_586 resets global73 and this action never rewrites it. Before another candidate, confirm the loaded build via the existing START charge FX and 10f/40f timing markers.
+  - Do not clear flight-special direction through 2.c global87 0x3c or 0.c neutral field-0x7 republish: the combined pair produced no observable change. Remove both. The transient is not proven to be input yaw; require video or an explicit motion/effect discriminator to separate world yaw, body-local pose, motion, and camera before another edit.
+  - Do not pair the shortened flight-special 10f START with global689=0x3. Runtime showed initial lock, held-direction drift during the remaining START frames, then SHOOT re-lock; direction/shared-field masks did not help. Match Messala global689=0xa so native func_595 aim ownership spans the complete 10f START, and remove all extra input/yaw overrides.
+  - Messala global689=0xa plus the Rebellion translation/pose clamp still retained the reported entry-facing transient. The next isolated comparison removes every target tick adapter and uses literal Messala func_970: func_593(); func_167(0x1004000);. Target translation may return; do not call this full resource equivalence because Messala motion/TRS assets remain absent.
   - Do not restore only global24 0x4000 + the 0x30001 motor on natural flight-special EXIT. Leaving func_351 profile 0 produced air idle with bird visuals and no flight; restore profile 2 before func_598. INTERRUPT still uses FORCED_RECOVERY.
   - Do not fix hit-stuck wing by calling func_74(0x3b): trans_end is a body+wing Folder and would override the hit body motion. Use the original wing-only func_1025(2) + sys_47(0x43,0xf6c1a9c1) refresh after func_884.
   - Do not reintroduce rebellion_flight_special_foot_stop/lock_aim/restore_analog or private seg/frames into the current Messala port. Its load-bearing invariant is func_167(0x1004000) immediately after func_593 on every tick.
@@ -416,6 +422,10 @@ Existing research notes are not rewritten by this index.
   - Do not wait homemade SUB_SHOT_CUSTOM / tks11a / 0xa0cd8d56 on func_309 or sys_47(0x7). Do not use func_310 as homemade duration/rate. Do not diagnose packing after func_241(0x23df217e, 0) already proves ACTION entry. See homemade-motion-clock-vs-game-frame.md.
   - Do not skip EW 0.c sys_0(0x90000,1) and d0001 && !d000b when submitting 0x53554243 ACTION_AB_SUB. Clip then plays with no 516001001. Do not put that gate on N/left/right 0x23df217e. Cluster striker-sys51, not this transform bootstrap.
   - Do not reuse Rebellion global157 as bird CS stage; func_44 sets it to global27 on action enter. Publish sys_1(0x10000,0,0x100). Do not keep 0x2194f05d as ACTION_CHARGE_SHOT_BIRD alias of uncharged bird main.
+  - Do not unbind Rebellion slot 3 and restore FLYING without re-pause: BindSlot forces byte 318=1 and empty 飛翔 starts 5s in air. After sys_4F(0xb,3,0xfa64e4d0), if global772==1 write sys_4F(0x15,3,0). Registry I4.
+  - Do not sys_4F(0x16, 3, 0/1) on FLYING to hide HUD. Vanilla EW never writes slot-3 0x16; 0x16=1 shows as red disable. Gyan 0x16 is optional assist, not 飛翔. Hide with 0xB unbind. Registry I5.
+  - Do not write func_351(0x2,0x4), func_167(0x1004000), or per-tick sys_46(0x2) climb from sys_0(0x40000,0x3,global39) on standing BD 前派生 (func_990/func_991). Runtime 2026-08-29: 突然冲到天上. Keep ground func_351(0) and planar chase. Registry E12.
+  - Do not set global184=1 from BD 前派生 loop slashes to reopen func_516. Runtime 2026-08-29: 1 never connects to 2, infinite 1. func_492 then func_71(global629=func_990) and func_530 clears mash. Stay in func_493; chase with func_517. Registry E13.
 
 ### `wing-zero-tv` — TV Wing Zero source behavior for the Rebellion port
 
@@ -430,6 +440,7 @@ Existing research notes are not rewritten by this index.
   - `docs/agent-sessions/2026-08-09-wing-zero-rebellion-transform-handoff.md`
 - **do_not:**
   - Do not copy TV input bits or TV interrupt requeue onto Rebellion as-is.
+  - Do not treat TV func_1078 sys_4F(0xb, 0x3, 0) as a generic 'hide HUD slot 3 in bird form' rule. TV slot 3 is ROLLING_BUSTER 0xF44BB746; Rebellion slot 3 is EW 飛翔. See wing-zero-rebellion-slot3-flying-land-reload.md.
 
 ### `unit-messala` — Messala flight-mode sub-shot MSC flow
 

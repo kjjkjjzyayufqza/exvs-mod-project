@@ -9,10 +9,7 @@ use app_lib::format::raw_path_id::{
 fn crc32_and_sha1_match_ob_vectors() {
     assert_eq!(crc32_ieee(b""), 0x0000_0000);
     assert_eq!(crc32_ieee(b"test"), 0xD87F_7E0C);
-    assert_eq!(
-        crc32_ieee(b"STREAMPATH_ST_VO_1000_P01_0"),
-        0x6862_87AC
-    );
+    assert_eq!(crc32_ieee(b"STREAMPATH_ST_VO_1000_P01_0"), 0x6862_87AC);
     let source = "091waveform/se/stage/SE_STAGE_AMB_01.nus3audio";
     assert_eq!(
         sha1_hex(source.as_bytes()),
@@ -70,10 +67,7 @@ fn json_and_vgsht1_round_trip_two_streams() {
     assert!(issues.is_empty(), "{issues:?}");
     let mut keys: Vec<_> = merged.entries.iter().map(|e| e.key.as_str()).collect();
     keys.sort_unstable();
-    assert_eq!(
-        keys,
-        vec![first.key.as_str(), second.key.as_str()]
-    );
+    assert_eq!(keys, vec![first.key.as_str(), second.key.as_str()]);
     let parsed = parse_json(&json_text).unwrap();
     assert_eq!(parsed.0.entries[0].key, second.key);
 }

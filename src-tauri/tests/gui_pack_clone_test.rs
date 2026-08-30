@@ -1,9 +1,10 @@
 use app_lib::format::fhm2d_pack::repack_fhm2d_from_structure;
 use app_lib::format::gui_pack_clone::{
-    allocate_gui_clone_hash, clone_character_gui_set, clone_gui_pack_extract, gui_clone_extract_relative,
-    gui_clone_hash_key, list_workspace_gui_packs, pack_file_name, parse_hash_name_token,
-    parse_pack_hash_from_name, structure_display_name, structure_hash_name, vs2_gui_extract_relative,
-    CloneGuiSetRequest, NAVI_GUI_PACKS, NAVI_UNIQUE_ID_HASH, PILOT_GUI_FIELDS,
+    allocate_gui_clone_hash, clone_character_gui_set, clone_gui_pack_extract,
+    gui_clone_extract_relative, gui_clone_hash_key, list_workspace_gui_packs, pack_file_name,
+    parse_hash_name_token, parse_pack_hash_from_name, structure_display_name, structure_hash_name,
+    vs2_gui_extract_relative, CloneGuiSetRequest, NAVI_GUI_PACKS, NAVI_UNIQUE_ID_HASH,
+    PILOT_GUI_FIELDS,
 };
 use app_lib::format::list_command_pool::{ListData, ListEntry};
 use app_lib::format::navilist::{build_navilist_data, parse_navilist_data};
@@ -16,8 +17,14 @@ use std::path::{Path, PathBuf};
 #[test]
 fn pack_file_name_is_uppercase_hex() {
     assert_eq!(pack_file_name(0x88BD_4DC3), "0x88BD4DC3.fhm2d");
-    assert_eq!(parse_pack_hash_from_name("0x88BD4DC3.fhm2d"), Some(0x88BD_4DC3));
-    assert_eq!(parse_pack_hash_from_name("0x88bd4dc3.fhm2d"), Some(0x88BD_4DC3));
+    assert_eq!(
+        parse_pack_hash_from_name("0x88BD4DC3.fhm2d"),
+        Some(0x88BD_4DC3)
+    );
+    assert_eq!(
+        parse_pack_hash_from_name("0x88bd4dc3.fhm2d"),
+        Some(0x88BD_4DC3)
+    );
 }
 
 #[test]
@@ -77,12 +84,12 @@ fn gui_clone_extract_relative_replaces_leaf_with_custom_name() {
 #[test]
 fn allocate_skips_occupied_and_zero() {
     let mut occupied = HashSet::new();
-    let first = allocate_gui_clone_hash(900_000_004, "st_p_016_001_c01", "lmbCutIn", &occupied)
-        .unwrap();
+    let first =
+        allocate_gui_clone_hash(900_000_004, "st_p_016_001_c01", "lmbCutIn", &occupied).unwrap();
     assert_ne!(first, 0);
     occupied.insert(first);
-    let second = allocate_gui_clone_hash(900_000_004, "st_p_016_001_c01", "lmbCutIn", &occupied)
-        .unwrap();
+    let second =
+        allocate_gui_clone_hash(900_000_004, "st_p_016_001_c01", "lmbCutIn", &occupied).unwrap();
     assert_ne!(second, first);
     assert_ne!(second, 0);
 }
@@ -90,8 +97,13 @@ fn allocate_skips_occupied_and_zero() {
 #[test]
 fn allocate_uses_custom_structure_name_in_crc_seed() {
     let occupied = HashSet::new();
-    let donor = allocate_gui_clone_hash(900_000_004, "navi_pl_s_016_o01_c02", "naviPlSC02", &occupied)
-        .unwrap();
+    let donor = allocate_gui_clone_hash(
+        900_000_004,
+        "navi_pl_s_016_o01_c02",
+        "naviPlSC02",
+        &occupied,
+    )
+    .unwrap();
     let custom = allocate_gui_clone_hash(
         900_000_004,
         "navi_pl_s_016_o01_c0212313dad",
@@ -101,7 +113,12 @@ fn allocate_uses_custom_structure_name_in_crc_seed() {
     .unwrap();
     assert_ne!(donor, custom);
     assert_eq!(
-        gui_clone_hash_key(900_000_004, "navi_pl_s_016_o01_c0212313dad", "naviPlSC02", 0),
+        gui_clone_hash_key(
+            900_000_004,
+            "navi_pl_s_016_o01_c0212313dad",
+            "naviPlSC02",
+            0
+        ),
         "GUI_CLONE|900000004|navi_pl_s_016_o01_c0212313dad|naviPlSC02"
     );
 }
@@ -155,7 +172,10 @@ fn clone_gui_pack_extract_writes_inner_files_with_new_hash_name() {
 fn parse_hash_name_token_accepts_bare_and_filename() {
     assert_eq!(parse_hash_name_token("0x88BD4DC3"), Some(0x88BD_4DC3));
     assert_eq!(parse_hash_name_token("0x88BD4DC3.fhm2d"), Some(0x88BD_4DC3));
-    assert_eq!(parse_pack_hash_from_name("0x88bd4dc3.fhm2d"), Some(0x88BD_4DC3));
+    assert_eq!(
+        parse_pack_hash_from_name("0x88bd4dc3.fhm2d"),
+        Some(0x88BD_4DC3)
+    );
 }
 
 #[test]
@@ -262,9 +282,16 @@ fn clone_character_gui_set_preview_and_write_pilot_and_navi() {
     })
     .unwrap();
     assert!(!written.preview);
-    let cut_in = written.character_field_updates.get("lmbCutIn").copied().unwrap();
+    let cut_in = written
+        .character_field_updates
+        .get("lmbCutIn")
+        .copied()
+        .unwrap();
     assert_ne!(cut_in, donor_cut_in);
-    assert!(!workspace.join("009gui").join(pack_file_name(cut_in)).exists());
+    assert!(!workspace
+        .join("009gui")
+        .join(pack_file_name(cut_in))
+        .exists());
     let extract_dir = PathBuf::from(&written.packs[0].output_path);
     assert_eq!(first_extracted_payload(&extract_dir), cut_in_payload);
     assert_eq!(
@@ -312,7 +339,10 @@ fn clone_character_gui_set_preview_and_write_pilot_and_navi() {
         cloned.commands.values().find(|&&v| v == donor_navi_bt),
         Some(&donor_navi_bt)
     );
-    assert!(cloned.commands.values().any(|&v| v == navi_bt_pack.new_hash));
+    assert!(cloned
+        .commands
+        .values()
+        .any(|&v| v == navi_bt_pack.new_hash));
     assert_eq!(written.packs[0].bind_target, "character_list.lmbCutIn");
 }
 
@@ -388,7 +418,11 @@ fn custom_name_does_not_replace_original_navi_thumbnail_folder() {
         .join("012list")
         .join("navi_list")
         .join("navi_list.bin");
-    fs::write(&navi_path, sample_relena_navi_list(sc02.fallback_donor_hash)).unwrap();
+    fs::write(
+        &navi_path,
+        sample_relena_navi_list(sc02.fallback_donor_hash),
+    )
+    .unwrap();
 
     let written = clone_character_gui_set(CloneGuiSetRequest {
         dpl_cache_path: dpl.display().to_string(),

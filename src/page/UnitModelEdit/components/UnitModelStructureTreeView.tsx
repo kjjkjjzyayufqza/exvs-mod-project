@@ -43,6 +43,7 @@ import {
   type UnitModelStructureTree,
   type UnitModelTreeNode,
 } from "../utils/unitModelStructureTree";
+import { isWeaponIconFileUrl } from "../utils/unitModelWeaponIconService";
 
 interface UnitModelStructureTreeViewProps {
   /** Parsed `_structure.json` object. `null` while no model is loaded. */
@@ -226,7 +227,9 @@ function TreeRow({
             {isNutexb ? (
               <ContextMenuItem onSelect={() => onShowTextureInPanel?.(node)}>
                 <ImageIcon className="mr-2 h-3.5 w-3.5" />
-                Show in Textures
+                {isWeaponIconFileUrl(node.fileUrl) || node.role === "weapon-icon"
+                  ? "Show in Icons"
+                  : "Show in Textures"}
               </ContextMenuItem>
             ) : null}
             {editableKind || isNutexb ? <ContextMenuSeparator /> : null}

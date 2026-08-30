@@ -19,7 +19,10 @@ fn filled_record() -> PilotVoiceResourceRecord {
 #[test]
 fn voice_stem_ignores_spaces() {
     assert_eq!(parse_voice_stem("VO_1000_P01 _0").unwrap(), "VO_1000_P01_0");
-    assert_eq!(parse_voice_stem(" vo_1000_p01_0 ").unwrap(), "VO_1000_P01_0");
+    assert_eq!(
+        parse_voice_stem(" vo_1000_p01_0 ").unwrap(),
+        "VO_1000_P01_0"
+    );
 }
 
 #[test]
@@ -98,5 +101,8 @@ fn vrtbl_bytes_round_trip() {
     .unwrap();
     let parsed = parse_bytes(&bytes).unwrap();
     assert_eq!(parsed.records[0].voice_key, record.voice_key);
-    assert_eq!(parsed.records[0].voice_stem.as_deref(), Some("VO_0016_P01_0"));
+    assert_eq!(
+        parsed.records[0].voice_stem.as_deref(),
+        Some("VO_0016_P01_0")
+    );
 }

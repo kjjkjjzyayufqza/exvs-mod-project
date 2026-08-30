@@ -2444,19 +2444,15 @@ fn append_source_item_to_destination(
     };
     if destination_has_item_hash(dest_forest, dest_data, &source_record.actual_ext, hash) {
         if overwrite {
-            let dest_record = find_dest_record_by_hash(
-                dest_forest,
-                dest_data,
-                &source_record.actual_ext,
-                hash,
-            )
-            .ok_or_else(|| {
-                format!(
-                    "Destination already has {} hash {} but the file record is missing.",
-                    source_record.actual_ext,
-                    EffectFolderHash::from_i32(hash).hex
-                )
-            })?;
+            let dest_record =
+                find_dest_record_by_hash(dest_forest, dest_data, &source_record.actual_ext, hash)
+                    .ok_or_else(|| {
+                    format!(
+                        "Destination already has {} hash {} but the file record is missing.",
+                        source_record.actual_ext,
+                        EffectFolderHash::from_i32(hash).hex
+                    )
+                })?;
             let dest_path = dest_record.path.clone();
             copy_one_file_replace(&source_record.path, &dest_path)?;
             copied.push(dest_path.to_string_lossy().to_string());
@@ -4119,7 +4115,9 @@ pub fn sanitize_effect_copy_dest_file_name(name: &str) -> Result<String, String>
         || trimmed.contains('\\')
         || Path::new(trimmed).is_absolute()
     {
-        return Err("Destination file name must be a single file name inside the pack.".to_string());
+        return Err(
+            "Destination file name must be a single file name inside the pack.".to_string(),
+        );
     }
     Ok(ensure_extension(trimmed, ".efxbn"))
 }

@@ -4,9 +4,7 @@ use std::io::Cursor;
 use app_lib::exvs2_json_cli::{
     edit_bytes, inspect_bytes, EditBytesOptions, InspectOptions, InspectType,
 };
-use app_lib::format::armsparam::{
-    build_armsparam, parse_armsparam, ArmsParamData, ArmsParamEntry,
-};
+use app_lib::format::armsparam::{build_armsparam, parse_armsparam, ArmsParamData, ArmsParamEntry};
 use app_lib::format::bulletparam::{
     build_bulletparam, bulletparam_entry_from_json_value, bulletparam_entry_to_json_value,
     parse_bulletparam, BulletParamData, BulletParamEntry,
@@ -789,10 +787,7 @@ fn bulletparam_serializes_bullet_size_and_accepts_initial_speed_alias() {
         "initialSpeed": 12.5
     });
     let entry = bulletparam_entry_from_json_value(&legacy).expect("parse legacy alias");
-    let raw = *entry
-        .commands
-        .get(&0xAB606D9E)
-        .expect("bullet_size hash");
+    let raw = *entry.commands.get(&0xAB606D9E).expect("bullet_size hash");
     assert!((f32::from_bits(raw) - 12.5).abs() < 1e-5);
 
     let canonical = bulletparam_entry_to_json_value(&entry);

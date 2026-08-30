@@ -180,10 +180,7 @@ pub fn parse_json(text: &str) -> Result<(RawPathIdDocument, Vec<RawPathIdParseIs
         let rec = raw
             .as_object()
             .ok_or_else(|| format!("{key}: entry must be an object"))?;
-        let kind_raw = rec
-            .get("kind")
-            .and_then(Value::as_str)
-            .unwrap_or("stream");
+        let kind_raw = rec.get("kind").and_then(Value::as_str).unwrap_or("stream");
         let kind = match RawPathIdKind::parse(kind_raw) {
             Some(kind) => kind,
             None => {
@@ -244,8 +241,14 @@ pub fn serialize_json(document: &RawPathIdDocument) -> Result<String, String> {
         body.insert("hash".to_string(), Value::from(entry.hash));
         body.insert("path".to_string(), Value::String(entry.path.clone()));
         body.insert("source".to_string(), Value::String(entry.source.clone()));
-        body.insert("param01".to_string(), param_pair_json(entry.param01_low, entry.param01_high));
-        body.insert("param02".to_string(), param_pair_json(entry.param02_low, entry.param02_high));
+        body.insert(
+            "param01".to_string(),
+            param_pair_json(entry.param01_low, entry.param01_high),
+        );
+        body.insert(
+            "param02".to_string(),
+            param_pair_json(entry.param02_low, entry.param02_high),
+        );
         let key = serde_json::to_string(&entry.key).map_err(|e| e.to_string())?;
         let value = serde_json::to_string(&Value::Object(body)).map_err(|e| e.to_string())?;
         lines.push(format!("{key} : {value}"));
@@ -380,7 +383,10 @@ pub fn merge_files(
             if !entry.path.is_empty() && path != &entry.path {
                 issues.push(RawPathIdParseIssue {
                     code: "path_mismatch".to_string(),
-                    message: format!("{}: vgsht1 path {path} != JSON path {}", entry.key, entry.path),
+                    message: format!(
+                        "{}: vgsht1 path {path} != JSON path {}",
+                        entry.key, entry.path
+                    ),
                     key: Some(entry.key.clone()),
                 });
             }
@@ -399,9 +405,9 @@ pub fn parse_pack(folder_path: &str) -> Result<RawPathIdPack, String> {
         .map_err(|e| format!("Failed to read {}: {e}", discovered.json_path.display()))?;
     let json_text = decode_json_text(&json_bytes)?;
     let vgsht1_bytes = match discovered.vgsht1_path.as_ref() {
-        Some(path) if path.is_file() => Some(
-            fs::read(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?,
-        ),
+        Some(path) if path.is_file() => {
+            Some(fs::read(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?)
+        }
         _ => None,
     };
     let (document, issues) = merge_files(json_text.as_str(), vgsht1_bytes.as_deref())?;
@@ -535,10 +541,7 @@ fn list_files_recursive(root: &Path, depth: i32, out: &mut Vec<PathBuf>) {
 }
 
 fn sibling_vgsht1_path(json_path: &Path) -> PathBuf {
-    let file_name = json_path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
+    let file_name = json_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
     if file_name.to_ascii_lowercase().ends_with(".json") {
         json_path.with_extension("vgsht1")
     } else {
@@ -619,8 +622,8 @@ fn is_json_object_payload(bytes: &[u8]) -> bool {
 }
 
 fn decode_json_text(bytes: &[u8]) -> Result<String, String> {
-    let text = std::str::from_utf8(bytes)
-        .map_err(|e| format!("raw_path_id JSON is not UTF-8: {e}"))?;
+    let text =
+        std::str::from_utf8(bytes).map_err(|e| format!("raw_path_id JSON is not UTF-8: {e}"))?;
     Ok(text.trim_start_matches('\u{feff}').to_string())
 }
 

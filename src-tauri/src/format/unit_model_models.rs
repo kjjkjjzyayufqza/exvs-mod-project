@@ -2548,18 +2548,10 @@ fn validate_source_numshb_path(source_numshb_path: &str) -> Result<PathBuf, Stri
 }
 
 fn ensure_path_inside_root(root: &Path, candidate: &Path) -> Result<(), String> {
-    let root_canon = fs::canonicalize(root).map_err(|e| {
-        format!(
-            "Failed to resolve unit model root {}: {e}",
-            root.display()
-        )
-    })?;
-    let candidate_canon = fs::canonicalize(candidate).map_err(|e| {
-        format!(
-            "Failed to resolve target path {}: {e}",
-            candidate.display()
-        )
-    })?;
+    let root_canon = fs::canonicalize(root)
+        .map_err(|e| format!("Failed to resolve unit model root {}: {e}", root.display()))?;
+    let candidate_canon = fs::canonicalize(candidate)
+        .map_err(|e| format!("Failed to resolve target path {}: {e}", candidate.display()))?;
     if !candidate_canon.starts_with(&root_canon) {
         return Err(format!(
             "Target NUMSHB {} is outside the unit model root.",
@@ -2579,19 +2571,11 @@ fn overwrite_existing_file(source: &Path, dest: &Path) -> Result<(), String> {
         .ok_or_else(|| format!("Invalid target NUMSHB path: {}", dest.display()))?;
     let backup = dest.with_file_name(format!("{dest_name}.replace-bak"));
     if backup.exists() {
-        fs::remove_file(&backup).map_err(|e| {
-            format!(
-                "Failed to remove leftover backup {}: {e}",
-                backup.display()
-            )
-        })?;
+        fs::remove_file(&backup)
+            .map_err(|e| format!("Failed to remove leftover backup {}: {e}", backup.display()))?;
     }
-    fs::rename(dest, &backup).map_err(|e| {
-        format!(
-            "Failed to stage existing NUMSHB {}: {e}",
-            dest.display()
-        )
-    })?;
+    fs::rename(dest, &backup)
+        .map_err(|e| format!("Failed to stage existing NUMSHB {}: {e}", dest.display()))?;
     if let Err(error) = fs::copy(source, dest) {
         let _ = fs::rename(&backup, dest);
         return Err(format!(

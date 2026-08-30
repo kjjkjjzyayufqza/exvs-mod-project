@@ -11,7 +11,10 @@ use app_lib::msc_toolchain::{
 };
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .to_path_buf()
 }
 
 fn tools_dir() -> PathBuf {
@@ -24,7 +27,9 @@ fn fixture_dir() -> PathBuf {
 
 fn run_python(script: &str, args: &[&str]) -> Result<(), String> {
     let mut cmd = Command::new("python");
-    cmd.arg(tools_dir().join(script)).args(args).current_dir(repo_root());
+    cmd.arg(tools_dir().join(script))
+        .args(args)
+        .current_dir(repo_root());
     cmd.env("PYTHONDONTWRITEBYTECODE", "1");
     let out = cmd.output().map_err(|e| e.to_string())?;
     if !out.status.success() {
@@ -79,7 +84,8 @@ fn compile_1_c_matches_live_msclang_oracle() {
     let src = std::fs::read_to_string(&src_c).unwrap();
     let got = compile_c_msclang_dash_i(&src).expect("rust compile");
     assert_eq!(
-        expected, got,
+        expected,
+        got,
         "1.c packed mismatch {}",
         first_diff(&expected, &got)
     );
@@ -146,7 +152,8 @@ fn compile_0_c_matches_live_msclang_oracle() {
     let src = std::fs::read_to_string(&src_c).unwrap();
     let got = compile_c_msclang_dash_i(&src).expect("rust compile 0.c");
     assert_eq!(
-        expected, got,
+        expected,
+        got,
         "0.c packed mismatch {}",
         first_diff(&expected, &got)
     );
@@ -214,7 +221,8 @@ fn compile_2_c_matches_live_msclang_oracle() {
     let src = std::fs::read_to_string(&src_c).unwrap();
     let got = compile_c_msclang_dash_i(&src).expect("rust compile 2.c");
     assert_eq!(
-        expected, got,
+        expected,
+        got,
         "2.c packed mismatch {}",
         first_diff(&expected, &got)
     );

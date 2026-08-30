@@ -337,7 +337,11 @@ pub fn list_nutexb_folder(root: &str) -> Result<NutexbFolderScan, String> {
     }
     let mut files = Vec::new();
     collect_nutexb_files_recursive(&root_path, &root_path, &mut files)?;
-    files.sort_by(|a, b| a.relative_path.to_lowercase().cmp(&b.relative_path.to_lowercase()));
+    files.sort_by(|a, b| {
+        a.relative_path
+            .to_lowercase()
+            .cmp(&b.relative_path.to_lowercase())
+    });
     Ok(NutexbFolderScan {
         root: root_path.display().to_string(),
         files,
@@ -349,11 +353,14 @@ fn collect_nutexb_files_recursive(
     dir: &Path,
     out: &mut Vec<NutexbScanFile>,
 ) -> Result<(), String> {
-    let entries = fs::read_dir(dir).map_err(|e| format!("Read dir {} failed: {e}", dir.display()))?;
+    let entries =
+        fs::read_dir(dir).map_err(|e| format!("Read dir {} failed: {e}", dir.display()))?;
     for entry in entries {
         let entry = entry.map_err(|e| format!("Read dir entry failed: {e}"))?;
         let path = entry.path();
-        let file_type = entry.file_type().map_err(|e| format!("Stat {} failed: {e}", path.display()))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|e| format!("Stat {} failed: {e}", path.display()))?;
         if file_type.is_dir() {
             let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
             if name.eq_ignore_ascii_case("__convert") || name.starts_with('.') {
@@ -378,9 +385,7 @@ fn collect_nutexb_files_recursive(
             .map_err(|_| format!("Path {} is not under {}", path.display(), root.display()))?
             .to_string_lossy()
             .replace('\\', "/");
-        let size = fs::metadata(&path)
-            .map(|meta| meta.len())
-            .unwrap_or(0);
+        let size = fs::metadata(&path).map(|meta| meta.len()).unwrap_or(0);
         out.push(NutexbScanFile {
             relative_path,
             path: path.display().to_string(),
@@ -967,8 +972,8 @@ pub fn image_to_nutexb(
         fs::create_dir_all(parent).map_err(|e| format!("Create output directory failed: {e}"))?;
     }
 
-    let dyn_img = image::open(image_path)
-        .map_err(|e| format!("Failed to open image {}: {e}", image_path))?;
+    let dyn_img =
+        image::open(image_path).map_err(|e| format!("Failed to open image {}: {e}", image_path))?;
     let mut rgba: RgbaImage = dyn_img.to_rgba8();
     if dds_format_needs_block_alignment(dds_format) {
         rgba = pad_rgba_to_block_size(rgba);

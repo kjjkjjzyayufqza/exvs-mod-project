@@ -45,8 +45,6 @@ pub struct PilotVoiceResourcePack {
     pub file_path: String,
 }
 
-
-
 pub fn parse_bytes(data: &[u8]) -> Result<PilotVoiceResourceTable, String> {
     if data.len() < HEADER_SIZE {
         return Err("pilotvoiceresourcetable.vrtbl is too small".to_string());
@@ -102,8 +100,8 @@ pub fn parse_pack(folder_path: &str) -> Result<PilotVoiceResourcePack, String> {
         return Err("Folder path is empty".to_string());
     }
     let file_path = discover_vrtbl(Path::new(folder_path))?;
-    let bytes = fs::read(&file_path)
-        .map_err(|e| format!("Failed to read {}: {e}", file_path.display()))?;
+    let bytes =
+        fs::read(&file_path).map_err(|e| format!("Failed to read {}: {e}", file_path.display()))?;
     Ok(PilotVoiceResourcePack {
         table: parse_bytes(&bytes)?,
         file_path: file_path.to_string_lossy().into_owned(),

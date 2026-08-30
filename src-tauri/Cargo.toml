@@ -153,6 +153,10 @@ name = "replace_unit_model_numshb"
 path = "tests/replace_unit_model_numshb.rs"
 
 [[test]]
+name = "unit_model_weapon_icons_test"
+path = "tests/unit_model_weapon_icons_test.rs"
+
+[[test]]
 name = "exvs2_json_cli_test"
 path = "tests/exvs2_json_cli_test.rs"
 

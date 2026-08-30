@@ -19,6 +19,7 @@ use crate::format::unit_model_numatb_profile_fix;
 use crate::format::unit_model_repack;
 use crate::format::unit_model_textures;
 use crate::format::unit_model_validate;
+use crate::format::unit_model_weapon_icons;
 
 // ── Pending import state ────────────────────────────────────────────────────
 
@@ -1443,6 +1444,80 @@ pub async fn remove_unit_model_nutexb(
 ) -> Result<unit_model_textures::UnitModelTextureInventory, String> {
     let result = tauri::async_runtime::spawn_blocking(move || {
         unit_model_textures::remove_unit_model_nutexb(
+            &model_root,
+            structure_json_path.as_deref(),
+            file_index,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn list_unit_model_weapon_icons(
+    model_root: String,
+    structure_json_path: Option<String>,
+) -> Result<unit_model_weapon_icons::UnitModelWeaponIconInventory, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_weapon_icons::list_unit_model_weapon_icons(
+            &model_root,
+            structure_json_path.as_deref(),
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn add_unit_model_weapon_icon(
+    model_root: String,
+    structure_json_path: Option<String>,
+    source_path: String,
+    target_filename: String,
+    insert_at: Option<i32>,
+) -> Result<unit_model_weapon_icons::UnitModelWeaponIconInventory, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_weapon_icons::add_unit_model_weapon_icon(
+            &model_root,
+            structure_json_path.as_deref(),
+            &source_path,
+            &target_filename,
+            insert_at,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn reorder_unit_model_weapon_icons(
+    model_root: String,
+    structure_json_path: Option<String>,
+    file_indices: Vec<i32>,
+) -> Result<unit_model_weapon_icons::UnitModelWeaponIconInventory, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_weapon_icons::reorder_unit_model_weapon_icons(
+            &model_root,
+            structure_json_path.as_deref(),
+            &file_indices,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn remove_unit_model_weapon_icon(
+    model_root: String,
+    structure_json_path: Option<String>,
+    file_index: i32,
+) -> Result<unit_model_weapon_icons::UnitModelWeaponIconInventory, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        unit_model_weapon_icons::remove_unit_model_weapon_icon(
             &model_root,
             structure_json_path.as_deref(),
             file_index,
