@@ -601,6 +601,7 @@ CLUSTERS: tuple[Cluster, ...] = (
             "docs/characterparam-field-notes.md",
             "docs/param-evidence-registry.tsv",
             "docs/param-editor-typed-labels-notes.md",
+            R("wing-zero-rebellion-unused-form-reload-group-b.md"),
         ),
         settled=(
             "sys_0 table 0x60006=speedparam, 0x60002=grapparam, 0x60007=interactionid.",
@@ -758,6 +759,13 @@ CLUSTERS: tuple[Cluster, ...] = (
             "0x8d5b747a",
             "飛翔",
             "着地リロード",
+            "reloadGroupBEnabled",
+            "0xB686E88C",
+            "unused form reload",
+            "another mode reload",
+            "自动reload",
+            "另一形态",
+            "group B",
             "sys_4F(0xb, 0x3, 0)",
             "前派生",
             "func_990",
@@ -773,6 +781,7 @@ CLUSTERS: tuple[Cluster, ...] = (
             R("wing-zero-rebellion-bird-form-0c-input-map.md"),
             R("wing-zero-rebellion-flight-interrupt-form.md"),
             R("wing-zero-rebellion-slot3-flying-land-reload.md"),
+            R("wing-zero-rebellion-unused-form-reload-group-b.md"),
         ),
         docs=(
             R("2026-08-09-wing-zero-rebellion-transform-port-plan.md"),
@@ -816,6 +825,7 @@ CLUSTERS: tuple[Cluster, ...] = (
             "Homemade SUB_SHOT_CUSTOM folder 0xa0cd8d56 (tks11a) phase length is global244 -= func_274(), not func_309/sys_47(0x7). func_308 seeks pose. func_310 is not a homemade rate knob. Runtime 2026-08-27: 107f ≈ 1.8s. See homemade-motion-clock-vs-game-frame.md.",
             "Bird CS is TV three hashes via field 0x100 (rebellion_bird_cs_stage), not a 0x800 alias. 0=0x476fac14 CDA9F561/562, 1=0x16ed34c0 CDA9F55A/B, 2=0x2194f05d CDA9F55C/D. 0.c 0x1 and 0x800 share the selector. Do not reuse global157 (func_44 writes global27).",
             "Rebellion HUD slot 3 is EW 飛翔 FLYING 0xFA64E4D0 (awakening FLYING_EX 0x8D5B747A): type-2 300f, land gate sys_4F(0x15,3)+global772+global24 0x1000000. Bird ENTER may sys_4F(0xb,3,0) like TV HUD. EXIT must rebind 0xFA64E4D0 and if global772==1 immediately sys_4F(0x15,3,0) (func_1034(4)). Runtime 2026-08-29 E3. See wing-zero-rebellion-slot3-flying-land-reload.md.",
+            "Unused-form auto-reload after a bird swap is armsparam reloadGroupBEnabled (0xB686E88C), not MSC sys_4F(0x15). BindSlot sets the old controller to slot 9; SelectReloadDurations then uses group B, or duration 0 if the flag is off. Runtime 2026-08-31 E3: set the flag on the six paired slot 0/1/2 rows only. See wing-zero-rebellion-unused-form-reload-group-b.md.",
         ),
         do_not=(
             "Do not unpack FHM2D for this case; named sources already exist.",
@@ -844,6 +854,7 @@ CLUSTERS: tuple[Cluster, ...] = (
             "Do not skip EW 0.c sys_0(0x90000,1) and d0001 && !d000b when submitting 0x53554243 ACTION_AB_SUB. Clip then plays with no 516001001. Do not put that gate on N/left/right 0x23df217e. Cluster striker-sys51, not this transform bootstrap.",
             "Do not reuse Rebellion global157 as bird CS stage; func_44 sets it to global27 on action enter. Publish sys_1(0x10000,0,0x100). Do not keep 0x2194f05d as ACTION_CHARGE_SHOT_BIRD alias of uncharged bird main.",
             "Do not unbind Rebellion slot 3 and restore FLYING without re-pause: BindSlot forces byte 318=1 and empty 飛翔 starts 5s in air. After sys_4F(0xb,3,0xfa64e4d0), if global772==1 write sys_4F(0x15,3,0). Registry I4.",
+            "Do not set reloadGroupBEnabled on FLYING / FLYING_EX / Zero System. Bird unbinds slot 3; group B would tick 飛翔 in the air (I4 class). Unused-form reload is the six paired slot 0/1/2 rows only. Mode-4 adapters do not replace that flag. See wing-zero-rebellion-unused-form-reload-group-b.md.",
             "Do not sys_4F(0x16, 3, 0/1) on FLYING to hide HUD. Vanilla EW never writes slot-3 0x16; 0x16=1 shows as red disable. Gyan 0x16 is optional assist, not 飛翔. Hide with 0xB unbind. Registry I5.",
             "Do not write func_351(0x2,0x4), func_167(0x1004000), or per-tick sys_46(0x2) climb from sys_0(0x40000,0x3,global39) on standing BD 前派生 (func_990/func_991). Runtime 2026-08-29: 突然冲到天上. Keep ground func_351(0) and planar chase. Registry E12.",
             "Do not set global184=1 from BD 前派生 loop slashes to reopen func_516. Runtime 2026-08-29: 1 never connects to 2, infinite 1. func_492 then func_71(global629=func_990) and func_530 clears mash. Stay in func_493; chase with func_517. Registry E13.",
@@ -945,6 +956,7 @@ CLUSTERS: tuple[Cluster, ...] = (
             R("func593-vanilla-ranged-slots.md"),
             R("msc-generation-param-bridge-comparison.md"),
             R("2026-08-26-wing-zero-rebellion-subshot-split-and-flight-weapons-plan.md"),
+            R("wing-zero-rebellion-unused-form-reload-group-b.md"),
         ),
         settled=(
             "Hambrabi is the external param-table generation: 0.c func_143 dispatches through sys_41 to a cmdaction row index, and 2.c func_849 walks sys_0(0x700001) registering every row via func_873 (kind -> ENTER) and func_988 (hash -> unit hook).",
@@ -964,6 +976,8 @@ CLUSTERS: tuple[Cluster, ...] = (
             "Do not add a keep-form bird hash to only one allowlist. Rebellion has two mirrored lists: func_41 (global3 != ...) skips teardown, and func_882 (global3 == ...) early-returns before rebellion_interrupt_bird_form_to_ground + func_884. E3 2026-08-31: patching func_41 alone kept the flight loop motion while the unit lost the flight motor, the bird props and the bird weapon bar. Both lists must hold the same set.",
             "Do not edit 0.c for anything but input mapping (user rule 2026-08-31). 0.c owns which input selects which hash plus the four-value func_95 selector; behaviour, form, loadout and phases are 2.c. Read 0.c first, edit 2.c first: a 2.c fix on an action the input never reaches reads as no change.",
             "Do not hand-pick the four func_95 arguments. arg1 selects the pending queue (func_88 wants 0, and 0.c func_15 reads it to select the flight loop), arg3 is the input class index. Bird-form ranged actions use (0, 0x1, 0) like bird main / bird CS2 / flight special; (0x1, 0x1, 0x7) is the ground sub slot and routes into native func_15 -> func_882, which rebuilds the ground loadout.",
+            "Do not expect TV func_351(0x1,0x4) alone on Rebellion roll-sub START/SHOOT ENTER to decouple translation from yaw. Runtime 2026-08-31 I9: no observable change. TV ALT_2/3 also uses a dedicated clip, func_168(0x1000000), func_166 pose and per-tick global47 0x40; copying only profile 1 is not the full TV recipe. Do not stack those extras in the same build.",
+            "Do not increase or stack SHOOT yaw after Rebellion roll-sub I10. The player-visible bug is held-back analog reverse flight plus camera offset, not a missing lock-yaw writer. Do not func_296(0x3e8, 0) on this action: I11 ENTER-only did not stop reverse, I12 every-tick motor-off free-fell in bird visuals and untransformed on landing. Stage 7 is global454=0 like ACTION_A_SHOT_BIRD. Do not zero global453 (D2), do not add func_167, clear 0x4000, copy the flight-special clamp, or use SE.",
         ),
     ),
     Cluster(

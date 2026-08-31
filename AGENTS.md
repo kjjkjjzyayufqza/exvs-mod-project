@@ -203,6 +203,12 @@ Reuse rules:
   `func_169(0x4000)` on 679 start, or `func_287(0x3ed)` as ground. Visual
   untransform must follow `natural_exit` (no `0x4000` clear). Runtime
   2026-08-27. Full process/audit: same dash note.
+- Unused-form auto-reload after a bird swap is **armsparam
+  `reloadGroupBEnabled`** (`0xB686E88C`), not MSC `sys_4F(0x15)`. BindSlot
+  parks the old row at slot 9; native then uses group B, or duration 0 if
+  the flag is off. Runtime 2026-08-31: six paired slot 0/1/2 rows only.
+  Do **not** set the flag on FLYING. Owner:
+  `docs/msc-research/wing-zero-rebellion-unused-form-reload-group-b.md`.
 - Homemade clip duration (`SUB_SHOT_CUSTOM` / `tks11a` / `0xa0cd8d56`) is
   **not** this transform bootstrap. `--match "homemade motion clock"`.
   Do not copy stock `func_309` / `sys_47(0x7)` waits onto homemade folders;

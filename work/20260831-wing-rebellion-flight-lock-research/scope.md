@@ -22,11 +22,11 @@
   - E:\XB\mod\040msc\wing_gundam_zero_rebellion_msc\2.c
   - E:\XB\mod\040msc (Messala candidate filename lookup and matched 2.c only)
 - surfaces: [decompiled_msc_source]
-- activities: [static_reverse, source_comparison, report]
+- activities: [static_reverse, source_comparison, source_edit, legacy_compile_repack, report]
 
 ## out_of_scope
 - assets: [post_OB_revisions, unrelated_units, game_executables]
-- activities: [binary_patching, repack, runtime_execution, network_access, dos, phishing_real_users, unrestricted_exfil]
+- activities: [runtime_execution, network_access, dos, phishing_real_users, unrestricted_exfil]
 
 ## network_profile
 - mode: offline

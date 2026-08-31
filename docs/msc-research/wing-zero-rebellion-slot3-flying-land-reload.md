@@ -18,6 +18,7 @@ Param   E:\XB\mod\041cpm\wing_gundam_zero_rebellion_param\armsparam.bin
 - Native `sys_4F`：`docs/exvs-msc-syscall-4f-native-handler.md`
 - BindSlot / reload：`tmp/exvs2-json/armsparam-native-audit/ida-analyze-arms-accessor-construction.json`、`ida-decompile-1405bd6ba.json`
 - 反证 I4 / I5：`docs/msc-research/msc-falsified-negatives-registry.md`
+- 另一形态自动 reload（slot 0/1/2 group B，不是本页的 `0x15` 着地门）：`docs/msc-research/wing-zero-rebellion-unused-form-reload-group-b.md`
 - 源码契约：`tools/tests/test_rebellion_bird_slot3_lifecycle.py`
 - Wiki EW 飛翔：<https://w.atwiki.jp/exvs2ob/pages/209.html>
 - Wiki TV ロリバス：<https://w.atwiki.jp/exvs2ob/pages/159.html>

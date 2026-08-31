@@ -2,8 +2,12 @@
 
 **Date:** 2026-08-31
 **Status:** L1 源码 E1（两份 2.c 逐字读取）。L2 架构分野 E2（跨机体对照 +
-`msc-generation-param-bridge-comparison.md`）。移植后的 L3 行为 **未验证**，
-必须实机确认。
+`msc-generation-param-bridge-comparison.md`）。L3 mixed：I1/I2 selector/form
+故障已 E3 定位；Stage 1 START 对准已 E3 观察；Stage 2 profile-1 解耦
+E3- I9；Stage 3 SHOOT-only yaw E3- I10；Stage 4 SE 探针被用户拒绝；
+Stage 5 ENTER-only 关电机 E3- I11；Stage 6 每 tick 关电机 E3- I12 自由落体。
+用户澄清：不按后正常，持续按后往后飞导致视角偏移。Stage 7 `global454=0` 待实机。
+禁止再关电机、禁止 yaw、禁止 SE、禁止清 `0x4000`。
 **Kind:** Cross-unit MSC action-flow reference + port record
 
 ## Sources
@@ -412,7 +416,73 @@ WZR 0.c 全部 36 条 `func_95` 归纳出的 class 语义：
 
 ---
 
-## 5. 实机之前要盯的点（全部 L3 未验证）
+## 4.10 对准 / 移动所有权实机结果（2026-08-31）
+
+**Stage 1:** 两个 roll ENTER 的 `global689` 从 `0x6` 改为 `0xA`。用户确认
+背对敌人时 START 能对准，但与前包没有可观察差异；持续 SHOOT 按住后仍会偏离
+目标。结论：`global689` 只影响 `func_595` START，不是 SHOOT yaw owner。
+
+**Stage 2（E3-，registry I9）：** 在共享 START/SHOOT ENTER 加 TV Wing Zero
+`func_351(0x1,0x4)`。用户再次报告无可观察变化：背对 START 仍对准，持续 SHOOT
+按住后仍偏离。结论：profile 1 在 Rebellion 上没有把平移与 yaw 解耦。
+
+下一单变量为 SHOOT-only current-target yaw，写在 bare `func_593()` 之后并严格 gate
+`global184==2`。本 action tick 没有 `func_167` 后置覆盖，因此与 flight-special D12
+不是同一 writer order。禁止扩到 START/679；否则会与 `func_595` 或 EXIT analog 竞争。
+
+**Stage 3（E3-，registry I10）：** 上述 SHOOT-only yaw 实机仍完全不起作用。
+这使 writer order 重新变成二义：要么 `global184==2` 分支没有按假设执行，要么
+native flight analog 在整个 MSC tick 之后再次覆盖 channel 0。按探针协议，下一包只在
+该分支第一次执行时播放一次 SE；响后才允许研究 native input owner，禁止继续加大 yaw。
+
+**Stage 4 探针被用户拒绝。** 不用 SE；锁定是否还在、会不会坠、收招能不能飞，
+全部用动作本身判别。I10 的「完全没效果」按 D9/I7 处理：`func_594` 在 START
+留下 `func_296(0x3e8, 1)` / `sys_1(0x30001, 1)`，按住摇杆就会把航向从当前锁拉开。
+
+**Stage 5（E3-，registry I11）：** 677 ENTER-only `func_296(0x3e8, 0)`。当时按
+「锁朝向」读；用户后来说只要不按后都正常，持续按后会往后飞、镜头偏。
+
+**Stage 6（E3-，registry I12）：** 同一关电机改到 677 每一 tick。SHOOT 自由落体，
+鸟外观还在，落地解除变形。电机已从这条招拿掉。Hambrabi / 鸟主射都不关电机。
+
+**用户澄清（2026-09-01，动作）：** 不按后 = 没问题。持续按后 = 往后飞 → 视角偏移。
+这是 `0x4000` analog 后向位移，不是 START 锁朝向失败。
+
+**Stage 7：** 只把 `global454` 从 Hambrabi `0x62` 改成鸟主射 `0`。`func_594` 在
+`global24 & 0x1000000` 时用它当 `global714` leftover。不要清 `0x4000`，不要
+`func_296(0x3e8, 0)`，不要再写 yaw。
+
+**Stage 3 之后的静态重读（仍 E1/E2，等 Stage 4 探针升格）：**
+前一轮把 I10 理解成「本 tick 没有 `func_167`，所以不是 flight-special D12」。
+这只排除了 MSC 自己后置重发 analog，**没有**排除鸟形态 `global24 0x4000`
+的原生 analog。I7 已经 E3 证明：只要该位仍在，原生 analog 会同时写位移和朝向，
+不需要 MSC `func_167`。foot-stop handbook / D9 的原话是：analog `0x4000` 或
+ch-1 mag 仍跑时，`sys_46(0)` 会被飞行航向覆盖。侧转 tick 故意保持
+`ACTION_A_SHOT_BIRD` 的裸 `func_593`、不拆 `0x4000`，因此 I10 的「完全没效果」
+与 D9 同类，优先于「没进 SHOOT」。用户拒绝 SE 探针后，Stage 5 改为 SHOOT-only
+关掉 `sys_1(0x30001)`，用动作看锁还在不在。
+
+Hambrabi 原文也**不是** SHOOT 活锁：`func_1083`/`func_1086` 只在
+`func_309(..., 0x320)` 写横向 `sys_46(0x1, 0x2, ±0x2328, …, 0xb4)`，没有
+`sys_46(0, func_626())`。瞄准窗只在 START 的 hook `global689=0x6`。wiki
+「转回目标」更像侧转 clip 的 root 旋转；本机 START/SHOOT 播的是鸟 loop
+`0x9de587ce`，没有这条视觉。
+
+TV `ACTION_AB_SUB_ALT_2/3` 的 `func_351(0x1,0x4)` 也不是单独生效：它配专用
+clip（`0x2ed9aa96` / `0x59477866`）、`func_168(0x1000000)`、`func_166` 姿态
+偏置，以及 START 每 tick `global47 |= 0x40`。I9 只抄了 profile 1，所以无观察
+变化不能解读成「TV 解耦在 Rebellion 上被证伪了完整配方」，只能解读成
+**单变量 profile 1 不够**。完整 TV 配方是多变量，禁止一次堆上。
+
+`func_594` 在 `global24 & 0x1000000` 且没有 `global122 0x40000` 时会
+`func_296(0x3e8, 1)` 并把 `global714` 设成 `global454`（侧转 mix `0x62`）。
+鸟主射把 mix 写成 `0/0/0`；侧转抄的是 Hambrabi `0x32/0x60/0x62`。I8 禁止
+在**仍有** `func_167` 的照射 tick 上靠 ENTER mix 降敏捷；本侧转 tick 没有
+`func_167`，因此 mix/analog 才是 I10 之后的合法下一刀，yaw 不是。
+
+---
+
+## 5. 实机之前要盯的点（部分已验证，见 §4.6–4.10）
 
 1. **左右方向可能反**。`sys_46` 的轴向符号约定是 E0，`0x2328` 到底是左还是右
    只能实机看。反了就把两个 ENTER 里的 `rebellion_flight_sub_roll_push` 对调。
