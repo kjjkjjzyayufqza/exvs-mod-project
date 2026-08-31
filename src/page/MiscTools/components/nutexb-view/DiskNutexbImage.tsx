@@ -10,10 +10,12 @@ export function DiskNutexbImage({
   path,
   mode,
   className,
+  maxDimension = 128,
 }: {
   path: string;
   mode: "thumb" | "full";
   className?: string;
+  maxDimension?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [pngUrl, setPngUrl] = useState<string | null>(null);
@@ -32,7 +34,7 @@ export function DiskNutexbImage({
         if (mode === "thumb") {
           const raw = await invoke<ArrayBuffer | Uint8Array>("nutexb_rgba_bytes", {
             inputPath: path,
-            maxDimension: 128,
+            maxDimension,
           });
           if (cancelled) return;
           const parsed = parseRgbaResponse(raw);
@@ -62,14 +64,17 @@ export function DiskNutexbImage({
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [mode, path]);
+  }, [maxDimension, mode, path]);
 
   return (
-    <div className={cn("relative flex h-full w-full items-center justify-center bg-black/80", className)}>
+    <div className={cn("relative h-full w-full overflow-hidden bg-black/80", className)}>
       {mode === "thumb" ? (
-        <canvas ref={canvasRef} className="max-h-full max-w-full object-contain" />
+        <canvas
+          ref={canvasRef}
+          className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+        />
       ) : pngUrl ? (
-        <img src={pngUrl} alt="" className="max-h-full max-w-full object-contain" />
+        <img src={pngUrl} alt="" className="absolute inset-0 h-full w-full object-contain" />
       ) : null}
       {loading ? (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40">

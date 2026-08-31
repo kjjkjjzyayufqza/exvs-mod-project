@@ -66,4 +66,19 @@ describe("characterListSearch", () => {
     const all = filterCharacterListRows(characters, "");
     expect(all.map((x) => x.idx)).toEqual([0, 1, 2]);
   });
+
+  it("pins highlighted characters to the top even when they do not match search", () => {
+    const characters = [
+      makeEntry({ entryId: 10, characterName: "Alpha" }),
+      makeEntry({ entryId: 20, characterName: "Beta Gundam" }),
+      makeEntry({ entryId: 30, characterName: "Gamma" }),
+    ];
+    const highlighted = new Set([30]);
+
+    const searched = filterCharacterListRows(characters, "alpha", highlighted);
+    expect(searched.map((x) => x.row.entryId)).toEqual([30, 10]);
+
+    const all = filterCharacterListRows(characters, "", highlighted);
+    expect(all.map((x) => x.row.entryId)).toEqual([30, 10, 20]);
+  });
 });

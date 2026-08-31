@@ -77,6 +77,7 @@
 | D15 | D14 再加 `0.c` bird-special 提交前重发 neutral shared field `0x7` | 仍与原现象完全相同 | `global87/global2` 方向快照不是已证实 owner；撤销 0.c/2.c mask。必须用录像或显式 motion/effect discriminator 区分 world yaw、body-local pose、motion 与 camera，禁止继续叠输入/yaw修补 |
 | D16 | 10f START 仍使用缩短后的 `global689=0x3`，再叠每帧 shared field `0x7` / local `global87` 中和 | 仍出现先对锁、START 中段朝 held direction、SHOOT 再对锁 | 删除所有方向覆盖；按 Messala 恢复 `global689=0xa`，让原生 `func_595` 的 10f aim ownership 覆盖完整 10f START。10f/40f phase timing与 target clamp 保持 |
 | D17 | 按 Messala 恢复 `global689=0xa`，但继续保留 Rebellion tick 尾 translation/pose clamp | 用户报告进入特射时仍有 held-direction 朝向瞬间 | 不再混合 owner；下一候选把 tick 收成 Messala `func_970` 原文：仅 `func_593(); func_167(0x1004000);`。接受 target translation 可能回归，以隔离朝向行为 |
+| D18 | `SPECIAL_SHOT_FLIGHT` START ENTER 一次性 `face_current_target` 后立刻 `stop_aim`（`global689=-1`） | 背对敌人时转向半途停下；射完进入自由控制后仍持续对锁 | START 全程每帧 `face`（TV `func_1042` 的 `0x1f4` 限速）。`stop_aim` 只在 START 置 `252`、SHOOT/END ENTER、以及 `release_flight_owner` 之前。`stop_aim` 不要写 `global714`（I1）。禁止把 `face` 扩到 677/679（D11）。不要改 ACTION `global689=0xa`（D16） |
 
 ## E. 生命周期 / `callFunc3`
 
@@ -117,6 +118,9 @@
 | F4 | 特格取消窗保留 `func_123(0x9a5)` | bit `0x4` 是 packed 前格，引擎 native cancel 到 `0xa2236f44` 跳过窗 | [special-n-bird-dash](./wing-zero-rebellion-special-n-bird-dash.md) 作废路径 |
 | F5 | 特格一进门就 `dash_requested=1`，站立/方向格斗全 hijack | 所有近战变冲刺，取消也没了 | 同上 |
 | F6 | Thinker 注册用裸偏移 `sys_1(0x10001,0,0x1,0x5fef)` | `func_143` 之前的 body 变大就错位 | [bird-form-0c-input-map](./wing-zero-rebellion-bird-form-0c-input-map.md) §1.1 |
+| F7 | 飞行特格 A 段 `func_123(0x200)` 且 `func_233(0x7e, 0)` | **一按特格立刻变普通形态，下落动作丢失**。`0x200` 就是特格；起始按住会 native cancel 进地面特格。`func_233` 第二参 0 不排除 `0x200` | [flight-hit-air-hold-and-special-melee-cancel](./wing-zero-rebellion-flight-hit-air-hold-and-special-melee-cancel.md) 2026-08-30 user |
+| F8 | wait 用 `func_309(global20, 0x960)` 当 TV `func_1054` 超时 | A 已走到 `0x708`，再 6f 就超时，空中 fallback 立刻结束动作 | 同上；2026-08-23 基线已删该超时 |
+| F9 | 飞行特格 ENTER 保形：三 hash 进 `func_41` allowlist 与 `func_882` skip，仍播普通身 Folder `0x1192E91E` | 用户第三次仍报**还是一样改坏了 / 一按丢失**。copy-list：normal-form motion 不能在 bird owner 上启动 | [flight-hit-air-hold-and-special-melee-cancel](./wing-zero-rebellion-flight-hit-air-hold-and-special-melee-cancel.md) 2026-08-30 user。回到 2026-08-23：ENTER `interrupt` 再播 A。视觉会变普通，但下落在。不要再保形除非换鸟 owner 片 |
 
 ## G. 工具链
 
@@ -143,6 +147,9 @@ Homemade NUANMB folder（DCC `*_out.fbx` 导入、Rebellion `tks11a` / `0xa0cd8d
 | I1 | Messala 连续 owner tick 直接用于 Rebellion，但不加 target translation clamp | 对锁、射击、自然收招均正常；ACTIVE 仍持续位移，而 Messala 停住 | `func_593` → `func_167(0x1004000)` 后仅清 ch1/ch2、case-4 vector、`func_300(0)`；禁止清 `0x4000`/motor/`global714`，且 679 (`global184==4`) 跳过 | [messala-flight-sub-shot-flow](./messala-flight-sub-shot-flow.md) §2026-08-28 runtime |
 | I2 | translation clamp 只清移动通道，不清 body-local rotation bank | 位置已停、收招正常，但左右方向键仍改变机体倾斜角 | ACTIVE 最后 `func_104(0,0,0)` + `func_107(0,0,0)` 清 `global268–273` 对应的 body channel-1 姿态；不改 `sys_46(0)` 世界 yaw，679 跳过 | 同上 §Runtime refinement |
 | I3 | Rebellion 使用 loop motion，却在 Messala-style 679 人工等待 10 帧 | 射击已结束且玩家已可自由操控，但 action 仍锁敌并以奇怪姿势离开 | 679 只做一次 cleanup 后立即 `global252=1`；Messala 的 motion-end wait 仅适用于真实 recovery clip | 同上 §looping motion 679 tail |
+| I6 | `0xd94d608f` `SPECIAL_SHOT_FLIGHT` 679 ENTER 立刻 `rebellion_flight_special_release_flight_owner`（`func_351(0x2,0x4)` / `func_296(0x3e8,1)`），同时 `rebellion_flight_special_end_hold` 仍每 tick `rebellion_flight_special_face_current_target` | 照射结束后可自由飞，但朝向仍锁敌 | 679 hold 保持 analog profile 0；`release_flight_owner` 与 `global252` 同一拍、先于 `func_598`（D10）。不是 I3：I3 是 analog 已还回去之后再空等 | 同上 §2026-08-30 679 analog restore |
+| I7 | 百分百 PMX-000 Messala `func_970`（`func_593(); func_167(0x1004000);`）+ Messala `452/453/454=0x64/0x61/0x61`，去掉 Rebellion 平移 clamp / `face` / `stop_aim`，679 ENTER 立刻 profile 2 | **START / SHOOT / END 全程持续移动，跟随键盘方向，足止完全没有** | 不要把 Messala tick 当成足止。鸟形态飞行位 `0x4000` 仍在时，原生 analog 同时写位移和朝向（D9/I1）。梅萨拉的停是它自己的 analog/clip，不可移植。下一刀若要悬停，只能加回 target clamp（I1），不要再叠自制活锁 | 同上 §literal Messala tick E3- 2026-08-30 |
+| I8 | I7 之后只把 ACTION `global452/453/454` 从 `0x64/0x61/0x61` 改成 `0x32/0x32/0x32` | **照射跟杆飞的敏捷度与改前一样** | 这组 mix 在 `func_593`/`func_300` 里被消费，随后 `func_167(0x1004000)` 把飞行 analog 残量按全速写回。要降照射敏捷，必须在 `func_167` **之后**、且仅 `global184==2` 时 `func_298/299/300` 压 ch1/ch2/ch4。不要再降 ENTER mix。不要写成 0（I1 足止 / D2 冻结） | 同上 §I8 ENTER mix |
 | I4 | 按 HUD 序号抄 TV `sys_4F(0xb, 0x3, 0)` 清 Rebellion slot 3，退出不重暂停 | 飛翔在空中就开始 reload | 卸格可以；EXIT 必须三参数重绑 FLYING 后若 `global772==1` 立刻 `sys_4F(0x15, 3, 0)`（`func_1034(4)`） | [slot3-flying-land-reload](./wing-zero-rebellion-slot3-flying-land-reload.md) |
 | I5 | 用 Gyan/Delta 的 `sys_4F(0x16, 3, 0/1)` 藏 Rebellion FLYING HUD | normal 槽 3 变红色 disable | vanilla EW 从不写槽 3 的 `0x16`。`0x16=1` 会把飞翔格打成 sealed。鸟形态卸格用 `0xB`，不要写 byte 322 | 同上；2026-08-29 user |
 

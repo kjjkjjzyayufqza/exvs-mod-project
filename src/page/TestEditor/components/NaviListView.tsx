@@ -21,7 +21,9 @@ import { promptAndMigrateWorkspaceContentIfNeeded } from "@/services/testEditorW
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import { useConfigStore } from "@/store/configStore";
 import { checkStringCoverage, getDefaultRanges } from "@/utils/exvsStringAllowedRanges";
-import { mergeGuiPackPickerItems, resolveGuiPackFolder, type GuiPackPickerItem, type WorkspaceGuiPack } from "./character-list/guiPackIndex";
+import { mergeGuiPackPickerItems, planGuiPackExtract, resolveGuiPackFolder, type GuiPackPickerItem, type WorkspaceGuiPack } from "./character-list/guiPackIndex";
+import { extractWorkspaceGuiPack } from "./character-list/guiPackExtract";
+import { formatGuiHashHex } from "./character-list/guiClonePlan";
 import type { SeriesIdPickerItem } from "./character-list/SeriesIdPickerPopover";
 import { listFhm2dNameMappingEntries } from "@/utils/fhm2dNameMapping";
 import {
@@ -72,6 +74,7 @@ export default function NaviListView({
   workspaceDocument,
 }: NaviListViewProps) {
   const obDplCachePath = useConfigStore((state) => state.obDplCachePath);
+  const obModPath = useConfigStore((state) => state.obModPath);
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [hasChanges, setHasChanges] = useState(false);
   const [isInfoDialogOpen, setIsInfoDialogOpen] = useState(false);
@@ -83,6 +86,7 @@ export default function NaviListView({
   const [guiPackItems, setGuiPackItems] = useState<GuiPackPickerItem[]>([]);
   const [guiPackLoading, setGuiPackLoading] = useState(false);
   const [guiPackError, setGuiPackError] = useState<string | null>(null);
+  const [extractingGuiHash, setExtractingGuiHash] = useState<number | null>(null);
   const [fontCoverageErrorDialogOpen, setFontCoverageErrorDialogOpen] = useState(false);
   const [fontCoverageErrors, setFontCoverageErrors] = useState<FontCoverageError[]>([]);
   const hasChangesRef = useRef(false);
@@ -339,6 +343,54 @@ export default function NaviListView({
     [guiPackItems, handleOpenPath],
   );
 
+  const handleExtractGuiPack = useCallback(
+    async (hash: number, fieldKey: string) => {
+      const plan = planGuiPackExtract(hash, fieldKey, guiPackItems);
+      if (!plan) {
+        toast.error(hash === 0 ? "No pack hash" : "Pack is already extracted");
+        return;
+      }
+      const dplCachePath = (obDplCachePath ?? "").trim();
+      if (!dplCachePath) {
+        toast.error("Set OB dplcache path in Config");
+        return;
+      }
+      if (!folderPath) {
+        toast.error("Set EXVS2 Workspace folder first");
+        return;
+      }
+      setExtractingGuiHash(plan.hash);
+      try {
+        const extracted = await extractWorkspaceGuiPack({
+          dplCachePath,
+          workspaceRoot: folderPath,
+          obModPath: (obModPath ?? "").trim() || null,
+          hash: plan.hash,
+          packagePath: plan.packagePath,
+          structureName: plan.structureName,
+        });
+        toast.success(`Extracted ${extracted.name}`, {
+          description: `009gui/${extracted.workspaceRelative}`,
+        });
+        await loadGuiPacks();
+        onPackMutated?.({
+          packKey: extracted.structureJsonPath || extracted.folderPath,
+          routeId: null,
+          prefix: "009gui",
+          hashFolderName: extracted.name || formatGuiHashHex(extracted.hash),
+          folderPath: extracted.folderPath,
+          structureJsonPath: extracted.structureJsonPath,
+          sourceLayout: "configured",
+        });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+      } finally {
+        setExtractingGuiHash(null);
+      }
+    },
+    [folderPath, guiPackItems, loadGuiPacks, obDplCachePath, obModPath, onPackMutated],
+  );
+
   const fileMeta = useMemo(() => {
     if (loadState.status !== "ready") return null;
     return {
@@ -464,6 +516,8 @@ export default function NaviListView({
             guiPackLoading={guiPackLoading}
             guiPackError={guiPackError}
             onOpenGuiPackFolder={(hash) => void handleOpenGuiPackFolder(hash)}
+            onExtractGuiPack={(hash, fieldKey) => void handleExtractGuiPack(hash, fieldKey)}
+            extractingGuiHash={extractingGuiHash}
             onChange={handleEditorChange}
             onSelectChange={setSelectedIndex}
           />

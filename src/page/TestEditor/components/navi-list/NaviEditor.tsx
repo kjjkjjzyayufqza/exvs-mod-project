@@ -30,6 +30,8 @@ interface NaviEditorProps {
   guiPackLoading?: boolean;
   guiPackError?: string | null;
   onOpenGuiPackFolder?: (hash: number) => void;
+  onExtractGuiPack?: (hash: number, fieldKey: string) => void;
+  extractingGuiHash?: number | null;
   onChange: (data: NaviListData) => void;
   onSelectChange?: (index: number) => void;
 }
@@ -45,6 +47,8 @@ export function NaviEditor({
   guiPackLoading,
   guiPackError,
   onOpenGuiPackFolder,
+  onExtractGuiPack,
+  extractingGuiHash,
   onChange,
   onSelectChange,
 }: NaviEditorProps) {
@@ -183,6 +187,8 @@ export function NaviEditor({
             guiPackLoading={guiPackLoading}
             guiPackError={guiPackError}
             onOpenGuiPackFolder={onOpenGuiPackFolder}
+            onExtractGuiPack={onExtractGuiPack}
+            extractingGuiHash={extractingGuiHash}
             onChange={handleUpdate}
           />
         ) : (

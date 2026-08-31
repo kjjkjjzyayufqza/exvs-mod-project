@@ -8,6 +8,12 @@ export interface CharacterListRowRef {
   idx: number;
 }
 
+const EMPTY_HIGHLIGHTS: ReadonlySet<number> = new Set();
+
+export function normalizeCharacterHighlightId(entryId: number): number {
+  return entryId >>> 0;
+}
+
 function normalizeSearchText(value: string): string {
   return value.toLowerCase();
 }
@@ -37,8 +43,28 @@ export function characterListEntryMatchesSearch(
 export function filterCharacterListRows(
   characters: CharacterListEntry[],
   query: string,
+  highlightedEntryIds?: ReadonlySet<number>,
 ): CharacterListRowRef[] {
   const mapped = characters.map((row, idx) => ({ row, idx }));
-  if (!query.trim()) return mapped;
-  return mapped.filter(({ row }) => characterListEntryMatchesSearch(row, query));
+  const highlighted = highlightedEntryIds ?? EMPTY_HIGHLIGHTS;
+  const visible = !query.trim()
+    ? mapped
+    : mapped.filter(
+        ({ row }) =>
+          highlighted.has(normalizeCharacterHighlightId(row.entryId)) ||
+          characterListEntryMatchesSearch(row, query),
+      );
+
+  if (highlighted.size === 0) return visible;
+
+  const starred: CharacterListRowRef[] = [];
+  const rest: CharacterListRowRef[] = [];
+  for (const item of visible) {
+    if (highlighted.has(normalizeCharacterHighlightId(item.row.entryId))) {
+      starred.push(item);
+    } else {
+      rest.push(item);
+    }
+  }
+  return starred.length === 0 ? visible : [...starred, ...rest];
 }

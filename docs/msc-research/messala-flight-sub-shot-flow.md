@@ -1,7 +1,7 @@
 # Messala 飞行模式副射：完整 `func_593` 流程
 
 **Date:** 2026-08-28  
-**Status:** Continuous owner and translation clamp E3. Looping-motion 679 recovery wait E3- on 2026-08-28; immediate-end candidate built. Pose clamp retest not separately graded.  
+**Status:** Continuous owner and translation clamp E3. Looping-motion 679 recovery wait E3- on 2026-08-28 (I3). 679 ENTER analog restore while `end_hold` still locks yaw E3- on 2026-08-30 (I6). Literal PMX-000 Messala tick E3- on 2026-08-30 (I7). ENTER `452/453/454=0x32` mix E3- on 2026-08-30 (I8): no observable agility change. Post-`func_167` SHOOT `func_298/299/300(0x14)` is E1 pending.  
 **Kind:** Cross-unit MSC action-flow reference
 
 ## Sources
@@ -723,3 +723,269 @@ Static gates on the implemented build: `msclang.py` compile pass,
 warnings, `check_msc_action_shape.py` 0 errors,
 `tools/tests/test_rebellion_flight_special_messala_flow.py` 9/9 pass. This is E1
 until the next in-game run.
+
+## 2026-08-30: 679 ENTER analog restore vs 足止
+
+**Status:** E3- user report of the ENTER-restore split (2026-08-30); the delayed
+`release_flight_owner` candidate is E1 pending the same in-game matrix.
+
+User report after SHOOT: during 679 the unit could already fly, but heading
+stayed locked on the current target. Source of that split is one write:
+
+```c
+// 679 ENTER (falsified I6)
+rebellion_flight_special_end_hold = 0x1;
+rebellion_flight_special_release_flight_owner();  // func_351(0x2, 0x4)
+```
+
+`end_hold` keeps `rebellion_flight_special_stop_translation` and
+`rebellion_flight_special_face_current_target` live, but
+`func_351(0x2, 0x4)` has already given analog translation back. Native analog
+wins position; the script still owns yaw. That is the reported "free move,
+locked heading" window.
+
+This is not I3. I3 was a looping-motion wait *after* analog was already
+restored. The 0x19 hold is a real foot-stop only while analog stays at
+profile 0 from `special_shot_flight_start`.
+
+One variable: move `rebellion_flight_special_release_flight_owner()` from 679
+ENTER to the resolving tick, before `global252`, so `func_598` still sees
+profile 2 (D10). Do not `func_169(0x4000)` (I1). Do not drop the motor. Do not
+extend the yaw writer into a new phase (D11). Interrupt during the hold still
+uses `func_41` `profile_swapped`.
+
+```text
+H  679 hold stays foot-stopped because analog is still profile 0
+P  after the beam dies, ~25f (0x19) of no translation and lock heading;
+   then analog flight returns; no air-idle / fake-normal
+F  can still fly during the hold, OR heading unlocks while still stopped,
+   OR EXIT is air idle / fake normal / cannot fly
+```
+
+## 2026-08-30: 679 不再锁敌；SHOOT 40f → 60f
+
+**Status:** E1 source-pinned; behaviour untested.
+
+User: after the beam, keep the foot-stop but stop facing the lock; also
+lengthen the shoot window.
+
+Heading owner is now phase-gated:
+
+| Phase | translation | `sys_46(0, func_102(...))` |
+|---|---|---|
+| 676 every frame | clamp | `face_current_target` (TV `0x1f4` cap) |
+| 676 yield (`252`) | clamp | `stop_aim`; native `global689` becomes `-1` |
+| 677 / 678 | clamp | **no** `face`; ENTER `stop_aim` |
+| 679 `end_hold` | clamp, analog still profile 0 | **no write** (D11); ENTER `stop_aim` |
+| `global252` | `stop_aim` then `release_flight_owner` | analog, no force aim |
+
+One-shot `face_current_target` is not the 679 writer. Native `func_595`
+still writes lock yaw after `func_72` while `global689` is `0xa` (10f
+window, then `0x5` residual on remaining START frames). That heading
+freezes through SHOOT/END, and `release_flight_owner` can look like a
+brief lock snap (D11 退出竞争).
+
+`rebellion_flight_special_stop_aim` is the same flag set as
+`rebellion_sub_shot_custom_stop_aim` (`global693=0`, `global689=-1`,
+`global79=0`, `global714=0x64`, `global722=1`, `func_300(0)`). Do not
+call the custom symbol. Do not change ACTION `global689=0xa` in this
+pass (D16). Do not `func_104` in `stop_aim`.
+
+```text
+H  native func_595 is what still faces after START one-shot; stop_aim
+   on START ENTER (after the snap) plus SHOOT/END ENTER kills live tracking
+P  charge snaps to lock once; SHOOT/END heading is frozen; after 679
+   analog returns without an extra lock-turn
+F  still tracks through END, OR a snap after analog returns (next
+   variable: release / air-idle, not another face_current_target), OR
+   START never locks, OR fires while moving (I1)
+```
+
+## 2026-08-30: START one-shot + ENTER `stop_aim` E3-
+
+**Status:** E3- in-game (2026-08-30). Next candidate is E1 pending.
+
+`func_102(..., 0x1f4, 0x2)` is a per-call cap. One ENTER snap from a rear
+heading stopped halfway. `stop_aim` on that same ENTER also set
+`global689=-1`, so native `func_595` did not finish the turn. After analog
+restore the lock still tracked.
+
+```text
+H  START owns the whole 0x19 charge turn; aim ownership ends when START
+   yields and again on analog restore; SHOOT/679 never face
+P  rear approach finishes facing during charge; beam and 679 hold do not
+   track; stick heading after analog restore does not keep turning to lock
+F  rear approach still stops short, OR free-control still tracks lock, OR
+   fires while moving (I1), OR EXIT air-idle
+```
+
+SHOOT TUNE is `0x3c` (60f), was `0x28` (CS2 40f copy). Same `sys_4F` pair and
+SE stop; only the `global244` gate moved. If the projectile dies on its own
+row lifetime, the extra frames are pose+clamp, not a longer beam — that is
+the in-game discriminator.
+
+Two knobs in one source pass because both were requested together. If the
+run is mixed, change only one next.
+
+```text
+H  679 hold is stopped and heading is frozen (last SHOOT yaw), not tracking
+P  after the beam: cannot translate; stick/lock does not keep turning the
+   body; shoot window is visibly longer than the previous 40f poke
+F  still tracks the lock through END, OR can fly during END, OR beam length
+   is unchanged because the projectile row dies at 40f
+```
+
+## 2026-08-30: START-only aim, tick stays Messala
+
+**Status:** E1 source-pinned; behaviour untested.
+
+`callFunc3` still hangs `special_shot_flight_tick`. Changing it to the 676
+start body is registry E1.
+
+Tick now matches `sub_shot_flight_tick`: only `func_593();`. That sub
+untransforms at ENTER, so it needs nothing else. Flight special keeps bird
+form, so `func_167(0x1004000)` and the translation clamp moved into the four
+phase bodies (`rebellion_flight_special_reassert_and_clamp`). Aim stays in
+`special_shot_flight_start` ENTER only (one-shot), then
+`rebellion_flight_special_stop_aim` so `func_595` sees `global689==-1`.
+
+Those writes now run *inside* `func_72`, so `func_595`/`func_596`
+`func_300` may run after the clamp (weaker than tick-after-`func_593`, I1).
+
+```text
+H  tick is vanilla func_593; START aims; SHOOT/END do not track; unit still
+   foot-stops because each phase reasserts and clamps
+P  charge turns to lock; beam and 679 hold do not keep turning; no free fly
+   during the shot; EXIT still flies
+F  fires while moving (I1), OR still tracks through SHOOT/END, OR START
+   never locks, OR EXIT air-idle
+```
+
+## 2026-08-30: literal PMX-000 Messala tick
+
+**Status:** E3- in-game (2026-08-30): START/SHOOT/END all stick-follow;
+foot-stop gone. See I7.
+
+User: 百分百参考 PMX-000 梅萨拉 `002zgundm_003mesala_001`
+`ACTION_AB_SUB_LOCK_SWITCH` `func_970-974`.
+
+Tick is Messala `func_970`:
+
+```c
+func_593();
+func_167(0x1004000);
+```
+
+Removed homemade `face_current_target`, `stop_aim`, and the translation
+clamp. Native `func_595` owns START yaw (`global689=0xa`). SHOOT/END do
+not write `sys_46(0)`. Movement mix is Messala `452/453/454 =
+0x64/0x61/0x61`. Accept registered I1 translation.
+
+Target-only adapters that are not Messala heading:
+
+- resources / loop `0x9de587ce` / `CDA9F565/566` / `global681=0x2`
+- `global698=0x14` (bird commit window, D10)
+- 679: loop has no `func_974` clip (I3), so cleanup then
+  `release_flight_owner` (profile 2) then `global252` (D10)
+- `func_41` keep-form / profile restore
+
+```text
+H  Messala 970 ownership; no homemade yaw; bird analog restored on 679 252
+P  START native 10f lock turn; SHOOT stick may change heading; may
+   translate while firing (I1); EXIT still flies in bird form
+F  EXIT air-idle / cannot fly, OR homemade lock still runs in SHOOT, OR
+   no actions (E1 callFunc3)
+```
+
+### Runtime E3- 2026-08-30: foot-stop gone on every phase
+
+**Status:** E3- user report (2026-08-30). No further source change this pass.
+
+User: 照射全程（START / SHOOT / END）都在持续移动，跟随键盘方向，足止完全没有。效果奇怪，要求只记录、不再改。
+
+This is registered I1 on a broader predicate: not residual slide while
+locked, but **stick-owned translation and heading for the whole quartet**.
+Registry **I7**.
+
+Possible owners, ranked. These are hypotheses until a one-variable retest.
+Do not treat this list as a patch order.
+
+1. **Translation clamp removed.** I1 already: Messala `func_970` on this
+   unit without the ch1/2/4 + `func_300(0)` adapter keeps flying. The
+   clamp was the only MSC writer that zeroed flight leftover mag. With it
+   gone, START/SHOOT/END have no stop.
+
+2. **`func_167(0x1004000)` every tick, all phases.** Messala's load-bearing
+   flight reassert. On Rebellion it keeps `global24 & 0x4000` in the bird
+   flight movement model. D9: while that bit is on, native analog maps
+   stick to world yaw. Same model maps stick to translation. Profile 0
+   does not turn that model off.
+
+3. **Messala `global452/453/454 = 0x64/0x61/0x61`.** Feeds `func_594` /
+   `func_300` as ~97% channel-4 scale. The previous bird-main zeros
+   (`0/0/0`) were the foot-stop mix. Restoring Messala mix plus (1) and
+   (2) is full analog travel, not a hover.
+
+4. **`func_351(0, 0x4)` is not bird foot-stop.** Messala transform analog
+   plus its clip `0xc8fd1afb` looked stopped in the I1 compare. Rebellion
+   bird analog is `0x77b100ff` / profile 2. Profile 0 on ENTER does not
+   proven-kill stick translation on this class.
+
+5. **Loop motion `0x9de587ce`.** Messala waits on a recovery clip.
+   Rebellion plays the bird fly loop the whole action. The clip itself
+   may carry travel; it is not a hover pose.
+
+6. **679 ENTER `release_flight_owner` (`func_351(0x2, 0x4)`).** Explains
+   END following the stick (I6 translation half, without the old yaw
+   writer). Does **not** by itself explain START and SHOOT, which still
+   use profile 0. If all three phases moved the same way, (1)–(4) are
+   the common owner; (6) only makes END worse.
+
+7. **Motor stays on.** `func_594` re-enables `func_296(0x3e8, 1)` on
+   flight. Combined with `0x4000`, stick has a live motor. Dropping the
+   motor was E3- for EXIT and is not licensed as a foot-stop.
+
+8. **Not a leftover homemade yaw writer.** `face_current_target` /
+   `stop_aim` / clamp symbols are gone from the phase bodies. Stick
+   follow is native flight analog filling the vacuum, same hole as D9.
+
+What this does **not** license: copying Messala tick as a foot-stop.
+Messala's stop was never portable; I1 already said the target needs its
+own translation adapter. Heading freeze during the beam is a separate
+gerobi requirement Messala `func_972` does not own.
+
+### 2026-08-30 mix scale (I7 kept, agility down)
+
+User: 移动射击可以留，但敏捷度太高。
+
+One variable: ACTION `global452/453/454` `0x64/0x61/0x61` → `0x32/0x32/0x32`.
+Tick, clamp, `face`/`stop_aim`, `global689`, analog profile, 679 restore
+unchanged. Not D2: values stay non-zero so `func_300` does not freeze.
+
+```text
+H  50% func_594 mix keeps stick-follow but slows leftover analog
+P  START/SHOOT/END still translate with stick; travel/turn-in-place feel
+   slower; EXIT still flies in bird form
+F  freeze / cannot steer (D2), no observable slowdown, OR EXIT air-idle (D10)
+```
+
+**Status:** E3- user report (2026-08-30). ENTER mix `0x32` did not change
+agility (I8). Next candidate is post-`func_167` channel scale on SHOOT.
+
+### 2026-08-30 post-167 SHOOT scale
+
+One variable: after `func_167`, while `global184==2` only, scale leftover
+channels with `func_298/299/300` (`sys_46(0x3, ch1/ch2/ch4)`).
+In-game `0x14` (20%) was too slow; current TUNE is `0x32` (50%).
+Ceiling `0x64`. Not `0` (I1 foot-stop / D2 freeze). Skip START (`184==1`)
+and 679 (`184==4`). Keep `0x4000`, motor, and analog profile policy.
+
+```text
+H  last-writer channel scale after func_167 slows beam analog leftover
+P  during the gerobi only, stick still moves the unit but clearly slower;
+   START charge and 679 EXIT fly at the previous I7 rate; no freeze
+F  beam agility unchanged (native analog after MSC tick), freeze, OR
+   EXIT air-idle / cannot fly
+```
+
+**Status:** E3 in-game: 20% too slow (2026-08-30). TUNE raised to 50%.

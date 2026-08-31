@@ -23,9 +23,9 @@ import {
   clonedGuiPackIdentity,
   CloneGuiSetResult,
   ClonedGuiPack,
-  DEFAULT_GUI_CLONE_DONOR_ENTRY_ID,
   formatGuiHashHex,
   guiCloneFieldLabel,
+  isMsGuiCloneKey,
   isNaviGuiCloneKey,
   isPilotGuiCloneKey,
   MIXED_GUI_CLONE_DONOR_ENTRY_ID,
@@ -85,7 +85,7 @@ export function CloneGuiDialog({
   const testEditorFolder = useConfigStore((s) => s.testEditorFolder);
   const obModPath = useConfigStore((s) => s.obModPath);
 
-  const [donorEntryId, setDonorEntryId] = useState(String(DEFAULT_GUI_CLONE_DONOR_ENTRY_ID));
+  const [donorEntryId, setDonorEntryId] = useState("");
   const [copyToObMod, setCopyToObMod] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [structureNames, setStructureNames] = useState<Record<string, string>>({});
@@ -96,6 +96,11 @@ export function CloneGuiDialog({
 
   const targetEntryId = targetEntry?.entryId ?? 0;
   const mixedDonor = Number(donorEntryId) === MIXED_GUI_CLONE_DONOR_ENTRY_ID;
+  const donorEntry = useMemo(() => {
+    const id = Number(donorEntryId);
+    if (!id) return null;
+    return characterList.entries.find((entry) => entry.entryId === id) ?? null;
+  }, [characterList.entries, donorEntryId]);
   const workspaceGuiRoot = `${(testEditorFolder ?? "").trim().replace(/[\\/]+$/, "")}\\009gui`;
 
   const previewRequest = useMemo(
@@ -122,7 +127,7 @@ export function CloneGuiDialog({
 
   useEffect(() => {
     if (!open) return;
-    setDonorEntryId(String(DEFAULT_GUI_CLONE_DONOR_ENTRY_ID));
+    setDonorEntryId("");
     setCopyToObMod(false);
     setSelectedKeys(new Set());
     setStructureNames({});
@@ -144,6 +149,9 @@ export function CloneGuiDialog({
     if (!previewRequest.targetEntryId) {
       throw new Error("Select a character first");
     }
+    if (!previewRequest.donorEntryId) {
+      throw new Error("Enter a donor character ID");
+    }
     return invoke<CloneGuiSetResult>("clone_character_gui_set", {
       request: {
         ...previewRequest,
@@ -154,6 +162,13 @@ export function CloneGuiDialog({
 
   useEffect(() => {
     if (!open || !targetEntryId) return;
+    if (!previewRequest.donorEntryId) {
+      setBusy(false);
+      setError(null);
+      setPreview(null);
+      setSelectedKeys(new Set());
+      return;
+    }
     let cancelled = false;
     setBusy(true);
     setError(null);
@@ -190,8 +205,13 @@ export function CloneGuiDialog({
     () => (preview?.packs ?? []).filter((pack) => isNaviGuiCloneKey(pack.fieldKey)),
     [preview],
   );
+  const msPacks = useMemo(
+    () => (preview?.packs ?? []).filter((pack) => isMsGuiCloneKey(pack.fieldKey)),
+    [preview],
+  );
   const selectedCount = selectedKeys.size;
   const selectedPilotCount = pilotPacks.filter((pack) => selectedKeys.has(pack.fieldKey)).length;
+  const selectedMsCount = msPacks.filter((pack) => selectedKeys.has(pack.fieldKey)).length;
   const selectedNaviCount = naviPacks.filter((pack) => selectedKeys.has(pack.fieldKey)).length;
 
   function setGroupSelected(packs: ClonedGuiPack[], checked: boolean) {
@@ -227,7 +247,7 @@ export function CloneGuiDialog({
         request: {
           ...previewRequest,
           copyToObMod,
-          clonePilot: selectedPilotCount > 0,
+          clonePilot: selectedPilotCount + selectedMsCount > 0,
           cloneNavi: selectedNaviCount > 0,
           selectedFieldKeys,
           structureNames: Object.fromEntries(
@@ -305,10 +325,11 @@ export function CloneGuiDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[85vh] max-w-5xl flex-col overflow-hidden">
         <DialogHeader>
-          <DialogTitle>Clone Wing Zero GUI</DialogTitle>
+          <DialogTitle>Clone GUI</DialogTitle>
           <DialogDescription>
-            Select rows to unpack. Inner files extract into the EXVS2 Workspace mod root 009gui folders
-            with a new HashName for later Repack. Inner .lm / textures are not edited.
+            Clone the donor unit's 009gui packs onto the selected character. Inner files extract into
+            EXVS2 Workspace 009gui folders with a new HashName for later Repack. Inner .lm /
+            textures are not edited.
           </DialogDescription>
         </DialogHeader>
 
@@ -323,14 +344,22 @@ export function CloneGuiDialog({
               <Input
                 value={donorEntryId}
                 onChange={(event) => setDonorEntryId(event.target.value)}
+                placeholder="character_list entryId"
               />
+              {donorEntry ? (
+                <div className="text-xs text-muted-foreground">
+                  {donorEntry.characterName || "Unnamed"} · unique {donorEntry.characterUniqueId}
+                </div>
+              ) : Number(donorEntryId) ? (
+                <div className="text-xs text-destructive">Donor entry not in character_list</div>
+              ) : null}
             </div>
           </div>
 
           <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
             <div>Workspace output folder: {workspaceGuiRoot || "(set EXVS2 Workspace folder)"}</div>
             <div>
-              Unpack donor FHM2D into mod workspace folders under 009gui. Structure HashName becomes 0xNEW for Repack.
+              Unpack donor FHM2D from dplcache, OB mod, or an existing 009gui extract. Structure HashName becomes 0xNEW for Repack.
             </div>
             {copyToObMod && obModPath ? (
               <div>Also repack the extracted folder into: {obModPath}\0xNEW.fhm2d</div>
@@ -339,7 +368,7 @@ export function CloneGuiDialog({
 
           {mixedDonor ? (
             <p className="text-sm text-amber-600">
-              28001001 mixes 016 cut-in with 028 boost/scP. Prefer {DEFAULT_GUI_CLONE_DONOR_ENTRY_ID} (EW Heero).
+              28001001 mixes 016 cut-in with 028 boost/scP.
             </p>
           ) : null}
 
@@ -402,8 +431,28 @@ export function CloneGuiDialog({
             disabled={busy || Boolean(completed)}
           />
           <PackGroup
+            title="MS Properties"
+            hint="Writes character_list MS hash fields on the target unit"
+            packs={msPacks}
+            selectedKeys={selectedKeys}
+            copyToObMod={copyToObMod}
+            groupState={groupCheckedState(
+              msPacks.map((pack) => pack.fieldKey),
+              selectedKeys,
+            )}
+            onToggleGroup={(checked) => setGroupSelected(msPacks, checked)}
+            onToggleRow={toggleRow}
+            structureNames={structureNames}
+            targetEntryId={targetEntryId}
+            workspaceGuiRoot={workspaceGuiRoot}
+            onStructureNameChange={(fieldKey, value) =>
+              setStructureNames((prev) => ({ ...prev, [fieldKey]: value }))
+            }
+            disabled={busy || Boolean(completed)}
+          />
+          <PackGroup
             title="Navi GUI"
-            hint={`Remaps Relena hashes in navi_list (${NAVI_LIST_PACK_HASH_HEX}) only for selected rows`}
+            hint={`Copies navi_list rows that share the donor seriesId, then remaps their GUI hashes (${NAVI_LIST_PACK_HASH_HEX})`}
             packs={naviPacks}
             selectedKeys={selectedKeys}
             copyToObMod={copyToObMod}

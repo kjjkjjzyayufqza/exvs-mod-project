@@ -6,11 +6,16 @@ import { Input } from "@/components/ui/input";
 import type { CharacterListEntry } from "@/models/characterListEntry";
 import { cn } from "@/lib/utils";
 import { CharacterCard } from "./CharacterCard";
-import { filterCharacterListRows } from "./characterListSearch";
+import {
+  loadCharacterListHighlights,
+  saveCharacterListHighlights,
+} from "./characterListHighlightCache";
+import { filterCharacterListRows, normalizeCharacterHighlightId } from "./characterListSearch";
 
 interface CharacterListProps {
   characters: CharacterListEntry[];
   selectedIndex: number;
+  sourceFilePath?: string;
   cardIconConvertDirPath?: string;
   cardIconNameOrder?: Array<string | null>;
   onSelect: (index: number) => void;
@@ -21,6 +26,7 @@ interface CharacterListProps {
 export function CharacterList({
   characters,
   selectedIndex,
+  sourceFilePath,
   cardIconConvertDirPath,
   cardIconNameOrder,
   onSelect,
@@ -30,6 +36,10 @@ export function CharacterList({
   const [searchTerm, setSearchTerm] = useState("");
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [highlightedEntryIds, setHighlightedEntryIds] = useState<Set<number>>(() => {
+    if (!sourceFilePath?.trim()) return new Set();
+    return new Set(loadCharacterListHighlights(sourceFilePath));
+  });
 
   const listParentRef = useRef<HTMLDivElement | null>(null);
   const getListScrollElement = useCallback(() => listParentRef.current, []);
@@ -40,9 +50,39 @@ export function CharacterList({
     if (selectedIndex >= 0) lastSelectedIndexRef.current = selectedIndex;
   }, [selectedIndex]);
 
+  useEffect(() => {
+    if (!sourceFilePath?.trim()) {
+      setHighlightedEntryIds(new Set());
+      return;
+    }
+    setHighlightedEntryIds(new Set(loadCharacterListHighlights(sourceFilePath)));
+  }, [sourceFilePath]);
+
+  const persistHighlightedEntryIds = useCallback(
+    (next: Set<number>) => {
+      if (!sourceFilePath?.trim()) return;
+      saveCharacterListHighlights(sourceFilePath, next);
+    },
+    [sourceFilePath],
+  );
+
+  const toggleHighlight = useCallback(
+    (entryId: number) => {
+      setHighlightedEntryIds((prev) => {
+        const id = normalizeCharacterHighlightId(entryId);
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        persistHighlightedEntryIds(next);
+        return next;
+      });
+    },
+    [persistHighlightedEntryIds],
+  );
+
   const filteredRows = useMemo(
-    () => filterCharacterListRows(characters, deferredSearchTerm),
-    [characters, deferredSearchTerm],
+    () => filterCharacterListRows(characters, deferredSearchTerm, highlightedEntryIds),
+    [characters, deferredSearchTerm, highlightedEntryIds],
   );
 
   const rowVirtualizer = useVirtualizer({
@@ -62,11 +102,13 @@ export function CharacterList({
 
     const targetIndex = lastSelectedIndexRef.current;
     if (targetIndex < 0 || targetIndex >= characters.length) return;
+    const virtualIndex = filteredRows.findIndex((item) => item.idx === targetIndex);
+    if (virtualIndex < 0) return;
 
     requestAnimationFrame(() => {
-      rowVirtualizer.scrollToIndex(targetIndex, { align: "center" });
+      rowVirtualizer.scrollToIndex(virtualIndex, { align: "center" });
     });
-  }, [characters.length, deferredSearchTerm, rowVirtualizer]);
+  }, [characters.length, deferredSearchTerm, filteredRows, rowVirtualizer]);
 
   const handleClearInput = useCallback(() => {
     setSearchTerm("");
@@ -101,6 +143,7 @@ export function CharacterList({
       {searchTerm.trim() && (
         <div className="text-xs text-muted-foreground mb-2">
           Found {filteredRows.length} of {characters.length} characters
+          {highlightedEntryIds.size > 0 ? ` · Star ${highlightedEntryIds.size} pinned` : ""}
         </div>
       )}
 
@@ -136,9 +179,11 @@ export function CharacterList({
                   cardIconConvertDirPath={cardIconConvertDirPath}
                   cardIconNameOrder={cardIconNameOrder}
                   isSelected={idx === selectedIndex}
+                  isHighlighted={highlightedEntryIds.has(normalizeCharacterHighlightId(row.entryId))}
                   onClick={() => onSelect(idx)}
                   onDelete={() => onDelete(idx)}
                   onCopy={() => onCopy(idx)}
+                  onToggleHighlight={() => toggleHighlight(row.entryId)}
                 />
               </div>
             );

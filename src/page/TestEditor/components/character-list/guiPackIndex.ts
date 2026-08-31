@@ -1,4 +1,6 @@
 import type { Fhm2dNameMappingEntry } from "@/utils/fhm2dNameMapping";
+import { findFhm2dNameMapping } from "@/utils/fhm2dNameMapping";
+import { sanitizeFhm2dStructureName } from "@/utils/fhm2dStructureMetadata";
 import { formatGuiHashHex } from "./guiClonePlan";
 
 export const CHARACTER_GUI_HASH_FIELDS = [
@@ -6,6 +8,14 @@ export const CHARACTER_GUI_HASH_FIELDS = [
   "lmbPilotClothing",
   "lmbBoost",
   "exPilotClothingLmbHash",
+  "msIghR",
+  "msVsR",
+  "msVsL",
+  "msTracker",
+  "msMsL",
+  "msMsS",
+  "msMn",
+  "msCrs",
   "vsPL",
   "vsPLC02",
   "vsPLC03",
@@ -26,6 +36,7 @@ export type WorkspaceGuiPack = {
   folderPath: string;
   structureJsonPath: string;
   workspaceRelative: string;
+  previewNutexbPath?: string | null;
 };
 
 export type GuiPackPickerItem = {
@@ -33,15 +44,75 @@ export type GuiPackPickerItem = {
   label: string;
   secondaryText: string;
   folderPath: string | null;
+  packagePath: string | null;
+  nutexbPath: string | null;
   source: "workspace" | "name-map" | "character-list";
 };
 
-const PILOT_PATH_MARKERS = [
-  "009gui/flash/pilot",
-  "009gui/image/pilot",
-  "009gui/flash/navi",
-  "009gui/image/navi",
-];
+export type GuiPackExtractPlan = {
+  hash: number;
+  packagePath: string;
+  structureName: string;
+};
+
+const GUI_PATH_MARKERS = [
+  "flash/pilot",
+  "image/pilot",
+  "flash/navi",
+  "image/navi",
+] as const;
+
+const GUI_NAME_PREFIX_RE = /^(st_p_|ex_p_|vs_p_|sc_p_|navi_)/i;
+
+const MS_GUI_PREFIX_TO_PACKAGE_BASE = {
+  ms_igh_r_: "009gui/image/ms/ms_igh_r",
+  ms_vs_r_: "009gui/image/ms/ms_vs_r",
+  ms_vs_l_: "009gui/image/ms/ms_vs_l",
+  ms_tracker_: "009gui",
+  ms_ms_l_: "009gui/image/ms/ms_ms_l",
+  ms_ms_s_: "009gui/image/ms/ms_ms_s",
+  ms_mn_: "009gui/image/ms/ms_mn",
+  ms_crs_: "009gui/image/ms/ms_crs",
+} as const;
+
+const MS_GUI_FIELD_PREFIXES: Record<string, keyof typeof MS_GUI_PREFIX_TO_PACKAGE_BASE> = {
+  msIghR: "ms_igh_r_",
+  msVsR: "ms_vs_r_",
+  msVsL: "ms_vs_l_",
+  msTracker: "ms_tracker_",
+  msMsL: "ms_ms_l_",
+  msMsS: "ms_ms_s_",
+  msMn: "ms_mn_",
+  msCrs: "ms_crs_",
+};
+
+const MS_GUI_PREFIXES = Object.keys(MS_GUI_PREFIX_TO_PACKAGE_BASE) as Array<
+  keyof typeof MS_GUI_PREFIX_TO_PACKAGE_BASE
+>;
+
+const MS_GUI_IMAGE_PATH_MARKERS = MS_GUI_PREFIXES.filter((prefix) => prefix !== "ms_tracker_").map(
+  (prefix) => `image/ms/${prefix.slice(0, -1)}/`,
+);
+
+function normalizeGuiRelativePath(path: string): string {
+  let normalized = path.replace(/\\/g, "/").trim().replace(/^\/+/, "").replace(/\/+$/, "").toLowerCase();
+  if (normalized.startsWith("app/data/")) normalized = normalized.slice("app/data/".length);
+  if (normalized.startsWith("x64/")) normalized = normalized.slice("x64/".length);
+  if (normalized.startsWith("009gui/")) normalized = normalized.slice("009gui/".length);
+  return normalized;
+}
+
+function isGuiPackName(name: string): boolean {
+  const normalized = name.trim().toLowerCase();
+  return GUI_NAME_PREFIX_RE.test(normalized) || MS_GUI_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
+function isMsGuiPath(path: string): boolean {
+  const relative = normalizeGuiRelativePath(path);
+  if (!relative) return false;
+  if (relative.startsWith("ms_tracker_")) return true;
+  return MS_GUI_IMAGE_PATH_MARKERS.some((marker) => relative.includes(marker));
+}
 
 export function isCharacterGuiHashField(name: string): name is CharacterGuiHashField {
   return (CHARACTER_GUI_HASH_FIELDS as readonly string[]).includes(name);
@@ -77,21 +148,24 @@ export function expectedWorkspaceGuiFolder(
 }
 
 export function isPilotOrNaviExtract(workspaceRelative: string, name: string): boolean {
-  const path = workspaceRelative.replace(/\\/g, "/").toLowerCase();
-  if (path.includes("flash/pilot") || path.includes("image/pilot")) return true;
-  if (path.includes("flash/navi") || path.includes("image/navi")) return true;
-  return /^(st_p_|ex_p_|vs_p_|sc_p_|navi_)/i.test(name);
+  const path = normalizeGuiRelativePath(workspaceRelative);
+  if (GUI_PATH_MARKERS.some((marker) => path.includes(marker))) return true;
+  if (isMsGuiPath(path)) return true;
+  return isGuiPackName(name);
 }
 
 export function isGuiRelatedNameMapping(entry: Fhm2dNameMappingEntry): boolean {
-  const path = (entry.packagePath ?? entry.gameRelativePath ?? "").replace(/\\/g, "/").toLowerCase();
-  if (PILOT_PATH_MARKERS.some((marker) => path.includes(marker))) return true;
-  return /^(st_p_|ex_p_|vs_p_|sc_p_|navi_)/i.test(entry.name);
+  const path = normalizeGuiRelativePath(entry.packagePath ?? entry.gameRelativePath ?? "");
+  if (GUI_PATH_MARKERS.some((marker) => path.includes(marker))) return true;
+  if (isMsGuiPath(path)) return true;
+  return isGuiPackName(entry.name);
 }
 
 export function fieldNamePrefix(fieldKey: string): string | null {
   if (fieldKey === "lmbCutIn" || fieldKey === "lmbPilotClothing") return "st_p_";
   if (fieldKey === "lmbBoost" || fieldKey === "exPilotClothingLmbHash") return "ex_p_";
+  const msPrefix = MS_GUI_FIELD_PREFIXES[fieldKey];
+  if (msPrefix) return msPrefix;
   if (fieldKey.startsWith("vsPL")) return "vs_p_l_";
   if (fieldKey.startsWith("vsPR")) return "vs_p_r_";
   if (fieldKey === "scP") return "sc_p_";
@@ -101,6 +175,101 @@ export function fieldNamePrefix(fieldKey: string): string | null {
 
 function rankingName(item: GuiPackPickerItem): string {
   return item.label || "";
+}
+
+export function fallbackGuiPackagePath(fieldKey: string, structureName: string): string {
+  const name = sanitizeFhm2dStructureName(structureName) || "gui_pack";
+  if (fieldKey.startsWith("vsPL") || name.startsWith("vs_p_l_")) {
+    return `009gui/image/pilot/vs_p_l/${name}`;
+  }
+  if (fieldKey.startsWith("vsPR") || name.startsWith("vs_p_r_")) {
+    return `009gui/image/pilot/vs_p_r/${name}`;
+  }
+  if (fieldKey === "scP" || name.startsWith("sc_p_")) {
+    return `009gui/image/pilot/sc_p/${name}`;
+  }
+  if (fieldKey === "lmbCutIn" || fieldKey === "lmbPilotClothing" || name.startsWith("st_p_")) {
+    return `009gui/flash/pilot/${name}`;
+  }
+  if (fieldKey === "lmbBoost" || fieldKey === "exPilotClothingLmbHash" || name.startsWith("ex_p_")) {
+    return `009gui/flash/pilot/${name}`;
+  }
+  if (name.startsWith("navi_bt_s_") || /naviBtS/i.test(fieldKey)) {
+    return `009gui/image/navi/navi_bt_s/${name}`;
+  }
+  if (name.startsWith("navi_pl_s_") || /naviPlS/i.test(fieldKey)) {
+    return `009gui/image/navi/navi_pl_s/${name}`;
+  }
+  if (name.startsWith("navi_bt_") || /naviBt/i.test(fieldKey)) {
+    return `009gui/flash/navi/battle/${name}`;
+  }
+  if (name.startsWith("navi_pl_") || /naviPl|resourceHash/i.test(fieldKey)) {
+    return `009gui/flash/navi/player/${name}`;
+  }
+  const msPrefix = MS_GUI_FIELD_PREFIXES[fieldKey] ?? MS_GUI_PREFIXES.find((prefix) => name.startsWith(prefix));
+  if (msPrefix) {
+    return `${MS_GUI_PREFIX_TO_PACKAGE_BASE[msPrefix]}/${name}`;
+  }
+  return `009gui/${name}`;
+}
+
+export function planGuiPackExtract(
+  hash: number,
+  fieldKey: string,
+  items: readonly GuiPackPickerItem[],
+): GuiPackExtractPlan | null {
+  const normalized = normalizeGuiHash(hash);
+  if (normalized === 0) return null;
+  const item = items.find((entry) => itemHash(entry) === normalized);
+  if (item?.folderPath) return null;
+
+  const mapping = findFhm2dNameMapping(formatGuiHashHex(normalized), { routePrefix: "009gui" });
+  const labelName =
+    item && item.source !== "character-list" ? item.label : "";
+  const structureName = sanitizeFhm2dStructureName(
+    mapping?.name ||
+      labelName ||
+      `${fieldNamePrefix(fieldKey) ?? "gui_"}${formatGuiHashHex(normalized).slice(2).toLowerCase()}`,
+  );
+  if (!structureName) return null;
+  const packagePath =
+    (item?.packagePath && item.packagePath.trim()) ||
+    mapping?.packagePath ||
+    fallbackGuiPackagePath(fieldKey, structureName);
+  return { hash: normalized, packagePath, structureName };
+}
+
+function itemHash(item: GuiPackPickerItem): number {
+  return normalizeGuiHash(item.hash);
+}
+
+function matchesFieldPrefix(item: GuiPackPickerItem, prefix: string): boolean {
+  const normalizedPrefix = prefix.toLowerCase();
+  const label = rankingName(item).toLowerCase();
+  if (label.startsWith(normalizedPrefix)) return true;
+
+  const normalizedPath = normalizeGuiRelativePath(item.packagePath ?? "");
+  if (!normalizedPath) return false;
+  if (normalizedPath.startsWith(normalizedPrefix)) return true;
+
+  const pathToken = normalizedPrefix.endsWith("_") ? normalizedPrefix.slice(0, -1) : normalizedPrefix;
+  if (normalizedPath.includes(`/${pathToken}/`) || normalizedPath.endsWith(`/${pathToken}`)) {
+    return true;
+  }
+
+  const packageLeaf = normalizedPath.split("/").filter(Boolean).pop();
+  return packageLeaf?.startsWith(normalizedPrefix) ?? false;
+}
+
+export function filterGuiPackPickerItems(
+  fieldKey: string,
+  items: readonly GuiPackPickerItem[],
+  selectedValue?: number,
+): GuiPackPickerItem[] {
+  const prefix = fieldNamePrefix(fieldKey);
+  if (!prefix) return [...items];
+  const selectedHash = selectedValue === undefined ? null : normalizeGuiHash(selectedValue);
+  return items.filter((item) => itemHash(item) === selectedHash || matchesFieldPrefix(item, prefix));
 }
 
 export function sortGuiPackPickerItems(fieldKey: string, items: GuiPackPickerItem[]): GuiPackPickerItem[] {
@@ -137,8 +306,16 @@ export function mergeGuiPackPickerItems(input: {
       existing.label = item.label || existing.label;
       existing.source = "workspace";
       existing.secondaryText = item.secondaryText;
+      existing.nutexbPath = item.nutexbPath;
+      existing.packagePath = item.packagePath || existing.packagePath;
     } else if (!existing.folderPath && item.folderPath) {
       existing.folderPath = item.folderPath;
+    }
+    if (!existing.packagePath && item.packagePath) {
+      existing.packagePath = item.packagePath;
+    }
+    if (!existing.nutexbPath && item.nutexbPath) {
+      existing.nutexbPath = item.nutexbPath;
     }
     if (item.source === "character-list") {
       existing.secondaryText = existing.secondaryText
@@ -156,6 +333,8 @@ export function mergeGuiPackPickerItems(input: {
       label: mapping.name,
       secondaryText: formatGuiHashHex(hash),
       folderPath: null,
+      packagePath: mapping.packagePath,
+      nutexbPath: null,
       source: "name-map",
     });
   }
@@ -167,6 +346,8 @@ export function mergeGuiPackPickerItems(input: {
       label: pack.name || pack.workspaceRelative,
       secondaryText: `${formatGuiHashHex(pack.hash)}  009gui/${pack.workspaceRelative}`,
       folderPath: pack.folderPath,
+      packagePath: `009gui/${pack.workspaceRelative.replace(/\\/g, "/")}`,
+      nutexbPath: pack.previewNutexbPath ?? null,
       source: "workspace",
     });
   }
@@ -177,6 +358,8 @@ export function mergeGuiPackPickerItems(input: {
       label: usage.label,
       secondaryText: formatGuiHashHex(usage.hash),
       folderPath: null,
+      packagePath: null,
+      nutexbPath: null,
       source: "character-list",
     });
   }
@@ -220,4 +403,17 @@ export function resolveGuiPackFolder(
   const normalized = normalizeGuiHash(hash);
   if (normalized === 0) return null;
   return items.find((item) => item.hash === normalized)?.folderPath ?? null;
+}
+
+export function resolveGuiPackNutexbPath(
+  hash: number,
+  items: GuiPackPickerItem[],
+): string | null {
+  const normalized = normalizeGuiHash(hash);
+  if (normalized === 0) return null;
+  return items.find((item) => item.hash === normalized)?.nutexbPath ?? null;
+}
+
+export function canExtractGuiPack(item: Pick<GuiPackPickerItem, "hash" | "folderPath">): boolean {
+  return normalizeGuiHash(item.hash) !== 0 && !item.folderPath;
 }

@@ -166,6 +166,7 @@ pub fn run() {
             commands::clone_fhm2d_pack,
             commands::clone_character_gui_set,
             commands::list_workspace_gui_packs,
+            commands::extract_workspace_gui_pack,
             stage_commands::stage_apply_rename,
             stage_commands::load_stage_bundle,
             stage_commands::stage_load_skeleton,

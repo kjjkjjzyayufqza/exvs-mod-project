@@ -2479,6 +2479,17 @@ pub fn list_workspace_gui_packs(
     crate::format::gui_pack_clone::list_workspace_gui_packs(std::path::Path::new(&workspace_root))
 }
 
+#[tauri::command]
+pub async fn extract_workspace_gui_pack(
+    request: crate::format::gui_pack_clone::ExtractWorkspaceGuiPackRequest,
+) -> Result<crate::format::gui_pack_clone::WorkspaceGuiPack, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::format::gui_pack_clone::extract_workspace_gui_pack(request)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[cfg(test)]
 mod file_copy_command_tests {
     use super::*;

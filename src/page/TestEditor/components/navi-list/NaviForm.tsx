@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { DualValueProperty } from "@/components/ui/dual-value-property";
 import type { NaviListEntry } from "@/models/naviListEntry";
 import { NAVI_GUI_HASH_FIELDS } from "@/models/naviListEntry";
-import { GuiHashFieldExtras } from "../character-list/GuiHashFieldExtras";
+import { GuiHashFieldExtras, GuiHashFieldPreview } from "../character-list/GuiHashFieldExtras";
 import type { GuiPackPickerItem } from "../character-list/guiPackIndex";
 import { SeriesIdPickerItem, SeriesIdPickerPopover } from "../character-list/SeriesIdPickerPopover";
 import { countNaviRowsForUniqueId, nextNaviUniqueId } from "./naviListModel";
@@ -27,6 +27,8 @@ interface NaviFormProps {
   guiPackLoading?: boolean;
   guiPackError?: string | null;
   onOpenGuiPackFolder?: (hash: number) => void;
+  onExtractGuiPack?: (hash: number, fieldKey: string) => void;
+  extractingGuiHash?: number | null;
   onChange: (navi: NaviListEntry) => void;
 }
 
@@ -71,6 +73,8 @@ export function NaviForm({
   guiPackLoading,
   guiPackError,
   onOpenGuiPackFolder,
+  onExtractGuiPack,
+  extractingGuiHash = null,
   onChange,
 }: NaviFormProps) {
   const [formData, setFormData] = useState<Record<string, number>>({});
@@ -166,6 +170,14 @@ export function NaviForm({
                     <DualValueProperty
                       key={fieldName}
                       label={field.label}
+                      preview={
+                        isHash ? (
+                          <GuiHashFieldPreview
+                            value={formData[fieldName] ?? 0}
+                            items={guiPackItems}
+                          />
+                        ) : undefined
+                      }
                       labelExtra={
                         fieldName === "seriesListEntryId" ? (
                           <SeriesIdPickerPopover
@@ -211,6 +223,8 @@ export function NaviForm({
                             onOpenChange={(open) => setGuiPickerField(open ? fieldName : null)}
                             onSelect={(hash) => handleFieldChange(fieldName, hash >>> 0)}
                             onOpenFolder={onOpenGuiPackFolder}
+                            onExtract={onExtractGuiPack}
+                            extractingHash={extractingGuiHash}
                           />
                         ) : undefined
                       }

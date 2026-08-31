@@ -14,7 +14,8 @@ import { StringFieldGroup } from "./StringFieldGroup";
 import { SeriesIdPickerItem, SeriesIdPickerPopover } from "./SeriesIdPickerPopover";
 import { BgmCuePickerItem, BgmCuePickerPopover } from "./BgmCuePickerPopover";
 import { CardIconIndexPickerItem, CardIconIndexPickerPopover } from "./CardIconIndexPickerPopover";
-import { GuiHashFieldExtras } from "./GuiHashFieldExtras";
+import { GuiHashFieldExtras, GuiHashFieldPreview } from "./GuiHashFieldExtras";
+import { CloneGuiFieldDialog } from "./CloneGuiFieldDialog";
 import { isCharacterGuiHashField, type GuiPackPickerItem } from "./guiPackIndex";
 import {
   findCharacterUniqueIdConflicts,
@@ -41,6 +42,10 @@ interface CharacterFormProps {
   guiPackLoading?: boolean;
   guiPackError?: string | null;
   onOpenGuiPackFolder?: (hash: number) => void;
+  onExtractGuiPack?: (hash: number, fieldKey: string) => void;
+  extractingGuiHash?: number | null;
+  onCloneGuiPack?: (hash: number, fieldKey: string, structureName: string) => void | Promise<void>;
+  cloningGuiHash?: number | null;
   jumpToCharacterIdTable?: {
     disabled: boolean;
     tooltip: string;
@@ -66,6 +71,10 @@ export function CharacterForm({
   guiPackLoading,
   guiPackError,
   onOpenGuiPackFolder,
+  onExtractGuiPack,
+  extractingGuiHash = null,
+  onCloneGuiPack,
+  cloningGuiHash = null,
   jumpToCharacterIdTable,
   onChange,
 }: CharacterFormProps) {
@@ -76,6 +85,7 @@ export function CharacterForm({
   const [bgmPrimaryPickerOpen, setBgmPrimaryPickerOpen] = useState(false);
   const [bgmSecondaryPickerOpen, setBgmSecondaryPickerOpen] = useState(false);
   const [guiPickerField, setGuiPickerField] = useState<string | null>(null);
+  const [cloneDialog, setCloneDialog] = useState<{ hash: number; fieldKey: string } | null>(null);
   const formDataRef = useRef<Record<string, number>>({});
   const stringFormDataRef = useRef<Record<string, string>>({});
 
@@ -421,6 +431,14 @@ export function CharacterForm({
                   <DualValueProperty
                     key={field.name}
                     label={field.label}
+                    preview={
+                      isCharacterGuiHashField(field.name) ? (
+                        <GuiHashFieldPreview
+                          value={formData[field.name] ?? 0}
+                          items={guiPackItems}
+                        />
+                      ) : undefined
+                    }
                     labelExtra={
                       field.name === "seriesId" ? (
                         <SeriesIdPickerPopover
@@ -473,6 +491,14 @@ export function CharacterForm({
                           onOpenChange={(open) => setGuiPickerField(open ? field.name : null)}
                           onSelect={(hash) => handleFieldChange(field.name, hash >>> 0)}
                           onOpenFolder={onOpenGuiPackFolder}
+                          onExtract={onExtractGuiPack}
+                          extractingHash={extractingGuiHash}
+                          onClone={
+                            onCloneGuiPack
+                              ? (hash, fieldKey) => setCloneDialog({ hash, fieldKey })
+                              : undefined
+                          }
+                          cloningHash={cloningGuiHash}
                         />
                       ) : field.name === "characterUniqueId" ? (
                         <TooltipProvider delayDuration={100}>
@@ -567,6 +593,27 @@ export function CharacterForm({
           ))}
         </div>
       </ScrollArea>
+      {cloneDialog && onCloneGuiPack ? (
+        <CloneGuiFieldDialog
+          open
+          fieldKey={cloneDialog.fieldKey}
+          donorHash={cloneDialog.hash}
+          items={guiPackItems}
+          targetEntryId={characterId}
+          busy={cloningGuiHash === cloneDialog.hash}
+          onOpenChange={(open) => {
+            if (!open) setCloneDialog(null);
+          }}
+          onConfirm={async (structureName) => {
+            try {
+              await onCloneGuiPack(cloneDialog.hash, cloneDialog.fieldKey, structureName);
+              setCloneDialog(null);
+            } catch {
+              // CharacterListView already toasted the clone failure.
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 }

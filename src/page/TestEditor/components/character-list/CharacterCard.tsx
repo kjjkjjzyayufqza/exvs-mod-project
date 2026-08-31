@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Copy, Trash2 } from "lucide-react";
+import { Copy, Star, Trash2 } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
 import { Button } from "@/components/ui/button";
@@ -14,9 +14,11 @@ interface CharacterCardProps {
   cardIconConvertDirPath?: string;
   cardIconNameOrder?: Array<string | null>;
   isSelected: boolean;
+  isHighlighted?: boolean;
   onClick: () => void;
   onDelete: () => void;
   onCopy: () => void;
+  onToggleHighlight?: () => void;
 }
 
 export function CharacterCard({
@@ -25,9 +27,11 @@ export function CharacterCard({
   cardIconConvertDirPath,
   cardIconNameOrder,
   isSelected,
+  isHighlighted = false,
   onClick,
   onDelete,
   onCopy,
+  onToggleHighlight,
 }: CharacterCardProps) {
   const characterName = character.characterName || "";
   const cardIconName = useMemo(() => {
@@ -48,7 +52,9 @@ export function CharacterCard({
     <div
       className={cn(
         "border rounded-md px-2 py-2 cursor-pointer hover:bg-accent/50 transition-colors h-full flex items-center justify-between gap-2",
-        isSelected && "ring-2 ring-inset ring-primary bg-accent"
+        isSelected && "ring-2 ring-inset ring-primary bg-accent",
+        isHighlighted && !isSelected && "border-amber-400/80 bg-amber-500/8",
+        isHighlighted && isSelected && "border-amber-400/80",
       )}
       onClick={onClick}
     >
@@ -87,6 +93,24 @@ export function CharacterCard({
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            "p-0 text-muted-foreground hover:bg-muted/60 hover:text-amber-600 dark:hover:text-amber-300",
+            isHighlighted && "text-amber-600 dark:text-amber-300",
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleHighlight?.();
+          }}
+          title={isHighlighted ? "Remove highlight" : "Highlight character"}
+          aria-label={isHighlighted ? "Remove highlight" : "Highlight character"}
+          aria-pressed={isHighlighted}
+          disabled={!onToggleHighlight}
+        >
+          <Star className={cn("w-4 h-4", isHighlighted && "fill-current")} />
+        </Button>
         <Button
           variant="ghost"
           size="sm"

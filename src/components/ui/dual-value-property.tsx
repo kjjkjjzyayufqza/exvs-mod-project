@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 interface DualValuePropertyProps {
   label: string;
   labelExtra?: React.ReactNode;
+  preview?: React.ReactNode;
   value: number | undefined;
   property: string;
   editable?: boolean;
@@ -41,6 +42,7 @@ interface DualValuePropertyProps {
 export function DualValueProperty({
   label,
   labelExtra,
+  preview,
   value,
   property,
   editable = false,
@@ -179,6 +181,8 @@ export function DualValueProperty({
             {labelExtra}
           </div>
 
+          {preview}
+
           {showHex ? (
             <div className="flex items-stretch rounded-md shadow-xs">
               <Input
@@ -301,6 +305,8 @@ export function DualValueProperty({
           </Label>
           {labelExtra}
         </div>
+
+        {preview}
 
         {showHex ? (
           <div className="flex rounded-md shadow-xs">

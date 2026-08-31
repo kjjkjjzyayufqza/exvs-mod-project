@@ -1,10 +1,11 @@
 use app_lib::format::fhm2d_pack::repack_fhm2d_from_structure;
 use app_lib::format::gui_pack_clone::{
     allocate_gui_clone_hash, clone_character_gui_set, clone_gui_pack_extract,
-    gui_clone_extract_relative, gui_clone_hash_key, list_workspace_gui_packs, pack_file_name,
-    parse_hash_name_token, parse_pack_hash_from_name, structure_display_name, structure_hash_name,
-    vs2_gui_extract_relative, CloneGuiSetRequest, NAVI_GUI_PACKS, NAVI_UNIQUE_ID_HASH,
-    PILOT_GUI_FIELDS,
+    extract_workspace_gui_pack, find_preview_nutexb, gui_clone_extract_relative,
+    gui_clone_hash_key, list_workspace_gui_packs, pack_file_name, parse_hash_name_token,
+    parse_pack_hash_from_name, structure_display_name, structure_hash_name,
+    vs2_gui_extract_relative, CloneGuiSetRequest, ExtractWorkspaceGuiPackRequest, NAVI_GUI_PACKS,
+    MS_GUI_FIELDS, NAVI_SERIES_ID_HASH, NAVI_UNIQUE_ID_HASH, PILOT_GUI_FIELDS,
 };
 use app_lib::format::list_command_pool::{ListData, ListEntry};
 use app_lib::format::navilist::{build_navilist_data, parse_navilist_data};
@@ -78,6 +79,22 @@ fn gui_clone_extract_relative_replaces_leaf_with_custom_name() {
             "wz_rebellion_cutin",
         ),
         "flash/pilot/p_016_001/wz_rebellion_cutin"
+    );
+    assert_eq!(
+        gui_clone_extract_relative(
+            "009gui/image/ms/ms_ms_s/ms_ms_s_016_001_001",
+            "ms_ms_s_016_001_001",
+            "ms_ms_s_900000004",
+        ),
+        "image/ms/ms_ms_s/ms_ms_s_900000004"
+    );
+    assert_eq!(
+        gui_clone_extract_relative(
+            "009gui/ms_tracker_016_001_001",
+            "ms_tracker_016_001_001",
+            "ms_tracker_900000004",
+        ),
+        "ms_tracker_900000004"
     );
 }
 
@@ -166,6 +183,7 @@ fn clone_gui_pack_extract_writes_inner_files_with_new_hash_name() {
         listed[0].workspace_relative.replace('\\', "/"),
         "flash/pilot/p_016_001/st_p_016_001_c01"
     );
+    assert_eq!(listed[0].preview_nutexb_path, None);
 }
 
 #[test]
@@ -176,6 +194,87 @@ fn parse_hash_name_token_accepts_bare_and_filename() {
         parse_pack_hash_from_name("0x88bd4dc3.fhm2d"),
         Some(0x88BD_4DC3)
     );
+}
+
+#[test]
+fn find_preview_nutexb_prefers_pack_name() {
+    let temp = tempfile::tempdir().unwrap();
+    fs::write(temp.path().join("other.nutexb"), b"a").unwrap();
+    fs::write(temp.path().join("vs_p_l_016_001_c01.nutexb"), b"b").unwrap();
+    let found = find_preview_nutexb(temp.path(), "vs_p_l_016_001_c01").unwrap();
+    assert!(found.replace('\\', "/").ends_with("vs_p_l_016_001_c01.nutexb"));
+}
+
+#[test]
+fn find_preview_nutexb_ex_p_uses_second_folder() {
+    let temp = tempfile::tempdir().unwrap();
+    let first = temp.path().join("0").join("0").join("0");
+    let second = temp.path().join("0").join("1").join("0");
+    fs::create_dir_all(&first).unwrap();
+    fs::create_dir_all(&second).unwrap();
+    fs::write(first.join("0.nutexb"), vec![0u8; 2000]).unwrap();
+    fs::write(second.join("23.nutexb"), vec![0u8; 240]).unwrap();
+    fs::write(second.join("22.nutexb"), vec![0u8; 5000]).unwrap();
+    let found = find_preview_nutexb(temp.path(), "ex_p_001_001_c01").unwrap();
+    let normalized = found.replace('\\', "/");
+    assert!(
+        normalized.ends_with("0/1/0/22.nutexb"),
+        "expected second-folder portrait, got {normalized}"
+    );
+}
+
+#[test]
+fn extract_workspace_gui_pack_keeps_hash_and_auto_names_folder() {
+    let temp = tempfile::tempdir().unwrap();
+    let dpl = temp.path().join("dpl");
+    let workspace = temp.path().join("mod");
+    let hash = 0x9233_D6AC;
+    write_tiny_ob_fhm2d(&dpl, hash, b"VS-P-L");
+    let extracted = extract_workspace_gui_pack(ExtractWorkspaceGuiPackRequest {
+        dpl_cache_path: dpl.display().to_string(),
+        workspace_root: workspace.display().to_string(),
+        ob_mod_path: None,
+        hash,
+        package_path: "009gui/image/pilot/vs_p_l/vs_p_l_016_001_c01".to_string(),
+        structure_name: "vs_p_l_016_001_c01".to_string(),
+    })
+    .unwrap();
+    assert_eq!(extracted.hash, hash);
+    assert_eq!(extracted.name, "vs_p_l_016_001_c01");
+    assert_eq!(
+        extracted.workspace_relative.replace('\\', "/"),
+        "image/pilot/vs_p_l/vs_p_l_016_001_c01"
+    );
+    assert_eq!(first_extracted_payload(Path::new(&extracted.folder_path)), b"VS-P-L");
+    assert_eq!(
+        structure_hash_name(Path::new(&extracted.structure_json_path)).unwrap(),
+        "0x9233D6AC"
+    );
+    fs::write(
+        Path::new(&extracted.folder_path).join("vs_p_l_016_001_c01.nutexb"),
+        b"tex",
+    )
+    .unwrap();
+    let listed = list_workspace_gui_packs(&workspace).unwrap();
+    assert_eq!(listed.len(), 1);
+    assert!(
+        listed[0]
+            .preview_nutexb_path
+            .as_ref()
+            .unwrap()
+            .replace('\\', "/")
+            .ends_with("vs_p_l_016_001_c01.nutexb")
+    );
+    let err = extract_workspace_gui_pack(ExtractWorkspaceGuiPackRequest {
+        dpl_cache_path: dpl.display().to_string(),
+        workspace_root: workspace.display().to_string(),
+        ob_mod_path: None,
+        hash,
+        package_path: "009gui/image/pilot/vs_p_l/vs_p_l_016_001_c01".to_string(),
+        structure_name: "vs_p_l_016_001_c01".to_string(),
+    })
+    .unwrap_err();
+    assert!(err.contains("already exists"));
 }
 
 #[test]
@@ -212,12 +311,13 @@ fn clone_character_gui_set_preview_and_write_pilot_and_navi() {
         .join("012list")
         .join("navi_list")
         .join("navi_list.bin");
-    fs::write(&navi_path, sample_relena_navi_list(donor_navi_bt)).unwrap();
+    fs::write(&navi_path, sample_navi_list(donor_navi_bt, 0xE92E_680F)).unwrap();
 
     let character_list = json!({
         "entries": [
             {
                 "entryId": 16_001_001,
+                "seriesId": 0xE92E_680Fu32,
                 "lmbCutIn": donor_cut_in,
                 "lmbPilotClothing": 0,
                 "lmbBoost": 0,
@@ -240,6 +340,7 @@ fn clone_character_gui_set_preview_and_write_pilot_and_navi() {
         copy_to_ob_mod: false,
         target_entry_id: 900_000_004,
         donor_entry_id: 16_001_001,
+        donor_navi_unique_id: None,
         clone_pilot: true,
         clone_navi: true,
         preview: true,
@@ -249,7 +350,7 @@ fn clone_character_gui_set_preview_and_write_pilot_and_navi() {
     })
     .unwrap();
     assert!(preview.preview);
-    assert_eq!(preview.packs.len(), 1 + NAVI_GUI_PACKS.len());
+    assert_eq!(preview.packs.len(), 2);
     assert!(!workspace
         .join("009gui")
         .join(pack_file_name(preview.packs[0].new_hash))
@@ -270,6 +371,7 @@ fn clone_character_gui_set_preview_and_write_pilot_and_navi() {
         copy_to_ob_mod: false,
         target_entry_id: 900_000_004,
         donor_entry_id: 16_001_001,
+        donor_navi_unique_id: None,
         clone_pilot: true,
         clone_navi: true,
         preview: false,
@@ -360,6 +462,7 @@ fn clone_character_gui_set_honors_selected_field_keys() {
     let character_list = json!({
         "entries": [{
             "entryId": 16_001_001,
+            "seriesId": 0xE92E_680Fu32,
             "lmbCutIn": donor_cut_in,
             "lmbBoost": donor_boost
         }]
@@ -372,6 +475,7 @@ fn clone_character_gui_set_honors_selected_field_keys() {
         copy_to_ob_mod: false,
         target_entry_id: 900_000_004,
         donor_entry_id: 16_001_001,
+        donor_navi_unique_id: None,
         clone_pilot: true,
         clone_navi: true,
         preview: false,
@@ -393,6 +497,122 @@ fn clone_character_gui_set_honors_selected_field_keys() {
         .join("009gui")
         .join(written.packs[0].new_file_name.as_str())
         .exists());
+}
+
+#[test]
+fn clone_character_gui_set_self_clones_ms_ms_s() {
+    let temp = tempfile::tempdir().unwrap();
+    let dpl = temp.path().join("dpl");
+    let workspace = temp.path().join("mod");
+    fs::create_dir_all(&dpl).unwrap();
+    let ms_ms_s = MS_GUI_FIELDS
+        .iter()
+        .find(|field| field.camel_key == "msMsS")
+        .unwrap();
+    let donor_hash = ms_ms_s.fallback_donor_hash;
+    let donor_pack = write_tiny_ob_fhm2d(&dpl, donor_hash, b"MS-MS-S");
+
+    let written = clone_character_gui_set(CloneGuiSetRequest {
+        dpl_cache_path: dpl.display().to_string(),
+        workspace_root: workspace.display().to_string(),
+        ob_mod_path: None,
+        copy_to_ob_mod: false,
+        target_entry_id: 900_000_004,
+        donor_entry_id: 900_000_004,
+        donor_navi_unique_id: None,
+        clone_pilot: true,
+        clone_navi: false,
+        preview: false,
+        selected_field_keys: Some(vec!["msMsS".to_string()]),
+        structure_names: Some(HashMap::from([(
+            "msMsS".to_string(),
+            "ms_ms_s_900000004".to_string(),
+        )])),
+        character_list: json!({
+            "entries": [{
+                "entryId": 900_000_004,
+                "msMsS": donor_hash,
+                "msMsL": 0
+            }]
+        }),
+    })
+    .unwrap();
+
+    assert_eq!(written.packs.len(), 1);
+    assert_eq!(written.packs[0].field_key, "msMsS");
+    assert_eq!(written.packs[0].donor_hash, donor_hash);
+    let new_hash = written
+        .character_field_updates
+        .get("msMsS")
+        .copied()
+        .unwrap();
+    assert_ne!(new_hash, donor_hash);
+    assert_eq!(
+        written.packs[0].workspace_relative,
+        "image/ms/ms_ms_s/ms_ms_s_900000004"
+    );
+    assert!(Path::new(&written.packs[0].output_path).is_dir());
+    assert_eq!(
+        first_extracted_payload(Path::new(&written.packs[0].output_path)),
+        b"MS-MS-S"
+    );
+    assert!(donor_pack.is_file());
+    assert_eq!(written.packs[0].bind_target, "character_list.msMsS");
+    assert!(!written.character_field_updates.contains_key("msMsL"));
+}
+
+#[test]
+fn clone_character_gui_set_self_clones_ms_tracker_flat() {
+    let temp = tempfile::tempdir().unwrap();
+    let dpl = temp.path().join("dpl");
+    let workspace = temp.path().join("mod");
+    fs::create_dir_all(&dpl).unwrap();
+    let ms_tracker = MS_GUI_FIELDS
+        .iter()
+        .find(|field| field.camel_key == "msTracker")
+        .unwrap();
+    let donor_hash = ms_tracker.fallback_donor_hash;
+    write_tiny_ob_fhm2d(&dpl, donor_hash, b"MS-TRACKER");
+
+    let written = clone_character_gui_set(CloneGuiSetRequest {
+        dpl_cache_path: dpl.display().to_string(),
+        workspace_root: workspace.display().to_string(),
+        ob_mod_path: None,
+        copy_to_ob_mod: false,
+        target_entry_id: 900_000_004,
+        donor_entry_id: 900_000_004,
+        donor_navi_unique_id: None,
+        clone_pilot: true,
+        clone_navi: false,
+        preview: false,
+        selected_field_keys: Some(vec!["msTracker".to_string()]),
+        structure_names: Some(HashMap::from([(
+            "msTracker".to_string(),
+            "ms_tracker_900000004".to_string(),
+        )])),
+        character_list: json!({
+            "entries": [{
+                "entryId": 900_000_004,
+                "msTracker": donor_hash
+            }]
+        }),
+    })
+    .unwrap();
+
+    assert_eq!(written.packs.len(), 1);
+    assert_eq!(written.packs[0].field_key, "msTracker");
+    assert_eq!(written.packs[0].workspace_relative, "ms_tracker_900000004");
+    assert_eq!(
+        first_extracted_payload(Path::new(&written.packs[0].output_path)),
+        b"MS-TRACKER"
+    );
+    let new_hash = written
+        .character_field_updates
+        .get("msTracker")
+        .copied()
+        .unwrap();
+    assert_ne!(new_hash, donor_hash);
+    assert!(dpl.join(pack_file_name(donor_hash)).is_file());
 }
 
 #[test]
@@ -420,7 +640,7 @@ fn custom_name_does_not_replace_original_navi_thumbnail_folder() {
         .join("navi_list.bin");
     fs::write(
         &navi_path,
-        sample_relena_navi_list(sc02.fallback_donor_hash),
+        sample_navi_list(sc02.fallback_donor_hash, 0xE92E_680F),
     )
     .unwrap();
 
@@ -431,6 +651,7 @@ fn custom_name_does_not_replace_original_navi_thumbnail_folder() {
         copy_to_ob_mod: false,
         target_entry_id: 900_000_004,
         donor_entry_id: 16_001_001,
+        donor_navi_unique_id: None,
         clone_pilot: false,
         clone_navi: true,
         preview: false,
@@ -439,7 +660,7 @@ fn custom_name_does_not_replace_original_navi_thumbnail_folder() {
             "naviPlSC02".to_string(),
             "navi_pl_s_016_o01_c0212313dad".to_string(),
         )])),
-        character_list: json!({ "entries": [{ "entryId": 16_001_001 }] }),
+        character_list: json!({ "entries": [{ "entryId": 16_001_001, "seriesId": 0xE92E_680Fu32 }] }),
     })
     .unwrap();
 
@@ -466,6 +687,140 @@ fn custom_name_does_not_replace_original_navi_thumbnail_folder() {
         first_extracted_payload(Path::new(&written.packs[0].output_path)),
         b"THUMB-C02"
     );
+}
+
+#[test]
+fn clone_preview_uses_workspace_extract_when_dplcache_pack_is_missing() {
+    let temp = tempfile::tempdir().unwrap();
+    let dpl = temp.path().join("dpl");
+    let workspace = temp.path().join("mod");
+    fs::create_dir_all(&dpl).unwrap();
+    let vanilla = PILOT_GUI_FIELDS
+        .iter()
+        .find(|field| field.camel_key == "vsPL")
+        .unwrap()
+        .fallback_donor_hash;
+    let cloned_hash = 0xD294_EC94;
+    let source = write_tiny_ob_fhm2d(&dpl, vanilla, b"VS-PL-CUSTOM");
+    let extract_dir = workspace
+        .join("009gui")
+        .join("image")
+        .join("pilot")
+        .join("vs_p_l")
+        .join("custom_vs_p_l");
+    clone_gui_pack_extract(&source, cloned_hash, &extract_dir, Some("custom_vs_p_l")).unwrap();
+    fs::remove_file(dpl.join(pack_file_name(cloned_hash))).ok();
+
+    let preview = clone_character_gui_set(CloneGuiSetRequest {
+        dpl_cache_path: dpl.display().to_string(),
+        workspace_root: workspace.display().to_string(),
+        ob_mod_path: None,
+        copy_to_ob_mod: false,
+        target_entry_id: 1_001_002,
+        donor_entry_id: 16_001_001,
+        donor_navi_unique_id: None,
+        clone_pilot: true,
+        clone_navi: false,
+        preview: true,
+        selected_field_keys: None,
+        structure_names: None,
+        character_list: json!({
+            "entries": [{
+                "entryId": 16_001_001,
+                "vsPL": cloned_hash
+            }]
+        }),
+    })
+    .unwrap();
+    assert_eq!(preview.packs.len(), 1);
+    assert_eq!(preview.packs[0].donor_hash, cloned_hash);
+    assert_eq!(preview.packs[0].donor_name, "custom_vs_p_l");
+    assert!(preview
+        .packs[0]
+        .source_path
+        .replace('\\', "/")
+        .ends_with("custom_vs_p_l"));
+}
+
+#[test]
+fn clone_preview_skips_missing_pack_and_keeps_the_rest() {
+    let temp = tempfile::tempdir().unwrap();
+    let dpl = temp.path().join("dpl");
+    let workspace = temp.path().join("mod");
+    fs::create_dir_all(&dpl).unwrap();
+    let cut_in = PILOT_GUI_FIELDS[0].fallback_donor_hash;
+    write_tiny_ob_fhm2d(&dpl, cut_in, b"CUTIN");
+
+    let preview = clone_character_gui_set(CloneGuiSetRequest {
+        dpl_cache_path: dpl.display().to_string(),
+        workspace_root: workspace.display().to_string(),
+        ob_mod_path: None,
+        copy_to_ob_mod: false,
+        target_entry_id: 1_001_002,
+        donor_entry_id: 16_001_001,
+        donor_navi_unique_id: None,
+        clone_pilot: true,
+        clone_navi: false,
+        preview: true,
+        selected_field_keys: None,
+        structure_names: None,
+        character_list: json!({
+            "entries": [{
+                "entryId": 16_001_001,
+                "lmbCutIn": cut_in,
+                "vsPL": 0xD294_EC94u32
+            }]
+        }),
+    })
+    .unwrap();
+    assert_eq!(preview.packs.len(), 1);
+    assert_eq!(preview.packs[0].field_key, "lmbCutIn");
+    assert!(preview
+        .warnings
+        .iter()
+        .any(|warning| warning.contains("0xD294EC94")));
+}
+
+#[test]
+fn clone_navi_follows_donor_series_not_hardcoded_relena() {
+    let temp = tempfile::tempdir().unwrap();
+    let dpl = temp.path().join("dpl");
+    let workspace = temp.path().join("mod");
+    fs::create_dir_all(&dpl).unwrap();
+    fs::create_dir_all(workspace.join("012list").join("navi_list")).unwrap();
+    let gundam_navi = 0x1111_2222;
+    write_tiny_ob_fhm2d(&dpl, gundam_navi, b"GUNDAM-NAVI");
+    write_tiny_ob_fhm2d(&dpl, NAVI_GUI_PACKS[0].fallback_donor_hash, b"RELENA");
+    let navi_path = workspace
+        .join("012list")
+        .join("navi_list")
+        .join("navi_list.bin");
+    fs::write(&navi_path, sample_navi_list(gundam_navi, 0xB1F4_E069)).unwrap();
+
+    let preview = clone_character_gui_set(CloneGuiSetRequest {
+        dpl_cache_path: dpl.display().to_string(),
+        workspace_root: workspace.display().to_string(),
+        ob_mod_path: None,
+        copy_to_ob_mod: false,
+        target_entry_id: 1_001_002,
+        donor_entry_id: 1_001_001,
+        donor_navi_unique_id: None,
+        clone_pilot: false,
+        clone_navi: true,
+        preview: true,
+        selected_field_keys: None,
+        structure_names: None,
+        character_list: json!({
+            "entries": [{
+                "entryId": 1_001_001,
+                "seriesId": 0xB1F4_E069u32
+            }]
+        }),
+    })
+    .unwrap();
+    assert_eq!(preview.packs.len(), 1);
+    assert_eq!(preview.packs[0].donor_hash, gundam_navi);
+    assert_ne!(preview.packs[0].donor_hash, NAVI_GUI_PACKS[0].fallback_donor_hash);
 }
 
 fn write_tiny_ob_fhm2d(dir: &Path, hash: u32, payload: &[u8]) -> PathBuf {
@@ -536,10 +891,11 @@ fn first_extracted_payload(extract_dir: &Path) -> Vec<u8> {
     fs::read(files.first().expect("extracted inner file")).unwrap()
 }
 
-fn sample_relena_navi_list(navi_bt_hash: u32) -> Vec<u8> {
+fn sample_navi_list(navi_hash: u32, series_id: u32) -> Vec<u8> {
     let mut commands = HashMap::new();
     commands.insert(NAVI_UNIQUE_ID_HASH, 16);
-    commands.insert(0x5F9E_BE2A, navi_bt_hash);
+    commands.insert(NAVI_SERIES_ID_HASH, series_id);
+    commands.insert(0x5F9E_BE2A, navi_hash);
     commands.insert(0x692B_6C6E, 0);
     commands.insert(0xFE2E_83D0, 1);
     let mut strings = HashMap::new();

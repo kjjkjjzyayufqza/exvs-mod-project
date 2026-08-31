@@ -42,6 +42,10 @@ interface CharacterEditorProps {
   guiPackLoading?: boolean;
   guiPackError?: string | null;
   onOpenGuiPackFolder?: (hash: number) => void;
+  onExtractGuiPack?: (hash: number, fieldKey: string) => void;
+  extractingGuiHash?: number | null;
+  onCloneGuiPack?: (hash: number, fieldKey: string, structureName: string) => void | Promise<void>;
+  cloningGuiHash?: number | null;
   jumpToCharacterIdTable?: {
     disabled: boolean;
     tooltip: string;
@@ -53,6 +57,7 @@ interface CharacterEditorProps {
   onJumpToNaviList?: (uniqueId: number) => void;
   onCloneApplied?: () => void;
   workspaceDocument?: TestEditorWorkspaceDocument;
+  sourceFilePath?: string;
   onChange: (data: CharacterListData) => void;
   onSelectChange?: (index: number) => void;
 }
@@ -184,6 +189,10 @@ export function CharacterEditor({
   guiPackLoading,
   guiPackError,
   onOpenGuiPackFolder,
+  onExtractGuiPack,
+  extractingGuiHash,
+  onCloneGuiPack,
+  cloningGuiHash,
   jumpToCharacterIdTable,
   cloneGuiWritable = true,
   onPackMutated,
@@ -191,6 +200,7 @@ export function CharacterEditor({
   onJumpToNaviList,
   onCloneApplied,
   workspaceDocument,
+  sourceFilePath,
   onChange,
   onSelectChange,
 }: CharacterEditorProps) {
@@ -328,6 +338,13 @@ export function CharacterEditor({
     [onChange, onCloneApplied],
   );
 
+  const handleCloneGuiPack = useCallback(
+    async (hash: number, fieldKey: string, structureName: string) => {
+      await onCloneGuiPack?.(hash, fieldKey, structureName);
+    },
+    [onCloneGuiPack],
+  );
+
   const handleAdd = useCallback(() => {
     if (!characterListData) return;
     const newEntryId = entries.length > 0 ? Math.max(...entries.map((c) => c.entryId), 0) + 1 : 1;
@@ -377,6 +394,7 @@ export function CharacterEditor({
         <CharacterList
           characters={entries}
           selectedIndex={selectedIndex}
+          sourceFilePath={sourceFilePath}
           cardIconConvertDirPath={cardIconConvertDirPath}
           cardIconNameOrder={cardIconNameOrder}
           onSelect={handleSelect}
@@ -405,6 +423,10 @@ export function CharacterEditor({
             guiPackLoading={guiPackLoading}
             guiPackError={guiPackError}
             onOpenGuiPackFolder={onOpenGuiPackFolder}
+            onExtractGuiPack={onExtractGuiPack}
+            extractingGuiHash={extractingGuiHash}
+            onCloneGuiPack={onCloneGuiPack ? handleCloneGuiPack : undefined}
+            cloningGuiHash={cloningGuiHash}
             jumpToCharacterIdTable={jumpToCharacterIdTable}
             onChange={handleUpdateCharacter}
           />

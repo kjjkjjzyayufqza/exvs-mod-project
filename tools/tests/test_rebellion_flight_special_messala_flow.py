@@ -57,16 +57,12 @@ class RebellionFlightSpecialMessalaFlowTest(unittest.TestCase):
             "global683 = 0x1",
             "global686 = 0x100",
             "global689 = 0xa",
-            # Not Messala's values. Messala's transform sub is a moving shot;
-            # this is a foot-stop, so these follow ACTION_A_SHOT_BIRD, the one
-            # bird-form ranged action that provably keeps flying afterwards.
-            # global698 becomes engine field 0x16, read back by 0.c as global33:
-            # while it is >= 0x64 the selector will not commit a new action, so
-            # Messala's 0 left the native flight loop no window to take over.
-            "global698 = 0x14",
-            "global452 = 0",
-            "global453 = 0",
-            "global454 = 0",
+            # User TUNE: analog commit window. D10 originally 0x14.
+            "global698 = 0x27",
+            # User TUNE: ENTER mix. I8: this is not beam agility.
+            "global452 = 0x60",
+            "global453 = 0x60",
+            "global454 = 0x60",
             "global142 = 0xc2b19d13",
             "callFunc3(special_shot_flight_tick)",
         )
@@ -74,57 +70,56 @@ class RebellionFlightSpecialMessalaFlowTest(unittest.TestCase):
             with self.subTest(statement=statement):
                 self.assertIn(statement, body)
 
-    def test_tick_keeps_messala_owner_then_foot_stops_every_pre_release_frame(self) -> None:
-        # The phase index stays the primary gate. A single ownership latch was
-        # able to switch the clamp off for the entire action, which is how the
-        # unit ended up free to move through the whole beam on 2026-08-29.
+    def test_tick_matches_messala_func_970(self) -> None:
         body = _strip_c_comments(_function_body(self.source, "special_shot_flight_tick"))
         self.assertRegex(
             body,
-            r"^\{\s*func_593\(\);\s*func_167\(0x1004000\);\s*"
-            r"if\s*\(\s*global184\s*!=\s*0x4\s*\|\|\s*"
-            r"rebellion_flight_special_end_hold\s*!=\s*0\s*\)\s*\{\s*"
-            r"rebellion_flight_special_stop_translation\(\);\s*"
-            r"rebellion_flight_special_face_current_target\(\);\s*"
-            r"\}\s*\}$",
+            r"func_593\(\);\s*func_167\(0x1004000\);",
         )
+        self.assertRegex(
+            body,
+            r"if\s*\(\s*global184\s*==\s*0x2\s*\)\s*\{\s*"
+            r"rebellion_flight_special_dampen_shoot_move\(\);\s*\}",
+        )
+        self.assertNotIn("rebellion_flight_special_face_current_target()", body)
+        self.assertNotIn("rebellion_flight_special_stop_translation()", body)
+
+    def test_shoot_dampen_scales_leftover_channels_after_func_167(self) -> None:
+        body = _strip_c_comments(
+            _function_body(self.source, "rebellion_flight_special_dampen_shoot_move")
+        )
+        self.assertIn("func_298(0x32)", body)
+        self.assertIn("func_299(0x32)", body)
+        self.assertIn("func_300(0x32)", body)
+        self.assertNotIn("func_298(0)", body)
+        self.assertNotIn("func_299(0)", body)
+        self.assertNotIn("func_300(0)", body)
+
+    def test_homemade_heading_and_clamp_adapters_are_gone(self) -> None:
+        forbidden = (
+            "rebellion_flight_special_face_current_target",
+            "rebellion_flight_special_stop_aim",
+            "rebellion_flight_special_reassert_and_clamp",
+            "rebellion_flight_special_stop_translation",
+        )
+        for symbol in forbidden:
+            with self.subTest(symbol=symbol):
+                self.assertNotIn(f"void {symbol}(", self.source)
+        for name in (
+            "special_shot_flight_tick",
+            "special_shot_flight_start",
+            "special_shot_flight_shoot",
+            "special_shot_flight_no_ammo",
+            "special_shot_flight_end",
+        ):
+            body = _strip_c_comments(_function_body(self.source, name))
+            for symbol in forbidden:
+                with self.subTest(function=name, symbol=symbol):
+                    self.assertNotIn(symbol, body)
 
     def test_the_flight_motor_is_never_taken_away(self) -> None:
-        # Four runs: the 2026-08-28 build never touched sys_1(0x30001) and both
-        # stopped correctly and exited correctly; the build that dropped it with
-        # a disabled clamp still let the player move. The clamp and the per-frame
-        # lock writer are what fixed stop and heading, so the motor drop was an
-        # unproven addition and the only remaining difference from
-        # ACTION_A_SHOT_BIRD, the bird-form action that provably keeps flying.
-        for name in (
-            "rebellion_flight_special_stop_translation",
-            "special_shot_flight_tick",
-        ):
-            with self.subTest(function=name):
-                body = _strip_c_comments(_function_body(self.source, name))
-                self.assertNotIn("func_296(0x3e8, 0)", body)
-
-    def test_foot_stop_drops_the_native_flight_owner(self) -> None:
-        body = _strip_c_comments(
-            _function_body(self.source, "rebellion_flight_special_stop_translation")
-        )
-        # The flight bit must stay set: the clears below are calibrated against
-        # the flight movement model, and dropping 0x4000 made the whole clamp a
-        # no-op at runtime on 2026-08-29 (registered failure I1).
-        self.assertNotIn("func_169(", body)
-        # The engine's own stop primitives: sys_46(0x8)/func_113() are what
-        # func_56 and func_73 run, and channels 1/2/3/4 are what func_44 clears
-        # on every action switch.
-        self.assertIn("sys_46(0x8, 0, 0, 0)", body)
-        self.assertIn("func_113()", body)
-        for channel in ("0x1", "0x2", "0x3", "0x4"):
-            with self.subTest(channel=channel):
-                self.assertIn(f"sys_46(0x1, {channel}, 0, 0, 0)", body)
-        self.assertIn("sys_46(0x4, 0x4, 0)", body)
-        self.assertIn("func_300(0)", body)
-        self.assertIn("func_104(0, 0, 0)", body)
-        self.assertIn("func_107(0, 0, 0)", body)
-        self.assertNotRegex(body, r"global714\s*=")
+        body = _strip_c_comments(_function_body(self.source, "special_shot_flight_tick"))
+        self.assertNotIn("func_296(0x3e8, 0)", body)
 
     def test_release_restores_flight_bit_motor_and_analog_profile(self) -> None:
         release = _strip_c_comments(
@@ -142,13 +137,16 @@ class RebellionFlightSpecialMessalaFlowTest(unittest.TestCase):
             r"func_351\(0, 0x4\);\s*rebellion_flight_special_profile_swapped\s*=\s*0x1;",
         )
 
-    def test_end_phase_hands_the_flight_owner_back_on_its_first_frame(self) -> None:
+    def test_end_restores_bird_analog_then_sets_global252(self) -> None:
+        # Loop motion has no Messala recovery clip (I3). Bird analog needs
+        # profile 2 before func_598 (D10).
         body = _strip_c_comments(_function_body(self.source, "special_shot_flight_end"))
         self.assertRegex(
             body,
-            r"rebellion_flight_special_end_hold\s*=\s*0x1;\s*"
-            r"rebellion_flight_special_release_flight_owner\(\);\s*\}",
+            r"rebellion_flight_special_release_flight_owner\(\);\s*"
+            r"global252\s*=\s*0x1;",
         )
+        self.assertNotIn("global244", body)
 
     def test_action_enter_clears_both_ownership_flags(self) -> None:
         body = _strip_c_comments(_function_body(self.source, "SPECIAL_SHOT_FLIGHT"))
@@ -156,11 +154,6 @@ class RebellionFlightSpecialMessalaFlowTest(unittest.TestCase):
         self.assertIn("rebellion_flight_special_profile_swapped = 0", body)
 
     def test_idle_landing_after_the_special_rearms_flight(self) -> None:
-        # func_412 (0xf5f21169) runs func_169(0x14000) + func_296(0x3e8, 0) and
-        # func_390 (0x6d00aeaa) runs func_170(0x30000003). Both wipe the flight
-        # bit and the motor, and both 0.c's bird input branch and the native
-        # flight loop are selected from that state, so without a re-arm the unit
-        # is stuck in bird visuals over a non-flight action with gravity on.
         body = _strip_c_comments(_function_body(self.source, "func_41"))
         self.assertRegex(
             body,
@@ -171,10 +164,6 @@ class RebellionFlightSpecialMessalaFlowTest(unittest.TestCase):
 
     def test_abnormal_exit_restores_the_analog_profile(self) -> None:
         body = _strip_c_comments(_function_body(self.source, "func_41"))
-        # end_hold is cleared unconditionally, so it can only ever be set while
-        # this action is in 679. The profile restore stays gated on
-        # profile_swapped, which only 676 sets, so it can never fire before the
-        # action has actually swapped the analog profile.
         self.assertRegex(
             body,
             r"if\s*\(\s*global3\s*!=\s*0\s*&&\s*global3\s*!=\s*0xd94d608f\s*\)\s*\{\s*"
@@ -210,23 +199,20 @@ class RebellionFlightSpecialMessalaFlowTest(unittest.TestCase):
             "special_shot_flight_start",
             "special_shot_flight_shoot",
             "special_shot_flight_no_ammo",
-            "special_shot_flight_end",
         ):
             with self.subTest(timed_function=name):
                 body = _strip_c_comments(_function_body(self.source, name))
                 self.assertIn("global244", body)
 
-    def test_looping_motion_end_holds_then_releases_ownership_with_global252(self) -> None:
-        # Rebellion has no recovery clip, so Messala func_974's motion-end
-        # predicate becomes a bounded phase timer. The foot-stop stays live for
-        # the hold and ownership is handed back on the resolving frame.
-        body = _strip_c_comments(_function_body(self.source, "special_shot_flight_end"))
-        self.assertRegex(
-            body,
-            r"if\s*\(\s*global244\s*>=\s*0x19\s*\*\s*0x64\s*\)\s*\{\s*"
-            r"rebellion_flight_special_end_hold\s*=\s*0;\s*"
-            r"global252\s*=\s*0x1;\s*\}",
-        )
+    def test_shoot_window_is_longer_than_the_cs2_copy(self) -> None:
+        body = _strip_c_comments(_function_body(self.source, "special_shot_flight_shoot"))
+        self.assertIn("global244 >= 0x3c * 0x64", body)
+        self.assertNotIn("global244 >= 0x28 * 0x64", body)
+
+    def test_callfunc3_stays_on_the_tick(self) -> None:
+        enter = _strip_c_comments(_function_body(self.source, "SPECIAL_SHOT_FLIGHT"))
+        self.assertIn("callFunc3(special_shot_flight_tick)", enter)
+        self.assertNotIn("callFunc3(special_shot_flight_start)", enter)
 
 
 if __name__ == "__main__":

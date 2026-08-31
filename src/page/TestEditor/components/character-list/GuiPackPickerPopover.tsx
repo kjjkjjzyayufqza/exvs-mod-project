@@ -1,5 +1,11 @@
 import { PreviewPickerPopover, type PreviewPickerItem } from "./PreviewPickerPopover";
-import { sortGuiPackPickerItems, type GuiPackPickerItem } from "./guiPackIndex";
+import { formatGuiHashHex } from "./guiClonePlan";
+import {
+  canExtractGuiPack,
+  filterGuiPackPickerItems,
+  sortGuiPackPickerItems,
+  type GuiPackPickerItem,
+} from "./guiPackIndex";
 
 export function GuiPackPickerPopover(props: {
   fieldKey: string;
@@ -11,12 +17,20 @@ export function GuiPackPickerPopover(props: {
   error?: string | null;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  onExtract?: (hash: number) => void;
+  extractingHash?: number | null;
 }) {
-  const pickerItems: PreviewPickerItem[] = sortGuiPackPickerItems(props.fieldKey, props.items).map((item) => ({
+  const pickerItems: PreviewPickerItem[] = sortGuiPackPickerItems(
+    props.fieldKey,
+    filterGuiPackPickerItems(props.fieldKey, props.items, props.selectedValue),
+  ).map((item) => ({
     value: item.hash >>> 0,
     label: item.label,
     previewSrc: "",
-    secondaryText: item.secondaryText,
+    secondaryText: formatGuiHashHex(item.hash >>> 0),
+    searchText: item.secondaryText,
+    nutexbPath: item.nutexbPath,
+    canExtract: canExtractGuiPack(item),
   }));
 
   return (
@@ -31,6 +45,8 @@ export function GuiPackPickerPopover(props: {
       open={props.open}
       onOpenChange={props.onOpenChange}
       filterPlaceholder="Filter by name or hash..."
+      onExtract={props.onExtract}
+      extractingValue={props.extractingHash}
     />
   );
 }

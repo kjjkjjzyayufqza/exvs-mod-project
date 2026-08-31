@@ -47,16 +47,20 @@ import {
 import { promptAndMigrateWorkspaceContentIfNeeded } from "@/services/testEditorWorkspace/contentMigration";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import { findFhm2dNameMapping, listFhm2dNameMappingEntries } from "@/utils/fhm2dNameMapping";
-import { formatGuiHashHex } from "./character-list/guiClonePlan";
+import { clonedGuiPackIdentity, formatGuiHashHex, isMsGuiCloneKey, isPilotGuiCloneKey, type CloneGuiSetResult } from "./character-list/guiClonePlan";
+import { sanitizeFhm2dStructureName } from "@/utils/fhm2dStructureMetadata";
+import { extractWorkspaceGuiPack } from "./character-list/guiPackExtract";
 import {
   collectCharacterGuiUsages,
   expectedWorkspaceGuiFolder,
   mergeGuiPackPickerItems,
+  planGuiPackExtract,
   resolveGuiPackFolder,
   type GuiPackPickerItem,
   type WorkspaceGuiPack,
 } from "./character-list/guiPackIndex";
 import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
+import { useConfigStore } from "@/store/configStore";
 
 interface CharacterListViewProps {
   folderPath: string;
@@ -130,6 +134,8 @@ export default function CharacterListView({
   onRevealTreeFolder,
   workspaceDocument,
 }: CharacterListViewProps) {
+  const obDplCachePath = useConfigStore((state) => state.obDplCachePath);
+  const obModPath = useConfigStore((state) => state.obModPath);
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [seriesPickerState, setSeriesPickerState] = useState<SeriesPickerState>({
     status: "idle",
@@ -157,6 +163,8 @@ export default function CharacterListView({
   const [workspaceGuiPacks, setWorkspaceGuiPacks] = useState<WorkspaceGuiPack[]>([]);
   const [guiPackLoading, setGuiPackLoading] = useState(false);
   const [guiPackError, setGuiPackError] = useState<string | null>(null);
+  const [extractingGuiHash, setExtractingGuiHash] = useState<number | null>(null);
+  const [cloningGuiHash, setCloningGuiHash] = useState<number | null>(null);
   const lastLoadedKeyRef = useRef<string>("");
 
   const resolveContent = useCallback(
@@ -496,6 +504,139 @@ export default function CharacterListView({
       await handleOpenPath(folder);
     },
     [folderPath, guiPackItems, handleOpenPath, onRevealTreeFolder],
+  );
+
+  const handleExtractGuiPack = useCallback(
+    async (hash: number, fieldKey: string) => {
+      const plan = planGuiPackExtract(hash, fieldKey, guiPackItems);
+      if (!plan) {
+        toast.error(hash === 0 ? "No pack hash" : "Pack is already extracted");
+        return;
+      }
+      const dplCachePath = (obDplCachePath ?? "").trim();
+      if (!dplCachePath) {
+        toast.error("Set OB dplcache path in Config");
+        return;
+      }
+      if (!folderPath) {
+        toast.error("Set EXVS2 Workspace folder first");
+        return;
+      }
+      setExtractingGuiHash(plan.hash);
+      try {
+        const extracted = await extractWorkspaceGuiPack({
+          dplCachePath,
+          workspaceRoot: folderPath,
+          obModPath: (obModPath ?? "").trim() || null,
+          hash: plan.hash,
+          packagePath: plan.packagePath,
+          structureName: plan.structureName,
+        });
+        toast.success(`Extracted ${extracted.name}`, {
+          description: `009gui/${extracted.workspaceRelative}`,
+        });
+        await loadGuiPacks();
+        onPackMutated?.({
+          packKey: extracted.structureJsonPath || extracted.folderPath,
+          routeId: null,
+          prefix: "009gui",
+          hashFolderName: extracted.name || formatGuiHashHex(extracted.hash),
+          folderPath: extracted.folderPath,
+          structureJsonPath: extracted.structureJsonPath,
+          sourceLayout: "configured",
+        });
+        onRevealTreeFolder?.(extracted.folderPath);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+      } finally {
+        setExtractingGuiHash(null);
+      }
+    },
+    [folderPath, guiPackItems, loadGuiPacks, obDplCachePath, obModPath, onPackMutated, onRevealTreeFolder],
+  );
+
+  const handleCloneGuiPack = useCallback(
+    async (hash: number, fieldKey: string, requestedName: string) => {
+      const normalized = hash >>> 0;
+      if (normalized === 0) {
+        toast.error("No pack hash");
+        throw new Error("No pack hash");
+      }
+      if (!isPilotGuiCloneKey(fieldKey) && !isMsGuiCloneKey(fieldKey)) {
+        toast.error("This field cannot be cloned from character_list");
+        throw new Error("This field cannot be cloned from character_list");
+      }
+      if (loadState.status !== "ready" || !loadState.writable) {
+        toast.error("Character list is read-only");
+        throw new Error("Character list is read-only");
+      }
+      const entry = loadState.list.entries[selectedIndex];
+      if (!entry) {
+        toast.error("Select a character first");
+        throw new Error("Select a character first");
+      }
+      const dplCachePath = (obDplCachePath ?? "").trim();
+      if (!dplCachePath) {
+        toast.error("Set OB dplcache path in Config");
+        throw new Error("Set OB dplcache path in Config");
+      }
+      if (!folderPath) {
+        toast.error("Set EXVS2 Workspace folder first");
+        throw new Error("Set EXVS2 Workspace folder first");
+      }
+      const structureName = sanitizeFhm2dStructureName(requestedName);
+      if (!structureName) {
+        toast.error("Enter a Name for the cloned pack");
+        throw new Error("Enter a Name for the cloned pack");
+      }
+      setCloningGuiHash(normalized);
+      try {
+        const result = await invoke<CloneGuiSetResult>("clone_character_gui_set", {
+          request: {
+            dplCachePath,
+            workspaceRoot: folderPath,
+            obModPath: (obModPath ?? "").trim() || null,
+            copyToObMod: false,
+            targetEntryId: entry.entryId,
+            donorEntryId: entry.entryId,
+            clonePilot: true,
+            cloneNavi: false,
+            preview: false,
+            selectedFieldKeys: [fieldKey],
+            structureNames: { [fieldKey]: structureName },
+            characterList: { entries: loadState.list.entries },
+          },
+        });
+        // Keep the current character_list hash. The clone is only a new 009gui pack.
+        await loadGuiPacks();
+        for (const pack of result.packs) {
+          onPackMutated?.(clonedGuiPackIdentity(pack));
+        }
+        const first = result.packs[0];
+        toast.success(`Cloned ${first?.structureName ?? structureName}`, {
+          description: first
+            ? `${formatGuiHashHex(first.newHash)} is in 009gui. This field is unchanged.`
+            : structureName,
+        });
+        if (first?.outputPath) onRevealTreeFolder?.(first.outputPath);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        toast.error(message);
+        throw error instanceof Error ? error : new Error(message);
+      } finally {
+        setCloningGuiHash(null);
+      }
+    },
+    [
+      folderPath,
+      loadGuiPacks,
+      loadState,
+      obDplCachePath,
+      obModPath,
+      onPackMutated,
+      onRevealTreeFolder,
+      selectedIndex,
+    ],
   );
 
   const handleOpenCharacterListFolder = useCallback(async () => {
@@ -911,6 +1052,12 @@ export default function CharacterListView({
             guiPackLoading={guiPackLoading}
             guiPackError={guiPackError}
             onOpenGuiPackFolder={(hash) => void handleOpenGuiPackFolder(hash)}
+            onExtractGuiPack={(hash, fieldKey) => void handleExtractGuiPack(hash, fieldKey)}
+            extractingGuiHash={extractingGuiHash}
+            onCloneGuiPack={(hash, fieldKey, structureName) =>
+              handleCloneGuiPack(hash, fieldKey, structureName)
+            }
+            cloningGuiHash={cloningGuiHash}
             jumpToCharacterIdTable={jumpToCharacterIdTable}
             cloneGuiWritable={loadState.writable}
             onPackMutated={onPackMutated}
@@ -918,6 +1065,7 @@ export default function CharacterListView({
             onJumpToNaviList={onJumpToNaviList}
             onCloneApplied={() => void loadGuiPacks()}
             workspaceDocument={workspaceDocument}
+            sourceFilePath={loadState.filePath}
             onChange={handleEditorChange}
             onSelectChange={handleEditorSelectChange}
           />

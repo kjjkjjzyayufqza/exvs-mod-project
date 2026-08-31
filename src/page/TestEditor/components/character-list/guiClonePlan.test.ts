@@ -1,15 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
   applyCharacterGuiFieldUpdates,
+  defaultGuiCloneStructureName,
   formatGuiHashHex,
   guiCloneFieldLabel,
   guiCloneHashSeed,
+  isMsGuiCloneKey,
   isNaviGuiCloneKey,
   isPilotGuiCloneKey,
+  MS_GUI_CLONE_FIELDS,
   overlayClonedGuiPack,
   PILOT_GUI_CLONE_FIELDS,
+  previewGuiCloneFieldName,
   previewGuiCloneHash,
   replaceGuiExtractLeaf,
+  uniqueGuiCloneStructureName,
 } from "./guiClonePlan";
 
 describe("guiClonePlan", () => {
@@ -28,10 +33,36 @@ describe("guiClonePlan", () => {
     expect(next.lmbCutIn).toBe(0xaabbccdd);
     expect((next as { vsPL?: number }).vsPL).toBe(2);
     expect(source.lmbCutIn).toBe(0x88bd4dc3);
-    expect(PILOT_GUI_CLONE_FIELDS).toHaveLength(7);
+    expect(PILOT_GUI_CLONE_FIELDS).toHaveLength(13);
+    expect(MS_GUI_CLONE_FIELDS).toHaveLength(8);
     expect(isPilotGuiCloneKey("lmbCutIn")).toBe(true);
+    expect(isMsGuiCloneKey("msMsS")).toBe(true);
+    expect(isMsGuiCloneKey("msCardIconIndex")).toBe(false);
     expect(isNaviGuiCloneKey("naviBt")).toBe(true);
+    expect(isNaviGuiCloneKey("navi_11112222")).toBe(true);
     expect(guiCloneFieldLabel("vsPL")).toBe("VS Pilot Left");
+    expect(guiCloneFieldLabel("msMsS")).toBe("MS MS S");
+  });
+
+  it("picks a unique clone leaf from the field prefix and target id", () => {
+    expect(defaultGuiCloneStructureName("msMsS", 900000004)).toBe("ms_ms_s_900000004");
+    expect(uniqueGuiCloneStructureName("msMsS", 900000004, [])).toBe("ms_ms_s_900000004");
+    expect(
+      uniqueGuiCloneStructureName("msMsS", 900000004, ["ms_ms_s_900000004", "ms_ms_s_900000004_2"]),
+    ).toBe("ms_ms_s_900000004_3");
+    expect(uniqueGuiCloneStructureName("msTracker", 16001001, ["ms_tracker_16001001"])).toBe(
+      "ms_tracker_16001001_2",
+    );
+  });
+
+  it("computes the clone HashName from the custom Name", () => {
+    const first = previewGuiCloneFieldName(900000004, "msMsS", "ms_ms_s_custom");
+    const second = previewGuiCloneFieldName(900000004, "msMsS", "ms_ms_s_other");
+    expect(first.structureName).toBe("ms_ms_s_custom");
+    expect(first.hashHex).toBe(formatGuiHashHex(first.newHash));
+    expect(first.seed).toBe("GUI_CLONE|900000004|ms_ms_s_custom|msMsS");
+    expect(first.newHash).toBe(previewGuiCloneHash(900000004, "ms_ms_s_custom", "msMsS"));
+    expect(second.newHash).not.toBe(first.newHash);
   });
 
   it("recomputes HashName and extract leaf from the custom structure name", () => {
