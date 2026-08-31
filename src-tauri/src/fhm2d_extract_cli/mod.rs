@@ -29,18 +29,44 @@ where
 }
 
 fn run_extract(command: ExtractCommand) -> Result<String, String> {
-    let result = extract_fhm2d_to_folder_with_layout(
+    let op = crate::console_color::StderrOp::start(
+        "fhm2d-extract",
+        format!(
+            "Starting — source: {}, output: {}, type: {}, layout: {:?}",
+            command.source_path,
+            command.output_dir,
+            command.extract_type.as_cli_str(),
+            command.layout
+        ),
+    );
+    let result = match extract_fhm2d_to_folder_with_layout(
         command.source_path.as_str(),
         command.output_dir.as_str(),
         Some(command.extract_type),
         command.list_output_name.clone(),
         command.write_meta_bin,
         command.layout,
-    )?;
+    ) {
+        Ok(result) => result,
+        Err(error) => {
+            op.err(&error);
+            return Err(error);
+        }
+    };
 
     if let Some(warning) = result.naming_error.as_ref() {
-        eprintln!("naming warning: {warning}");
+        crate::console_color::eprint_warn("fhm2d-extract", &format!("naming warning: {warning}"));
     }
+    op.ok(format!(
+        "type={}, layout={:?}, naming={}",
+        command.extract_type.as_cli_str(),
+        command.layout,
+        if result.naming_error.is_some() {
+            "naming_warning"
+        } else {
+            "ok"
+        }
+    ));
 
     Ok(format_success(&command, &result))
 }

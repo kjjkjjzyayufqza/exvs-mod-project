@@ -84,10 +84,10 @@ function buildFileIndexToFolderSegments(parseRoot: ParseNode): Map<number, strin
         if (!Number.isInteger(fi) || fi < 0) {
           throw new Error(`Motion parse tree: invalid Item name (fileIndex): ${String(child.name)}`);
         }
-        if (map.has(fi)) {
-          throw new Error(`Motion parse tree: duplicate fileIndex in tree: ${fi}`);
+        // Same pool fileIndex may appear in multiple folders; keep the first path for fileUrl.
+        if (!map.has(fi)) {
+          map.set(fi, folderPath);
         }
-        map.set(fi, folderPath);
       }
     }
   }

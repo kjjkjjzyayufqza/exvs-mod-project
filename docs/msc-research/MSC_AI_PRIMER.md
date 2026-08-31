@@ -184,6 +184,11 @@ to copy the vanilla shape. **Never reason forward from assumed call semantics.**
 | Homemade NUANMB clip duration | is `global244 -= func_274()`, **not** `func_309` / `sys_47(0x7)` / a `func_310` rate |
 | Shipping a build with two changed variables | the failure becomes undiagnosable |
 | Responding to a failed run by adding complexity | shrink to the smallest discriminating edit instead |
+| Editing `0.c` for anything but input mapping | `0.c` owns only *which input selects which hash*, plus the four-value `func_95` selector. Behaviour, form, loadout and phases are `2.c`. Read `0.c` first, edit `2.c` first |
+| A `2.c` fix that "changed nothing" | check which `0.c` branch actually ran, including the neutral-stick `else`, before assuming the `2.c` edit was wrong |
+| Hand-picking the four `func_95` args | they are a weapon-category descriptor. Hambrabi `func_145` derives all four from the action row; copy them from an existing action of the same category |
+| Repacking only one script | `0.c` to `0.bscex` and `2.c` to `2.dscex` are separate repacks; changing one and packing the other is silent |
+| Grepping a packed `.dscex` for a hash as little-endian u32 | constants are not stored in the clear; even untouched hashes return zero hits. Decompile the artefact instead |
 
 ---
 

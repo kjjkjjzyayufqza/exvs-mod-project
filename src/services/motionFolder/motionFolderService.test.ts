@@ -500,4 +500,58 @@ describe("motionFolderService", () => {
     });
   });
 
+  it("serializes a shared fileIndex as one SubFileData row and two tree Items", () => {
+    const [root] = baseNodes();
+    const original = root!.children[0] as MotionItemNode;
+    const folder0: MotionFolderNode = {
+      id: "folder:0/0",
+      kind: "folder",
+      parentId: root!.id,
+      name: "0",
+      link: false,
+      depth: 1,
+      pathSegments: ["0", "0"],
+      children: [{
+        ...original,
+        id: "item:0",
+        parentId: "folder:0/0",
+        depth: 2,
+        pathSegments: ["0", "0"],
+      }],
+      unk1: "00000000",
+      unk2: "00000000",
+      unk2_1: 0,
+      unk3: 0,
+      unk4: 0,
+      unk5: 0,
+      unk6: 0,
+      rawStructure: null,
+      rawParse: null,
+    };
+    const folder1: MotionFolderNode = {
+      ...folder0,
+      id: "folder:0/1",
+      name: "1",
+      pathSegments: ["0", "1"],
+      children: [{
+        ...original,
+        id: "item:0/1:0:1",
+        parentId: "folder:0/1",
+        depth: 2,
+        pathSegments: ["0", "1"],
+      }],
+    };
+    const nodes: MotionStructureNode[] = [{
+      ...root!,
+      children: [folder0, folder1],
+    }];
+
+    const serialized = serializeMotionProject(baseProject(), nodes, "pack");
+    expect(serialized.SubFileData).toHaveLength(1);
+    expect(serialized.Fhm2dTotalCount).toBe(1);
+    const itemEntries = serialized.SubFileStructure.filter((entry) => entry.type === "Item");
+    expect(itemEntries).toHaveLength(2);
+    expect(itemEntries.map((entry) => ("fileIndex" in entry ? entry.fileIndex : null))).toEqual([0, 0]);
+  });
+
 });

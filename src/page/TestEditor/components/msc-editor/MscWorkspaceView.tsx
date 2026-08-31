@@ -80,11 +80,7 @@ import {
   resolveMscActionOverlayForFolder,
   verifyMscRoundtrip,
 } from "./mscWorkspaceActions";
-import {
-  DialogLastPathKey,
-  getDialogDefaultPath,
-  rememberDialogSelection,
-} from "@/utils/dialogLastPath";
+import { formatCaughtError } from "@/utils/formatCaughtError";
 
 interface MscWorkspaceViewProps {
   workspaceRoot: string;
@@ -375,7 +371,7 @@ export default function MscWorkspaceView({
       }
     } catch (error) {
       console.error("Error during repack folder:", error);
-      toast.error(`Repack Folder failed: ${error instanceof Error ? error.message : String(error)}`);
+      toast.error(`Repack Folder failed: ${formatCaughtError(error)}`);
     } finally {
       setIsFolderRepacking(false);
     }
@@ -437,7 +433,7 @@ export default function MscWorkspaceView({
         toast.success(`Converted ${await convertScriptCore(file)}`);
         await fetchFiles();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : `Error converting ${file.name}`);
+        toast.error(`Error converting ${file.name}: ${formatCaughtError(error)}`);
       } finally {
         setProcessingFile(null);
       }
@@ -455,7 +451,7 @@ export default function MscWorkspaceView({
         }
         await fetchFiles();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : `Error repacking ${file.name}`);
+        toast.error(`Error repacking ${file.name}: ${formatCaughtError(error)}`);
       } finally {
         setProcessingFile(null);
       }
@@ -486,7 +482,7 @@ export default function MscWorkspaceView({
         }
         await fetchFiles();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : `Error resolving overlay for ${file.name}`);
+        toast.error(`Error resolving overlay for ${file.name}: ${formatCaughtError(error)}`);
       } finally {
         setProcessingFile(null);
       }
@@ -500,7 +496,7 @@ export default function MscWorkspaceView({
         setProcessingFile(file.name);
         await openFileInExternalEditor({ filePath: file.path, editorCommand });
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : `Error opening ${file.name} in editor`);
+        toast.error(`Error opening ${file.name} in editor: ${formatCaughtError(error)}`);
       } finally {
         setProcessingFile(null);
       }
@@ -524,7 +520,7 @@ export default function MscWorkspaceView({
       setPreview({ file, content, mode: "content" });
     } catch (error) {
       toast.error(
-        `Failed to preview ${file.name}: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to preview ${file.name}: ${formatCaughtError(error)}`,
       );
     }
   }, []);
@@ -554,7 +550,7 @@ export default function MscWorkspaceView({
           toast.warning(`Round-trip verify ${file.name}: ${summary}.${context}`);
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = formatCaughtError(error);
         setSlotVerifyState(slotIndex, { status: "error", message });
         toast.error(`Round-trip verify ${file.name} failed: ${message}`);
       } finally {
@@ -575,7 +571,7 @@ export default function MscWorkspaceView({
           await (kind === "decompile" ? convertScriptCore(file) : repackScriptCore(file));
         } catch (error) {
           failures += 1;
-          toast.error(`${file.name}: ${error instanceof Error ? error.message : String(error)}`);
+          toast.error(`${file.name}: ${formatCaughtError(error)}`);
         }
         setBatch((prev) => (prev ? { ...prev, done: prev.done + 1 } : prev));
       }
@@ -614,7 +610,7 @@ export default function MscWorkspaceView({
         const overwrite = await collectExisting([outputPath, logPath]);
         setConfirm({ mode: "convert-one", file, outputPath, logPath, overwrite });
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : `Failed to prepare convert for ${file.name}`);
+        toast.error(`Failed to prepare convert for ${file.name}: ${formatCaughtError(error)}`);
       }
     },
     [collectExisting, workspaceMode],

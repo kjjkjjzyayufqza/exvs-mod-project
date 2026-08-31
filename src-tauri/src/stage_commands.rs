@@ -1535,6 +1535,12 @@ pub async fn extract_unit_model_fhm2d_to_folder(
     write_meta_bin: Option<bool>,
 ) -> Result<unit_model_extract::UnitModelExtractResult, String> {
     let write_meta = write_meta_bin.unwrap_or(false);
+    let op = crate::console_color::StderrOp::start(
+        "extract_unit_model_fhm2d_to_folder",
+        format!(
+            "Starting — source: {source_path}, output: {out_root}, write_meta_bin: {write_meta}"
+        ),
+    );
     let result = tauri::async_runtime::spawn_blocking(move || {
         unit_model_extract::extract_unit_model_fhm2d_to_folder_impl(
             &source_path,
@@ -1543,8 +1549,19 @@ pub async fn extract_unit_model_fhm2d_to_folder(
         )
     })
     .await
-    .map_err(|e| format!("Task join error: {e}"))??;
-    Ok(result)
+    .map_err(|e| {
+        let msg = format!("Task join error: {e}");
+        op.err(&msg);
+        msg
+    })?;
+    match &result {
+        Ok(extracted) => op.ok(format!(
+            "{} models, {} files",
+            extracted.model_count, extracted.total_files
+        )),
+        Err(error) => op.err(error),
+    }
+    result
 }
 
 #[tauri::command]

@@ -1,0 +1,89 @@
+---
+description: EXVS2 MSC — 0.c may only be edited for input mapping (button/stick bit to action hash, and the func_95 selector tuple). Behaviour, form, loadout and phase changes belong in 2.c. Use when editing 0.c, func_143, func_95, global48, global2, action hash routing, bird/flight form actions, or diagnosing "the fix changed nothing".
+globs:
+  - docs/msc-research/**
+  - docs/msc-*.md
+  - docs/exvs-msc-*.md
+  - tools/msc*.py
+  - tools/check_msc*.py
+alwaysApply: false
+---
+
+# 0.c is input mapping only
+
+**Rule (user, 2026-08-31): do not edit `0.c` unless the change is an input
+mapping (按键操作). Everything else goes in `2.c`.**
+
+## What 0.c is allowed to own
+
+Exactly one thing: **which input selects which action**, expressed as a
+`func_95` call inside the `func_143` button chain.
+
+```c
+func_95(<action hash>, <arg1>, <flags>, <class index>);
+```
+
+That includes:
+
+- which `global48` button bit / `global2` stick bit takes which branch
+- which action hash a branch submits
+- the four `func_95` arguments (they are one unit — see below)
+- ammo / state gates that decide **whether** to submit at all
+  (e.g. `sys_0(0x90000, slot)`, `sys_0(0xd0001, 0)`)
+
+## What 0.c must never own
+
+Behaviour. Form. Loadout. Motion. Phases. Cancel windows implemented as code.
+All of that is `2.c`: the `func_241` registry, the `func_593` quartet,
+`func_41` teardown, `func_882` keep-form. If you are tempted to "fix the move"
+in `0.c`, you are in the wrong file.
+
+## The four func_95 arguments are a weapon-category descriptor
+
+They are not free choices. Hambrabi `0.c func_145` derives all four from the
+action row, so a classic-selector unit must **copy them from an existing action
+of the same category**, never hand-pick:
+
+| arg | lands in | meaning |
+| --- | --- | --- |
+| `arg0` | `global51` | action hash |
+| `arg1` | `global61` | which pending queue: `func_88()` wants `0`, `func_87()` wants `1`. `0.c func_15` (the flight/idle form selector, `global20 & 0x4000` → index `0x18`) reads `func_88()` first, so keep-form flight actions need `arg1 = 0` |
+| `arg2` | `global43` | cancel-route flags; `0x800` also flips `global22` |
+| `arg3` | `global62` | class index = input slot. Published as shared field `0x1a` and used as a bit index (`0x1 << global62`) |
+
+Wing Zero Rebellion class map, from its own 36 `func_95` calls:
+
+```text
+0   main-shot family AND every bird-form ranged action
+    (0x476fac14 bird main, 0x2194f05d bird CS2, 0xd94d608f flight special)
+1   N melee      2/3/4/5  front/left/right/back melee     6  BD melee
+7   GROUND sub   8  ground special   9  special melee
+0xa awakening    0xb CSA             0xc CSB
+```
+
+Copying `(0x1, 0x1, 0x7)` — the ground sub slot — onto a bird-form shot is what
+routed it into native `func_15` → `func_882` and rebuilt the ground loadout.
+
+## Diagnostic order when a move misbehaves
+
+Read `0.c` **first**, edit `2.c` first.
+
+1. Which branch actually ran? Check every `else` in the chain, including the
+   neutral-stick fallback. A `2.c` fix applied to an action the input never
+   reaches reads as "the patch changed nothing".
+2. Only then look at the `2.c` action body.
+
+## Verifying a 0.c change reached the game
+
+`0.c` compiles to `0.bscex`, which is a **separate repack** from `2.c` →
+`2.dscex`. Changing only one and repacking only the other is silent.
+
+Do not grep the packed `.bscex` / `.dscex` for a hash as a little-endian u32 —
+constants are not stored in the clear and even untouched hashes return zero
+hits. Decompile the packed artefact with `tools/mscdec.py` and read it.
+
+## Why this rule exists
+
+Three failed in-game cycles on the Rebellion flight sub-shot, all the same
+shape: the `2.c` action was correct, the `0.c` mapping was not, and each
+"no change" result was read as a `2.c` bug and answered with another `2.c` edit.

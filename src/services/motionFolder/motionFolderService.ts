@@ -285,6 +285,7 @@ function parseMotionProject(
   }
 
   const roots: MotionStructureNode[] = [];
+  const usedItemIds = new Set<string>();
   const stack: ParseFrame[] = [
     {
       node: null,
@@ -344,8 +345,13 @@ function parseMotionProject(
       const fileUrl = typeof fileData.fileUrl === "string"
         ? fileData.fileUrl
         : buildFileUrl(rootName, folderSegments, name);
+      let itemId = nextId("item", String(entry.fileIndex));
+      if (usedItemIds.has(itemId)) {
+        itemId = nextId("item", `${folderSegments.join("/")}:${entry.fileIndex}:${usedItemIds.size}`);
+      }
+      usedItemIds.add(itemId);
       const item: MotionItemNode = {
-        id: nextId("item", String(entry.fileIndex)),
+        id: itemId,
         kind: "item",
         parentId: current.node?.id ?? null,
         name,
@@ -473,7 +479,14 @@ export function serializeMotionProject(
   rootName: string,
 ): MotionStructureProject {
   const nextProject = cloneProject(project);
-  const items = collectItems(nodes).sort((a, b) => a.fileIndex - b.fileIndex);
+  // SubFileData is a unique pool. Multiple tree Items may share one fileIndex.
+  const uniqueByFileIndex = new Map<number, MotionItemNode>();
+  for (const item of collectItems(nodes)) {
+    if (!uniqueByFileIndex.has(item.fileIndex)) {
+      uniqueByFileIndex.set(item.fileIndex, item);
+    }
+  }
+  const items = [...uniqueByFileIndex.values()].sort((a, b) => a.fileIndex - b.fileIndex);
   const fileIndexMap = new Map<number, number>();
   items.forEach((item, index) => {
     fileIndexMap.set(item.fileIndex, index);

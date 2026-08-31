@@ -355,6 +355,33 @@ impl<'a> Fhm2dExtractor<'a> {
     }
 
     pub fn extract(self) -> Result<ExtractFhm2dResult, String> {
+        let format_label = self.format.map(Fhm2dFormat::as_cli_str).unwrap_or("none");
+        let op = crate::console_color::StderrOp::start(
+            "fhm2d_extract",
+            format!(
+                "Starting — source: {}, output: {}, format: {format_label}, layout: {:?}",
+                self.source_path, self.out_dir, self.layout
+            ),
+        );
+        match self.run() {
+            Ok(result) => {
+                if let Some(warning) = result.naming_error.as_ref() {
+                    crate::console_color::eprint_warn(
+                        "fhm2d_extract",
+                        &format!("naming warning: {warning}"),
+                    );
+                }
+                op.ok("extracted");
+                Ok(result)
+            }
+            Err(error) => {
+                op.err(&error);
+                Err(error)
+            }
+        }
+    }
+
+    fn run(self) -> Result<ExtractFhm2dResult, String> {
         let file_bytes =
             fs::read(self.source_path).map_err(|e| format!("Failed to read fhm2d file: {e}"))?;
         let (parsed, meta_inflated) = parse_ob_fhm2d(file_bytes.as_slice())?;
@@ -1401,7 +1428,7 @@ fn apply_motion_names(
     if sub.len() != files.len() {
         return Err("Motion naming: file list and buffer list length mismatch".to_string());
     }
-    let folder_map = build_folder_map(parse_root)?;
+    let folder_map = build_folder_map_impl(parse_root, false)?;
     for (idx, item) in sub.iter_mut().enumerate() {
         let folder_segments = folder_map.get(&item.file_index).ok_or_else(|| {
             format!(
@@ -1578,7 +1605,7 @@ fn apply_effect_shallow_parent_resource_names(
         .iter()
         .map(|file| (file.file_index, file.data.as_slice()))
         .collect::<HashMap<_, _>>();
-    let folder_map = build_folder_map(parse_root)?;
+    let folder_map = build_folder_map_impl(parse_root, false)?;
     let mut parent_dirs: HashSet<Vec<String>> = HashSet::new();
     for path in folder_map.values() {
         if path.len() >= 1 {
@@ -1646,6 +1673,8 @@ fn apply_effect_shallow_parent_resource_names(
 fn build_file_index_map(sub: &[OutputSubFileData]) -> Result<HashMap<i32, usize>, String> {
     let mut map = HashMap::new();
     for (idx, item) in sub.iter().enumerate() {
+        // SubFileData is the unique pool. Shared tree Items reuse one fileIndex; they
+        // must not create a second pool row.
         if map.insert(item.file_index, idx).is_some() {
             return Err(format!(
                 "Duplicate fileIndex in SubFileData: {}",
@@ -1713,12 +1742,33 @@ fn ensure_unique_file_urls(sub: &[OutputSubFileData]) -> Result<(), String> {
     Ok(())
 }
 
+fn format_parse_folder_path(path: &[String]) -> String {
+    if path.is_empty() {
+        "<root>".to_string()
+    } else {
+        path.join("\\")
+    }
+}
+
+/// Maps each `fileIndex` to the folder path of its **first** tree Item.
+///
+/// FHM2D SubFileStructure uses reference semantics: the same pool `fileIndex`
+/// may appear on multiple Items (vanilla motion packs do this). Extra
+/// occurrences keep the tree as-is; SubFileData still has one `fileUrl`.
 fn build_folder_map(root: &ParseNode) -> Result<HashMap<i32, Vec<String>>, String> {
+    build_folder_map_impl(root, true)
+}
+
+fn build_folder_map_impl(
+    root: &ParseNode,
+    log_shared: bool,
+) -> Result<HashMap<i32, Vec<String>>, String> {
     let mut out = HashMap::new();
     fn walk(
         node: &ParseNode,
         path: &mut Vec<String>,
         out: &mut HashMap<i32, Vec<String>>,
+        log_shared: bool,
     ) -> Result<(), String> {
         let children = match &node.children {
             Some(v) => v,
@@ -1728,7 +1778,7 @@ fn build_folder_map(root: &ParseNode) -> Result<HashMap<i32, Vec<String>>, Strin
             match child.node_type.as_deref() {
                 Some("Folder") => {
                     path.push(child.name.clone());
-                    walk(child, path, out)?;
+                    walk(child, path, out, log_shared)?;
                     let _ = path.pop();
                 }
                 Some("Item") => {
@@ -1736,8 +1786,19 @@ fn build_folder_map(root: &ParseNode) -> Result<HashMap<i32, Vec<String>>, Strin
                         .name
                         .parse::<i32>()
                         .map_err(|_| format!("Invalid parse-tree file index: {}", child.name))?;
-                    if out.insert(idx, path.clone()).is_some() {
-                        return Err(format!("Duplicate file index in parse tree: {idx}"));
+                    if let Some(existing) = out.get(&idx) {
+                        if log_shared {
+                            crate::console_color::eprint_warn(
+                                "fhm2d_extract",
+                                &format!(
+                                    "Shared fileIndex {idx} referenced from {} and {}; SubFileData keeps the first folder path",
+                                    format_parse_folder_path(existing),
+                                    format_parse_folder_path(path)
+                                ),
+                            );
+                        }
+                    } else {
+                        out.insert(idx, path.clone());
                     }
                 }
                 _ => {}
@@ -1746,7 +1807,7 @@ fn build_folder_map(root: &ParseNode) -> Result<HashMap<i32, Vec<String>>, Strin
         Ok(())
     }
     let mut path = Vec::new();
-    walk(root, &mut path, &mut out)?;
+    walk(root, &mut path, &mut out, log_shared)?;
     Ok(out)
 }
 
@@ -2023,6 +2084,28 @@ mod tests {
             unk3: None,
             children: Some(children),
         }
+    }
+
+    #[test]
+    fn shared_file_index_keeps_first_folder_path() {
+        let root = ParseNode {
+            node_type: None,
+            name: "Root".to_string(),
+            link: None,
+            unk1: None,
+            unk2: None,
+            unk3: None,
+            children: Some(vec![parse_folder(
+                "0",
+                vec![
+                    parse_folder("0", vec![parse_item(402)]),
+                    parse_folder("1", vec![parse_item(402)]),
+                ],
+            )]),
+        };
+        let map = build_folder_map(&root).expect("shared fileIndex is valid");
+        assert_eq!(map.get(&402).map(Vec::as_slice), Some(["0", "0"].as_slice()));
+        assert_eq!(map.len(), 1);
     }
 
     #[test]

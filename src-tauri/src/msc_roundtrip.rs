@@ -122,15 +122,28 @@ pub fn verify_msc_roundtrip_from_c(
     c_path: String,
     original_path: String,
 ) -> Result<MscRoundtripCompareReport, String> {
-    let c_file = Path::new(&c_path);
-    if !c_file.is_file() {
-        return Err(format!("MSC round-trip verify: C file not found: {c_path}"));
-    }
-    let c_source = fs::read_to_string(c_file).map_err(|error| {
-        format!("MSC round-trip verify: failed to read C file {c_path}: {error}")
-    })?;
-    let original = read_existing_file(&original_path, "original")?;
-    verify_c_source_against_original(&c_source, &original)
+    let op = crate::console_color::StderrOp::start(
+        "verify_msc_roundtrip_from_c",
+        format!("Starting — c: {c_path}, original: {original_path}"),
+    );
+    let result = (|| {
+        let c_file = Path::new(&c_path);
+        if !c_file.is_file() {
+            return Err(format!("MSC round-trip verify: C file not found: {c_path}"));
+        }
+        let c_source = fs::read_to_string(c_file).map_err(|error| {
+            format!("MSC round-trip verify: failed to read C file {c_path}: {error}")
+        })?;
+        let original = read_existing_file(&original_path, "original")?;
+        verify_c_source_against_original(&c_source, &original)
+    })();
+    op.finish(result, |report| {
+        if report.is_match {
+            "match".to_string()
+        } else {
+            format!("mismatch at offset {:?}", report.first_divergence_offset)
+        }
+    })
 }
 
 #[cfg(test)]

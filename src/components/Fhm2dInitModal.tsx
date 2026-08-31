@@ -66,6 +66,7 @@ import {
     resolveInitRouteTarget,
     type Fhm2dInitExtractOutput,
 } from "@/utils/fhm2dInitExtractPaths";
+import { formatCaughtError } from "@/utils/formatCaughtError";
 
 interface Fhm2dInitModalProps {
     isOpen: boolean;
@@ -713,7 +714,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
             }
         } catch (error) {
             clearInterval(progressInterval);
-            const message = error instanceof Error ? error.message : String(error);
+            const message = formatCaughtError(error);
             toast.error(`Extract failed: ${message}`);
 
             const newEntry: ExtractionHistory = {

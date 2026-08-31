@@ -128,14 +128,28 @@ pub fn decompile_msc(
     output_path: String,
     log_path: String,
 ) -> Result<(), String> {
+    let op = crate::console_color::StderrOp::start(
+        "decompile_msc",
+        format!("Starting — input: {input_path}, output: {output_path}, log: {log_path}"),
+    );
     let output_c = PathBuf::from(&output_path);
     let log = resolve_decompile_log_path(&output_c, Some(Path::new(&log_path)));
-    decompile_file(input_path.as_ref(), &output_c, &log)
+    op.finish(
+        decompile_file(input_path.as_ref(), &output_c, &log),
+        |_| format!("wrote {output_path}"),
+    )
 }
 
 #[tauri::command]
 pub fn compile_msc(input_path: String, output_path: String) -> Result<(), String> {
-    compile_file(input_path.as_ref(), output_path.as_ref(), false)
+    let op = crate::console_color::StderrOp::start(
+        "compile_msc",
+        format!("Starting — input: {input_path}, output: {output_path}"),
+    );
+    op.finish(
+        compile_file(input_path.as_ref(), output_path.as_ref(), false),
+        |_| format!("wrote {output_path}"),
+    )
 }
 
 pub fn rust_entry_does_not_shell_python() -> bool {

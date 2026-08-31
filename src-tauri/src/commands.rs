@@ -603,9 +603,22 @@ pub async fn extract_fhm2d_to_folder(
     list_output_file_name: Option<String>,
     write_meta_bin: Option<bool>,
 ) -> Result<crate::format::fhm2d::ExtractFhm2dResult, String> {
-    let parsed_format = crate::format::fhm2d::Fhm2dFormat::from_opt_str(format.as_deref())?;
+    let format_label = format.clone().unwrap_or_else(|| "none".to_string());
     let write_meta = write_meta_bin.unwrap_or(false);
-    tauri::async_runtime::spawn_blocking(move || {
+    let op = crate::console_color::StderrOp::start(
+        "extract_fhm2d_to_folder",
+        format!(
+            "Starting — source: {source_path}, output: {out_dir}, format: {format_label}, write_meta_bin: {write_meta}"
+        ),
+    );
+    let parsed_format = match crate::format::fhm2d::Fhm2dFormat::from_opt_str(format.as_deref()) {
+        Ok(value) => value,
+        Err(error) => {
+            op.err(&error);
+            return Err(error);
+        }
+    };
+    let result = tauri::async_runtime::spawn_blocking(move || {
         crate::format::fhm2d::extract_fhm2d_to_folder_impl(
             source_path.as_str(),
             out_dir.as_str(),
@@ -615,7 +628,24 @@ pub async fn extract_fhm2d_to_folder(
         )
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| {
+        let msg = format!("Task join error: {e}");
+        op.err(&msg);
+        msg
+    })?;
+    match &result {
+        Ok(extracted) => {
+            if let Some(warning) = extracted.naming_error.as_ref() {
+                crate::console_color::eprint_warn(
+                    "extract_fhm2d_to_folder",
+                    &format!("naming warning: {warning}"),
+                );
+            }
+            op.ok("extracted");
+        }
+        Err(error) => op.err(error),
+    }
+    result
 }
 
 #[derive(Clone, Deserialize)]

@@ -1,5 +1,7 @@
 //! ANSI-colored stderr helpers for operator-visible log lines.
 
+use std::time::Instant;
+
 const RESET: &str = "\x1b[0m";
 const BOLD: &str = "\x1b[1m";
 const RED: &str = "\x1b[91m";
@@ -21,4 +23,67 @@ pub fn eprint_warn(tag: &str, msg: &str) {
 
 pub fn eprint_error(tag: &str, msg: &str) {
     eprintln!("{BOLD}{RED}[{tag}]{RESET} {RED}{msg}{RESET}");
+}
+
+/// Timed stderr envelope for Tauri/CLI operations. Always logs start, then
+/// success or the full error string — never swallows `Result::Err`.
+pub struct StderrOp {
+    tag: &'static str,
+    start: Instant,
+}
+
+impl StderrOp {
+    pub fn start(tag: &'static str, msg: impl AsRef<str>) -> Self {
+        eprint_info(tag, msg.as_ref());
+        Self {
+            tag,
+            start: Instant::now(),
+        }
+    }
+
+    pub fn elapsed_ms(&self) -> u128 {
+        self.start.elapsed().as_millis()
+    }
+
+    pub fn ok(&self, msg: impl AsRef<str>) {
+        eprint_success(
+            self.tag,
+            &format!("Done in {}ms — {}", self.elapsed_ms(), msg.as_ref()),
+        );
+    }
+
+    pub fn err(&self, err: impl AsRef<str>) {
+        eprint_error(
+            self.tag,
+            &format!("Failed in {}ms — {}", self.elapsed_ms(), err.as_ref()),
+        );
+    }
+
+    pub fn finish<T>(
+        &self,
+        result: Result<T, String>,
+        ok_msg: impl FnOnce(&T) -> String,
+    ) -> Result<T, String> {
+        match &result {
+            Ok(value) => self.ok(ok_msg(value)),
+            Err(error) => self.err(error),
+        }
+        result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StderrOp;
+
+    #[test]
+    fn finish_preserves_ok_and_err_payloads() {
+        let op = StderrOp::start("test_op", "Starting");
+        let ok = op.finish(Ok(7_i32), |value| format!("n={value}"));
+        assert_eq!(ok.unwrap(), 7);
+
+        let op = StderrOp::start("test_op", "Starting");
+        let err: Result<i32, String> = op.finish(Err("boom".to_string()), |_| "ok".to_string());
+        assert_eq!(err.unwrap_err(), "boom");
+    }
 }

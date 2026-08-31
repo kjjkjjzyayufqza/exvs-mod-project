@@ -433,7 +433,7 @@ Existing research notes are not rewritten by this index.
   - Do not set global184=1 from BD 前派生 loop slashes to reopen func_516. Runtime 2026-08-29: 1 never connects to 2, infinite 1. func_492 then func_71(global629=func_990) and func_530 clears mash. Stay in func_493; chase with func_517. Registry E13.
   - Do not put per-tick sys_46(0) lock yaw plus channel-1 mag 0x320 on DIR_2 final slash func_974. Runtime 2026-08-30: magnet tracking. Registry E18. Do not ENTER-sys_46 mag from frame 0 (E19). Start ch1 mag 0x190 at 0xc8 (E21), clear at 0xbb8 (E23). One-shot face at func_148 (E22). Ch1 pitch 0xffffdcd8 climbs (E25); 0x7d0 (+20) still high; in-game winner is 1000 (+10deg). Do not sys_46(0x2) or func_351(0x2) (E12).
   - Do not release_flight_owner then func_296(0) on hit during 0xd94d608f / transform start/end. Keep air hold like bird melee from_flight. Do not treat analog 0x77b100ff as a keep-air global7: bird special-melee ENTER must still drop. See wing-zero-rebellion-flight-hit-air-hold-and-special-melee-cancel.md.
-  - Do not keep-form skip func_41/func_882 for bird special melee 0xc0b814ff/0x8d96c52f/0x279f0da4 while still playing ordinary Folder 0x1192E91E (F9): user still reported the dive lost. Copy-list: normal-form motion does not start on a bird owner. Restore the 2026-08-23 dive: ENTER interrupt, A to 0x708, wait until !func_287(0x3ed), then B. Visual untransform on press is required for that Folder; do not treat it as the same failure as a lost action. Do not add A-phase func_123(0x200)/func_233(0x7e,0) (F7) or func_309(global20,0x960) (F8). Do not add cancel/optional-land until that baseline is confirmed after repack. Do not func_123(0x9a5). Do not func_81(0x928ca34f).
+  - Do not keep-form skip func_41/func_882 for bird special melee 0xc0b814ff/0x8d96c52f/0x279f0da4 while still playing ordinary Folder 0x1192E91E (F9): user still reported the dive lost. Copy-list: normal-form motion does not start on a bird owner. Dive baseline: ENTER interrupt, A to 0x708, wait until !func_287(0x3ed), then B. Cancel is wait/ground func_123(0x3bf)+func_123(0xc00000) only; do not open that window on A (F7), do not func_233/func_81, do not func_123(0x9a5) (F4), do not func_309(global20,0x960) (F8). Do not func_81(0x928ca34f).
 
 ### `wing-zero-tv` — TV Wing Zero source behavior for the Rebellion port
 
@@ -471,6 +471,34 @@ Existing research notes are not rewritten by this index.
   - Do not copy only Messala ENTER calls; the load-bearing behavior is func_167(0x1004000) after func_593 on every tick including EXIT.
   - Do not use Messala's motion-end 679 predicate with Rebellion's intentionally looping 0x9de587ce motion; keep a bounded target recovery timer.
   - Do not claim full visual/resource Messala equivalence from a green lifecycle contract; motion c8fd1afb and private TRS/weapon resources are absent. For the confirmed movement-only delta, do not destroy continuous flight ownership: clamp translation after func_167 and skip 679.
+
+### `unit-hambrabi` — Hambrabi flight-mode sub-shot 側転射撃 and the param-table generation
+
+- **kind:** unit
+- **aliases:** `Hambrabi`, `ハンブラビ`, `002zgundm_006hambrb_001`, `変形サブ射撃`, `側転射撃`, `前進射撃`, `背部ビームライフル`, `roll shot`, `side roll`, `func_969`, `func_1082`, `func_1083`, `func_1085`, `func_1086`, `func_1182`, `func_873`, `func_988`, `func_849`, `0x700000`, `chrsysparam action matrix`, `SUB_SHOT_FLIGHT_ROLL_L`, `SUB_SHOT_FLIGHT_ROLL_R`, `0x5346534c`, `0x53465352`
+- **settled:**
+  - Hambrabi is the external param-table generation: 0.c func_143 dispatches through sys_41 to a cmdaction row index, and 2.c func_849 walks sys_0(0x700001) registering every row via func_873 (kind -> ENTER) and func_988 (hash -> unit hook).
+  - The whole 2.c has only three func_593 ranged ENTERs (func_957 kind 0x03, func_963 kind 0x12, func_969 kind 0x35). They are shared archetypes; all behaviour values come from the row through func_875(row, field).
+  - 変形サブ射撃 is kind 0x35 (func_969-974). It has no dedicated action function; its only unit-exclusive code is the hook pair func_1082+func_1083 (one roll side) and func_1085+func_1086 (the mirror), plus the shared repeat helper func_1182.
+  - The two roll sides differ only in the sign of sys_46(0x2, 0x3, +-0x2328, 0, 0xdc) and sys_46(0x1, 0x2, +-0x2328, ..., 0xb4); global964 is the last-side latch that gates the reversal kick so same-side chaining does not stack it.
+  - func_873 and func_988 return raw bytecode pointers; resolve them against the sibling 2.txt [func_name, pointer] table with a fixed -48 offset.
+  - Wing Zero Rebellion is the classic local-selector generation with zero 0x700000 reads and a global779 ceiling, so the hooks cannot be cloned literally; only the sys_46 recipe, the analog mix 0x32/0x60/0x62 and global689=0x6 are portable.
+  - Ported 2026-08-31: bird global48 0x80 splits on global2 0x10/0x20 into homemade hashes 0x5346534c / 0x53465352 (SUB_SHOT_FLIGHT_ROLL_L / _R), keep-form via the func_41 allowlist, 3-shot burst via native global683=0x3. L3 unverified.
+- **read_first:**
+  - `docs/msc-research/hambrabi-flight-sub-side-roll-shot.md`
+- **related:**
+  - `docs/msc-research/func593-vanilla-ranged-slots.md`
+  - `docs/msc-research/msc-generation-param-bridge-comparison.md`
+  - `docs/msc-research/2026-08-26-wing-zero-rebellion-subshot-split-and-flight-weapons-plan.md`
+- **do_not:**
+  - Do not try to register or copy func_1082/1083/1085/1086 into a unit without a chrsysparam action matrix; they read global798 rows and Hambrabi-only globals 951/952/964, all above Rebellion's global779.
+  - Do not reproduce the burst with Hambrabi's func_1182 -> func_891 row re-dispatch on a classic-selector unit; use the native func_596 repeat gate (global682 held / global683 forced).
+  - Do not treat func_957/963/969 as move-specific actions; they are kind archetypes shared by every row of that kind.
+  - Do not add func_167 to the ported tick or copy the Rebellion flight-special translation clamp; both are registered failures on that unit. ACTION_A_SHOT_BIRD's bare func_593 tick plus a func_41 allowlist entry is the proven keep-form shape.
+  - Do not treat the sys_46 sign as a known left/right mapping; the axis convention is E0 and the port's sides may need swapping after an in-game run.
+  - Do not add a keep-form bird hash to only one allowlist. Rebellion has two mirrored lists: func_41 (global3 != ...) skips teardown, and func_882 (global3 == ...) early-returns before rebellion_interrupt_bird_form_to_ground + func_884. E3 2026-08-31: patching func_41 alone kept the flight loop motion while the unit lost the flight motor, the bird props and the bird weapon bar. Both lists must hold the same set.
+  - Do not edit 0.c for anything but input mapping (user rule 2026-08-31). 0.c owns which input selects which hash plus the four-value func_95 selector; behaviour, form, loadout and phases are 2.c. Read 0.c first, edit 2.c first: a 2.c fix on an action the input never reaches reads as no change.
+  - Do not hand-pick the four func_95 arguments. arg1 selects the pending queue (func_88 wants 0, and 0.c func_15 reads it to select the flight loop), arg3 is the input class index. Bird-form ranged actions use (0, 0x1, 0) like bird main / bird CS2 / flight special; (0x1, 0x1, 0x7) is the ground sub slot and routes into native func_15 -> func_882, which rebuilds the ground loadout.
 
 ### `gyan` — Gyan MSC: melee, Dodai special shot, auto-turn
 

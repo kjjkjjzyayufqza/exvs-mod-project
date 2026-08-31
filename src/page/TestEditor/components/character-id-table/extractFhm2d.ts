@@ -1,4 +1,5 @@
 import { exists, readFile } from '@tauri-apps/plugin-fs';
+import { formatCaughtError } from "@/utils/formatCaughtError";
 import { invoke } from '@tauri-apps/api/core';
 import { Buffer } from 'buffer';
 import { ExtractFHMData, Fhm2d_type_format, ExtractType } from '@/models/fhm2d';
@@ -137,8 +138,8 @@ export async function extractAsset(
 
     console.log(`[FHM2D Extract] total: ${(performance.now() - extractT0).toFixed(2)}ms`);
     return result;
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Extraction failed:', err);
-    return { success: false, error: err.message || 'Unknown error during extraction' };
+    return { success: false, error: formatCaughtError(err) };
   }
 }

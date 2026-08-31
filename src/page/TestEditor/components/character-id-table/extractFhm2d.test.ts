@@ -173,4 +173,21 @@ describe("extractFhm2d route targets", () => {
       folderExists: true,
     });
   });
+
+  it("surfaces Tauri string errors instead of Unknown error during extraction", async () => {
+    extractFHMDataMock.mockRejectedValue("Motion name suffix invalid: idle.bin");
+    const target = await resolveFhm2dPackPaths(
+      "E:/output",
+      DEFAULT_TEST_EDITOR_WORKSPACE,
+      "unit.effect",
+      "0xBDBE6FEA",
+    );
+
+    const result = await extractAsset(effectAssetFixture(), target);
+
+    expect(result).toEqual({
+      success: false,
+      error: "Motion name suffix invalid: idle.bin",
+    });
+  });
 });
