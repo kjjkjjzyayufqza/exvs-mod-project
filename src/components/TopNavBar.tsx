@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
@@ -75,6 +76,14 @@ export function TopNavBar() {
         className="h-6 px-2 text-xs hover:bg-accent active:translate-y-px"
       >
         FHM2D Init
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-6 px-2 text-xs hover:bg-accent active:translate-y-px"
+        asChild
+      >
+        <Link to="/About">About</Link>
       </Button>
     </div>
   );

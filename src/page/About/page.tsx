@@ -1,7 +1,6 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-
 import { AboutLinkButton } from "./components/AboutLinkButton";
+import { AboutModule } from "./components/AboutModule";
+import { AboutSpecRow } from "./components/AboutSpecRow";
 import {
   ATTRIBUTION_CANARY,
   AUTHOR_HANDLE,
@@ -16,73 +15,101 @@ import {
 export default function AboutPage() {
   return (
     <div className="h-full min-h-0 overflow-auto">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 pb-16">
-        <header className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{PRODUCT_NAME}</h1>
-          <p className="text-sm text-muted-foreground">
-            by {AUTHOR_HANDLE}
-          </p>
-          <p className="font-mono text-xs text-muted-foreground">{ATTRIBUTION_CANARY}</p>
-        </header>
+      <div className="mx-auto w-full max-w-6xl px-6 pb-20 pt-8">
+        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.28em] text-muted-foreground">
+          Identity / about
+        </p>
 
-        <section className="grid gap-4 md:grid-cols-2">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>Author</CardTitle>
-              <CardDescription>Identity for this source-available tool.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <p>
-                Handle: <span className="font-mono">{AUTHOR_HANDLE}</span>
+        <div className="mt-5 grid items-end gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(16rem,0.85fr)]">
+          <header className="min-w-0">
+            <h1 className="text-4xl font-semibold tracking-tight text-balance lg:text-5xl">
+              {PRODUCT_NAME}
+            </h1>
+            <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
+              Source-available research editor for Over Boost and earlier Extreme
+              Vs. 2 revisions. Not an open-source product you can rebrand.
+            </p>
+          </header>
+
+          <aside className="rounded-2xl bg-muted/45 px-5 py-4">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              Author
+            </p>
+            <p className="mt-2 font-mono text-sm">{AUTHOR_HANDLE}</p>
+            <div className="mt-4">
+              <AboutLinkButton href={SUPPORT_HOME} label="GitHub" />
+            </div>
+          </aside>
+        </div>
+
+        <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <AboutModule index="01" kicker="Handle" title="Who ships this">
+            <dl>
+              <AboutSpecRow label="Author">{AUTHOR_HANDLE}</AboutSpecRow>
+              <AboutSpecRow label="Bundle">
+                <span className="break-all font-mono text-xs">{BUNDLE_ID}</span>
+              </AboutSpecRow>
+              <AboutSpecRow label="Support">
+                <span className="break-all font-mono text-xs">{SUPPORT_HOME}</span>
+              </AboutSpecRow>
+            </dl>
+          </AboutModule>
+
+          <AboutModule index="02" kicker="License" title="Three separate layers">
+            <dl>
+              <AboutSpecRow label="Code">PolyForm Shield 1.0.0 · LICENSE</AboutSpecRow>
+              <AboutSpecRow label="Docs">CC BY-NC-SA 4.0 · LICENSE-DOCS.md</AboutSpecRow>
+              <AboutSpecRow label="Use">ACCEPTABLE_USE.md · not a copyright license</AboutSpecRow>
+            </dl>
+          </AboutModule>
+
+          <AboutModule
+            index="03"
+            kicker="Canary"
+            title="Attribution string"
+            className="md:col-span-2 xl:col-span-1"
+          >
+            <p className="break-all font-mono text-xs text-foreground">{ATTRIBUTION_CANARY}</p>
+            <p className="mt-3 text-xs leading-relaxed">
+              Visible on purpose. A wrapped copy that keeps this page still names the author.
+            </p>
+          </AboutModule>
+        </div>
+
+        <AboutModule index="04" kicker="Scope" title="Over Boost and earlier" className="mt-4">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+            <p className="max-w-prose text-pretty">
+              Research and tooling target Over Boost (OB) and earlier Extreme Vs. 2
+              revisions only. Do not use this application against any later revision
+              that is still operated as a live arcade or online service.
+            </p>
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                Live title · forbidden target
               </p>
-              <p>
-                Bundle id: <span className="font-mono">{BUNDLE_ID}</span>
-              </p>
-              <AboutLinkButton href={SUPPORT_HOME} label="GitHub (support)" />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>Licenses</CardTitle>
-              <CardDescription>Code and docs are licensed separately.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <p>Program source: PolyForm Shield 1.0.0 (`LICENSE`).</p>
-              <p>Author documentation: CC BY-NC-SA 4.0 (`LICENSE-DOCS.md`).</p>
-              <p>Use policy: `ACCEPTABLE_USE.md` (not a copyright license).</p>
-            </CardContent>
-          </Card>
-        </section>
-
-        <Separator />
-
-        <section className="space-y-3">
-          <h2 className="text-base font-semibold tracking-tight">Version scope</h2>
-          <p className="text-sm text-muted-foreground">
-            Research and tooling target Over Boost (OB) and earlier Extreme Vs. 2
-            revisions only. Do not use this application against any later revision
-            that is still operated as a live arcade or online service.
-          </p>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Live title (forbidden target)</CardTitle>
-              <CardDescription>
-                Named so the ban is not an abbreviation. Not a research target.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-1 text-sm">
-              <p>{LIVE_TITLE_EN}</p>
-              <p>{LIVE_TITLE_JA}</p>
-              <p>{LIVE_TITLE_ZH}</p>
-              <p className="text-muted-foreground">
+              <ul className="mt-3 space-y-2 text-sm text-foreground">
+                <li>
+                  <span className="mr-2 font-mono text-[10px] text-muted-foreground">EN</span>
+                  {LIVE_TITLE_EN}
+                </li>
+                <li>
+                  <span className="mr-2 font-mono text-[10px] text-muted-foreground">JA</span>
+                  {LIVE_TITLE_JA}
+                </li>
+                <li>
+                  <span className="mr-2 font-mono text-[10px] text-muted-foreground">ZH</span>
+                  {LIVE_TITLE_ZH}
+                </li>
+              </ul>
+              <p className="mt-3 text-xs">
                 Aliases only: IB, EXVS2IB, イニブ. Successors are also forbidden.
+                Named here so the ban is not an abbreviation. Not a research target.
               </p>
-            </CardContent>
-          </Card>
-        </section>
+            </div>
+          </div>
+        </AboutModule>
 
-        <p className="text-xs text-muted-foreground">
+        <p className="mt-10 max-w-prose text-xs leading-relaxed text-muted-foreground">
           Not affiliated with Bandai Namco, Sunrise, or Extreme Vs. publishers.
           Game binaries and dumps are not licensed by this project.
         </p>

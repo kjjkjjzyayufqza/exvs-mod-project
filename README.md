@@ -2,36 +2,38 @@
 
 **by [kjjkjjzyayufqza](https://github.com/kjjkjjzyayufqza)**
 
-Tauri v2 desktop application (Rust backend + React/TypeScript frontend) for
-editing EXVS2 game assets: MSC script decompilation/recompilation, binary
-format parsing, 3D model and animation editing, and packing/repacking
-workflows.
+Source-available research editor for EXVS2 **Over Boost and earlier**.
+Rust + React on Tauri v2: MSC decompile/recompile, binary formats, models,
+motion, pack/repack.
 
-This repository is **source-available**, not OSI open source.
+This is **not** OSI open source. You may not wrap it as a competing product.
 
-| Layer | Document |
+| Module | Document |
 | --- | --- |
-| Program source | [PolyForm Shield 1.0.0](LICENSE) |
-| Author's documentation | [CC BY-NC-SA 4.0](LICENSE-DOCS.md) |
-| Acceptable use | [ACCEPTABLE_USE.md](ACCEPTABLE_USE.md) |
+| Code | [PolyForm Shield 1.0.0](LICENSE) |
+| Docs | [CC BY-NC-SA 4.0](LICENSE-DOCS.md) |
+| Use | [ACCEPTABLE_USE.md](ACCEPTABLE_USE.md) |
 
 Support: https://github.com/kjjkjjzyayufqza/exvs-mod-project
 
-Not affiliated with Bandai Namco, Sunrise, or the Extreme Vs. publishers.
+Not affiliated with Bandai Namco, Sunrise, or Extreme Vs. publishers.
 
 ---
 
-## English
+## 01 — Scope
 
-This project is a personal research tool for **Over Boost (OB)** and **earlier**
-Extreme Vs. 2 revisions only.
+<details>
+<summary>English</summary>
 
-It must **not** be used to modify, reverse, dump, or target any later revision
-that is still operated as a live arcade or online service. That includes the
-currently operated title **Mobile Suit Gundam EXTREME VS.2 INFINITE BOOST**
+Personal research tool for **Over Boost (OB)** and **earlier** Extreme Vs. 2
+revisions only.
+
+Do **not** use it to modify, reverse, dump, or target any later revision that
+is still operated as a live arcade or online service. That includes
+**Mobile Suit Gundam EXTREME VS.2 INFINITE BOOST**
 (Japanese: 機動戦士ガンダム エクストリームバーサス2 インフィニットブースト;
-short names IB / EXVS2IB / イニブ are aliases only). The ban is the whole
-later-than-OB live class, including successors.
+aliases IB / EXVS2IB / イニブ only). The ban is the whole later-than-OB live
+class, including successors.
 
 Do **not** ship a competing product (rebrand, wrap, or substitute this editor,
 paid or free). Do **not** commit or redistribute game executables, dumps, or
@@ -40,9 +42,10 @@ behavior into another product is not.
 
 Full terms: [ACCEPTABLE_USE.md](ACCEPTABLE_USE.md).
 
----
+</details>
 
-## 中文
+<details>
+<summary>中文</summary>
 
 本项目是个人研究工具，**仅针对 Over Boost（OB）及更早**的 Extreme Vs. 2 修订。
 
@@ -56,9 +59,10 @@ Full terms: [ACCEPTABLE_USE.md](ACCEPTABLE_USE.md).
 
 全文：[ACCEPTABLE_USE.md](ACCEPTABLE_USE.md)。
 
----
+</details>
 
-## 日本語
+<details>
+<summary>日本語</summary>
 
 本プロジェクトは個人研究用ツールであり、対象は **Over Boost（OB）およびそれ以前**の
 Extreme Vs. 2 のみです。
@@ -76,9 +80,55 @@ Extreme Vs. 2 のみです。
 
 全文：[ACCEPTABLE_USE.md](ACCEPTABLE_USE.md)。
 
+</details>
+
 ---
 
-## Development
+## 02 — Acknowledgments
+
+None of this research stands alone. Formats, scripts, and tooling in this
+tree sit on work that other people published first.
+
+**descatal** — EXVS modding research and tools that made later Over Boost
+work possible.
+
+| Project | URL |
+| --- | --- |
+| descatal | https://github.com/descatal |
+| BoostStudio | https://github.com/descatal/BoostStudio |
+
+**ssbh_lib series** — SSBH read/write (`numdlb`, `numshb`, `nusktb`, `nuanmb`,
+`numatb`, …) and the texture/editor stack around it. This repo vendors a fork
+for EXVS2; credit belongs upstream.
+
+| Project | URL |
+| --- | --- |
+| ssbh_lib / ssbh_data | https://github.com/ultimate-research/ssbh_lib |
+| ScanMountGoat | https://github.com/ScanMountGoat |
+| ssbh_editor | https://github.com/ScanMountGoat/ssbh_editor |
+| ssbh_data_py | https://github.com/ScanMountGoat/ssbh_data_py |
+| ultimate_tex | https://github.com/ScanMountGoat/ultimate_tex |
+| nutexb (upstream) | https://github.com/ScanMountGoat/nutexb |
+| SSBHLib (predecessor) | https://github.com/Ploaj/SSBHLib |
+| This repo's ssbh_lib fork | https://github.com/kjjkjjzyayufqza/ssbh_lib |
+| This repo's nutexb fork | https://github.com/kjjkjjzyayufqza/nutexb |
+
+**jam1garner MSC series** — MSC bytecode as a documented language. EXVS2 MSC
+tools here start from that Smash MSC line (`mscdec` / `msclang` / `pymsc`).
+
+| Project | URL |
+| --- | --- |
+| jam1garner | https://github.com/jam1garner |
+| mscdec | https://github.com/jam1garner/mscdec |
+| msclang | https://github.com/jam1garner/msclang |
+| pymsc | https://github.com/jam1garner/pymsc |
+| msc (Rust crate) | https://github.com/jam1garner/msc-rs |
+
+Errors in this project are ours. Credit for the ground they stand on is not.
+
+---
+
+## 03 — Development
 
 ```bash
 pnpm install
@@ -89,15 +139,15 @@ pnpm build        # tsc + vite build
 
 Do not start a bare `pnpm dev` server; use `pnpm start` so the Tauri shell is present.
 
-## Documentation
+## 04 — Documentation
 
-- `AGENTS.md` — operating guidance for coding agents (cross-agent hub).
-- `CLAUDE.md` — pointer at `AGENTS.md` for Claude-family tools.
-- `ACCEPTABLE_USE.md` — use policy (this is the long legal notice).
-- `CONTRIBUTING.md` — how (and how not) to work in this tree.
-- `CONTEXT.md` / `CONTEXT-MAP.md` — domain terminology.
-- `docs/` — format specifications and reverse-engineering research notes.
+| File | Role |
+| --- | --- |
+| `AGENTS.md` | Operating guidance for coding agents |
+| `CLAUDE.md` | Pointer at `AGENTS.md` for Claude-family tools |
+| `ACCEPTABLE_USE.md` | Use policy (long legal notice) |
+| `CONTRIBUTING.md` | How (and how not) to work in this tree |
+| `CONTEXT.md` / `CONTEXT-MAP.md` | Domain terminology |
+| `docs/` | Format specs and research notes |
 
-## Recommended IDE setup
-
-[VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+IDE: [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
