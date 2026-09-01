@@ -10,7 +10,13 @@
 | WI-006 | Flight sub stage-3 SHOOT-only last-writer yaw | cre | Rebellion 2.c/2.dscex | source edit + legacy repack | falsified | E-002,E-003,E-004 | E3- I10: no observable effect; branch-vs-native overwrite unresolved |
 | WI-007 | Flight sub stage-4 SHOOT branch SE probe | cre | Rebellion 2.c/2.dscex | diagnostic repack | rejected | E-002,E-003,E-004 | user: no SE; action-only lock facing |
 | WI-008 | Flight sub stage-5 SHOOT analog motor off | cre | Rebellion 2.c/2.dscex | source edit + legacy repack | falsified | E-002,E-003,E-004 | E3- I11: ENTER-only 296(0); held stick still yaws off |
-| WI-009 | Flight sub stage-6 per-tick SHOOT motor off | cre | Rebellion 2.c/2.dscex | source edit + legacy repack | awaiting_runtime | E-002,E-003,E-004 | 677 every tick func_296(0x3e8,0); 679 restore 1 |
+| WI-009 | Flight sub stage-6 per-tick SHOOT motor off | cre | Rebellion 2.c/2.dscex | source edit + legacy repack | falsified | E-002,E-003,E-004 | E3- I12: free-fall fake bird; motor-off removed |
+| WI-010 | Flight sub stage-7 analog leftover 454=0 | cre | Rebellion 2.c/2.dscex | source edit + legacy repack | falsified | E-002,E-003,E-004 | E3- I13: no effect; mix reverted to 0x62 |
+| WI-011 | Flight sub stage-8 sys_46(0x6) analog-input gate | cre | Rebellion 2.c/2.dscex | source edit + legacy repack | withdrawn | E-002,E-003,E-004 | never E3; copied kind-0x35 global854 not roll hook |
+| WI-012 | Flight sub hold-repeat (Hambrabi 1182) | cre | Rebellion 2.c/2.dscex | source edit + legacy repack | complete | | E3 2026-09-01 user: auto 3-shot cancelled |
+| WI-013 | Flight sub analog sys_4C(0x8,0x3) | cre | Rebellion 2.c/2.dscex | source edit + legacy repack | withdrawn | E-002,E-003,E-004 | magnitude reseed, not reverse gate; never E3 |
+| WI-014 | Flight sub analog 2026-08-28 clamp | cre | Rebellion 2.c/2.dscex | source edit + legacy repack | awaiting_runtime | E-002,E-003,E-004 | Stage 13 installed 1CFD3810; SHOOT profile 0 every tick; 679 restores profile 2 (D10) |
+| WI-015 | Flight sub START aim snap (Hambrabi 601) | cre | Rebellion 2.c/2.dscex | source edit + legacy repack | awaiting_runtime | E-002,E-003,E-004 | Stage 12: yaw before clamp, global184==1 only; analog judgement is hold-back during SHOOT |
 
 ## Coverage
 - [x] Recon/analysis complete for in_scope assets

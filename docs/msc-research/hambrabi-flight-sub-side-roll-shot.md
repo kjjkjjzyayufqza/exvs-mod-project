@@ -6,8 +6,12 @@
 故障已 E3 定位；Stage 1 START 对准已 E3 观察；Stage 2 profile-1 解耦
 E3- I9；Stage 3 SHOOT-only yaw E3- I10；Stage 4 SE 探针被用户拒绝；
 Stage 5 ENTER-only 关电机 E3- I11；Stage 6 每 tick 关电机 E3- I12 自由落体。
-用户澄清：不按后正常，持续按后往后飞导致视角偏移。Stage 7 `global454=0` 待实机。
-禁止再关电机、禁止 yaw、禁止 SE、禁止清 `0x4000`。
+用户澄清：不按后正常，持续按后往后飞导致视角偏移。Stage 7 `global454=0` E3- I13 没用。
+Stage 8 `func_296(0x3e9)` / Stage 9 `sys_4C(0x8, 0x3)` 均未 E3 证明能挡住后向 analog。
+Stage 10 声称已装 `68C073FE`，但用户加载的 `2.dscex` 不是那份二进制。
+Stage 12 已装 `46A5F1D2`：clamp 改成 tick 最后写入。Stage 13 已装 `1CFD3810`
+（304256 B）：SHOOT 每 tick `func_351(0,0x4)`（I1 profile 0），679 ENTER 恢复
+`func_351(0x2,0x4)`（D10）。clamp / 电机 / `0x4000` 不变。禁止再关电机（I12）、禁止 SE、禁止清 `0x4000`、禁止 `sys_46(0xF)`、禁止叠 SHOOT yaw。
 **Kind:** Cross-unit MSC action-flow reference + port record
 
 ## Sources
@@ -227,7 +231,7 @@ global689 = 0x6                        // START 瞄准窗
 
 | Hambrabi 做法 | Rebellion 替代 |
 |---------------|----------------|
-| `func_1182` → `func_891` 重派发 row 实现 3 连射 | `global683 = 0x3`，由原生 `func_596` 重跑 `global677` 三次 |
+| `func_1182` → `func_891` 重派发 row 实现按住续射 | `global683 = 0x1`；tick 在 `func_593` 之后跑 `rebellion_flight_sub_hold_refire`（`func_233(0x80)` + 5/21/34f 窗 + `func_81(global3, 0, 0x1, 0)`）。禁止 `global683 = 0x3` |
 | 自带側転 motion clip | 无该 clip，START 用 `func_308(global20, 0x9de587ce, global276, 0x190, 0)` 播鸟环，形状抄 `ACTION_A_SHOT_BIRD` |
 | `global964` 换边 latch | `rebellion_flight_sub_last_side` |
 | `global951 / global952` | **丢弃**（语义未知且超 `global779`，不猜） |
@@ -237,17 +241,17 @@ global689 = 0x6                        // START 瞄准窗
 靠 `func_41` 白名单跳过 teardown。**不要**往 tick 里加 `func_167`，
 **不要**抄 flight-special 的 translation clamp —— 两者在本机都是登记在案的失败。
 
-弾药：一次发动只扣一发。三束里只有第一束走 `sys_4F(0, global681, …)`，
-其余走 `sys_4F(0, 0x5, …)` 跳过扣弹（与 `SUB_SHOT_CUSTOM` 同法）。
+弾药：每次 ENTER 的那一发走 `sys_4F(0, 0x5, …)`。按住续射靠 `func_81` 重进，
+`sys_0(0x90000, 1)` 没弹就不武装。
 
 ### 4.4 相位时序（本机自制时钟 `global244` / `func_274`）
 
 | 段 | 帧 | 内容 |
 |----|----|----|
 | `676` start | 8f | 播鸟环、`func_94(0x5)`、`sys_4E(0)`、换边反向踢 |
-| `677` shoot | 6f ×3 | 横向推进 + 弹对 + `sys_58(0x1, 0x436f1f0a)` + `func_123(0x380)` |
+| `677` shoot | 6f ×1 | 横向推进 + 弹对 + `sys_58(0x1, 0x436f1f0a)` + `func_123(0x380)`。按住副射才续 |
 | `678` no_ammo | — | 指向 `679` end；**不可为 0**，见 I2 |
-| `679` end | 8f | `func_89(0x5, 0)`、`global212 = 0x14` |
+| `679` end | until clip `0x22` / complete | `func_89(0x5, 0)`、`global212 = 0x14`；给 `func_1182` 的 21–34f 续射窗留时间 |
 
 合计约 34f，与 Hambrabi 的 34–38f 窗口同量级。
 
@@ -448,9 +452,28 @@ native flight analog 在整个 MSC tick 之后再次覆盖 channel 0。按探针
 **用户澄清（2026-09-01，动作）：** 不按后 = 没问题。持续按后 = 往后飞 → 视角偏移。
 这是 `0x4000` analog 后向位移，不是 START 锁朝向失败。
 
-**Stage 7：** 只把 `global454` 从 Hambrabi `0x62` 改成鸟主射 `0`。`func_594` 在
-`global24 & 0x1000000` 时用它当 `global714` leftover。不要清 `0x4000`，不要
-`func_296(0x3e8, 0)`，不要再写 yaw。
+**Stage 7（E3-，registry I13）：** `global454=0` 与鸟主射相同。用户报告没用：不按后
+仍正常，持续按后仍往后飞、镜头偏。mix 已改回 Hambrabi `0x62`。结论：native
+`0x4000` analog 不吃 leftover scale。不要再降 mix、关电机、清 `0x4000`、抄
+足止 clamp、或写 yaw。不按后这条招保持现状。
+
+**Stage 8（撤回，未 E3）：** `func_296(0x3e9,0)` 抄的是 kind 0x35 `global854` 足止，
+不是侧转 hook。`func_1083`/`func_1086` 从不写 `0x3e9`。
+
+**Stage 9（撤回，未 E3）：** `sys_4C(0x8, 0x3)` 是 magnitude reseed，挡不住后向 analog。
+
+**Stage 10（未进入用户加载的二进制）：** 声称 `68C073FE` 已装，用户侧哈希对不上。
+
+**Stage 11（E1 已装 `616D3F43`，E3 待实机）：** 2026-08-28 电机开着的通道 clamp
+写在 tick 的 `func_593()` 之后。676/677 每 tick 升 `clamp_live`，SHOOT 另升
+`rewrite_lateral` 以便清通道后再写 Hambrabi `sys_46(0x1, 0x2)`。679 清标志，
+所以 EXIT 不被 clamp。不 gate `global184`（I10）。不关电机（I12）。不清
+`0x4000`。不写 `sys_46(0xF)`。I13 禁止抄 clamp 是 mix 失败后的预防性禁令，
+这条招上从未 E3 测过 clamp；Stage 11 是第一次哈希对得上的 clamp，但 START yaw 在 clamp 之后。
+
+**Stage 12（E1 已装 `46A5F1D2`，E3 待实机）：** 把通道 clamp 改到 tick 最后写入。START yaw 仍可在 `global184==1` 时跑，但必须在 clamp 之前。电机开着。不清 `0x4000`。不写 `sys_46(0xF)`。
+
+**Stage 13（E1 已装 `1CFD3810`，E3 待实机）：** SHOOT 每 tick `func_351(0, 0x4)`（I1 足止 profile，电机仍开）。679 ENTER `func_351(0x2, 0x4)`（D10，避免 profile 0 收招空中 idle）。START 仍是 profile 1。Stage 12 clamp 仍在 tick 最后。
 
 **Stage 3 之后的静态重读（仍 E1/E2，等 Stage 4 探针升格）：**
 前一轮把 I10 理解成「本 tick 没有 `func_167`，所以不是 flight-special D12」。

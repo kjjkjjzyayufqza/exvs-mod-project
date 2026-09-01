@@ -111,3 +111,67 @@
 - artifacts: [notes/2026-08-31-flight-sub-stage6-hpf.md]
 - evidence_ids: [E-002, E-003, E-004]
 - next: user holds stick through SHOOT; lock facing vs drop vs END flight
+
+## 2026-09-01T00:22:00+08:00 | cre | repair-stage-7
+- action: user clarified held-back reverse flight plus camera offset; register I12 motor-off fall; set global454=0
+- command_or_ref: both roll ENTER global454 0x62→0; no motor, no yaw, no 0x4000; legacy msclang.py -i
+- result_summary: I12 registered; global454=0 compiled and installed as 2.dscex F9C8FF39...
+- artifacts: [notes/2026-09-01-flight-sub-stage7-hpf.md]
+- evidence_ids: [E-002, E-003, E-004]
+- next: user holds back during SHOOT and reports reverse flight vs camera
+
+## 2026-09-01T00:27:00+08:00 | cre | i13-revert
+- action: register I13; restore global454=0x62; do not pack another analog suppress
+- command_or_ref: leftover mix ignored by native 0x4000 analog; I12 forbids motor-off
+- result_summary: I13 registered; mix restored and installed
+- artifacts: [notes/2026-09-01-flight-sub-i13.md]
+- evidence_ids: [E-002, E-003, E-004]
+- next: no further mix/motor/yaw/0x4000 pack; hold-back reverse is native analog
+
+## 2026-09-01T00:37:00+08:00 | cre | repair-stage-8
+- action: one-variable func_296(0x3e9,0)/sys_46(0x6,0) on 677 every tick and 679 until global252; restore 1 on 679 global252
+- command_or_ref: not sys_1(0x30001); not sys_46(0x5); legacy tools/msclang.py -i
+- result_summary: AI-block/opaque-pointer/action-shape passed; candidate compiled and installed as 2.dscex 9DB851C9... (303584 B)
+- artifacts: [notes/2026-09-01-flight-sub-stage8-hpf.md]
+- evidence_ids: [E-002, E-003, E-004]
+- next: user holds back during SHOOT; report reverse-fly vs fall vs END flight
+
+## 2026-09-01T00:46:00+08:00 | cre | repair-stage-9
+- action: withdraw untested Stage 8 0x3e9; copy Hambrabi func_1083 sys_4C(0x8, 0x3) every tick after func_593
+- command_or_ref: not sys_1(0x30001); not sys_46(0x6); legacy tools/msclang.py -i
+- result_summary: Stage 8 never E3 (wrong Hambrabi site); Stage 9 compiled and installed as 2.dscex 4E0478AD... (303904 B)
+- artifacts: [notes/2026-09-01-flight-sub-stage9-hpf.md]
+- evidence_ids: [E-002, E-003, E-004]
+- next: user holds back during SHOOT; report reverse-fly vs fall vs END flight
+
+## 2026-09-01T00:52:00+08:00 | cre | repair-stage-10
+- action: withdraw 0x3e9/sys_4C; apply 2026-08-28 motor-on channel clamp after func_167 on START/SHOOT; rewrite Hambrabi lateral on SHOOT; skip 679
+- command_or_ref: not sys_1(0x30001,0); not func_169(0x4000); not sys_46(0xF); legacy tools/msclang.py -i
+- result_summary: compiled as 2.dscex 68C073FE... (304112 B) then overwritten; user-loaded hash did not match
+- artifacts: [notes/2026-09-01-flight-sub-stage10-hpf.md]
+- evidence_ids: [E-002, E-003, E-004]
+- next: user holds back during SHOOT; report reverse vs fall vs side travel vs END flight
+
+## 2026-09-01T01:01:00+08:00 | cre | repair-stage-11
+- action: user: previous packs did not modify/fix loaded gameplay; put I1 clamp after func_593 gated by 676/677 flags not global184; skip 679; rewrite SHOOT lateral
+- command_or_ref: legacy tools/msclang.py -i; source 2.c A8862D98 matches installed 2.dscex 616D3F43 (304208 B)
+- result_summary: source guards passed; workspace 2.c and 2.dscex hashes match the Stage 11 snapshot
+- artifacts: [notes/2026-09-01-flight-sub-stage11-hpf.md]
+- evidence_ids: [E-002, E-003, E-004]
+- next: user reloads 616D3F43 and holds back during SHOOT; report reverse vs fall vs side travel vs END flight
+
+## 2026-09-01T01:10:00+08:00 | cre | repair-stage-12
+- action: Stage 11 START yaw ran after the analog clamp; I10 means global184 may stay 1 through SHOOT so yaw last-wrote; move clamp to the tick last writer
+- command_or_ref: legacy tools/msclang.py -i; source 2.c 8B128FFD matches installed 2.dscex 46A5F1D2 (304208 B)
+- result_summary: mscdec func_947: func_593, hold_refire, 184==1 yaw, then func_946 clamp
+- artifacts: [notes/2026-09-01-flight-sub-stage12-hpf.md]
+- evidence_ids: [E-002, E-003, E-004]
+- next: user reloads 46A5F1D2 and holds back during SHOOT; report reverse vs fall vs side travel vs END flight
+
+## 2026-09-01T01:15:00+08:00 | cre | repair-stage-13
+- action: SHOOT every tick func_351(0,0x4); 679 ENTER restores func_351(0x2,0x4) (D10); keep Stage 12 last-writer clamp
+- command_or_ref: legacy tools/msclang.py -i; source 2.c 60D20912 matches installed 2.dscex 1CFD3810 (304256 B)
+- result_summary: mscdec func_950 func_351(0) ENTER+tick; func_951 ENTER func_351(0x2)
+- artifacts: [notes/2026-09-01-flight-sub-stage13-hpf.md]
+- evidence_ids: [E-002, E-003, E-004]
+- next: user reloads 1CFD3810 and holds back during SHOOT; report reverse vs fall vs side travel vs END flight

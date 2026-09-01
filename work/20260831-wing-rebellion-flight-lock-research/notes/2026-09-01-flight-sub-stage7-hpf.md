@@ -1,10 +1,18 @@
 # Flight sub repair stage 7 — analog leftover scale 454=0
 
-**Status:** E1 source edit + legacy repack; runtime unverified.
+**Status:** E1 source edit + legacy repack installed; runtime unverified.
 
 User correction 2026-09-01: no back input is fine; held back reverse-flies
 and the camera offsets. I9-I11 were misread as lock-yaw. I12 (every-tick
 motor off) free-fell in bird visuals; motor-off is removed.
+
+## Build identity
+
+- Source `2.c` MD5: `A3BCABB963DF7EB74194797D10EC0FD1`
+- Installed `2.dscex` MD5: `F9C8FF39CAF3BAE9915B071B8BFF853F`
+- Backup: `tmp/msc-repack/20260901-flight-sub-leftover-stage7/2.before.dscex`
+- Compiler: legacy `tools/msclang.py -i`
+- Source guards: AI blocks pass; opaque pointers 0 warnings; action shape 0 errors.
 
 ## Scope
 
