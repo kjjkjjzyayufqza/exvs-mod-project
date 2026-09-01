@@ -2,9 +2,9 @@
 name = "app"
 version = "0.1.0"
 description = "EXVS Mod Project"
-authors = ["you"]
-license = ""
-repository = ""
+authors = ["kjjkjjzyayufqza"]
+license = "LicenseRef-PolyForm-Shield-1.0.0"
+repository = "https://github.com/kjjkjjzyayufqza/exvs-mod-project"
 edition = "2021"
 rust-version = "1.77"
 default-run = "app"

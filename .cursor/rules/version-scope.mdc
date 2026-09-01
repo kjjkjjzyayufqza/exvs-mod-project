@@ -24,7 +24,11 @@ This project targets **EXVS2 Over Boost (OB) and earlier revisions only**.
 - Do not use them as a validation or cross-check reference, and do not cite them
   as an evidence tier in `docs/`.
 - Do not add their name, abbreviation or executable name to source, comments,
-  tests, fixtures, docs or commit messages.
+  tests, fixtures, research notes, or commit messages.
+- **LegalNameOnce exception:** `ACCEPTABLE_USE.md`, the README legal blocks,
+  the in-app About page, and `docs/governance/` / `docs/adr/` that record
+  this policy MAY name the live title in full so humans can see the ban.
+  That is not permission to open, dump, or study that revision.
 
 ## Evidence rule
 

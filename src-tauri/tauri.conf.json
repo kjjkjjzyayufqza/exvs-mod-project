@@ -1,7 +1,7 @@
 {
   "productName": "EXVS Mod Project",
   "version": "0.1.0",
-  "identifier": "com.tauri.app.extract",
+  "identifier": "com.kjjkjjzyayufqza.exvsmod",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:6531",

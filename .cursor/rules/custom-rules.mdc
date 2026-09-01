@@ -12,7 +12,10 @@ This Cursor rule is AI-only guidance for this repository. The cross-agent hub is
 
 Before making code, asset, documentation, or command changes:
 
-1. Read `AGENTS.md`.
+1. Read the **Agent contract** at the top of `AGENTS.md` (and
+   `.cursor/rules/agent-contract.mdc`). Classify InRepoWork vs
+   CrossProductPort **before** any file search. Then read the rest of
+   `AGENTS.md`.
 2. Run one scoped filename search for related `docs/` Markdown unless the exact
    file is already known or the task is rules-only.
 3. Read only the most relevant specification before editing.

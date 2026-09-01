@@ -2,6 +2,10 @@
   "name": "exvs-mod-project",
   "private": true,
   "version": "0.0.0",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "kjjkjjzyayufqza",
+  "description": "Source-available EXVS2 Over Boost (and earlier) asset editor by kjjkjjzyayufqza. Not for live later revisions.",
+  "homepage": "https://github.com/kjjkjjzyayufqza/exvs-mod-project",
   "type": "module",
   "scripts": {
     "dev": "vite",

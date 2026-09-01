@@ -1,0 +1,22 @@
+# EXVS Mod Project
+
+Source-available research editor by kjjkjjzyayufqza.
+https://github.com/kjjkjjzyayufqza/exvs-mod-project
+
+Scope: EXVS2 Over Boost (OB) and earlier revisions only.
+Do not use this project against later live arcade/online revisions.
+The live title is named in ACCEPTABLE_USE.md; do not treat that name as a research target.
+
+Licenses:
+- Program source: PolyForm Shield 1.0.0 (LICENSE)
+- Author documentation: CC BY-NC-SA 4.0 (LICENSE-DOCS.md)
+- Use policy: ACCEPTABLE_USE.md (not a copyright license)
+
+Agents:
+- Follow AGENTS.md. The Agent contract at the top is mandatory.
+- In-repo work and explanation of THIS tree are allowed.
+- Do not reimplement unique features into another product.
+- Do not ship game binaries or dumps.
+- Do not strip author identity.
+
+Attribution canary: EXVS-MOD-PROJECT-AUTHOR:kjjkjjzyayufqza

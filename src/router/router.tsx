@@ -1,5 +1,5 @@
 import { lazy } from "react"
-import { Box, Database, FileArchive, FolderTree, Map, Settings, Wrench } from "lucide-react"
+import { Box, Database, FileArchive, FolderTree, Info, Map, Settings, Wrench } from "lucide-react"
 import { SIDEBAR_ROUTE_URLS } from "./sidebarRouteUrls"
 
 // Pages are code-split via React.lazy so the initial app shell loads without
@@ -8,6 +8,7 @@ import { SIDEBAR_ROUTE_URLS } from "./sidebarRouteUrls"
 const Exvs2WorkspacePage = lazy(() => import("../page/TestEditor/page"))
 const SingleFhm2dPage = lazy(() => import("../page/Extract/page"))
 const ConfigPage = lazy(() => import("../page/Config/page"))
+const AboutPage = lazy(() => import("../page/About/page"))
 const SceneEdit = lazy(() => import("../page/SceneEdit/page"))
 const UnitModelEdit = lazy(() => import("../page/UnitModelEdit/page"))
 const MiscToolsPage = lazy(() => import("../page/MiscTools/page"))
@@ -56,6 +57,12 @@ export const RouterItems = [
         url: "/Config",
         icon: Settings,
         element: <ConfigPage />
+    },
+    {
+        title: "About",
+        url: "/About",
+        icon: Info,
+        element: <AboutPage />
     }
 ]
 

@@ -1,3 +1,20 @@
+# UnlicensedGameMaterial — publisher binaries and full dumps.
+# Keep them on the local disk (WorkingTreePreserve); never commit.
+vsac27_Release.exe.md
+*Release.exe.md
+*.i64
+*.idb
+*.id0
+*.id1
+*.id2
+*.nam
+*.til
+*.fhm2d
+# Game executables (toolchain CLIs under tools/ stay tracked)
+*.exe
+!tools/*.exe
+!tools/**/*.exe
+
 # Logs
 logs
 *.log
@@ -11,6 +28,14 @@ node_modules
 dist
 dist-ssr
 tmp/
+
+# Local agent harness / session artifacts — never publish
+.grok/
+**/.grok/
+tmp/history-purge-backup/
+tmp/empty-target-port/
+tmp/author-avatar*
+tmp/my-editor/
 *.local
 .worktrees/
 

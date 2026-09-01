@@ -17,6 +17,7 @@ describe("pathMatchesRoute", () => {
 describe("findMatchedRouteUrl", () => {
   it("resolves known sidebar paths", () => {
     expect(findMatchedRouteUrl("/SingleFhm2d")).toBe("/SingleFhm2d");
+    expect(findMatchedRouteUrl("/About")).toBe("/About");
     expect(findMatchedRouteUrl("/")).toBe("/");
   });
 
