@@ -52,8 +52,10 @@ describe("mainViewTabGroups", () => {
   it("places BGM Table under Sound after Voice slot", () => {
     const tab = MAIN_VIEW_TAB_META.find((entry) => entry.value === "bgm-table");
     expect(tab).toMatchObject({ group: "sound", name: "BGM table" });
+    const listTab = MAIN_VIEW_TAB_META.find((entry) => entry.value === "bgm-list");
+    expect(listTab).toMatchObject({ group: "sound", name: "BGM list" });
     const soundTabs = MAIN_VIEW_TAB_META.filter((entry) => entry.group === "sound").map((entry) => entry.value);
-    expect(soundTabs).toEqual(["raw-path-id", "pilot-voice-resource", "bgm-table"]);
+    expect(soundTabs).toEqual(["raw-path-id", "pilot-voice-resource", "bgm-table", "bgm-list"]);
   });
 
   it("keeps Param Editor mounted after the first visit even without unsaved changes", () => {

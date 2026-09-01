@@ -32,7 +32,7 @@ struct Cli {
     #[arg(long = "write-meta-bin")]
     write_meta_bin: bool,
 
-    /// Override stage-list output file name (stage_list type only)
+    /// Override list payload file name (`stage_list` / `list` types)
     #[arg(long = "list-output-name", value_name = "NAME")]
     list_output_name: Option<String>,
 }

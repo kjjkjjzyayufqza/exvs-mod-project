@@ -65,7 +65,6 @@ export function emptyBgmTableEntry(): BgmTableEntry {
 
 export function emptyBgmTableFields(entry: BgmTableEntry): string[] {
   const fields: string[] = [];
-  if (!entry.cueName?.trim()) fields.push("cueName");
   if (!entry.entryId) fields.push("cueHash");
   if (!entry.cueLabelCrc) fields.push("cueLabelCrc");
   return fields;

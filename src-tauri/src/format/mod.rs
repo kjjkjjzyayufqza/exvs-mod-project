@@ -1,4 +1,5 @@
 pub mod armsparam;
+pub mod bgm_list;
 pub mod bgm_table;
 pub mod bulletparam;
 pub mod characterlist;

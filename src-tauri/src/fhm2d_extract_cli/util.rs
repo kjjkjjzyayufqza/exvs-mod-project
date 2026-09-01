@@ -14,7 +14,7 @@ pub(crate) fn usage() -> String {
         "",
         "Optional:",
         "  --write-meta-bin      Write decompressed meta.bin into the output directory",
-        "  --list-output-name    Stage-list output file name override (stage_list only)",
+        "  --list-output-name    List payload file name override (stage_list / list)",
         "  -h, --help            Show this help",
         "",
         "Supported types:",

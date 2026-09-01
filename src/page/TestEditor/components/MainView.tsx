@@ -30,6 +30,7 @@ import { resolveMotionPackFromStructureJson } from "./motion-folder-editor/motio
 import RawPathIdView from "./raw-path-id/RawPathIdView";
 import PilotVoiceResourceView from "./pilot-voice-resource/PilotVoiceResourceView";
 import BgmTableView from "./bgm-table/BgmTableView";
+import BgmListView from "./bgm-list/BgmListView";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import { shouldAutoActivateMscWorkspaceTab } from "../utils/mscWorkspaceUtils";
 import { shouldKeepMainViewTabMounted } from "./main-view/mainViewTabGroups";
@@ -173,6 +174,19 @@ const tabs: StageTab[] = [
     value: "bgm-table",
     render: (props: MainViewProps) => (
       <BgmTableView
+        folderPath={props.folderPath ?? ""}
+        isActive={false}
+        onUnsavedChanges={props.onUnsavedChanges}
+        onPackMutated={props.onPackMutated}
+        workspaceDocument={props.workspaceDocument}
+      />
+    ),
+  },
+  {
+    name: "BGM list",
+    value: "bgm-list",
+    render: (props: MainViewProps) => (
+      <BgmListView
         folderPath={props.folderPath ?? ""}
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}
@@ -410,6 +424,7 @@ const MainView = ({
   const [rawPathIdHasUnsaved, setRawPathIdHasUnsaved] = useState(false);
   const [pilotVoiceResourceHasUnsaved, setPilotVoiceResourceHasUnsaved] = useState(false);
   const [bgmTableHasUnsaved, setBgmTableHasUnsaved] = useState(false);
+  const [bgmListHasUnsaved, setBgmListHasUnsaved] = useState(false);
   const [stageListHasUnsaved, setStageListHasUnsaved] = useState(false);
   const [stageIconListHasUnsaved, setStageIconListHasUnsaved] = useState(false);
   const [mscWorkspaceHasUnsaved, setMscWorkspaceHasUnsaved] = useState(false);
@@ -502,6 +517,9 @@ const MainView = ({
   const handleBgmTableUnsaved = useCallback((hasChanges: boolean) => {
     setBgmTableHasUnsaved(hasChanges);
   }, []);
+  const handleBgmListUnsaved = useCallback((hasChanges: boolean) => {
+    setBgmListHasUnsaved(hasChanges);
+  }, []);
 
   const handleStageListUnsaved = useCallback((hasChanges: boolean) => {
     setStageListHasUnsaved(hasChanges);
@@ -535,6 +553,7 @@ const MainView = ({
       "raw-path-id": rawPathIdHasUnsaved,
       "pilot-voice-resource": pilotVoiceResourceHasUnsaved,
       "bgm-table": bgmTableHasUnsaved,
+      "bgm-list": bgmListHasUnsaved,
       "card-icon-list": stageIconListHasUnsaved,
       "stage-icon-list": stageIconListHasUnsaved,
       "stage-list": stageListHasUnsaved,
@@ -553,6 +572,7 @@ const MainView = ({
       rawPathIdHasUnsaved,
       pilotVoiceResourceHasUnsaved,
       bgmTableHasUnsaved,
+      bgmListHasUnsaved,
       stageIconListHasUnsaved,
       stageListHasUnsaved,
       mscWorkspaceHasUnsaved,
@@ -738,6 +758,21 @@ const MainView = ({
               folderPath={props.folderPath ?? ""}
               isActive={activeTab === "bgm-table"}
               onUnsavedChanges={handleBgmTableUnsaved}
+              onPackMutated={props.onPackMutated}
+              workspaceDocument={props.workspaceDocument}
+            />
+          ),
+        };
+      }
+
+      if (tab.value === "bgm-list") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <BgmListView
+              folderPath={props.folderPath ?? ""}
+              isActive={activeTab === "bgm-list"}
+              onUnsavedChanges={handleBgmListUnsaved}
               onPackMutated={props.onPackMutated}
               workspaceDocument={props.workspaceDocument}
             />

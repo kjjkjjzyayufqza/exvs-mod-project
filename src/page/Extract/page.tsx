@@ -116,6 +116,12 @@ const EXTRACT_FORMAT_OPTIONS: Array<{
     format: Fhm2d_type_format.fhm2d_stage_list,
   },
   {
+    value: Fhm2d_type_format.fhm2d_list,
+    label: "List (BGM list)",
+    description: "Generic 012list payload rename (bgm_list.bin).",
+    format: Fhm2d_type_format.fhm2d_list,
+  },
+  {
     value: Fhm2d_type_format.fhm2d_all_nutexb,
     label: "All nutexb",
     description: "Texture-list packages (icons, stage images).",

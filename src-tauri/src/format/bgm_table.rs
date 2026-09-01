@@ -5,7 +5,8 @@
 //! `docs/exvs2-audio-voice-bgm-indexing.md`.
 
 use crate::format::list_command_pool::{
-    build_list, list_data_from_json, list_data_to_json, parse_list, ListData, ListEntry,
+    build_list, list_data_from_json, list_data_to_json, list_entry_from_json_value,
+    list_entry_to_json_value, parse_list, ListData, ListEntry,
 };
 use crate::format::param_bin_format::{ParamBinaryHeader, PARAM_BIN_MAGIC};
 use crate::format::param_entry_schema::ParamCommandPool;
@@ -256,13 +257,20 @@ pub fn finalize_entry(entry_json: &Value, table_json: &Value) -> Result<Value, S
         occupied.remove(&id);
     }
     let route = donor_route(&table.entries, bank_group, current_id)?;
-    let derived = derive_entry(&cue_name, bank_group, current_id, &occupied, route)?;
-    let mut out = crate::format::list_command_pool::list_entry_to_json_value(
-        &derived,
-        BGM_TABLE_COMMAND_POOL,
-    );
+    let compact: String = cue_name.chars().filter(|c| !c.is_whitespace()).collect();
+    // Vanilla rows have no stored cue name — only CRC32(uppercase bank cue).
+    if compact.is_empty() {
+        let mut kept = list_entry_from_json_value(entry_json, BGM_TABLE_COMMAND_POOL)?;
+        kept.commands.insert(CMD_BANK_GROUP, bank_group);
+        kept.commands.insert(CMD_BANK_GROUP_COPY, bank_group);
+        kept.commands.insert(CMD_ROUTE, route);
+        validate_entry(&kept)?;
+        return Ok(list_entry_to_json_value(&kept, BGM_TABLE_COMMAND_POOL));
+    }
+    let derived = derive_entry(&compact, bank_group, current_id, &occupied, route)?;
+    let mut out = list_entry_to_json_value(&derived, BGM_TABLE_COMMAND_POOL);
     if let Some(obj) = out.as_object_mut() {
-        obj.insert("cueName".to_string(), json!(normalize_cue_name(&cue_name)?));
+        obj.insert("cueName".to_string(), json!(compact));
     }
     Ok(out)
 }
@@ -295,14 +303,19 @@ pub fn write_pack(data_json: &Value, file_path: &str) -> Result<Value, String> {
     Ok(json)
 }
 
+fn is_ignored_discover_name(name: &str) -> bool {
+    name.ends_with("_structure.json")
+        || name == "meta.bin"
+        || name.ends_with(".orig")
+        || name.ends_with(".bak")
+}
+
 fn discover_bgm_table(folder: &Path) -> Result<PathBuf, String> {
-    let known = folder.join(FILE_NAME);
-    if known.is_file() {
-        return Ok(known);
-    }
-    let alt = folder.join("bgm_table");
-    if alt.is_file() {
-        return Ok(alt);
+    for name in [FILE_NAME, "bgm_table", "0.bin"] {
+        let known = folder.join(name);
+        if known.is_file() {
+            return Ok(known);
+        }
     }
     let mut found = None;
     let entries = fs::read_dir(folder).map_err(|_| {
@@ -321,7 +334,7 @@ fn discover_bgm_table(folder: &Path) -> Result<PathBuf, String> {
             .and_then(|n| n.to_str())
             .unwrap_or("")
             .to_ascii_lowercase();
-        if name.ends_with("_structure.json") || name == "meta.bin" {
+        if is_ignored_discover_name(&name) {
             continue;
         }
         let Ok(bytes) = fs::read(&path) else {

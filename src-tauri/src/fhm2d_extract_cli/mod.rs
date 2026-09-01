@@ -200,6 +200,9 @@ mod tests {
             ("all_nutexb", Fhm2dFormat::AllNutexb),
             ("stage_list", Fhm2dFormat::StageList),
             ("stage-list", Fhm2dFormat::StageList),
+            ("list", Fhm2dFormat::List),
+            ("bgm_list", Fhm2dFormat::List),
+            ("fhm2d_list", Fhm2dFormat::List),
         ];
         for (spelling, expected) in cases {
             assert_eq!(

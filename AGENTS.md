@@ -500,7 +500,7 @@ New-Item -ItemType Directory -Force $task | Out-Null
 
 **Required flags (no silent defaults):** `--type` / `-t` and `--layout` / `-l`
 (`folder` | `flat`). Types: `character`, `effect`, `motion`, `msc`, `sound`,
-`character_param`, `character_cost`, `striker_table`, `all_nutexb`, `stage_list` (also `fhm2d_*`).
+`character_param`, `character_cost`, `striker_table`, `all_nutexb`, `stage_list`, `list` (also `fhm2d_*`).
 
 Writes files under `--output` and `<out_dir>_structure.json` beside that folder
 name (still under `tmp/` when `--output` is under `tmp/...`). Layout is

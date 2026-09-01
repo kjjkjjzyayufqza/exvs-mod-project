@@ -2118,6 +2118,9 @@ fn validate_command_table_file_type(data: &[u8], file_type: &str) -> Result<(), 
         "bgmtable" => {
             crate::format::bgm_table::parse_bytes(data)?;
         }
+        "bgmlist" | "bgm_list" => {
+            crate::format::bgm_list::parse_bytes(data)?;
+        }
         "serieslist" => {
             crate::format::serieslist::parse_serieslist(data)?;
         }
@@ -2239,6 +2242,12 @@ pub fn parse_typed_param_file(path: &str, param_type: &str) -> Result<Value, Str
                 crate::format::bgm_table::BGM_TABLE_COMMAND_POOL,
             );
         }
+        "bgmlist" | "bgm_list" => {
+            return crate::format::list_command_pool::list_data_to_json(
+                &crate::format::bgm_list::parse_bytes(&data)?,
+                crate::format::bgm_list::BGM_LIST_COMMAND_POOL,
+            );
+        }
         "serieslist" => {
             return crate::format::serieslist::parse_serieslist(&data);
         }
@@ -2301,6 +2310,7 @@ pub fn build_typed_param_file(
             crate::format::characterlist::build_characterlist(&d)?
         }
         "bgmtable" => crate::format::bgm_table::build_sorted_bytes(&data_json)?,
+        "bgmlist" | "bgm_list" => crate::format::bgm_list::build_sorted_bytes(&data_json)?,
         "serieslist" => crate::format::serieslist::build_serieslist(&data_json)?,
         "navilist" | "navi_list" => crate::format::navilist::build_navilist(&data_json)?,
         "stagelist" => crate::format::stagelist::build_stagelist(&data_json)?,
@@ -2461,6 +2471,21 @@ pub fn finalize_bgm_table_entry(entry_json: Value, table_json: Value) -> Result<
 #[tauri::command]
 pub fn build_bgm_table_pack(data_json: Value, file_path: &str) -> Result<Value, String> {
     crate::format::bgm_table::write_pack(&data_json, file_path)
+}
+
+#[tauri::command]
+pub fn parse_bgm_list_pack(folder_path: &str) -> Result<Value, String> {
+    crate::format::bgm_list::parse_pack(folder_path)
+}
+
+#[tauri::command]
+pub fn finalize_bgm_list_entry(entry_json: Value, table_json: Value) -> Result<Value, String> {
+    crate::format::bgm_list::finalize_entry(&entry_json, &table_json)
+}
+
+#[tauri::command]
+pub fn build_bgm_list_pack(data_json: Value, file_path: &str) -> Result<Value, String> {
+    crate::format::bgm_list::write_pack(&data_json, file_path)
 }
 
 #[tauri::command]

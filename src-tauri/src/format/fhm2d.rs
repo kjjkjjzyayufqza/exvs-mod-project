@@ -53,6 +53,8 @@ pub enum Fhm2dFormat {
     Effect,
     AllNutexb,
     StageList,
+    /// Generic 012list payload rename (`list_output_file_name`), used by `bgm_list`.
+    List,
     CharacterParam,
     /// Out-of-game character balance data (cost, HP, etc.): `0xFF832E7F.fhm2d`.
     CharacterCost,
@@ -117,6 +119,7 @@ impl Fhm2dFormat {
             "effect" => Ok(Self::Effect),
             "all_nutexb" | "allnutexb" => Ok(Self::AllNutexb),
             "stage_list" | "stagelist" => Ok(Self::StageList),
+            "list" | "bgm_list" | "bgmlist" => Ok(Self::List),
             "character_param" | "characterparam" | "param" => Ok(Self::CharacterParam),
             "character_cost" | "charactercost" | "cost" => Ok(Self::CharacterCost),
             "striker_table" | "strikertable" | "striker" => Ok(Self::StrikerTable),
@@ -131,7 +134,7 @@ impl Fhm2dFormat {
     }
 
     pub fn supported_type_list() -> &'static str {
-        "character, exvs_common, effect, motion, msc, sound, character_param, character_cost, striker_table, all_nutexb, stage_list"
+        "character, exvs_common, effect, motion, msc, sound, character_param, character_cost, striker_table, all_nutexb, stage_list, list"
     }
 
     pub fn as_cli_str(self) -> &'static str {
@@ -141,6 +144,7 @@ impl Fhm2dFormat {
             Self::Effect => "effect",
             Self::AllNutexb => "all_nutexb",
             Self::StageList => "stage_list",
+            Self::List => "list",
             Self::CharacterParam => "character_param",
             Self::CharacterCost => "character_cost",
             Self::StrikerTable => "striker_table",
@@ -1082,8 +1086,8 @@ fn apply_naming(
     out_name: &str,
 ) -> Result<(), String> {
     match format {
-        Some(Fhm2dFormat::StageList) => {
-            apply_stage_list_name(output, list_output_file_name, out_name)
+        Some(Fhm2dFormat::StageList) | Some(Fhm2dFormat::List) => {
+            apply_list_output_name(output, list_output_file_name, out_name)
         }
         Some(Fhm2dFormat::CharacterParam) => {
             if try_apply_striker_table_names(&mut output.sub_file_data, files)? {
@@ -1160,7 +1164,16 @@ fn sync_structure_display_name(output: &mut OutputStructure) {
     }
 }
 
-fn apply_stage_list_name(
+/// Rename used by `stage_list` / `list` extract types for the first payload.
+pub fn list_payload_extract_name(out_name: &str, payload_name: &str) -> (String, String, String) {
+    (
+        format!(".\\{}\\{}", out_name, payload_name),
+        extension_with_dot(payload_name),
+        strip_extension(payload_name),
+    )
+}
+
+fn apply_list_output_name(
     output: &mut OutputStructure,
     list_output_file_name: Option<&str>,
     out_name: &str,
@@ -1169,8 +1182,11 @@ fn apply_stage_list_name(
         let first = output
             .sub_file_data
             .first_mut()
-            .ok_or_else(|| "Stage list extract has empty SubFileData".to_string())?;
-        first.file_url = format!(".\\{}\\{}", out_name, name);
+            .ok_or_else(|| "List extract has empty SubFileData".to_string())?;
+        let (file_url, file_type, file_base_name) = list_payload_extract_name(out_name, name);
+        first.file_url = file_url;
+        first.file_type = file_type;
+        first.file_base_name = Some(file_base_name);
     }
     Ok(())
 }
@@ -2211,6 +2227,43 @@ mod tests {
             sub[6].file_url,
             ".\\090sound\\voicecategorytable_condition.vctbl"
         );
+    }
+
+    #[test]
+    fn list_type_renames_payload_to_catalog_filename() {
+        let mut output = OutputStructure {
+            name: "bgm_list".to_string(),
+            hash_name: "0xC91627E8".to_string(),
+            magic: 0,
+            fhm2d_total_count: 1,
+            unk_count: 0,
+            sub_file_data: vec![output_file(0, 0, ".\\bgm_list\\0.bin")],
+            sub_file_structure: Vec::new(),
+            sub_file_parse_structure: ParseNode {
+                node_type: None,
+                name: "Root".to_string(),
+                link: None,
+                unk1: None,
+                unk2: None,
+                unk3: None,
+                children: None,
+            },
+            naming_error: None,
+        };
+        apply_naming(
+            &mut output,
+            &[],
+            Some(Fhm2dFormat::List),
+            Some("bgm_list.bin"),
+            "bgm_list",
+        )
+        .expect("rename list payload");
+        assert_eq!(output.sub_file_data[0].file_url, ".\\bgm_list\\bgm_list.bin");
+        assert_eq!(
+            output.sub_file_data[0].file_base_name.as_deref(),
+            Some("bgm_list")
+        );
+        assert_eq!(output.sub_file_data[0].file_type, ".bin");
     }
 
     fn output_file(index: usize, file_index: i32, file_url: &str) -> OutputSubFileData {

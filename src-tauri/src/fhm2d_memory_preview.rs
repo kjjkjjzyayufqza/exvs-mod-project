@@ -843,6 +843,7 @@ impl Fhm2dMemorySession {
                 Fhm2dFormat::Effect => "fhm2d_effect".to_string(),
                 Fhm2dFormat::AllNutexb => "fhm2d_all_nutexb".to_string(),
                 Fhm2dFormat::StageList => "fhm2d_stage_list".to_string(),
+                Fhm2dFormat::List => "fhm2d_list".to_string(),
                 Fhm2dFormat::CharacterParam => "fhm2d_character_param".to_string(),
                 Fhm2dFormat::CharacterCost => "fhm2d_character_cost".to_string(),
                 Fhm2dFormat::StrikerTable => "fhm2d_striker_table".to_string(),

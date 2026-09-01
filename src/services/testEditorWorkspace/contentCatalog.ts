@@ -111,6 +111,14 @@ export const WORKSPACE_CONTENT_CATALOG = Object.freeze({
     defaultPackName: "bgm_table",
     label: "BGM Table",
   },
+  "bgm-list": {
+    id: "bgm-list",
+    routeId: "list.character",
+    hashHex: "0xC91627E8",
+    relativeFilePath: "bgm_list.bin",
+    defaultPackName: "bgm_list",
+    label: "BGM List",
+  },
   "bgm-bank-update-02": {
     id: "bgm-bank-update-02",
     routeId: "unit.sound",

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   buildFhm2dInitExtractOutput,
@@ -178,6 +180,35 @@ describe("fhm2dInitExtractPaths", () => {
     expect(out.folderPath.replace(/\\/g, "/")).toBe("E:/XB/mod/090sound/090sound");
     expect(out.repackOutputPath?.replace(/\\/g, "/")).toBe(
       "E:/XB/mod/090sound/0x8C428AF2.fhm2d",
+    );
+  });
+
+  it("lists BGM List in FHM2D Init as 0xC91627E8 under 012list", () => {
+    const source = readFileSync(
+      resolve(__dirname, "../components/Fhm2dInitModal.tsx"),
+      "utf8",
+    );
+    expect(source).toContain("0xC91627E8");
+    expect(source).toContain("fhm2d_list");
+    expect(source).toContain("initBgmListPack");
+    expect(source).toContain("BGM_LIST_PACK_NAME");
+  });
+
+  it("maps BGM List to 012list/bgm_list", () => {
+    const route = resolveInitRouteTarget("list.character");
+    expect(route.routePrefix).toBe("012list");
+
+    const out = buildFhm2dInitExtractOutput({
+      exportRoot: "E:/XB/mod",
+      routeId: route.routeId,
+      routePrefix: route.routePrefix,
+      packName: "bgm_list",
+      hashHex: "0xC91627E8",
+    });
+    expect(out.relativeFolderPath).toBe("012list/bgm_list");
+    expect(out.folderPath.replace(/\\/g, "/")).toBe("E:/XB/mod/012list/bgm_list");
+    expect(out.repackOutputPath?.replace(/\\/g, "/")).toBe(
+      "E:/XB/mod/012list/0xC91627E8.fhm2d",
     );
   });
 

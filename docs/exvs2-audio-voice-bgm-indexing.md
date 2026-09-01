@@ -248,9 +248,10 @@ vs2 count：82 / 318 / 48。
 | `0x8C428AF2` | Pilot Voice Table | 新行全空；stem 只填 `voiceKey`/`streamPathId`；无 copy-from |
 | `0xDFD38C70` | Character List | `pilotPresentationHash` 走 DualValueProperty；高位 hash 按 int32 位型写回 u32 |
 | `0x5E92AAEC` | BGM Table | 独立 `.vgsht2`，**不是** 090sound 根包的 `bgmstemstable`。cue 名派生 CRC；`record_id` 升序插入；route 抄同组行 |
+| `0xC91627E8` | BGM List | HUD 曲名。`musicId` + kind-7 title / titleWithNotePrefix + `cueHash`（= `bgm_table.record_id`）。extract autorename `bgm_list.bin` |
 | `0x0C568109` | Init only | group 6 `BGM_AC27_UPDATE_02` 的 `.nus3bank`。Test Editor 不解/改 nus3 内容，只 Unpack + Repack |
 
-`.nus3audio` / `.nus3bank` 加曲仍用 EXVS2-Audio-Editor。POC 里「没有 nus3bank 写入器」已过时。Character List 的 Primary/Secondary BGM 字段从工作区 BGM Table 选 `cueHash`。HUD `bgm_list`（`0xC91627E8`）尚未做。
+`.nus3audio` / `.nus3bank` 加曲仍用 EXVS2-Audio-Editor。POC 里「没有 nus3bank 写入器」已过时。Character List 的 Primary/Secondary BGM 字段从工作区 BGM Table 选 `cueHash`。HUD `bgm_list`（`0xC91627E8`）走 Test Editor → BGM List：kind-7 曲名在 Rust 编解码，`cueHash` 绑 `bgm_table.record_id`。
 
 Sound FHM2D 解包在 Rust 里按 magic 命名（`apply_raw_path_id_names` → `apply_090sound_root_names`），前端只渲染。vrtbl stem 反查在 0..199 之外包含 work `900` 和 `1000`。
 

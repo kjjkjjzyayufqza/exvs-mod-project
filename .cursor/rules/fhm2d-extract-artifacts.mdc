@@ -68,4 +68,4 @@ cargo build --bin fhm2d_extract
 | `--output` / `-o` | Must resolve under repo `tmp/` for agent runs. |
 
 Types: `character`, `effect`, `motion`, `msc`, `sound`, `character_param`,
-`character_cost`, `all_nutexb`, `stage_list` (also `fhm2d_*` ids).
+`character_cost`, `all_nutexb`, `stage_list`, `list` (also `fhm2d_*` ids).

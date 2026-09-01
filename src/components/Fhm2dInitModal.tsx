@@ -49,6 +49,8 @@ import { initRawPathIdPack } from "@/page/TestEditor/components/raw-path-id/init
 import { RAW_PATH_ID_PACK_NAME } from "@/page/TestEditor/components/raw-path-id/rawPathIdDocument";
 import { initBgmTablePack } from "@/page/TestEditor/components/bgm-table/initBgmTablePack";
 import { initBgmBankUpdate02Pack } from "@/page/TestEditor/components/bgm-table/initBgmBankUpdate02Pack";
+import { initBgmListPack } from "@/page/TestEditor/components/bgm-list/initBgmListPack";
+import { BGM_LIST_PACK_NAME } from "@/page/TestEditor/components/bgm-list/bgmListDocument";
 import { initStrikerTablePack } from "@/page/TestEditor/components/striker-table/initStrikerTablePack";
 import { STRIKER_TABLE_PACK_NAME } from "@/page/TestEditor/components/striker-table/strikerTableDocument";
 import {
@@ -144,6 +146,16 @@ const FHM2D_ITEMS: InitListItem[] = [
         formatLabel: "list",
         fixedPackName: "navi_list",
         description: "support navi table → 012list/navi_list",
+    },
+    {
+        id: "bgm_list",
+        name: "BGM List",
+        hash: "0xC91627E8",
+        routeId: "list.character",
+        format: Fhm2d_type_format.fhm2d_list,
+        formatLabel: "list",
+        fixedPackName: BGM_LIST_PACK_NAME,
+        description: "HUD titles → 012list/bgm_list/bgm_list.bin",
     },
     {
         id: "stage_list",
@@ -582,6 +594,10 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
             await handleExtract(item, item.fixedPackName ?? BGM_TABLE_PACK_NAME);
             return;
         }
+        if (item.id === "bgm_list" && nameOverride === undefined) {
+            await handleExtract(item, item.fixedPackName ?? BGM_LIST_PACK_NAME);
+            return;
+        }
         if (item.id === "bgm_bank_update_02" && nameOverride === undefined) {
             await handleExtract(item, item.fixedPackName ?? BGM_BANK_UPDATE_02_PACK_NAME);
             return;
@@ -641,7 +657,10 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
         try {
             await assertFhm2dMagic(inputPath);
             const listOutputFileName =
-                item.format === Fhm2d_type_format.fhm2d_stage_list ? `${item.id}.bin` : undefined;
+                item.format === Fhm2d_type_format.fhm2d_stage_list ||
+                item.format === Fhm2d_type_format.fhm2d_list
+                    ? `${item.id}.bin`
+                    : undefined;
 
             const extractResult = item.id === "raw_path_id"
                 ? await initRawPathIdPack({
@@ -655,6 +674,11 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                     })
                 : item.id === "bgm_table"
                     ? await initBgmTablePack({
+                        sourceFhm2dPath: inputPath,
+                        workspaceRoot: outBase,
+                    })
+                : item.id === "bgm_list"
+                    ? await initBgmListPack({
                         sourceFhm2dPath: inputPath,
                         workspaceRoot: outBase,
                     })

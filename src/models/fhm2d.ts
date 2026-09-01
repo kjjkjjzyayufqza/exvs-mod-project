@@ -9,6 +9,8 @@ export enum Fhm2d_type_format {
   fhm2d_effect = "fhm2d_effect",
   fhm2d_all_nutexb = "fhm2d_all_nutexb",
   fhm2d_stage_list = "fhm2d_stage_list",
+  /** Generic 012list payload rename (`list_output_file_name`), used by BGM List. */
+  fhm2d_list = "fhm2d_list",
   fhm2d_character_param = "fhm2d_character_param",
   /** Out-of-game character balance tables (cost, HP, etc.) for 0xFF832E7F.fhm2d. */
   fhm2d_character_cost = "fhm2d_character_cost",

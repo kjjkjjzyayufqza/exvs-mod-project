@@ -50,6 +50,7 @@ describe("workspace content catalog", () => {
     ["raw-path-id", "unit.sound", "0x264D1CA7", null],
     ["pilot-voice-resource", "unit.sound", "0x8C428AF2", "pilotvoiceresourcetable.vrtbl"],
     ["bgm-table", "unit.sound", "0x5E92AAEC", "bgm_table.vgsht2"],
+    ["bgm-list", "list.character", "0xC91627E8", "bgm_list.bin"],
     ["bgm-bank-update-02", "unit.sound", "0x0C568109", null],
   ] as const)("defines %s", (id, routeId, hashHex, relativeFilePath) => {
     expect(getWorkspaceContentDescriptor(id)).toMatchObject({
@@ -179,6 +180,23 @@ describe("workspace content catalog", () => {
     );
     expect(result.configured.structureJsonPath).toBe(
       "E:/workspace/090sound/090sound_structure.json",
+    );
+    expect(result.sourceLayout).toBe("missing");
+  });
+
+  it("resolves BGM List under 012list/bgm_list", async () => {
+    withExistingPaths([]);
+
+    const result = await resolveWorkspaceContent(
+      "E:/workspace",
+      DEFAULT_TEST_EDITOR_WORKSPACE,
+      "bgm-list",
+    );
+
+    expect(result.descriptor.defaultPackName).toBe("bgm_list");
+    expect(result.configured.folderPath).toBe("E:/workspace/012list/bgm_list");
+    expect(result.configured.filePath).toBe(
+      "E:/workspace/012list/bgm_list/bgm_list.bin",
     );
     expect(result.sourceLayout).toBe("missing");
   });

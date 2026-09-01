@@ -185,6 +185,10 @@ name = "bgm_table_format_test"
 path = "tests/bgm_table_format_test.rs"
 
 [[test]]
+name = "bgm_list_format_test"
+path = "tests/bgm_list_format_test.rs"
+
+[[test]]
 name = "gui_pack_clone_test"
 path = "tests/gui_pack_clone_test.rs"
 
