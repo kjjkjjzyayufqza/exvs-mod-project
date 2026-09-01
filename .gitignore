@@ -1,7 +1,13 @@
 # UnlicensedGameMaterial — publisher binaries and full dumps.
 # Keep them on the local disk (WorkingTreePreserve); never commit.
+# Toolchain CLIs under tools/ stay tracked; JSON fixtures (*.numatb.json) are
+# not matched by these extension rules.
 vsac27_Release.exe.md
 *Release.exe.md
+vsac*.exe
+OBHK*
+dplcache_release/
+dplcache*/
 *.i64
 *.idb
 *.id0
@@ -10,6 +16,27 @@ vsac27_Release.exe.md
 *.nam
 *.til
 *.fhm2d
+*.dll
+*.pdb
+*.mscsb
+*.cscex
+*.bscex
+*.dscex
+*.nusktb
+*.numshb
+*.numdlb
+*.numatb
+*.nuanmb
+*.nutexb
+*.nuhlpb
+*.nufxlb
+*.numshexb
+*.jnttbl
+*.adjb
+*.cpk
+*.arc
+*.pac
+*.iso
 # Game executables (toolchain CLIs under tools/ stay tracked)
 *.exe
 !tools/*.exe
