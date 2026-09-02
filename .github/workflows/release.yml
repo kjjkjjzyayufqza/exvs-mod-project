@@ -19,9 +19,20 @@ jobs:
       contents: write
     env:
       CARGO_TERM_COLOR: always
+      CARGO_NET_GIT_FETCH_WITH_CLI: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Authenticate private Cargo git deps
+        env:
+          CARGO_GIT_TOKEN: ${{ secrets.CARGO_GIT_TOKEN }}
+        shell: pwsh
+        run: |
+          if (-not $env:CARGO_GIT_TOKEN) {
+            throw "Missing CARGO_GIT_TOKEN. Create a PAT with Contents: Read on kjjkjjzyayufqza/ssbh_lib and set it as the CARGO_GIT_TOKEN repository secret."
+          }
+          git config --global url."https://x-access-token:$($env:CARGO_GIT_TOKEN)@github.com/".insteadOf "https://github.com/"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
