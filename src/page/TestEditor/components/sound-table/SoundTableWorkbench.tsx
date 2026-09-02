@@ -155,7 +155,7 @@ export function SoundTableWorkbench({
 }
 
 export function soundTableMissingMessage(message: string): boolean {
-  return /No raw_path_id JSON|No pilotvoiceresourcetable|No bgm_table|No bgm_list|Extract pack/i.test(message);
+  return /No raw_path_id JSON|No pilotvoiceresourcetable|No bgm_table|No bgm_list|No BGM bank|Extract pack/i.test(message);
 }
 
 export function displayVoiceStem(value: string): string {

@@ -36,6 +36,14 @@
 
 三个新 row 都由目标本机 row 复制，保留未知字段、`resourceLabel` 与布局。只修改 entry id、`actionLabel`、弹数、reload 类型及 reload timer。
 
+### HUD art index (2026-09-02)
+
+Copying Assist onto flight slot 1 also copied `fieldBb93d195=1` (tallgeese). MSC still binds `sys_4F(0xB, 1, 0x04DC0DEE)`. Art selection is that field into `weapon_icon` Folder order, not the slot number. TV / Hambrabi do the same. Set `0x04DC0DEE` `fieldBb93d195` to `7` (`wep_3_h_n_b_g`). Ground `0x11BE199D` stays `1`. Owner: `docs/exvs-character-weapon-icon-table.md`. E3 2026-09-02 user: bird cell 1 shows the new art, ground 援护 unchanged.
+
+- Before SHA-256: `AC585FE1E16CFFAD29EE558D77804375147DE741C5A0EA315545E653DAA3D64A`
+- After SHA-256: `C47BFFBDC4B985FED134C1918DF9B51ECA409D7EC7B635FB1FE176C928651B60`
+- Backup / request: `tmp/exvs2-json/20260902-flight-slot1-hud-art/`
+
 ### Burst/mode timer
 
 - 主射：default `120`；A mode1/3/4/5=`75`、A mode2=`25`；B mode1=`75`、B mode2/3/4/5=`60`。按原 Buster Rifle 比例缩放。

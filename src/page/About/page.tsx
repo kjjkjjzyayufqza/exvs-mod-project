@@ -1,3 +1,4 @@
+import { AboutBrandMark } from "./components/AboutBrandMark";
 import { AboutLinkButton } from "./components/AboutLinkButton";
 import { AboutModule } from "./components/AboutModule";
 import { AboutSpecRow } from "./components/AboutSpecRow";
@@ -20,24 +21,32 @@ export default function AboutPage() {
           Identity / about
         </p>
 
-        <div className="mt-5 grid items-end gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(16rem,0.85fr)]">
-          <header className="min-w-0">
-            <h1 className="text-4xl font-semibold tracking-tight text-balance lg:text-5xl">
-              {PRODUCT_NAME}
-            </h1>
-            <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
-              Source-available research editor for Over Boost and earlier Extreme
-              Vs. 2 revisions. Not an open-source product you can rebrand.
-            </p>
+        <div className="mt-5 grid items-start gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(16rem,0.85fr)]">
+          <header className="flex min-w-0 items-start gap-5">
+            <AboutBrandMark />
+            <div className="min-w-0">
+              <h1 className="text-4xl font-semibold tracking-tight text-balance lg:text-5xl">
+                {PRODUCT_NAME}
+              </h1>
+              <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
+                Source-available research editor for Over Boost and earlier Extreme
+                Vs. 2 revisions. Not an open-source product you can rebrand.
+              </p>
+            </div>
           </header>
 
           <aside className="rounded-2xl bg-muted/45 px-5 py-4">
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-              Author
-            </p>
-            <p className="mt-2 font-mono text-sm">{AUTHOR_HANDLE}</p>
-            <div className="mt-4">
-              <AboutLinkButton href={SUPPORT_HOME} label="GitHub" />
+            <div className="flex items-start gap-4">
+              <AboutBrandMark className="size-16 lg:size-16" />
+              <div className="min-w-0">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                  Author
+                </p>
+                <p className="mt-2 font-mono text-sm">{AUTHOR_HANDLE}</p>
+                <div className="mt-4">
+                  <AboutLinkButton href={SUPPORT_HOME} label="GitHub" />
+                </div>
+              </div>
             </div>
           </aside>
         </div>

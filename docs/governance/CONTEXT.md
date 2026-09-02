@@ -125,8 +125,9 @@ author adds one.
 _Avoid_: inventing Discord, email, or donation links
 
 **AppIcon**:
-A dedicated application icon supplied by the author. Until that mark exists,
-do not substitute the GitHub avatar or change window/chrome branding.
+The author-supplied mark in `icon.png`. It is the native app icon, the About
+brand mark, the README logo, and the GitHub social preview source. Do not
+substitute the GitHub avatar.
 _Avoid_: using the GitHub avatar as the app icon, putting the author line in
 the top bar or window title
 

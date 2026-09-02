@@ -248,10 +248,10 @@ vs2 count：82 / 318 / 48。
 | `0x8C428AF2` | Pilot Voice Table | 新行全空；stem 只填 `voiceKey`/`streamPathId`；无 copy-from |
 | `0xDFD38C70` | Character List | `pilotPresentationHash` 走 DualValueProperty；高位 hash 按 int32 位型写回 u32 |
 | `0x5E92AAEC` | BGM Table | 独立 `.vgsht2`，**不是** 090sound 根包的 `bgmstemstable`。cue 名派生 CRC；`record_id` 升序插入；route 抄同组行 |
-| `0xC91627E8` | BGM List | HUD 曲名。`musicId` + kind-7 title / titleWithNotePrefix + `cueHash`（= `bgm_table.record_id`）。extract autorename `bgm_list.bin` |
-| `0x0C568109` | Init only | group 6 `BGM_AC27_UPDATE_02` 的 `.nus3bank`。Test Editor 不解/改 nus3 内容，只 Unpack + Repack |
+| `0xC91627E8` | BGM List | HUD 曲名。`musicId` + kind-7 title / titleWithNotePrefix + `cueHash`（= `bgm_table.record_id`）。extract autorename `bgm_list.bin`。**开战 jingle 必填**：`BgmList_GetTitleWithNoteByCueHash` 找不到行就返回 NULL，`sub_1401CA440` 写 `BGM_Name` 空指针（`rva=0x1CA4A1`）。不是“没曲名而已”。Owner：`E:\research\EXVS2-Audio-Editor\docs\ob-bgm-jingle-resolve-tone-av.md` |
+| `0x0C568109` | Sound → BGM bank | group 6 `BGM_AC27_UPDATE_02.nus3bank`。Workspace 只 Init / 打开文件夹 / Repack |
 
-`.nus3audio` / `.nus3bank` 加曲仍用 EXVS2-Audio-Editor。POC 里「没有 nus3bank 写入器」已过时。Character List 的 Primary/Secondary BGM 字段从工作区 BGM Table 选 `cueHash`。HUD `bgm_list`（`0xC91627E8`）走 Test Editor → BGM List：kind-7 曲名在 Rust 编解码，`cueHash` 绑 `bgm_table.record_id`。
+BGM bank TONE 追加（OB `BGM_AC27_UPDATE_02`）：**不要用 Audio Editor Add+Save**。该路径会把名字长度从 `0x19` 收成 `0x0C` 并改 `flags1`，`nus3_decode_tone_descriptor` 在启动 `FinalizeLoad` 空指针（`rva=0x11CE4ED`）。正确做法是克隆一条 336 B donor 记录到 **TONE index 3**（对齐 audio TNID 3），**保留 donor 的 `0x19` 名字槽**（`COLORS_Flow\0` 后面补零），DTON/GRP/PACK 不动。脚本：`tmp/fhm2d-extract/bgm-colors-flow-bank/append_colors_flow_tone.py`。`.nus3audio` 加曲仍用 Audio Editor。Character List 的 Primary/Secondary BGM 字段从工作区 BGM Table 选 `cueHash`。HUD `bgm_list`（`0xC91627E8`）走 Test Editor → BGM List：kind-7 曲名在 Rust 编解码，`cueHash` 绑 `bgm_table.record_id`。
 
 Sound FHM2D 解包在 Rust 里按 magic 命名（`apply_raw_path_id_names` → `apply_090sound_root_names`），前端只渲染。vrtbl stem 反查在 0..199 之外包含 work `900` 和 `1000`。
 

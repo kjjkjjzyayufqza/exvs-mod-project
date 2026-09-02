@@ -103,10 +103,32 @@ export async function bgmTableGroupAssets(bankGroup: number): Promise<BgmGroupAs
 }
 
 export async function findNus3bankFile(folderPath: string): Promise<string | null> {
-  const entries = await readDir(folderPath);
-  const hits = entries.filter((entry) => (entry.name ?? "").toLowerCase().endsWith(".nus3bank"));
-  if (hits.length !== 1 || !hits[0].name) return null;
-  return await join(folderPath, hits[0].name);
+  const hits: string[] = [];
+  const walk = async (dir: string, depth: number): Promise<void> => {
+    if (depth > 4) return;
+    let entries;
+    try {
+      entries = await readDir(dir);
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const name = entry.name ?? "";
+      if (!name || name.startsWith(".")) continue;
+      const path = await join(dir, name);
+      if (name.toLowerCase().endsWith(".nus3bank")) {
+        hits.push(path);
+        continue;
+      }
+      if (entry.isDirectory) {
+        await walk(path, depth + 1);
+      }
+    }
+  };
+  await walk(folderPath, 0);
+  if (hits.length === 0) return null;
+  const preferred = hits.find((path) => /bgm_ac27_update_02\.nus3bank$/i.test(path.replace(/\\/g, "/")));
+  return preferred ?? hits[0];
 }
 
 export async function bgmUpdate02AudioPath(dplCacheDir: string): Promise<string> {

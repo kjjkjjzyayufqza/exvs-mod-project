@@ -1,7 +1,7 @@
 # Wing Zero Rebellion：飞行特射/变形受击下坠 + 飞行特格
 
 **Date:** 2026-08-30  
-**Status:** keep-air E1 source-pinned (H1/H2 untested). Special-melee dive restored (2026-08-23). Cancel window E1 (`func_123(0x3bf)` wait/ground); H5 untested in-game. F7/F8/F9 E3-.  
+**Status:** keep-air E1 source-pinned; H1 retest pending 2026-09-02 (flight special hit still dropped: `func_412` ENTER `func_296(0)` after `func_44`). Special-melee dive restored (2026-08-23). Cancel window E1 (`func_123(0x3bf)` wait/ground); H5 untested in-game. F7/F8/F9 E3-.  
 **Kind:** MSC `2.c` interrupt air-hold; bird special-melee dive rollback  
 **Primary tree:** `E:\XB\mod\040msc\wing_gundam_zero_rebellion_msc\`
 
@@ -52,7 +52,7 @@ FORCED_RECOVERY 仍拆 form（`global143=0`、shell、wing refresh）。不重�
 - `keep_form`、`keep_air` latch、或 `global7` 是 `0xd94d608f` / `0x9475130e` / `0xa02d57dc` 时 `func_296(1)`。
 - `global7 == 0x77b100ff` **不要** keep air，否则特格 ENTER 也会悬停。
 
-`func_41`：受击不再先 `release_flight_owner` 再拆电机。
+`func_41`：受击不再先 `release_flight_owner` 再拆电机。2026-09-02：空中 idle `0xf5f21169` 也走 keep-air + interrupt，不再 release。`func_412` ENTER 在 `func_44` 的 `sys_2` 里可能先于 `func_41` 闩 keep_air，所以当 `keep_form` 仍为 1（特射进行中被打断；679 自然 EXIT 已清掉）时写 `func_296(0x3e8, 1)` 而不是 `0`。
 
 ### 预注册
 

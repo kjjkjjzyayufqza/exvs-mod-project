@@ -989,3 +989,29 @@ F  beam agility unchanged (native analog after MSC tick), freeze, OR
 ```
 
 **Status:** E3 in-game: 20% too slow (2026-08-30). TUNE raised to 50%.
+
+## 地面 N 特格进飞行的 `sys_4A`（E1 2026-09-02）
+
+Registry: `func_241(0x6BF5E9AA, ACTION_BC_SPECIAL_MELEE)`（注释「特格」）。
+ENTER `global609 = func_929`。无杆 `global172` 全 0 → `global773 = 0`。
+
+`func_929` `global240==0`（N 特格）顺序：
+
+1. `func_902()` → `sys_4A(0, 0x8B5565AC, 0xB2B50AE0, 0xCFF7C874, 0x7, 0)`
+2. `func_903()` → `sys_4A(0, 0x3728D323, global20, 0x1, 0x7, 0x1)` 再 `sys_4A(0xa, 0x7, 0x1, 0x50, 0x50, 0x50)`
+3. `global170 = 0` 然后 `func_888()` → `func_890()`：清 group 8，绑 `0xB2B50AE0`。**不**走 `func_891`，所以 **不** spawn `0x7CE03034`（common `saber_002`）
+4. `global143 = 0x1`；`func_995()` 是 `sys_47` TRS + `sys_4F(0xb)` 绑模 `0x2AA54884` / `0x8684CA25`，不是粒子
+5. SE：`sys_58(0x9, 0x45C973AC)`、`sys_58(0, 0xACA6604A)`；10f `sys_58(0, 0xF74B5BFE)`
+
+000common_001 CRC（`eff_000common_000common_001_<short>`）：
+
+| hash | 名 | 在 N 特格 ENTER？ |
+|------|----|-------------------|
+| `0x8B5565AC` | 不在 common | **是**，`func_902` |
+| `0x3728D323` | 不在 common（Hambrabi 枪口/刀光，用户已否） | **是**，`func_903` |
+| `0x7CE03034` | `saber_002` | 否（要 `global170 != 0` / `func_891`） |
+| `0x6D49ABBC` | `saberstrip_002` | 否（`func_904`，不是 `func_929` ENTER） |
+
+后方向 `global773==0x2` 只 `func_902`，不打 `0x3728D323`。N / 前 / 左右都是 902+903。
+
+本树没有 Messala `002chara` / `vernier_table`；引擎喷口是否另挂 common `vernier_*` 无法从这份 MSC 证明。

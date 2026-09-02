@@ -31,6 +31,7 @@ import RawPathIdView from "./raw-path-id/RawPathIdView";
 import PilotVoiceResourceView from "./pilot-voice-resource/PilotVoiceResourceView";
 import BgmTableView from "./bgm-table/BgmTableView";
 import BgmListView from "./bgm-list/BgmListView";
+import BgmBankView from "./bgm-bank/BgmBankView";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import { shouldAutoActivateMscWorkspaceTab } from "../utils/mscWorkspaceUtils";
 import { shouldKeepMainViewTabMounted } from "./main-view/mainViewTabGroups";
@@ -191,6 +192,19 @@ const tabs: StageTab[] = [
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}
         onPackMutated={props.onPackMutated}
+        workspaceDocument={props.workspaceDocument}
+      />
+    ),
+  },
+  {
+    name: "BGM bank",
+    value: "bgm-bank",
+    render: (props: MainViewProps) => (
+      <BgmBankView
+        folderPath={props.folderPath ?? ""}
+        isActive={false}
+        onPackMutated={props.onPackMutated}
+        onRequestFhm2dRepack={props.onRequestFhm2dRepack}
         workspaceDocument={props.workspaceDocument}
       />
     ),
@@ -774,6 +788,21 @@ const MainView = ({
               isActive={activeTab === "bgm-list"}
               onUnsavedChanges={handleBgmListUnsaved}
               onPackMutated={props.onPackMutated}
+              workspaceDocument={props.workspaceDocument}
+            />
+          ),
+        };
+      }
+
+      if (tab.value === "bgm-bank") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <BgmBankView
+              folderPath={props.folderPath ?? ""}
+              isActive={activeTab === "bgm-bank"}
+              onPackMutated={props.onPackMutated}
+              onRequestFhm2dRepack={props.onRequestFhm2dRepack}
               workspaceDocument={props.workspaceDocument}
             />
           ),

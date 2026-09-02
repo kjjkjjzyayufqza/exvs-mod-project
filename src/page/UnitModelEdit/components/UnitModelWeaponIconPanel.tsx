@@ -20,9 +20,19 @@ import { useSsbhModelPreview } from "@/components/ssbh-model-preview/SsbhModelPr
 import { clearNutexbRgbaCache } from "@/components/ssbh-model-preview/nutexbPreviewCache";
 import { TexturePreviewModal } from "@/page/SceneEdit/components/TexturePreviewModal";
 import { TextureReplaceModal } from "@/page/SceneEdit/components/TextureReplaceModal";
+import {
+  TextureAddConfirmModal,
+  type TextureAddSelection,
+} from "@/page/SceneEdit/components/TextureAddConfirmModal";
 import type { DdsFormat } from "@/page/SceneEdit/components/TextureFormatSelect";
 import { replaceNutexbInPlace } from "@/page/SceneEdit/utils/sceneTextureConvert";
-import { invalidateNutexbInternalName } from "@/page/SceneEdit/utils/sceneTextureAddPlan";
+import {
+  analyzeTextureAddCandidates,
+  invalidateNutexbInternalName,
+  type AnalyzedAddCandidate,
+  type RawAddFile,
+} from "@/page/SceneEdit/utils/sceneTextureAddPlan";
+import { applyWeaponIconAddSelections } from "../utils/unitModelWeaponIconAdd";
 import {
   clearSceneTextureThumbnailCache,
   ensureSceneTextureThumbnailDataUrl,
@@ -41,7 +51,6 @@ import {
   UNIT_MODEL_REPLACE_WEAPON_ICON_DIALOG_PATH_KEY,
 } from "../utils/unitModelEditorSettings";
 import {
-  addUnitModelWeaponIcon,
   listUnitModelWeaponIcons,
   removeUnitModelWeaponIcon,
   reorderUnitModelWeaponIcons,
@@ -122,12 +131,21 @@ export function UnitModelWeaponIconPanel({
   const [busy, setBusy] = useState<"add" | "reorder" | "remove" | "replace" | null>(null);
   const [previewEntry, setPreviewEntry] = useState<TextureManagerEntry | null>(null);
   const [replaceTarget, setReplaceTarget] = useState<TextureManagerEntry | null>(null);
+  const [addCandidates, setAddCandidates] = useState<AnalyzedAddCandidate[] | null>(null);
+  const [addAnalyzing, setAddAnalyzing] = useState(false);
+  const [convertProgress, setConvertProgress] = useState<{ done: number; total: number } | null>(
+    null,
+  );
   const [, bumpThumbnailCache] = useReducer((value: number) => value + 1, 0);
   const focusKey = (focusFilename ?? "").toLowerCase();
 
   const selectedIcon = useMemo(
     () => inventory?.icons.find((icon) => icon.fileIndex === selectedFileIndex) ?? null,
     [inventory, selectedFileIndex],
+  );
+  const managerEntries = useMemo<TextureManagerEntry[]>(
+    () => (inventory?.icons ?? []).map(iconToManagerEntry),
+    [inventory],
   );
 
   const refreshInventory = useCallback(async () => {
@@ -195,32 +213,99 @@ export function UnitModelWeaponIconPanel({
     }
     const selected = await open({
       title: "Add weapon HUD icon",
-      multiple: false,
-      filters: [{ name: "NUTEXB", extensions: ["nutexb"] }],
+      multiple: true,
+      filters: [{ name: "Textures", extensions: ["nutexb", "png", "dds", "tga"] }],
       defaultPath:
         (await getStoredDialogDefaultPath(UNIT_MODEL_ADD_WEAPON_ICON_DIALOG_PATH_KEY)) ??
         unitRoot ??
         undefined,
     });
-    if (!selected || Array.isArray(selected)) return;
-    await rememberStoredDialogSelection(UNIT_MODEL_ADD_WEAPON_ICON_DIALOG_PATH_KEY, selected, "file");
-    setBusy("add");
-    try {
-      const next = await addUnitModelWeaponIcon({
-        modelRoot: unitRoot,
-        structureJsonPath: structurePath,
-        sourcePath: selected,
-        targetFilename: getBaseName(selected),
-      });
-      notifyMutated(next);
-      toast.success(`Added ${weaponIconHudLabel(next.icons.length - 1)}`);
-    } catch (error) {
-      toast.error("Failed to add weapon icon", { description: String(error) });
-      await refreshInventory();
-    } finally {
-      setBusy(null);
+    if (!selected) return;
+    const paths = Array.isArray(selected) ? selected : [selected];
+    if (paths.length === 0) return;
+    const firstPath = paths[0];
+    if (firstPath) {
+      await rememberStoredDialogSelection(
+        UNIT_MODEL_ADD_WEAPON_ICON_DIALOG_PATH_KEY,
+        firstPath,
+        "file",
+      );
     }
-  }, [mutationsLocked, notifyMutated, refreshInventory, structurePath, unitRoot]);
+
+    const files: RawAddFile[] = paths.map((path) => ({
+      sourcePath: path,
+      filename: getBaseName(path),
+    }));
+    setAddAnalyzing(true);
+    setAddCandidates(
+      files.map((file) => ({
+        id: file.sourcePath,
+        sourcePath: file.sourcePath,
+        filename: file.filename,
+        nutexbFilename: file.filename.replace(/\.[^.]+$/, ".nutexb"),
+        isNutexb: file.filename.toLowerCase().endsWith(".nutexb"),
+        internalName: null,
+        duplicate: false,
+        duplicateReason: null,
+        duplicateOf: null,
+      })),
+    );
+
+    try {
+      const analyzed = await analyzeTextureAddCandidates(files, managerEntries);
+      setAddCandidates(analyzed);
+    } catch (error) {
+      toast.error("Failed to analyze weapon icons", { description: String(error) });
+      setAddCandidates(null);
+    } finally {
+      setAddAnalyzing(false);
+    }
+  }, [managerEntries, mutationsLocked, structurePath, unitRoot]);
+
+  const handleBatchConfirm = useCallback(
+    async (selections: TextureAddSelection[]) => {
+      if (!unitRoot || !structurePath || selections.length === 0) return;
+      setBusy("add");
+      setConvertProgress({ done: 0, total: selections.length });
+      try {
+        const result = await applyWeaponIconAddSelections({
+          modelRoot: unitRoot,
+          structureJsonPath: structurePath,
+          selections,
+          existingEntries: managerEntries,
+          onProgress: (done, total) => setConvertProgress({ done, total }),
+        });
+        if (result.replacedCount > 0) {
+          const next = await refreshInventory();
+          if (next) setInventory(next);
+          emitUnitTexturesChanged();
+          onMutated?.();
+        } else if (result.inventory) {
+          notifyMutated(result.inventory);
+        }
+        const summaryParts: string[] = [];
+        if (result.addedCount > 0) summaryParts.push(`Added ${result.addedCount}`);
+        if (result.replacedCount > 0) summaryParts.push(`replaced ${result.replacedCount}`);
+        toast.success(
+          summaryParts.length > 0
+            ? `${summaryParts.join(", ")} HUD icon(s)`
+            : "No HUD icons changed",
+        );
+      } catch (error) {
+        toast.error("Failed to add weapon icon", { description: String(error) });
+        await refreshInventory();
+      } finally {
+        setBusy(null);
+        setConvertProgress(null);
+        setAddCandidates(null);
+        setAddAnalyzing(false);
+        clearNutexbRgbaCache();
+        clearSceneTextureThumbnailCache();
+        bumpThumbnailCache();
+      }
+    },
+    [managerEntries, notifyMutated, onMutated, refreshInventory, structurePath, unitRoot],
+  );
 
   const handleMove = useCallback(
     async (fileIndex: number, direction: -1 | 1) => {
@@ -352,7 +437,7 @@ export function UnitModelWeaponIconPanel({
           className="h-8 w-8 shrink-0"
           onClick={() => void handleAdd()}
           disabled={noRoot || busy !== null || mutationsLocked}
-          title="Add HUD icon"
+          title="Add HUD icon (nutexb / png / dds / tga)"
         >
           {busy === "add" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
         </Button>
@@ -445,6 +530,26 @@ export function UnitModelWeaponIconPanel({
             const entry = replaceTarget;
             setReplaceTarget(null);
             void handleReplace(entry, ddsFormat);
+          }}
+        />
+      ) : null}
+
+      {addCandidates ? (
+        <TextureAddConfirmModal
+          candidates={addCandidates}
+          analyzing={addAnalyzing}
+          isConverting={busy === "add"}
+          convertProgress={convertProgress}
+          title={`Add HUD icons (${addCandidates.length})`}
+          subtitle="PNG/DDS/TGA convert into weapon_icon; check a conflict row to replace"
+          onClose={() => {
+            if (busy !== "add") {
+              setAddCandidates(null);
+              setAddAnalyzing(false);
+            }
+          }}
+          onConfirm={(selections) => {
+            void handleBatchConfirm(selections);
           }}
         />
       ) : null}

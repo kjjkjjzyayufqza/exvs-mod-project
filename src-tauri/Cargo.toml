@@ -296,6 +296,14 @@ strip = true
 
 
 [[example]]
+name = "repack_fhm2d"
+path = "examples/repack_fhm2d.rs"
+
+[[example]]
+name = "add_bgm_list_colors_flow"
+path = "examples/add_bgm_list_colors_flow.rs"
+
+[[example]]
 name = "nuanmb_strip_extra_bones"
 path = "examples/nuanmb_strip_extra_bones.rs"
 required-features = ["nuanmb-examples"]

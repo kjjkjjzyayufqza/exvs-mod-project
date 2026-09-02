@@ -1,7 +1,12 @@
 # ハンブラビ 変形サブ射撃「側転射撃」— 实现解剖与 Rebellion 左右移植
 
 **Date:** 2026-08-31
-**Status:** L1 源码 E1（两份 2.c 逐字读取）。L2 架构分野 E2（跨机体对照 +
+**Status:** 2026-09-01 source correction is **E1** (chrsysparam.csyspm table0
+49×128, column = field+1): 変形サブ射撃 is kind **0x03 rows 36/37/38**,
+shared `func_1088` enter + `func_1089` main hook. `func_1082/1083/1085/1086`
+have **zero row refs** (dead code). Kind 0x35 / `func_969` is 変形特殊射撃.
+func_1089 port is packed, **E3 pending**. Earlier L3 mixed record still applies:
+L1 源码 E1（两份 2.c 逐字读取）。L2 架构分野 E2（跨机体对照 +
 `msc-generation-param-bridge-comparison.md`）。L3 mixed：I1/I2 selector/form
 故障已 E3 定位；Stage 1 START 对准已 E3 观察；Stage 2 profile-1 解耦
 E3- I9；Stage 3 SHOOT-only yaw E3- I10；Stage 4 SE 探针被用户拒绝；
@@ -125,6 +130,12 @@ sys_1(0x10001, 0x12, var1, func_988(func_875(var1, 0x7d)));   // 退出 hook
 但它们是挂在 param row 上的 hook，不是自带 ENTER 的 action。
 
 ### 2.3 側転射撃 左右两侧就是这两对 hook
+
+> **Superseded 2026-09-01, see §4.13.** The `func_1182` callers
+> `func_1083` / `func_1086` (and their enter twins `func_1082` / `func_1085`)
+> are **unreferenced dead code**. Real 変形サブ射撃 is kind 0x03 rows 36/37/38
+> → `func_1088` + `func_1089`. This subsection is kept as the record of the
+> wrong source, not as current truth.
 
 `func_1182` 是全文件唯一的「サブ键连射」helper，**只有两个调用者**：`func_1083` / `func_1086`。
 
@@ -643,6 +654,164 @@ func_615(0x1, 0xe, 0x8, 0);      // = func_142(0x1, 0xe, 0); global716 = 0x8;
 我们 84 函数 / 60 种），而不是逐行猜。差集顶上的 `sys_4C(0x8)` 先被试掉，
 再顺着 `func_863` → `func_142` / `func_144` 的注册-应用配对找到真正的门。
 **先做系统性差集，再动手改。**
+
+---
+
+## 4.13 真正的参照源是 `func_1088` + `func_1089`（E1 2026-09-01；E3 pending）
+
+解包 `E:\XB\mod\041cpm\002zgundm_006hambrb_001\chrsysparam.csyspm`：
+magic `0xB4ACACAF`，table0 marker `0xA8BBBAB9`，**49 行 × 128 列**。
+`sys_0(0x700000, row, field)` 的 field 对上数组下标要 **+1**（第 0 列是行头）：
+action hash 在列 `0x2f` = 字段 `0x2e`，kind 在列 `0x0b` = 字段 `0x0a`。
+
+| row | col 0x2f action hash | kind (col 0x0b) | 说明 |
+|-----|----------------------|-----------------|------|
+| 36 | `0x9940F95A` | 0x03 | 側転 一侧（col 0x05 stick `0x10`） |
+| 37 | `0x2986D9F6` | 0x03 | 側転 另一侧（col 0x05 stick `0x20`） |
+| 38 | `0xF6FD193E` | 0x03 | 前後 前進射撃（无 0x05 方向位；**唯一写垂直跟踪**） |
+| 2 | `0x61392E18` | **0x35** | 変形特殊射撃（フェダーイン），不是副射 |
+
+三行共用同一对 hook（列 = 字段+1）：
+
+| 字段 | 列 | hash | `func_988` 指针 | `2.txt` −48 → 函数 |
+|------|----|------|-----------------|---------------------|
+| 0x2 主 hook | 0x03 | `0xF2D67A5D` | `0x44b48` | **`func_1089`** |
+| 0x7c enter | 0x7d | `0x7741FFF4` | `0x44ad6` | **`func_1088`** |
+| 0x7d exit | 0x7e | `0xF0D9E33B` | `0x45330` | exit hook（未移植） |
+
+`func_1082` pointer 279392、`func_1083` 279516、`func_1085`、`func_1086`
+在 49 行里 **没有任何字段命中**。先前整条移植的参照源是错的。
+
+ENTER（`func_1088`）：`global689 = 0x4`，`global452/453/454 = 0x64/0x63/0x63`，
+`global951 = 0x1` / `global952 = 0xe`（给 `func_615` 的骨骼瞄准参数）。
+
+主 hook（`func_1089`）相对死代码 `func_1083` 的关键差异：
+
+| | 死代码 `func_1083`（错） | 真 hook `func_1089` |
+|---|---|---|
+| 3 连射 | 按键闩锁 `func_1182` + `func_891` 重派发 | **23f `func_308` 把 clip 重 seek 到 8f + `global924++`**，上限 3；每条额外链在 18f 开火 |
+| 水平追踪 | 每帧 `func_102(…, 0x1f4, 0x2)`（本机后来的 SHOOT 写法） | `func_102(…, **0x7d0**, 0x2)`，由 `global925` 配额限制 |
+| 横向推进 | SHOOT / hook 首帧固定 `0xb4` | tick **7f** 触发，`sys_46(0x1,0x2)` + `sys_46(0x2,0x3)` 成对，时长 `0x82`→`0xa0`，俯冲 `-0x1f4`→`-0x3e8` |
+| 特效缩放 | 固定 `0x50` | 随链数 `0x50` → `0x5a` → `0x6e` |
+| 播放速率 | 无 | 6f `func_110(0x96)` 提到 150%，链内开火时回 100% |
+
+row 38 才把 `sys_0(0x40001, 0x5)` 俯仰喂进 `sys_46(0x1,0x2)` / `sys_46(0x2,0x3)`
+的 Y 槽；側転两侧 Y=0。本机尚未做 前後 前進射撃（需要第三个 hash）。
+`func_1178` / `func_1190` 是变形专用调用，鸟形态里不移植。
+
+Rebellion 侧 2026-09-01 已把 `func_1089` 每帧体接到
+`sub_shot_flight_roll_tick`，放在 analog clamp **之后**，让他的移动写入最后生效。
+保留已 E3 的：`func_615` 骨骼瞄准注册、0.c `(0, 0x1, 0)` selector、不关飞行马达、
+clip 时钟、合并 ENTER。
+
+2026-09-02：Hambrabi 仍是 23f 重播 / 18f 额外开火（上表不改）。本机用户要求
+三发间隔统一 18f，所以 START `func_309(0x12 * 0x64)`、tick extras 与 reseek
+都走 `0x708`。extras 必须写在 reseek 前面：同一拍 `func_308(..., 0x320, 0)`
+会把 `sys_47(0xf)` 清回 0，否则第 2/3 发永远不触发。`func_615` 第三参随
+START 改成 `0x12`。7f 横移、`global683=0x1`、slot `0x5` extras、弹药闩不变。
+
+**本包 H / P / F（打包前登记，E3 未跑）：**
+
+```text
+H  hypothesis: one bird-sub press fires three linked shots 18f apart
+   (START 18f -> 677 shot 1; extras then reseek both at 18f)
+P  prediction: three beams with equal 18f gaps; sideways roll; lock heading
+   within aim_budget; bird form kept; stick does not steal yaw
+F  falsifier: gaps still unequal OR shots 2/3 dump on the same frame as shot 1
+   OR only one shot OR no extras after ammo latch
+```
+
+已知污染：SHOOT 仍 `rewrite_lateral=1`，clamp 每 tick 会把 `sys_46(0x1,0x2)`
+重写成时长 `0xb4`。7f 那一帧 `func_1089` 最后写入；之后 clamp 可能吃掉
+插值器。若 F 打到「有滚但时长不对」，下一刀只关 `rewrite_lateral`，不要叠别的。
+
+**VFX 2026-09-02（用户，E3 pending）：** `sys_4A(0, 0x3728d323, …)` 和
+`sys_4A(0x7, 0x3865d2ad, …)` 仍是枪口光束，不是翻滚拖尾。已从 tick / 18f /
+SHOOT / 679 整段移除，并去掉 `sys_4A(0x1, 0x7, 0x1)`，避免清掉鸟双枪的 group 7。
+弹仍走 `sys_4F(0, 0x5, CDA9F563/564)`。真拖尾 hash 未定，下一刀再加。
+
+### 4.13.1 Hambrabi 飞行副射实际会生成什么（E1 2026-09-02）
+
+Live path is kind 0x03 `func_957` + hook `func_1089`. Row FX slots
+fields `0x30`–`0x39` are **all 0**. Motion folders 13/22 contain **only**
+three `.nuanmb` each, no sibling effect files, and those clips do not embed
+`0x3728d323` / `0x3865d2ad`. Unit `effect_project_*.bin` also does not list
+those two hashes.
+
+| 来源 | 生成什么 | 何时 |
+|------|----------|------|
+| `func_895(global839)` | 三件套 clip：`001hito` `rollshot_mah_air_lf/rt` + `401range2` `tail00` + `465hambbkpk` `backpack00` | START，引擎播 |
+| `func_972` / hook 18f | 背部双步枪弹 `sys_4F` `0x9dce8e51` + `0x2d08aefd`（弹自身 depiction VFX） | 首发在 677 ENTER；2/3 发在 hook 18f 走 slot `0x5` |
+| `func_972` | SE `sys_58(0, 0x216a12ff)` | SHOOT 首帧 |
+| `func_1089` 4f | `sys_4A(0, 0x3728d323, 0x30379136, 1, 7, 1)` 缩放 `0x50/0x5a/0x6e` | 用户 E3：枪口/刀光，不是翻滚拖尾。TV 同 hash 是左右刀光 |
+| `func_1089` 18f + SHOOT tick | `sys_4A(0x7, 0x3865d2ad, 0x28f6b4bb, 0xf96b3d85, …)` | 用户 E3：枪口光束。`0xf96b3d85` = backpack `WING_L`；`0x28f6b4bb` = vernier hitgroup |
+| native vernier | backpack `ATH_V_WING_L/R` 上 `0x28F75678` / `0x6561DEB0` | 推进时引擎喷口，不是这条 MSC `sys_4A` |
+| `func_1178` | `sys_4F(0xb, …)` 变形绑模 | 不是粒子 |
+
+**没有独立的翻滚拖尾粒子。** 侧转看起来在滚，是因为 clip 同时转 body / tail / backpack。Rebellion 只播了自制 body hash，没播他的 `tail00` / `backpack00` 伴生件。
+
+### 4.13.2 地面特格进飞行 vs 飞行副射的 `sys_4A` ID（E1 2026-09-02）
+
+`sys_4A(0, effectHash, parent, …)` 的第二参才是特效 ID。`0x30379136` 是挂点/父节点，不是特效。unit `effect_project_*.bin` 不含下面这些 hash（全局 006effect 银行）。
+
+chrsysparam table0 列 = 字段（本文件 row 数据从 `0x2c` 起，action hash 在列 `0x2e`，kind 在列 `0x0a`，enter hook 在列 `0x7c`）。`func_988` 指针 +48 对 `2.txt`。
+
+| 输入 | row | action hash | kind | ENTER / 主 hook | 何时 `sys_4A(0, id, …)` | 特效 ID |
+|------|-----|-------------|------|-----------------|------------------------|---------|
+| 地面 N 特格 | 5 | `0x6DFA4A03` | `0x1f` | `func_1000` / `func_1001` | 特格本体 **没有** spawn | — |
+| 同上，clip 结束 `func_891` | 6 | `0xDD5644F0` | `0x0f` | `func_1003` / `func_1004` | 地面：`func_915(0xb)`；飞行版 `func_1092`：`0x708` (18f) | **`0xB44D558A`** |
+| 地面方向特格 | 7 | `0x6BF5E9AA` | `0x1f` | `func_1006` / `func_1007` | 主 hook 首帧 | **`0x7758882D`** + **`0x3728D323`** |
+| 飞行副射 側転 | 36/37 | `0x9940F95A` / `0x2986D9F6` | `0x03` | `func_1088` / `func_1089` | 4f / 18f | **`0x3728D323`** / **`0x3865D2AD`** |
+| 飞行同款 0x0f | 44 | `0xD19EF976` | `0x0f` | `func_1091` / `func_1092` | 18f | **`0xB44D558A`**（与 row 6 同一 ID） |
+
+地面 N 特格进飞行的实际顺序（`func_1001`）：
+
+1. ENTER 无粒子。`func_1148(0xc)` 只是 `sys_4B` 绑模，不是 `sys_4A` spawn。
+2. 4f `func_1174()`：`sys_47(0x10)` 骨骼，不是粒子。
+3. 23f `func_1178()`：`global143 = 0x1`，`sys_4F(0xb, …, 0xE59A04DE / 0xCDD6F179)` 变形绑模，**不是**特效 ID。
+4. clip 完 `func_891(0xDD5644F0)`，由 row 6 才 `sys_4A(0, 0xB44D558A, 0x30379136, 1, 7, 0)`，SE `sys_58(0, 0x9D279EC3)`。
+
+和飞行副射**重叠**的 `sys_4A` hash 只有 **`0x3728D323`**（副射 4f 与方向特格 `func_1007` 首帧）。用户已 E3：这个 hash 是枪口/刀光，不是翻滚拖尾。N 特格那条看得见的粒子是 **`0xB44D558A`**，不在副射 hook 里。
+
+`func_1148(0x2)` → `func_1158` 的 `0xBE700A2`、17f 的 `0x1A4E9B2A` 挂在方向特格 `func_1037` / `func_1070` 上，不是 N 特格 `0x6DFA4A03`。
+
+**000common_001 CRC（E1 2026-09-02）：** `sys_4A` 第二参 = zlib CRC32 of
+`eff_000common_000common_001_<short>`。Hambrabi 实际点到的 common 名：
+
+| hash | common short | 谁写 |
+|------|--------------|------|
+| `0x70C05068` | `boost_001` | 共用 `func_361`（BD/boost ENTER） |
+| `0x69DB6129` | `boost_011` | 共用 `func_252` |
+| `0x0BE700A2` | `saber_003` | 特格 `func_1157/1158` |
+| `0x1A4E9B2A` | `saberstrip_003` | 特格 trail |
+| `0xED5BCB47` | `saberstrip_011` | 特格 |
+| `0xDF6DA9C5` | `saberstrip_031` | 特格 |
+| `0xC0674CC5` | `vernier_002` | **vernier_table 12 行**，不是 MSC `sys_4A` |
+| `0xA5550F37` | `vstrip_001` | **vernier_table 1 行**，不是 MSC `sys_4A` |
+
+用户 2026-09-02：`0xB44D558A` / `0x7758882D` / `0xBE700A2` / `0x1A4E9B2A` 都不是要的视觉。后两个就是上表 saber/saberstrip。未试的 common 是 `boost_*` 和 vernier_table 的 `vernier_002` / `vstrip_001`。`0xB44D558A` 不在 000common_001。
+
+**VFX 2026-09-02（用户）：** 飞行副射 START 的 `0x1A4E9B2A`（`saberstrip_003`）和 extras 的 `0xBE700A2`（`saber_003`）已移除。收招 `sys_4A(0x1, 0x9, 0x1)` 清 group 9 拖尾。不要 `sys_4A(0x1, 0x7)`（K3 / 鸟双枪 group 7）。
+
+```text
+H  hypothesis: four Hambrabi/this-unit sys_4A hashes are distinguishable
+   on flight-sub START / shot1 / shot2 / shot3
+P  prediction: START 0x1A4E9B2A green trail; shot1 0xB44D558A; shot2
+   0x7758882D; shot3 0xBE700A2 green beam. Guns stay (group 8/9 not 7)
+F  falsifier: none visible OR all look like muzzle OR guns vanish OR
+   user cannot tell which shot is which
+```
+
+Tick extras are `sys_4F(0, 0x5, …)` and skip `0x90000`. If START has no ammo,
+`func_593` never enters 677, but the 18f/23f chain still ran — shots 2/3 with
+an empty first volley. 2026-09-02: latch `rebellion_flight_sub_primary_emitted`
+on 677 first emit; gate both the 23f re-seek and the 18f extras on it. Do not
+re-read `0x90000` on extras (first volley already spent the last round).
+
+Self-cancel on 0x80 re-ENTERs `SUB_SHOT_FLIGHT_ROLL` and clears the latch/chain,
+so links 2/3 vanish. User: do not let flight sub cancel flight sub. 677
+`func_123(0x380)` dropped to `0x300` (keep 0x100|0x200 特格, drop 0x80). Tick
+no longer `func_123(0x80)` on the last link. Wiki cancel for 変形サブ is 変形特格.
 
 ---
 

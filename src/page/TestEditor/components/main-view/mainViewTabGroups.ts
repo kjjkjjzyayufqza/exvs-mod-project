@@ -39,6 +39,7 @@ export const MAIN_VIEW_TAB_META: MainViewTabMeta[] = [
   { value: "pilot-voice-resource", name: "Voice slot", shortName: "Slot", group: "sound" },
   { value: "bgm-table", name: "BGM table", shortName: "BGM", group: "sound" },
   { value: "bgm-list", name: "BGM list", shortName: "HUD", group: "sound" },
+  { value: "bgm-bank", name: "BGM bank", shortName: "Bank", group: "sound" },
   { value: "card-icon-list", name: "Card Icon List", shortName: "Card icons", group: "stage" },
   { value: "stage-icon-list", name: "Stage Icon List", shortName: "Stage icons", group: "stage" },
   { value: "stage-list", name: "Stage List", shortName: "Stages", group: "stage" },

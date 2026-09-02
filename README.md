@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icon.png" width="168" height="168" alt="EXVS Mod Project">
+</p>
+
 # EXVS Mod Project
 
 **by [kjjkjjzyayufqza](https://github.com/kjjkjjzyayufqza)**

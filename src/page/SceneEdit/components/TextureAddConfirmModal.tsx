@@ -38,6 +38,8 @@ interface TextureAddConfirmModalProps {
   analyzing: boolean;
   isConverting?: boolean;
   convertProgress?: { done: number; total: number } | null;
+  title?: string;
+  subtitle?: string;
   onClose: () => void;
   onConfirm: (selections: TextureAddSelection[]) => void;
 }
@@ -47,6 +49,8 @@ export function TextureAddConfirmModal({
   analyzing,
   isConverting = false,
   convertProgress = null,
+  title,
+  subtitle,
   onClose,
   onConfirm,
 }: TextureAddConfirmModalProps) {
@@ -218,8 +222,8 @@ export function TextureAddConfirmModal({
   const content = (
     <AppRndModalShell
       titleId="texture-add-confirm-modal-title"
-      title={`Add textures (${candidates.length})`}
-      subtitle="Review name conflicts; check a conflict row to replace"
+      title={title ?? `Add textures (${candidates.length})`}
+      subtitle={subtitle ?? "Review name conflicts; check a conflict row to replace"}
       headerIcon={<Images className="h-4 w-4 text-primary" />}
       dimensions={TEXTURE_ADD_MODAL_DIMENSIONS}
       storageKey={SCENE_EDIT_RND_SIZE_KEYS.textureAddConfirm}

@@ -212,6 +212,32 @@ describe("fhm2dInitExtractPaths", () => {
     );
   });
 
+  it("lists BGM AC27 Update 02 bank in FHM2D Init as 0x0C568109 under 090sound", () => {
+    const source = readFileSync(
+      resolve(__dirname, "../components/Fhm2dInitModal.tsx"),
+      "utf8",
+    );
+    expect(source).toContain("0x0C568109");
+    expect(source).toContain("initBgmBankUpdate02Pack");
+    expect(source).toContain("BGM_BANK_UPDATE_02_PACK_NAME");
+  });
+
+  it("maps BGM AC27 Update 02 bank to 090sound/bgm_ac27_update_02", () => {
+    const route = resolveInitRouteTarget("unit.sound");
+    const out = buildFhm2dInitExtractOutput({
+      exportRoot: "E:/XB/mod",
+      routeId: route.routeId,
+      routePrefix: route.routePrefix,
+      packName: "bgm_ac27_update_02",
+      hashHex: "0x0C568109",
+    });
+    expect(out.relativeFolderPath).toBe("090sound/bgm_ac27_update_02");
+    expect(out.folderPath.replace(/\\/g, "/")).toBe("E:/XB/mod/090sound/bgm_ac27_update_02");
+    expect(out.repackOutputPath?.replace(/\\/g, "/")).toBe(
+      "E:/XB/mod/090sound/0x0C568109.fhm2d",
+    );
+  });
+
   it("maps BGM Table to 090sound/bgm_table", () => {
     const route = resolveInitRouteTarget("unit.sound");
     const out = buildFhm2dInitExtractOutput({

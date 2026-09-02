@@ -7,5 +7,5 @@ kjjkjjzyayufqza. The native **BundleId** changes from the generic Tauri
 `com.tauri.app.extract` to `com.kjjkjjzyayufqza.exvsmod`. Identity is a
 dedicated **AboutPage**, not a Config subsection, not the window title, and
 not the top bar. **SupportHome** is the GitHub repository only. **AppIcon**
-waits for an author-supplied mark; the GitHub avatar is not used as the
-app icon.
+is the author-supplied mark in `icon.png` (About, README, and native icons).
+The GitHub avatar is not used as the app icon.

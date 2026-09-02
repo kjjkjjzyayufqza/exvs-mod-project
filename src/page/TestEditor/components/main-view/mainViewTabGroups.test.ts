@@ -54,8 +54,10 @@ describe("mainViewTabGroups", () => {
     expect(tab).toMatchObject({ group: "sound", name: "BGM table" });
     const listTab = MAIN_VIEW_TAB_META.find((entry) => entry.value === "bgm-list");
     expect(listTab).toMatchObject({ group: "sound", name: "BGM list" });
+    const bankTab = MAIN_VIEW_TAB_META.find((entry) => entry.value === "bgm-bank");
+    expect(bankTab).toMatchObject({ group: "sound", name: "BGM bank" });
     const soundTabs = MAIN_VIEW_TAB_META.filter((entry) => entry.group === "sound").map((entry) => entry.value);
-    expect(soundTabs).toEqual(["raw-path-id", "pilot-voice-resource", "bgm-table", "bgm-list"]);
+    expect(soundTabs).toEqual(["raw-path-id", "pilot-voice-resource", "bgm-table", "bgm-list", "bgm-bank"]);
   });
 
   it("keeps Param Editor mounted after the first visit even without unsaved changes", () => {
