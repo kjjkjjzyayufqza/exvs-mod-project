@@ -43,6 +43,8 @@
     "clipboard-manager:allow-read-image",
     "clipboard-manager:allow-write-image",
     "store:default",
+    "updater:default",
+    "process:default",
     "shell:allow-execute",
     {
       "identifier": "fs:allow-exists",

@@ -2,6 +2,7 @@ import { AboutBrandMark } from "./components/AboutBrandMark";
 import { AboutLinkButton } from "./components/AboutLinkButton";
 import { AboutModule } from "./components/AboutModule";
 import { AboutSpecRow } from "./components/AboutSpecRow";
+import { AboutUpdateModule } from "./components/AboutUpdateModule";
 import {
   ATTRIBUTION_CANARY,
   AUTHOR_HANDLE,
@@ -84,6 +85,8 @@ export default function AboutPage() {
             </p>
           </AboutModule>
         </div>
+
+        <AboutUpdateModule />
 
         <AboutModule index="04" kicker="Scope" title="Over Boost and earlier" className="mt-4">
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">

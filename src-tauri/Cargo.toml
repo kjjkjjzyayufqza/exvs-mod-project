@@ -6,7 +6,7 @@ authors = ["kjjkjjzyayufqza"]
 license = "LicenseRef-PolyForm-Shield-1.0.0"
 repository = "https://github.com/kjjkjjzyayufqza/exvs-mod-project"
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.77.2"
 default-run = "app"
 autobins = false
 autoexamples = false
@@ -240,6 +240,8 @@ tauri-plugin-shell = "2"
 tauri-plugin-store = "2"
 notify = "8.2.0"
 tauri-plugin-opener = "2"
+tauri-plugin-process = "2"
+tauri-plugin-updater = "2"
 # 0.12+ supports base_port; default 9223 falls inside Windows Hyper-V excluded ranges on many machines (error 10013).
 tauri-plugin-mcp-bridge = "0.12"
 

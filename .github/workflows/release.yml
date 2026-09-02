@@ -1,0 +1,86 @@
+name: release
+
+on:
+  push:
+    branches:
+      - release
+  workflow_dispatch:
+
+concurrency:
+  group: release-windows
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/release'
+    runs-on: windows-latest
+    timeout-minutes: 180
+    permissions:
+      contents: write
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          prefix-key: release-windows
+
+      - name: Stamp release version
+        run: node .github/scripts/stamp-release-version.mjs "0.1.${{ github.run_number }}"
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and publish
+        id: tauri
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          EXVS_UPDATER_GITHUB_TOKEN: ${{ secrets.EXVS_UPDATER_GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: EXVS Mod Project v__VERSION__
+          releaseBody: |
+            Windows release of EXVS Mod Project.
+
+            - `EXVS-Mod-Project-<version>-windows-x64.zip` is the portable app plus the full `tools` folder.
+            - The NSIS installer is the auto-update package. Installed copies check this GitHub Release for newer versions.
+          releaseDraft: false
+          prerelease: false
+          updaterJsonPreferNsis: true
+          args: --bundles nsis
+
+      - name: Pack portable zip
+        shell: pwsh
+        run: |
+          .\.github\scripts\pack-portable-zip.ps1 `
+            -Version "${{ steps.tauri.outputs.appVersion }}" `
+            -OutputZip "EXVS-Mod-Project-${{ steps.tauri.outputs.appVersion }}-windows-x64.zip"
+
+      - name: Upload portable zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "v${{ steps.tauri.outputs.appVersion }}" `
+            "EXVS-Mod-Project-${{ steps.tauri.outputs.appVersion }}-windows-x64.zip" `
+            --clobber

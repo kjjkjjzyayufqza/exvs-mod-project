@@ -34,6 +34,20 @@ mod stage_commands;
 
 pub use ssbh_motion::smoke_decode_and_sample_nuanmb;
 
+#[tauri::command]
+fn read_updater_github_token() -> Option<String> {
+    std::env::var("EXVS_UPDATER_GITHUB_TOKEN")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            option_env!("EXVS_UPDATER_GITHUB_TOKEN")
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+        })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default()
@@ -44,6 +58,8 @@ pub fn run() {
         .plugin(tauri_plugin_persisted_scope::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(commands::WatcherState::default())
         .manage(preview_collection_state::PreviewCollectionState::default())
         .manage(fhm2d_memory_preview::Fhm2dMemorySessionState::default())
@@ -51,6 +67,7 @@ pub fn run() {
         .manage(stage_commands::StagePendingImportState::default())
         .manage(scene_memory_session::SceneSessionState::default())
         .invoke_handler(tauri::generate_handler![
+            read_updater_github_token,
             commands::my_custom_command,
             commands::read_file,
             commands::path_exists,
