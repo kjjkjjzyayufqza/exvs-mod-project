@@ -63,7 +63,7 @@ function makeDeps(): WeaponIconAddDeps & {
     }),
     replaceNutexbInPlace: vi.fn().mockResolvedValue(null),
     addUnitModelWeaponIcon: vi.fn().mockResolvedValue(emptyInventory()),
-    invalidateNutexbInternalName: vi.fn(),
+    invalidateNutexbInternalName: vi.fn((_path: string) => undefined),
   };
 }
 

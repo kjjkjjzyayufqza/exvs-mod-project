@@ -42,6 +42,11 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { exists, readDir, readTextFile } from "@tauri-apps/plugin-fs";
 import {
+  DialogLastPathKey,
+  getDialogDefaultPath,
+  rememberDialogSelection,
+} from "@/utils/dialogLastPath";
+import {
   folderContainsMscScriptFiles,
   getMscConvertLogPath,
   getMscConvertOutputPath,
