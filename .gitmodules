@@ -1,0 +1,4 @@
+[submodule "external/water-anime-shader"]
+	path = external/water-anime-shader
+	url = https://github.com/cortiz2894/stylized-components.git
+	branch = main

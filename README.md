@@ -128,6 +128,16 @@ tools here start from that Smash MSC line (`mscdec` / `msclang` / `pymsc`).
 | pymsc | https://github.com/jam1garner/pymsc |
 | msc (Rust crate) | https://github.com/jam1garner/msc-rs |
 
+**Christian Ortiz (cortiz2894)** — the SSBH model preview's stylized (bloom +
+warm light) look is inspired by his anime water / stylized WebGL components.
+Thank you, Christian.
+
+| Project | URL |
+| --- | --- |
+| stylized-components | https://github.com/cortiz2894/stylized-components |
+| cortiz2894 | https://github.com/cortiz2894 |
+| Portfolio | https://cortiz.dev |
+
 Errors in this project are ours. Credit for the ground they stand on is not.
 
 ---

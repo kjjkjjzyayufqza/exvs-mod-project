@@ -61,6 +61,8 @@ tmp/
 **/.grok/
 tmp/history-purge-backup/
 tmp/empty-target-port/
+# Do not vendor Texture Wizard website snapshots.
+external/texturewiz-offline/
 tmp/author-avatar*
 tmp/my-editor/
 *.local

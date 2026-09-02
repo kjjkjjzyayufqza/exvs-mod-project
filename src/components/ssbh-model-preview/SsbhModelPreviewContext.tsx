@@ -108,7 +108,7 @@ export type BoneTransformMode = "translate" | "rotate" | "scale";
 export type PreviewInstanceViewMode = "all" | "single";
 export type PreviewControlScope = "all" | "single";
 
-/** Physical PBR preview vs stylized look inspired by cortiz2894/water-anime-shader (bloom + warm lights). */
+/** Physical PBR preview vs stylized look inspired by cortiz2894/stylized-components (bloom + warm lights). */
 export type PreviewRenderStyle = "standard" | "anime";
 
 /** Blender Dark theme 3D Viewport grid background high (0.22, 0.22, 0.22). */

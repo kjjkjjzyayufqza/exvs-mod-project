@@ -413,7 +413,7 @@ type SsbhModelCanvasProps = {
   bonePointSize: number;
   boneTransformMode: BoneTransformMode;
   bonePoseResetNonce: number;
-  /** Stylized pipeline (bloom + warm lights) inspired by external/water-anime-shader. */
+  /** Stylized pipeline (bloom + warm lights) inspired by cortiz2894/stylized-components. */
   previewRenderStyle: PreviewRenderStyle;
   /** When true, R3F stops the render loop (background kept-alive route). */
   previewSuspended?: boolean;

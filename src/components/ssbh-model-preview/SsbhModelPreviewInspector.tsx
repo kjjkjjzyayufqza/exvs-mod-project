@@ -444,7 +444,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
       <MayaSection title="Display Settings" icon={<Settings2 className="h-3.5 w-3.5" />}>
         <div className={cn("grid gap-x-4 gap-y-2", pairGridClass)}>
           <div className={cn("flex flex-col gap-1.5", !isFlush && "sm:col-span-2")}>
-            <Label className="text-[11px] text-muted-foreground" title="Bloom + warm key lights (water-anime-shader style)">
+            <Label className="text-[11px] text-muted-foreground" title="Bloom + warm key lights (cortiz2894/stylized-components)">
               Preview render style
             </Label>
             <Select
