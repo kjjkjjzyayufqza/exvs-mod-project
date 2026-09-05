@@ -32,6 +32,7 @@ import PilotVoiceResourceView from "./pilot-voice-resource/PilotVoiceResourceVie
 import BgmTableView from "./bgm-table/BgmTableView";
 import BgmListView from "./bgm-list/BgmListView";
 import BgmBankView from "./bgm-bank/BgmBankView";
+import CameraTableView from "./camera-table/CameraTableView";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import { shouldAutoActivateMscWorkspaceTab } from "../utils/mscWorkspaceUtils";
 import { shouldKeepMainViewTabMounted } from "./main-view/mainViewTabGroups";
@@ -389,6 +390,19 @@ const tabs: StageTab[] = [
       />
     ),
   },
+  {
+    name: "Camera",
+    value: "camera-table",
+    render: (props: MainViewProps) => (
+      <CameraTableView
+        folderPath={props.folderPath ?? ""}
+        isActive={false}
+        onUnsavedChanges={props.onUnsavedChanges}
+        workspaceDocument={props.workspaceDocument}
+        modFolderPath={props.modFolderPath}
+      />
+    ),
+  },
 ];
 
 const MainView = ({
@@ -443,6 +457,7 @@ const MainView = ({
   const [stageIconListHasUnsaved, setStageIconListHasUnsaved] = useState(false);
   const [mscWorkspaceHasUnsaved, setMscWorkspaceHasUnsaved] = useState(false);
   const [motionFolderHasUnsaved, setMotionFolderHasUnsaved] = useState(false);
+  const [cameraTableHasUnsaved, setCameraTableHasUnsaved] = useState(false);
   const lastAutoActivatedMscFolderRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -551,6 +566,10 @@ const MainView = ({
     setMotionFolderHasUnsaved(hasChanges);
   }, []);
 
+  const handleCameraTableUnsaved = useCallback((hasChanges: boolean) => {
+    setCameraTableHasUnsaved(hasChanges);
+  }, []);
+
   const [paramEditorHasUnsaved, setParamEditorHasUnsaved] = useState(false);
   const handleParamEditorUnsaved = useCallback((hasChanges: boolean) => {
     setParamEditorHasUnsaved(hasChanges);
@@ -573,6 +592,7 @@ const MainView = ({
       "stage-list": stageListHasUnsaved,
       "msc-workspace": mscWorkspaceHasUnsaved,
       "motion-folder": motionFolderHasUnsaved,
+      "camera-table": cameraTableHasUnsaved,
       "param-editor": paramEditorHasUnsaved,
     }),
     [
@@ -591,6 +611,7 @@ const MainView = ({
       stageListHasUnsaved,
       mscWorkspaceHasUnsaved,
       motionFolderHasUnsaved,
+      cameraTableHasUnsaved,
       paramEditorHasUnsaved,
     ],
   );
@@ -914,6 +935,21 @@ const MainView = ({
         };
       }
 
+      if (tab.value === "camera-table") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <CameraTableView
+              folderPath={props.folderPath ?? ""}
+              isActive={activeTab === "camera-table"}
+              onUnsavedChanges={handleCameraTableUnsaved}
+              workspaceDocument={props.workspaceDocument}
+              modFolderPath={props.modFolderPath}
+            />
+          ),
+        };
+      }
+
       return tab;
     });
   }, [
@@ -935,6 +971,7 @@ const MainView = ({
     handleStageListUnsaved,
     handleMscWorkspaceUnsaved,
     handleMotionFolderUnsaved,
+    handleCameraTableUnsaved,
     handleParamEditorUnsaved,
     handleUnsavedChanges,
     mscWorkspaceFolderPath,

@@ -41,7 +41,8 @@
     "raw_path_id": "解包 0x264D1CA7，并根据 vs2 meta 命名内部文件 → 090sound/raw_path_id",
     "pilot_voice_resource": "解包 0x8C428AF2，并命名 7 个根表 → 090sound/090sound",
     "bgm_table": "解包 0x5E92AAEC 的 bgm_table.vgsht2 → 090sound/bgm_table",
-    "bgm_bank_update_02": "解包 0x0C568109 的第 6 组 nus3bank → 090sound/bgm_ac27_update_02"
+    "bgm_bank_update_02": "解包 0x0C568109 的第 6 组 nus3bank → 090sound/bgm_ac27_update_02",
+    "exvs_common_camera": "解包 0xCB665375 EXVS common（camera/parameters/*.vgsht2）→ 002chara/000common_000common_001"
   },
   "labels": {
     "sourceFolder": "源文件夹",

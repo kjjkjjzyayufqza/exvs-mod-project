@@ -127,6 +127,14 @@ export const WORKSPACE_CONTENT_CATALOG = Object.freeze({
     defaultPackName: "bgm_ac27_update_02",
     label: "BGM AC27 Update 02 Bank",
   },
+  "camera-table": {
+    id: "camera-table",
+    routeId: "unit.model",
+    hashHex: "0xCB665375",
+    relativeFilePath: "camera/parameters/02winlose.vgsht2",
+    defaultPackName: "000common_000common_001",
+    label: "Camera Table",
+  },
 } as const);
 
 export type WorkspaceContentId = keyof typeof WORKSPACE_CONTENT_CATALOG;

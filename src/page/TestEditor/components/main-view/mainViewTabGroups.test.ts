@@ -19,6 +19,13 @@ describe("mainViewTabGroups", () => {
     expect(grouped.map((group) => group.id)).toEqual(MAIN_VIEW_TAB_GROUP_ORDER);
   });
 
+  it("places Camera under Pack after Motion Folder", () => {
+    const tab = MAIN_VIEW_TAB_META.find((entry) => entry.value === "camera-table");
+    expect(tab).toMatchObject({ group: "pack", name: "Camera" });
+    const packTabs = MAIN_VIEW_TAB_META.filter((entry) => entry.group === "pack").map((entry) => entry.value);
+    expect(packTabs).toEqual(["folder-structure", "effect-folder", "motion-folder", "camera-table"]);
+  });
+
   it("places Navi List under Character after Series List", () => {
     const tab = MAIN_VIEW_TAB_META.find((entry) => entry.value === "navi-list");
     expect(tab).toMatchObject({ group: "character", name: "Navi List" });

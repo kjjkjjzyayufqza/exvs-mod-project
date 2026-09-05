@@ -138,7 +138,9 @@
     "removeVgsht2": "重新打包后，删除 OB Mod 文件夹中与写入的 .fhm2d（HashName）同名主干的 .vgsht2（例如文件夹 Gyan_model → 0x49235031.fhm2d → 删除 0x49235031.vgsht2）。需要先在配置中设置 OB Mod 路径。",
     "preparing": "正在准备列表…",
     "empty": "没有可重新打包的文件夹。",
-    "missingStructure": "缺少结构文件"
+    "missingStructure": "缺少结构文件",
+    "exvsCommonBlocked": "EXVS common（0xCB665375 / 000common_000common_001）必须用 Common bundle 对话框打包，不能走通用 FHM2D repack。请用 Camera 标签页的 Repack，或 Unit Model。",
+    "exvsCommonSkipped": "已跳过 EXVS common 包。请改用 Camera 标签页或 Unit Model 的 Common 打包。"
   },
   "structure": {
     "loadedJson": "已加载 JSON 文件：{{name}}",

@@ -63,6 +63,8 @@ Rebellion 切飞行换 slot 0/1/2。改前 11 行 flag 全是 0。`TWINBUSTERRIF
 
 未改：`0xFA64E4D0` FLYING、`0x8D5B747A` FLYING_EX、Zero System、MACHINECANNON。
 
+2026-09-05 另加独立觉醒行 `0x54424558` `TWINBUSTERRIFLE_EX`（从 `0x55B03548` 复制，`reloadGroupBEnabled=1` 一并带上）。不要给 FLYING 开。见 [wing-zero-rebellion-normal-special-shot-ex.md](./wing-zero-rebellion-normal-special-shot-ex.md)。
+
 ```text
 before  SHA-256 2388C188437646B25C397FFD27E0CBC86D43F356198671918C6952609DB7D406
 after   SHA-256 A63B5886D0E7541003EFEE808D292C419A46D4C3AB623069775BD7B487DDBF31

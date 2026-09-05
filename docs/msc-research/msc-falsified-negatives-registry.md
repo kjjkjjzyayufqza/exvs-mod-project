@@ -139,6 +139,7 @@ Homemade NUANMB folder（DCC `*_out.fbx` 导入、Rebellion `tks11a` / `0xa0cd8d
 | H1 | 自制 folder 上用 `func_309` / `sys_47(0xf)` / `sys_47(0x7)` 等 stock motion-complete 等待切段 | 107 帧片墙钟约 **3s**；把门 121→107→81 **墙钟不变**；`func_116` 后再 seek 末帧等 `0x7` → **卡最后一帧** | `global244 -= func_274()`（`global457`，1 帧 = `0x64`）；`func_308` 只 play/seek | [homemade-motion-clock-vs-game-frame](./homemade-motion-clock-vs-game-frame.md) |
 | H2 | 用 `func_310` / `sys_47(0x5)` / 每帧 `func_110` 当自制速度或时长旋钮（含 `func_310(1000)`） | 墙钟不变。`func_73` 进段 `func_110(0x64)`；`func_308(..., global276, ...)` 把 `0x64` 再打进去 | 不要当旋钮。时长只走 H1 的游戏帧倒计时 | 同上 |
 | H3 | `func_241(action_hash, HANDLER)` 已经证明 ACTION 进入后，仍把根因写成没打包 / 旧 `2.dscex` | 浪费整段 session；改打包对照不改变时长 | `func_241(hash, 0)` 才是「不进 ACTION」对照。仍进入 = 时钟问题，见 H1 | 同上 |
+| H4 | 胜利 pose 用 `func_97(0)` / `sys_47(0x4, global20, 0)` 解 GBL_RT 骨锁，指望自制 `GBL_RT` Y=10 离地 | **仍贴地**。用户停这条路，改在 clip 里做 `CENTER_RT` / `BASE` | 不要再解骨 0，也不要叠 `func_351(0x2)`（E12）。高度走 motion 骨骼 | [victory-pose](./wing-zero-rebellion-victory-pose.md) §7；2026-09-05 user |
 
 ## I. Cross-unit partial ports
 

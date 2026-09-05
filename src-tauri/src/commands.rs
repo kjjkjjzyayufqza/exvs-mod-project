@@ -2502,6 +2502,21 @@ pub fn bgm_table_group_assets(bank_group: u32) -> Result<Value, String> {
 }
 
 #[tauri::command]
+pub fn parse_camera_table_file(path: &str) -> Result<Value, String> {
+    crate::format::camera_table::parse_file(path)
+}
+
+#[tauri::command]
+pub fn parse_camera_table_pack(folder_path: &str, family: &str) -> Result<Value, String> {
+    crate::format::camera_table::parse_pack(folder_path, family)
+}
+
+#[tauri::command]
+pub fn build_camera_table_file(data_json: Value, file_path: &str) -> Result<Value, String> {
+    crate::format::camera_table::write_pack(&data_json, file_path)
+}
+
+#[tauri::command]
 pub fn clone_fhm2d_pack(
     source_path: String,
     new_hash: u32,

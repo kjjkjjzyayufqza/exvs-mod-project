@@ -119,4 +119,23 @@ describe("ListeningRepackDialog", () => {
     expect(await screen.findByText("006effect/0xABCDEF01")).toBeInTheDocument();
     expect(screen.queryByText("002chara/0x12345678")).not.toBeInTheDocument();
   });
+
+  it("omits EXVS common 0xCB665375 from the generic FHM2D list", async () => {
+    render(
+      <ListeningRepackDialog
+        open
+        dirtyPacks={[
+          pack("002chara/000common_000common_001", "C:/workspace/002chara/000common_000common_001"),
+          pack("006effect/0xABCDEF01", "C:/workspace/006effect/0xABCDEF01"),
+        ]}
+        modFolderPath="C:/mod"
+        onOpenChange={() => {}}
+        onPackRepacked={() => {}}
+      />,
+    );
+
+    expect(await screen.findByText("006effect/0xABCDEF01")).toBeInTheDocument();
+    expect(screen.queryByText("002chara/000common_000common_001")).not.toBeInTheDocument();
+    expect(screen.queryByText("0xCB665375")).not.toBeInTheDocument();
+  });
 });

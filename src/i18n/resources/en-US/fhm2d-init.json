@@ -41,7 +41,8 @@
     "raw_path_id": "unpack 0x264D1CA7 and name inner files from vs2 meta → 090sound/raw_path_id",
     "pilot_voice_resource": "unpack 0x8C428AF2 and name 7 root tables → 090sound/090sound",
     "bgm_table": "unpack 0x5E92AAEC bgm_table.vgsht2 → 090sound/bgm_table",
-    "bgm_bank_update_02": "unpack 0x0C568109 group 6 nus3bank → 090sound/bgm_ac27_update_02"
+    "bgm_bank_update_02": "unpack 0x0C568109 group 6 nus3bank → 090sound/bgm_ac27_update_02",
+    "exvs_common_camera": "unpack 0xCB665375 EXVS common (camera/parameters/*.vgsht2) → 002chara/000common_000common_001"
   },
   "labels": {
     "sourceFolder": "Source Folder",

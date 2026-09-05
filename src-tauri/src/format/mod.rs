@@ -2,6 +2,7 @@ pub mod armsparam;
 pub mod bgm_list;
 pub mod bgm_table;
 pub mod bulletparam;
+pub mod camera_table;
 pub mod characterlist;
 pub mod characterparam;
 pub mod chrsysparam;

@@ -20,6 +20,7 @@ If those functions or hashes are missing, this note describes a different tree �
 - Slot `0x34` tick: [func1044-slot-callback-atlas](./func1044-slot-callback-atlas.md)
 - `0.c` result enum: [0c-to-2c-input-action-boundary](./0c-to-2c-input-action-boundary.md)
 - Homemade clip clock (only if the new pose is homemade NUANMB): [homemade-motion-clock-vs-game-frame](./homemade-motion-clock-vs-game-frame.md)
+- Victory cameras (02winlose word25 packs, not MSC mining): [wing-zero-rebellion-victory-camera](./wing-zero-rebellion-victory-camera.md)
 - Do not invent a private result hash: registry A4 in [msc-falsified-negatives-registry](./msc-falsified-negatives-registry.md)
 
 ---
@@ -190,7 +191,23 @@ TV 参考：`028gunwtv` `func_186()==0/1/else` 三套 `0x4e` hash + `func_876/87
 
 ---
 
-## 7. 若要动 `2.c`：预注册（尚未授权改码）
+## 7. Homemade height: do not MSC-unlock GBL_RT (2026-09-05, E3-)
+
+`func_97(0)` / `sys_47(0x4, global20, 0)` on victory ENTER + first `func_74` +
+every `func_481` tick **did not** lift the unit. User abandoned this path:
+author `CENTER_RT` / `BASE` in the homemade clip instead. The unlock calls
+were reverted. Do not retry bone-0 unlock, `func_351(0x2)`, or analog-2 climb
+(registry E12) for this pose.
+
+```text
+H  func_97(0) lets homemade GBL_RT Y=10 apply
+P  pose at authored height
+F  still glued to ground  <- observed; user stopped here
+```
+
+---
+
+## 8. 若要动 `2.c`：预注册（尚未授权改码）
 
 ```text
 H  hypothesis:  <which path A/B, which Folder hash>

@@ -238,6 +238,37 @@ describe("fhm2dInitExtractPaths", () => {
     );
   });
 
+  it("lists EXVS Common Camera in FHM2D Init as 0xCB665375", () => {
+    const source = readFileSync(
+      resolve(__dirname, "../components/Fhm2dInitModal.tsx"),
+      "utf8",
+    );
+    expect(source).toContain("0xCB665375");
+    expect(source).toContain("initCameraPack");
+    expect(source).toContain("CAMERA_TABLE_PACK_NAME");
+    expect(source).toContain("exvs_common_camera");
+  });
+
+  it("maps EXVS Common Camera to 002chara/000common_000common_001", () => {
+    const route = resolveInitRouteTarget("unit.model");
+    expect(route.routePrefix).toBe("002chara");
+
+    const out = buildFhm2dInitExtractOutput({
+      exportRoot: "E:/XB/mod",
+      routeId: route.routeId,
+      routePrefix: route.routePrefix,
+      packName: "000common_000common_001",
+      hashHex: "0xCB665375",
+    });
+    expect(out.relativeFolderPath).toBe("002chara/000common_000common_001");
+    expect(out.folderPath.replace(/\\/g, "/")).toBe(
+      "E:/XB/mod/002chara/000common_000common_001",
+    );
+    expect(out.repackOutputPath?.replace(/\\/g, "/")).toBe(
+      "E:/XB/mod/002chara/0xCB665375.fhm2d",
+    );
+  });
+
   it("maps BGM Table to 090sound/bgm_table", () => {
     const route = resolveInitRouteTarget("unit.sound");
     const out = buildFhm2dInitExtractOutput({

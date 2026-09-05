@@ -306,6 +306,7 @@ hold 内额外写 live yaw，也不改变第二发 followup 的快照瞄准。
 8. **点按窗用 motion 时间区间，不要只靠 `func_309` 边沿。**  
 9. **主射 `0x1` 和特射 `0x100` 都要能点按。**  
 10. **不要 `func_81` 后觉醒 hash，也不要把第二发做成 3 圈重进。**
+11. **第一发闪电用点按第二发那套 `rebellion_twinbuster_charge_fx_*`（`0x43221BFF` group 8）。** 不要 `0x6c04bf01` + 开火 `sys_4A(0x1, 0x7)`；觉醒开火不要 `sys_4A(0xb, 0x8)`。
 
 ---
 
@@ -319,3 +320,29 @@ hold 内额外写 live yaw，也不改变第二发 followup 的快照瞄准。
 | O4 | `func_71`→`func_73` 在 `global24 & 0x2` 时会不会额外改朝向 | 去掉 `hiv_lock_aim` 后实机已不再瞬转 |
 | O5 | 软转速率 | 用户已改成 `0x190`，实机转速可接受 |
 | O6 | 开火后清 `693/689/79` 是否足够 | 已写进开火帧；若还跟再查引擎其它对锁位 |
+
+---
+
+## 9. 第一发闪电 = 点按第二发那套 `0x43221BFF`（2026-09-05）
+
+**Status:** E1 source-pinned; L3 untested
+
+用户：平时 / 觉醒特射都会直接出两发红的，缺闪电；闪电就是正常特射**第二发**那套。
+
+| 路径 | 弹 | 以前的 muzzle FX | 现在 |
+|------|----|------------------|------|
+| 平时第一发 | `CDA9F55A/B` | hold 时 `0x6c04bf01` 挂 `0xC59B3FEC` group 7，开火立刻 `sys_4A(0x1, 0x7)` 清掉 | hold+开火 keep `rebellion_twinbuster_charge_fx_*` |
+| 觉醒 / burst 第一发 | `CDA9F55C/D` | 同上，再在开火帧 `sys_4A(0xb, 0x8)` 把 group 8 也清掉 | 同一套 keep；**不要** `sys_4A(0xb, 0x8)` |
+| 点按第二发 | `CDA9F55C/D` | `0x43221BFF` 挂合成枪 `0xaad46c` bone `0x3`/`0x7` group 8，开火期间 keep | 不变 |
+
+第二发已经证实能看见的闪电是 `rebellion_twinbuster_charge_fx_start/keep/end`，不是 group-7 `0x6c04bf01`。
+
+```text
+H9  hypothesis: first-shot hold+fire uses the same 0x43221BFF keep as tap second shot, in both normal A/B and burst C/D
+P9  prediction: 15f freeze already shows both-barrel lightning; it stays while the two red beams play; tap followup pause lightning unchanged
+F9  falsifier: first fire still has no lightning; tap second shot lost lightning; CSA bar dumped (do not sys_4A(0x1, 0x7) on 677)
+```
+
+EXIT：自然放到 `0x14b4` / `func_925` recovery / `func_924` 空弹都 `charge_fx_end`。点按不要在 677 里 end，followup 会 `start` 再接。INTERRUPT：不要在 `func_93` 里 end（BD/跳可进 `func_93` 而招还活着）；下一发 `ACTION_AC_SPECIAL_SHOT_ALT_2` ENTER 会 end leftover。
+
+---

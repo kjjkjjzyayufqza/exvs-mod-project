@@ -206,8 +206,9 @@ native 行为：
 
 结论：
 
-- 这是 `sys_53` 最常见入口：按 hash 触发某种 depiction preset。
-- 第三个参数高概率是强度/倍率或持续相关量（取决于 preset 类型）。
+- 这是 `sys_53` 最常见入口：按 **clip BST key**（`02winlose` / `01waza` / `00system` word25，`0x980ABFA6`）安装战斗镜头，不是 row id，也不是 nuanmb 名。
+- `sub_140646AD0` 把 hash 填进 `player+5952` 的 `entryBase`；第三参 `strength` 写在 `player+576`。`647290` 只在 `strength > 0` 时用它当整段 clip-clock 上限；省略第三参时 native 默认 `-1.0f`，这条截止不生效。
+- 单 shot 时长是编译行 `+28` 的 `0x42ACFE7D`，不是 word40。完整 0x134 / `5DC150` 布局见 [camera-clip-bst-loader.md](msc-research/camera-clip-bst-loader.md)。
 
 ---
 
@@ -283,4 +284,4 @@ See `docs/msc-research/gyan-session-2026-07-11-handoff.md` §4.
 
 - `0x0` 与 `0x1/0x2/0x3` 在实际渲染链中的优先级关系。
 - `subcmd 0x6` 对应的三维向量到底是“方向/位移/色彩权重”哪一类语义。
-- `sub_140646AD0` 内部 `hash -> 节点` 查找命中的具体资源类型（特效、后处理、镜头参数或混合体）。
+- `sub_140646AD0` 内部 `hash -> 节点` 查找命中的具体资源类型（特效、后处理、镜头参数或混合体）。Battle `sys_53(0x4)` clip hashes are `02winlose` word25 keys into a runtime BST compiled from `vgsht2` rows, not loose `*.nuanmb`. Loader note: `docs/msc-research/camera-clip-bst-loader.md`.

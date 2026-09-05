@@ -138,7 +138,9 @@
     "removeVgsht2": "After repack, remove the .vgsht2 with the same stem as the written .fhm2d (HashName) in the OB Mod folder (e.g. folder Gyan_model → 0x49235031.fhm2d → remove 0x49235031.vgsht2). Requires OB Mod path in Config.",
     "preparing": "Preparing list...",
     "empty": "No folders to repack.",
-    "missingStructure": "Missing structure file"
+    "missingStructure": "Missing structure file",
+    "exvsCommonBlocked": "EXVS common (0xCB665375 / 000common_000common_001) must be packed with the Common bundle dialog, not generic FHM2D repack. Use the Camera tab Repack button or Unit Model.",
+    "exvsCommonSkipped": "Skipped EXVS common pack. Use the Camera tab or Unit Model Common repack instead."
   },
   "structure": {
     "loadedJson": "Loaded JSON file: {{name}}",

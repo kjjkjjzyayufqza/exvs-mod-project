@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
+import { isExvsCommonPackIdentity } from "@/page/UnitModelEdit/utils/exvsCommonService";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -196,6 +197,10 @@ function FileTreePaneImpl({
       );
       if (!target) {
         toast.error(t("fileTree.cannotResolvePack"));
+        return;
+      }
+      if (isExvsCommonPackIdentity(target)) {
+        toast.error(t("repackDialog.exvsCommonBlocked"));
         return;
       }
       onRequestFhm2dRepack(target);

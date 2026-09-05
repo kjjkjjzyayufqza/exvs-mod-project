@@ -54,6 +54,8 @@ import { initBgmListPack } from "@/page/TestEditor/components/bgm-list/initBgmLi
 import { BGM_LIST_PACK_NAME } from "@/page/TestEditor/components/bgm-list/bgmListDocument";
 import { initStrikerTablePack } from "@/page/TestEditor/components/striker-table/initStrikerTablePack";
 import { STRIKER_TABLE_PACK_NAME } from "@/page/TestEditor/components/striker-table/strikerTableDocument";
+import { initCameraPack } from "@/page/TestEditor/components/camera-table/initCameraPack";
+import { CAMERA_TABLE_PACK_NAME } from "@/page/TestEditor/components/camera-table/cameraTableDocument";
 import {
   BGM_BANK_UPDATE_02_PACK_NAME,
   BGM_TABLE_PACK_NAME,
@@ -267,6 +269,15 @@ const FHM2D_ITEMS: InitListItem[] = [
         fixedPackName: BGM_BANK_UPDATE_02_PACK_NAME,
         descriptionKey: "bgm_bank_update_02",
     },
+    {
+        id: "exvs_common_camera",
+        name: "EXVS Common Camera",
+        hash: "0xCB665375",
+        routeId: "unit.model",
+        formatLabel: "exvs_common",
+        fixedPackName: CAMERA_TABLE_PACK_NAME,
+        descriptionKey: "exvs_common_camera",
+    },
 ];
 
 const HISTORY_KEY = "fhm2d_extraction_history_v1";
@@ -383,6 +394,8 @@ function getFormatBadgeColor(formatLabel: string): string {
             return "bg-emerald-500/10 text-emerald-700 border-emerald-500/25 hover:bg-emerald-500/20";
         case "sound":
             return "bg-cyan-500/10 text-cyan-700 border-cyan-500/25 hover:bg-cyan-500/20";
+        case "exvs_common":
+            return "bg-orange-500/10 text-orange-700 border-orange-500/25 hover:bg-orange-500/20";
         default:
             return "bg-muted text-muted-foreground";
     }
@@ -608,6 +621,10 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
             await handleExtract(item, item.fixedPackName ?? STRIKER_TABLE_PACK_NAME);
             return;
         }
+        if (item.id === "exvs_common_camera" && nameOverride === undefined) {
+            await handleExtract(item, item.fixedPackName ?? CAMERA_TABLE_PACK_NAME);
+            return;
+        }
 
         if (nameOverride === undefined) {
             openExtractNameDialog(item);
@@ -691,6 +708,11 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                     })
                 : item.id === "striker_table"
                     ? await initStrikerTablePack({
+                        sourceFhm2dPath: inputPath,
+                        workspaceRoot: outBase,
+                    })
+                : item.id === "exvs_common_camera"
+                    ? await initCameraPack({
                         sourceFhm2dPath: inputPath,
                         workspaceRoot: outBase,
                     })

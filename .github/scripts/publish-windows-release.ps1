@@ -1,4 +1,4 @@
-# Local Windows NSIS build + GitHub Release upload.
+# Local Windows x64 zip build + GitHub Release upload.
 # Usage: pnpm release:windows
 # Optional: pwsh -File .github/scripts/publish-windows-release.ps1 -Version 0.1.1
 #
@@ -120,16 +120,14 @@ if (-not $log) {
     $log = "- Windows release of EXVS Mod Project."
 }
 $notes = @(
-    "Windows release of EXVS Mod Project.",
+    "Windows x64 release of EXVS Mod Project.",
     "",
     $log,
     "",
-    "- EXVS-Mod-Project-$Version-windows-x64.zip is the portable app.",
-    "- The NSIS installer is the auto-update package. Installed copies check this GitHub Release on every launch."
+    "- EXVS-Mod-Project-$Version-windows-x64.zip is the Windows x64 build.",
+    "- Installed copies check this GitHub Release on every launch."
 ) -join "`n"
 
-$env:CARGO_PROFILE_RELEASE_LTO = "off"
-$env:CARGO_PROFILE_RELEASE_CODEGEN_UNITS = "16"
 $cpu = [Environment]::ProcessorCount
 $env:CARGO_BUILD_JOBS = [Math]::Max(2, [Math]::Min(6, $cpu)).ToString()
 
@@ -137,50 +135,35 @@ if (Test-Path -LiteralPath $HiddenBin) {
     throw "src-tauri/src/bin.ci-hidden already exists. Rename it back to src/bin before publishing."
 }
 
-$prepared = $false
 try {
     Write-Host "Stamping $Version"
     node .github/scripts/stamp-release-version.mjs $Version
-    python .github/scripts/check_tauri_bundle_bins.py --self-check
-    python .github/scripts/prepare_tauri_app_only_bins.py
-    $prepared = $true
-
-    Write-Host "Building NSIS installer (local Release, LTO off, jobs=$($env:CARGO_BUILD_JOBS))"
-    pnpm tauri build --bundles nsis
+    Write-Host "Building Windows x64 app (local Release, thin LTO, jobs=$($env:CARGO_BUILD_JOBS))"
+    pnpm tauri build --no-bundle
 }
 finally {
-    if ($prepared) {
-        Restore-PublishTree
-    }
-}
-
-$nsisDir = Join-Path $RepoRoot "src-tauri\target\release\bundle\nsis"
-$setup = Get-ChildItem -LiteralPath $nsisDir -File |
-    Where-Object { $_.Name -like "*${Version}*setup.exe" -and $_.Name -notlike "*.sig" } |
-    Select-Object -First 1
-$sig = Get-ChildItem -LiteralPath $nsisDir -File |
-    Where-Object { $_.Name -like "*${Version}*setup.exe.sig" } |
-    Select-Object -First 1
-if (-not $setup) {
-    throw "NSIS installer was not produced under $nsisDir"
-}
-if (-not $sig) {
-    throw "NSIS updater signature was not produced under $nsisDir"
+    Restore-PublishTree
 }
 
 $outDir = Join-Path $RepoRoot "tmp\release-local\$Version"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-Copy-Item -LiteralPath $setup.FullName -Destination (Join-Path $outDir $setup.Name) -Force
-Copy-Item -LiteralPath $sig.FullName -Destination (Join-Path $outDir $sig.Name) -Force
 
 $zipName = "EXVS-Mod-Project-$Version-windows-x64.zip"
 $zipRel = "tmp\release-local\$Version\$zipName"
 & (Join-Path $PSScriptRoot "pack-portable-zip.ps1") -Version $Version -OutputZip $zipRel -RepoRoot $RepoRoot
 $zipPath = Join-Path $RepoRoot $zipRel
+$sigPath = "$zipPath.sig"
+if (Test-Path -LiteralPath $sigPath) {
+    Remove-Item -LiteralPath $sigPath -Force
+}
+Write-Host "Signing $zipPath"
+pnpm tauri signer sign $zipPath
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $sigPath)) {
+    throw "Windows x64 zip signature was not produced at $sigPath"
+}
 
-Write-Host "NSIS: $($setup.FullName)"
-Write-Host "SIG:  $($sig.FullName)"
-Write-Host "ZIP:  $zipPath"
+Write-Host "ZIP: $zipPath"
+Write-Host "SIG: $sigPath"
 
 if ($SkipUpload) {
     Write-Host "SkipUpload set; not creating a GitHub Release."
@@ -204,14 +187,12 @@ gh release create $tag `
     --title "EXVS Mod Project $tag" `
     --notes $notes `
     --latest `
-    $setup.FullName `
-    $sig.FullName `
     $zipPath
 
 $assets = gh api "repos/$OwnerRepo/releases/tags/$tag" | ConvertFrom-Json
-$setupAsset = $assets.assets | Where-Object { $_.name -like "*setup.exe" -and $_.name -notlike "*.sig" } | Select-Object -First 1
-if (-not $setupAsset) {
-    throw "Uploaded release $tag is missing the NSIS setup.exe asset"
+$zipAsset = $assets.assets | Where-Object { $_.name -eq $zipName } | Select-Object -First 1
+if (-not $zipAsset) {
+    throw "Uploaded release $tag is missing $zipName"
 }
 
 $latest = [ordered]@{
@@ -220,12 +201,8 @@ $latest = [ordered]@{
     pub_date = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
     platforms = @{
         "windows-x86_64" = @{
-            signature = (Get-Content -LiteralPath $sig.FullName -Raw).Trim()
-            url = "https://api.github.com/repos/$OwnerRepo/releases/assets/$($setupAsset.id)"
-        }
-        "windows-x86_64-nsis" = @{
-            signature = (Get-Content -LiteralPath $sig.FullName -Raw).Trim()
-            url = "https://api.github.com/repos/$OwnerRepo/releases/assets/$($setupAsset.id)"
+            signature = (Get-Content -LiteralPath $sigPath -Raw).Trim()
+            url = "https://api.github.com/repos/$OwnerRepo/releases/assets/$($zipAsset.id)"
         }
     }
 }

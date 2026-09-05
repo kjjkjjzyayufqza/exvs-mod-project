@@ -28,6 +28,7 @@ import { useTestEditorPageActive } from "./hooks/useTestEditorPageActive";
 import { useTestEditorFolderWatch } from "./hooks/useTestEditorFolderWatch";
 import { collectStructureJsonPathKeys, normalizeStructureJsonPathKey } from "./components/fileTreeNodeRowUtils";
 import { TestEditorWorkspaceArea } from "./components/TestEditorWorkspaceArea";
+import { isExvsCommonPackIdentity } from "@/page/UnitModelEdit/utils/exvsCommonService";
 import { TEST_EDITOR_FOLDER_STORE_KEY, useConfigStore } from "@/store/configStore";
 import { TestEditorToolbar } from "./components/TestEditorToolbar";
 import ListeningRepackDialog from "./components/ListeningRepackDialog";
@@ -210,6 +211,7 @@ const TestEditorPage = () => {
           structureJsonPathKeys,
         );
         if (!pack) return;
+        if (isExvsCommonPackIdentity(pack)) return;
         nextDirty.set(pack.packKey, pack);
       });
     });
@@ -398,6 +400,7 @@ const TestEditorPage = () => {
 
   const handlePackMutated = useCallback(
     (pack: WorkspacePackIdentity) => {
+      if (isExvsCommonPackIdentity(pack)) return;
       setDirtyPacks((prev) => {
         const next = new Map(prev);
         next.set(pack.packKey, pack);
@@ -425,9 +428,13 @@ const TestEditorPage = () => {
   }, []);
 
   const requestFhm2dRepack = useCallback((pack: WorkspacePackIdentity) => {
+    if (isExvsCommonPackIdentity(pack)) {
+      toast.error(t("repackDialog.exvsCommonBlocked"));
+      return;
+    }
     setRepackDialogPacks([pack]);
     setIsRepackDialogOpen(true);
-  }, []);
+  }, [t]);
 
   const openNumdlbSession = useCallback((filePath: string) => {
     const normalized = filePath.trim().toLowerCase();

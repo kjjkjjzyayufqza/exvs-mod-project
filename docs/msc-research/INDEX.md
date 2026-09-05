@@ -102,6 +102,7 @@ Existing research notes are not rewritten by this index.
   - `docs/exvs-msc-syscall-4b-notes.md`
   - `docs/exvs-msc-syscall-4e-notes.md`
   - `docs/exvs-msc-syscall-53-notes.md`
+  - `docs/msc-research/camera-clip-bst-loader.md`
   - `docs/exvs-msc-syscall-54-notes.md`
   - `docs/exvs-msc-syscall-55-notes.md`
   - `docs/exvs-native-truth-mapping-workflow.md`
@@ -110,6 +111,33 @@ Existing research notes are not rewritten by this index.
 - **do_not:**
   - Do not treat sys_47(0x5) (func_310) as a homemade clip duration or playback-speed knob. Do not wait homemade folders on sys_47(0x7).
   - Do not treat sys_51(0x20000, 0, 0x2, slot, type) as unit-task automata. Independent 5xxxxxxxx strikers spawn only through that call. See striker-sys51.
+
+### `camera-clip-bst` — Battle camera clip BST / vgsht2 compile loader
+
+- **kind:** global
+- **aliases:** `camera BST`, `clip BST`, `CCameraMotion`, `sub_140646AD0`, `sub_1405DC540`, `sub_1405DD890`, `sub_1405AA780`, `0x268D28`, `qword_1421155D0`, `0x980ABFA6`, `sub_140647290`, `sub_140647590`, `sub_1405DC150`, `0x42ACFE7D`, `0x749B8F0E`, `vgsht2 camera`, `02winlose`, `01waza`, `00system`, `03cpubattle`, `camera_motion.nusktb`, `LoadCameraClipPackage`, `镜头 BST`, `胜利镜头 payload`
+- **notes:** Native loader research. Not an X.c edit. Insert identity pinned on OB vsac27_Release 2026-09-05.
+- **settled:**
+  - sys_53(0x4, hash) looks up 02winlose word25 clip packs, not row ids. See wing-zero-rebellion-victory-camera.md.
+  - OB camera/ has no per-clip nuanmb for those hashes. Four vgsht2 files have zero trailing bytes. Loose *.nuanmb are the menu/god CCameraMotion path.
+  - sub_1405DC540 compiles each 220-byte row into a 0x134 struct at (global+3232). sub_1405DD890 inserts those rows into the std::map at global+0x268D28, the same tree sub_140646AD0 walks. Per-hash cap 20; linear pool cap 8192.
+  - GetEntry on camera folder children 0/1/2/5 is 00system / 01waza / 02winlose / 03cpubattle. Child 3 is camera_motion; child 4 is battle/big (not clip BST).
+  - 646C20 elem+32 is compiled+32 (0xC488848F). Every OB row in all four families is 0, so shipped battle clips never call sub_1406783B0. Offset 0xD20F0173 compiles to +244.
+  - Segment duration is 0x42ACFE7D at compiled +28; 647290 advances when segment_clock >= that (dur==0 means no auto-advance). Editor FOV 0x749B8F0E is 5DC150 dest +128 v0 (row+132), not v2.
+  - 0x40B88DD7 and 0xC52DEBE5 have no immediates in vsac27_Release and are not copied by 5DC540. dump_compile_map.py swapped 5DC150 a5..a9 labels.
+- **read_first:**
+  - `docs/msc-research/camera-clip-bst-loader.md`
+  - `docs/msc-research/wing-zero-rebellion-victory-camera.md`
+  - `docs/exvs-msc-syscall-53-notes.md`
+- **related:**
+  - `docs/msc-research/wing-zero-rebellion-victory-pose.md`
+- **do_not:**
+  - Do not treat battle/big.nuanmb or menu stgintro clips as winlose/waza payloads.
+  - Do not invent clip hashes, pass 02winlose row ids to sys_53, or preview from FOV+offset alone.
+  - Do not unpack FHM2D 0xCB665375; named 000common camera files already exist.
+  - Do not treat on-disk word8 0x40B88DD7 as 646C20 elem+32; that slot is compiled 0xC488848F.
+  - Do not treat word40 0xD20F0173 as duration; duration is 0x42ACFE7D.
+  - Do not trust Hex-Rays of 647590 or dump_compile_map.py block labels for 5DC150 slot order.
 
 ### `runtime-2c` — Global 2.c runtime / action depiction architecture
 
@@ -356,7 +384,7 @@ Existing research notes are not rewritten by this index.
 ### `wing-zero-rebellion` — Wing Zero Rebellion MSC / bird-form transform port
 
 - **kind:** unit
-- **aliases:** `Wing Gundam Zero Rebellion`, `wing_gundam_zero_rebellion`, `900000004`, `kamaesht2neo`, `Neo Bird`, `bird form`, `鸟形态`, `飞翼零式叛乱`, `零式叛乱`, `Rebellion`, `FORCED_RECOVERY`, `0x77b100ff`, `alt2 gerobi`, `N特射`, `SUB_SHOT_CUSTOM`, `SUB_SHOT_TYPE1`, `SUB_SHOT_TYPE2`, `SUB_SHOT_ASSIST`, `SUB_SHOT_FLIGHT`, `SPECIAL_SHOT_FLIGHT`, `flight sub shot`, `flight special gerobi`, `0x53554243`, `0x7e08fcc9`, `0xd94d608f`, `ltngfb`, `闪电高达`, `rebellion_hiv_lock_aim`, `0x7cd11119`, `0x928ca34f`, `func_937`, `bird melee`, `鸟近战`, `特格接N`, `bird dash`, `rebellion_enter_normal_special_n_bird_dash`, `cut_in_loop`, `rebellion_transform_cut_in_loop`, `dash global143`, `dash inertia`, `无杆惯性`, `rebellion_dash_untransform_keep_move`, `tks11a`, `0xa0cd8d56`, `homemade motion clock`, `0x16ed34c0`, `0x2194f05d`, `0x476fac14`, `ACTION_A_SHOT_BIRD_CS1`, `ACTION_A_SHOT_BIRD_CS2`, `rebellion_bird_cs_stage`, `bird CS`, `鸟CS`, `鸟照射`, `slot 3`, `slot3`, `FLYING`, `FLYING_EX`, `0xfa64e4d0`, `0x8d5b747a`, `飛翔`, `着地リロード`, `reloadGroupBEnabled`, `0xB686E88C`, `unused form reload`, `another mode reload`, `自动reload`, `另一形态`, `group B`, `sys_4F(0xb, 0x3, 0)`, `前派生`, `func_990`, `func_991`, `突然冲到天上`, `flight special hit drop`, `transform start hit drop`, `bird special melee cancel`, `optional landing`, `victory pose`, `win pose`, `胜利pose`, `胜利 pose`, `winbgn`, `winbgn01`, `37winbgn03`, `0xf32aa1ba`, `func_480`, `result pose`, `weapon icon`, `hud icon`, `weapon_icon`, `fieldBb93d195`, `0xBB93D195`, `wep_3_h_n_b_g`, `imcWeaponArt`
+- **aliases:** `Wing Gundam Zero Rebellion`, `wing_gundam_zero_rebellion`, `900000004`, `kamaesht2neo`, `Neo Bird`, `bird form`, `鸟形态`, `飞翼零式叛乱`, `零式叛乱`, `Rebellion`, `FORCED_RECOVERY`, `0x77b100ff`, `alt2 gerobi`, `N特射`, `SUB_SHOT_CUSTOM`, `SUB_SHOT_TYPE1`, `SUB_SHOT_TYPE2`, `SUB_SHOT_ASSIST`, `SUB_SHOT_FLIGHT`, `SPECIAL_SHOT_FLIGHT`, `flight sub shot`, `flight special gerobi`, `0x53554243`, `0x7e08fcc9`, `0xd94d608f`, `ltngfb`, `闪电高达`, `rebellion_hiv_lock_aim`, `0x7cd11119`, `0x928ca34f`, `func_937`, `bird melee`, `鸟近战`, `特格接N`, `bird dash`, `rebellion_enter_normal_special_n_bird_dash`, `cut_in_loop`, `rebellion_transform_cut_in_loop`, `dash global143`, `dash inertia`, `无杆惯性`, `rebellion_dash_untransform_keep_move`, `tks11a`, `0xa0cd8d56`, `homemade motion clock`, `0x16ed34c0`, `0x2194f05d`, `0x476fac14`, `ACTION_A_SHOT_BIRD_CS1`, `ACTION_A_SHOT_BIRD_CS2`, `rebellion_bird_cs_stage`, `bird CS`, `鸟CS`, `鸟照射`, `slot 3`, `slot3`, `FLYING`, `FLYING_EX`, `0xfa64e4d0`, `0x8d5b747a`, `飛翔`, `着地リロード`, `reloadGroupBEnabled`, `0xB686E88C`, `unused form reload`, `another mode reload`, `自动reload`, `另一形态`, `group B`, `sys_4F(0xb, 0x3, 0)`, `前派生`, `func_990`, `func_991`, `突然冲到天上`, `flight special hit drop`, `transform start hit drop`, `bird special melee cancel`, `optional landing`, `victory pose`, `win pose`, `胜利pose`, `胜利 pose`, `winbgn`, `winbgn01`, `37winbgn03`, `0xf32aa1ba`, `func_480`, `result pose`, `02winlose`, `0xfd5fd16a`, `0x8ca6cc45`, `victory camera`, `winlose camera`, `weapon icon`, `hud icon`, `weapon_icon`, `fieldBb93d195`, `0xBB93D195`, `wep_3_h_n_b_g`, `imcWeaponArt`, `ms stance`, `global170 latch`, `飞行特格枪刀`, `empty front back sub SE`, `0x76b41e21`, `前后副射音效`, `落地不回槽`, `rebellion_flying_reload_on_land`, `TWINBUSTERRIFLE_EX`, `0x54424558`, `normal special shot EX`, `twinbuster lightning`, `特射闪电`, `0x43221BFF`
 - **notes:** AGENTS.md still inlines this bootstrap. Sibling Rebellion MSC edits: alt2-gerobi, sub-shot-custom, bird-melee-n-followup, special-n-bird-dash, 2026-08-26 subshot-split-and-flight-weapons plan.
 - **settled:**
   - Bird arsenal is gated in 0.c func_143 only, not 2.c ACTION_*.
@@ -377,7 +405,13 @@ Existing research notes are not rewritten by this index.
   - Rebellion HUD slot 3 is EW 飛翔 FLYING 0xFA64E4D0 (awakening FLYING_EX 0x8D5B747A): type-2 300f, land gate sys_4F(0x15,3)+global772+global24 0x1000000. Bird ENTER may sys_4F(0xb,3,0) like TV HUD. EXIT must rebind 0xFA64E4D0 and if global772==1 immediately sys_4F(0x15,3,0) (func_1034(4)). Runtime 2026-08-29 E3. See wing-zero-rebellion-slot3-flying-land-reload.md.
   - Unused-form auto-reload after a bird swap is armsparam reloadGroupBEnabled (0xB686E88C), not MSC sys_4F(0x15). BindSlot sets the old controller to slot 9; SelectReloadDurations then uses group B, or duration 0 if the flag is off. Runtime 2026-08-31 E3: set the flag on the six paired slot 0/1/2 rows only. See wing-zero-rebellion-unused-form-reload-group-b.md.
   - Victory pose is engine hash 0xf32aa1ba -> func_480 -> slot 0x34 -> func_74(0x4e) on tables 0x3/0x4, not a new ACTION hash. Default clip 0x8d761fe5 winbgn01; func_186()==1 clip 0x5aa9d1f6 37winbgn03. See wing-zero-rebellion-victory-pose.md.
+  - Victory camera sys_53(0x4, hash) looks up 02winlose word25 clip packs, not row ids. OB table is 000common camera/parameters/02winlose.vgsht2 (1166 packs). Current tick 0xfd5fd16a is FOV 11. See wing-zero-rebellion-victory-camera.md.
   - HUD art is armsparam fieldBb93d195 (0xBB93D195) into the weapon_icon Folder, not MSC slot index. TV/Hambrabi keep the same sys_4F slot and swap the row. See docs/exvs-character-weapon-icon-table.md. Rebellion bird slot 1 0x04DC0DEE index 7 = wep_3_h_n_b_g (E3 2026-09-02 user).
+  - MS hand stance is global170 (0 dual guns / else saber). Latch it in transform_start. Bird->MS restore including flight special-melee B-end must apply the latch before func_884. Do not force global170=1 on special-melee EXIT. See wing-zero-rebellion-flight-special-melee-ms-stance.md.
+  - Bird special-melee cancel shares global24 0x1000000 with the FLYING land gate. After func_41 func_169, keep-air must func_167(0x4000) not 0x1004000, and func_876 must wait for !func_287(0x3ed) before sys_4F(0x15,3,1). Do not unpause in air (I4). See wing-zero-rebellion-slot3-flying-land-reload.md §7.
+  - Empty 前后副射 0x7c1d57c2 func_912 and ammo 0x53554243 func_909 must one-shot func_309(global20, 0x1f4) with global241. Unlatched sys_58 retriggers every tick. See wing-zero-rebellion-empty-front-back-sub-se.md.
+  - Normal 特射 is two independent rows like FLYING/FLYING_EX: 0x55B03548 TWINBUSTERRIFLE ammo 2 art 2, homemade 0x54424558 TWINBUSTERRIFLE_EX ammo 2 art 0xa. func_1034(3/4) swaps HUD slot 2. Bird 0x233C4626 unchanged. Do not cut ground ammo to 1. See wing-zero-rebellion-normal-special-shot-ex.md.
+  - ALT_2 first-shot lightning is the tap-second-shot helper: 0x43221BFF on 0xaad46c bones 0x3/0x7 group 8 (rebellion_twinbuster_charge_fx_*), kept through A/B or burst C/D. See alt2-gerobi-stop-and-followup.md §9.
 - **read_first:**
   - `docs/agent-sessions/2026-08-09-wing-zero-rebellion-transform-handoff.md`
   - `docs/msc-research/wing-zero-rebellion-bird-form-0c-input-map.md`
@@ -395,6 +429,11 @@ Existing research notes are not rewritten by this index.
   - `docs/msc-research/homemade-motion-clock-vs-game-frame.md`
   - `docs/msc-research/wing-zero-rebellion-flight-hit-air-hold-and-special-melee-cancel.md`
   - `docs/msc-research/wing-zero-rebellion-victory-pose.md`
+  - `docs/msc-research/wing-zero-rebellion-victory-camera.md`
+  - `docs/msc-research/camera-clip-bst-loader.md`
+  - `docs/msc-research/wing-zero-rebellion-flight-special-melee-ms-stance.md`
+  - `docs/msc-research/wing-zero-rebellion-empty-front-back-sub-se.md`
+  - `docs/msc-research/wing-zero-rebellion-normal-special-shot-ex.md`
 - **related:**
   - `docs/msc-research/tv-wing-zero-flight-double-forward-aim.md`
   - `docs/msc-research/tv-wing-zero-flight-special-melee-landing-copy-list.md`
@@ -446,6 +485,13 @@ Existing research notes are not rewritten by this index.
   - Do not release_flight_owner then func_296(0) on hit during 0xd94d608f / transform start/end. Keep air hold like bird melee from_flight. Do not treat analog 0x77b100ff as a keep-air global7: bird special-melee ENTER must still drop. See wing-zero-rebellion-flight-hit-air-hold-and-special-melee-cancel.md.
   - Do not keep-form skip func_41/func_882 for bird special melee 0xc0b814ff/0x8d96c52f/0x279f0da4 while still playing ordinary Folder 0x1192E91E (F9): user still reported the dive lost. Copy-list: normal-form motion does not start on a bird owner. Dive baseline: ENTER interrupt, A to 0x708, wait until !func_287(0x3ed), then B. Cancel is wait/ground func_123(0x3bf)+func_123(0xc00000) only; do not open that window on A (F7), do not func_233/func_81, do not func_123(0x9a5) (F4), do not func_309(global20,0x960) (F8). Do not func_81(0x928ca34f).
   - Do not add a victory pose by inventing a new action hash or fake slot 0x26. Keep 0xf32aa1ba -> func_480 -> slot 0x34; extra clips are extra func_186() branches on table 0x3/0x4 slot 0x4e. Do not retarget func_241(0xf32aa1ba, func_871). Do not edit func_835 group 0x7 for the win clip. See wing-zero-rebellion-victory-pose.md.
+  - Do not pick victory cameras by mining 2.c sys_53, inventing hashes, passing 02winlose row ids, or using 01waza/00system clips. Swap func_870 word25 only from OB 02winlose packs. See wing-zero-rebellion-victory-camera.md.
+  - Do not unlock victory-pose GBL_RT with func_97(0) / sys_47(0x4, global20, 0). Runtime 2026-09-05 still glued to ground (registry H4). Author CENTER_RT / BASE in the homemade clip. Do not retry analog-2 climb (E12). See wing-zero-rebellion-victory-pose.md.
+  - Do not force global170=1 on rebellion_bird_special_melee_natural_exit or landing B-end. That always returns saber after a gun ENTER. Do not force dual guns on restore (broke saber->bird->saber). Latch at transform_start; do not apply the latch on dash restore. See wing-zero-rebellion-flight-special-melee-ms-stance.md.
+  - Do not keep-air bird special-melee cancel with func_167(0x1004000) after func_169(0x1010000). That rewrites the FLYING land-gate bit; sidestep land then never starts slot-3 5s. Use func_167(0x4000) and open reload on !func_287(0x3ed). Do not sys_4F(0x16). Do not unpause in air. See wing-zero-rebellion-slot3-flying-land-reload.md §7.
+  - Do not leave func_912 / func_909 sys_58 under bare func_309(global20, 0x1f4). Reached-time retriggers the fire SE every tick. Latch global241. See wing-zero-rebellion-empty-front-back-sub-se.md.
+  - Do not give normal 特射 awakening ammo by editing MSC consume or by sys_4F(0x16). Copy the FLYING BindSlot pair: a second armsparam row plus func_1034(3/4). Do not cut ground TWINBUSTERRIFLE from 2 ammo to 1; only the EX row changes art to 0xa. Do not append the new entryId after FLYING. Do not set reloadGroupBEnabled on FLYING. See wing-zero-rebellion-normal-special-shot-ex.md.
+  - Do not put ALT_2 first-shot lightning on 0x6c04bf01 / 0xC59B3FEC group 7 then sys_4A(0x1, 0x7) at fire. That is not the tap-second-shot FX and it dies before the red beams. Do not sys_4A(0xb, 0x8) on the burst C/D fire tick: that wipes group 8. Keep rebellion_twinbuster_charge_fx_*. See alt2-gerobi-stop-and-followup.md §9.
 
 ### `wing-zero-tv` — TV Wing Zero source behavior for the Rebellion port
 

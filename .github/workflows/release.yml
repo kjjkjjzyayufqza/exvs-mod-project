@@ -1,6 +1,6 @@
 name: release
 
-# Windows NSIS publishing is local: pnpm release:windows
+# Windows x64 zip publishing is local: pnpm release:windows
 # (see .github/scripts/publish-windows-release.ps1). This workflow is an
 # optional fallback and does not run on push.
 on:
@@ -20,10 +20,7 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
       CARGO_NET_GIT_FETCH_WITH_CLI: true
-      # CI-only: Cargo.toml release uses thin LTO + codegen-units=1 (slow).
-      # These env overrides keep a stripped Release binary without the 35m link.
-      CARGO_PROFILE_RELEASE_LTO: "off"
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+      # Honor src-tauri/Cargo.toml [profile.release] (thin LTO, codegen-units=1).
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,7 +38,7 @@ jobs:
             throw "Missing CARGO_GIT_TOKEN. Create a PAT with Contents: Read on kjjkjjzyayufqza/ssbh_lib and set it as the CARGO_GIT_TOKEN repository secret."
           }
           if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
-            throw "Missing TAURI_SIGNING_PRIVATE_KEY. The NSIS updater artifacts cannot be signed without it."
+            throw "Missing TAURI_SIGNING_PRIVATE_KEY. The Windows x64 zip cannot be signed without it."
           }
           if (-not $env:EXVS_UPDATER_GITHUB_TOKEN) {
             Write-Host "EXVS_UPDATER_GITHUB_TOKEN is unset; the app will bake CARGO_GIT_TOKEN so private GitHub Releases stay readable."
@@ -106,9 +103,6 @@ jobs:
       - name: Guard Tauri extra bins
         run: python .github/scripts/check_tauri_bundle_bins.py --self-check
 
-      - name: Keep NSIS bundle app-only
-        run: python .github/scripts/prepare_tauri_app_only_bins.py
-
       - name: Collect changelog
         id: changelog
         env:
@@ -138,12 +132,12 @@ jobs:
             $log = "- Windows release of EXVS Mod Project."
           }
           $body = @(
-            "Windows release of EXVS Mod Project.",
+            "Windows x64 release of EXVS Mod Project.",
             "",
             $log,
             "",
-            "- EXVS-Mod-Project-<version>-windows-x64.zip is the portable app plus the full tools folder.",
-            "- The NSIS installer is the auto-update package. Installed copies check this GitHub Release on every launch."
+            "- EXVS-Mod-Project-<version>-windows-x64.zip is the Windows x64 build.",
+            "- Installed copies check this GitHub Release on every launch."
           ) -join "`n"
           $eof = "RELNOTES_EOF"
           Add-Content -Path $env:GITHUB_OUTPUT -Value "body<<$eof"
@@ -168,11 +162,11 @@ jobs:
           releaseDraft: false
           prerelease: false
           tauriScript: pnpm tauri
-          uploadUpdaterJson: true
-          uploadUpdaterSignatures: true
+          uploadUpdaterJson: false
+          uploadUpdaterSignatures: false
           uploadWorkflowArtifacts: true
-          updaterJsonPreferNsis: true
-          args: --bundles nsis
+          updaterJsonPreferNsis: false
+          args: --no-bundle
 
       - name: Resolve published version
         id: published
@@ -187,38 +181,18 @@ jobs:
           "tag=$tag" | Add-Content $env:GITHUB_OUTPUT
           Write-Host "published version $version tag $tag"
 
-      - name: Verify NSIS installer
+      - name: Verify Windows x64 exe
         shell: pwsh
         run: |
-          $nsisDir = "src-tauri\target\release\bundle\nsis"
-          if (-not (Test-Path -LiteralPath $nsisDir)) {
-            throw "NSIS bundle directory was not created: $nsisDir"
+          $releaseDir = "src-tauri\target\release"
+          $exe = @(
+            (Join-Path $releaseDir "EXVS Mod Project.exe"),
+            (Join-Path $releaseDir "app.exe")
+          ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $exe) {
+            throw "Release executable was not found in $releaseDir"
           }
-          $setup = Get-ChildItem -LiteralPath $nsisDir -File | Where-Object { $_.Name -like "*setup.exe" }
-          if (-not $setup) {
-            throw "NSIS installer (*setup.exe) was not produced under $nsisDir"
-          }
-          Write-Host "NSIS installer: $($setup.FullName)"
-          $sig = Get-ChildItem -LiteralPath $nsisDir -File | Where-Object { $_.Name -like "*setup.exe.sig" }
-          if (-not $sig) {
-            throw "NSIS updater signature (*setup.exe.sig) was not produced under $nsisDir"
-          }
-          Write-Host "NSIS signature: $($sig.FullName)"
-
-      - name: Verify GitHub Release updater assets
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: pwsh
-        run: |
-          $tag = "${{ steps.published.outputs.tag }}"
-          $assets = gh release view $tag --json assets --jq ".assets[].name"
-          Write-Host $assets
-          if ($assets -notmatch "latest.json") {
-            throw "GitHub Release $tag is missing latest.json"
-          }
-          if ($assets -notmatch "setup.exe") {
-            throw "GitHub Release $tag is missing the NSIS setup.exe"
-          }
+          Write-Host "Windows x64 exe: $exe ($((Get-Item -LiteralPath $exe).Length) bytes)"
 
       - name: Pack portable zip
         shell: pwsh
@@ -227,6 +201,20 @@ jobs:
             -Version "${{ steps.published.outputs.version }}" `
             -OutputZip "EXVS-Mod-Project-${{ steps.published.outputs.version }}-windows-x64.zip"
 
+      - name: Sign zip
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        shell: pwsh
+        run: |
+          $version = "${{ steps.published.outputs.version }}"
+          $zipName = "EXVS-Mod-Project-$version-windows-x64.zip"
+          pnpm tauri signer sign $zipName
+          $sigPath = "$zipName.sig"
+          if (-not (Test-Path -LiteralPath $sigPath)) {
+            throw "Windows x64 zip signature was not produced at $sigPath"
+          }
+
       - name: Upload portable zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -234,3 +222,15 @@ jobs:
           gh release upload "${{ steps.published.outputs.tag }}" `
             "EXVS-Mod-Project-${{ steps.published.outputs.version }}-windows-x64.zip" `
             --clobber
+
+      - name: Verify GitHub Release zip asset
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.published.outputs.tag }}"
+          $assets = gh release view $tag --json assets --jq ".assets[].name"
+          Write-Host $assets
+          if ($assets -notmatch "windows-x64.zip") {
+            throw "GitHub Release $tag is missing the windows-x64 zip"
+          }

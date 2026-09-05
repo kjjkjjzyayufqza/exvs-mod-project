@@ -194,6 +194,10 @@ name = "bgm_list_format_test"
 path = "tests/bgm_list_format_test.rs"
 
 [[test]]
+name = "camera_table_format_test"
+path = "tests/camera_table_format_test.rs"
+
+[[test]]
 name = "gui_pack_clone_test"
 path = "tests/gui_pack_clone_test.rs"
 
@@ -255,7 +259,19 @@ ssbh_data = { git = "https://github.com/kjjkjjzyayufqza/ssbh_lib", branch = "wmm
 ssbh_lib = { git = "https://github.com/kjjkjjzyayufqza/ssbh_lib", branch = "wmmt2-merge", package = "ssbh_lib" }
 base64 = "0.22"
 crc32fast = "1.4"
-image = "0.25.9"
+# Do not enable image's default-formats: 0.25.10 pulls AVIF (rav1e) and
+# OpenEXR into the shipped exe. Keep the formats ImgToNutexb / scene
+# texture import actually accept.
+image = { version = "0.25.9", default-features = false, features = [
+    "rayon",
+    "png",
+    "jpeg",
+    "bmp",
+    "tga",
+    "gif",
+    "webp",
+    "tiff",
+] }
 image_dds = { version = "0.7.2", features = ["ddsfile", "image"] }
 encoding_rs = "0.8"
 anyhow = "1.0"
@@ -295,8 +311,10 @@ opt-level = 1
 # the default "unwind" — the format parsers (binrw / image / ufbx) can panic on
 # malformed input and must not abort the whole process. ThinLTO keeps build
 # time reasonable while still optimizing across crate boundaries; `strip`
-# removes debug symbols to shrink the shipped binary.
+# removes debug symbols to shrink the shipped binary. Do not override LTO or
+# codegen-units in publish/CI: those overrides were the 42MB exe.
 [profile.release]
+opt-level = 3
 codegen-units = 1
 lto = "thin"
 strip = true

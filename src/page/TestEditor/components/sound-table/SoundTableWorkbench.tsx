@@ -30,6 +30,7 @@ type SoundTableWorkbenchProps = {
   metaLines?: SoundTableMetaLine[];
   loadedLabel?: string;
   notice?: ReactNode;
+  toolbarExtra?: ReactNode;
   addPanel?: ReactNode;
   listPanel?: ReactNode;
   detailPanel?: ReactNode;
@@ -73,6 +74,7 @@ export function SoundTableWorkbench({
   metaLines,
   loadedLabel,
   notice,
+  toolbarExtra,
   addPanel,
   listPanel,
   detailPanel,
@@ -102,6 +104,7 @@ export function SoundTableWorkbench({
               {notice}
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              {toolbarExtra}
               <Button size="sm" variant="outline" onClick={onReload} className="inline-flex items-center gap-2">
                 <RefreshCw className="h-4 w-4" />
                 {t("common.reload")}
@@ -159,7 +162,7 @@ export function SoundTableWorkbench({
 }
 
 export function soundTableMissingMessage(message: string): boolean {
-  return /No raw_path_id JSON|No pilotvoiceresourcetable|No bgm_table|No bgm_list|No BGM bank|Extract pack|nus3bank|raw_path_id/i.test(
+  return /No raw_path_id JSON|No pilotvoiceresourcetable|No bgm_table|No bgm_list|No BGM bank|Extract pack|nus3bank|raw_path_id|Camera table not found|EXVS common|0xCB665375|02winlose/i.test(
     message,
   );
 }

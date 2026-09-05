@@ -52,6 +52,7 @@ describe("workspace content catalog", () => {
     ["bgm-table", "unit.sound", "0x5E92AAEC", "bgm_table.vgsht2"],
     ["bgm-list", "list.character", "0xC91627E8", "bgm_list.bin"],
     ["bgm-bank-update-02", "unit.sound", "0x0C568109", null],
+    ["camera-table", "unit.model", "0xCB665375", "camera/parameters/02winlose.vgsht2"],
   ] as const)("defines %s", (id, routeId, hashHex, relativeFilePath) => {
     expect(getWorkspaceContentDescriptor(id)).toMatchObject({
       id,
@@ -231,5 +232,29 @@ describe("workspace content catalog", () => {
     expect(result.configured.folderPath).toBe("E:/workspace/090sound/bgm_ac27_update_02");
     expect(result.configured.filePath).toBeNull();
     expect(result.sourceLayout).toBe("missing");
+  });
+
+  it("resolves Camera table under 002chara/000common_000common_001", async () => {
+    withExistingPaths([
+      "E:/workspace/002chara/000common_000common_001",
+      "E:/workspace/002chara/000common_000common_001_structure.json",
+      "E:/workspace/002chara/000common_000common_001/camera/parameters/02winlose.vgsht2",
+    ]);
+
+    const result = await resolveWorkspaceContent(
+      "E:/workspace",
+      DEFAULT_TEST_EDITOR_WORKSPACE,
+      "camera-table",
+    );
+
+    expect(result.descriptor.defaultPackName).toBe("000common_000common_001");
+    expect(result.configured.folderPath).toBe("E:/workspace/002chara/000common_000common_001");
+    expect(result.configured.filePath).toBe(
+      "E:/workspace/002chara/000common_000common_001/camera/parameters/02winlose.vgsht2",
+    );
+    expect(result.existing?.filePath).toBe(
+      "E:/workspace/002chara/000common_000common_001/camera/parameters/02winlose.vgsht2",
+    );
+    expect(result.sourceLayout).toBe("configured");
   });
 });

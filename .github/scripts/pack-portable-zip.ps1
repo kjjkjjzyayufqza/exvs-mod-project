@@ -24,14 +24,6 @@ if (Test-Path -LiteralPath $stageRoot) {
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 Copy-Item -LiteralPath $exe -Destination (Join-Path $stage "EXVS Mod Project.exe")
 
-$readme = @"
-EXVS Mod Project $Version
-
-Portable Windows build.
-The NSIS installer from the same GitHub Release is the auto-update package.
-"@
-Set-Content -LiteralPath (Join-Path $stage "README.txt") -Value $readme -Encoding utf8
-
 $zipPath = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $OutputZip))
 $zipDir = Split-Path -Parent $zipPath
 if ($zipDir -and -not (Test-Path -LiteralPath $zipDir)) {

@@ -75,6 +75,23 @@ export function isExvsCommonModelRoot(modelRoot: string | null | undefined): boo
   return Boolean(modelRoot && getBaseName(modelRoot).toLowerCase() === EXVS_COMMON_PACKAGE_NAME);
 }
 
+export function isExvsCommonPackIdentity(pack: {
+  folderPath: string;
+  hashFolderName?: string;
+  packKey?: string;
+}): boolean {
+  if (isExvsCommonModelRoot(pack.folderPath)) return true;
+  const stem = (pack.hashFolderName ?? "").trim().toLowerCase();
+  if (stem === EXVS_COMMON_PACKAGE_NAME || stem === EXVS_COMMON_HASH_NAME.toLowerCase()) {
+    return true;
+  }
+  const key = (pack.packKey ?? "").replace(/\\/g, "/").toLowerCase();
+  return (
+    key.includes(EXVS_COMMON_PACKAGE_NAME) ||
+    key.includes(EXVS_COMMON_HASH_NAME.toLowerCase())
+  );
+}
+
 export function parseExvsCommonRuntimeModelId(value: string): number {
   const normalized = value.trim().replace(/^0x/i, "");
   if (!/^[0-9a-fA-F]{1,8}$/.test(normalized)) {

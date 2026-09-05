@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { exists } from "@tauri-apps/plugin-fs";
 import { PackageCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { isExvsCommonPackIdentity } from "@/page/UnitModelEdit/utils/exvsCommonService";
 import type { WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
@@ -74,8 +75,17 @@ export default function ListeningRepackDialog({
           seen.add(pack.packKey);
           packs.push(pack);
         }
+        const skippedCommon = packs.some((pack) => isExvsCommonPackIdentity(pack));
+        const genericPacks = packs.filter((pack) => !isExvsCommonPackIdentity(pack));
+        if (skippedCommon) {
+          toast.error(
+            genericPacks.length === 0
+              ? t("repackDialog.exvsCommonBlocked")
+              : t("repackDialog.exvsCommonSkipped"),
+          );
+        }
         const next: PackEntry[] = [];
-        for (const pack of packs) {
+        for (const pack of genericPacks) {
           const remappedPack = await resolveMigratedFhm2dPackPaths(pack);
           let folderPath = remappedPack.folderPath;
           let structurePath = remappedPack.structureJsonPath;

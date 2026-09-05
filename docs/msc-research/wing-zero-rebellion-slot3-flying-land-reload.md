@@ -1,7 +1,7 @@
 # Rebellion slot 3 飛翔：鸟形态卸 HUD + 着地リロード
 
-**Date:** 2026-08-29
-**Status:** E3 实机确认成功（2026-08-29 user）；`0x16` 藏格 E3- 红色 disable；只卸不重暂停 E3- 空中提前 reload
+**Date:** 2026-08-29 (section 7 added 2026-09-05)
+**Status:** E3 实机确认成功（2026-08-29 user）；`0x16` 藏格 E3- 红色 disable；只卸不重暂停 E3- 空中提前 reload；near-ground special-melee cancel land gate E1 untested (H6)
 **Kind:** HUD / ammo slot lifecycle（bird ENTER/EXIT vs native 着地リロード）
 **Primary trees:**
 
@@ -139,3 +139,25 @@ func_879
 | 只卸不重暂停 → 空中提前 reload | E3- | 2026-08-29 user |
 | FLYING 上写 `0x16=1` → 红 disable | E3- | 2026-08-29 user |
 | 卸格 + EXIT 重绑 + `global772` 时重暂停 | **E3** | 2026-08-29 user：没问题了 |
+
+---
+
+## 7. Near-ground bird special-melee cancel then sidestep (E1, untested)
+
+**Status:** E1 source-pinned 2026-09-05; L3 untested. Do not claim the land latch works until the user runs H6.
+
+Same `global24 0x1000000` bit is TV ALT_7 airborne special-melee **and** the FLYING land gate. Bird special-melee A ENTER `func_168`s it. Cancel in `func_41` `func_169(0x1010000)`s it, then `rebellion_interrupt_bird_form_to_ground` keep-air used `func_167(0x1004000)`, which **writes the bit back**. `func_876` then waits forever. A later weapon that `func_169`s unsticks it. Sidestep land does not.
+
+Do **not** unpause FLYING in the air (I4). Do **not** `sys_4F(0x16)` (I5). Do **not** retarget the combat `func_241(0x7cd11119, func_480)` win-pose hook.
+
+| State | Owner | ENTER | EXIT / natural B | INTERRUPT / cancel |
+|-------|--------|-------|------------------|--------------------|
+| `global24 0x1000000` | special-melee A + FLYING land gate | A `func_168` | wait `func_169` when `!func_287(0x3ed)` | `func_169`; keep-air analog is `func_167(0x4000)` only |
+| `rebellion_flying_reload_on_land` | `func_41` cancel / hit | 0 | 0 | 1 |
+| `global772` / slot 3 byte 318 | `func_933` consume + restore re-pause | unchanged | B then vanilla `func_876` | hold pause until `!func_287(0x3ed)` |
+
+```text
+H6  hypothesis: after near-ground bird special melee cancel into main (currently win pose) then L/R step, FLYING 5s starts on the grounded tick without another weapon
+P6  prediction: boost/slot 3 begins the 300f reload once they are on the ground; hover before the step does not start it
+F6  falsifier: still need another weapon; OR 5s starts while still hovering (I4)
+```
