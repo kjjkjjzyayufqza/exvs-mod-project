@@ -29,6 +29,7 @@ import {
 } from "@/models/characterCost";
 import { cn } from "@/lib/utils";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useTranslation } from "react-i18next";
 import { DualValueProperty } from "@/components/ui/dual-value-property";
 import {
   applyCharacterCostImport,
@@ -116,6 +117,7 @@ export default function CharacterCostView({
   onUnsavedChanges,
   workspaceDocument,
 }: CharacterCostViewProps) {
+  const { t } = useTranslation("test-character-cost");
   const [subTab, setSubTab] = useState<CharacterCostSubTab>("playable");
   const [panelState, setPanelState] = useState<Record<CharacterCostSubTab, LoadState>>(emptyPanels);
   const [dirty, setDirty] = useState<Record<CharacterCostSubTab, boolean>>(emptyDirty);
@@ -173,7 +175,7 @@ export default function CharacterCostView({
       if (!folderPath) {
         setPanelState((prev) => ({
           ...prev,
-          [tab]: { status: "error", filePath: "", message: "Folder path is empty" },
+          [tab]: { status: "error", filePath: "", message: t("folderPathEmpty") },
         }));
         resetEditorForTab(tab);
         return;
@@ -204,7 +206,7 @@ export default function CharacterCostView({
           resetEditorForTab(tab);
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown error";
+        const message = error instanceof Error ? error.message : t("unknownError");
         setPanelState((prev) => ({ ...prev, [tab]: { status: "error", filePath, message } }));
         setNewRowIndicesByTab((prev) => ({ ...prev, [tab]: new Set() }));
         resetEditorForTab(tab);
@@ -406,7 +408,7 @@ export default function CharacterCostView({
   const handleSaveFile = useCallback(async () => {
     if (loadState.status !== "ready") return;
     if (!loadState.writable) {
-      toast.error("Legacy flat workspace content is read-only");
+      toast.error(t("readOnlyLegacy"));
       return;
     }
     const filePath = loadState.filePath;
@@ -431,12 +433,12 @@ export default function CharacterCostView({
       });
       const buffer = buildCharacterCostBuffer(sortedTable);
       await writeFile(filePath, buffer);
-      toast.success(`Saved ${COST_FILES[subTab]}`);
+      toast.success(t("savedFile", { file: COST_FILES[subTab] }));
       setDirty((d) => ({ ...d, [subTab]: false }));
       await loadPanel(subTab, { preserveSelectionId: selectedRow?.CharacterId ?? null });
     } catch (error) {
       console.error(error);
-      toast.error("Failed to save character cost file");
+      toast.error(t("saveFailed"));
     }
   }, [loadPanel, loadState, selectedRow?.CharacterId, subTab]);
 
@@ -446,13 +448,13 @@ export default function CharacterCostView({
     try {
       const pathExists = await exists(folderPathToOpen);
       if (!pathExists) {
-        toast.error("Path does not exist");
+        toast.error(t("pathNotExist"));
         return;
       }
       await openPath(folderPathToOpen);
     } catch (error) {
       console.error(error);
-      toast.error("Failed to open folder");
+      toast.error(t("openFolderFailed"));
     }
   }, [loadState]);
 
@@ -465,11 +467,11 @@ export default function CharacterCostView({
         defaultFileName: COST_FILES[subTab].replace(/\.bin$/i, ".json"),
       });
       if (!result) return;
-      toast.success(`Exported ${result.count} rows`);
+      toast.success(t("exportedRows", { count: result.count }));
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Failed to export JSON: ${message}`);
+      const message = error instanceof Error ? error.message : t("unknownError");
+      toast.error(t("exportFailed", { message }));
     } finally {
       setIsExporting(false);
     }
@@ -478,7 +480,7 @@ export default function CharacterCostView({
   const handlePickImportJson = useCallback(async () => {
     if (loadState.status !== "ready") return;
     if (!loadState.writable) {
-      toast.error("Legacy flat workspace content is read-only");
+      toast.error(t("readOnlyLegacy"));
       return;
     }
     if (isImporting) return;
@@ -487,15 +489,15 @@ export default function CharacterCostView({
       const preview = await pickCharacterCostImportPreview();
       if (!preview) return;
       if (preview.validCount === 0) {
-        toast.error("Invalid JSON: no valid entries found");
+        toast.error(t("invalidJson"));
         return;
       }
       setImportPreview(preview);
       setIsImportDialogOpen(true);
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Failed to import JSON: ${message}`);
+      const message = error instanceof Error ? error.message : t("unknownError");
+      toast.error(t("importFailed", { message }));
     } finally {
       setIsImporting(false);
     }
@@ -504,7 +506,7 @@ export default function CharacterCostView({
   const handleConfirmImport = useCallback(() => {
     if (loadState.status !== "ready") return;
     if (!loadState.writable) {
-      toast.error("Legacy flat workspace content is read-only");
+      toast.error(t("readOnlyLegacy"));
       return;
     }
     if (!importPreview) return;
@@ -521,10 +523,10 @@ export default function CharacterCostView({
       setNewRowIndicesByTab((prev) => ({ ...prev, [subTab]: new Set() }));
       setIsImportDialogOpen(false);
       setImportPreview(null);
-      toast.success(`Imported ${importPreview.validCount} rows`);
+      toast.success(t("importedRows", { count: importPreview.validCount }));
     } catch (error) {
       console.error(error);
-      toast.error("Failed to apply import");
+      toast.error(t("applyImportFailed"));
     }
   }, [importPreview, loadState, subTab]);
 
@@ -553,7 +555,7 @@ export default function CharacterCostView({
   if (!folderPath.trim()) {
     return (
       <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground px-4 text-center">
-        Select a workspace folder in the toolbar.
+        {t("selectWorkspaceFolder")}
       </div>
     );
   }
@@ -563,16 +565,16 @@ export default function CharacterCostView({
       <div className="h-full w-full flex flex-col min-h-0">
         <Tabs value={subTab} onValueChange={handleSubTabChange} className="flex flex-col flex-1 min-h-0 gap-3">
           <TabsList className="w-fit shrink-0">
-            <TabsTrigger value="playable">Playable</TabsTrigger>
-            <TabsTrigger value="boss">Boss</TabsTrigger>
-            <TabsTrigger value="zako">Zako</TabsTrigger>
+            <TabsTrigger value="playable">{t("playable")}</TabsTrigger>
+            <TabsTrigger value="boss">{t("boss")}</TabsTrigger>
+            <TabsTrigger value="zako">{t("zako")}</TabsTrigger>
           </TabsList>
           <Card className="h-full flex flex-col border-none shadow-none rounded-none bg-transparent">
             <CardHeader className="p-0 pb-4">
-              <CardTitle>Character Cost</CardTitle>
+              <CardTitle>{t("title")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 p-0">
-              <div className="text-sm text-muted-foreground">Loading {COST_FILES[subTab]}...</div>
+              <div className="text-sm text-muted-foreground">{t("loading", { file: COST_FILES[subTab] })}</div>
             </CardContent>
           </Card>
         </Tabs>
@@ -585,29 +587,29 @@ export default function CharacterCostView({
       <div className="h-full w-full flex flex-col min-h-0">
         <Tabs value={subTab} onValueChange={handleSubTabChange} className="flex h-full flex-col gap-3 flex-1 min-h-0">
           <TabsList className="w-fit">
-            <TabsTrigger value="playable">Playable</TabsTrigger>
-            <TabsTrigger value="boss">Boss</TabsTrigger>
-            <TabsTrigger value="zako">Zako</TabsTrigger>
+            <TabsTrigger value="playable">{t("playable")}</TabsTrigger>
+            <TabsTrigger value="boss">{t("boss")}</TabsTrigger>
+            <TabsTrigger value="zako">{t("zako")}</TabsTrigger>
           </TabsList>
           <Card className="border-none shadow-none rounded-none bg-transparent">
             <CardHeader className="p-0 pb-4">
-              <CardTitle>Character Cost</CardTitle>
+              <CardTitle>{t("title")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 p-0">
               <div className="text-sm text-muted-foreground break-all">
                 {loadState.filePath ? (
                   <>
-                    <div className="font-medium text-foreground">File</div>
+                    <div className="font-medium text-foreground">{t("file")}</div>
                     {loadState.filePath}
                   </>
                 ) : (
-                  "Folder path is empty"
+                  t("folderPathEmpty")
                 )}
               </div>
               <div className="text-sm text-destructive">{loadState.message}</div>
               <Button size="sm" onClick={() => void loadPanel(subTab)} className="inline-flex items-center gap-2">
                 <RefreshCw className="w-4 h-4" />
-                Reload
+                {t("reload")}
               </Button>
             </CardContent>
           </Card>
@@ -624,9 +626,9 @@ export default function CharacterCostView({
     <div className="h-full w-full flex flex-col min-h-0">
       <Tabs value={subTab} onValueChange={handleSubTabChange} className="flex h-full min-h-0 flex-1 flex-col gap-3">
         <TabsList className="w-fit shrink-0">
-          <TabsTrigger value="playable">Playable</TabsTrigger>
-          <TabsTrigger value="boss">Boss</TabsTrigger>
-          <TabsTrigger value="zako">Zako</TabsTrigger>
+          <TabsTrigger value="playable">{t("playable")}</TabsTrigger>
+          <TabsTrigger value="boss">{t("boss")}</TabsTrigger>
+          <TabsTrigger value="zako">{t("zako")}</TabsTrigger>
         </TabsList>
 
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -634,15 +636,15 @@ export default function CharacterCostView({
             <CardHeader className="p-0 pb-4 shrink-0">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <CardTitle>Character Cost</CardTitle>
+                  <CardTitle>{t("title")}</CardTitle>
                   <div className="text-xs text-muted-foreground break-all mt-1 flex items-center gap-1">
                     {loadState.filePath}
                     <button
                       type="button"
                       onClick={() => void handleOpenFolder()}
                       className="shrink-0 p-0.5 rounded hover:bg-accent hover:text-accent-foreground"
-                      title="Open folder"
-                      aria-label="Open folder"
+                      title={t("openFolder")}
+                      aria-label={t("openFolder")}
                     >
                       <FolderOpen className="w-3.5 h-3.5" />
                     </button>
@@ -664,7 +666,7 @@ export default function CharacterCostView({
                 <div className="flex flex-wrap items-center gap-2 shrink-0 justify-end">
                   <Button size="sm" variant="outline" onClick={() => void loadPanel(subTab)} className="inline-flex items-center gap-2">
                     <RefreshCw className="w-4 h-4" />
-                    Reload
+                    {t("reload")}
                   </Button>
                   <Button
                     size="sm"
@@ -674,7 +676,7 @@ export default function CharacterCostView({
                     className="inline-flex items-center gap-2"
                   >
                     <Upload className="w-4 h-4" />
-                    Import JSON
+                    {t("importJson")}
                   </Button>
                   <Button
                     size="sm"
@@ -684,7 +686,7 @@ export default function CharacterCostView({
                     className="inline-flex items-center gap-2"
                   >
                     <Download className="w-4 h-4" />
-                    Export JSON
+                    {t("exportJson")}
                   </Button>
                   <Button
                     size="sm"
@@ -693,7 +695,7 @@ export default function CharacterCostView({
                     className="inline-flex items-center gap-2"
                   >
                     <Save className="w-4 h-4" />
-                    Save File
+                    {t("saveFile")}
                   </Button>
                 </div>
               </div>
@@ -703,17 +705,17 @@ export default function CharacterCostView({
               <div className="flex h-full min-h-0 gap-4 flex-1">
                 <div className="w-1/3 border rounded-lg p-3 overflow-hidden flex flex-col min-h-0">
                   <div className="flex items-center justify-between mb-3 shrink-0">
-                    <div className="font-semibold text-sm">Rows ({tableData.length})</div>
+                    <div className="font-semibold text-sm">{t("rows", { count: tableData.length })}</div>
                     <Button size="sm" onClick={handleAdd} disabled={!loadState.writable} className="inline-flex items-center gap-2">
                       <Plus className="w-4 h-4" />
-                      Add
+                      {t("add")}
                     </Button>
                   </div>
 
                   <div className="relative mb-3 shrink-0">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                     <Input
-                      placeholder="Search by Character ID..."
+                      placeholder={t("searchPlaceholder")}
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="pl-10"
@@ -753,7 +755,7 @@ export default function CharacterCostView({
                               onClick={() => handleSelect(idx)}
                             >
                               <div className="flex min-w-0 items-center gap-2">
-                                <span className="text-sm font-medium truncate">ID: {row.CharacterId}</span>
+                                <span className="text-sm font-medium truncate">{t("idLabel", { id: row.CharacterId })}</span>
                                 {newRowIndices.has(idx) && (
                                   <Badge
                                     variant="outline"
@@ -774,7 +776,7 @@ export default function CharacterCostView({
                                     if (!loadState.writable) return;
                                     handleCopyRow(idx);
                                   }}
-                                  title="Copy as new"
+                                    title={t("copyAsNew")}
                                 >
                                   <Copy className="w-4 h-4" />
                                 </Button>
@@ -788,7 +790,7 @@ export default function CharacterCostView({
                                     if (!loadState.writable) return;
                                     openDeleteDialog(idx);
                                   }}
-                                  title="Delete"
+                                  title={t("delete")}
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
@@ -799,7 +801,7 @@ export default function CharacterCostView({
                       })}
                     </div>
                     {filteredRows.length === 0 && (
-                      <div className="text-center text-muted-foreground py-8 text-sm">No rows found</div>
+                      <div className="text-center text-muted-foreground py-8 text-sm">{t("noRows")}</div>
                     )}
                   </div>
                 </div>
@@ -808,13 +810,13 @@ export default function CharacterCostView({
                   {selectedRow ? (
                     <>
                       <div className="flex items-center justify-between mb-4 shrink-0">
-                        <div className="text-sm font-semibold">Edit row (index: {selectedIndex})</div>
-                        <div className="text-xs text-muted-foreground">int32 (decimal or hex)</div>
+                        <div className="text-sm font-semibold">{t("editRow", { index: selectedIndex })}</div>
+                        <div className="text-xs text-muted-foreground">{t("int32Format")}</div>
                       </div>
                       <ScrollArea className="flex-1 min-h-0">
                         <div className="space-y-2 pr-2">
                           <DualValueProperty
-                            label="Character ID"
+                            label={t("characterId")}
                             value={selectedRow.CharacterId}
                             property="CharacterId"
                             editable={loadState.writable}
@@ -831,7 +833,7 @@ export default function CharacterCostView({
                             onCommit={(nextValue) => updateSelectedRowField("CharacterId", nextValue)}
                           />
                           <DualValueProperty
-                            label="Cost"
+                            label={t("cost")}
                             value={selectedRow.Cost}
                             property="Cost"
                             editable={loadState.writable}
@@ -847,7 +849,7 @@ export default function CharacterCostView({
                             onCommit={(nextValue) => updateSelectedRowField("Cost", nextValue)}
                           />
                           <DualValueProperty
-                            label="HP"
+                            label={t("hp")}
                             value={selectedRow.Hp}
                             property="Hp"
                             editable={loadState.writable}
@@ -866,7 +868,7 @@ export default function CharacterCostView({
                       </ScrollArea>
                     </>
                   ) : (
-                    <div className="text-sm text-muted-foreground">Select a row to edit Cost and HP (int32).</div>
+                    <div className="text-sm text-muted-foreground">{t("selectRow")}</div>
                   )}
                 </div>
               </div>
@@ -878,8 +880,8 @@ export default function CharacterCostView({
       {isImportDialogOpen ? (
         <AppRndModalShell
           titleId="character-cost-import-title"
-          title="Import character cost JSON?"
-          subtitle={`Replace rows in ${COST_FILES[subTab]}.`}
+          title={t("importTitle")}
+          subtitle={t("replaceRows", { file: COST_FILES[subTab] })}
           headerIcon={<Upload className="h-5 w-5 text-primary" />}
           dimensions={CHARACTER_COST_IMPORT_MODAL_DIMENSIONS}
           storageKey="app.rnd-size.character-cost-import"
@@ -887,24 +889,24 @@ export default function CharacterCostView({
           footer={
             <div className="flex justify-end gap-2 bg-background px-6 py-4">
               <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
-                Cancel
+                {t("cancel")}
               </Button>
               <Button onClick={handleConfirmImport} disabled={!loadState.writable}>
-                Apply import
+                {t("applyImport")}
               </Button>
             </div>
           }
         >
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-6 text-sm">
             <p className="text-muted-foreground">
-              This replaces all rows in the current file with valid entries from the JSON file.
+              {t("importDescription")}
             </p>
             {importPreview ? (
               <div className="space-y-1">
-                <div>Valid rows: {importPreview.validCount}</div>
-                <div>Invalid / skipped: {importPreview.invalidCount}</div>
+                <div>{t("validRows", { count: importPreview.validCount })}</div>
+                <div>{t("invalidRows", { count: importPreview.invalidCount })}</div>
                 {importPreview.duplicateIds.length > 0 ? (
-                  <div className="text-amber-600">Duplicate IDs in file: {importPreview.duplicateIds.join(", ")}</div>
+                  <div className="text-amber-600">{t("duplicateIds", { ids: importPreview.duplicateIds.join(", ") })}</div>
                 ) : null}
               </div>
             ) : null}
@@ -915,13 +917,13 @@ export default function CharacterCostView({
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete row?</AlertDialogTitle>
-            <AlertDialogDescription>This removes the entry from the list. Save the file to write to disk.</AlertDialogDescription>
+            <AlertDialogTitle>{t("deleteTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("deleteDescription")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} disabled={!loadState.writable}>
-              Delete
+              {t("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { dirname, join } from "@tauri-apps/api/path";
 import { ImageOff, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 type NutexbInfo = {
   name: string;
@@ -27,6 +28,7 @@ function sanitizeFileName(input: string): string {
 }
 
 export function NutexbPreview({ path }: NutexbPreviewProps) {
+  const { t } = useTranslation("test-lists");
   const [isLoading, setIsLoading] = useState(false);
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const [imgKey, setImgKey] = useState(0);
@@ -74,7 +76,7 @@ export function NutexbPreview({ path }: NutexbPreviewProps) {
     return (
       <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" />
-        <span className="text-xs">Converting...</span>
+        <span className="text-xs">{t("nutexb.converting")}</span>
       </div>
     );
   }
@@ -100,26 +102,26 @@ export function NutexbPreview({ path }: NutexbPreviewProps) {
       />
       <div className="space-y-1 text-xs">
         <div className="flex items-center justify-between gap-2">
-          <span className="shrink-0 text-muted-foreground">Texture</span>
-          <span className="truncate text-right" title={info.name}>
+          <span className="shrink-0 text-muted-foreground">{t("nutexb.texture")}</span>
+          <span className="truncate text-right" title={info.name} data-i18n-ignore="">
             {info.name}
           </span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Size</span>
-          <span>
+          <span className="text-muted-foreground">{t("nutexb.size")}</span>
+          <span data-i18n-ignore="">
             {info.width} × {info.height}
           </span>
         </div>
         <div className="flex items-center justify-between gap-2">
-          <span className="shrink-0 text-muted-foreground">Format</span>
-          <span className="truncate text-right" title={info.imageFormat}>
+          <span className="shrink-0 text-muted-foreground">{t("nutexb.format")}</span>
+          <span className="truncate text-right" title={info.imageFormat} data-i18n-ignore="">
             {info.imageFormat}
           </span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Mipmaps</span>
-          <span>{info.mipmapCount}</span>
+          <span className="text-muted-foreground">{t("nutexb.mipmaps")}</span>
+          <span data-i18n-ignore="">{info.mipmapCount}</span>
         </div>
       </div>
     </div>

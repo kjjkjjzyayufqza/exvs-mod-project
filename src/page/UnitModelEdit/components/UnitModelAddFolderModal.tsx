@@ -1,4 +1,5 @@
 import { FolderPlus, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,7 @@ export function UnitModelAddFolderModal({
   modelIdText = "",
   onModelIdTextChange,
 }: UnitModelAddFolderModalProps) {
+  const { t } = useTranslation("unit-add-extract");
   const missingTextureCount = texturePlan?.missing.length ?? 0;
   let modelIdError: string | null = null;
   if (exvsCommon) {
@@ -66,8 +68,8 @@ export function UnitModelAddFolderModal({
   return (
     <AppRndModalShell
       titleId="unit-model-add-folder-title"
-      title="Add model from folder"
-      subtitle="Review the prepared SSBH folder before it is copied into the package"
+      title={t("addFolder.title")}
+      subtitle={t("addFolder.subtitle")}
       headerIcon={<FolderPlus className="h-5 w-5 text-primary" />}
       dimensions={DIMENSIONS}
       storageKey="app.rnd-size.unit-model-add-folder"
@@ -76,7 +78,7 @@ export function UnitModelAddFolderModal({
       footer={
         <div className="flex justify-end gap-2 p-3">
           <Button type="button" variant="outline" disabled={busy} onClick={onCancel}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             type="button"
@@ -84,7 +86,7 @@ export function UnitModelAddFolderModal({
             onClick={onConfirm}
           >
             {busy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
-            {busy ? "Adding..." : "Add model"}
+            {busy ? t("addFolder.adding") : t("addFolder.addModel")}
           </Button>
         </div>
       }
@@ -98,7 +100,7 @@ export function UnitModelAddFolderModal({
           />
           {exvsCommon ? (
             <div className="space-y-1.5 rounded-md bg-muted/30 p-3">
-              <Label htmlFor="exvs-common-model-id">Runtime model ID</Label>
+              <Label htmlFor="exvs-common-model-id">{t("addFolder.runtimeModelId")}</Label>
               <Input
                 id="exvs-common-model-id"
                 value={modelIdText}
@@ -108,8 +110,7 @@ export function UnitModelAddFolderModal({
                 disabled={busy}
               />
               <p className="text-[11px] text-muted-foreground">
-                Unique in the Common SHL. New records use type {EXVS_COMMON_NEW_SHL_MODEL_TYPE}{" "}
-                (Part).
+                {t("addFolder.commonShlHint", { type: EXVS_COMMON_NEW_SHL_MODEL_TYPE })}
               </p>
               {modelIdError ? <p className="text-[11px] text-destructive">{modelIdError}</p> : null}
             </div>

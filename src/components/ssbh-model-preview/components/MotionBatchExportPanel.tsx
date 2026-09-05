@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FolderOutput, LoaderCircle, TriangleAlert } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ export function MotionBatchExportPanel({
   workspaceRoot,
   disabled,
 }: MotionBatchExportPanelProps) {
+  const { t } = useTranslation("ssbh-motion");
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<BatchProgress | null>(null);
   const [results, setResults] = useState<BatchResult[]>([]);
@@ -82,7 +84,7 @@ export function MotionBatchExportPanel({
   const runBatch = useCallback(async () => {
     if (!skeletonPath || !numdlbPath || targets.length === 0) return;
     const outputDir = await open({
-      title: "Choose batch export folder",
+      title: t("batchExport.chooseFolder"),
       directory: true,
       multiple: false,
       defaultPath: getDialogDefaultPath(DialogLastPathKey.ssbhMotionBatchExportDir, workspaceRoot),
@@ -127,31 +129,33 @@ export function MotionBatchExportPanel({
       setProgress(null);
       setRunning(false);
       if (failed === 0 && exported > 0) {
-        toast.success("Batch export finished", { description: `${exported} clips exported` });
+        toast.success(t("batchExport.finished"), {
+          description: t("batchExport.clipsExported", { count: exported }),
+        });
       } else if (failed > 0) {
-        toast.error("Batch export finished with failures", {
-          description: `${exported} exported, ${failed} failed`,
+        toast.error(t("batchExport.finishedWithFailures"), {
+          description: t("batchExport.exportedFailed", { exported, failed }),
         });
       }
     }
-  }, [numdlbPath, skeletonPath, targets, workspaceRoot]);
+  }, [numdlbPath, skeletonPath, t, targets, workspaceRoot]);
 
   const failedResults = results.filter((result) => result.error !== null);
   const exportedCount = results.length - failedResults.length;
 
   return (
     <MayaSection
-      title="Batch motion FBX export"
+      title={t("batchExport.title")}
       icon={<FolderOutput className="h-3.5 w-3.5 opacity-80" />}
       defaultOpen={false}
     >
       <div className="flex flex-col gap-2 text-[10px]">
         <p className="text-muted-foreground">
-          Export every selected NUANMB as its own CompleteMotionFbx into one folder.
+          {t("batchExport.hint")}
         </p>
         <div className="flex items-center gap-1.5">
           <span className="tabular-nums text-muted-foreground">
-            {targets.length}/{nuanmbPaths.length} selected
+            {t("batchExport.selectedCount", { selected: targets.length, total: nuanmbPaths.length })}
           </span>
           <Button
             type="button"
@@ -161,7 +165,7 @@ export function MotionBatchExportPanel({
             disabled={running || disabled || targets.length === nuanmbPaths.length}
             onClick={selectAll}
           >
-            All
+            {t("batchExport.all")}
           </Button>
           <Button
             type="button"
@@ -171,7 +175,7 @@ export function MotionBatchExportPanel({
             disabled={running || disabled || targets.length === 0}
             onClick={selectNone}
           >
-            None
+            {t("batchExport.none")}
           </Button>
         </div>
         <div className="flex max-h-40 flex-col overflow-y-auto rounded-sm border border-border/40 px-1 py-1">
@@ -214,7 +218,7 @@ export function MotionBatchExportPanel({
             ) : (
               <FolderOutput className="mr-1 h-3.5 w-3.5" />
             )}
-            Export all to folder ({targets.length})
+            {t("batchExport.exportAll", { count: targets.length })}
           </Button>
         </div>
         {progress ? (
@@ -223,7 +227,7 @@ export function MotionBatchExportPanel({
               className="h-1"
               value={(progress.done / Math.max(1, progress.total)) * 100}
             />
-            <span className="font-mono text-muted-foreground">
+            <span className="font-mono text-muted-foreground" data-i18n-ignore="">
               {progress.done + 1}/{progress.total}: {progress.current}
             </span>
           </div>
@@ -231,13 +235,13 @@ export function MotionBatchExportPanel({
         {abortedOnBlender ? (
           <p role="alert" className="flex gap-1.5 text-destructive wrap-anywhere">
             <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>Blender 5.1 failed to resolve; the remaining clips were skipped.</span>
+            <span>{t("batchExport.blenderFailed")}</span>
           </p>
         ) : null}
         {results.length > 0 ? (
-          <MotionReportCard title={`${exportedCount} exported, ${failedResults.length} failed`}>
+          <MotionReportCard title={t("batchExport.exportedFailed", { exported: exportedCount, failed: failedResults.length })}>
             {failedResults.map((result) => (
-              <div key={result.path} className="mt-1 text-destructive wrap-anywhere">
+              <div key={result.path} className="mt-1 text-destructive wrap-anywhere" data-i18n-ignore="">
                 {nuanmbStem(result.path)}: {result.error}
               </div>
             ))}

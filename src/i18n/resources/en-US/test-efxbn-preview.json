@@ -1,0 +1,113 @@
+{
+  "types": {
+    "billboard": "Billboard",
+    "model": "Model",
+    "strip": "Strip",
+    "meshEmitterWrapper": "Mesh emitter wrapper",
+    "wrapper": "Wrapper",
+    "container": "Container {{type}}"
+  },
+  "values": {
+    "sortedFrontToBack": "sorted front to back",
+    "sortedBackToFront": "sorted back to front",
+    "unsorted": "unsorted (order-independent)",
+    "off": "off",
+    "units": "{{value}} units",
+    "none": "none",
+    "unresolved": "unresolved",
+    "baseOnly": "base only",
+    "missing": "missing",
+    "noDocument": "No document"
+  },
+  "aria": {
+    "outliner": "EFXBN block outliner",
+    "properties": "EFXBN properties",
+    "liveAuthor": "EFXBN live author",
+    "documentActions": "EFXBN document actions"
+  },
+  "labels": {
+    "blocks": "Blocks",
+    "localTexture": "Local texture",
+    "tabs": "Inspector tabs",
+    "block": "Block {{index}}",
+    "shaderVariants": "Shader variants",
+    "efxbnFile": "EFXBN file"
+  },
+  "status": {
+    "unsaved": "{{count}} unsaved",
+    "liveDraft": "live draft",
+    "unsavedEdits": "Unsaved edits",
+    "writing": "Writing…",
+    "clean": "clean"
+  },
+  "buttons": {
+    "showAllTitle": "Show all blocks",
+    "showAllAria": "Show all EFXBN blocks",
+    "soloTitle": "Hide every block except the selected block",
+    "solo": "Solo",
+    "duplicateTitle": "Duplicate the selected block under the same parent, with its own curve keys",
+    "duplicateAria": "Duplicate the selected EFXBN block",
+    "deleteTitle": "Delete the selected block and renumber every index that pointed past it",
+    "deleteAria": "Delete the selected EFXBN block",
+    "hideBlock": "Hide block",
+    "showBlock": "Show block",
+    "hideBlockAria": "Hide EFXBN block {{index}}",
+    "showBlockAria": "Show EFXBN block {{index}}",
+    "dragTitle": "Drag onto another block to reparent it, or onto the header strip to make it a root",
+    "undoTitle": "Undo {{change}}",
+    "nothingToUndo": "Nothing to undo",
+    "redoTitle": "Redo",
+    "resetTitle": "Discard every unsaved change and return to the file on disk",
+    "reset": "Reset",
+    "rewriteTitle": "Rewrite {{path}} from the edited document",
+    "rewriteDefaultTitle": "Rewrite the efxbn file from the edited document",
+    "saveDirty": "Save EFXBN ({{count}})",
+    "save": "Save EFXBN"
+  },
+  "tabs": {
+    "edit": "Edit",
+    "color": "Color",
+    "block": "Block",
+    "controls": "Controls",
+    "material": "Material"
+  },
+  "fields": {
+    "index": "Index",
+    "runtimeType": "Runtime type",
+    "treeLevel": "Tree level",
+    "childBlocks": "Child blocks",
+    "lifetime": "Lifetime",
+    "emit": "Emit",
+    "delay": "Delay",
+    "spawnForm": "Spawn form",
+    "actionFlags": "Action flags",
+    "depthBlend": "Depth / blend",
+    "culling": "Culling",
+    "drawOrder": "Draw order",
+    "viewAngleRamp": "View-angle ramp",
+    "cameraFade": "Camera fade",
+    "model": "Model",
+    "animation": "Animation"
+  },
+  "textureSlots": {
+    "color0": "Colour map",
+    "color1": "Pass-2 colour",
+    "uv0": "UV offset",
+    "uv1": "Pass-2 UV offset"
+  },
+  "sources": {
+    "pack": "pack",
+    "common": "common",
+    "neither": "Present in neither this pack nor the shared pack",
+    "resolvedPack": "Resolved in the pack being edited",
+    "resolvedCommon": "Resolved in the shared pack {{pack}}"
+  },
+  "empty": {
+    "noActiveControls": "No active control lanes.",
+    "noTextureSlots": "No model-control texture slots."
+  },
+  "help": {
+    "drawSchemeFlag": "Runtime draw-scheme flag word (element +0x390)",
+    "baseShaderOnly": "Preview renders the base shader only; this block will not match the game."
+  }
+}

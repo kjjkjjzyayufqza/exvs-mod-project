@@ -7,6 +7,7 @@ import { FolderSelector } from "./components/FolderSelector"
 import { ProjectStructure } from "./components/ProjectStructure"
 import { useTemplateStore } from "@/store/templateStore"
 import { writeTextFile } from "@tauri-apps/plugin-fs"
+import { useTranslation } from "react-i18next"
 
 const TEMPLATE_GENERATOR_DIMENSIONS = {
     width: 1200,
@@ -16,6 +17,7 @@ const TEMPLATE_GENERATOR_DIMENSIONS = {
 }
 
 export function TemplateJsonGenerator() {
+    const { t } = useTranslation("misc-tools-b")
     const [isOpen, setIsOpen] = useState(false)
     const {
         selectedFolder,
@@ -53,7 +55,7 @@ export function TemplateJsonGenerator() {
 
     const handleGenerateJson = async () => {
         if (!selectedFolder || !completeProjectData) {
-            alert("Please select a folder and ensure data is loaded first.")
+            alert(t("template.selectFirst"))
             return
         }
 
@@ -232,23 +234,23 @@ export function TemplateJsonGenerator() {
             // Write the JSON file
             await writeTextFile(dataJsonPath, JSON.stringify(jsonData, null, 2))
 
-            alert(`data.json generated successfully at: ${dataJsonPath}`)
+            alert(t("template.generated", { path: dataJsonPath }))
         } catch (error) {
             console.error("Error generating data.json:", error)
-            alert("Failed to generate data.json. Please check the console for details.")
+            alert(t("template.failed"))
         }
     }
 
     return (
         <>
             <Button variant="outline" className="w-full" onClick={() => setIsOpen(true)}>
-                Open Template JSON Generator
+                {t("template.open")}
             </Button>
             {isOpen ? (
                 <AppRndModalShell
                     titleId="template-json-generator-title"
-                    title="Template JSON Generator"
-                    subtitle="Generate data.json from a selected project folder"
+                    title={t("template.title")}
+                    subtitle={t("template.subtitle")}
                     headerIcon={<FileJson className="h-5 w-5 text-primary" />}
                     dimensions={TEMPLATE_GENERATOR_DIMENSIONS}
                     storageKey="app.rnd-size.template-json-generator"

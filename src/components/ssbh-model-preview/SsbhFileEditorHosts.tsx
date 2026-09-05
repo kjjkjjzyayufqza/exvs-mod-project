@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -42,26 +43,25 @@ function GuardDialog({
   onGuardDiscard,
   onGuardSave,
 }: GuardDialogProps) {
+  const { t } = useTranslation("ssbh-modals");
   return (
     <AlertDialog open={guard !== null} onOpenChange={onGuardOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Unsaved {label} changes</AlertDialogTitle>
+          <AlertDialogTitle>{t("common.unsavedTitle", { label })}</AlertDialogTitle>
           <AlertDialogDescription>
-            {guard?.action === "close"
-              ? "Save before closing, discard edits, or cancel."
-              : "Save before reloading from disk, discard edits, or cancel."}
+            {guard?.action === "close" ? t("common.unsavedClose") : t("common.unsavedReload")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
           <AlertDialogCancel type="button" onClick={onGuardCancel}>
-            Cancel
+            {t("common.cancel")}
           </AlertDialogCancel>
           <Button type="button" variant="outline" onClick={onGuardDiscard}>
-            Discard
+            {t("common.discard")}
           </Button>
           <Button type="button" onClick={() => void onGuardSave()}>
-            {guard?.action === "close" ? "Save and close" : "Save and reload"}
+            {guard?.action === "close" ? t("common.saveAndClose") : t("common.saveAndReload")}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -85,6 +85,7 @@ export function SsbhFileEditorHosts({
   shlModelFolderNames,
   shlBodySlotRequired = true,
 }: SsbhFileEditorHostsProps) {
+  const { t } = useTranslation("ssbh-modals");
   return (
     <>
       <NumdlbEditorModalHost
@@ -98,7 +99,7 @@ export function SsbhFileEditorHosts({
         viewportSuspend={viewportSuspend}
       />
       <GuardDialog
-        label="NUMDLB"
+        label={t("formats.numdlb")}
         guard={numdlb.guard}
         onGuardOpenChange={numdlb.onGuardOpenChange}
         onGuardCancel={numdlb.onGuardCancel}
@@ -117,7 +118,7 @@ export function SsbhFileEditorHosts({
         viewportSuspend={viewportSuspend}
       />
       <GuardDialog
-        label="NUHLPB"
+        label={t("formats.nuhlpb")}
         guard={nuhlpb.guard}
         onGuardOpenChange={nuhlpb.onGuardOpenChange}
         onGuardCancel={nuhlpb.onGuardCancel}
@@ -136,7 +137,7 @@ export function SsbhFileEditorHosts({
         viewportSuspend={viewportSuspend}
       />
       <GuardDialog
-        label="NUMATB"
+        label={t("formats.numatb")}
         guard={numatb.guard}
         onGuardOpenChange={numatb.onGuardOpenChange}
         onGuardCancel={numatb.onGuardCancel}
@@ -156,7 +157,7 @@ export function SsbhFileEditorHosts({
         viewportSuspend={viewportSuspend}
       />
       <GuardDialog
-        label="JNTT"
+        label={t("formats.jntt")}
         guard={jnttbl.guard}
         onGuardOpenChange={jnttbl.onGuardOpenChange}
         onGuardCancel={jnttbl.onGuardCancel}
@@ -177,7 +178,7 @@ export function SsbhFileEditorHosts({
         bodySlotRequired={shlBodySlotRequired}
       />
       <GuardDialog
-        label="SHL"
+        label={t("formats.shl")}
         guard={shl.guard}
         onGuardOpenChange={shl.onGuardOpenChange}
         onGuardCancel={shl.onGuardCancel}
@@ -196,7 +197,7 @@ export function SsbhFileEditorHosts({
         viewportSuspend={viewportSuspend}
       />
       <GuardDialog
-        label="vernier"
+        label={t("formats.vernier")}
         guard={vernier.guard}
         onGuardOpenChange={vernier.onGuardOpenChange}
         onGuardCancel={vernier.onGuardCancel}

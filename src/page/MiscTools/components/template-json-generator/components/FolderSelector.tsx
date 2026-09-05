@@ -7,6 +7,7 @@ import { open } from "@tauri-apps/plugin-dialog"
 import { readDir } from "@tauri-apps/plugin-fs"
 import { FolderOpen, Loader2, AlertTriangle } from "lucide-react"
 import { useTemplateStore } from "@/store/templateStore"
+import { useTranslation } from "react-i18next"
 
 interface FileInfo {
     name: string
@@ -73,6 +74,7 @@ export function FolderSelector({
     setCompleteProjectData,
     setSettings
 }: FolderSelectorProps) {
+    const { t } = useTranslation("misc-tools-b")
     const { resetAll } = useTemplateStore()
     const handleFolderSelect = async () => {
         try {
@@ -130,7 +132,7 @@ export function FolderSelector({
             const dataDir = entries.find(entry => entry.name === 'data' && entry.isDirectory)
 
             if (!dataDir) {
-                alert("Selected folder must contain a 'data' directory. Only files within the data directory will be processed.")
+                alert(t("template.selectDataError"))
                 setSelectedFolder("")
                 return
             }
@@ -245,10 +247,10 @@ export function FolderSelector({
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                     <FolderOpen className="h-5 w-5" />
-                    Folder Selection
+                    {t("template.selectFolderTitle")}
                 </CardTitle>
                 <CardDescription>
-                    Select a folder containing a /data directory. Only files within the data directory will be processed.
+                    {t("template.selectFolderDescription")}
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -257,7 +259,7 @@ export function FolderSelector({
                         <Input
                             value={selectedFolder}
                             readOnly
-                            placeholder="No folder selected"
+                            placeholder={t("template.noFolder")}
                         />
                         <Button
                             onClick={handleFolderSelect}
@@ -269,7 +271,7 @@ export function FolderSelector({
                             ) : (
                                 <FolderOpen className="h-4 w-4" />
                             )}
-                            Select Folder
+                            {t("template.selectFolder")}
                         </Button>
                     </div>
 
@@ -277,9 +279,11 @@ export function FolderSelector({
                         <Alert>
                             <AlertTriangle className="h-4 w-4 text-orange-500" />
                             <AlertDescription className="text-orange-600">
-                                Selected folder: {selectedFolder}
+                                {t("template.selectedFolder", { path: selectedFolder })}
                                 <br />
-                                Only files with extensions {ALLOWED_EXTENSIONS.join(', ')} within the /data directory will be processed.
+                                {t("template.extensionsHint", {
+                                  extensions: ALLOWED_EXTENSIONS.join(", "),
+                                })}
                             </AlertDescription>
                         </Alert>
                     )}

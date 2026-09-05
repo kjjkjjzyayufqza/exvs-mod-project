@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import type { StageListEntry } from "@/models/stageListEntry";
 import { getPathSeparatorFromFileUrl } from "@/lib/fhm2d_fileUrlUtils";
 import { formatSeriesPngFileNameFromBaseName, resolveMappedSeriesBaseName } from "../series-list/seriesImage";
+import { useTranslation } from "react-i18next";
 
 interface StageCardProps {
   stage: StageListEntry;
@@ -30,6 +31,7 @@ export function StageCard({
   stageIconConvertDirPath,
   stageIconBaseNameOrder,
 }: StageCardProps) {
+  const { t } = useTranslation("test-stage-list-view");
   const stageName = stage.name ?? "";
   const baseName = resolveMappedSeriesBaseName(stageIconBaseNameOrder, stage.iconIndex ?? 0);
   const fileName = baseName ? formatSeriesPngFileNameFromBaseName(baseName) : null;
@@ -74,7 +76,7 @@ export function StageCard({
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="text-sm font-medium line-clamp-2 wrap-break-word">
-                  {stageName || `Stage ${stage.entryId ?? index}`}
+                  {stageName || t("card.fallbackName", { id: stage.entryId ?? index })}
                 </div>
               </TooltipTrigger>
               {stageName && (
@@ -86,8 +88,8 @@ export function StageCard({
           </TooltipProvider>
 
           <div className="text-xs text-muted-foreground space-y-0.5">
-            <div>ID: {stage.entryId ?? 0}</div>
-            <div>Index: {index}</div>
+            <div data-i18n-ignore="">{t("form.idLabel", { id: stage.entryId ?? 0 })}</div>
+            <div>{t("card.index", { index })}</div>
           </div>
         </div>
       </div>
@@ -103,7 +105,7 @@ export function StageCard({
             if (!editable) return;
             onCopy();
           }}
-          title="Copy as new"
+          title={t("actions.copyAsNew")}
         >
           <Copy className="w-4 h-4" />
         </Button>
@@ -117,7 +119,7 @@ export function StageCard({
             if (!editable) return;
             onDelete();
           }}
-          title="Delete"
+          title={t("actions.delete")}
         >
           <Trash2 className="w-4 h-4" />
         </Button>

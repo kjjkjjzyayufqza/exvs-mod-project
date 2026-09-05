@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import type { Virtualizer } from "@tanstack/react-virtual";
+import { useTranslation } from "react-i18next";
 import type { EffectProjectEntrySnapshot } from "@/models/characterEffectProject";
 import { cn } from "@/lib/utils";
 import { formatEffectProjectIdLeBeLine } from "./effectProjectDisplayUtils";
@@ -23,18 +24,19 @@ export function EffectProjectRowListPanel({
   onSelectRow,
   disabled,
 }: Props) {
+  const { t } = useTranslation("ssbh-motion");
   const virtualItems = rowVirtualizer.getVirtualItems();
   const totalSize = rowVirtualizer.getTotalSize();
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_3rem] gap-2 border-b bg-muted/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-        <span>Effect project id</span>
-        <span className="text-right">Buf</span>
+        <span>{t("effectProject.columnId")}</span>
+        <span className="text-right">{t("effectProject.columnBuf")}</span>
       </div>
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto overscroll-contain">
         {visibleRowIndices.length === 0 ? (
-          <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">No rows match the filter.</div>
+          <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">{t("effectProject.noMatch")}</div>
         ) : (
           <div className="relative w-full" style={{ height: totalSize }}>
             {virtualItems.map((vi) => {
@@ -62,6 +64,7 @@ export function EffectProjectRowListPanel({
                     <div
                       className="min-w-0 break-all font-mono text-[10px] leading-snug tabular-nums"
                       title={formatEffectProjectIdLeBeLine(entry.EffectProjectId)}
+                      data-i18n-ignore=""
                     >
                       {formatEffectProjectIdLeBeLine(entry.EffectProjectId)}
                     </div>

@@ -27,6 +27,7 @@ import { Plus, Search, Image as ImageIcon, Download } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useMemo, useCallback, useEffect, useReducer, useState } from "react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { TexturePreviewModal } from "./TexturePreviewModal";
 import { TextureReplaceModal } from "./TextureReplaceModal";
 import {
@@ -53,16 +54,16 @@ import type { DdsFormat } from "./TextureFormatSelect";
 const ASYNC_THUMB_CONCURRENCY = 4;
 const TEXTURE_ROW_HEIGHT = 40;
 
-function formatInfoCategory(category: TextureManagerEntry["infoCategory"]): string {
+function formatInfoCategory(category: TextureManagerEntry["infoCategory"], t: (key: string) => string): string {
   switch (category) {
     case "fog":
-      return "fog";
+      return t("categories.fog");
     case "light":
-      return "light";
+      return t("categories.light");
     case "post_effect":
-      return "post effect";
+      return t("categories.postEffect");
     default:
-      return "info";
+      return t("categories.info");
   }
 }
 
@@ -75,6 +76,7 @@ export function SceneTextureManager({
   textureDataMap,
   decodeContext,
 }: SceneTextureManagerProps) {
+  const { t } = useTranslation("scene-texture");
   const {
     entries,
     selectedId,
@@ -190,10 +192,10 @@ export function SceneTextureManager({
 
   const handleAddTexture = useCallback(async () => {
     const selected = await open({
-      title: "Add Texture to Scene",
+      title: t("dialog.addTitle"),
       multiple: true,
       filters: [
-        { name: "Textures", extensions: ["nutexb", "png", "dds", "tga"] },
+        { name: t("dialog.texturesFilter"), extensions: ["nutexb", "png", "dds", "tga"] },
       ],
     });
     if (!selected) return;
@@ -231,7 +233,7 @@ export function SceneTextureManager({
       setAddCandidates(analyzed);
     } catch (error) {
       console.error(error);
-      toast.error("Failed to analyze textures for duplicates");
+      toast.error(t("errors.analyzeDuplicates"));
     } finally {
       setAddAnalyzing(false);
     }
@@ -257,10 +259,10 @@ export function SceneTextureManager({
             );
             if (!existing?.nutexbPath) {
               failedCount += 1;
-              toast.error(`Cannot replace ${candidate.filename}`, {
+              toast.error(t("errors.cannotReplace", { filename: candidate.filename }), {
                 description: existing
-                  ? "Existing texture has no target path"
-                  : "Matching texture entry not found",
+                  ? t("errors.noTargetPath")
+                  : t("errors.entryNotFound"),
               });
               done += 1;
               setConvertProgress({ done, total: selections.length });
@@ -282,7 +284,7 @@ export function SceneTextureManager({
             } catch (error) {
               failedCount += 1;
               console.error(error);
-              toast.error(`Failed to replace ${existing.filename}`, {
+              toast.error(t("errors.replaceFailed", { filename: existing.filename }), {
                 description:
                   error instanceof Error ? error.message : String(error),
               });
@@ -381,7 +383,7 @@ export function SceneTextureManager({
   const handleDelete = useCallback(
     (entry: TextureManagerEntry) => {
       if (entry.scope === "info") {
-        toast.info("Info textures are not removed through the model texture list");
+        toast.info(t("errors.infoNotRemovable"));
         return;
       }
       // A texture wired into a numatb material must not be removed — doing so
@@ -389,8 +391,8 @@ export function SceneTextureManager({
       // commits with "save changes" (existing files are deleted from the stage
       // textures/ folder by the save pipeline at that point).
       if (entry.referencedBy.length > 0) {
-        toast.error("Cannot remove a texture referenced by numatb", {
-          description: `${entry.filename} is used by: ${entry.referencedBy.join(", ")}`,
+        toast.error(t("errors.referenced"), {
+          description: t("errors.usedBy", { filename: entry.filename, refs: entry.referencedBy.join(", ") }),
         });
         return;
       }
@@ -420,12 +422,12 @@ export function SceneTextureManager({
         suggestedFilename: entry.filename.replace(/\.nutexb$/i, ".png"),
       });
       if (outputPath) {
-        toast.success(`Exported PNG: ${outputPath.split(/[/\\]/).pop()}`);
+        toast.success(t("success.exported", { filename: outputPath.split(/[/\\]/).pop() }));
       }
     } catch (error) {
       console.error(error);
       const message =
-        error instanceof Error ? error.message : "Failed to export nutexb to PNG";
+        error instanceof Error ? error.message : t("errors.exportFailed");
       toast.error(message);
     } finally {
       setIsExporting(false);
@@ -468,7 +470,7 @@ export function SceneTextureManager({
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search textures..."
+            placeholder={t("toolbar.searchPlaceholder")}
             className="h-6 pl-6 text-[11px]"
           />
         </div>
@@ -477,7 +479,7 @@ export function SceneTextureManager({
           size="icon"
           className="h-6 w-6 shrink-0"
           onClick={handleAddTexture}
-          title="Add texture"
+          title={t("toolbar.add")}
         >
           <Plus className="h-3.5 w-3.5" />
         </Button>
@@ -488,7 +490,7 @@ export function SceneTextureManager({
             className="h-6 w-6 shrink-0"
             onClick={() => void handleExport(selectedEntry)}
             disabled={isExporting}
-            title="Export selected nutexb to PNG"
+            title={t("toolbar.exportSelected")}
           >
             <Download className="h-3.5 w-3.5" />
           </Button>
@@ -500,14 +502,14 @@ export function SceneTextureManager({
           <div className="flex flex-col items-center justify-center h-32 text-muted-foreground gap-1">
             <ImageIcon className="h-6 w-6 opacity-40" />
             <p className="text-[10px] opacity-60">
-              {searchQuery.trim() ? `No textures match "${searchQuery.trim()}"` : "No textures"}
+              {searchQuery.trim() ? t("empty.noMatches", { query: searchQuery.trim() }) : t("empty.noTextures")}
             </p>
           </div>
         ) : (
           <>
             <TextureSection
-              title="Model textures"
-              description="Shared textures folder"
+              title={t("sections.model")}
+              description={t("sections.sharedFolder")}
               entries={modelEntries}
               textureDataMap={textureDataMap}
               selectedId={selectedId}
@@ -527,8 +529,8 @@ export function SceneTextureManager({
             />
             {(hasInfoEntries || infoEntries.length > 0) && (
               <TextureSection
-                title="Info textures"
-                description="fog / light / post_effect"
+                title={t("sections.info")}
+                description={t("sections.infoDescription")}
                 entries={infoEntries}
                 textureDataMap={textureDataMap}
                 selectedId={selectedId}
@@ -588,10 +590,10 @@ export function SceneTextureManager({
             const entry = replaceTarget;
             setReplaceTarget(null);
             open({
-              title: `Replace ${entry.filename}`,
+              title: t("actions.replaceNamed", { filename: entry.filename }),
               multiple: false,
               filters: [
-                { name: "Textures", extensions: ["nutexb", "png", "dds", "tga"] },
+                { name: t("dialog.texturesFilter"), extensions: ["nutexb", "png", "dds", "tga"] },
               ],
             }).then((selected) => {
               if (typeof selected !== "string" || !selected.trim()) return;
@@ -599,7 +601,7 @@ export function SceneTextureManager({
               const isNutexb = filePath.toLowerCase().endsWith(".nutexb");
               if (entry.scope === "info") {
                 if (!entry.nutexbPath) {
-                  toast.error("Info texture has no target path");
+                  toast.error(t("errors.noTargetPath"));
                   return;
                 }
                 replaceNutexbInPlace({
@@ -616,14 +618,14 @@ export function SceneTextureManager({
                       thumbnailDataUrl: null,
                     });
                     bumpThumbnailCache();
-                    toast.success(`Replaced ${entry.filename}`);
+                    toast.success(t("success.replaced", { filename: entry.filename }));
                   })
                   .catch((error) => {
                     console.error(error);
                     const message =
                       error instanceof Error
                         ? error.message
-                        : "Failed to replace info texture";
+                        : t("errors.replaceFailed", { filename: entry.filename });
                     toast.error(message);
                   });
                 return;
@@ -692,6 +694,7 @@ function TextureSection({
   isExporting,
   grow,
 }: TextureSectionProps) {
+  const { t } = useTranslation("scene-texture");
   return (
     <section className={cn("flex min-h-0 flex-col border-b border-border/40", grow ? "flex-1" : "basis-1/2")}>
       <div className="flex items-center justify-between gap-2 border-b border-border/30 bg-muted/10 px-2 py-1">
@@ -714,7 +717,7 @@ function TextureSection({
         className="flex-1 min-h-0 overflow-auto"
         emptyState={
           <div className="flex h-16 items-center justify-center px-2 text-center text-[10px] text-muted-foreground">
-            No matches in this section
+            {t("empty.noSectionMatches")}
           </div>
         }
         renderRow={(entry) => (
@@ -761,6 +764,7 @@ function TextureRow({
   onExport,
   canExport,
 }: TextureRowProps) {
+  const { t } = useTranslation("scene-texture");
   const thumbnailDataUrl = entry.nutexbPath
     ? getSceneTextureThumbnailDataUrl(entry.nutexbPath, textureDataMap)
     : null;
@@ -822,7 +826,7 @@ function TextureRow({
               variant={entry.status === "added" ? "default" : "secondary"}
               className="text-[9px] px-1 py-0 leading-tight h-auto"
             >
-              {isInfoTexture ? formatInfoCategory(entry.infoCategory) : entry.status}
+              {isInfoTexture ? formatInfoCategory(entry.infoCategory, t) : entry.status}
             </Badge>
             {entry.referencedBy.length > 0 && (
               <span className="text-[9px] text-muted-foreground/70 font-mono tabular-nums">
@@ -834,12 +838,12 @@ function TextureRow({
       </ContextMenuTrigger>
 
       <ContextMenuContent>
-        <ContextMenuItem onClick={onPreview}>Preview</ContextMenuItem>
+        <ContextMenuItem onClick={onPreview}>{t("actions.preview")}</ContextMenuItem>
         {canExport && (
-          <ContextMenuItem onClick={onExport}>Export to PNG</ContextMenuItem>
+          <ContextMenuItem onClick={onExport}>{t("actions.exportPng")}</ContextMenuItem>
         )}
-        <ContextMenuItem onClick={onReplace}>Replace</ContextMenuItem>
-        <ContextMenuItem onClick={onCopyPath}>Copy Path</ContextMenuItem>
+        <ContextMenuItem onClick={onReplace}>{t("actions.replace")}</ContextMenuItem>
+        <ContextMenuItem onClick={onCopyPath}>{t("actions.copyPath")}</ContextMenuItem>
         {!isInfoTexture && (
           <ContextMenuItem
             onClick={onDelete}
@@ -847,8 +851,8 @@ function TextureRow({
             className={entry.referencedBy.length > 0 ? undefined : "text-destructive"}
           >
             {entry.referencedBy.length > 0
-              ? "Remove (referenced by numatb)"
-              : "Remove"}
+              ? t("actions.removeReferenced")
+              : t("actions.remove")}
           </ContextMenuItem>
         )}
       </ContextMenuContent>

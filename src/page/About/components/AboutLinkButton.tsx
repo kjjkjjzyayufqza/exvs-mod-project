@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { ExternalLink } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
 
 export function AboutLinkButton({
   href,
@@ -12,15 +13,16 @@ export function AboutLinkButton({
   href: string;
   label: string;
 }) {
+  const { t } = useTranslation("small-pages");
   const onOpen = useCallback(async () => {
     try {
       await openUrl(href);
     } catch {
       try {
         await navigator.clipboard.writeText(href);
-        toast.success("URL copied");
+        toast.success(t("about.urlCopied"));
       } catch {
-        toast.error("Could not open or copy the URL");
+        toast.error(t("about.urlError"));
       }
     }
   }, [href]);

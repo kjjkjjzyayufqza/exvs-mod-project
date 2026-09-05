@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { ImageIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,7 @@ export function SeriesForm({
   isSeriesIdTaken,
   onChange,
 }: SeriesFormProps) {
+  const { t } = useTranslation("test-lists");
   const [previewVersion, setPreviewVersion] = useState(0);
   const [seriesImageDialogOpen, setSeriesImageDialogOpen] = useState(false);
 
@@ -94,9 +96,9 @@ export function SeriesForm({
   const onSubmit = useCallback((data: FormData) => {
     // Validate Series ID uniqueness
     if (isSeriesIdTaken?.(data.entryId)) {
-      form.setError("entryId", {
+      form.setError("entryId" as const, {
         type: "manual",
-        message: "Series ID already exists"
+        message: t("series.idExists")
       });
       return;
     }
@@ -141,7 +143,7 @@ export function SeriesForm({
                 <div className="h-24 w-48 overflow-hidden rounded border bg-black relative group">
                   <img
                     src={thumbnailSrc}
-                    alt={seriesName || "Series"}
+                    alt={seriesName || t("series.altFallback")}
                     className="h-full w-full object-contain"
                     onError={(e) => {
                       e.currentTarget.src = "/tauri.svg";
@@ -155,7 +157,7 @@ export function SeriesForm({
                       className="shadow-md font-semibold"
                       onClick={() => setSeriesImageDialogOpen(true)}
                     >
-                      View
+                      {t("series.view")}
                     </Button>
                   </div>
                 </div>
@@ -163,11 +165,11 @@ export function SeriesForm({
               <div className="flex-1 min-w-0 space-y-2">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 space-y-2">
-                    <CardTitle className="text-lg">Series Details</CardTitle>
+                    <CardTitle className="text-lg">{t("series.details")}</CardTitle>
                     <div className="text-xs text-muted-foreground">
                       <div>ID: {series.entryId}</div>
-                      <div>Index: {index}</div>
-                      <div>Image: {imageFileName ?? "-"}</div>
+                      <div>{t("series.indexLabel", { index })}</div>
+                      <div>{t("series.imageLabel", { name: imageFileName ?? "-" })}</div>
                     </div>
                   </div>
                   <SeriesImageReplaceDialog
@@ -192,7 +194,7 @@ export function SeriesForm({
                         className="shrink-0 font-semibold shadow-sm gap-2"
                       >
                         <ImageIcon className="w-4 h-4 shrink-0" />
-                        Image
+                        {t("series.image")}
                       </Button>
                     }
                   />
@@ -209,11 +211,11 @@ export function SeriesForm({
                   name="entryId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Series ID</FormLabel>
+                      <FormLabel>{t("series.seriesId")}</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
-                          placeholder="Enter series ID"
+                          placeholder={t("series.enterId")}
                           {...field}
                           onChange={(e) => field.onChange(Number(e.target.value) || 0)}
                         />
@@ -228,9 +230,9 @@ export function SeriesForm({
                   name="seriesName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Series Name</FormLabel>
+                      <FormLabel>{t("series.seriesName")}</FormLabel>
                       <FormControl>
-                        <Input placeholder="Enter series name" {...field} />
+                        <Input placeholder={t("series.enterName")} {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -243,7 +245,7 @@ export function SeriesForm({
                     name="iconFileIndex"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>iconFileIndex</FormLabel>
+                        <FormLabel>{t("series.field.iconFileIndex")}</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -252,7 +254,7 @@ export function SeriesForm({
                           />
                         </FormControl>
                         <FormDescription>
-                          Points to image index in 0xA0253AA0.fhm2d.
+                          {t("series.help.iconFileIndex")}
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -264,7 +266,7 @@ export function SeriesForm({
                     name="characterListPosition"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>characterListPosition</FormLabel>
+                        <FormLabel>{t("series.field.characterListPosition")}</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -273,7 +275,7 @@ export function SeriesForm({
                           />
                         </FormControl>
                         <FormDescription>
-                          Position/index used for character list ordering.
+                          {t("series.help.characterListPosition")}
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -285,7 +287,7 @@ export function SeriesForm({
                     name="displayNameRef"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>displayNameRef</FormLabel>
+                        <FormLabel>{t("series.field.displayNameRef")}</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -294,7 +296,7 @@ export function SeriesForm({
                           />
                         </FormControl>
                         <FormDescription>
-                          Name lookup used by the proficiency (Jukurendo) popup.
+                          {t("series.help.displayNameRef")}
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -306,7 +308,7 @@ export function SeriesForm({
                     name="recordLookupId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>recordLookupId</FormLabel>
+                        <FormLabel>{t("series.field.recordLookupId")}</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -314,7 +316,7 @@ export function SeriesForm({
                             onChange={(e) => field.onChange(Number(e.target.value) || 0)}
                           />
                         </FormControl>
-                        <FormDescription>Record lookup key.</FormDescription>
+                        <FormDescription>{t("series.help.recordLookupId")}</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -325,7 +327,7 @@ export function SeriesForm({
                     name="unk0x08"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>unk0x08</FormLabel>
+                        <FormLabel>{t("series.field.unk0x08")}</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -333,7 +335,7 @@ export function SeriesForm({
                             onChange={(e) => field.onChange(Number(e.target.value) || 0)}
                           />
                         </FormControl>
-                        <FormDescription>No IDA reference; meaning unknown.</FormDescription>
+                        <FormDescription>{t("series.help.unk0x08")}</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -341,7 +343,7 @@ export function SeriesForm({
                 </div>
 
                 <Button type="submit" disabled={!editable || !form.formState.isDirty} className="w-full mt-4">
-                  Save Changes
+                  {t("series.saveChanges")}
                 </Button>
               </fieldset>
             </ScrollArea>

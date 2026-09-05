@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import type { MergedRegistryEntry } from "@/services/resourceRegistry/types";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 export interface ResourceRegistryTableActions {
   onCopySeed: (seed: string) => void;
@@ -53,6 +54,7 @@ function SortIcon({ sorted }: { sorted: false | "asc" | "desc" }) {
 }
 
 export function ResourceRegistryDataTable({ rows, actions }: ResourceRegistryDataTableProps) {
+  const { t } = useTranslation("small-pages");
   const [sorting, setSorting] = useState<SortingState>([{ id: "category", desc: false }]);
 
   const columns = useMemo<ColumnDef<MergedRegistryEntry>[]>(
@@ -60,7 +62,7 @@ export function ResourceRegistryDataTable({ rows, actions }: ResourceRegistryDat
       {
         id: "source",
         accessorKey: "sourceLayer",
-        header: "Src",
+        header: t("registry.src"),
         size: 52,
         cell: ({ row }) => (
           <Badge
@@ -74,7 +76,7 @@ export function ResourceRegistryDataTable({ rows, actions }: ResourceRegistryDat
       {
         id: "category",
         accessorKey: "category",
-        header: "Category",
+        header: t("registry.category"),
         size: 88,
         cell: ({ row }) => (
           <span className="text-xs font-mono">{row.original.category}</span>
@@ -83,7 +85,7 @@ export function ResourceRegistryDataTable({ rows, actions }: ResourceRegistryDat
       {
         id: "slot",
         accessorKey: "slot",
-        header: "Slot",
+        header: t("registry.slot"),
         size: 100,
         cell: ({ row }) => (
           <span className="text-xs font-mono">{row.original.slot}</span>
@@ -92,7 +94,7 @@ export function ResourceRegistryDataTable({ rows, actions }: ResourceRegistryDat
       {
         id: "displayName",
         accessorFn: (row) => row.displayName ?? "",
-        header: "Name",
+        header: t("registry.name"),
         size: 140,
         cell: ({ row }) => (
           <span className="text-xs truncate max-w-[160px] block">
@@ -103,7 +105,7 @@ export function ResourceRegistryDataTable({ rows, actions }: ResourceRegistryDat
       {
         id: "seed",
         accessorKey: "seed",
-        header: "Seed",
+        header: t("registry.seed"),
         cell: ({ row }) => (
           <span className="font-mono text-xs break-all">{row.original.seed}</span>
         ),
@@ -111,7 +113,7 @@ export function ResourceRegistryDataTable({ rows, actions }: ResourceRegistryDat
       {
         id: "hashHex",
         accessorKey: "hashHex",
-        header: "Hash",
+        header: t("registry.hash"),
         size: 100,
         cell: ({ row }) => (
           <span className="font-mono text-[11px] text-muted-foreground">
@@ -131,7 +133,7 @@ export function ResourceRegistryDataTable({ rows, actions }: ResourceRegistryDat
       {
         id: "notes",
         accessorFn: (row) => row.notes ?? "",
-        header: "Notes",
+        header: t("registry.notes"),
         size: 160,
         cell: ({ row }) => (
           <span className="text-[10px] text-muted-foreground line-clamp-2 max-w-[180px]">
@@ -153,7 +155,7 @@ export function ResourceRegistryDataTable({ rows, actions }: ResourceRegistryDat
                 size="icon"
                 variant="ghost"
                 className="h-7 w-7"
-                title="Copy seed"
+                title={t("registry.copySeed")}
                 onClick={() => actions.onCopySeed(entry.seed)}
               >
                 <Copy className="h-3.5 w-3.5" />
@@ -162,10 +164,10 @@ export function ResourceRegistryDataTable({ rows, actions }: ResourceRegistryDat
                 size="icon"
                 variant="ghost"
                 className="h-7 w-7"
-                title="Copy hash"
+                title={t("registry.copyHash")}
                 onClick={() => actions.onCopyHash(entry.hashHex)}
               >
-                <span className="text-[9px] font-mono">0x</span>
+                <span className="text-[9px] font-mono" data-i18n-ignore="">0x</span>
               </Button>
               {isWorkspace ? (
                 <>
@@ -173,7 +175,7 @@ export function ResourceRegistryDataTable({ rows, actions }: ResourceRegistryDat
                     size="icon"
                     variant="ghost"
                     className="h-7 w-7"
-                    title="Promote to global"
+                    title={t("registry.promote")}
                     onClick={() => actions.onPromote(entry.id)}
                   >
                     <ArrowUpToLine className="h-3.5 w-3.5" />
@@ -182,7 +184,7 @@ export function ResourceRegistryDataTable({ rows, actions }: ResourceRegistryDat
                     size="icon"
                     variant="ghost"
                     className="h-7 w-7"
-                    title="Edit"
+                    title={t("registry.edit")}
                     onClick={() => actions.onEdit(entry)}
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -191,7 +193,7 @@ export function ResourceRegistryDataTable({ rows, actions }: ResourceRegistryDat
                     size="icon"
                     variant="ghost"
                     className="h-7 w-7 text-destructive"
-                    title="Delete"
+                    title={t("registry.delete")}
                     onClick={() => actions.onDelete(entry.id)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -202,7 +204,7 @@ export function ResourceRegistryDataTable({ rows, actions }: ResourceRegistryDat
                   size="icon"
                   variant="ghost"
                   className="h-7 w-7"
-                  title="View global entry"
+                  title={t("registry.viewGlobal")}
                   onClick={() => actions.onEdit(entry)}
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -286,7 +288,7 @@ export function ResourceRegistryDataTable({ rows, actions }: ResourceRegistryDat
           {tableRows.length === 0 ? (
             <TableRow>
               <TableCell colSpan={columns.length} className="h-24 text-center text-sm text-muted-foreground">
-                No entries match the current filters.
+                {t("registry.noEntries")}
               </TableCell>
             </TableRow>
           ) : (

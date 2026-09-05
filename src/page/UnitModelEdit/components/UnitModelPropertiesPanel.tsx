@@ -1,5 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -51,10 +52,11 @@ function ValidationStatusBanner({
   validation: UnitModelValidationResult | null;
   isValidating: boolean;
 }) {
+  const { t } = useTranslation("unit-properties");
   if (!unitRoot) {
     return (
       <div className="rounded-md border bg-muted/20 p-2 text-[11px] text-muted-foreground">
-        Open or extract a unit model folder to start validation.
+        {t("validation.openPrompt")}
       </div>
     );
   }
@@ -64,8 +66,8 @@ function ValidationStatusBanner({
       <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2 text-[11px] text-primary">
         <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin" />
         <div>
-          <div className="font-semibold">Checking unit model</div>
-          <div className="mt-0.5 text-primary/80">Validation refreshes after folder load and Unit Model edits.</div>
+          <div className="font-semibold">{t("validation.checking")}</div>
+          <div className="mt-0.5 text-primary/80">{t("validation.refreshHint")}</div>
         </div>
       </div>
     );
@@ -74,7 +76,7 @@ function ValidationStatusBanner({
   if (!validation) {
     return (
       <div className="rounded-md border bg-muted/20 p-2 text-[11px] text-muted-foreground">
-        Validation runs automatically when a unit folder is opened or edited. Use Run to refresh it now.
+        {t("validation.autoHint")}
       </div>
     );
   }
@@ -84,8 +86,8 @@ function ValidationStatusBanner({
       <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-[11px] text-destructive">
         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <div>
-          <div className="font-semibold">Repack blocked by {validation.errors.length} validation issue(s)</div>
-          <div className="mt-0.5 text-destructive/80">Fix the issue list below before repacking.</div>
+          <div className="font-semibold">{t("validation.blocked", { count: validation.errors.length })}</div>
+          <div className="mt-0.5 text-destructive/80">{t("validation.fixHint")}</div>
         </div>
       </div>
     );
@@ -95,9 +97,9 @@ function ValidationStatusBanner({
     <div className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2 text-[11px] text-emerald-600">
       <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
       <div>
-        <div className="font-semibold">Ready to repack</div>
+        <div className="font-semibold">{t("validation.ready")}</div>
         <div className="mt-0.5 text-emerald-700/80 dark:text-emerald-400/80">
-          Required files and texture references passed validation.
+          {t("validation.passed")}
         </div>
       </div>
     </div>
@@ -165,13 +167,14 @@ export function UnitModelPropertiesPanel({
   onOpenOutput,
   isValidating,
 }: UnitModelPropertiesPanelProps) {
+  const { t } = useTranslation("unit-properties");
   const [tab, setTab] = useState<UnitModelPropertiesTab>("inspect");
 
   return (
     <div className="flex h-full min-w-0 max-w-full flex-col overflow-hidden border-l">
       <div className="flex shrink-0 items-center overflow-hidden border-b bg-muted/20 px-3 py-1 select-none">
         <span className="truncate text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          Details
+          {t("title")}
         </span>
       </div>
 
@@ -182,42 +185,42 @@ export function UnitModelPropertiesPanel({
       >
         <TabsList className="shrink-0 h-7 w-full min-w-0 justify-start overflow-hidden rounded-none border-b bg-muted/20 px-1">
           <TabsTrigger value="inspect" className={TAB_TRIGGER}>
-            Inspect
+            {t("tabs.inspect")}
           </TabsTrigger>
           <TabsTrigger value="motion" className={TAB_TRIGGER}>
-            Motion
+            {t("tabs.motion")}
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="inspect" className="mt-0 min-h-0 min-w-0 flex-1 overflow-hidden">
           <ScrollArea className="h-full w-full min-w-0">
             <div className="min-w-0 max-w-full pb-4">
-              <MayaSection title="Unit Model" defaultOpen>
+              <MayaSection title={t("sections.unitModel")} defaultOpen>
                 <div className="space-y-1.5 text-[11px]">
                   <div className="min-w-0">
-                    <div className="text-muted-foreground">Model root</div>
-                    <div className="break-all font-mono text-[10px] leading-snug">{unitRoot ?? "None"}</div>
+                    <div className="text-muted-foreground">{t("fields.modelRoot")}</div>
+                    <div className="break-all font-mono text-[10px] leading-snug">{unitRoot ?? t("states.none")}</div>
                   </div>
                   <div className="min-w-0">
-                    <div className="text-muted-foreground">Structure JSON</div>
-                    <div className="break-all font-mono text-[10px] leading-snug">{structurePath ?? "None"}</div>
+                    <div className="text-muted-foreground">{t("fields.structureJson")}</div>
+                    <div className="break-all font-mono text-[10px] leading-snug">{structurePath ?? t("states.none")}</div>
                   </div>
                   <div className="min-w-0">
-                    <div className="text-muted-foreground">OB Mod folder</div>
+                    <div className="text-muted-foreground">{t("fields.obModFolder")}</div>
                     <div
                       className={cn(
                         "break-all font-mono text-[10px] leading-snug",
                         !obModPath.trim() && "text-destructive",
                       )}
                     >
-                      {obModPath.trim() || "Not configured"}
+                      {obModPath.trim() || t("states.notConfigured")}
                     </div>
                   </div>
                 </div>
               </MayaSection>
 
               <MayaSection
-                title="Validation"
+                title={t("sections.validation")}
                 actions={
                   <Button
                     type="button"
@@ -226,12 +229,12 @@ export function UnitModelPropertiesPanel({
                     className="h-5 w-5"
                     onClick={onValidate}
                     disabled={!unitRoot || isValidating}
-                    aria-label="Run validation"
+                    aria-label={t("actions.runValidation")}
                   >
                     {isValidating ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
                     ) : (
-                      <span className="text-[10px]">Run</span>
+                      <span className="text-[10px]">{t("actions.run")}</span>
                     )}
                   </Button>
                 }
@@ -240,43 +243,46 @@ export function UnitModelPropertiesPanel({
                   <ValidationStatusBanner unitRoot={unitRoot} validation={validation} isValidating={isValidating} />
                   {validation ? (
                     <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-                      <Metric label="Models" value={validation.summary.modelCount} />
-                      <Metric label="NUMATB" value={validation.summary.numatbCount} />
-                      <Metric label="NUHLPB" value={validation.summary.nuhlpbCount} />
-                      <Metric label="SHL files" value={validation.summary.shlCount} />
-                      <Metric label="SHL models" value={validation.summary.shlDeclaredModelCount ?? "-"} />
-                      <Metric label="Texture refs" value={validation.summary.textureReferenceCount} />
+                      <Metric label={t("metrics.models")} value={validation.summary.modelCount} />
+                      <Metric label={t("metrics.numatb")} value={validation.summary.numatbCount} />
+                      <Metric label={t("metrics.nuhlpb")} value={validation.summary.nuhlpbCount} />
+                      <Metric label={t("metrics.shlFiles")} value={validation.summary.shlCount} />
+                      <Metric label={t("metrics.shlModels")} value={validation.summary.shlDeclaredModelCount ?? "-"} />
+                      <Metric label={t("metrics.textureRefs")} value={validation.summary.textureReferenceCount} />
                     </div>
                   ) : null}
                 </div>
               </MayaSection>
 
               {lastRepack ? (
-                <MayaSection title="Last Repack">
+                <MayaSection title={t("sections.lastRepack")}>
                   <div className="space-y-2 text-[11px]">
                     <div className="break-all font-mono text-[10px] leading-snug">{lastRepack.outputPath}</div>
                     <div className="text-muted-foreground">
-                      {lastRepack.totalFiles} files, {formatBytes(lastRepack.outputSize)}
+                      {t("metrics.repackSummary", {
+                        files: lastRepack.totalFiles,
+                        size: formatBytes(lastRepack.outputSize),
+                      })}
                     </div>
                     <Button type="button" size="sm" variant="outline" className="h-7 w-full text-[10px]" onClick={onOpenOutput}>
-                      Reveal output
+                      {t("actions.revealOutput")}
                     </Button>
                   </div>
                 </MayaSection>
               ) : null}
 
               {validation?.errors.length ? (
-                <MayaSection title={`Issues (${validation.errors.length})`} defaultOpen>
+                <MayaSection title={t("sections.issuesCount", { count: validation.errors.length })} defaultOpen>
                   <ValidationIssueList errors={validation.errors} />
                 </MayaSection>
               ) : validation ? (
-                <MayaSection title="Issues">
-                  <p className="text-[11px] text-emerald-600">No blocking validation issues.</p>
+                <MayaSection title={t("sections.issues")}>
+                  <p className="text-[11px] text-emerald-600">{t("validation.noIssues")}</p>
                 </MayaSection>
               ) : null}
 
               {validation?.warnings.length ? (
-                <MayaSection title={`Warnings (${validation.warnings.length})`}>
+                <MayaSection title={t("sections.warningsCount", { count: validation.warnings.length })}>
                   <div className="space-y-1.5 text-[11px]">
                     {validation.warnings.map((warning, index) => (
                       <div key={`${warning}:${index}`} className="rounded-md border bg-muted/20 p-2">
@@ -287,7 +293,7 @@ export function UnitModelPropertiesPanel({
                 </MayaSection>
               ) : null}
 
-              <MayaSection title="Preview" defaultOpen>
+              <MayaSection title={t("sections.preview")} defaultOpen>
                 <div className="min-w-0 max-w-full overflow-x-hidden">
                   <SsbhModelPreviewInspector layout="flush" />
                 </div>
@@ -301,9 +307,9 @@ export function UnitModelPropertiesPanel({
             <div className="min-w-0 max-w-full space-y-1 p-3 pb-6">
               <div className="mb-1 flex items-baseline justify-between gap-2">
                 <h2 className="text-[11px] font-semibold tracking-wide text-foreground">
-                  Motion preview
+                  {t("motion.preview")}
                 </h2>
-                <span className="text-[9px] text-muted-foreground">Source · Convert · Edit</span>
+                <span className="text-[9px] text-muted-foreground">{t("motion.workflow")}</span>
               </div>
               <SsbhModelPreviewMotionPanel />
             </div>

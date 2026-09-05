@@ -1,0 +1,7 @@
+{
+  "menu": { "focusSelected": "Focus Selected", "resetCamera": "Reset Camera", "transformMode": "Transform Mode", "duplicate": "Duplicate", "delete": "Delete", "viewOptions": "View Options", "importStaticMesh": "Import Static Mesh...", "exportSelectedModel": "Export Selected Model..." },
+  "transform": { "title": "Transform", "translate": "Translate", "rotate": "Rotate", "scale": "Scale" },
+  "view": { "showGrid": "Show Grid", "showAxes": "Show Axes", "wireframe": "Wireframe" },
+  "axis": { "add": "Add {{key}}", "reset": "Reset axis", "remove": "Remove {{key}}", "rows": { "VDK_POSITION_X": { "label": "Trans", "title": "Translate" }, "VDK_ROTATION_X": { "label": "Rot", "title": "Rotate" }, "VDK_SCALE_X": { "label": "Scale", "title": "Scale" } } },
+  "texture": { "selectFile": "Select texture file", "placeholder": "texture.nutexb", "inputLabel": "Texture path", "browse": "Browse for texture" }
+}

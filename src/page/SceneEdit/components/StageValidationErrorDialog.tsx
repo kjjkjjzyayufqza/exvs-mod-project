@@ -1,5 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Box, Crosshair } from "lucide-react";
@@ -36,12 +37,14 @@ type ValidationRow =
 
 export function StageValidationErrorDialog({
   open,
-  title = "Texture validation failed",
+  title,
   errors,
   knownFolderNames,
   onClose,
   onSelectFolder,
 }: StageValidationErrorDialogProps) {
+  const { t } = useTranslation("scene-stage-dialogs");
+  const resolvedTitle = title ?? t("validation.title");
   const listRef = useRef<HTMLDivElement | null>(null);
   const groups = useMemo(
     () => groupErrorsByFolder(errors, knownFolderNames),
@@ -78,12 +81,8 @@ export function StageValidationErrorDialog({
   return (
     <AppRndModalShell
       titleId="stage-validation-error-title"
-      title={title}
-      subtitle={`${errors.length} issue${errors.length !== 1 ? "s" : ""}${
-        objectCount > 0
-          ? ` across ${objectCount} object${objectCount !== 1 ? "s" : ""}`
-          : ""
-      } blocked packing`}
+      title={resolvedTitle}
+      subtitle={t(objectCount > 0 ? "validation.subtitleWithObjects" : "validation.subtitle", { count: errors.length, objectCount })}
       headerIcon={<AlertTriangle className="h-4 w-4 text-destructive" />}
       dimensions={VALIDATION_MODAL_DIMENSIONS}
       storageKey="stage-validation-error-dialog-size"
@@ -91,14 +90,14 @@ export function StageValidationErrorDialog({
       footer={
         <div className="flex justify-end px-4 py-3">
           <Button type="button" onClick={onClose}>
-            Close
+            {t("common.close")}
           </Button>
         </div>
       }
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
         <p className="text-sm text-muted-foreground">
-          Fix the texture paths and try again.
+          {t("validation.instructions")}
         </p>
         <div ref={listRef} className="min-h-0 flex-1 overflow-auto rounded border overscroll-contain">
           <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
@@ -117,16 +116,16 @@ export function StageValidationErrorDialog({
                   {row.kind === "group" ? (
                     <div className="flex min-h-7 items-center gap-2 border-b text-sm font-medium text-foreground">
                       <Box className="h-4 w-4 shrink-0 text-destructive" />
-                      <span className="truncate">{row.folder ?? "Stage"}</span>
+                      <span className="truncate">{row.folder ?? t("validation.stage")}</span>
                       {row.folder && onSelectFolder ? (
                     <button
                       type="button"
                       className="ml-auto flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
                           onClick={() => onSelectFolder(row.folder!)}
-                      title="Select this object in the outliner"
+                      title={t("validation.locateTitle")}
                     >
                       <Crosshair className="h-3 w-3" />
-                      Locate
+                      {t("validation.locate")}
                     </button>
                       ) : null}
                     </div>

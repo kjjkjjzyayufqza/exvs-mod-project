@@ -1,0 +1,9 @@
+{
+  "analysis": { "waiting": "等待 DAE 分析，或分析报告了阻止转换的错误。" },
+  "output": { "title": "输出", "replaceNumshb": "仅写入临时 .numshb。现有 NUMDLB、NUMATB、NUSKTB、JNTTBL 和 NUHLPB 保持不变。", "unitModel": "生成的模型文件将注册到 Unit model models 文件夹{{stageRoot}}。引用的纹理会去重到共享纹理池。", "batchDirect": "所有 {{count}} 个文件共享这些 SSBH 和 NUMATB 设置。每个模型会直接写入自己的磁盘文件夹。", "direct": "SSBH 文件会直接写入选定的磁盘文件夹。", "memory": "SSBH 文件会保存在内存中，直到你保存 stage 文件夹{{stageRoot}}。", "batchFolderName": "每个输出文件夹使用其源 FBX/DAE 文件名。", "modelFolderName": "模型文件夹名称", "scale": "缩放", "upAxis": "上方向轴", "yUp": "Y-up", "zUp": "Z-up", "none": "无", "flipUv": "翻转 UV（V）", "flipUvHelp": "在 SSBH 转换期间反转 V 坐标。" },
+  "geometry": { "title": "包含几何体（{{selected}}/{{total}}）" },
+  "files": { "title": "输出文件", "replaceNote": "仅替换网格时，其他 SSBH 输出保持关闭。", "writeLog": "写入日志" },
+  "mapping": { "title": "NUMDLB 映射" },
+  "profiles": { "title": "NUMATB 配置文件（纹理数据）", "copyTitle": "复制完整 NUMATB 配置文件数据为 JSON（用于 AI 分析）", "copyLabel": "复制 NUMATB 配置文件为 JSON" },
+  "validation": { "checking": "正在检查 NUMATB 纹理引用……", "failed": "纹理引用验证失败：{{error}}", "fixTitle": "在转换前修复无法解析的纹理引用：" }
+}

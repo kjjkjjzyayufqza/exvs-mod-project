@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import {
   FileCode2,
   Loader2,
@@ -57,6 +58,7 @@ export function NuhlpbEditorModalWindow({
   skipActivate,
   viewportSuspend,
 }: NuhlpbEditorModalWindowProps) {
+  const { t } = useTranslation("ssbh-root-b");
   const dirty = useMemo(
     () => isNuhlpbDraftDirty(session.baseData, session.draftData),
     [session.baseData, session.draftData],
@@ -98,7 +100,7 @@ export function NuhlpbEditorModalWindow({
           onClick={onReloadRequest}
         >
           <RefreshCw className="mr-1 h-3.5 w-3.5" />
-          Reload
+          {t("reload")}
         </Button>
         <Button
           type="button"
@@ -109,7 +111,7 @@ export function NuhlpbEditorModalWindow({
           onClick={onReset}
         >
           <RotateCcw className="mr-1 h-3.5 w-3.5" />
-          Reset
+          {t("reset")}
         </Button>
         <Button
           type="button"
@@ -123,7 +125,7 @@ export function NuhlpbEditorModalWindow({
           ) : (
             <Save className="mr-1 h-3.5 w-3.5" />
           )}
-          {session.saving ? "Saving..." : "Save"}
+          {session.saving ? t("saving") : t("save")}
         </Button>
         <Button
           type="button"
@@ -133,7 +135,7 @@ export function NuhlpbEditorModalWindow({
           disabled={session.saving}
           onClick={onCloseRequest}
         >
-          Close
+          {t("close")}
         </Button>
       </div>
     ) : null;
@@ -145,7 +147,7 @@ export function NuhlpbEditorModalWindow({
       zIndex={session.zIndex}
       titleId={titleId}
       title={dirty ? `• ${title}` : title}
-      subtitle="Edit SSBH (.nuhlpb) file"
+      subtitle={t("editNuhlpb")}
       headerIcon={<FileCode2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
       onActivate={onActivate}
       onClose={onCloseRequest}
@@ -157,7 +159,7 @@ export function NuhlpbEditorModalWindow({
       {session.loading ? (
         <div className="flex items-center gap-2 px-5 py-4 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading NUHLPB...
+          {t("loadingNuhlpb")}
         </div>
       ) : session.loadError ? (
         <div className="px-5 py-4 text-sm text-destructive">{session.loadError}</div>
@@ -180,7 +182,7 @@ export function NuhlpbEditorModalWindow({
           </div>
         </div>
       ) : (
-        <div className="px-5 py-4 text-sm text-muted-foreground">No data.</div>
+        <div className="px-5 py-4 text-sm text-muted-foreground">{t("noData")}</div>
       )}
     </SsbhEditorModalWindowShell>
   );

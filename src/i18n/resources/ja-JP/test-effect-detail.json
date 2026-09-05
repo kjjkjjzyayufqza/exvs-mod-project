@@ -1,0 +1,101 @@
+{
+  "errors": {
+    "crcSeedRequired": "空でない文字列を入力して CRC32 を計算してください。",
+    "invalidHash": "有効なハッシュ（10進数または 0xHEX）を入力してください。",
+    "pathsUnavailable": "エフェクトフォルダーのパスを利用できません。",
+    "hashUpdateFailed": "ファイルハッシュを更新できませんでした",
+    "exportFailed": "nutexb を PNG にエクスポートできませんでした",
+    "replaceFailed": "エフェクトテクスチャを置換できませんでした"
+  },
+  "success": {
+    "hashUpdated": "Hash updated to {{hex}} ({{signed}})",
+    "exported": "Exported {{name}}",
+    "replaced": "Replaced {{name}}"
+  },
+  "labels": {
+    "hash": "Hash",
+    "hashInput": "Hex or signed/unsigned int",
+    "crcSeed": "Seed string → IEEE CRC32 (UTF-8)",
+    "name": "Name",
+    "path": "Path",
+    "extension": "Extension",
+    "fileIndex": "File index",
+    "missing": "Missing",
+    "effects": "Effects",
+    "modelRefs": "Model refs",
+    "textureParams": "Texture params",
+    "unknowns": "Unknowns",
+    "magic": "Magic",
+    "versionFlags": "Version/flags",
+    "effectCount": "Effect count",
+    "modelControls": "Model controls",
+    "curveKeys": "Curve keys",
+    "textureParameters": "Texture parameters",
+    "modelIds": "Model IDs",
+    "folderUnk3": "Folder unk3",
+    "missingRequired": "Missing required",
+    "validationEfxbn": "EFXBN",
+    "validationModels": "モデル",
+    "validationTextures": "テクスチャ",
+    "unresolvedModels": "未解決モデル"
+  },
+  "actions": {
+    "directValue": "Direct value",
+    "crc32String": "CRC32 string",
+    "applyHash": "Apply hash",
+    "openFile": "Open file",
+    "exportPng": "Export PNG",
+    "replace": "Replace",
+    "openEffectProject": "Open effect project"
+  },
+  "placeholders": {
+    "hashInput": "0xDEADBEEF or -559038737",
+    "crcSeed": "resource name seed"
+  },
+  "status": {
+    "willStore": "Will store int {{signed}} · {{hex}}",
+    "jsonNumber": "(JSON number)",
+    "keys": "{{count}} keys",
+    "active": "{{count}} active"
+  },
+  "states": {
+    "unset": "unset",
+    "previewUnavailable": "Preview unavailable until input is valid.",
+    "noModelIds": "No model IDs.",
+    "selectEntry": "Select an entry to inspect details.",
+    "yes": "yes",
+    "no": "no",
+    "none": "none",
+    "missing": "missing",
+    "valid": "valid",
+    "invalid": "invalid"
+  },
+  "sections": {
+    "fileDetails": "File details",
+    "categoryDetails": "{{category}} details",
+    "fileIdentity": "File identity",
+    "effectResource": "Effect resource",
+    "efxbnParse": "EFXBN parse",
+    "unknownFollowUp": "Unknown follow-up",
+    "modelFiles": "Model files ({{count}})",
+    "lastValidation": "Last validation"
+  },
+  "columns": {
+    "hex": "Hex",
+    "int32": "Int32",
+    "model": "Model",
+    "animation": "Animation",
+    "controlRefs": "Control refs",
+    "texture": "Texture",
+    "addressing": "Addressing",
+    "uvPattern": "UV pattern",
+    "flags": "Flags"
+  },
+  "tooltips": {
+    "exportPng": "Export nutexb to PNG",
+    "replaceTexture": "Replace texture (keeps nutexb internal name)"
+  },
+  "dialogs": {
+    "replaceTitle": "Replace {{name}}"
+  }
+}

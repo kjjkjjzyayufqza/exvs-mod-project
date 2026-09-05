@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { FileJson, Layers, Loader2, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { join } from "@tauri-apps/api/path";
@@ -70,6 +71,7 @@ export function NumatbEditorModalWindow({
   skipActivate,
   viewportSuspend,
 }: NumatbEditorModalWindowProps) {
+  const { t } = useTranslation("ssbh-root-b");
   const dirty = session.isDirty;
   const titleId = `numatb-editor-title-${session.id}`;
 
@@ -122,7 +124,7 @@ export function NumatbEditorModalWindow({
       const selected = await open({
         directory: true,
         multiple: false,
-        title: "Choose folder to export NUMATB JSON",
+        title: t("numatb.exportFolderTitle"),
       });
       if (typeof selected !== "string" || !selected.trim()) {
         return;
@@ -131,10 +133,10 @@ export function NumatbEditorModalWindow({
       const outName = `${fileBasename(src)}.json`;
       const outPath = await join(selected, outName);
       await writeTextFile(outPath, JSON.stringify(envelope, null, 2));
-      toast.success("NUMATB exported as JSON", { description: outPath });
+      toast.success(t("numatbExported"), { description: outPath });
     } catch (e) {
       const msg = String(e);
-      toast.error("Failed to export NUMATB as JSON", { description: msg });
+      toast.error(t("numatbExportFailed"), { description: msg });
     } finally {
       setJsonExportBusy(false);
     }
@@ -149,14 +151,14 @@ export function NumatbEditorModalWindow({
           className="h-8 text-[10px]"
           disabled={session.saving || session.loading || jsonExportBusy}
           onClick={() => void exportNumatbJsonToDirectory()}
-          title="Read the .numatb from disk and write JSON (filePath, format, data) to the chosen folder"
+          title={t("numatb.exportFolderHelp")}
         >
           {jsonExportBusy ? (
             <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
           ) : (
             <FileJson className="mr-1 h-3.5 w-3.5" />
           )}
-          Export JSON...
+          {t("numatb.exportJson")}
         </Button>
         <Button
           type="button"
@@ -167,7 +169,7 @@ export function NumatbEditorModalWindow({
           onClick={onReloadRequest}
         >
           <RefreshCw className="mr-1 h-3.5 w-3.5" />
-          Reload
+          {t("reload")}
         </Button>
         <Button
           type="button"
@@ -178,7 +180,7 @@ export function NumatbEditorModalWindow({
           onClick={onReset}
         >
           <RotateCcw className="mr-1 h-3.5 w-3.5" />
-          Reset
+          {t("reset")}
         </Button>
         <Button
           type="button"
@@ -195,7 +197,7 @@ export function NumatbEditorModalWindow({
           ) : (
             <Save className="mr-1 h-3.5 w-3.5" />
           )}
-          {session.saving ? "Saving..." : "Save"}
+          {session.saving ? t("saving") : t("save")}
         </Button>
         <Button
           type="button"
@@ -205,7 +207,7 @@ export function NumatbEditorModalWindow({
           disabled={session.saving}
           onClick={onCloseRequest}
         >
-          Close
+          {t("close")}
         </Button>
       </div>
     ) : null;
@@ -217,7 +219,7 @@ export function NumatbEditorModalWindow({
       zIndex={session.zIndex}
       titleId={titleId}
       title={dirty ? `• ${title}` : title}
-      subtitle="Edit SSBH (.numatb) material template"
+      subtitle={t("numatb.subtitle")}
       headerIcon={<Layers className="h-4 w-4 text-primary" />}
       onActivate={onActivate}
       onClose={onCloseRequest}
@@ -229,7 +231,7 @@ export function NumatbEditorModalWindow({
       {session.loading ? (
         <div className="flex items-center gap-2 px-5 py-4 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading NUMATB...
+          {t("numatb.loading")}
         </div>
       ) : session.loadError ? (
         <div className="px-5 py-4 text-sm text-destructive">{session.loadError}</div>
@@ -254,7 +256,7 @@ export function NumatbEditorModalWindow({
           </div>
         </div>
       ) : (
-        <div className="px-5 py-4 text-sm text-muted-foreground">No data.</div>
+        <div className="px-5 py-4 text-sm text-muted-foreground">{t("noData")}</div>
       )}
     </SsbhEditorModalWindowShell>
   );

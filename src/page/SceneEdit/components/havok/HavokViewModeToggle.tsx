@@ -15,18 +15,17 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 export type ViewMode = "normal" | "collision" | "both";
 
 const VIEW_MODE_CONFIG: {
   mode: ViewMode;
-  label: string;
-  shortLabel: string;
   icon: typeof Eye;
 }[] = [
-  { mode: "normal", label: "Lit", shortLabel: "Lit", icon: Eye },
-  { mode: "collision", label: "Collision", shortLabel: "Col", icon: Box },
-  { mode: "both", label: "Lit + Collision", shortLabel: "Both", icon: Layers },
+  { mode: "normal", icon: Eye },
+  { mode: "collision", icon: Box },
+  { mode: "both", icon: Layers },
 ];
 
 interface HavokViewModeToggleProps {
@@ -52,6 +51,7 @@ export function HavokViewModeToggle({
   showMesh = true,
   onToggleMesh,
 }: HavokViewModeToggleProps) {
+  const { t } = useTranslation("scene-dae-hkt");
   const current = VIEW_MODE_CONFIG.find((v) => v.mode === value) ?? VIEW_MODE_CONFIG[0];
   const CurrentIcon = current.icon;
 
@@ -70,19 +70,19 @@ export function HavokViewModeToggle({
               disabled={disabled}
             >
               <CurrentIcon className="h-3.5 w-3.5" />
-              <span>{current.shortLabel}</span>
+              <span>{t(`viewMode.modes.${current.mode}.short`)}</span>
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="text-[10px]">
-          {disabled ? "No collision data (no .hkt files in stage)" : "View Mode"}
+          {disabled ? t("viewMode.noCollisionData") : t("viewMode.title")}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="start" className="w-48">
         <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
-          View Mode
+          {t("viewMode.title")}
         </DropdownMenuLabel>
-        {VIEW_MODE_CONFIG.map(({ mode, label, icon: Icon }) => (
+        {VIEW_MODE_CONFIG.map(({ mode, icon: Icon }) => (
           <DropdownMenuItem
             key={mode}
             onClick={() => onChange(mode)}
@@ -92,7 +92,7 @@ export function HavokViewModeToggle({
             )}
           >
             <Icon className="h-3.5 w-3.5" />
-            {label}
+            {t(`viewMode.modes.${mode}.label`)}
           </DropdownMenuItem>
         ))}
 
@@ -100,7 +100,7 @@ export function HavokViewModeToggle({
           <>
             <DropdownMenuSeparator />
             <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Show
+              {t("viewMode.show")}
             </DropdownMenuLabel>
           </>
         )}
@@ -112,7 +112,7 @@ export function HavokViewModeToggle({
             className="gap-2 text-xs"
           >
             <Grid3X3 className="h-3.5 w-3.5" />
-            Wireframe
+            {t("viewMode.wireframe")}
           </DropdownMenuCheckboxItem>
         )}
 
@@ -123,7 +123,7 @@ export function HavokViewModeToggle({
             className="gap-2 text-xs"
           >
             <Box className="h-3.5 w-3.5" />
-            AABB Bounds
+            {t("viewMode.aabbBounds")}
           </DropdownMenuCheckboxItem>
         )}
 
@@ -134,7 +134,7 @@ export function HavokViewModeToggle({
             className="gap-2 text-xs"
           >
             <Shapes className="h-3.5 w-3.5" />
-            Collision Mesh
+            {t("viewMode.collisionMesh")}
           </DropdownMenuCheckboxItem>
         )}
       </DropdownMenuContent>

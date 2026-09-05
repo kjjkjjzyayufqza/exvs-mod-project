@@ -1,4 +1,5 @@
 import { useDeferredValue, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -97,6 +98,7 @@ export function PlacementCsvEditorPanel({
   onResetRow,
   onResetField,
 }: PlacementCsvEditorPanelProps) {
+  const { t } = useTranslation("scene-toolbar");
   const [filter, setFilter] = useState("");
   const deferredFilter = useDeferredValue(filter);
 
@@ -134,7 +136,7 @@ export function PlacementCsvEditorPanel({
     return (
       <div data-testid="placement-csv-editor-panel" className="flex min-h-0 flex-col gap-2">
         <AddTypedMenu onAddTyped={onAddTyped} />
-        <div className="py-2 text-center text-[10px] text-muted-foreground">No placement data</div>
+          <div className="py-2 text-center text-[10px] text-muted-foreground">{t("placement.noData")}</div>
       </div>
     );
   }
@@ -149,7 +151,7 @@ export function PlacementCsvEditorPanel({
           <Search className="pointer-events-none absolute left-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground/70" />
           <Input
             className={cn(PROP_INPUT, "pl-6")}
-            placeholder="Search rows..."
+            placeholder={t("placement.searchPlaceholder")}
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
           />
@@ -159,24 +161,24 @@ export function PlacementCsvEditorPanel({
 
       <div className="flex items-center justify-between px-0.5 text-[9px] text-muted-foreground tabular-nums">
         <span>
-          {entries.length} row{entries.length === 1 ? "" : "s"}
+          {t("placement.rowCount", { count: entries.length })}
           {selectedIndex !== null && (
             <>
               {" "}
-              · selected <span className="text-foreground/80">#{selectedIndex}</span>
+              · {t("placement.selected")} <span className="text-foreground/80">#{selectedIndex}</span>
             </>
           )}
         </span>
         {deferredFilter.trim() && (
           <span>
-            {rows.length} match{rows.length === 1 ? "" : "es"}
+            {t("placement.matchCount", { count: rows.length })}
           </span>
         )}
       </div>
 
       <section className={cn(INSPECTOR_SECTION, "shrink-0")}>
         <div className={cn(INSPECTOR_SECTION_HEADER, "cursor-default")}>
-          <span className="truncate">Placement rows</span>
+          <span className="truncate">{t("placement.rows")}</span>
           <span className="ml-auto font-mono text-[9px] opacity-60">{rows.length}</span>
         </div>
         <VirtualizedList
@@ -186,7 +188,7 @@ export function PlacementCsvEditorPanel({
           className="max-h-36 overflow-y-auto overscroll-contain p-0.5"
           emptyState={
             <div className="py-2 text-center text-[10px] text-muted-foreground">
-              No rows match the filter
+              {t("placement.noMatches")}
             </div>
           }
           renderRow={({ entry, index }) => (
@@ -213,8 +215,8 @@ export function PlacementCsvEditorPanel({
                 {selectedTitle}
               </div>
               <div className="truncate font-mono text-[9px] text-muted-foreground/80">
-                #{selectedIndex} · {VDK_TYPE_LABELS[selectedType] ?? selectedEntry.vdkType}
-                {selectedEntry.objectNumber !== null && ` · obj ${selectedEntry.objectNumber}`}
+                #{selectedIndex} · {t(`placement.types.${selectedType.toLowerCase()}`, { defaultValue: selectedEntry.vdkType })}
+                {selectedEntry.objectNumber !== null && <> · {t("placement.objectNumber")} {selectedEntry.objectNumber}</>}
               </div>
             </div>
             {rowModified && (
@@ -231,7 +233,7 @@ export function PlacementCsvEditorPanel({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="text-[10px]">
-                  Reset row to loaded state
+                  {t("placement.resetRow")}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -248,7 +250,7 @@ export function PlacementCsvEditorPanel({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="text-[10px]">
-                Delete placement row
+                {t("placement.deleteRow")}
               </TooltipContent>
             </Tooltip>
           </div>
@@ -274,7 +276,7 @@ export function PlacementCsvEditorPanel({
 
       {selectedIndex === null && entries.length > 0 && (
         <div className="rounded-sm border border-dashed border-border/50 px-2 py-3 text-center text-[10px] text-muted-foreground">
-          Select a placement row to edit fields
+          {t("placement.selectToEdit")}
         </div>
       )}
     </div>
@@ -282,6 +284,7 @@ export function PlacementCsvEditorPanel({
 }
 
 function AddTypedMenu({ onAddTyped }: { onAddTyped: (vdkType: string) => void }) {
+  const { t } = useTranslation("scene-toolbar");
   return (
     <DropdownMenu>
       <Tooltip>
@@ -293,7 +296,7 @@ function AddTypedMenu({ onAddTyped }: { onAddTyped: (vdkType: string) => void })
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="text-[10px]">
-          Add placement row
+          {t("placement.addRow")}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-36">
@@ -302,7 +305,7 @@ function AddTypedMenu({ onAddTyped }: { onAddTyped: (vdkType: string) => void })
           return (
             <DropdownMenuItem key={type} onClick={() => onAddTyped(type)}>
               <Icon className={cn("mr-2 h-3.5 w-3.5", VDK_TYPE_TONE[type])} />
-              {VDK_TYPE_LABELS[type]}
+              {t(`placement.types.${type.toLowerCase()}`)}
             </DropdownMenuItem>
           );
         })}
@@ -333,7 +336,8 @@ function PlacementRowItem({
   const title = summarizePlacementRow(entry, index, subModels);
   const vdkKey = (entry.vdkType?.toUpperCase() ?? "") as PlacementVdkType;
   const Icon = VDK_TYPE_ICONS[vdkKey] ?? Box;
-  const typeLabel = VDK_TYPE_LABELS[vdkKey] ?? entry.vdkType ?? "Row";
+  const { t } = useTranslation("scene-toolbar");
+  const typeLabel = VDK_TYPE_LABELS[vdkKey] ?? entry.vdkType ?? t("placement.row");
 
   return (
     <button
@@ -361,7 +365,7 @@ function PlacementRowItem({
           {getPlacementDisplayName(entry) && entry.objectNumber !== null
             ? ` · #${entry.objectNumber}`
             : entry.objectNumber !== null
-              ? ` · obj ${entry.objectNumber}`
+              ? <> · {t("placement.objectNumber")} {entry.objectNumber}</>
               : ""}
         </div>
       </div>

@@ -1,0 +1,124 @@
+{
+  "page": {
+    "title": "杂项工具",
+    "description": "用于开发和调试的各种实用工具",
+    "cards": {
+      "fileOps": {
+        "title": "文件操作",
+        "description": "文件读取、写入与处理工具",
+        "open": "打开文件浏览器"
+      },
+      "calculator": {
+        "title": "计算器",
+        "description": "基础计算与单位换算",
+        "open": "打开计算器"
+      },
+      "color": {
+        "title": "颜色工具",
+        "description": "取色与颜色转换工具",
+        "open": "打开取色器"
+      },
+      "dev": {
+        "title": "开发工具",
+        "description": "开发与调试实用工具",
+        "open": "打开开发控制台"
+      },
+      "fbx": {
+        "title": "FBX 项目重命名",
+        "description": "加载并分析 FBX 模型文件"
+      },
+      "template": {
+        "title": "模板 JSON 生成器",
+        "description": "扫描文件夹结构并生成模板 JSON"
+      },
+      "imageToNutexb": {
+        "title": "图像转 Nutexb",
+        "description": "将图像文件转换为 nutexb，并可指定输出目录"
+      },
+      "numatb": {
+        "title": "Numatb 编辑器",
+        "description": "编辑 .numatb 文件中的材质属性"
+      },
+      "compress": {
+        "title": "图像压缩器",
+        "description": "压缩 PNG 图像以减小体积并尽量保持画质"
+      },
+      "resize": {
+        "title": "图像调整器",
+        "description": "按指定尺寸批量调整图像大小"
+      },
+      "fhm2dImage": {
+        "title": "FHM2D 图像查看器",
+        "description": "在内存中打开 FHM2D，浏览全部贴图并列出其他文件"
+      },
+      "nutexb": {
+        "title": "Nutexb 视图",
+        "description": "打开文件夹，递归加载全部 .nutexb，并以树形浏览"
+      },
+      "gvs": {
+        "title": "GVS 地图转 VS2",
+        "description": "提取扁平文件并生成 VS2 兼容的 outputMeta JSON"
+      }
+    }
+  },
+  "common": {
+    "openFolder": "打开文件夹",
+    "refresh": "刷新",
+    "preview": "预览",
+    "images": "图像",
+    "tree": "树",
+    "expandAll": "全部展开",
+    "collapseAll": "全部折叠",
+    "selectFolder": "选择文件夹",
+    "removeFile": "移除文件",
+    "indexOfTotal": "{{index}} / {{total}}"
+  },
+  "nutexb": {
+    "previewAlt": "Nutexb 预览",
+    "title": "Nutexb 视图",
+    "subtitle": "递归扫描文件夹，按需解码缩略图（最多同时 3 个，128px）。",
+    "empty": "打开文件夹以扫描所有 .nutexb（包括子文件夹）。",
+    "filterPlaceholder": "按名称或路径筛选……",
+    "noMatches": "没有匹配的 nutexb 文件",
+    "noFiles": "此视图中没有 nutexb 文件",
+    "selectFile": "选择一个 .nutexb 文件",
+    "expandFolder": "展开文件夹",
+    "collapseFolder": "折叠文件夹",
+    "filesShown": "显示 {{count}} 个",
+    "fileCount": "{{count}} 个 nutexb 文件",
+    "fileCount_other": "{{count}} 个 nutexb 文件",
+    "name": "名称",
+    "format": "格式",
+    "mips": "Mips",
+    "layers": "层",
+    "swizzled": "已 swizzle",
+    "open": "打开 Nutexb 视图",
+    "found": "找到 {{count}} 个 nutexb 文件",
+    "found_other": "找到 {{count}} 个 nutexb 文件",
+    "dimensions": "{{width}} x {{height}} x {{depth}}",
+    "mipsLayers": "Mips {{mips}} · {{layersLabel}} {{layers}}"
+  },
+  "template": {
+    "title": "模板 JSON 生成器",
+    "subtitle": "从选定项目文件夹生成 data.json",
+    "selectFolderTitle": "文件夹选择",
+    "selectFolderDescription": "选择包含 /data 目录的文件夹。仅处理 data 目录中的文件。",
+    "noFolder": "未选择文件夹",
+    "selectFolder": "选择文件夹",
+    "structure": "模板结构",
+    "structureDescription": "拖放项目以重新组织项目结构",
+    "addFolder": "添加文件夹",
+    "addFile": "添加文件",
+    "generate": "生成 JSON",
+    "magic": "Magic",
+    "files": "文件",
+    "unkCount": "UnkCount",
+    "selectDataError": "选定文件夹必须包含 data 目录。仅处理 data 目录中的文件。",
+    "selectFirst": "请选择文件夹并确保数据已加载。",
+    "generated": "data.json 已成功生成至：{{path}}",
+    "failed": "无法生成 data.json。请查看控制台了解详情。",
+    "open": "打开模板 JSON 生成器",
+    "selectedFolder": "已选文件夹：{{path}}",
+    "extensionsHint": "仅处理 /data 目录中扩展名为 {{extensions}} 的文件。"
+  }
+}

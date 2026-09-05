@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ImageIcon, Loader2, TriangleAlert } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { stat } from "@tauri-apps/plugin-fs";
@@ -154,6 +155,7 @@ export function EffectNutexbPreview({
   /** Bump after in-place replace/export-side edits so the preview reloads. */
   revision?: number;
 }) {
+  const { t } = useTranslation("test-effect-folder");
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [src, setSrc] = useState<string | null>(null);
   const normalizedLabel = useMemo(() => label || "nutexb preview", [label]);
@@ -183,12 +185,12 @@ export function EffectNutexbPreview({
       ) : state === "loading" ? (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading texture preview
+          {t("nutexb.loading")}
         </div>
       ) : (
         <div className="flex flex-col items-center gap-2 text-xs text-amber-700 dark:text-amber-300">
           <TriangleAlert className="h-5 w-5" />
-          Preview unavailable
+          {t("nutexb.unavailable")}
         </div>
       )}
     </div>

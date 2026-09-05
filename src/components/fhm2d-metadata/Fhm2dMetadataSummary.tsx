@@ -1,5 +1,6 @@
 import { FileJson, FolderOpen, Hash, Info, PackageCheck } from "lucide-react";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -52,6 +53,7 @@ export function Fhm2dMetadataSummary({
   className,
   compact = false,
 }: Fhm2dMetadataSummaryProps) {
+  const { t } = useTranslation("fhm2d-meta");
   return (
     <section
       className={cn(
@@ -59,7 +61,7 @@ export function Fhm2dMetadataSummary({
         compact ? "space-y-2 p-3" : "space-y-3 p-4",
         className,
       )}
-      aria-label="FHM2D metadata preview"
+      aria-label={t("summary.aria")}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
@@ -67,9 +69,9 @@ export function Fhm2dMetadataSummary({
             <Info className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <div className="text-sm font-semibold">Structure metadata</div>
+            <div className="text-sm font-semibold">{t("summary.title")}</div>
             <p className="text-xs text-muted-foreground">
-              Name controls the editable folder. HashName controls the game file.
+              {t("summary.help")}
             </p>
           </div>
         </div>
@@ -81,34 +83,36 @@ export function Fhm2dMetadataSummary({
           )}
         >
           <Hash className="h-3 w-3" />
-          {hashName ?? "HashName missing"}
+          {hashName ?? t("summary.hashNameMissing")}
         </Badge>
       </div>
 
       <div className="space-y-2">
-        <MetadataRow
-          icon={<FolderOpen className="h-3.5 w-3.5" />}
-          label="Name"
-          value={name || "fhm2d_pack"}
-        />
+        <div data-i18n-ignore="">
+          <MetadataRow
+            icon={<FolderOpen className="h-3.5 w-3.5" />}
+            label="Name"
+            value={name || "fhm2d_pack"}
+          />
+        </div>
         {folderPath ? (
           <MetadataRow
             icon={<FolderOpen className="h-3.5 w-3.5" />}
-            label="Folder"
+            label={t("summary.folder")}
             value={folderPath}
           />
         ) : null}
         {structureJsonPath ? (
           <MetadataRow
             icon={<FileJson className="h-3.5 w-3.5" />}
-            label="Structure JSON"
+            label={t("summary.structureJson")}
             value={structureJsonPath}
           />
         ) : null}
         {repackOutputPath ? (
           <MetadataRow
             icon={<PackageCheck className="h-3.5 w-3.5" />}
-            label="Repack output"
+            label={t("summary.repackOutput")}
             value={repackOutputPath}
           />
         ) : null}

@@ -1,5 +1,6 @@
 import { useCallback, useDeferredValue, useMemo, useRef, useState, useTransition } from "react";
 import { Search } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,7 @@ export function NaviList({
   onDelete,
   onCopy,
 }: NaviListProps) {
+  const { t } = useTranslation("test-lists");
   const [searchTerm, setSearchTerm] = useState("");
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [, startTransition] = useTransition();
@@ -58,7 +60,7 @@ export function NaviList({
       <div className="relative mb-3">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
         <Input
-          placeholder="Search by name, unique id, or index..."
+          placeholder={t("navi.searchPlaceholder")}
           value={searchTerm}
           onChange={(event) => {
             const next = event.target.value;
@@ -70,7 +72,7 @@ export function NaviList({
 
       {searchTerm.trim() ? (
         <div className="text-xs text-muted-foreground mb-2">
-          Found {filteredRows.length} of {naviData.length} navi rows
+          {t("common.foundOf", { found: filteredRows.length, total: naviData.length, unit: t("navi.unitRows") })}
         </div>
       ) : null}
 
@@ -114,7 +116,7 @@ export function NaviList({
         </div>
         {filteredRows.length === 0 ? (
           <div className="text-center text-muted-foreground py-8 text-sm">
-            {searchTerm.trim() ? `No navi found matching "${searchTerm.trim()}"` : "No navi rows"}
+            {searchTerm.trim() ? t("navi.noMatch", { term: searchTerm.trim() }) : t("navi.noRows")}
           </div>
         ) : null}
       </div>

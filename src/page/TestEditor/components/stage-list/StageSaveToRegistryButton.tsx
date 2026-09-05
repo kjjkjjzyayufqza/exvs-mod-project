@@ -20,6 +20,7 @@ import {
   resolveStageSlotSeeds,
   type StageHashSlot,
 } from "@/services/resourceRegistry/stageRegistrySync";
+import { useTranslation } from "react-i18next";
 
 interface StageSaveToRegistryButtonProps {
   stage: StageListEntry;
@@ -29,14 +30,6 @@ interface StageSaveToRegistryButtonProps {
   slotSeeds: Partial<Record<StageHashSlot, string>>;
 }
 
-function describeSaveResult(slots: ReturnType<typeof resolveStageSlotSeeds>): string | undefined {
-  const unverified = slots.filter((slot) => !slot.seedVerified).map((slot) => slot.slot);
-  if (unverified.length === 0) {
-    return undefined;
-  }
-  return `Generated placeholder seeds for: ${unverified.join(", ")}. Edit in Resource Registry if needed.`;
-}
-
 export function StageSaveToRegistryButton({
   stage,
   index,
@@ -44,19 +37,20 @@ export function StageSaveToRegistryButton({
   resourceRegistry,
   slotSeeds,
 }: StageSaveToRegistryButtonProps) {
+  const { t } = useTranslation("test-stage-list-view");
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
 
   const persistStage = useCallback(async () => {
     if (!workspacePath.trim()) {
-      toast.error("Select a workspace folder in Resource Registry or EXVS2 Workspace first");
+      toast.error(t("saveRegistry.selectWorkspace"));
       return;
     }
 
     const slots = resolveStageSlotSeeds(stage, resourceRegistry.mergedEntries, slotSeeds);
     if (slots.length === 0) {
-      toast.error("No non-zero stage hash fields to save");
+      toast.error(t("saveRegistry.noHashes"));
       return;
     }
 
@@ -65,31 +59,34 @@ export function StageSaveToRegistryButton({
       const entries = buildStageRegistryEntries(stage, slots);
       const saved = await resourceRegistry.replaceWorkspaceStageByEntryId(stage.entryId, entries);
       if (!saved) {
-        toast.error("Failed to save to workspace registry");
+        toast.error(t("saveRegistry.saveFailed"));
         return;
       }
-      const hint = describeSaveResult(slots);
-      toast.success(`Saved ${entries.length} registry entries for stage ID ${stage.entryId}`, {
-        description: hint,
+      const unverified = slots.filter((slot) => !slot.seedVerified).map((slot) => slot.slot);
+      toast.success(t("toast.savedRegistry", { count: entries.length, id: stage.entryId }), {
+        description:
+          unverified.length > 0
+            ? t("saveRegistry.placeholderSeeds", { slots: unverified.join(", ") })
+            : undefined,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      toast.error(message || "Failed to save to registry");
+      toast.error(message || t("saveRegistry.saveFailed"));
     } finally {
       setBusy(false);
       setConfirmOpen(false);
     }
-  }, [resourceRegistry, slotSeeds, stage, workspacePath]);
+  }, [resourceRegistry, slotSeeds, stage, t, workspacePath]);
 
   const handleClick = useCallback(() => {
     if (!workspacePath.trim()) {
-      toast.error("Select a workspace folder in Resource Registry or EXVS2 Workspace first");
+      toast.error(t("saveRegistry.selectWorkspace"));
       return;
     }
 
     const slots = resolveStageSlotSeeds(stage, resourceRegistry.mergedEntries, slotSeeds);
     if (slots.length === 0) {
-      toast.error("No non-zero stage hash fields to save");
+      toast.error(t("saveRegistry.noHashes"));
       return;
     }
 
@@ -101,9 +98,9 @@ export function StageSaveToRegistryButton({
     }
 
     void persistStage();
-  }, [persistStage, resourceRegistry.mergedEntries, slotSeeds, stage, workspacePath]);
+  }, [persistStage, resourceRegistry.mergedEntries, slotSeeds, stage, t, workspacePath]);
 
-  const stageTitle = stage.name?.trim() || `Stage ${stage.entryId}`;
+  const stageTitle = stage.name?.trim() || t("card.fallbackName", { id: stage.entryId });
 
   return (
     <>
@@ -114,25 +111,29 @@ export function StageSaveToRegistryButton({
         className="h-8 gap-1.5 shrink-0"
         disabled={busy || resourceRegistry.loading}
         onClick={handleClick}
-        title="Save current stage hashes to workspace resource registry"
+        title={t("saveRegistry.title")}
       >
         {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Database className="h-3.5 w-3.5" />}
-        Save to Registry
+        {t("saveRegistry.button")}
       </Button>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Overwrite registry entries?</AlertDialogTitle>
+            <AlertDialogTitle>{t("saveRegistry.overwriteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Stage ID {stage.entryId} ({stageTitle}, index {index}) already has {pendingCount} registry
-              row(s). Overwrite them with the current hash and seed values?
+              {t("saveRegistry.overwriteDescription", {
+                id: stage.entryId,
+                name: stageTitle,
+                index,
+                count: pendingCount,
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={busy}>{t("actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction disabled={busy} onClick={() => void persistStage()}>
-              Overwrite
+              {t("saveRegistry.overwrite")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

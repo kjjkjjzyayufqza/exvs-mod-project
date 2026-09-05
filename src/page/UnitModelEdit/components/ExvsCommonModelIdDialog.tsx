@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Hash } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ export function ExvsCommonModelIdDialog({
   onConfirm,
   onCancel,
 }: ExvsCommonModelIdDialogProps) {
+  const { t } = useTranslation("unit-common-dialogs");
   const [text, setText] = useState(initialValue);
   const error = modelIdError(text);
 
@@ -53,8 +55,8 @@ export function ExvsCommonModelIdDialog({
   return (
     <AppRndModalShell
       titleId="exvs-common-model-id-title"
-      title="Runtime model ID"
-      subtitle={`New SHL record uses type ${EXVS_COMMON_NEW_SHL_MODEL_TYPE} (Part)`}
+      title={t("modelId.title")}
+      subtitle={t("modelId.subtitle", { type: EXVS_COMMON_NEW_SHL_MODEL_TYPE })}
       headerIcon={<Hash className="h-5 w-5 text-primary" />}
       dimensions={DIMENSIONS}
       storageKey="app.rnd-size.exvs-common-model-id"
@@ -63,21 +65,21 @@ export function ExvsCommonModelIdDialog({
       footer={
         <div className="flex justify-end gap-2 p-3">
           <Button type="button" variant="outline" disabled={busy} onClick={onCancel}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             type="button"
             disabled={busy || Boolean(error)}
             onClick={() => onConfirm(parseExvsCommonRuntimeModelId(text), text)}
           >
-            Continue
+            {t("common.continue")}
           </Button>
         </div>
       }
     >
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
         <div className="space-y-1.5">
-          <Label htmlFor="exvs-common-runtime-model-id">Model ID</Label>
+          <Label htmlFor="exvs-common-runtime-model-id">{t("modelId.label")}</Label>
           <Input
             id="exvs-common-runtime-model-id"
             value={text}
@@ -94,7 +96,7 @@ export function ExvsCommonModelIdDialog({
             }}
           />
           <p className="text-[11px] text-muted-foreground">
-            Hex value unique in the Common SHL. 0x prefix is optional.
+            {t("modelId.help")}
           </p>
           {error ? <p className="text-[11px] text-destructive">{error}</p> : null}
         </div>

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ const SettingsDialog = lazy(() =>
 const Fhm2dInitModal = lazy(() => import("./Fhm2dInitModal"));
 
 export function TopNavBar() {
+  const { t } = useTranslation("shared");
   const [isFhm2dInitModalOpen, setIsFhm2dInitModalOpen] = useState(false);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -42,7 +44,7 @@ export function TopNavBar() {
     <div className="fixed inset-x-0 top-0 z-[var(--z-topbar)] flex h-[var(--layout-topbar-height)] shrink-0 items-center gap-1 border-b border-border bg-muted/80 px-2 backdrop-blur-sm">
       <SidebarTrigger
         className="h-6 w-6 text-muted-foreground hover:text-foreground"
-        title="Toggle Sidebar (Ctrl/Cmd+B)"
+        title={t("nav.toggleSidebar")}
       />
       <div className="mx-1 h-4 w-px shrink-0 bg-border" aria-hidden />
       <Popover open={optionsOpen} onOpenChange={setOptionsOpen}>
@@ -52,7 +54,7 @@ export function TopNavBar() {
             size="sm"
             className="h-6 px-2 text-xs hover:bg-accent active:translate-y-px"
           >
-            Options
+            {t("nav.options")}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-44 p-1" align="start">
@@ -65,7 +67,7 @@ export function TopNavBar() {
               setSettingsOpen(true);
             }}
           >
-            Settings
+            {t("nav.settings")}
           </Button>
         </PopoverContent>
       </Popover>
@@ -75,7 +77,7 @@ export function TopNavBar() {
         onClick={handleFhm2dInitClick}
         className="h-6 px-2 text-xs hover:bg-accent active:translate-y-px"
       >
-        FHM2D Init
+        {t("nav.fhm2dInit")}
       </Button>
       <Button
         variant="ghost"
@@ -83,7 +85,7 @@ export function TopNavBar() {
         className="h-6 px-2 text-xs hover:bg-accent active:translate-y-px"
         asChild
       >
-        <Link to="/About">About</Link>
+        <Link to="/About">{t("nav.about")}</Link>
       </Button>
     </div>
   );

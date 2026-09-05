@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useSsbhModelPreview } from "./SsbhModelPreviewContext";
 import type { MotionBoneLocal } from "./motionPreviewTypes";
@@ -242,6 +243,7 @@ export function SsbhModelViewportTimeline({
   onScrubPreview,
   onScrubEnd,
 }: SsbhModelViewportTimelineProps) {
+  const { t } = useTranslation("ssbh-motion");
   const p = useSsbhModelPreview();
   const maxFrame = Math.max(0, p.motionManifest?.finalFrameIndex ?? 0);
   const hasMotion = Boolean(p.motionSelectedNuanmbPath) && Boolean(p.motionClip) && maxFrame > 0;
@@ -523,7 +525,7 @@ export function SsbhModelViewportTimeline({
         <div
           className="flex items-center gap-0.5 rounded-md border border-border/50 bg-muted/20 p-0.5"
           role="group"
-          aria-label="Playback transport"
+          aria-label={t("timeline.playbackTransport")}
         >
           <Button
             type="button"
@@ -538,7 +540,7 @@ export function SsbhModelViewportTimeline({
               setScrubFrame(null);
               p.setMotionFrame(target);
             }}
-            title="Jump to start (keeps play state)"
+            title={t("timeline.jumpStart")}
           >
             <ChevronsLeft className="h-3.5 w-3.5" />
           </Button>
@@ -560,7 +562,7 @@ export function SsbhModelViewportTimeline({
               }
               p.setMotionPlaying(!p.motionPlaying);
             }}
-            title={p.motionPlaying ? "Pause playback" : "Play"}
+            title={p.motionPlaying ? t("timeline.pause") : t("timeline.play")}
           >
             {p.motionPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
           </Button>
@@ -573,7 +575,7 @@ export function SsbhModelViewportTimeline({
             onClick={() => {
               seekFrameAndPause(clampFrame(displayFrame, 0, maxFrame));
             }}
-            title="Stop playback (pause at current frame)"
+            title={t("timeline.stop")}
           >
             <Square className="h-3 w-3 fill-current" />
           </Button>
@@ -587,7 +589,7 @@ export function SsbhModelViewportTimeline({
               const idx = Math.floor(displayFrame + 1e-9);
               seekFrameAndPause(idx - 1);
             }}
-            title="Previous frame (pauses)"
+            title={t("timeline.prevFrame")}
           >
             <ChevronLeft className="h-3.5 w-3.5" />
           </Button>
@@ -601,7 +603,7 @@ export function SsbhModelViewportTimeline({
               const idx = Math.floor(displayFrame + 1e-9);
               seekFrameAndPause(idx + 1);
             }}
-            title="Next frame (pauses)"
+            title={t("timeline.nextFrame")}
           >
             <ChevronRight className="h-3.5 w-3.5" />
           </Button>
@@ -617,7 +619,7 @@ export function SsbhModelViewportTimeline({
               setScrubFrame(null);
               p.setMotionFrame(target);
             }}
-            title="Jump to end (keeps play state)"
+            title={t("timeline.jumpEnd")}
           >
             <ChevronsRight className="h-3.5 w-3.5" />
           </Button>
@@ -633,9 +635,9 @@ export function SsbhModelViewportTimeline({
               className="h-6 min-w-[2rem] px-1.5 text-[10px] tabular-nums"
               disabled={!hasMotion}
               onClick={() => p.setMotionSpeed(v)}
-              title={`Set speed to ${v}x (does not stop playback)`}
+              title={t("timeline.setSpeed", { speed: v })}
             >
-              {v}x
+              {t("timeline.speedTimes", { speed: v })}
             </Button>
           ))}
         </div>
@@ -643,7 +645,7 @@ export function SsbhModelViewportTimeline({
         <div className="ml-auto flex flex-wrap items-center gap-2.5 pr-0.5">
           <div className="flex items-center gap-1.5">
             <Label htmlFor="viewport-force-visible" className="text-[10px] text-muted-foreground">
-              Force Visible
+              {t("timeline.forceVisible")}
             </Label>
             <Switch
               id="viewport-force-visible"
@@ -654,7 +656,7 @@ export function SsbhModelViewportTimeline({
           </div>
           <div className="flex items-center gap-1.5">
             <Label htmlFor="viewport-loop" className="text-[10px] text-muted-foreground">
-              Loop
+              {t("timeline.loop")}
             </Label>
             <Switch
               id="viewport-loop"
@@ -716,8 +718,8 @@ export function SsbhModelViewportTimeline({
           }}
           title={
             hasMotion
-              ? "Drag playhead to scrub (playback resumes after scrub if it was playing)"
-              : "Load motion to enable timeline"
+              ? t("timeline.scrubTitle")
+              : t("timeline.loadMotion")
           }
         >
           <TimelineRuler marks={timelineScale.marks} />
@@ -746,11 +748,11 @@ export function SsbhModelViewportTimeline({
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
-            Frame {Math.round(displayFrame)}
+            {t("timeline.frame", { current: Math.round(displayFrame) })}
             <span className="text-muted-foreground/70"> / {Math.round(maxFrame)}</span>
           </span>
           <div className="flex items-center gap-1">
-            <Label className="text-[10px] text-muted-foreground">Go to</Label>
+            <Label className="text-[10px] text-muted-foreground">{t("timeline.goTo")}</Label>
             <Input
               className="h-6 w-[72px] font-mono text-[10px] tabular-nums"
               value={frameInputText}
@@ -779,10 +781,10 @@ export function SsbhModelViewportTimeline({
             className="h-6 px-1.5 text-[10px]"
             disabled={!hasMotion}
             onClick={() => p.setMotionSpeed(1)}
-            title="Reset speed to 1x"
+            title={t("timeline.resetSpeed")}
           >
             <RotateCcw className="mr-1 h-3 w-3" />
-            1x
+            {t("timeline.resetSpeedLabel")}
           </Button>
           <div className="ml-auto flex items-center gap-1">
             <Button
@@ -792,9 +794,9 @@ export function SsbhModelViewportTimeline({
               className="h-6 px-2 text-[10px]"
               disabled={!hasMotion}
               onClick={() => setRangeToolsOpen((open) => !open)}
-              title="Toggle range play tools"
+              title={t("timeline.toggleRange")}
             >
-              Range
+              {t("timeline.range")}
               {rangeToolsOpen ? (
                 <ChevronUp className="ml-1 h-3 w-3" />
               ) : (
@@ -808,9 +810,9 @@ export function SsbhModelViewportTimeline({
               className="h-6 px-2 text-[10px]"
               disabled={!hasMotion && boneNames.length === 0}
               onClick={() => setBoneInspectorOpen((open) => !open)}
-              title="Toggle bone transform inspector (collapsed by default to avoid mis-clicks)"
+              title={t("timeline.toggleBones")}
             >
-              Bones
+              {t("timeline.bones")}
               {boneInspectorOpen ? (
                 <ChevronUp className="ml-1 h-3 w-3" />
               ) : (
@@ -837,7 +839,7 @@ export function SsbhModelViewportTimeline({
               }
             }}
           >
-            Set In
+            {t("timeline.setIn")}
           </Button>
           <Button
             type="button"
@@ -853,7 +855,7 @@ export function SsbhModelViewportTimeline({
               }
             }}
           >
-            Set Out
+            {t("timeline.setOut")}
           </Button>
           <Button
             type="button"
@@ -867,11 +869,11 @@ export function SsbhModelViewportTimeline({
               setRangeEnabled(false);
             }}
           >
-            Clear Range
+            {t("timeline.clearRange")}
           </Button>
           <div className="ml-auto flex items-center gap-2 pr-1">
             <Label htmlFor="timeline-range" className="text-[10px] text-muted-foreground">
-              Range Play
+              {t("timeline.rangePlay")}
             </Label>
             <Switch
               id="timeline-range"
@@ -889,18 +891,18 @@ export function SsbhModelViewportTimeline({
       {boneInspectorOpen ? (
         <div className="mt-1.5 rounded-md border border-border/50 bg-background/70 p-2">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="text-[11px] font-medium">Bone transform inspector</div>
+            <div className="text-[11px] font-medium">{t("timeline.boneInspector")}</div>
             <div className="text-[10px] text-muted-foreground">
               {boneNames.length > 0
                 ? `${selectedBoneIndex}: ${boneNames[selectedBoneIndex] ?? "—"}`
-                : "No skeleton"}
+                : t("timeline.noSkeleton")}
             </div>
           </div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-[220px_minmax(0,1fr)]">
             <div className="space-y-2">
               <Input
                 className="h-7 text-[11px]"
-                placeholder="Filter bone name..."
+                placeholder={t("timeline.filterBone")}
                 value={boneFilter}
                 onChange={(e) => setBoneFilter(e.target.value)}
                 disabled={boneNames.length === 0}
@@ -927,13 +929,13 @@ export function SsbhModelViewportTimeline({
                           onClick={() => setSelectedBoneIndex(row.index)}
                         >
                           <span className="font-mono text-[10px] text-muted-foreground">{row.index}</span>{" "}
-                          <span>{row.name}</span>
+                          <span data-i18n-ignore="">{row.name}</span>
                         </button>
                       );
                     })}
                   </div>
                 ) : (
-                  <div className="px-2 py-1 text-[11px] text-muted-foreground">No matching bones</div>
+                  <div className="px-2 py-1 text-[11px] text-muted-foreground">{t("timeline.noMatchingBones")}</div>
                 )}
               </div>
             </div>
@@ -954,7 +956,7 @@ export function SsbhModelViewportTimeline({
                     seekFrameAndPause(prevKey);
                   }}
                 >
-                  Prev Key
+                  {t("timeline.prevKey")}
                 </Button>
                 <Button
                   type="button"
@@ -971,55 +973,55 @@ export function SsbhModelViewportTimeline({
                     seekFrameAndPause(nextKey);
                   }}
                 >
-                  Next Key
+                  {t("timeline.nextKey")}
                 </Button>
-                <span className="text-[10px] text-muted-foreground">Keys: {boneKeyframes.length}</span>
+                <span className="text-[10px] text-muted-foreground">{t("timeline.keys", { count: boneKeyframes.length })}</span>
               </div>
               {currentBoneLocal ? (
                 <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
                   <div className="rounded border border-border/40 p-2">
-                    <div className="mb-1 text-[10px] font-medium text-muted-foreground">Translation</div>
-                    <div className="font-mono text-[11px] tabular-nums">
+                    <div className="mb-1 text-[10px] font-medium text-muted-foreground">{t("timeline.translation")}</div>
+                    <div className="font-mono text-[11px] tabular-nums" data-i18n-ignore="">
                       X {currentBoneLocal.translation[0].toFixed(4)}
                     </div>
-                    <div className="font-mono text-[11px] tabular-nums">
+                    <div className="font-mono text-[11px] tabular-nums" data-i18n-ignore="">
                       Y {currentBoneLocal.translation[1].toFixed(4)}
                     </div>
-                    <div className="font-mono text-[11px] tabular-nums">
+                    <div className="font-mono text-[11px] tabular-nums" data-i18n-ignore="">
                       Z {currentBoneLocal.translation[2].toFixed(4)}
                     </div>
                   </div>
                   <div className="rounded border border-border/40 p-2">
-                    <div className="mb-1 text-[10px] font-medium text-muted-foreground">Rotation (Quat)</div>
-                    <div className="font-mono text-[11px] tabular-nums">
+                    <div className="mb-1 text-[10px] font-medium text-muted-foreground">{t("timeline.rotationQuat")}</div>
+                    <div className="font-mono text-[11px] tabular-nums" data-i18n-ignore="">
                       X {currentBoneLocal.rotation[0].toFixed(5)}
                     </div>
-                    <div className="font-mono text-[11px] tabular-nums">
+                    <div className="font-mono text-[11px] tabular-nums" data-i18n-ignore="">
                       Y {currentBoneLocal.rotation[1].toFixed(5)}
                     </div>
-                    <div className="font-mono text-[11px] tabular-nums">
+                    <div className="font-mono text-[11px] tabular-nums" data-i18n-ignore="">
                       Z {currentBoneLocal.rotation[2].toFixed(5)}
                     </div>
-                    <div className="font-mono text-[11px] tabular-nums">
+                    <div className="font-mono text-[11px] tabular-nums" data-i18n-ignore="">
                       W {currentBoneLocal.rotation[3].toFixed(5)}
                     </div>
                   </div>
                   <div className="rounded border border-border/40 p-2">
-                    <div className="mb-1 text-[10px] font-medium text-muted-foreground">Scale</div>
-                    <div className="font-mono text-[11px] tabular-nums">
+                    <div className="mb-1 text-[10px] font-medium text-muted-foreground">{t("timeline.scale")}</div>
+                    <div className="font-mono text-[11px] tabular-nums" data-i18n-ignore="">
                       X {currentBoneLocal.scale[0].toFixed(4)}
                     </div>
-                    <div className="font-mono text-[11px] tabular-nums">
+                    <div className="font-mono text-[11px] tabular-nums" data-i18n-ignore="">
                       Y {currentBoneLocal.scale[1].toFixed(4)}
                     </div>
-                    <div className="font-mono text-[11px] tabular-nums">
+                    <div className="font-mono text-[11px] tabular-nums" data-i18n-ignore="">
                       Z {currentBoneLocal.scale[2].toFixed(4)}
                     </div>
                   </div>
                 </div>
               ) : (
                 <div className="text-[11px] text-muted-foreground">
-                  No sampled transform for the selected bone at this frame.
+                  {t("timeline.noSample")}
                 </div>
               )}
             </div>

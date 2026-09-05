@@ -1,4 +1,5 @@
 import { FolderOpen, Folder, FileText, ChevronRight, AlertTriangle, GripVertical } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   ContextMenu,
@@ -26,6 +27,7 @@ export function CustomTreeNode({
   enableExampleHighlight = false,
   mode = 'Model'
 }: CustomTreeNodeProps) {
+  const { t } = useTranslation("shared");
   const isFolder = !node.isLeaf;
   const nodeData = node.data.data;
 
@@ -123,7 +125,7 @@ export function CustomTreeNode({
           "hover:bg-muted-foreground/10",
           !isFolder && "invisible"
         )}
-        aria-label={node.isOpen ? "Collapse" : "Expand"}
+        aria-label={node.isOpen ? t("tree.collapse") : t("tree.expand")}
       >
         <ChevronRight
           className={cn(
@@ -201,7 +203,7 @@ export function CustomTreeNode({
               </div>
             </TooltipTrigger>
             <TooltipContent side="left" className="text-xs">
-              <p>Missing barispecular texture file</p>
+              <p>{t("tree.missingBarispecular")}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -216,10 +218,10 @@ export function CustomTreeNode({
       <ContextMenuContent className="w-40">
         <ContextMenuItem
           onSelect={() => {
-            toast.message("Test");
+            toast.message(t("tree.testAction"));
           }}
         >
-          Test
+          {t("tree.testAction")}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

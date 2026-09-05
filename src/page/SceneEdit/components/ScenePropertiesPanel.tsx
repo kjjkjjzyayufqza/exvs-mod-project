@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useTranslation } from "react-i18next";
 
 export type ScenePropertiesTab = "inspect" | "texture" | "graphic" | "placement";
 
@@ -31,12 +32,13 @@ export function ScenePropertiesPanel({
   textureBadge,
 }: ScenePropertiesPanelProps) {
   const [tab, setTab] = useState<ScenePropertiesTab>("inspect");
+  const { t } = useTranslation("scene-texture");
 
   return (
     <div className="flex h-full min-w-0 flex-col overflow-hidden border-l">
       <div className="flex shrink-0 items-center border-b bg-muted/20 px-3 py-1 select-none whitespace-nowrap">
         <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          Details
+          {t("panel.details")}
         </span>
         {headerActions ? <span className="ml-auto">{headerActions}</span> : null}
       </div>
@@ -48,20 +50,20 @@ export function ScenePropertiesPanel({
       >
         <TabsList className="shrink-0 h-7 w-full justify-start rounded-none border-b bg-muted/20 px-1">
           <TabsTrigger value="inspect" className={TAB_TRIGGER}>
-            Inspect
+            {t("panel.inspect")}
           </TabsTrigger>
           <TabsTrigger value="texture" className={TAB_TRIGGER}>
-            Texture
+            {t("panel.texture")}
             {textureBadge !== undefined && textureBadge > 0 && (
               <span className={TAB_BADGE}>{textureBadge}</span>
             )}
           </TabsTrigger>
           <TabsTrigger value="graphic" className={TAB_TRIGGER}>
-            Graphic
+            {t("panel.graphic")}
             {graphicBadge && <span className={TAB_BADGE}>{graphicBadge}</span>}
           </TabsTrigger>
           <TabsTrigger value="placement" className={TAB_TRIGGER}>
-            Placement
+            {t("panel.placement")}
             {placementBadge !== undefined && placementBadge > 0 && (
               <span className={TAB_BADGE}>{placementBadge}</span>
             )}

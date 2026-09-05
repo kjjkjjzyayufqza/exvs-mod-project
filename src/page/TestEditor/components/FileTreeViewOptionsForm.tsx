@@ -1,4 +1,5 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,7 @@ const selectClass =
   "mt-1 flex h-8 w-full rounded-md border border-input bg-background px-2 text-xs shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export function FileTreeViewOptionsForm({ value, onChange, isolatePointerEvents, className }: Props) {
+  const { t } = useTranslation("test-workspace");
   const onPointerDown = isolatePointerEvents
     ? (e: ReactPointerEvent) => {
         e.stopPropagation();
@@ -28,7 +30,7 @@ export function FileTreeViewOptionsForm({ value, onChange, isolatePointerEvents,
       onPointerDown={onPointerDown}
     >
       <div>
-        <Label className="text-xs text-muted-foreground">Sort by</Label>
+        <Label className="text-xs text-muted-foreground">{t("fileTree.sortBy")}</Label>
         <select
           className={selectClass}
           value={value.sortBy}
@@ -36,15 +38,15 @@ export function FileTreeViewOptionsForm({ value, onChange, isolatePointerEvents,
             onChange({ sortBy: e.target.value as FileTreeViewOptions["sortBy"] })
           }
         >
-          <option value="name">Name</option>
-          <option value="dateModified">Date modified</option>
-          <option value="type">Type</option>
-          <option value="size">Size</option>
+          <option value="name">{t("fileTree.name")}</option>
+          <option value="dateModified">{t("fileTree.dateModified")}</option>
+          <option value="type">{t("fileTree.type")}</option>
+          <option value="size">{t("fileTree.size")}</option>
         </select>
       </div>
 
       <div>
-        <Label className="text-xs text-muted-foreground">Order</Label>
+        <Label className="text-xs text-muted-foreground">{t("fileTree.order")}</Label>
         <select
           className={selectClass}
           value={value.direction}
@@ -52,13 +54,13 @@ export function FileTreeViewOptionsForm({ value, onChange, isolatePointerEvents,
             onChange({ direction: e.target.value as FileTreeViewOptions["direction"] })
           }
         >
-          <option value="asc">Ascending</option>
-          <option value="desc">Descending</option>
+          <option value="asc">{t("fileTree.ascending")}</option>
+          <option value="desc">{t("fileTree.descending")}</option>
         </select>
       </div>
 
       <div>
-        <Label className="text-xs text-muted-foreground">Group by</Label>
+        <Label className="text-xs text-muted-foreground">{t("fileTree.groupBy")}</Label>
         <select
           className={selectClass}
           value={value.groupBy}
@@ -66,12 +68,12 @@ export function FileTreeViewOptionsForm({ value, onChange, isolatePointerEvents,
             onChange({ groupBy: e.target.value as FileTreeViewOptions["groupBy"] })
           }
         >
-          <option value="none">None</option>
-          <option value="type">Type</option>
-          <option value="dateModified">Date modified</option>
+          <option value="none">{t("fileTree.none")}</option>
+          <option value="type">{t("fileTree.type")}</option>
+          <option value="dateModified">{t("fileTree.dateModified")}</option>
         </select>
         <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-          Grouping picks the primary column (same as Explorer). Sort by is used when Group by is None.
+          {t("fileTree.groupHint")}
         </p>
       </div>
 
@@ -80,7 +82,7 @@ export function FileTreeViewOptionsForm({ value, onChange, isolatePointerEvents,
           checked={value.foldersOnTop}
           onCheckedChange={(checked) => onChange({ foldersOnTop: Boolean(checked) })}
         />
-        <span>Folders on top</span>
+        <span>{t("fileTree.foldersOnTop")}</span>
       </label>
     </div>
   );

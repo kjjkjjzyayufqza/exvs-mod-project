@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import type { HavokInstallInfo, DaeImportConfig } from "./daeImportTypes";
 import { DaeImportFieldRow, DaeImportSection, DaeImportStatusAlert } from "./daeImportUi";
 import { DaeImportHktSimplifyFields } from "./DaeImportHktSimplifyFields";
@@ -21,11 +22,11 @@ export function DaeImportHktConfigPanel({
   sourceName,
   onValidationChange,
 }: DaeImportHktConfigPanelProps) {
+  const { t } = useTranslation("scene-dae-hkt");
   if (!havokInfo) {
     return (
       <DaeImportStatusAlert tone="error">
-        Havok Content Tools not detected. Install to C:\Program Files\Havok\HavokContentTools
-        to enable HKT generation.
+        {t("errors.toolsNotDetected")}
       </DaeImportStatusAlert>
     );
   }
@@ -33,7 +34,7 @@ export function DaeImportHktConfigPanel({
   if (!havokInfo.filterManagerAvailable) {
     return (
       <DaeImportStatusAlert tone="error">
-        hctStandAloneFilterManager.exe not found in the Havok installation.
+        {t("errors.filterManagerNotFound")}
       </DaeImportStatusAlert>
     );
   }
@@ -43,22 +44,21 @@ export function DaeImportHktConfigPanel({
 
   return (
     <>
-      <DaeImportSection title="Collision (HKT)">
+      <DaeImportSection title={t("section.collisionTitle")}>
         <DaeImportStatusAlert tone="info">
-          Builds simplified collision from DAE/FBX geometry (skin-baked when rigged), then converts
-          to HKT via Havok Content Tools.
+          {t("section.collisionDescription")}
         </DaeImportStatusAlert>
-        <DaeImportFieldRow label="Havok Version">
+        <DaeImportFieldRow label={t("fields.havokVersion")}>
           <span className="block truncate text-right font-mono text-[11px]">{havokInfo.version}</span>
         </DaeImportFieldRow>
         <DaeImportFieldRow
-          label="Conversion Profile"
-          hint="Auto-selected from installed Havok configs"
+          label={t("fields.conversionProfile")}
+          hint={t("fields.conversionProfileHint")}
         >
           <span className="block truncate text-right text-[11px] text-muted-foreground">
-            Automatic
+            {t("fields.automatic")}
             {profileCount > 0
-              ? ` · ${profileCount} profile${profileCount === 1 ? "" : "s"}`
+              ? ` · ${t("fields.profileCount", { count: profileCount })}`
               : ""}
           </span>
         </DaeImportFieldRow>

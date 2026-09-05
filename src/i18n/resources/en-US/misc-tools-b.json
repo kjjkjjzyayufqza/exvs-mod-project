@@ -1,0 +1,124 @@
+{
+  "page": {
+    "title": "Misc Tools",
+    "description": "Various utility tools for development and debugging",
+    "cards": {
+      "fileOps": {
+        "title": "File Operations",
+        "description": "File reading, writing, and manipulation utilities",
+        "open": "Open File Browser"
+      },
+      "calculator": {
+        "title": "Calculator",
+        "description": "Basic calculations and conversions",
+        "open": "Open Calculator"
+      },
+      "color": {
+        "title": "Color Tools",
+        "description": "Color picker and conversion utilities",
+        "open": "Open Color Picker"
+      },
+      "dev": {
+        "title": "Dev Tools",
+        "description": "Development and debugging utilities",
+        "open": "Open Dev Console"
+      },
+      "fbx": {
+        "title": "FBX Item Rename",
+        "description": "Load and analyze FBX model files"
+      },
+      "template": {
+        "title": "Template JSON Generator",
+        "description": "Generate template JSON files by scanning folder structures"
+      },
+      "imageToNutexb": {
+        "title": "Image to Nutexb",
+        "description": "Convert image files to nutexb format with custom output directory"
+      },
+      "numatb": {
+        "title": "Numatb Editor",
+        "description": "Edit material properties in .numatb files"
+      },
+      "compress": {
+        "title": "Image Compressor",
+        "description": "Compress PNG images to reduce file size while maintaining quality"
+      },
+      "resize": {
+        "title": "Image Resizer",
+        "description": "Resize images to specified dimensions with batch processing support"
+      },
+      "fhm2dImage": {
+        "title": "FHM2D Image View",
+        "description": "Open an FHM2D in memory, browse every texture, and list the other files"
+      },
+      "nutexb": {
+        "title": "Nutexb View",
+        "description": "Open a folder, recursively load every .nutexb, and browse them in a tree"
+      },
+      "gvs": {
+        "title": "GVS Map to VS2",
+        "description": "Extract flat files and generate VS2-compatible outputMeta JSON"
+      }
+    }
+  },
+  "common": {
+    "openFolder": "Open folder",
+    "refresh": "Refresh",
+    "preview": "Preview",
+    "images": "Images",
+    "tree": "Tree",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all",
+    "selectFolder": "Select Folder",
+    "removeFile": "Remove file",
+    "indexOfTotal": "{{index}} of {{total}}"
+  },
+  "nutexb": {
+    "previewAlt": "Nutexb preview",
+    "title": "Nutexb View",
+    "subtitle": "Recursive folder scan. Thumbnails decode on demand (max 3 at a time, 128px).",
+    "empty": "Open a folder to scan every .nutexb, including subfolders.",
+    "filterPlaceholder": "Filter tree by name or path...",
+    "noMatches": "No matching nutexb files",
+    "noFiles": "No nutexb files in this view",
+    "selectFile": "Select a .nutexb file",
+    "expandFolder": "Expand folder",
+    "collapseFolder": "Collapse folder",
+    "filesShown": "{{count}} shown",
+    "fileCount": "{{count}} nutexb file",
+    "fileCount_other": "{{count}} nutexb files",
+    "name": "Name",
+    "format": "Format",
+    "mips": "Mips",
+    "layers": "layers",
+    "swizzled": "swizzled",
+    "open": "Open Nutexb View",
+    "found": "Found {{count}} nutexb file",
+    "found_other": "Found {{count}} nutexb files",
+    "dimensions": "{{width}} x {{height}} x {{depth}}",
+    "mipsLayers": "Mips {{mips}} · {{layersLabel}} {{layers}}"
+  },
+  "template": {
+    "title": "Template JSON Generator",
+    "subtitle": "Generate data.json from a selected project folder",
+    "selectFolderTitle": "Folder Selection",
+    "selectFolderDescription": "Select a folder containing a /data directory. Only files within the data directory will be processed.",
+    "noFolder": "No folder selected",
+    "selectFolder": "Select Folder",
+    "structure": "Template Structure",
+    "structureDescription": "Drag and drop items to reorganize your project structure",
+    "addFolder": "Add Folder",
+    "addFile": "Add File",
+    "generate": "Generate JSON",
+    "magic": "Magic",
+    "files": "Files",
+    "unkCount": "UnkCount",
+    "selectDataError": "Selected folder must contain a 'data' directory. Only files within the data directory will be processed.",
+    "selectFirst": "Please select a folder and ensure data is loaded first.",
+    "generated": "data.json generated successfully at: {{path}}",
+    "failed": "Failed to generate data.json. Please check the console for details.",
+    "open": "Open Template JSON Generator",
+    "selectedFolder": "Selected folder: {{path}}",
+    "extensionsHint": "Only files with extensions {{extensions}} within the /data directory will be processed."
+  }
+}

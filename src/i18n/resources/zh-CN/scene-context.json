@@ -1,0 +1,7 @@
+{
+  "menu": { "focusSelected": "聚焦选中项", "resetCamera": "重置相机", "transformMode": "变换模式", "duplicate": "复制", "delete": "删除", "viewOptions": "视图选项", "importStaticMesh": "导入静态网格…", "exportSelectedModel": "导出选中模型…" },
+  "transform": { "title": "变换", "translate": "平移", "rotate": "旋转", "scale": "缩放" },
+  "view": { "showGrid": "显示网格", "showAxes": "显示坐标轴", "wireframe": "线框" },
+  "axis": { "add": "添加 {{key}}", "reset": "重置坐标轴", "remove": "移除 {{key}}", "rows": { "VDK_POSITION_X": { "label": "平移", "title": "平移" }, "VDK_ROTATION_X": { "label": "旋转", "title": "旋转" }, "VDK_SCALE_X": { "label": "缩放", "title": "缩放" } } },
+  "texture": { "selectFile": "选择纹理文件", "placeholder": "texture.nutexb", "inputLabel": "纹理路径", "browse": "浏览纹理" }
+}

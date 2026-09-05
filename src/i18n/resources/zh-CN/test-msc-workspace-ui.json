@@ -1,0 +1,118 @@
+{
+  "aria": {
+    "workspaceType": "MSC 工作区类型"
+  },
+  "tabs": {
+    "unit": "机体 MSC",
+    "traditional": "传统 MSC"
+  },
+  "workspace": {
+    "unitTitle": "机体 MSC 工作区",
+    "traditionalTitle": "传统 MSC 工作区",
+    "root": "工作区根目录：{{path}}"
+  },
+  "buttons": {
+    "picking": "选择中…",
+    "pickFolder": "选择文件夹",
+    "decompileAll": "全部反编译",
+    "repackAll": "全部重新打包",
+    "repackFhm2d": "重新打包 .fhm2d",
+    "diff": "差异",
+    "closePreview": "关闭预览",
+    "cancel": "取消",
+    "overwriteContinue": "覆盖并继续",
+    "continue": "继续"
+  },
+  "actions": {
+    "convert": "转换",
+    "converting": "转换中…",
+    "preview": "预览",
+    "open": "打开",
+    "resolveOverlay": "解析 overlay",
+    "resolving": "解析中…",
+    "verify": "校验",
+    "verifying": "校验中…",
+    "repack": "重新打包",
+    "repacking": "打包中…"
+  },
+  "status": {
+    "decompiling": "反编译中",
+    "repacking": "重新打包中",
+    "decompiled": "已反编译",
+    "repacked": "已重新打包"
+  },
+  "search": {
+    "placeholder": "搜索此文件夹中的文件…",
+    "fileType": "文件类型"
+  },
+  "fileTypes": {
+    "all": "全部文件",
+    "resolved": "Resolved"
+  },
+  "editor": {
+    "commandLabel": "外部编辑器命令",
+    "commandTitle": "打开时使用的外部编辑器命令（例如 cursor、code、notepad）",
+    "commandPlaceholder": "cursor",
+    "autoRepackTitle": "将 C 编译回 MSC 后，自动重新打包所在的 FHM2D",
+    "autoRepack": "自动重新打包 .fhm2d"
+  },
+  "preview": {
+    "noChanges": "与上次反编译的快照相比没有变化。",
+    "diffNeedsSnapshot": "请在本会话中反编译此脚本以捕获差异快照",
+    "toggleDiff": "切换与上次反编译快照的差异"
+  },
+  "empty": {
+    "noFiles": "没有文件匹配当前筛选条件",
+    "selectUnit": "请选择至少包含一个 {{exts}} 文件的文件夹。",
+    "selectTraditional": "请选择包含 {{ext}} MSC 脚本的文件夹。支持任意文件名。"
+  },
+  "dialog": {
+    "outputTargets": "输出目标",
+    "noOverwrite": "不会覆盖任何已有输出文件。",
+    "convertToC": "转换为 C",
+    "decompileAll": "反编译全部脚本",
+    "repackAll": "重新打包全部 C 文件",
+    "convertFile": "现在将 {{name}} 转换为 C 源文件？",
+    "batchDecompile": "反编译 {{count}} 个文件：{{names}}。",
+    "batchRepack": "重新打包 {{count}} 个文件：{{names}}。",
+    "willOverwrite": "将覆盖的现有文件",
+    "migrateStructure": "迁移 MSC FHM2D 结构"
+  },
+  "toast": {
+    "readFolderFailed": "读取 MSC 文件夹失败",
+    "configureModPath": "请先在配置中设置 OB Mod 路径再重新打包",
+    "repackedToMod": "已重新打包到 mod：{{path}}",
+    "removedVgsht2": "已移除匹配的 .vgsht2（与 .fhm2d 同名）",
+    "repackRemoveVgsht2Failed": "已重新打包到 mod，但无法移除 .vgsht2：{{message}}",
+    "repackFolderFailed": "重新打包文件夹失败：{{message}}",
+    "converted": "已转换 {{name}}",
+    "convertFailed": "转换 {{name}} 失败：{{message}}",
+    "repacked": "已重新打包 {{name}}",
+    "repackFailed": "重新打包 {{name}} 失败：{{message}}",
+    "noRegistryEvidence": "未找到 {{name}} 的稳定 MSC 注册表证据",
+    "resolveOverlayFailed": "解析 {{name}} 的 overlay 失败：{{message}}",
+    "openEditorFailed": "在编辑器中打开 {{name}} 失败：{{message}}",
+    "previewFailed": "无法预览 {{name}}：{{message}}",
+    "roundtripOk": "往返校验 {{name}}：{{summary}}",
+    "roundtripWarn": "往返校验 {{name}}：{{summary}}。{{context}}",
+    "roundtripFailed": "往返校验 {{name}} 失败：{{message}}",
+    "fileError": "{{name}}：{{message}}",
+    "autoRepackSkipped": "由于部分 MSC 文件失败，已跳过自动 .fhm2d 重新打包",
+    "batchOk": "{{verb}} {{count}} 个文件",
+    "batchPartial": "{{verb}} {{done}}/{{total}} 个文件，{{failed}} 个失败",
+    "prepareConvertFailed": "无法为 {{name}} 准备转换：{{message}}",
+    "needUnitScripts": "所选文件夹必须至少包含一个 .bscex、.cscex 或 .dscex 文件",
+    "needTraditionalScripts": "所选文件夹必须至少包含一个 .bin 文件",
+    "decompiledNoSnapshot": "已反编译 {{name}}，但无法为差异对比快照 {{path}}：{{message}}",
+    "overlayUpdated": "已用 {{summary}} 中的 {{renames}} 处回调重命名更新 {{path}}",
+    "overlayFound": "已找到 {{summary}}，但没有需要重写的未解析 func_N 回调名",
+    "evidenceSummary": "{{actions}} 个 action、{{slots}} 个 slot callback、{{weapons}} 个 weapon binding、{{resources}} 个 resource binding"
+  },
+  "pipeline": {
+    "c": "C",
+    "unverified": "尚未进行往返校验",
+    "verifying": "正在进行往返校验",
+    "match": "往返字节一致（{{bytes}} 字节）",
+    "mismatch": "往返在偏移 {{offset}} 处不一致（原始 {{original}} 字节，重编译 {{recompiled}} 字节）"
+  }
+}

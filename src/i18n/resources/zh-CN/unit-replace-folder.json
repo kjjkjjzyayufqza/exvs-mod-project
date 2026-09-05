@@ -1,0 +1,65 @@
+{
+  "title": "替换模型",
+  "description": "选择替换完整 SSBH 集合，或仅覆盖网格文件。",
+  "identity": {
+    "preserved": "保留目标标识",
+    "index": "索引 {{index}}",
+    "help": "模型名称、顺序和 NUHLPB 将保留在目标上。"
+  },
+  "scope": {
+    "label": "替换范围",
+    "full": {
+      "title": "完整 SSBH 文件夹",
+      "help": "替换网格、模型、骨架、材质和 JNTTBL。"
+    },
+    "numshb": {
+      "title": "仅网格（.numshb）",
+      "help": "覆盖现有 NUMSHB，其他文件保持不变。"
+    }
+  },
+  "source": {
+    "label": "来源",
+    "full": "选择已准备的 SSBH 文件夹",
+    "numshb": "选择现有 .numshb",
+    "convert": "转换 FBX / DAE"
+  },
+  "warnings": "警告",
+  "blockers": "阻止项",
+  "cancel": "取消",
+  "replacing": "正在替换……",
+  "replaceMesh": "替换网格",
+  "replaceContents": "替换内容",
+  "preview": {
+    "compatibility": "兼容性",
+    "texturePlan": "纹理提交计划",
+    "inPlace": "原位覆盖",
+    "untouched": "不变项：NUMDLB、两个 NUMATB 文件、NUSKTB、JNTTBL、NUHLPB、纹理和结构 JSON。",
+    "meshObjects": "网格对象与 NUMDLB 对比",
+    "skinBones": "蒙皮骨骼与目标 NUSKTB 对比"
+  },
+  "counts": {
+    "targetBones": "目标骨骼",
+    "sourceBones": "来源骨骼",
+    "matchingNames": "匹配名称",
+    "referenced": "已引用",
+    "copied": "已复制",
+    "reused": "已复用",
+    "missing": "缺失",
+    "objects": "对象",
+    "vertices": "顶点",
+    "triangles": "三角形",
+    "missingInSkeleton": "骨架中缺失"
+  },
+  "lists": {
+    "missingInSource": "来源中缺失",
+    "newInSource": "来源新增",
+    "keptMaterials": "保留材质",
+    "removedMaterials": "移除材质",
+    "addedMaterials": "新增材质",
+    "orphaned": "替换后可能移除",
+    "kept": "保留",
+    "allInfluenceBonesExist": "目标骨架包含所有影响骨骼",
+    "none": "无",
+    "more": "+{{count}} 项"
+  }
+}

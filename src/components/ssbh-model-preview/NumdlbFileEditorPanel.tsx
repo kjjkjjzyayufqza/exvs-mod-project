@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Save } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ type NumdlbFileEditorPanelProps = {
 };
 
 export function NumdlbFileEditorPanel({ selected }: NumdlbFileEditorPanelProps) {
+  const { t } = useTranslation("ssbh-root-b");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<NumdlbReadResult | null>(null);
@@ -43,17 +45,17 @@ export function NumdlbFileEditorPanel({ selected }: NumdlbFileEditorPanelProps) 
   if (!isNumdlb) {
     return (
       <p className="text-[11px] text-muted-foreground">
-        Select a `.numdlb` file from the file list to edit its mapping.
+        {t("selectNumdlb")}
       </p>
     );
   }
 
   if (loading) {
-    return <p className="text-[11px] text-muted-foreground">Loading `.numdlb` mapping...</p>;
+    return <p className="text-[11px] text-muted-foreground">{t("loadingNumdlb")}</p>;
   }
 
   if (!data || !selected) {
-    return <p className="text-[11px] text-muted-foreground">No `.numdlb` data available.</p>;
+    return <p className="text-[11px] text-muted-foreground">{t("noNumdlbData")}</p>;
   }
 
   return (
@@ -81,13 +83,13 @@ export function NumdlbFileEditorPanel({ selected }: NumdlbFileEditorPanelProps) 
             animationFileName: data.animationFileName,
             entries: data.entries,
           })
-            .then(() => toast.success("Saved `.numdlb` mapping"))
+            .then(() => toast.success(t("savedNumdlb")))
             .catch((error) => toast.error(String(error)))
             .finally(() => setSaving(false));
         }}
       >
         <Save className="mr-1 h-3.5 w-3.5" />
-        {saving ? "Saving..." : "Save NUMDLB"}
+        {saving ? t("saving") : t("saveNumdlb")}
       </Button>
     </div>
   );

@@ -1,0 +1,34 @@
+{
+  "summary": {
+    "aria": "FHM2D 元数据预览",
+    "title": "结构元数据",
+    "help": "Name 控制可编辑文件夹。HashName 控制游戏文件。",
+    "folder": "文件夹",
+    "structureJson": "结构 JSON",
+    "repackOutput": "重打包输出",
+    "hashNameMissing": "缺少 HashName"
+  },
+  "nameField": {
+    "sanitizedName": "规范化 Name",
+    "dictionary": "词典",
+    "folder": "文件夹",
+    "needsHash": "需要从来源得到 8 位哈希",
+    "defaultDescription": "为解包文件夹和结构 JSON 使用可读名称。"
+  },
+  "migration": {
+    "title": "迁移 FHM2D 结构",
+    "subtitle": "此结构 JSON 需要顶层 Name 和 HashName 元数据才能安全加载。",
+    "loadWithout": "不迁移并加载",
+    "migrateAndLoad": "迁移并加载",
+    "currentJson": "当前 JSON",
+    "afterMigration": "迁移后",
+    "nameHelp": "使用可读的文件夹名称。空格和不支持的字符会被规范化。",
+    "hashPreserved": "游戏哈希保留为 {{hash}}",
+    "hashMissing": "无法检测 HashName",
+    "hashPreservedHelp": "重打包仍会输出面向游戏的哈希文件。可读的 Name 只改变解包工作区。",
+    "hashMissingHelp": "此 JSON 需要结构文件名或包含 8 位哈希的 fileUrl 根路径。",
+    "dictionary": "词典：{{name}}（{{confidence}}）",
+    "currentFolder": "当前文件夹",
+    "currentNameCandidate": "当前名称候选："
+  }
+}

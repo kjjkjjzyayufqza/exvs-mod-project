@@ -1,0 +1,20 @@
+{
+  "validation": {
+    "modelName": "Model name",
+    "duplicate": "A model named \"{{name}}\" already exists in this package. Remove it first, or use Replace instead of Add.",
+    "requiredFiles": "Required files",
+    "textureReferences": "Textures referenced by materials: {{count}}",
+    "copied_one": "{{count}} found in folder — will be copied and deduped into the shared pool:",
+    "copied_other": "{{count}} found in folder — will be copied and deduped into the shared pool:",
+    "reused_one": "{{count}} already in the package texture pool — will be reused:",
+    "reused_other": "{{count}} already in the package texture pool — will be reused:",
+    "missing_one": "{{count}} missing from both the folder and package texture pool:",
+    "missing_other": "{{count}} missing from both the folder and package texture pool:",
+    "more_one": "+{{count}} more",
+    "more_other": "+{{count}} more",
+    "nuhlpb": { "add": "A fresh empty NUHLPB will be created for this model.", "addIgnored": "The source NUHLPB is ignored; a fresh empty NUHLPB will be created for this model.", "replace": "The target model's existing NUHLPB will be kept.", "replaceIgnored": "The source NUHLPB is ignored; the target model's existing NUHLPB will be kept." }
+  },
+  "tree": {
+    "unsaved": "Unsaved edits", "modified": "Modified this session", "folder": "folder", "copyNodeInfo": "Copy {{name}} info to AI", "edit": "Edit {{kind}}…", "showIcons": "Show in Icons", "showTextures": "Show in Textures", "reveal": "Reveal in Explorer", "copyPath": "Copy path", "noFolder": "No unit model folder loaded", "profileOk": "NUMATB profiles look correct", "profileScanNoRename_one": "Scanned {{count}} numatb file; no rename needed.", "profileScanNoRename_other": "Scanned {{count}} numatb files; no rename needed.", "profileWarning": "Profile scan warning", "fixConfirm": { "detected_one": "Detected {{count}} numatb file to rename so basenames match the game .numdlb list.", "detected_other": "Detected {{count}} numatb files to rename so basenames match the game .numdlb list.", "contentRule": "Content rule: non-empty shader_label → nust slot; empty → maya slot.", "targetNames": "Target names come from sibling .numdlb material paths (basename only).", "willNotModify": "Will NOT modify any .numdlb. Only renames .numatb on disk + structure JSON.", "title": "Auto-fix NUMATB names (numdlb untouched)" }, "fixed_one": "Fixed {{count}} numatb profile name", "fixed_other": "Fixed {{count}} numatb profile names", "fixedDescription": "Scanned {{scanned}}; skipped {{skipped}}.", "fixFailed": "Failed to auto-fix NUMATB profiles", "heading": "Structure", "summary": "magic {{magic}} · {{files}} files · {{models}} models · {{textures}} textures", "noModel": "No model loaded", "autoFixTitle": "Detect maya/nust from shader_label and rename mismatched .numatb + structure JSON", "autoFix": "Auto-fix profiles", "copyStructure": "Copy structure to AI", "parseFailed": "Failed to parse structure JSON", "empty": "Extract or open a unit-model folder to inspect its structure tree."
+  }
+}

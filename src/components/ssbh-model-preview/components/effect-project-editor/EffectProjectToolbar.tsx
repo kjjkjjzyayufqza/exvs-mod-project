@@ -1,4 +1,5 @@
 import { Plus, Search } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,10 +28,11 @@ export function EffectProjectToolbar({
   displayEndian,
   onDisplayEndianChange,
 }: Props) {
+  const { t } = useTranslation("ssbh-motion");
   return (
     <div className="flex flex-wrap items-end gap-3">
       <div className="space-y-1">
-        <Label className="text-[10px] text-muted-foreground">Int32 display endian</Label>
+        <Label className="text-[10px] text-muted-foreground">{t("effectProject.int32Endian")}</Label>
         <ToggleGroup
           type="single"
           value={displayEndian}
@@ -39,10 +41,10 @@ export function EffectProjectToolbar({
           }}
           className="h-8 justify-start"
         >
-          <ToggleGroupItem value="be" className="h-8 px-2.5 text-[10px]" aria-label="Show values as big-endian int32">
+          <ToggleGroupItem value="be" className="h-8 px-2.5 text-[10px]" aria-label={t("effectProject.showBe")}>
             BE
           </ToggleGroupItem>
-          <ToggleGroupItem value="le" className="h-8 px-2.5 text-[10px]" aria-label="Show values as little-endian int32">
+          <ToggleGroupItem value="le" className="h-8 px-2.5 text-[10px]" aria-label={t("effectProject.showLe")}>
             LE
           </ToggleGroupItem>
         </ToggleGroup>
@@ -55,12 +57,12 @@ export function EffectProjectToolbar({
         />
         <Input
           type="search"
-          placeholder="Filter rows…"
-          title="Any field; space-separated terms."
+          placeholder={t("effectProject.filterPlaceholder")}
+          title={t("effectProject.filterTitle")}
           className="h-8 border-border/70 pl-7 font-mono text-[10px] shadow-none"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          aria-label="Filter effect project rows"
+          aria-label={t("effectProject.filterAria")}
         />
       </div>
       <Badge variant="secondary" className="h-7 px-1.5 font-mono text-[9px] font-normal tabular-nums">
@@ -68,7 +70,7 @@ export function EffectProjectToolbar({
       </Badge>
       <Button type="button" size="sm" className="h-8 gap-1 px-2 text-[10px]" disabled={disabled} onClick={onAddRow}>
         <Plus className="h-3 w-3" />
-        Add row
+        {t("effectProject.addRow")}
       </Button>
     </div>
   );

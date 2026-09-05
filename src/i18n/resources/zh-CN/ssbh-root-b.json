@@ -1,0 +1,30 @@
+{
+  "reload": "重新加载",
+  "reset": "重置",
+  "saving": "保存中...",
+  "save": "保存",
+  "close": "关闭",
+  "noData": "无数据。",
+  "editNuhlpb": "编辑 SSBH（.nuhlpb）文件",
+  "loadingNuhlpb": "正在加载 NUHLPB...",
+  "selectNumdlb": "从文件列表选择一个 `.numdlb` 文件以编辑其映射。",
+  "loadingNumdlb": "正在加载 `.numdlb` 映射...",
+  "noNumdlbData": "没有可用的 `.numdlb` 数据。",
+  "savedNumdlb": "`.numdlb` 映射已保存",
+  "saveNumdlb": "保存 NUMDLB",
+  "editNumdlb": "编辑 SSBH（.numdlb）文件",
+  "editShl": "编辑 SHL（.shl）模型外壳",
+  "loadingShl": "正在加载 SHL...",
+  "copyShlTitle": "复制完整 SHL 草稿 JSON（用于 AI / 调试）",
+  "copyShlAria": "复制 SHL JSON",
+  "copyJson": "复制 JSON",
+  "numatbExported": "NUMATB 已导出为 JSON",
+  "numatbExportFailed": "导出 NUMATB JSON 失败",
+  "numatb": {
+    "subtitle": "编辑 SSBH（.numatb）材质模板",
+    "loading": "正在加载 NUMATB...",
+    "exportJson": "导出 JSON...",
+    "exportFolderTitle": "选择用于导出 NUMATB JSON 的文件夹",
+    "exportFolderHelp": "从磁盘读取 .numatb，并把 JSON（filePath、format、data）写入所选文件夹"
+  }
+}

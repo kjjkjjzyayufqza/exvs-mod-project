@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, Circle, Loader2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import type { SsbhModelPreviewTextureDecodeProgress } from "./SsbhModelPreviewContext";
@@ -24,6 +25,7 @@ export function SsbhModelPreviewLoadingOverlay({
   readingBundle,
   textureDecode,
 }: SsbhModelPreviewLoadingOverlayProps) {
+  const { t } = useTranslation("ssbh-root-c");
   const [activeIndex, setActiveIndex] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -75,13 +77,13 @@ export function SsbhModelPreviewLoadingOverlay({
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
             <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
-            <p className="text-[11px] font-medium text-foreground leading-tight">Decoding textures</p>
+            <p className="text-[11px] font-medium text-foreground leading-tight">{t("loading.decodingTextures")}</p>
             <span className="ml-auto shrink-0 tabular-nums text-[10px] text-muted-foreground">
               {textureDecode.done}/{textureDecode.total}
             </span>
           </div>
           <p className="truncate text-[10px] text-muted-foreground" title={textureDecode.currentLabel ?? undefined}>
-            {textureDecode.currentLabel ?? "Preparing…"}
+            {textureDecode.currentLabel ?? t("loading.preparing")}
           </p>
           <Progress value={pct} className="h-1" />
         </div>
@@ -106,7 +108,7 @@ export function SsbhModelPreviewLoadingOverlay({
                 <span
                   className={`text-xs ${status === "pending" ? "text-muted-foreground/60" : "text-foreground"}`}
                 >
-                  {label}
+              {t(`loading.step.${label.toLowerCase()}`)}
                 </span>
               </li>
             );
@@ -117,7 +119,7 @@ export function SsbhModelPreviewLoadingOverlay({
             <span
               className={`text-xs ${getTextureStatus() === "pending" ? "text-muted-foreground/60" : "text-foreground"}`}
             >
-              Textures
+              {t("loading.textures")}
               {textureDecode && getTextureStatus() === "active" && (
                 <span className="ml-1.5 tabular-nums text-[10px] text-muted-foreground">
                   {textureDecode.done}/{textureDecode.total}
@@ -132,7 +134,7 @@ export function SsbhModelPreviewLoadingOverlay({
           <div className="mt-2.5 flex flex-col gap-1">
             <Progress value={pct} className="h-1" />
             <p className="truncate text-[10px] text-muted-foreground">
-              {textureDecode.currentLabel ?? "Preparing…"}
+              {textureDecode.currentLabel ?? t("loading.preparing")}
             </p>
           </div>
         )}

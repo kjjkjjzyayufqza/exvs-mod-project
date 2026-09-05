@@ -30,6 +30,7 @@ import {
   type EffectFolderInventory,
 } from "@/services/effectFolder/effectFolderService"
 import { cn } from "@/lib/utils"
+import { useTranslation } from "react-i18next"
 import {
   buildEffectFolderCopyPlan,
   toEffectFolderSelections,
@@ -70,12 +71,12 @@ type ProjectileDepictionCopyDialogProps = {
 
 const FOLDER_PICKER = {
   kind: "folder" as const,
-  title: "Select effect folder",
+  title: "",
 }
 
 const BIN_PICKER = {
   kind: "file" as const,
-  title: "Select projectile_depiction_table.bin",
+  title: "",
   filters: [{ name: "Projectile depiction", extensions: ["bin"] }],
 }
 
@@ -103,6 +104,7 @@ export function ProjectileDepictionCopyDialog({
   workspaceDefaultPath,
   onApplyToCurrentFile,
 }: ProjectileDepictionCopyDialogProps) {
+  const { t } = useTranslation("test-projectile-copy")
   const entry = data.entries[selectedEntryIndex] ?? null
   const entryId = entry ? readTypedEntryId(entry, selectedEntryIndex) : 0
   const hashRows = useMemo(() => (entry ? listProjectileDepictionHashRows(entry) : []), [entry])
@@ -190,7 +192,7 @@ export function ProjectileDepictionCopyDialog({
   const scanSource = useCallback(async () => {
     const trimmed = sourceRoot.trim()
     if (!trimmed) {
-      setSourceError("Pick a source effect folder.")
+      setSourceError(t("errors.sourceFolder"))
       return
     }
     const requestId = beginRequest()
@@ -201,7 +203,7 @@ export function ProjectileDepictionCopyDialog({
       const inventory = await inspectEffectFolder(trimmed, structureJsonPath)
       if (requestId !== requestIdRef.current) return
       if (!entry) {
-        setSourceError("No depiction entry selected.")
+        setSourceError(t("errors.noEntry"))
         return
       }
       const nextResolutions = resolveProjectileDepictionHashes(entry, inventory)
@@ -209,7 +211,7 @@ export function ProjectileDepictionCopyDialog({
       setResolutions(nextResolutions)
       setPolicies(createDefaultEfxbnPolicies(selectedEffectItemsFromResolutions(nextResolutions)))
       if (sourceResolveBlocksCopy(nextResolutions)) {
-        setSourceError("Source folder is missing one or more required effect hashes. Fix the pack or hashes before copying.")
+        setSourceError(t("errors.missingHashes"))
       }
     } catch (error) {
       if (requestId !== requestIdRef.current) return
@@ -225,7 +227,7 @@ export function ProjectileDepictionCopyDialog({
   const scanDest = useCallback(async () => {
     const trimmed = destRoot.trim()
     if (!trimmed) {
-      setDestError("Pick a destination effect folder.")
+      setDestError(t("errors.destinationFolder"))
       return
     }
     const requestId = beginRequest()
@@ -279,7 +281,7 @@ export function ProjectileDepictionCopyDialog({
       })
       if (requestId !== requestIdRef.current) return
       setCopyResult(result)
-      toast.success(`Copied ${result.copiedFiles.length} effect file(s)`)
+      toast.success(t("success.copiedFiles", { count: result.copiedFiles.length }))
       setPhase("depiction")
     } catch (error) {
       if (requestId !== requestIdRef.current) return
@@ -298,7 +300,7 @@ export function ProjectileDepictionCopyDialog({
     if (!entry) return
     const trimmed = depictionPath.trim()
     if (!trimmed) {
-      setDepictionError("Pick a target projectile_depiction_table.bin.")
+      setDepictionError(t("errors.targetTable"))
       return
     }
     const requestId = beginRequest()
@@ -310,20 +312,20 @@ export function ProjectileDepictionCopyDialog({
         if (existingIndex >= 0 && existingIndex !== selectedEntryIndex) {
           if (!replaceConfirmed) {
             setDepictionError(
-              `${formatHash(entryId)} already exists in the current table. Confirm replace, then write again.`,
+              t("errors.currentExists", { hash: formatHash(entryId) }),
             )
             return
           }
           onApplyToCurrentFile(mergeProjectileDepictionEntry(data, entry, "replace"))
           setDepictionWrite("replace")
-          toast.success("Replaced depiction entry in the current table (unsaved)")
+          toast.success(t("success.replacedCurrent"))
         } else if (existingIndex === selectedEntryIndex) {
-          setDepictionError("The current file already contains this selected entry. Nothing to copy.")
+          setDepictionError(t("errors.sameEntry"))
           return
         } else {
           onApplyToCurrentFile(mergeProjectileDepictionEntry(data, entry, "append"))
           setDepictionWrite("append")
-          toast.success("Appended depiction entry to the current table (unsaved)")
+          toast.success(t("success.appendedCurrent"))
         }
         setPhase("result")
         return
@@ -337,7 +339,7 @@ export function ProjectileDepictionCopyDialog({
       const existingIndex = findProjectileDepictionEntryIndex(target, entryId)
       if (existingIndex >= 0 && !replaceConfirmed) {
         setDepictionError(
-          `${formatHash(entryId)} already exists in the target table. Confirm replace, then write again.`,
+          t("errors.targetExists", { hash: formatHash(entryId) }),
         )
         return
       }
@@ -350,7 +352,7 @@ export function ProjectileDepictionCopyDialog({
       })
       setDepictionWrite(mode)
       setPhase("result")
-      toast.success(mode === "replace" ? "Replaced depiction entry on disk" : "Appended depiction entry on disk")
+      toast.success(mode === "replace" ? t("success.replacedDisk") : t("success.appendedDisk"))
     } catch (error) {
       if (requestId !== requestIdRef.current) return
       setDepictionError(error instanceof Error ? error.message : String(error))
@@ -379,9 +381,9 @@ export function ProjectileDepictionCopyDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="flex max-h-[min(90vh,820px)] w-[min(96vw,820px)] max-w-4xl flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 space-y-1.5 border-b px-5 pb-3 pt-5 text-left">
-          <DialogTitle className="pr-8 text-base">Copy projectile depiction effect</DialogTitle>
+          <DialogTitle className="pr-8 text-base">{t("title")}</DialogTitle>
           <DialogDescription className="text-[11px]">
-            {formatHash(entryId)} · copy source-local EFXBN resources, then optionally write this row to another table
+            {t("description", { hash: formatHash(entryId) })}
           </DialogDescription>
         </DialogHeader>
 
@@ -390,16 +392,16 @@ export function ProjectileDepictionCopyDialog({
             {phase === "source" ? (
               <>
                 <section className="space-y-2">
-                  <h3 className="text-xs font-semibold">Entry hashes</h3>
+                  <h3 className="text-xs font-semibold">{t("sections.entryHashes")}</h3>
                   <div className="overflow-hidden rounded-md border">
                     <table className="w-full text-left text-[11px]">
                       <thead className="bg-muted/40 text-[10px] uppercase tracking-wide text-muted-foreground">
                         <tr>
-                          <th className="px-2 py-1.5 font-medium">Field</th>
-                          <th className="px-2 py-1.5 font-medium">Hash</th>
-                          <th className="px-2 py-1.5 font-medium">LE bytes</th>
-                          <th className="px-2 py-1.5 font-medium">Status</th>
-                          <th className="px-2 py-1.5 font-medium">Path</th>
+                          <th className="px-2 py-1.5 font-medium">{t("columns.field")}</th>
+                          <th className="px-2 py-1.5 font-medium">{t("columns.hash")}</th>
+                          <th className="px-2 py-1.5 font-medium">{t("columns.leBytes")}</th>
+                          <th className="px-2 py-1.5 font-medium">{t("columns.status")}</th>
+                          <th className="px-2 py-1.5 font-medium">{t("columns.path")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -415,7 +417,7 @@ export function ProjectileDepictionCopyDialog({
                               </td>
                               <td className="px-2 py-1.5 font-mono tabular-nums">{row.leBytes}</td>
                               <td className={cn("px-2 py-1.5", resolved && statusClass(resolved.status))}>
-                                {resolved ? resolved.message : row.empty ? "Empty" : "Scan source to resolve"}
+                                {resolved ? resolved.message : row.empty ? t("states.empty") : t("states.scanSource")}
                               </td>
                               <td className="max-w-[18rem] px-2 py-1.5 font-mono text-[10px] break-all text-muted-foreground">
                                 {sourcePath || "—"}
@@ -430,7 +432,7 @@ export function ProjectileDepictionCopyDialog({
 
                 <section className="space-y-1.5 rounded-lg border bg-muted/15 p-3">
                   <Label htmlFor="projectile-copy-source-folder" className="text-[11px]">
-                    Source effect folder
+                    {t("labels.sourceFolder")}
                   </Label>
                   <FilePathInput
                     id="projectile-copy-source-folder"
@@ -445,16 +447,15 @@ export function ProjectileDepictionCopyDialog({
                     placeholder="E:\\XB\\mod\\006effect\\014gndm00_016jagdac_001"
                     className="font-mono text-xs"
                     storeKey="paramEditor.v2.fp.projectileCopy.sourceEffect"
-                    picker={{ ...FOLDER_PICKER, defaultPath: workspaceDefaultPath }}
+                    picker={{ ...FOLDER_PICKER, title: t("picker.sourceFolder"), defaultPath: workspaceDefaultPath }}
                     disabled={ioActive}
                   />
                   <p className="text-[10px] text-muted-foreground">
-                    Reads the sibling _structure.json and on-disk files only. Inspecting a large pack parses every
-                    EFXBN and can take a few seconds.
+                    {t("help.sourceScan")}
                   </p>
                   <Button type="button" size="sm" onClick={() => void scanSource()} disabled={ioActive}>
                     {scanningSource ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Scan source
+                    {t("actions.scanSource")}
                   </Button>
                 </section>
                 {sourceError ? (
@@ -472,7 +473,7 @@ export function ProjectileDepictionCopyDialog({
               <>
                 <section className="space-y-1.5 rounded-lg border bg-muted/15 p-3">
                   <Label htmlFor="projectile-copy-dest-folder" className="text-[11px]">
-                    Destination effect folder
+                    {t("labels.destinationFolder")}
                   </Label>
                   <FilePathInput
                     id="projectile-copy-dest-folder"
@@ -485,12 +486,12 @@ export function ProjectileDepictionCopyDialog({
                     placeholder="E:\\workspace\\006effect\\0xDEST"
                     className="font-mono text-xs"
                     storeKey="paramEditor.v2.fp.projectileCopy.destEffect"
-                    picker={{ ...FOLDER_PICKER, defaultPath: workspaceDefaultPath }}
+                    picker={{ ...FOLDER_PICKER, title: t("picker.destinationFolder"), defaultPath: workspaceDefaultPath }}
                     disabled={ioActive}
                   />
                   <Button type="button" size="sm" onClick={() => void scanDest()} disabled={ioActive}>
                     {scanningDest ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Scan destination
+                    {t("actions.scanDestination")}
                   </Button>
                 </section>
 
@@ -506,9 +507,9 @@ export function ProjectileDepictionCopyDialog({
                 ) : null}
 
                 <section className="space-y-2">
-                  <h3 className="text-xs font-semibold">EFXBN rename / overwrite</h3>
+                  <h3 className="text-xs font-semibold">{t("sections.efxbnPolicy")}</h3>
                   {policies.length === 0 ? (
-                    <p className="text-[11px] text-muted-foreground">No EFXBN files in the copy set.</p>
+                    <p className="text-[11px] text-muted-foreground">{t("states.noEfxbn")}</p>
                   ) : (
                     <div className="space-y-2">
                       {policies.map((policy) => {
@@ -528,25 +529,25 @@ export function ProjectileDepictionCopyDialog({
                                 onChange={(event) => updatePolicy(policy.fileIndex, { destName: event.target.value })}
                                 className="h-8 font-mono text-[11px]"
                                 disabled={ioActive || policy.action !== "copy"}
-                                aria-label={`Destination file name for ${policy.sourceName}`}
+                                aria-label={t("aria.destinationName", { name: policy.sourceName })}
                               />
                               <select
                                 className="h-8 rounded-md border bg-background px-2 text-[11px]"
                                 value={policy.action}
-                                aria-label={`Copy action for ${policy.sourceName}`}
+                                aria-label={t("aria.copyAction", { name: policy.sourceName })}
                                 disabled={ioActive}
                                 onChange={(event) =>
                                   updatePolicy(policy.fileIndex, { action: event.target.value as EfxbnCopyAction })
                                 }
                               >
-                                <option value="copy">Copy as new</option>
-                                <option value="overwrite">Overwrite existing</option>
-                                <option value="keep">Keep existing</option>
+                                <option value="copy">{t("actions.copyNew")}</option>
+                                <option value="overwrite">{t("actions.overwrite")}</option>
+                                <option value="keep">{t("actions.keepExisting")}</option>
                               </select>
                             </div>
                             <div className="space-y-1 break-all font-mono text-[10px] text-muted-foreground">
-                              <div>Source: {policy.sourcePath || "—"}</div>
-                              <div>Output: {preview?.outputPath || "Scan destination to resolve output path"}</div>
+                              <div>{t("labels.source")}: {policy.sourcePath || "—"}</div>
+                              <div>{t("labels.output")}: {preview?.outputPath || t("states.scanDestinationOutput")}</div>
                             </div>
                             {error && !error.ok ? (
                               <p className="text-[11px] text-destructive">{error.error}</p>
@@ -559,7 +560,7 @@ export function ProjectileDepictionCopyDialog({
                 </section>
                 {outputPreviews.length > 0 ? (
                   <section className="space-y-1.5">
-                    <h3 className="text-xs font-semibold">Final output paths</h3>
+                    <h3 className="text-xs font-semibold">{t("sections.finalPaths")}</h3>
                     <ul className="space-y-1 rounded-md border bg-muted/20 p-2 font-mono text-[10px]">
                       {outputPreviews.map((preview) => (
                         <li key={`dest-out-${preview.fileIndex}`} className="break-all">
@@ -583,11 +584,10 @@ export function ProjectileDepictionCopyDialog({
             {phase === "depiction" ? (
               <section className="space-y-3">
                 <p className="text-xs">
-                  Also copy depiction entry <span className="font-mono">{formatHash(entryId)}</span> into a target
-                  projectile_depiction_table.bin?
+                  {t("depiction.question", { hash: formatHash(entryId) })}
                 </p>
                 <Label htmlFor="projectile-copy-depiction-bin" className="text-[11px]">
-                  Target projectile_depiction_table.bin
+                  {t("labels.targetTable")}
                 </Label>
                 <FilePathInput
                   id="projectile-copy-depiction-bin"
@@ -600,7 +600,7 @@ export function ProjectileDepictionCopyDialog({
                   placeholder="E:\\XB\\mod\\006effect\\...\\projectile_depiction_table.bin"
                   className="font-mono text-xs"
                   storeKey="paramEditor.v2.fp.projectileCopy.destDepiction"
-                  picker={{ ...BIN_PICKER, defaultPath: workspaceDefaultPath ?? sourceFilePath }}
+                  picker={{ ...BIN_PICKER, title: t("picker.targetTable"), defaultPath: workspaceDefaultPath ?? sourceFilePath }}
                   disabled={ioActive}
                 />
                 <label className="flex items-center gap-2 text-[11px]">
@@ -610,7 +610,7 @@ export function ProjectileDepictionCopyDialog({
                     disabled={ioActive}
                     onChange={(event) => setReplaceConfirmed(event.target.checked)}
                   />
-                  If the target already has {formatHash(entryId)}, replace that row
+                  {t("labels.replaceExisting", { hash: formatHash(entryId) })}
                 </label>
                 {depictionError ? (
                   <div
@@ -628,16 +628,16 @@ export function ProjectileDepictionCopyDialog({
                 <div className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2.5">
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                   <div className="space-y-1 text-[11px]">
-                    <p className="font-medium">Finished</p>
+                    <p className="font-medium">{t("result.finished")}</p>
                     <p>
-                      Effect copy: {copyResult ? `${copyResult.copiedFiles.length} copied, ${copyResult.skipped.length} skipped` : "not run"}
+                      {t("result.effectCopy")}: {copyResult ? t("result.copyCounts", { copied: copyResult.copiedFiles.length, skipped: copyResult.skipped.length }) : t("states.notRun")}
                     </p>
                     {copyResult?.destinationStructureJsonPath ? (
                       <p className="break-all font-mono text-[10px] text-muted-foreground">
                         {copyResult.destinationStructureJsonPath}
                       </p>
                     ) : null}
-                    <p>Depiction row: {depictionWrite ?? "unknown"}</p>
+                    <p>{t("result.depictionRow")}: {depictionWrite ?? t("states.unknown")}</p>
                     {depictionPath.trim() ? (
                       <p className="break-all font-mono text-[10px] text-muted-foreground">{depictionPath.trim()}</p>
                     ) : null}
@@ -645,7 +645,7 @@ export function ProjectileDepictionCopyDialog({
                 </div>
                 {outputPreviews.length > 0 ? (
                   <section className="space-y-1.5">
-                    <h4 className="text-[11px] font-medium">Planned output paths</h4>
+                    <h4 className="text-[11px] font-medium">{t("sections.plannedPaths")}</h4>
                     <ul className="max-h-40 space-y-1 overflow-auto rounded-md border bg-muted/20 p-2 font-mono text-[10px]">
                       {outputPreviews.map((preview) => (
                         <li key={`plan-${preview.fileIndex}`} className="break-all">
@@ -657,7 +657,7 @@ export function ProjectileDepictionCopyDialog({
                 ) : null}
                 {copyResult?.copiedFiles.length ? (
                   <section className="space-y-1.5">
-                    <h4 className="text-[11px] font-medium">Copied files</h4>
+                    <h4 className="text-[11px] font-medium">{t("sections.copiedFiles")}</h4>
                     <ul className="max-h-40 space-y-1 overflow-auto rounded-md border bg-muted/20 p-2 font-mono text-[10px]">
                       {copyResult.copiedFiles.map((path) => (
                         <li key={path} className="break-all">
@@ -678,7 +678,7 @@ export function ProjectileDepictionCopyDialog({
           </div>
           <div className="flex flex-col-reverse gap-2 sm:flex-row">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={ioActive}>
-              {phase === "result" ? "Close" : "Cancel"}
+              {phase === "result" ? t("actions.close") : t("actions.cancel")}
             </Button>
             {phase === "source" ? (
               <Button
@@ -686,13 +686,13 @@ export function ProjectileDepictionCopyDialog({
                 onClick={goToDestination}
                 disabled={!canLeaveSource || scanningSource}
               >
-                Next
+                {t("actions.next")}
               </Button>
             ) : null}
             {phase === "destination" ? (
               <>
                 <Button type="button" variant="secondary" onClick={() => setPhase("source")} disabled={busy}>
-                  Back
+                  {t("actions.back")}
                 </Button>
                 <Button
                   type="button"
@@ -700,7 +700,7 @@ export function ProjectileDepictionCopyDialog({
                   disabled={busy || !destInventory || !policiesValid}
                 >
                   {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Copy className="mr-2 h-4 w-4" />}
-                  Copy effect files
+                  {t("actions.copyEffectFiles")}
                 </Button>
               </>
             ) : null}
@@ -712,14 +712,14 @@ export function ProjectileDepictionCopyDialog({
                   onClick={() => setPhase(selectedItems.length > 0 ? "destination" : "source")}
                   disabled={busy}
                 >
-                  Back
+                  {t("actions.back")}
                 </Button>
                 <Button type="button" variant="secondary" onClick={skipDepiction} disabled={busy}>
-                  Skip table copy
+                  {t("actions.skipTable")}
                 </Button>
                 <Button type="button" onClick={() => void writeDepiction()} disabled={busy}>
                   {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Write depiction row
+                  {t("actions.writeRow")}
                 </Button>
               </>
             ) : null}

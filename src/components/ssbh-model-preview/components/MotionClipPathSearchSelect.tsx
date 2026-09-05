@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from "react";
 import { Check, ChevronDown, FolderOpen, Search } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,6 +40,7 @@ export function MotionClipPathSearchSelect({
   disabled = false,
   className,
 }: MotionClipPathSearchSelectProps) {
+  const { t } = useTranslation("ssbh-motion");
   const reactId = useId();
   const instanceId = `motion-clip-${reactId.replace(/:/g, "")}`;
   const [open, setOpen] = useState(false);
@@ -126,11 +128,11 @@ export function MotionClipPathSearchSelect({
           <span className="flex min-w-0 flex-1 items-start gap-1.5">
             <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             <span className="min-w-0 flex-1">
-              <span className="block break-all font-mono text-[10px] font-medium leading-snug">
+              <span className="block break-all font-mono text-[10px] font-medium leading-snug" data-i18n-ignore="">
                 {trigger.title}
               </span>
               {trigger.subtitle ? (
-                <span className="mt-0.5 block truncate font-mono text-[9px] tabular-nums text-muted-foreground">
+                <span className="mt-0.5 block truncate font-mono text-[9px] tabular-nums text-muted-foreground" data-i18n-ignore="">
                   {trigger.subtitle}
                 </span>
               ) : null}
@@ -155,12 +157,15 @@ export function MotionClipPathSearchSelect({
         <div className="flex items-center gap-1.5 border-b border-border/70 px-2 py-1.5">
           <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <Label htmlFor={searchInputId} className="sr-only">
-            Search motion clips
+            {t("clipSearch.searchLabel")}
           </Label>
           <Input
             id={searchInputId}
             name={`${instanceId}-search`}
-            placeholder={`Search ${paths.length} clips in ${catalog.groups.length} folders`}
+            placeholder={t("clipSearch.searchPlaceholder", {
+              clips: paths.length,
+              folders: catalog.groups.length,
+            })}
             className="h-7 border-0 bg-transparent px-0 text-[11px] shadow-none focus-visible:ring-0"
             value={query}
             autoComplete="off"
@@ -175,9 +180,9 @@ export function MotionClipPathSearchSelect({
           />
         </div>
         <ScrollArea className="h-[min(22rem,50vh)]">
-          <div id={`${instanceId}-listbox`} className="p-1" role="listbox" aria-label="Motion clips">
+          <div id={`${instanceId}-listbox`} className="p-1" role="listbox" aria-label={t("clipSearch.listLabel")}>
             {visibleGroups.length === 0 ? (
-              <p className="px-2 py-6 text-center text-[11px] text-muted-foreground">No clips match.</p>
+              <p className="px-2 py-6 text-center text-[11px] text-muted-foreground">{t("clipSearch.noMatch")}</p>
             ) : (
               visibleGroups.map((group) => {
                 const expanded = searching || expandedId === group.id;
@@ -219,6 +224,7 @@ function FolderBlock({
   onToggle: () => void;
   onPick: (path: string) => void;
 }) {
+  const { t } = useTranslation("ssbh-motion");
   const containsSelected = group.clips.some((clip) => clip.path === selectedPath);
 
   return (
@@ -227,7 +233,7 @@ function FolderBlock({
         ref={selectedFolderRef}
         type="button"
         aria-expanded={expanded}
-        aria-label={`${group.label}, ${group.clips.length} clips`}
+        aria-label={t("clipSearch.folderAria", { label: group.label, count: group.clips.length })}
         className={cn(
           "flex w-full items-center gap-1 rounded-sm px-1.5 py-1 text-left transition-colors duration-200",
           "hover:bg-accent/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
@@ -242,7 +248,9 @@ function FolderBlock({
             !expanded && "-rotate-90",
           )}
         />
-        <span className="min-w-0 flex-1 truncate font-mono text-[10px] tabular-nums">{group.label}</span>
+        <span className="min-w-0 flex-1 truncate font-mono text-[10px] tabular-nums" data-i18n-ignore="">
+          {group.label}
+        </span>
         <span className="shrink-0 font-mono text-[9px] tabular-nums text-muted-foreground">{group.clips.length}</span>
       </button>
       {expanded
@@ -290,7 +298,9 @@ function ClipRow({
       onClick={() => onPick(clip.path)}
     >
       <Check className={cn("mt-0.5 h-3 w-3 shrink-0", selected ? "opacity-100" : "opacity-0")} />
-      <span className="min-w-0 break-all font-mono text-[10px] leading-snug">{clip.fileName}</span>
+      <span className="min-w-0 break-all font-mono text-[10px] leading-snug" data-i18n-ignore="">
+        {clip.fileName}
+      </span>
     </button>
   );
 }

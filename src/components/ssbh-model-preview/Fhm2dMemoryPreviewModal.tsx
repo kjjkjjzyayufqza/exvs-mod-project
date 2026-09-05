@@ -26,6 +26,7 @@ import {
   useTransition,
 } from "react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -108,6 +109,7 @@ function findFirstEntryId(session: Fhm2dMemorySessionSummary | null): string | n
 }
 
 export function Fhm2dMemoryPreviewModal() {
+  const { t } = useTranslation("ssbh-modals");
   const p = useSsbhModelPreview();
   const obDplCachePath = useConfigStore((state) => state.obDplCachePath ?? "");
   const session = p.memoryWorkspaceSession;
@@ -252,7 +254,7 @@ export function Fhm2dMemoryPreviewModal() {
             p.setMemoryWorkspaceSourcePath(path);
             setActiveEntryId(findFirstEntryId(created));
             setCollapsedFolderIds(new Set());
-            toast.success("Memory workspace was restored from disk.");
+            toast.success(t("memory.restored"));
           } catch (e2) {
             toast.error(String(e2));
           } finally {
@@ -262,7 +264,7 @@ export function Fhm2dMemoryPreviewModal() {
           }
           return;
         }
-        toast.error("Could not reach the in-memory FHM2D workspace session.", {
+        toast.error(t("memory.sessionUnreachable"), {
           description: msg,
         });
       }
@@ -296,7 +298,7 @@ export function Fhm2dMemoryPreviewModal() {
     if (!workspaceRoot) {
       setCharacterIdPickerState({
         status: "error",
-        message: "Open a workspace folder before using the Character ID picker.",
+        message: t("memory.workspaceRequired"),
       });
       return;
     }
@@ -366,11 +368,11 @@ export function Fhm2dMemoryPreviewModal() {
         setRenameName("");
         setRenameVirtualPath("");
         if (created.namingWarning) {
-          toast.error("Memory preview naming warning", {
+          toast.error(t("memory.namingWarningToast"), {
             description: created.namingWarning,
           });
         } else {
-          toast.success("FHM2D loaded into memory workspace");
+          toast.success(t("memory.loaded"));
         }
       } catch (e) {
         toast.error(String(e));
@@ -541,7 +543,7 @@ export function Fhm2dMemoryPreviewModal() {
           return next;
         });
       });
-      toast.success("Virtual rename applied", {
+      toast.success(t("memory.renameApplied"), {
         description: impact.nextVirtualPath,
       });
     } catch (e) {
@@ -587,7 +589,7 @@ export function Fhm2dMemoryPreviewModal() {
     const bundles = settled.successes.map((result) => result.value);
     const failed = settled.failures.map((result) => String(result.error));
     if (failed.length > 0) {
-      toast.error("Some memory preview candidates failed", {
+      toast.error(t("memory.candidatesFailed"), {
         description: failed.slice(0, 3).join("\n"),
       });
     }
@@ -604,10 +606,10 @@ export function Fhm2dMemoryPreviewModal() {
         const bundles = await buildSelectedBundles();
         if (mode === "replace") {
           p.loadMemoryPreviewBundles(bundles);
-          toast.success("Memory preview applied to 3D view");
+          toast.success(t("memory.appliedToView"));
         } else {
           p.appendMemoryPreviewBundles(bundles);
-          toast.success("Memory preview appended to 3D view");
+          toast.success(t("memory.appendedToView"));
         }
         closeModal();
       } catch (e) {
@@ -627,8 +629,8 @@ export function Fhm2dMemoryPreviewModal() {
   return (
     <AppRndModalShell
       titleId="memory-preview-workspace-title"
-      title="Memory Preview Workspace"
-      subtitle="Inspect and edit an FHM2D package in memory"
+      title={t("memory.title")}
+      subtitle={t("memory.subtitle")}
       headerIcon={<FileArchive className="h-5 w-5 text-primary" />}
       dimensions={MEMORY_PREVIEW_DIMENSIONS}
       storageKey="app.rnd-size.memory-preview-workspace"
@@ -639,7 +641,7 @@ export function Fhm2dMemoryPreviewModal() {
         <div className="flex flex-wrap items-center justify-end gap-2">
               <Button type="button" size="sm" onClick={() => void openFhm2dFile()} disabled={busy}>
                 <FileArchive className="mr-1.5 h-3.5 w-3.5" />
-                Open FHM2D
+                {t("memory.openFhm2d")}
               </Button>
               <Button
                 type="button"
@@ -649,7 +651,7 @@ export function Fhm2dMemoryPreviewModal() {
                 disabled={busy || !sourcePath}
               >
                 <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                Reload Session
+                {t("memory.reloadSession")}
               </Button>
               <Button
                 type="button"
@@ -659,7 +661,7 @@ export function Fhm2dMemoryPreviewModal() {
                 disabled={busy || !sourcePath}
               >
                 <Wand2 className="mr-1.5 h-3.5 w-3.5" />
-                Auto Rename
+                {t("memory.autoRename")}
               </Button>
               <Button
                 type="button"
@@ -669,7 +671,7 @@ export function Fhm2dMemoryPreviewModal() {
                 disabled={busy || p.previewBusy || selectedCandidateIds.size === 0}
               >
                 <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                Apply Selected To 3D View
+                {t("memory.applyToView")}
               </Button>
               <Button
                 type="button"
@@ -679,7 +681,7 @@ export function Fhm2dMemoryPreviewModal() {
                 disabled={busy || p.previewBusy || selectedCandidateIds.size === 0}
               >
                 <Layers3 className="mr-1.5 h-3.5 w-3.5" />
-                Append To 3D View
+                {t("memory.appendToView")}
               </Button>
               <Button
                 type="button"
@@ -689,17 +691,17 @@ export function Fhm2dMemoryPreviewModal() {
                 disabled={busy || !session}
               >
                 <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                Clear Session
+                {t("memory.clearSession")}
               </Button>
         </div>
         {session ? (
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
-            <span>Source: {session.sourceName}</span>
-            <span>Format: {session.format ?? "auto"}</span>
-            <span>Rename rev: {session.renameRevision}</span>
-            <span>{session.previewCandidates.length} preview candidates</span>
+            <span>{t("memory.source")} <span data-i18n-ignore="">{session.sourceName}</span></span>
+            <span>{t("memory.format")} <span data-i18n-ignore="">{session.format ?? "auto"}</span></span>
+            <span>{t("memory.renameRev")} {session.renameRevision}</span>
+            <span>{t("memory.previewCandidates", { count: session.previewCandidates.length })}</span>
             {session.namingWarning ? (
-              <span className="text-amber-600 dark:text-amber-400">Naming warning present</span>
+              <span className="text-amber-600 dark:text-amber-400">{t("memory.namingWarning")}</span>
             ) : null}
           </div>
         ) : null}
@@ -710,24 +712,32 @@ export function Fhm2dMemoryPreviewModal() {
             <div className="shrink-0 border-b px-4 py-3">
               <div className="mb-2 flex items-center gap-2">
                 <FileArchive className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-semibold">Character ID</h3>
+                <h3 className="text-sm font-semibold">{t("memory.characterId")}</h3>
               </div>
               <div className="space-y-2">
                 <div className="rounded-lg border bg-muted/15 px-3 py-2 text-[10px] text-muted-foreground">
                   {characterIdPickerState.status === "loading" ? (
-                    <div>Loading character_id_table.bin from the current workspace…</div>
+                    <div>{t("memory.loadingCharacterTable")}</div>
                   ) : null}
                   {characterIdPickerState.status === "error" ? (
                     <div className="text-destructive">{characterIdPickerState.message}</div>
                   ) : null}
                   {characterIdPickerState.status === "ready" ? (
                     <div className="space-y-1">
-                      <div className="break-all">Source: {characterIdPickerState.filePath}</div>
+                      <div className="break-all">{t("memory.source")} <span data-i18n-ignore="">{characterIdPickerState.filePath}</span></div>
                       <div>
-                        Loadable rows: {characterIdPickerState.availableCount}/{characterIdPickerState.options.length}
+                        {t("memory.loadableRows", {
+                          available: characterIdPickerState.availableCount,
+                          total: characterIdPickerState.options.length,
+                        })}
                       </div>
                       <div className="break-all">
-                        Source root: {obDplCachePath.trim() ? obDplCachePath : "obDplCachePath is not configured"}
+                        {t("memory.sourceRoot")}{" "}
+                        {obDplCachePath.trim() ? (
+                          <span data-i18n-ignore="">{obDplCachePath}</span>
+                        ) : (
+                          t("memory.cachePathMissing")
+                        )}
                       </div>
                     </div>
                   ) : null}
@@ -740,7 +750,7 @@ export function Fhm2dMemoryPreviewModal() {
                       const next = event.target.value;
                       startTransition(() => setCharacterIdSearchText(next));
                     }}
-                    placeholder="Search Character ID or Model hash"
+                    placeholder={t("memory.searchCharacterId")}
                     className="h-8 pl-7 text-[11px]"
                     disabled={characterIdPickerState.status !== "ready"}
                   />
@@ -749,7 +759,7 @@ export function Fhm2dMemoryPreviewModal() {
               <div className="mt-3">
                 {characterIdPickerState.status === "ready" && filteredCharacterIdOptions.length === 0 ? (
                   <div className="rounded-lg border border-dashed px-3 py-4 text-[11px] text-muted-foreground">
-                    No Character ID rows match the current search.
+                    {t("memory.noCharacterRows")}
                   </div>
                 ) : null}
                 {characterIdPickerState.status === "ready" && filteredCharacterIdOptions.length > 0 ? (
@@ -775,7 +785,7 @@ export function Fhm2dMemoryPreviewModal() {
                           <button
                             key={`character-id-${option.characterId}-${option.modelHashHex}`}
                             type="button"
-                            aria-label={`Character ID ${option.characterId}`}
+                            aria-label={t("memory.characterIdOption", { id: option.characterId })}
                             disabled={disabled}
                             className={cn(
                               "absolute left-0 right-0 flex flex-col items-start gap-1 border-l-[3px] px-3 py-2 text-left text-[11px] transition-colors",
@@ -789,22 +799,22 @@ export function Fhm2dMemoryPreviewModal() {
                             title={option.disabledReason ?? option.sourcePath}
                           >
                             <div className="flex w-full items-center justify-between gap-2">
-                              <span className="font-medium">{`Character ID ${option.characterId}`}</span>
+                              <span className="font-medium">{t("memory.characterIdOption", { id: option.characterId })}</span>
                               {option.disabledReason ? (
                                 <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-700 dark:text-amber-300">
-                                  Disabled
+                                  {t("memory.disabled")}
                                 </span>
                               ) : (
                                 <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-700 dark:text-emerald-300">
-                                  Ready
+                                  {t("memory.ready")}
                                 </span>
                               )}
                             </div>
-                            <div className="font-mono text-[10px] text-muted-foreground">
+                            <div className="font-mono text-[10px] text-muted-foreground" data-i18n-ignore="">
                               {option.modelHashHex}.fhm2d
                             </div>
                             {option.disabledReason ? (
-                              <div className="text-[10px] text-muted-foreground">{option.disabledReason}</div>
+                              <div className="text-[10px] text-muted-foreground" data-i18n-ignore="">{option.disabledReason}</div>
                             ) : null}
                           </button>
                         );
@@ -818,7 +828,7 @@ export function Fhm2dMemoryPreviewModal() {
             <div className="shrink-0 border-b px-4 py-3">
               <div className="mb-2 flex items-center gap-2">
                 <FolderTree className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-semibold">Virtual File Tree</h3>
+                <h3 className="text-sm font-semibold">{t("memory.virtualTree")}</h3>
               </div>
               <div className="space-y-2">
                 <div className="relative">
@@ -829,7 +839,7 @@ export function Fhm2dMemoryPreviewModal() {
                       const next = event.target.value;
                       startTransition(() => setTreeSearchText(next));
                     }}
-                    placeholder="Search path, name, extension"
+                    placeholder={t("memory.searchTree")}
                     className="h-8 pl-7 text-[11px]"
                   />
                 </div>
@@ -840,7 +850,7 @@ export function Fhm2dMemoryPreviewModal() {
                       startTransition(() => setModelRelatedOnly(checked === true))
                     }
                   />
-                  Model-related only
+                  {t("memory.modelRelatedOnly")}
                 </label>
               </div>
             </div>
@@ -923,14 +933,14 @@ export function Fhm2dMemoryPreviewModal() {
                       )}
                       <div className="min-w-0 flex-1 pl-1">
                         <div className="flex items-center gap-1.5">
-                          <span className={cn("truncate", isActive ? "font-medium" : "font-normal")}>
+                          <span className={cn("truncate", isActive ? "font-medium" : "font-normal")} data-i18n-ignore="">
                             {node.name}
                           </span>
                           {node.hasReferenceIssue ? (
                             <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
                           ) : null}
                         </div>
-                        <div className="truncate font-mono text-[9px] text-muted-foreground/95">
+                        <div className="truncate font-mono text-[9px] text-muted-foreground/95" data-i18n-ignore="">
                           {node.fileType ?? node.relativePath}
                         </div>
                       </div>
@@ -945,11 +955,10 @@ export function Fhm2dMemoryPreviewModal() {
             <div className="shrink-0 border-b px-4 py-3">
               <div className="mb-2 flex items-center gap-2">
                 <Boxes className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-semibold">Details & Rename</h3>
+                <h3 className="text-sm font-semibold">{t("memory.detailsTitle")}</h3>
               </div>
               <p className="text-[10px] leading-relaxed text-muted-foreground">
-                Inspect the selected virtual entry, review dependencies for .numdlb files, and rename files entirely in
-                memory.
+                {t("memory.detailsHelp")}
               </p>
             </div>
 
@@ -957,9 +966,9 @@ export function Fhm2dMemoryPreviewModal() {
               {activeEntry ? (
                 <div className="space-y-4 text-[11px]">
                   <div className="rounded-lg border bg-muted/15 p-3">
-                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Selected entry</div>
-                    <div className="mt-1 break-all text-sm font-medium">{activeEntry.virtualPath}</div>
-                    <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] text-muted-foreground">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("memory.selectedEntry")}</div>
+                    <div className="mt-1 break-all text-sm font-medium" data-i18n-ignore="">{activeEntry.virtualPath}</div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] text-muted-foreground" data-i18n-ignore="">
                       <div>Kind: {activeEntry.kind}</div>
                       <div>Type: {activeEntry.fileType ?? "folder"}</div>
                       <div>Size: {formatBytes(activeEntry.size)}</div>
@@ -972,9 +981,9 @@ export function Fhm2dMemoryPreviewModal() {
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <div>
                           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                            .numdlb candidate
+                            {t("memory.numdlbCandidate")}
                           </div>
-                          <div className="font-medium">{activeCandidate.displayLabel}</div>
+                          <div className="font-medium" data-i18n-ignore="">{activeCandidate.displayLabel}</div>
                         </div>
                         <span
                           className={cn(
@@ -984,10 +993,10 @@ export function Fhm2dMemoryPreviewModal() {
                               : "bg-amber-500/10 text-amber-700 dark:text-amber-300",
                           )}
                         >
-                          {activeCandidate.complete ? "Loadable" : "Needs fixes"}
+                          {activeCandidate.complete ? t("memory.loadable") : t("memory.needsFixes")}
                         </span>
                       </div>
-                      <div className="space-y-1 text-[10px] text-muted-foreground">
+                      <div className="space-y-1 text-[10px] text-muted-foreground" data-i18n-ignore="">
                         <div>Folder: {activeCandidate.folderRelativePath}</div>
                         <div>Mesh: {activeCandidate.meshVirtualPath ?? "Missing"}</div>
                         <div>Skeleton: {activeCandidate.skelVirtualPath ?? "Optional / missing"}</div>
@@ -996,11 +1005,12 @@ export function Fhm2dMemoryPreviewModal() {
                       </div>
                       {activeCandidate.issues.length > 0 ? (
                         <div className="mt-3 space-y-1">
-                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Issues</div>
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t("memory.issues")}</div>
                           {activeCandidate.issues.map((issue) => (
                             <div
                               key={issue}
                               className="rounded-md bg-amber-500/8 px-2 py-1 text-[10px] text-amber-700 dark:text-amber-300"
+                              data-i18n-ignore=""
                             >
                               {issue}
                             </div>
@@ -1011,10 +1021,10 @@ export function Fhm2dMemoryPreviewModal() {
                   ) : null}
 
                   <div className="rounded-lg border bg-background p-3">
-                    <div className="mb-2 text-[10px] uppercase tracking-wide text-muted-foreground">Rename in memory</div>
+                    <div className="mb-2 text-[10px] uppercase tracking-wide text-muted-foreground">{t("memory.renameInMemory")}</div>
                     <div className="space-y-2">
                       <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">File name</Label>
+                        <Label className="text-[10px] text-muted-foreground">{t("memory.fileName")}</Label>
                         <Input
                           value={renameName}
                           onChange={(event) => setRenameName(event.target.value)}
@@ -1023,7 +1033,7 @@ export function Fhm2dMemoryPreviewModal() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">Virtual path</Label>
+                        <Label className="text-[10px] text-muted-foreground">{t("memory.virtualPath")}</Label>
                         <Input
                           value={renameVirtualPath}
                           onChange={(event) => setRenameVirtualPath(event.target.value)}
@@ -1040,14 +1050,14 @@ export function Fhm2dMemoryPreviewModal() {
                         onClick={() => void applyRename()}
                       >
                         <Wand2 className="mr-1.5 h-3.5 w-3.5" />
-                        Apply Rename
+                        {t("memory.applyRename")}
                       </Button>
                     </div>
                   </div>
                 </div>
               ) : (
                 <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
-                  Open an FHM2D file to inspect the memory workspace.
+                  {t("memory.openToInspect")}
                 </div>
               )}
             </div>
@@ -1057,7 +1067,7 @@ export function Fhm2dMemoryPreviewModal() {
             <div className="shrink-0 border-b px-4 py-3">
               <div className="mb-2 flex items-center gap-2">
                 <CheckSquare className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-semibold">Preview Workbench</h3>
+                <h3 className="text-sm font-semibold">{t("memory.workbench")}</h3>
               </div>
               <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
                 <Checkbox
@@ -1066,18 +1076,18 @@ export function Fhm2dMemoryPreviewModal() {
                     startTransition(() => setCompleteOnly(checked === true))
                   }
                 />
-                Show only loadable .numdlb candidates
+                {t("memory.completeOnly")}
               </label>
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-4 py-3">
               <div className="shrink-0 space-y-2">
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Model folders ({groupedCandidates.length})
+                  {t("memory.modelFolders", { count: groupedCandidates.length })}
                 </div>
                 {groupedCandidates.length === 0 ? (
                   <div className="rounded-lg border border-dashed px-3 py-4 text-[11px] text-muted-foreground">
-                    No preview candidates in the current memory session.
+                    {t("memory.noCandidates")}
                   </div>
                 ) : (
                   <div ref={groupsViewportRef} className="max-h-[min(38vh,300px)] overflow-y-auto">
@@ -1119,9 +1129,12 @@ export function Fhm2dMemoryPreviewModal() {
                               }
                             />
                             <div className="min-w-0 flex-1">
-                              <div className="truncate font-medium">{group.folderRelativePath}</div>
+                              <div className="truncate font-medium" data-i18n-ignore="">{group.folderRelativePath}</div>
                               <div className="text-[10px] text-muted-foreground">
-                                {group.candidates.length} .numdlb · {group.completeCount} loadable
+                                {t("memory.folderSummary", {
+                                  count: group.candidates.length,
+                                  complete: group.completeCount,
+                                })}
                               </div>
                             </div>
                           </label>
@@ -1134,7 +1147,7 @@ export function Fhm2dMemoryPreviewModal() {
 
               <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
                 <div className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  .numdlb candidates ({filteredCandidates.length})
+                  {t("memory.candidates", { count: filteredCandidates.length })}
                 </div>
                 <div ref={candidatesViewportRef} className="min-h-0 flex-1 overflow-y-auto">
                   <div
@@ -1184,15 +1197,15 @@ export function Fhm2dMemoryPreviewModal() {
                             onClick={() => setActiveEntryId(candidate.modlEntryId)}
                           >
                             <div className="flex items-center gap-2">
-                              <span className="truncate font-medium">{candidate.displayLabel}</span>
+                              <span className="truncate font-medium" data-i18n-ignore="">{candidate.displayLabel}</span>
                               {!candidate.complete ? (
                                 <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
                               ) : null}
                             </div>
-                            <div className="truncate text-[10px] text-muted-foreground">
+                            <div className="truncate text-[10px] text-muted-foreground" data-i18n-ignore="">
                               {candidate.modlVirtualPath}
                             </div>
-                            <div className="mt-1 text-[10px] text-muted-foreground">
+                            <div className="mt-1 text-[10px] text-muted-foreground" data-i18n-ignore="">
                               mesh {candidate.meshVirtualPath ? "ready" : "missing"} · matl{" "}
                               {candidate.matlVirtualPaths.length} · textures {candidate.nutexbVirtualPaths.length}
                             </div>
@@ -1210,10 +1223,12 @@ export function Fhm2dMemoryPreviewModal() {
       {(busy || isPending || workspaceProgress) && (
         <div className="border-t bg-muted/25 px-4 py-2 text-[10px] text-muted-foreground">
           {workspaceProgress
-            ? `Building memory preview bundles ${workspaceProgress.done}/${workspaceProgress.total}${
-                workspaceProgress.currentLabel ? ` · ${workspaceProgress.currentLabel}` : ""
-              }`
-            : "Working in memory workspace…"}
+            ? t("memory.buildingBundles", {
+                done: workspaceProgress.done,
+                total: workspaceProgress.total,
+                label: workspaceProgress.currentLabel ? ` · ${workspaceProgress.currentLabel}` : "",
+              })
+            : t("memory.working")}
         </div>
       )}
     </AppRndModalShell>

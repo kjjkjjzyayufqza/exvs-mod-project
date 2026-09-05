@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ChevronRight,
   ChevronDown,
@@ -56,6 +57,7 @@ import {
 
 /** Indented pulsing rows shown while a stage bundle is loading. */
 function OutlinerSkeleton() {
+  const { t } = useTranslation("scene-root-b");
   const rows = [
     { indent: 0, width: "70%" },
     { indent: 1, width: "55%" },
@@ -68,7 +70,7 @@ function OutlinerSkeleton() {
     { indent: 1, width: "60%" },
   ];
   return (
-    <div className="flex h-full flex-col gap-1 p-2" aria-busy="true" aria-label="Loading scene tree">
+    <div className="flex h-full flex-col gap-1 p-2" aria-busy="true" aria-label={t("outliner.loadingTree")}>
       {rows.map((row, index) => (
         <div
           key={index}
@@ -122,6 +124,7 @@ export function SceneOutliner({
   onExportDae,
   onReplaceModel,
 }: SceneOutlinerProps) {
+  const { t } = useTranslation("scene-root-b");
   const {
     selectedIds,
     select,
@@ -324,9 +327,9 @@ export function SceneOutliner({
           <FolderOpen className="h-5 w-5 opacity-40" />
         </div>
         <div className="text-center space-y-1 min-w-0 w-full px-1">
-          <p className="text-xs font-medium break-words">No stage loaded</p>
+        <p className="text-xs font-medium break-words">{t("outliner.noStage")}</p>
           <p className="text-[10px] opacity-60 leading-relaxed break-words">
-            Import FHM2D or Open Stage to begin editing
+            {t("outliner.emptyHint")}
           </p>
         </div>
       </div>
@@ -348,59 +351,59 @@ export function SceneOutliner({
       </ContextMenuTrigger>
       <ContextMenuContent className="w-56">
         <ContextMenuItem onClick={handleSelectAll}>
-          Select All
-          <ContextMenuShortcut>Ctrl+A</ContextMenuShortcut>
+          {t("outliner.selectAll")}
+          <ContextMenuShortcut data-i18n-ignore="">Ctrl+A</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuItem onClick={() => {
           deselectAll();
           onClearSelection?.();
         }}>
-          Deselect All
-          <ContextMenuShortcut>Esc</ContextMenuShortcut>
+          {t("outliner.deselectAll")}
+          <ContextMenuShortcut data-i18n-ignore="">Esc</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onClick={handleCopy} disabled={selectedIds.size === 0}>
           <Copy className="mr-2 h-3.5 w-3.5" />
-          Copy
-          <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
+          {t("outliner.copy")}
+          <ContextMenuShortcut data-i18n-ignore="">Ctrl+C</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuItem onClick={handleDuplicate} disabled={selectedIds.size === 0}>
           <Clipboard className="mr-2 h-3.5 w-3.5" />
-          Duplicate
-          <ContextMenuShortcut>Ctrl+D</ContextMenuShortcut>
+          {t("outliner.duplicate")}
+          <ContextMenuShortcut data-i18n-ignore="">Ctrl+D</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuItem onClick={onPaste} disabled={clipboard.length === 0}>
           <Clipboard className="mr-2 h-3.5 w-3.5" />
-          Paste as New
-          <ContextMenuShortcut>Ctrl+V</ContextMenuShortcut>
+          {t("outliner.paste")}
+          <ContextMenuShortcut data-i18n-ignore="">Ctrl+V</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuItem onClick={handleDeleteSelected} disabled={selectedIds.size === 0} className="text-destructive">
           <Trash2 className="mr-2 h-3.5 w-3.5" />
-          Delete
-          <ContextMenuShortcut>Del</ContextMenuShortcut>
+          {t("outliner.delete")}
+          <ContextMenuShortcut data-i18n-ignore="">Del</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onClick={handleGroup} disabled={selectedIds.size < 2}>
           <FolderPlus className="mr-2 h-3.5 w-3.5" />
-          Group Selected
-          <ContextMenuShortcut>Ctrl+G</ContextMenuShortcut>
+          {t("outliner.groupSelected")}
+          <ContextMenuShortcut data-i18n-ignore="">Ctrl+G</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onClick={onFocusSelected} disabled={selectedIds.size === 0}>
-          Focus Selected
-          <ContextMenuShortcut>F</ContextMenuShortcut>
+          {t("outliner.focusSelected")}
+          <ContextMenuShortcut data-i18n-ignore="">F</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuSub>
           <ContextMenuSubTrigger>
             <Eye className="mr-2 h-3.5 w-3.5" />
-            Visibility
+            {t("outliner.visibility")}
           </ContextMenuSubTrigger>
           <ContextMenuSubContent>
             <ContextMenuItem onClick={() => selectedIds.forEach((id) => useSceneEditorStore.getState().setVisibility(id, true))}>
-              Show Selected
+              {t("outliner.showSelected")}
             </ContextMenuItem>
             <ContextMenuItem onClick={() => selectedIds.forEach((id) => useSceneEditorStore.getState().setVisibility(id, false))}>
-              Hide Selected
+              {t("outliner.hideSelected")}
             </ContextMenuItem>
           </ContextMenuSubContent>
         </ContextMenuSub>
@@ -420,6 +423,7 @@ function GroupHeaderRow({
   removeGroup: (id: string) => void;
   onDelete?: (ids: string[]) => void;
 }) {
+  const { t } = useTranslation("scene-root-b");
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -450,12 +454,12 @@ function GroupHeaderRow({
       <ContextMenuContent className="w-52">
         <ContextMenuItem onClick={() => removeGroup(group.id)}>
           <Ungroup className="mr-2 h-3.5 w-3.5" />
-          Ungroup
+          {t("outliner.ungroup")}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onClick={() => onDelete?.(group.children)}>
           <Trash2 className="mr-2 h-3.5 w-3.5" />
-          Delete All in Group
+          {t("outliner.deleteAllInGroup")}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
@@ -547,6 +551,7 @@ function OutlinerNodeRow({
     (s) => s.errorFolders[node.id] ?? 0,
   );
   const hasValidationError = validationErrorCount > 0;
+  const { t } = useTranslation("scene-root-b");
 
   return (
     <ContextMenu>
@@ -584,7 +589,7 @@ function OutlinerNodeRow({
           {canReorder ? (
             <span
               className="flex h-4 w-4 shrink-0 cursor-grab items-center justify-center text-muted-foreground/70 active:cursor-grabbing"
-              title="Drag to reorder"
+              title={t("outliner.dragToReorder")}
               aria-hidden
             >
               <GripVertical className="h-3 w-3" />
@@ -613,7 +618,7 @@ function OutlinerNodeRow({
           {hasValidationError && (
             <AlertTriangle
               className="h-3 w-3 shrink-0 text-destructive"
-              aria-label={`${validationErrorCount} texture validation error(s)`}
+              aria-label={t("outliner.validationErrors", { count: validationErrorCount })}
             />
           )}
           <div
@@ -626,8 +631,8 @@ function OutlinerNodeRow({
               type="button"
               className="h-4 w-4 flex items-center justify-center rounded-sm hover:bg-accent"
               onClick={(e) => { e.stopPropagation(); toggleVisibility(node.id); }}
-              title={visible ? "Hide" : "Show"}
-              aria-label={visible ? `Hide ${node.label}` : `Show ${node.label}`}
+              title={visible ? t("outliner.hide") : t("outliner.show")}
+              aria-label={visible ? t("outliner.hideNamed", { name: node.label }) : t("outliner.showNamed", { name: node.label })}
             >
               {visible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3 text-muted-foreground" />}
             </button>
@@ -635,8 +640,8 @@ function OutlinerNodeRow({
               type="button"
               className="h-4 w-4 flex items-center justify-center rounded-sm hover:bg-accent"
               onClick={(e) => { e.stopPropagation(); toggleLock(node.id); }}
-              title={locked ? "Unlock" : "Lock"}
-              aria-label={locked ? `Unlock ${node.label}` : `Lock ${node.label}`}
+              title={locked ? t("outliner.unlock") : t("outliner.lock")}
+              aria-label={locked ? t("outliner.unlockNamed", { name: node.label }) : t("outliner.lockNamed", { name: node.label })}
             >
               {locked ? <Lock className="h-3 w-3 text-amber-500" /> : <Unlock className="h-3 w-3" />}
             </button>
@@ -705,6 +710,7 @@ function NodeContextMenuContent({
   const supportsExportDae = canExportNodeRoleToDae(node.role) && Boolean(onExportDae);
   const supportsReplaceModel = canReplaceModelNode(node) && Boolean(onReplaceModel);
   const { label: typeLabel, Icon: TypeIcon } = getNodeTypeInfo(node.role);
+  const { t } = useTranslation("scene-root-b");
 
   return (
     <ContextMenuContent className="w-52">
@@ -712,7 +718,7 @@ function NodeContextMenuContent({
         <>
           <ContextMenuItem onClick={() => onOpenProperties?.(node.id)}>
             <Settings className="mr-2 h-3.5 w-3.5" />
-            Properties
+            {t("outliner.properties")}
           </ContextMenuItem>
           <ContextMenuSeparator />
         </>
@@ -721,7 +727,7 @@ function NodeContextMenuContent({
         <>
           <ContextMenuItem onClick={() => onExportDae!(node.id)}>
             <Download className="mr-2 h-3.5 w-3.5" />
-            Export Model...
+            {t("outliner.exportModel")}
           </ContextMenuItem>
           <ContextMenuSeparator />
         </>
@@ -730,7 +736,7 @@ function NodeContextMenuContent({
         <>
           <ContextMenuItem onClick={() => onReplaceModel!(node.id)}>
             <FolderSync className="mr-2 h-3.5 w-3.5" />
-            Replace Model...
+            {t("outliner.replaceModel")}
           </ContextMenuItem>
           <ContextMenuSeparator />
         </>
@@ -740,30 +746,30 @@ function NodeContextMenuContent({
         useSceneEditorStore.getState().copyToClipboard(entries);
       }}>
         <Copy className="mr-2 h-3.5 w-3.5" />
-        Copy
-        <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
+        {t("outliner.copy")}
+        <ContextMenuShortcut data-i18n-ignore="">Ctrl+C</ContextMenuShortcut>
       </ContextMenuItem>
       <ContextMenuItem onClick={() => onDuplicate?.([node.id])}>
         <Clipboard className="mr-2 h-3.5 w-3.5" />
-        Duplicate as New
-        <ContextMenuShortcut>Ctrl+D</ContextMenuShortcut>
+        {t("outliner.duplicateAsNew")}
+        <ContextMenuShortcut data-i18n-ignore="">Ctrl+D</ContextMenuShortcut>
       </ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuItem onClick={() => toggleVisibility(node.id)}>
         {visible ? <EyeOff className="mr-2 h-3.5 w-3.5" /> : <Eye className="mr-2 h-3.5 w-3.5" />}
-        {visible ? "Hide" : "Show"}
-        <ContextMenuShortcut>H</ContextMenuShortcut>
+        {visible ? t("outliner.hide") : t("outliner.show")}
+        <ContextMenuShortcut data-i18n-ignore="">H</ContextMenuShortcut>
       </ContextMenuItem>
       <ContextMenuItem onClick={() => toggleLock(node.id)}>
         {locked ? <Unlock className="mr-2 h-3.5 w-3.5" /> : <Lock className="mr-2 h-3.5 w-3.5" />}
-        {locked ? "Unlock" : "Lock"}
+        {locked ? t("outliner.unlock") : t("outliner.lock")}
       </ContextMenuItem>
       {supportsHkt && (
         <>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => onGenerateHkt!([hktTargetId])}>
             <Shield className="mr-2 h-3.5 w-3.5" />
-            {isCollisionNode ? "Regenerate HKT" : "Generate HKT"}
+            {isCollisionNode ? t("outliner.regenerateHkt") : t("outliner.generateHkt")}
           </ContextMenuItem>
         </>
       )}
@@ -772,7 +778,7 @@ function NodeContextMenuContent({
           {!supportsHkt && <ContextMenuSeparator />}
           <ContextMenuItem onClick={() => onReplaceHkt!(hktTargetId)}>
             <Shield className="mr-2 h-3.5 w-3.5" />
-            Replace HKT...
+            {t("outliner.replaceHkt")}
           </ContextMenuItem>
         </>
       )}
@@ -781,20 +787,20 @@ function NodeContextMenuContent({
           {!supportsHkt && !supportsReplaceHkt && <ContextMenuSeparator />}
           <ContextMenuItem onClick={() => onGenerateHktFromModel!(hktTargetId)}>
             <Sparkles className="mr-2 h-3.5 w-3.5" />
-            Generate HKT from Model...
+            {t("outliner.generateHktFromModel")}
           </ContextMenuItem>
         </>
       )}
       <ContextMenuSeparator />
       <ContextMenuItem onClick={() => onDelete?.([node.id])} className="text-destructive">
         <Trash2 className="mr-2 h-3.5 w-3.5" />
-        Delete
-        <ContextMenuShortcut>Del</ContextMenuShortcut>
+        {t("outliner.delete")}
+        <ContextMenuShortcut data-i18n-ignore="">Del</ContextMenuShortcut>
       </ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuLabel className="flex items-center text-[11px] font-normal text-muted-foreground">
         <TypeIcon className="mr-2 h-3.5 w-3.5" />
-        {typeLabel}
+        <span data-i18n-ignore="">{typeLabel}</span>
       </ContextMenuLabel>
     </ContextMenuContent>
   );

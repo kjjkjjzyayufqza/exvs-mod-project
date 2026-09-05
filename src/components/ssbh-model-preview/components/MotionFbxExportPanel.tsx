@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { FileOutput, FolderSearch, LoaderCircle, TriangleAlert } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -22,10 +23,6 @@ type MotionFbxExportPanelProps = {
   workspaceRoot: string | null;
   disabled: boolean;
 };
-
-function reportSummary(report: CompleteMotionFbxExportReport): string {
-  return `${report.frameCount} frames, ${report.durationSeconds.toFixed(3)}s @ 60 FPS`;
-}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -67,6 +64,7 @@ export function MotionFbxExportPanel({
   workspaceRoot,
   disabled,
 }: MotionFbxExportPanelProps) {
+  const { t } = useTranslation("ssbh-motion");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<CompleteMotionFbxExportReport | null>(null);
@@ -85,7 +83,7 @@ export function MotionFbxExportPanel({
 
   const pickBlenderPath = useCallback(async () => {
     const picked = await open({
-      title: "Choose Blender 5.1 executable",
+      title: t("fbxExport.chooseBlender"),
       multiple: false,
       filters: [{ name: "Blender", extensions: ["exe"] }],
       defaultPath: blenderPath || getDialogDefaultPath(DialogLastPathKey.ssbhBlender51Exe, undefined),
@@ -93,13 +91,13 @@ export function MotionFbxExportPanel({
     if (typeof picked !== "string" || !picked.trim()) return;
     persistBlenderPath(picked.trim());
     rememberDialogSelection(DialogLastPathKey.ssbhBlender51Exe, picked, "file");
-  }, [blenderPath, persistBlenderPath]);
+  }, [blenderPath, persistBlenderPath, t]);
 
   const exportMotionFbx = useCallback(async () => {
     if (!selectedNuanmbPath || !skeletonPath || !numdlbPath) return;
 
     const outputFbxPath = await save({
-      title: "Save Complete Motion FBX",
+      title: t("fbxExport.saveFbx"),
       filters: [{ name: "FBX", extensions: ["fbx"] }],
       defaultPath: defaultSavePath(selectedNuanmbPath, workspaceRoot),
     });
@@ -119,21 +117,26 @@ export function MotionFbxExportPanel({
       });
       rememberDialogSelection(DialogLastPathKey.ssbhMotionFbxExport, outputFbxPath, "file");
       setReport(nextReport);
-      toast.success("Motion FBX exported", { description: reportSummary(nextReport) });
+      toast.success(t("fbxExport.exported"), {
+        description: t("fbxExport.summary", {
+          frames: nextReport.frameCount,
+          seconds: nextReport.durationSeconds.toFixed(3),
+        }),
+      });
     } catch (caughtError) {
       const message = errorMessage(caughtError);
       setError(message);
-      toast.error("Motion FBX export failed", { description: message });
+      toast.error(t("fbxExport.failed"), { description: message });
     } finally {
       setBusy(false);
     }
-  }, [blenderPath, numdlbPath, selectedNuanmbPath, skeletonPath, workspaceRoot]);
+  }, [blenderPath, numdlbPath, selectedNuanmbPath, skeletonPath, t, workspaceRoot]);
 
   return (
-    <MayaSection title="Motion FBX export" icon={<FileOutput className="h-3.5 w-3.5 opacity-80" />} defaultOpen>
+    <MayaSection title={t("fbxExport.title")} icon={<FileOutput className="h-3.5 w-3.5 opacity-80" />} defaultOpen>
       <div className="flex flex-col gap-2 text-[10px]">
         <p className="text-muted-foreground">
-          Export one CompleteMotionFbx (model + bound action) via Blender 5.1 at 60 FPS. Edit it in a DCC, then bring it back below via Import FBX.
+          {t("fbxExport.hint")}
         </p>
         <div className="flex flex-wrap gap-1.5">
           <Button
@@ -148,18 +151,18 @@ export function MotionFbxExportPanel({
             ) : (
               <FileOutput className="mr-1 h-3.5 w-3.5" />
             )}
-            Export complete FBX
+            {t("fbxExport.exportComplete")}
           </Button>
         </div>
         <details className="group">
           <summary className="cursor-pointer list-none rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-            <span className="select-none">Blender 5.1 path (optional override)</span>
+            <span className="select-none">{t("fbxExport.blenderPath")}</span>
           </summary>
           <div className="mt-1 flex gap-1">
             <Input
               className="h-7 text-[10px]"
               value={blenderPath}
-              placeholder="Auto-detect if empty"
+              placeholder={t("fbxExport.autoDetect")}
               onChange={(event) => persistBlenderPath(event.target.value)}
               disabled={busy || disabled}
             />
@@ -176,10 +179,10 @@ export function MotionFbxExportPanel({
           </div>
         </details>
         {!numdlbPath || !skeletonPath ? (
-          <p className="text-destructive">Active model needs NUMDLB and NUSKTB for export.</p>
+          <p className="text-destructive">{t("fbxExport.needsFiles")}</p>
         ) : null}
         {numdlbPath && skeletonPath && !selectedNuanmbPath ? (
-          <p className="text-muted-foreground">Select a NUANMB to export.</p>
+          <p className="text-muted-foreground">{t("fbxExport.selectNuanmb")}</p>
         ) : null}
         {error ? (
           <p role="alert" className="flex gap-1.5 text-destructive wrap-anywhere">
@@ -190,7 +193,14 @@ export function MotionFbxExportPanel({
         {report ? (
           <MotionReportCard
             title={report.actionName}
-            rows={[reportSummary(report), report.outputPath, `Blender: ${report.blenderPath}`]}
+            rows={[
+              t("fbxExport.summary", {
+                frames: report.frameCount,
+                seconds: report.durationSeconds.toFixed(3),
+              }),
+              report.outputPath,
+              t("fbxExport.blenderRow", { path: report.blenderPath }),
+            ]}
             warnings={report.warnings}
           />
         ) : null}

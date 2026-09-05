@@ -37,6 +37,7 @@ import {
   type BgmListEntry,
 } from "./bgmListDocument";
 import { buildBgmListSourceFhm2dPath, initBgmListPack } from "./initBgmListPack";
+import { useTranslation } from "react-i18next";
 
 type LoadState =
   | { status: "idle" }
@@ -72,6 +73,7 @@ function HashField({
   disabled: boolean;
   onCommit: (next: number) => void;
 }) {
+  const { t } = useTranslation("test-lists");
   const [text, setText] = useState(value ? formatHash(value) : "");
   useEffect(() => {
     setText(value ? formatHash(value) : "");
@@ -90,7 +92,7 @@ function HashField({
           }
           onCommit(parsed);
         }}
-        placeholder="empty"
+        placeholder={t("common.empty")}
         disabled={disabled}
         className={cn("h-8 font-mono text-xs tabular-nums", empty && "border-amber-500")}
       />
@@ -105,6 +107,7 @@ export default function BgmListView({
   onPackMutated,
   workspaceDocument,
 }: BgmListViewProps) {
+  const { t } = useTranslation("test-lists");
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [hasChanges, setHasChanges] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -147,7 +150,7 @@ export default function BgmListView({
 
   const load = useCallback(async () => {
     if (!folderPath) {
-      setLoadState({ status: "error", folderPath: "", message: "Folder path is empty" });
+      setLoadState({ status: "error", folderPath: "", message: t("common.folderPathEmpty") });
       setHasChanges(false);
       onUnsavedChanges?.(false);
       return;
@@ -256,14 +259,17 @@ export default function BgmListView({
   const handleSave = useCallback(async () => {
     if (loadState.status !== "ready") return;
     if (!loadState.writable) {
-      toast.error("Legacy workspace content is read-only");
+      toast.error(t("common.legacyReadOnlyShort"));
       return;
     }
     const incomplete = loadState.table.entries.findIndex((entry) => emptyBgmListFields(entry).length > 0);
     if (incomplete >= 0) {
       setSelectedIndex(incomplete);
       toast.error(
-        `Row ${incomplete} has empty fields: ${emptyBgmListFields(loadState.table.entries[incomplete]).join(", ")}`,
+        t("sound.rowEmptyFields", {
+          row: incomplete,
+          fields: emptyBgmListFields(loadState.table.entries[incomplete]).join(", "),
+        }),
       );
       return;
     }
@@ -273,7 +279,7 @@ export default function BgmListView({
       setHasChanges(false);
       onUnsavedChanges?.(false);
       onPackMutated?.(workspacePackIdentityFromResolved(loadState.pack, "configured"));
-      toast.success("Saved");
+      toast.success(t("sound.saved"));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     }
@@ -282,7 +288,7 @@ export default function BgmListView({
   const handleInitPack = useCallback(async () => {
     const sourceFhm2dPath = buildBgmListSourceFhm2dPath(obDplCachePath ?? "");
     if (!sourceFhm2dPath) {
-      toast.error("Set the OB dplcache folder in FHM2D Init first");
+      toast.error(t("common.setObDplcacheInit"));
       return;
     }
     setIsInitializing(true);
@@ -293,7 +299,7 @@ export default function BgmListView({
         workspaceDocument,
       });
       lastLoadedKeyRef.current = "";
-      toast.success("Unpacked BGM list");
+      toast.success(t("bgmList.unpacked"));
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -316,11 +322,11 @@ export default function BgmListView({
   return (
     <SoundTableWorkbench
       isActive={isActive}
-      title="BGM list"
-      purpose="HUD titles for a cueHash already in BGM Table. WAV still goes in Audio Editor."
+      title={t("bgmList.title")}
+      purpose={t("bgmList.purpose")}
       status={workbenchStatus}
       errorMessage={loadState.status === "error" ? loadState.message : null}
-      unpackLabel="Init pack"
+      unpackLabel={t("common.initPack")}
       unpacking={isInitializing}
       unpackDisabled={!folderPath}
       onUnpack={() => void handleInitPack()}
@@ -332,24 +338,24 @@ export default function BgmListView({
         loadState.status === "ready"
           ? [
               {
-                label: "Structure",
+                label: t("common.structure"),
                 value: loadState.pack.structureJsonPath,
                 onOpen: () => void dirname(loadState.pack.structureJsonPath).then((target) => openPath(target)),
               },
               {
-                label: "File",
+                label: t("common.file"),
                 value: loadState.filePath,
                 onOpen: () => void dirname(loadState.filePath).then((target) => openPath(target)),
               },
               {
-                label: "Pack",
+                label: t("common.pack"),
                 value: `${BGM_LIST_PACK_HASH}.fhm2d`,
               },
             ]
           : undefined
       }
       loadedLabel={
-        loadState.status === "ready" ? `Loaded: ${loadState.table.entries.length} titles` : undefined
+        loadState.status === "ready" ? t("sound.loadedTitles", { count: loadState.table.entries.length }) : undefined
       }
       notice={
         loadState.status === "ready" ? (
@@ -370,13 +376,13 @@ export default function BgmListView({
             <Input
               value={addTitle}
               onChange={(event) => setAddTitle(event.target.value)}
-              placeholder="HUD title"
+              placeholder={t("bgmList.hudTitle")}
               disabled={!loadState.writable}
               className="h-8 text-xs"
             />
             <Button size="sm" onClick={() => void handleAdd()} disabled={!loadState.writable} className="h-8">
               <Plus className="h-4 w-4" />
-              Add
+              {t("common.add")}
             </Button>
           </div>
         ) : null
@@ -387,7 +393,7 @@ export default function BgmListView({
             <Input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search"
+              placeholder={t("common.search")}
               className="h-8 text-xs"
             />
             <ScrollArea className="min-h-0 flex-1 rounded-md bg-muted/20">
@@ -407,10 +413,12 @@ export default function BgmListView({
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate font-medium">{bgmListEntryLabel(entry)}</span>
-                        <span className="shrink-0 text-[10px] text-muted-foreground">id {entry.musicId}</span>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                          {t("bgmList.idAbbrev", { id: entry.musicId })}
+                        </span>
                       </div>
                       {missing.length > 0 ? (
-                        <div className="text-[10px] font-medium text-amber-600">warning</div>
+                        <div className="text-[10px] font-medium text-amber-600">{t("common.warning")}</div>
                       ) : null}
                     </button>
                   );
@@ -424,10 +432,14 @@ export default function BgmListView({
         loadState.status === "ready" && selected && selectedIndex != null ? (
           <div className="space-y-4 rounded-lg bg-muted/20 p-4">
             {selectedEmpty.length > 0 ? (
-              <div className="text-xs font-medium text-amber-600">Empty: {selectedEmpty.join(", ")}</div>
+              <div className="text-xs font-medium text-amber-600">
+                {t("sound.emptyFields", { fields: selectedEmpty.join(", ") })}
+              </div>
             ) : null}
             <div className="space-y-1">
-              <Label className={cn("text-xs", selectedEmpty.includes("title") && "text-amber-600")}>Title</Label>
+              <Label className={cn("text-xs", selectedEmpty.includes("title") && "text-amber-600")}>
+                {t("bgmList.titleField")}
+              </Label>
               <Input
                 value={selected.title ?? ""}
                 onChange={(event) => {
@@ -440,13 +452,13 @@ export default function BgmListView({
                   );
                   markChanged({ ...loadState.table, entries });
                 }}
-                placeholder="OVER BOOST Ver.9"
+                placeholder={t("bgmList.titlePlaceholder")}
                 disabled={!loadState.writable}
                 className={cn("h-8 text-xs", selectedEmpty.includes("title") && "border-amber-500")}
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Title with note</Label>
+              <Label className="text-xs">{t("bgmList.titleWithNote")}</Label>
               <Input
                 value={selected.titleWithNotePrefix ?? ""}
                 onChange={(event) => {
@@ -455,13 +467,15 @@ export default function BgmListView({
                   );
                   markChanged({ ...loadState.table, entries });
                 }}
-                placeholder={"\u266AOVER BOOST Ver.9"}
+                placeholder={t("bgmList.titleNotePlaceholder")}
                 disabled={!loadState.writable}
                 className="h-8 text-xs"
               />
             </div>
             <div className="space-y-1">
-              <Label className={cn("text-xs", selectedEmpty.includes("musicId") && "text-amber-600")}>musicId</Label>
+              <Label className={cn("text-xs", selectedEmpty.includes("musicId") && "text-amber-600")}>
+                {t("bgmList.musicId")}
+              </Label>
               <Input
                 type="number"
                 value={selected.musicId}
@@ -475,7 +489,7 @@ export default function BgmListView({
             </div>
             <div className="space-y-1">
               <Label className={cn("text-xs", selectedEmpty.includes("cueHash") && "text-amber-600")}>
-                cueHash (bgm_table record_id)
+                {t("bgmList.cueHashRecord")}
               </Label>
               <div className="flex items-center gap-2">
                 <BgmCuePickerPopover
@@ -486,14 +500,14 @@ export default function BgmListView({
               </div>
             </div>
             <HashField
-              label="cueHash"
+              label={t("bgmList.cueHash")}
               value={selected.cueHash}
               empty={selectedEmpty.includes("cueHash")}
               disabled={!loadState.writable}
               onCommit={(cueHash) => void updateSelected({ cueHash })}
             />
             <HashField
-              label="sourceGroupHash"
+              label={t("bgmList.sourceGroupHash")}
               value={selected.sourceGroupHash}
               empty={false}
               disabled={!loadState.writable}
@@ -512,11 +526,11 @@ export default function BgmListView({
               className="text-destructive"
             >
               <Trash2 className="h-4 w-4" />
-              Remove
+              {t("common.remove")}
             </Button>
           </div>
         ) : loadState.status === "ready" ? (
-          <div className="flex h-full items-center text-sm text-muted-foreground">Select a row, or add one.</div>
+          <div className="flex h-full items-center text-sm text-muted-foreground">{t("common.selectRowOrAdd")}</div>
         ) : null
       }
     />

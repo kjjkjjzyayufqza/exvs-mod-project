@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { Loader2, Replace } from "lucide-react";
@@ -26,6 +27,7 @@ interface TextureReplaceModalProps {
 }
 
 export function TextureReplaceModal({ entry, onClose, onConfirm }: TextureReplaceModalProps) {
+  const { t } = useTranslation("scene-texture-dialogs");
   const initialFromEntry = normalizeDdsFormat(entry.format);
   const [ddsFormat, setDdsFormat] = useState<DdsFormat>(initialFromEntry || DEFAULT_DDS_FORMAT);
   const [formatLoading, setFormatLoading] = useState(Boolean(entry.nutexbPath));
@@ -65,8 +67,8 @@ export function TextureReplaceModal({ entry, onClose, onConfirm }: TextureReplac
   const content = (
     <AppRndModalShell
       titleId="texture-replace-modal-title"
-      title={`Replace: ${entry.filename}`}
-      subtitle="Choose the conversion format before selecting a source file"
+      title={t("textureReplace.title", { filename: entry.filename })}
+      subtitle={t("textureReplace.subtitle")}
       headerIcon={<Replace className="h-4 w-4 text-primary" />}
       dimensions={TEXTURE_REPLACE_MODAL_DIMENSIONS}
       onClose={onClose}
@@ -75,11 +77,11 @@ export function TextureReplaceModal({ entry, onClose, onConfirm }: TextureReplac
           <div className="flex flex-col gap-3 p-4 flex-1">
             <div className="flex flex-col gap-1">
               <label className="text-xs text-muted-foreground">
-                DDS Format for conversion
+                {t("textureReplace.ddsFormat")}
                 {formatLoading ? (
                   <span className="ml-1.5 inline-flex items-center gap-1 text-[10px] text-muted-foreground/80">
                     <Loader2 className="h-3 w-3 animate-spin" />
-                    detecting original…
+                    {t("textureReplace.detecting")}
                   </span>
                 ) : null}
               </label>
@@ -93,7 +95,7 @@ export function TextureReplaceModal({ entry, onClose, onConfirm }: TextureReplac
 
             <div className="flex items-center gap-2 mt-auto">
               <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={onClose}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 size="sm"
@@ -101,7 +103,7 @@ export function TextureReplaceModal({ entry, onClose, onConfirm }: TextureReplac
                 disabled={formatLoading}
                 onClick={() => onConfirm(ddsFormat)}
               >
-                Select File & Replace
+                {t("textureReplace.selectAndReplace")}
               </Button>
             </div>
           </div>

@@ -4,6 +4,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { FBXLoader } from "three-stdlib";
 import { useDebounce } from "use-debounce";
+import { useTranslation } from "react-i18next";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 
@@ -90,6 +91,7 @@ function disposeFbxObject(object: {
 }
 
 export function FBXItemRename() {
+  const { t } = useTranslation("misc-tools-a");
   const [fbxPath, setFbxPath] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -208,18 +210,21 @@ export function FBXItemRename() {
 
   return (
     <>
-      <Button variant="outline" className="w-full" onClick={() => setIsOpen(true)}>
-        Open FBX Item Rename
+        <Button variant="outline" className="w-full" onClick={() => setIsOpen(true)}>
+        {t("fbx.open")}
       </Button>
 
       {isOpen ? (
         <AppRndModalShell
           titleId="fbx-item-rename-title"
-          title="FBX Item Rename"
+          title={t("fbx.title")}
           subtitle={
             fbxData
-              ? `${fbxItems.mesh.length} meshes, ${fbxItems.bone.length} bones`
-              : "Load an FBX file and edit its exported name mapping"
+              ? t("fbx.loadedSubtitle", {
+                  meshes: fbxItems.mesh.length,
+                  bones: fbxItems.bone.length,
+                })
+              : t("fbx.subtitle")
           }
           headerIcon={<FilePenLine className="h-5 w-5 text-primary" />}
           dimensions={FBX_RENAME_DIMENSIONS}
@@ -230,13 +235,13 @@ export function FBXItemRename() {
             fbxData ? (
               <div className="flex flex-wrap justify-end gap-2 p-3">
                 <Button variant="outline" onClick={() => void handleSelectFile()} disabled={isLoading}>
-                  Load Another FBX
+                  {t("fbx.loadAnother")}
                 </Button>
                 <Button
                   onClick={() => void handleSaveFile()}
                   disabled={isLoading || Boolean(jsonValidationError)}
                 >
-                  Save FBX or Mapping
+                  {t("fbx.saveMapping")}
                 </Button>
               </div>
             ) : undefined
@@ -247,7 +252,7 @@ export function FBXItemRename() {
               <div className="flex flex-1 items-center justify-center">
                 <Button onClick={() => void handleSelectFile()} disabled={isLoading} size="lg">
                   {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  {isLoading ? "Loading..." : "Select FBX File"}
+                  {isLoading ? t("common.loading") : t("fbx.selectFile")}
                 </Button>
               </div>
             ) : (
@@ -260,7 +265,7 @@ export function FBXItemRename() {
                   value={jsonText}
                   onChange={(event) => setJsonText(event.target.value)}
                   spellCheck={false}
-                  aria-label="FBX name mapping JSON"
+                  aria-label={t("fbx.mappingAria")}
                 />
               </>
             )}

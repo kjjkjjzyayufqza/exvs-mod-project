@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dices } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,32 +33,35 @@ interface NaviFormProps {
   onChange: (navi: NaviListEntry) => void;
 }
 
-const NUMERIC_GROUPS: Array<{ title: string; fields: Array<{ name: keyof NaviListEntry; label: string }> }> = [
+const NUMERIC_GROUPS: Array<{
+  titleKey: "navi.group.identity" | "navi.group.sharedHashes" | "navi.group.costumeHashes";
+  fields: Array<{ name: keyof NaviListEntry; labelKey: string }>;
+}> = [
   {
-    title: "Identity",
+    titleKey: "navi.group.identity",
     fields: [
-      { name: "entryId", label: "Entry ID" },
-      { name: "characterUniqueId", label: "Navi Unique ID" },
-      { name: "costumeIndex", label: "Costume Index" },
-      { name: "seriesListEntryId", label: "Series List Entry ID" },
-      { name: "enabledCode", label: "Enabled Code" },
+      { name: "entryId", labelKey: "navi.field.entryId" },
+      { name: "characterUniqueId", labelKey: "navi.field.characterUniqueId" },
+      { name: "costumeIndex", labelKey: "navi.field.costumeIndex" },
+      { name: "seriesListEntryId", labelKey: "navi.field.seriesListEntryId" },
+      { name: "enabledCode", labelKey: "navi.field.enabledCode" },
     ],
   },
   {
-    title: "Shared resource hashes",
+    titleKey: "navi.group.sharedHashes",
     fields: [
-      { name: "sharedResourceHashA", label: "Shared Resource Hash A" },
-      { name: "sharedResourceHashB", label: "Shared Resource Hash B" },
-      { name: "sharedResourceHashC", label: "Shared Resource Hash C" },
-      { name: "sharedResourceHashD", label: "Shared Resource Hash D" },
-      { name: "sharedResourceHashE", label: "Shared Resource Hash E" },
+      { name: "sharedResourceHashA", labelKey: "navi.field.sharedResourceHashA" },
+      { name: "sharedResourceHashB", labelKey: "navi.field.sharedResourceHashB" },
+      { name: "sharedResourceHashC", labelKey: "navi.field.sharedResourceHashC" },
+      { name: "sharedResourceHashD", labelKey: "navi.field.sharedResourceHashD" },
+      { name: "sharedResourceHashE", labelKey: "navi.field.sharedResourceHashE" },
     ],
   },
   {
-    title: "Costume resource hashes",
+    titleKey: "navi.group.costumeHashes",
     fields: [
-      { name: "costumeResourceHashA", label: "Costume Resource Hash A" },
-      { name: "costumeResourceHashB", label: "Costume Resource Hash B" },
+      { name: "costumeResourceHashA", labelKey: "navi.field.costumeResourceHashA" },
+      { name: "costumeResourceHashB", labelKey: "navi.field.costumeResourceHashB" },
     ],
   },
 ];
@@ -77,6 +81,7 @@ export function NaviForm({
   extractingGuiHash = null,
   onChange,
 }: NaviFormProps) {
+  const { t } = useTranslation("test-lists");
   const [formData, setFormData] = useState<Record<string, number>>({});
   const [displayName, setDisplayName] = useState("");
   const [seriesPickerOpen, setSeriesPickerOpen] = useState(false);
@@ -131,22 +136,22 @@ export function NaviForm({
   const handlePickNewUniqueId = useCallback(() => {
     const nextId = nextNaviUniqueId(entries);
     handleFieldChange("characterUniqueId", nextId);
-    toast.success("Picked new Navi Unique ID", { description: `Set to ${nextId}` });
+    toast.success(t("navi.pickedUnique"), { description: t("navi.setTo", { id: nextId }) });
   }, [entries, handleFieldChange]);
 
   return (
     <div className="h-full flex flex-col min-h-0">
       <div className="flex items-center justify-between mb-4">
         <div className="text-sm font-semibold">
-          Edit Navi · unique {formData.characterUniqueId ?? 0} · costume {formData.costumeIndex ?? 0}
+          {t("navi.editTitle", { uniqueId: formData.characterUniqueId ?? 0, costume: formData.costumeIndex ?? 0 })}
         </div>
-        <div className="text-xs text-muted-foreground">Edits are staged; use Save File to write</div>
+        <div className="text-xs text-muted-foreground">{t("navi.editsStaged")}</div>
       </div>
       <Separator className="mb-4" />
       <ScrollArea className="flex-1 min-h-0">
         <div className="space-y-6 pr-2">
           <div className="space-y-2">
-            <Label htmlFor="navi-display-name">Display Name</Label>
+            <Label htmlFor="navi-display-name">{t("navi.displayName")}</Label>
             <Input
               id="navi-display-name"
               value={displayName}
@@ -160,8 +165,8 @@ export function NaviForm({
           </div>
 
           {NUMERIC_GROUPS.map((group) => (
-            <div key={group.title} className="space-y-3">
-              <div className="font-bold text-foreground">{group.title}</div>
+            <div key={group.titleKey} className="space-y-3">
+              <div className="font-bold text-foreground">{t(group.titleKey)}</div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {group.fields.map((field) => {
                   const fieldName = String(field.name);
@@ -169,7 +174,7 @@ export function NaviForm({
                   return (
                     <DualValueProperty
                       key={fieldName}
-                      label={field.label}
+                      label={t(field.labelKey)}
                       preview={
                         isHash ? (
                           <GuiHashFieldPreview
@@ -193,7 +198,7 @@ export function NaviForm({
                           <TooltipProvider delayDuration={100}>
                             <div className="flex items-center gap-1">
                               <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                                {sharedRowCount} other costume row{sharedRowCount === 1 ? "" : "s"}
+                                {t("navi.otherCostume", { count: sharedRowCount })}
                               </span>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -203,12 +208,12 @@ export function NaviForm({
                                     size="icon"
                                     className="h-6 w-6"
                                     onClick={handlePickNewUniqueId}
-                                    aria-label="Pick new unique ID"
+                                    aria-label={t("navi.pickUniqueAria")}
                                   >
                                     <Dices className="h-3.5 w-3.5" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent side="top">Pick next free Unique ID</TooltipContent>
+                                <TooltipContent side="top">{t("navi.pickUniqueTooltip")}</TooltipContent>
                               </Tooltip>
                             </div>
                           </TooltipProvider>

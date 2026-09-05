@@ -32,6 +32,7 @@ import {
 } from "@/models/strikerTable";
 import { cn } from "@/lib/utils";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useTranslation } from "react-i18next";
 import { DualValueProperty } from "@/components/ui/dual-value-property";
 import {
   applyStrikerTableImport,
@@ -88,6 +89,7 @@ export default function StrikerTableView({
   onPackMutated,
   workspaceDocument,
 }: StrikerTableViewProps) {
+  const { t } = useTranslation("test-striker-table");
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [hasChanges, setHasChanges] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -120,7 +122,7 @@ export default function StrikerTableView({
   const load = useCallback(
     async (options?: { preserveSelectionId?: number | null }) => {
       if (!folderPath) {
-        setLoadState({ status: "error", filePath: "", message: "Folder path is empty" });
+        setLoadState({ status: "error", filePath: "", message: t("errors.folderPathEmpty") });
         resetEditorState();
         return;
       }
@@ -134,7 +136,7 @@ export default function StrikerTableView({
         setLoadState({
           status: "error",
           filePath: pack.folderPath,
-          message: "Striker table content path is not configured",
+          message: t("errors.notConfigured"),
         });
         resetEditorState();
         return;
@@ -322,12 +324,12 @@ export default function StrikerTableView({
   const handleSaveFile = useCallback(async () => {
     if (loadState.status !== "ready") return;
     if (!loadState.writable) {
-      toast.error("Legacy flat workspace content is read-only");
+      toast.error(t("errors.legacyReadOnly"));
       return;
     }
     const duplicates = findDuplicateStrikerHostIds(loadState.table.rows);
     if (duplicates.length > 0) {
-      toast.error(`Duplicate host unit id(s): ${duplicates.join(", ")}`);
+      toast.error(t("errors.duplicateHostIds", { ids: duplicates.join(", ") }));
       return;
     }
     const sortedRows = sortStrikerTableRows(loadState.table.rows);
@@ -343,7 +345,7 @@ export default function StrikerTableView({
 
       const sortedTable = cloneStrikerTable(loadState.table, sortedRows);
       await writeFile(filePath, buildStrikerTableBuffer(sortedTable));
-      toast.success(`Saved ${STRIKER_TABLE_FILE_NAME}`);
+      toast.success(t("success.saved", { fileName: STRIKER_TABLE_FILE_NAME }));
       setHasChanges(false);
       onUnsavedChanges?.(false);
 
@@ -360,7 +362,7 @@ export default function StrikerTableView({
       await load({ preserveSelectionId: selectedRow?.HostUnitId ?? null });
     } catch (error) {
       console.error(error);
-      toast.error("Failed to save striker table");
+      toast.error(t("errors.saveFailed"));
     }
   }, [load, loadState, onPackMutated, onUnsavedChanges, resolveTableContent, selectedRow?.HostUnitId]);
 
@@ -369,13 +371,13 @@ export default function StrikerTableView({
     const folderPathToOpen = await dirname(loadState.filePath);
     try {
       if (!(await exists(folderPathToOpen))) {
-        toast.error("Path does not exist");
+        toast.error(t("errors.pathNotExist"));
         return;
       }
       await openPath(folderPathToOpen);
     } catch (error) {
       console.error(error);
-      toast.error("Failed to open folder");
+      toast.error(t("errors.openFolderFailed"));
     }
   }, [loadState]);
 
@@ -387,19 +389,19 @@ export default function StrikerTableView({
         defaultFileName: "strikertable.json",
       });
       if (!result) return;
-      toast.success(`Exported ${result.count} rows`);
+      toast.success(t("success.exported", { count: result.count }));
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Failed to export JSON: ${message}`);
+      const message = error instanceof Error ? error.message : t("errors.unknown");
+      toast.error(t("errors.exportFailed", { message }));
     } finally {
       setIsExporting(false);
     }
-  }, [isExporting, loadState]);
+  }, [isExporting, loadState, t]);
 
   const handlePickImportJson = useCallback(async () => {
     if (loadState.status !== "ready") return;
     if (!loadState.writable) {
-      toast.error("Legacy flat workspace content is read-only");
+      toast.error(t("errors.legacyReadOnly"));
       return;
     }
     if (isImporting) return;
@@ -408,18 +410,18 @@ export default function StrikerTableView({
       const preview = await pickStrikerTableImportPreview();
       if (!preview) return;
       if (preview.validCount === 0) {
-        toast.error("Invalid JSON: no valid entries found");
+        toast.error(t("errors.invalidJson"));
         return;
       }
       setImportPreview(preview);
       setIsImportDialogOpen(true);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Failed to import JSON: ${message}`);
+      const message = error instanceof Error ? error.message : t("errors.unknown");
+      toast.error(t("errors.importFailed", { message }));
     } finally {
       setIsImporting(false);
     }
-  }, [isImporting, loadState]);
+  }, [isImporting, loadState, t]);
 
   const handleConfirmImport = useCallback(() => {
     if (loadState.status !== "ready" || !loadState.writable || !importPreview) return;
@@ -434,10 +436,10 @@ export default function StrikerTableView({
       setNewRowIndices(new Set());
       setIsImportDialogOpen(false);
       setImportPreview(null);
-      toast.success(`Imported ${importPreview.validCount} rows`);
+      toast.success(t("success.imported", { count: importPreview.validCount }));
     } catch (error) {
       console.error(error);
-      toast.error("Failed to apply import");
+      toast.error(t("errors.applyImportFailed"));
     }
   }, [importPreview, loadState]);
 
@@ -448,7 +450,7 @@ export default function StrikerTableView({
   if (!folderPath.trim()) {
     return (
       <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground px-4 text-center">
-        Select a workspace folder in the toolbar.
+        {t("empty.selectFolder")}
       </div>
     );
   }
@@ -457,10 +459,10 @@ export default function StrikerTableView({
     return (
       <Card className="h-full flex flex-col border-none shadow-none rounded-none bg-transparent">
         <CardHeader className="p-0 pb-4">
-          <CardTitle>Striker Table</CardTitle>
+          <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 p-0">
-          <div className="text-sm text-muted-foreground">Loading {STRIKER_TABLE_FILE_NAME}...</div>
+          <div className="text-sm text-muted-foreground">{t("loading", { fileName: STRIKER_TABLE_FILE_NAME })}</div>
         </CardContent>
       </Card>
     );
@@ -470,23 +472,23 @@ export default function StrikerTableView({
     return (
       <Card className="border-none shadow-none rounded-none bg-transparent">
         <CardHeader className="p-0 pb-4">
-          <CardTitle>Striker Table</CardTitle>
+          <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 p-0">
           <div className="text-sm text-muted-foreground break-all">
             {loadState.filePath ? (
               <>
-                <div className="font-medium text-foreground">File</div>
+                <div className="font-medium text-foreground">{t("file")}</div>
                 {loadState.filePath}
               </>
             ) : (
-              "Folder path is empty"
+              t("errors.folderPathEmpty")
             )}
           </div>
           <div className="text-sm text-destructive">{loadState.message}</div>
           <Button size="sm" onClick={() => void load()} className="inline-flex items-center gap-2">
             <RefreshCw className="w-4 h-4" />
-            Reload
+            {t("actions.reload")}
           </Button>
         </CardContent>
       </Card>
@@ -499,21 +501,21 @@ export default function StrikerTableView({
         <CardHeader className="p-0 pb-4 shrink-0">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <CardTitle>Striker Table</CardTitle>
+              <CardTitle>{t("title")}</CardTitle>
               <div className="text-xs text-muted-foreground break-all mt-1 flex items-center gap-1">
                 {loadState.filePath}
                 <button
                   type="button"
                   onClick={() => void handleOpenFolder()}
                   className="shrink-0 p-0.5 rounded hover:bg-accent hover:text-accent-foreground"
-                  title="Open folder"
-                  aria-label="Open folder"
+                  title={t("actions.openFolder")}
+                  aria-label={t("actions.openFolder")}
                 >
                   <FolderOpen className="w-3.5 h-3.5" />
                 </button>
               </div>
               <div className="text-xs text-muted-foreground mt-1">
-                {STRIKER_TABLE_FILE_NAME} — {tableData.length} host units · slot = 0 is empty
+                {t("summary", { fileName: STRIKER_TABLE_FILE_NAME, count: tableData.length })}
               </div>
               <LegacyWorkspaceMoveNotice
                 workspaceRoot={folderPath}
@@ -528,7 +530,7 @@ export default function StrikerTableView({
             <div className="flex flex-wrap items-center gap-2 shrink-0 justify-end">
               <Button size="sm" variant="outline" onClick={() => void load()} className="inline-flex items-center gap-2">
                 <RefreshCw className="w-4 h-4" />
-                Reload
+                {t("actions.reload")}
               </Button>
               <Button
                 size="sm"
@@ -538,7 +540,7 @@ export default function StrikerTableView({
                 className="inline-flex items-center gap-2"
               >
                 <Upload className="w-4 h-4" />
-                Import JSON
+                {t("actions.importJson")}
               </Button>
               <Button
                 size="sm"
@@ -548,7 +550,7 @@ export default function StrikerTableView({
                 className="inline-flex items-center gap-2"
               >
                 <Download className="w-4 h-4" />
-                Export JSON
+                {t("actions.exportJson")}
               </Button>
               <Button
                 size="sm"
@@ -557,7 +559,7 @@ export default function StrikerTableView({
                 className="inline-flex items-center gap-2"
               >
                 <Save className="w-4 h-4" />
-                Save File
+                {t("actions.saveFile")}
               </Button>
             </div>
           </div>
@@ -567,17 +569,17 @@ export default function StrikerTableView({
           <div className="flex h-full min-h-0 gap-4 flex-1">
             <div className="w-1/3 border rounded-lg p-3 overflow-hidden flex flex-col min-h-0">
               <div className="flex items-center justify-between mb-3 shrink-0">
-                <div className="font-semibold text-sm">Hosts ({tableData.length})</div>
+                <div className="font-semibold text-sm">{t("hosts", { count: tableData.length })}</div>
                 <Button size="sm" onClick={handleAdd} disabled={!loadState.writable} className="inline-flex items-center gap-2">
                   <Plus className="w-4 h-4" />
-                  Add
+                  {t("actions.add")}
                 </Button>
               </div>
 
               <div className="relative mb-3 shrink-0">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
-                  placeholder="Search host or striker id..."
+                  placeholder={t("searchPlaceholder")}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -625,7 +627,7 @@ export default function StrikerTableView({
                                   variant="outline"
                                   className="shrink-0 border-blue-500/40 bg-blue-500/15 text-blue-700 dark:text-blue-300 text-[10px] px-1.5 py-0"
                                 >
-                                  New
+                                  {t("new")}
                                 </Badge>
                               )}
                             </div>
@@ -643,7 +645,7 @@ export default function StrikerTableView({
                                 e.stopPropagation();
                                 handleCopyRow(idx);
                               }}
-                              title="Copy as new"
+                              title={t("actions.copyAsNew")}
                             >
                               <Copy className="w-4 h-4" />
                             </Button>
@@ -657,7 +659,7 @@ export default function StrikerTableView({
                                 setDeleteCandidateIndex(idx);
                                 setDeleteDialogOpen(true);
                               }}
-                              title="Delete"
+                              title={t("actions.delete")}
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
@@ -668,7 +670,7 @@ export default function StrikerTableView({
                   })}
                 </div>
                 {filteredRows.length === 0 && (
-                  <div className="text-center text-muted-foreground py-8 text-sm">No rows found</div>
+                  <div className="text-center text-muted-foreground py-8 text-sm">{t("empty.noRows")}</div>
                 )}
               </div>
             </div>
@@ -677,13 +679,13 @@ export default function StrikerTableView({
               {selectedRow ? (
                 <>
                   <div className="flex items-center justify-between mb-4 shrink-0">
-                    <div className="text-sm font-semibold">Edit row (index: {selectedIndex})</div>
-                    <div className="text-xs text-muted-foreground">u32 host / slot ids · 0 = empty</div>
+                    <div className="text-sm font-semibold">{t("editRow", { index: selectedIndex })}</div>
+                    <div className="text-xs text-muted-foreground">{t("idHint")}</div>
                   </div>
                   <ScrollArea className="flex-1 min-h-0">
                     <div className="space-y-2 pr-2">
                       <DualValueProperty
-                        label="Host unit id"
+                        label={t("fields.hostUnitId")}
                         value={unsignedId(selectedRow.HostUnitId)}
                         property="HostUnitId"
                         editable={loadState.writable}
@@ -699,7 +701,7 @@ export default function StrikerTableView({
                         onCommit={(nextValue) => updateSelectedRowField("HostUnitId", nextValue)}
                       />
                       <DualValueProperty
-                        label="Striker slot 1"
+                        label={t("fields.strikerSlot1")}
                         value={unsignedId(selectedRow.Slot1)}
                         property="Slot1"
                         editable={loadState.writable}
@@ -715,7 +717,7 @@ export default function StrikerTableView({
                         onCommit={(nextValue) => updateSelectedRowField("Slot1", nextValue)}
                       />
                       <DualValueProperty
-                        label="Striker slot 2"
+                        label={t("fields.strikerSlot2")}
                         value={unsignedId(selectedRow.Slot2)}
                         property="Slot2"
                         editable={loadState.writable}
@@ -735,7 +737,7 @@ export default function StrikerTableView({
                 </>
               ) : (
                 <div className="text-sm text-muted-foreground">
-                  Select a host unit to edit its two striker slots.
+                  {t("empty.selectHost")}
                 </div>
               )}
             </div>
@@ -746,8 +748,8 @@ export default function StrikerTableView({
       {isImportDialogOpen ? (
         <AppRndModalShell
           titleId="striker-table-import-title"
-          title="Import striker table JSON?"
-          subtitle={`Replace rows in ${STRIKER_TABLE_FILE_NAME}.`}
+          title={t("import.title")}
+          subtitle={t("import.subtitle", { fileName: STRIKER_TABLE_FILE_NAME })}
           headerIcon={<Upload className="h-5 w-5 text-primary" />}
           dimensions={STRIKER_TABLE_IMPORT_MODAL_DIMENSIONS}
           storageKey="app.rnd-size.striker-table-import"
@@ -755,26 +757,25 @@ export default function StrikerTableView({
           footer={
             <div className="flex justify-end gap-2 bg-background px-6 py-4">
               <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
-                Cancel
+                {t("actions.cancel")}
               </Button>
               <Button onClick={handleConfirmImport} disabled={!loadState.writable}>
-                Apply import
+                {t("actions.applyImport")}
               </Button>
             </div>
           }
         >
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-6 text-sm">
             <p className="text-muted-foreground">
-              This replaces all rows in the current file with valid entries from the JSON file. Save
-              writes ids in ascending order.
+              {t("import.description")}
             </p>
             {importPreview ? (
               <div className="space-y-1">
-                <div>Valid rows: {importPreview.validCount}</div>
-                <div>Invalid / skipped: {importPreview.invalidCount}</div>
+                <div>{t("import.validRows", { count: importPreview.validCount })}</div>
+                <div>{t("import.invalidRows", { count: importPreview.invalidCount })}</div>
                 {importPreview.duplicateIds.length > 0 ? (
                   <div className="text-amber-600">
-                    Duplicate host ids in file: {importPreview.duplicateIds.join(", ")}
+                    {t("import.duplicates", { ids: importPreview.duplicateIds.join(", ") })}
                   </div>
                 ) : null}
               </div>
@@ -786,13 +787,13 @@ export default function StrikerTableView({
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete row?</AlertDialogTitle>
+          <AlertDialogTitle>{t("delete.title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the host unit from the list. Save the file to write to disk.
+              {t("delete.description")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 if (deleteCandidateIndex === null) return;
@@ -802,7 +803,7 @@ export default function StrikerTableView({
               }}
               disabled={!loadState.writable}
             >
-              Delete
+              {t("actions.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Diamond, Link2, Unlink2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,7 @@ type ChannelRowProps = {
   disabled: boolean;
   keyExists: boolean;
   insertLabel: string;
+  writing: boolean;
   focused: boolean;
   onFocus: () => void;
   onInsert: () => void;
@@ -93,15 +95,17 @@ function ChannelRow({
   disabled,
   keyExists,
   insertLabel,
+  writing,
   focused,
   onFocus,
   onInsert,
   onDrag,
   onCommit,
 }: ChannelRowProps) {
+  const { t } = useTranslation("test-effect-folder");
   return (
     <div className={cn("grid grid-cols-[14px_minmax(0,1fr)_56px_24px] items-center gap-2 rounded px-1", focused && "bg-muted/60")}>
-      <button type="button" className={cn("font-mono text-[10px] font-bold", letterClassName)} onClick={onFocus}>
+      <button type="button" className={cn("font-mono text-[10px] font-bold", letterClassName)} onClick={onFocus} data-i18n-ignore="">
         {letter}
       </button>
       <Slider
@@ -112,7 +116,7 @@ function ChannelRow({
         disabled={disabled}
         onValueChange={(next) => onDrag(next[0] ?? value)}
         onValueCommit={(next) => onCommit(next[0] ?? value)}
-        aria-label={`${letter} channel slider`}
+        aria-label={t("colorAuthor.channelSlider", { letter })}
       />
       <Input
         type="number"
@@ -121,7 +125,7 @@ function ChannelRow({
         step={0.01}
         value={Number.isFinite(value) ? value.toFixed(2) : "0.00"}
         disabled={disabled}
-        aria-label={`${letter} channel`}
+        aria-label={t("colorAuthor.channel", { letter })}
         className="h-7 px-1.5 font-mono text-[11px] tabular-nums"
         onChange={(event) => {
           const parsed = Number(event.target.value);
@@ -137,7 +141,7 @@ function ChannelRow({
         size="icon"
         variant="ghost"
         className="h-6 w-6"
-        disabled={keyExists || insertLabel.startsWith("Writing")}
+        disabled={keyExists || writing}
         aria-label={insertLabel}
         onClick={onInsert}
       >
@@ -158,6 +162,7 @@ export function EfxbnColorAuthor({
   onDocumentChange,
   onError,
 }: EfxbnColorAuthorProps) {
+  const { t } = useTranslation("test-effect-folder");
   const [linkRgb, setLinkRgb] = useState(true);
 
   const draftColor = useMemo(() => {
@@ -286,15 +291,17 @@ export function EfxbnColorAuthor({
   return (
     <div className="space-y-3 p-0.5">
       <p className="rounded-md border bg-muted/20 px-2 py-1.5 text-[10px] text-muted-foreground">
-        Tint multiplies the colour map. The 3D preview updates when the drag ends.
+        {t("colorAuthor.help")}
       </p>
 
       <div className="rounded-md border border-border/60 bg-muted/15 p-2">
         <div className="mb-2 flex items-center gap-2">
-          <span className="text-[11px] font-medium">Particle / model tint</span>
-          {dirty ? <Badge variant="outline" className="h-4 border-amber-500/40 px-1 text-[8px] text-amber-400">dirty</Badge> : null}
-          {writing ? <Badge variant="outline" className="h-4 px-1 text-[8px]">writing</Badge> : null}
-          <span className="ml-auto font-mono text-[9px] text-muted-foreground">frame {Number(frame.toFixed(3))}</span>
+          <span className="text-[11px] font-medium">{t("colorAuthor.tint")}</span>
+          {dirty ? <Badge variant="outline" className="h-4 border-amber-500/40 px-1 text-[8px] text-amber-400">{t("colorAuthor.dirty")}</Badge> : null}
+          {writing ? <Badge variant="outline" className="h-4 px-1 text-[8px]">{t("colorAuthor.writing")}</Badge> : null}
+          <span className="ml-auto font-mono text-[9px] text-muted-foreground" data-i18n-ignore="">
+            {t("colorAuthor.frame", { value: Number(frame.toFixed(3)) })}
+          </span>
         </div>
 
         <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-3">
@@ -307,14 +314,14 @@ export function EfxbnColorAuthor({
               style={{
                 background: `linear-gradient(135deg, rgba(${channelToByte(color.r)},${channelToByte(color.g)},${channelToByte(color.b)},${swatchAlpha}), rgba(${channelToByte(color.r * 0.55)},${channelToByte(color.g * 0.55)},${channelToByte(color.b * 0.55)},0.45)), repeating-conic-gradient(#2a2a2a 0% 25%, #1a1a1a 0% 50%) 50% / 10px 10px`,
               }}
-              title="Pick RGB. Values above 1 remain available in the channel controls."
+              title={t("colorAuthor.pickerTitle")}
             >
               <input
                 type="color"
                 className="absolute inset-0 h-full w-full opacity-0"
                 value={rgbToHex(color.r, color.g, color.b)}
                 disabled={!rgbLinkable || writing}
-                aria-label="RGB color picker"
+                aria-label={t("colorAuthor.pickerAria")}
                 onInput={(event) => {
                   const raw = event.currentTarget.value.slice(1);
                   const next = {
@@ -362,7 +369,12 @@ export function EfxbnColorAuthor({
                   disabled={!editable || writing}
                   keyExists={keyExists}
                   focused={focusedControlName === controlName}
-                  insertLabel={writing ? `Writing ${letter} channel` : `Insert ${letter} key at frame ${Number(frame.toFixed(3))}`}
+                  writing={writing}
+                  insertLabel={
+                    writing
+                      ? t("colorAuthor.writingChannel", { letter })
+                      : t("colorAuthor.insertKey", { letter, frame: Number(frame.toFixed(3)) })
+                  }
                   onFocus={() => onFocusedControlNameChange(controlName)}
                   onInsert={() => {
                     onFocusedControlNameChange(controlName);
@@ -386,7 +398,7 @@ export function EfxbnColorAuthor({
             onClick={() => setLinkRgb((value) => !value)}
           >
             {linkRgb ? <Link2 className="h-3 w-3" /> : <Unlink2 className="h-3 w-3" />}
-            {linkRgb ? "Link RGB" : "Free RGB"}
+            {linkRgb ? t("colorAuthor.linkRgb") : t("colorAuthor.freeRgb")}
           </Button>
           {rgbMissingKey ? (
             <Button
@@ -397,13 +409,11 @@ export function EfxbnColorAuthor({
               disabled={writing}
               onClick={() => insertKeys(["r", "g", "b"])}
             >
-              Insert RGB keys
+              {t("colorAuthor.insertRgbKeys")}
             </Button>
           ) : null}
           <span className="text-[9px] text-muted-foreground">
-            {rgbMissingKey
-              ? "Insert a key at the playhead to edit this animated channel."
-              : "Editing keys at the current playhead."}
+            {rgbMissingKey ? t("colorAuthor.insertHint") : t("colorAuthor.editingHint")}
           </span>
         </div>
       </div>

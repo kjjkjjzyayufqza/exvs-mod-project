@@ -1,0 +1,64 @@
+{
+  "title": "Striker Table",
+  "file": "文件",
+  "loading": "正在加载 {{fileName}}…",
+  "summary": "{{fileName}} — {{count}} 个主机",
+  "hosts": "主机（{{count}}）",
+  "searchPlaceholder": "搜索主机或槽位 ID…",
+  "new": "新建",
+  "editRow": "编辑行（索引：{{index}}）",
+  "idHint": "ID 为无符号整数。双栏显示十进制和十六进制。",
+  "fields": {
+    "hostUnitId": "HostUnitId",
+    "strikerSlot1": "Slot1",
+    "strikerSlot2": "Slot2"
+  },
+  "empty": {
+    "selectFolder": "请在工具栏中选择工作区文件夹。",
+    "noRows": "未找到行",
+    "selectHost": "选择一个主机行以编辑槽位。"
+  },
+  "actions": {
+    "reload": "重新加载",
+    "openFolder": "打开文件夹",
+    "importJson": "导入 JSON",
+    "exportJson": "导出 JSON",
+    "saveFile": "保存文件",
+    "add": "添加",
+    "copyAsNew": "复制为新行",
+    "delete": "删除",
+    "cancel": "取消",
+    "applyImport": "应用导入"
+  },
+  "success": {
+    "saved": "已保存 {{fileName}}",
+    "exported": "已导出 {{count}} 行",
+    "imported": "已导入 {{count}} 行"
+  },
+  "errors": {
+    "folderPathEmpty": "文件夹路径为空",
+    "notConfigured": "此工作区未配置 Striker Table。",
+    "legacyReadOnly": "旧版扁平工作区内容为只读",
+    "duplicateHostIds": "重复的 HostUnitId：{{ids}}",
+    "saveFailed": "保存 Striker Table 失败",
+    "pathNotExist": "路径不存在",
+    "openFolderFailed": "打开文件夹失败",
+    "exportFailed": "导出 JSON 失败：{{message}}",
+    "invalidJson": "JSON 无效：没有找到有效条目",
+    "importFailed": "导入 JSON 失败：{{message}}",
+    "applyImportFailed": "应用导入失败",
+    "unknown": "未知错误"
+  },
+  "import": {
+    "title": "导入 Striker Table JSON？",
+    "subtitle": "替换 {{fileName}} 中的行。",
+    "description": "使用 JSON 文件中的有效条目替换当前文件中的所有行。",
+    "validRows": "有效行：{{count}}",
+    "invalidRows": "无效/跳过：{{count}}",
+    "duplicates": "文件中重复的 HostUnitId：{{ids}}"
+  },
+  "delete": {
+    "title": "删除行？",
+    "description": "这将从列表中移除该条目。保存文件后才会写入磁盘。"
+  }
+}

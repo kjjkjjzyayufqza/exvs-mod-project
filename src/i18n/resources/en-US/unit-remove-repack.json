@@ -1,0 +1,51 @@
+{
+  "actions": {
+    "cancel": "Cancel",
+    "continue": "Continue",
+    "back": "Back"
+  },
+  "remove": {
+    "title": "Remove model?",
+    "description": "You are about to remove {{name}} from this Unit model package.",
+    "details": "This deletes the model's SSBH files, its paired NUHLPB, and any shared textures that become unreferenced. The package structure JSON will be rewritten.",
+    "loading": "Removing..."
+  },
+  "confirm": {
+    "title": "Permanently remove model?",
+    "description": "Final confirmation: {{name}} will be deleted from disk. This cannot be undone.",
+    "action": "Permanently remove"
+  },
+  "repack": {
+    "title": "Repack Changes",
+    "subtitle": "Validate and repack the unit model into the configured OB Mod folder",
+    "loading": "Repacking...",
+    "action": "Repack",
+    "unitModel": "Unit model",
+    "pathWarningPrefix": "OB Mod path is not configured. Open",
+    "configPage": "Config",
+    "pathWarningSuffix": " and set the OB Mod folder before repacking."
+  },
+  "validation": {
+    "checking": "Checking validation before repack",
+    "checkingHint": "The Repack button is enabled after validation passes.",
+    "waiting": "Waiting for validation",
+    "waitingHint": "Validation runs automatically after opening or editing a Unit Model folder.",
+    "passed": "Validation passed",
+    "warningsKept": "{{count}} warning(s) will be kept as non-blocking notes.",
+    "blocked": "Repack blocked by {{count}} issue(s)",
+    "blockedHint": "Fix these issues in the Unit Model structure before repacking.",
+    "showingIssues": "Showing 5 of {{count}}. See the right Details panel for the full list."
+  },
+  "errors": {
+    "noModelFolder": "No unit model folder selected",
+    "modFolderNotConfigured": "OB Mod folder is not configured",
+    "setModPath": "Set the OB Mod path in Config before repacking.",
+    "validationBlocked": "Repack blocked by validation",
+    "issuesMustBeFixed": "{{count}} issue(s) must be fixed first",
+    "repackFailed": "Unit model repack failed"
+  },
+  "success": {
+    "repacked": "Unit model repacked to OB Mod folder",
+    "removedVgsht2": "{{path}} (removed matching .vgsht2)"
+  }
+}

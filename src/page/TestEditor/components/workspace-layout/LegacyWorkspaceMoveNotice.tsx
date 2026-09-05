@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { formatCaughtError } from "@/utils/formatCaughtError";
 import { FolderInput } from "lucide-react";
 import { toast } from "sonner";
@@ -29,6 +30,7 @@ export function LegacyWorkspaceMoveNotice({
   onMoved,
   className = "",
 }: LegacyWorkspaceMoveNoticeProps) {
+  const { t } = useTranslation("test-workspace");
   const [isMoving, setIsMoving] = useState(false);
 
   const handleMove = useCallback(async () => {
@@ -42,13 +44,13 @@ export function LegacyWorkspaceMoveNotice({
         contentId,
       );
       const result = await moveLegacyWorkspaceContentToConfigured(content);
-      toast.success(`Moved ${content.descriptor.label} to the configured workspace route`, {
+      toast.success(t("legacy.moved", { name: content.descriptor.label }), {
         description: result.configuredFolderPath,
       });
       await onMoved();
     } catch (error) {
       console.error(`Failed to move legacy workspace content "${contentId}":`, error);
-      toast.error(`Failed to move legacy content: ${formatCaughtError(error)}`);
+      toast.error(t("legacy.moveFailed", { message: formatCaughtError(error) }));
     } finally {
       setIsMoving(false);
     }
@@ -57,6 +59,7 @@ export function LegacyWorkspaceMoveNotice({
     isMoving,
     onMoved,
     sourceLayout,
+    t,
     workspaceDocument,
     workspaceRoot,
   ]);
@@ -70,8 +73,7 @@ export function LegacyWorkspaceMoveNotice({
       className={`flex flex-wrap items-center gap-2 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300 ${className}`}
     >
       <span className="min-w-0 flex-1">
-        Legacy flat workspace content is read-only. Writes target{" "}
-        <span className="font-mono break-all">{configuredPath}</span>.
+        {t("legacy.notice", { path: configuredPath })}
       </span>
       <Button
         type="button"
@@ -80,10 +82,10 @@ export function LegacyWorkspaceMoveNotice({
         className="h-7 shrink-0 gap-1.5 border-amber-500/40 bg-background/70 px-2 text-xs"
         onClick={() => void handleMove()}
         disabled={isMoving}
-        title="Move legacy pack folder and structure JSON to the configured route"
+        title={t("legacy.moveTitle")}
       >
         <FolderInput className="h-3.5 w-3.5" />
-        {isMoving ? "Moving..." : "Move to New"}
+        {isMoving ? t("legacy.moving") : t("legacy.moveToNew")}
       </Button>
     </div>
   );

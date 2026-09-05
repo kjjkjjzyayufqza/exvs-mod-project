@@ -1,4 +1,5 @@
 import { memo, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Plus, RotateCcw, Search, Trash2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,6 +76,7 @@ export function PlacementFieldEditor({
   onRemoveField,
   onResetField,
 }: PlacementFieldEditorProps) {
+  const { t } = useTranslation("scene-placement");
   const [editKeys, setEditKeys] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
 
@@ -109,17 +111,17 @@ export function PlacementFieldEditor({
   return (
     <div className={`flex min-h-0 flex-col gap-2 ${PROP_PANEL}`}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-0.5 text-[9px] text-muted-foreground tabular-nums">
-        <span>{fields.length} fields</span>
+        <span>{t("field.fields", { count: fields.length })}</span>
         {customCount > 0 && (
           <>
             <span>·</span>
-            <span className="text-amber-500">{customCount} custom</span>
+            <span className="text-amber-500">{t("field.custom", { count: customCount })}</span>
           </>
         )}
         {headerFormat && (
           <>
             <span>·</span>
-            <span className="text-sky-500">header csv</span>
+            <span className="text-sky-500">{t("field.headerCsv")}</span>
           </>
         )}
         <Tooltip>
@@ -136,14 +138,14 @@ export function PlacementFieldEditor({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-[10px]">
-            {editKeys ? "Hide raw VDK keys" : "Edit raw VDK keys"}
+            {editKeys ? t("field.hideRawKeys") : t("field.editRawKeys")}
           </TooltipContent>
         </Tooltip>
       </div>
 
       <section className={INSPECTOR_SECTION}>
         <div className={cn(INSPECTOR_SECTION_HEADER, "cursor-default")}>
-          <span className="truncate">Transform</span>
+          <span className="truncate">{t("field.transform")}</span>
         </div>
         <div className="px-1.5 py-1.5">
           <TransformAxisGrid
@@ -308,6 +310,7 @@ function resolveSubModelIndex(
 function formatObjectNumberLabel(
   value: string,
   subModels: Array<{ folderName: string; objectIndex: number }>,
+  emptyLabel: string,
 ): string {
   const trimmed = value.trim();
   const selected = subModels.find(
@@ -318,7 +321,7 @@ function formatObjectNumberLabel(
     return `${index} · ${selected.folderName}`;
   }
   if (trimmed) return trimmed;
-  return "Select object...";
+  return emptyLabel;
 }
 
 function PlacementObjectNumberSelect({
@@ -332,7 +335,8 @@ function PlacementObjectNumberSelect({
   onPreview: (value: string) => void;
   onCommit: (value: string) => void;
 }) {
-  const displayLabel = formatObjectNumberLabel(value, subModels);
+  const { t } = useTranslation("scene-placement");
+  const displayLabel = formatObjectNumberLabel(value, subModels, t("field.selectObject"));
 
   return (
     <Select
@@ -343,7 +347,7 @@ function PlacementObjectNumberSelect({
       }}
     >
       <SelectTrigger title={displayLabel} className={INSPECTOR_SELECT_TRIGGER}>
-        <SelectValue placeholder="Select object...">{displayLabel}</SelectValue>
+        <SelectValue placeholder={t("field.selectObject")}>{displayLabel}</SelectValue>
       </SelectTrigger>
       <SelectContent
         position="popper"
@@ -357,6 +361,7 @@ function PlacementObjectNumberSelect({
             value={String(objectIndex)}
             className="items-start py-1.5 pl-8 pr-2 text-left text-[10px]"
             title={`${objectIndex} · ${sm.folderName}`}
+            data-i18n-ignore=""
           >
             <span className="font-mono tabular-nums text-muted-foreground">{objectIndex}</span>
             <span className="ml-1.5 min-w-0 whitespace-normal break-all leading-snug">
@@ -383,6 +388,7 @@ function FieldValueControl({
   onFieldPreview: (fieldIndex: number, value: string) => void;
   onFieldCommit: (fieldIndex: number, value: string) => void;
 }) {
+  const { t } = useTranslation("scene-placement");
   if (field.kind === "bool") {
     const on = field.value.toUpperCase() !== "FALSE";
     return (
@@ -397,8 +403,8 @@ function FieldValueControl({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="TRUE">On</SelectItem>
-          <SelectItem value="FALSE">Off</SelectItem>
+        <SelectItem value="TRUE">{t("field.on")}</SelectItem>
+          <SelectItem value="FALSE">{t("field.off")}</SelectItem>
         </SelectContent>
       </Select>
     );
@@ -461,6 +467,7 @@ function RowActions({
   onReset: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation("scene-placement");
   return (
     <div className="flex shrink-0 items-center justify-end gap-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
       {valueModified && (
@@ -470,14 +477,14 @@ function RowActions({
               type="button"
               className={`inline-flex ${PROP_BTN_ICON} items-center justify-center rounded-sm text-muted-foreground hover:text-foreground`}
               onClick={onReset}
-              aria-label="Reset value"
+              aria-label={t("field.resetValue")}
             >
               <RotateCcw className="h-3 w-3" />
             </button>
           </TooltipTrigger>
           {originalValue !== undefined && (
             <TooltipContent side="bottom" className="text-[10px]">
-              Reset to {originalValue}
+              {t("field.resetTo", { value: originalValue })}
             </TooltipContent>
           )}
         </Tooltip>
@@ -487,7 +494,7 @@ function RowActions({
           type="button"
           className={`inline-flex ${PROP_BTN_ICON} items-center justify-center rounded-sm text-muted-foreground hover:text-destructive`}
           onClick={onDelete}
-          aria-label="Remove field"
+          aria-label={t("field.removeField")}
         >
           <Trash2 className="h-3 w-3" />
         </button>
@@ -503,6 +510,7 @@ function AddFieldControl({
   missingKeys: string[];
   onAddField: (key: string, value: string) => void;
 }) {
+  const { t } = useTranslation("scene-placement");
   const [open, setOpen] = useState(false);
   const [customKey, setCustomKey] = useState("");
   const [search, setSearch] = useState("");
@@ -533,7 +541,7 @@ function AddFieldControl({
         <PopoverTrigger asChild>
           <Button type="button" size="sm" variant="outline" className={PROP_BTN}>
             <Plus className="mr-1 h-3.5 w-3.5" />
-            Add field
+            {t("field.addField")}
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72 p-2">
@@ -541,7 +549,7 @@ function AddFieldControl({
             <Search className="pointer-events-none absolute left-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground/70" />
             <Input
               className="h-7 pl-6 text-[11px]"
-              placeholder="Search catalog..."
+              placeholder={t("field.searchCatalog")}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -552,7 +560,7 @@ function AddFieldControl({
             getItemKey={(key) => key}
             className="max-h-60 overflow-auto"
             emptyState={
-              <div className="px-1 py-2 text-[10px] text-muted-foreground">No matching keys</div>
+              <div className="px-1 py-2 text-[10px] text-muted-foreground">{t("field.noMatchingKeys")}</div>
             }
             renderRow={(key) => (
               <button
@@ -571,7 +579,7 @@ function AddFieldControl({
       </Popover>
       <Input
         className="h-6 min-w-0 flex-1 px-1.5 text-[10px] font-mono uppercase"
-        placeholder="Custom VDK_KEY"
+        placeholder={t("field.customKeyPlaceholder")}
         value={customKey}
         onChange={(event) => setCustomKey(event.target.value)}
         onKeyDown={(event) => {
@@ -579,7 +587,7 @@ function AddFieldControl({
         }}
       />
       <Button type="button" size="sm" variant="secondary" className={PROP_BTN} onClick={addCustom}>
-        Add
+        {t("common.add")}
       </Button>
     </div>
   );

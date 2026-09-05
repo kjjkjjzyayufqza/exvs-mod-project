@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -63,43 +64,44 @@ export function ViewportContextMenu({
   onDuplicateSelected,
   hasSelection,
 }: ViewportContextMenuProps) {
+  const { t } = useTranslation("scene-context");
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className="w-56">
         <ContextMenuItem onClick={onFocusSelected} disabled={!hasSelection}>
           <Frame className="mr-2 h-3.5 w-3.5" />
-          Focus Selected
-          <ContextMenuShortcut>F</ContextMenuShortcut>
+          {t("menu.focusSelected")}
+          <ContextMenuShortcut data-i18n-ignore="">F</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuItem onClick={onResetCamera}>
           <RotateCcw className="mr-2 h-3.5 w-3.5" />
-          Reset Camera
+          {t("menu.resetCamera")}
         </ContextMenuItem>
         <ContextMenuSeparator />
 
         <ContextMenuSub>
           <ContextMenuSubTrigger>
             <Move className="mr-2 h-3.5 w-3.5" />
-            Transform Mode
+            {t("menu.transformMode")}
           </ContextMenuSubTrigger>
           <ContextMenuSubContent className="w-44">
             <ContextMenuItem onClick={() => onGizmoMode("translate")}>
               <Move className="mr-2 h-3.5 w-3.5" />
-              Translate
-              <ContextMenuShortcut>W</ContextMenuShortcut>
+              {t("transform.translate")}
+              <ContextMenuShortcut data-i18n-ignore="">W</ContextMenuShortcut>
               {gizmoMode === "translate" && <span className="ml-auto text-primary">●</span>}
             </ContextMenuItem>
             <ContextMenuItem onClick={() => onGizmoMode("rotate")}>
               <RotateCw className="mr-2 h-3.5 w-3.5" />
-              Rotate
-              <ContextMenuShortcut>E</ContextMenuShortcut>
+              {t("transform.rotate")}
+              <ContextMenuShortcut data-i18n-ignore="">E</ContextMenuShortcut>
               {gizmoMode === "rotate" && <span className="ml-auto text-primary">●</span>}
             </ContextMenuItem>
             <ContextMenuItem onClick={() => onGizmoMode("scale")}>
               <Scaling className="mr-2 h-3.5 w-3.5" />
-              Scale
-              <ContextMenuShortcut>R</ContextMenuShortcut>
+              {t("transform.scale")}
+              <ContextMenuShortcut data-i18n-ignore="">R</ContextMenuShortcut>
               {gizmoMode === "scale" && <span className="ml-auto text-primary">●</span>}
             </ContextMenuItem>
           </ContextMenuSubContent>
@@ -109,13 +111,13 @@ export function ViewportContextMenu({
 
         <ContextMenuItem onClick={onDuplicateSelected} disabled={!hasSelection}>
           <Copy className="mr-2 h-3.5 w-3.5" />
-          Duplicate
-          <ContextMenuShortcut>Ctrl+D</ContextMenuShortcut>
+          {t("menu.duplicate")}
+          <ContextMenuShortcut data-i18n-ignore="">Ctrl+D</ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuItem onClick={onDeleteSelected} disabled={!hasSelection} className="text-destructive">
           <Trash2 className="mr-2 h-3.5 w-3.5" />
-          Delete
-          <ContextMenuShortcut>Del</ContextMenuShortcut>
+          {t("menu.delete")}
+          <ContextMenuShortcut data-i18n-ignore="">Del</ContextMenuShortcut>
         </ContextMenuItem>
 
         <ContextMenuSeparator />
@@ -123,19 +125,19 @@ export function ViewportContextMenu({
         <ContextMenuSub>
           <ContextMenuSubTrigger>
             <Eye className="mr-2 h-3.5 w-3.5" />
-            View Options
+            {t("menu.viewOptions")}
           </ContextMenuSubTrigger>
           <ContextMenuSubContent className="w-44">
             <ContextMenuCheckboxItem checked={showGrid} onCheckedChange={onToggleGrid}>
               <Grid3x3 className="mr-2 h-3.5 w-3.5" />
-              Show Grid
+              {t("view.showGrid")}
             </ContextMenuCheckboxItem>
             <ContextMenuCheckboxItem checked={showAxes} onCheckedChange={onToggleAxes}>
               <Axis3D className="mr-2 h-3.5 w-3.5" />
-              Show Axes
+              {t("view.showAxes")}
             </ContextMenuCheckboxItem>
             <ContextMenuCheckboxItem checked={wireframe} onCheckedChange={onToggleWireframe}>
-              Wireframe
+              {t("view.wireframe")}
             </ContextMenuCheckboxItem>
           </ContextMenuSubContent>
         </ContextMenuSub>
@@ -144,11 +146,11 @@ export function ViewportContextMenu({
 
         <ContextMenuItem onClick={onImportDAE}>
           <Upload className="mr-2 h-3.5 w-3.5" />
-          Import Static Mesh...
+          {t("menu.importStaticMesh")}
         </ContextMenuItem>
         <ContextMenuItem onClick={onExportDAE} disabled={!hasSelection}>
           <Download className="mr-2 h-3.5 w-3.5" />
-          Export Selected Model...
+          {t("menu.exportSelectedModel")}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

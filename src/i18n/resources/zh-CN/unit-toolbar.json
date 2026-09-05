@@ -1,0 +1,9 @@
+{
+  "file": {"label": "文件", "tooltip": "打开／提取机体模型", "openFolder": "打开模型文件夹", "extractFhm2d": "将 .fhm2d 提取到文件夹", "openExvsCommon": "打开／提取 EXVS Common", "useLoadedRoot": "使用已加载的预览根目录"},
+  "validate": {"aria": "验证机体模型", "tooltip": "验证是否可重新打包"},
+  "repack": {"aria": "重新打包机体模型", "tooltip": "重新打包到 OB Mod 文件夹"},
+  "export": {"aria": "将已加载模型导出为 FBX", "tooltip": "将已加载模型导出为 FBX"},
+  "display": {"grid": "切换网格", "axes": "切换坐标轴", "wireframe": "切换线框", "stats": "切换渲染统计", "resetCamera": "重置相机"},
+  "more": {"actions": "更多操作", "copyReviewPayload": "复制 AI 审查载荷"},
+  "status": {"checking": "检查中……", "ready": "已准备好重新打包", "pending": "等待验证", "noFolder": "没有文件夹", "issues_one": "{{count}} 个问题", "issues_other": "{{count}} 个问题", "exvsCommon": "EXVS Common · {{status}}"}
+}

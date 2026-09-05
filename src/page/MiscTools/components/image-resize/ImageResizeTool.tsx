@@ -11,6 +11,7 @@ import { basename, dirname, join, resourceDir } from "@tauri-apps/api/path";
 import { Command } from "@tauri-apps/plugin-shell";
 import { exists } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { VirtualizedSelectedFileList } from "../VirtualizedSelectedFileList";
 
 const IMAGE_RESIZE_DIMENSIONS = {
@@ -25,6 +26,7 @@ interface ImageResizeToolProps {
 }
 
 export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
+  const { t } = useTranslation("misc-tools-a");
   const [selectedImagePaths, setSelectedImagePaths] = useState<string[]>([]);
   const [fileNames, setFileNames] = useState<{[key: string]: {baseName: string, displayName: string, extension: string}}>({});
   const [isOpen, setIsOpen] = useState(false);
@@ -54,7 +56,7 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
       }
     } catch (error) {
       console.error("Error selecting files:", error);
-      toast.error("Failed to select files");
+      toast.error(t("common.selectFilesFailed"));
     }
   };
 
@@ -74,7 +76,7 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
       setFileNames(Object.fromEntries(nameEntries));
     } catch (error) {
       console.error("Error processing image files:", error);
-      toast.error("Failed to process image files");
+      toast.error(t("common.processImagesFailed"));
     }
   };
 
@@ -94,7 +96,7 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
     } catch (error) {
       console.error("Error selecting output directory:", error);
       toast.error(
-        error instanceof Error ? error.message : "Failed to select output directory"
+        error instanceof Error ? error.message : t("common.selectOutputFailed")
       );
     }
   };
@@ -116,12 +118,12 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
   // Handle batch resize
   const handleResize = async () => {
     if (selectedImagePaths.length === 0) {
-      toast.error("Please select at least one image file");
+      toast.error(t("resize.selectImage"));
       return;
     }
 
     if (width <= 0 || height <= 0) {
-      toast.error("Width and height must be greater than 0");
+      toast.error(t("resize.invalidSize"));
       return;
     }
 
@@ -197,11 +199,21 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
       const failureCount = failedFiles.length;
 
       if (successCount > 0) {
-        toast.success(`Successfully resized ${successCount} image(s)${failureCount > 0 ? `. ${failureCount} failed.` : ''}`);
+        toast.success(
+          failureCount > 0
+            ? t("resize.successPartial", { count: successCount, failed: failureCount })
+            : t("resize.success", { count: successCount }),
+        );
       }
 
       if (failureCount > 0) {
-        toast.error(`Failed to resize ${failureCount} file(s): ${failedFiles.slice(0, 3).join(', ')}${failureCount > 3 ? '...' : ''}`);
+        toast.error(
+          t("resize.failedList", {
+            count: failureCount,
+            files: failedFiles.slice(0, 3).join(", "),
+            extra: failureCount > 3 ? "..." : "",
+          }),
+        );
       }
 
       // Only close modal if all files failed
@@ -219,7 +231,7 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
       console.error("Batch resize failed:", error);
       setResizeProgress(null);
       setIsResizing(false);
-      toast.error("Batch resize failed");
+      toast.error(t("resize.batchFailed"));
     }
   };
 
@@ -257,10 +269,13 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
         return {
           path: imagePath,
           title: fileInfo?.displayName || imagePath.split(/[/\\]/).pop() || imagePath,
-          description: `${outputName ?? ""}${outputDirectory ? " → selected folder" : " → next to source"}`,
+          description: t(
+            outputDirectory ? "resize.outputSelectedFolder" : "resize.outputNextToSource",
+            { name: outputName ?? "" },
+          ),
         };
       }),
-    [fileNames, outputDirectory, overwriteOriginal, selectedImagePaths],
+    [fileNames, outputDirectory, overwriteOriginal, selectedImagePaths, t],
   );
 
   const progressContent = isResizing || resizeProgress ? (
@@ -270,12 +285,16 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
           <div className="w-full max-w-md space-y-2">
             <div className="text-center">
               <span className="text-muted-foreground">
-                Resizing {resizeProgress.current} of {resizeProgress.total} images...
+                {t("common.progressOf", {
+                  action: t("resize.progressAction"),
+                  current: resizeProgress.current,
+                  total: resizeProgress.total,
+                })}
               </span>
             </div>
             {resizeProgress.currentFile && (
               <div className="text-center text-sm text-muted-foreground truncate">
-                Current: {resizeProgress.currentFile}
+                {t("common.current", { name: resizeProgress.currentFile })}
               </div>
             )}
             <div className="w-full bg-secondary rounded-full h-2">
@@ -286,12 +305,12 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
             </div>
             {resizeProgress.failedFiles.length > 0 && (
               <div className="text-center text-sm text-red-600">
-                Failed: {resizeProgress.failedFiles.length} files
+                {t("common.failedFiles", { count: resizeProgress.failedFiles.length })}
               </div>
             )}
           </div>
         ) : (
-          <span className="text-muted-foreground">Resizing images...</span>
+          <span className="text-muted-foreground">{t("resize.loading")}</span>
         )}
       </div>
   ) : null;
@@ -299,13 +318,13 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
   return (
     <>
       <Button variant="outline" className="w-full" onClick={() => setIsOpen(true)}>
-        Open Image Resizer
+        {t("resize.open")}
       </Button>
       {isOpen ? (
         <AppRndModalShell
           titleId="image-resizer-title"
-          title="PNG Image Resizer"
-          subtitle="Resize image files with ImageMagick"
+          title={t("resize.title")}
+          subtitle={t("resize.subtitle")}
           headerIcon={<Scaling className="h-5 w-5 text-primary" />}
           dimensions={IMAGE_RESIZE_DIMENSIONS}
           storageKey="app.rnd-size.image-resizer"
@@ -324,13 +343,13 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
               <div className="flex flex-col items-center justify-center p-8 text-center">
                 <Upload className="h-12 w-12 text-muted-foreground mb-4" />
                 <h3 className="text-lg font-medium text-foreground mb-2">
-                  Select image files to resize
+                  {t("resize.dropHint")}
                 </h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Batch resizing supported (PNG, JPG, BMP, GIF, WebP, TIFF)
+                  {t("resize.batchHint")}
                 </p>
                 <Button variant="outline" type="button">
-                  Browse Files
+                  {t("common.browse")}
                 </Button>
               </div>
             </Card>
@@ -339,7 +358,7 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
             <Card className="p-4">
               <div className="flex items-center justify-between mb-3">
                 <Label className="text-sm font-medium">
-                  Selected Image Files ({selectedImagePaths.length})
+                  {t("resize.selected", { count: selectedImagePaths.length })}
                 </Label>
                 <Button
                   variant="ghost"
@@ -364,11 +383,11 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
                     <Settings className="h-4 w-4" />
-                    Resize Dimensions
+                    {t("resize.dimensions")}
                   </Label>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="width-input">Width</Label>
+                      <Label htmlFor="width-input">{t("resize.width")}</Label>
                       <Input
                         id="width-input"
                         type="number"
@@ -384,7 +403,7 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="height-input">Height</Label>
+                      <Label htmlFor="height-input">{t("resize.height")}</Label>
                       <Input
                         id="height-input"
                         type="number"
@@ -401,14 +420,14 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    All selected images will be resized to {width}x{height} pixels
+                    {t("resize.willResize", { width, height })}
                   </p>
                 </div>
 
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
                     <FolderOpen className="h-4 w-4" />
-                    Output directory
+                    {t("resize.outputDirectory")}
                   </Label>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <Button
@@ -417,7 +436,7 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
                       className="w-full sm:w-auto shrink-0"
                       onClick={handleSelectOutputDirectory}
                     >
-                      Choose folder
+                      {t("resize.chooseFolder")}
                     </Button>
                     {outputDirectory ? (
                       <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -431,12 +450,12 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
                           className="h-8 shrink-0 px-2"
                           onClick={() => setOutputDirectory(null)}
                         >
-                          Clear
+                          {t("resize.clear")}
                         </Button>
                       </div>
                     ) : (
                       <p className="text-xs text-muted-foreground">
-                        Default: save next to each source file
+                        {t("resize.defaultOutput")}
                       </p>
                     )}
                   </div>
@@ -448,14 +467,14 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
                     checked={overwriteOriginal}
                     onCheckedChange={(checked) => setOverwriteOriginal(checked === true)}
                   />
-                  <Label htmlFor="overwrite">Overwrite original files</Label>
+                <Label htmlFor="overwrite">{t("common.overwrite")}</Label>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {overwriteOriginal
                     ? outputDirectory
-                      ? "Writes using the original file name inside the output folder; source files are not modified."
-                      : "Replaces each selected file in place."
-                    : "Saves as name_cov.ext in the output folder or next to the source file."}
+                      ? t("resize.overwriteToFolder")
+                      : t("resize.overwriteInPlace")
+                    : t("resize.saveAsCov")}
                 </p>
               </div>
 
@@ -466,14 +485,14 @@ export function ImageResizeTool({ onClose }: ImageResizeToolProps) {
                   onClick={handleReset}
                   className="flex-1"
                 >
-                  Reset
+                  {t("common.reset")}
                 </Button>
                 <Button
                   onClick={handleResize}
                   disabled={selectedImagePaths.length === 0}
                   className="flex-1"
                 >
-                  Resize All
+                  {t("resize.action")}
                 </Button>
               </div>
             </>

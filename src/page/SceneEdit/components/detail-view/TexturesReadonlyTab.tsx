@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -41,6 +42,7 @@ function TextureResolveRow({ entry }: { entry: TextureRefResolve }) {
 }
 
 export function TexturesReadonlyTab({ textureResolve, resolvedPaths }: TexturesReadonlyTabProps) {
+  const { t } = useTranslation("scene-page");
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const getScrollElement = useCallback(() => scrollRef.current, []);
   const rowVirtualizer = useVirtualizer({
@@ -53,7 +55,7 @@ export function TexturesReadonlyTab({ textureResolve, resolvedPaths }: TexturesR
   if (textureResolve.length === 0 && resolvedPaths.length === 0) {
     return (
       <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-        No texture references found
+        {t("detailView.emptyTextures")}
       </div>
     );
   }
@@ -66,10 +68,10 @@ export function TexturesReadonlyTab({ textureResolve, resolvedPaths }: TexturesR
   return (
     <div className="p-3 space-y-3">
       <div className="flex items-center gap-4 text-xs text-muted-foreground border-b pb-2">
-        <span>References: {textureResolve.length}</span>
-        <span className="text-green-600">Resolved: {resolvedCount}</span>
+        <span>{t("detailView.textureReferences", { count: textureResolve.length })}</span>
+        <span className="text-green-600">{t("detailView.textureResolved", { count: resolvedCount })}</span>
         {missingCount > 0 && (
-          <span className="text-destructive">Missing: {missingCount}</span>
+          <span className="text-destructive">{t("detailView.textureMissing", { count: missingCount })}</span>
         )}
       </div>
       <div ref={scrollRef} className="overflow-auto max-h-[500px]">

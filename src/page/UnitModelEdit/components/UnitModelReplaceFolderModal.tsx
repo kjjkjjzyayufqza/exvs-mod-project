@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 import type {
   UnitModelNumshbReplacePreview,
   UnitModelReplacePreview,
@@ -22,9 +23,10 @@ export type UnitModelReplaceScope = "full" | "numshb";
 
 const LIST_CAP = 10;
 
-function NameList({ items, empty = "none" }: { items: string[]; empty?: string }) {
+function NameList({ items, empty }: { items: string[]; empty?: string }) {
+  const { t } = useTranslation("unit-replace-folder");
   if (items.length === 0) {
-    return <span className="text-[10px] text-muted-foreground">{empty}</span>;
+    return <span className="text-[10px] text-muted-foreground">{empty ?? t("lists.none")}</span>;
   }
   const shown = items.slice(0, LIST_CAP);
   const extra = items.length - shown.length;
@@ -40,7 +42,7 @@ function NameList({ items, empty = "none" }: { items: string[]; empty?: string }
       ))}
       {extra > 0 ? (
         <li className="rounded px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-          +{extra} more
+          {t("lists.more", { count: extra })}
         </li>
       ) : null}
     </ul>
@@ -115,6 +117,7 @@ export function UnitModelReplaceFolderModal({
   const canConfirm = hasPreview && blockers.length === 0 && !busy;
   const identityName = fullPreview?.target.modelName ?? numshbPreview?.target.modelName ?? targetModelName;
   const identityIndex = fullPreview?.target.modelIndex ?? numshbPreview?.target.modelIndex ?? targetModelIndex;
+  const { t } = useTranslation("unit-replace-folder");
 
   return (
     <AlertDialog
@@ -127,10 +130,10 @@ export function UnitModelReplaceFolderModal({
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             <Replace className="h-4 w-4 text-primary" aria-hidden />
-            Replace model
+            {t("title")}
           </AlertDialogTitle>
           <AlertDialogDescription>
-            Choose whether to swap the whole SSBH set or overwrite only the mesh file.
+            {t("description")}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -140,23 +143,23 @@ export function UnitModelReplaceFolderModal({
               <FileBox className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="font-medium">Target identity is preserved</span>
+                  <span className="font-medium">{t("identity.preserved")}</span>
                   {identityIndex != null ? (
                     <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
-                      index {identityIndex}
+                      {t("identity.index", { index: identityIndex })}
                     </Badge>
                   ) : null}
                 </div>
                 <p className="mt-1 font-mono text-[11px]">{identityName}</p>
                 <p className="mt-1 text-[10px] text-muted-foreground">
-                  Model name, order, and NUHLPB stay on the target.
+                  {t("identity.help")}
                 </p>
               </div>
             </div>
           </section>
 
           <section className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-2.5">
-            <p className="text-[11px] font-medium">Replace scope</p>
+            <p className="text-[11px] font-medium">{t("scope.label")}</p>
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
               <button
                 type="button"
@@ -169,9 +172,9 @@ export function UnitModelReplaceFolderModal({
                     : "border-border/60 hover:bg-muted/40",
                 )}
               >
-                <span className="block text-[11px] font-medium">Full SSBH folder</span>
+                <span className="block text-[11px] font-medium">{t("scope.full.title")}</span>
                 <span className="mt-0.5 block text-[10px] text-muted-foreground">
-                  Swap mesh, model, skeleton, materials, and JNTTBL.
+                  {t("scope.full.help")}
                 </span>
               </button>
               <button
@@ -185,16 +188,16 @@ export function UnitModelReplaceFolderModal({
                     : "border-border/60 hover:bg-muted/40",
                 )}
               >
-                <span className="block text-[11px] font-medium">Mesh only (.numshb)</span>
+                <span className="block text-[11px] font-medium">{t("scope.numshb.title")}</span>
                 <span className="mt-0.5 block text-[10px] text-muted-foreground">
-                  Overwrite the existing NUMSHB. Leave every other file untouched.
+                  {t("scope.numshb.help")}
                 </span>
               </button>
             </div>
           </section>
 
           <section className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-2.5">
-            <p className="text-[11px] font-medium">Source</p>
+            <p className="text-[11px] font-medium">{t("source.label")}</p>
             {scope === "full" ? (
               <Button
                 type="button"
@@ -205,7 +208,7 @@ export function UnitModelReplaceFolderModal({
                 onClick={onChooseFullFolder}
               >
                 <FolderOpen className="h-3.5 w-3.5" aria-hidden />
-                Choose prepared SSBH folder
+                {t("source.full")}
               </Button>
             ) : (
               <div className="flex flex-wrap gap-1.5">
@@ -218,7 +221,7 @@ export function UnitModelReplaceFolderModal({
                   onClick={onChooseExistingNumshb}
                 >
                   <FolderOpen className="h-3.5 w-3.5" aria-hidden />
-                  Choose existing .numshb
+                  {t("source.numshb")}
                 </Button>
                 <Button
                   type="button"
@@ -229,7 +232,7 @@ export function UnitModelReplaceFolderModal({
                   onClick={onConvertFbx}
                 >
                   <FileUp className="h-3.5 w-3.5" aria-hidden />
-                  Convert FBX / DAE
+                  {t("source.convert")}
                 </Button>
               </div>
             )}
@@ -246,7 +249,7 @@ export function UnitModelReplaceFolderModal({
             <section className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-amber-700 dark:text-amber-300">
               <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium">
                 <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
-                Warnings
+                {t("warnings")}
               </p>
               <ul className="space-y-1">
                 {warnings.map((warning) => (
@@ -262,7 +265,7 @@ export function UnitModelReplaceFolderModal({
             <section className="rounded-md border border-red-500/40 bg-red-500/10 p-2.5 text-red-600 dark:text-red-400">
               <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium">
                 <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
-                Blockers
+                {t("blockers")}
               </p>
               <ul className="space-y-1">
                 {blockers.map((blocker) => (
@@ -277,15 +280,15 @@ export function UnitModelReplaceFolderModal({
 
         <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
           <AlertDialogCancel type="button" disabled={busy} onClick={onCancel}>
-            Cancel
+            {t("cancel")}
           </AlertDialogCancel>
           <Button type="button" disabled={!canConfirm} onClick={onConfirm}>
             {busy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
             {busy
-              ? "Replacing..."
+              ? t("replacing")
               : scope === "numshb"
-                ? "Replace mesh"
-                : "Replace contents"}
+                ? t("replaceMesh")
+                : t("replaceContents")}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -294,6 +297,7 @@ export function UnitModelReplaceFolderModal({
 }
 
 function FullReplacePreview({ preview }: { preview: UnitModelReplacePreview }) {
+  const { t } = useTranslation("unit-replace-folder");
   const skeleton = preview.compatibility.skeleton;
   const materials = preview.compatibility.materials;
   const textures = preview.textures;
@@ -307,13 +311,13 @@ function FullReplacePreview({ preview }: { preview: UnitModelReplacePreview }) {
       <section className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-2.5">
         <p className="flex items-center gap-1.5 text-[11px] font-medium">
           <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-          Compatibility
+          {t("preview.compatibility")}
         </p>
         <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
-          <CountRow label="Target bones" value={skeleton.targetBoneCount} />
-          <CountRow label="Source bones" value={skeleton.sourceBoneCount} />
+          <CountRow label={t("counts.targetBones")} value={skeleton.targetBoneCount} />
+          <CountRow label={t("counts.sourceBones")} value={skeleton.sourceBoneCount} />
           <CountRow
-            label="Matching names"
+            label={t("counts.matchingNames")}
             value={skeleton.matchingBoneNames}
             tone={
               skeleton.missingInSource.length > 0 || skeleton.newInSource.length > 0
@@ -324,25 +328,25 @@ function FullReplacePreview({ preview }: { preview: UnitModelReplacePreview }) {
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div>
-            <p className="text-[10px] text-muted-foreground">Missing in source</p>
+            <p className="text-[10px] text-muted-foreground">{t("lists.missingInSource")}</p>
             <NameList items={skeleton.missingInSource} />
           </div>
           <div>
-            <p className="text-[10px] text-muted-foreground">New in source</p>
+            <p className="text-[10px] text-muted-foreground">{t("lists.newInSource")}</p>
             <NameList items={skeleton.newInSource} />
           </div>
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <div>
-            <p className="text-[10px] text-muted-foreground">Kept materials</p>
+            <p className="text-[10px] text-muted-foreground">{t("lists.keptMaterials")}</p>
             <NameList items={materials.keptLabels} />
           </div>
           <div>
-            <p className="text-[10px] text-muted-foreground">Removed materials</p>
+            <p className="text-[10px] text-muted-foreground">{t("lists.removedMaterials")}</p>
             <NameList items={materials.removedLabels} />
           </div>
           <div>
-            <p className="text-[10px] text-muted-foreground">Added materials</p>
+            <p className="text-[10px] text-muted-foreground">{t("lists.addedMaterials")}</p>
             <NameList items={materials.addedLabels} />
           </div>
         </div>
@@ -350,21 +354,21 @@ function FullReplacePreview({ preview }: { preview: UnitModelReplacePreview }) {
       <section className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-2.5">
         <p className="flex items-center gap-1.5 text-[11px] font-medium">
           <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-          Texture commit plan
+          {t("preview.texturePlan")}
         </p>
         <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-          <CountRow label="Referenced" value={textures.referenced.length} />
-          <CountRow label="Copied" value={textures.copiedFromSource.length} />
-          <CountRow label="Reused" value={textures.reusedFromPool.length} />
+          <CountRow label={t("counts.referenced")} value={textures.referenced.length} />
+          <CountRow label={t("counts.copied")} value={textures.copiedFromSource.length} />
+          <CountRow label={t("counts.reused")} value={textures.reusedFromPool.length} />
           <CountRow
-            label="Missing"
+            label={t("counts.missing")}
             value={textures.missing.length}
             tone={textures.missing.length > 0 ? "warning" : "default"}
           />
         </div>
         {textures.orphanedAfterReplace.length > 0 ? (
           <div>
-            <p className="text-[10px] text-muted-foreground">May be removed after replace</p>
+            <p className="text-[10px] text-muted-foreground">{t("lists.orphaned")}</p>
             <NameList items={textures.orphanedAfterReplace} />
           </div>
         ) : null}
@@ -374,40 +378,41 @@ function FullReplacePreview({ preview }: { preview: UnitModelReplacePreview }) {
 }
 
 function NumshbReplacePreview({ preview }: { preview: UnitModelNumshbReplacePreview }) {
+  const { t } = useTranslation("unit-replace-folder");
   const objects = preview.meshObjects;
   const skeleton = preview.skeleton;
   return (
     <>
       <section className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-2.5">
-        <p className="text-[11px] font-medium">In-place overwrite</p>
+        <p className="text-[11px] font-medium">{t("preview.inPlace")}</p>
         <p className="font-mono text-[10px] text-muted-foreground">{preview.targetNumshbPath}</p>
         <p className="text-[10px] text-muted-foreground">
-          Untouched: NUMDLB, both NUMATB files, NUSKTB, JNTTBL, NUHLPB, textures, and structure JSON.
+          {t("preview.untouched")}
         </p>
       </section>
       <section className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-2.5">
         <p className="flex items-center gap-1.5 text-[11px] font-medium">
           <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-          Mesh objects vs NUMDLB
+          {t("preview.meshObjects")}
         </p>
         <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
-          <CountRow label="Objects" value={preview.stats.sourceObjectCount} />
-          <CountRow label="Vertices" value={preview.stats.sourceVertexCount} />
-          <CountRow label="Triangles" value={preview.stats.sourceTriangleCount} />
+          <CountRow label={t("counts.objects")} value={preview.stats.sourceObjectCount} />
+          <CountRow label={t("counts.vertices")} value={preview.stats.sourceVertexCount} />
+          <CountRow label={t("counts.triangles")} value={preview.stats.sourceTriangleCount} />
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <div>
-            <p className="text-[10px] text-muted-foreground">Kept</p>
+            <p className="text-[10px] text-muted-foreground">{t("lists.kept")}</p>
             <NameList items={objects.kept.map((item) => objectLabel(item.name, item.subindex))} />
           </div>
           <div>
-            <p className="text-[10px] text-muted-foreground">Missing in source</p>
+            <p className="text-[10px] text-muted-foreground">{t("lists.missingInSource")}</p>
             <NameList
               items={objects.missingInSource.map((item) => objectLabel(item.name, item.subindex))}
             />
           </div>
           <div>
-            <p className="text-[10px] text-muted-foreground">New in source</p>
+            <p className="text-[10px] text-muted-foreground">{t("lists.newInSource")}</p>
             <NameList
               items={objects.newInSource.map((item) => objectLabel(item.name, item.subindex))}
             />
@@ -415,16 +420,16 @@ function NumshbReplacePreview({ preview }: { preview: UnitModelNumshbReplacePrev
         </div>
       </section>
       <section className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-2.5">
-        <p className="text-[11px] font-medium">Skin bones vs target NUSKTB</p>
+        <p className="text-[11px] font-medium">{t("preview.skinBones")}</p>
         <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-          <CountRow label="Matching names" value={skeleton.matchingBoneNames} />
+          <CountRow label={t("counts.matchingNames")} value={skeleton.matchingBoneNames} />
           <CountRow
-            label="Missing in skeleton"
+            label={t("counts.missingInSkeleton")}
             value={skeleton.missingInTargetSkeleton.length}
             tone={skeleton.missingInTargetSkeleton.length > 0 ? "warning" : "default"}
           />
         </div>
-        <NameList items={skeleton.missingInTargetSkeleton} empty="all influence bones exist on the target skeleton" />
+        <NameList items={skeleton.missingInTargetSkeleton} empty={t("lists.allInfluenceBonesExist")} />
       </section>
     </>
   );

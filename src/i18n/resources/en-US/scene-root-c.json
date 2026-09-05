@@ -1,0 +1,18 @@
+{
+  "common": { "cancel": "Cancel" },
+  "textureFormat": { "selectPlaceholder": "Select DDS format" },
+  "texturePath": { "selectFile": "Select texture file" },
+  "textureReplace": {
+    "subtitle": "Choose the conversion format before selecting a source file",
+    "selectAndReplace": "Select File & Replace"
+  },
+  "texturePreview": {
+    "noPath": "No nutexb path available",
+    "loadFailed": "Failed to load preview",
+    "zoomOut": "Zoom out",
+    "resetZoom": "Reset zoom",
+    "zoomIn": "Zoom in",
+    "subtitle": "Texture preview and DDS format",
+    "loading": "Loading preview..."
+  }
+}

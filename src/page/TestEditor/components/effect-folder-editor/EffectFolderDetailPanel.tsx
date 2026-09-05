@@ -39,6 +39,7 @@ import {
   invalidateEffectNutexbPreviewCache,
 } from "./EffectNutexbPreview";
 import { crc32Ieee } from "@/utils/crc32Ieee";
+import { useTranslation } from "react-i18next";
 
 type EffectFolderDetailPanelProps = {
   item: EffectListItem | null;
@@ -112,6 +113,7 @@ function EditableFileHashEditor({
   structureJsonPath: string;
   onSaved?: () => void;
 }) {
+  const { t } = useTranslation("test-effect-detail");
   const [mode, setMode] = useState<HashEditMode>("value");
   const [valueInput, setValueInput] = useState(hash?.hex ?? "");
   const [crcSeed, setCrcSeed] = useState("");
@@ -142,13 +144,13 @@ function EditableFileHashEditor({
     if (resolvedSigned == null) {
       toast.error(
         mode === "crc32"
-          ? "Enter a non-empty string to compute CRC32."
-          : "Enter a valid hash (decimal or 0xHEX).",
+          ? t("errors.crcSeedRequired")
+          : t("errors.invalidHash"),
       );
       return;
     }
     if (!effectRoot.trim() || !structureJsonPath.trim()) {
-      toast.error("Effect folder paths are not available.");
+      toast.error(t("errors.pathsUnavailable"));
       return;
     }
 
@@ -162,10 +164,10 @@ function EditableFileHashEditor({
         hashId,
       });
       const preview = hashPreviewFromSigned(hashId);
-      toast.success(`Hash updated to ${preview.hex} (${preview.signed})`);
+      toast.success(t("success.hashUpdated", { hex: preview.hex, signed: preview.signed }));
       onSaved?.();
     } catch (error) {
-      toast.error("Failed to update file hash", {
+      toast.error(t("errors.hashUpdateFailed"), {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -183,9 +185,9 @@ function EditableFileHashEditor({
   return (
     <div className="space-y-2 border-b border-muted/60 py-2 text-[11px]">
       <div className="flex items-start justify-between gap-3">
-        <span className="shrink-0 text-muted-foreground">Hash</span>
+        <span className="shrink-0 text-muted-foreground">{t("labels.hash")}</span>
         {hash ? <HashValue hash={hash} /> : (
-          <span className="font-mono text-muted-foreground">unset</span>
+          <span className="font-mono text-muted-foreground">{t("states.unset")}</span>
         )}
       </div>
 
@@ -198,7 +200,7 @@ function EditableFileHashEditor({
           disabled={busy}
           onClick={() => setMode("value")}
         >
-          Direct value
+          {t("actions.directValue")}
         </Button>
         <Button
           type="button"
@@ -208,20 +210,20 @@ function EditableFileHashEditor({
           disabled={busy}
           onClick={() => setMode("crc32")}
         >
-          CRC32 string
+          {t("actions.crc32String")}
         </Button>
       </div>
 
       {mode === "value" ? (
         <div className="space-y-1">
           <Label htmlFor={`effect-file-hash-value-${fileIndex}`} className="text-[10px] text-muted-foreground">
-            Hex or signed/unsigned int
+            {t("labels.hashInput")}
           </Label>
           <Input
             id={`effect-file-hash-value-${fileIndex}`}
             value={valueInput}
             onChange={(event) => setValueInput(event.target.value)}
-            placeholder="0xDEADBEEF or -559038737"
+            placeholder={t("placeholders.hashInput")}
             className="h-8 font-mono text-[11px]"
             disabled={busy}
             spellCheck={false}
@@ -230,13 +232,13 @@ function EditableFileHashEditor({
       ) : (
         <div className="space-y-1">
           <Label htmlFor={`effect-file-hash-crc-${fileIndex}`} className="text-[10px] text-muted-foreground">
-            Seed string → IEEE CRC32 (UTF-8)
+            {t("labels.crcSeed")}
           </Label>
           <Input
             id={`effect-file-hash-crc-${fileIndex}`}
             value={crcSeed}
             onChange={(event) => setCrcSeed(event.target.value)}
-            placeholder="resource name seed"
+            placeholder={t("placeholders.crcSeed")}
             className="h-8 font-mono text-[11px]"
             disabled={busy}
             spellCheck={false}
@@ -248,14 +250,15 @@ function EditableFileHashEditor({
         <div className="min-w-0 font-mono text-[10px] text-muted-foreground">
           {resolvedHash ? (
             <span>
-              Will store int{" "}
+              {t("status.willStore", { signed: resolvedHash.signed, hex: resolvedHash.hex })}
+              {" "}
               <span className="text-foreground">{resolvedHash.signed}</span>
               {" · "}
               <span className="text-foreground">{resolvedHash.hex}</span>
-              {" "}(JSON number)
+              {" "}{t("status.jsonNumber")}
             </span>
           ) : (
-            <span>Preview unavailable until input is valid.</span>
+            <span>{t("states.previewUnavailable")}</span>
           )}
         </div>
         <Button
@@ -266,7 +269,7 @@ function EditableFileHashEditor({
           onClick={() => void handleApply()}
         >
           {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-          Apply hash
+          {t("actions.applyHash")}
         </Button>
       </div>
     </div>
@@ -274,8 +277,9 @@ function EditableFileHashEditor({
 }
 
 function ModelIdTable({ hashes }: { hashes: EffectFolderHash[] }) {
+  const { t } = useTranslation("test-effect-detail");
   if (hashes.length === 0) {
-    return <p className="text-[11px] text-muted-foreground">No model IDs.</p>;
+    return <p className="text-[11px] text-muted-foreground">{t("states.noModelIds")}</p>;
   }
 
   return (
@@ -283,8 +287,8 @@ function ModelIdTable({ hashes }: { hashes: EffectFolderHash[] }) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="h-8 text-[10px]">Hex</TableHead>
-            <TableHead className="h-8 text-[10px]">Int32</TableHead>
+            <TableHead className="h-8 text-[10px]">{t("columns.hex")}</TableHead>
+            <TableHead className="h-8 text-[10px]">{t("columns.int32")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -310,6 +314,7 @@ export function EffectFolderDetailPanel({
   onEfxbnWritten,
   onStructureMutated,
 }: EffectFolderDetailPanelProps) {
+  const { t } = useTranslation("test-effect-detail");
   const [fileDetailsOpen, setFileDetailsOpen] = useState(false);
   const focusedItemKey =
     item == null
@@ -326,7 +331,7 @@ export function EffectFolderDetailPanel({
     return (
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
         <div className="custom-scrollbar-thin min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4">
-          <p className="text-xs text-muted-foreground">Select an entry to inspect details.</p>
+          <p className="text-xs text-muted-foreground">{t("states.selectEntry")}</p>
           {inventory ? <EffectFolderResolutionPanel inventory={inventory} /> : null}
           {validation ? <ValidationResultPanel validation={validation} /> : null}
         </div>
@@ -362,10 +367,10 @@ export function EffectFolderDetailPanel({
                 <ChevronDown
                   className={`h-3.5 w-3.5 transition-transform ${fileDetailsOpen ? "rotate-0" : "-rotate-90"}`}
                 />
-                File details
+                {t("sections.fileDetails")}
               </Button>
             </CollapsibleTrigger>
-            <Badge variant="secondary" className="text-[10px]">
+            <Badge variant="secondary" className="text-[10px]" data-i18n-ignore="">
               efxbn
             </Badge>
           </div>
@@ -400,7 +405,7 @@ export function EffectFolderDetailPanel({
           ) : null}
           <div>
             <div className="mb-2 flex items-center gap-2">
-              <h3 className="text-sm font-semibold">{item.category.toUpperCase()} details</h3>
+              <h3 className="text-sm font-semibold">{t("sections.categoryDetails", { category: item.category.toUpperCase() })}</h3>
               <Badge variant="secondary" className="text-[10px]">
                 {item.category}
               </Badge>
@@ -468,6 +473,7 @@ function FileDetail({
   onOpenAsEffectProject?: (filePath: string) => void;
   hashEdit?: FileHashEditContext | null;
 }) {
+  const { t } = useTranslation("test-effect-detail");
   const file = item.item;
   const lowerPath = file.path.toLowerCase();
   const isEffectProject = lowerPath.endsWith(".effect_project");
@@ -494,10 +500,10 @@ function FileDetail({
         dialogPathKey: EFFECT_FOLDER_EXPORT_TEXTURE_DIALOG_PATH_KEY,
       });
       if (output) {
-        toast.success(`Exported ${fileBasename(output, "texture.png")}`);
+        toast.success(t("success.exported", { name: fileBasename(output, "texture.png") }));
       }
     } catch (error) {
-      toast.error("Failed to export nutexb to PNG", { description: String(error) });
+      toast.error(t("errors.exportFailed"), { description: String(error) });
     } finally {
       setBusy(null);
     }
@@ -509,7 +515,7 @@ function FileDetail({
       setReplaceOpen(false);
 
       const selected = await open({
-        title: `Replace ${filename}`,
+        title: t("dialogs.replaceTitle", { name: filename }),
         multiple: false,
         filters: [{ name: "Images", extensions: ["png", "dds", "tga"] }],
         defaultPath:
@@ -535,9 +541,9 @@ function FileDetail({
         });
         invalidateEffectNutexbPreviewCache(file.path);
         setPreviewRevision((value) => value + 1);
-        toast.success(`Replaced ${filename}`);
+        toast.success(t("success.replaced", { name: filename }));
       } catch (error) {
-        toast.error("Failed to replace effect texture", { description: String(error) });
+        toast.error(t("errors.replaceFailed"), { description: String(error) });
       } finally {
         setBusy(null);
       }
@@ -557,13 +563,13 @@ function FileDetail({
 
       <div className="rounded-md border p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <h4 className="text-xs font-medium">File identity</h4>
+          <h4 className="text-xs font-medium">{t("sections.fileIdentity")}</h4>
           {file.hash ? <HashBadge hash={file.hash} /> : null}
         </div>
-        <MetadataRow label="Name" value={file.name || file.fileBaseName} />
-        <MetadataRow label="Path" value={file.path} />
-        <MetadataRow label="Extension" value={file.actualExt} />
-        <MetadataRow label="File index" value={String(file.fileIndex)} />
+        <MetadataRow label={t("labels.name")} value={file.name || file.fileBaseName} />
+        <MetadataRow label={t("labels.path")} value={file.path} />
+        <MetadataRow label={t("labels.extension")} value={file.actualExt} />
+        <MetadataRow label={t("labels.fileIndex")} value={String(file.fileIndex)} />
         {hashEdit ? (
           <EditableFileHashEditor
             hash={file.hash}
@@ -573,16 +579,16 @@ function FileDetail({
             onSaved={hashEdit.onSaved}
           />
         ) : file.hash ? (
-          <HashMetadataRow label="Hash" hash={file.hash} />
+          <HashMetadataRow label={t("labels.hash")} hash={file.hash} />
         ) : null}
-        {file.unk2 ? <MetadataRow label="unk2" value={file.unk2} /> : null}
-        <MetadataRow label="Missing" value={file.missing ? "yes" : "no"} />
+        {file.unk2 ? <MetadataRow label={t("labels.unk2")} value={file.unk2} /> : null}
+        <MetadataRow label={t("labels.missing")} value={file.missing ? t("states.yes") : t("states.no")} />
       </div>
 
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant="outline" onClick={() => void openPath(file.path)}>
           <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-          Open file
+          {t("actions.openFile")}
         </Button>
         {canEditTexture ? (
           <>
@@ -592,14 +598,14 @@ function FileDetail({
               variant="outline"
               disabled={busy !== null}
               onClick={() => void handleExportPng()}
-              title="Export nutexb to PNG"
+              title={t("tooltips.exportPng")}
             >
               {busy === "export" ? (
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
               ) : (
                 <Download className="mr-1.5 h-3.5 w-3.5" />
               )}
-              Export PNG
+              {t("actions.exportPng")}
             </Button>
             <Button
               type="button"
@@ -607,20 +613,20 @@ function FileDetail({
               variant="outline"
               disabled={busy !== null}
               onClick={() => setReplaceOpen(true)}
-              title="Replace texture (keeps nutexb internal name)"
+              title={t("tooltips.replaceTexture")}
             >
               {busy === "replace" ? (
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
               ) : (
                 <Replace className="mr-1.5 h-3.5 w-3.5" />
               )}
-              Replace
+              {t("actions.replace")}
             </Button>
           </>
         ) : null}
         {isEffectProject && onOpenAsEffectProject ? (
           <Button type="button" size="sm" variant="outline" onClick={() => onOpenAsEffectProject(file.path)}>
-            Open effect project
+            {t("actions.openEffectProject")}
           </Button>
         ) : null}
       </div>
@@ -649,6 +655,7 @@ function EfxbnDetail({
   onOpenAsEffectProject?: (filePath: string) => void;
   hashEdit?: FileHashEditContext | null;
 }) {
+  const { t } = useTranslation("test-effect-detail");
   const file = item.item;
   const summary = file.efxbn;
 
@@ -656,24 +663,24 @@ function EfxbnDetail({
     <div className="space-y-3">
       <div className="rounded-md border p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <h4 className="text-xs font-medium">Effect resource</h4>
+          <h4 className="text-xs font-medium">{t("sections.effectResource")}</h4>
           {file.hash ? <HashBadge hash={file.hash} /> : null}
         </div>
         <div className="grid grid-cols-2 gap-2 text-[11px] md:grid-cols-4">
           <div className="rounded-md bg-muted/50 p-2">
-            <div className="text-muted-foreground">Effects</div>
+            <div className="text-muted-foreground">{t("labels.effects")}</div>
             <div className="font-mono text-sm">{summary?.effectCount ?? "-"}</div>
           </div>
           <div className="rounded-md bg-muted/50 p-2">
-            <div className="text-muted-foreground">Model refs</div>
+            <div className="text-muted-foreground">{t("labels.modelRefs")}</div>
             <div className="font-mono text-sm">{summary?.modelIds.filter((hash) => hash.signed !== 0).length ?? "-"}</div>
           </div>
           <div className="rounded-md bg-muted/50 p-2">
-            <div className="text-muted-foreground">Texture params</div>
+            <div className="text-muted-foreground">{t("labels.textureParams")}</div>
             <div className="font-mono text-sm">{summary?.textureParameters.length ?? "-"}</div>
           </div>
           <div className="rounded-md bg-muted/50 p-2">
-            <div className="text-muted-foreground">Unknowns</div>
+            <div className="text-muted-foreground">{t("labels.unknowns")}</div>
             <div className="font-mono text-sm">{summary?.todo.unknowns.length ?? "-"}</div>
           </div>
         </div>
@@ -685,15 +692,15 @@ function EfxbnDetail({
       />
       {summary ? (
         <div className="space-y-2 rounded-md border p-3">
-          <h4 className="text-xs font-medium">EFXBN parse</h4>
-          <MetadataRow label="Magic" value={summary.magic} />
-          <MetadataRow label="Version/flags" value={String(summary.versionOrFlags)} />
-          <MetadataRow label="Effect count" value={String(summary.effectCount)} />
-          <MetadataRow label="Model controls" value={String(summary.modelControlConfigCount)} />
-          <MetadataRow label="Curve keys" value={`${summary.curveKeyCount} keys`} />
-          <MetadataRow label="Texture parameters" value={String(summary.textureParameters.length)} />
+          <h4 className="text-xs font-medium">{t("sections.efxbnParse")}</h4>
+          <MetadataRow label={t("labels.magic")} value={summary.magic} />
+          <MetadataRow label={t("labels.versionFlags")} value={String(summary.versionOrFlags)} />
+          <MetadataRow label={t("labels.effectCount")} value={String(summary.effectCount)} />
+          <MetadataRow label={t("labels.modelControls")} value={String(summary.modelControlConfigCount)} />
+          <MetadataRow label={t("labels.curveKeys")} value={t("status.keys", { count: summary.curveKeyCount })} />
+          <MetadataRow label={t("labels.textureParameters")} value={String(summary.textureParameters.length)} />
           <div className="space-y-2">
-            <h5 className="text-[11px] font-medium text-muted-foreground">Model IDs</h5>
+            <h5 className="text-[11px] font-medium text-muted-foreground">{t("labels.modelIds")}</h5>
             <ModelIdTable hashes={summary.modelIds} />
           </div>
           {summary.effects.length > 0 ? (
@@ -702,10 +709,12 @@ function EfxbnDetail({
                 <TableHeader>
                   <TableRow>
                     <TableHead className="h-8 text-[10px]">#</TableHead>
-                    <TableHead className="h-8 text-[10px]">Model</TableHead>
-                    <TableHead className="h-8 text-[10px]">Animation</TableHead>
-                    <TableHead className="h-8 text-[10px]">Control refs</TableHead>
-                    <TableHead className="h-8 text-[10px]">textureHandle</TableHead>
+                    <TableHead className="h-8 text-[10px]">{t("columns.model")}</TableHead>
+                    <TableHead className="h-8 text-[10px]">{t("columns.animation")}</TableHead>
+                    <TableHead className="h-8 text-[10px]">{t("columns.controlRefs")}</TableHead>
+                    <TableHead className="h-8 text-[10px]" data-i18n-ignore="">
+                      {t("columns.textureHandle")}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -715,7 +724,7 @@ function EfxbnDetail({
                       <TableCell className="py-1 font-mono text-[10px]">{effect.modelHash.hex}</TableCell>
                       <TableCell className="py-1 font-mono text-[10px]">{effect.animationHash.hex}</TableCell>
                       <TableCell className="py-1 font-mono text-[10px]">
-                        {effect.controlReferences.filter((ref) => ref.selector !== 0 || ref.lookupIndex !== 0).length} active
+                        {t("status.active", { count: effect.controlReferences.filter((ref) => ref.selector !== 0 || ref.lookupIndex !== 0).length })}
                       </TableCell>
                       <TableCell className="py-1 font-mono text-[10px] tabular-nums">{effect.textureHandle}</TableCell>
                     </TableRow>
@@ -726,16 +735,16 @@ function EfxbnDetail({
           ) : null}
           {summary.textureParameters.length > 0 ? (
             <div className="space-y-2">
-              <h5 className="text-[11px] font-medium text-muted-foreground">Texture parameters</h5>
+              <h5 className="text-[11px] font-medium text-muted-foreground">{t("labels.textureParameters")}</h5>
               <div className="overflow-x-auto rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="h-8 text-[10px]">#</TableHead>
-                      <TableHead className="h-8 text-[10px]">Texture</TableHead>
-                      <TableHead className="h-8 text-[10px]">Addressing</TableHead>
-                      <TableHead className="h-8 text-[10px]">UV pattern</TableHead>
-                      <TableHead className="h-8 text-[10px]">Flags</TableHead>
+                      <TableHead className="h-8 text-[10px]">{t("columns.texture")}</TableHead>
+                      <TableHead className="h-8 text-[10px]">{t("columns.addressing")}</TableHead>
+                      <TableHead className="h-8 text-[10px]">{t("columns.uvPattern")}</TableHead>
+                      <TableHead className="h-8 text-[10px]">{t("columns.flags")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -745,7 +754,9 @@ function EfxbnDetail({
                         <TableCell className="py-1 font-mono text-[10px]">{parameter.colorMapHash.hex}</TableCell>
                         <TableCell className="py-1 font-mono text-[10px] tabular-nums">{parameter.addressingMode}</TableCell>
                         <TableCell className="py-1 font-mono text-[10px] tabular-nums">{parameter.uvPatternType}</TableCell>
-                        <TableCell className="py-1 font-mono text-[10px]">0x{parameter.textureSettingFlags.toString(16).toUpperCase()}</TableCell>
+                        <TableCell className="py-1 font-mono text-[10px]" data-i18n-ignore="">
+                          0x{parameter.textureSettingFlags.toString(16).toUpperCase()}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -755,7 +766,7 @@ function EfxbnDetail({
           ) : null}
           {summary.todo.unknowns.length > 0 ? (
             <div className="space-y-2">
-              <h5 className="text-[11px] font-medium text-muted-foreground">Unknown follow-up</h5>
+              <h5 className="text-[11px] font-medium text-muted-foreground">{t("sections.unknownFollowUp")}</h5>
               <div className="rounded-md border">
                 {summary.todo.unknowns.slice(0, 6).map((item) => (
                   <div key={item.field} className="border-b px-2 py-1.5 text-[11px] last:border-b-0">
@@ -778,20 +789,21 @@ function EfxbnDetail({
 }
 
 function ModelDetail({ item }: { item: Extract<EffectListItem, { category: "models" }> }) {
+  const { t } = useTranslation("test-effect-detail");
   const model = item.model;
 
   return (
     <div>
-      <MetadataRow label="Name" value={model.name} />
-      <HashMetadataRow label="Hash" hash={model.hash} />
-      <MetadataRow label="Folder unk3" value={String(model.folderUnk3)} />
+      <MetadataRow label={t("labels.name")} value={model.name} />
+      <HashMetadataRow label={t("labels.hash")} hash={model.hash} />
+      <MetadataRow label={t("labels.folderUnk3")} value={String(model.folderUnk3)} />
       <MetadataRow
-        label="Missing required"
-        value={model.missingRequiredExts.length > 0 ? model.missingRequiredExts.join(", ") : "none"}
+        label={t("labels.missingRequired")}
+        value={model.missingRequiredExts.length > 0 ? model.missingRequiredExts.join(", ") : t("states.none")}
       />
 
       <div className="mt-3">
-        <h4 className="mb-2 text-xs font-medium">Model files ({model.files.length})</h4>
+        <h4 className="mb-2 text-xs font-medium">{t("sections.modelFiles", { count: model.files.length })}</h4>
         <ul className="space-y-1">
           {model.files.map((file) => (
             <li
@@ -808,7 +820,7 @@ function ModelDetail({ item }: { item: Extract<EffectListItem, { category: "mode
               <div className="flex shrink-0 items-center gap-1">
                 {file.missing ? (
                   <Badge variant="destructive" className="text-[10px]">
-                    missing
+                    {t("states.missing")}
                   </Badge>
                 ) : null}
                 <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => void openPath(file.path)}>
@@ -824,19 +836,20 @@ function ModelDetail({ item }: { item: Extract<EffectListItem, { category: "mode
 }
 
 function ValidationResultPanel({ validation }: { validation: EffectFolderValidationResult }) {
+  const { t } = useTranslation("test-effect-detail");
   return (
     <div className="rounded-md border p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h4 className="text-xs font-medium">Last validation</h4>
+        <h4 className="text-xs font-medium">{t("sections.lastValidation")}</h4>
         <Badge variant={validation.valid ? "default" : "destructive"} className="text-[10px]">
-          {validation.valid ? "valid" : "invalid"}
+          {validation.valid ? t("states.valid") : t("states.invalid")}
         </Badge>
       </div>
       <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground">
-        <span>EFXBN: {validation.summary.efxbnCount}</span>
-        <span>Models: {validation.summary.modelCount}</span>
-        <span>Textures: {validation.summary.textureCount}</span>
-        <span>Unresolved models: {validation.summary.unresolvedModelIdCount}</span>
+        <span>{t("labels.validationEfxbn")}: {validation.summary.efxbnCount}</span>
+        <span>{t("labels.validationModels")}: {validation.summary.modelCount}</span>
+        <span>{t("labels.validationTextures")}: {validation.summary.textureCount}</span>
+        <span>{t("labels.unresolvedModels")}: {validation.summary.unresolvedModelIdCount}</span>
       </div>
       {validation.errors.length > 0 ? (
         <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-[11px] text-destructive">

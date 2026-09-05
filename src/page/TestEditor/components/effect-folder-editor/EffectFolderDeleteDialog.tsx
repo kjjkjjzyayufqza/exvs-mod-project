@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -28,6 +29,7 @@ export function EffectFolderDeleteDialog({
   busy = false,
   onConfirm,
 }: EffectFolderDeleteDialogProps) {
+  const { t } = useTranslation("test-effect-folder");
   const [deleteFiles, setDeleteFiles] = useState(false);
 
   useEffect(() => {
@@ -39,11 +41,9 @@ export function EffectFolderDeleteDialog({
     <AlertDialog open={dialogOpen} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Remove effect entries</AlertDialogTitle>
+          <AlertDialogTitle>{t("deleteDialog.title")}</AlertDialogTitle>
           <AlertDialogDescription>
-            Remove {selectionCount} selected entr{selectionCount === 1 ? "y" : "ies"} from{" "}
-            <code className="rounded bg-muted px-1 py-0.5">_structure.json</code>. This updates the structure file
-            immediately.
+            {t("deleteDialog.description", { count: selectionCount, file: "_structure.json" })}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -55,12 +55,12 @@ export function EffectFolderDeleteDialog({
             disabled={busy}
           />
           <Label htmlFor="effect-delete-files" className="text-sm font-normal">
-            Also delete underlying files from the effect pack folder
+            {t("deleteDialog.alsoDelete")}
           </Label>
         </div>
 
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={busy}>{t("actions.cancel")}</AlertDialogCancel>
           <Button
             type="button"
             variant="destructive"
@@ -68,7 +68,7 @@ export function EffectFolderDeleteDialog({
             onClick={() => void onConfirm(deleteFiles)}
           >
             {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Remove
+            {t("actions.remove")}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

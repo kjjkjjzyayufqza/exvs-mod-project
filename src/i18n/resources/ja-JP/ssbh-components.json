@@ -1,0 +1,14 @@
+{
+  "bone.searchLabel": "ボーンのインデックスまたは名前を検索",
+  "bone.searchPlaceholder": "インデックスまたは名前を検索…",
+  "bone.listLabel": "ボーン一覧",
+  "bone.showingFirst": "{{total}} 個中、先頭 {{shown}} 個を表示。入力して検索してください。",
+  "bone.listCapped": "パフォーマンスのため一覧を制限しています。検索を絞り込んでください。",
+  "common.noMatches": "一致する項目がありません。",
+  "material.listLabel": "マテリアルラベル",
+  "material.showingFirst": "{{total}} 個中、先頭 {{shown}} 個を表示。入力して検索してください。",
+  "material.useCustom": "カスタムを使用",
+  "material.empty": "マテリアルラベルはまだありません。上でカスタム名を入力してください。",
+  "material.placeholder": "マテリアルを選択または入力…",
+  "material.showSuggestions": "マテリアルラベルの候補を表示"
+}

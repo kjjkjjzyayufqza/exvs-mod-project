@@ -12,6 +12,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -74,26 +75,11 @@ function fileNameFromPath(path: string): string {
   return path.split(/[/\\]/).pop() ?? path;
 }
 
-const PREVIEW_STAGE_OPTIONS: Array<{
-  value: HktCollisionDisplayStage;
-  label: string;
-  hint: string;
-}> = [
-  { value: "merged", label: "Merged", hint: "before simplify" },
-  { value: "hktInput", label: "HKT input", hint: "encoded mesh" },
-  { value: "decodedHkt", label: "Decoded", hint: "after Havok" },
+const PREVIEW_STAGE_OPTIONS: HktCollisionDisplayStage[] = [
+  "merged",
+  "hktInput",
+  "decodedHkt",
 ];
-
-function previewStageLabel(stage: HktCollisionDisplayStage): string {
-  switch (stage) {
-    case "merged":
-      return "Merged mesh";
-    case "hktInput":
-      return "HKT input mesh";
-    case "decodedHkt":
-      return "Decoded HKT mesh";
-  }
-}
 
 function defaultReviewObjPath(sourcePath: string): string {
   const lastSlash = Math.max(sourcePath.lastIndexOf("/"), sourcePath.lastIndexOf("\\"));
@@ -112,6 +98,7 @@ export function GenerateHktFromModelDialog({
   targetName,
   onReplaced,
 }: GenerateHktFromModelDialogProps) {
+  const { t } = useTranslation("scene-dae-hkt");
   const [sourcePath, setSourcePath] = useState<string | null>(null);
   const [collisionScale, setCollisionScale] = useState(DEFAULT_HKT_COLLISION_SCALE);
   const [collisionUpAxis, setCollisionUpAxis] = useState<SsbhDaeUpAxis>(
@@ -270,7 +257,7 @@ export function GenerateHktFromModelDialog({
   const pickFile = async () => {
     try {
       const selected = await open({
-        title: "Select model file for HKT collision",
+        title: t("generateFromModel.selectFile"),
         filters: [{ name: "Model", extensions: ["dae", "fbx"] }],
         multiple: false,
         defaultPath: await getStoredDialogDefaultPath(SCENE_GENERATE_HKT_FROM_MODEL_DIALOG_PATH_KEY),
@@ -281,7 +268,7 @@ export function GenerateHktFromModelDialog({
       setSourcePath(next);
       invalidatePreviewArtifacts();
     } catch (err) {
-      toast.error("Failed to open file picker", { description: String(err) });
+      toast.error(t("generateFromModel.openPickerFailed"), { description: String(err) });
     }
   };
 
@@ -289,14 +276,14 @@ export function GenerateHktFromModelDialog({
     if (!sourcePath || !sourceName) return;
     try {
       const outputPath = await save({
-        title: "Export HKT input review OBJ",
+        title: t("generateFromModel.exportReviewObj"),
         defaultPath: defaultReviewObjPath(sourcePath),
         filters: [{ name: "Wavefront OBJ", extensions: ["obj"] }],
       });
       if (!outputPath) return;
 
       setObjExporting(true);
-      toast.loading("Exporting HKT input OBJ...", { id: "hkt-input-review-obj" });
+      toast.loading(t("generateFromModel.exportingToast"), { id: "hkt-input-review-obj" });
       const result = await sceneExportHktCollisionReviewObjPath({
         filePath: sourcePath,
         sourceName,
@@ -304,19 +291,22 @@ export function GenerateHktFromModelDialog({
         stage: "hktInput",
         outputPath,
       });
-      toast.success("HKT input OBJ exported", {
+      toast.success(t("generateFromModel.objExported"), {
         id: "hkt-input-review-obj",
-        description: `${formatTriangleCount(result.triangleCount)} triangles written to ${result.outputPath}`,
+        description: t("generateFromModel.objExportedDetail", {
+          triangles: formatTriangleCount(result.triangleCount),
+          path: result.outputPath,
+        }),
       });
     } catch (err) {
-      toast.error("Export OBJ failed", {
+      toast.error(t("generateFromModel.exportObjFailed"), {
         id: "hkt-input-review-obj",
         description: err instanceof Error ? err.message : String(err),
       });
     } finally {
       setObjExporting(false);
     }
-  }, [sourcePath, sourceName, importConfig]);
+  }, [sourcePath, sourceName, importConfig, t]);
 
   const canApply =
     Boolean(sessionId && targetImportId && sourcePath && sourceName) &&
@@ -339,11 +329,11 @@ export function GenerateHktFromModelDialog({
       );
 
       if (usedCachedPreview) {
-        toast.loading(`Applying previewed HKT from ${sourceName}...`, { id: "hkt-from-model" });
+        toast.loading(t("generateFromModel.applyingPreviewed", { name: sourceName }), { id: "hkt-from-model" });
         hktBytes = cachedHkt.hktBytes;
         hktXml = cachedHkt.hktXml;
       } else {
-        toast.loading(`Generating HKT from ${sourceName}...`, { id: "hkt-from-model" });
+        toast.loading(t("generateFromModel.generatingFrom", { name: sourceName }), { id: "hkt-from-model" });
         setHktGenerating(true);
         const payload = await sceneGenerateReplacementHktFromDaePath(
           sourcePath,
@@ -369,15 +359,15 @@ export function GenerateHktFromModelDialog({
         hktXml,
       );
       await onReplaced(targetImportId);
-      toast.success(`HKT replaced for ${targetName}`, {
+      toast.success(t("generateFromModel.replacedFor", { name: targetName }), {
         id: "hkt-from-model",
         description: usedCachedPreview
-          ? `Applied previewed collision from ${sourceName}`
-          : `Generated and applied collision from ${sourceName}`,
+          ? t("generateFromModel.appliedPreviewed", { name: sourceName })
+          : t("generateFromModel.generatedApplied", { name: sourceName }),
       });
       onOpenChange(false);
     } catch (err) {
-      toast.error("Generate HKT failed", {
+      toast.error(t("generateFromModel.generateFailed"), {
         id: "hkt-from-model",
         description: err instanceof Error ? err.message : String(err),
       });
@@ -389,17 +379,17 @@ export function GenerateHktFromModelDialog({
 
   const applyButtonLabel = applying
     ? hktGenerating
-      ? "Generating HKT..."
-      : "Applying HKT..."
-    : "Generate & Replace HKT";
+      ? t("generateFromModel.generatingHkt")
+      : t("generateFromModel.applyingHkt")
+    : t("generateFromModel.generateReplace");
 
   if (!isOpen) return null;
 
   return (
     <AppRndModalShell
       titleId="generate-hkt-from-model-title"
-      title="Generate HKT from New Model"
-      subtitle={`Replace collision for ${targetName}`}
+      title={t("generateFromModel.title")}
+      subtitle={t("generateFromModel.subtitle", { name: targetName })}
       headerIcon={<Sparkles className="h-5 w-5 text-emerald-400" />}
       dimensions={GENERATE_HKT_FROM_MODEL_MODAL_DIMENSIONS}
       storageKey="app.rnd-size.generate-hkt-from-model"
@@ -414,13 +404,12 @@ export function GenerateHktFromModelDialog({
           <p className="flex min-w-0 flex-1 basis-full items-start gap-1.5 text-pretty text-[11px] leading-snug text-muted-foreground break-words sm:basis-auto">
             <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>
-              Preview is optional and caches the HKT. Generate & Replace uses the cache when
-              available, otherwise generates fresh collision data.
+              {t("generateFromModel.footerHint")}
             </span>
           </p>
           <div className="flex shrink-0 items-center gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={applying}>
-              Cancel
+              {t("generateFromModel.cancel")}
             </Button>
             <Button
               onClick={() => void handleApply()}
@@ -440,10 +429,7 @@ export function GenerateHktFromModelDialog({
     >
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <p className="shrink-0 border-b border-border/60 px-5 py-3 text-xs text-muted-foreground">
-          Read a fresh DAE or FBX, rebuild a Havok collision shape, and replace the collision for{" "}
-          <span className="font-medium text-foreground">{targetName}</span>. Generate & Replace uses the previewed HKT
-          when one exists; otherwise it generates fresh collision data and writes map_hit.hkt into the open stage folder
-          when one is loaded.
+          {t("generateFromModel.intro", { name: targetName })}
         </p>
         <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
           {/* Controls */}
@@ -452,17 +438,19 @@ export function GenerateHktFromModelDialog({
               <section className="min-w-0 overflow-hidden rounded-lg border border-border/60 bg-muted/20 p-3">
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   <Replace className="h-3.5 w-3.5" />
-                  Replace target
+                  {t("generateFromModel.replaceTarget")}
                 </div>
-                <p className="mt-1.5 break-all text-sm font-medium">{targetName}</p>
+                <p className="mt-1.5 break-all text-sm font-medium" data-i18n-ignore="">
+                  {targetName}
+                </p>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  Its current collision is overwritten when you apply.
+                  {t("generateFromModel.overwriteHint")}
                 </p>
               </section>
 
               <section className="min-w-0 space-y-2 overflow-hidden">
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Source model
+                  {t("generateFromModel.sourceModel")}
                 </div>
                 <Button
                   type="button"
@@ -472,15 +460,15 @@ export function GenerateHktFromModelDialog({
                   disabled={applying}
                 >
                   <FileUp className="mr-2 h-4 w-4" />
-                  {sourcePath ? "Choose a different model" : "Choose model file (.dae / .fbx)"}
+                  {sourcePath ? t("generateFromModel.chooseDifferent") : t("generateFromModel.chooseFile")}
                 </Button>
                 {sourcePath ? (
-                  <p className="break-all rounded-md bg-muted/30 px-2 py-1.5 font-mono text-[11px] text-muted-foreground">
+                  <p className="break-all rounded-md bg-muted/30 px-2 py-1.5 font-mono text-[11px] text-muted-foreground" data-i18n-ignore="">
                     {sourcePath}
                   </p>
                 ) : (
                   <p className="text-[11px] text-muted-foreground">
-                    Only the geometry is read. The model is converted straight to collision; nothing else is imported.
+                    {t("generateFromModel.geometryOnly")}
                   </p>
                 )}
               </section>
@@ -507,17 +495,17 @@ export function GenerateHktFromModelDialog({
                   <section className="min-w-0 space-y-2 overflow-hidden">
                     <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                       <Layers3 className="h-3.5 w-3.5" />
-                      Review stage
+                      {t("generateFromModel.reviewStage")}
                     </div>
                     <div className="grid min-w-0 grid-cols-3 gap-1 rounded-lg border border-border/60 bg-muted/20 p-1">
                       {PREVIEW_STAGE_OPTIONS.map((stage) => {
-                        const active = previewStage === stage.value;
+                        const active = previewStage === stage;
                         return (
                           <button
-                            key={stage.value}
+                            key={stage}
                             type="button"
                             aria-pressed={active}
-                            onClick={() => handlePreviewStageChange(stage.value)}
+                            onClick={() => handlePreviewStageChange(stage)}
                             disabled={previewLoading || hktGenerating || applying || objExporting}
                             className={cn(
                               "flex min-h-[50px] min-w-0 flex-col items-center justify-center rounded-md px-1.5 py-1.5 text-center transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/50 disabled:pointer-events-none disabled:opacity-50",
@@ -527,10 +515,10 @@ export function GenerateHktFromModelDialog({
                             )}
                           >
                             <span className="whitespace-nowrap text-[11px] font-semibold">
-                              {stage.label}
+                              {t(`generateFromModel.stages.${stage}.label`)}
                             </span>
                             <span className="text-[9px] leading-tight opacity-80">
-                              {stage.hint}
+                              {t(`generateFromModel.stages.${stage}.hint`)}
                             </span>
                           </button>
                         );
@@ -548,7 +536,7 @@ export function GenerateHktFromModelDialog({
                       ) : (
                         <Download className="mr-2 h-3.5 w-3.5" />
                       )}
-                      {objExporting ? "Exporting OBJ..." : "Export HKT input OBJ"}
+                      {objExporting ? t("generateFromModel.exportingObj") : t("generateFromModel.exportHktInputObj")}
                     </Button>
                   </section>
                 </>
@@ -556,22 +544,23 @@ export function GenerateHktFromModelDialog({
 
               {previewUsesPreHavokMesh && meshPreview ? (
                 <p className="text-[11px] text-amber-400/90">
-                  Havok SDK XML decode unavailable. Preview shows the HKT input mesh instead of
-                  decoded HKT.
+                  {t("generateFromModel.decodeUnavailable")}
                 </p>
               ) : null}
 
               {meshPreview && !previewLoading && !hktGenerating ? (
                 <p className="text-[11px] text-emerald-400/90">
-                  {previewStageLabel(meshPreview.stage)} ready (
-                  {formatTriangleCount(meshPreview.triangleCount)} triangles, ~
-                  {formatTriangleCount(meshPreview.triangleCount * 2)} primitive keys).
+                  {t("generateFromModel.readyStats", {
+                    stage: t(`generateFromModel.stages.${meshPreview.stage}.mesh`),
+                    triangles: formatTriangleCount(meshPreview.triangleCount),
+                    keys: formatTriangleCount(meshPreview.triangleCount * 2),
+                  })}
                   {hasValidCachedHkt && !previewUsesPreHavokMesh
-                    ? " HKT is cached in memory; Generate & Replace will apply this preview."
+                    ? t("generateFromModel.cachedHint")
                     : ""}
                 </p>
               ) : meshPreview && (previewLoading || hktGenerating || objExporting) ? (
-                <p className="text-[11px] text-muted-foreground">Building preview...</p>
+                <p className="text-[11px] text-muted-foreground">{t("generateFromModel.buildingPreview")}</p>
               ) : null}
             </div>
           </ScrollArea>
@@ -585,13 +574,17 @@ export function GenerateHktFromModelDialog({
                 <Boxes className="h-8 w-8 text-muted-foreground/50" />
                 <p className="text-sm text-muted-foreground">
                   {previewError
-                    ? "Could not build a collision preview"
+                    ? t("generateFromModel.previewFailed")
                     : sourcePath
-                      ? `Click Preview to build the ${previewStageLabel(previewStage)}`
-                      : "Select a model, then preview its collision"}
+                      ? t("generateFromModel.clickPreview", {
+                          stage: t(`generateFromModel.stages.${previewStage}.mesh`),
+                        })
+                      : t("generateFromModel.selectThenPreview")}
                 </p>
                 {previewError ? (
-                  <p className="max-w-sm break-words text-[11px] text-destructive">{previewError}</p>
+                  <p className="max-w-sm break-words text-[11px] text-destructive" data-i18n-ignore="">
+                    {previewError}
+                  </p>
                 ) : null}
                 {sourcePath ? (
                   <Button
@@ -607,8 +600,8 @@ export function GenerateHktFromModelDialog({
                       <Eye className="mr-2 h-4 w-4" />
                     )}
                     {previewLoading
-                      ? "Generating HKT..."
-                      : "Preview"}
+                      ? t("generateFromModel.generatingHkt")
+                      : t("generateFromModel.preview")}
                   </Button>
                 ) : null}
               </div>
@@ -629,7 +622,7 @@ export function GenerateHktFromModelDialog({
                   ) : (
                     <Download className="mr-1.5 h-3 w-3" />
                   )}
-                  {objExporting ? "Exporting..." : "OBJ"}
+                  {objExporting ? t("generateFromModel.exporting") : t("generateFromModel.obj")}
                 </Button>
                 <Button
                   type="button"
@@ -644,7 +637,7 @@ export function GenerateHktFromModelDialog({
                   ) : (
                     <Eye className="mr-1.5 h-3 w-3" />
                   )}
-                  {previewLoading ? "Updating..." : "Refresh"}
+                  {previewLoading ? t("generateFromModel.updating") : t("generateFromModel.refresh")}
                 </Button>
               </div>
             ) : null}
@@ -652,25 +645,25 @@ export function GenerateHktFromModelDialog({
             {previewLoading && !meshPreview ? (
               <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-md bg-background/80 px-2 py-1 text-[11px] text-muted-foreground backdrop-blur">
                 <Loader2 className="h-3 w-3 animate-spin" />
-                Building preview
+                {t("generateFromModel.buildingPreviewShort")}
               </div>
             ) : null}
 
             {meshPreview ? (
               <div className="pointer-events-none absolute left-3 top-3 grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5 rounded-md bg-background/75 px-2.5 py-2 font-mono text-[10px] text-muted-foreground backdrop-blur">
-                <span className="text-foreground">Stage</span>
+                <span className="text-foreground">{t("preview.stage")}</span>
                 <span className="text-right tabular-nums text-emerald-400">
-                  {previewStageLabel(meshPreview.stage)}
+                  {t(`generateFromModel.stages.${meshPreview.stage}.mesh`)}
                 </span>
-                <span>Render</span>
+                <span>{t("preview.render")}</span>
                 <span className="text-right tabular-nums">{formatTriangleCount(meshPreview.renderTriangleCount)}</span>
-                <span>Merged</span>
+                <span>{t("preview.merged")}</span>
                 <span className="text-right tabular-nums">{formatTriangleCount(meshPreview.mergedTriangleCount)}</span>
-                <span className="text-foreground">Triangles</span>
+                <span className="text-foreground">{t("preview.triangles")}</span>
                 <span className="text-right tabular-nums text-emerald-400">
                   {formatTriangleCount(meshPreview.triangleCount)}
                 </span>
-                <span>Vertices</span>
+                <span>{t("preview.vertices")}</span>
                 <span className="text-right tabular-nums">{formatTriangleCount(meshPreview.vertexCount)}</span>
               </div>
             ) : null}

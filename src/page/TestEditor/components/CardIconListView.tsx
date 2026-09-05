@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { NutexbIconListView } from "./NutexbIconListView";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 
@@ -14,13 +15,14 @@ export default function CardIconListView({
   onUnsavedChanges,
   workspaceDocument,
 }: CardIconListViewProps) {
+  const { t } = useTranslation("test-lists");
   return (
     <NutexbIconListView
       folderPath={folderPath}
       workspaceDocument={workspaceDocument}
       contentId="card-icons"
       hash="0x49235031"
-      title="Card Icon List"
+      title={t("cardIcon.title")}
       isActive={isActive}
       onUnsavedChanges={onUnsavedChanges}
     />

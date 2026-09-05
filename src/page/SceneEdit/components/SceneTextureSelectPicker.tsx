@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useSceneTextureManagerStore } from "../store/sceneTextureManagerStore";
 import { useNumatbTextureOptionsOverride } from "@/components/ssbh-model-preview/numatbTextureOptionsContext";
+import { useTranslation } from "react-i18next";
 
 const MAX_OPTIONS_WITHOUT_QUERY = 80;
 const MAX_OPTIONS_FILTERED = 200;
@@ -119,6 +120,7 @@ export function SceneTextureSelectPicker({
   className,
 }: SceneTextureSelectPickerProps) {
   const instanceId = useId();
+  const { t } = useTranslation("scene-texture");
   const listboxId = `${instanceId}-texture-listbox`;
   const inputId = `${instanceId}-texture-input`;
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -238,18 +240,17 @@ export function SceneTextureSelectPicker({
               <div
                 id={listboxId}
                 role="listbox"
-                aria-label="Scene textures"
+                aria-label={t("picker.sceneTextures")}
                 className="p-1"
               >
                   {textureOptions.length > MAX_OPTIONS_WITHOUT_QUERY && !queryTrim && (
                     <p className="px-2 py-1 text-[10px] text-muted-foreground">
-                      Showing first {MAX_OPTIONS_WITHOUT_QUERY} of{" "}
-                      {textureOptions.length} textures. Type to search.
+                      {t("picker.showingFirst", { shown: MAX_OPTIONS_WITHOUT_QUERY, total: textureOptions.length })}
                     </p>
                   )}
                   {filteredTruncated && (
                     <p className="px-2 py-1 text-[10px] text-muted-foreground">
-                      List capped for performance. Narrow your search.
+                      {t("picker.listCapped")}
                     </p>
                   )}
 
@@ -289,20 +290,20 @@ export function SceneTextureSelectPicker({
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => selectOption(inputValue.trim())}
                     >
-                      <span className="text-muted-foreground">Use custom:</span>
+                      <span className="text-muted-foreground">{t("picker.useCustom")}:</span>
                       <span className="truncate font-mono">{inputValue.trim()}</span>
                     </button>
                   )}
 
                   {filteredOptions.length === 0 && !queryTrim && (
                     <p className="px-2 py-4 text-center text-[11px] text-muted-foreground">
-                      No scene textures yet. Type a custom name above.
+                      {t("picker.noTextures")}
                     </p>
                   )}
 
                   {filteredOptions.length === 0 && queryTrim && exactMatch && (
                     <p className="px-2 py-4 text-center text-[11px] text-muted-foreground">
-                      No additional matches.
+                      {t("picker.noAdditionalMatches")}
                     </p>
                   )}
               </div>
@@ -325,7 +326,7 @@ export function SceneTextureSelectPicker({
           value={inputValue}
           disabled={disabled}
           autoComplete="off"
-          placeholder="Select or type texture..."
+          placeholder={t("picker.placeholder")}
           className="h-7 pr-7 text-xs"
           onFocus={() => setOpen(true)}
           onChange={(event) => setInputOnly(event.target.value)}
@@ -354,7 +355,7 @@ export function SceneTextureSelectPicker({
           variant="ghost"
           size="icon"
           disabled={disabled}
-          aria-label="Show texture suggestions"
+          aria-label={t("picker.showSuggestions")}
           className="absolute right-0 top-0 h-7 w-7 shrink-0 text-muted-foreground"
           onClick={() => setOpen((current) => !current)}
         >

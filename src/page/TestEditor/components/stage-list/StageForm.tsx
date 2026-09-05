@@ -12,26 +12,27 @@ import type { StageIconIndexPickerGroup } from "./StageIconIndexPickerPopover";
 import { STAGE_HASH_SLOTS } from "@/services/resourceRegistry/types";
 import { defaultStageSlotSeed, type StageHashSlot } from "@/services/resourceRegistry/stageRegistrySync";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
+import { useTranslation } from "react-i18next";
 
-const NUMERIC_FIELDS = [
-  { name: "entryId" as const, label: "id" },
-  { name: "fileName" as const, label: "fileName" },
-  { name: "selectOrderDefault" as const, label: "selectOrderDefault (选关顺序)" },
-  { name: "selectOrderAlt" as const, label: "selectOrderAlt (选关顺序-alt)" },
-  { name: "recordLookupId" as const, label: "recordLookupId" },
-  { name: "randomSelectWeightDefault" as const, label: "randomSelectWeightDefault (随机权重)" },
-  { name: "randomSelectWeightAlt" as const, label: "randomSelectWeightAlt (随机权重-alt)" },
-  { name: "seriesAltGroupId" as const, label: "seriesAltGroupId" },
-  { name: "seriesDefaultGroupId" as const, label: "seriesDefaultGroupId" },
-  { name: "vsSD" as const, label: "vs_s_d (加载背景-黑色)" },
-  { name: "vsSL" as const, label: "vs_s_l (加载背景)" },
-  { name: "vsSn" as const, label: "vs_sn (地图名称图片)" },
-  { name: "unk0x0c" as const, label: "unk0x0c" },
-  { name: "unk0x14" as const, label: "unk0x14" },
-  { name: "unk0x34" as const, label: "unk0x34" },
-  { name: "unk0x38" as const, label: "unk0x38" },
-  { name: "iconIndex" as const, label: "Icon Index(同时索引两张图)" },
-];
+const NUMERIC_FIELD_NAMES = [
+  "entryId",
+  "fileName",
+  "selectOrderDefault",
+  "selectOrderAlt",
+  "recordLookupId",
+  "randomSelectWeightDefault",
+  "randomSelectWeightAlt",
+  "seriesAltGroupId",
+  "seriesDefaultGroupId",
+  "vsSD",
+  "vsSL",
+  "vsSn",
+  "unk0x0c",
+  "unk0x14",
+  "unk0x34",
+  "unk0x38",
+  "iconIndex",
+] as const;
 
 const FILE_NAME_FIELDS = new Set(["fileName", "vsSD", "vsSL", "vsSn"]);
 
@@ -68,6 +69,7 @@ export function StageForm({
   stageIconIndexPickerError = null,
   resourceRegistry,
 }: StageFormProps) {
+  const { t } = useTranslation("test-stage-list-view");
   const [stageIconIndexPickerOpen, setStageIconIndexPickerOpen] = useState(false);
   const [slotSeeds, setSlotSeeds] = useState<Partial<Record<StageHashSlot, string>>>({});
 
@@ -117,7 +119,7 @@ export function StageForm({
     [editable, stage, onChange]
   );
 
-  const getNumericValue = (fieldName: (typeof NUMERIC_FIELDS)[number]["name"]): number => {
+  const getNumericValue = (fieldName: (typeof NUMERIC_FIELD_NAMES)[number]): number => {
     const value = stage[fieldName];
     if (typeof value === "number" && Number.isFinite(value)) return value;
     return 0;
@@ -127,12 +129,12 @@ export function StageForm({
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-sm font-medium text-muted-foreground">Stage #{index}</div>
+          <div className="text-sm font-medium text-muted-foreground">{t("form.stageNumber", { index })}</div>
           {stage.name?.trim() ? (
             <div className="text-sm font-semibold truncate">{stage.name}</div>
           ) : null}
-          <div className="text-[11px] font-mono text-muted-foreground tabular-nums">
-            ID: {stage.entryId}
+          <div className="text-[11px] font-mono text-muted-foreground tabular-nums" data-i18n-ignore="">
+            {t("form.idLabel", { id: stage.entryId })}
           </div>
         </div>
         {resourceRegistry ? (
@@ -146,7 +148,7 @@ export function StageForm({
         ) : null}
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor={`name-${index}`} className="text-xs">name</Label>
+        <Label htmlFor={`name-${index}`} className="text-xs">{t("form.name")}</Label>
         <Input
           id={`name-${index}`}
           type="text"
@@ -157,20 +159,20 @@ export function StageForm({
         />
       </div>
       <div className="grid grid-cols-2 gap-2">
-        {NUMERIC_FIELDS.map((field) => (
+        {NUMERIC_FIELD_NAMES.map((name) => (
           <DualValueProperty
-            key={field.name}
-            label={field.label}
+            key={name}
+            label={t(`form.fields.${name}`)}
             labelExtra={
-              FILE_NAME_FIELDS.has(field.name) ? (
+              FILE_NAME_FIELDS.has(name) ? (
                 <StageFileNameStatusIcons
-                  fileNameValue={getNumericValue(field.name)}
+                  fileNameValue={getNumericValue(name)}
                   obDplCachePath={obDplCachePath}
                   obModPath={obModPath}
                   stageModelRouteRootPath={stageModelRouteRootPath}
                   onReveal={onReveal}
                 />
-              ) : field.name === "iconIndex" ? (
+              ) : name === "iconIndex" ? (
                 <StageIconIndexPickerPopover
                   onSelect={(idx) => handleFieldChange("iconIndex", idx)}
                   groups={stageIconIndexPickerGroups}
@@ -182,8 +184,8 @@ export function StageForm({
                 />
               ) : undefined
             }
-            value={getNumericValue(field.name)}
-            property={`${field.name}-${index}`}
+            value={getNumericValue(name)}
+            property={`${name}-${index}`}
             editable={editable}
             editingProperty={null}
             editValue=""
@@ -196,12 +198,12 @@ export function StageForm({
             editOnRowClick={false}
             mode="live"
             showHex
-            onCommit={(nextValue) => handleFieldChange(field.name, nextValue)}
+            onCommit={(nextValue) => handleFieldChange(name, nextValue)}
             onLiveIntInputFocus={
-              field.name === "iconIndex" ? () => setStageIconIndexPickerOpen(true) : undefined
+              name === "iconIndex" ? () => setStageIconIndexPickerOpen(true) : undefined
             }
             onLiveIntInputClick={
-              field.name === "iconIndex" ? () => setStageIconIndexPickerOpen(true) : undefined
+              name === "iconIndex" ? () => setStageIconIndexPickerOpen(true) : undefined
             }
           />
         ))}
@@ -209,7 +211,7 @@ export function StageForm({
 
       {resourceRegistry ? (
         <div className="space-y-2 border-t pt-3">
-          <div className="text-xs font-medium text-muted-foreground">Resource seeds (CRC32)</div>
+          <div className="text-xs font-medium text-muted-foreground">{t("form.resourceSeeds")}</div>
           <div className="grid grid-cols-1 gap-2">
             {(["fileName", "vsSD", "vsSL", "vsSn"] as const).map((slot) => (
               <ResourceSeedField

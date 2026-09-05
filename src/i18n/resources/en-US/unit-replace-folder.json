@@ -1,0 +1,65 @@
+{
+  "title": "Replace model",
+  "description": "Choose whether to swap the whole SSBH set or overwrite only the mesh file.",
+  "identity": {
+    "preserved": "Target identity is preserved",
+    "index": "index {{index}}",
+    "help": "Model name, order, and NUHLPB stay on the target."
+  },
+  "scope": {
+    "label": "Replace scope",
+    "full": {
+      "title": "Full SSBH folder",
+      "help": "Swap mesh, model, skeleton, materials, and JNTTBL."
+    },
+    "numshb": {
+      "title": "Mesh only (.numshb)",
+      "help": "Overwrite the existing NUMSHB. Leave every other file untouched."
+    }
+  },
+  "source": {
+    "label": "Source",
+    "full": "Choose prepared SSBH folder",
+    "numshb": "Choose existing .numshb",
+    "convert": "Convert FBX / DAE"
+  },
+  "warnings": "Warnings",
+  "blockers": "Blockers",
+  "cancel": "Cancel",
+  "replacing": "Replacing...",
+  "replaceMesh": "Replace mesh",
+  "replaceContents": "Replace contents",
+  "preview": {
+    "compatibility": "Compatibility",
+    "texturePlan": "Texture commit plan",
+    "inPlace": "In-place overwrite",
+    "untouched": "Untouched: NUMDLB, both NUMATB files, NUSKTB, JNTTBL, NUHLPB, textures, and structure JSON.",
+    "meshObjects": "Mesh objects vs NUMDLB",
+    "skinBones": "Skin bones vs target NUSKTB"
+  },
+  "counts": {
+    "targetBones": "Target bones",
+    "sourceBones": "Source bones",
+    "matchingNames": "Matching names",
+    "referenced": "Referenced",
+    "copied": "Copied",
+    "reused": "Reused",
+    "missing": "Missing",
+    "objects": "Objects",
+    "vertices": "Vertices",
+    "triangles": "Triangles",
+    "missingInSkeleton": "Missing in skeleton"
+  },
+  "lists": {
+    "missingInSource": "Missing in source",
+    "newInSource": "New in source",
+    "keptMaterials": "Kept materials",
+    "removedMaterials": "Removed materials",
+    "addedMaterials": "Added materials",
+    "orphaned": "May be removed after replace",
+    "kept": "Kept",
+    "allInfluenceBonesExist": "all influence bones exist on the target skeleton",
+    "none": "None",
+    "more": "+{{count}} more"
+  }
+}

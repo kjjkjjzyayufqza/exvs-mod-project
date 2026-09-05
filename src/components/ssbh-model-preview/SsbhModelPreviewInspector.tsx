@@ -3,6 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { save } from "@tauri-apps/plugin-dialog";
 import { Bone, ChevronDown, ChevronRight, Database, Eye, EyeOff, FileDown, Info, Layout, List, Search, Settings2 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -62,6 +63,7 @@ type SsbhModelPreviewInspectorProps = {
 };
 
 export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPreviewInspectorProps) {
+  const { t } = useTranslation("ssbh-inspector");
   const isFlush = layout === "flush";
   const pairGridClass = isFlush ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2";
   const tripleGridClass = isFlush ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-3";
@@ -111,7 +113,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
       : suggestedName;
 
     const outputDaePath = await save({
-      title: "Export preview mesh to COLLADA",
+      title: t("actions.exportPreviewMesh"),
       filters: [{ name: "COLLADA", extensions: ["dae"] }],
       defaultPath,
     });
@@ -131,14 +133,14 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
       });
       rememberDialogSelection(DialogLastPathKey.ssbhDaeExportDae, daePath, "file");
       const texLine =
-        stats.texturesExported > 0 ? ` · PNG textures: ${stats.texturesExported}` : "";
-      toast.success("Exported COLLADA", {
-        description: `${daePath}\nObjects: ${stats.objectsExported} · Triangles: ${stats.trianglesExported}${texLine}`,
+        stats.texturesExported > 0 ? t("success.pngTextures", { count: stats.texturesExported }) : "";
+      toast.success(t("success.exportedCollada"), {
+        description: t("success.exportSummary", { path: daePath, objects: stats.objectsExported, triangles: stats.trianglesExported, textures: texLine }),
       });
     } finally {
       setDaeExportBusy(false);
     }
-  }, [p.bundle, p.workspaceRoot, daeExportScaleText, daeExportUpAxis, daeExportNumatbTextures]);
+  }, [p.bundle, p.workspaceRoot, daeExportScaleText, daeExportUpAxis, daeExportNumatbTextures, t]);
 
   const scopedDraws = useMemo(
     () => {
@@ -313,24 +315,23 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
           aria-live="polite"
         >
           {p.loading ? (
-            <span>Loading model from disk…</span>
+          <span>{t("states.loadingModel")}</span>
           ) : (
             <span
               className="block truncate"
               title={p.textureDecodeProgress?.currentLabel ?? undefined}
             >
-              Decoding unique textures ({p.textureDecodeProgress?.done ?? 0}/{p.textureDecodeProgress?.total ?? 0}
-              {p.textureDecodeProgress?.currentLabel ? ` — ${p.textureDecodeProgress.currentLabel}` : ""})
+              {t("states.decodingTextures", { done: p.textureDecodeProgress?.done ?? 0, total: p.textureDecodeProgress?.total ?? 0, current: p.textureDecodeProgress?.currentLabel ? ` — ${p.textureDecodeProgress.currentLabel}` : "" })}
             </span>
           )}
         </div>
       ) : null}
       {p.previewInstances.length > 0 ? (
-        <MayaSection title="Collection" icon={<Layout className="h-3.5 w-3.5" />}>
+          <MayaSection title={t("sections.collection")} icon={<Layout className="h-3.5 w-3.5" />}>
           <div className="flex flex-col gap-3">
             <div className={cn("grid gap-2", pairGridClass)}>
               <div className="flex flex-col gap-1.5">
-                <Label className="text-[10px] text-muted-foreground">View range</Label>
+                <Label className="text-[10px] text-muted-foreground">{t("labels.viewRange")}</Label>
                 <ToggleGroup
                   type="single"
                   value={p.previewViewMode}
@@ -340,12 +341,12 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                   variant="outline"
                   className="flex w-full justify-start gap-1"
                 >
-                  <ToggleGroupItem value="all" className="h-7 px-2 text-[10px]">All models</ToggleGroupItem>
-                  <ToggleGroupItem value="single" className="h-7 px-2 text-[10px]">Active only</ToggleGroupItem>
+                  <ToggleGroupItem value="all" className="h-7 px-2 text-[10px]">{t("filters.allModels")}</ToggleGroupItem>
+                  <ToggleGroupItem value="single" className="h-7 px-2 text-[10px]">{t("filters.activeOnly")}</ToggleGroupItem>
                 </ToggleGroup>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label className="text-[10px] text-muted-foreground">Control range</Label>
+                <Label className="text-[10px] text-muted-foreground">{t("labels.controlRange")}</Label>
                 <ToggleGroup
                   type="single"
                   value={p.previewControlScope}
@@ -355,26 +356,26 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                   variant="outline"
                   className="flex w-full justify-start gap-1"
                 >
-                  <ToggleGroupItem value="all" className="h-7 px-2 text-[10px]">All models</ToggleGroupItem>
-                  <ToggleGroupItem value="single" className="h-7 px-2 text-[10px]">Active only</ToggleGroupItem>
+                  <ToggleGroupItem value="all" className="h-7 px-2 text-[10px]">{t("filters.allModels")}</ToggleGroupItem>
+                  <ToggleGroupItem value="single" className="h-7 px-2 text-[10px]">{t("filters.activeOnly")}</ToggleGroupItem>
                 </ToggleGroup>
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-[10px] text-muted-foreground">Collection search</Label>
+              <Label className="text-[10px] text-muted-foreground">{t("labels.collectionSearch")}</Label>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   className="h-8 pl-7 text-[11px]"
                   value={p.previewCollectionQuery}
                   onChange={(event) => p.setPreviewCollectionQuery(event.target.value)}
-                  placeholder="Search label or path"
+                  placeholder={t("search.placeholder")}
                 />
               </div>
             </div>
             <div className="flex items-center justify-between border-b pb-2">
               <span className="text-[10px] text-muted-foreground">
-                {p.previewCollectionItems.length}/{p.previewInstances.length} models shown
+                {t("stats.modelsShown", { shown: p.previewCollectionItems.length, total: p.previewInstances.length })}
               </span>
               <Button
                 type="button"
@@ -383,7 +384,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                 className="h-6 px-2 text-[9px] uppercase tracking-tighter"
                 onClick={p.showAllPreviewInstances}
               >
-                {p.previewCollectionAllVisible ? "Hide all" : "Show all"}
+                {p.previewCollectionAllVisible ? t("actions.hideAll") : t("actions.showAll")}
               </Button>
             </div>
             <div ref={collectionListRef} className="h-[220px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-muted">
@@ -410,7 +411,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                         <button
                           type="button"
                           className="shrink-0 cursor-pointer text-muted-foreground hover:text-foreground"
-                          title={visible ? "Hide model" : "Show model"}
+                          title={visible ? t("actions.hideModel") : t("actions.showModel")}
                           onClick={() => p.setPreviewInstanceVisible(inst.id, !visible)}
                         >
                           {visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
@@ -441,11 +442,11 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
           </div>
         </MayaSection>
       ) : null}
-      <MayaSection title="Display Settings" icon={<Settings2 className="h-3.5 w-3.5" />}>
+      <MayaSection title={t("sections.displaySettings")} icon={<Settings2 className="h-3.5 w-3.5" />}>
         <div className={cn("grid gap-x-4 gap-y-2", pairGridClass)}>
           <div className={cn("flex flex-col gap-1.5", !isFlush && "sm:col-span-2")}>
-            <Label className="text-[11px] text-muted-foreground" title="Bloom + warm key lights (cortiz2894/stylized-components)">
-              Preview render style
+            <Label className="text-[11px] text-muted-foreground" title={t("help.bloomLights")}>
+              {t("labels.previewRenderStyle")}
             </Label>
             <Select
               value={p.previewRenderStyle}
@@ -456,73 +457,72 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="standard" className="text-[11px]">
-                  Standard
+                  {t("renderStyle.standard")}
                 </SelectItem>
                 <SelectItem value="anime" className="text-[11px]">
-                  Anime (bloom + warm lights)
+                  {t("renderStyle.anime")}
                 </SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="flex items-center justify-between gap-2">
-            <Label className="text-[11px] text-muted-foreground">Wireframe</Label>
+            <Label className="text-[11px] text-muted-foreground">{t("labels.wireframe")}</Label>
             <Switch checked={p.wireframe} onCheckedChange={p.setWireframe} />
           </div>
           <div className="flex items-center justify-between gap-2">
-            <Label className="text-[11px] text-muted-foreground">Skeleton</Label>
+            <Label className="text-[11px] text-muted-foreground">{t("labels.skeleton")}</Label>
             <Switch checked={p.showSkeleton} onCheckedChange={p.setShowSkeleton} disabled={!skeletonToggleEnabled} />
           </div>
           <div className="flex items-center justify-between gap-2">
-            <Label className="text-[11px] text-muted-foreground">Grid</Label>
+            <Label className="text-[11px] text-muted-foreground">{t("labels.grid")}</Label>
             <Switch checked={p.showGrid} onCheckedChange={p.setShowGrid} />
           </div>
           <div className="flex items-center justify-between gap-2">
-            <Label className="text-[11px] text-muted-foreground">Axes</Label>
+            <Label className="text-[11px] text-muted-foreground">{t("labels.axes")}</Label>
             <Switch checked={p.showAxesGizmo} onCheckedChange={p.setShowAxesGizmo} />
           </div>
           <div className="flex items-center justify-between gap-2">
-            <Label className="text-[11px] text-muted-foreground">Stats</Label>
+            <Label className="text-[11px] text-muted-foreground">{t("labels.stats")}</Label>
             <Switch checked={p.showStats} onCheckedChange={p.setShowStats} />
           </div>
           <div className="flex items-center justify-between gap-2">
-            <Label className="text-[11px] text-muted-foreground">Texture Flip Y</Label>
+            <Label className="text-[11px] text-muted-foreground">{t("labels.textureFlipY")}</Label>
             <Switch checked={p.textureFlipY} onCheckedChange={p.setTextureFlipY} />
           </div>
           <div className="flex items-center justify-between gap-2">
-            <Label className="text-[11px] text-muted-foreground" title="Mirror mesh UV horizontally (U → 1−U)">
-              Flip UV U
+            <Label className="text-[11px] text-muted-foreground" title={t("help.flipUvU")}>
+              {t("labels.flipUvU")}
             </Label>
             <Switch checked={p.uvFlipU} onCheckedChange={p.setUvFlipU} />
           </div>
           <div className="flex items-center justify-between gap-2">
-            <Label className="text-[11px] text-muted-foreground" title="Mirror mesh UV vertically (V → 1−V)">
-              Flip UV V
+            <Label className="text-[11px] text-muted-foreground" title={t("help.flipUvV")}>
+              {t("labels.flipUvV")}
             </Label>
             <Switch checked={p.uvFlipV} onCheckedChange={p.setUvFlipV} />
           </div>
           <div className="flex items-center justify-between gap-2">
-            <Label className="text-[11px] text-muted-foreground">Normal Map</Label>
+            <Label className="text-[11px] text-muted-foreground">{t("labels.normalMap")}</Label>
             <Switch checked={p.normalMapEnabled} onCheckedChange={p.setNormalMapEnabled} />
           </div>
         </div>
       </MayaSection>
 
-      <MayaSection title="Export COLLADA" icon={<FileDown className="h-3.5 w-3.5" />} defaultOpen={false}>
+      <MayaSection title={t("sections.exportCollada")} icon={<FileDown className="h-3.5 w-3.5" />} defaultOpen={false}>
         <div className="flex flex-col gap-3">
           <p className="text-[9px] leading-snug text-muted-foreground">
-            Writes the same mesh (and skeleton when present) as the 3D preview from the loaded model folder to a .dae file.
-            Optional: export diffuse nutexb textures referenced in numatb as PNG next to the DAE and bind them in the COLLADA file.
+            {t("help.exportCollada")}
           </p>
           {p.bundle?.modlPath ? (
-            <p className="truncate font-mono text-[10px] text-muted-foreground" title={p.bundle.modlPath}>
+            <p className="truncate font-mono text-[10px] text-muted-foreground" title={p.bundle.modlPath} data-i18n-ignore="">
               NUMDLB: {p.bundle.modlPath}
             </p>
           ) : (
-            <p className="text-[10px] text-muted-foreground">Load a model in the viewport to enable export.</p>
+            <p className="text-[10px] text-muted-foreground">{t("export.loadModelFirst")}</p>
           )}
           <div className={cn("grid grid-cols-1 gap-3", !isFlush && "sm:grid-cols-2")}>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-[11px] text-muted-foreground">Scale</Label>
+              <Label className="text-[11px] text-muted-foreground">{t("labels.scale")}</Label>
               <Input
                 className="h-8 text-[11px]"
                 value={daeExportScaleText}
@@ -531,7 +531,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-[11px] text-muted-foreground">Up axis</Label>
+              <Label className="text-[11px] text-muted-foreground">{t("labels.upAxis")}</Label>
               <Select
                 value={daeExportUpAxis}
                 onValueChange={(v) => setDaeExportUpAxis(v as SsbhDaeUpAxis)}
@@ -542,13 +542,13 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="y_up" className="text-[11px]">
-                    Y-up
+                    {t("upAxis.yUp")}
                   </SelectItem>
                   <SelectItem value="z_up" className="text-[11px]">
-                    Z-up
+                    {t("upAxis.zUp")}
                   </SelectItem>
                   <SelectItem value="none" className="text-[11px]">
-                    None
+                    {t("upAxis.none")}
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -562,7 +562,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
               className="mt-0.5"
             />
             <span className="text-muted-foreground">
-              Export numatb diffuse textures (nutexb → PNG in the same folder as the .dae, update DAE references)
+              {t("export.numatbTextures")}
             </span>
           </label>
           <Button
@@ -578,22 +578,21 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
             }}
           >
             <FileDown className="mr-1.5 h-3.5 w-3.5" />
-            {daeExportBusy ? "Exporting…" : "Export to .dae…"}
+            {daeExportBusy ? t("actions.exporting") : t("actions.exportDae")}
           </Button>
         </div>
       </MayaSection>
 
-      <MayaSection title="Texture cache" icon={<Database className="h-3.5 w-3.5" />} defaultOpen={false}>
+      <MayaSection title={t("sections.textureCache")} icon={<Database className="h-3.5 w-3.5" />} defaultOpen={false}>
         <div className="flex flex-col gap-2">
           <p className="text-[9px] leading-snug text-muted-foreground">
-            Keys use full-file CRC32 (IEEE) from Rust; any nutexb byte change produces a new key. Clearing revokes in-memory
-            blob URLs and removes persisted PNG entries (IndexedDB).
+            {t("help.textureCache")}
           </p>
           <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
             <span>
-              Memory: {textureCacheStats?.memoryEntries ?? "—"} · Persistent:{" "}
+              {t("stats.memory")} {textureCacheStats?.memoryEntries ?? "—"} · {t("stats.persistent")}{" "}
               {textureCacheStats?.idbEntries === null || textureCacheStats?.idbEntries === undefined
-                ? "n/a"
+                ? t("stats.notAvailable")
                 : textureCacheStats.idbEntries}
             </span>
             <Button
@@ -603,7 +602,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
               className="h-7 px-2 text-[9px]"
               onClick={() => void refreshTextureCacheStats()}
             >
-              Refresh stats
+              {t("actions.refreshStats")}
             </Button>
           </div>
           <div className="flex flex-wrap gap-1">
@@ -615,49 +614,49 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
               onClick={async () => {
                 await clearNutexbPreviewCacheAsync();
                 await refreshTextureCacheStats();
-                toast.success("Texture preview cache cleared");
+                toast.success(t("success.cacheCleared"));
               }}
             >
-              Clear all
+              {t("actions.clearAll")}
             </Button>
           </div>
         </div>
       </MayaSection>
 
-      <MayaSection title="Material Debug" icon={<Info className="h-3.5 w-3.5" />} defaultOpen={false}>
+      <MayaSection title={t("sections.materialDebug")} icon={<Info className="h-3.5 w-3.5" />} defaultOpen={false}>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label className="text-[11px] text-muted-foreground">Debug view mode</Label>
+            <Label className="text-[11px] text-muted-foreground">{t("labels.debugViewMode")}</Label>
             <Select value={p.materialDebugViewMode} onValueChange={(v) => p.setMaterialDebugViewMode(v as typeof p.materialDebugViewMode)}>
               <SelectTrigger className="h-8 text-[11px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="full" className="text-[11px]">Full</SelectItem>
-                <SelectItem value="baseColor" className="text-[11px]">Base color only</SelectItem>
-                <SelectItem value="normals" className="text-[11px]">Normals only</SelectItem>
-                <SelectItem value="roughnessMetalness" className="text-[11px]">Roughness/metalness</SelectItem>
-                <SelectItem value="emissive" className="text-[11px]">Emissive only</SelectItem>
-                <SelectItem value="reflection" className="text-[11px]">Reflection only</SelectItem>
+                <SelectItem value="full" className="text-[11px]">{t("debugView.full")}</SelectItem>
+                <SelectItem value="baseColor" className="text-[11px]">{t("debugView.baseColor")}</SelectItem>
+                <SelectItem value="normals" className="text-[11px]">{t("debugView.normals")}</SelectItem>
+                <SelectItem value="roughnessMetalness" className="text-[11px]">{t("debugView.roughnessMetalness")}</SelectItem>
+                <SelectItem value="emissive" className="text-[11px]">{t("debugView.emissive")}</SelectItem>
+                <SelectItem value="reflection" className="text-[11px]">{t("debugView.reflection")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label className="text-[11px] text-muted-foreground">Inspect draw</Label>
+            <Label className="text-[11px] text-muted-foreground">{t("labels.inspectDraw")}</Label>
             <Select
               value={p.selectedDebugDrawKey ?? "__none__"}
               onValueChange={(v) => p.setSelectedDebugDrawKey(v === "__none__" ? null : v)}
               disabled={debugRows.length === 0}
             >
               <SelectTrigger className="h-8 text-[11px]">
-                <SelectValue placeholder="Select draw" />
+                <SelectValue placeholder={t("material.selectDraw")} />
               </SelectTrigger>
               <SelectContent className="max-h-[220px]">
                 <SelectItem value="__none__" className="text-[11px]">
-                  None
+                  {t("material.none")}
                 </SelectItem>
                 {debugRows.map((r) => (
-                  <SelectItem key={r.key} value={r.key} className="text-[11px] font-mono">
+                  <SelectItem key={r.key} value={r.key} className="text-[11px] font-mono" data-i18n-ignore="">
                     {r.materialLabel} ({r.key})
                   </SelectItem>
                 ))}
@@ -667,7 +666,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
 
           <div className="max-h-[220px] space-y-1 overflow-y-auto pr-1 text-[10px]">
             {debugRows.map((r) => (
-              <div key={r.key} className="rounded border border-border/60 p-2">
+              <div key={r.key} className="rounded border border-border/60 p-2" data-i18n-ignore="">
                 <div className="font-medium">{r.materialLabel}</div>
                 <div className="font-mono text-muted-foreground">{r.shaderLabel || "shader: <none>"}</div>
                 <div className="mt-1 flex items-center gap-2 text-[9px] uppercase text-muted-foreground">
@@ -678,14 +677,13 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
               </div>
             ))}
             {!debugRows.length ? (
-              <span className="text-[10px] italic text-muted-foreground">No materials available</span>
+              <span className="text-[10px] italic text-muted-foreground">{t("material.noMaterials")}</span>
             ) : null}
           </div>
           <div className="min-w-0 space-y-2 rounded border border-border/60 p-2">
-            <div className="font-medium text-[11px]">Preview texture decoding</div>
+            <div className="font-medium text-[11px]">{t("material.previewDecoding")}</div>
             <p className="text-[9px] leading-snug text-muted-foreground">
-              Uncheck a slot to skip loading that texture for all meshes (faster preview, less GPU memory). Paths below
-              still show what the material references on disk.
+              {t("help.previewDecoding")}
             </p>
             <div className="flex flex-wrap gap-1">
               <Button
@@ -695,7 +693,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                 className="h-7 px-2 text-[9px]"
                 onClick={() => p.setAllTextureSlotsLoadEnabled(true)}
               >
-                Load all
+                {t("actions.loadAll")}
               </Button>
               <Button
                 type="button"
@@ -704,7 +702,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                 className="h-7 px-2 text-[9px]"
                 onClick={() => p.setAllTextureSlotsLoadEnabled(false)}
               >
-                Load none
+                {t("actions.loadNone")}
               </Button>
             </div>
             <div
@@ -712,6 +710,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                 "grid max-h-[200px] grid-cols-1 gap-x-3 gap-y-1.5 overflow-y-auto overflow-x-hidden pr-0.5",
                 !isFlush && "sm:grid-cols-2",
               )}
+              data-i18n-ignore=""
             >
               {TEXTURE_PREVIEW_SLOT_META.map(({ key, label }) => (
                 <label
@@ -732,15 +731,15 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
           {selectedDebugRow && selectedBinding ? (
             <div className="min-w-0 overflow-hidden rounded border border-border/60">
               <div className="border-b border-border/50 bg-muted/20 px-2 py-1.5">
-                <div className="font-medium text-[11px]">Selected Material Details</div>
-                <div className="mt-1 wrap-break-word font-mono text-[10px] text-muted-foreground leading-snug">
+                <div className="font-medium text-[11px]">{t("material.selectedDetails")}</div>
+                <div className="mt-1 wrap-break-word font-mono text-[10px] text-muted-foreground leading-snug" data-i18n-ignore="">
                   {selectedBinding.materialLabel}
                 </div>
-                <div className="wrap-break-word font-mono text-[10px] text-muted-foreground leading-snug">
+                <div className="wrap-break-word font-mono text-[10px] text-muted-foreground leading-snug" data-i18n-ignore="">
                   {selectedBinding.shaderLabel || "<no shader>"}
                 </div>
               </div>
-              <div className="max-h-[min(42vh,360px)] overflow-y-auto overflow-x-hidden px-2 py-2">
+              <div className="max-h-[min(42vh,360px)] overflow-y-auto overflow-x-hidden px-2 py-2" data-i18n-ignore="">
                 <div className="space-y-2 text-[10px]">
                   {TEXTURE_PREVIEW_SLOT_META.map(({ key, short }) => {
                     const pathField = TEXTURE_SLOT_TO_PATH_FIELD[key];
@@ -808,14 +807,14 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
         </div>
       </MayaSection>
 
-      <MayaSection title="Lighting & Environment" icon={<Layout className="h-3.5 w-3.5" />} defaultOpen={false}>
+      <MayaSection title={t("sections.lighting")} icon={<Layout className="h-3.5 w-3.5" />} defaultOpen={false}>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label
               className="text-[11px] text-muted-foreground"
-              title="Soft character reduces low-poly faceting on unit models (higher ambient, softer key)."
+              title={t("help.lightingPreset")}
             >
-              Lighting preset
+              {t("labels.lightingPreset")}
             </Label>
             <Select
               value={matchPreviewLightingPreset({
@@ -835,19 +834,19 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
               </SelectTrigger>
               <SelectContent>
                 {PREVIEW_LIGHTING_PRESET_META.map((preset) => (
-                  <SelectItem key={preset.id} value={preset.id} className="text-[11px]" title={preset.description}>
-                    {preset.label}
+                  <SelectItem key={preset.id} value={preset.id} className="text-[11px]" title={t(`lighting.presetHelp.${preset.id}`)}>
+                    {t(`lighting.preset.${preset.id}`)}
                   </SelectItem>
                 ))}
                 <SelectItem value="custom" className="text-[11px]" disabled>
-                  Custom (sliders)
+                  {t("lighting.custom")}
                 </SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
-              <Label className="text-[11px] text-muted-foreground">Ambient</Label>
+              <Label className="text-[11px] text-muted-foreground">{t("labels.ambient")}</Label>
               <span className="text-[10px] font-mono">{p.ambientIntensity.toFixed(2)}</span>
             </div>
             <input
@@ -862,7 +861,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
           </div>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
-              <Label className="text-[11px] text-muted-foreground">Directional</Label>
+              <Label className="text-[11px] text-muted-foreground">{t("labels.directional")}</Label>
               <span className="text-[10px] font-mono">{p.directionalIntensity.toFixed(2)}</span>
             </div>
             <input
@@ -878,7 +877,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
           <div className={cn("grid gap-2", tripleGridClass)}>
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
-                <Label className="text-[11px] text-muted-foreground">Light X</Label>
+                <Label className="text-[11px] text-muted-foreground">{t("labels.lightX")}</Label>
                 <span className="text-[10px] font-mono">{p.directionalX.toFixed(1)}</span>
               </div>
               <input
@@ -893,7 +892,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
             </div>
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
-                <Label className="text-[11px] text-muted-foreground">Light Y</Label>
+                <Label className="text-[11px] text-muted-foreground">{t("labels.lightY")}</Label>
                 <span className="text-[10px] font-mono">{p.directionalY.toFixed(1)}</span>
               </div>
               <input
@@ -908,7 +907,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
             </div>
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
-                <Label className="text-[11px] text-muted-foreground">Light Z</Label>
+                <Label className="text-[11px] text-muted-foreground">{t("labels.lightZ")}</Label>
                 <span className="text-[10px] font-mono">{p.directionalZ.toFixed(1)}</span>
               </div>
               <input
@@ -923,7 +922,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
             </div>
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label className="text-[11px] text-muted-foreground">Background Color</Label>
+            <Label className="text-[11px] text-muted-foreground">{t("labels.backgroundColor")}</Label>
             <div className="flex items-center gap-2">
               <input
                 type="color"
@@ -937,10 +936,10 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
         </div>
       </MayaSection>
 
-      <MayaSection title="Mesh Explorer" icon={<List className="h-3.5 w-3.5" />}>
+      <MayaSection title={t("sections.meshExplorer")} icon={<List className="h-3.5 w-3.5" />}>
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between border-b pb-2">
-            <span className="text-[10px] text-muted-foreground">{scopedDraws.length} total meshes</span>
+            <span className="text-[10px] text-muted-foreground">{t("mesh.total", { count: scopedDraws.length })}</span>
             <div className="flex gap-1">
               <Button
                 type="button"
@@ -949,7 +948,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                 className="h-6 px-2 text-[9px] uppercase tracking-tighter"
                 onClick={p.showAllMeshes}
               >
-                All
+                {t("mesh.all")}
               </Button>
               <Button
                 type="button"
@@ -958,7 +957,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                 className="h-6 px-2 text-[9px] uppercase tracking-tighter"
                 onClick={p.hideAllMeshes}
               >
-                None
+                {t("mesh.none")}
               </Button>
             </div>
           </div>
@@ -980,7 +979,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                       onCheckedChange={(checked) => p.toggleVisible(draw.key, checked === true)}
                       className="mt-0.5 h-3.5 w-3.5"
                     />
-                    <div className="min-w-0 flex-1 leading-tight">
+                    <div className="min-w-0 flex-1 leading-tight" data-i18n-ignore="">
                       <span className="block truncate text-[11px] font-medium">{draw.label}</span>
                       <span className="block truncate text-[9px] text-muted-foreground">
                         {draw.materialLabel}
@@ -991,34 +990,25 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
               })}
             </div>
             {!scopedDraws.length && (
-              <span className="py-4 text-center text-[10px] italic text-muted-foreground">No meshes loaded</span>
+              <span className="py-4 text-center text-[10px] italic text-muted-foreground">{t("mesh.noMeshes")}</span>
             )}
           </div>
         </div>
       </MayaSection>
 
-      <MayaSection title="Bone Explorer" icon={<Bone className="h-3.5 w-3.5" />}>
+      <MayaSection title={t("sections.boneExplorer")} icon={<Bone className="h-3.5 w-3.5" />}>
         <div className="flex flex-col gap-3">
           <p className="text-[9px] leading-snug text-muted-foreground">
-            Hierarchy matches the skeleton. Select a bone here or click joint spheres in the viewport, then drag the
-            gizmo. With the 3D view focused: Maya-style{" "}
-            <span className="font-mono text-foreground">W / E / R</span> (or{" "}
-            <span className="font-mono text-foreground">1 / 2 / 3</span>) for Move / Rotate / Scale;{" "}
-            <span className="font-mono text-foreground">Ctrl+Z</span> undo /{" "}
-            <span className="font-mono text-foreground">Ctrl+Shift+Z</span> or{" "}
-            <span className="font-mono text-foreground">Ctrl+Y</span> redo bone transforms;{" "}
-            <span className="font-mono text-foreground">Esc</span> clears the active bone. Orbit pauses while dragging
-            the gizmo.
+            {t("help.boneExplorer")}
           </p>
           {!hasSkinnedMesh && p.selectedBoneIndex !== null && bones.length > 0 ? (
             <p className="text-[10px] text-amber-600/90 dark:text-amber-400/90">
-              This model has no per-vertex bone weights in the mesh JSON — skeleton lines will move but geometry will not
-              deform.
+              {t("help.noSkinWeights")}
             </p>
           ) : null}
           {p.previewInstances.length > 1 ? (
             <div className="flex flex-col gap-1.5">
-              <Label className="text-[10px] text-muted-foreground">Bone list scope</Label>
+              <Label className="text-[10px] text-muted-foreground">{t("labels.boneListScope")}</Label>
               <ToggleGroup
                 type="single"
                 value={boneListMode}
@@ -1029,18 +1019,20 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                 className="flex w-full justify-start gap-1"
               >
                 <ToggleGroupItem value="active" className="h-7 px-2 text-[10px]">
-                  Active model
+                  {t("bones.activeModel")}
                 </ToggleGroupItem>
                 <ToggleGroupItem value="all" className="h-7 px-2 text-[10px]">
-                  All visible models
+                  {t("bones.allVisible")}
                 </ToggleGroupItem>
               </ToggleGroup>
             </div>
           ) : null}
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between gap-2">
-              <Label className="text-[10px] text-muted-foreground">Joint size</Label>
-              <span className="font-mono text-[10px] text-muted-foreground">{p.bonePointSize.toFixed(1)}x</span>
+              <Label className="text-[10px] text-muted-foreground">{t("labels.jointSize")}</Label>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {t("bones.sizeValue", { value: p.bonePointSize.toFixed(1) })}
+              </span>
             </div>
             <Slider
               value={[p.bonePointSize]}
@@ -1057,7 +1049,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label className="text-[10px] text-muted-foreground">Gizmo mode</Label>
+            <Label className="text-[10px] text-muted-foreground">{t("labels.gizmoMode")}</Label>
             <ToggleGroup
               type="single"
               value={p.boneTransformMode}
@@ -1068,14 +1060,14 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
               variant="outline"
               className="flex w-full flex-wrap justify-start gap-1"
             >
-              <ToggleGroupItem value="translate" className="h-8 flex-1 min-w-18 px-2 text-[10px]" aria-label="Move">
-                Move
+              <ToggleGroupItem value="translate" className="h-8 flex-1 min-w-18 px-2 text-[10px]" aria-label={t("bones.move")}>
+                {t("bones.move")}
               </ToggleGroupItem>
-              <ToggleGroupItem value="rotate" className="h-8 flex-1 min-w-18 px-2 text-[10px]" aria-label="Rotate">
-                Rotate
+              <ToggleGroupItem value="rotate" className="h-8 flex-1 min-w-18 px-2 text-[10px]" aria-label={t("bones.rotate")}>
+                {t("bones.rotate")}
               </ToggleGroupItem>
-              <ToggleGroupItem value="scale" className="h-8 flex-1 min-w-18 px-2 text-[10px]" aria-label="Scale">
-                Scale
+              <ToggleGroupItem value="scale" className="h-8 flex-1 min-w-18 px-2 text-[10px]" aria-label={t("bones.scale")}>
+                {t("bones.scale")}
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
@@ -1087,11 +1079,11 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
             disabled={bones.length === 0}
             onClick={p.resetBonePose}
           >
-            Reset bone pose
+            {t("actions.resetBonePose")}
           </Button>
           <div className="flex items-center justify-between border-b pb-2">
             <span className="text-[10px] text-muted-foreground">
-              {totalBoneCount} bones
+              {t("bones.count", { count: totalBoneCount })}
             </span>
             <Button
               type="button"
@@ -1101,7 +1093,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
               disabled={boneListInstances.length === 0}
               onClick={() => p.setSelectedBoneIndex(null)}
             >
-              Clear selection
+              {t("actions.clearSelection")}
             </Button>
           </div>
           <div ref={boneListRef} className="h-[300px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-muted">
@@ -1130,7 +1122,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                         <button
                           type="button"
                           className="shrink-0 cursor-pointer hover:text-foreground"
-                          title={collapsedBoneGroups.has(row.instance.id) ? "Expand bone group" : "Collapse bone group"}
+                          title={collapsedBoneGroups.has(row.instance.id) ? t("actions.expandBoneGroup") : t("actions.collapseBoneGroup")}
                           onClick={() =>
                             setCollapsedBoneGroups((prev) => {
                               const next = new Set(prev);
@@ -1159,6 +1151,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                             p.setActivePreviewInstanceId(row.instance.id);
                           }}
                           title={row.instance.modlPath}
+                          data-i18n-ignore=""
                         >
                           {row.instance.displayLabel}
                         </button>
@@ -1189,39 +1182,41 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                       p.setSelectedBoneIndex(row.boneIndex);
                     }}
                   >
-                    <span className="truncate text-[11px] font-medium leading-tight">{row.bone.name}</span>
+                    <span className="truncate text-[11px] font-medium leading-tight" data-i18n-ignore="">
+                      {row.bone.name}
+                    </span>
                     <span className="font-mono text-[9px] text-muted-foreground">[{row.boneIndex}]</span>
                   </button>
                 );
               })}
             </div>
             {boneListInstances.length === 0 ? (
-              <span className="py-4 text-center text-[10px] italic text-muted-foreground">No skeleton loaded</span>
+              <span className="py-4 text-center text-[10px] italic text-muted-foreground">{t("bones.noSkeleton")}</span>
             ) : null}
           </div>
         </div>
       </MayaSection>
 
-      <MayaSection title="Scene Statistics" icon={<Info className="h-3.5 w-3.5" />} defaultOpen={false}>
+      <MayaSection title={t("sections.sceneStats")} icon={<Info className="h-3.5 w-3.5" />} defaultOpen={false}>
         <div className="grid grid-cols-2 gap-x-2 gap-y-3">
           <div className="flex flex-col">
-            <span className="text-[9px] uppercase text-muted-foreground">Vertices</span>
+            <span className="text-[9px] uppercase text-muted-foreground">{t("stats.vertices")}</span>
             <span className="text-[11px] font-mono">{p.vertexTriangleStats.verts.toLocaleString()}</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-[9px] uppercase text-muted-foreground">Triangles</span>
+            <span className="text-[9px] uppercase text-muted-foreground">{t("stats.triangles")}</span>
             <span className="text-[11px] font-mono">{p.vertexTriangleStats.tris.toLocaleString()}</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-[9px] uppercase text-muted-foreground">Draw Calls</span>
+            <span className="text-[9px] uppercase text-muted-foreground">{t("stats.drawCalls")}</span>
             <span className="text-[11px] font-mono">{p.draws.length}</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-[9px] uppercase text-muted-foreground">Textures</span>
+            <span className="text-[9px] uppercase text-muted-foreground">{t("stats.textures")}</span>
             <span className="text-[11px] font-mono">{p.textureDataMap.size}</span>
           </div>
           <div className="flex flex-col col-span-2">
-            <span className="text-[9px] uppercase text-muted-foreground">Bones</span>
+            <span className="text-[9px] uppercase text-muted-foreground">{t("stats.bones")}</span>
             <span className="text-[11px] font-mono">
               {p.bundle?.skel ? (p.bundle.skel as SkelDataJson).bones?.length ?? 0 : "—"}
             </span>
@@ -1230,36 +1225,36 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
       </MayaSection>
 
       {activeBundle ? (
-        <MayaSection title="Preview Bundle Debug" icon={<Info className="h-3.5 w-3.5" />} defaultOpen={false}>
+        <MayaSection title={t("sections.bundleDebug")} icon={<Info className="h-3.5 w-3.5" />} defaultOpen={false}>
           <div className="flex flex-col gap-3 text-[10px]">
             <div className="space-y-1">
-              <div className="text-[9px] uppercase text-muted-foreground">Active bundle</div>
-              <div className="font-mono wrap-anywhere">{activeBundle.modlPath}</div>
-              <div className="font-mono wrap-anywhere text-muted-foreground">{activeBundle.meshPath}</div>
+              <div className="text-[9px] uppercase text-muted-foreground">{t("bundle.active")}</div>
+              <div className="font-mono wrap-anywhere" data-i18n-ignore="">{activeBundle.modlPath}</div>
+              <div className="font-mono wrap-anywhere text-muted-foreground" data-i18n-ignore="">{activeBundle.meshPath}</div>
             </div>
 
             <div className="grid grid-cols-2 gap-x-2 gap-y-2">
               <div className="flex flex-col">
-                <span className="text-[9px] uppercase text-muted-foreground">Matl files loaded</span>
+                <span className="text-[9px] uppercase text-muted-foreground">{t("bundle.matlFiles")}</span>
                 <span className="font-mono">{activeBundle.matlPaths.length}</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-[9px] uppercase text-muted-foreground">Matl entries merged</span>
+                <span className="text-[9px] uppercase text-muted-foreground">{t("bundle.matlEntries")}</span>
                 <span className="font-mono">{activeMatlLookup.size}</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-[9px] uppercase text-muted-foreground">Texture refs</span>
+                <span className="text-[9px] uppercase text-muted-foreground">{t("bundle.textureRefs")}</span>
                 <span className="font-mono">{activeBundle.textureRefs.length}</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-[9px] uppercase text-muted-foreground">Resolved nutexb</span>
+                <span className="text-[9px] uppercase text-muted-foreground">{t("bundle.resolvedNutexb")}</span>
                 <span className="font-mono">{activeBundle.resolvedNutexbPaths.length}</span>
               </div>
             </div>
 
             <div className="space-y-1">
-              <div className="text-[9px] uppercase text-muted-foreground">Matl path list</div>
-              <div className="max-h-[96px] space-y-1 overflow-y-auto pr-1">
+              <div className="text-[9px] uppercase text-muted-foreground">{t("bundle.matlPathList")}</div>
+              <div className="max-h-[96px] space-y-1 overflow-y-auto pr-1" data-i18n-ignore="">
                 {activeBundle.matlPaths.length > 0 ? (
                   activeBundle.matlPaths.map((path) => (
                     <div key={path} className="font-mono wrap-anywhere text-muted-foreground">
@@ -1267,16 +1262,16 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                     </div>
                   ))
                 ) : (
-                  <div className="italic text-muted-foreground">No matl files loaded</div>
+                  <div className="italic text-muted-foreground">{t("bundle.noMatl")}</div>
                 )}
               </div>
             </div>
 
             <div className="space-y-1">
               <div className="text-[9px] uppercase text-muted-foreground">
-                Draw labels missing in matl ({missingMaterialLabelRows.length})
+                {t("bundle.missingDrawLabels", { count: missingMaterialLabelRows.length })}
               </div>
-              <div className="max-h-[96px] space-y-1 overflow-y-auto pr-1">
+              <div className="max-h-[96px] space-y-1 overflow-y-auto pr-1" data-i18n-ignore="">
                 {missingMaterialLabelRows.length > 0 ? (
                   missingMaterialLabelRows.map((row) => (
                     <div key={row} className="font-mono wrap-anywhere text-amber-700/90 dark:text-amber-400/90">
@@ -1284,16 +1279,19 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                     </div>
                   ))
                 ) : (
-                  <div className="italic text-muted-foreground">All draw material labels exist in merged matl entries.</div>
+                  <div className="italic text-muted-foreground">{t("bundle.allDrawLabels")}</div>
                 )}
               </div>
             </div>
 
             <div className="space-y-1">
               <div className="text-[9px] uppercase text-muted-foreground">
-                Unresolved texture refs ({unresolvedTextureResolveRows.length}/{activeTextureResolveRows.length})
+                {t("bundle.unresolvedTextureRefs", {
+                  unresolved: unresolvedTextureResolveRows.length,
+                  total: activeTextureResolveRows.length,
+                })}
               </div>
-              <div className="max-h-[132px] space-y-1 overflow-y-auto pr-1">
+              <div className="max-h-[132px] space-y-1 overflow-y-auto pr-1" data-i18n-ignore="">
                 {unresolvedTextureResolveRows.length > 0 ? (
                   unresolvedTextureResolveRows.slice(0, 120).map((row) => (
                     <div key={row.reference} className="font-mono wrap-anywhere text-amber-700/90 dark:text-amber-400/90">
@@ -1301,7 +1299,7 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                     </div>
                   ))
                 ) : (
-                  <div className="italic text-muted-foreground">All collected texture refs resolved to on-disk .nutexb files.</div>
+                  <div className="italic text-muted-foreground">{t("bundle.allTexturesResolved")}</div>
                 )}
               </div>
             </div>
@@ -1310,9 +1308,9 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
       ) : null}
 
       {p.bundle?.warnings?.length ? (
-        <MayaSection title="Warnings" icon={<Info className="h-3.5 w-3.5 text-amber-500" />}>
+        <MayaSection title={t("sections.warnings")} icon={<Info className="h-3.5 w-3.5 text-amber-500" />}>
           <div className="min-w-0 max-w-full">
-            <ul className="list-disc space-y-1.5 pl-4 text-[10px] text-muted-foreground">
+            <ul className="list-disc space-y-1.5 pl-4 text-[10px] text-muted-foreground" data-i18n-ignore="">
               {p.bundle.warnings.map((w, i) => (
                 <li key={i} className="min-w-0 whitespace-normal wrap-anywhere">
                   {w}

@@ -11,6 +11,7 @@ import { basename, join, resourceDir } from "@tauri-apps/api/path";
 import { Command } from "@tauri-apps/plugin-shell";
 import { exists } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { VirtualizedSelectedFileList } from "../VirtualizedSelectedFileList";
 
 const IMAGE_COMPRESS_DIMENSIONS = {
@@ -25,6 +26,7 @@ interface ImageCompressToolProps {
 }
 
 export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
+  const { t } = useTranslation("misc-tools-a");
   const [selectedImagePaths, setSelectedImagePaths] = useState<string[]>([]);
   const [fileNames, setFileNames] = useState<{[key: string]: {baseName: string, displayName: string, extension: string}}>({});
   const [isOpen, setIsOpen] = useState(false);
@@ -52,7 +54,7 @@ export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
       }
     } catch (error) {
       console.error("Error selecting files:", error);
-      toast.error("Failed to select files");
+      toast.error(t("common.selectFilesFailed"));
     }
   };
 
@@ -72,14 +74,14 @@ export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
       setFileNames(Object.fromEntries(nameEntries));
     } catch (error) {
       console.error("Error processing image files:", error);
-      toast.error("Failed to process image files");
+      toast.error(t("common.processImagesFailed"));
     }
   };
 
   // Handle batch compression
   const handleCompress = async () => {
     if (selectedImagePaths.length === 0) {
-      toast.error("Please select at least one PNG file");
+      toast.error(t("compress.selectPng"));
       return;
     }
 
@@ -168,11 +170,21 @@ export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
       const failureCount = failedFiles.length;
 
       if (successCount > 0) {
-        toast.success(`Successfully compressed ${successCount} image(s)${failureCount > 0 ? `. ${failureCount} failed.` : ''}`);
+        toast.success(
+          failureCount > 0
+            ? t("compress.successPartial", { count: successCount, failed: failureCount })
+            : t("compress.success", { count: successCount }),
+        );
       }
 
       if (failureCount > 0) {
-        toast.error(`Failed to compress ${failureCount} file(s): ${failedFiles.slice(0, 3).join(', ')}${failureCount > 3 ? '...' : ''}`);
+        toast.error(
+          t("compress.failedList", {
+            count: failureCount,
+            files: failedFiles.slice(0, 3).join(", "),
+            extra: failureCount > 3 ? "..." : "",
+          }),
+        );
       }
 
       // Only close modal if all files failed
@@ -190,7 +202,7 @@ export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
       console.error("Batch compression failed:", error);
       setCompressionProgress(null);
       setIsCompressing(false);
-      toast.error("Batch compression failed");
+      toast.error(t("compress.batchFailed"));
     }
   };
 
@@ -224,14 +236,14 @@ export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
         return {
           path: imagePath,
           title: fileInfo?.displayName || imagePath.split(/[/\\]/).pop() || imagePath,
-          description: `Output: ${
-            overwriteOriginal
-              ? fileInfo?.displayName ?? ""
-              : `${fileInfo?.baseName}_low${fileInfo?.extension}`
-          }`,
+          description: overwriteOriginal
+            ? t("compress.outputOverwrite", { name: fileInfo?.displayName ?? "" })
+            : t("compress.outputRenamed", {
+                name: `${fileInfo?.baseName}_low${fileInfo?.extension}`,
+              }),
         };
       }),
-    [fileNames, overwriteOriginal, selectedImagePaths],
+    [fileNames, overwriteOriginal, selectedImagePaths, t],
   );
 
   const progressContent = isCompressing || compressionProgress ? (
@@ -241,12 +253,16 @@ export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
           <div className="w-full max-w-md space-y-2">
             <div className="text-center">
               <span className="text-muted-foreground">
-                Compressing {compressionProgress.current} of {compressionProgress.total} images...
+                {t("common.progressOf", {
+                  action: t("compress.progressAction"),
+                  current: compressionProgress.current,
+                  total: compressionProgress.total,
+                })}
               </span>
             </div>
             {compressionProgress.currentFile && (
               <div className="text-center text-sm text-muted-foreground truncate">
-                Current: {compressionProgress.currentFile}
+                {t("common.current", { name: compressionProgress.currentFile })}
               </div>
             )}
             <div className="w-full bg-secondary rounded-full h-2">
@@ -257,12 +273,12 @@ export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
             </div>
             {compressionProgress.failedFiles.length > 0 && (
               <div className="text-center text-sm text-red-600">
-                Failed: {compressionProgress.failedFiles.length} files
+                {t("common.failedFiles", { count: compressionProgress.failedFiles.length })}
               </div>
             )}
           </div>
         ) : (
-          <span className="text-muted-foreground">Compressing images...</span>
+          <span className="text-muted-foreground">{t("compress.loading")}</span>
         )}
       </div>
   ) : null;
@@ -270,13 +286,13 @@ export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
   return (
     <>
       <Button variant="outline" className="w-full" onClick={() => setIsOpen(true)}>
-        Open Image Compressor
+        {t("compress.open")}
       </Button>
       {isOpen ? (
         <AppRndModalShell
           titleId="image-compressor-title"
-          title="PNG Image Compressor"
-          subtitle="Compress PNG files with pngquant"
+          title={t("compress.title")}
+          subtitle={t("compress.subtitle")}
           headerIcon={<Minimize2 className="h-5 w-5 text-primary" />}
           dimensions={IMAGE_COMPRESS_DIMENSIONS}
           storageKey="app.rnd-size.image-compressor"
@@ -295,13 +311,13 @@ export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
               <div className="flex flex-col items-center justify-center p-8 text-center">
                 <Upload className="h-12 w-12 text-muted-foreground mb-4" />
                 <h3 className="text-lg font-medium text-foreground mb-2">
-                  Select PNG files to compress
+                  {t("compress.dropHint")}
                 </h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Batch compression supported
+                  {t("compress.batchHint")}
                 </p>
                 <Button variant="outline" type="button">
-                  Browse Files
+                  {t("common.browse")}
                 </Button>
               </div>
             </Card>
@@ -310,7 +326,7 @@ export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
             <Card className="p-4">
               <div className="flex items-center justify-between mb-3">
                 <Label className="text-sm font-medium">
-                  Selected PNG Files ({selectedImagePaths.length})
+                  {t("compress.selected", { count: selectedImagePaths.length })}
                 </Label>
                 <Button
                   variant="ghost"
@@ -333,7 +349,7 @@ export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
               {/* Compression Settings */}
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="quality-input">Compression Quality (%)</Label>
+                  <Label htmlFor="quality-input">{t("compress.quality")}</Label>
                   <Input
                     id="quality-input"
                     type="number"
@@ -349,8 +365,8 @@ export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
                     className="w-full"
                   />
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>0% (maximum compression)</span>
-                    <span>100% (lossless)</span>
+                    <span>{t("compress.maxCompression")}</span>
+                    <span>{t("compress.lossless")}</span>
                   </div>
                 </div>
 
@@ -360,10 +376,10 @@ export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
                     checked={overwriteOriginal}
                     onCheckedChange={(checked) => setOverwriteOriginal(checked === true)}
                   />
-                  <Label htmlFor="overwrite">Overwrite original files</Label>
+                <Label htmlFor="overwrite">{t("common.overwrite")}</Label>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {!overwriteOriginal && "If unchecked, compressed files will be saved as <name>_low.png"}
+                  {!overwriteOriginal && t("compress.overwriteHint")}
                 </p>
               </div>
 
@@ -374,14 +390,14 @@ export function ImageCompressTool({ onClose }: ImageCompressToolProps) {
                   onClick={handleReset}
                   className="flex-1"
                 >
-                  Reset
+                  {t("common.reset")}
                 </Button>
                 <Button
                   onClick={handleCompress}
                   disabled={selectedImagePaths.length === 0}
                   className="flex-1"
                 >
-                  Compress All
+                  {t("compress.action")}
                 </Button>
               </div>
             </>

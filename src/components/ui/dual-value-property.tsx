@@ -8,6 +8,7 @@ import { Edit3, Save, X } from "lucide-react";
 import { toast } from 'sonner';
 import { int32ToHexDisplay, hexDisplayToInt32, float32ToHexDisplay, hexDisplayToFloat32, validateHexInput } from "@/module/commonFunc";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 interface DualValuePropertyProps {
   label: string;
@@ -64,6 +65,7 @@ export function DualValueProperty({
   onLiveIntInputFocus,
   onLiveIntInputClick,
 }: DualValuePropertyProps) {
+  const { t } = useTranslation("ui-b");
   const [editFormat, setEditFormat] = useState<'number' | 'hex'>('number');
   const isEditing = editingProperty === property;
   const displayValue = value !== undefined ? value : 0;
@@ -117,7 +119,7 @@ export function DualValueProperty({
       onValueChange(convertedValue);
       onValidationErrorChange?.("");
     } catch (error) {
-      toast.error('Invalid value for conversion');
+      toast.error(t("invalidValueConversion"));
     }
   };
 
@@ -134,7 +136,7 @@ export function DualValueProperty({
       onValidationErrorChange?.("");
       onSaveEdit();
     } catch (error) {
-      toast.error('Invalid value format');
+      toast.error(t("invalidValueFormat"));
     }
   };
 
@@ -147,8 +149,8 @@ export function DualValueProperty({
         </div>
         {showHex ? (
           <div className="flex items-center gap-4 text-sm text-muted-foreground font-mono">
-            <span title={`${numberLabel} value`}>{displayValue}</span>
-            <span title="Hex value" className="text-xs">({hexValue})</span>
+            <span title={t("numberValue", { numberLabel })}>{displayValue}</span>
+            <span title={t("hexValue")} className="text-xs">({hexValue})</span>
           </div>
         ) : (
           <span className="text-sm text-muted-foreground font-mono">
@@ -200,13 +202,13 @@ export function DualValueProperty({
 
                   if (isFloat) {
                     if (isNaN(Number(trimmed))) {
-                      setLiveValidationError("Invalid float32 value");
+                      setLiveValidationError(t("invalidFloat32"));
                       return;
                     }
                     commit(Number.parseFloat(trimmed) || 0);
                   } else {
                     if (!/^-?\d+$/.test(trimmed)) {
-                      setLiveValidationError("Invalid int32 value");
+                      setLiveValidationError(t("invalidInt32"));
                       return;
                     }
                     commit(Number.parseInt(trimmed, 10) | 0);
@@ -227,17 +229,17 @@ export function DualValueProperty({
                 onChange={(e) => {
                   const validation = validateHexInput(e.target.value);
                   setLiveHexDraft(validation.formatted);
-                  setLiveValidationError(validation.isValid ? "" : validation.error ?? "Invalid hex format");
+                  setLiveValidationError(validation.isValid ? "" : validation.error ?? t("invalidHex"));
 
                   if (!validation.isValid) return;
 
                   try {
                     commit(isFloat ? hexDisplayToFloat32(validation.formatted) : hexDisplayToInt32(validation.formatted));
                   } catch (error) {
-                    setLiveValidationError(error instanceof Error ? error.message : "Invalid hex format");
+                    setLiveValidationError(error instanceof Error ? error.message : t("invalidHex"));
                   }
                 }}
-                placeholder="XX XX XX XX"
+                placeholder={t("hexPlaceholder")}
                 onFocus={onLiveIntInputFocus}
                 onClick={onLiveIntInputClick}
                 className={cn(
@@ -264,13 +266,13 @@ export function DualValueProperty({
 
                 if (isFloat) {
                   if (isNaN(Number(trimmed))) {
-                    setLiveValidationError("Invalid float32 value");
+                    setLiveValidationError(t("invalidFloat32"));
                     return;
                   }
                   commit(Number.parseFloat(trimmed) || 0);
                 } else {
                   if (!/^-?\d+$/.test(trimmed)) {
-                    setLiveValidationError("Invalid int32 value");
+                    setLiveValidationError(t("invalidInt32"));
                     return;
                   }
                   commit(Number.parseInt(trimmed, 10) | 0);
@@ -331,7 +333,7 @@ export function DualValueProperty({
               ].join(" ")}
               autoFocus={isEditing && resolvedEditFormat === "number"}
               aria-invalid={isEditing && resolvedEditFormat === "number" && validationError ? true : undefined}
-              title={!isEditing ? "Click to edit" : (resolvedEditFormat !== "number" ? `Click to switch to ${numberLabel} format` : validationError || undefined)}
+            title={!isEditing ? t("clickToEdit") : (resolvedEditFormat !== "number" ? t("clickToSwitchFormat", { numberLabel }) : validationError || undefined)}
             />
             <Input
               value={isEditing && resolvedEditFormat === "hex" ? editValue : hexValue}
@@ -339,7 +341,7 @@ export function DualValueProperty({
                 const newValue = e.target.value;
                 const validation = validateHexInput(newValue);
                 onValueChange(validation.formatted);
-                onValidationErrorChange?.(validation.isValid ? "" : validation.error ?? "Invalid hex format");
+                onValidationErrorChange?.(validation.isValid ? "" : validation.error ?? t("invalidHex"));
               } : undefined}
               onKeyDown={isEditing && resolvedEditFormat === "hex" ? (e) => {
                 if (e.key === "Enter") handleSave();
@@ -347,7 +349,7 @@ export function DualValueProperty({
               } : undefined}
               onClick={!isEditing && startEditOnRowClick ? () => handleStartEdit("hex") : (isEditing && resolvedEditFormat !== "hex" ? () => handleFormatChange("hex") : undefined)}
               readOnly={!isEditing || resolvedEditFormat !== "hex"}
-              placeholder="XX XX XX XX"
+              placeholder={t("hexPlaceholder")}
               className={[
                 "h-8 font-mono text-sm shadow-none rounded-r-md rounded-l-none -ml-px",
                 !isEditing || resolvedEditFormat !== "hex" ? "cursor-pointer hover:bg-accent/20" : "",
@@ -355,7 +357,7 @@ export function DualValueProperty({
               ].join(" ")}
               autoFocus={isEditing && resolvedEditFormat === "hex"}
               aria-invalid={isEditing && resolvedEditFormat === "hex" && validationError ? true : undefined}
-              title={!isEditing ? "Click to edit" : (resolvedEditFormat !== "hex" ? "Click to switch to Hex format" : validationError || undefined)}
+              title={!isEditing ? t("clickToEdit") : (resolvedEditFormat !== "hex" ? t("clickToSwitchFormat", { numberLabel: t("hex") }) : validationError || undefined)}
             />
           </div>
         ) : (
@@ -372,7 +374,7 @@ export function DualValueProperty({
             } : undefined}
             onClick={!isEditing && startEditOnRowClick ? () => handleStartEdit("number") : undefined}
             readOnly={!isEditing}
-            placeholder={`${numberLabel} value`}
+            placeholder={t("numberValue", { numberLabel })}
             className={[
               "h-8 font-mono text-sm",
               !isEditing ? "cursor-pointer hover:bg-accent/20" : "",
@@ -380,7 +382,7 @@ export function DualValueProperty({
             ].join(" ")}
             autoFocus={isEditing}
             aria-invalid={validationError ? true : undefined}
-            title={validationError || (!isEditing ? "Click to edit" : undefined)}
+            title={validationError || (!isEditing ? t("clickToEdit") : undefined)}
           />
         )}
 
@@ -392,10 +394,10 @@ export function DualValueProperty({
 
         {isEditing ? (
           <div className="flex items-center justify-end gap-1">
-            <Button size="icon" className="h-7 w-7" onClick={handleSave} title="Save">
+            <Button size="icon" className="h-7 w-7" onClick={handleSave} title={t("save")}>
               <Save className="h-3.5 w-3.5" />
             </Button>
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onCancelEdit} title="Cancel">
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onCancelEdit} title={t("cancel")}>
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -405,10 +407,10 @@ export function DualValueProperty({
             variant="outline"
             className="w-full h-7"
             onClick={() => handleStartEdit("number")}
-            title="Edit"
+            title={t("edit")}
           >
             <Edit3 className="h-3 w-3 mr-1.5" />
-            Edit
+            {t("edit")}
           </Button>
         )}
       </div>
@@ -435,7 +437,7 @@ export function DualValueProperty({
                 </div>
               </div>
               <div className="space-y-1">
-                <div className="text-xs text-muted-foreground">Hex</div>
+                <div className="text-xs text-muted-foreground">{t("hex")}</div>
                 <div className="font-mono p-2 bg-muted rounded-md text-center">
                   {hexValue}
                 </div>
@@ -455,7 +457,7 @@ export function DualValueProperty({
                 onClick={() => handleStartEdit('number')}
               >
                 <Edit3 className="h-3 w-3 mr-2" />
-                Edit {numberLabel}
+                {t("editNumber", { numberLabel })}
               </Button>
               <Button
                 size="sm"
@@ -463,7 +465,7 @@ export function DualValueProperty({
                 onClick={() => handleStartEdit('hex')}
               >
                 <Edit3 className="h-3 w-3 mr-2" />
-                Edit Hex
+                {t("editHex")}
               </Button>
             </div>
           ) : (
@@ -474,7 +476,7 @@ export function DualValueProperty({
               onClick={() => handleStartEdit('number')}
             >
               <Edit3 className="h-3 w-3 mr-2" />
-              Edit
+              {t("edit")}
             </Button>
           )}
         </div>
@@ -487,11 +489,11 @@ export function DualValueProperty({
               onValueChange={(value) => value && handleFormatChange(value as 'number' | 'hex')}
               className="justify-start"
             >
-              <ToggleGroupItem value="number" aria-label={`${numberLabel} format`}>
+              <ToggleGroupItem value="number" aria-label={t("formatAria", { numberLabel })}>
                 {numberLabel}
               </ToggleGroupItem>
-              <ToggleGroupItem value="hex" aria-label="Hex format">
-                Hex
+              <ToggleGroupItem value="hex" aria-label={t("hexFormat")}>
+                {t("hex")}
               </ToggleGroupItem>
             </ToggleGroup>
           )}
@@ -503,7 +505,7 @@ export function DualValueProperty({
               if (showHex && resolvedEditFormat === 'hex') {
                 const validation = validateHexInput(newValue);
                 onValueChange(validation.formatted);
-                onValidationErrorChange?.(validation.isValid ? "" : validation.error ?? "Invalid hex format");
+                onValidationErrorChange?.(validation.isValid ? "" : validation.error ?? t("invalidHex"));
               } else {
                 onValueChange(newValue);
                 onValidationErrorChange?.("");
@@ -515,8 +517,8 @@ export function DualValueProperty({
             }}
             placeholder={
               showHex && resolvedEditFormat === 'hex' 
-                ? 'XX XX XX XX' 
-                : `${numberLabel} value`
+                ? t("hexPlaceholder") 
+                : t("numberValue", { numberLabel })
             }
             className={validationError ? 'border-red-500' : ''}
             autoFocus
@@ -530,11 +532,11 @@ export function DualValueProperty({
           <div className="flex gap-2">
             <Button size="sm" onClick={handleSave} className="flex-1">
               <Save className="h-3 w-3 mr-2" />
-              Save
+              {t("save")}
             </Button>
             <Button size="sm" variant="outline" onClick={onCancelEdit} className="flex-1">
               <X className="h-3 w-3 mr-2" />
-              Cancel
+              {t("cancel")}
             </Button>
           </div>
         </div>

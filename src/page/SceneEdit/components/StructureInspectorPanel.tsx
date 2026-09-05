@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { Layers, RefreshCw, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ interface StructureInspectorPanelProps {
 }
 
 export function StructureInspectorPanel({ stageRoot }: StructureInspectorPanelProps) {
+  const { t } = useTranslation("scene-stage-dialogs");
   const [data, setData] = useState<ExvsStructureData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,9 +61,9 @@ export function StructureInspectorPanel({ stageRoot }: StructureInspectorPanelPr
           <FolderOpen className="h-5 w-5 opacity-40" />
         </div>
         <div className="text-center space-y-1 min-w-0 w-full px-1">
-          <p className="text-xs font-medium break-words">No stage loaded</p>
+          <p className="text-xs font-medium break-words">{t("inspector.noStage")}</p>
           <p className="text-[10px] opacity-60 leading-relaxed break-words">
-            Open a stage folder to inspect its structure
+            {t("inspector.openFolder")}
           </p>
         </div>
       </div>
@@ -73,7 +75,7 @@ export function StructureInspectorPanel({ stageRoot }: StructureInspectorPanelPr
       <div className="flex h-full items-center justify-center">
         <div className="flex items-center gap-2 text-muted-foreground text-xs">
           <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-          Loading...
+          {t("common.loading")}
         </div>
       </div>
     );
@@ -86,7 +88,7 @@ export function StructureInspectorPanel({ stageRoot }: StructureInspectorPanelPr
         <p className="text-[10px] text-muted-foreground text-center max-w-[200px]">{error}</p>
         <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={loadStructure}>
           <RefreshCw className="h-3 w-3 mr-1" />
-          Retry
+          {t("common.retry")}
         </Button>
       </div>
     );

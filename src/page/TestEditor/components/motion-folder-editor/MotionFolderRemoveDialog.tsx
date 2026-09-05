@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,6 +27,7 @@ export function MotionFolderRemoveDialog({
   busy = false,
   onConfirm,
 }: MotionFolderRemoveDialogProps) {
+  const { t } = useTranslation("test-motion-folder-panels");
   const [deleteFilesOnDisk, setDeleteFilesOnDisk] = useState(false);
 
   useEffect(() => {
@@ -37,23 +39,19 @@ export function MotionFolderRemoveDialog({
     <Dialog open={dialogOpen} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Remove motion {selectionCount === 1 ? "entry" : "entries"}?</DialogTitle>
-          <DialogDescription>
-            {selectionCount === 1
-              ? "This removes the selected structure entry."
-              : `This removes ${selectionCount} selected structure entries.`}
-          </DialogDescription>
+          <DialogTitle>{t("remove.title", { count: selectionCount })}</DialogTitle>
+          <DialogDescription>{t("remove.description", { count: selectionCount })}</DialogDescription>
         </DialogHeader>
         <label className="flex items-center gap-2 text-sm">
           <Checkbox
             checked={deleteFilesOnDisk}
             onCheckedChange={(checked) => setDeleteFilesOnDisk(Boolean(checked))}
           />
-          Delete files from disk
+          {t("remove.deleteFromDisk")}
         </label>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("actions.cancel")}
           </Button>
           <Button
             type="button"
@@ -62,7 +60,7 @@ export function MotionFolderRemoveDialog({
             onClick={() => void onConfirm(deleteFilesOnDisk).then(() => onOpenChange(false))}
           >
             {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Remove
+            {t("actions.remove")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { FolderOpen, ImagePlus, Link2, Loader2 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
@@ -33,6 +34,7 @@ interface SceneAssetConfigPanelProps {
 }
 
 export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
+  const { t } = useTranslation("scene-placement");
   const asset = useSceneAssetStore((s) => s.assets[assetId]);
   const setNumatb = useSceneAssetStore((s) => s.setNumatb);
   const setTextureSlot = useSceneAssetStore((s) => s.setTextureSlot);
@@ -70,7 +72,7 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
 
   const handleImportTexture = useCallback(async () => {
     if (!asset?.outputDir) {
-      toast.error("Set output directory first");
+      toast.error(t("asset.errors.setOutputDirectory"));
       return;
     }
     const name = textureName.trim() || `texture_${Date.now()}`;
@@ -84,7 +86,7 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
       if (!result) return;
       setTextureSlot(assetId, name, result.outputNutexbPath);
       propagateFromParent(assetId);
-      toast.success(`Imported texture: ${result.nutexbName}`);
+      toast.success(t("asset.importedTexture", { name: result.nutexbName }));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
@@ -95,7 +97,7 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
   const handlePickOutputDir = useCallback(async () => {
     setIsPickingOutputDir(true);
     try {
-      const dir = await open({ directory: true, title: "Asset output directory" });
+      const dir = await open({ directory: true, title: t("asset.outputDirectory") });
       if (typeof dir === "string" && dir.trim()) {
         setOutputDir(assetId, dir.trim());
       }
@@ -107,7 +109,7 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
   if (!asset) {
     return (
       <div className="py-2 text-[11px] text-muted-foreground">
-        No asset config for this object. Select an imported model or register it as a scene asset.
+        {t("asset.noConfig")}
       </div>
     );
   }
@@ -117,7 +119,7 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
       <div className="rounded border border-border/60 p-2">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <p className={`${PROP_LABEL} truncate`} title={assetId}>
-            Asset: {assetId}
+            {t("asset.assetLabel")}: {assetId}
           </p>
           {asset.parentAssetId && (
             <span className="flex shrink-0 items-center gap-1 text-[10px] text-blue-400">
@@ -128,19 +130,19 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
         </div>
         {children.length > 0 && (
           <p className="mt-1 text-[10px] text-muted-foreground">
-            {children.length} child clone(s) will inherit changes
+            {t("asset.childClones", { count: children.length })}
           </p>
         )}
       </div>
 
       <div className="rounded border border-border/60 p-2">
-        <Label className={PROP_LABEL}>Output Directory</Label>
+        <Label className={PROP_LABEL}>{t("asset.outputDirectory")}</Label>
         <div className="mt-1 flex min-w-0 gap-1">
           <Input
             value={asset.outputDir ?? ""}
             onChange={(e) => setOutputDir(assetId, e.target.value)}
             className={`${PROP_INPUT} min-w-0 flex-1`}
-            placeholder="Set output folder for textures/ssbh..."
+            placeholder={t("asset.outputDirectoryPlaceholder")}
           />
           <Button
             type="button"
@@ -160,14 +162,14 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
       </div>
 
       <div className="rounded border border-border/60 p-2">
-        <p className={PROP_LABEL}>Import Texture (PNG → nutexb)</p>
+        <p className={PROP_LABEL}>{t("asset.importTexture")}</p>
         <div className="mt-1 space-y-1.5">
           <div className="flex min-w-0 gap-1">
             <Input
               value={textureName}
               onChange={(e) => setTextureName(e.target.value)}
               className={`${PROP_INPUT} min-w-0 flex-1`}
-              placeholder="Texture name (e.g. basecolor)"
+              placeholder={t("asset.textureNamePlaceholder")}
               disabled={isImportingTexture}
             />
             <TextureFormatSelect
@@ -189,13 +191,13 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
             ) : (
               <ImagePlus className="mr-1 h-3.5 w-3.5" />
             )}
-            {isImportingTexture ? "Converting PNG..." : "Pick PNG & Convert to nutexb"}
+            {isImportingTexture ? t("asset.convertingPng") : t("asset.pickAndConvert")}
           </Button>
         </div>
 
         {Object.keys(asset.textureOverrides).length > 0 ? (
           <div className="mt-2 space-y-0.5">
-            <p className="text-[10px] text-muted-foreground">Texture Slots:</p>
+            <p className="text-[10px] text-muted-foreground">{t("asset.textureSlots")}</p>
             {Object.entries(asset.textureOverrides).map(([paramId, path]) => (
               <div key={paramId} className="flex min-w-0 items-center gap-1 text-[10px]">
                 <span className="shrink-0 font-mono text-muted-foreground">{paramId}</span>
@@ -205,17 +207,17 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
           </div>
         ) : (
           <p className="mt-2 text-[10px] italic text-muted-foreground">
-            No texture slots assigned yet. Import a PNG above to create one.
+            {t("asset.noTextureSlots")}
           </p>
         )}
       </div>
 
       <div className="rounded border border-border/60 p-2">
-        <p className={PROP_LABEL}>Material (numatb)</p>
+        <p className={PROP_LABEL}>{t("asset.material")}</p>
         <Tabs value={selectedProfile} onValueChange={(v) => setSelectedProfile(v as "maya" | "nust")}>
           <TabsList className="mt-1 grid h-7 w-full grid-cols-2">
-            <TabsTrigger value="nust" className="h-6 text-[10px]">__nust__</TabsTrigger>
-            <TabsTrigger value="maya" className="h-6 text-[10px]">__maya__</TabsTrigger>
+            <TabsTrigger value="nust" className="h-6 text-[10px]" data-i18n-ignore="">__nust__</TabsTrigger>
+            <TabsTrigger value="maya" className="h-6 text-[10px]" data-i18n-ignore="">__maya__</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -233,7 +235,7 @@ export function SceneAssetConfigPanel({ assetId }: SceneAssetConfigPanelProps) {
           </div>
         ) : (
           <p className="mt-1.5 text-[10px] italic text-muted-foreground">
-            No numatb material data for this profile.
+            {t("asset.noMaterialData")}
           </p>
         )}
 

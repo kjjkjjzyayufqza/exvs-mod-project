@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 import {
   discoverStructureJsonBesideFolder,
   type StructureJsonDiscovery,
@@ -52,79 +53,79 @@ import {
 /** Formats currently supported by Rust `extract_fhm2d_to_folder` naming pipelines. */
 const EXTRACT_FORMAT_OPTIONS: Array<{
   value: string;
-  label: string;
-  description: string;
+  labelKey: string;
+  descriptionKey: string;
   format?: Fhm2d_type_format;
 }> = [
   {
     value: "generic",
-    label: "Generic (no special naming)",
-    description: "Extract files as-is without asset-type renames.",
+    labelKey: "formats.generic",
+    descriptionKey: "formats.genericDescription",
   },
   {
     value: Fhm2d_type_format.fhm2d_character,
-    label: "Character / unit model",
-    description: "Full unit package naming (numdlb groups, materials, textures).",
+    labelKey: "formats.character",
+    descriptionKey: "formats.characterDescription",
     format: Fhm2d_type_format.fhm2d_character,
   },
   {
     value: Fhm2d_type_format.fhm2d_effect,
-    label: "Effect",
-    description: "Effect package layout (lighter naming than character).",
+    labelKey: "formats.effect",
+    descriptionKey: "formats.effectDescription",
     format: Fhm2d_type_format.fhm2d_effect,
   },
   {
     value: Fhm2d_type_format.fhm2d_motion,
-    label: "Motion",
-    description: "Motion package naming.",
+    labelKey: "formats.motion",
+    descriptionKey: "formats.motionDescription",
     format: Fhm2d_type_format.fhm2d_motion,
   },
   {
     value: Fhm2d_type_format.fhm2d_msc,
-    label: "MSC",
-    description: "MSC script package naming.",
+    labelKey: "formats.msc",
+    descriptionKey: "formats.mscDescription",
     format: Fhm2d_type_format.fhm2d_msc,
   },
   {
     value: Fhm2d_type_format.fhm2d_sound,
-    label: "Sound",
-    description: "Sound package naming.",
+    labelKey: "formats.sound",
+    descriptionKey: "formats.soundDescription",
     format: Fhm2d_type_format.fhm2d_sound,
   },
   {
     value: Fhm2d_type_format.fhm2d_character_param,
-    label: "Character param",
-    description: "Character parameter tables.",
+    labelKey: "formats.characterParam",
+    descriptionKey: "formats.characterParamDescription",
     format: Fhm2d_type_format.fhm2d_character_param,
   },
   {
     value: Fhm2d_type_format.fhm2d_character_cost,
-    label: "Character cost",
-    description: "Out-of-game cost / HP balance tables.",
+    labelKey: "formats.characterCost",
+    descriptionKey: "formats.characterCostDescription",
     format: Fhm2d_type_format.fhm2d_character_cost,
   },
   {
     value: Fhm2d_type_format.fhm2d_striker_table,
-    label: "Striker table",
-    description: "Host unit → striker slot table (0xFEEB79F0, vgsht1 stride 8).",
+    labelKey: "formats.striker",
+    descriptionKey: "formats.strikerDescription",
     format: Fhm2d_type_format.fhm2d_striker_table,
   },
   {
     value: Fhm2d_type_format.fhm2d_stage_list,
-    label: "Stage list",
-    description: "Stage list binary naming.",
+    labelKey: "formats.stage",
+    descriptionKey: "formats.stageDescription",
     format: Fhm2d_type_format.fhm2d_stage_list,
   },
   {
     value: Fhm2d_type_format.fhm2d_list,
-    label: "List (BGM list)",
-    description: "Generic 012list payload rename (bgm_list.bin).",
+    labelKey: "formats.list",
+    descriptionKey: "formats.listDescription",
     format: Fhm2d_type_format.fhm2d_list,
   },
   {
     value: Fhm2d_type_format.fhm2d_all_nutexb,
-    label: "All nutexb",
-    description: "Texture-list packages (icons, stage images).",
+    labelKey: "formats.nutexb",
+    descriptionKey: "formats.nutexbDescription",
     format: Fhm2d_type_format.fhm2d_all_nutexb,
   },
 ];
@@ -157,17 +158,18 @@ function FlowStrip({ from, to }: { from: string | null; to: string | null }) {
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 font-mono text-[11px]">
       <span className={cn("min-w-0 break-all", from ? "text-foreground" : "text-muted-foreground")}>
-        {from ?? "no source selected"}
+        {from ?? ""}
       </span>
       <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
       <span className={cn("min-w-0 break-all", to ? "text-foreground" : "text-muted-foreground")}>
-        {to ?? "no destination resolved"}
+        {to ?? ""}
       </span>
     </div>
   );
 }
 
 export default function SingleFhm2dPage() {
+  const { t } = useTranslation("extract-page");
   const store = useConfigStore((s) => s.store);
   const getSetting = useConfigStore((s) => s.getSetting);
 
@@ -217,19 +219,19 @@ export default function SingleFhm2dPage() {
       : null;
 
   const extractBlockedReason = !inputFilePath.trim()
-    ? "Select a .fhm2d file."
+    ? t("blockedInput")
     : !outputFolderPath.trim()
-      ? "Select an output folder."
+      ? t("blockedOutput")
       : createSubfolder && !requestedName
-        ? "Enter an extract name, or turn off subfolder creation."
+        ? t("blockedName")
         : null;
 
   const repackBlockedReason = !repackFolderPath.trim()
-    ? "Select an extracted asset folder."
+    ? t("blockedRepackFolder")
     : isDiscovering
-      ? "Resolving the sibling structure JSON..."
+      ? t("blockedResolving")
       : !repackDiscovery
-        ? "Structure JSON has not been resolved yet."
+        ? t("blockedUnresolved")
         : !repackDiscovery.ok
           ? repackDiscovery.error
           : null;
@@ -252,7 +254,7 @@ export default function SingleFhm2dPage() {
       if (!data) {
         setPreview({
           status: "error",
-          message: "File magic does not match FHM2D (Xboost) or PS4 FHM. Preview unavailable.",
+            message: t("invalidMagic"),
         });
         return;
       }
@@ -264,7 +266,7 @@ export default function SingleFhm2dPage() {
     } catch (error) {
       setPreview({
         status: "error",
-        message: error instanceof Error ? error.message : String(error),
+            message: error instanceof Error ? error.message : String(error),
       });
     }
   }, []);
@@ -342,18 +344,21 @@ export default function SingleFhm2dPage() {
         writeMetaBin,
       );
       if (extractResult.namingError) {
-        toast.error("Unpack finished but FHM naming step failed (files were written)", {
+        toast.error(t("namingFailed"), {
           description: extractResult.namingError,
           duration: 20_000,
         });
       } else {
-        toast.success("Unpack completed", {
-          description: `${targetOutDir}\nStructure: ${targetOutDir}_structure.json`,
+        toast.success(t("unpackDone"), {
+          description: t("toasts.unpackPaths", {
+            folder: targetOutDir,
+            structure: `${targetOutDir}_structure.json`,
+          }),
           duration: 12_000,
         });
       }
     } catch (error) {
-      toast.error("Unpack failed", {
+      toast.error(t("unpackFailed"), {
         description: error instanceof Error ? error.message : String(error),
         duration: 15_000,
       });
@@ -365,7 +370,7 @@ export default function SingleFhm2dPage() {
   const handleRepack = async () => {
     if (isRepacking) return;
     if (repackBlockedReason || !repackDiscovery?.ok) {
-      toast.error("Cannot repack", { description: repackBlockedReason ?? "Structure unresolved" });
+      toast.error(t("cannotRepack"), { description: repackBlockedReason ?? t("blockedUnresolved") });
       return;
     }
 
@@ -375,12 +380,17 @@ export default function SingleFhm2dPage() {
         structurePath: repackDiscovery.structureJsonPath,
         inputFolderPath: repackFolderPath.trim(),
       });
-      toast.success("Repack completed", {
-        description: `Structure: ${repackDiscovery.structureJsonPath}\nOutput: ${result.outputPath}\nFiles: ${result.totalFiles}, size: ${result.outputSize}`,
+      toast.success(t("repackDone"), {
+        description: t("toasts.repackSummary", {
+          structure: repackDiscovery.structureJsonPath,
+          output: result.outputPath,
+          files: result.totalFiles,
+          size: result.outputSize,
+        }),
         duration: 15_000,
       });
     } catch (error) {
-      toast.error("Repack failed", {
+      toast.error(t("repackFailed"), {
         description: error instanceof Error ? error.message : String(error),
         duration: 15_000,
       });
@@ -393,10 +403,9 @@ export default function SingleFhm2dPage() {
     <div className="h-full min-h-0 overflow-auto">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 pb-16">
         <header className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Single FHM2D</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
           <p className="max-w-3xl text-sm text-muted-foreground">
-            Handle one archive at a time: unpack a .fhm2d into a named folder plus its sibling
-            structure JSON, or pack an already extracted folder back using that JSON.
+            {t("intro")}
           </p>
         </header>
 
@@ -404,11 +413,11 @@ export default function SingleFhm2dPage() {
           <TabsList className="grid w-full max-w-sm grid-cols-2">
             <TabsTrigger value="unpack" className="gap-2 text-xs">
               <PackageOpen className="h-3.5 w-3.5" />
-              Unpack
+              {t("unpack")}
             </TabsTrigger>
             <TabsTrigger value="repack" className="gap-2 text-xs">
               <FolderArchive className="h-3.5 w-3.5" />
-              Repack
+              {t("repack")}
             </TabsTrigger>
           </TabsList>
 
@@ -424,25 +433,24 @@ export default function SingleFhm2dPage() {
             <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)]">
               <SectionPanel>
                 <SectionBlock
-                  title="Source"
+                  title={t("source")}
                   description={
                     <>
-                      Unpacked by the Rust{" "}
-                      <code className="font-mono">extract_fhm2d_to_folder</code> command, not by
-                      the JS parser used for the preview.
+                      {t("sourceDescription")} ({" "}
+                      <code className="font-mono">extract_fhm2d_to_folder</code>)
                     </>
                   }
                 >
                   <div className="space-y-1.5">
                     <Label htmlFor="extract-input" className="text-xs">
-                      FHM2D file
+                      {t("fhm2dFile")}
                     </Label>
                     <FilePathInput
                       id="extract-input"
                       value={inputFilePath}
                       onChange={(e) => setInputFilePath(e.target.value)}
                       storeKey="inputFilePath"
-                      placeholder="Select .fhm2d..."
+                      placeholder={t("selectFhm2d")}
                       picker={{ kind: "file", multiple: false }}
                       onPickedValue={(picked) => {
                         if (Array.isArray(picked)) return;
@@ -455,26 +463,26 @@ export default function SingleFhm2dPage() {
                 </SectionBlock>
 
                 <SectionBlock
-                  title="Destination"
-                  description="Files land here; the structure JSON is written beside the folder."
+                  title={t("destination")}
+                  description={t("destinationDescription")}
                 >
                   <div className="space-y-1.5">
                     <Label htmlFor="extract-output" className="text-xs">
-                      Output folder
+                      {t("outputFolder")}
                     </Label>
                     <FilePathInput
                       id="extract-output"
                       value={outputFolderPath}
                       onChange={(e) => setOutputFolderPath(e.target.value)}
                       storeKey="outputFolderPath"
-                      placeholder="Select output directory..."
+                      placeholder={t("selectOutput")}
                       picker={{ kind: "folder", multiple: false }}
                     />
                   </div>
 
                   <Fhm2dNameField
                     id="extract-structure-name"
-                    label="Extract name"
+                    label={t("extractName")}
                     value={structureName}
                     onChange={setStructureName}
                     sourceNameOrPath={inputFilePath}
@@ -482,8 +490,8 @@ export default function SingleFhm2dPage() {
                     structureJsonPath={effectiveStructureJsonPath || null}
                     description={
                       createSubfolder
-                        ? "Used for the output folder and the sibling structure JSON name."
-                        : "Subfolder creation is off, so the selected output folder name becomes Name."
+                        ? t("nameDescription")
+                        : t("nameDescriptionNoSubfolder")
                     }
                   />
 
@@ -494,33 +502,33 @@ export default function SingleFhm2dPage() {
                       className="mt-0.5"
                     />
                     <span>
-                      <span className="font-medium">Create subfolder using name</span>
+                      <span className="font-medium">{t("createSubfolder")}</span>
                       <span className="block text-muted-foreground">
-                        Writes into output/name/ and name_structure.json beside it.
+                        {t("createSubfolderHelp")}
                       </span>
                     </span>
                   </label>
                 </SectionBlock>
 
                 <SectionBlock
-                  title="Naming"
-                  description="Picks the rename pipeline the extractor applies to inner files."
+                  title={t("naming")}
+                  description={t("namingDescription")}
                 >
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Asset format</Label>
+                    <Label className="text-xs">{t("assetFormat")}</Label>
                     <Select value={formatKey} onValueChange={setFormatKey}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select format" />
+                        <SelectValue placeholder={t("selectFormat")} />
                       </SelectTrigger>
                       <SelectContent>
                         {EXTRACT_FORMAT_OPTIONS.map((opt) => (
                           <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
+                            {t(opt.labelKey)}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground">{selectedFormat.description}</p>
+                    <p className="text-xs text-muted-foreground">{t(selectedFormat.descriptionKey)}</p>
                   </div>
 
                   <label className="flex items-start gap-2 text-xs">
@@ -530,9 +538,9 @@ export default function SingleFhm2dPage() {
                       className="mt-0.5"
                     />
                     <span>
-                      <span className="font-medium">Write meta.bin</span>
+                      <span className="font-medium">{t("writeMeta")}</span>
                       <span className="block text-muted-foreground">
-                        Handled by the Rust extractor when supported for this archive.
+                        {t("writeMetaHelp")}
                       </span>
                     </span>
                   </label>
@@ -546,12 +554,12 @@ export default function SingleFhm2dPage() {
                     {isExtracting ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Unpacking...
+                        {t("unpacking")}
                       </>
                     ) : (
                       <>
                         <PackageOpen className="h-4 w-4" />
-                        Unpack
+                        {t("unpack")}
                       </>
                     )}
                   </Button>
@@ -591,27 +599,19 @@ export default function SingleFhm2dPage() {
             <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)]">
               <SectionPanel>
                 <SectionBlock
-                  title="Extracted folder"
-                  description={
-                    <>
-                      The parent directory is searched for{" "}
-                      <code className="font-mono">{"{folder}_structure.json"}</code> (or legacy{" "}
-                      <code className="font-mono">{"{folder}.json"}</code> carrying
-                      SubFileStructure), then the folder is packed through{" "}
-                      <code className="font-mono">repack_fhm2d</code>.
-                    </>
-                  }
+                  title={t("extractedFolder")}
+                  description={t("extractedDescription")}
                 >
                   <div className="space-y-1.5">
                     <Label htmlFor="repack-folder" className="text-xs">
-                      Asset folder
+                      {t("assetFolder")}
                     </Label>
                     <FilePathInput
                       id="repack-folder"
                       value={repackFolderPath}
                       onChange={(e) => setRepackFolderPath(e.target.value)}
                       storeKey="repackInputPath"
-                      placeholder="Select extracted folder..."
+                      placeholder={t("selectExtracted")}
                       picker={{ kind: "folder", multiple: false }}
                     />
                   </div>
@@ -625,12 +625,12 @@ export default function SingleFhm2dPage() {
                     {isRepacking ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Repacking...
+                        {t("repacking")}
                       </>
                     ) : (
                       <>
                         <FolderArchive className="h-4 w-4" />
-                        Repack to parent
+                        {t("repackToParent")}
                       </>
                     )}
                   </Button>
@@ -642,19 +642,19 @@ export default function SingleFhm2dPage() {
 
               <SectionPanel>
                 <SectionBlock
-                  title="Resolved structure"
-                  description="Structure path and HashName-aware output written next to the folder."
+                  title={t("resolvedStructure")}
+                  description={t("resolvedDescription")}
                 >
                   {!repackFolderPath.trim() && (
                     <p className="rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground">
-                      Choose an extracted folder to resolve its structure JSON.
+                      {t("chooseFolder")}
                     </p>
                   )}
 
                   {repackFolderPath.trim() && isDiscovering && (
                     <p className="flex items-center gap-2 rounded-md border border-dashed p-6 text-xs text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Looking for structure JSON in the parent directory...
+                      {t("looking")}
                     </p>
                   )}
 
@@ -676,25 +676,24 @@ export default function SingleFhm2dPage() {
                       />
                       {repackDiscovery.missingMetadata && (
                         <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-400">
-                          Structure JSON has no Name and/or HashName. Output falls back to the
-                          structure file stem instead of a hash-based name.
+                          {t("missingMetadata")}
                         </p>
                       )}
                       <dl className="space-y-2 text-[11px]">
                         <div>
-                          <dt className="font-medium text-foreground">Match</dt>
+                          <dt className="font-medium text-foreground">{t("match")}</dt>
                           <dd className="font-mono text-muted-foreground">
                             {repackDiscovery.matchKind}
                           </dd>
                         </div>
                         <div>
-                          <dt className="font-medium text-foreground">Structure</dt>
+                          <dt className="font-medium text-foreground">{t("structure")}</dt>
                           <dd className="break-all font-mono text-muted-foreground">
                             {repackDiscovery.structureJsonPath}
                           </dd>
                         </div>
                         <div>
-                          <dt className="font-medium text-foreground">Output</dt>
+                          <dt className="font-medium text-foreground">{t("output")}</dt>
                           <dd className="break-all font-mono text-muted-foreground">
                             {repackDiscovery.repackOutputPath}
                           </dd>

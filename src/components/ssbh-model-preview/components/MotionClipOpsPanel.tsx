@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { LoaderCircle, Scissors, Timer, TriangleAlert } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,7 @@ export function MotionClipOpsPanel({
   disabled,
   onTransformed,
 }: MotionClipOpsPanelProps) {
+  const { t } = useTranslation("ssbh-motion");
   const lastFrame = finalFrameIndex !== null ? Math.max(0, Math.floor(finalFrameIndex)) : 0;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +63,7 @@ export function MotionClipOpsPanel({
       const dir = getDialogDefaultPath(DialogLastPathKey.ssbhMotionClipOpsSave, workspaceRoot);
       const sep = dir?.includes("\\") ? "\\" : "/";
       const outputNuanmbPath = await save({
-        title: "Save transformed NUANMB",
+        title: t("clipOps.saveTransformed"),
         filters: [{ name: "NUANMB", extensions: ["nuanmb"] }],
         defaultPath: dir ? `${dir.replace(/[/\\]+$/, "")}${sep}${fileName}` : fileName,
       });
@@ -78,53 +80,53 @@ export function MotionClipOpsPanel({
         });
         rememberDialogSelection(DialogLastPathKey.ssbhMotionClipOpsSave, outputNuanmbPath, "file");
         setReport(nextReport);
-        toast.success("Clip written", {
-          description: `${nextReport.frameCount} frames @ 60 FPS`,
+        toast.success(t("clipOps.clipWritten"), {
+          description: t("clipOps.framesAt60", { count: nextReport.frameCount }),
         });
         onTransformed(nextReport.outputPath);
       } catch (caughtError) {
         const message = errorMessage(caughtError);
         setError(message);
-        toast.error("Clip operation failed", { description: message });
+        toast.error(t("clipOps.failed"), { description: message });
       } finally {
         setBusy(false);
       }
     },
-    [onTransformed, selectedNuanmbPath, skeletonPath, workspaceRoot],
+    [onTransformed, selectedNuanmbPath, skeletonPath, t, workspaceRoot],
   );
 
   const runTrim = useCallback(() => {
     const start = Number.parseInt(startFrame, 10);
     const end = Number.parseInt(endFrame, 10);
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start > end) {
-      setError("Trim needs 0 <= start frame <= end frame.");
+      setError(t("clipOps.trimRange"));
       return;
     }
     void runOperation({ kind: "trim", startFrame: start, endFrame: end }, "_trim");
-  }, [endFrame, runOperation, startFrame]);
+  }, [endFrame, runOperation, startFrame, t]);
 
   const runRetime = useCallback(() => {
     const factor = Number.parseFloat(speedFactor);
     if (!Number.isFinite(factor) || factor <= 0) {
-      setError("Speed factor must be a positive number.");
+      setError(t("clipOps.speedPositive"));
       return;
     }
     void runOperation(
       { kind: "retime", speedFactor: factor },
       `_x${String(factor).replace(".", "_")}`,
     );
-  }, [runOperation, speedFactor]);
+  }, [runOperation, speedFactor, t]);
 
   return (
-    <MayaSection title="Clip tools" icon={<Scissors className="h-3.5 w-3.5 opacity-80" />} defaultOpen={false}>
+    <MayaSection title={t("clipOps.title")} icon={<Scissors className="h-3.5 w-3.5 opacity-80" />} defaultOpen={false}>
       <div className="flex flex-col gap-2 text-[10px]">
         <p className="text-muted-foreground">
-          Write a trimmed or retimed copy of the selected NUANMB (transform-only, 60 FPS).
+          {t("clipOps.hint")}
         </p>
         <div className="flex flex-wrap items-end gap-1.5">
           <div className="flex flex-col gap-1">
             <Label htmlFor="clip-ops-start-frame" className="text-[10px] text-muted-foreground">
-              Start frame
+              {t("clipOps.startFrame")}
             </Label>
             <Input
               id="clip-ops-start-frame"
@@ -138,7 +140,7 @@ export function MotionClipOpsPanel({
           </div>
           <div className="flex flex-col gap-1">
             <Label htmlFor="clip-ops-end-frame" className="text-[10px] text-muted-foreground">
-              End frame
+              {t("clipOps.endFrame")}
             </Label>
             <Input
               id="clip-ops-end-frame"
@@ -162,13 +164,13 @@ export function MotionClipOpsPanel({
             ) : (
               <Scissors className="mr-1 h-3.5 w-3.5" />
             )}
-            Trim
+            {t("clipOps.trim")}
           </Button>
         </div>
         <div className="flex flex-wrap items-end gap-1.5">
           <div className="flex flex-col gap-1">
             <Label htmlFor="clip-ops-speed" className="text-[10px] text-muted-foreground">
-              Speed x
+              {t("clipOps.speedX")}
             </Label>
             <Input
               id="clip-ops-speed"
@@ -193,11 +195,11 @@ export function MotionClipOpsPanel({
             ) : (
               <Timer className="mr-1 h-3.5 w-3.5" />
             )}
-            Retime
+            {t("clipOps.retime")}
           </Button>
         </div>
         {!selectedNuanmbPath ? (
-          <p className="text-muted-foreground">Select a NUANMB to use clip tools.</p>
+          <p className="text-muted-foreground">{t("clipOps.selectNuanmb")}</p>
         ) : null}
         {error ? (
           <p role="alert" className="flex gap-1.5 text-destructive wrap-anywhere">
@@ -209,7 +211,10 @@ export function MotionClipOpsPanel({
           <MotionReportCard
             title={report.actionName}
             rows={[
-              `${report.frameCount} frames, ${report.durationSeconds.toFixed(3)}s @ 60 FPS`,
+              t("clipOps.summary", {
+                frames: report.frameCount,
+                seconds: report.durationSeconds.toFixed(3),
+              }),
               report.outputPath,
             ]}
             warnings={report.warnings}

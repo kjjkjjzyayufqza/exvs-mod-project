@@ -1,0 +1,5 @@
+{
+  "common": { "yes": "はい", "no": "いいえ" },
+  "analysis": { "analyzing": "静的メッシュを解析しています…", "title": "ソース解析", "convertible": "変換可能", "meshes": "メッシュ", "vertices": "頂点", "bones": "ボーン" },
+  "ssbh": { "output": "SSBH 出力", "baseFilename": "ベースファイル名", "scaleFactor": "スケール係数", "upAxis": "上方向軸", "writeTargets": "書き込み対象" }
+}

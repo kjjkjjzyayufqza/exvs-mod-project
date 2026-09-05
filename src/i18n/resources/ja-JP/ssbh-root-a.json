@@ -1,0 +1,6 @@
+{
+  "attachment.loadTemplatesFailed": "アタッチメントテンプレートの読み込みに失敗しました",
+  "attachment.warning": "アタッチメント警告",
+  "attachment.applied": "アタッチメントを適用しました",
+  "attachment.applyFailed": "アタッチメントの適用に失敗しました"
+}

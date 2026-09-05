@@ -1,4 +1,5 @@
 import { useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import type { EfxbnControlName, EfxbnCurveKey } from "./efxbnDocument";
 import {
@@ -97,6 +98,7 @@ export function EfxbnGraphCanvas({
   onViewChange,
   onScrubbingChange,
 }: EfxbnGraphCanvasProps) {
+  const { t } = useTranslation("test-effect-folder");
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragOverlayRef = useRef<SVGGElement | null>(null);
   const plotContentRef = useRef<SVGGElement | null>(null);
@@ -355,6 +357,7 @@ export function EfxbnGraphCanvas({
             role="button"
             tabIndex={0}
             aria-pressed={selected}
+            data-i18n-ignore=""
             aria-label={`${curve.name} key at ${frameLabel}, value ${formatGraphNumber(entry.value)}`}
             className="cursor-crosshair outline-none focus-visible:[&>polygon]:stroke-primary"
             onPointerDown={(event) => handleKeyPointerDown(event, ref)}
@@ -398,7 +401,7 @@ export function EfxbnGraphCanvas({
         height={height}
         viewBox={`0 0 ${width} ${height}`}
         role="application"
-        aria-label="EFXBN curve graph"
+        aria-label={t("canvas.ariaGraph")}
         className="block h-full w-full touch-none select-none"
         onPointerDown={handleRootPointerDown}
         onPointerMove={handlePointerMove}
@@ -501,7 +504,7 @@ export function EfxbnGraphCanvas({
         max={100}
         step="any"
         value={progress}
-        aria-label="EFXBN progress"
+        aria-label={t("canvas.ariaProgress")}
         className="sr-only"
         onChange={(event) => onProgressChange(Number(event.target.value))}
       />

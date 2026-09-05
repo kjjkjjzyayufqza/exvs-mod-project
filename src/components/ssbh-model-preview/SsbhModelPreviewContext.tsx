@@ -22,6 +22,7 @@ import {
   type SetStateAction,
 } from "react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import type { BufferGeometry } from "three";
 import {
   buildDrawListFromBundle,
@@ -545,6 +546,7 @@ export function SsbhModelPreviewProvider({
   defaultLightingPreset = "studio",
   children,
 }: ProviderProps) {
+  const { t } = useTranslation("ssbh-root-c");
   const root = workspaceRoot?.trim() ? workspaceRoot : null;
   const initialLighting: PreviewLightingValues =
     PREVIEW_LIGHTING_PRESETS[defaultLightingPreset] ?? PREVIEW_LIGHTING_PRESETS.studio;
@@ -1238,7 +1240,7 @@ export function SsbhModelPreviewProvider({
           if (inspect.stacks.length > 1) {
             const names = inspect.stacks.map((s) => s.name).join(", ");
             const message = `This FBX has multiple animation stacks. Choose one in the Motion panel: ${names}`;
-            toast.message("Pick an animation stack", { description: names });
+            toast.message(t("toast.pickAnimStack"), { description: names });
             throw new Error(message);
           }
           stackName = inspect.stacks[0]?.name ?? null;
@@ -1252,18 +1254,22 @@ export function SsbhModelPreviewProvider({
           rigBindingPolicy: "exactHierarchy",
         });
         loadMotionNuanmbPath(report.outputPath);
-        toast.success("FBX preview loaded", {
-          description: `${report.actionName} · ${report.frameCount} frames · ${report.matchedBones.length} bones matched`,
+        toast.success(t("toast.fbxPreviewLoaded"), {
+          description: t("toast.fbxPreviewSummary", {
+            action: report.actionName,
+            frames: report.frameCount,
+            bones: report.matchedBones.length,
+          }),
         });
         if (report.warnings.length > 0) {
-          toast.message("FBX preview warnings", {
+          toast.message(t("toast.fbxPreviewWarnings"), {
             description: report.warnings.slice(0, 3).join("\n"),
           });
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (!message.includes("multiple animation stacks")) {
-          toast.error("FBX motion preview failed", { description: message });
+          toast.error(t("toast.fbxPreviewFailed"), { description: message });
         }
         throw error instanceof Error ? error : new Error(message);
       }
@@ -1321,14 +1327,17 @@ export function SsbhModelPreviewProvider({
         const missing = required.filter((id) => !bound.has(id));
         if (missing.length === 0 && plan.kind === "bundle") {
           await playMotionBundle(plan);
-          toast.success("Motion folder bundle playing", {
-            description: `action ${plan.actionId} · ${plan.clips.length} clip(s) · multi-model`,
+          toast.success(t("toast.motionBundlePlaying"), {
+            description: t("toast.motionBundleSummary", {
+              actionId: plan.actionId,
+              count: plan.clips.length,
+            }),
           });
           return;
         }
         if (missing.length > 0) {
-          toast.message("Motion folder has multi-model clips", {
-            description: `Bind modelId(s) in Attachments first: ${missing.join(", ")}. Loaded clip list on active model instead.`,
+          toast.message(t("toast.motionMultiModel"), {
+            description: t("toast.motionMultiModelHelp", { ids: missing.join(", ") }),
           });
         }
       }
@@ -1419,13 +1428,13 @@ export function SsbhModelPreviewProvider({
     if (collectedWarnings.length > 0) {
       const preview = collectedWarnings.slice(0, 4).join("\n");
       const more =
-        collectedWarnings.length > 4 ? `\n… and ${collectedWarnings.length - 4} more` : "";
-      toast.message("Model preview notices", {
-        description: `${preview}${more}`,
+        collectedWarnings.length > 4 ? t("toast.noticesMore", { count: collectedWarnings.length - 4 }) : "";
+      toast.message(t("toast.modelNotices"), {
+        description: preview + more,
       });
     }
     return { instances, draws: allDraws };
-  }, []);
+  }, [t]);
 
   const buildInstancesFromPaths = useCallback(async (paths: string[], startSlotIndex: number) => {
     const uniquePaths = [...new Map(paths.map((path) => [path.toLowerCase(), path])).values()];
@@ -1574,7 +1583,7 @@ export function SsbhModelPreviewProvider({
     try {
       return buildSkeletonLineGeometry(bundle.skel as SkelDataJson);
     } catch (e) {
-      toast.error(`Skeleton parse failed: ${String(e)}`);
+      toast.error(t("toast.skeletonParseFailed", { message: String(e) }));
       return null;
     }
   }, [bundle?.skel]);
@@ -1684,7 +1693,7 @@ export function SsbhModelPreviewProvider({
                 },
               };
             });
-            toast.error("Motion metadata unavailable", { description: String(e) });
+            toast.error(t("toast.motionMetadataUnavailable"), { description: String(e) });
           }
         })();
       }
@@ -1812,7 +1821,7 @@ export function SsbhModelPreviewProvider({
               },
             };
           });
-          toast.error("Motion cannot play", { description: message });
+          toast.error(t("toast.motionCannotPlay"), { description: message });
         }
       })();
     }
@@ -2190,9 +2199,9 @@ export function SsbhModelPreviewProvider({
       if (failedTextures.length > 0) {
         const preview = failedTextures.slice(0, 4).join("\n");
         const more =
-          failedTextures.length > 4 ? `\n… and ${failedTextures.length - 4} more` : "";
-        toast.error("Some textures failed to decode", {
-          description: `${preview}${more}`,
+          failedTextures.length > 4 ? t("toast.noticesMore", { count: failedTextures.length - 4 }) : "";
+        toast.error(t("toast.texturesFailed"), {
+          description: preview + more,
         });
       }
     })();
@@ -2517,7 +2526,7 @@ export function SsbhModelPreviewProvider({
     const defaultDir = getDialogDefaultPath(DialogLastPathKey.ssbhPreviewOpenModelFolder, root);
     const defaultPath = defaultDir ? `${defaultDir.replace(/[/\\]+$/, "")}\\scene-config.json` : "scene-config.json";
     const outputPath = await save({
-      title: "Export EXVS2 Workspace scene config",
+      title: t("dialogs.exportSceneConfig"),
       defaultPath,
       filters: [{ name: "JSON", extensions: ["json"] }],
     });
@@ -2580,7 +2589,7 @@ export function SsbhModelPreviewProvider({
     };
     await writeTextFile(outputPath, JSON.stringify(config, null, 2));
     rememberDialogSelection(DialogLastPathKey.ssbhPreviewOpenModelFolder, outputPath, "file");
-    toast.success("Scene exported", { description: outputPath });
+    toast.success(t("toast.sceneExported"), { description: outputPath });
   }, [
     root,
     previewInstances,
@@ -2744,7 +2753,7 @@ export function SsbhModelPreviewProvider({
     });
     setModelAttachments(mappedAttachments);
     setFitRequestId((v) => v + 1);
-    toast.success("Scene imported", { description: selectedPath });
+    toast.success(t("toast.sceneImported"), { description: selectedPath });
   }, [loadInstancesFromPaths, root, setAutoLoadAfterConvertToSsbh]);
 
   const commitBonePoseUndo = useCallback((beforeTransformSnapshot: Float32Array) => {

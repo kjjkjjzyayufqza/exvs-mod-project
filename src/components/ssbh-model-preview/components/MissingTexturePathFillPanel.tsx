@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -24,10 +25,12 @@ function profileLabel(profile: MissingTexturePathSlotRef["profile"]): string {
 export function MissingTexturePathFillPanel({
   slots,
   onFillSlot,
-  title = "Fill every texture path parameter for profiles you export:",
+  title,
   className,
   getSlotMessage,
 }: MissingTexturePathFillPanelProps) {
+  const { t } = useTranslation("ssbh-motion");
+  const heading = title ?? t("missingTextures.fillAll");
   const slotEntries = useMemo(
     () =>
       slots.map((slot) => ({
@@ -107,7 +110,7 @@ export function MissingTexturePathFillPanel({
 
   return (
     <div className={cn("space-y-2 rounded-md border border-destructive/30 bg-destructive/5 p-3", className)}>
-      <p className="text-[11px] text-destructive">{title}</p>
+      <p className="text-[11px] text-destructive">{heading}</p>
 
       <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background px-3 py-2">
         <div className="min-w-0 flex-1">
@@ -126,7 +129,7 @@ export function MissingTexturePathFillPanel({
           disabled={!canApplySelected}
           onClick={applyBulkValueToSelected}
         >
-          Apply to selected ({selectedCount})
+          {t("missingTextures.applySelected", { count: selectedCount })}
         </Button>
       </div>
 
@@ -135,11 +138,11 @@ export function MissingTexturePathFillPanel({
           <Checkbox
             checked={allSelected ? true : someSelected ? "indeterminate" : false}
             onCheckedChange={(value) => toggleSelectAll(value === true)}
-            aria-label="Select all texture path slots"
+            aria-label={t("missingTextures.selectAll")}
             className="h-3.5 w-3.5"
           />
-          <span className="text-[10px] font-medium text-muted-foreground">Parameter</span>
-          <span className="text-[10px] font-medium text-muted-foreground">Texture</span>
+          <span className="text-[10px] font-medium text-muted-foreground">{t("missingTextures.parameter")}</span>
+          <span className="text-[10px] font-medium text-muted-foreground">{t("missingTextures.texture")}</span>
         </div>
 
         {slotEntries.map(({ slot, key }) => (
@@ -150,10 +153,10 @@ export function MissingTexturePathFillPanel({
             <Checkbox
               checked={selectedKeys.has(key)}
               onCheckedChange={(value) => toggleSlotSelected(key, value === true)}
-              aria-label={`Select ${slot.paramId}`}
+              aria-label={t("missingTextures.selectParam", { paramId: slot.paramId })}
               className="h-3.5 w-3.5"
             />
-            <div className="min-w-0">
+            <div className="min-w-0" data-i18n-ignore="">
               <Label className="font-mono text-[11px] font-normal text-foreground">{slot.paramId}</Label>
               <p className="truncate text-[9px] leading-tight text-muted-foreground">
                 {profileLabel(slot.profile)} · {slot.materialLabel}
@@ -166,7 +169,7 @@ export function MissingTexturePathFillPanel({
                 onChange={(basename) => onFillSlot(slot, basename)}
               />
               {getSlotMessage?.(slot) ? (
-                <p className="mt-1 wrap-break-word font-mono text-[9px] leading-tight text-destructive">
+                <p className="mt-1 wrap-break-word font-mono text-[9px] leading-tight text-destructive" data-i18n-ignore="">
                   {getSlotMessage(slot)}
                 </p>
               ) : null}

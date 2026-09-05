@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +52,7 @@ export function DaeImportSsbhFullPanel({
   unitModelMode = false,
   replaceNumshbMode = false,
 }: DaeImportSsbhFullPanelProps) {
+  const { t } = useTranslation("scene-dae-full");
   const setSourcePath = useDaeSsbhSessionStore((state) => state.setSourcePath);
   const loadAnalysis = useDaeSsbhSessionStore((state) => state.loadAnalysis);
   const loadTemplateLibrary = useDaeSsbhSessionStore((state) => state.loadTemplateLibrary);
@@ -173,35 +175,33 @@ export function DaeImportSsbhFullPanel({
   if (!analysis || !analysis.canConvert) {
     return (
       <div className="p-4 text-[11px] text-muted-foreground">
-        Waiting for DAE analysis or analysis reported blocking errors.
+        {t("analysis.waiting")}
       </div>
     );
   }
 
   return (
     <div className="space-y-3 p-4">
-      <DaeImportPanelSection title="Output">
+      <DaeImportPanelSection title={t("output.title")}>
         <p className="text-[11px] text-muted-foreground">
           {replaceNumshbMode
-            ? "Only a temporary .numshb is written. The existing NUMDLB, NUMATB, NUSKTB, JNTTBL, and NUHLPB stay untouched."
+            ? t("output.replaceNumshb")
             : unitModelMode
-            ? `Generated model files are registered under the Unit model models folder${stageRoot ? ` (${stageRoot})` : ""}. Referenced textures are deduplicated into its shared texture pool.`
+            ? t("output.unitModel", { stageRoot: stageRoot ? ` (${stageRoot})` : "" })
             : directToDisk
             ? batchCount > 1
-              ? `These SSBH and NUMATB settings are shared by all ${batchCount} files. Each model is written directly to its own disk folder.`
-              : "SSBH files are written directly to the selected disk folder."
-            : `SSBH files are kept in memory until you save the stage folder${
-                stageRoot ? ` (${stageRoot})` : ""
-              }.`}
+              ? t("output.batchDirect", { count: batchCount })
+              : t("output.direct")
+            : t("output.memory", { stageRoot: stageRoot ? ` (${stageRoot})` : "" })}
         </p>
         <div className="grid gap-2 md:grid-cols-2">
           {batchCount > 1 ? (
             <p className="md:col-span-2 text-[11px] text-muted-foreground">
-              Each output folder uses its source FBX/DAE filename.
+              {t("output.batchFolderName")}
             </p>
           ) : (
             <div className="space-y-1 md:col-span-2">
-              <Label className="text-[11px] text-muted-foreground">Model folder name</Label>
+              <Label className="text-[11px] text-muted-foreground">{t("output.modelFolderName")}</Label>
               <Input
                 value={session.outputBaseName}
                 onChange={(e) => session.setOutputBaseName(e.target.value)}
@@ -211,7 +211,7 @@ export function DaeImportSsbhFullPanel({
           )}
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <Label className="text-[11px] text-muted-foreground">Scale</Label>
+              <Label className="text-[11px] text-muted-foreground">{t("output.scale")}</Label>
               <Input
                 value={session.scaleFactorText}
                 onChange={(e) => session.setScaleFactorText(e.target.value)}
@@ -219,15 +219,15 @@ export function DaeImportSsbhFullPanel({
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-[11px] text-muted-foreground">Up axis</Label>
+              <Label className="text-[11px] text-muted-foreground">{t("output.upAxis")}</Label>
               <select
                 className="h-8 w-full rounded-md border border-input bg-background px-2 text-[11px]"
                 value={session.upAxis}
                 onChange={(e) => session.setUpAxis(e.target.value as "y_up" | "z_up" | "none")}
               >
-                <option value="y_up">Y-up</option>
-                <option value="z_up">Z-up</option>
-                <option value="none">None</option>
+                <option value="y_up">{t("output.yUp")}</option>
+                <option value="z_up">{t("output.zUp")}</option>
+                <option value="none">{t("output.none")}</option>
               </select>
             </div>
           </div>
@@ -237,9 +237,9 @@ export function DaeImportSsbhFullPanel({
               onCheckedChange={(checked) => session.setFlipUv(checked === true)}
             />
             <span className="space-y-0.5">
-              <span className="block font-medium text-foreground">Flip UV (V)</span>
+              <span className="block font-medium text-foreground">{t("output.flipUv")}</span>
               <span className="block text-[10px] text-muted-foreground">
-                Invert the V coordinate during SSBH conversion.
+                {t("output.flipUvHelp")}
               </span>
             </span>
           </label>
@@ -247,7 +247,7 @@ export function DaeImportSsbhFullPanel({
       </DaeImportPanelSection>
 
       <DaeImportPanelSection
-        title={`Include Geometries (${session.includeGeometryNames.length}/${analysis.geometryNames.length})`}
+        title={t("geometry.title", { selected: session.includeGeometryNames.length, total: analysis.geometryNames.length })}
       >
         <ScrollArea className="max-h-[120px]">
           <div className="space-y-1">
@@ -264,7 +264,7 @@ export function DaeImportSsbhFullPanel({
         </ScrollArea>
       </DaeImportPanelSection>
 
-      <DaeImportPanelSection title="Output Files">
+      <DaeImportPanelSection title={t("files.title")}>
         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
           <label className="flex cursor-pointer items-center gap-2 text-[11px]">
             <Checkbox
@@ -296,7 +296,7 @@ export function DaeImportSsbhFullPanel({
               disabled={unitModelMode || replaceNumshbMode}
               onCheckedChange={(c) => session.setWriteNumatb(c === true)}
             />
-            __nust__.numatb
+            <span data-i18n-ignore="">__nust__.numatb</span>
           </label>
           <label className="flex cursor-pointer items-center gap-2 text-[11px]">
             <Checkbox
@@ -304,7 +304,7 @@ export function DaeImportSsbhFullPanel({
               disabled={unitModelMode || replaceNumshbMode}
               onCheckedChange={(c) => session.setWriteMayaProfile(c === true)}
             />
-            __maya__.numatb
+            <span data-i18n-ignore="">__maya__.numatb</span>
           </label>
           {unitModelMode && !replaceNumshbMode ? (
             <label className="flex cursor-pointer items-center gap-2 text-[11px]">
@@ -313,7 +313,7 @@ export function DaeImportSsbhFullPanel({
             </label>
           ) : replaceNumshbMode ? (
             <p className="col-span-2 text-[10px] text-muted-foreground">
-              Other SSBH outputs stay off for mesh-only replace.
+              {t("files.replaceNote")}
             </p>
           ) : (
             <label className="flex cursor-pointer items-center gap-2 text-[11px]">
@@ -321,14 +321,14 @@ export function DaeImportSsbhFullPanel({
                 checked={session.writeLog}
                 onCheckedChange={(c) => session.setWriteLog(c === true)}
               />
-              Write log
+              {t("files.writeLog")}
             </label>
           )}
         </div>
       </DaeImportPanelSection>
 
       {replaceNumshbMode ? null : (
-      <DaeImportPanelSection title="NUMDLB Mapping">
+      <DaeImportPanelSection title={t("mapping.title")}>
         <NumdlbMaterialMappingEditor
           rows={session.numdlbEntries}
           onChangeMeshObjectName={session.setMeshObjectName}
@@ -343,15 +343,15 @@ export function DaeImportSsbhFullPanel({
       {replaceNumshbMode ? null : (
         <>
           <DaeImportPanelSection
-            title="NUMATB Profiles (Texture Data)"
+            title={t("profiles.title")}
             headerEnd={
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 shrink-0"
-                title="Copy full NUMATB profile data as JSON (for AI analysis)"
-                aria-label="Copy NUMATB profiles as JSON"
+                title={t("profiles.copyTitle")}
+                aria-label={t("profiles.copyLabel")}
                 onClick={() => void handleCopyNumatbProfilesJson()}
               >
                 <Copy className="h-3.5 w-3.5" />
@@ -378,19 +378,19 @@ export function DaeImportSsbhFullPanel({
           />
           {textureReferencesValidating ? (
             <p className="text-[11px] text-muted-foreground">
-              Checking NUMATB texture references...
+              {t("validation.checking")}
             </p>
           ) : null}
           {textureReferenceValidationError ? (
             <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
               <p className="text-[11px] text-destructive">
-                Texture reference validation failed: {textureReferenceValidationError}
+                {t("validation.failed", { error: textureReferenceValidationError })}
               </p>
             </div>
           ) : null}
           <MissingTexturePathFillPanel
             slots={textureReferenceIssues.map((issue) => issue.slot)}
-            title="Fix texture references that cannot be resolved before conversion:"
+            title={t("validation.fixTitle")}
             getSlotMessage={(slot) =>
               textureReferenceIssueMessages.get(missingTexturePathSlotKey(slot)) ?? null
             }

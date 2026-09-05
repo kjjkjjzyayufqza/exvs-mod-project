@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Tree, type NodeApi } from "react-arborist";
 import { CustomTreeNode } from "@/components/CustomTreeNode";
 import type { TreeDataItem } from "@/lib/utils";
@@ -19,6 +20,7 @@ export function MotionFolderTreePanel({
   focusedKey,
   onSelectionChange,
 }: MotionFolderTreePanelProps) {
+  const { t } = useTranslation("test-motion-folder-panels");
   const containerRef = useRef<HTMLDivElement | null>(null);
   const treeRef = useRef<any>(null);
   const [treeHeight, setTreeHeight] = useState(480);
@@ -73,7 +75,7 @@ export function MotionFolderTreePanel({
   return (
     <div ref={containerRef} className="h-full min-h-0 overflow-hidden border-r bg-background">
       {treeData.length === 0 ? (
-        <p className="px-3 py-6 text-center text-xs text-muted-foreground">No motion structure entries.</p>
+        <p className="px-3 py-6 text-center text-xs text-muted-foreground">{t("tree.empty")}</p>
       ) : (
         <Tree
           ref={treeRef}

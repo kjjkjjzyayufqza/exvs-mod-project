@@ -1,4 +1,5 @@
 import { AlertTriangle, Box, FileCode2, FileWarning, ImageIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,13 +14,7 @@ import {
   type EffectListItem,
 } from "./effectFolderEditorUtils";
 
-const CATEGORY_LABELS: Record<EffectInventoryCategory | "all", string> = {
-  all: "All",
-  efxbn: "EFXBN",
-  models: "Models",
-  textures: "Textures",
-  other: "Other",
-};
+const CATEGORY_KEYS: Array<EffectInventoryCategory | "all"> = ["all", "efxbn", "models", "textures", "other"];
 
 type EffectFolderListPanelProps = {
   items: EffectListItem[];
@@ -42,6 +37,14 @@ export function EffectFolderListPanel({
   onToggleSelection,
   onFocus,
 }: EffectFolderListPanelProps) {
+  const { t } = useTranslation("test-effect-folder");
+  const categoryLabel = (key: EffectInventoryCategory | "all"): string => {
+    if (key === "efxbn") return "EFXBN";
+    if (key === "all") return t("list.all");
+    if (key === "models") return t("list.models");
+    if (key === "textures") return t("list.textures");
+    return t("list.other");
+  };
   const renderThumb = (item: EffectListItem, selected: boolean) => {
     if (item.category === "textures") {
       return (
@@ -71,7 +74,7 @@ export function EffectFolderListPanel({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden border-r bg-background">
       <div className="custom-scrollbar-thin flex shrink-0 gap-0.5 overflow-x-auto border-b px-2 py-1.5">
-        {(Object.keys(CATEGORY_LABELS) as Array<EffectInventoryCategory | "all">).map((key) => (
+        {CATEGORY_KEYS.map((key) => (
           <button
             key={key}
             type="button"
@@ -83,14 +86,14 @@ export function EffectFolderListPanel({
                 : "bg-muted/60 hover:bg-muted",
             )}
           >
-            {CATEGORY_LABELS[key]} ({categoryCounts[key]})
+            {categoryLabel(key)} ({categoryCounts[key]})
           </button>
         ))}
       </div>
 
       <div className="custom-scrollbar-thin min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {items.length === 0 ? (
-          <p className="px-3 py-6 text-center text-xs text-muted-foreground">No entries in this category.</p>
+          <p className="px-3 py-6 text-center text-xs text-muted-foreground">{t("list.empty")}</p>
         ) : (
           <ul className="divide-y divide-border/60">
             {items.map((item) => {
@@ -110,7 +113,7 @@ export function EffectFolderListPanel({
                     <Checkbox
                       checked={selected}
                       onCheckedChange={() => onToggleSelection(key, true)}
-                      aria-label={`Select ${effectListItemLabel(item)}`}
+                      aria-label={t("list.selectItem", { name: effectListItemLabel(item) })}
                       className="mt-0.5"
                     />
                     {renderThumb(item, selected)}
@@ -128,7 +131,7 @@ export function EffectFolderListPanel({
                           {item.category}
                         </Badge>
                         {missing ? (
-                          <FileWarning className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Missing file" />
+                          <FileWarning className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label={t("list.missingFile")} />
                         ) : null}
                       </div>
                       <p className="truncate font-mono text-[10px] text-muted-foreground">
@@ -139,7 +142,7 @@ export function EffectFolderListPanel({
                           item.category === "models" ? item.model.hash : item.item.hash;
                         if (!hash) return null;
                         return (
-                          <p className="truncate font-mono text-[10px] tabular-nums text-muted-foreground/80">
+                          <p className="truncate font-mono text-[10px] tabular-nums text-muted-foreground/80" data-i18n-ignore="">
                             {formatEffectFolderHash(hash)}
                             {item.category !== "models" ? ` / fileIndex ${item.item.fileIndex}` : null}
                           </p>
@@ -157,7 +160,7 @@ export function EffectFolderListPanel({
       {showMissingBanner ? (
         <div className="flex shrink-0 items-center gap-2 border-t bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-          Some entries reference missing files on disk.
+          {t("list.missingBanner")}
         </div>
       ) : null}
     </div>

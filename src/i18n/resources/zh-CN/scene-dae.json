@@ -1,0 +1,5 @@
+{
+  "common": { "yes": "是", "no": "否" },
+  "analysis": { "analyzing": "正在分析静态网格……", "title": "源文件分析", "convertible": "可转换", "meshes": "网格", "vertices": "顶点", "bones": "骨骼" },
+  "ssbh": { "output": "SSBH 输出", "baseFilename": "基础文件名", "scaleFactor": "缩放因子", "upAxis": "向上轴", "yUp": "Y-Up", "zUp": "Z-Up", "noConversion": "不转换", "writeTargets": "写入目标" }
+}

@@ -42,6 +42,9 @@ doctest = false
 # Keep historical utility binaries available for cargo run/build, but do not
 # build their test harnesses during cargo test. Several legacy targets are heavy
 # enough to exhaust memory when Cargo auto-discovers every test target.
+#
+# Agent CLIs stay in src/bin/. Feature-gated tools live in legacy-bin/ so
+# Tauri CLI 2.11 does not disk-scan them into NSIS (tauri-apps/tauri#15325).
 [[bin]]
 name = "app"
 path = "src/main.rs"
@@ -49,13 +52,13 @@ test = false
 
 [[bin]]
 name = "crc32_brute_seed"
-path = "src/bin/crc32_brute_seed.rs"
+path = "legacy-bin/crc32_brute_seed.rs"
 test = false
 required-features = ["legacy-cli-tools"]
 
 [[bin]]
 name = "debug_hkt_to_obj"
-path = "src/bin/debug_hkt_to_obj.rs"
+path = "legacy-bin/debug_hkt_to_obj.rs"
 test = false
 required-features = ["legacy-cli-tools"]
 
@@ -71,73 +74,75 @@ test = false
 
 [[bin]]
 name = "fhm2d_extract_folder"
-path = "src/bin/fhm2d_extract_folder.rs"
+path = "legacy-bin/fhm2d_extract_folder.rs"
 test = false
 required-features = ["legacy-cli-tools"]
 
 [[bin]]
 name = "fhm2d_named_tree"
-path = "src/bin/fhm2d_named_tree.rs"
+path = "legacy-bin/fhm2d_named_tree.rs"
 test = false
 required-features = ["legacy-cli-tools"]
 
 [[bin]]
 name = "gen_hkt_from_import"
-path = "src/bin/gen_hkt_from_import.rs"
+path = "legacy-bin/gen_hkt_from_import.rs"
 test = false
 required-features = ["legacy-cli-tools"]
 
 [[bin]]
 name = "gen_hkt_variants"
-path = "src/bin/gen_hkt_variants.rs"
+path = "legacy-bin/gen_hkt_variants.rs"
 test = false
 required-features = ["legacy-cli-tools"]
 
 [[bin]]
 name = "gen_simple_hkt"
-path = "src/bin/gen_simple_hkt.rs"
+path = "legacy-bin/gen_simple_hkt.rs"
 test = false
 required-features = ["legacy-cli-tools"]
 
 [[bin]]
 name = "hkt_compress_compare"
-path = "src/bin/hkt_compress_compare.rs"
+path = "legacy-bin/hkt_compress_compare.rs"
 test = false
 required-features = ["legacy-cli-tools"]
 
 [[bin]]
 name = "hkt_xml_to_obj"
-path = "src/bin/hkt_xml_to_obj.rs"
+path = "legacy-bin/hkt_xml_to_obj.rs"
 test = false
 required-features = ["legacy-cli-tools"]
 
 [[bin]]
 name = "perf_preview_hkt"
-path = "src/bin/perf_preview_hkt.rs"
+path = "legacy-bin/perf_preview_hkt.rs"
 test = false
 required-features = ["legacy-cli-tools"]
 
 [[bin]]
 name = "stage_texture_roundtrip_check"
-path = "src/bin/stage_texture_roundtrip_check.rs"
+path = "legacy-bin/stage_texture_roundtrip_check.rs"
 test = false
 required-features = ["legacy-cli-tools"]
 
 [[bin]]
 name = "unit_model_repack_roundtrip"
-path = "src/bin/unit_model_repack_roundtrip.rs"
+path = "legacy-bin/unit_model_repack_roundtrip.rs"
 test = false
 required-features = ["legacy-cli-tools"]
 
 [[bin]]
 name = "mscdec"
-path = "src/bin/mscdec.rs"
+path = "legacy-bin/mscdec.rs"
 test = false
+required-features = ["legacy-cli-tools"]
 
 [[bin]]
 name = "msclang"
-path = "src/bin/msclang.rs"
+path = "legacy-bin/msclang.rs"
 test = false
+required-features = ["legacy-cli-tools"]
 
 # Default `cargo test` suite (agent-facing CLIs only — keep this list short).
 [[test]]

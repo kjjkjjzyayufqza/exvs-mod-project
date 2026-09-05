@@ -14,6 +14,7 @@ import {
   Search,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,7 @@ function rootFolderName(rootPath: string): string {
 }
 
 export function NutexbViewTool() {
+  const { t } = useTranslation("misc-tools-b");
   const [isOpen, setIsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [scan, setScan] = useState<NutexbFolderScan | null>(null);
@@ -122,13 +124,13 @@ export function NutexbViewTool() {
       setCollapsedFolderIds(new Set());
       setSearch("");
       rememberDialogSelection(DialogLastPathKey.miscNutexbView, folderPath, "directory");
-      toast.success(`Found ${next.files.length} nutexb file${next.files.length === 1 ? "" : "s"}`);
+      toast.success(t("nutexb.found", { count: next.files.length }));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [t]);
 
   const pickFolder = useCallback(async () => {
     try {
@@ -196,13 +198,13 @@ export function NutexbViewTool() {
   return (
     <>
       <Button variant="outline" className="w-full" onClick={() => setIsOpen(true)}>
-        Open Nutexb View
+        {t("nutexb.open")}
       </Button>
       {isOpen ? (
         <AppRndModalShell
           titleId="misc-tools-nutexb-view-title"
-          title="Nutexb View"
-          subtitle="Recursive folder scan. Thumbnails decode on demand (max 3 at a time, 128px)."
+          title={t("nutexb.title")}
+          subtitle={t("nutexb.subtitle")}
           headerIcon={<ImageIcon className="h-5 w-5" />}
           dimensions={MODAL_DIMENSIONS}
           storageKey="misc-tools-nutexb-view-size"
@@ -213,7 +215,7 @@ export function NutexbViewTool() {
             <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" onClick={() => void pickFolder()} disabled={busy}>
                 {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <FolderOpen className="mr-1.5 h-4 w-4" />}
-                Open folder
+                {t("common.openFolder")}
               </Button>
               <Button
                 size="sm"
@@ -222,7 +224,7 @@ export function NutexbViewTool() {
                 onClick={() => scan && void loadFolder(scan.root)}
               >
                 <RefreshCw className="mr-1.5 h-4 w-4" />
-                Refresh
+                {t("common.refresh")}
               </Button>
               {scan ? (
                 <div className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={scan.root}>
@@ -234,9 +236,9 @@ export function NutexbViewTool() {
             {!scan ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
                 <ImageIcon className="h-10 w-10 opacity-50" />
-                <div>Open a folder to scan every .nutexb, including subfolders.</div>
+                <div>{t("nutexb.empty")}</div>
                 <Button onClick={() => void pickFolder()} disabled={busy}>
-                  Open folder
+                  {t("common.openFolder")}
                 </Button>
               </div>
             ) : (
@@ -246,26 +248,24 @@ export function NutexbViewTool() {
                   <Input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Filter tree by name or path..."
+                    placeholder={t("nutexb.filterPlaceholder")}
                     className="h-8 pl-9"
                   />
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {scan.files.length} nutexb file{scan.files.length === 1 ? "" : "s"}
-                  {selectedNode
-                    ? ` · ${selectedFiles.length} shown`
-                    : ""}
+                  {t("nutexb.fileCount", { count: scan.files.length })}
+                  {selectedNode ? ` · ${t("nutexb.filesShown", { count: selectedFiles.length })}` : ""}
                 </div>
                 <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)_300px] gap-3">
                   <div className="flex min-h-0 flex-col gap-2">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-medium">Tree</div>
+                      <div className="text-sm font-medium">{t("common.tree")}</div>
                       <div className="flex gap-1">
                         <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={expandAll}>
-                          Expand all
+                          {t("common.expandAll")}
                         </Button>
                         <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={collapseAll}>
-                          Collapse all
+                          {t("common.collapseAll")}
                         </Button>
                       </div>
                     </div>
@@ -301,7 +301,7 @@ export function NutexbViewTool() {
                                   type="button"
                                   className="shrink-0"
                                   onClick={() => toggleFolder(node.id)}
-                                  aria-label={collapsed ? "Expand folder" : "Collapse folder"}
+                                  aria-label={collapsed ? t("nutexb.expandFolder") : t("nutexb.collapseFolder")}
                                 >
                                   {collapsed ? (
                                     <ChevronRight className="h-3.5 w-3.5" />
@@ -335,13 +335,13 @@ export function NutexbViewTool() {
                         })}
                       </div>
                       {rows.length === 0 ? (
-                        <div className="p-4 text-center text-xs text-muted-foreground">No matching nutexb files</div>
+                        <div className="p-4 text-center text-xs text-muted-foreground">{t("nutexb.noMatches")}</div>
                       ) : null}
                     </div>
                   </div>
 
                   <div className="flex min-h-0 flex-col gap-2">
-                    <div className="text-sm font-medium">Images</div>
+                    <div className="text-sm font-medium">{t("common.images")}</div>
                     <div ref={thumbRef} className="min-h-0 flex-1 overflow-auto rounded-md border">
                       <div
                         style={{
@@ -390,46 +390,58 @@ export function NutexbViewTool() {
                       </div>
                       {thumbFiles.length === 0 ? (
                         <div className="p-6 text-center text-sm text-muted-foreground">
-                          No nutexb files in this view
+                          {t("nutexb.noFiles")}
                         </div>
                       ) : null}
                     </div>
                   </div>
 
                   <div className="flex min-h-0 flex-col gap-2">
-                    <div className="text-sm font-medium">Preview</div>
+                    <div className="text-sm font-medium">{t("common.preview")}</div>
                     <div className="h-[280px] overflow-hidden rounded-md border">
                       {selectedFile?.path ? (
                         <DiskNutexbImage path={selectedFile.path} mode="full" />
                       ) : (
                         <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-                          Select a .nutexb file
+                          {t("nutexb.selectFile")}
                         </div>
                       )}
                     </div>
                     <div className="space-y-0.5 break-all text-[11px] text-muted-foreground">
                       {selectedFile ? (
-                        <>
+                        <div data-i18n-ignore="">
                           <div>{selectedFile.name}</div>
                           <div>{selectedFile.relativePath}</div>
                           <div>{selectedFile.path}</div>
                           <div>{formatByteSize(selectedFile.size)}</div>
-                        </>
+                        </div>
                       ) : null}
                       {info ? (
                         <>
-                          <div>Name: {info.name}</div>
                           <div>
-                            {info.width} x {info.height} x {info.depth}
+                            {t("nutexb.name")}: <span data-i18n-ignore="">{info.name}</span>
                           </div>
-                          <div>Format: {info.imageFormat}</div>
+                          <div data-i18n-ignore="">
+                            {t("nutexb.dimensions", {
+                              width: info.width,
+                              height: info.height,
+                              depth: info.depth,
+                            })}
+                          </div>
                           <div>
-                            Mips {info.mipmapCount} · layers {info.layerCount}
-                            {info.isSwizzled ? " · swizzled" : ""}
+                            {t("nutexb.format")}: <span data-i18n-ignore="">{info.imageFormat}</span>
+                          </div>
+                          <div>
+                            {t("nutexb.mipsLayers", {
+                              mips: info.mipmapCount,
+                              layersLabel: t("nutexb.layers"),
+                              layers: info.layerCount,
+                            })}
+                            {info.isSwizzled ? ` · ${t("nutexb.swizzled")}` : ""}
                           </div>
                         </>
                       ) : null}
-                      {infoError ? <div className="text-destructive">{infoError}</div> : null}
+                      {infoError ? <div className="text-destructive" data-i18n-ignore="">{infoError}</div> : null}
                     </div>
                   </div>
                 </div>

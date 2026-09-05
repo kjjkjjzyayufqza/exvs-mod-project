@@ -2,6 +2,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, us
 import { dirname } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -106,6 +107,7 @@ import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/servi
 const WATCH_COMMAND = "watch_folder";
 
 const TestEditorPage = () => {
+  const { t } = useTranslation("test-workspace");
   const store = useConfigStore((s) => s.store);
   const getSetting = useConfigStore((s) => s.getSetting);
   const [treeData, setTreeData] = useState<TestTreeNode[]>([]);
@@ -244,11 +246,11 @@ const TestEditorPage = () => {
       setEffectProjectGuard(null);
     } catch (error) {
       console.error(error);
-      toast.error("Failed to start folder watch");
+      toast.error(t("toast.folderWatchFailed"));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const refreshFolder = useCallback(async () => {
     if (!currentDir) return;
@@ -258,11 +260,11 @@ const TestEditorPage = () => {
       setTreeData(normalizeTree(fresh ?? []));
     } catch (error) {
       console.error(error);
-      toast.error("Failed to refresh folder");
+      toast.error(t("toast.refreshFolderFailed"));
     } finally {
       setIsLoading(false);
     }
-  }, [currentDir]);
+  }, [currentDir, t]);
 
   const deferredSearchTerm = useDeferredValue(searchTerm);
 
@@ -522,7 +524,7 @@ const TestEditorPage = () => {
             : s,
         ),
       );
-      toast.success("Saved NUMDLB");
+      toast.success(t("toast.savedNumdlb"));
     } catch (e) {
       toast.error(String(e));
       setNumdlbSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, saving: false } : s)));
@@ -558,7 +560,7 @@ const TestEditorPage = () => {
             : s,
         ),
       );
-      toast.success("Reloaded NUMDLB from disk");
+      toast.success(t("toast.reloadedNumdlb"));
     } catch (e) {
       const msg = String(e);
       setNumdlbSessions((prev) =>
@@ -699,7 +701,7 @@ const TestEditorPage = () => {
           s.id === sessionId ? { ...s, saving: false, baseData: saved, draftData: saved } : s,
         ),
       );
-      toast.success("Saved NUHLPB");
+      toast.success(t("toast.savedNuhlpb"));
     } catch (e) {
       toast.error(String(e));
       setNuhlpbSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, saving: false } : s)));
@@ -733,7 +735,7 @@ const TestEditorPage = () => {
           s.id === sessionId ? { ...s, loading: false, loadError: null, baseData: base, draftData: draft } : s,
         ),
       );
-      toast.success("Reloaded NUHLPB from disk");
+      toast.success(t("toast.reloadedNuhlpb"));
     } catch (e) {
       const msg = String(e);
       setNuhlpbSessions((prev) =>
@@ -919,7 +921,7 @@ const TestEditorPage = () => {
             : s,
         ),
       );
-      toast.success("Saved JNTT");
+      toast.success(t("toast.savedJntt"));
     } catch (e) {
       toast.error(String(e));
       setJnttblSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, saving: false } : s)));
@@ -956,7 +958,7 @@ const TestEditorPage = () => {
             : s,
         ),
       );
-      toast.success("Reloaded JNTT from disk");
+      toast.success(t("toast.reloadedJntt"));
     } catch (e) {
       const msg = String(e);
       setJnttblSessions((prev) =>
@@ -1161,7 +1163,7 @@ const TestEditorPage = () => {
             : s,
         ),
       );
-      toast.success("Saved effect project");
+      toast.success(t("toast.savedEffectProject"));
     } catch (e) {
       toast.error(String(e));
       setEffectProjectSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, saving: false } : s)));
@@ -1219,7 +1221,7 @@ const TestEditorPage = () => {
       queueMicrotask(() => {
         startAuxiliaryScanForEffectProject(sessionId, fp);
       });
-      toast.success("Reloaded effect project from disk");
+      toast.success(t("toast.reloadedEffectProject"));
     } catch (e) {
       const msg = String(e);
       setEffectProjectSessions((prev) =>
@@ -1385,7 +1387,7 @@ const TestEditorPage = () => {
             : s,
         ),
       );
-      toast.success("Saved NUMATB");
+      toast.success(t("toast.savedNumatb"));
     } catch (e) {
       toast.error(String(e));
       setNumatbSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, saving: false } : s)));
@@ -1431,7 +1433,7 @@ const TestEditorPage = () => {
             : s,
         ),
       );
-      toast.success("Reloaded NUMATB from disk");
+      toast.success(t("toast.reloadedNumatb"));
     } catch (e) {
       const msg = String(e);
       setNumatbSessions((prev) =>
@@ -1615,14 +1617,14 @@ const TestEditorPage = () => {
       <AlertDialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+            <AlertDialogTitle>{t("unsaved.title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              You have unsaved changes in the current file. Do you want to discard them and load the new file?
+              {t("unsaved.fileDescription")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleCancelSelection}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDiscardChanges}>Discard Changes</AlertDialogAction>
+            <AlertDialogCancel onClick={handleCancelSelection}>{t("unsaved.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDiscardChanges}>{t("unsaved.discardChanges")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1645,22 +1647,22 @@ const TestEditorPage = () => {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved NUMDLB changes</AlertDialogTitle>
+            <AlertDialogTitle>{t("unsaved.numdlbTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
               {numdlbGuard?.action === "close"
-                ? "Save before closing, discard edits, or cancel."
-                : "Save before reloading from disk, discard edits, or cancel."}
+                ? t("unsaved.closeHint")
+                : t("unsaved.reloadHint")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
             <AlertDialogCancel type="button" onClick={dismissNumdlbGuard}>
-              Cancel
+              {t("unsaved.cancel")}
             </AlertDialogCancel>
             <Button type="button" variant="outline" onClick={discardNumdlbGuard}>
-              Discard
+              {t("unsaved.discard")}
             </Button>
             <Button type="button" onClick={() => void saveAndFinishNumdlbGuard()}>
-              {numdlbGuard?.action === "close" ? "Save and close" : "Save and reload"}
+              {numdlbGuard?.action === "close" ? t("unsaved.saveAndClose") : t("unsaved.saveAndReload")}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1684,22 +1686,22 @@ const TestEditorPage = () => {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved NUHLPB changes</AlertDialogTitle>
+            <AlertDialogTitle>{t("unsaved.nuhlpbTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
               {nuhlpbGuard?.action === "close"
-                ? "Save before closing, discard edits, or cancel."
-                : "Save before reloading from disk, discard edits, or cancel."}
+                ? t("unsaved.closeHint")
+                : t("unsaved.reloadHint")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
             <AlertDialogCancel type="button" onClick={dismissNuhlpbGuard}>
-              Cancel
+              {t("unsaved.cancel")}
             </AlertDialogCancel>
             <Button type="button" variant="outline" onClick={discardNuhlpbGuard}>
-              Discard
+              {t("unsaved.discard")}
             </Button>
             <Button type="button" onClick={() => void saveAndFinishNuhlpbGuard()}>
-              {nuhlpbGuard?.action === "close" ? "Save and close" : "Save and reload"}
+              {nuhlpbGuard?.action === "close" ? t("unsaved.saveAndClose") : t("unsaved.saveAndReload")}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1723,22 +1725,22 @@ const TestEditorPage = () => {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved NUMATB changes</AlertDialogTitle>
+            <AlertDialogTitle>{t("unsaved.numatbTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
               {numatbGuard?.action === "close"
-                ? "Save before closing, discard edits, or cancel."
-                : "Save before reloading from disk, discard edits, or cancel."}
+                ? t("unsaved.closeHint")
+                : t("unsaved.reloadHint")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
             <AlertDialogCancel type="button" onClick={dismissNumatbGuard}>
-              Cancel
+              {t("unsaved.cancel")}
             </AlertDialogCancel>
             <Button type="button" variant="outline" onClick={discardNumatbGuard}>
-              Discard
+              {t("unsaved.discard")}
             </Button>
             <Button type="button" onClick={() => void saveAndFinishNumatbGuard()}>
-              {numatbGuard?.action === "close" ? "Save and close" : "Save and reload"}
+              {numatbGuard?.action === "close" ? t("unsaved.saveAndClose") : t("unsaved.saveAndReload")}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1763,22 +1765,22 @@ const TestEditorPage = () => {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved JNTT changes</AlertDialogTitle>
+            <AlertDialogTitle>{t("unsaved.jnttTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
               {jnttblGuard?.action === "close"
-                ? "Save before closing, discard edits, or cancel."
-                : "Save before reloading from disk, discard edits, or cancel."}
+                ? t("unsaved.closeHint")
+                : t("unsaved.reloadHint")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
             <AlertDialogCancel type="button" onClick={dismissJnttblGuard}>
-              Cancel
+              {t("unsaved.cancel")}
             </AlertDialogCancel>
             <Button type="button" variant="outline" onClick={discardJnttblGuard}>
-              Discard
+              {t("unsaved.discard")}
             </Button>
             <Button type="button" onClick={() => void saveAndFinishJnttblGuard()}>
-              {jnttblGuard?.action === "close" ? "Save and close" : "Save and reload"}
+              {jnttblGuard?.action === "close" ? t("unsaved.saveAndClose") : t("unsaved.saveAndReload")}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1803,22 +1805,22 @@ const TestEditorPage = () => {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved effect project changes</AlertDialogTitle>
+            <AlertDialogTitle>{t("unsaved.effectProjectTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
               {effectProjectGuard?.action === "close"
-                ? "Save before closing, discard edits, or cancel."
-                : "Save before reloading from disk, discard edits, or cancel."}
+                ? t("unsaved.closeHint")
+                : t("unsaved.reloadHint")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
             <AlertDialogCancel type="button" onClick={dismissEffectProjectGuard}>
-              Cancel
+              {t("unsaved.cancel")}
             </AlertDialogCancel>
             <Button type="button" variant="outline" onClick={discardEffectProjectGuard}>
-              Discard
+              {t("unsaved.discard")}
             </Button>
             <Button type="button" onClick={() => void saveAndFinishEffectProjectGuard()}>
-              {effectProjectGuard?.action === "close" ? "Save and close" : "Save and reload"}
+              {effectProjectGuard?.action === "close" ? t("unsaved.saveAndClose") : t("unsaved.saveAndReload")}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

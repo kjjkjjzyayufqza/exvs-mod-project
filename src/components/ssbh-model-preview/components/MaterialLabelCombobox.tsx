@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,6 +82,7 @@ export function MaterialLabelCombobox({
   className,
   placeholder = "Select or type material...",
 }: MaterialLabelComboboxProps) {
+  const { t } = useTranslation("ssbh-components");
   const instanceId = useId();
   const listboxId = `${instanceId}-material-listbox`;
   const inputId = `${instanceId}-material-input`;
@@ -163,10 +165,10 @@ export function MaterialLabelCombobox({
               }}
               onWheel={(event) => event.stopPropagation()}
             >
-              <div id={listboxId} role="listbox" aria-label="Material labels" className="p-1">
+              <div id={listboxId} role="listbox" aria-label={t("material.listLabel")} className="p-1">
                 {allOptions.length > MAX_OPTIONS_WITHOUT_QUERY && !queryTrim && (
                   <p className="px-2 py-1 text-[10px] text-muted-foreground">
-                    Showing first {MAX_OPTIONS_WITHOUT_QUERY} of {allOptions.length}. Type to search.
+                    {t("material.showingFirst", { shown: MAX_OPTIONS_WITHOUT_QUERY, total: allOptions.length })}
                   </p>
                 )}
 
@@ -200,14 +202,14 @@ export function MaterialLabelCombobox({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => selectOption(inputValue.trim())}
                   >
-                    <span className="text-muted-foreground">Use custom:</span>
+                    <span className="text-muted-foreground">{t("material.useCustom")}:</span>
                     <span className="truncate font-mono">{inputValue.trim()}</span>
                   </button>
                 )}
 
                 {filteredOptions.length === 0 && !queryTrim && (
                   <p className="px-2 py-4 text-center text-[11px] text-muted-foreground">
-                    No material labels yet. Type a custom name above.
+                    {t("material.empty")}
                   </p>
                 )}
               </div>
@@ -230,7 +232,7 @@ export function MaterialLabelCombobox({
           value={inputValue}
           disabled={disabled}
           autoComplete="off"
-          placeholder={placeholder}
+          placeholder={placeholder ?? t("material.placeholder")}
           className="h-8 pr-7 text-[11px]"
           onFocus={() => setOpen(true)}
           onChange={(event) => setInputValue(event.target.value)}
@@ -254,7 +256,7 @@ export function MaterialLabelCombobox({
           variant="ghost"
           size="icon"
           disabled={disabled}
-          aria-label="Show material label suggestions"
+          aria-label={t("material.showSuggestions")}
           className="absolute right-0 top-0 h-8 w-7 shrink-0 text-muted-foreground"
           onClick={() => setOpen((current) => !current)}
         >

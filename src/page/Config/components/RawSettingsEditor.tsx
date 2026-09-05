@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Store } from "@tauri-apps/plugin-store";
 import { Check, Loader2, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +48,7 @@ export function RawSettingsEditor({
   onWriteSetting,
   onDeleteSetting,
 }: Props) {
+  const { t } = useTranslation("config-full");
   const [entries, setEntries] = useState<RawSettingEntry[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
@@ -136,9 +138,9 @@ export function RawSettingsEditor({
           ),
         );
         clearDraft(entry.key);
-        toast.success(`Saved ${entry.key}`);
+        toast.success(t("raw.saved", { key: entry.key }));
       } catch (error) {
-        toast.error(`Failed to save ${entry.key}`, {
+        toast.error(t("raw.saveFailed", { key: entry.key }), {
           description: error instanceof Error ? error.message : String(error),
         });
       } finally {
@@ -156,9 +158,9 @@ export function RawSettingsEditor({
         await onDeleteSetting(key);
         setEntries((prev) => prev.filter((row) => row.key !== key));
         clearDraft(key);
-        toast.success(`Deleted ${key}`);
+        toast.success(t("raw.deleted", { key }));
       } catch (error) {
-        toast.error(`Failed to delete ${key}`, {
+        toast.error(t("raw.deleteFailed", { key }), {
           description: error instanceof Error ? error.message : String(error),
         });
       } finally {
@@ -176,7 +178,7 @@ export function RawSettingsEditor({
       key = validateSettingKey(newKey, existingKeys);
       parsed = parseSettingValue(newValue);
     } catch (error) {
-      toast.error("Cannot add key", {
+      toast.error(t("raw.cannotAdd"), {
         description: error instanceof Error ? error.message : String(error),
       });
       return;
@@ -194,9 +196,9 @@ export function RawSettingsEditor({
       setNewKey("");
       setNewValue('""');
       setIsAdding(false);
-      toast.success(`Added ${key}`);
+      toast.success(t("raw.added", { key }));
     } catch (error) {
-      toast.error(`Failed to add ${key}`, {
+      toast.error(t("raw.addFailed", { key }), {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -208,10 +210,9 @@ export function RawSettingsEditor({
     <section className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
-          <h2 className="text-base font-semibold tracking-tight">Raw settings</h2>
+          <h2 className="text-base font-semibold tracking-tight">{t("raw.title")}</h2>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Every key in <code className="font-mono text-xs">settings.json</code>, edited as JSON.
-            Strings must be quoted. Saving writes to disk immediately.
+            {t("raw.intro", { file: "settings.json" })}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -220,7 +221,7 @@ export function RawSettingsEditor({
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filter keys..."
+              placeholder={t("raw.filter")}
               className="h-8 w-52 pl-8 text-xs"
             />
           </div>
@@ -233,7 +234,7 @@ export function RawSettingsEditor({
             disabled={!store || loadState === "loading"}
           >
             <RotateCcw className={cn("h-3.5 w-3.5", loadState === "loading" && "animate-spin")} />
-            Reload
+            {t("actions.reload")}
           </Button>
           <Button
             type="button"
@@ -243,7 +244,7 @@ export function RawSettingsEditor({
             disabled={!store}
           >
             <Plus className="h-3.5 w-3.5" />
-            Add key
+            {t("actions.addKey")}
           </Button>
         </div>
       </div>
@@ -252,25 +253,25 @@ export function RawSettingsEditor({
         <div className="grid gap-3 rounded-md border bg-muted/30 p-3 sm:grid-cols-[minmax(0,18rem)_minmax(0,1fr)_auto] sm:items-end">
           <div className="space-y-1.5">
             <Label htmlFor="raw-new-key" className="text-xs">
-              Key
+              {t("raw.key")}
             </Label>
             <Input
               id="raw-new-key"
               value={newKey}
               onChange={(event) => setNewKey(event.target.value)}
-              placeholder="mySettingKey"
+              placeholder={t("raw.keyPlaceholder")}
               className="h-8 font-mono text-xs"
             />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="raw-new-value" className="text-xs">
-              Value (JSON)
+              {t("raw.valueJson")}
             </Label>
             <Input
               id="raw-new-value"
               value={newValue}
               onChange={(event) => setNewValue(event.target.value)}
-              placeholder='"E:\\XB\\mod"'
+              placeholder={t("raw.valuePlaceholder")}
               className="h-8 font-mono text-xs"
             />
           </div>
@@ -283,7 +284,7 @@ export function RawSettingsEditor({
               disabled={savingKey !== null}
             >
               <Check className="h-3.5 w-3.5" />
-              Add
+              {t("actions.add")}
             </Button>
             <Button
               type="button"
@@ -293,7 +294,7 @@ export function RawSettingsEditor({
               onClick={() => setIsAdding(false)}
             >
               <X className="h-3.5 w-3.5" />
-              Cancel
+              {t("actions.cancel")}
             </Button>
           </div>
         </div>
@@ -301,32 +302,32 @@ export function RawSettingsEditor({
 
       {!store && (
         <p className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-          Settings store is still initializing.
+          {t("raw.initializing")}
         </p>
       )}
 
       {store && loadState === "loading" && entries.length === 0 && (
         <p className="flex items-center gap-2 rounded-md border border-dashed p-6 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Reading settings.json...
+          {t("raw.reading")}
         </p>
       )}
 
       {store && loadState === "error" && (
         <p className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
-          Failed to read settings.json: {loadError}
+          {t("raw.readFailed", { error: loadError })}
         </p>
       )}
 
       {store && loadState === "ready" && entries.length === 0 && (
         <p className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-          The settings store is empty. Use Add key to create the first entry.
+          {t("raw.empty")}
         </p>
       )}
 
       {store && entries.length > 0 && visibleEntries.length === 0 && (
         <p className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-          No key matches "{query}".
+          {t("raw.noMatch", { query })}
         </p>
       )}
 
@@ -355,7 +356,7 @@ export function RawSettingsEditor({
                   </p>
                   <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                     <span className={cn("font-mono", KIND_TONE[kind])}>{kind}</span>
-                    {isManaged && <span>· has a field above</span>}
+                    {isManaged && <span>· {t("raw.managed")}</span>}
                   </p>
                 </div>
 
@@ -389,8 +390,8 @@ export function RawSettingsEditor({
                         size="icon"
                         variant="outline"
                         className="h-8 w-8"
-                        title="Save this key"
-                        aria-label={`Save ${entry.key}`}
+                        title={t("actions.saveKey")}
+                        aria-label={t("actions.saveAria", { key: entry.key })}
                         onClick={() => void saveRow(entry)}
                         disabled={!isDirty || isBusy}
                       >
@@ -405,8 +406,8 @@ export function RawSettingsEditor({
                         size="icon"
                         variant="ghost"
                         className="h-8 w-8"
-                        title="Revert to stored value"
-                        aria-label={`Revert ${entry.key}`}
+                        title={t("actions.revert")}
+                        aria-label={t("actions.revertAria", { key: entry.key })}
                         onClick={() => clearDraft(entry.key)}
                         disabled={!isDirty || isBusy}
                       >
@@ -417,8 +418,8 @@ export function RawSettingsEditor({
                         size="icon"
                         variant="ghost"
                         className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        title="Delete this key"
-                        aria-label={`Delete ${entry.key}`}
+                        title={t("actions.deleteKey")}
+                        aria-label={t("actions.deleteAria", { key: entry.key })}
                         onClick={() => void deleteRow(entry.key)}
                         disabled={isBusy}
                       >
@@ -436,7 +437,7 @@ export function RawSettingsEditor({
 
       {dirtyCount > 0 && (
         <p className="text-xs text-muted-foreground">
-          {dirtyCount} unsaved {dirtyCount === 1 ? "key" : "keys"}. Each key is saved on its own.
+          {t("raw.unsaved", { count: dirtyCount })}
         </p>
       )}
     </section>

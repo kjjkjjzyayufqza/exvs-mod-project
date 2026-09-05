@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { FilePlus2, Loader2, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -39,6 +40,7 @@ export function DaeImportConfigProfileSelector({
   captureSnapshot,
   onApply,
 }: DaeImportConfigProfileSelectorProps) {
+  const { t } = useTranslation("scene-dae-forms");
   const [library, setLibrary] = useState<DaeImportConfigProfileLibrary>(EMPTY_LIBRARY);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [profileName, setProfileName] = useState("");
@@ -79,11 +81,11 @@ export function DaeImportConfigProfileSelector({
       setSelectedId(profile.id);
       setProfileName(profile.name);
       setError(null);
-      toast.success(`Applied import config '${profile.name}'`);
+      toast.success(t("profiles.applied", { name: profile.name }));
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : String(reason);
       setError(message);
-      toast.error("Failed to apply import config", { description: message });
+      toast.error(t("profiles.applyFailed"), { description: message });
     }
   };
 
@@ -96,7 +98,7 @@ export function DaeImportConfigProfileSelector({
   const handleSave = async () => {
     const name = profileName.trim();
     if (!name) {
-      setError("Profile name is required.");
+      setError(t("profiles.nameRequired"));
       return;
     }
     setBusy("save");
@@ -112,11 +114,11 @@ export function DaeImportConfigProfileSelector({
       setLibrary(nextLibrary);
       setSelectedId(profile.id);
       setProfileName(profile.name);
-      toast.success(selectedProfile ? "Import config updated" : "Import config saved");
+      toast.success(selectedProfile ? t("profiles.updated") : t("profiles.saved"));
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : String(reason);
       setError(message);
-      toast.error("Failed to save import config", { description: message });
+      toast.error(t("profiles.saveFailed"), { description: message });
     } finally {
       setBusy(null);
     }
@@ -131,11 +133,11 @@ export function DaeImportConfigProfileSelector({
       setLibrary(nextLibrary);
       setSelectedId(null);
       setProfileName("");
-      toast.success(`Deleted import config '${selectedProfile.name}'`);
+      toast.success(t("profiles.deleted", { name: selectedProfile.name }));
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : String(reason);
       setError(message);
-      toast.error("Failed to delete import config", { description: message });
+      toast.error(t("profiles.deleteFailed"), { description: message });
     } finally {
       setBusy(null);
     }
@@ -144,10 +146,10 @@ export function DaeImportConfigProfileSelector({
   const disabled = loading || busy !== null;
 
   return (
-    <DaeImportSection title="Import Config Profiles">
+    <DaeImportSection title={t("profiles.title")}>
       <DaeImportFieldRow
-        label="Saved Profile"
-        hint="Applies reusable conversion, material, texture, and output settings"
+        label={t("profiles.savedProfile")}
+        hint={t("profiles.savedProfileHint")}
       >
         <div className="flex min-w-0 items-center gap-1.5">
           <Select value={selectedId ?? undefined} onValueChange={handleSelect} disabled={disabled}>
@@ -155,11 +157,11 @@ export function DaeImportConfigProfileSelector({
               {loading ? (
                 <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Loading profiles
+                  {t("profiles.loading")}
                 </span>
               ) : (
                 <SelectValue
-                  placeholder={library.profiles.length > 0 ? "Choose profile" : "No saved profiles"}
+                  placeholder={library.profiles.length > 0 ? t("profiles.choose") : t("profiles.none")}
                 />
               )}
             </SelectTrigger>
@@ -178,8 +180,8 @@ export function DaeImportConfigProfileSelector({
             className="h-8 w-8 shrink-0"
             onClick={handleNew}
             disabled={disabled}
-            title="Create new profile"
-            aria-label="Create new import config profile"
+            title={t("profiles.createTitle")}
+            aria-label={t("profiles.createAria")}
           >
             <FilePlus2 className="h-3.5 w-3.5" />
           </Button>
@@ -187,8 +189,8 @@ export function DaeImportConfigProfileSelector({
       </DaeImportFieldRow>
 
       <DaeImportFieldRow
-        label="Profile Name"
-        hint={selectedProfile ? "Edit name or save current settings over selected profile" : "Name current settings"}
+        label={t("profiles.name")}
+        hint={selectedProfile ? t("profiles.editHint") : t("profiles.nameHint")}
       >
         <div className="flex min-w-0 items-center gap-1.5">
           <Input
@@ -198,9 +200,9 @@ export function DaeImportConfigProfileSelector({
             onKeyDown={(event) => {
               if (event.key === "Enter" && !disabled) void handleSave();
             }}
-            placeholder="e.g. Standard Unit Model"
+            placeholder={t("profiles.namePlaceholder")}
             disabled={disabled}
-            aria-label="Import config profile name"
+            aria-label={t("profiles.nameAria")}
           />
           <Button
             type="button"
@@ -214,7 +216,7 @@ export function DaeImportConfigProfileSelector({
             ) : (
               <Save className="h-3.5 w-3.5" />
             )}
-            Save
+            {t("profiles.save")}
           </Button>
           <Button
             type="button"
@@ -223,8 +225,8 @@ export function DaeImportConfigProfileSelector({
             className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
             onClick={() => void handleDelete()}
             disabled={disabled || !selectedProfile}
-            title="Delete selected profile"
-            aria-label="Delete selected import config profile"
+            title={t("profiles.deleteTitle")}
+            aria-label={t("profiles.deleteAria")}
           >
             {busy === "delete" ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />

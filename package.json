@@ -16,7 +16,8 @@
     "start": "tauri dev",
     "test": "vitest run",
     "test:scene": "vitest run src/page/SceneEdit",
-    "test:all": "vitest run --config vitest.all.config.ts"
+    "test:all": "vitest run --config vitest.all.config.ts",
+    "check:i18n-coverage": "node scripts/check_i18n_coverage.mjs"
   },
   "dependencies": {
     "@comfyorg/fbx-exporter-three": "^1.0.1",
@@ -69,6 +70,7 @@
     "dayjs": "^1.11.20",
     "embla-carousel-react": "8.6.0",
     "framer-motion": "^12.38.0",
+    "i18next": "^26.4.2",
     "immer": "^11.1.8",
     "json-edit-react": "^1.29.1",
     "leva": "^0.10.1",
@@ -83,6 +85,7 @@
     "react-dom": "^19.2.6",
     "react-dropzone": "^15.0.0",
     "react-hook-form": "^7.75.0",
+    "react-i18next": "^17.0.13",
     "react-icons": "^5.6.0",
     "react-resizable-panels": "^4.11.0",
     "react-rnd": "^10.5.3",

@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Tree, type NodeApi } from "react-arborist";
 import { ArrowUpDown, FolderOpen, Search, X } from "lucide-react";
 import { exists } from "@tauri-apps/plugin-fs";
+import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -73,6 +74,7 @@ function FileTreePaneImpl({
   onViewOptionsChange,
   onOpenAsEffectProject,
 }: FileTreePaneProps) {
+  const { t } = useTranslation("test-workspace");
   const empty = data.length === 0;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [treeHeight, setTreeHeight] = useState(480);
@@ -143,13 +145,13 @@ function FileTreePaneImpl({
       const normalizedPath = isWindowsPath ? rawPath.replace(/\//g, "\\") : rawPath.replace(/\\/g, "/");
 
       if (normalizedPath.includes('"')) {
-        toast.error('Invalid path: contains a quote character (")');
+        toast.error(t("fileTree.invalidQuote"));
         return;
       }
 
       const pathExists = await exists(normalizedPath);
       if (!pathExists) {
-        toast.error("Path does not exist");
+        toast.error(t("fileTree.pathMissing"));
         return;
       }
 
@@ -157,9 +159,9 @@ function FileTreePaneImpl({
     } catch (error) {
       console.error("Error opening path:", error);
       const message = error instanceof Error ? error.message : String(error);
-      toast.error(message ? `Failed to open: ${message}` : "Failed to open");
+      toast.error(message ? t("fileTree.openFailedWithReason", { message }) : t("fileTree.openFailed"));
     }
-  }, []);
+  }, [t]);
 
   const handleOpenNodePath = useCallback(
     async (node: TestTreeNode) => {
@@ -172,18 +174,18 @@ function FileTreePaneImpl({
     async (node: TestTreeNode) => {
       const folderPath = node.isDir ? node.path : getParentDirPath(node.path);
       if (!folderPath) {
-        toast.error("Cannot resolve folder path");
+        toast.error(t("fileTree.cannotResolveFolder"));
         return;
       }
       await openAnyPath(folderPath);
     },
-    [getParentDirPath, openAnyPath]
+    [getParentDirPath, openAnyPath, t]
   );
 
   const openRepackDialogForNode = useCallback(
     (node: TestTreeNode) => {
       if (!currentDir) {
-        toast.error("No workspace root selected");
+        toast.error(t("fileTree.noWorkspaceRoot"));
         return;
       }
       const target = parseWorkspacePackNodeTarget(
@@ -193,12 +195,12 @@ function FileTreePaneImpl({
         structureJsonPathKeys,
       );
       if (!target) {
-        toast.error("Cannot resolve workspace pack target");
+        toast.error(t("fileTree.cannotResolvePack"));
         return;
       }
       onRequestFhm2dRepack(target);
     },
-    [currentDir, onRequestFhm2dRepack, structureJsonPathKeys, workspaceDocument],
+    [currentDir, onRequestFhm2dRepack, structureJsonPathKeys, t, workspaceDocument],
   );
 
   const fileTreeNodeRowCtx = useMemo<FileTreeNodeRowContext>(
@@ -248,16 +250,16 @@ function FileTreePaneImpl({
                   <Input
                     value={searchTerm}
                     onChange={(e) => onSearchChange(e.target.value)}
-                    placeholder="Search files..."
-                    title="Filter is remembered per workspace root"
+                    placeholder={t("fileTree.searchPlaceholder")}
+                    title={t("fileTree.searchRemembered")}
                     className="h-8 bg-background/50 pl-8 pr-8 text-xs transition-colors focus-visible:bg-background"
                   />
                   {searchTerm ? (
                     <button
                       type="button"
                       onClick={() => onSearchChange("")}
-                      title="Clear search"
-                      aria-label="Clear search"
+                      title={t("fileTree.clearSearch")}
+                      aria-label={t("fileTree.clearSearch")}
                       className={cn(
                         "absolute right-1.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center",
                         "rounded-sm text-muted-foreground transition-colors hover:bg-muted-foreground/10",
@@ -275,13 +277,13 @@ function FileTreePaneImpl({
                       variant="outline"
                       size="icon"
                       className="h-8 w-8 shrink-0"
-                      title="Sort and group (list layout)"
+                      title={t("fileTree.sortGroupTitle")}
                     >
                       <ArrowUpDown className="h-3.5 w-3.5" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent align="end" className="w-80 p-3">
-                    <div className="text-xs font-medium text-foreground mb-2">List layout</div>
+                    <div className="text-xs font-medium text-foreground mb-2">{t("fileTree.listLayout")}</div>
                     <FileTreeViewOptionsForm value={viewOptions} onChange={onViewOptionsChange} />
                   </PopoverContent>
                 </Popover>
@@ -295,7 +297,7 @@ function FileTreePaneImpl({
                 {empty ? (
                   <div className="flex h-full flex-col items-center justify-center gap-2 text-xs text-muted-foreground p-4 text-center">
                     <FolderOpen className="h-8 w-8 opacity-20" />
-                    <p>Select a folder in the toolbar to start</p>
+                    <p>{t("fileTree.empty")}</p>
                   </div>
                 ) : (
                   <Tree
@@ -323,7 +325,7 @@ function FileTreePaneImpl({
       </ContextMenuTrigger>
       <ContextMenuContent className="w-auto min-w-[260px] p-0">
         <div className="p-2 space-y-1">
-          <ContextMenuLabel className="px-2 text-xs text-muted-foreground">List layout</ContextMenuLabel>
+          <ContextMenuLabel className="px-2 text-xs text-muted-foreground">{t("fileTree.listLayout")}</ContextMenuLabel>
           <FileTreeViewOptionsForm
             value={viewOptions}
             onChange={onViewOptionsChange}

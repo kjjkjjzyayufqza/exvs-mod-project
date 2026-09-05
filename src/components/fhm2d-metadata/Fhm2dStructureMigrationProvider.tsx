@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowRight, Check, FileJson, FolderOpen, Hash } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ const FHM2D_STRUCTURE_MIGRATION_DIMENSIONS = {
 export function Fhm2dStructureMigrationProvider({
   children,
 }: Fhm2dStructureMigrationProviderProps) {
+  const { t } = useTranslation("fhm2d-meta");
   const [pending, setPending] = useState<PendingMigration | null>(null);
   const [name, setName] = useState("");
   const resolverRef = useRef<((value: string | null) => void) | null>(null);
@@ -80,7 +82,7 @@ export function Fhm2dStructureMigrationProvider({
     : null;
   const canMigrate = Boolean(pending && hashName && sanitizedName);
 
-  const title = pending?.title ?? "Migrate FHM2D structure";
+  const title = pending?.title ?? t("migration.title");
   const originalName = useMemo(() => {
     if (!pending) return "";
     return pending.analysis.name ?? pending.analysis.suggestedName;
@@ -93,7 +95,7 @@ export function Fhm2dStructureMigrationProvider({
         <AppRndModalShell
           titleId="fhm2d-structure-migration-title"
           title={title}
-          subtitle="This structure JSON needs top-level Name and HashName metadata before it can load safely."
+          subtitle={t("migration.subtitle")}
           headerIcon={<FileJson className="h-5 w-5 text-primary" />}
           dimensions={FHM2D_STRUCTURE_MIGRATION_DIMENSIONS}
           storageKey="app.rnd-size.fhm2d-structure-migration"
@@ -101,11 +103,11 @@ export function Fhm2dStructureMigrationProvider({
           footer={
             <div className="flex justify-end gap-2 bg-muted/20 px-5 py-3">
               <Button variant="outline" onClick={() => closeWithValue(null)}>
-                Load without migrating
+                {t("migration.loadWithout")}
               </Button>
               <Button disabled={!canMigrate} onClick={() => closeWithValue(sanitizedName)}>
                 <Check className="mr-2 h-4 w-4" />
-                Migrate and load
+                {t("migration.migrateAndLoad")}
               </Button>
             </div>
           }
@@ -115,20 +117,20 @@ export function Fhm2dStructureMigrationProvider({
               <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr] md:items-center">
                 <PathPreview
                   icon={<FileJson className="h-3.5 w-3.5" />}
-                  label="Current JSON"
+                  label={t("migration.currentJson")}
                   value={pending.analysis.structureJsonPath}
                 />
                 <ArrowRight className="hidden h-4 w-4 text-muted-foreground md:block" />
                 <PathPreview
                   icon={<FileJson className="h-3.5 w-3.5" />}
-                  label="After migration"
+                  label={t("migration.afterMigration")}
                   value={nextStructureJson}
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="fhm2d-migration-name">Name</Label>
+              <Label htmlFor="fhm2d-migration-name" data-i18n-ignore="">Name</Label>
               <Input
                 id="fhm2d-migration-name"
                 value={name}
@@ -136,7 +138,7 @@ export function Fhm2dStructureMigrationProvider({
                 onChange={(event) => setName(sanitizeFhm2dStructureName(event.target.value))}
               />
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Use a readable folder name. Spaces and unsupported characters are normalized.
+                {t("migration.nameHelp")}
               </p>
             </div>
 
@@ -164,16 +166,21 @@ export function Fhm2dStructureMigrationProvider({
                 )}
                 <div className="space-y-1">
                   <div className="font-semibold">
-                    {hashName ? `Game hash preserved as ${hashName}` : "HashName could not be detected"}
+                    {hashName
+                      ? t("migration.hashPreserved", { hash: hashName })
+                      : t("migration.hashMissing")}
                   </div>
                   <p className="leading-relaxed opacity-90">
                     {hashName
-                      ? "Repack will still output the game-facing hash file. The readable Name only changes the extracted workspace."
-                      : "This JSON needs a structure filename or fileUrl root that contains an 8-digit hash."}
+                      ? t("migration.hashPreservedHelp")
+                      : t("migration.hashMissingHelp")}
                   </p>
                   {mappingEntry ? (
                     <p className="font-mono text-[11px] leading-relaxed opacity-80">
-                      Dictionary: {mappingEntry.name} ({mappingEntry.confidence})
+                      {t("migration.dictionary", {
+                        name: mappingEntry.name,
+                        confidence: mappingEntry.confidence,
+                      })}
                     </p>
                   ) : null}
                 </div>
@@ -183,14 +190,14 @@ export function Fhm2dStructureMigrationProvider({
             {pending.analysis.rootPath ? (
               <PathPreview
                 icon={<FolderOpen className="h-3.5 w-3.5" />}
-                label="Current folder"
+                label={t("migration.currentFolder")}
                 value={pending.analysis.rootPath}
                 muted
               />
             ) : null}
             {originalName && originalName !== sanitizedName ? (
               <div className="text-xs text-muted-foreground">
-                Current name candidate: <span className="font-mono">{originalName}</span>
+                {t("migration.currentNameCandidate")} <span className="font-mono">{originalName}</span>
               </div>
             ) : null}
           </div>

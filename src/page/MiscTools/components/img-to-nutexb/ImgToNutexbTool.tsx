@@ -12,6 +12,7 @@ import { basename, join } from "@tauri-apps/api/path";
 import { ImageFormat, useNutexbStore } from "../../../../store/nutexbStore";
 import { useConfigStore } from "../../../../store/configStore";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { VirtualizedSelectedFileList } from "../VirtualizedSelectedFileList";
 
 const IMG_TO_NUTEXB_DIMENSIONS = {
@@ -26,6 +27,7 @@ interface ImgToNutexbToolProps {
 }
 
 export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
+  const { t } = useTranslation("misc-tools-a");
   const [selectedImagePaths, setSelectedImagePaths] = useState<string[]>([]);
   const [fileNames, setFileNames] = useState<{[key: string]: {baseName: string, displayName: string}}>({});
   const [isDragOver, setIsDragOver] = useState(false);
@@ -66,12 +68,12 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
     if (imageFiles.length > 0) {
       // For drag and drop, we'll use file selection dialog instead
       // since Web File API doesn't provide file paths
-      toast.info(`Found ${imageFiles.length} image file(s). Please use the file selection button to choose your images`);
+      toast.info(t("convert.dropFound", { count: imageFiles.length }));
       await handleFileSelect();
     } else {
-      toast.error("Please drop image files (PNG, JPG, BMP, etc.)");
+      toast.error(t("convert.dropImages"));
     }
-  }, []);
+  }, [t]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -102,7 +104,7 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
       }
     } catch (error) {
       console.error("Error selecting files:", error);
-      toast.error("Failed to select files");
+      toast.error(t("common.selectFilesFailed"));
     }
   };
 
@@ -124,7 +126,7 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
       }
     } catch (error) {
       console.error("Error selecting output directory:", error);
-      toast.error("Failed to select output directory");
+      toast.error(t("common.selectOutputFailed"));
     }
   };
 
@@ -145,19 +147,19 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
       setFileNames(Object.fromEntries(nameEntries));
     } catch (error) {
       console.error("Error processing image files:", error);
-      toast.error("Failed to process image files");
+      toast.error(t("common.processImagesFailed"));
     }
   };
 
   // Handle batch conversion with concurrency control
   const handleConvert = async () => {
     if (selectedImagePaths.length === 0) {
-      toast.error("Please select at least one image file");
+      toast.error(t("convert.selectImage"));
       return;
     }
 
     if (!outputPath) {
-      toast.error("Please select an output directory");
+      toast.error(t("convert.selectOutput"));
       return;
     }
 
@@ -213,11 +215,21 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
       const failureCount = failedFiles.length;
 
       if (successCount > 0) {
-        toast.success(`Successfully converted ${successCount} image(s) to nutexb format${failureCount > 0 ? `. ${failureCount} failed.` : ''}`);
+        toast.success(
+          failureCount > 0
+            ? t("convert.successPartial", { count: successCount, failed: failureCount })
+            : t("convert.success", { count: successCount }),
+        );
       }
 
       if (failureCount > 0) {
-        toast.error(`Failed to convert ${failureCount} file(s): ${failedFiles.slice(0, 3).join(', ')}${failureCount > 3 ? '...' : ''}`);
+        toast.error(
+          t("convert.failedList", {
+            count: failureCount,
+            files: failedFiles.slice(0, 3).join(", "),
+            extra: failureCount > 3 ? "..." : "",
+          }),
+        );
       }
 
       // Only close modal if all files failed
@@ -233,7 +245,7 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
     } catch (error) {
       console.error("Batch conversion failed:", error);
       setConversionProgress(null);
-      toast.error("Batch conversion failed");
+      toast.error(t("convert.batchFailed"));
     }
   };
 
@@ -268,10 +280,10 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
         return {
           path: imagePath,
           title: fileInfo?.displayName || imagePath.split(/[/\\]/).pop() || imagePath,
-          description: `${fileInfo?.baseName ?? ""} → ${fileInfo?.baseName ?? ""}.nutexb`,
+          description: t("convert.outputDescription", { name: fileInfo?.baseName ?? "" }),
         };
       }),
-    [fileNames, selectedImagePaths],
+    [fileNames, selectedImagePaths, t],
   );
 
   const progressContent = isConverting || conversionProgress ? (
@@ -281,12 +293,16 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
           <div className="w-full max-w-md space-y-2">
             <div className="text-center">
               <span className="text-muted-foreground">
-                Converting {conversionProgress.current} of {conversionProgress.total} images...
+                {t("common.progressOf", {
+                  action: t("convert.progressAction"),
+                  current: conversionProgress.current,
+                  total: conversionProgress.total,
+                })}
               </span>
             </div>
             {conversionProgress.currentFile && (
               <div className="text-center text-sm text-muted-foreground truncate">
-                Current: {conversionProgress.currentFile}
+                {t("common.current", { name: conversionProgress.currentFile })}
               </div>
             )}
             <div className="w-full bg-secondary rounded-full h-2">
@@ -297,12 +313,12 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
             </div>
             {conversionProgress.failedFiles.length > 0 && (
               <div className="text-center text-sm text-red-600">
-                Failed: {conversionProgress.failedFiles.length} files
+                {t("common.failedFiles", { count: conversionProgress.failedFiles.length })}
               </div>
             )}
           </div>
         ) : (
-          <span className="text-muted-foreground">Converting image to nutexb...</span>
+          <span className="text-muted-foreground">{t("convert.loading")}</span>
         )}
       </div>
   ) : null;
@@ -310,13 +326,13 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
   return (
     <>
       <Button variant="outline" className="w-full" onClick={() => setIsOpen(true)}>
-        Open Image to Nutexb
+        {t("convert.open")}
       </Button>
       {isOpen ? (
         <AppRndModalShell
           titleId="image-to-nutexb-title"
-          title="Image to Nutexb Converter"
-          subtitle="Batch convert image files to nutexb"
+          title={t("convert.title")}
+          subtitle={t("convert.subtitle")}
           headerIcon={<ImagePlus className="h-5 w-5 text-primary" />}
           dimensions={IMG_TO_NUTEXB_DIMENSIONS}
           storageKey="app.rnd-size.image-to-nutexb"
@@ -327,7 +343,7 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
             <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4">
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-sm text-red-600">{error}</p>
+          <p className="text-sm text-red-600" data-i18n-ignore="">{error}</p>
         </div>
       )}
 
@@ -336,14 +352,14 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
         <div className="space-y-2">
           <Label htmlFor="output-path" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
-            Output Directory
+            {t("convert.outputDirectory")}
           </Label>
           <div className="flex gap-2">
             <Input
               id="output-path"
               value={outputPath}
               onChange={(e) => setOutputPath(e.target.value)}
-              placeholder="Select output directory for nutexb files"
+              placeholder={t("convert.outputPlaceholder")}
               className="flex-1"
             />
             <Button variant="outline" onClick={handleOutputPathSelect}>
@@ -351,7 +367,7 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Select a directory where the converted nutexb files will be saved
+            {t("convert.outputHelp")}
           </p>
         </div>
       </Card>
@@ -372,13 +388,13 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
           <div className="flex flex-col items-center justify-center p-8 text-center">
             <Upload className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium text-foreground mb-2">
-              Select or drop image files
+              {t("convert.dropHint")}
             </h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Supports PNG, JPG, BMP, GIF, WebP, TIFF formats (batch selection supported)
+              {t("convert.formatsHint")}
             </p>
             <Button variant="outline" type="button">
-              Browse Files
+              {t("common.browse")}
             </Button>
           </div>
         </Card>
@@ -387,7 +403,7 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">
             <Label className="text-sm font-medium">
-              Selected Images ({selectedImagePaths.length})
+              {t("convert.selected", { count: selectedImagePaths.length })}
             </Label>
             <Button
               variant="ghost"
@@ -410,15 +426,15 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
           {/* Configuration */}
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="format-select">Image Format (applied to all files)</Label>
+              <Label htmlFor="format-select">{t("convert.imageFormat")}</Label>
               <Select
                 value={selectedFormat}
                 onValueChange={(value) => setSelectedFormat(value as ImageFormat)}
               >
                 <SelectTrigger id="format-select">
-                  <SelectValue placeholder="Select format" />
+                  <SelectValue placeholder={t("convert.selectFormat")} />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent data-i18n-ignore="">
                   <SelectItem value="R8Unorm">R8Unorm</SelectItem>
                   <SelectItem value="Rgba8Unorm">Rgba8Unorm</SelectItem>
                   <SelectItem value="Rgba8UnormSrgb">Rgba8UnormSrgb</SelectItem>
@@ -449,7 +465,7 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
                 checked={hasMipmaps}
                 onCheckedChange={(checked) => setHasMipmaps(checked === true)}
               />
-              <Label htmlFor="mipmaps">Generate Mipmaps</Label>
+              <Label htmlFor="mipmaps">{t("convert.mipmaps")}</Label>
             </div>
           </div>
 
@@ -460,14 +476,14 @@ export function ImgToNutexbTool({ onClose }: ImgToNutexbToolProps) {
               onClick={handleReset}
               className="flex-1"
             >
-              Reset
+              {t("common.reset")}
             </Button>
             <Button
               onClick={handleConvert}
               disabled={selectedImagePaths.length === 0 || !outputPath}
               className="flex-1"
             >
-              Convert All to Nutexb
+              {t("convert.action")}
             </Button>
           </div>
         </>

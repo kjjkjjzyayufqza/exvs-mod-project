@@ -16,6 +16,7 @@ import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { buildCardIconPreviewPath } from "./cardIconUtils";
 import { splitPathSegments } from "@/lib/fhm2d_fileUrlUtils";
 import type { CardIconItem } from "./cardIconStructure";
+import { useTranslation } from "react-i18next";
 
 type ReplaceSummary = {
   outputNutexbPath: string;
@@ -50,9 +51,11 @@ export function CardIconReplaceDialog({
   convertDirPath,
   selectedItem,
   onApplied,
-  triggerLabel = "Edit Image",
+  triggerLabel,
   disabled = false,
 }: CardIconReplaceDialogProps) {
+  const { t } = useTranslation("test-lists");
+  const resolvedTriggerLabel = triggerLabel ?? t("cardIcon.editImage");
   const [openState, setOpenState] = useState(false);
   const [pngPath, setPngPath] = useState("");
   const [ddsFormat, setDdsFormat] = useState<string>("BC7RgbaUnormSrgb");
@@ -97,7 +100,7 @@ export function CardIconReplaceDialog({
       } catch (error) {
         console.error(error);
         const message =
-          error instanceof Error ? error.message : "Failed to detect original DDS format";
+          error instanceof Error ? error.message : t("cardIcon.detectFormatFailed");
         toast.error(message);
       } finally {
         setIsDetectingFormat(false);
@@ -108,28 +111,28 @@ export function CardIconReplaceDialog({
 
   const handleApply = useCallback(async () => {
     if (!selectedItem) {
-      toast.error("Select an item to replace");
+      toast.error(t("cardIcon.selectItem"));
       return;
     }
     if (!folderPath) {
-      toast.error("Folder path is empty");
+      toast.error(t("cardIcon.folderEmpty"));
       return;
     }
     if (!convertDirPath) {
-      toast.error("Convert folder is not available");
+      toast.error(t("cardIcon.convertMissing"));
       return;
     }
     if (!targetFileUrl) {
-      toast.error("Target nutexb path is not available");
+      toast.error(t("cardIcon.targetMissing"));
       return;
     }
     const sourcePngPath = pngPath || defaultPreviewPngPath;
     if (!sourcePngPath) {
-      toast.error("No source PNG available");
+      toast.error(t("cardIcon.noSourcePng"));
       return;
     }
     if (!(await exists(sourcePngPath))) {
-      toast.error("Source PNG does not exist");
+      toast.error(t("cardIcon.sourceMissing"));
       return;
     }
 
@@ -137,7 +140,7 @@ export function CardIconReplaceDialog({
       setIsReplacing(true);
       const nutexbPath = await resolveFullPath(folderPath, targetFileUrl);
       if (!nutexbPath) {
-        toast.error("Failed to resolve nutexb path");
+        toast.error(t("cardIcon.resolveNutexbFailed"));
         return;
       }
       const result = await invoke<ReplaceSummary>("card_icon_replace_from_png_with_dds_format", {
@@ -146,13 +149,13 @@ export function CardIconReplaceDialog({
         pngPath: sourcePngPath,
         ddsFormat,
       });
-      toast.success(`Updated card icon: ${result.nutexbName}`);
+      toast.success(t("cardIcon.updated", { name: result.nutexbName }));
       setOpenState(false);
       setPngPath("");
       await onApplied();
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : "Failed to replace card icon";
+      const message = error instanceof Error ? error.message : t("cardIcon.replaceFailed");
       toast.error(message);
     } finally {
       setIsReplacing(false);
@@ -166,18 +169,19 @@ export function CardIconReplaceDialog({
     selectedItem,
     targetFileUrl,
     defaultPreviewPngPath,
+    t,
   ]);
 
   return (
     <>
       <Button size="sm" variant="outline" disabled={!canEdit} onClick={() => setOpenState(true)}>
-        {triggerLabel}
+        {resolvedTriggerLabel}
       </Button>
       {openState ? (
         <AppRndModalShell
           titleId="card-icon-replace-title"
-          title="Replace Card Icon"
-          subtitle="Replaces the selected nutexb and refreshes the __convert preview PNG."
+          title={t("cardIcon.replaceTitle")}
+          subtitle={t("cardIcon.replaceSubtitle")}
           headerIcon={<ImageIcon className="h-5 w-5 text-primary" />}
           dimensions={CARD_ICON_REPLACE_MODAL_DIMENSIONS}
           storageKey="app.rnd-size.card-icon-replace"
@@ -187,47 +191,51 @@ export function CardIconReplaceDialog({
           <div className="min-h-0 flex-1 overflow-y-auto p-6">
             <div className="grid grid-cols-2 gap-6">
           <div className="space-y-3">
-            <Label>Preview</Label>
+            <Label>{t("common.preview")}</Label>
             <Card className="overflow-hidden min-h-[360px]">
               <AspectRatio ratio={1} className="bg-black flex items-center justify-center">
                 {previewSrc ? (
                   <img
                     src={previewSrc}
-                    alt="Card icon preview"
+                    alt={t("cardIcon.previewAlt")}
                     className="w-full h-full object-contain"
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full w-full bg-black">
-                    <span className="text-sm text-muted-foreground">No preview available</span>
+                    <span className="text-sm text-muted-foreground">{t("common.noPreview")}</span>
                   </div>
                 )}
               </AspectRatio>
             </Card>
             <div className="text-xs text-muted-foreground min-h-8 leading-snug">
-              {pngPath ? "Previewing the selected PNG (will be applied)." : "Previewing current __convert PNG (if exists)."}
+              {pngPath ? t("cardIcon.previewSelected") : t("cardIcon.previewCurrent")}
             </div>
           </div>
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Target Nutexb</Label>
-              <div className="text-xs text-muted-foreground break-all border rounded-md px-3 py-2 min-h-10">
-                {targetFileUrl || "No target selected"}
+              <Label>{t("cardIcon.labelTargetNutexb")}</Label>
+              <div className="text-xs text-muted-foreground break-all border rounded-md px-3 py-2 min-h-10" data-i18n-ignore="">
+                {targetFileUrl || t("cardIcon.noTarget")}
               </div>
               <div className="text-xs text-muted-foreground min-h-8 leading-snug">
-                The target is resolved from <span className="font-mono">SubFileData.fileUrl</span>.
+                {t("cardIcon.resolvedFrom")}{" "}
+                <span className="font-mono" data-i18n-ignore="">
+                  SubFileData.fileUrl
+                </span>
+                .
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label>DDS Format</Label>
+              <Label>{t("common.ddsFormat")}</Label>
               <Select
                 value={ddsFormat}
                 onValueChange={setDdsFormat}
                 disabled={isReplacing || isDetectingFormat}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select DDS format" />
+                  <SelectValue placeholder={t("common.selectDdsFormat")} />
                 </SelectTrigger>
                 <SelectContent>
                   {DDS_FORMATS.map((opt) => (
@@ -239,40 +247,44 @@ export function CardIconReplaceDialog({
               </Select>
               <div className="text-xs text-muted-foreground min-h-8 leading-snug">
                 {isDetectingFormat
-                  ? "Detecting original format from target nutexb..."
-                  : "Default is the original format from the target nutexb file."}
+                  ? t("cardIcon.detectingFormat")
+                  : t("cardIcon.defaultOriginal")}
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="card-icon-replace-png">Source PNG (optional)</Label>
+              <Label htmlFor="card-icon-replace-png">{t("cardIcon.sourcePngOptional")}</Label>
               <FilePathInput
                 id="card-icon-replace-png"
                 value={pngPath}
-                placeholder="Select a PNG file..."
+                placeholder={t("common.selectPng")}
                 picker={{
                   kind: "file",
                   multiple: false,
-                  title: "Select PNG file",
+                  title: t("common.selectPngTitle"),
                   filters: [{ name: "PNG", extensions: ["png"] }],
                 }}
                 onPickedValue={handlePngPicked}
                 disabled={isReplacing}
               />
               <div className="text-xs text-muted-foreground min-h-8 leading-snug">
-                If empty, it uses the current <span className="font-mono">__convert</span> preview PNG.
+                {t("cardIcon.ifEmptyUses")}{" "}
+                <span className="font-mono" data-i18n-ignore="">
+                  __convert
+                </span>{" "}
+                {t("cardIcon.previewPng")}
               </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setOpenState(false)} disabled={isReplacing}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 onClick={() => void handleApply()}
                 disabled={isReplacing || isDetectingFormat || !canEdit || (!pngPath && !defaultPreviewPngPath)}
               >
-                {isReplacing ? "Replacing..." : "Apply"}
+                {isReplacing ? t("common.replacing") : t("common.apply")}
               </Button>
             </div>
           </div>

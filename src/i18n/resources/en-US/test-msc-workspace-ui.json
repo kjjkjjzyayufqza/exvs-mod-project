@@ -1,0 +1,118 @@
+{
+  "aria": {
+    "workspaceType": "MSC workspace type"
+  },
+  "tabs": {
+    "unit": "Unit MSC",
+    "traditional": "Traditional MSC"
+  },
+  "workspace": {
+    "unitTitle": "Unit MSC Workspace",
+    "traditionalTitle": "Traditional MSC Workspace",
+    "root": "Workspace root: {{path}}"
+  },
+  "buttons": {
+    "picking": "Picking…",
+    "pickFolder": "Pick folder",
+    "decompileAll": "Decompile All",
+    "repackAll": "Repack All",
+    "repackFhm2d": "Repack .fhm2d",
+    "diff": "Diff",
+    "closePreview": "Close preview",
+    "cancel": "Cancel",
+    "overwriteContinue": "Overwrite and continue",
+    "continue": "Continue"
+  },
+  "actions": {
+    "convert": "Convert",
+    "converting": "Converting…",
+    "preview": "Preview",
+    "open": "Open",
+    "resolveOverlay": "Resolve overlay",
+    "resolving": "Resolving…",
+    "verify": "Verify",
+    "verifying": "Verifying…",
+    "repack": "Repack",
+    "repacking": "Repacking…"
+  },
+  "status": {
+    "decompiling": "Decompiling",
+    "repacking": "Repacking",
+    "decompiled": "Decompiled",
+    "repacked": "Repacked"
+  },
+  "search": {
+    "placeholder": "Search files in this folder…",
+    "fileType": "File type"
+  },
+  "fileTypes": {
+    "all": "All Files",
+    "resolved": "Resolved"
+  },
+  "editor": {
+    "commandLabel": "External editor command",
+    "commandTitle": "External editor command used by Open (e.g. cursor, code, notepad)",
+    "commandPlaceholder": "cursor",
+    "autoRepackTitle": "After compiling C back to MSC, automatically repack the containing FHM2D",
+    "autoRepack": "Auto-repack .fhm2d"
+  },
+  "preview": {
+    "noChanges": "No changes vs the last-decompiled snapshot.",
+    "diffNeedsSnapshot": "Decompile this script in this session to capture a diff snapshot",
+    "toggleDiff": "Toggle diff vs the last-decompiled snapshot"
+  },
+  "empty": {
+    "noFiles": "No files match the current filter",
+    "selectUnit": "Select a folder containing at least one {{exts}} file.",
+    "selectTraditional": "Select a folder containing {{ext}} MSC scripts. Arbitrary file names are supported."
+  },
+  "dialog": {
+    "outputTargets": "Output targets",
+    "noOverwrite": "No existing output files will be overwritten.",
+    "convertToC": "Convert to C",
+    "decompileAll": "Decompile all scripts",
+    "repackAll": "Repack all C files",
+    "convertFile": "Convert {{name}} to C source now?",
+    "batchDecompile": "Decompile {{count}} file(s): {{names}}.",
+    "batchRepack": "Repack {{count}} file(s): {{names}}.",
+    "willOverwrite": "Existing files that will be overwritten",
+    "migrateStructure": "Migrate MSC FHM2D structure"
+  },
+  "toast": {
+    "readFolderFailed": "Failed to read MSC folder",
+    "configureModPath": "Configure OB Mod path in Config before repacking",
+    "repackedToMod": "Repacked to mod: {{path}}",
+    "removedVgsht2": "Removed matching .vgsht2 (same stem as .fhm2d)",
+    "repackRemoveVgsht2Failed": "Repacked to mod but failed to remove .vgsht2: {{message}}",
+    "repackFolderFailed": "Repack Folder failed: {{message}}",
+    "converted": "Converted {{name}}",
+    "convertFailed": "Error converting {{name}}: {{message}}",
+    "repacked": "Repacked {{name}}",
+    "repackFailed": "Error repacking {{name}}: {{message}}",
+    "noRegistryEvidence": "No stable MSC registry evidence found for {{name}}",
+    "resolveOverlayFailed": "Error resolving overlay for {{name}}: {{message}}",
+    "openEditorFailed": "Error opening {{name}} in editor: {{message}}",
+    "previewFailed": "Failed to preview {{name}}: {{message}}",
+    "roundtripOk": "Round-trip verify {{name}}: {{summary}}",
+    "roundtripWarn": "Round-trip verify {{name}}: {{summary}}.{{context}}",
+    "roundtripFailed": "Round-trip verify {{name}} failed: {{message}}",
+    "fileError": "{{name}}: {{message}}",
+    "autoRepackSkipped": "Automatic .fhm2d repack skipped because one or more MSC files failed",
+    "batchOk": "{{verb}} {{count}} file(s)",
+    "batchPartial": "{{verb}} {{done}}/{{total}} file(s), {{failed}} failed",
+    "prepareConvertFailed": "Failed to prepare convert for {{name}}: {{message}}",
+    "needUnitScripts": "Selected folder must contain at least one .bscex, .cscex, or .dscex file",
+    "needTraditionalScripts": "Selected folder must contain at least one .bin file",
+    "decompiledNoSnapshot": "Decompiled {{name}}, but could not snapshot {{path}} for diffing: {{message}}",
+    "overlayUpdated": "Updated {{path}} with {{renames}} callback rename(s) from {{summary}}",
+    "overlayFound": "Found {{summary}}, but no unresolved func_N callback names needed rewriting",
+    "evidenceSummary": "{{actions}} action(s), {{slots}} slot callback(s), {{weapons}} weapon binding(s), and {{resources}} resource binding(s)"
+  },
+  "pipeline": {
+    "c": "C",
+    "unverified": "Round-trip not verified yet",
+    "verifying": "Round-trip verify running",
+    "match": "Round-trip byte-identical ({{bytes}} bytes)",
+    "mismatch": "Round-trip diverges at offset {{offset}} (original {{original}} bytes, recompiled {{recompiled}} bytes)"
+  }
+}

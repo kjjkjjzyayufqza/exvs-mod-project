@@ -11,15 +11,17 @@ import { ImageResizeTool } from "./components/image-resize/ImageResizeTool"
 import { GvsMapToVs2Tool } from "./components/gvs-map-to-vs2/GvsMapToVs2Tool"
 import { Fhm2dImageViewTool } from "./components/fhm2d-image-view/Fhm2dImageViewTool"
 import { NutexbViewTool } from "./components/nutexb-view/NutexbViewTool"
+import { useTranslation } from "react-i18next"
 
 export default function MiscToolsPage() {
+  const { t } = useTranslation("misc-tools-b")
   return (
     <div className="h-full">
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">Misc Tools</h1>
+          <h1 className="text-2xl font-bold">{t("page.title")}</h1>
           <p className="text-muted-foreground">
-            Various utility tools for development and debugging
+            {t("page.description")}
           </p>
         </div>
 
@@ -31,15 +33,15 @@ export default function MiscToolsPage() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5" />
-                File Operations
+                {t("page.cards.fileOps.title")}
               </CardTitle>
               <CardDescription>
-                File reading, writing, and manipulation utilities
+                {t("page.cards.fileOps.description")}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button variant="outline" className="w-full">
-                Open File Browser
+                {t("page.cards.fileOps.open")}
               </Button>
             </CardContent>
           </Card>
@@ -49,15 +51,15 @@ export default function MiscToolsPage() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
                 <Calculator className="h-5 w-5" />
-                Calculator
+                {t("page.cards.calculator.title")}
               </CardTitle>
               <CardDescription>
-                Basic calculations and conversions
+                {t("page.cards.calculator.description")}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button variant="outline" className="w-full">
-                Open Calculator
+                {t("page.cards.calculator.open")}
               </Button>
             </CardContent>
           </Card>
@@ -67,15 +69,15 @@ export default function MiscToolsPage() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
                 <Palette className="h-5 w-5" />
-                Color Tools
+                {t("page.cards.color.title")}
               </CardTitle>
               <CardDescription>
-                Color picker and conversion utilities
+                {t("page.cards.color.description")}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button variant="outline" className="w-full">
-                Open Color Picker
+                {t("page.cards.color.open")}
               </Button>
             </CardContent>
           </Card>
@@ -85,15 +87,15 @@ export default function MiscToolsPage() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
                 <Wrench className="h-5 w-5" />
-                Dev Tools
+                {t("page.cards.dev.title")}
               </CardTitle>
               <CardDescription>
-                Development and debugging utilities
+                {t("page.cards.dev.description")}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button variant="outline" className="w-full">
-                Open Dev Console
+                {t("page.cards.dev.open")}
               </Button>
             </CardContent>
           </Card>
@@ -103,10 +105,10 @@ export default function MiscToolsPage() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
                 <File className="h-5 w-5" />
-                FBX Item Rename
+                {t("page.cards.fbx.title")}
               </CardTitle>
               <CardDescription>
-                Load and analyze FBX model files
+                {t("page.cards.fbx.description")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -119,10 +121,10 @@ export default function MiscToolsPage() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
                 <FileJson className="h-5 w-5" />
-                Template JSON Generator
+                {t("page.cards.template.title")}
               </CardTitle>
               <CardDescription>
-                Generate template JSON files by scanning folder structures
+                {t("page.cards.template.description")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -135,10 +137,10 @@ export default function MiscToolsPage() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
                 <ImageIcon className="h-5 w-5" />
-                Image to Nutexb
+                {t("page.cards.imageToNutexb.title")}
               </CardTitle>
               <CardDescription>
-                Convert image files to nutexb format with custom output directory
+                {t("page.cards.imageToNutexb.description")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -151,10 +153,10 @@ export default function MiscToolsPage() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
                 <FileEdit className="h-5 w-5" />
-                Numatb Editor
+                {t("page.cards.numatb.title")}
               </CardTitle>
               <CardDescription>
-                Edit material properties in .numatb files
+                {t("page.cards.numatb.description")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -167,10 +169,10 @@ export default function MiscToolsPage() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
                 <ImageIcon className="h-5 w-5" />
-                Image Compressor
+                {t("page.cards.compress.title")}
               </CardTitle>
               <CardDescription>
-                Compress PNG images to reduce file size while maintaining quality
+                {t("page.cards.compress.description")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -183,10 +185,10 @@ export default function MiscToolsPage() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
                 <ImageIcon className="h-5 w-5" />
-                Image Resizer
+                {t("page.cards.resize.title")}
               </CardTitle>
               <CardDescription>
-                Resize images to specified dimensions with batch processing support
+                {t("page.cards.resize.description")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -198,10 +200,10 @@ export default function MiscToolsPage() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
                 <ImageIcon className="h-5 w-5" />
-                FHM2D Image View
+                {t("page.cards.fhm2dImage.title")}
               </CardTitle>
               <CardDescription>
-                Open an FHM2D in memory, browse every texture, and list the other files
+                {t("page.cards.fhm2dImage.description")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -213,10 +215,10 @@ export default function MiscToolsPage() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
                 <ImageIcon className="h-5 w-5" />
-                Nutexb View
+                {t("page.cards.nutexb.title")}
               </CardTitle>
               <CardDescription>
-                Open a folder, recursively load every .nutexb, and browse them in a tree
+                {t("page.cards.nutexb.description")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -229,10 +231,10 @@ export default function MiscToolsPage() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
                 <GitCompareArrows className="h-5 w-5" />
-                GVS Map to VS2
+                {t("page.cards.gvs.title")}
               </CardTitle>
               <CardDescription>
-                Extract flat files and generate VS2-compatible outputMeta JSON
+                {t("page.cards.gvs.description")}
               </CardDescription>
             </CardHeader>
             <CardContent>

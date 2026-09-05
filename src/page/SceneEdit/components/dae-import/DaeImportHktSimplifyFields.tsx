@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type {
   HktHullPreset,
@@ -24,11 +25,7 @@ import {
   buildImportConfigForHktPreview,
   detectHktSimplifyPreset,
   formatTriangleCount,
-  HKT_HULL_PRESET_HINTS,
-  HKT_HULL_PRESET_LABELS,
   HKT_HULL_PRESET_ORDER,
-  HKT_SIMPLIFY_PRESET_HINTS,
-  HKT_SIMPLIFY_PRESET_LABELS,
   HKT_SIMPLIFY_PRESET_ORDER,
   hktHullConfigFromPreset,
   hktSimplifyConfigFromPreset,
@@ -43,9 +40,9 @@ import {
   type ImportConfig,
 } from "../../utils/sceneSessionService";
 
-const STRATEGY_OPTIONS: { value: HktSimplifyStrategy; label: string; hint: string }[] = [
-  { value: "shapePreserving", label: "Shape-preserving", hint: "Follow the original surface" },
-  { value: "convexHull", label: "Convex outline", hint: "Coarse outer frame, few faces" },
+const STRATEGY_OPTIONS: { value: HktSimplifyStrategy; labelKey: string; hintKey: string }[] = [
+  { value: "shapePreserving", labelKey: "strategy.shapePreserving", hintKey: "strategy.shapePreservingHint" },
+  { value: "convexHull", labelKey: "strategy.convexHull", hintKey: "strategy.convexHullHint" },
 ];
 
 interface DaeImportHktSimplifyFieldsProps {
@@ -74,6 +71,7 @@ export function DaeImportHktSimplifyFields({
   autoPreview = true,
   onValidationChange,
 }: DaeImportHktSimplifyFieldsProps) {
+  const { t } = useTranslation("scene-dae-hkt");
   const [preview, setPreview] = useState<HktCollisionPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -229,17 +227,15 @@ export function DaeImportHktSimplifyFields({
     : undefined;
 
   return (
-    <DaeImportSection title={compact ? "Simplify" : "Collision Simplification"} compact={compact}>
+    <DaeImportSection title={t(compact ? "section.simplify" : "section.collisionSimplification")} compact={compact}>
       {!compact ? (
         <DaeImportStatusAlert tone="info">
-          Shape-preserving keeps the source surface; High 32k is the current single-shape
-          detail budget for HKT generation. Convex outline builds a coarse outer shell for
-          low-poly bounds.
+          {t("section.simplificationDescription")}
         </DaeImportStatusAlert>
       ) : null}
 
       <div className={cn("min-w-0 space-y-2", compact ? "px-3" : "px-1")}>
-        <div className="text-[11px] font-medium text-foreground">Strategy</div>
+        <div className="text-[11px] font-medium text-foreground">{t("fields.strategy")}</div>
         <div
           className={cn(
             "grid min-w-0 gap-1 rounded-lg border border-border/60 bg-muted/20 p-1",
@@ -261,9 +257,9 @@ export function DaeImportHktSimplifyFields({
                     : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
                 )}
               >
-                <span className="text-[11px] font-semibold">{opt.label}</span>
+                <span className="text-[11px] font-semibold">{t(opt.labelKey)}</span>
                 <span className="text-pretty text-[10px] leading-snug opacity-80 break-words">
-                  {opt.hint}
+                  {t(opt.hintKey)}
                 </span>
               </button>
             );
@@ -273,18 +269,18 @@ export function DaeImportHktSimplifyFields({
 
       {activeStrategy === "shapePreserving" ? (
         <DaeImportFieldRow
-          label="Simplify Level"
-          hint={HKT_SIMPLIFY_PRESET_HINTS[activePreset]}
+          label={t("fields.simplifyLevel")}
+          hint={t(`presets.simplify.${activePreset}.hint`)}
           className={compactFieldRowClass}
         >
           <Select value={activePreset} onValueChange={handlePresetChange}>
-            <SelectTrigger className="h-8 text-[11px]">
-              <SelectValue placeholder="Select level" />
+            <SelectTrigger className="h-8 text-[11px]" aria-label={t("fields.simplifyLevel")}>
+              <SelectValue placeholder={t("placeholders.selectLevel")} />
             </SelectTrigger>
             <SelectContent className={daeImportModalSelectContentClass}>
               {HKT_SIMPLIFY_PRESET_ORDER.map((preset) => (
                 <SelectItem key={preset} value={preset} className="text-[11px]">
-                  {HKT_SIMPLIFY_PRESET_LABELS[preset]}
+                  {t(`presets.simplify.${preset}.label`)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -292,21 +288,21 @@ export function DaeImportHktSimplifyFields({
         </DaeImportFieldRow>
       ) : (
         <DaeImportFieldRow
-          label="Hull Detail"
-          hint={HKT_HULL_PRESET_HINTS[activeHullPreset]}
+          label={t("fields.hullDetail")}
+          hint={t(`presets.hull.${activeHullPreset}.hint`)}
           className={compactFieldRowClass}
         >
           <Select
             value={activeHullPreset}
             onValueChange={(v) => handleHullPresetChange(v as HktHullPreset)}
           >
-            <SelectTrigger className="h-8 text-[11px]">
-              <SelectValue placeholder="Select detail" />
+            <SelectTrigger className="h-8 text-[11px]" aria-label={t("fields.hullDetail")}>
+              <SelectValue placeholder={t("placeholders.selectDetail")} />
             </SelectTrigger>
             <SelectContent className={daeImportModalSelectContentClass}>
               {HKT_HULL_PRESET_ORDER.map((preset) => (
                 <SelectItem key={preset} value={preset} className="text-[11px]">
-                  {HKT_HULL_PRESET_LABELS[preset]}
+                  {t(`presets.hull.${preset}.label`)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -316,8 +312,8 @@ export function DaeImportHktSimplifyFields({
 
       {activeStrategy === "shapePreserving" ? (
         <DaeImportBoolField
-          label="Real Quads"
-          hint="Merge valid triangle pairs into authored quad primitives; disable for triangle-only diagnostics."
+          label={t("fields.realQuads")}
+          hint={t("fields.realQuadsHint")}
           checked={normalizedValue.quadMergeEnabled}
           onCheckedChange={handleQuadMergeChange}
           className={compactFieldRowClass}
@@ -331,33 +327,33 @@ export function DaeImportHktSimplifyFields({
             compact ? "px-3" : "px-4",
           )}
         >
-          <p className="font-medium text-foreground">Preview</p>
+          <p className="font-medium text-foreground">{t("preview.title")}</p>
           {previewError ? (
-            <p className="text-pretty break-words text-destructive">{previewError}</p>
+            <p className="text-pretty break-words text-destructive">{t("preview.error", { message: previewError })}</p>
           ) : null}
           {previewLoading ? (
-            <p>Computing collision stats…</p>
+            <p>{t("preview.computing")}</p>
           ) : previewError ? null : preview ? (
             <div className="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[10px]">
-              <span>Render tris</span>
+              <span>{t("preview.renderTris")}</span>
               <span className="text-right">{formatTriangleCount(preview.renderTriangleCount)}</span>
-              <span>Merged tris</span>
+              <span>{t("preview.mergedTris")}</span>
               <span className="text-right">{formatTriangleCount(preview.mergedTriangleCount)}</span>
-              <span>Collision tris</span>
+              <span>{t("preview.collisionTris")}</span>
               <span className="text-right text-green-400">
                 {formatTriangleCount(preview.simplifiedTriangleCount)}
               </span>
-              <span>Vertices</span>
+              <span>{t("preview.vertices")}</span>
               <span className="text-right">{formatTriangleCount(preview.vertexCount)}</span>
               {reduction != null && normalizedValue.enabled ? (
                 <>
-                  <span>Reduction</span>
+                  <span>{t("preview.reduction")}</span>
                   <span className="text-right">{reduction}%</span>
                 </>
               ) : null}
             </div>
           ) : (
-            <p>Adjust settings to preview triangle counts.</p>
+            <p>{t("preview.adjustSettings")}</p>
           )}
         </div>
       ) : null}

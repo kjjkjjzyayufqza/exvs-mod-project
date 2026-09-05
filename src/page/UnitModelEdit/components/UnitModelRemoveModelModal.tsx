@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
 
 import {
@@ -27,6 +28,7 @@ export function UnitModelRemoveModelModal({
   onConfirm,
   onCancel,
 }: UnitModelRemoveModelModalProps) {
+  const { t } = useTranslation("unit-remove-repack");
   const [step, setStep] = useState<1 | 2>(1);
 
   useEffect(() => {
@@ -50,24 +52,22 @@ export function UnitModelRemoveModelModal({
             <AlertDialogHeader>
               <AlertDialogTitle className="flex items-center gap-2">
                 <Trash2 className="h-4 w-4 text-destructive" aria-hidden />
-                Remove model?
+                {t("remove.title")}
               </AlertDialogTitle>
               <AlertDialogDescription asChild>
                 <div className="space-y-2 text-left text-sm text-muted-foreground">
                   <p>
-                    You are about to remove <span className="font-mono text-foreground">{label}</span>{" "}
-                    from this Unit model package.
+                    {t("remove.description", { name: label })}
                   </p>
                   <p>
-                    This deletes the model&apos;s SSBH files, its paired NUHLPB, and any shared textures
-                    that become unreferenced. The package structure JSON will be rewritten.
+                    {t("remove.details")}
                   </p>
                 </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
               <AlertDialogCancel type="button" disabled={busy} onClick={onCancel}>
-                Cancel
+                {t("actions.cancel")}
               </AlertDialogCancel>
               <Button
                 type="button"
@@ -75,7 +75,7 @@ export function UnitModelRemoveModelModal({
                 disabled={!label || busy}
                 onClick={() => setStep(2)}
               >
-                Continue
+                {t("actions.continue")}
               </Button>
             </AlertDialogFooter>
           </>
@@ -84,23 +84,22 @@ export function UnitModelRemoveModelModal({
             <AlertDialogHeader>
               <AlertDialogTitle className="flex items-center gap-2 text-destructive">
                 <AlertTriangle className="h-4 w-4" aria-hidden />
-                Permanently remove model?
+                {t("confirm.title")}
               </AlertDialogTitle>
               <AlertDialogDescription asChild>
                 <div className="space-y-2 text-left text-sm text-muted-foreground">
                   <p>
-                    Final confirmation: <span className="font-mono text-foreground">{label}</span> will be
-                    deleted from disk. This cannot be undone.
+                    {t("confirm.description", { name: label })}
                   </p>
                 </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
               <Button type="button" variant="outline" disabled={busy} onClick={() => setStep(1)}>
-                Back
+                {t("actions.back")}
               </Button>
               <AlertDialogCancel type="button" disabled={busy} onClick={onCancel}>
-                Cancel
+                {t("actions.cancel")}
               </AlertDialogCancel>
               <Button
                 type="button"
@@ -111,10 +110,10 @@ export function UnitModelRemoveModelModal({
                 {busy ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                    Removing...
+                    {t("remove.loading")}
                   </>
                 ) : (
-                  "Permanently remove"
+                  t("confirm.action")
                 )}
               </Button>
             </AlertDialogFooter>

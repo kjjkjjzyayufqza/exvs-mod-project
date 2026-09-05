@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { join } from "@tauri-apps/api/path";
 import {
@@ -118,22 +119,28 @@ interface PreviewState {
   mode: PreviewMode;
 }
 
-const UNIT_FILE_TYPES = [
-  { value: "all", label: "All Files" },
-  { value: "c", label: ".c" },
-  { value: "resolved", label: "Resolved" },
-  { value: "txt", label: ".txt" },
-  { value: "bscex", label: ".bscex" },
-  { value: "cscex", label: ".cscex" },
-  { value: "dscex", label: ".dscex" },
-] as const;
+type FileTypeOption = {
+  value: string;
+  textKey?: "fileTypes.all" | "fileTypes.resolved";
+  dump?: string;
+};
 
-const TRADITIONAL_FILE_TYPES = [
-  { value: "all", label: "All Files" },
-  { value: "bin", label: ".bin" },
-  { value: "c", label: ".c" },
-  { value: "txt", label: ".txt" },
-] as const;
+const UNIT_FILE_TYPES: FileTypeOption[] = [
+  { value: "all", textKey: "fileTypes.all" },
+  { value: "c", dump: ".c" },
+  { value: "resolved", textKey: "fileTypes.resolved" },
+  { value: "txt", dump: ".txt" },
+  { value: "bscex", dump: ".bscex" },
+  { value: "cscex", dump: ".cscex" },
+  { value: "dscex", dump: ".dscex" },
+];
+
+const TRADITIONAL_FILE_TYPES: FileTypeOption[] = [
+  { value: "all", textKey: "fileTypes.all" },
+  { value: "bin", dump: ".bin" },
+  { value: "c", dump: ".c" },
+  { value: "txt", dump: ".txt" },
+];
 
 function matchesFileType(fileName: string, type: string): boolean {
   const lower = fileName.toLowerCase();
@@ -163,6 +170,7 @@ export default function MscWorkspaceView({
   workspaceDefaultPath,
   modFolderPath,
 }: MscWorkspaceViewProps) {
+  const { t } = useTranslation("test-msc-workspace-ui");
   const [workspaceMode, setWorkspaceMode] = useState<MscWorkspaceMode>("unit");
   const [traditionalFolderPath, setTraditionalFolderPath] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -224,11 +232,11 @@ export default function MscWorkspaceView({
       setAllFiles(files);
     } catch (error) {
       console.error("Error reading directory:", error);
-      toast.error("Failed to read MSC folder");
+      toast.error(t("toast.readFolderFailed"));
     } finally {
       setIsLoading(false);
     }
-  }, [activeFolderPath]);
+  }, [activeFolderPath, t]);
 
   useEffect(() => {
     if (isActive && activeFolderPath) {
@@ -299,9 +307,7 @@ export default function MscWorkspaceView({
       const ok = await folderContainsMscScriptFiles(selected, workspaceMode);
       if (!ok) {
         toast.error(
-          workspaceMode === "unit"
-            ? "Selected folder must contain at least one .bscex, .cscex, or .dscex file"
-            : "Selected folder must contain at least one .bin file",
+          workspaceMode === "unit" ? t("toast.needUnitScripts") : t("toast.needTraditionalScripts"),
         );
         return;
       }
@@ -322,7 +328,7 @@ export default function MscWorkspaceView({
     if (!activeFolderPath) return;
     const resolvedModFolderPath = modFolderPath?.trim();
     if (!resolvedModFolderPath) {
-      toast.error("Configure OB Mod path in Config before repacking");
+      toast.error(t("toast.configureModPath"));
       return;
     }
     try {
@@ -333,7 +339,7 @@ export default function MscWorkspaceView({
       let structurePath = `${parentDir}\\${folderName}_structure.json`;
       const migration = await promptAndMigrateFhm2dStructureIfNeeded({
         structureJsonPath: structurePath,
-        title: "Migrate MSC FHM2D structure",
+        title: t("dialog.migrateStructure"),
       });
       if (migration) {
         const migratedPaths = applyFhm2dStructureMigrationToPack(
@@ -359,11 +365,11 @@ export default function MscWorkspaceView({
           result.outputPath,
         );
         if (removed) {
-          toast.success(`Repacked to mod: ${result.outputPath}`, {
-            description: "Removed matching .vgsht2 (same stem as .fhm2d)",
+          toast.success(t("toast.repackedToMod", { path: result.outputPath }), {
+            description: t("toast.removedVgsht2"),
           });
         } else {
-          toast.success(`Repacked to mod: ${result.outputPath}`);
+          toast.success(t("toast.repackedToMod", { path: result.outputPath }));
         }
       } catch (removeErr) {
         console.error(
@@ -371,16 +377,16 @@ export default function MscWorkspaceView({
           removeErr,
         );
         toast.error(
-          `Repacked to mod but failed to remove .vgsht2: ${(removeErr as Error).message}`,
+          t("toast.repackRemoveVgsht2Failed", { message: (removeErr as Error).message }),
         );
       }
     } catch (error) {
       console.error("Error during repack folder:", error);
-      toast.error(`Repack Folder failed: ${formatCaughtError(error)}`);
+      toast.error(t("toast.repackFolderFailed", { message: formatCaughtError(error) }));
     } finally {
       setIsFolderRepacking(false);
     }
-  }, [activeFolderPath, modFolderPath, setActiveFolderPath]);
+  }, [activeFolderPath, modFolderPath, setActiveFolderPath, t]);
 
   /** Decompile one script to raw C/log outputs. Throws on tool failure. */
   const convertScriptCore = useCallback(
@@ -401,8 +407,11 @@ export default function MscWorkspaceView({
         setDecompileSnapshots((prev) => new Map(prev).set(outputPath, decompiledContent));
       } catch (snapshotError) {
         toast.warning(
-          `Decompiled ${file.name}, but could not snapshot ${outputPath} for diffing: ` +
-            (snapshotError instanceof Error ? snapshotError.message : String(snapshotError)),
+          t("toast.decompiledNoSnapshot", {
+            name: file.name,
+            path: outputPath,
+            message: snapshotError instanceof Error ? snapshotError.message : String(snapshotError),
+          }),
         );
       }
       const slotIndex = Number.parseInt(file.name, 10);
@@ -410,9 +419,9 @@ export default function MscWorkspaceView({
         setSlotVerifyState(slotIndex, null);
       }
 
-      return `${file.name} converted to raw C`;
+      return file.name;
     },
-    [workspaceMode, setSlotVerifyState],
+    [t, workspaceMode, setSlotVerifyState],
   );
 
   /** Recompile one C file back to its source pack extension. Throws on tool failure. */
@@ -426,7 +435,7 @@ export default function MscWorkspaceView({
       if (Number.isInteger(slotIndex)) {
         setSlotVerifyState(slotIndex, null);
       }
-      return `${file.name} to ${outputPath.replace(/^.*[\\/]/, "")}`;
+      return file.name;
     },
     [workspaceMode, setSlotVerifyState],
   );
@@ -435,33 +444,33 @@ export default function MscWorkspaceView({
     async (file: MscFileInfo) => {
       try {
         setProcessingFile(file.name);
-        toast.success(`Converted ${await convertScriptCore(file)}`);
+        toast.success(t("toast.converted", { name: await convertScriptCore(file) }));
         await fetchFiles();
       } catch (error) {
-        toast.error(`Error converting ${file.name}: ${formatCaughtError(error)}`);
+        toast.error(t("toast.convertFailed", { name: file.name, message: formatCaughtError(error) }));
       } finally {
         setProcessingFile(null);
       }
     },
-    [convertScriptCore, fetchFiles],
+    [convertScriptCore, fetchFiles, t],
   );
 
   const handleRepackOne = useCallback(
     async (file: MscFileInfo) => {
       try {
         setProcessingFile(file.name);
-        toast.success(`Repacked ${await repackScriptCore(file)}`);
+        toast.success(t("toast.repacked", { name: await repackScriptCore(file) }));
         if (autoRepackFhm2d) {
           await handleRepackFolder();
         }
         await fetchFiles();
       } catch (error) {
-        toast.error(`Error repacking ${file.name}: ${formatCaughtError(error)}`);
+        toast.error(t("toast.repackFailed", { name: file.name, message: formatCaughtError(error) }));
       } finally {
         setProcessingFile(null);
       }
     },
-    [autoRepackFhm2d, handleRepackFolder, repackScriptCore, fetchFiles],
+    [autoRepackFhm2d, handleRepackFolder, repackScriptCore, fetchFiles, t],
   );
 
   const handleResolveOverlay = useCallback(
@@ -471,14 +480,21 @@ export default function MscWorkspaceView({
         const scriptFolder = file.path.replace(/[\\/][^\\/]+$/, "");
         const result = await resolveMscActionOverlayForFolder(scriptFolder);
         if (result.status === "skipped") {
-          toast.warning(`No stable MSC registry evidence found for ${file.name}`);
+          toast.warning(t("toast.noRegistryEvidence", { name: file.name }));
         } else {
-          const evidenceSummary =
-            `${result.actionCount} action(s), ${result.slotCallbackCount} slot callback(s), ` +
-            `${result.weaponBindingCount} weapon binding(s), and ${result.resourceBindingCount} resource binding(s)`;
+          const evidenceSummary = t("toast.evidenceSummary", {
+            actions: result.actionCount,
+            slots: result.slotCallbackCount,
+            weapons: result.weaponBindingCount,
+            resources: result.resourceBindingCount,
+          });
           const message = result.updatedPath
-            ? `Updated ${result.updatedPath} with ${result.renamedCallbackCount} callback rename(s) from ${evidenceSummary}`
-            : `Found ${evidenceSummary}, but no unresolved func_N callback names needed rewriting`;
+            ? t("toast.overlayUpdated", {
+                path: result.updatedPath,
+                renames: result.renamedCallbackCount,
+                summary: evidenceSummary,
+              })
+            : t("toast.overlayFound", { summary: evidenceSummary });
           if (result.status === "partial") {
             toast.warning(message);
           } else {
@@ -487,12 +503,12 @@ export default function MscWorkspaceView({
         }
         await fetchFiles();
       } catch (error) {
-        toast.error(`Error resolving overlay for ${file.name}: ${formatCaughtError(error)}`);
+        toast.error(t("toast.resolveOverlayFailed", { name: file.name, message: formatCaughtError(error) }));
       } finally {
         setProcessingFile(null);
       }
     },
-    [fetchFiles],
+    [fetchFiles, t],
   );
 
   const handleOpenInEditor = useCallback(
@@ -501,12 +517,12 @@ export default function MscWorkspaceView({
         setProcessingFile(file.name);
         await openFileInExternalEditor({ filePath: file.path, editorCommand });
       } catch (error) {
-        toast.error(`Error opening ${file.name} in editor: ${formatCaughtError(error)}`);
+        toast.error(t("toast.openEditorFailed", { name: file.name, message: formatCaughtError(error) }));
       } finally {
         setProcessingFile(null);
       }
     },
-    [editorCommand],
+    [editorCommand, t],
   );
 
   const handleEditorCommandChange = useCallback((nextCommand: string) => {
@@ -524,11 +540,9 @@ export default function MscWorkspaceView({
       const content = await readTextFile(file.path);
       setPreview({ file, content, mode: "content" });
     } catch (error) {
-      toast.error(
-        `Failed to preview ${file.name}: ${formatCaughtError(error)}`,
-      );
+      toast.error(t("toast.previewFailed", { name: file.name, message: formatCaughtError(error) }));
     }
-  }, []);
+  }, [t]);
 
   const handleTogglePreviewMode = useCallback(() => {
     setPreview((prev) => {
@@ -547,23 +561,23 @@ export default function MscWorkspaceView({
         setSlotVerifyState(slotIndex, verifyStateFromReport(result.report));
         const summary = summarizeMscRoundtripReport(result.report);
         if (result.report.isMatch) {
-          toast.success(`Round-trip verify ${file.name}: ${summary}`);
+          toast.success(t("toast.roundtripOk", { name: file.name, summary }));
         } else {
           const context = result.report.originalContextHex
             ? ` Original: ${result.report.originalContextHex} | Recompiled: ${result.report.recompiledContextHex ?? "(empty)"}`
             : "";
-          toast.warning(`Round-trip verify ${file.name}: ${summary}.${context}`);
+          toast.warning(t("toast.roundtripWarn", { name: file.name, summary, context }));
         }
       } catch (error) {
         const message = formatCaughtError(error);
         setSlotVerifyState(slotIndex, { status: "error", message });
-        toast.error(`Round-trip verify ${file.name} failed: ${message}`);
+        toast.error(t("toast.roundtripFailed", { name: file.name, message }));
       } finally {
         setProcessingFile(null);
         await fetchFiles();
       }
     },
-    [setSlotVerifyState, fetchFiles],
+    [setSlotVerifyState, fetchFiles, t],
   );
 
   const runBatch = useCallback(
@@ -576,7 +590,7 @@ export default function MscWorkspaceView({
           await (kind === "decompile" ? convertScriptCore(file) : repackScriptCore(file));
         } catch (error) {
           failures += 1;
-          toast.error(`${file.name}: ${formatCaughtError(error)}`);
+          toast.error(t("toast.fileError", { name: file.name, message: formatCaughtError(error) }));
         }
         setBatch((prev) => (prev ? { ...prev, done: prev.done + 1 } : prev));
       }
@@ -585,18 +599,25 @@ export default function MscWorkspaceView({
         if (failures === 0) {
           await handleRepackFolder();
         } else {
-          toast.warning("Automatic .fhm2d repack skipped because one or more MSC files failed");
+          toast.warning(t("toast.autoRepackSkipped"));
         }
       }
       await fetchFiles();
-      const verb = kind === "decompile" ? "Decompiled" : "Repacked";
+      const verb = kind === "decompile" ? t("status.decompiled") : t("status.repacked");
       if (failures === 0) {
-        toast.success(`${verb} ${targets.length} file(s)`);
+        toast.success(t("toast.batchOk", { verb, count: targets.length }));
       } else {
-        toast.warning(`${verb} ${targets.length - failures}/${targets.length} file(s), ${failures} failed`);
+        toast.warning(
+          t("toast.batchPartial", {
+            verb,
+            done: targets.length - failures,
+            total: targets.length,
+            failed: failures,
+          }),
+        );
       }
     },
-    [autoRepackFhm2d, convertScriptCore, handleRepackFolder, repackScriptCore, fetchFiles],
+    [autoRepackFhm2d, convertScriptCore, handleRepackFolder, repackScriptCore, fetchFiles, t],
   );
 
   const collectExisting = useCallback(async (paths: string[]): Promise<string[]> => {
@@ -615,10 +636,10 @@ export default function MscWorkspaceView({
         const overwrite = await collectExisting([outputPath, logPath]);
         setConfirm({ mode: "convert-one", file, outputPath, logPath, overwrite });
       } catch (error) {
-        toast.error(`Failed to prepare convert for ${file.name}: ${formatCaughtError(error)}`);
+        toast.error(t("toast.prepareConvertFailed", { name: file.name, message: formatCaughtError(error) }));
       }
     },
-    [collectExisting, workspaceMode],
+    [collectExisting, workspaceMode, t],
   );
 
   const openDecompileAll = useCallback(async () => {
@@ -660,7 +681,7 @@ export default function MscWorkspaceView({
         return [
           {
             key: "convert",
-            label: working ? "Converting…" : "Convert",
+            label: working ? t("actions.converting") : t("actions.convert"),
             onClick: () => openConvertOne(file),
             variant: "default",
             disabled,
@@ -673,7 +694,7 @@ export default function MscWorkspaceView({
         const actions: MscFileActionDescriptor[] = [
           {
             key: "preview",
-            label: "Preview",
+            label: t("actions.preview"),
             onClick: () => handlePreview(file),
             variant: "ghost",
             disabled,
@@ -681,7 +702,7 @@ export default function MscWorkspaceView({
           },
           {
             key: "open",
-            label: "Open",
+            label: t("actions.open"),
             onClick: () => handleOpenInEditor(file),
             variant: "ghost",
             disabled,
@@ -692,7 +713,7 @@ export default function MscWorkspaceView({
           if (workspaceMode === "unit" && file.name.toLowerCase() === "2.c") {
             actions.push({
               key: "resolve-overlay",
-              label: working ? "Resolving…" : "Resolve Overlay",
+              label: working ? t("actions.resolving") : t("actions.resolveOverlay"),
               onClick: () => handleResolveOverlay(file),
               variant: "secondary",
               disabled,
@@ -702,7 +723,7 @@ export default function MscWorkspaceView({
           if (workspaceMode === "unit") {
             actions.push({
               key: "verify",
-              label: working ? "Verifying…" : "Verify",
+              label: working ? t("actions.verifying") : t("actions.verify"),
               onClick: () => handleVerifyRoundtrip(file),
               variant: "outline",
               disabled,
@@ -711,7 +732,7 @@ export default function MscWorkspaceView({
           }
           actions.push({
             key: "repack",
-            label: working ? "Repacking…" : "Repack",
+            label: working ? t("actions.repacking") : t("actions.repack"),
             onClick: () => handleRepackOne(file),
             variant: "default",
             disabled,
@@ -725,7 +746,7 @@ export default function MscWorkspaceView({
         return [
           {
             key: "preview",
-            label: "Preview",
+            label: t("actions.preview"),
             onClick: () => handlePreview(file),
             variant: "ghost",
             disabled,
@@ -733,7 +754,7 @@ export default function MscWorkspaceView({
           },
           {
             key: "open",
-            label: "Open",
+            label: t("actions.open"),
             onClick: () => handleOpenInEditor(file),
             variant: "ghost",
             disabled,
@@ -754,6 +775,7 @@ export default function MscWorkspaceView({
       handleVerifyRoundtrip,
       handleRepackOne,
       workspaceMode,
+      t,
     ],
   );
 
@@ -771,9 +793,9 @@ export default function MscWorkspaceView({
       onValueChange={(value) => setWorkspaceMode(value as MscWorkspaceMode)}
       className="shrink-0"
     >
-      <TabsList aria-label="MSC workspace type">
-        <TabsTrigger value="unit">Unit MSC</TabsTrigger>
-        <TabsTrigger value="traditional">Traditional MSC</TabsTrigger>
+      <TabsList aria-label={t("aria.workspaceType")}>
+        <TabsTrigger value="unit">{t("tabs.unit")}</TabsTrigger>
+        <TabsTrigger value="traditional">{t("tabs.traditional")}</TabsTrigger>
       </TabsList>
     </Tabs>
   );
@@ -786,28 +808,20 @@ export default function MscWorkspaceView({
           <FolderOpen className="size-10 opacity-50" />
           <div className="max-w-md space-y-2 text-sm">
             <p className="font-medium text-foreground">
-              {workspaceMode === "unit" ? "Unit MSC Workspace" : "Traditional MSC Workspace"}
+              {workspaceMode === "unit" ? t("workspace.unitTitle") : t("workspace.traditionalTitle")}
             </p>
             {workspaceMode === "unit" ? (
-              <p>
-                Select a folder containing at least one{" "}
-                <code className="rounded bg-muted px-1 font-mono">.bscex</code>,{" "}
-                <code className="rounded bg-muted px-1 font-mono">.cscex</code>, or{" "}
-                <code className="rounded bg-muted px-1 font-mono">.dscex</code> file.
-              </p>
+              <p>{t("empty.selectUnit", { exts: ".bscex, .cscex, or .dscex" })}</p>
             ) : (
-              <p>
-                Select a folder containing <code className="rounded bg-muted px-1 font-mono">.bin</code>{" "}
-                MSC scripts. Arbitrary file names are supported.
-              </p>
+              <p>{t("empty.selectTraditional", { ext: ".bin" })}</p>
             )}
             {workspaceRoot ? (
-              <p className="font-mono text-[11px] text-muted-foreground">Workspace root: {workspaceRoot}</p>
+              <p className="font-mono text-[11px] text-muted-foreground">{t("workspace.root", { path: workspaceRoot })}</p>
             ) : null}
           </div>
           <Button type="button" variant="secondary" size="sm" onClick={() => void handlePickFolder()} disabled={isPickingFolder}>
             {isPickingFolder ? <Loader2 className="mr-2 animate-spin" /> : <FolderOpen className="mr-2" />}
-            {isPickingFolder ? "Picking…" : "Pick folder"}
+            {isPickingFolder ? t("buttons.picking") : t("buttons.pickFolder")}
           </Button>
         </div>
       </div>
@@ -822,28 +836,28 @@ export default function MscWorkspaceView({
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 flex-1 space-y-1">
               <h2 className="text-lg font-semibold tracking-tight">
-                {workspaceMode === "unit" ? "Unit MSC Workspace" : "Traditional MSC Workspace"}
+                {workspaceMode === "unit" ? t("workspace.unitTitle") : t("workspace.traditionalTitle")}
               </h2>
-              <p className="break-all font-mono text-[11px] text-muted-foreground" title={activeFolderPath}>
+              <p className="break-all font-mono text-[11px] text-muted-foreground" title={activeFolderPath} data-i18n-ignore="">
                 {activeFolderPath}
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               <Button type="button" variant="outline" size="sm" onClick={() => void handlePickFolder()} disabled={isPickingFolder || isBusy}>
                 {isPickingFolder ? <Loader2 className="mr-2 animate-spin" /> : <FolderOpen className="mr-2" />}
-                Pick folder
+                {t("buttons.pickFolder")}
               </Button>
               <Button type="button" size="sm" onClick={() => void openDecompileAll()} disabled={isBusy || scriptTargets.length === 0}>
                 <Play className="mr-2" />
-                Decompile All
+                {t("buttons.decompileAll")}
               </Button>
               <Button type="button" size="sm" onClick={() => void openRepackAll()} disabled={isBusy || repackTargets.length === 0}>
                 <Hammer className="mr-2" />
-                Repack All
+                {t("buttons.repackAll")}
               </Button>
               <Button type="button" variant="secondary" size="sm" onClick={() => void handleRepackFolder()} disabled={isBusy}>
                 {isFolderRepacking ? <Loader2 className="mr-2 animate-spin" /> : <Package className="mr-2" />}
-                Repack .fhm2d
+                {t("buttons.repackFhm2d")}
               </Button>
             </div>
           </div>
@@ -856,7 +870,7 @@ export default function MscWorkspaceView({
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>
-                  {batch.kind === "decompile" ? "Decompiling" : "Repacking"} {batch.done}/{batch.total}
+                  {batch.kind === "decompile" ? t("status.decompiling") : t("status.repacking")} {batch.done}/{batch.total}
                 </span>
                 <span className="font-mono tabular-nums">{Math.round((batch.done / batch.total) * 100)}%</span>
               </div>
@@ -866,19 +880,19 @@ export default function MscWorkspaceView({
 
           <div className="flex flex-wrap items-center gap-2">
             <Input
-              placeholder="Search files in this folder…"
+              placeholder={t("search.placeholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1"
             />
             <Select value={fileType} onValueChange={setFileType}>
               <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="File type" />
+                <SelectValue placeholder={t("search.fileType")} />
               </SelectTrigger>
               <SelectContent>
                 {fileTypes.map((type) => (
                   <SelectItem key={type.value} value={type.value}>
-                    {type.label}
+                    {type.textKey ? t(type.textKey) : <span data-i18n-ignore="">{type.dump}</span>}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -887,14 +901,14 @@ export default function MscWorkspaceView({
               value={editorCommand}
               onChange={(e) => handleEditorCommandChange(e.target.value)}
               className="w-[150px] font-mono text-xs"
-              placeholder="cursor"
-              aria-label="External editor command"
-              title="External editor command used by Open (e.g. cursor, code, notepad)"
+              placeholder={t("editor.commandPlaceholder")}
+              aria-label={t("editor.commandLabel")}
+              title={t("editor.commandTitle")}
             />
             <label
               htmlFor="msc-auto-repack-fhm2d"
               className="flex h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-xs text-muted-foreground"
-              title="After compiling C back to MSC, automatically repack the containing FHM2D"
+              title={t("editor.autoRepackTitle")}
             >
               <Switch
                 id="msc-auto-repack-fhm2d"
@@ -902,7 +916,7 @@ export default function MscWorkspaceView({
                 onCheckedChange={handleAutoRepackFhm2dChange}
                 disabled={isBusy}
               />
-              Auto-repack .fhm2d
+              {t("editor.autoRepack")}
             </label>
           </div>
         </div>
@@ -912,7 +926,7 @@ export default function MscWorkspaceView({
             <div className="flex shrink-0 items-center justify-between gap-2 border-b bg-muted/40 px-3 py-1.5">
               <div className="flex min-w-0 items-center gap-2">
                 <FileCode className="size-4 shrink-0 text-muted-foreground" />
-                <span className="truncate font-mono text-xs" title={preview.file.path}>
+                <span className="truncate font-mono text-xs" title={preview.file.path} data-i18n-ignore="">
                   {preview.file.name}
                 </span>
                 {preview.mode === "diff" && previewDiff ? (
@@ -932,15 +946,15 @@ export default function MscWorkspaceView({
                     disabled={previewSnapshot === null}
                     title={
                       previewSnapshot === null
-                        ? "Decompile this script in this session to capture a diff snapshot"
-                        : "Toggle diff vs the last-decompiled snapshot"
+                        ? t("preview.diffNeedsSnapshot")
+                        : t("preview.toggleDiff")
                     }
                   >
                     <Diff className="mr-1" />
-                    Diff
+                    {t("buttons.diff")}
                   </Button>
                 ) : null}
-                <Button type="button" variant="ghost" size="sm" onClick={() => setPreview(null)} title="Close preview">
+                <Button type="button" variant="ghost" size="sm" onClick={() => setPreview(null)} title={t("buttons.closePreview")}>
                   <X />
                 </Button>
               </div>
@@ -949,7 +963,7 @@ export default function MscWorkspaceView({
               {preview.mode === "diff" && previewDiff ? (
                 previewDiff.isIdentical ? (
                   <p className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                    No changes vs the last-decompiled snapshot.
+                    {t("preview.noChanges")}
                   </p>
                 ) : (
                   <pre className="py-2 font-mono text-xs leading-5">
@@ -971,7 +985,7 @@ export default function MscWorkspaceView({
                   </pre>
                 )
               ) : (
-                <pre className="whitespace-pre px-3 py-2 font-mono text-xs leading-5">{preview.content}</pre>
+                <pre className="whitespace-pre px-3 py-2 font-mono text-xs leading-5" data-i18n-ignore="">{preview.content}</pre>
               )}
             </div>
           </div>
@@ -987,7 +1001,7 @@ export default function MscWorkspaceView({
           ) : groups.length === 0 ? (
             <div className="flex h-32 flex-col items-center justify-center text-muted-foreground">
               <FolderOpen className="mb-2 size-8 opacity-50" />
-              No files match the current filter
+              {t("empty.noFiles")}
             </div>
           ) : (
             groups.map((group) => (
@@ -1017,22 +1031,20 @@ export default function MscWorkspaceView({
           <AlertDialogHeader>
             <AlertDialogTitle>
               {confirm?.mode === "convert-one"
-                ? "Convert to C"
+                ? t("dialog.convertToC")
                 : confirm?.mode === "decompile-all"
-                  ? "Decompile all scripts"
-                  : "Repack all C files"}
+                  ? t("dialog.decompileAll")
+                  : t("dialog.repackAll")}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-sm text-muted-foreground">
                 {confirm?.mode === "convert-one" ? (
                   <>
                     <p>
-                      Convert{" "}
-                      <code className="rounded bg-muted px-1 py-0.5 font-mono text-foreground">{confirm.file.name}</code>{" "}
-                      to C source now?
+                      {t("dialog.convertFile", { name: confirm.file.name })}
                     </p>
                     <div className="space-y-1">
-                      <p className="font-medium text-foreground">Output targets</p>
+                      <p className="font-medium text-foreground">{t("dialog.outputTargets")}</p>
                       <p>
                         <code className="rounded bg-muted px-1 py-0.5 font-mono">{confirm.outputPath}</code>
                       </p>
@@ -1043,36 +1055,39 @@ export default function MscWorkspaceView({
                   </>
                 ) : confirm ? (
                   <p>
-                    {confirm.mode === "decompile-all" ? "Decompile" : "Repack"}{" "}
-                    <span className="font-medium text-foreground">{confirm.targets.length}</span> file(s):{" "}
-                    <span className="font-mono text-foreground">
-                      {confirm.targets.map((t) => t.name).join(", ")}
-                    </span>
-                    .
+                    {confirm.mode === "decompile-all"
+                      ? t("dialog.batchDecompile", {
+                          count: confirm.targets.length,
+                          names: confirm.targets.map((file) => file.name).join(", "),
+                        })
+                      : t("dialog.batchRepack", {
+                          count: confirm.targets.length,
+                          names: confirm.targets.map((file) => file.name).join(", "),
+                        })}
                   </p>
                 ) : null}
 
                 {confirm && confirm.overwrite.length > 0 ? (
                   <div className="space-y-1">
                     <p className="font-medium text-amber-600 dark:text-amber-500">
-                      Existing files that will be overwritten
+                      {t("dialog.willOverwrite")}
                     </p>
                     {confirm.overwrite.map((path) => (
-                      <p key={path}>
+                      <p key={path} data-i18n-ignore="">
                         <code className="rounded bg-muted px-1 py-0.5 font-mono">{path}</code>
                       </p>
                     ))}
                   </div>
                 ) : (
-                  <p>No existing output files will be overwritten.</p>
+                  <p>{t("dialog.noOverwrite")}</p>
                 )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isBusy}>{t("buttons.cancel")}</AlertDialogCancel>
             <Button type="button" onClick={() => void handleConfirm()} disabled={isBusy}>
-              {confirm && confirm.overwrite.length > 0 ? "Overwrite and continue" : "Continue"}
+              {confirm && confirm.overwrite.length > 0 ? t("buttons.overwriteContinue") : t("buttons.continue")}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

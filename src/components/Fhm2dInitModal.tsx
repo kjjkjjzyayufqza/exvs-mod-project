@@ -20,6 +20,7 @@ import {
     ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { exists, stat } from "@tauri-apps/plugin-fs";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -88,8 +89,8 @@ type InitListItem = {
      * e.g. common effect uses 000common_001 instead of the long meta path name.
      */
     fixedPackName?: string;
-    /** English note shown in expanded row (optional). */
-    description?: string;
+    /** Translation key for the note shown in the expanded row (optional). */
+    descriptionKey?: string;
 };
 
 type FileStatus = {
@@ -121,7 +122,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         hash: "0x036B9E67",
         routeId: "list.character",
         formatLabel: "list",
-        description: "character_id_table.bin under 012list",
+        descriptionKey: "character_id_table",
     },
     {
         id: "character_list",
@@ -129,7 +130,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         hash: "0xDFD38C70",
         routeId: "list.character",
         formatLabel: "list",
-        description: "character_list.bin under 012list",
+        descriptionKey: "character_list",
     },
     {
         id: "series_list",
@@ -145,7 +146,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         routeId: "list.navi",
         formatLabel: "list",
         fixedPackName: "navi_list",
-        description: "support navi table → 012list/navi_list",
+        descriptionKey: "navi_list",
     },
     {
         id: "bgm_list",
@@ -155,7 +156,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         format: Fhm2d_type_format.fhm2d_list,
         formatLabel: "list",
         fixedPackName: BGM_LIST_PACK_NAME,
-        description: "HUD titles → 012list/bgm_list/bgm_list.bin",
+        descriptionKey: "bgm_list",
     },
     {
         id: "stage_list",
@@ -204,7 +205,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         routeId: "param.for-outgame",
         format: Fhm2d_type_format.fhm2d_character_cost,
         formatLabel: "character_cost",
-        description: "unit cost, HP → 041cpm/for_outgame",
+        descriptionKey: "character_cost",
     },
     {
         id: "striker_table",
@@ -214,7 +215,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         format: Fhm2d_type_format.fhm2d_striker_table,
         formatLabel: "striker_table",
         fixedPackName: STRIKER_TABLE_PACK_NAME,
-        description: "host unit → striker slot1/slot2 → 041cpm/strikertable",
+        descriptionKey: "striker_table",
     },
     {
         id: "common_effect",
@@ -224,7 +225,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         format: Fhm2d_type_format.fhm2d_effect,
         formatLabel: "effect",
         fixedPackName: "000common_001",
-        description: "shared unit FX → 006effect/000common_001",
+        descriptionKey: "common_effect",
     },
     {
         id: "raw_path_id",
@@ -234,7 +235,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         format: Fhm2d_type_format.fhm2d_sound,
         formatLabel: "sound",
         fixedPackName: "raw_path_id",
-        description: "unpack 0x264D1CA7 and name inner files from vs2 meta → 090sound/raw_path_id",
+        descriptionKey: "raw_path_id",
     },
     {
         id: "pilot_voice_resource",
@@ -244,7 +245,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         format: Fhm2d_type_format.fhm2d_sound,
         formatLabel: "sound",
         fixedPackName: "090sound",
-        description: "unpack 0x8C428AF2 and name 7 root tables → 090sound/090sound",
+        descriptionKey: "pilot_voice_resource",
     },
     {
         id: "bgm_table",
@@ -254,7 +255,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         format: Fhm2d_type_format.fhm2d_sound,
         formatLabel: "sound",
         fixedPackName: BGM_TABLE_PACK_NAME,
-        description: "unpack 0x5E92AAEC bgm_table.vgsht2 → 090sound/bgm_table",
+        descriptionKey: "bgm_table",
     },
     {
         id: "bgm_bank_update_02",
@@ -264,7 +265,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         format: Fhm2d_type_format.fhm2d_sound,
         formatLabel: "sound",
         fixedPackName: BGM_BANK_UPDATE_02_PACK_NAME,
-        description: "unpack 0x0C568109 group 6 nus3bank → 090sound/bgm_ac27_update_02",
+        descriptionKey: "bgm_bank_update_02",
     },
 ];
 
@@ -388,6 +389,7 @@ function getFormatBadgeColor(formatLabel: string): string {
 }
 
 export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps) {
+    const { t } = useTranslation("fhm2d-init");
     const searchInputRef = useRef<HTMLInputElement>(null);
 
     // Core states
@@ -439,7 +441,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                     item.name.toLowerCase().includes(query) ||
                     item.hash.toLowerCase().includes(query) ||
                     item.id.toLowerCase().includes(query) ||
-                    (item.description?.toLowerCase().includes(query) ?? false)
+                    (item.descriptionKey ? t(`descriptions.${item.descriptionKey}`).toLowerCase().includes(query) : false)
             );
         }
 
@@ -614,25 +616,25 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
 
         const outBase = (testEditorFolder ?? "").trim();
         if (!outBase) {
-            toast.error("Please set EXVS2 Workspace folder first (workspace root, e.g. E:\\XB\\mod)");
+            toast.error(t("errors.workspaceFolderRequired"));
             return;
         }
 
         const sourceBase = (obDplCachePath ?? "").trim();
         if (!sourceBase) {
-            toast.error("Please set source folder first");
+            toast.error(t("errors.sourceFolderRequired"));
             return;
         }
 
         const inputPath = getFhm2dFullPath(sourceBase, item.hash);
         if (!inputPath) {
-            toast.error("Invalid source folder");
+            toast.error(t("errors.invalidSourceFolder"));
             return;
         }
 
         const fileExists = await exists(inputPath);
         if (!fileExists) {
-            toast.error(`Source file not found: ${inputPath}`);
+            toast.error(t("errors.sourceFileNotFound", { path: inputPath }));
             return;
         }
 
@@ -719,19 +721,19 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
             setLastExtractedId(item.id);
             const namingError = "namingError" in extractResult ? extractResult.namingError : undefined;
             if (namingError) {
-                toast.error(`Extract finished but FHM naming failed: ${item.name}`, {
+                toast.error(t("errors.namingFailed", { name: item.name }), {
                     description: namingError,
                     duration: 20_000,
                     action: {
-                        label: "Open Folder",
+                        label: t("actions.openFolder"),
                         onClick: () => openFolder(resultFolderPath),
                     },
                 });
             } else {
-                toast.success(`Extract completed: ${item.name}`, {
-                    description: `Output: ${extractOutput.relativeFolderPath}\n${resultFolderPath}`,
+                toast.success(t("success.extractCompleted", { name: item.name }), {
+                    description: t("success.output", { relative: extractOutput.relativeFolderPath, path: resultFolderPath }),
                     action: {
-                        label: "Open Folder",
+                        label: t("actions.openFolder"),
                         onClick: () => openFolder(resultFolderPath),
                     },
                 });
@@ -739,7 +741,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
         } catch (error) {
             clearInterval(progressInterval);
             const message = formatCaughtError(error);
-            toast.error(`Extract failed: ${message}`);
+            toast.error(t("errors.extractFailed", { message }));
 
             const newEntry: ExtractionHistory = {
                 id: item.id,
@@ -759,7 +761,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
 
     async function handleBatchExtract() {
         if (selectedIds.size === 0) {
-            toast.error("No items selected");
+            toast.error(t("errors.noItemsSelected"));
             return;
         }
 
@@ -788,7 +790,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
         setBatchProgress({ current: 0, total: 0 });
         setSelectedIds(new Set());
 
-        toast.success(`Batch extraction complete: ${successCount} success, ${failCount} failed`);
+        toast.success(t("success.batchComplete", { success: successCount, failed: failCount }));
     }
 
     async function copyPath(path: string, id: string) {
@@ -796,9 +798,9 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
             await navigator.clipboard.writeText(path);
             setCopiedId(id);
             setTimeout(() => setCopiedId(null), 2000);
-            toast.success("Path copied to clipboard");
+            toast.success(t("success.pathCopied"));
         } catch {
-            toast.error("Failed to copy path");
+            toast.error(t("errors.copyPathFailed"));
         }
     }
 
@@ -806,7 +808,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
         try {
             await invoke("exec_shell_command", { command: `explorer "${path}"` });
         } catch {
-            toast.error("Failed to open folder");
+            toast.error(t("errors.openFolderFailed"));
         }
     }
 
@@ -821,8 +823,8 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
         <TooltipProvider delayDuration={100}>
             <AppRndModalShell
                 titleId="fhm2d-init-modal-title"
-                title="FHM2D Init"
-                subtitle="Extract into workspace prefixes (012list / 041cpm / 009gui / 006effect)"
+                title={t("title")}
+                subtitle={t("subtitle")}
                 headerIcon={<FileCode2 className="h-5 w-5 text-primary" />}
                 dimensions={FHM2D_INIT_MODAL_DIMENSIONS}
                 storageKey="app.rnd-size.fhm2d-init"
@@ -839,11 +841,11 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                             className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"
                                         >
                                             <FolderOpen className="h-3.5 w-3.5" />
-                                            Source Folder
+                                            {t("labels.sourceFolder")}
                                         </Label>
                                         <FilePathInput
                                             id="fhm2d-init-source"
-                                            placeholder="Select source folder..."
+                                            placeholder={t("labels.sourceFolderPlaceholder")}
                                             value={obDplCachePath ?? ""}
                                             readOnly
                                             storeKey="obDplCachePath"
@@ -858,11 +860,11 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                             className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground"
                                         >
                                             <FolderOutput className="h-3.5 w-3.5" />
-                                            EXVS2 Workspace Folder (workspace root)
+                                            {t("labels.workspaceFolder")}
                                         </Label>
                                         <FilePathInput
                                             id="fhm2d-init-export"
-                                            placeholder="e.g. E:\XB\mod"
+                                            placeholder={t("labels.workspacePlaceholder")}
                                             value={testEditorFolder ?? ""}
                                             readOnly
                                             storeKey={TEST_EDITOR_FOLDER_STORE_KEY}
@@ -872,36 +874,33 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                     </div>
                                 </div>
                                 <p className="text-[11px] text-muted-foreground">
-                                    Uses Tauri config{" "}
-                                    <span className="font-mono">{TEST_EDITOR_FOLDER_STORE_KEY}</span>{" "}
-                                    (same as EXVS2 Workspace open folder), not{" "}
-                                    <span className="font-mono">obModPath</span> (game inject) or{" "}
-                                    <span className="font-mono">extractOutputPath</span>. Packs write
-                                    under <span className="font-mono">012list/</span>,{" "}
-                                    <span className="font-mono">041cpm/</span>,{" "}
-                                    <span className="font-mono">009gui/</span>,{" "}
-                                    <span className="font-mono">006effect/</span>.
+                                    {t("labels.configDescription", {
+                                        configKey: TEST_EDITOR_FOLDER_STORE_KEY,
+                                        gamePath: "obModPath",
+                                        outputPath: "extractOutputPath",
+                                        routes: "012list/, 041cpm/, 009gui/, 006effect/",
+                                    })}
                                 </p>
 
                                 {/* Quick Stats */}
                                 <div className="flex items-center gap-4 text-xs">
                                     <Badge variant="secondary" className="font-normal">
-                                        {stats.available} / {stats.total} files available
+                                        {t("stats.available", { available: stats.available, total: stats.total })}
                                     </Badge>
                                     {isBatchMode && (
                                         <Badge variant="outline" className="font-normal">
-                                            {stats.selected} selected
+                                            {t("stats.selected", { count: stats.selected })}
                                         </Badge>
                                     )}
                                     {obDplCachePath && !isRefreshing ? (
                                         <span className="text-muted-foreground">
                                             <CheckCircle2 className="inline h-3 w-3 mr-1 text-green-500" />
-                                            Ready
+                                            {t("states.ready")}
                                         </span>
                                     ) : (
                                         <span className="text-muted-foreground">
                                             <AlertCircle className="inline h-3 w-3 mr-1 text-amber-500" />
-                                            {isRefreshing ? "Scanning..." : "Configure folders"}
+                                            {isRefreshing ? t("states.scanning") : t("states.configureFolders")}
                                         </span>
                                     )}
                                 </div>
@@ -914,7 +913,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                         <Input
                                             ref={searchInputRef}
-                                            placeholder="Search files..."
+                                            placeholder={t("search.placeholder")}
                                             value={searchQuery}
                                             onChange={(e) => setSearchQuery(e.target.value)}
                                             className="pl-9 h-9"
@@ -925,7 +924,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                         <PopoverTrigger asChild>
                                             <Button variant="outline" size="sm" className="h-9 px-3 gap-1">
                                                 <Filter className="h-3.5 w-3.5" />
-                                                <span className="text-xs">Filter</span>
+                                                <span className="text-xs">{t("search.filter")}</span>
                                                 {filterOption !== "all" && (
                                                     <span className="ml-1 w-1.5 h-1.5 rounded-full bg-primary" />
                                                 )}
@@ -934,10 +933,10 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                         <PopoverContent className="w-40 p-1" align="end">
                                             <div className="space-y-1">
                                                 {[
-                                                    { value: "all", label: "All Files" },
-                                                    { value: "available", label: "Available Only" },
-                                                    { value: "list", label: "List Type" },
-                                                    { value: "nutexb", label: "NUTEXB Type" },
+                                                    { value: "all", label: t("filters.all") },
+                                                    { value: "available", label: t("filters.available") },
+                                                    { value: "list", label: t("filters.list") },
+                                                    { value: "nutexb", label: t("filters.nutexb") },
                                                 ].map((opt) => (
                                                     <Button
                                                         key={opt.value}
@@ -967,10 +966,10 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                             value={sortOption}
                                             onChange={(e) => setSortOption(e.target.value as SortOption)}
                                         >
-                                            <option value="name">Name</option>
-                                            <option value="type">Type</option>
-                                            <option value="status">Status</option>
-                                            <option value="lastUsed">Last Used</option>
+                                            <option value="name">{t("columns.name")}</option>
+                                            <option value="type">{t("columns.type")}</option>
+                                            <option value="status">{t("columns.status")}</option>
+                                            <option value="lastUsed">{t("columns.lastUsed")}</option>
                                         </select>
                                     </Button>
 
@@ -986,7 +985,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                                 <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
                                             </Button>
                                         </TooltipTrigger>
-                                        <TooltipContent>Refresh</TooltipContent>
+                                        <TooltipContent>{t("actions.refresh")}</TooltipContent>
                                     </Tooltip>
 
                                     <Tooltip>
@@ -1001,10 +1000,10 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                                 }}
                                             >
                                                 <Settings2 className="h-4 w-4 mr-1.5" />
-                                                Batch
+                                                {t("actions.batch")}
                                             </Button>
                                         </TooltipTrigger>
-                                        <TooltipContent>Batch Mode</TooltipContent>
+                                        <TooltipContent>{t("actions.batchMode")}</TooltipContent>
                                     </Tooltip>
                                 </div>
 
@@ -1018,7 +1017,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                                 id="select-all"
                                             />
                                             <Label htmlFor="select-all" className="text-xs cursor-pointer">
-                                                Select All ({filteredItems.length})
+                                                {t("actions.selectAll", { count: filteredItems.length })}
                                             </Label>
                                         </div>
                                         <Button
@@ -1035,7 +1034,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                             ) : (
                                                 <>
                                                     <Play className="h-3.5 w-3.5" />
-                                                    Extract {selectedIds.size} items
+                                                    {t("actions.extractItems", { count: selectedIds.size })}
                                                 </>
                                             )}
                                         </Button>
@@ -1050,7 +1049,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                         {filteredItems.length === 0 ? (
                                             <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
                                                 <Search className="h-8 w-8 mb-2 opacity-50" />
-                                                <p className="text-sm">No matching files found</p>
+                                                <p className="text-sm">{t("states.noMatchingFiles")}</p>
                                             </div>
                                         ) : (
                                             filteredItems.map((item) => {
@@ -1147,7 +1146,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                                                                     variant="outline"
                                                                                     className="h-5 px-1.5 text-[10px] border-red-200 bg-red-50 text-red-600"
                                                                                 >
-                                                                                    Missing
+                                                                                    {t("states.missing")}
                                                                                 </Badge>
                                                                             )}
                                                                         </div>
@@ -1220,7 +1219,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                                                                     )}
                                                                                 </Button>
                                                                             </TooltipTrigger>
-                                                                            <TooltipContent>Copy Path</TooltipContent>
+                                                                            <TooltipContent>{t("actions.copyPath")}</TooltipContent>
                                                                         </Tooltip>
 
                                                                         <CollapsibleTrigger asChild>
@@ -1258,10 +1257,10 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                                                                 ) : isLastExtracted ? (
                                                                                     <>
                                                                                         <ArrowRight className="h-3.5 w-3.5 mr-1.5" />
-                                                                                        <span className="text-xs">Again</span>
+                                                                                        <span className="text-xs">{t("actions.again")}</span>
                                                                                     </>
                                                                                 ) : (
-                                                                                    <span className="text-xs">Extract</span>
+                                                                                    <span className="text-xs">{t("actions.extract")}</span>
                                                                                 )}
                                                                             </Button>
                                                                         )}
@@ -1275,28 +1274,28 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                                                     <div className="rounded-md bg-muted/50 p-3 space-y-2 text-xs">
                                                                         <div className="grid grid-cols-2 gap-2">
                                                                             <div>
-                                                                                <span className="text-muted-foreground">ID:</span>
+                                                                                <span className="text-muted-foreground">{t("fields.id")}:</span>
                                                                                 <span className="ml-2 font-mono">{item.id}</span>
                                                                             </div>
                                                                             <div>
-                                                                                <span className="text-muted-foreground">Format:</span>
-                                                                                <span className="ml-2">{item.format || "auto-detect"}</span>
+                                                                                <span className="text-muted-foreground">{t("fields.format")}:</span>
+                                                                                <span className="ml-2">{item.format || t("fields.autoDetect")}</span>
                                                                             </div>
                                                                         </div>
-                                                                        {item.description && (
+                                                                        {item.descriptionKey && (
                                                                             <div className="text-muted-foreground leading-relaxed">
-                                                                                {item.description}
+                                                                                {t(`descriptions.${item.descriptionKey}`)}
                                                                             </div>
                                                                         )}
                                                                         <div>
-                                                                            <span className="text-muted-foreground">Path:</span>
+                                                                                <span className="text-muted-foreground">{t("fields.path")}:</span>
                                                                             <span className="ml-2 font-mono break-all">
                                                                                 {status?.path || "-"}
                                                                             </span>
                                                                         </div>
                                                                         {status?.lastModified && (
                                                                             <div>
-                                                                                <span className="text-muted-foreground">Modified:</span>
+                                                                                <span className="text-muted-foreground">{t("fields.modified")}:</span>
                                                                                 <span className="ml-2">
                                                                                     {new Date(status.lastModified).toLocaleString()}
                                                                                 </span>
@@ -1304,7 +1303,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                                                                         )}
                                                                         {status?.size && (
                                                                             <div>
-                                                                                <span className="text-muted-foreground">Size:</span>
+                                                                                <span className="text-muted-foreground">{t("fields.size")}:</span>
                                                                                 <span className="ml-2">{formatFileSize(status.size)}</span>
                                                                             </div>
                                                                         )}
@@ -1323,7 +1322,7 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                             {/* Footer */}
                             <div className="px-5 py-4 border-t bg-muted/20 flex items-center justify-end">
                                 <Button variant="outline" size="sm" onClick={onClose} disabled={isExtracting}>
-                                    Close
+                                    {t("actions.close")}
                                 </Button>
                             </div>
                         </CardContent>
@@ -1364,6 +1363,7 @@ function ExtractNameDialog({
     onCancel: () => void;
     onConfirm: () => void;
 }) {
+    const { t } = useTranslation("fhm2d-init");
     if (!item) return null;
 
     const route = getItemRoute(item);
@@ -1377,8 +1377,8 @@ function ExtractNameDialog({
     return (
         <AppRndModalShell
             titleId="fhm2d-init-extract-name-title"
-            title="Name extracted FHM2D pack"
-            subtitle="Writes under the workspace route prefix (same layout as TestEditor / mod folders)."
+            title={t("dialog.title")}
+            subtitle={t("dialog.subtitle")}
             headerIcon={<FolderOutput className="h-5 w-5 text-primary" />}
             dimensions={FHM2D_EXTRACT_NAME_DIMENSIONS}
             storageKey="app.rnd-size.fhm2d-init-extract-name"
@@ -1386,11 +1386,11 @@ function ExtractNameDialog({
             footer={
                 <div className="flex justify-end gap-2 p-3">
                     <Button variant="outline" onClick={onCancel}>
-                        Cancel
+                        {t("actions.cancel")}
                     </Button>
                     <Button disabled={!outputRoot.trim() || !extractOutput} onClick={onConfirm}>
                         <FolderOutput className="mr-2 h-4 w-4" />
-                        Extract
+                        {t("actions.extract")}
                     </Button>
                 </div>
             }
@@ -1401,38 +1401,38 @@ function ExtractNameDialog({
                     <div className="mt-1 font-mono text-xs text-muted-foreground">{item.hash}</div>
                     <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
                         <span>
-                            Route: <span className="font-mono text-foreground">{route.routeId}</span>
+                            {t("fields.route")}: <span className="font-mono text-foreground">{route.routeId}</span>
                         </span>
                         <span>
-                            Prefix: <span className="font-mono text-foreground">{route.routePrefix}</span>
+                            {t("fields.prefix")}: <span className="font-mono text-foreground">{route.routePrefix}</span>
                         </span>
                     </div>
                 </div>
 
                 <section
                     className="space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm"
-                    aria-label="Output path review"
+                    aria-label={t("dialog.outputReviewAria")}
                 >
                     <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
                         <FolderOutput className="h-3.5 w-3.5" />
-                        Output path (review before extract)
+                        {t("dialog.outputReview")}
                     </div>
                     {extractOutput ? (
                         <div className="space-y-2">
                             <div>
-                                <div className="text-[11px] font-medium text-muted-foreground">Relative</div>
+                                <div className="text-[11px] font-medium text-muted-foreground">{t("fields.relative")}</div>
                                 <div className="break-all rounded-md border bg-background px-2 py-1.5 font-mono text-xs">
                                     {extractOutput.relativeFolderPath}
                                 </div>
                             </div>
                             <div>
-                                <div className="text-[11px] font-medium text-muted-foreground">Full folder</div>
+                                <div className="text-[11px] font-medium text-muted-foreground">{t("fields.fullFolder")}</div>
                                 <div className="break-all rounded-md border bg-background px-2 py-1.5 font-mono text-xs">
                                     {extractOutput.folderPath}
                                 </div>
                             </div>
                             <div>
-                                <div className="text-[11px] font-medium text-muted-foreground">Structure JSON</div>
+                                <div className="text-[11px] font-medium text-muted-foreground">{t("fields.structureJson")}</div>
                                 <div className="break-all rounded-md border bg-background px-2 py-1.5 font-mono text-xs text-muted-foreground">
                                     {extractOutput.structureJsonPath}
                                 </div>
@@ -1440,8 +1440,7 @@ function ExtractNameDialog({
                         </div>
                     ) : (
                         <p className="text-xs text-muted-foreground">
-                            Set Export Folder first. Expected layout: {"{export}"}/{route.routePrefix}/
-                            {sanitizedName}
+                            {t("dialog.exportFolderRequired", { exportRoot: "{export}", prefix: route.routePrefix, name: sanitizedName })}
                         </p>
                     )}
                 </section>

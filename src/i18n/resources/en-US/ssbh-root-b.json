@@ -1,0 +1,30 @@
+{
+  "reload": "Reload",
+  "reset": "Reset",
+  "saving": "Saving...",
+  "save": "Save",
+  "close": "Close",
+  "noData": "No data.",
+  "editNuhlpb": "Edit SSBH (.nuhlpb) file",
+  "loadingNuhlpb": "Loading NUHLPB...",
+  "selectNumdlb": "Select a `.numdlb` file from the file list to edit its mapping.",
+  "loadingNumdlb": "Loading `.numdlb` mapping...",
+  "noNumdlbData": "No `.numdlb` data available.",
+  "savedNumdlb": "Saved `.numdlb` mapping",
+  "saveNumdlb": "Save NUMDLB",
+  "editNumdlb": "Edit SSBH (.numdlb) file",
+  "editShl": "Edit SHL (.shl) model shell",
+  "loadingShl": "Loading SHL...",
+  "copyShlTitle": "Copy full SHL draft JSON (for AI / debug)",
+  "copyShlAria": "Copy SHL JSON",
+  "copyJson": "Copy JSON",
+  "numatbExported": "NUMATB exported as JSON",
+  "numatbExportFailed": "Failed to export NUMATB as JSON",
+  "numatb": {
+    "subtitle": "Edit SSBH (.numatb) material template",
+    "loading": "Loading NUMATB...",
+    "exportJson": "Export JSON...",
+    "exportFolderTitle": "Choose folder to export NUMATB JSON",
+    "exportFolderHelp": "Read the .numatb from disk and write JSON (filePath, format, data) to the chosen folder"
+  }
+}

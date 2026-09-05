@@ -1,0 +1,5 @@
+{
+  "common": { "yes": "Yes", "no": "No" },
+  "analysis": { "analyzing": "Analyzing static mesh...", "title": "Source Analysis", "convertible": "Convertible", "meshes": "Meshes", "vertices": "Vertices", "bones": "Bones" },
+  "ssbh": { "output": "SSBH Output", "baseFilename": "Base Filename", "scaleFactor": "Scale Factor", "upAxis": "Up Axis", "yUp": "Y-Up", "zUp": "Z-Up", "noConversion": "No Conversion", "writeTargets": "Write Targets" }
+}

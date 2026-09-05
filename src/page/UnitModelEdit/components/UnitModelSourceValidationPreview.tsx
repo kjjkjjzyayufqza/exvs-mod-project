@@ -1,4 +1,5 @@
 import { AlertTriangle, CheckCircle2, FileBox, ImageIcon, Info } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { cn } from "@/lib/utils";
 import type { UnitModelSourceValidation } from "../utils/unitModelModelService";
@@ -13,6 +14,7 @@ export type UnitModelSourceTexturePlan = {
 };
 
 function TextureList({ items }: { items: string[] }) {
+  const { t } = useTranslation("unit-source-tree");
   const shown = items.slice(0, TEXTURE_LIST_CAP);
   const extra = items.length - shown.length;
   return (
@@ -27,7 +29,7 @@ function TextureList({ items }: { items: string[] }) {
       ))}
       {extra > 0 ? (
         <li className="rounded px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-          +{extra} more
+          {t("validation.more", { count: extra })}
         </li>
       ) : null}
     </ul>
@@ -52,6 +54,7 @@ export function UnitModelSourceValidationPreview({
   mode = "add",
   texturePlan = null,
 }: UnitModelSourceValidationPreviewProps) {
+  const { t } = useTranslation("unit-source-tree");
   const copied = texturePlan?.copiedFromSource ?? validation.sourceTexturesFound;
   const fromPool = texturePlan?.reusedFromPool ?? [];
   const missing = texturePlan?.missing ?? validation.textureReferencesNotInSource;
@@ -63,7 +66,7 @@ export function UnitModelSourceValidationPreview({
         <FileBox className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
         <div className="min-w-0">
           <p className="font-medium">
-            Model name: <span className="font-mono">{validation.modelName}</span>
+            {t("validation.modelName")}: <span className="font-mono">{validation.modelName}</span>
           </p>
           <p className="break-all font-mono text-[10px] text-muted-foreground" title={validation.sourceDir}>
             {validation.sourceDir}
@@ -74,13 +77,12 @@ export function UnitModelSourceValidationPreview({
       {duplicateName ? (
         <p className="flex items-center gap-1.5 rounded-md border border-red-500/40 bg-red-500/10 px-2 py-1.5 text-[11px] text-red-600 dark:text-red-400">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          A model named "{validation.modelName}" already exists in this package. Remove it first, or
-          use Replace instead of Add.
+          {t("validation.duplicate", { name: validation.modelName })}
         </p>
       ) : null}
 
       <div>
-        <p className="mb-1 text-[11px] font-medium text-muted-foreground">Required files</p>
+        <p className="mb-1 text-[11px] font-medium text-muted-foreground">{t("validation.requiredFiles")}</p>
         <ul className="grid grid-cols-1 gap-0.5 sm:grid-cols-2">
           {validation.requiredFiles.map((file) => (
             <li key={file} className="flex items-center gap-1.5 font-mono text-[11px]">
@@ -94,12 +96,12 @@ export function UnitModelSourceValidationPreview({
       <div className="rounded-md border border-border/60 bg-muted/10 p-2.5">
         <p className="flex items-center gap-1.5 text-[11px] font-medium">
           <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-          Textures referenced by materials: {validation.textureReferences.length}
+          {t("validation.textureReferences", { count: validation.textureReferences.length })}
         </p>
         {copied.length > 0 ? (
           <div className="mt-1.5">
             <p className="text-[10px] text-muted-foreground">
-              {copied.length} found in folder — will be copied and deduped into the shared pool:
+              {t("validation.copied", { count: copied.length })}
             </p>
             <TextureList items={copied} />
           </div>
@@ -107,7 +109,7 @@ export function UnitModelSourceValidationPreview({
         {fromPool.length > 0 ? (
           <div className="mt-2">
             <p className="text-[10px] text-muted-foreground">
-              {fromPool.length} already in the package texture pool — will be reused:
+              {t("validation.reused", { count: fromPool.length })}
             </p>
             <TextureList items={fromPool} />
           </div>
@@ -115,7 +117,7 @@ export function UnitModelSourceValidationPreview({
         {missing.length > 0 ? (
           <div className="mt-2">
             <p className={cn("text-[10px]", "text-red-600 dark:text-red-400")}>
-              {missing.length} missing from both the folder and package texture pool:
+              {t("validation.missing", { count: missing.length })}
             </p>
             <TextureList items={missing} />
           </div>
@@ -126,11 +128,11 @@ export function UnitModelSourceValidationPreview({
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
         {createsEmptyNuhlpb
           ? validation.ignoredSourceNuhlpb
-            ? "The source NUHLPB is ignored; a fresh empty NUHLPB will be created for this model."
-            : "A fresh empty NUHLPB will be created for this model."
+            ? t("validation.nuhlpb.addIgnored")
+            : t("validation.nuhlpb.add")
           : validation.ignoredSourceNuhlpb
-            ? "The source NUHLPB is ignored; the target model's existing NUHLPB will be kept."
-            : "The target model's existing NUHLPB will be kept."}
+            ? t("validation.nuhlpb.replaceIgnored")
+            : t("validation.nuhlpb.replace")}
       </p>
     </div>
   );

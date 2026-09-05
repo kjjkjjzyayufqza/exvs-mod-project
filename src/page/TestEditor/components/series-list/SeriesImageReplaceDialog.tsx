@@ -4,6 +4,7 @@ import { dirname } from "@tauri-apps/api/path";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 import { ImageIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,7 @@ export function SeriesImageReplaceDialog({
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
 }: SeriesImageReplaceDialogProps) {
+  const { t } = useTranslation("test-lists");
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? Boolean(controlledOpen) : internalOpen;
@@ -104,18 +106,18 @@ export function SeriesImageReplaceDialog({
   );
 
   const validationErrorReplace = useMemo(() => {
-    if (!seriesImageConvertDirPath) return "Series image convert folder is not available";
-    if (!seriesImageWritable) return "Series image pack is read-only";
+    if (!seriesImageConvertDirPath) return t("series.imageDialog.convertMissing");
+    if (!seriesImageWritable) return t("series.imageDialog.packReadOnly");
     if (!baseName) {
       const max =
         seriesImageSeriesBaseNameOrder && seriesImageSeriesBaseNameOrder.length > 0
           ? seriesImageSeriesBaseNameOrder.length - 1
           : -1;
-      return `iconFileIndex is out of range (0 - ${max})`;
+      return t("series.imageDialog.indexOutOfRange", { max });
     }
-    if (strictMsIndex === null) return `Unsupported series Name "${baseName}" for replace (backend expects "ser_ms_###")`;
+    if (strictMsIndex === null) return t("series.imageDialog.unsupportedNameDetail", { name: baseName });
     return "";
-  }, [baseName, seriesImageConvertDirPath, seriesImageSeriesBaseNameOrder, seriesImageWritable, strictMsIndex]);
+  }, [baseName, seriesImageConvertDirPath, seriesImageSeriesBaseNameOrder, seriesImageWritable, strictMsIndex, t]);
 
   const nextSerMsIndex = useMemo(
     () => computeNextSerMsIndex(seriesImageSeriesBaseNameOrder),
@@ -128,12 +130,12 @@ export function SeriesImageReplaceDialog({
   );
 
   const validationErrorAdd = useMemo(() => {
-    if (!seriesImageConvertDirPath) return "Series image convert folder is not available";
-    if (!seriesImageStructureJsonPath) return "Series image structure JSON is not available";
-    if (!seriesImageWritable) return "Series image pack is read-only";
-    if (nextSerMsIndex === null) return "No available ser_ms index (max 999)";
+    if (!seriesImageConvertDirPath) return t("series.imageDialog.convertMissing");
+    if (!seriesImageStructureJsonPath) return t("series.imageDialog.structureMissing");
+    if (!seriesImageWritable) return t("series.imageDialog.packReadOnly");
+    if (nextSerMsIndex === null) return t("series.imageDialog.noSlot");
     return "";
-  }, [nextSerMsIndex, seriesImageConvertDirPath, seriesImageStructureJsonPath, seriesImageWritable]);
+  }, [nextSerMsIndex, seriesImageConvertDirPath, seriesImageStructureJsonPath, seriesImageWritable, t]);
 
   const canEdit = Boolean(seriesImageConvertDirPath && seriesImageWritable);
   const canReplaceApply =
@@ -180,15 +182,15 @@ export function SeriesImageReplaceDialog({
   const handleApplyReplace = useCallback(async () => {
     if (!seriesImageConvertDirPath) return;
     if (!pngPath) {
-      toast.error("Please select a PNG file");
+      toast.error(t("series.imageDialog.selectPng"));
       return;
     }
     if (validationErrorReplace || !targetNutexbName) {
-      toast.error(validationErrorReplace || "Invalid iconFileIndex mapping");
+      toast.error(validationErrorReplace || t("series.imageDialog.invalidMapping"));
       return;
     }
     if (!baseName || strictMsIndex === null) {
-      toast.error(validationErrorReplace || "Unsupported series Name");
+      toast.error(validationErrorReplace || t("series.imageDialog.unsupportedName"));
       return;
     }
 
@@ -203,33 +205,33 @@ export function SeriesImageReplaceDialog({
         pngPath,
       });
 
-      toast.success(`Updated series image: ${result.nutexbName}`);
+      toast.success(t("series.imageDialog.updated", { name: result.nutexbName }));
       onApplied(iconFileIndex);
       setPreviewVersion((v) => v + 1);
       setOpen(false);
     } catch (e) {
       console.error(e);
-      toast.error(e instanceof Error ? e.message : "Failed to replace series image");
+      toast.error(e instanceof Error ? e.message : t("series.imageDialog.replaceFailed"));
     } finally {
       setIsReplacing(false);
     }
-  }, [baseName, iconFileIndex, onApplied, pngPath, seriesImageConvertDirPath, setOpen, strictMsIndex, targetNutexbName, validationErrorReplace]);
+  }, [baseName, iconFileIndex, onApplied, pngPath, seriesImageConvertDirPath, setOpen, strictMsIndex, t, targetNutexbName, validationErrorReplace]);
 
   const handleAddNewSeriesImage = useCallback(async () => {
     if (!seriesImageConvertDirPath) {
-      toast.error("Series image convert folder is not available");
+      toast.error(t("series.imageDialog.convertMissing"));
       return;
     }
     if (!seriesImageStructureJsonPath) {
-      toast.error("Series image structure JSON is not available");
+      toast.error(t("series.imageDialog.structureMissing"));
       return;
     }
     if (!pngPath) {
-      toast.error("Please select a PNG file");
+      toast.error(t("series.imageDialog.selectPng"));
       return;
     }
     if (validationErrorAdd || nextSerMsIndex === null) {
-      toast.error(validationErrorAdd || "Cannot compute next series slot");
+      toast.error(validationErrorAdd || t("series.imageDialog.cannotComputeSlot"));
       return;
     }
 
@@ -245,7 +247,7 @@ export function SeriesImageReplaceDialog({
       const seriesBaseNameOrder = extractA0253FirstFolderSeriesBaseNameOrder(structJson);
       const nextSerMsIndexFresh = computeNextSerMsIndex(seriesBaseNameOrder);
       if (!nextSerMsIndexFresh) {
-        toast.error("No available ser_ms index (max 999)");
+        toast.error(t("series.imageDialog.noSlot"));
         return;
       }
 
@@ -270,7 +272,7 @@ export function SeriesImageReplaceDialog({
       const encoded = new TextEncoder().encode(JSON.stringify(nextStructJson, null, 2));
       await writeFile(structurePath, encoded);
 
-      toast.success(`Created series image: ${replaceResult.nutexbName}`);
+      toast.success(t("series.imageDialog.created", { name: replaceResult.nutexbName }));
 
       onApplied(nextIconFileIndex);
       if (onRefreshSeriesImages) {
@@ -280,11 +282,11 @@ export function SeriesImageReplaceDialog({
       setOpen(false);
     } catch (e) {
       console.error(e);
-      toast.error(e instanceof Error ? e.message : "Failed to create new series icon");
+      toast.error(e instanceof Error ? e.message : t("series.imageDialog.createFailed"));
     } finally {
       setIsAppending(false);
     }
-  }, [nextSerMsIndex, onApplied, onRefreshSeriesImages, pngPath, seriesImageConvertDirPath, seriesImageStructureJsonPath, setOpen, validationErrorAdd]);
+  }, [nextSerMsIndex, onApplied, onRefreshSeriesImages, pngPath, seriesImageConvertDirPath, seriesImageStructureJsonPath, setOpen, t, validationErrorAdd]);
 
   const previewZoom = (
     <Card className="overflow-hidden transform-3d min-h-[440px]" style={{ willChange: "transform" }}>
@@ -309,7 +311,7 @@ export function SeriesImageReplaceDialog({
                 >
                   <img
                     src={previewSrc}
-                    alt="Series preview"
+                    alt={t("series.previewAlt")}
                     className="w-full h-full object-contain [image-rendering:optimizeSpeed] transform-[translateZ(0)] mx-auto"
                     style={{
                       imageRendering: "-webkit-optimize-contrast",
@@ -355,7 +357,7 @@ export function SeriesImageReplaceDialog({
           </TransformWrapper>
         ) : (
           <div className="flex items-center justify-center h-full w-full bg-black">
-            <span className="text-sm text-muted-foreground">No preview available</span>
+            <span className="text-sm text-muted-foreground">{t("common.noPreview")}</span>
           </div>
         )}
       </AspectRatio>
@@ -372,8 +374,8 @@ export function SeriesImageReplaceDialog({
       {open ? (
         <AppRndModalShell
           titleId="series-image-replace-title"
-          title="Replace Series Image"
-          subtitle="Replace an existing nutexb or add a new slot."
+          title={t("series.imageDialog.title")}
+          subtitle={t("series.imageDialog.subtitle")}
           headerIcon={<ImageIcon className="h-5 w-5 text-primary" />}
           dimensions={SERIES_IMAGE_REPLACE_MODAL_DIMENSIONS}
           storageKey="app.rnd-size.series-image-replace"
@@ -382,52 +384,63 @@ export function SeriesImageReplaceDialog({
         >
           <div className="min-h-0 flex-1 overflow-y-auto p-6">
             <p className="mb-4 text-xs text-muted-foreground">
-              Add writes nutexb first, then updates <span className="font-mono">0xA0253AA0_structure.json</span>.
+              {t("series.imageDialog.addWrites")}{" "}
+              <span className="font-mono" data-i18n-ignore="">
+                0xA0253AA0_structure.json
+              </span>
+              .
             </p>
             <div className="grid grid-cols-2 gap-6">
           <div className="space-y-3">
-            <Label>Preview</Label>
+            <Label>{t("common.preview")}</Label>
             {previewZoom}
             <div className="text-xs text-muted-foreground min-h-8 leading-snug">
-              {pngPath ? "Previewing the selected PNG (will be applied)." : "Previewing current __convert PNG (if exists)."}
+              {pngPath ? t("series.imageDialog.previewSelected") : t("series.imageDialog.previewCurrent")}
             </div>
           </div>
 
           <div className="space-y-4 min-h-0 flex flex-col">
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as SeriesImageTab)} className="flex flex-col flex-1 min-h-0">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="replace">Replace existing</TabsTrigger>
-                <TabsTrigger value="add">Add new</TabsTrigger>
+                <TabsTrigger value="replace">{t("series.imageDialog.replaceExisting")}</TabsTrigger>
+                <TabsTrigger value="add">{t("series.imageDialog.addNew")}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="replace" className="mt-4 space-y-4 flex-1">
                 <div className="space-y-2">
-                  <Label htmlFor="series-nutexb-file-name">Target Nutexb (by iconFileIndex)</Label>
+                  <Label htmlFor="series-nutexb-file-name">{t("series.imageDialog.targetByIndex")}</Label>
                   <Input
                     id="series-nutexb-file-name"
                     value={targetNutexbName ?? ""}
                     readOnly
-                    placeholder="(out of range)"
+                    placeholder={t("series.imageDialog.outOfRange")}
                   />
                   <div className="text-xs text-muted-foreground min-h-8 leading-snug">
-                    Resolved from <span className="font-mono">0xA0253AA0_structure.json</span> using{" "}
-                    <span className="font-mono">iconFileIndex</span> as a 0-based index.
+                    {t("series.imageDialog.resolvedFrom")}{" "}
+                    <span className="font-mono" data-i18n-ignore="">
+                      0xA0253AA0_structure.json
+                    </span>{" "}
+                    {t("series.imageDialog.using")}{" "}
+                    <span className="font-mono" data-i18n-ignore="">
+                      iconFileIndex
+                    </span>{" "}
+                    {t("series.imageDialog.asIndex")}
                     {seriesImageSeriesBaseNameOrder && seriesImageSeriesBaseNameOrder.length > 0 && (
-                      <> Mapped entries: <span className="font-mono">{seriesImageSeriesBaseNameOrder.length}</span>.</>
+                      <> {t("series.imageDialog.mappedEntries", { count: seriesImageSeriesBaseNameOrder.length })}</>
                     )}
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="series-replace-png">Source PNG</Label>
+                  <Label htmlFor="series-replace-png">{t("common.sourcePng")}</Label>
                   <FilePathInput
                     id="series-replace-png"
                     value={pngPath}
-                    placeholder="Select a PNG file..."
+                    placeholder={t("common.selectPng")}
                     picker={{
                       kind: "file",
                       multiple: false,
-                      title: "Select PNG file",
+                      title: t("common.selectPngTitle"),
                       filters: [{ name: "PNG", extensions: ["png"] }],
                     }}
                     onPickedValue={handlePngPicked}
@@ -439,25 +452,28 @@ export function SeriesImageReplaceDialog({
 
                 <div className="flex justify-end gap-2 pt-2">
                   <Button variant="outline" onClick={() => setOpen(false)} disabled={isReplacing || isAppending}>
-                    Cancel
+                    {t("common.cancel")}
                   </Button>
                   <Button onClick={() => void handleApplyReplace()} disabled={!canReplaceApply}>
-                    {isReplacing ? "Replacing..." : "Replace image"}
+                    {isReplacing ? t("common.replacing") : t("series.imageDialog.replaceImage")}
                   </Button>
                 </div>
               </TabsContent>
 
               <TabsContent value="add" className="mt-4 space-y-4 flex-1">
                 <div className="space-y-2">
-                  <Label>Next slot</Label>
+                  <Label>{t("series.imageDialog.nextSlot")}</Label>
                   <Input
-                    value={nextBaseNamePreview ? `${nextBaseNamePreview}.nutexb` : "(unavailable)"}
+                    value={nextBaseNamePreview ? `${nextBaseNamePreview}.nutexb` : t("series.imageDialog.unavailable")}
                     readOnly
                   />
                   <div className="text-xs text-muted-foreground leading-snug">
-                    Converts your PNG to a new nutexb and preview PNG, then appends one entry to structure JSON. New{" "}
-                    <span className="font-mono">iconFileIndex</span> will be{" "}
-                    <span className="font-mono">
+                    {t("series.imageDialog.addHint")}{" "}
+                    <span className="font-mono" data-i18n-ignore="">
+                      iconFileIndex
+                    </span>{" "}
+                    {t("series.imageDialog.willBe")}{" "}
+                    <span className="font-mono" data-i18n-ignore="">
                       {seriesImageSeriesBaseNameOrder ? seriesImageSeriesBaseNameOrder.length : "—"}
                     </span>
                     .
@@ -465,15 +481,15 @@ export function SeriesImageReplaceDialog({
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="series-add-png">Source PNG</Label>
+                  <Label htmlFor="series-add-png">{t("common.sourcePng")}</Label>
                   <FilePathInput
                     id="series-add-png"
                     value={pngPath}
-                    placeholder="Select a PNG file..."
+                    placeholder={t("common.selectPng")}
                     picker={{
                       kind: "file",
                       multiple: false,
-                      title: "Select PNG file",
+                      title: t("common.selectPngTitle"),
                       filters: [{ name: "PNG", extensions: ["png"] }],
                     }}
                     onPickedValue={handlePngPicked}
@@ -485,10 +501,10 @@ export function SeriesImageReplaceDialog({
 
                 <div className="flex justify-end gap-2 pt-2">
                   <Button variant="outline" onClick={() => setOpen(false)} disabled={isReplacing || isAppending}>
-                    Cancel
+                    {t("common.cancel")}
                   </Button>
                   <Button onClick={() => void handleAddNewSeriesImage()} disabled={!canAddExecute}>
-                    {isAppending ? "Adding..." : "Add series image"}
+                    {isAppending ? t("series.imageDialog.adding") : t("series.imageDialog.addImage")}
                   </Button>
                 </div>
               </TabsContent>

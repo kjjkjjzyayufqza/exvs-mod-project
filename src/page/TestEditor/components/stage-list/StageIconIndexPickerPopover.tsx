@@ -5,6 +5,7 @@ import { SkipForward, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useTranslation } from "react-i18next";
 
 const PICKER_ROW_HEIGHT = 112;
 const NUMERIC_QUERY_PATTERN = /^\d+$/;
@@ -34,6 +35,7 @@ export function StageIconIndexPickerPopover(props: {
   onOpenChange?: (open: boolean) => void;
 }) {
   const { onSelect, groups, selectedValue, isLoading, error, open: openProp, onOpenChange } = props;
+  const { t } = useTranslation("test-stage-list-view");
   const [openInternal, setOpenInternal] = useState(false);
   const open = openProp ?? openInternal;
   const setOpen = onOpenChange ?? setOpenInternal;
@@ -131,8 +133,8 @@ export function StageIconIndexPickerPopover(props: {
           variant="ghost"
           size="icon"
           className="m-0 p-0 h-4"
-          aria-label="Open Stage Icon Index picker"
-          title="Open Stage Icon Index picker"
+          aria-label={t("iconPicker.openAria")}
+          title={t("iconPicker.openAria")}
         >
           <SkipForward />
         </Button>
@@ -148,15 +150,15 @@ export function StageIconIndexPickerPopover(props: {
         onEscapeKeyDown={() => setOpen(false)}
       >
         <div className="flex items-center justify-between px-3 py-2 border-b">
-          <div className="text-sm font-semibold">Stage Icon Index Picker</div>
+          <div className="text-sm font-semibold">{t("iconPicker.title")}</div>
           <Button
             type="button"
             variant="ghost"
             size="icon"
             className="h-7 w-7"
             onClick={() => setOpen(false)}
-            aria-label="Close"
-            title="Close"
+            aria-label={t("iconPicker.close")}
+            title={t("iconPicker.close")}
           >
             <X className="h-4 w-4" />
           </Button>
@@ -168,27 +170,27 @@ export function StageIconIndexPickerPopover(props: {
               <div key={group.key} className="flex-1 min-w-0 flex flex-col gap-1.5">
                 <div className="text-sm font-medium">{group.title}</div>
                 <div className="text-xs text-muted-foreground truncate">
-                  Structure: {group.structurePath ?? "-"}
+                  {t("iconPicker.structure", { path: group.structurePath ?? "-" })}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Loaded: {group.loadedCount ?? group.items.length} icons
+                  {t("iconPicker.loaded", { count: group.loadedCount ?? group.items.length })}
                 </div>
               </div>
             ))}
           </div>
-          {isLoading && <div className="text-xs text-muted-foreground">Loading icon groups...</div>}
-          {!isLoading && error && <div className="text-xs text-destructive">{error}</div>}
+          {isLoading && <div className="text-xs text-muted-foreground">{t("iconPicker.loading")}</div>}
+          {!isLoading && error && <div className="text-xs text-destructive" data-i18n-ignore="">{error}</div>}
         </div>
 
         {selectedValue !== undefined && (
           <div className="px-3 py-2 border-b bg-muted/30 space-y-2">
-            <div className="text-xs text-muted-foreground">Selected Index: {selectedValue}</div>
+            <div className="text-xs text-muted-foreground">{t("iconPicker.selectedIndex", { index: selectedValue })}</div>
             <div className="flex gap-2 min-h-0">
               {selectedRows.map((row) => (
                 <div key={row.key} className="flex-1 min-w-0 flex items-center gap-2 rounded-md border px-2 py-2">
                   <img
                     src={row.item?.previewSrc ?? "/tauri.svg"}
-                    alt={row.item?.name ?? "(empty)"}
+                    alt={row.item?.name ?? t("iconPicker.empty")}
                     className="h-9 w-16 rounded bg-black object-contain shrink-0"
                     loading="lazy"
                     decoding="async"
@@ -198,7 +200,7 @@ export function StageIconIndexPickerPopover(props: {
                   />
                   <div className="min-w-0 flex-1">
                     <div className="text-xs text-muted-foreground">{row.title}</div>
-                    <div className="text-sm font-medium truncate">{row.item?.name ?? "(empty)"}</div>
+                    <div className="text-sm font-medium truncate">{row.item?.name ?? t("iconPicker.empty")}</div>
                   </div>
                 </div>
               ))}
@@ -210,13 +212,13 @@ export function StageIconIndexPickerPopover(props: {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter by index or name..."
+            placeholder={t("iconPicker.filterPlaceholder")}
             className="h-8"
           />
 
           <div ref={listRef} className="h-[600px] overflow-auto border rounded-md overscroll-contain">
             {rowCount === 0 ? (
-              <div className="text-xs text-muted-foreground py-6 text-center">No results.</div>
+              <div className="text-xs text-muted-foreground py-6 text-center">{t("iconPicker.noResults")}</div>
             ) : (
               <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
                 {rowVirtualizer.getVirtualItems().map((virtualRow) => {
@@ -238,7 +240,9 @@ export function StageIconIndexPickerPopover(props: {
                           setOpen(false);
                         }}
                       >
-                        <div className="text-xs text-muted-foreground font-mono mb-2">Index: {idx}</div>
+                        <div className="text-xs text-muted-foreground font-mono mb-2">
+                          {t("iconPicker.index", { index: idx })}
+                        </div>
                         <div className="flex gap-2 min-h-0">
                           {groupedMap.map((group) => {
                             const item = group.byIndex.get(idx);
@@ -246,7 +250,7 @@ export function StageIconIndexPickerPopover(props: {
                               <div key={group.key} className="flex-1 min-w-0 flex items-center gap-2 rounded-md border px-2 py-2">
                                 <img
                                   src={item?.previewSrc ?? "/tauri.svg"}
-                                  alt={item?.name ?? "(empty)"}
+                                  alt={item?.name ?? t("iconPicker.empty")}
                                   className="h-10 w-20 rounded bg-black object-contain shrink-0"
                                   loading="lazy"
                                   decoding="async"
@@ -256,7 +260,7 @@ export function StageIconIndexPickerPopover(props: {
                                 />
                                 <div className="min-w-0 flex-1">
                                   <div className="text-xs text-muted-foreground">{group.title}</div>
-                                  <div className="text-sm font-medium truncate">{item?.name ?? "(empty)"}</div>
+                                  <div className="text-sm font-medium truncate">{item?.name ?? t("iconPicker.empty")}</div>
                                 </div>
                               </div>
                             );

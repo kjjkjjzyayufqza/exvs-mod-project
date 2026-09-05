@@ -1,0 +1,16 @@
+{
+  "nav.options": "オプション",
+  "nav.settings": "設定",
+  "nav.fhm2dInit": "FHM2D 初期化",
+  "nav.about": "このアプリについて",
+  "nav.toggleSidebarShortcut": "サイドバーを切り替え（Ctrl/Cmd+B）",
+  "sidebar.workspace": "EXVS2 ワークスペース",
+  "sidebar.singleFhm2d": "単一 FHM2D",
+  "sidebar.sceneEdit": "シーン編集",
+  "sidebar.unitModelEditor": "ユニットモデルエディター",
+  "sidebar.resourceRegistry": "リソースレジストリ",
+  "sidebar.miscTools": "その他のツール",
+  "sidebar.config": "設定",
+  "sidebar.about": "このアプリについて",
+  "common.toggleSidebar": "サイドバーを切り替え"
+}

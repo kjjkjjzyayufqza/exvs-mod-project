@@ -4,6 +4,7 @@ mod character_id_preview;
 pub mod collision_mesh;
 mod commands;
 mod console_color;
+mod github_release;
 #[cfg(debug_assertions)]
 mod dev_tools_sync;
 pub mod exvs2_json_cli;
@@ -68,6 +69,7 @@ pub fn run() {
         .manage(scene_memory_session::SceneSessionState::default())
         .invoke_handler(tauri::generate_handler![
             read_updater_github_token,
+            github_release::fetch_github_latest_release,
             commands::my_custom_command,
             commands::read_file,
             commands::path_exists,

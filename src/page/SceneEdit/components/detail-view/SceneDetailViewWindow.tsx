@@ -1,4 +1,5 @@
 import { useCallback, useMemo, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -54,6 +55,7 @@ export function SceneDetailViewWindow({
   onNuhlpbDraftChange,
   onNuhlpbSave,
 }: SceneDetailViewWindowProps) {
+  const { t } = useTranslation("scene-page");
   const data = session.modelData;
   const numatbDraft = data?.numatb.draft ?? null;
   const numatbPaths = data?.numatbPaths ?? null;
@@ -92,8 +94,8 @@ export function SceneDetailViewWindow({
       cascadeIndex={cascadeIndex}
       zIndex={session.zIndex}
       titleId={`detail-view-title-${session.id}`}
-      title={`Properties — ${session.nodeLabel}`}
-      subtitle="SSBH Model Detail View"
+      title={t("detailView.propertiesTitle", { name: session.nodeLabel })}
+      subtitle={t("detailView.ssbhSubtitle")}
       headerIcon={<Settings className="h-4 w-4 text-primary" />}
       skipActivate={skipActivate}
       onActivate={onActivate}
@@ -107,19 +109,19 @@ export function SceneDetailViewWindow({
         className="flex min-h-0 flex-1 flex-col"
       >
         <TabsList className="shrink-0 border-b px-2" data-no-drag>
-          <TabsTrigger value="model">{numdlbDirty && "• "}Model</TabsTrigger>
-          <TabsTrigger value="material">{numatbDirty && "• "}Material</TabsTrigger>
-          <TabsTrigger value="skeleton">Skeleton</TabsTrigger>
-          <TabsTrigger value="mesh">Mesh</TabsTrigger>
-          <TabsTrigger value="helper">{nuhlpbDirty && "• "}Helper</TabsTrigger>
-          <TabsTrigger value="textures">Textures</TabsTrigger>
+          <TabsTrigger value="model">{numdlbDirty && "• "}{t("detailView.tabs.model")}</TabsTrigger>
+          <TabsTrigger value="material">{numatbDirty && "• "}{t("detailView.tabs.material")}</TabsTrigger>
+          <TabsTrigger value="skeleton">{t("detailView.tabs.skeleton")}</TabsTrigger>
+          <TabsTrigger value="mesh">{t("detailView.tabs.mesh")}</TabsTrigger>
+          <TabsTrigger value="helper">{nuhlpbDirty && "• "}{t("detailView.tabs.helper")}</TabsTrigger>
+          <TabsTrigger value="textures">{t("detailView.tabs.textures")}</TabsTrigger>
         </TabsList>
 
         <div className="min-h-0 flex-1 overflow-hidden" style={{ contain: "strict" }}>
           {shouldMountDetailTab(activeTab, "model") && (
             <DetailTabPanel tab="model">
               {data.numdlb.loading ? (
-                <LoadingState label="Loading .numdlb..." />
+                <LoadingState label={t("detailView.loadingNumdlb")} />
               ) : data.numdlb.error ? (
                 <ErrorState error={data.numdlb.error} />
               ) : data.numdlb.draft ? (
@@ -131,7 +133,7 @@ export function SceneDetailViewWindow({
                   />
                 </div>
               ) : (
-                <EmptyState label="No .numdlb data available" />
+                <EmptyState label={t("detailView.emptyNumdlb")} />
               )}
             </DetailTabPanel>
           )}
@@ -139,7 +141,7 @@ export function SceneDetailViewWindow({
           {shouldMountDetailTab(activeTab, "material") && (
             <DetailTabPanel tab="material">
               {data.numatb.loading ? (
-                <LoadingState label="Loading .numatb..." />
+                <LoadingState label={t("detailView.loadingNumatb")} />
               ) : data.numatb.error ? (
                 <ErrorState error={data.numatb.error} />
               ) : data.numatb.draft ? (
@@ -153,7 +155,7 @@ export function SceneDetailViewWindow({
                   />
                 </div>
               ) : (
-                <EmptyState label="No .numatb data available" />
+                <EmptyState label={t("detailView.emptyNumatb")} />
               )}
             </DetailTabPanel>
           )}
@@ -173,7 +175,7 @@ export function SceneDetailViewWindow({
           {shouldMountDetailTab(activeTab, "helper") && (
             <DetailTabPanel tab="helper">
               {data.nuhlpb.loading ? (
-                <LoadingState label="Loading .nuhlpb..." />
+                <LoadingState label={t("detailView.loadingNuhlpb")} />
               ) : data.nuhlpb.error ? (
                 <ErrorState error={data.nuhlpb.error} />
               ) : data.nuhlpb.draft ? (
@@ -185,7 +187,7 @@ export function SceneDetailViewWindow({
                   />
                 </div>
               ) : (
-                <EmptyState label="No .nuhlpb data available" />
+                <EmptyState label={t("detailView.emptyNuhlpb")} />
               )}
             </DetailTabPanel>
           )}
@@ -228,12 +230,13 @@ function DetailTabPanel({
 }
 
 function TabSaveBar({ dirty, onSave }: { dirty: boolean; onSave: () => void }) {
+  const { t } = useTranslation("scene-page");
   if (!dirty) return null;
   return (
     <div className="flex items-center justify-end gap-2 rounded border border-amber-500/30 bg-amber-500/5 px-3 py-1.5">
-      <span className="text-xs text-amber-600">Unsaved changes</span>
+      <span className="text-xs text-amber-600">{t("detailView.unsavedChanges")}</span>
       <Button size="sm" variant="outline" className="h-6 text-xs" onClick={onSave}>
-        Save
+        {t("detailView.save")}
       </Button>
     </div>
   );
@@ -251,7 +254,9 @@ function LoadingState({ label }: { label: string }) {
 function ErrorState({ error }: { error: string }) {
   return (
     <div className="rounded border border-destructive/30 bg-destructive/5 p-3">
-      <p className="text-xs text-destructive">{error}</p>
+      <p className="text-xs text-destructive" data-i18n-ignore="">
+        {error}
+      </p>
     </div>
   );
 }

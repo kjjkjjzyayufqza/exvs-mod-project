@@ -1,4 +1,5 @@
 import { Store } from "@tauri-apps/plugin-store";
+import type { AppLocale } from "@/i18n/locale";
 
 export interface ConfigState {
   store: Store | null;
@@ -21,9 +22,11 @@ export interface ConfigState {
   repackInputPath?: string;
   sceneEditGizmoSize?: number;
   sidebarOpen: boolean;
+  locale: AppLocale;
 
   // Methods to update settings
   setRepackInputPath: (path: string) => Promise<void>;
   setSceneEditGizmoSize: (size: number) => Promise<void>;
   setSidebarOpen: (open: boolean) => Promise<void>;
+  setLocale: (locale: AppLocale) => Promise<void>;
 }

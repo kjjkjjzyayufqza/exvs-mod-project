@@ -1,0 +1,100 @@
+{
+  "title": "FHM2D 初始化",
+  "subtitle": "提取到工作区前缀（012list / 041cpm / 009gui / 006effect）",
+  "errors": {
+    "workspaceFolderRequired": "请先设置 EXVS2 工作区文件夹。",
+    "sourceFolderRequired": "请先设置源文件夹。",
+    "invalidSourceFolder": "源文件夹无效。",
+    "sourceFileNotFound": "找不到源文件：{{path}}",
+    "namingFailed": "提取完成，但 FHM 命名失败：{{name}}",
+    "extractFailed": "提取失败：{{message}}",
+    "noItemsSelected": "未选择项目。",
+    "copyPathFailed": "路径复制失败。",
+    "openFolderFailed": "打开文件夹失败。"
+  },
+  "success": {
+    "extractCompleted": "已完成提取：{{name}}",
+    "output": "输出：{{relative}}\n{{path}}",
+    "batchComplete": "批量提取完成：成功 {{success}} 项，失败 {{failed}} 项。",
+    "pathCopied": "路径已复制。"
+  },
+  "actions": {
+    "refresh": "刷新",
+    "batch": "批量",
+    "batchMode": "批量模式",
+    "selectAll": "全选（{{count}}）",
+    "extractItems": "提取 {{count}} 项",
+    "copyPath": "复制路径",
+    "again": "再次提取",
+    "extract": "提取",
+    "close": "关闭",
+    "cancel": "取消"
+  },
+  "descriptions": {
+    "character_id_table": "character_id_table.bin under 012list",
+    "character_list": "character_list.bin under 012list",
+    "navi_list": "支持导航员表 → 012list/navi_list",
+    "bgm_list": "HUD 标题 → 012list/bgm_list/bgm_list.bin",
+    "character_cost": "机体费用、HP → 041cpm/for_outgame",
+    "striker_table": "主机体 → 支援机体槽位 1/2 → 041cpm/strikertable",
+    "common_effect": "共享机体 FX → 006effect/000common_001",
+    "raw_path_id": "解包 0x264D1CA7，并根据 vs2 meta 命名内部文件 → 090sound/raw_path_id",
+    "pilot_voice_resource": "解包 0x8C428AF2，并命名 7 个根表 → 090sound/090sound",
+    "bgm_table": "解包 0x5E92AAEC 的 bgm_table.vgsht2 → 090sound/bgm_table",
+    "bgm_bank_update_02": "解包 0x0C568109 的第 6 组 nus3bank → 090sound/bgm_ac27_update_02"
+  },
+  "labels": {
+    "sourceFolder": "源文件夹",
+    "sourceFolderPlaceholder": "选择源文件夹……",
+    "workspaceFolder": "EXVS2 工作区文件夹（工作区根目录）",
+    "workspacePlaceholder": "例如 E:\\XB\\mod",
+    "configDescription": "使用 Tauri 配置 {{configKey}}（与 EXVS2 工作区打开文件夹相同），而不是 {{gamePath}}（游戏注入）或 {{outputPath}}。资源包写入 {{routes}}。"
+  },
+  "stats": {
+    "available": "{{available}} / {{total}} 个文件可用",
+    "selected": "已选择 {{count}} 项"
+  },
+  "states": {
+    "ready": "就绪",
+    "scanning": "正在扫描……",
+    "configureFolders": "请配置文件夹",
+    "noMatchingFiles": "没有匹配的文件",
+    "missing": "缺失"
+  },
+  "search": {
+    "placeholder": "搜索文件……",
+    "filter": "筛选"
+  },
+  "filters": {
+    "all": "全部文件",
+    "available": "仅可用",
+    "list": "列表类型",
+    "nutexb": "NUTEXB 类型"
+  },
+  "columns": {
+    "name": "名称",
+    "type": "类型",
+    "status": "状态",
+    "lastUsed": "上次使用"
+  },
+  "fields": {
+    "id": "ID",
+    "format": "格式",
+    "autoDetect": "自动检测",
+    "path": "路径",
+    "modified": "修改时间",
+    "size": "大小",
+    "relative": "相对路径",
+    "fullFolder": "完整文件夹",
+    "structureJson": "Structure JSON",
+    "route": "路由",
+    "prefix": "前缀"
+  },
+  "dialog": {
+    "title": "命名已提取的 FHM2D 包",
+    "subtitle": "写入工作区路由前缀下（布局与 TestEditor / mod 文件夹相同）。",
+    "outputReviewAria": "输出路径复核",
+    "outputReview": "输出路径（提取前复核）",
+    "exportFolderRequired": "请先设置导出文件夹。预期布局：{{exportRoot}}/{{prefix}}/{{name}}"
+  }
+}

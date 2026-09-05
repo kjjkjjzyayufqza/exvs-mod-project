@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw, Save, Settings2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -25,6 +26,7 @@ export function WorkspaceLayoutDialog({
   controller,
   onOpenChange,
 }: WorkspaceLayoutDialogProps) {
+  const { t } = useTranslation("test-workspace");
   const [draft, setDraft] = useState<TestEditorWorkspaceDocument>(() =>
     cloneDocument(controller.document),
   );
@@ -90,8 +92,8 @@ export function WorkspaceLayoutDialog({
 
   return (
     <AppRndModalShell
-      title="Workspace layout"
-      subtitle={controller.workspaceRoot || "No workspace selected"}
+      title={t("layout.title")}
+      subtitle={controller.workspaceRoot || t("layout.noWorkspace")}
       titleId="workspace-layout-title"
       headerIcon={<Settings2 className="h-4 w-4 text-primary" />}
       dimensions={{ width: 860, height: 620, minWidth: 680, minHeight: 460 }}
@@ -107,7 +109,7 @@ export function WorkspaceLayoutDialog({
               onCheckedChange={handleLegacyFallbackChange}
             />
             <Label htmlFor="workspace-layout-legacy-fallback" className="text-xs">
-              Legacy flat read fallback
+              {t("layout.legacyFallback")}
             </Label>
           </div>
           <div className="flex items-center gap-2">
@@ -119,17 +121,17 @@ export function WorkspaceLayoutDialog({
               disabled={controller.isLoading || controller.isSaving}
             >
               <RefreshCw className={`h-4 w-4 ${controller.isLoading ? "animate-spin" : ""}`} />
-              Reload
+              {t("layout.reload")}
             </Button>
             <Button
               type="button"
               size="sm"
               onClick={handleSave}
               disabled={!canSave}
-              aria-label="Save layout"
+              aria-label={t("layout.saveLayout")}
             >
               <Save className="h-4 w-4" />
-              Save layout
+              {t("layout.saveLayout")}
             </Button>
           </div>
         </div>

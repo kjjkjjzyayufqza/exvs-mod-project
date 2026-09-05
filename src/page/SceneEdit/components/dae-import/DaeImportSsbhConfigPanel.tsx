@@ -13,6 +13,7 @@ import {
   DaeImportSection,
   daeImportModalSelectContentClass,
 } from "./daeImportUi";
+import { useTranslation } from "react-i18next";
 
 interface DaeImportSsbhConfigPanelProps {
   config: SsbhImportConfig;
@@ -23,6 +24,7 @@ export function DaeImportSsbhConfigPanel({
   config,
   onChange,
 }: DaeImportSsbhConfigPanelProps) {
+  const { t } = useTranslation("scene-dae");
   const update = <K extends keyof SsbhImportConfig>(
     key: K,
     value: SsbhImportConfig[K],
@@ -32,15 +34,15 @@ export function DaeImportSsbhConfigPanel({
 
   return (
     <>
-      <DaeImportSection title="SSBH Output">
-        <DaeImportFieldRow label="Base Filename">
+      <DaeImportSection title={t("ssbh.output")}>
+        <DaeImportFieldRow label={t("ssbh.baseFilename")}>
           <Input
             className="h-8 text-[11px]"
             value={config.baseFilename}
             onChange={(e) => update("baseFilename", e.target.value)}
           />
         </DaeImportFieldRow>
-        <DaeImportFieldRow label="Scale Factor">
+        <DaeImportFieldRow label={t("ssbh.scaleFactor")}>
           <Input
             className="h-8 text-[11px]"
             type="number"
@@ -50,7 +52,7 @@ export function DaeImportSsbhConfigPanel({
             onChange={(e) => update("scaleFactor", parseFloat(e.target.value) || 1)}
           />
         </DaeImportFieldRow>
-        <DaeImportFieldRow label="Up Axis">
+        <DaeImportFieldRow label={t("ssbh.upAxis")}>
           <Select
             value={config.upAxis}
             onValueChange={(v) => update("upAxis", v as SsbhDaeUpAxis)}
@@ -60,20 +62,20 @@ export function DaeImportSsbhConfigPanel({
             </SelectTrigger>
             <SelectContent className={daeImportModalSelectContentClass}>
               <SelectItem value="y_up" className="text-[11px]">
-                Y-Up
+                {t("ssbh.yUp")}
               </SelectItem>
               <SelectItem value="z_up" className="text-[11px]">
-                Z-Up
+                {t("ssbh.zUp")}
               </SelectItem>
               <SelectItem value="none" className="text-[11px]">
-                No Conversion
+                {t("ssbh.noConversion")}
               </SelectItem>
             </SelectContent>
           </Select>
         </DaeImportFieldRow>
       </DaeImportSection>
 
-      <DaeImportSection title="Write Targets">
+      <DaeImportSection title={t("ssbh.writeTargets")}>
         {(
           [
             ["writeNumdlb", "numdlb"],

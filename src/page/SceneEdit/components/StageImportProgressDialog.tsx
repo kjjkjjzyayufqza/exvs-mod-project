@@ -2,6 +2,7 @@ import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Progress } from "@/components/ui/progress";
 import { AlertTriangle, CheckCircle2, Loader2, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 const STAGE_IMPORT_PROGRESS_DIMENSIONS = {
   width: 520,
@@ -79,8 +80,9 @@ export function StageImportProgressDialog({
   progress,
   steps,
   onClose,
-  title = "Importing Stage",
+  title,
 }: StageImportProgressDialogProps) {
+  const { t } = useTranslation("scene-root-b");
   const activeStep = steps.find((s) => s.status === "active");
   const isBusy = steps.some((step) => step.status === "active");
 
@@ -89,8 +91,8 @@ export function StageImportProgressDialog({
   return (
     <AppRndModalShell
       titleId="stage-import-progress-title"
-      title={title}
-      subtitle={activeStep?.label ?? "Preparing..."}
+      title={title ?? t("import.title")}
+      subtitle={activeStep?.label ?? t("import.preparing")}
       headerIcon={<Loader2 className={cn("h-5 w-5 text-primary", isBusy && "animate-spin")} />}
       dimensions={STAGE_IMPORT_PROGRESS_DIMENSIONS}
       storageKey="app.rnd-size.stage-import-progress"

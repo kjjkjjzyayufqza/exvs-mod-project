@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import type { CardIconItem } from "./cardIconStructure";
+import { useTranslation } from "react-i18next";
 
 interface CardIconRemoveDialogProps {
   item: CardIconItem;
@@ -19,25 +20,26 @@ interface CardIconRemoveDialogProps {
 }
 
 export function CardIconRemoveDialog({ item, onConfirm, disabled = false }: CardIconRemoveDialogProps) {
-  const label = item.name ?? "(empty)";
+  const { t } = useTranslation("test-lists");
+  const label = item.name ?? t("cardIcon.emptyParen");
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
         <Button size="sm" variant="outline" disabled={disabled}>
-          Remove
+          {t("common.remove")}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Remove Card Icon</AlertDialogTitle>
+          <AlertDialogTitle>{t("cardIcon.removeTitle")}</AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to remove "{label}" (index {item.itemIndex}) from the list? This does not delete files on disk.
+            {t("cardIcon.removeNamed", { name: label, index: item.itemIndex })}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction onClick={onConfirm} disabled={disabled} className="bg-red-600 hover:bg-red-700">
-            Remove
+            {t("common.remove")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -4,6 +4,7 @@ import { dirname, join } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { RefreshCw, Save, Image as ImageIcon, Loader2, Info, FolderOpen } from "lucide-react";
 
 import { AppRndModalShell } from "@/components/AppRndModalShell";
@@ -68,6 +69,7 @@ export default function SeriesListView({
   onUnsavedChanges,
   workspaceDocument,
 }: SeriesListViewProps) {
+  const { t } = useTranslation("test-lists");
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [hasChanges, setHasChanges] = useState(false);
   const [isRefreshingNutexb, setIsRefreshingNutexb] = useState(false);
@@ -116,14 +118,14 @@ export default function SeriesListView({
 
   const load = useCallback(async () => {
     if (!folderPath) {
-      setLoadState({ status: "error", filePath: "", message: "Folder path is empty" });
+      setLoadState({ status: "error", filePath: "", message: t("common.folderPathEmpty") });
       resetEditorState();
       return;
     }
 
     const { content, filePath } = await resolveContentFilePath("series-list");
     if (!filePath) {
-      setLoadState({ status: "error", filePath: "", message: "Series list content path is not configured" });
+      setLoadState({ status: "error", filePath: "", message: t("series.notConfigured") });
       resetEditorState();
       return;
     }
@@ -170,7 +172,7 @@ export default function SeriesListView({
         dirPath: "",
         structureJsonPath: "",
         writable: false,
-        message: "Folder path is empty",
+        message: t("common.folderPathEmpty"),
       });
       return;
     }
@@ -240,7 +242,7 @@ export default function SeriesListView({
   const handleSaveFile = useCallback(async () => {
     if (loadState.status !== "ready") return;
     if (!loadState.writable) {
-      toast.error("Legacy flat workspace content is read-only");
+      toast.error(t("common.legacyReadOnly"));
       return;
     }
     const filePath = loadState.filePath;
@@ -269,19 +271,19 @@ export default function SeriesListView({
         outputPath: filePath,
         paramType: "serieslist",
       });
-      toast.success("Saved series_list.bin");
+      toast.success(t("series.saved"));
       setHasChanges(false);
       onUnsavedChanges?.(false);
       await load();
     } catch (error) {
       console.error(error);
-      toast.error("Failed to save series_list.bin");
+      toast.error(t("series.saveFailed"));
     }
   }, [loadState, onUnsavedChanges]);
 
   const handleRefreshNutexb = useCallback(async () => {
     if (!folderPath) {
-      toast.error("Folder path is empty");
+      toast.error(t("common.folderPathEmpty"));
       return;
     }
 
@@ -289,7 +291,7 @@ export default function SeriesListView({
       setIsRefreshingNutexb(true);
       const content = await resolveContent("series-icons");
       if (!content.writable) {
-        toast.error("Series icon content is not writable at the configured workspace route");
+        toast.error(t("series.iconNotWritable"));
         return;
       }
       const seriesImageDir = content.configured.folderPath;
@@ -301,14 +303,14 @@ export default function SeriesListView({
           overwrite: true,
         }
       );
-      toast.success(`Converted ${result.converted} nutexb file(s) to PNG`);
+      toast.success(t("series.convertedPng", { count: result.converted }));
       if (result.failed > 0) {
-        toast.error(`Failed to convert ${result.failed} file(s)`);
+        toast.error(t("series.convertFailed", { count: result.failed }));
       }
       void loadSeriesImageCount();
     } catch (error) {
       console.error(error);
-      toast.error("Failed to refresh nutexb previews");
+      toast.error(t("series.refreshFailed"));
     } finally {
       setIsRefreshingNutexb(false);
     }
@@ -320,13 +322,13 @@ export default function SeriesListView({
       const normalizedPath = isWindowsPath ? rawPath.replace(/\//g, "\\") : rawPath.replace(/\\/g, "/");
 
       if (normalizedPath.includes('"')) {
-        toast.error('Invalid path: contains a quote character (")');
+        toast.error(t("common.invalidQuotePath"));
         return;
       }
 
       const pathExists = await exists(normalizedPath);
       if (!pathExists) {
-        toast.error("Path does not exist");
+        toast.error(t("common.pathMissing"));
         return;
       }
 
@@ -334,7 +336,7 @@ export default function SeriesListView({
     } catch (error) {
       console.error("Error opening path:", error);
       const message = error instanceof Error ? error.message : String(error);
-      toast.error(message ? `Failed to open: ${message}` : "Failed to open");
+      toast.error(message ? t("common.openFailedWithMessage", { message }) : t("common.openFailed"));
     }
   }, []);
 
@@ -359,10 +361,10 @@ export default function SeriesListView({
       <div className="h-full w-full">
         <Card className="h-full flex flex-col border-none shadow-none rounded-none bg-transparent">
           <CardHeader className="p-0 pb-4">
-            <CardTitle>Series List</CardTitle>
+            <CardTitle>{t("series.title")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 p-0">
-            <div className="text-sm text-muted-foreground">Loading series_list.bin...</div>
+            <div className="text-sm text-muted-foreground">{t("series.loading")}</div>
           </CardContent>
         </Card>
       </div>
@@ -374,23 +376,23 @@ export default function SeriesListView({
       <div className="h-full w-full">
         <Card className="border-none shadow-none rounded-none bg-transparent">
           <CardHeader className="p-0 pb-4">
-            <CardTitle>Series List</CardTitle>
+            <CardTitle>{t("series.title")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 p-0">
             <div className="text-sm text-muted-foreground">
               {loadState.filePath ? (
                 <>
-                  <div className="font-medium text-foreground">File</div>
+                  <div className="font-medium text-foreground">{t("common.file")}</div>
                   <div className="break-all">{loadState.filePath}</div>
                 </>
               ) : (
-                <div className="break-all">Folder path is empty</div>
+                <div className="break-all">{t("common.folderPathEmpty")}</div>
               )}
             </div>
             <div className="text-sm text-destructive">{loadState.message}</div>
             <Button size="sm" onClick={() => void load()} className="inline-flex items-center gap-2">
               <RefreshCw className="w-4 h-4" />
-              Reload
+              {t("common.reload")}
             </Button>
           </CardContent>
         </Card>
@@ -401,7 +403,7 @@ export default function SeriesListView({
   if (loadState.status !== "ready") {
     return (
       <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground">
-        Select this tab to load series_list.bin
+        {t("series.selectTab")}
       </div>
     );
   }
@@ -412,22 +414,22 @@ export default function SeriesListView({
         <CardHeader className="p-0 pb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <CardTitle>Series List</CardTitle>
+              <CardTitle>{t("series.title")}</CardTitle>
               <div className="text-xs text-muted-foreground break-all mt-1 flex items-center gap-1">
-                Series List: {loadState.filePath}
+                {t("series.fileLabel", { path: loadState.filePath })}
                 <button
                   type="button"
                   onClick={() => void handleOpenSeriesListFolder()}
                   className="shrink-0 p-0.5 rounded hover:bg-accent hover:text-accent-foreground"
-                  title="Open folder"
-                  aria-label="Open folder"
+                  title={t("common.openFolder")}
+                  aria-label={t("common.openFolder")}
                 >
                   <FolderOpen className="w-3.5 h-3.5" />
                 </button>
               </div>
               {fileMeta && (
                 <div className="text-xs text-muted-foreground mt-1">
-                  Loaded: {fileMeta.count} series, {fileMeta.commands} commands
+                  {t("series.loadedSeries", { count: fileMeta.count, commands: fileMeta.commands })}
                 </div>
               )}
               <LegacyWorkspaceMoveNotice
@@ -440,27 +442,27 @@ export default function SeriesListView({
                 className="mt-2"
               />
               <div className="text-xs text-muted-foreground break-all mt-2 flex items-center gap-1">
-                Series Image List: {seriesImageCountState.dirPath || "-"}
+                {t("series.imageListLabel", { path: seriesImageCountState.dirPath || "-" })}
                 {seriesImageCountState.dirPath && (
                   <button
                     type="button"
                     onClick={() => void handleOpenSeriesImageFolder()}
                     className="shrink-0 p-0.5 rounded hover:bg-accent hover:text-accent-foreground"
-                    title="Open folder"
-                    aria-label="Open folder"
+                    title={t("common.openFolder")}
+                    aria-label={t("common.openFolder")}
                   >
                     <FolderOpen className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
               <div className="text-xs text-muted-foreground mt-1">
-                Loaded:{" "}
+                {t("common.loadedPrefix")}{" "}
                 {seriesImageCountState.status === "ready"
-                  ? `${seriesImageCountState.count} png`
+                  ? t("series.pngCount", { count: seriesImageCountState.count })
                   : seriesImageCountState.status === "loading"
-                    ? "Loading..."
+                    ? t("common.loadingEllipsis")
                     : seriesImageCountState.status === "error"
-                      ? "Failed"
+                      ? t("common.failed")
                       : "-"}
               </div>
               {seriesImageCountState.status === "ready" ? (
@@ -478,7 +480,7 @@ export default function SeriesListView({
             <div className="flex items-center gap-2 shrink-0">
               <Button size="sm" variant="outline" onClick={() => void load()} className="inline-flex items-center gap-2">
                 <RefreshCw className="w-4 h-4" />
-                Reload
+                {t("common.reload")}
               </Button>
               <Button
                 size="sm"
@@ -488,7 +490,7 @@ export default function SeriesListView({
                 className="inline-flex items-center gap-2"
               >
                 {isRefreshingNutexb ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
-                Refresh Nutexb
+                {t("series.refreshNutexb")}
               </Button>
               <Button
                 size="sm"
@@ -497,7 +499,7 @@ export default function SeriesListView({
                 className="inline-flex items-center gap-2"
               >
                 <Info className="w-4 h-4" />
-                Info
+                {t("common.info")}
               </Button>
               <Button
                 size="sm"
@@ -506,7 +508,7 @@ export default function SeriesListView({
                 className="inline-flex items-center gap-2"
               >
                 <Save className="w-4 h-4" />
-                Save File
+                {t("common.saveFile")}
               </Button>
             </div>
           </div>
@@ -529,16 +531,16 @@ export default function SeriesListView({
       {isInfoDialogOpen ? (
         <AppRndModalShell
           titleId="series-list-info-title"
-          title="Info"
+          title={t("common.info")}
           headerIcon={<Info className="h-5 w-5 text-primary" />}
           dimensions={SERIES_LIST_INFO_MODAL_DIMENSIONS}
           storageKey="app.rnd-size.series-list-info"
           onClose={() => setIsInfoDialogOpen(false)}
         >
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-6 text-sm text-muted-foreground">
-            <p>1. 自动加载0xb7367090\series_list.bin</p>
-            <p>2. 图片mapping自0xA0253AA0\__convert</p>
-            <p>3. 图片透过0xA0253AA0_structure.json来mapping原有顺序</p>
+            <p>{t("series.info.load")}</p>
+            <p>{t("series.info.mapping")}</p>
+            <p>{t("series.info.order")}</p>
           </div>
         </AppRndModalShell>
       ) : null}

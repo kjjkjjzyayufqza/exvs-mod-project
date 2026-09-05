@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type WheelEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { Image, Loader2, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
@@ -52,6 +53,7 @@ export function TexturePreviewModal({
   onFormatApply,
   isReencoding = false,
 }: TexturePreviewModalProps) {
+  const { t } = useTranslation("scene-texture-dialogs");
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +70,7 @@ export function TexturePreviewModal({
   useEffect(() => {
     if (!entry.nutexbPath) {
       setLoading(false);
-      setError("No nutexb path available");
+      setError(t("texturePreview.noPath"));
       return;
     }
 
@@ -86,14 +88,14 @@ export function TexturePreviewModal({
       .then((dataUrl) => {
         if (cancelled) return;
         if (!dataUrl) {
-          setError("Failed to load preview");
+          setError(t("texturePreview.loadFailed"));
           return;
         }
         setPreviewDataUrl(dataUrl);
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(typeof err === "string" ? err : "Failed to load preview");
+        setError(typeof err === "string" ? err : t("texturePreview.loadFailed"));
       })
       .finally(() => {
         if (!cancelled) {
@@ -169,11 +171,11 @@ export function TexturePreviewModal({
   const headerActions = (
     <>
               {previewWidth > 0 && previewHeight > 0 && (
-                <span className="text-[10px] text-muted-foreground font-mono">
+                <span className="text-[10px] text-muted-foreground font-mono" title={t("texturePreview.dimensions")}>
                   {previewWidth}×{previewHeight}
                 </span>
               )}
-              <span className="w-9 text-right font-mono text-[10px] text-muted-foreground">
+                <span className="w-9 text-right font-mono text-[10px] text-muted-foreground" aria-label={t("texturePreview.zoomPercent")}>
                 {Math.round(zoom * 100)}%
               </span>
               <Button
@@ -181,7 +183,7 @@ export function TexturePreviewModal({
                 size="icon"
                 className="h-5 w-5"
                 data-no-drag
-                title="Zoom out"
+                title={t("texturePreview.zoomOut")}
                 onClick={() => adjustZoom(-1)}
                 disabled={isReencoding || !previewDataUrl || zoom <= MIN_ZOOM}
               >
@@ -192,7 +194,7 @@ export function TexturePreviewModal({
                 size="icon"
                 className="h-5 w-5"
                 data-no-drag
-                title="Reset zoom"
+                title={t("texturePreview.resetZoom")}
                 onClick={resetZoom}
                 disabled={isReencoding || !previewDataUrl || zoom === 1}
               >
@@ -203,7 +205,7 @@ export function TexturePreviewModal({
                 size="icon"
                 className="h-5 w-5"
                 data-no-drag
-                title="Zoom in"
+                title={t("texturePreview.zoomIn")}
                 onClick={() => adjustZoom(1)}
                 disabled={isReencoding || !previewDataUrl || zoom >= MAX_ZOOM}
               >
@@ -216,7 +218,7 @@ export function TexturePreviewModal({
     <AppRndModalShell
       titleId="texture-preview-modal-title"
       title={entry.filename}
-      subtitle="Texture preview and DDS format"
+      subtitle={t("texturePreview.subtitle")}
       headerIcon={<Image className="h-4 w-4 text-primary" />}
       headerActions={headerActions}
       dimensions={TEXTURE_PREVIEW_DIMENSIONS}
@@ -232,7 +234,7 @@ export function TexturePreviewModal({
             {loading && (
               <div className="flex flex-col items-center gap-2 text-muted-foreground">
                 <Loader2 className="h-6 w-6 animate-spin" />
-                <span className="text-xs">Loading preview...</span>
+                <span className="text-xs">{t("texturePreview.loading")}</span>
               </div>
             )}
             {error && (
@@ -268,7 +270,7 @@ export function TexturePreviewModal({
           >
             <div className="flex flex-col gap-1">
               <label className="text-[10px] text-muted-foreground">
-                DDS Format
+                {t("texturePreview.ddsFormat")}
               </label>
               <TextureFormatSelect
                 value={ddsFormat}
@@ -278,8 +280,8 @@ export function TexturePreviewModal({
               />
               <div className="text-[10px] text-muted-foreground min-h-4 leading-snug">
                 {formatLoading
-                  ? "Detecting original format from target nutexb..."
-                  : "Default is the original format from the target nutexb file."}
+                    ? t("texturePreview.detectingFormat")
+                  : t("texturePreview.defaultFormat")}
               </div>
             </div>
             {formatDirty && onFormatApply && (
@@ -292,10 +294,10 @@ export function TexturePreviewModal({
                 {isReencoding ? (
                   <>
                     <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                    Re-encoding...
+                    {t("texturePreview.reencoding")}
                   </>
                 ) : (
-                  "Apply format to nutexb"
+                  t("texturePreview.applyFormat")
                 )}
               </Button>
             )}

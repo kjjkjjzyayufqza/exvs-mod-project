@@ -46,6 +46,7 @@ import {
 import { importCustomUnitRows, mergeImportedEntries } from "@/services/resourceRegistry/importCustomUnit";
 import { crc32Ieee } from "@/utils/crc32Ieee";
 import { ResourceRegistryDataTable } from "@/page/ResourceRegistry/components/ResourceRegistryDataTable";
+import { useTranslation } from "react-i18next";
 
 interface ResourceRegistryViewProps {
   folderPath: string;
@@ -61,6 +62,7 @@ const REGISTRY_EDITOR_MODAL_DIMENSIONS = {
 };
 
 export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceRegistryViewProps) {
+  const { t } = useTranslation("test-resource-registry");
   const registry = useResourceRegistry(folderPath || null);
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
@@ -140,13 +142,13 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
 
   const copyText = async (value: string, label: string) => {
     await writeText(value);
-    toast.success(`${label} copied`);
+    toast.success(t("toast.copied", { label }));
   };
 
   const handleSaveEntry = async () => {
     const trimmed = formSeed.trim();
     if (!trimmed) {
-      toast.error("Seed is required");
+      toast.error(t("error.seedRequired"));
       return;
     }
     const entry = buildRegistryEntryFromSeed({
@@ -161,7 +163,7 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
 
     if (formTarget === "workspace") {
       if (!folderPath) {
-        toast.error("Select a workspace folder first");
+        toast.error(t("error.workspaceRequired"));
         return;
       }
       await registry.updateWorkspaceEntry(entry);
@@ -174,17 +176,17 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
         notes: entry.notes,
       });
       if (!result.ok) {
-        toast.error(result.reason === "duplicate_hash" ? "Duplicate hash in global registry" : "Failed to save");
+        toast.error(result.reason === "duplicate_hash" ? t("error.duplicateHash") : t("error.saveFailed"));
         return;
       }
     }
     setEditorOpen(false);
-    toast.success(editing ? "Entry updated" : "Entry created");
+    toast.success(editing ? t("toast.entryUpdated") : t("toast.entryCreated"));
   };
 
   const handleExport = useCallback(async () => {
     const path = await open({
-      title: "Export resource registry",
+      title: t("dialog.exportTitle"),
       filters: [{ name: "JSON", extensions: ["json"] }],
       defaultPath: "resource_registry.json",
     });
@@ -196,28 +198,28 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
           ? registry.globalDoc
           : { version: 1 as const, entries: registry.mergedEntries.map(({ sourceLayer: _s, ...e }) => e) };
     await writeTextFile(path, JSON.stringify(payload, null, 2));
-    toast.success("Registry exported");
+    toast.success(t("toast.exported"));
   }, [registry]);
 
   const handleImportJson = useCallback(async () => {
     const path = await open({
-      title: "Import resource registry JSON",
+      title: t("dialog.importTitle"),
       filters: [{ name: "JSON", extensions: ["json"] }],
       multiple: false,
     });
     if (!path || typeof path !== "string") return;
     if (!folderPath) {
-      toast.error("Select a workspace folder first");
+      toast.error(t("error.workspaceRequired"));
       return;
     }
     try {
       const raw = await readTextFile(path);
       const parsed = JSON.parse(raw) as { entries?: ResourceRegistryEntry[] };
       if (!Array.isArray(parsed.entries)) {
-        throw new Error("Invalid registry JSON");
+        throw new Error(t("error.saveFailed"));
       }
       await registry.importWorkspaceEntries(parsed.entries);
-      toast.success(`Imported ${parsed.entries.length} entries into workspace registry`);
+      toast.success(t("toast.importedEntries", { count: parsed.entries.length }));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       toast.error(message);
@@ -226,26 +228,26 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
 
   const handleImportCustomUnit = useCallback(async () => {
     const path = await open({
-      title: "Import custom_unit.json",
+      title: t("dialog.importCustomTitle"),
       filters: [{ name: "JSON", extensions: ["json"] }],
       multiple: false,
     });
     if (!path || typeof path !== "string") return;
     if (!folderPath) {
-      toast.error("Select a workspace folder first");
+      toast.error(t("error.workspaceRequired"));
       return;
     }
     try {
       const raw = await readTextFile(path);
       const rows = JSON.parse(raw) as unknown[];
-      if (!Array.isArray(rows)) throw new Error("custom_unit.json must be an array");
+      if (!Array.isArray(rows)) throw new Error(t("error.customUnitArray"));
       const { entries, warnings } = importCustomUnitRows(rows as never[]);
       const next = mergeImportedEntries(registry.workspaceDoc, entries);
       await registry.replaceWorkspaceDoc(next);
       if (warnings.length > 0) {
-        toast.warning(`Imported ${entries.length} entries with ${warnings.length} hash warnings`);
+        toast.warning(t("toast.importedWithWarnings", { count: entries.length, warnings: warnings.length }));
       } else {
-        toast.success(`Imported ${entries.length} unit entries from custom_unit.json`);
+        toast.success(t("toast.importedUnitEntries", { count: entries.length }));
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -260,32 +262,31 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               {showTitle ? (
-                <CardTitle className="text-base">Resource Registry</CardTitle>
+                <CardTitle className="text-base">{t("title")}</CardTitle>
               ) : null}
               <p className={cn("text-xs text-muted-foreground max-w-3xl", showTitle && "mt-1")}>
-                Name to CRC32 mappings for stage and unit assets. Workspace entries override global
-                defaults. Resource path CRC32 only, not param field-key hashes.
+                {t("description")}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" variant="outline" onClick={() => void registry.reload()} disabled={registry.loading}>
-                {registry.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                {registry.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}<span className="sr-only">{t("action.reload")}</span>
               </Button>
               <Button size="sm" onClick={openCreate}>
                 <Plus className="h-4 w-4 mr-1" />
-                New
+                {t("action.new")}
               </Button>
               <Button size="sm" variant="outline" onClick={() => void handleImportJson()}>
                 <Upload className="h-4 w-4 mr-1" />
-                Import JSON
+                {t("action.importJson")}
               </Button>
               <Button size="sm" variant="outline" onClick={() => void handleImportCustomUnit()}>
                 <Upload className="h-4 w-4 mr-1" />
-                Import custom_unit
+                {t("action.importCustom")}
               </Button>
               <Button size="sm" variant="outline" onClick={() => void handleExport()}>
                 <Download className="h-4 w-4 mr-1" />
-                Export
+                {t("action.export")}
               </Button>
             </div>
           </div>
@@ -293,19 +294,19 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
         <CardContent className="px-4 pb-4 pt-0 space-y-3">
           <div className="flex flex-wrap gap-2 items-end">
             <div className="flex-1 min-w-[200px] space-y-1">
-              <Label className="text-xs">Search</Label>
+              <Label className="text-xs">{t("field.search")}</Label>
               <div className="relative">
                 <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="seed, hash, display name..."
+                  placeholder={t("placeholder.search")}
                   className="h-8 pl-8 text-xs"
                 />
               </div>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Source</Label>
+              <Label className="text-xs">{t("field.source")}</Label>
               <Select
                 value={registry.viewSource}
                 onValueChange={(v) => registry.setViewSource(v as RegistryViewSource)}
@@ -314,20 +315,18 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="merged">Merged</SelectItem>
-                  <SelectItem value="workspace">Workspace</SelectItem>
-                  <SelectItem value="global">Global</SelectItem>
+                  <SelectItem value="merged">{t("source.merged")}</SelectItem><SelectItem value="workspace">{t("source.workspace")}</SelectItem><SelectItem value="global">{t("source.global")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Category</Label>
+              <Label className="text-xs">{t("field.category")}</Label>
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                 <SelectTrigger className="h-8 w-[120px] text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="all">{t("category.all")}</SelectItem>
                   {CATEGORIES.map((cat) => (
                     <SelectItem key={cat} value={cat}>
                       {cat}
@@ -337,29 +336,26 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Slot filter</Label>
+              <Label className="text-xs">{t("field.slotFilter")}</Label>
               <Input
                 value={slotFilter}
                 onChange={(e) => setSlotFilter(e.target.value)}
-                placeholder="fileName, model..."
+                placeholder={t("placeholder.slot")}
                 className="h-8 w-[140px] text-xs"
               />
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-            <span>{visibleEntries.length} shown</span>
-            <span>{registry.mergedEntries.length} merged total</span>
-            <span>{registry.workspaceDoc.entries.length} workspace</span>
-            <span>{registry.globalDoc.entries.length} global</span>
+            <span>{t("count.shown", { count: visibleEntries.length })}</span><span>{t("count.merged", { count: registry.mergedEntries.length })}</span><span>{t("count.workspace", { count: registry.workspaceDoc.entries.length })}</span><span>{t("count.global", { count: registry.globalDoc.entries.length })}</span>
             {conflictCount > 0 ? (
-              <span className="text-destructive">{conflictCount} hash conflicts</span>
+              <span className="text-destructive">{t("count.conflicts", { count: conflictCount })}</span>
             ) : null}
-            {!folderPath ? <span className="text-amber-600">No workspace folder selected</span> : null}
+            {!folderPath ? <span className="text-amber-600">{t("error.noWorkspace")}</span> : null}
           </div>
 
           {registry.error ? (
-            <p className="text-xs text-destructive">{registry.error}</p>
+            <p className="text-xs text-destructive">{t("error.registry", { message: registry.error })}</p>
           ) : null}
         </CardContent>
       </Card>
@@ -368,18 +364,18 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
         <CardContent className="p-0 flex-1 min-h-0 overflow-hidden">
           {visibleEntries.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground space-y-3">
-              <p>No registry entries match your filters.</p>
+              <p>{t("empty.noMatches")}</p>
               <Button size="sm" onClick={openCreate}>
                 <Plus className="h-4 w-4 mr-1" />
-                Create first entry
+                {t("action.createFirst")}
               </Button>
             </div>
           ) : (
             <ResourceRegistryDataTable
               rows={visibleEntries}
               actions={{
-                onCopySeed: (seed) => void copyText(seed, "Seed"),
-                onCopyHash: (hashHex) => void copyText(hashHex, "Hash"),
+                onCopySeed: (seed) => void copyText(seed, t("field.seed")),
+                onCopyHash: (hashHex) => void copyText(hashHex, t("field.hash")),
                 onEdit: openEdit,
                 onDelete: setDeleteId,
                 onPromote: (id) => void registry.promoteToGlobal(id),
@@ -392,8 +388,8 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
       {editorOpen ? (
         <AppRndModalShell
           titleId="resource-registry-entry-editor-title"
-          title={editing ? "Edit registry entry" : "New registry entry"}
-          subtitle="Seed string is hashed with IEEE CRC32 to produce the int32 resource value."
+          title={editing ? t("dialog.editTitle") : t("dialog.newTitle")}
+          subtitle={t("dialog.subtitle")}
           headerIcon={<Database className="h-5 w-5 text-primary" />}
           dimensions={REGISTRY_EDITOR_MODAL_DIMENSIONS}
           storageKey="app.rnd-size.resource-registry-entry-editor"
@@ -401,16 +397,16 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
           footer={
             <div className="flex justify-end gap-2 bg-background px-6 py-4">
               <Button variant="outline" onClick={() => setEditorOpen(false)}>
-                Cancel
+                {t("action.cancel")}
               </Button>
-              <Button onClick={() => void handleSaveEntry()}>Save</Button>
+              <Button onClick={() => void handleSaveEntry()}>{t("action.save")}</Button>
             </div>
           }
         >
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-6">
             <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <Label className="text-xs">Category</Label>
+                  <Label className="text-xs">{t("field.category")}</Label>
                   <Select value={formCategory} onValueChange={(v) => setFormCategory(v as ResourceRegistryCategory)}>
                     <SelectTrigger className="h-8 text-xs">
                       <SelectValue />
@@ -425,7 +421,7 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Slot</Label>
+                  <Label className="text-xs">{t("field.slot")}</Label>
                   <Input
                     value={formSlot}
                     onChange={(e) => setFormSlot(e.target.value)}
@@ -434,7 +430,7 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
                 </div>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Seed</Label>
+                <Label className="text-xs">{t("field.seed")}</Label>
                 <Input
                   value={formSeed}
                   onChange={(e) => setFormSeed(e.target.value)}
@@ -442,12 +438,14 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
                 />
                 {formPreview ? (
                   <p className="text-[10px] font-mono text-muted-foreground">
-                    {formPreview.hashHex} · int32 {formPreview.hashInt32}
+                    <span data-i18n-ignore="">{formPreview.hashHex}</span>
+                    {" · "}
+                    {t("seedField.int32", { value: formPreview.hashInt32 })}
                   </p>
                 ) : null}
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Display name (optional)</Label>
+                <Label className="text-xs">{t("field.displayName")}</Label>
                 <Input
                   value={formDisplayName}
                   onChange={(e) => setFormDisplayName(e.target.value)}
@@ -455,7 +453,7 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Notes (optional)</Label>
+                <Label className="text-xs">{t("field.notes")}</Label>
                 <Textarea
                   value={formNotes}
                   onChange={(e) => setFormNotes(e.target.value)}
@@ -463,14 +461,13 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Save target</Label>
+                <Label className="text-xs">{t("field.saveTarget")}</Label>
                 <Select value={formTarget} onValueChange={(v) => setFormTarget(v as "workspace" | "global")}>
                   <SelectTrigger className="h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="workspace">Workspace registry</SelectItem>
-                    <SelectItem value="global">Global registry</SelectItem>
+                    <SelectItem value="workspace">{t("target.workspace")}</SelectItem><SelectItem value="global">{t("target.global")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -481,14 +478,13 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
       <AlertDialog open={deleteId != null} onOpenChange={(open) => !open && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete workspace entry?</AlertDialogTitle>
+            <AlertDialogTitle>{t("dialog.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the mapping from the workspace registry file only. Global entries are not
-              affected.
+              {t("dialog.deleteDescription")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("action.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className={cn("bg-destructive text-destructive-foreground hover:bg-destructive/90")}
               onClick={() => {
@@ -496,7 +492,7 @@ export function ResourceRegistryView({ folderPath, showTitle = true }: ResourceR
                 setDeleteId(null);
               }}
             >
-              Delete
+              {t("action.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

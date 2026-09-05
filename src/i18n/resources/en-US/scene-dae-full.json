@@ -1,0 +1,9 @@
+{
+  "analysis": { "waiting": "Waiting for DAE analysis or analysis reported blocking errors." },
+  "output": { "title": "Output", "replaceNumshb": "Only a temporary .numshb is written. The existing NUMDLB, NUMATB, NUSKTB, JNTTBL, and NUHLPB stay untouched.", "unitModel": "Generated model files are registered under the Unit model models folder{{stageRoot}}. Referenced textures are deduplicated into its shared texture pool.", "batchDirect": "These SSBH and NUMATB settings are shared by all {{count}} files. Each model is written directly to its own disk folder.", "direct": "SSBH files are written directly to the selected disk folder.", "memory": "SSBH files are kept in memory until you save the stage folder{{stageRoot}}.", "batchFolderName": "Each output folder uses its source FBX/DAE filename.", "modelFolderName": "Model folder name", "scale": "Scale", "upAxis": "Up axis", "yUp": "Y-up", "zUp": "Z-up", "none": "None", "flipUv": "Flip UV (V)", "flipUvHelp": "Invert the V coordinate during SSBH conversion." },
+  "geometry": { "title": "Include Geometries ({{selected}}/{{total}})" },
+  "files": { "title": "Output Files", "replaceNote": "Other SSBH outputs stay off for mesh-only replace.", "writeLog": "Write log" },
+  "mapping": { "title": "NUMDLB Mapping" },
+  "profiles": { "title": "NUMATB Profiles (Texture Data)", "copyTitle": "Copy full NUMATB profile data as JSON (for AI analysis)", "copyLabel": "Copy NUMATB profiles as JSON" },
+  "validation": { "checking": "Checking NUMATB texture references...", "failed": "Texture reference validation failed: {{error}}", "fixTitle": "Fix texture references that cannot be resolved before conversion:" }
+}

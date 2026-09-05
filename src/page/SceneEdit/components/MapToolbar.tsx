@@ -39,15 +39,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 import type { PlacementGizmoMode } from "./MapViewport";
 import { MAX_SCENE_GIZMO_SIZE, MIN_SCENE_GIZMO_SIZE } from "../utils/sceneEditorSettings";
 import { HavokViewModeToggle } from "./havok/HavokViewModeToggle";
 
 const GIZMO_MODES = [
-  { key: "W", mode: "translate" as const, label: "Move", icon: Move3D },
-  { key: "E", mode: "rotate" as const, label: "Rotate", icon: RotateCw },
-  { key: "R", mode: "scale" as const, label: "Scale", icon: Maximize },
+  { key: "W", mode: "translate" as const, icon: Move3D },
+  { key: "E", mode: "rotate" as const, icon: RotateCw },
+  { key: "R", mode: "scale" as const, icon: Maximize },
 ];
 
 interface MapToolbarProps {
@@ -131,6 +132,7 @@ export function MapToolbar({
   showCollisionMesh,
   onToggleCollisionMesh,
 }: MapToolbarProps) {
+  const { t } = useTranslation("scene-toolbar");
   return (
     <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b bg-muted/20 px-1.5 py-0.5">
       {/* ─── File Operations Group ─── */}
@@ -145,25 +147,25 @@ export function MapToolbar({
                 disabled={isLoading}
               >
                 <FolderOpen className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">File</span>
+                <span className="hidden sm:inline">{t("file.label")}</span>
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Open / Import stage</TooltipContent>
+          <TooltipContent side="bottom">{t("file.openImportStage")}</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="start" className="text-xs">
           <DropdownMenuItem onClick={onOpenFolder}>
             <FolderOpen className="mr-2 h-3.5 w-3.5" />
-            Open Stage Folder
+            {t("file.openStageFolder")}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onImportFhm2d}>
             <FileArchive className="mr-2 h-3.5 w-3.5" />
-            Import .fhm2d
+            {t("file.importFhm2d")}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={onExtractFhm2d}>
             <PackageOpen className="mr-2 h-3.5 w-3.5" />
-            Extract .fhm2d to folder
+            {t("file.extractFhm2d")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -177,7 +179,7 @@ export function MapToolbar({
             className="h-6 w-6 relative"
             onClick={onSaveFolder}
             disabled={!canSave || isLoading}
-            aria-label="Save as Folder"
+            aria-label={t("save.folderAria")}
           >
             <Save className="h-3.5 w-3.5" />
             {hasUnsavedChanges && (
@@ -188,7 +190,7 @@ export function MapToolbar({
             )}
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Save changes to folder</TooltipContent>
+        <TooltipContent side="bottom">{t("save.folderTooltip")}</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -199,12 +201,12 @@ export function MapToolbar({
             className="h-6 w-6"
             onClick={onSaveFhm2d}
             disabled={!canSave || isLoading}
-            aria-label="Save as FHM2D"
+            aria-label={t("save.fhm2dAria")}
           >
             <HardDriveDownload className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Repack and save as .fhm2d</TooltipContent>
+        <TooltipContent side="bottom">{t("save.fhm2dTooltip")}</TooltipContent>
       </Tooltip>
 
       <Separator orientation="vertical" className="h-4 mx-0.5" />
@@ -218,12 +220,12 @@ export function MapToolbar({
             className="h-6 w-6"
             onClick={onImportDaeWithConfig}
             disabled={isLoading}
-            aria-label="Import static mesh"
+            aria-label={t("import.importMeshAria")}
           >
             <Upload className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Import DAE / FBX</TooltipContent>
+        <TooltipContent side="bottom">{t("import.importDaeTooltip")}</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -234,13 +236,13 @@ export function MapToolbar({
             className="h-6 w-6"
             onClick={onBatchImportDaeWithConfig}
             disabled={isLoading}
-            aria-label="Batch import static meshes to disk"
+            aria-label={t("import.batchAria")}
           >
             <Files className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom">
-          Batch import DAE / FBX to disk with HKT
+          {t("import.batchTooltip")}
         </TooltipContent>
       </Tooltip>
 
@@ -252,12 +254,12 @@ export function MapToolbar({
             className="h-6 w-6"
             onClick={onExportSelectedDae}
             disabled={!canExportDae || isLoading}
-            aria-label="Export selected objects"
+            aria-label={t("export.selectedAria")}
           >
             <Download className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Export selected model</TooltipContent>
+        <TooltipContent side="bottom">{t("export.selectedTooltip")}</TooltipContent>
       </Tooltip>
 
       <Tooltip>
@@ -268,19 +270,19 @@ export function MapToolbar({
             className="h-6 w-6"
             onClick={onExportHktToObj}
             disabled={isLoading}
-            aria-label="Export HKT to OBJ"
+            aria-label={t("export.hktAria")}
           >
             <Boxes className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Export HKT to OBJ...</TooltipContent>
+        <TooltipContent side="bottom">{t("export.hktTooltip")}</TooltipContent>
       </Tooltip>
 
       <Separator orientation="vertical" className="h-4 mx-0.5" />
 
       {/* ─── Transform Gizmo Group ─── */}
       <div className="flex items-center rounded-sm overflow-hidden border border-border/60">
-        {GIZMO_MODES.map(({ key, mode, label, icon: Icon }) => (
+        {GIZMO_MODES.map(({ key, mode, icon: Icon }) => (
           <Tooltip key={mode}>
             <TooltipTrigger asChild>
               <button
@@ -292,17 +294,17 @@ export function MapToolbar({
                     : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
                 )}
                 onClick={() => onGizmoModeChange(mode)}
-                aria-label={`Set transform mode to ${mode}`}
+                aria-label={t("gizmo.setMode", { mode })}
               >
                 <Icon className="h-3 w-3" />
-                <span className="hidden sm:inline">{label}</span>
+                <span className="hidden sm:inline">{t(`gizmo.${mode}`)}</span>
                 <kbd className="text-[8px] font-mono opacity-60 ml-0.5">
                   {key}
                 </kbd>
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              {label} ({key})
+              {t(`gizmo.${mode}`)} ({key})
             </TooltipContent>
           </Tooltip>
         ))}
@@ -316,18 +318,18 @@ export function MapToolbar({
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6"
-                aria-label="Gizmo size"
+                aria-label={t("gizmo.size")}
               >
                 <SlidersHorizontal className="h-3 w-3" />
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Gizmo size</TooltipContent>
+          <TooltipContent side="bottom">{t("gizmo.size")}</TooltipContent>
         </Tooltip>
         <PopoverContent side="bottom" align="start" className="w-56 p-3">
           <div className="space-y-2">
             <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span>Gizmo Size</span>
+              <span>{t("gizmo.size")}</span>
               <span className="font-mono text-foreground">{gizmoSize.toFixed(2)}</span>
             </div>
             <Slider
@@ -355,12 +357,12 @@ export function MapToolbar({
               size="icon"
               className="h-6 w-6"
               onClick={onToggleGrid}
-              aria-label={showGrid ? "Hide grid" : "Show grid"}
+              aria-label={t(showGrid ? "display.hideGrid" : "display.showGrid")}
             >
               <Grid3x3 className="h-3 w-3" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Grid</TooltipContent>
+          <TooltipContent side="bottom">{t("display.grid")}</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -370,12 +372,12 @@ export function MapToolbar({
               size="icon"
               className="h-6 w-6"
               onClick={onToggleAxes}
-              aria-label={showAxes ? "Hide axes" : "Show axes"}
+              aria-label={t(showAxes ? "display.hideAxes" : "display.showAxes")}
             >
               <Axis3D className="h-3 w-3" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Axes</TooltipContent>
+          <TooltipContent side="bottom">{t("display.axes")}</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -385,12 +387,12 @@ export function MapToolbar({
               size="icon"
               className="h-6 w-6"
               onClick={onToggleWireframe}
-              aria-label={wireframe ? "Disable wireframe" : "Enable wireframe"}
+              aria-label={t(wireframe ? "display.disableWireframe" : "display.enableWireframe")}
             >
               <Box className="h-3 w-3" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Wireframe</TooltipContent>
+          <TooltipContent side="bottom">{t("display.wireframe")}</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -400,12 +402,12 @@ export function MapToolbar({
               size="icon"
               className="h-6 w-6"
               onClick={onToggleStats}
-              aria-label={showStats ? "Hide stats" : "Show stats"}
+              aria-label={t(showStats ? "display.hideStats" : "display.showStats")}
             >
               <Activity className="h-3 w-3" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Stats</TooltipContent>
+          <TooltipContent side="bottom">{t("display.stats")}</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -415,12 +417,12 @@ export function MapToolbar({
               size="icon"
               className={cn("h-6 w-6", animeRenderEnabled && "text-pink-400")}
               onClick={() => onToggleAnimeRender(!animeRenderEnabled)}
-              aria-label={animeRenderEnabled ? "Disable anime render" : "Enable anime render"}
+              aria-label={t(animeRenderEnabled ? "display.disableAnime" : "display.enableAnime")}
             >
               <Sparkles className="h-3 w-3" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Anime render</TooltipContent>
+          <TooltipContent side="bottom">{t("display.animeRender")}</TooltipContent>
         </Tooltip>
       </div>
 
@@ -451,16 +453,16 @@ export function MapToolbar({
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent side="bottom">More actions</TooltipContent>
+          <TooltipContent side="bottom">{t("more.actions")}</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end" className="text-xs">
           <DropdownMenuItem onClick={onResetCamera}>
             <RotateCcw className="mr-2 h-3.5 w-3.5" />
-            Reset Camera
+            {t("more.resetCamera")}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onClearCache} disabled={clearCacheDisabled}>
             <Eraser className="mr-2 h-3.5 w-3.5" />
-            Clear Cache
+            {t("more.clearCache")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

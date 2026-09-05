@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Tree, type NodeApi } from "react-arborist";
 import { Copy, Plus, Redo2, Save, Trash2, Undo2 } from "lucide-react";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { useTranslation } from "react-i18next";
 
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -188,6 +189,7 @@ export default function RepackFolderStructureView({
   jsonFilePath = null,
   onUnsavedChanges
 }: RepackFolderStructureViewProps) {
+  const { t } = useTranslation("test-workspace");
   const {
     treeData,
     setTreeData,
@@ -329,21 +331,21 @@ export default function RepackFolderStructureView({
             setLoadedFilePath(jsonFilePath);
             setHasUnsavedChanges(false);
             clearUndoHistory();
-            toast.success(`Loaded JSON file: ${jsonFilePath.split(/[\\/]/).pop()}`);
+            toast.success(t("structure.loadedJson", { name: jsonFilePath.split(/[\\/]/).pop() }));
           } else {
-            toast.error("No valid tree data found in the selected file");
+            toast.error(t("structure.noTreeData"));
           }
         } else {
-          toast.error("No valid SubFileStructure found in the selected file");
+          toast.error(t("structure.noSubFileStructure"));
         }
       } catch (error) {
         console.error("Error loading JSON file:", error);
-        toast.error("Failed to load JSON file: " + (error as Error).message);
+        toast.error(t("structure.loadJsonFailed", { message: (error as Error).message }));
       }
     };
 
     loadJsonFile();
-  }, [clearUndoHistory, jsonFilePath, loadedFilePath, setCompleteProjectData, setTreeData, setSelectedItem]);
+  }, [clearUndoHistory, jsonFilePath, loadedFilePath, setCompleteProjectData, setTreeData, setSelectedItem, t]);
 
   // Notify parent about unsaved changes
   useEffect(() => {
@@ -354,12 +356,12 @@ export default function RepackFolderStructureView({
 
   const handleSave = useCallback(async () => {
     if (!loadedFilePath) {
-      toast.error("No file loaded to save");
+      toast.error(t("structure.noFileToSave"));
       return;
     }
 
     if (!completeProjectData) {
-      toast.error("No data to save");
+      toast.error(t("structure.noDataToSave"));
       return;
     }
 
@@ -368,7 +370,7 @@ export default function RepackFolderStructureView({
       const exportData = exportProjectData();
       
       if (!exportData) {
-        toast.error("Failed to export project data");
+        toast.error(t("structure.exportFailed"));
         return;
       }
 
@@ -382,14 +384,14 @@ export default function RepackFolderStructureView({
       setHasUnsavedChanges(false);
       
       const fileName = loadedFilePath.split(/[\\/]/).pop();
-      toast.success(`Successfully saved: ${fileName}`);
+      toast.success(t("structure.saved", { name: fileName }));
     } catch (error) {
       console.error("Error saving file:", error);
-      toast.error("Failed to save file: " + (error as Error).message);
+      toast.error(t("structure.saveFailed", { message: (error as Error).message }));
     } finally {
       setIsSaving(false);
     }
-  }, [loadedFilePath, completeProjectData, exportProjectData]);
+  }, [loadedFilePath, completeProjectData, exportProjectData, t]);
 
   const handleSelectChange = (nodes: NodeApi<TreeDataItem>[]) => {
     const nextSelected = nodes.map((node) => node.data);
@@ -574,8 +576,8 @@ export default function RepackFolderStructureView({
     setSelectedItems([lastCreated]);
     setSelectedItem(lastCreated);
     setHasUnsavedChanges(true);
-    toast.success(`Added ${createdNodes.length} folder(s)`);
-  }, [recordBeforeMutation, resolveTargetFolders, setSelectedItem, setTreeData, treeData]);
+    toast.success(t("structure.addedFolders", { count: createdNodes.length }));
+  }, [recordBeforeMutation, resolveTargetFolders, setSelectedItem, setTreeData, t, treeData]);
 
   const handleAddFiles = useCallback(() => {
     const targets = resolveTargetFolders();
@@ -637,8 +639,8 @@ export default function RepackFolderStructureView({
     setSelectedItems([lastCreated]);
     setSelectedItem(lastCreated);
     setHasUnsavedChanges(true);
-    toast.success(`Added ${createdNodes.length} file(s)`);
-  }, [completeProjectData, recordBeforeMutation, resolveTargetFolders, setCompleteProjectData, setSelectedItem, setTreeData, treeData]);
+    toast.success(t("structure.addedFiles", { count: createdNodes.length }));
+  }, [completeProjectData, recordBeforeMutation, resolveTargetFolders, setCompleteProjectData, setSelectedItem, setTreeData, t, treeData]);
 
   const handleQuickAddFilesConfirm = useCallback(
     (payload: {
@@ -757,8 +759,8 @@ export default function RepackFolderStructureView({
       setHasUnsavedChanges(true);
       toast.success(
         shareFileIndexAcrossFolders
-          ? `Added ${newNodes.length} file node(s) with shared fileIndex per selected source file`
-          : `Added ${newNodes.length} file(s)`,
+          ? t("structure.addedSharedFiles", { count: newNodes.length })
+          : t("structure.addedFiles", { count: newNodes.length }),
       );
     },
     [
@@ -769,6 +771,7 @@ export default function RepackFolderStructureView({
       setHasUnsavedChanges,
       setSelectedItem,
       setTreeData,
+      t,
       treeData,
     ],
   );
@@ -778,7 +781,7 @@ export default function RepackFolderStructureView({
     if (ids.length === 0) return;
     setDeleteSelectedDialogOpen(false);
     handleDelete({ ids });
-    toast.success(`Deleted ${ids.length} node(s)`);
+    toast.success(t("structure.deletedNodes", { count: ids.length }));
   };
 
   const handleCopySelected = useCallback(() => {
@@ -786,10 +789,16 @@ export default function RepackFolderStructureView({
     copyNodes(selectionForCopy.map((item) => item.id));
     toast.success(
       selectionForCopy.length === 1
-        ? `Copied ${selectionForCopy[0]?.data?.type === "Folder" ? "folder" : "file"} "${selectionForCopy[0]?.name}"`
-        : `Copied ${selectionForCopy.length} selected node(s)`,
+        ? t("structure.copiedItem", {
+            kind:
+              selectionForCopy[0]?.data?.type === "Folder"
+                ? t("structure.kindFolder")
+                : t("structure.kindFile"),
+            name: selectionForCopy[0]?.name,
+          })
+        : t("structure.copiedNodes", { count: selectionForCopy.length }),
     );
-  }, [copyNodes, selectionForCopy]);
+  }, [copyNodes, selectionForCopy, t]);
 
   const handlePaste = () => {
     if (!selectedItem || selectedItem.data?.type !== "Folder" || copiedItems.length === 0) return;
@@ -797,8 +806,12 @@ export default function RepackFolderStructureView({
     pasteNode(selectedItem.id);
     toast.success(
       copiedItems.length === 1 && copiedItem
-        ? `Successfully pasted ${copiedItem.data?.type === "Folder" ? "folder" : "file"} "${copiedItem.name}" into "${selectedItem.name}"`
-        : `Successfully pasted ${copiedItems.length} node(s) into "${selectedItem.name}"`,
+        ? t("structure.pastedItem", {
+            kind: copiedItem.data?.type === "Folder" ? t("structure.kindFolder") : t("structure.kindFile"),
+            name: copiedItem.name,
+            target: selectedItem.name,
+          })
+        : t("structure.pastedNodes", { count: copiedItems.length, target: selectedItem.name }),
     );
     setHasUnsavedChanges(true);
   };
@@ -878,7 +891,7 @@ export default function RepackFolderStructureView({
     <div className="flex h-full min-h-0 w-full flex-col bg-background">
       <header className="shrink-0 space-y-2 pb-3">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <CardTitle className="text-base sm:text-lg">Project Structure</CardTitle>
+          <CardTitle className="text-base sm:text-lg">{t("structure.title")}</CardTitle>
           <div className="flex flex-wrap items-center justify-end gap-1">
             <Button
               type="button"
@@ -886,10 +899,10 @@ export default function RepackFolderStructureView({
               disabled={!canUndo}
               variant="outline"
               size="sm"
-              title="Undo (Ctrl+Z / Cmd+Z)"
+              title={t("structure.undoTitle")}
             >
               <Undo2 className="h-4 w-4" />
-              Undo
+              {t("structure.undo")}
             </Button>
             <Button
               type="button"
@@ -897,20 +910,20 @@ export default function RepackFolderStructureView({
               disabled={!canRedo}
               variant="outline"
               size="sm"
-              title="Redo (Ctrl+Y / Ctrl+Shift+Z / Cmd+Shift+Z)"
+              title={t("structure.redoTitle")}
             >
               <Redo2 className="h-4 w-4" />
-              Redo
+              {t("structure.redo")}
             </Button>
             <Button
               onClick={handleSave}
               disabled={!hasUnsavedChanges || !loadedFilePath || isSaving}
               variant={hasUnsavedChanges ? "default" : "outline"}
               size="sm"
-              title="Save changes (Ctrl+S)"
+              title={t("structure.saveTitle")}
             >
               <Save className="h-4 w-4" />
-              {isSaving ? "Saving..." : "Save"}
+              {isSaving ? t("structure.saving") : t("structure.save")}
             </Button>
             <Button
               onClick={handleAddFolders}
@@ -919,12 +932,12 @@ export default function RepackFolderStructureView({
               size="sm"
               title={
                 addTargetsCount > 1
-                  ? `Add a new folder to ${addTargetsCount} selected folders`
-                  : "Add a new folder to selected folder"
+                  ? t("structure.addFolderTitleMany", { count: addTargetsCount })
+                  : t("structure.addFolderTitle")
               }
             >
               <Plus className="h-4 w-4" />
-              Add Folder
+              {t("structure.addFolder")}
             </Button>
             <Button
               onClick={handleAddFiles}
@@ -933,12 +946,12 @@ export default function RepackFolderStructureView({
               size="sm"
               title={
                 addTargetsCount > 1
-                  ? `Add a new file to ${addTargetsCount} selected folders`
-                  : "Add a new file to selected folder"
+                  ? t("structure.addFileTitleMany", { count: addTargetsCount })
+                  : t("structure.addFileTitle")
               }
             >
               <Plus className="h-4 w-4" />
-              Add File
+              {t("structure.addFile")}
             </Button>
             <Button
               type="button"
@@ -948,12 +961,12 @@ export default function RepackFolderStructureView({
               size="sm"
               title={
                 addTargetsCount > 1
-                  ? `Quick add files to ${addTargetsCount} selected folders`
-                  : "Quick add files to selected folder"
+                  ? t("structure.quickAddTitleMany", { count: addTargetsCount })
+                  : t("structure.quickAddTitle")
               }
             >
               <Plus className="h-4 w-4" />
-              Quick Add file
+              {t("structure.quickAdd")}
             </Button>
             <Button
               type="button"
@@ -963,12 +976,12 @@ export default function RepackFolderStructureView({
               size="sm"
               title={
                 hasSelectionToCopy
-                  ? `Copy ${selectionForCopy.length} selected node(s) to the internal clipboard`
-                  : "Select one or more nodes in the tree"
+                  ? t("structure.copyTitle", { count: selectionForCopy.length })
+                  : t("structure.selectNodes")
               }
             >
               <Copy className="h-4 w-4" />
-              Copy selected
+              {t("structure.copySelected")}
             </Button>
             <Button
               type="button"
@@ -978,39 +991,35 @@ export default function RepackFolderStructureView({
               disabled={selectedItems.length === 0}
               title={
                 selectedItems.length > 0
-                  ? `Delete ${selectedItems.length} selected node(s) (confirm)`
-                  : "Select one or more nodes in the tree"
+                  ? t("structure.deleteTitle", { count: selectedItems.length })
+                  : t("structure.selectNodes")
               }
               onClick={() => setDeleteSelectedDialogOpen(true)}
             >
               <Trash2 className="h-4 w-4" />
-              Delete selected
+              {t("structure.deleteSelected")}
             </Button>
           </div>
         </div>
         <div className="space-y-1.5">
           <CardDescription className="text-sm leading-snug">
-            Drag and drop to reorganize.             Tree selection: click; Ctrl/Cmd+click toggle; Shift+click range; Ctrl/Cmd+Shift+click
-            toggle add. Copy selected supports multi-selection. Delete selected removes highlighted nodes (or Backspace).
-            Shortcuts: Save Ctrl+S (Cmd+S), Undo Ctrl+Z (Cmd+Z), Redo Ctrl+Y or Ctrl+Shift+Z (Cmd+Shift+Z). Copy/Paste tree
-            nodes: Ctrl+C / Ctrl+V (Cmd) when focus is in the tree panel (use &quot;Copy selected&quot; otherwise).
+            {t("structure.help")}
           </CardDescription>
           {selectedItems.length > 1 ? (
             <p className="text-xs text-muted-foreground">
-              Selected {selectedItems.length} nodes. Add actions apply to selected folders only; use Copy selected or Ctrl/Cmd+C
-              for batch copy. Property editor is disabled for multi-selection.
+              {t("structure.multiSelected", { count: selectedItems.length })}
             </p>
           ) : null}
           {loadedFilePath && (
             <p className="text-xs text-muted-foreground">
-              {loadedFilePath.split(/[\\/]/).pop()}
+              <span data-i18n-ignore="">{loadedFilePath.split(/[\\/]/).pop()}</span>
               {hasUnsavedChanges && (
-                <span className="text-yellow-600 dark:text-yellow-500"> (unsaved)</span>
+                <span className="text-yellow-600 dark:text-yellow-500"> {t("structure.unsaved")}</span>
               )}
             </p>
           )}
           {completeProjectData && (
-            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground" data-i18n-ignore="">
               <span>
                 Magic: <span className="font-semibold text-foreground">{completeProjectData.Magic}</span>
               </span>
@@ -1084,14 +1093,13 @@ export default function RepackFolderStructureView({
       <AlertDialog open={deleteSelectedDialogOpen} onOpenChange={setDeleteSelectedDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete selected nodes?</AlertDialogTitle>
+            <AlertDialogTitle>{t("structure.deleteDialogTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove {selectedItems.length} selected node(s) from the structure tree. SubFileData
-              will be re-synced from the tree. This cannot be undone except via Undo.
+              {t("structure.deleteDialogDescription", { count: selectedItems.length })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("structure.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={(e) => {
@@ -1099,7 +1107,7 @@ export default function RepackFolderStructureView({
                 handleConfirmDeleteSelected();
               }}
             >
-              Delete
+              {t("structure.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

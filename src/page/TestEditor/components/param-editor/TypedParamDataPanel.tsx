@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { toast } from "sonner"
+import { useTranslation } from "react-i18next"
 import { Search, CopyPlus, Eye, Plus, Trash2, Pencil, Save, X, ClipboardCopy, Braces, FileInput, Copy } from "lucide-react"
 import { AppRndModalShell } from "@/components/AppRndModalShell"
 import { Button } from "@/components/ui/button"
@@ -91,6 +92,7 @@ function ParamFieldCell({
   offset: number
   onCommit: (nextValue: number | string) => void
 }) {
+  const { t } = useTranslation("test-typed-param")
   const isFloat = kind === 5
   const isString = kind === 7 || typeof value === "string"
   const offsetBadge =
@@ -134,7 +136,7 @@ function ParamFieldCell({
           className="h-8 w-full rounded-md border border-border/60 bg-background px-2 font-mono text-[11px] outline-none focus:border-primary/40"
           value={text}
           onChange={(e) => onCommit(e.target.value)}
-          placeholder="(empty string)"
+          placeholder={t("field.emptyString")}
         />
       </div>
     )
@@ -192,6 +194,7 @@ export function TypedParamDataPanel({
   workspaceDefaultPath?: string
   sourceFilePath?: string
 }) {
+  const { t } = useTranslation("test-typed-param")
   const [fieldSearch, setFieldSearch] = useState("")
   const [entrySearchDraft, setEntrySearchDraft] = useState("")
   const [entrySearch, setEntrySearch] = useState("")
@@ -301,7 +304,7 @@ export function TypedParamDataPanel({
     if (!preview || !entry) return
     const fieldLayout = buildTypedEntryFieldLayout(data, selectedEntryIndex)
     if (!fieldLayout) {
-      toast.error("Unable to resolve entry field layout.")
+      toast.error(t("errors.fieldLayout"))
       return
     }
     const parsed = parseHexPreviewEditText(hexEditDraft, preview.bytes.length)
@@ -317,8 +320,8 @@ export function TypedParamDataPanel({
     onChange({ ...data, entries: nextEntries, entryIds: nextEntryIds })
     setEntryEditorMeta((prev) => markEntryEditorMetaDirty(prev, selectedEntryIndex))
     setHexPreviewMode("view")
-    toast.success("Hex preview changes saved to entry fields")
-  }, [data, entry, hexEditDraft, onChange, preview, selectedEntryIndex])
+    toast.success(t("toast.hexSaved"))
+  }, [data, entry, hexEditDraft, onChange, preview, selectedEntryIndex, t])
 
   const fieldInfoMap = useMemo(() => {
     if (!entry || !data.fieldSpecs) return {}
@@ -490,34 +493,34 @@ export function TypedParamDataPanel({
       <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border bg-card shadow-sm">
         <div className="space-y-2.5 border-b bg-muted/20 px-3 py-2.5">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-xs font-semibold tracking-tight">Entries</h3>
+            <h3 className="text-xs font-semibold tracking-tight">{t("list.title")}</h3>
             <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
-              {entrySearch.trim() ? `${filteredEntryRows.length} / ${data.entries.length}` : `${data.entries.length} rows`}
-              {isEntrySearchPending ? " ..." : ""}
+              {entrySearch.trim() ? t("list.filteredCount", { visible: filteredEntryRows.length, total: data.entries.length }) : t("list.rows", { count: data.entries.length })}
+              {isEntrySearchPending ? ` ${t("list.pending")}` : ""}
             </span>
           </div>
           <div className="flex flex-wrap gap-1.5 text-[9px] text-muted-foreground">
             {entryLegendCounts.file > 0 ? (
-              <span className="rounded border border-border/60 bg-muted/30 px-1 py-0.5">File {entryLegendCounts.file}</span>
+              <span className="rounded border border-border/60 bg-muted/30 px-1 py-0.5">{t("legend.file", { count: entryLegendCounts.file })}</span>
             ) : null}
             {entryLegendCounts.copied > 0 ? (
               <span className="rounded border border-sky-500/25 bg-sky-500/10 px-1 py-0.5 text-sky-700 dark:text-sky-300">
-                Copy {entryLegendCounts.copied}
+                {t("legend.copy", { count: entryLegendCounts.copied })}
               </span>
             ) : null}
             {entryLegendCounts.blank > 0 ? (
               <span className="rounded border border-emerald-500/25 bg-emerald-500/10 px-1 py-0.5 text-emerald-700 dark:text-emerald-300">
-                New {entryLegendCounts.blank}
+                {t("legend.new", { count: entryLegendCounts.blank })}
               </span>
             ) : null}
             {entryLegendCounts.edited > 0 ? (
               <span className="rounded border border-amber-500/25 bg-amber-500/10 px-1 py-0.5 text-amber-800 dark:text-amber-300">
-                Edited {entryLegendCounts.edited}
+                {t("legend.edited", { count: entryLegendCounts.edited })}
               </span>
             ) : null}
             {entryLegendCounts.highlighted > 0 ? (
               <span className="rounded border border-amber-400/30 bg-amber-400/10 px-1 py-0.5 text-amber-700 dark:text-amber-200">
-                Highlight {entryLegendCounts.highlighted}
+                {t("legend.highlight", { count: entryLegendCounts.highlighted })}
               </span>
             ) : null}
           </div>
@@ -530,7 +533,7 @@ export function TypedParamDataPanel({
                 setEntrySearchDraft(next)
                 startEntrySearchTransition(() => setEntrySearch(next))
               }}
-              placeholder="Search id / field / value..."
+              placeholder={t("search.entriesPlaceholder")}
               className={cn(PANEL_SEARCH_INPUT_CLASS, "font-mono tabular-nums")}
             />
           </div>
@@ -538,7 +541,7 @@ export function TypedParamDataPanel({
         <div ref={entryListRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
           {filteredEntryRows.length === 0 ? (
             <div className="flex h-28 items-center justify-center px-3 text-center text-xs text-muted-foreground">
-              No entries match the search.
+              {t("empty.entriesSearch")}
             </div>
           ) : (
             <div className="relative w-full" style={{ height: entryVirtualizer.getTotalSize() }}>
@@ -578,11 +581,11 @@ export function TypedParamDataPanel({
       <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border bg-card shadow-sm">
         <div className="space-y-2.5 border-b bg-muted/20 px-3 py-2.5">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <h3 className="text-xs font-semibold tracking-tight text-foreground">{fileType} typed entry</h3>
+            <h3 className="text-xs font-semibold tracking-tight text-foreground">{t("title.typedEntry", { fileType })}</h3>
             {entry ? (
               <span className="flex min-w-0 flex-wrap items-center gap-1.5">
                 <span className="rounded-md border border-border/60 bg-background px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-muted-foreground">
-                  {formatHash(readTypedEntryId(entry, selectedEntryIndex))} · {Object.keys(entry).length} fields
+                  {formatHash(readTypedEntryId(entry, selectedEntryIndex))} · {t("list.fields", { count: Object.keys(entry).length })}
                 </span>
                 <ParamEntryListBadges meta={entryEditorMeta[selectedEntryIndex]} />
               </span>
@@ -594,7 +597,7 @@ export function TypedParamDataPanel({
               <input
                 value={fieldSearch}
                 onChange={(e) => setFieldSearch(e.target.value)}
-                placeholder="Filter field…"
+                placeholder={t("search.fieldsPlaceholder")}
                 className={PANEL_SEARCH_INPUT_CLASS}
               />
             </div>
@@ -602,7 +605,7 @@ export function TypedParamDataPanel({
               <div
                 className="flex flex-wrap items-center gap-1 rounded-md border border-border/50 bg-background/70 p-0.5"
                 role="group"
-                aria-label="Import and export"
+                aria-label={t("aria.importExport")}
               >
                 <Button
                   type="button"
@@ -610,11 +613,11 @@ export function TypedParamDataPanel({
                   variant="ghost"
                   className={PANEL_TOOLBAR_BUTTON_CLASS}
                   disabled={!entry}
-                  title="Import hex bytes or entry JSON"
+                  title={t("buttons.importTooltip")}
                   onClick={() => setImportOpen(true)}
                 >
                   <FileInput className="h-3 w-3" />
-                  Import
+                  {t("buttons.import")}
                 </Button>
                 <Button
                   type="button"
@@ -622,11 +625,11 @@ export function TypedParamDataPanel({
                   variant="ghost"
                   className={PANEL_TOOLBAR_BUTTON_CLASS}
                   disabled={!entry}
-                  title="Copy selected entry as JSON"
+                  title={t("buttons.entryJsonTooltip")}
                   onClick={copySelectedEntryJson}
                 >
                   <ClipboardCopy className="h-3 w-3" />
-                  Entry JSON
+                  {t("buttons.entryJson")}
                 </Button>
                 <Button
                   type="button"
@@ -634,17 +637,17 @@ export function TypedParamDataPanel({
                   variant="ghost"
                   className={PANEL_TOOLBAR_BUTTON_CLASS}
                   disabled={!data.entries.length}
-                  title="Copy full view data as JSON"
+                  title={t("buttons.allJsonTooltip")}
                   onClick={copyFullViewJson}
                 >
                   <Braces className="h-3 w-3" />
-                  All JSON
+                  {t("buttons.allJson")}
                 </Button>
               </div>
               <div
                 className="flex flex-wrap items-center gap-1 rounded-md border border-border/50 bg-background/70 p-0.5"
                 role="group"
-                aria-label="Entry tools"
+                aria-label={t("aria.entryTools")}
               >
                 <Button
                   type="button"
@@ -652,11 +655,11 @@ export function TypedParamDataPanel({
                   variant="ghost"
                   className={PANEL_TOOLBAR_BUTTON_CLASS}
                   disabled={!entry}
-                  title="Hex preview"
+                  title={t("buttons.hexTooltip")}
                   onClick={() => setPreviewOpen(true)}
                 >
                   <Eye className="h-3 w-3" />
-                  Hex
+                  {t("buttons.hex")}
                 </Button>
                 {isProjectileDepictionTableFileType(fileType) ? (
                   <Button
@@ -665,11 +668,11 @@ export function TypedParamDataPanel({
                     variant="ghost"
                     className={PANEL_TOOLBAR_BUTTON_CLASS}
                     disabled={!entry}
-                    title="Copy this entry's effect hashes into another effect pack"
+                    title={t("buttons.copyEffectTooltip")}
                     onClick={() => setCopyEffectOpen(true)}
                   >
                     <Copy className="h-3 w-3" />
-                    Copy Effect
+                    {t("buttons.copyEffect")}
                   </Button>
                 ) : null}
                 <Button
@@ -680,7 +683,7 @@ export function TypedParamDataPanel({
                   onClick={copyEntryAsNew}
                 >
                   <CopyPlus className="h-3 w-3" />
-                  Duplicate
+                  {t("buttons.duplicate")}
                 </Button>
                 <Button
                   type="button"
@@ -690,7 +693,7 @@ export function TypedParamDataPanel({
                   onClick={addEntry}
                 >
                   <Plus className="h-3 w-3" />
-                  Add
+                  {t("buttons.add")}
                 </Button>
                 <Button
                   type="button"
@@ -704,7 +707,7 @@ export function TypedParamDataPanel({
                   onClick={deleteEntry}
                 >
                   <Trash2 className="h-3 w-3" />
-                  Delete
+                  {t("buttons.delete")}
                 </Button>
               </div>
             </div>
@@ -724,9 +727,9 @@ export function TypedParamDataPanel({
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.04),transparent_55%)] px-4 py-3 pr-3 dark:bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.03),transparent_55%)]"
         >
           {!entry ? (
-            <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">No entry selected</div>
+            <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">{t("empty.noEntrySelected")}</div>
           ) : filteredFieldRows.length === 0 ? (
-            <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">No fields match the filter.</div>
+            <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">{t("empty.fieldsFilter")}</div>
           ) : (
             <div className="relative w-full" style={{ height: fieldVirtualizer.getTotalSize() }}>
               {fieldVirtualizer.getVirtualItems().map((virtualRow) => {
@@ -774,13 +777,13 @@ export function TypedParamDataPanel({
       {previewOpen ? (
         <AppRndModalShell
           titleId="typed-param-hex-preview-title"
-          title="Hex Preview"
+          title={t("hex.title")}
           subtitle={
             preview
               ? `${formatHash(preview.entryId)} · ${preview.bytes.length} bytes · little-endian row data${
                   hexPreviewMode === "edit" ? " · editing" : " · view only"
                 }`
-              : "No entry selected"
+              : t("empty.noEntrySelected")
           }
           headerIcon={<Eye className="h-5 w-5 text-primary" />}
           headerActions={
@@ -788,22 +791,22 @@ export function TypedParamDataPanel({
               hexPreviewMode === "view" ? (
                 <Button type="button" size="sm" variant="outline" className="h-7 gap-1 px-2 text-[10px]" onClick={beginHexEdit}>
                   <Pencil className="h-3 w-3" />
-                  Edit
+                  {t("buttons.edit")}
                 </Button>
               ) : (
                 <div className="flex items-center gap-1.5">
                   {hexEditDirty ? (
                     <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-800 dark:text-amber-200">
-                      Unsaved
+                      {t("status.unsaved")}
                     </span>
                   ) : null}
                   <Button type="button" size="sm" variant="outline" className="h-7 gap-1 px-2 text-[10px]" onClick={cancelHexEdit}>
                     <X className="h-3 w-3" />
-                    Cancel
+                    {t("buttons.cancel")}
                   </Button>
                   <Button type="button" size="sm" className="h-7 gap-1 px-2 text-[10px]" onClick={saveHexEdit}>
                     <Save className="h-3 w-3" />
-                    Save
+                    {t("buttons.save")}
                   </Button>
                 </div>
               )
@@ -821,7 +824,7 @@ export function TypedParamDataPanel({
                 <HexPreviewEditor draft={hexEditDraft} onDraftChange={setHexEditDraft} byteCount={preview.bytes.length} />
               )
             ) : (
-              <div className="flex h-28 items-center justify-center text-sm text-muted-foreground">No entry selected</div>
+              <div className="flex h-28 items-center justify-center text-sm text-muted-foreground">{t("empty.noEntrySelected")}</div>
             )}
           </div>
         </AppRndModalShell>
@@ -863,10 +866,11 @@ function HexPreviewEditor({
   onDraftChange: (next: string) => void
   byteCount: number
 }) {
+  const { t } = useTranslation("test-typed-param")
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border bg-[#0d1117] text-[#d6deeb] shadow-inner">
       <div className="border-b border-white/10 bg-white/5 px-3 py-2 font-mono text-[10px] uppercase tracking-wide text-slate-400">
-        Edit hex bytes · {byteCount} bytes · 16 bytes per line
+        {t("hex.editHeader", { count: byteCount })}
       </div>
       <textarea
         value={draft}
@@ -879,6 +883,7 @@ function HexPreviewEditor({
 }
 
 function HexPreviewRows({ rows }: { rows: Array<{ offset: string; hex: string; ascii: string }> }) {
+  const { t } = useTranslation("test-typed-param")
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const getScrollElement = useCallback(() => scrollRef.current, [])
   const virtualizer = useVirtualizer({
@@ -901,9 +906,9 @@ function HexPreviewRows({ rows }: { rows: Array<{ offset: string; hex: string; a
   return (
     <div className="overflow-hidden rounded-md border bg-[#0d1117] text-[#d6deeb] shadow-inner">
       <div className="grid select-none grid-cols-[6.5rem_minmax(24rem,1fr)_minmax(8rem,0.35fr)] border-b border-white/10 bg-white/5 px-3 py-2 font-mono text-[10px] uppercase tracking-wide text-slate-400">
-        <span>Offset</span>
-        <span>Hex</span>
-        <span>Ascii</span>
+        <span>{t("hex.offset")}</span>
+        <span>{t("hex.hex")}</span>
+        <span>{t("hex.ascii")}</span>
       </div>
       <div
         ref={scrollRef}

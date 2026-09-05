@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useTranslation } from "react-i18next";
 import { AlertTriangle, ImageIcon, Images, Loader2 } from "lucide-react";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,7 @@ export function TextureAddConfirmModal({
   onClose,
   onConfirm,
 }: TextureAddConfirmModalProps) {
+  const { t } = useTranslation("scene-texture-dialogs");
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [formats, setFormats] = useState<Record<string, DdsFormat>>({});
   const [bulkFormat, setBulkFormat] = useState<DdsFormat>(DEFAULT_DDS_FORMAT);
@@ -172,16 +174,16 @@ export function TextureAddConfirmModal({
   }, [candidates, checked, formats, onConfirm]);
 
   const footerSummary = useMemo(() => {
-    if (analyzing) return "Checking for duplicate names...";
+    if (analyzing) return t("add.checkingDuplicates");
     const parts: string[] = [];
-    if (selectedAddCount > 0) parts.push(`${selectedAddCount} add`);
-    if (selectedReplaceCount > 0) parts.push(`${selectedReplaceCount} replace`);
+    if (selectedAddCount > 0) parts.push(t("add.summaryAdd", { count: selectedAddCount }));
+    if (selectedReplaceCount > 0) parts.push(t("add.summaryReplace", { count: selectedReplaceCount }));
     if (parts.length > 0) return parts.join(" · ");
     if (replaceableCount > 0) {
-      return `${replaceableCount} name conflict(s) — check to replace`;
+      return t("add.conflicts", { count: replaceableCount });
     }
-    return "No duplicates";
-  }, [analyzing, selectedAddCount, selectedReplaceCount, replaceableCount]);
+    return t("add.noDuplicates");
+  }, [analyzing, selectedAddCount, selectedReplaceCount, replaceableCount, t]);
 
   const footer = (
     <div className="flex items-center gap-2 bg-muted/20 px-3 py-2">
@@ -193,7 +195,7 @@ export function TextureAddConfirmModal({
         onClick={onClose}
         disabled={isConverting}
       >
-        Cancel
+        {t("common.cancel")}
       </Button>
       <Button
         size="sm"
@@ -205,15 +207,15 @@ export function TextureAddConfirmModal({
           <>
             <Loader2 className="mr-1 h-3 w-3 animate-spin" />
             {convertProgress
-              ? `Converting ${convertProgress.done}/${convertProgress.total}...`
-              : "Converting..."}
+              ? t("add.convertingProgress", convertProgress)
+              : t("add.converting")}
           </>
         ) : selectedReplaceCount > 0 && selectedAddCount === 0 ? (
-          `Confirm & Replace (${selectedReplaceCount})`
+          t("add.confirmReplace", { count: selectedReplaceCount })
         ) : selectedReplaceCount > 0 ? (
-          `Confirm (${selectedAddCount}+${selectedReplaceCount})`
+          t("add.confirmMixed", { add: selectedAddCount, replace: selectedReplaceCount })
         ) : (
-          `Confirm & Convert (${selectedCount})`
+          t("add.confirmConvert", { count: selectedCount })
         )}
       </Button>
     </div>
@@ -222,8 +224,8 @@ export function TextureAddConfirmModal({
   const content = (
     <AppRndModalShell
       titleId="texture-add-confirm-modal-title"
-      title={title ?? `Add textures (${candidates.length})`}
-      subtitle={subtitle ?? "Review name conflicts; check a conflict row to replace"}
+      title={title ?? t("add.title", { count: candidates.length })}
+      subtitle={subtitle ?? t("add.subtitle")}
       headerIcon={<Images className="h-4 w-4 text-primary" />}
       dimensions={TEXTURE_ADD_MODAL_DIMENSIONS}
       storageKey={SCENE_EDIT_RND_SIZE_KEYS.textureAddConfirm}
@@ -238,11 +240,11 @@ export function TextureAddConfirmModal({
                 checked={masterState}
                 disabled={busy || masterToggleIds.length === 0}
                 onCheckedChange={(value) => toggleAll(value === true)}
-                title="Toggle all unique (non-conflict) rows"
+                title={t("add.toggleAll")}
               />
               <span>
-                {selectedCount}/{selectableIds.length} selected
-                {selectedReplaceCount > 0 ? ` (${selectedReplaceCount} replace)` : ""}
+                {t("add.selected", { selected: selectedCount, total: selectableIds.length })}
+                {selectedReplaceCount > 0 ? ` (${t("add.replaceCount", { count: selectedReplaceCount })})` : ""}
               </span>
             </label>
 
@@ -259,9 +261,9 @@ export function TextureAddConfirmModal({
                 className="h-7 text-[11px] px-2"
                 disabled={busy || imageIds.length === 0}
                 onClick={() => applyFormatTo(imageIds.filter((id) => checked[id]))}
-                title="Apply this format to the checked image rows"
+                title={t("add.applyChecked")}
               >
-                To selected
+                {t("add.toSelected")}
               </Button>
               <Button
                 variant="outline"
@@ -269,9 +271,9 @@ export function TextureAddConfirmModal({
                 className="h-7 text-[11px] px-2"
                 disabled={busy || imageIds.length === 0}
                 onClick={() => applyFormatTo(imageIds)}
-                title="Apply this format to every image row"
+                title={t("add.applyAll")}
               >
-                To all
+                {t("add.toAll")}
               </Button>
             </div>
           </div>
@@ -331,6 +333,7 @@ function CandidateRow({
   onToggle,
   onFormatChange,
 }: CandidateRowProps) {
+  const { t } = useTranslation("scene-texture-dialogs");
   const [previewError, setPreviewError] = useState(false);
   const previewSrc = useMemo(() => {
     if (candidate.isNutexb || !isImageFile(candidate.filename)) return null;
@@ -361,7 +364,7 @@ function CandidateRow({
         onCheckedChange={(value) => onToggle(value === true)}
         title={
           replaceable
-            ? "Check to replace the existing texture with this file"
+              ? t("add.checkToReplace")
             : blockedDuplicate
               ? describeDuplicate(candidate)
               : undefined
@@ -387,7 +390,7 @@ function CandidateRow({
           {candidate.filename}
           {willReplace ? (
             <span className="ml-1 text-[10px] font-medium text-amber-700 dark:text-amber-400">
-              replace
+              {t("add.replaceLabel")}
             </span>
           ) : null}
         </span>
@@ -414,7 +417,7 @@ function CandidateRow({
       <div className="shrink-0 w-[150px]" data-no-drag>
         {candidate.isNutexb ? (
           <span className="text-[10px] text-muted-foreground italic block text-right pr-1">
-            {willReplace ? "overwrite as-is" : "copy as-is"}
+            {willReplace ? t("add.overwriteAsIs") : t("add.copyAsIs")}
           </span>
         ) : (
           <TextureFormatSelect

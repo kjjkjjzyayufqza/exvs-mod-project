@@ -3,6 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { FolderOpen, ImageIcon, Loader2, Search } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
@@ -46,11 +47,11 @@ const MODAL_DIMENSIONS = {
 const THUMB_COLUMNS = 4;
 const THUMB_ROW_HEIGHT = 168;
 
-const FORMAT_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: Fhm2d_type_format.fhm2d_all_nutexb, label: "all_nutexb (GUI / icons)" },
-  { value: Fhm2d_type_format.fhm2d_character, label: "character" },
-  { value: Fhm2d_type_format.fhm2d_effect, label: "effect" },
-  { value: Fhm2d_type_format.fhm2d_motion, label: "motion" },
+const FORMAT_OPTIONS: Array<{ value: string; text: string }> = [
+  { value: Fhm2d_type_format.fhm2d_all_nutexb, text: "all_nutexb (GUI / icons)" },
+  { value: Fhm2d_type_format.fhm2d_character, text: "character" },
+  { value: Fhm2d_type_format.fhm2d_effect, text: "effect" },
+  { value: Fhm2d_type_format.fhm2d_motion, text: "motion" },
 ];
 
 function isNutexbFile(file: Fhm2dImageViewFile): boolean {
@@ -58,6 +59,7 @@ function isNutexbFile(file: Fhm2dImageViewFile): boolean {
 }
 
 export function Fhm2dImageViewTool() {
+  const { t } = useTranslation("misc-tools-a");
   const [isOpen, setIsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [format, setFormat] = useState<string>(Fhm2d_type_format.fhm2d_all_nutexb);
@@ -147,9 +149,9 @@ export function Fhm2dImageViewTool() {
         setSelectedImageId(nextImages[0]?.id ?? null);
         rememberDialogSelection(DialogLastPathKey.miscFhm2dImageView, path, "file");
         if (created.namingWarning) {
-          toast.error("FHM2D naming warning", { description: created.namingWarning });
+          toast.error(t("fhm2dImage.namingWarning"), { description: created.namingWarning });
         } else {
-          toast.success(`Loaded ${created.sourceName} into memory`);
+          toast.success(t("fhm2dImage.loaded", { name: created.sourceName }));
         }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : String(error));
@@ -158,7 +160,7 @@ export function Fhm2dImageViewTool() {
         setBusy(false);
       }
     },
-    [disposeSession, session?.sessionId],
+    [disposeSession, session?.sessionId, t],
   );
 
   const pickFhm2d = useCallback(async () => {
@@ -187,13 +189,13 @@ export function Fhm2dImageViewTool() {
   return (
     <>
       <Button variant="outline" className="w-full" onClick={() => setIsOpen(true)}>
-        Open FHM2D Image View
+        {t("fhm2dImage.open")}
       </Button>
       {isOpen ? (
         <AppRndModalShell
           titleId="misc-tools-fhm2d-image-view-title"
-          title="FHM2D Image View"
-          subtitle="In-memory only. Thumbnails decode on demand (max 3 at a time, 128px)."
+          title={t("fhm2dImage.title")}
+          subtitle={t("fhm2dImage.subtitle")}
           headerIcon={<ImageIcon className="h-5 w-5" />}
           dimensions={MODAL_DIMENSIONS}
           storageKey="misc-tools-fhm2d-image-view-size"
@@ -203,7 +205,7 @@ export function Fhm2dImageViewTool() {
           <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
             <div className="flex flex-wrap items-end gap-2">
               <div className="min-w-[220px] space-y-1">
-                <Label>Format</Label>
+                <Label>{t("common.format")}</Label>
                 <Select
                   value={format}
                   onValueChange={(value) => {
@@ -215,10 +217,10 @@ export function Fhm2dImageViewTool() {
                   <SelectTrigger className="h-8">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent data-i18n-ignore="">
                     {FORMAT_OPTIONS.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
-                        {option.label}
+                        {option.text}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -226,7 +228,7 @@ export function Fhm2dImageViewTool() {
               </div>
               <Button size="sm" onClick={() => void pickFhm2d()} disabled={busy}>
                 {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <FolderOpen className="mr-1.5 h-4 w-4" />}
-                Choose FHM2D
+                {t("fhm2dImage.choose")}
               </Button>
               {sourcePath ? (
                 <div className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={sourcePath}>
@@ -238,9 +240,9 @@ export function Fhm2dImageViewTool() {
             {!session ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
                 <ImageIcon className="h-10 w-10 opacity-50" />
-                <div>Select an FHM2D pack. Nothing is written to disk.</div>
+                <div>{t("fhm2dImage.empty")}</div>
                 <Button onClick={() => void pickFhm2d()} disabled={busy}>
-                  Choose FHM2D
+                  {t("fhm2dImage.choose")}
                 </Button>
               </div>
             ) : (
@@ -250,17 +252,20 @@ export function Fhm2dImageViewTool() {
                   <Input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Filter images and other files..."
+                    placeholder={t("fhm2dImage.filterPlaceholder")}
                     className="h-8 pl-9"
                   />
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {images.length} image{images.length === 1 ? "" : "s"} · {others.length} other file
-                  {others.length === 1 ? "" : "s"} · session {session.sessionId}
+                  {t("fhm2dImage.imageCount", { count: images.length })}
+                  {" · "}
+                  {t("fhm2dImage.otherFileCount", { count: others.length })}
+                  {" · "}
+                  {t("fhm2dImage.session", { id: session.sessionId })}
                 </div>
                 <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_320px] gap-3">
                   <div className="flex min-h-0 flex-col gap-2">
-                    <div className="text-sm font-medium">Images</div>
+                    <div className="text-sm font-medium">{t("fhm2dImage.images")}</div>
                     <div ref={imageGridRef} className="min-h-0 flex-1 overflow-auto rounded-md border">
                       <div
                         style={{
@@ -302,11 +307,11 @@ export function Fhm2dImageViewTool() {
                                         />
                                       ) : (
                                         <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">
-                                          No in-memory preview
+                                          {t("fhm2dImage.noPreview")}
                                         </div>
                                       )}
                                     </div>
-                                    <div className="truncate px-1.5 py-1 text-[10px]" title={file.relativePath}>
+                                    <div className="truncate px-1.5 py-1 text-[10px]" title={file.relativePath} data-i18n-ignore="">
                                       {file.name}
                                     </div>
                                   </button>
@@ -317,12 +322,12 @@ export function Fhm2dImageViewTool() {
                         })}
                       </div>
                       {images.length === 0 ? (
-                        <div className="p-6 text-center text-sm text-muted-foreground">No image files in this pack</div>
+                        <div className="p-6 text-center text-sm text-muted-foreground">{t("fhm2dImage.noImages")}</div>
                       ) : null}
                     </div>
                   </div>
                   <div className="flex min-h-0 flex-col gap-2">
-                    <div className="text-sm font-medium">Preview</div>
+                    <div className="text-sm font-medium">{t("common.preview")}</div>
                     <div className="h-[280px] overflow-hidden rounded-md border">
                       {selectedImage && isNutexbFile(selectedImage) && session ? (
                         <MemoryNutexbImage
@@ -332,18 +337,18 @@ export function Fhm2dImageViewTool() {
                         />
                       ) : (
                         <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-                          Select a .nutexb image
+                          {t("fhm2dImage.selectImage")}
                         </div>
                       )}
                     </div>
                     {selectedImage ? (
-                      <div className="space-y-0.5 break-all text-[11px] text-muted-foreground">
+                      <div className="space-y-0.5 break-all text-[11px] text-muted-foreground" data-i18n-ignore="">
                         <div>{selectedImage.name}</div>
                         <div>{selectedImage.relativePath}</div>
                         <div>{formatByteSize(selectedImage.size)}</div>
                       </div>
                     ) : null}
-                    <div className="text-sm font-medium">Other files</div>
+                    <div className="text-sm font-medium">{t("fhm2dImage.otherFiles")}</div>
                     <div ref={otherListRef} className="min-h-0 flex-1 overflow-auto rounded-md border">
                       <div
                         style={{
@@ -365,8 +370,8 @@ export function Fhm2dImageViewTool() {
                               }}
                               title={file.relativePath}
                             >
-                              <span className="truncate">{file.relativePath || file.name}</span>
-                              <span className="shrink-0 text-muted-foreground">
+                              <span className="truncate" data-i18n-ignore="">{file.relativePath || file.name}</span>
+                              <span className="shrink-0 text-muted-foreground" data-i18n-ignore="">
                                 {file.fileType || "file"} · {formatByteSize(file.size)}
                               </span>
                             </div>
@@ -374,7 +379,7 @@ export function Fhm2dImageViewTool() {
                         })}
                       </div>
                       {others.length === 0 ? (
-                        <div className="p-3 text-center text-xs text-muted-foreground">No other files</div>
+                        <div className="p-3 text-center text-xs text-muted-foreground">{t("fhm2dImage.noOtherFiles")}</div>
                       ) : null}
                     </div>
                   </div>

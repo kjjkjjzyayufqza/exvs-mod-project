@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import type { HavokMeshData } from "@/utils/havokXmlParser";
 import { parseHavokXML } from "@/utils/havokXmlParser";
@@ -49,6 +50,7 @@ export function HavokCollisionEditorPanel({
   activeMeshData,
   disabled = false,
 }: HavokCollisionEditorPanelProps) {
+  const { t } = useTranslation("scene-dae-hkt");
   const [localSimplify, setLocalSimplify] = useState<HktSimplifyConfig>(
     hktSimplify ?? { ...DEFAULT_HKT_SIMPLIFY },
   );
@@ -129,7 +131,7 @@ export function HavokCollisionEditorPanel({
 
   const handleRegenerate = useCallback(async () => {
     if (!sessionId || !sessionImportId) {
-      setRegenError("No session import linked");
+      setRegenError(t("collisionEditor.noSession"));
       return;
     }
     setRegenerating(true);
@@ -167,12 +169,13 @@ export function HavokCollisionEditorPanel({
     collisionScale,
     collisionUpAxis,
     onHavokDataUpdated,
+    t,
   ]);
 
   if (!sessionImportId) {
     return (
       <DaeImportStatusAlert tone="info">
-        Select an imported model with a session link to edit collision simplification.
+        {t("collisionEditor.selectImported")}
       </DaeImportStatusAlert>
     );
   }
@@ -184,23 +187,25 @@ export function HavokCollisionEditorPanel({
       {isLoadingConfig ? (
         <div className="flex items-center gap-2 px-1 py-1 text-[10px] text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-          Loading collision settings...
+          {t("collisionEditor.loading")}
         </div>
       ) : null}
 
       {activeTris != null ? (
         <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-[11px]">
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Loaded collision</span>
-            <span className="font-mono text-green-400">{formatTriangleCount(activeTris)} tris</span>
+            <span className="text-muted-foreground">{t("collisionEditor.loadedCollision")}</span>
+            <span className="font-mono text-green-400">
+              {formatTriangleCount(activeTris)} {t("collisionEditor.tris")}
+            </span>
           </div>
           <p className="mt-1 text-[10px] text-muted-foreground">
-            Use Collision / Both view mode in the toolbar to visualize the wireframe overlay.
+            {t("collisionEditor.viewModeHint")}
           </p>
         </div>
       ) : (
         <DaeImportStatusAlert tone="info">
-          No collision mesh loaded. Adjust simplification below and regenerate HKT.
+          {t("collisionEditor.noMesh")}
         </DaeImportStatusAlert>
       )}
 
@@ -239,16 +244,18 @@ export function HavokCollisionEditorPanel({
           ) : (
             <RefreshCw className="mr-1.5 h-3 w-3" />
           )}
-          {regenerating ? "Regenerating HKT..." : "Regenerate HKT"}
+          {regenerating ? t("collisionEditor.regenerating") : t("collisionEditor.regenerate")}
         </Button>
         {regenerating ? (
           <p className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
             <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-            Building collision mesh from source geometry...
+            {t("collisionEditor.building")}
           </p>
         ) : null}
         {regenError ? (
-          <p className="mt-1 text-[10px] text-destructive">{regenError}</p>
+          <p className="mt-1 text-[10px] text-destructive" data-i18n-ignore="">
+            {regenError}
+          </p>
         ) : null}
       </div>
     </div>

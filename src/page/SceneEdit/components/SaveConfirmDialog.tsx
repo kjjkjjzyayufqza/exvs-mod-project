@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,6 +60,7 @@ export function SaveConfirmDialog({
   onConfirm,
   onCancel,
 }: SaveConfirmDialogProps) {
+  const { t } = useTranslation("scene-placement");
   if (!preview) return null;
 
   const pipelineNotes = buildSavePipelineNotes(preview);
@@ -71,41 +73,40 @@ export function SaveConfirmDialog({
     <AlertDialog open={open}>
       <AlertDialogContent className="max-w-lg" showCloseButton onCloseClick={onCancel}>
         <AlertDialogHeader>
-          <AlertDialogTitle>Save changes to folder?</AlertDialogTitle>
+          <AlertDialogTitle>{t("save.title")}</AlertDialogTitle>
           <AlertDialogDescription>
-            The following pending edits will be written to{" "}
-            <span className="font-medium text-foreground break-all">{stageRoot ?? "the stage folder"}</span>.
+            {t("save.description", { stageRoot: stageRoot ?? t("save.stageFolder") })}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
         <ScrollArea className="max-h-64 rounded border p-3">
           <div className="space-y-4 pr-2">
             <ChangeSection
-              title={`Add ${preview.added.length} object${preview.added.length !== 1 ? "s" : ""}`}
+              title={t("save.addObjects", { count: preview.added.length })}
               icon={<FolderPlus className="h-4 w-4 shrink-0" />}
               toneClass="text-green-600 dark:text-green-400"
               items={preview.added}
             />
             <ChangeSection
-              title={`Update ${preview.modified.length} object${preview.modified.length !== 1 ? "s" : ""}`}
+              title={t("save.updateObjects", { count: preview.modified.length })}
               icon={<FolderPen className="h-4 w-4 shrink-0" />}
               toneClass="text-amber-600 dark:text-amber-400"
               items={modifiedItems}
             />
             <ChangeSection
-              title={`Delete ${preview.deleted.length} object${preview.deleted.length !== 1 ? "s" : ""}`}
+              title={t("save.deleteObjects", { count: preview.deleted.length })}
               icon={<FolderMinus className="h-4 w-4 shrink-0" />}
               toneClass="text-destructive"
               items={preview.deleted}
             />
             <ChangeSection
-              title={`Replace ${preview.replaced.length} model${preview.replaced.length !== 1 ? "s" : ""}`}
+              title={t("save.replaceModels", { count: preview.replaced.length })}
               icon={<FolderSync className="h-4 w-4 shrink-0" />}
               toneClass="text-blue-600 dark:text-blue-400"
               items={replacedItems}
             />
             <ChangeSection
-              title={`Update ${preview.globalChanges.length} scene file${preview.globalChanges.length !== 1 ? "s" : ""}`}
+              title={t("save.updateSceneFiles", { count: preview.globalChanges.length })}
               icon={<Info className="h-4 w-4 shrink-0" />}
               toneClass="text-blue-600 dark:text-blue-400"
               items={preview.globalChanges}
@@ -113,7 +114,7 @@ export function SaveConfirmDialog({
             <div className="space-y-1.5">
               <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                 <Info className="h-4 w-4 shrink-0" />
-                Save pipeline will also
+                {t("save.pipelineAlso")}
               </div>
               <ul className="ml-6 space-y-1 text-sm text-muted-foreground list-disc">
                 {pipelineNotes.map((note) => (
@@ -126,10 +127,10 @@ export function SaveConfirmDialog({
 
         <AlertDialogFooter>
           <AlertDialogCancel type="button" onClick={onCancel}>
-            Cancel
+            {t("common.cancel")}
           </AlertDialogCancel>
           <AlertDialogAction type="button" onClick={onConfirm}>
-            Save to Folder
+            {t("save.saveToFolder")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { CardIconItem } from "./cardIconStructure";
 import { CardIconCard } from "./CardIconCard";
+import { useTranslation } from "react-i18next";
 
 interface CardIconListProps {
   items: CardIconItem[];
@@ -37,6 +38,7 @@ export function CardIconList({
   hoveredItemIndex = null,
   onHoverItemIndex,
 }: CardIconListProps) {
+  const { t } = useTranslation("test-lists");
   const [searchTerm, setSearchTerm] = useState("");
   const deferredSearchTerm = useDeferredValue(searchTerm);
 
@@ -76,7 +78,7 @@ export function CardIconList({
       <div className="relative min-w-0 mb-3">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
         <Input
-          placeholder="Search by name or index..."
+          placeholder={t("cardIcon.searchPlaceholder")}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-10 h-8"
@@ -85,7 +87,7 @@ export function CardIconList({
 
       {searchTerm.trim() && (
         <div className="text-xs text-muted-foreground mb-2">
-          Found {filteredItems.length} of {items.length} icons
+          {t("common.foundOf", { found: filteredItems.length, total: items.length, unit: t("cardIcon.unitIcons") })}
         </div>
       )}
 
@@ -136,7 +138,7 @@ export function CardIconList({
 
         {filteredItems.length === 0 && (
           <div className="text-center text-muted-foreground py-8 text-sm">
-            {searchTerm.trim() ? `No icons found matching "${searchTerm.trim()}"` : "No icons available"}
+            {searchTerm.trim() ? t("cardIcon.noMatch", { term: searchTerm.trim() }) : t("cardIcon.noIconsAvailable")}
           </div>
         )}
       </div>

@@ -1,0 +1,9 @@
+{
+  "file": {"label": "File", "tooltip": "Open / extract unit model", "openFolder": "Open model folder", "extractFhm2d": "Extract .fhm2d to folders", "openExvsCommon": "Open / Extract EXVS Common", "useLoadedRoot": "Use loaded preview root"},
+  "validate": {"aria": "Validate unit model", "tooltip": "Validate for repack"},
+  "repack": {"aria": "Repack unit model", "tooltip": "Repack to OB Mod folder"},
+  "export": {"aria": "Export loaded models as FBX", "tooltip": "Export loaded models as FBX"},
+  "display": {"grid": "Toggle grid", "axes": "Toggle axes", "wireframe": "Toggle wireframe", "stats": "Toggle render stats", "resetCamera": "Reset camera"},
+  "more": {"actions": "More actions", "copyReviewPayload": "Copy AI review payload"},
+  "status": {"checking": "Checking...", "ready": "Ready to repack", "pending": "Pending validation", "noFolder": "No folder", "issues_one": "{{count}} issue", "issues_other": "{{count}} issues", "exvsCommon": "EXVS Common · {{status}}"}
+}

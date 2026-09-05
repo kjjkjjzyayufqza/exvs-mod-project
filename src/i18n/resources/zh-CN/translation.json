@@ -1,0 +1,16 @@
+{
+  "nav.options": "选项",
+  "nav.settings": "设置",
+  "nav.fhm2dInit": "FHM2D 初始化",
+  "nav.about": "关于",
+  "nav.toggleSidebarShortcut": "切换侧边栏（Ctrl/Cmd+B）",
+  "sidebar.workspace": "EXVS2 工作区",
+  "sidebar.singleFhm2d": "单个 FHM2D",
+  "sidebar.sceneEdit": "场景编辑",
+  "sidebar.unitModelEditor": "机体模型编辑器",
+  "sidebar.resourceRegistry": "资源注册表",
+  "sidebar.miscTools": "其他工具",
+  "sidebar.config": "配置",
+  "sidebar.about": "关于",
+  "common.toggleSidebar": "切换侧边栏"
+}

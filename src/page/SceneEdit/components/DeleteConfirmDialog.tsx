@@ -8,6 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useTranslation } from "react-i18next";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Folder, Trash2 } from "lucide-react";
 import type { DeleteConfirmation } from "../utils/sceneDeleteConfirm";
@@ -38,6 +39,7 @@ export function DeleteConfirmDialog({
   onConfirm,
   onCancel,
 }: DeleteConfirmDialogProps) {
+  const { t } = useTranslation("scene-root-a");
   if (!preview) return null;
 
   return (
@@ -46,11 +48,10 @@ export function DeleteConfirmDialog({
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2 text-destructive">
             <Trash2 className="h-5 w-5" />
-            Delete {preview.previews.length} folder{preview.previews.length !== 1 ? "s" : ""}?
+            {t("delete.confirmTitle", { count: preview.previews.length })}
           </AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently delete {preview.totalFiles} file{preview.totalFiles !== 1 ? "s" : ""}{" "}
-            ({formatBytes(preview.totalSizeBytes)}) from disk. This action cannot be undone.
+            {t("delete.confirmDescription", { count: preview.totalFiles, size: formatBytes(preview.totalSizeBytes) })}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -62,7 +63,7 @@ export function DeleteConfirmDialog({
                 <div className="min-w-0">
                   <div className="font-medium truncate">{p.folderName}</div>
                   <div className="text-xs text-muted-foreground">
-                    {p.files.length} file{p.files.length !== 1 ? "s" : ""} &middot; {formatBytes(p.totalSizeBytes)}
+                    {t("delete.fileCount", { count: p.files.length, size: formatBytes(p.totalSizeBytes) })}
                   </div>
                 </div>
               </div>
@@ -73,24 +74,24 @@ export function DeleteConfirmDialog({
         {(meta?.placementCount != null && meta.placementCount > 0 || meta?.hasHktData) && (
           <div className="text-xs text-muted-foreground space-y-1 px-1">
             {meta?.placementCount != null && meta.placementCount > 0 && (
-              <p>{meta.placementCount} placement entry(ies) will also be removed.</p>
+              <p>{t("delete.placementRemoved", { count: meta.placementCount })}</p>
             )}
             {meta?.hasHktData && (
-              <p>Associated HKT collision data will also be removed.</p>
+              <p>{t("delete.hktRemoved")}</p>
             )}
           </div>
         )}
 
         <AlertDialogFooter>
           <AlertDialogCancel type="button" onClick={onCancel}>
-            Cancel
+            {t("common.cancel")}
           </AlertDialogCancel>
           <AlertDialogAction
             type="button"
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             onClick={onConfirm}
           >
-            Confirm Delete
+            {t("delete.confirm")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { exists } from "@tauri-apps/plugin-fs";
 import { ArchiveRestore, FolderOpen, Loader2, PackageOpen } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ export function ExvsCommonBundleDialog({
   onOpenChange,
   onOpened,
 }: ExvsCommonBundleDialogProps) {
+  const { t } = useTranslation("unit-common-dialogs");
   const extractOutputPath = useConfigStore((state) => state.extractOutputPath ?? "");
   const obDplCachePath = useConfigStore((state) => state.obDplCachePath ?? "");
   const obModPath = useConfigStore((state) => state.obModPath ?? "");
@@ -92,18 +94,21 @@ export function ExvsCommonBundleDialog({
         obDplCachePath,
         overwrite,
       });
-      toast.success(overwrite ? "EXVS Common re-extracted" : "EXVS Common extracted", {
-        description: `${result.uniquePhysicalFiles} physical files, ${result.logicalReferenceCount} logical resources`,
+      toast.success(t(overwrite ? "bundle.toast.reExtracted" : "bundle.toast.extracted"), {
+        description: t("bundle.toast.extractedDescription", {
+          physicalFiles: result.uniquePhysicalFiles,
+          logicalResources: result.logicalReferenceCount,
+        }),
       });
       if (result.backupModelRoot) {
-        toast.info("Previous Common workspace backed up", {
+        toast.info(t("bundle.toast.backedUp"), {
           description: result.backupModelRoot,
         });
       }
       await onOpened(result.modelRoot);
       onOpenChange(false);
     } catch (reason) {
-      toast.error("EXVS Common extraction failed", { description: String(reason) });
+      toast.error(t("bundle.toast.extractionFailed"), { description: String(reason) });
     } finally {
       setWorking(false);
     }
@@ -114,8 +119,8 @@ export function ExvsCommonBundleDialog({
   return (
     <AppRndModalShell
       titleId="exvs-common-bundle-title"
-      title="Open / Extract EXVS Common"
-      subtitle="DPLCache source only. Camera, system, model, texture, and SHL stay under 002chara."
+      title={t("bundle.title")}
+      subtitle={t("bundle.subtitle")}
       headerIcon={<ArchiveRestore className="h-5 w-5 text-primary" />}
       dimensions={DIMENSIONS}
       storageKey="app.rnd-size.exvs-common-bundle"
@@ -124,12 +129,12 @@ export function ExvsCommonBundleDialog({
       footer={
         <div className="flex flex-wrap justify-end gap-2 p-3">
           <Button variant="outline" disabled={working} onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           {workspaceExists ? (
             <>
               <Button variant="secondary" disabled={working} onClick={() => void openExisting()}>
-                <FolderOpen className="mr-1.5 h-4 w-4" /> Open Existing
+                <FolderOpen className="mr-1.5 h-4 w-4" /> {t("bundle.openExisting")}
               </Button>
               <Button disabled={working || !sourceExists} onClick={() => void extract(true)}>
                 {working ? (
@@ -137,7 +142,7 @@ export function ExvsCommonBundleDialog({
                 ) : (
                   <ArchiveRestore className="mr-1.5 h-4 w-4" />
                 )}
-                Re-extract + Backup
+                {t("bundle.reExtractBackup")}
               </Button>
             </>
           ) : (
@@ -147,7 +152,7 @@ export function ExvsCommonBundleDialog({
               ) : (
                 <PackageOpen className="mr-1.5 h-4 w-4" />
               )}
-              Extract EXVS Common
+              {t("bundle.extract")}
             </Button>
           )}
         </div>
@@ -156,7 +161,7 @@ export function ExvsCommonBundleDialog({
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 text-xs">
         {checking ? (
           <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Checking configured paths...
+            <Loader2 className="h-4 w-4 animate-spin" /> {t("bundle.checkingPaths")}
           </div>
         ) : error ? (
           <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-destructive">
@@ -165,17 +170,17 @@ export function ExvsCommonBundleDialog({
         ) : paths ? (
           <>
             <div className="rounded-md bg-muted/20 p-3">
-              <div className="text-muted-foreground">DPLCache source</div>
+              <div className="text-muted-foreground">{t("bundle.dplCacheSource")}</div>
               <div className="break-all font-mono text-[11px] tabular-nums">{paths.sourceFhm2d}</div>
               <div className={sourceExists ? "mt-1 text-emerald-600" : "mt-1 text-destructive"}>
-                {sourceExists ? "Source found" : "Source missing"}
+                {sourceExists ? t("bundle.sourceFound") : t("bundle.sourceMissing")}
               </div>
             </div>
             <div className="rounded-md bg-muted/20 p-3">
-              <div className="text-muted-foreground">Workspace</div>
+              <div className="text-muted-foreground">{t("bundle.workspace")}</div>
               <div className="break-all font-mono text-[11px] tabular-nums">{paths.modelRoot}</div>
               <div className="mt-1 text-muted-foreground">
-                {workspaceExists ? "Existing Common workspace found" : "No existing workspace"}
+                {workspaceExists ? t("bundle.workspaceFound") : t("bundle.workspaceMissing")}
               </div>
             </div>
           </>

@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FolderOpen, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -27,6 +28,7 @@ export function TexturePathPicker({
   disabled,
   className,
 }: TexturePathPickerProps) {
+  const { t } = useTranslation("scene-context");
   const [dragOver, setDragOver] = useState(false);
   const [converting, setConverting] = useState(false);
   const [ddsFormat, setDdsFormat] = useState<DdsFormat>(() => recommendDdsFormat(paramId));
@@ -65,7 +67,7 @@ export function TexturePathPicker({
 
   const handleBrowse = async () => {
     const selected = await open({
-      title: "Select texture file",
+      title: t("texture.selectFile"),
       multiple: false,
       filters: [{ name: "Textures", extensions: ["png", "dds", "nutexb"] }],
     });
@@ -106,7 +108,8 @@ export function TexturePathPicker({
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled || converting}
           className="h-7 text-xs flex-1 min-w-0"
-          placeholder="texture.nutexb"
+          placeholder={t("texture.placeholder")}
+          aria-label={t("texture.inputLabel")}
         />
         <Button
           type="button"
@@ -115,6 +118,8 @@ export function TexturePathPicker({
           className="h-7 w-7 shrink-0"
           disabled={disabled || converting}
           onClick={handleBrowse}
+          title={t("texture.browse")}
+          aria-label={t("texture.browse")}
         >
           {converting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderOpen className="h-3.5 w-3.5" />}
         </Button>

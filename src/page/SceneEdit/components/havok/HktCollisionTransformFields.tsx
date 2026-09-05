@@ -14,6 +14,7 @@ import {
   daeImportModalSelectContentClass,
 } from "../dae-import/daeImportUi";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 export interface HktCollisionTransformValue {
   scaleFactor: number;
@@ -46,6 +47,7 @@ export function HktCollisionTransformFields({
   compact = false,
   disabled = false,
 }: HktCollisionTransformFieldsProps) {
+  const { t } = useTranslation("scene-dae-hkt");
   const [scaleFactorText, setScaleFactorText] = useState(() => String(value.scaleFactor));
 
   useEffect(() => {
@@ -73,10 +75,10 @@ export function HktCollisionTransformFields({
   };
 
   return (
-    <DaeImportSection title={compact ? "Transform" : "Collision Transform"} compact={compact}>
+    <DaeImportSection title={compact ? t("transform.titleCompact") : t("transform.title")} compact={compact}>
       <DaeImportFieldRow
-        label="Scale Factor"
-        hint="Uniform scale applied to source geometry before building collision"
+        label={t("transform.scaleFactor")}
+        hint={t("transform.scaleHint")}
         className={compactFieldRowClass}
       >
         <Input
@@ -98,8 +100,8 @@ export function HktCollisionTransformFields({
         />
       </DaeImportFieldRow>
       <DaeImportFieldRow
-        label="Up Axis"
-        hint="Axis conversion from the source model into collision space"
+        label={t("transform.upAxis")}
+        hint={t("transform.upAxisHint")}
         className={compactFieldRowClass}
       >
         <Select
@@ -112,13 +114,13 @@ export function HktCollisionTransformFields({
           </SelectTrigger>
           <SelectContent className={daeImportModalSelectContentClass}>
             <SelectItem value="y_up" className="text-[11px]">
-              Y-Up
+              {t("transform.yUp")}
             </SelectItem>
             <SelectItem value="z_up" className="text-[11px]">
-              Z-Up
+              {t("transform.zUp")}
             </SelectItem>
             <SelectItem value="none" className="text-[11px]">
-              No Conversion
+              {t("transform.noConversion")}
             </SelectItem>
           </SelectContent>
         </Select>

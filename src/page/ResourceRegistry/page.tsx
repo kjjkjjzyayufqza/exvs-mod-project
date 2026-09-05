@@ -3,10 +3,12 @@ import { Label } from "@/components/ui/label";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { useConfigStore } from "@/store/configStore";
 import { ResourceRegistryView } from "@/page/TestEditor/components/resource-registry/ResourceRegistryView";
+import { useTranslation } from "react-i18next";
 
 const WORKSPACE_STORE_KEY = "resourceRegistryWorkspacePath";
 
 export default function ResourceRegistryPage() {
+  const { t } = useTranslation("small-pages");
   const extractOutputPath = useConfigStore((s) => s.extractOutputPath);
   const getSetting = useConfigStore((s) => s.getSetting);
   const setSetting = useConfigStore((s) => s.setSetting);
@@ -34,29 +36,28 @@ export default function ResourceRegistryPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       <div className="shrink-0 space-y-1">
-        <h1 className="text-xl font-semibold">Resource Registry</h1>
+        <h1 className="text-xl font-semibold">{t("registry.title")}</h1>
         <p className="text-xs text-muted-foreground max-w-3xl">
-          CRC32 name database for stage, unit, and prop assets. Workspace file overrides global
-          defaults.
+          {t("registry.intro")}
         </p>
       </div>
 
       <div className="shrink-0 max-w-3xl space-y-1">
-        <Label className="text-xs">Workspace folder</Label>
+        <Label className="text-xs">{t("registry.workspace")}</Label>
         <FilePathInput
           value={workspacePath}
           onChange={(e) => handleWorkspaceChange(e.target.value)}
           picker={{
             kind: "folder",
-            title: "Select workspace folder",
+            title: t("registry.select"),
             defaultPathKey: WORKSPACE_STORE_KEY,
             persistDefaultPath: true,
           }}
-          placeholder="Folder containing resource_registry.json"
+          placeholder={t("registry.placeholder")}
           className="h-8 text-xs font-mono"
         />
         <p className="text-[10px] text-muted-foreground">
-          Workspace entries are saved to resource_registry.json in this folder.
+          {t("registry.saved")}
         </p>
       </div>
 

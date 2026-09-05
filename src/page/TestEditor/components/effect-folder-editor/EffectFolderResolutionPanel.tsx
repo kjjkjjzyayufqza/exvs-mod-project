@@ -1,5 +1,6 @@
 import { openPath } from "@tauri-apps/plugin-opener";
 import { AlertTriangle, FolderOpen, Layers } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type {
   EffectFolderHash,
   EffectFolderInventory,
@@ -14,10 +15,6 @@ type EffectFolderResolutionPanelProps = {
   inventory: EffectFolderInventory;
 };
 
-function plural(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? "" : "s"}`;
-}
-
 type SharedResource = { hash: EffectFolderHash; name: string | null };
 
 function SharedResourceList({ title, resources }: { title: string; resources: SharedResource[] }) {
@@ -27,7 +24,7 @@ function SharedResourceList({ title, resources }: { title: string; resources: Sh
       <span className="text-[10px] uppercase tracking-wide text-sky-800 dark:text-sky-200">
         {title}
       </span>
-      <ul className="custom-scrollbar-thin mt-1 max-h-28 space-y-0.5 overflow-y-auto">
+      <ul className="custom-scrollbar-thin mt-1 max-h-28 space-y-0.5 overflow-y-auto" data-i18n-ignore="">
         {resources.map((resource) => (
           <li
             key={resource.hash.signed}
@@ -44,7 +41,7 @@ function SharedResourceList({ title, resources }: { title: string; resources: Sh
 
 function HashList({ hashes }: { hashes: readonly EffectFolderHash[] }) {
   return (
-    <div className="mt-1 flex flex-wrap gap-1">
+    <div className="mt-1 flex flex-wrap gap-1" data-i18n-ignore="">
       {hashes.map((hash) => (
         <code
           key={hash.signed}
@@ -66,6 +63,7 @@ function HashList({ hashes }: { hashes: readonly EffectFolderHash[] }) {
  * hundreds of expected cross-pack hits.
  */
 export function EffectFolderResolutionPanel({ inventory }: EffectFolderResolutionPanelProps) {
+  const { t } = useTranslation("test-effect-folder");
   const { summary, commonPack } = inventory;
   const isCommonPack = isEffectFolderCommonPackRoot(inventory.effectRoot);
   const sharedCount = summary.commonModelIds.length + summary.commonTextureIds.length;
@@ -86,7 +84,7 @@ export function EffectFolderResolutionPanel({ inventory }: EffectFolderResolutio
       <div className="rounded-md border p-3">
         <div className="mb-2 flex items-center gap-2">
           <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-          <h4 className="text-xs font-medium">Shared pack</h4>
+          <h4 className="text-xs font-medium">{t("resolution.sharedPack")}</h4>
         </div>
 
         {commonPack ? (
@@ -99,33 +97,35 @@ export function EffectFolderResolutionPanel({ inventory }: EffectFolderResolutio
                 type="button"
                 onClick={() => void openPath(commonPack.effectRoot)}
                 className="shrink-0 rounded p-0.5 hover:bg-accent hover:text-accent-foreground"
-                title="Open shared pack folder"
-                aria-label="Open shared pack folder"
+                title={t("resolution.openShared")}
+                aria-label={t("resolution.openShared")}
               >
                 <FolderOpen className="h-3.5 w-3.5" />
               </button>
             </div>
             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-              <span>{plural(commonPack.models.length, "model")} indexed</span>
-              <span>{plural(commonPack.textures.length, "texture")} indexed</span>
+              <span>{t("resolution.indexedModels", { count: commonPack.models.length })}</span>
+              <span>{t("resolution.indexedTextures", { count: commonPack.textures.length })}</span>
             </div>
           </>
         ) : (
           <p className="text-[11px] text-muted-foreground">
             {isCommonPack
-              ? `This is the shared pack ${EFFECT_FOLDER_COMMON_PACK_NAME}; every reference resolves inside it.`
-              : `${EFFECT_FOLDER_COMMON_PACK_NAME} was not found next to this pack, so references into it cannot be resolved.`}
+              ? t("resolution.isSharedPack", { pack: EFFECT_FOLDER_COMMON_PACK_NAME })
+              : t("resolution.missingShared", { pack: EFFECT_FOLDER_COMMON_PACK_NAME })}
           </p>
         )}
 
         {sharedCount > 0 ? (
           <div className="mt-2 rounded border border-sky-500/30 bg-sky-500/10 p-2">
             <p className="text-[11px] text-sky-900 dark:text-sky-100">
-              Resolved {plural(summary.commonModelIds.length, "model reference")} and{" "}
-              {plural(summary.commonTextureIds.length, "texture reference")} from the shared pack.
+              {t("resolution.resolvedFromShared", {
+                models: t("resolution.modelReference", { count: summary.commonModelIds.length }),
+                textures: t("resolution.textureReference", { count: summary.commonTextureIds.length }),
+              })}
             </p>
-            <SharedResourceList title="Models" resources={sharedModels} />
-            <SharedResourceList title="Textures" resources={sharedTextures} />
+            <SharedResourceList title={t("resolution.models")} resources={sharedModels} />
+            <SharedResourceList title={t("resolution.textures")} resources={sharedTextures} />
           </div>
         ) : null}
       </div>
@@ -135,17 +135,16 @@ export function EffectFolderResolutionPanel({ inventory }: EffectFolderResolutio
           <div className="mb-2 flex items-center gap-2">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden />
             <h4 className="text-xs font-medium text-amber-800 dark:text-amber-200">
-              Unresolved references
+              {t("resolution.unresolved")}
             </h4>
           </div>
           <p className="text-[11px] text-amber-900 dark:text-amber-100">
-            Present in neither this pack nor {EFFECT_FOLDER_COMMON_PACK_NAME}. The game draws
-            nothing for these.
+            {t("resolution.neitherPack", { pack: EFFECT_FOLDER_COMMON_PACK_NAME })}
           </p>
           {summary.unresolvedModelIds.length > 0 ? (
             <div className="mt-2">
               <span className="text-[10px] uppercase tracking-wide text-amber-800 dark:text-amber-200">
-                Models
+                {t("resolution.models")}
               </span>
               <HashList hashes={summary.unresolvedModelIds} />
             </div>
@@ -153,7 +152,7 @@ export function EffectFolderResolutionPanel({ inventory }: EffectFolderResolutio
           {summary.unresolvedTextureIds.length > 0 ? (
             <div className="mt-2">
               <span className="text-[10px] uppercase tracking-wide text-amber-800 dark:text-amber-200">
-                Textures
+                {t("resolution.textures")}
               </span>
               <HashList hashes={summary.unresolvedTextureIds} />
             </div>
@@ -164,7 +163,7 @@ export function EffectFolderResolutionPanel({ inventory }: EffectFolderResolutio
       {warnings.unresolved.length > 0 || warnings.other.length > 0 ? (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
           <h4 className="mb-2 text-xs font-medium text-amber-800 dark:text-amber-200">
-            Inventory warnings
+            {t("resolution.inventoryWarnings")}
           </h4>
           <ul className="list-disc space-y-1 pl-4 text-[11px] text-amber-900 dark:text-amber-100">
             {[...warnings.unresolved, ...warnings.other].map((message) => (

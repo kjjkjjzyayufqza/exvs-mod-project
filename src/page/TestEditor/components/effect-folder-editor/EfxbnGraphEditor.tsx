@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Diamond, Maximize2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -43,13 +44,13 @@ export type EfxbnGraphEditorProps = {
   onError: (message: string) => void;
 };
 
-const CHANNEL_GROUPS: readonly { label: string; names: readonly EfxbnControlName[] }[] = [
-  { label: "Spawn form", names: ["spawnForm0", "spawnForm1", "spawnForm2", "spawnForm3"] },
-  { label: "Spread", names: ["spreadX", "spreadY"] },
-  { label: "Velocity", names: ["speedBaseX", "speedBaseY", "speedBaseZ"] },
-  { label: "Scale", names: ["scaleBaseX", "scaleBaseY", "scaleBaseZ"] },
-  { label: "Color", names: ["colorR", "colorG", "colorB", "colorA"] },
-  { label: "Forces", names: ["worldGravityAccel", "directionAccel"] },
+const CHANNEL_GROUPS: readonly { heading: string; names: readonly EfxbnControlName[] }[] = [
+  { heading: "Spawn form", names: ["spawnForm0", "spawnForm1", "spawnForm2", "spawnForm3"] },
+  { heading: "Spread", names: ["spreadX", "spreadY"] },
+  { heading: "Velocity", names: ["speedBaseX", "speedBaseY", "speedBaseZ"] },
+  { heading: "Scale", names: ["scaleBaseX", "scaleBaseY", "scaleBaseZ"] },
+  { heading: "Color", names: ["colorR", "colorG", "colorB", "colorA"] },
+  { heading: "Forces", names: ["worldGravityAccel", "directionAccel"] },
 ];
 
 const CHANNEL_COLORS: Record<EfxbnControlName, string> = {
@@ -156,6 +157,7 @@ export function EfxbnGraphEditor({
   onDocumentChange,
   onError,
 }: EfxbnGraphEditorProps) {
+  const { t } = useTranslation("test-effect-folder");
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ width: 800, height: 300 });
   const [visibleControls, setVisibleControls] = useState<ReadonlySet<EfxbnControlName>>(
@@ -366,7 +368,7 @@ export function EfxbnGraphEditor({
   return (
     <section
       className="flex h-full min-h-[220px] flex-col bg-background"
-      aria-label="EFXBN Graph Editor"
+      aria-label={t("graph.ariaEditor")}
       onKeyDown={(event) => {
         if (event.target instanceof HTMLInputElement) return;
         if (event.key.toLowerCase() === "f" && selectedDisplayKeys.length > 0) {
@@ -385,7 +387,11 @@ export function EfxbnGraphEditor({
           variant={keyAtPlayhead ? "secondary" : "ghost"}
           className="h-7 w-7"
           disabled={writing}
-          aria-label={`${keyAtPlayhead ? "Select" : "Insert"} key for ${focusedControlName} at frame ${formatNumber(playheadFrame ?? progress)}`}
+          aria-label={
+            keyAtPlayhead
+              ? t("graph.selectKey", { name: focusedControlName, frame: formatNumber(playheadFrame ?? progress) })
+              : t("graph.insertKey", { name: focusedControlName, frame: formatNumber(playheadFrame ?? progress) })
+          }
           onClick={insertFocusedKey}
         >
           <Diamond className={cn("h-3.5 w-3.5", keyAtPlayhead && "fill-amber-400 text-amber-400")} />
@@ -396,7 +402,7 @@ export function EfxbnGraphEditor({
           variant="ghost"
           className="h-7 w-7"
           disabled={writing || selection.length === 0}
-          aria-label="Delete selected EFXBN keys"
+          aria-label={t("graph.deleteKeys")}
           onClick={deleteSelection}
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -406,21 +412,21 @@ export function EfxbnGraphEditor({
           size="sm"
           variant="ghost"
           className="h-7 gap-1 px-2 text-[10px]"
-          aria-label="Frame selected EFXBN keys"
+          aria-label={t("graph.frameSelection")}
           disabled={selectedDisplayKeys.length === 0}
           onClick={() => setView(fitSelectionView(selectedDisplayKeys))}
         >
-          <Maximize2 className="h-3 w-3" /> Selection
+          <Maximize2 className="h-3 w-3" /> {t("graph.selection")}
         </Button>
         <Button
           type="button"
           size="sm"
           variant="ghost"
           className="h-7 px-2 text-[10px]"
-          aria-label="Frame all visible EFXBN curves"
+          aria-label={t("graph.frameAll")}
           onClick={() => setView(initialEfxbnGraphView(visibleDisplayKeys))}
         >
-          Home
+          {t("graph.home")}
         </Button>
         <Button
           type="button"
@@ -430,18 +436,20 @@ export function EfxbnGraphEditor({
           aria-pressed={normalizeView}
           onClick={() => setNormalizeView((value) => !value)}
         >
-          {normalizeView ? "Normalize" : "Absolute"}
+          {normalizeView ? t("graph.normalize") : t("graph.absolute")}
         </Button>
-        <span className="ml-auto font-mono text-[9px] tabular-nums text-muted-foreground">
-          frame {formatNumber(playheadFrame ?? progress)} / {formatNumber(frameCount)} | {formatNumber(progress)}%
+        <span className="ml-auto font-mono text-[9px] tabular-nums text-muted-foreground" data-i18n-ignore="">
+          {t("graph.frameLabel", { value: formatNumber(playheadFrame ?? progress) })} / {formatNumber(frameCount)} | {formatNumber(progress)}%
         </span>
       </div>
 
       <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(280px,1fr)_200px]">
-        <aside className="custom-scrollbar-thin overflow-y-auto border-r px-1.5 py-1.5" aria-label="EFXBN graph channels">
+        <aside className="custom-scrollbar-thin overflow-y-auto border-r px-1.5 py-1.5" aria-label={t("graph.channels")}>
           {CHANNEL_GROUPS.map((group) => (
-            <div key={group.label} className="mb-1">
-              <p className="px-1 py-1 text-[10px] font-medium text-muted-foreground">{group.label}</p>
+            <div key={group.heading} className="mb-1">
+              <p className="px-1 py-1 text-[10px] font-medium text-muted-foreground" data-i18n-ignore="">
+                {group.heading}
+              </p>
               {group.names.map((name) => {
                 const curve = curves.find((entry) => entry.name === name)!;
                 const dirty = JSON.stringify(curve.keys) !== JSON.stringify(curve.baselineKeys);
@@ -456,7 +464,7 @@ export function EfxbnGraphEditor({
                   >
                     <Checkbox
                       checked={visibleControls.has(name)}
-                      aria-label={`Show ${name} curve`}
+                      aria-label={t("graph.showCurve", { name })}
                       onCheckedChange={(checked) => {
                         setVisibleControls((currentVisible) => {
                           const next = new Set(currentVisible);
@@ -470,6 +478,7 @@ export function EfxbnGraphEditor({
                     <button
                       type="button"
                       className="min-w-0 truncate text-left font-mono text-[11px]"
+                      data-i18n-ignore=""
                       onClick={() => onFocusedControlNameChange(name)}
                     >
                       {name}
@@ -505,19 +514,20 @@ export function EfxbnGraphEditor({
           />
         </div>
 
-        <aside className="border-l p-3" aria-label="Selected EFXBN key values">
-          <p className="mb-2 text-xs font-medium">Selected key</p>
+        <aside className="border-l p-3" aria-label={t("graph.selectedValues")}>
+          <p className="mb-2 text-xs font-medium">{t("graph.selectedKey")}</p>
           <div className="space-y-2">
             <label className="block space-y-1">
-              <span className="text-[9px] text-muted-foreground">Channel</span>
+              <span className="text-[9px] text-muted-foreground">{t("graph.channel")}</span>
               <Input
-                value={selection.length === 1 ? selection[0]!.controlName : selection.length > 1 ? "Mixed" : "None"}
+                value={selection.length === 1 ? selection[0]!.controlName : selection.length > 1 ? t("graph.mixed") : t("graph.none")}
                 readOnly
                 className="h-7 px-1.5 font-mono text-[10px]"
+                data-i18n-ignore=""
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[9px] text-muted-foreground">Frame</span>
+              <span className="text-[9px] text-muted-foreground">{t("graph.frame")}</span>
               <PrecisionInput
                 ariaLabel="Selected EFXBN key frame"
                 value={commonFrame}
@@ -529,7 +539,7 @@ export function EfxbnGraphEditor({
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[9px] text-muted-foreground">Progress %</span>
+              <span className="text-[9px] text-muted-foreground">{t("graph.progress")}</span>
               <PrecisionInput
                 ariaLabel="Selected EFXBN key progress"
                 value={commonProgress}
@@ -538,7 +548,7 @@ export function EfxbnGraphEditor({
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[9px] text-muted-foreground">Value</span>
+              <span className="text-[9px] text-muted-foreground">{t("graph.value")}</span>
               <PrecisionInput
                 ariaLabel="Selected EFXBN key value"
                 value={commonValue}
@@ -546,7 +556,7 @@ export function EfxbnGraphEditor({
                 onCommit={(value) => patchSelection({ value })}
               />
             </label>
-            <p className="font-mono text-[9px] text-muted-foreground">{selection.length} selected</p>
+            <p className="font-mono text-[9px] text-muted-foreground">{t("graph.selectedCount", { count: selection.length })}</p>
           </div>
         </aside>
       </div>

@@ -19,6 +19,7 @@ import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { appendCardIconToStructureJson } from "./cardIconStructure";
+import { useTranslation } from "react-i18next";
 
 type ReplaceSummary = {
   outputNutexbPath: string;
@@ -106,10 +107,10 @@ function makeUniqueName(base: string, usedLower: Set<string>): string {
   return `${safeBase}_${Date.now()}`;
 }
 
-function validateName(name: string): string | null {
+function validateName(name: string, emptyMsg: string, forbiddenMsg: string): string | null {
   const trimmed = name.trim();
-  if (!trimmed) return "Name is empty";
-  if (containsInvalidFileChars(trimmed)) return "Name contains forbidden characters";
+  if (!trimmed) return emptyMsg;
+  if (containsInvalidFileChars(trimmed)) return forbiddenMsg;
   return null;
 }
 
@@ -122,6 +123,7 @@ export function CardIconAddDialog({
   onAdded,
   disabled = false,
 }: CardIconAddDialogProps) {
+  const { t } = useTranslation("test-lists");
   const [openState, setOpenState] = useState(false);
   const [mode, setMode] = useState<"single" | "batch">("single");
 
@@ -174,24 +176,24 @@ export function CardIconAddDialog({
     for (const it of batchItems) {
       if (it.status === "skipped") continue;
       const trimmed = it.nameInput.trim();
-      const baseIssue = validateName(trimmed);
+      const baseIssue = validateName(trimmed, t("cardIcon.nameEmpty"), t("cardIcon.nameForbidden"));
       if (baseIssue) {
         issues.set(it.id, baseIssue);
         continue;
       }
       const lower = trimmed.toLowerCase();
       if (usedLower.has(lower)) {
-        issues.set(it.id, "Duplicate name in batch");
+        issues.set(it.id, t("cardIcon.duplicateInBatch"));
         continue;
       }
       if (existingNamesLower.has(lower)) {
-        issues.set(it.id, "Name already exists in structure JSON");
+        issues.set(it.id, t("cardIcon.nameExistsJson"));
         continue;
       }
       usedLower.add(lower);
     }
     return issues;
-  }, [batchItems, existingNamesLower]);
+  }, [batchItems, existingNamesLower, t]);
 
   const batchSummary = useMemo(() => {
     const total = batchItems.length;
@@ -220,15 +222,15 @@ export function CardIconAddDialog({
 
   const handleApply = useCallback(async () => {
     if (!packFolderPath) {
-      toast.error("Folder path is empty");
+      toast.error(t("cardIcon.folderEmpty"));
       return;
     }
     if (!pngPath) {
-      toast.error("Please select a PNG file");
+      toast.error(t("cardIcon.selectPng"));
       return;
     }
     if (!isNameValid) {
-      toast.error("Invalid name (empty or contains forbidden characters)");
+      toast.error(t("cardIcon.invalidName"));
       return;
     }
 
@@ -244,7 +246,7 @@ export function CardIconAddDialog({
         return url.toLowerCase().endsWith(`/${lower}.nutexb`) || url.toLowerCase().endsWith(`\\${lower}.nutexb`);
       });
       if (hasDuplicate) {
-        toast.error("The name already exists in structure JSON");
+        toast.error(t("cardIcon.nameExistsJson"));
         return;
       }
 
@@ -256,7 +258,7 @@ export function CardIconAddDialog({
 
       const nutexbPath = await join(packFolderPath, `${trimmedName}.nutexb`);
       if (!nutexbPath) {
-        toast.error("Failed to resolve target nutexb path");
+        toast.error(t("cardIcon.resolveFailed"));
         return;
       }
 
@@ -268,19 +270,19 @@ export function CardIconAddDialog({
       });
 
       await writeTextFile(structurePath, JSON.stringify(nextStructJson, null, 2));
-      toast.success(`Created card icon: ${result.nutexbName}`);
+      toast.success(t("cardIcon.createdOne", { name: result.nutexbName }));
       setOpenState(false);
       setPngPath("");
       setNameInput("");
       await onAdded();
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : "Failed to create card icon";
+      const message = error instanceof Error ? error.message : t("cardIcon.createFailed");
       toast.error(message);
     } finally {
       setIsCreating(false);
     }
-  }, [convertDirPath, ddsFormat, isNameValid, onAdded, packFolderPath, pngPath, structurePath, trimmedName]);
+  }, [convertDirPath, ddsFormat, isNameValid, onAdded, packFolderPath, pngPath, structurePath, t, trimmedName]);
 
   const canApply = Boolean(pngPath) && isNameValid && !isCreating;
 
@@ -292,13 +294,13 @@ export function CardIconAddDialog({
   const handlePickBatchPngs = useCallback(async () => {
     if (isBatchRunning || isCreating) return;
     if (!packFolderPath) {
-      toast.error("Folder path is empty");
+      toast.error(t("cardIcon.folderEmpty"));
       return;
     }
     try {
       const selected = await open({
         multiple: true,
-        title: "Select PNG files",
+        title: t("common.selectPngFiles"),
         filters: [{ name: "PNG", extensions: ["png"] }],
       });
       if (!selected) return;
@@ -328,7 +330,7 @@ export function CardIconAddDialog({
           nameInput: base,
           status: isPngPath(p) ? "pending" : "skipped",
           progress: 0,
-          message: isPngPath(p) ? undefined : "Only PNG is supported for card icons",
+          message: isPngPath(p) ? undefined : t("cardIcon.onlyPng"),
         });
       }
 
@@ -341,9 +343,9 @@ export function CardIconAddDialog({
       });
     } catch (error) {
       console.error(error);
-      toast.error("Failed to select files");
+      toast.error(t("cardIcon.selectFilesFailed"));
     }
-  }, [isBatchRunning, isCreating, loadExistingNameSet, packFolderPath, selectedBatchId]);
+  }, [isBatchRunning, isCreating, loadExistingNameSet, packFolderPath, selectedBatchId, t]);
 
   const handleUpdateBatchName = useCallback(
     (id: string, value: string) => {
@@ -399,7 +401,7 @@ export function CardIconAddDialog({
         if (it.status === "skipped") continue;
 
         const trimmed = it.nameInput.trim();
-        const issue = validateName(trimmed);
+        const issue = validateName(trimmed, t("cardIcon.nameEmpty"), t("cardIcon.nameForbidden"));
         if (issue) {
           setBatchItems((prev) => prev.map((e) => (e.id === it.id ? { ...e, status: "error", progress: 100, message: issue } : e)));
           continue;
@@ -407,7 +409,7 @@ export function CardIconAddDialog({
 
         if (!isPngPath(it.pngPath)) {
           setBatchItems((prev) =>
-            prev.map((e) => (e.id === it.id ? { ...e, status: "skipped", progress: 100, message: "Only PNG is supported for card icons" } : e))
+            prev.map((e) => (e.id === it.id ? { ...e, status: "skipped", progress: 100, message: t("cardIcon.onlyPng") } : e))
           );
           continue;
         }
@@ -415,7 +417,7 @@ export function CardIconAddDialog({
         const lower = trimmed.toLowerCase();
         if (existingLower.has(lower) || successNamesLower.has(lower)) {
           setBatchItems((prev) =>
-            prev.map((e) => (e.id === it.id ? { ...e, status: "error", progress: 100, message: "Name already exists (duplicate)" } : e))
+            prev.map((e) => (e.id === it.id ? { ...e, status: "error", progress: 100, message: t("cardIcon.nameExists") } : e))
           );
           continue;
         }
@@ -426,7 +428,7 @@ export function CardIconAddDialog({
         if (!nutexbPath) {
           setBatchItems((prev) =>
             prev.map((e) =>
-              e.id === it.id ? { ...e, status: "error", progress: 100, message: "Failed to resolve target nutexb path" } : e
+              e.id === it.id ? { ...e, status: "error", progress: 100, message: t("cardIcon.resolveFailed") } : e
             )
           );
           continue;
@@ -455,39 +457,39 @@ export function CardIconAddDialog({
           createdCount += 1;
 
           setBatchItems((prev) =>
-            prev.map((e) => (e.id === it.id ? { ...e, status: "success", progress: 100, message: "Created" } : e))
+            prev.map((e) => (e.id === it.id ? { ...e, status: "success", progress: 100, message: t("cardIcon.createdStatus") } : e))
           );
         } catch (error) {
           console.error(error);
-          const message = error instanceof Error ? error.message : "Failed to create card icon";
+          const message = error instanceof Error ? error.message : t("cardIcon.createFailed");
           setBatchItems((prev) => prev.map((e) => (e.id === it.id ? { ...e, status: "error", progress: 100, message } : e)));
         }
       }
 
       if (stopBatchRef.current) {
-        setBatchItems((prev) => prev.map((e) => (e.status === "pending" ? { ...e, status: "cancelled", message: "Stopped", progress: 0 } : e)));
+        setBatchItems((prev) => prev.map((e) => (e.status === "pending" ? { ...e, status: "cancelled", message: t("cardIcon.stoppedStatus"), progress: 0 } : e)));
       }
 
       if (createdCount > 0) {
         await writeTextFile(structurePath, JSON.stringify(nextStructJson, null, 2));
-        toast.success(`Created ${createdCount} card icon(s)`);
+        toast.success(t("cardIcon.createdCount", { count: createdCount }));
         await onAdded();
       } else if (!stopBatchRef.current) {
-        toast.error("No card icons were created");
+        toast.error(t("cardIcon.noneCreated"));
       }
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : "Batch create failed";
+      const message = error instanceof Error ? error.message : t("cardIcon.batchFailed");
       toast.error(message);
     } finally {
       setIsBatchRunning(false);
     }
-  }, [batchItems, canStartBatch, convertDirPath, ddsFormat, hash, onAdded, packFolderPath, structurePath]);
+  }, [batchItems, canStartBatch, convertDirPath, ddsFormat, hash, onAdded, packFolderPath, structurePath, t]);
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
       if (!next && (isCreating || isBatchRunning)) {
-        toast.error("Please wait for the current task to finish, or stop the batch before closing");
+        toast.error(t("cardIcon.waitOrStop"));
         setOpenState(true);
         return;
       }
@@ -504,19 +506,19 @@ export function CardIconAddDialog({
         stopBatchRef.current = false;
       }
     },
-    [isBatchRunning, isCreating]
+    [isBatchRunning, isCreating, t]
   );
 
   return (
     <>
       <Button size="sm" variant="outline" disabled={disabled} onClick={() => handleOpenChange(true)}>
-        Add
+        {t("common.add")}
       </Button>
       {openState ? (
         <AppRndModalShell
           titleId="card-icon-add-title"
-          title="Add Card Icon"
-          subtitle={`Creates nutexb from PNG and appends items to ${hash}_structure.json.`}
+          title={t("cardIcon.addTitle")}
+          subtitle={t("cardIcon.addSubtitle", { hash })}
           headerIcon={<ImagePlus className="h-5 w-5 text-primary" />}
           dimensions={CARD_ICON_ADD_MODAL_DIMENSIONS}
           storageKey="app.rnd-size.card-icon-add"
@@ -527,27 +529,27 @@ export function CardIconAddDialog({
             <Tabs value={mode} onValueChange={(v) => setMode(v as "single" | "batch")} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="single" disabled={isBatchRunning}>
-              Single
+              {t("cardIcon.single")}
             </TabsTrigger>
             <TabsTrigger value="batch" disabled={isCreating}>
-              Batch
+              {t("cardIcon.batch")}
             </TabsTrigger>
           </TabsList>
 
         <div className="grid grid-cols-2 gap-6">
           <div className="space-y-3">
-            <Label>Preview</Label>
+            <Label>{t("common.preview")}</Label>
             <Card className="overflow-hidden min-h-[360px]">
               <AspectRatio ratio={1} className="bg-black flex items-center justify-center">
                 {activePreviewSrc ? (
                   <img
                     src={activePreviewSrc}
-                    alt="Card icon preview"
+                    alt={t("cardIcon.previewAlt")}
                     className="w-full h-full object-contain"
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full w-full bg-black">
-                    <span className="text-sm text-muted-foreground">No preview available</span>
+                    <span className="text-sm text-muted-foreground">{t("common.noPreview")}</span>
                   </div>
                 )}
               </AspectRatio>
@@ -555,38 +557,38 @@ export function CardIconAddDialog({
             <div className="text-xs text-muted-foreground min-h-8 leading-snug">
               {mode === "batch"
                 ? selectedBatchItem
-                  ? `Selected: ${selectedBatchItem.sourceFileName}`
-                  : "Select a batch item to preview."
-                : "Previewing the selected PNG (will be applied)."}
+                  ? t("cardIcon.selectedFile", { name: selectedBatchItem.sourceFileName })
+                  : t("cardIcon.selectBatchPreview")
+                : t("cardIcon.previewSelected")}
             </div>
           </div>
 
           <div className="space-y-4">
             <TabsContent value="single" className="space-y-4 mt-0">
               <div className="space-y-2">
-                <Label htmlFor="card-icon-name">Name (also file name)</Label>
+                <Label htmlFor="card-icon-name">{t("cardIcon.nameAlsoFile")}</Label>
                 <Input
                   id="card-icon-name"
                   value={nameInput}
                   onChange={(e) => setNameInput(e.target.value)}
-                  placeholder="Enter a name..."
+                  placeholder={t("cardIcon.enterName")}
                   disabled={isCreating || isBatchRunning}
                 />
                 <div className="text-xs text-muted-foreground min-h-8 leading-snug">
-                  The item will be appended at index <span className="font-mono">{nextIndex}</span>.
+                  {t("cardIcon.appendIndex", { index: nextIndex })}
                 </div>
                 {trimmedName && (
                   <div className="text-xs text-muted-foreground break-all">
-                    Target nutexb: <span className="font-mono">{`${trimmedName}.nutexb`}</span>
+                    {t("cardIcon.targetNutexb", { name: `${trimmedName}.nutexb` })}
                   </div>
                 )}
               </div>
 
               <div className="space-y-2">
-                <Label>DDS Format</Label>
+                <Label>{t("common.ddsFormat")}</Label>
                 <Select value={ddsFormat} onValueChange={setDdsFormat} disabled={isCreating || isBatchRunning}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select DDS format" />
+                    <SelectValue placeholder={t("common.selectDdsFormat")} />
                   </SelectTrigger>
                   <SelectContent>
                     {DDS_FORMATS.map((opt) => (
@@ -597,48 +599,48 @@ export function CardIconAddDialog({
                   </SelectContent>
                 </Select>
                 <div className="text-xs text-muted-foreground min-h-8 leading-snug">
-                  Output texture format for the nutexb file.
+                  {t("cardIcon.ddsHelp")}
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="card-icon-add-png">Source PNG</Label>
+                <Label htmlFor="card-icon-add-png">{t("common.sourcePng")}</Label>
                 <FilePathInput
                   id="card-icon-add-png"
                   value={pngPath}
-                  placeholder="Select a PNG file..."
+                  placeholder={t("common.selectPng")}
                   picker={{
                     kind: "file",
                     multiple: false,
-                    title: "Select PNG file",
+                    title: t("common.selectPngTitle"),
                     filters: [{ name: "PNG", extensions: ["png"] }],
                   }}
                   onPickedValue={handlePngPicked}
                   disabled={isCreating || isBatchRunning}
                 />
                 <div className="text-xs text-muted-foreground min-h-8 leading-snug">
-                  The PNG will be converted in Rust (no external executables).
+                  {t("cardIcon.pngRust")}
                 </div>
               </div>
 
-              {!isNameValid && trimmedName && <div className="text-sm text-destructive">Name contains invalid characters.</div>}
+              {!isNameValid && trimmedName && <div className="text-sm text-destructive">{t("cardIcon.invalidNameChars")}</div>}
 
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isCreating || isBatchRunning}>
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
                 <Button onClick={() => void handleApply()} disabled={!canApply || isBatchRunning}>
-                  {isCreating ? "Creating..." : "Confirm"}
+                  {isCreating ? t("cardIcon.creating") : t("cardIcon.confirm")}
                 </Button>
               </div>
             </TabsContent>
 
             <TabsContent value="batch" className="space-y-4 mt-0">
               <div className="space-y-2">
-                <Label>DDS Format</Label>
+                <Label>{t("common.ddsFormat")}</Label>
                 <Select value={ddsFormat} onValueChange={setDdsFormat} disabled={isBatchRunning}>
                   <SelectTrigger className="w-full max-w-[280px]">
-                    <SelectValue placeholder="Select DDS format" />
+                    <SelectValue placeholder={t("common.selectDdsFormat")} />
                   </SelectTrigger>
                   <SelectContent>
                     {DDS_FORMATS.map((opt) => (
@@ -652,17 +654,19 @@ export function CardIconAddDialog({
 
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm text-muted-foreground">
-                  Total: <span className="font-mono">{batchSummary.total}</span> · Success:{" "}
-                  <span className="font-mono">{batchSummary.success}</span> · Failed:{" "}
-                  <span className="font-mono">{batchSummary.failed}</span>
+                  {t("cardIcon.totalSuccessFailed", {
+                    total: batchSummary.total,
+                    success: batchSummary.success,
+                    failed: batchSummary.failed,
+                  })}
                 </div>
                 <div className="flex items-center gap-2">
                   <Button size="sm" variant="outline" onClick={() => void handlePickBatchPngs()} disabled={isBatchRunning}>
-                    Select PNGs
+                    {t("cardIcon.selectPngs")}
                   </Button>
                   <Button size="sm" variant="outline" onClick={handleClearBatch} disabled={isBatchRunning || batchItems.length === 0}>
                     <Trash2 className="w-4 h-4 mr-2" />
-                    Clear
+                    {t("common.clear")}
                   </Button>
                 </div>
               </div>
@@ -671,7 +675,7 @@ export function CardIconAddDialog({
                 <div ref={batchListRef} className="h-[360px] overflow-auto">
                   <div className="relative w-full p-2" style={{ height: batchRowVirtualizer.getTotalSize() }}>
                     {batchItems.length === 0 ? (
-                      <div className="p-3 text-sm text-muted-foreground">No files selected.</div>
+                      <div className="p-3 text-sm text-muted-foreground">{t("cardIcon.noFiles")}</div>
                     ) : (
                       batchRowVirtualizer.getVirtualItems().map((virtualRow) => {
                         const it = batchItems[virtualRow.index];
@@ -679,7 +683,7 @@ export function CardIconAddDialog({
                         const idx = virtualRow.index;
                         const issue = batchNameIssues.get(it.id);
                         const isSelected = it.id === selectedBatchId;
-                        const target = `${it.nameInput.trim() || "(empty)"}.nutexb`;
+                        const target = `${it.nameInput.trim() || t("cardIcon.emptyParen")}.nutexb`;
                         return (
                           <div
                             key={it.id}
@@ -698,7 +702,7 @@ export function CardIconAddDialog({
                               <div className="min-w-0 flex-1">
                                 <div className="text-sm font-medium truncate">{it.sourceFileName || it.pngPath}</div>
                                 <div className="text-xs text-muted-foreground mt-1">
-                                  #{idx + 1} · Target: <span className="font-mono">{target}</span>
+                                  {t("cardIcon.rowTarget", { n: idx + 1, target })}
                                 </div>
                               </div>
                               <Button
@@ -720,7 +724,7 @@ export function CardIconAddDialog({
                                   value={it.nameInput}
                                   onChange={(e) => handleUpdateBatchName(it.id, e.target.value)}
                                   disabled={isBatchRunning}
-                                  placeholder="Enter a name..."
+                                  placeholder={t("cardIcon.enterName")}
                                 />
                                 <div className="min-h-5 text-xs mt-1">
                                   {issue ? (
@@ -728,7 +732,7 @@ export function CardIconAddDialog({
                                   ) : it.message ? (
                                     <span className="text-muted-foreground">{it.message}</span>
                                   ) : (
-                                    <span className="text-muted-foreground">&nbsp;</span>
+                                    <span className="text-muted-foreground">{"\u00a0"}</span>
                                   )}
                                 </div>
                               </div>
@@ -751,15 +755,15 @@ export function CardIconAddDialog({
               <div className="flex justify-end gap-2 pt-1">
                 {isBatchRunning ? (
                   <Button variant="outline" onClick={handleStopBatch}>
-                    Stop
+                    {t("common.stop")}
                   </Button>
                 ) : (
                   <Button variant="outline" onClick={() => handleOpenChange(false)}>
-                    Close
+                    {t("common.close")}
                   </Button>
                 )}
                 <Button onClick={() => void handleStartBatch()} disabled={!canStartBatch}>
-                  {isBatchRunning ? "Running..." : "Start Batch"}
+                  {isBatchRunning ? t("cardIcon.running") : t("cardIcon.startBatch")}
                 </Button>
               </div>
             </TabsContent>

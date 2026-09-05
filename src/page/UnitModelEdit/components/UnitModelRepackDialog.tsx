@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, CheckCircle2, Loader2, PackageCheck } from "lucide-react";
@@ -51,6 +52,7 @@ export function UnitModelRepackDialog({
   onValidationResult,
   onRepacked,
 }: UnitModelRepackDialogProps) {
+  const { t } = useTranslation("unit-remove-repack");
   const [isRunning, setIsRunning] = useState(false);
   const [metadataDestination, setMetadataDestination] = useState<string | null>(null);
 
@@ -88,12 +90,12 @@ export function UnitModelRepackDialog({
 
   const handleConfirm = async () => {
     if (!modelRoot || !structurePath) {
-      toast.error("No unit model folder selected");
+      toast.error(t("errors.noModelFolder"));
       return;
     }
     if (!modFolderConfigured) {
-      toast.error("OB Mod folder is not configured", {
-        description: "Set the OB Mod path in Config before repacking.",
+      toast.error(t("errors.modFolderNotConfigured"), {
+        description: t("errors.setModPath"),
       });
       return;
     }
@@ -103,21 +105,21 @@ export function UnitModelRepackDialog({
       onValidationResult(latestValidation);
       if (!latestValidation.valid) {
         const firstIssue = latestValidation.errors[0]?.message;
-        toast.error("Repack blocked by validation", {
-          description: firstIssue ?? `${latestValidation.errors.length} issue(s) must be fixed first`,
+        toast.error(t("errors.validationBlocked"), {
+          description: firstIssue ?? t("errors.issuesMustBeFixed", { count: latestValidation.errors.length }),
         });
         return;
       }
       const result = await repackValidatedUnitModelFolderToModFolder(modFolder, structurePath);
       onRepacked(result);
-      toast.success("Unit model repacked to OB Mod folder", {
+      toast.success(t("success.repacked"), {
         description: result.removedVgsht2
-          ? `${result.outputPath} (removed matching .vgsht2)`
+          ? t("success.removedVgsht2", { path: result.outputPath })
           : result.outputPath,
       });
       onOpenChange(false);
     } catch (error) {
-      toast.error("Unit model repack failed", { description: String(error) });
+      toast.error(t("errors.repackFailed"), { description: String(error) });
     } finally {
       setIsRunning(false);
     }
@@ -128,8 +130,8 @@ export function UnitModelRepackDialog({
   return (
     <AppRndModalShell
       titleId="unit-model-repack-title"
-      title="Repack Changes"
-      subtitle="Validate and repack the unit model into the configured OB Mod folder"
+      title={t("repack.title")}
+      subtitle={t("repack.subtitle")}
       headerIcon={<PackageCheck className="h-5 w-5 text-primary" />}
       dimensions={UNIT_MODEL_REPACK_DIMENSIONS}
       storageKey="app.rnd-size.unit-model-repack"
@@ -138,11 +140,11 @@ export function UnitModelRepackDialog({
       footer={
         <div className="flex justify-end gap-2 p-3">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isRunning}>
-            Cancel
+            {t("actions.cancel")}
           </Button>
           <Button onClick={() => void handleConfirm()} disabled={!canRepack}>
             <PackageCheck className="mr-2 h-4 w-4" />
-            {isRunning ? "Repacking..." : "Repack"}
+            {isRunning ? t("repack.loading") : t("repack.action")}
           </Button>
         </div>
       }
@@ -150,7 +152,7 @@ export function UnitModelRepackDialog({
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
         <Fhm2dMetadataSummary
           compact
-          name={folderName || "Unit model"}
+          name={folderName || t("repack.unitModel")}
           hashName={hashNamePreview}
           folderPath={modelRoot}
           structureJsonPath={structurePath}
@@ -161,8 +163,7 @@ export function UnitModelRepackDialog({
           <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2.5 text-xs text-destructive">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>
-              OB Mod path is not configured. Open <span className="font-medium">Config</span> and set the OB Mod
-              folder before repacking.
+              {t("repack.pathWarningPrefix")} <span className="font-medium">{t("repack.configPage")}</span>{t("repack.pathWarningSuffix")}
             </span>
           </div>
         )}
@@ -180,13 +181,14 @@ function ValidationGate({
   validation: UnitModelValidationResult | null;
   isValidating: boolean;
 }) {
+  const { t } = useTranslation("unit-remove-repack");
   if (isValidating) {
     return (
       <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-primary">
         <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
         <div>
-          <div className="font-semibold">Checking validation before repack</div>
-          <div className="mt-1 text-primary/80">The Repack button is enabled after validation passes.</div>
+          <div className="font-semibold">{t("validation.checking")}</div>
+          <div className="mt-1 text-primary/80">{t("validation.checkingHint")}</div>
         </div>
       </div>
     );
@@ -197,8 +199,8 @@ function ValidationGate({
       <div className="flex items-start gap-2 rounded-md border bg-muted/20 p-2.5 text-xs text-muted-foreground">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <div>
-          <div className="font-semibold text-foreground">Waiting for validation</div>
-          <div className="mt-1">Validation runs automatically after opening or editing a Unit Model folder.</div>
+          <div className="font-semibold text-foreground">{t("validation.waiting")}</div>
+          <div className="mt-1">{t("validation.waitingHint")}</div>
         </div>
       </div>
     );
@@ -209,10 +211,10 @@ function ValidationGate({
       <div className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2.5 text-xs text-emerald-600">
         <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
         <div>
-          <div className="font-semibold">Validation passed</div>
+          <div className="font-semibold">{t("validation.passed")}</div>
           {validation.warnings.length ? (
             <div className="mt-1 text-emerald-700/80 dark:text-emerald-400/80">
-              {validation.warnings.length} warning(s) will be kept as non-blocking notes.
+              {t("validation.warningsKept", { count: validation.warnings.length })}
             </div>
           ) : null}
         </div>
@@ -225,8 +227,8 @@ function ValidationGate({
       <div className="flex items-start gap-2 text-destructive">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <div>
-          <div className="font-semibold">Repack blocked by {validation.errors.length} issue(s)</div>
-          <div className="mt-1 text-destructive/80">Fix these issues in the Unit Model structure before repacking.</div>
+          <div className="font-semibold">{t("validation.blocked", { count: validation.errors.length })}</div>
+          <div className="mt-1 text-destructive/80">{t("validation.blockedHint")}</div>
         </div>
       </div>
       <div className="mt-2 space-y-1.5">
@@ -247,7 +249,7 @@ function ValidationGate({
         ))}
         {validation.errors.length > 5 ? (
           <div className="text-[11px] text-muted-foreground">
-            Showing 5 of {validation.errors.length}. See the right Details panel for the full list.
+            {t("validation.showingIssues", { count: validation.errors.length })}
           </div>
         ) : null}
       </div>

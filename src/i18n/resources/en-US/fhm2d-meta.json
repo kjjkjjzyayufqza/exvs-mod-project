@@ -1,0 +1,34 @@
+{
+  "summary": {
+    "aria": "FHM2D metadata preview",
+    "title": "Structure metadata",
+    "help": "Name controls the editable folder. HashName controls the game file.",
+    "folder": "Folder",
+    "structureJson": "Structure JSON",
+    "repackOutput": "Repack output",
+    "hashNameMissing": "HashName missing"
+  },
+  "nameField": {
+    "sanitizedName": "Sanitized Name",
+    "dictionary": "Dictionary",
+    "folder": "Folder",
+    "needsHash": "Needs 8-digit hash from source",
+    "defaultDescription": "Use a readable name for the extracted folder and structure JSON."
+  },
+  "migration": {
+    "title": "Migrate FHM2D structure",
+    "subtitle": "This structure JSON needs top-level Name and HashName metadata before it can load safely.",
+    "loadWithout": "Load without migrating",
+    "migrateAndLoad": "Migrate and load",
+    "currentJson": "Current JSON",
+    "afterMigration": "After migration",
+    "nameHelp": "Use a readable folder name. Spaces and unsupported characters are normalized.",
+    "hashPreserved": "Game hash preserved as {{hash}}",
+    "hashMissing": "HashName could not be detected",
+    "hashPreservedHelp": "Repack will still output the game-facing hash file. The readable Name only changes the extracted workspace.",
+    "hashMissingHelp": "This JSON needs a structure filename or fileUrl root that contains an 8-digit hash.",
+    "dictionary": "Dictionary: {{name}} ({{confidence}})",
+    "currentFolder": "Current folder",
+    "currentNameCandidate": "Current name candidate:"
+  }
+}

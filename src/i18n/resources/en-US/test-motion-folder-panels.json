@@ -1,0 +1,93 @@
+{
+  "title": "Motion Folder",
+  "actions": {
+    "openFolder": "Open folder",
+    "browse": "Browse",
+    "load": "Load",
+    "selectVisible": "Select visible",
+    "clear": "Clear",
+    "cancel": "Cancel",
+    "refresh": "Refresh",
+    "save": "Save",
+    "add": "Add",
+    "replace": "Replace",
+    "remove": "Remove"
+  },
+  "labels": {
+    "motionFolder": "Motion folder",
+    "rootName": "Root name",
+    "structureJson": "Structure JSON"
+  },
+  "placeholders": {
+    "folderPath": "E:\\workspace\\003motion\\0xHASH",
+    "search": "Search by name, unk1, unk2, fileIndex, or path"
+  },
+  "states": {
+    "unsaved": "unsaved",
+    "setPathThenLoad": "Set a motion folder path, then Load.",
+    "selectDetails": "Select a folder or motion item to inspect details.",
+    "loadingInventory": "Loading motion inventory..."
+  },
+  "errors": {
+    "invalidFolderPath": "Enter a valid motion folder path."
+  },
+  "aria": {
+    "leStructureHex": "Little-endian structure hex",
+    "beMscHex": "Big-endian MSC value hex"
+  },
+  "summary": {
+    "title": "Pack summary",
+    "motions": "Motions",
+    "folders": "Folders",
+    "nonzeroUnk1": "Nonzero unk1",
+    "nonzeroUnk2": "Nonzero unk2",
+    "warnings": "Inventory warnings",
+    "parseLinks": "parse links"
+  },
+  "help": {
+    "loadExample": "Load a folder such as {{example}}. Structure JSON is inferred from the sibling file.",
+    "hexLeTitle": "Show structure JSON LE bytes (e.g. a621fd5e)",
+    "hexBeTitle": "Show MSC integer spelling / byte-swapped (e.g. 5efd21a6)",
+    "hexFieldTitle": "LE = structure JSON bytes; BE = MSC integer spelling (byte-swapped)"
+  },
+  "status": {
+    "treeSelection": "Tree selection:",
+    "selected": "{{count}} selected",
+    "entries": "{{count}} entries"
+  },
+  "detail": {
+    "heading": "{{kind}} details",
+    "folder": "Folder",
+    "motionItem": "Motion item",
+    "entryIdentity": "Entry identity",
+    "hexDisplay": "Hex display: {{endian}}. Structure JSON always stores LE bytes; MSC C / runtime integers use the byte-swapped spelling.",
+    "label": "Label",
+    "path": "Path",
+    "children": "Children",
+    "editEntry": "Edit entry",
+    "name": "Name",
+    "apply": "Apply",
+    "fileBinding": "File binding",
+    "openFile": "Open file",
+    "replaceExt": "Replace {{ext}}",
+    "openParent": "Open parent folder",
+    "childOrder": "Child order",
+    "noChildren": "This folder has no children yet.",
+    "orderHelp": "Structure order matters for multi-clip actions: put the {{body}} model clip first, then wing / weapon / other channels. Changes need Save.",
+    "body": "body",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "moveNamedUp": "Move {{name}} up",
+    "moveNamedDown": "Move {{name}} down"
+  },
+  "remove": {
+    "title_one": "Remove motion entry?",
+    "title_other": "Remove motion entries?",
+    "description_one": "This removes the selected structure entry.",
+    "description_other": "This removes {{count}} selected structure entries.",
+    "deleteFromDisk": "Delete files from disk"
+  },
+  "tree": {
+    "empty": "No motion structure entries."
+  }
+}

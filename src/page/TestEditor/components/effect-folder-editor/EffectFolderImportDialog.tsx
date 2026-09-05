@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ export function EffectFolderImportDialog({
   onImportFile,
   onImportModel,
 }: EffectFolderImportDialogProps) {
+  const { t } = useTranslation("test-effect-folder");
   const [kind, setKind] = useState<ImportKind>(defaultKind);
   const [hashInput, setHashInput] = useState("");
   const [sourcePath, setSourcePath] = useState("");
@@ -83,7 +85,7 @@ export function EffectFolderImportDialog({
   const handleSubmit = useCallback(async () => {
     const hashId = parseHashInput(hashInput);
     if (hashId == null) {
-      setError("Enter a valid hash (decimal or 0xHEX).");
+      setError(t("importDialog.invalidHash"));
       return;
     }
     setError(null);
@@ -102,77 +104,75 @@ export function EffectFolderImportDialog({
       });
     }
     onOpenChange(false);
-  }, [hashInput, kind, onImportFile, onImportModel, onOpenChange, sourcePath, targetName]);
+  }, [hashInput, kind, onImportFile, onImportModel, onOpenChange, sourcePath, t, targetName]);
 
   return (
     <Dialog open={dialogOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Import effect asset</DialogTitle>
-          <DialogDescription>
-            Add an efxbn, nutexb texture, or model folder entry to the effect pack structure. Use a real source asset
-            for normal imports.
-          </DialogDescription>
+          <DialogTitle>{t("importDialog.title")}</DialogTitle>
+          <DialogDescription>{t("importDialog.description")}</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
           <div className="grid gap-2">
-            <Label htmlFor="effect-import-kind">Asset kind</Label>
+            <Label htmlFor="effect-import-kind">{t("importDialog.assetKind")}</Label>
             <Select value={kind} onValueChange={(value) => setKind(value as ImportKind)}>
               <SelectTrigger id="effect-import-kind">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="efxbn">EFXBN</SelectItem>
-                <SelectItem value="texture">Texture (nutexb)</SelectItem>
-                <SelectItem value="model">Model folder</SelectItem>
+                <SelectItem value="texture">{t("importDialog.textureNutexb")}</SelectItem>
+                <SelectItem value="model">{t("importDialog.modelFolder")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="effect-import-hash">Hash ID</Label>
+            <Label htmlFor="effect-import-hash">{t("importDialog.hashId")}</Label>
             <Input
               id="effect-import-hash"
               value={hashInput}
               onChange={(event) => setHashInput(event.target.value)}
-              placeholder="0xBDBE6FEA or -1147211798"
+              placeholder={t("importDialog.hashPlaceholder")}
               className="font-mono"
             />
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor="effect-import-source">
-              {kind === "model" ? "Source folder (optional)" : "Source file (optional)"}
+              {kind === "model" ? t("importDialog.sourceFolder") : t("importDialog.sourceFile")}
             </Label>
             <div className="flex gap-2">
               <FilePathInput
                 id="effect-import-source"
                 value={sourcePath}
                 onChange={(event) => setSourcePath(event.target.value)}
-                placeholder={kind === "model" ? "Pick model folder" : "Pick efxbn or nutexb file"}
+                placeholder={kind === "model" ? t("importDialog.pickFolder") : t("importDialog.pickFile")}
               />
               <Button type="button" variant="outline" onClick={() => void (kind === "model" ? pickSourceDir() : pickSourceFile())}>
-                Browse
+                {t("actions.browse")}
               </Button>
             </div>
             {sourceIsEmpty ? (
               <div className="flex gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-[11px] text-amber-800 dark:text-amber-200">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <span>No source selected. This creates a placeholder entry and should be validated before repack.</span>
+                <span>{t("importDialog.noSource")}</span>
               </div>
             ) : null}
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor="effect-import-target">
-              {kind === "model" ? "Target folder name (optional)" : "Target filename (optional)"}
+              {kind === "model" ? t("importDialog.targetFolder") : t("importDialog.targetFile")}
             </Label>
             <Input
               id="effect-import-target"
               value={targetName}
               onChange={(event) => setTargetName(event.target.value)}
               placeholder={kind === "model" ? "model_folder" : "effect_name"}
+              data-i18n-ignore=""
             />
           </div>
 
@@ -181,11 +181,11 @@ export function EffectFolderImportDialog({
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
-            Cancel
+            {t("actions.cancel")}
           </Button>
           <Button type="button" onClick={() => void handleSubmit()} disabled={busy}>
             {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            {sourceIsEmpty ? "Create placeholder" : "Import"}
+            {sourceIsEmpty ? t("importDialog.createPlaceholder") : t("actions.import")}
           </Button>
         </DialogFooter>
       </DialogContent>

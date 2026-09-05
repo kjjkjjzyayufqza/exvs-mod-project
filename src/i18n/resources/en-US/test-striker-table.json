@@ -1,0 +1,64 @@
+{
+  "title": "Striker Table",
+  "file": "File",
+  "loading": "Loading {{fileName}}...",
+  "summary": "{{fileName}} — {{count}} hosts",
+  "hosts": "Hosts ({{count}})",
+  "searchPlaceholder": "Search host or slot IDs...",
+  "new": "New",
+  "editRow": "Edit row (index: {{index}})",
+  "idHint": "IDs are unsigned. Dual fields show decimal and hex.",
+  "fields": {
+    "hostUnitId": "HostUnitId",
+    "strikerSlot1": "Slot1",
+    "strikerSlot2": "Slot2"
+  },
+  "empty": {
+    "selectFolder": "Select a workspace folder in the toolbar.",
+    "noRows": "No rows found",
+    "selectHost": "Select a host row to edit slots."
+  },
+  "actions": {
+    "reload": "Reload",
+    "openFolder": "Open folder",
+    "importJson": "Import JSON",
+    "exportJson": "Export JSON",
+    "saveFile": "Save File",
+    "add": "Add",
+    "copyAsNew": "Copy as new",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "applyImport": "Apply import"
+  },
+  "success": {
+    "saved": "Saved {{fileName}}",
+    "exported": "Exported {{count}} rows",
+    "imported": "Imported {{count}} rows"
+  },
+  "errors": {
+    "folderPathEmpty": "Folder path is empty",
+    "notConfigured": "Striker table is not configured for this workspace.",
+    "legacyReadOnly": "Legacy flat workspace content is read-only",
+    "duplicateHostIds": "Duplicate HostUnitId values: {{ids}}",
+    "saveFailed": "Failed to save striker table",
+    "pathNotExist": "Path does not exist",
+    "openFolderFailed": "Failed to open folder",
+    "exportFailed": "Failed to export JSON: {{message}}",
+    "invalidJson": "Invalid JSON: no valid entries found",
+    "importFailed": "Failed to import JSON: {{message}}",
+    "applyImportFailed": "Failed to apply import",
+    "unknown": "Unknown error"
+  },
+  "import": {
+    "title": "Import striker table JSON?",
+    "subtitle": "Replace rows in {{fileName}}.",
+    "description": "This replaces all rows in the current file with valid entries from the JSON file.",
+    "validRows": "Valid rows: {{count}}",
+    "invalidRows": "Invalid / skipped: {{count}}",
+    "duplicates": "Duplicate HostUnitId values in file: {{ids}}"
+  },
+  "delete": {
+    "title": "Delete row?",
+    "description": "This removes the entry from the list. Save the file to write to disk."
+  }
+}

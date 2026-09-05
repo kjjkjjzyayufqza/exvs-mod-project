@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, memo, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ChevronRight,
   ChevronDown,
@@ -226,7 +227,7 @@ function folderDisplayName(role: string): string {
   return "folder";
 }
 
-function formatStructureTreeText(nodes: TreeNode[]): string {
+function formatStructureTreeText(nodes: TreeNode[], t: (key: string) => string): string {
   const lines: string[] = [];
 
   const walk = (node: TreeNode) => {
@@ -235,7 +236,7 @@ function formatStructureTreeText(nodes: TreeNode[]): string {
       const entry = node.entry;
       if (entry.type !== "Folder") return;
       lines.push(
-        `${prefix}${folderDisplayName(node.semanticRole)}/  x${entry.folderCount}  u1=${entry.unk1} u2=${entry.unk2} u2_1=${entry.unk2_1} u3=${entry.unk3} u4=${entry.unk4} u5=${entry.unk5} u6=${entry.unk6}`,
+        `${prefix}${t(`structure.roles.${node.semanticRole}`)}/  x${entry.folderCount}  u1=${entry.unk1} u2=${entry.unk2} u2_1=${entry.unk2_1} u3=${entry.unk3} u4=${entry.unk4} u5=${entry.unk5} u6=${entry.unk6}`,
       );
     } else {
       const entry = node.entry;
@@ -258,12 +259,12 @@ function formatStructureTreeText(nodes: TreeNode[]): string {
   return lines.join("\n");
 }
 
-async function copyStructureTreeToClipboard(nodes: TreeNode[]): Promise<void> {
+async function copyStructureTreeToClipboard(nodes: TreeNode[], t: (key: string) => string): Promise<void> {
   try {
-    await writeText(formatStructureTreeText(nodes));
-    toast.success("Copied structure tree to clipboard");
+    await writeText(formatStructureTreeText(nodes, t));
+    toast.success(t("clipboard.copied"));
   } catch {
-    toast.error("Failed to copy to clipboard");
+    toast.error(t("clipboard.copyFailed"));
   }
 }
 
@@ -274,6 +275,7 @@ export interface ExvsStructureViewerProps {
 }
 
 export const ExvsStructureViewer = memo(function ExvsStructureViewer({ data }: ExvsStructureViewerProps) {
+  const { t } = useTranslation("scene-structure-graphic");
   const [filter, setFilter] = useState("");
   const tree = useMemo(() => buildTreeFromFlat(data.SubFileStructure, data.SubFileData), [data]);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => collectDefaultExpanded(tree));
@@ -300,8 +302,8 @@ export const ExvsStructureViewer = memo(function ExvsStructureViewer({ data }: E
   }, []);
 
   const handleCopyTree = useCallback(() => {
-    void copyStructureTreeToClipboard(tree);
-  }, [tree]);
+    void copyStructureTreeToClipboard(tree, t);
+  }, [tree, t]);
 
   const renderRow = useCallback(
     (row: FlatRow) => <TreeRow row={row} onToggle={toggleExpanded} />,
@@ -316,7 +318,7 @@ export const ExvsStructureViewer = memo(function ExvsStructureViewer({ data }: E
       <div className="flex items-center gap-2 border-b px-3 py-2">
         <Layers className="h-4 w-4 text-muted-foreground" />
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          FHM2D Structure
+          {t("structure.title")}
         </span>
         <div className="ml-auto flex items-center gap-1.5">
           <Tooltip>
@@ -326,19 +328,19 @@ export const ExvsStructureViewer = memo(function ExvsStructureViewer({ data }: E
                 size="icon"
                 className="h-6 w-6"
                 onClick={handleCopyTree}
-                aria-label="Copy structure tree"
+                aria-label={t("structure.copyAria")}
               >
                 <Copy className="h-3.5 w-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="text-xs">
-              Copy entire tree
+              {t("structure.copyTooltip")}
             </TooltipContent>
           </Tooltip>
           <Badge variant="secondary" className="h-5 px-2 text-[10px] font-mono">
-            {data.Fhm2dTotalCount} files
+            {t("structure.fileCount", { count: data.Fhm2dTotalCount })}
           </Badge>
-          <Badge variant="outline" className="h-5 px-2 text-[10px] font-mono">
+          <Badge variant="outline" className="h-5 px-2 text-[10px] font-mono" data-i18n-ignore="">
             unk={data.UnkCount}
           </Badge>
         </div>
@@ -351,7 +353,7 @@ export const ExvsStructureViewer = memo(function ExvsStructureViewer({ data }: E
           <Input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter..."
+            placeholder={t("structure.filterPlaceholder")}
             className="h-7 pl-8 text-xs placeholder:text-muted-foreground/50"
           />
         </div>
@@ -380,9 +382,9 @@ export const ExvsStructureViewer = memo(function ExvsStructureViewer({ data }: E
         className="flex-1 min-h-0 overflow-auto p-1"
         emptyState={
           filter ? (
-            <p className="px-2 py-4 text-center text-[10px] text-muted-foreground">No matching nodes</p>
+            <p className="px-2 py-4 text-center text-[10px] text-muted-foreground">{t("structure.noMatchingNodes")}</p>
           ) : (
-            <p className="px-2 py-4 text-center text-[10px] text-muted-foreground">No structure entries</p>
+            <p className="px-2 py-4 text-center text-[10px] text-muted-foreground">{t("structure.noEntries")}</p>
           )
         }
       />
@@ -445,16 +447,17 @@ const TreeRow = memo(function TreeRow({
 // ── Folder label with ALL unk fields ─────────────────────────────────────────
 
 function FolderLabel({ entry, role }: { entry: StructureFolder; role: string }) {
+  const { t } = useTranslation("scene-structure-graphic");
   const tagColor = TAG_COLORS[role];
 
   return (
     <div className="flex items-center gap-1 min-w-0 flex-1">
       <span className="truncate font-medium text-foreground/80">
-        {folderDisplayName(role)}
+        {t(`structure.roles.${role}`)}
       </span>
       <span className="text-muted-foreground/50 font-mono text-[9px]">×{entry.folderCount}</span>
 
-      <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-muted/80 text-muted-foreground/70 border border-border/50">
+      <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-muted/80 text-muted-foreground/70 border border-border/50" data-i18n-ignore="">
         u1={entry.unk1} u2={entry.unk2} u2_1={entry.unk2_1} u3={entry.unk3} u4={entry.unk4} u5={entry.unk5} u6={entry.unk6}
       </span>
 
@@ -482,7 +485,7 @@ function ItemLabel({ node }: { node: TreeNode }) {
       </span>
       <span className="text-[9px] text-muted-foreground/40">{file?.fileType}</span>
 
-      <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-muted/80 text-muted-foreground/70 border border-border/50">
+      <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-muted/80 text-muted-foreground/70 border border-border/50" data-i18n-ignore="">
         u1={entry.unk1} u2={entry.unk2} u2_1={entry.unk2_1} u3={entry.unk3} u4={entry.unk4}
       </span>
 

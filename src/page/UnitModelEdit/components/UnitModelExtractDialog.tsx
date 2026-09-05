@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, FolderOutput, Loader2, PackageOpen } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import {
@@ -51,6 +52,7 @@ type UnitModelExtractDialogProps = {
 };
 
 export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: UnitModelExtractDialogProps) {
+  const { t } = useTranslation("unit-add-extract");
   const extractOutputPath = useConfigStore((state) => state.extractOutputPath ?? "");
   const unitModelOutputPath = useConfigStore((state) => state.unitModelOutputPath ?? "");
   const setSetting = useConfigStore((state) => state.setSetting);
@@ -138,7 +140,7 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
     const trimmedSource = sourcePath.trim();
     const trimmedOutput = outputDirectory.trim();
     if (!trimmedSource || !trimmedOutput) {
-      toast.error("Select a source .fhm2d and an output directory");
+      toast.error(t("extract.errors.selectSourceAndOutput"));
       return;
     }
 
@@ -148,11 +150,11 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
       const result = await extractUnitModelToFolder(trimmedSource, outRoot);
       await onExtracted(result);
       onOpenChange(false);
-      toast.success("Extracted unit model to folders", {
-        description: `${result.modelCount} models, ${result.totalFiles} files`,
+      toast.success(t("extract.success.title"), {
+        description: t("extract.success.description", { models: result.modelCount, files: result.totalFiles }),
       });
     } catch (error) {
-      toast.error("Failed to extract unit model", { description: String(error) });
+      toast.error(t("extract.errors.failed"), { description: String(error) });
     } finally {
       setIsExtracting(false);
       setOverwriteOpen(false);
@@ -181,8 +183,8 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
       {open ? (
         <AppRndModalShell
           titleId="unit-model-extract-title"
-          title="Extract .fhm2d to folders"
-          subtitle="Choose a unit-model archive and output directory"
+          title={t("extract.title")}
+          subtitle={t("extract.subtitle")}
           headerIcon={<PackageOpen className="h-5 w-5 text-primary" />}
           dimensions={UNIT_MODEL_EXTRACT_DIMENSIONS}
           storageKey="app.rnd-size.unit-model-extract"
@@ -191,7 +193,7 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
           footer={
             <div className="flex justify-end gap-2 p-3">
               <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isExtracting}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button onClick={handleExtractClick} disabled={!canExtract}>
                 {isExtracting ? (
@@ -199,14 +201,14 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
                 ) : (
                   <PackageOpen className="mr-2 h-4 w-4" />
                 )}
-                {isExtracting ? "Extracting..." : folderExists ? "Extract and overwrite" : "Extract"}
+                {isExtracting ? t("extract.extracting") : folderExists ? t("extract.extractAndOverwrite") : t("extract.extract")}
               </Button>
             </div>
           }
         >
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
             <div className="space-y-2">
-              <Label htmlFor="unit-model-extract-source">Source .fhm2d</Label>
+              <Label htmlFor="unit-model-extract-source">{t("extract.source")}</Label>
               <FilePathInput
                 id="unit-model-extract-source"
                 value={sourcePath}
@@ -223,10 +225,10 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
                   );
                 }}
                 readOnly
-                placeholder="Select a .fhm2d file..."
+                placeholder={t("extract.sourcePlaceholder")}
                 picker={{
                   kind: "file",
-                  title: "Select unit-model .fhm2d",
+                  title: t("extract.sourcePickerTitle"),
                   filters: [{ name: "FHM2D", extensions: ["fhm2d"] }],
                   defaultPathKey: UNIT_MODEL_EXTRACT_SOURCE_DIALOG_PATH_KEY,
                 }}
@@ -241,30 +243,29 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
                 routeId="unit.model"
                 folderPath={previewOutRoot}
                 structureJsonPath={previewStructureJson}
-                description="Use a readable name for this unit-model workspace."
+                description={t("extract.nameDescription")}
               />
 
             <div className="space-y-2">
-              <Label htmlFor="unit-model-extract-output">Output directory</Label>
+              <Label htmlFor="unit-model-extract-output">{t("extract.outputDirectory")}</Label>
               <FilePathInput
                 id="unit-model-extract-output"
                 value={outputDirectory}
                 onChange={(event) => setOutputDirectory(event.target.value)}
                 onPickedValue={(value) => void handleOutputPicked(value)}
                 readOnly
-                placeholder="Select output folder..."
+                placeholder={t("extract.outputPlaceholder")}
                 storeKey={UNIT_MODEL_OUTPUT_PATH_SETTING_KEY}
                 persistPickedValue
                 picker={{
                   kind: "folder",
-                  title: "Select unit-model extract output folder",
+                  title: t("extract.outputPickerTitle"),
                   defaultPath: resolvedDefaultOutput || extractOutputPath || undefined,
                   defaultPathKey: UNIT_MODEL_EXTRACT_OUTPUT_DIALOG_PATH_KEY,
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                Defaults to Config Extract Output Path when Unit Model output path is empty. Picking a
-                folder here updates only the Unit Model output path.
+                {t("extract.outputHint")}
               </p>
             </div>
 
@@ -280,10 +281,9 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
               <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-sm text-amber-900 dark:text-amber-100">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="space-y-1">
-                  <div className="font-medium">Output folder already exists</div>
+                  <div className="font-medium">{t("extract.collision.title")}</div>
                   <p className="text-xs text-muted-foreground">
-                    Re-extracting will write into the existing folder. Files may be merged or replaced.
-                    Extract requires a second confirmation.
+                    {t("extract.collision.description")}
                   </p>
                   {collisionOutRoot ? (
                     <p className="break-all font-mono text-[11px] text-foreground">{collisionOutRoot}</p>
@@ -296,8 +296,7 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
               <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2.5 text-sm text-destructive">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>
-                  Extract Output Path is not configured. Set it in Config or choose an output directory
-                  here.
+                  {t("extract.missingOutputPath")}
                 </span>
               </div>
             ) : null}
@@ -308,11 +307,11 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
       <AlertDialog open={overwriteOpen} onOpenChange={(next) => (!isExtracting ? setOverwriteOpen(next) : undefined)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Overwrite existing folder?</AlertDialogTitle>
+            <AlertDialogTitle>{t("extract.overwrite.title")}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-left text-sm text-muted-foreground">
                 <p>
-                  The target folder already exists. Continuing will merge or replace files inside it.
+                  {t("extract.overwrite.description")}
                 </p>
                 {collisionOutRoot ? (
                   <p className="break-all font-mono text-xs text-foreground">{collisionOutRoot}</p>
@@ -321,7 +320,7 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isExtracting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isExtracting}>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={(event) => {
@@ -333,12 +332,12 @@ export function UnitModelExtractDialog({ open, onOpenChange, onExtracted }: Unit
               {isExtracting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Extracting...
+                  {t("extract.extracting")}
                 </>
               ) : (
                 <>
                   <FolderOutput className="mr-2 h-4 w-4" />
-                  Overwrite and extract
+                  {t("extract.overwrite.action")}
                 </>
               )}
             </AlertDialogAction>

@@ -11,6 +11,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import { useConfigStore } from "@/store/configStore";
+import { useTranslation } from "react-i18next";
 import {
   resolveMotionPackFromFolderPathAsync,
   resolveMotionPackFromStructureJson,
@@ -55,6 +56,7 @@ export default function MotionFolderEditorView({
   onUnsavedChanges,
   onPackMutated,
 }: MotionFolderEditorViewProps) {
+  const { t } = useTranslation("test-motion-folder-panels");
   const store = useConfigStore((state) => state.store);
   const suggestedPack = useMemo(
     () => resolveMotionPackFromStructureJson(workspaceRoot, structureJsonPath, workspaceDocument),
@@ -181,12 +183,12 @@ export default function MotionFolderEditorView({
         workspaceDocument,
       );
       if (!pack) {
-        setLoadError("Enter a valid motion folder path.");
+        setLoadError(t("errors.invalidFolderPath"));
         return;
       }
       activatePack(pack);
     })();
-  }, [activatePack, folderInput, workspaceDocument, workspaceRoot]);
+  }, [activatePack, folderInput, t, workspaceDocument, workspaceRoot]);
 
   const runReplace = useCallback(async () => {
     const selected = await open({
@@ -206,17 +208,17 @@ export default function MotionFolderEditorView({
         <CardHeader className="shrink-0 space-y-3 p-0 pb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <CardTitle>Motion Folder</CardTitle>
+              <CardTitle>{t("title")}</CardTitle>
               {headerPath ? (
-                <div className="mt-1 flex items-center gap-1 break-all text-xs text-muted-foreground">
+                <div className="mt-1 flex items-center gap-1 break-all text-xs text-muted-foreground" data-i18n-ignore="">
                   <span>{headerPath}</span>
                   {activePack ? (
                     <button
                       type="button"
                       onClick={() => void openPath(activePack.folderPath)}
                       className="shrink-0 rounded p-0.5 hover:bg-accent hover:text-accent-foreground"
-                      title="Open folder"
-                      aria-label="Open folder"
+                      title={t("actions.openFolder")}
+                      aria-label={t("actions.openFolder")}
                     >
                       <FolderOpen className="h-3.5 w-3.5" />
                     </button>
@@ -224,25 +226,33 @@ export default function MotionFolderEditorView({
                 </div>
               ) : (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Load a folder such as <span className="font-mono">003motion\0xHASH</span>. Structure JSON is
-                  inferred from the sibling file.
+                  {t("help.loadExample", { example: "003motion\\0xHASH" })}
                 </p>
               )}
               {inventory ? (
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                  <span>{inventory.summary.totalFiles} motions</span>
-                  <span>{inventory.summary.folderCount} folders</span>
-                  <span>{inventory.summary.linkedItemCount + inventory.summary.linkedFolderCount} parse links</span>
-                  <span>{inventory.summary.nonZeroUnk1Count} unk1</span>
-                  <span>{inventory.summary.nonZeroUnk2Count} unk2</span>
+                  <span>{t("summary.motions")} {inventory.summary.totalFiles}</span>
+                  <span>{t("summary.folders")} {inventory.summary.folderCount}</span>
+                  <span>
+                    {inventory.summary.linkedItemCount + inventory.summary.linkedFolderCount} {t("summary.parseLinks")}
+                  </span>
+                  <span data-i18n-ignore="">
+                    {inventory.summary.nonZeroUnk1Count} unk1
+                  </span>
+                  <span data-i18n-ignore="">
+                    {inventory.summary.nonZeroUnk2Count} unk2
+                  </span>
                   {editor.hasUnsavedChanges ? (
-                    <span className="text-amber-600 dark:text-amber-400">unsaved</span>
+                    <span className="text-amber-600 dark:text-amber-400">{t("states.unsaved")}</span>
                   ) : null}
                 </div>
               ) : null}
               {suggestedPack && !activePack ? (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Tree selection: <span className="break-all font-mono">{suggestedPack.folderPath}</span>
+                  {t("status.treeSelection")}{" "}
+                  <span className="break-all font-mono" data-i18n-ignore="">
+                    {suggestedPack.folderPath}
+                  </span>
                 </p>
               ) : null}
             </div>
@@ -262,7 +272,7 @@ export default function MotionFolderEditorView({
                   ) : (
                     <RefreshCw className="h-4 w-4" />
                   )}
-                  Refresh
+                  {t("actions.refresh")}
                 </Button>
                 <Button
                   type="button"
@@ -277,7 +287,7 @@ export default function MotionFolderEditorView({
                   ) : (
                     <Save className="h-4 w-4" />
                   )}
-                  Save
+                  {t("actions.save")}
                 </Button>
                 <Button
                   type="button"
@@ -288,7 +298,7 @@ export default function MotionFolderEditorView({
                   className={toolbarButtonClass}
                 >
                   <Plus className="h-4 w-4" />
-                  Add
+                  {t("actions.add")}
                 </Button>
                 <Button
                   type="button"
@@ -299,7 +309,7 @@ export default function MotionFolderEditorView({
                   className={toolbarButtonClass}
                 >
                   <Replace className="h-4 w-4" />
-                  Replace
+                  {t("actions.replace")}
                 </Button>
                 <Button
                   type="button"
@@ -310,7 +320,7 @@ export default function MotionFolderEditorView({
                   className={toolbarButtonClass}
                 >
                   <Trash2 className="h-4 w-4" />
-                  Remove
+                  {t("actions.remove")}
                 </Button>
               </div>
             ) : null}
@@ -318,11 +328,11 @@ export default function MotionFolderEditorView({
 
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-0 max-w-2xl flex-1">
-              <Label className="text-[10px] text-muted-foreground">Motion folder</Label>
+              <Label className="text-[10px] text-muted-foreground">{t("labels.motionFolder")}</Label>
               <FilePathInput
                 value={folderInput}
                 onChange={(event) => setFolderInput(event.target.value)}
-                placeholder="E:\\workspace\\003motion\\0xHASH"
+                placeholder={t("placeholders.folderPath")}
                 className="mt-0.5 font-mono text-xs"
               />
             </div>
@@ -335,10 +345,10 @@ export default function MotionFolderEditorView({
                 className={toolbarButtonClass}
               >
                 <FolderOpen className="h-4 w-4" />
-                Browse
+                {t("actions.browse")}
               </Button>
               <Button type="button" size="sm" variant="secondary" onClick={loadFolder} className={toolbarButtonClass}>
-                Load
+                {t("actions.load")}
               </Button>
             </div>
           </div>
@@ -350,19 +360,19 @@ export default function MotionFolderEditorView({
           {!activePack ? (
             <div className="flex h-48 shrink-0 flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-muted/5 text-sm text-muted-foreground">
               <FolderOpen className="h-8 w-8 opacity-50" />
-              <p>Set a motion folder path, then Load.</p>
+              <p>{t("states.setPathThenLoad")}</p>
             </div>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border">
               {editor.loadState.status === "loading" ? (
                 <div className="flex flex-1 items-center justify-center p-4 text-sm text-muted-foreground">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Loading motion inventory...
+                  {t("states.loadingInventory")}
                 </div>
               ) : null}
 
               {editor.loadState.status === "error" ? (
-                <div className="flex flex-1 items-center justify-center p-4 text-sm text-destructive">
+                <div className="flex flex-1 items-center justify-center p-4 text-sm text-destructive" data-i18n-ignore="">
                   {editor.loadState.message}
                 </div>
               ) : null}
@@ -374,7 +384,7 @@ export default function MotionFolderEditorView({
                     <Input
                       value={editor.searchQuery}
                       onChange={(event) => editor.setSearchQuery(event.target.value)}
-                      placeholder="Search by name, unk1, unk2, fileIndex, or path"
+                      placeholder={t("placeholders.search")}
                       className="h-8 min-w-0 flex-1 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
                     />
                     <div className="flex shrink-0 items-center gap-1 border-l border-border/60 pl-2">
@@ -389,16 +399,18 @@ export default function MotionFolderEditorView({
                         <ToggleGroupItem
                           value="le"
                           className="h-7 px-2 text-[10px]"
-                          title="Show structure JSON LE bytes (e.g. a621fd5e)"
-                          aria-label="Little-endian hex display"
+                          title={t("help.hexLeTitle")}
+                          aria-label={t("aria.leStructureHex")}
+                          data-i18n-ignore=""
                         >
                           LE
                         </ToggleGroupItem>
                         <ToggleGroupItem
                           value="be"
                           className="h-7 px-2 text-[10px]"
-                          title="Show MSC integer spelling / byte-swapped (e.g. 5efd21a6)"
-                          aria-label="Big-endian MSC hex display"
+                          title={t("help.hexBeTitle")}
+                          aria-label={t("aria.beMscHex")}
+                          data-i18n-ignore=""
                         >
                           BE
                         </ToggleGroupItem>
@@ -410,7 +422,7 @@ export default function MotionFolderEditorView({
                         className="h-7 px-2 text-xs"
                         onClick={() => editor.selectAllSearchMatches()}
                       >
-                        Select visible
+                        {t("actions.selectVisible")}
                       </Button>
                       <Button
                         type="button"
@@ -419,15 +431,15 @@ export default function MotionFolderEditorView({
                         className="h-7 px-2 text-xs"
                         onClick={() => editor.clearSelection()}
                       >
-                        Clear
+                        {t("actions.clear")}
                       </Button>
                       {editor.selectedNodes.length > 0 ? (
                         <span className="whitespace-nowrap px-1 text-xs tabular-nums text-muted-foreground">
-                          {editor.selectedNodes.length} selected
+                          {t("status.selected", { count: editor.selectedNodes.length })}
                         </span>
                       ) : (
                         <span className="whitespace-nowrap px-1 text-xs tabular-nums text-muted-foreground">
-                          {editor.flatNodes.length} entries
+                          {t("status.entries", { count: editor.flatNodes.length })}
                         </span>
                       )}
                     </div>

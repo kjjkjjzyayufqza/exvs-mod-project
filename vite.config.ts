@@ -26,7 +26,7 @@ export default defineConfig(async () => ({
     // Pre-transform the always-loaded shell so first paint isn't blocked on a
     // cold request waterfall.
     warmup: {
-      clientFiles: ["./src/main.tsx", "./src/App.tsx", "./src/page/Main/page.tsx"],
+      clientFiles: ["./src/main.tsx", "./src/App.tsx", "./src/page/TestEditor/page.tsx"],
     },
   },
   // 3. to make use of `TAURI_DEBUG` and other env variables

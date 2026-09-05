@@ -1,4 +1,5 @@
 import { useDeferredValue, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,7 @@ export function BoneIndexSearchSelect({
   instanceId,
   ariaLabel,
 }: BoneIndexSearchSelectProps) {
+  const { t } = useTranslation("ssbh-components");
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
@@ -129,12 +131,12 @@ export function BoneIndexSearchSelect({
       >
         <div className="flex flex-col gap-1 border-b p-2">
           <Label htmlFor={searchInputId} className="sr-only">
-            Search bone index or name
+            {t("bone.searchLabel")}
           </Label>
           <Input
             id={searchInputId}
             name={`${instanceId}-bone-search`}
-            placeholder="Search index or name..."
+            placeholder={t("bone.searchPlaceholder")}
             className="h-8 text-[11px]"
             value={query}
             autoComplete="off"
@@ -142,15 +144,15 @@ export function BoneIndexSearchSelect({
           />
         </div>
         <ScrollArea className="h-[min(280px,40vh)]">
-          <div id={`${instanceId}-bone-listbox`} className="p-1" role="listbox" aria-label="Bone list">
+          <div id={`${instanceId}-bone-listbox`} className="p-1" role="listbox" aria-label={t("bone.listLabel")}>
             {totalBones > MAX_OPTIONS_WITHOUT_QUERY && !qTrim && (
               <p className="px-2 py-1 text-[10px] text-muted-foreground">
-                Showing first {MAX_OPTIONS_WITHOUT_QUERY} of {totalBones} bones. Type to search.
+                {t("bone.showingFirst", { shown: MAX_OPTIONS_WITHOUT_QUERY, total: totalBones })}
               </p>
             )}
             {filteredSearchTruncated && (
               <p className="px-2 py-1 text-[10px] text-muted-foreground">
-                List capped for performance. Narrow your search.
+                {t("bone.listCapped")}
               </p>
             )}
             {options.map(({ index, name }) => (
@@ -176,7 +178,7 @@ export function BoneIndexSearchSelect({
               </button>
             ))}
             {options.length === 0 && (
-              <p className="px-2 py-4 text-center text-[11px] text-muted-foreground">No matches.</p>
+              <p className="px-2 py-4 text-center text-[11px] text-muted-foreground">{t("common.noMatches")}</p>
             )}
           </div>
         </ScrollArea>

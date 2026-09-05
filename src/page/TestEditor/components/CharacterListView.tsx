@@ -6,6 +6,7 @@ import { openPath } from "@tauri-apps/plugin-opener";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { Buffer } from "buffer";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Download, Upload, RefreshCw, Save, Info, FolderOpen } from "lucide-react";
 
 import { AppRndModalShell } from "@/components/AppRndModalShell";
@@ -134,6 +135,7 @@ export default function CharacterListView({
   onRevealTreeFolder,
   workspaceDocument,
 }: CharacterListViewProps) {
+  const { t } = useTranslation("test-character-list-view");
   const obDplCachePath = useConfigStore((state) => state.obDplCachePath);
   const obModPath = useConfigStore((state) => state.obModPath);
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
@@ -227,7 +229,7 @@ export default function CharacterListView({
 
   const load = useCallback(async () => {
     if (!folderPath) {
-      setLoadState({ status: "error", filePath: "", message: "Folder path is empty" });
+      setLoadState({ status: "error", filePath: "", message: t("errors.folderPathEmpty") });
       resetEditorState();
       return;
     }
@@ -237,7 +239,7 @@ export default function CharacterListView({
       setLoadState({
         status: "error",
         filePath: content.configured.folderPath,
-        message: "Character list content path is not configured",
+        message: t("errors.characterListNotConfigured"),
       });
       resetEditorState();
       return;
@@ -256,14 +258,14 @@ export default function CharacterListView({
       resetEditorState();
     } catch (error) {
       console.error(error);
-      setLoadState({ status: "error", filePath, message: error instanceof Error ? error.message : "Unknown error" });
+      setLoadState({ status: "error", filePath, message: error instanceof Error ? error.message : t("errors.unknown") });
       resetEditorState();
     }
   }, [folderPath, resetEditorState, resolveContentFilePath]);
 
   const loadBgmPicker = useCallback(async () => {
     if (!folderPath) {
-      setBgmPickerState({ status: "error", message: "Folder path is empty" });
+      setBgmPickerState({ status: "error", message: t("errors.folderPathEmpty") });
       return;
     }
     setBgmPickerState({ status: "loading" });
@@ -281,21 +283,21 @@ export default function CharacterListView({
     } catch (error) {
       setBgmPickerState({
         status: "error",
-        message: error instanceof Error ? error.message : "BGM table is not unpacked",
+        message: error instanceof Error ? error.message : t("errors.bgmNotUnpacked"),
       });
     }
   }, [folderPath, resolveContentPackPaths]);
 
   const loadSeriesPicker = useCallback(async () => {
     if (!folderPath) {
-      setSeriesPickerState({ status: "error", filePath: "", convertDirPath: "", message: "Folder path is empty" });
+      setSeriesPickerState({ status: "error", filePath: "", convertDirPath: "", message: t("errors.folderPathEmpty") });
       return;
     }
 
     const { filePath } = await resolveContentFilePath("series-list");
     const { pack: seriesIconsPack } = await resolveContentPackPaths("series-icons");
     if (!filePath) {
-      setSeriesPickerState({ status: "error", filePath: "", convertDirPath: "", message: "Series list content path is not configured" });
+      setSeriesPickerState({ status: "error", filePath: "", convertDirPath: "", message: t("errors.seriesListNotConfigured") });
       return;
     }
     const convertDirPath = await join(seriesIconsPack.folderPath, "__convert");
@@ -347,7 +349,7 @@ export default function CharacterListView({
 
   const loadCardIconMap = useCallback(async () => {
     if (!folderPath) {
-      setCardIconMapState({ status: "error", filePath: "", convertDirPath: "", message: "Folder path is empty" });
+      setCardIconMapState({ status: "error", filePath: "", convertDirPath: "", message: t("errors.folderPathEmpty") });
       return;
     }
 
@@ -469,13 +471,13 @@ export default function CharacterListView({
       const normalizedPath = isWindowsPath ? rawPath.replace(/\//g, "\\") : rawPath.replace(/\\/g, "/");
 
       if (normalizedPath.includes('"')) {
-        toast.error('Invalid path: contains a quote character (")');
+        toast.error(t("errors.invalidPathQuote"));
         return;
       }
 
       const pathExists = await exists(normalizedPath);
       if (!pathExists) {
-        toast.error("Path does not exist");
+        toast.error(t("errors.pathNotExist"));
         return;
       }
 
@@ -483,7 +485,7 @@ export default function CharacterListView({
     } catch (error) {
       console.error("Error opening path:", error);
       const message = error instanceof Error ? error.message : String(error);
-      toast.error(message ? `Failed to open: ${message}` : "Failed to open");
+      toast.error(t("errors.failedToOpen", { message }));
     }
   }, []);
 
@@ -497,7 +499,7 @@ export default function CharacterListView({
         }
       }
       if (!folder) {
-        toast.error("No extracted 009gui folder for this hash");
+        toast.error(t("errors.noExtractedGui"));
         return;
       }
       onRevealTreeFolder?.(folder);
@@ -510,16 +512,16 @@ export default function CharacterListView({
     async (hash: number, fieldKey: string) => {
       const plan = planGuiPackExtract(hash, fieldKey, guiPackItems);
       if (!plan) {
-        toast.error(hash === 0 ? "No pack hash" : "Pack is already extracted");
+        toast.error(hash === 0 ? t("errors.noPackHash") : t("errors.packAlreadyExtracted"));
         return;
       }
       const dplCachePath = (obDplCachePath ?? "").trim();
       if (!dplCachePath) {
-        toast.error("Set OB dplcache path in Config");
+        toast.error(t("errors.setObDplcache"));
         return;
       }
       if (!folderPath) {
-        toast.error("Set EXVS2 Workspace folder first");
+        toast.error(t("errors.setWorkspace"));
         return;
       }
       setExtractingGuiHash(plan.hash);
@@ -559,34 +561,34 @@ export default function CharacterListView({
     async (hash: number, fieldKey: string, requestedName: string) => {
       const normalized = hash >>> 0;
       if (normalized === 0) {
-        toast.error("No pack hash");
+        toast.error(t("errors.noPackHash"));
         throw new Error("No pack hash");
       }
       if (!isPilotGuiCloneKey(fieldKey) && !isMsGuiCloneKey(fieldKey)) {
-        toast.error("This field cannot be cloned from character_list");
+        toast.error(t("errors.fieldCannotClone"));
         throw new Error("This field cannot be cloned from character_list");
       }
       if (loadState.status !== "ready" || !loadState.writable) {
-        toast.error("Character list is read-only");
+        toast.error(t("errors.readOnly"));
         throw new Error("Character list is read-only");
       }
       const entry = loadState.list.entries[selectedIndex];
       if (!entry) {
-        toast.error("Select a character first");
+        toast.error(t("errors.selectCharacter"));
         throw new Error("Select a character first");
       }
       const dplCachePath = (obDplCachePath ?? "").trim();
       if (!dplCachePath) {
-        toast.error("Set OB dplcache path in Config");
+        toast.error(t("errors.setObDplcache"));
         throw new Error("Set OB dplcache path in Config");
       }
       if (!folderPath) {
-        toast.error("Set EXVS2 Workspace folder first");
+        toast.error(t("errors.setWorkspace"));
         throw new Error("Set EXVS2 Workspace folder first");
       }
       const structureName = sanitizeFhm2dStructureName(requestedName);
       if (!structureName) {
-        toast.error("Enter a Name for the cloned pack");
+        toast.error(t("errors.enterCloneName"));
         throw new Error("Enter a Name for the cloned pack");
       }
       setCloningGuiHash(normalized);
@@ -648,7 +650,7 @@ export default function CharacterListView({
   const performSave = useCallback(async () => {
     if (loadState.status !== "ready") return;
     if (!loadState.writable) {
-      toast.error("Legacy flat workspace content is read-only");
+      toast.error(t("errors.legacyReadOnly"));
       return;
     }
     const filePath = loadState.filePath;
@@ -673,7 +675,7 @@ export default function CharacterListView({
         outputPath: filePath,
         paramType: "characterlist",
       });
-      toast.success("Saved character_list.bin");
+      toast.success(t("success.saved"));
       setHasChanges(false);
       onUnsavedChanges?.(false);
       try {
@@ -751,11 +753,11 @@ export default function CharacterListView({
       if (!filePath) return;
       const jsonString = JSON.stringify(loadState.list.entries, null, 2);
       await writeTextFile(filePath, jsonString);
-      toast.success(`Exported ${loadState.list.entries.length} characters`);
+      toast.success(t("success.exported", { count: loadState.list.entries.length }));
     } catch (error) {
       console.error(error);
       const message = error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Failed to export JSON: ${message}`);
+      toast.error(t("errors.failedToExport", { message }));
     } finally {
       setIsExporting(false);
     }
@@ -771,7 +773,7 @@ export default function CharacterListView({
       if (!preview) return;
 
       if (preview.validCount === 0) {
-        toast.error("Invalid JSON: no valid entries found");
+      toast.error(t("errors.invalidJson"));
         return;
       }
 
@@ -822,11 +824,11 @@ export default function CharacterListView({
 
       setIsImportDialogOpen(false);
       setImportPreview(null);
-      toast.success(`Imported ${importPreview.validCount} characters`);
+      toast.success(t("success.imported", { count: importPreview.validCount }));
     } catch (error) {
       console.error(error);
       const message = error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Failed to apply import: ${message}`);
+      toast.error(t("errors.failedToApplyImport", { message }));
     } finally {
       setIsImporting(false);
     }
@@ -848,21 +850,21 @@ export default function CharacterListView({
     if (characterIdTableIdSet === null && !characterIdTableIdsError) {
       return {
         disabled: true,
-        tooltip: "Loading character_id_table.bin…",
+        tooltip: t("tooltips.loadingIdTable"),
         onClick: () => {},
       };
     }
     if (characterIdTableIdsError || characterIdTableIdSet === null) {
       return {
         disabled: true,
-        tooltip: `Missing: character_id_table.bin unavailable (${characterIdTableIdsError ?? "unknown"})`,
+        tooltip: t("tooltips.idTableUnavailable", { message: characterIdTableIdsError ?? t("errors.unknown") }),
         onClick: () => {},
       };
     }
     if (loadState.status !== "ready") {
       return {
         disabled: true,
-        tooltip: "Character list is not ready",
+        tooltip: t("tooltips.listNotReady"),
         onClick: () => {},
       };
     }
@@ -870,7 +872,7 @@ export default function CharacterListView({
     if (!selected) {
       return {
         disabled: true,
-        tooltip: "Select a character to edit",
+        tooltip: t("tooltips.selectCharacter"),
         onClick: () => {},
       };
     }
@@ -878,13 +880,13 @@ export default function CharacterListView({
     if (!characterIdTableIdSet.has(id)) {
       return {
         disabled: true,
-        tooltip: `Missing: no row for Character ID ${id} in character_id_table.bin`,
+        tooltip: t("tooltips.idMissing", { id }),
         onClick: () => {},
       };
     }
     return {
       disabled: false,
-      tooltip: `Open Character ID Table and select Character ID ${id}`,
+      tooltip: t("tooltips.openIdTable", { id }),
       onClick: () => onJumpToCharacterIdTable(id),
     };
   }, [characterIdTableIdSet, characterIdTableIdsError, loadState, onJumpToCharacterIdTable, selectedIndex]);
@@ -898,10 +900,10 @@ export default function CharacterListView({
       <div className="h-full w-full">
         <Card className="h-full flex flex-col border-none shadow-none rounded-none bg-transparent">
           <CardHeader className="p-0 pb-4">
-            <CardTitle>Character List</CardTitle>
+            <CardTitle>{t("title")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 p-0">
-            <div className="text-sm text-muted-foreground">Loading character_list.bin...</div>
+            <div className="text-sm text-muted-foreground">{t("loading")}</div>
           </CardContent>
         </Card>
       </div>
@@ -913,23 +915,23 @@ export default function CharacterListView({
       <div className="h-full w-full">
         <Card className="border-none shadow-none rounded-none bg-transparent">
           <CardHeader className="p-0 pb-4">
-            <CardTitle>Character List</CardTitle>
+            <CardTitle>{t("title")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 p-0">
             <div className="text-sm text-muted-foreground">
               {loadState.filePath ? (
                 <>
-                  <div className="font-medium text-foreground">File</div>
+                  <div className="font-medium text-foreground">{t("file")}</div>
                   <div className="break-all">{loadState.filePath}</div>
                 </>
               ) : (
-                <div className="break-all">Folder path is empty</div>
+                <div className="break-all">{t("errors.folderPathEmpty")}</div>
               )}
             </div>
             <div className="text-sm text-destructive">{loadState.message}</div>
             <Button size="sm" onClick={handleReloadAll} className="inline-flex items-center gap-2">
               <RefreshCw className="w-4 h-4" />
-              Reload
+              {t("reload")}
             </Button>
           </CardContent>
         </Card>
@@ -940,7 +942,7 @@ export default function CharacterListView({
   if (loadState.status !== "ready") {
     return (
       <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground">
-        Select this tab to load character_list.bin
+        {t("selectTabToLoad")}
       </div>
     );
   }
@@ -951,22 +953,22 @@ export default function CharacterListView({
         <CardHeader className="p-0 pb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <CardTitle>Character List</CardTitle>
+              <CardTitle>{t("title")}</CardTitle>
               <div className="text-xs text-muted-foreground break-all mt-1 flex items-center gap-1">
                 {loadState.filePath}
                 <button
                   type="button"
                   onClick={() => void handleOpenCharacterListFolder()}
                   className="shrink-0 p-0.5 rounded hover:bg-accent hover:text-accent-foreground"
-                  title="Open folder"
-                  aria-label="Open folder"
+                  title={t("openFolder")}
+                  aria-label={t("openFolder")}
                 >
                   <FolderOpen className="w-3.5 h-3.5" />
                 </button>
               </div>
               {fileMeta && (
                 <div className="text-xs text-muted-foreground mt-1">
-                  Loaded: {fileMeta.count} characters, {fileMeta.commands} commands
+                  {t("loadedSummary", { count: fileMeta.count, commands: fileMeta.commands })}
                 </div>
               )}
               <LegacyWorkspaceMoveNotice
@@ -982,7 +984,7 @@ export default function CharacterListView({
             <div className="flex items-center gap-2 shrink-0">
               <Button size="sm" variant="outline" onClick={handleReloadAll} className="inline-flex items-center gap-2">
                 <RefreshCw className="w-4 h-4" />
-                Reload
+                {t("reload")}
               </Button>
               <Button
                 size="sm"
@@ -990,10 +992,10 @@ export default function CharacterListView({
                 onClick={() => void handlePickImportCharaJson()}
                 disabled={!loadState.writable || isImporting}
                 className="inline-flex items-center gap-2"
-                title="Import characters from JSON"
+                title={t("importTooltip")}
               >
                 <Upload className="w-4 h-4" />
-                Import JSON
+                {t("importJson")}
               </Button>
               <Button
                 size="sm"
@@ -1001,10 +1003,10 @@ export default function CharacterListView({
                 onClick={() => void handleExportCharaJson()}
                 disabled={isExporting || loadState.list.entries.length === 0}
                 className="inline-flex items-center gap-2"
-                title="Export all characters to JSON"
+                title={t("exportTooltip")}
               >
                 <Download className="w-4 h-4" />
-                Export JSON
+                {t("exportJson")}
               </Button>
               <Button
                 size="sm"
@@ -1013,7 +1015,7 @@ export default function CharacterListView({
                 className="inline-flex items-center gap-2"
               >
                 <Info className="w-4 h-4" />
-                Info
+                {t("info")}
               </Button>
               <Button
                 size="sm"
@@ -1022,7 +1024,7 @@ export default function CharacterListView({
                 className="inline-flex items-center gap-2"
               >
                 <Save className="w-4 h-4" />
-                Save File
+                {t("saveFile")}
               </Button>
             </div>
           </div>
@@ -1075,7 +1077,7 @@ export default function CharacterListView({
       {isInfoDialogOpen ? (
         <AppRndModalShell
           titleId="character-list-info-title"
-          title="Info"
+          title={t("info")}
           headerIcon={<Info className="h-5 w-5 text-primary" />}
           dimensions={CHARACTER_LIST_INFO_MODAL_DIMENSIONS}
           storageKey="app.rnd-size.character-list-info"
@@ -1092,8 +1094,8 @@ export default function CharacterListView({
       {isImportDialogOpen ? (
         <AppRndModalShell
           titleId="character-list-import-title"
-          title="Import Chara JSON"
-          subtitle={importPreview ? `Valid ${importPreview.validCount} / ${importPreview.totalCount}` : "No file selected"}
+          title={t("importCharaJson")}
+          subtitle={importPreview ? t("validCounts", { valid: importPreview.validCount, total: importPreview.totalCount }) : t("noFileSelected")}
           headerIcon={<Upload className="h-5 w-5 text-primary" />}
           dimensions={CHARACTER_LIST_IMPORT_MODAL_DIMENSIONS}
           storageKey="app.rnd-size.character-list-import"
@@ -1112,14 +1114,14 @@ export default function CharacterListView({
                 }}
                 disabled={isImporting}
               >
-                Cancel
+                {t("cancel")}
               </Button>
               <Button
                 onClick={() => void handleConfirmImport()}
                 disabled={!loadState.writable || !importPreview || importPreview.validCount === 0 || isImporting}
                 className="inline-flex items-center gap-2"
               >
-                Import
+                {t("import")}
               </Button>
             </div>
           }
@@ -1128,14 +1130,13 @@ export default function CharacterListView({
             {importPreview ? (
               <>
                 <div className="space-y-1 text-sm text-muted-foreground">
-                  <div className="break-all">File: {importPreview.filePath}</div>
+                  <div className="break-all">{t("fileValue", { path: importPreview.filePath })}</div>
                   <div>
-                    Total: {importPreview.totalCount} · Valid: {importPreview.validCount} · Invalid: {importPreview.invalidCount}
-                    {importPreview.duplicateIds.length > 0 ? ` · Duplicates: ${importPreview.duplicateIds.length}` : ""}
+                    {t("importCounts", { total: importPreview.totalCount, valid: importPreview.validCount, invalid: importPreview.invalidCount, duplicates: importPreview.duplicateIds.length })}
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <div className="text-sm font-medium">IDs to import ({importPreview.ids.length})</div>
+                  <div className="text-sm font-medium">{t("idsToImport", { count: importPreview.ids.length })}</div>
                   <div className="max-h-56 overflow-auto rounded-md border p-2 font-mono text-xs whitespace-pre-wrap">
                     {importPreview.ids.slice(0, 500).join(", ")}
                     {importPreview.ids.length > 500 ? `\n... and ${importPreview.ids.length - 500} more` : ""}
@@ -1149,7 +1150,7 @@ export default function CharacterListView({
                 </div>
               </>
             ) : (
-              <div className="text-sm text-muted-foreground">No file selected</div>
+              <div className="text-sm text-muted-foreground">{t("noFileSelected")}</div>
             )}
           </div>
         </AppRndModalShell>

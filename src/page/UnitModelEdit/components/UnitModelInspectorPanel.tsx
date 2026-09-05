@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -7,9 +8,9 @@ import { SsbhModelPreviewMotionPanel } from "@/components/ssbh-model-preview/Ssb
 import { UnitModelTexturePanel } from "./UnitModelTexturePanel";
 
 const TAB_ITEMS = [
-  { name: "Model Preview", value: "modelPreview" },
-  { name: "Textures", value: "textures" },
-  { name: "Motion", value: "motion" },
+  { key: "modelPreview", value: "modelPreview" },
+  { key: "textures", value: "textures" },
+  { key: "motion", value: "motion" },
 ] as const;
 
 type TabValue = (typeof TAB_ITEMS)[number]["value"];
@@ -20,6 +21,7 @@ type Props = {
 };
 
 export function UnitModelInspectorPanel({ unitRoot }: Props) {
+  const { t } = useTranslation("unit-inspector-manager");
   const [activeTab, setActiveTab] = useState<TabValue>("modelPreview");
   const tabStripRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -36,7 +38,7 @@ export function UnitModelInspectorPanel({ unitRoot }: Props) {
   const scrollTabStrip = (direction: -1 | 1) => {
     const el = tabStripRef.current;
     if (!el) {
-      throw new Error("UnitModelInspectorPanel: tab strip scroll container is not mounted");
+      throw new Error(t("inspector.errors.tabStripNotMounted"));
     }
     const delta = Math.max(80, Math.round(el.clientWidth * 0.45));
     el.scrollBy({ left: direction * delta, behavior: "smooth" });
@@ -83,7 +85,7 @@ export function UnitModelInspectorPanel({ unitRoot }: Props) {
             className="h-auto min-h-8 w-8 shrink-0 self-center"
             onClick={() => scrollTabStrip(-1)}
             disabled={!canScrollLeft}
-            aria-label="Scroll tabs left"
+            aria-label={t("inspector.scrollTabsLeft")}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -98,7 +100,7 @@ export function UnitModelInspectorPanel({ unitRoot }: Props) {
                   value={tab.value}
                   className="h-8 shrink-0 rounded-md px-2.5 text-[11px] font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                 >
-                  {tab.name}
+                  {t(`inspector.tabs.${tab.key}`)}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -110,7 +112,7 @@ export function UnitModelInspectorPanel({ unitRoot }: Props) {
             className="h-auto min-h-8 w-8 shrink-0 self-center"
             onClick={() => scrollTabStrip(1)}
             disabled={!canScrollRight}
-            aria-label="Scroll tabs right"
+            aria-label={t("inspector.scrollTabsRight")}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>

@@ -23,6 +23,7 @@ import {
   useConfigStore,
 } from "@/store/configStore";
 import { RawSettingsEditor } from "./components/RawSettingsEditor";
+import { useTranslation } from "react-i18next";
 
 const formSchema = z.object({
   obDplCachePath: z.string(),
@@ -45,42 +46,34 @@ const MANAGED_SETTING_KEYS = [
 const PATH_FIELDS: Array<{
   name: keyof ConfigFormValues;
   storeKey: string;
-  label: string;
-  placeholder: string;
-  description: string;
+  labelKey: string;
+  placeholderKey: string;
+  descriptionKey: string;
 }> = [
   {
     name: "obDplCachePath",
     storeKey: "obDplCachePath",
-    label: "OB dplcache_release directory",
-    placeholder: "Select OB dplcache_release folder...",
-    description: "Source of the unmodified game archives.",
+    labelKey: "paths.dpl.label", placeholderKey: "paths.dpl.placeholder", descriptionKey: "paths.dpl.description",
   },
   {
     name: "obModPath",
     storeKey: "obModPath",
-    label: "OB mod directory",
-    placeholder: "Select OB mod folder...",
-    description: "Destination the repack pipeline writes finished packs into.",
+    labelKey: "paths.mod.label", placeholderKey: "paths.mod.placeholder", descriptionKey: "paths.mod.description",
   },
   {
     name: "extractOutputPath",
     storeKey: "extractOutputPath",
-    label: "Extract output path",
-    placeholder: "Select extract output folder...",
-    description:
-      "Optional secondary extract root used by Character ID table > Extract to Output Folder. Extract to Workspace uses the EXVS2 Workspace root instead.",
+    labelKey: "paths.extract.label", placeholderKey: "paths.extract.placeholder", descriptionKey: "paths.extract.description",
   },
   {
     name: "characterIdDebugMscOutputPath",
     storeKey: CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY,
-    label: "Character ID debug MSC output root",
-    placeholder: "Select MSC debug output root...",
-    description: "Debug Extract All MSC root; the 040msc route folder is appended automatically.",
+    labelKey: "paths.debug.label", placeholderKey: "paths.debug.placeholder", descriptionKey: "paths.debug.description",
   },
 ];
 
 export default function ConfigPage() {
+  const { t } = useTranslation("config-full");
   const store = useConfigStore((s) => s.store);
   const setSetting = useConfigStore((s) => s.setSetting);
   const initStore = useConfigStore((s) => s.initStore);
@@ -134,7 +127,7 @@ export default function ConfigPage() {
   /** No typed delete exists, so the whole store is re-read to drop stale mirrored fields. */
   const deleteRawSetting = useCallback(
     async (key: string) => {
-      if (!store) throw new Error("Settings store is not initialized yet");
+      if (!store) throw new Error(t("errors.storeNotReady"));
       await store.delete(key);
       await store.save();
       await initStore();
@@ -145,7 +138,7 @@ export default function ConfigPage() {
 
   const onSubmit = async (data: ConfigFormValues) => {
     if (!store) {
-      toast.error("Settings store is not initialized yet");
+      toast.error(t("errors.storeNotReady"));
       return;
     }
     await setSetting("obDplCachePath", data.obDplCachePath);
@@ -156,25 +149,24 @@ export default function ConfigPage() {
       data.characterIdDebugMscOutputPath,
     );
     setRawReloadToken((token) => token + 1);
-    toast.success("Configuration saved");
+    toast.success(t("saved"));
   };
 
   return (
     <div className="h-full min-h-0 overflow-auto">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 pb-16">
         <header className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Configuration</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Common paths have typed fields. Everything else in the settings store is editable below
-            at raw JSON level.
+            {t("intro")}
           </p>
         </header>
 
         <section className="space-y-4">
           <div className="space-y-1">
-            <h2 className="text-base font-semibold tracking-tight">Paths</h2>
+            <h2 className="text-base font-semibold tracking-tight">{t("paths.title")}</h2>
             <p className="text-sm text-muted-foreground">
-              Written to <code className="font-mono text-xs">settings.json</code> on save.
+              {t("paths.savedTo")} <code className="font-mono text-xs">settings.json</code> {t("paths.onSave")}
             </p>
           </div>
 
@@ -187,16 +179,16 @@ export default function ConfigPage() {
                   name={field.name}
                   render={({ field: controllerField }) => (
                     <FormItem className="max-w-3xl">
-                      <FormLabel>{field.label}</FormLabel>
+                      <FormLabel>{t(field.labelKey)}</FormLabel>
                       <FormControl>
                         <FilePathInput
-                          placeholder={field.placeholder}
+                          placeholder={t(field.placeholderKey)}
                           {...controllerField}
                           storeKey={field.storeKey}
                           picker={{ kind: "folder", multiple: false }}
                         />
                       </FormControl>
-                      <FormDescription>{field.description}</FormDescription>
+                      <FormDescription>{t(field.descriptionKey)}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -205,7 +197,7 @@ export default function ConfigPage() {
 
               <Button type="submit" disabled={form.formState.isSubmitting}>
                 <Save className="h-4 w-4" />
-                Save paths
+                {t("paths.save")}
               </Button>
             </form>
           </Form>

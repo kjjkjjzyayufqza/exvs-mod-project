@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -67,12 +68,12 @@ function countAllSize(folder: VirtualTreeFolder): number {
   return size;
 }
 
-async function copyTextToClipboard(text: string, successMessage: string): Promise<void> {
+async function copyTextToClipboard(text: string, successMessage: string, errorMessage = "Failed to copy to clipboard"): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);
     toast.success(successMessage);
   } catch {
-    toast.error("Failed to copy to clipboard");
+    toast.error(errorMessage);
   }
 }
 
@@ -181,6 +182,7 @@ const TreeFolderRow = memo(function TreeFolderRow({
   onToggle,
   folderPath,
 }: TreeFolderRowProps) {
+  const { t } = useTranslation("scene-stage-dialogs");
   const fileCount = countAllFiles(folder);
   const totalSize = countAllSize(folder);
   const hasContent = folder.children.length > 0 || folder.files.length > 0;
@@ -206,8 +208,8 @@ const TreeFolderRow = memo(function TreeFolderRow({
       <Folder className="h-3.5 w-3.5 shrink-0 text-amber-400" />
       <span className="font-mono font-medium">{folder.name}/</span>
       <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-        {folder.children.length > 0 && `${folder.children.length} folders, `}
-        {fileCount} files, {formatSize(totalSize)}
+        {folder.children.length > 0 && `${t("preview.folders", { count: folder.children.length })}, `}
+        {t("preview.files", { count: fileCount })}, {formatSize(totalSize)}
       </span>
     </div>
   );
@@ -285,14 +287,15 @@ function VirtualizedTreePreview({ tree }: { tree: VirtualTreeFolder }) {
 }
 
 function WarningsBlock({ warnings }: { warnings: string[] }) {
+  const { t } = useTranslation("scene-stage-dialogs");
   const [expanded, setExpanded] = useState(false);
 
   const handleCopy = useCallback(
     (event: React.MouseEvent) => {
       event.stopPropagation();
-      void copyTextToClipboard(formatWarningsText(warnings), "Copied warnings to clipboard");
+      void copyTextToClipboard(formatWarningsText(warnings), t("preview.copiedWarnings"), t("preview.copyFailed"));
     },
-    [warnings],
+    [warnings, t],
   );
 
   if (warnings.length === 0) return null;
@@ -322,11 +325,11 @@ function WarningsBlock({ warnings }: { warnings: string[] }) {
         )}
         <span className="font-medium">
           {errorCount > 0 && (
-            <span className="text-destructive">{errorCount} error(s)</span>
+            <span className="text-destructive">{t("preview.errors", { count: errorCount })}</span>
           )}
           {errorCount > 0 && warningCount > 0 && ", "}
           {warningCount > 0 && (
-            <span className="text-yellow-500">{warningCount} warning(s)</span>
+            <span className="text-yellow-500">{t("preview.warnings", { count: warningCount })}</span>
           )}
         </span>
         <div className="ml-auto flex items-center gap-1">
@@ -342,7 +345,7 @@ function WarningsBlock({ warnings }: { warnings: string[] }) {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" className="text-xs">
-              Copy all warnings
+              {t("preview.copyWarnings")}
             </TooltipContent>
           </Tooltip>
           {expanded ? (
@@ -386,20 +389,21 @@ export function StageRenamePreviewDialog({
   onLoad,
   onClose,
 }: StageRenamePreviewDialogProps) {
+  const { t } = useTranslation("scene-stage-dialogs");
   const folderCount = tree?.children.length ?? 0;
 
   const handleCopyTree = useCallback(() => {
     if (!tree) return;
-    void copyTextToClipboard(formatTreeText(tree), "Copied folder tree to clipboard");
-  }, [tree]);
+    void copyTextToClipboard(formatTreeText(tree), t("preview.copiedTree"), t("preview.copyFailed"));
+  }, [tree, t]);
 
   if (!open) return null;
 
   return (
     <AppRndModalShell
       titleId="stage-structure-preview-title"
-      title="Stage Structure Preview"
-      subtitle="FHM2D internal folder structure with semantic rename"
+      title={t("preview.title")}
+      subtitle={t("preview.subtitle")}
       headerIcon={<Folder className="h-4 w-4 text-amber-400" />}
       dimensions={STAGE_PREVIEW_DIMENSIONS}
       storageKey="stage-structure-preview-dialog-size"
@@ -408,10 +412,10 @@ export function StageRenamePreviewDialog({
       footer={
         <div className="flex justify-end gap-2 px-4 py-3">
           <Button variant="outline" onClick={onClose} disabled={isLoadingBundle}>
-            Close
+            {t("common.close")}
           </Button>
           <Button onClick={onLoad} disabled={isLoadingBundle}>
-            {isLoadingBundle ? "Loading..." : "Load into Scene"}
+            {isLoadingBundle ? t("common.loading") : t("preview.loadIntoScene")}
           </Button>
         </div>
       }
@@ -422,10 +426,10 @@ export function StageRenamePreviewDialog({
             {sourceName}
           </Badge>
           <Badge variant="outline" className="text-xs tabular-nums">
-            {folderCount} top folders
+            {t("preview.topFolders", { count: folderCount })}
           </Badge>
           <Badge variant="outline" className="text-xs tabular-nums">
-            {totalFiles} files
+            {t("preview.files", { count: totalFiles })}
           </Badge>
           <Badge variant="outline" className="text-xs tabular-nums">
             {formatSize(totalSizeBytes)}
@@ -436,7 +440,7 @@ export function StageRenamePreviewDialog({
 
         <div className="flex-1 min-h-0 flex flex-col gap-1.5">
           <div className="flex items-center justify-between px-0.5">
-            <span className="text-xs font-medium text-muted-foreground">Folder Tree</span>
+            <span className="text-xs font-medium text-muted-foreground">{t("preview.folderTree")}</span>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -450,7 +454,7 @@ export function StageRenamePreviewDialog({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" className="text-xs">
-                Copy entire tree
+                {t("preview.copyTree")}
               </TooltipContent>
             </Tooltip>
           </div>

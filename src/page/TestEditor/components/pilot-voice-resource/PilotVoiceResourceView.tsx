@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatHash } from "@/models/commandTable";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 import {
   resolveWorkspaceContent,
   workspacePackIdentityFromResolved,
@@ -59,8 +60,8 @@ type PilotVoiceResourceViewProps = {
   workspaceDocument: TestEditorWorkspaceDocument;
 };
 
-function recordLabel(record: PilotVoiceResourceRecord): string {
-  return record.voiceStem?.trim() || "New voice";
+function recordLabel(record: PilotVoiceResourceRecord, emptyName: string): string {
+  return record.voiceStem?.trim() || emptyName;
 }
 
 function VoiceStemField({
@@ -74,18 +75,19 @@ function VoiceStemField({
   disabled: boolean;
   onCommit: (next: string) => void;
 }) {
+  const { t } = useTranslation("test-lists");
   const [text, setText] = useState(value);
   useEffect(() => {
     setText(value);
   }, [value]);
   return (
     <div className="space-y-1">
-      <Label className={cn("text-xs", empty && "text-amber-600")}>Voice</Label>
+      <Label className={cn("text-xs", empty && "text-amber-600")}>{t("pilotVoice.voice")}</Label>
       <Input
         value={text}
         onChange={(event) => setText(event.target.value)}
         onBlur={() => onCommit(text.replace(/\s+/g, ""))}
-        placeholder="empty"
+        placeholder={t("common.empty")}
         disabled={disabled}
         className={cn("h-8 font-mono text-xs", empty && "border-amber-500")}
       />
@@ -106,6 +108,7 @@ function HashField({
   disabled: boolean;
   onCommit: (next: number) => void;
 }) {
+  const { t } = useTranslation("test-lists");
   const [text, setText] = useState(value ? formatHash(value) : "");
   useEffect(() => {
     setText(value ? formatHash(value) : "");
@@ -124,7 +127,7 @@ function HashField({
           }
           onCommit(parsed);
         }}
-        placeholder="empty"
+        placeholder={t("common.empty")}
         disabled={disabled}
         className={cn("h-8 font-mono text-xs tabular-nums", empty && "border-amber-500")}
       />
@@ -139,6 +142,7 @@ export default function PilotVoiceResourceView({
   onPackMutated,
   workspaceDocument,
 }: PilotVoiceResourceViewProps) {
+  const { t } = useTranslation("test-lists");
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [hasChanges, setHasChanges] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -158,7 +162,7 @@ export default function PilotVoiceResourceView({
 
   const load = useCallback(async () => {
     if (!folderPath) {
-      setLoadState({ status: "error", folderPath: "", message: "Folder path is empty" });
+      setLoadState({ status: "error", folderPath: "", message: t("common.folderPathEmpty") });
       setHasChanges(false);
       onUnsavedChanges?.(false);
       return;
@@ -212,7 +216,7 @@ export default function PilotVoiceResourceView({
     return loadState.table.records
       .map((record, index) => ({ record, index }))
       .filter(({ record }) =>
-        query ? recordLabel(record).toLowerCase().includes(query) : true,
+        query ? recordLabel(record, t("pilotVoice.newVoice")).toLowerCase().includes(query) : true,
       );
   }, [loadState, searchQuery]);
 
@@ -255,13 +259,18 @@ export default function PilotVoiceResourceView({
   const handleSave = useCallback(async () => {
     if (loadState.status !== "ready") return;
     if (!loadState.writable) {
-      toast.error("Legacy workspace content is read-only");
+      toast.error(t("common.legacyReadOnlyShort"));
       return;
     }
     const incomplete = loadState.table.records.findIndex((record) => emptyPilotVoiceFields(record).length > 0);
     if (incomplete >= 0) {
       setSelectedIndex(incomplete);
-      toast.error(`Row ${incomplete} has empty fields: ${emptyPilotVoiceFields(loadState.table.records[incomplete]).join(", ")}`);
+      toast.error(
+        t("sound.rowEmptyFields", {
+          row: incomplete,
+          fields: emptyPilotVoiceFields(loadState.table.records[incomplete]).join(", "),
+        }),
+      );
       return;
     }
     try {
@@ -270,7 +279,7 @@ export default function PilotVoiceResourceView({
       setHasChanges(false);
       onUnsavedChanges?.(false);
       onPackMutated?.(workspacePackIdentityFromResolved(loadState.pack, "configured"));
-      toast.success("Saved");
+      toast.success(t("sound.saved"));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     }
@@ -279,7 +288,7 @@ export default function PilotVoiceResourceView({
   const handleInitPack = useCallback(async () => {
     const sourceFhm2dPath = buildPilotVoiceResourceSourceFhm2dPath(obDplCachePath ?? "");
     if (!sourceFhm2dPath) {
-      toast.error("Set the OB dplcache folder in FHM2D Init first");
+      toast.error(t("common.setObDplcacheInit"));
       return;
     }
     setIsInitializing(true);
@@ -290,7 +299,7 @@ export default function PilotVoiceResourceView({
         workspaceDocument,
       });
       lastLoadedKeyRef.current = "";
-      toast.success("Unpacked voice table");
+      toast.success(t("pilotVoice.unpacked"));
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -313,11 +322,11 @@ export default function PilotVoiceResourceView({
   return (
     <SoundTableWorkbench
       isActive={isActive}
-      title="Voice slot"
-      purpose="Edit one voice row in pilotvoiceresourcetable.vrtbl."
+      title={t("pilotVoice.title")}
+      purpose={t("pilotVoice.purpose")}
       status={workbenchStatus}
       errorMessage={loadState.status === "error" ? loadState.message : null}
-      unpackLabel="Init pack"
+      unpackLabel={t("common.initPack")}
       unpacking={isInitializing}
       unpackDisabled={!folderPath}
       onUnpack={() => void handleInitPack()}
@@ -329,24 +338,24 @@ export default function PilotVoiceResourceView({
         loadState.status === "ready"
           ? [
               {
-                label: "Structure",
+                label: t("common.structure"),
                 value: loadState.pack.structureJsonPath,
                 onOpen: () => void dirname(loadState.pack.structureJsonPath).then((target) => openPath(target)),
               },
               {
-                label: "File",
+                label: t("common.file"),
                 value: loadState.filePath,
                 onOpen: () => void dirname(loadState.filePath).then((target) => openPath(target)),
               },
               {
-                label: "Pack",
+                label: t("common.pack"),
                 value: `${PILOT_VOICE_RESOURCE_PACK_HASH}.fhm2d`,
               },
             ]
           : undefined
       }
       loadedLabel={
-        loadState.status === "ready" ? `Loaded: ${loadState.table.records.length} voices` : undefined
+        loadState.status === "ready" ? t("sound.loadedVoices", { count: loadState.table.records.length }) : undefined
       }
       notice={
         loadState.status === "ready" ? (
@@ -370,7 +379,7 @@ export default function PilotVoiceResourceView({
             className="h-8"
           >
             <Plus className="h-4 w-4" />
-            Add
+            {t("common.add")}
           </Button>
         ) : null
       }
@@ -380,7 +389,7 @@ export default function PilotVoiceResourceView({
             <Input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search"
+              placeholder={t("common.search")}
               className="h-8 text-xs"
             />
             <ScrollArea className="min-h-0 flex-1 rounded-md bg-muted/20">
@@ -399,9 +408,9 @@ export default function PilotVoiceResourceView({
                       )}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate font-medium">{recordLabel(record)}</span>
+                        <span className="truncate font-medium">{recordLabel(record, t("pilotVoice.newVoice"))}</span>
                         {missing.length > 0 ? (
-                          <span className="shrink-0 text-[10px] font-medium text-amber-600">warning</span>
+                          <span className="shrink-0 text-[10px] font-medium text-amber-600">{t("common.warning")}</span>
                         ) : null}
                       </div>
                     </button>
@@ -417,7 +426,7 @@ export default function PilotVoiceResourceView({
           <div className="space-y-4 rounded-lg bg-muted/20 p-4">
             {selectedEmpty.length > 0 ? (
               <div className="text-xs font-medium text-amber-600">
-                Empty: {selectedEmpty.join(", ")}
+                {t("sound.emptyFields", { fields: selectedEmpty.join(", ") })}
               </div>
             ) : null}
             <VoiceStemField
@@ -427,35 +436,35 @@ export default function PilotVoiceResourceView({
               onCommit={(voiceStem) => void updateSelected({ voiceStem })}
             />
             <HashField
-              label="voiceKey"
+              label={t("pilotVoice.voiceKey")}
               value={selected.voiceKey}
               empty={selectedEmpty.includes("voiceKey")}
               disabled={!loadState.writable}
               onCommit={(voiceKey) => void updateSelected({ voiceKey })}
             />
             <HashField
-              label="streamPathId"
+              label={t("pilotVoice.streamPathId")}
               value={selected.streamPathId}
               empty={selectedEmpty.includes("streamPathId")}
               disabled={!loadState.writable}
               onCommit={(streamPathId) => void updateSelected({ streamPathId })}
             />
             <HashField
-              label="votPackage"
+              label={t("pilotVoice.votPackage")}
               value={selected.votPackage}
               empty={selectedEmpty.includes("votPackage")}
               disabled={!loadState.writable}
               onCommit={(votPackage) => void updateSelected({ votPackage })}
             />
             <HashField
-              label="dummyPackage"
+              label={t("pilotVoice.dummyPackage")}
               value={selected.dummyPackage}
               empty={selectedEmpty.includes("dummyPackage")}
               disabled={!loadState.writable}
               onCommit={(dummyPackage) => void updateSelected({ dummyPackage })}
             />
             <HashField
-              label="bankPackage"
+              label={t("pilotVoice.bankPackage")}
               value={selected.bankPackage}
               empty={selectedEmpty.includes("bankPackage")}
               disabled={!loadState.writable}
@@ -469,11 +478,11 @@ export default function PilotVoiceResourceView({
               className="text-destructive"
             >
               <Trash2 className="h-4 w-4" />
-              Remove
+              {t("common.remove")}
             </Button>
           </div>
         ) : loadState.status === "ready" ? (
-          <div className="flex h-full items-center text-sm text-muted-foreground">Select a row, or add one.</div>
+          <div className="flex h-full items-center text-sm text-muted-foreground">{t("common.selectRowOrAdd")}</div>
         ) : null
       }
     />

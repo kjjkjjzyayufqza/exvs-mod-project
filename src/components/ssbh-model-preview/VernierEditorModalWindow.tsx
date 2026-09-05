@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Flame, Loader2, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { TypedParamFile } from "./vernierIoService";
@@ -51,6 +52,7 @@ export function VernierEditorModalWindow({
   skipActivate,
   viewportSuspend,
 }: VernierEditorModalWindowProps) {
+  const { t } = useTranslation("ssbh-modals");
   const dirty = isVernierDraftDirty(session.baseData, session.draftData);
   const titleId = `vernier-editor-title-${session.id}`;
 
@@ -89,7 +91,7 @@ export function VernierEditorModalWindow({
           onClick={onReloadRequest}
         >
           <RefreshCw className="h-3.5 w-3.5" />
-          Reload
+          {t("common.reload")}
         </Button>
         <Button
           type="button"
@@ -100,7 +102,7 @@ export function VernierEditorModalWindow({
           onClick={onReset}
         >
           <RotateCcw className="h-3.5 w-3.5" />
-          Reset
+          {t("common.reset")}
         </Button>
         <Button
           type="button"
@@ -114,7 +116,7 @@ export function VernierEditorModalWindow({
           ) : (
             <Save className="h-3.5 w-3.5" />
           )}
-          {session.saving ? "Saving..." : "Save"}
+          {session.saving ? t("common.saving") : t("common.save")}
         </Button>
         <Button
           type="button"
@@ -124,7 +126,7 @@ export function VernierEditorModalWindow({
           disabled={session.saving}
           onClick={onCloseRequest}
         >
-          Close
+          {t("common.close")}
         </Button>
       </div>
     ) : null;
@@ -136,7 +138,7 @@ export function VernierEditorModalWindow({
       zIndex={session.zIndex}
       titleId={titleId}
       title={dirty ? `• ${title}` : title}
-      subtitle="Edit vernier table (thruster/effect slots)"
+      subtitle={t("vernier.subtitle")}
       headerIcon={<Flame className="h-4 w-4 text-primary" />}
       onActivate={onActivate}
       onClose={onCloseRequest}
@@ -148,7 +150,7 @@ export function VernierEditorModalWindow({
       {session.loading ? (
         <div className="flex items-center gap-2 px-5 py-4 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading vernier table...
+          {t("vernier.loading")}
         </div>
       ) : session.loadError ? (
         <div className="px-5 py-4 text-sm text-destructive">{session.loadError}</div>
@@ -159,7 +161,7 @@ export function VernierEditorModalWindow({
           disabled={session.saving}
         />
       ) : (
-        <div className="px-5 py-4 text-sm text-muted-foreground">No data.</div>
+        <div className="px-5 py-4 text-sm text-muted-foreground">{t("common.noData")}</div>
       )}
     </SsbhEditorModalWindowShell>
   );

@@ -1,6 +1,7 @@
 import JsonView from "@uiw/react-json-view";
 import { vscodeTheme } from "@uiw/react-json-view/vscode";
 import { Loader2, RefreshCw } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { SectionBlock, SectionPanel } from "./SectionPanel";
@@ -19,11 +20,12 @@ type Props = {
 
 /** Read-only header/structure dump of the selected archive (JS parse, inspection only). */
 export function ArchivePreviewPanel({ preview, canReload, onReload }: Props) {
+  const { t } = useTranslation("extract-page");
   return (
     <SectionPanel>
       <SectionBlock
-        title="Archive preview"
-        description="Header and sub-file structure parsed in the UI. Never used for extraction."
+        title={t("archivePreview.title")}
+        description={t("archivePreview.description")}
         action={
           <Button
             type="button"
@@ -34,20 +36,20 @@ export function ArchivePreviewPanel({ preview, canReload, onReload }: Props) {
             onClick={onReload}
           >
             <RefreshCw className="h-3.5 w-3.5" />
-            Reload
+            {t("archivePreview.reload")}
           </Button>
         }
       >
         {preview.status === "idle" && (
           <p className="rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground">
-            Pick a .fhm2d file to read its header.
+            {t("archivePreview.idle")}
           </p>
         )}
 
         {preview.status === "loading" && (
           <p className="flex items-center gap-2 rounded-md border border-dashed p-6 text-xs text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Reading archive...
+            {t("archivePreview.loading")}
           </p>
         )}
 
@@ -59,7 +61,7 @@ export function ArchivePreviewPanel({ preview, canReload, onReload }: Props) {
 
         {preview.status === "ready" && (
           <div className="space-y-2">
-            <p className="font-mono text-[11px] text-muted-foreground">
+            <p className="font-mono text-[11px] text-muted-foreground" data-i18n-ignore="">
               container: {preview.typeLabel}
             </p>
             <div className="max-h-[min(420px,45vh)] overflow-auto rounded-md border bg-muted/20 p-2">

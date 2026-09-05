@@ -1,0 +1,64 @@
+{
+  "attachment": {
+    "loadTemplatesFailed": "Failed to load attachment templates",
+    "warning": "Attachment warning",
+    "applied": "Attachments applied",
+    "applyFailed": "Apply attachments failed",
+    "button": "Attachments",
+    "title": "Attachments & model IDs",
+    "subtitle": "Bind modelId → model, attach guest bones to host bones, save/apply templates",
+    "applyToViewport": "Apply to viewport",
+    "activeEdges": "Active viewport edges: {{count}}. Motion keeps evaluating each skeleton; attachments snap guest roots after bone updates.",
+    "addNumdlb": "Add .numdlb",
+    "templateSaved": "Attachment template saved",
+    "saveFailed": "Save template failed",
+    "unresolvedModels": "Template applied with unresolved models",
+    "templateApplied": "Attachment template applied",
+    "templateSummary": "{{name}} · {{count}} edge(s)",
+    "edgesActive": "{{count}} edge(s) active",
+    "templateDeleted": "Template deleted",
+    "deleteFailed": "Delete failed",
+    "bound": "Bound {{label}} → {{modelId}}"
+  },
+  "bindings": {
+    "title": "Model ID bindings",
+    "previewModel": "Preview model",
+    "selectModel": "Select model",
+    "role": "Role",
+    "bind": "Bind",
+    "empty": "No bindings yet.",
+    "removeAria": "Remove binding {{modelId}}",
+    "motionPrimary": "Motion primary modelId",
+    "none": "None"
+  },
+  "edges": {
+    "title": "Attachment edges (host bone → guest bone)",
+    "hostModelId": "Host modelId",
+    "guestModelId": "Guest modelId",
+    "host": "Host",
+    "guest": "Guest",
+    "selectHostBone": "Select host bone",
+    "selectGuestBone": "Select guest bone",
+    "hostMissingSkel": "Host model not loaded or missing NUSKTB.",
+    "add": "Add edge",
+    "empty": "No edges yet.",
+    "enableAria": "Enable edge",
+    "removeAria": "Remove edge"
+  },
+  "library": {
+    "title": "Template library",
+    "name": "Name",
+    "description": "Description",
+    "namePlaceholder": "Gyan body+shield",
+    "descriptionPlaceholder": "Optional",
+    "save": "Save template",
+    "loading": "Loading templates…",
+    "empty": "No saved templates.",
+    "counts": "{{models}} model(s) · {{edges}} edge(s)",
+    "apply": "Apply",
+    "deleteAria": "Delete {{name}}"
+  },
+  "common": {
+    "close": "Close"
+  }
+}

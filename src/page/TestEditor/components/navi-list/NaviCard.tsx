@@ -1,4 +1,5 @@
 import { Copy, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -24,7 +25,8 @@ export function NaviCard({
   onDelete,
   onCopy,
 }: NaviCardProps) {
-  const name = navi.displayName || `Navi ${navi.characterUniqueId}`;
+  const { t } = useTranslation("test-lists");
+  const name = navi.displayName || t("navi.fallbackName", { id: navi.characterUniqueId });
   return (
     <div
       className={cn(
@@ -47,20 +49,20 @@ export function NaviCard({
           </Tooltip>
         </TooltipProvider>
         <div className="text-xs text-muted-foreground space-y-0.5">
-          <div>Unique ID: {navi.characterUniqueId}</div>
+          <div>{t("navi.uniqueId")} {navi.characterUniqueId}</div>
           <div>
-            Costume {navi.costumeIndex} · series {navi.seriesListEntryId} ·{" "}
-            {navi.enabledCode === 1 ? "enabled" : `code ${navi.enabledCode}`}
+            {t("navi.costume", { index: navi.costumeIndex })} · {t("navi.series", { id: navi.seriesListEntryId })} ·{" "}
+            {navi.enabledCode === 1 ? t("navi.enabled") : t("navi.code", { code: navi.enabledCode })}
           </div>
-          <div>Index: {index}</div>
+          <div>{t("common.index")}: {index}</div>
         </div>
       </div>
       {editable ? (
         <div className="flex items-center gap-1 shrink-0" onClick={(event) => event.stopPropagation()}>
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onCopy} aria-label="Copy navi">
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onCopy} aria-label={t("navi.copyAria")}>
             <Copy className="h-3.5 w-3.5" />
           </Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onDelete} aria-label="Delete navi">
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onDelete} aria-label={t("navi.deleteAria")}>
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </div>

@@ -21,6 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DDS_FORMATS } from "@/lib/ddsFormats";
 import { splitPathSegments } from "@/lib/fhm2d_fileUrlUtils";
 import type { CardIconItem } from "./cardIconStructure";
+import { useTranslation } from "react-i18next";
 
 type ReplacePixelSource = "nutexb" | "convertPng";
 const BATCH_REPLACE_ROW_HEIGHT = 36;
@@ -51,9 +52,11 @@ export function CardIconBatchReplaceDialog({
   convertDirPath,
   items,
   onApplied,
-  triggerLabel = "Replace Format",
+  triggerLabel,
   disabled = false,
 }: CardIconBatchReplaceDialogProps) {
+  const { t } = useTranslation("test-lists");
+  const resolvedTriggerLabel = triggerLabel ?? t("nutexb.replaceFormat");
   const [openState, setOpenState] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [ddsFormat, setDdsFormat] = useState<string>("BC7RgbaUnormSrgb");
@@ -160,17 +163,17 @@ export function CardIconBatchReplaceDialog({
 
   const handleReplace = useCallback(async () => {
     if (selectedIds.size === 0) {
-      toast.error("Please select at least one image");
+      toast.error(t("cardIcon.selectOneImage"));
       return;
     }
     if (!folderPath || !convertDirPath) {
-      toast.error("Folder path or convert dir is missing");
+      toast.error(t("cardIcon.folderOrConvertMissing"));
       return;
     }
 
     const toProcess = itemsWithFileUrl.filter((it) => selectedIds.has(it.itemIndex));
     if (toProcess.length === 0) {
-      toast.error("No valid items selected");
+      toast.error(t("cardIcon.noValidItems"));
       return;
     }
 
@@ -184,7 +187,7 @@ export function CardIconBatchReplaceDialog({
     }
 
     if (pairs.length === 0) {
-      toast.error("Failed to resolve nutexb paths");
+      toast.error(t("cardIcon.resolvePathsFailed"));
       return;
     }
 
@@ -213,9 +216,9 @@ export function CardIconBatchReplaceDialog({
       }
 
       setReplaceProgress(null);
-      toast.success(`Replaced ${converted} image(s) with ${ddsFormat}`);
+      toast.success(t("cardIcon.replacedCount", { count: converted, format: ddsFormat }));
       if (failed > 0) {
-        toast.error(`Failed to replace ${failed} image(s)`);
+        toast.error(t("cardIcon.replaceFailedCount", { count: failed }));
       }
       setOpenState(false);
       setSelectedIds(new Set());
@@ -223,25 +226,25 @@ export function CardIconBatchReplaceDialog({
     } catch (error) {
       setReplaceProgress(null);
       console.error(error);
-      const message = error instanceof Error ? error.message : "Failed to replace format";
+      const message = error instanceof Error ? error.message : t("cardIcon.replaceFormatFailed");
       toast.error(message);
     } finally {
       setIsReplacing(false);
     }
-  }, [convertDirPath, ddsFormat, folderPath, itemsWithFileUrl, onApplied, pixelSource, selectedIds]);
+  }, [convertDirPath, ddsFormat, folderPath, itemsWithFileUrl, onApplied, pixelSource, selectedIds, t]);
 
   const selectedCount = selectedIds.size;
 
   return (
     <>
       <Button size="sm" variant="outline" disabled={disabled || itemsWithFileUrl.length === 0} onClick={() => setOpenState(true)}>
-        {triggerLabel}
+        {resolvedTriggerLabel}
       </Button>
       {openState ? (
         <AppRndModalShell
           titleId="card-icon-batch-replace-title"
-          title="Replace Format (DDS)"
-          subtitle="Writes the on-disk nutexb and refreshes the matching __convert PNG."
+          title={t("cardIcon.batchTitle")}
+          subtitle={t("cardIcon.batchSubtitle")}
           headerIcon={<Images className="h-5 w-5 text-primary" />}
           dimensions={CARD_ICON_BATCH_REPLACE_MODAL_DIMENSIONS}
           storageKey="app.rnd-size.card-icon-batch-replace"
@@ -250,7 +253,7 @@ export function CardIconBatchReplaceDialog({
           footer={
             <div className="flex flex-wrap justify-end gap-2 bg-background px-6 py-4">
               <Button variant="outline" onClick={() => setOpenState(false)} disabled={isReplacing}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 onClick={() => void handleReplace()}
@@ -259,10 +262,10 @@ export function CardIconBatchReplaceDialog({
                 {isReplacing ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Replacing...
+                    {t("common.replacing")}
                   </>
                 ) : (
-                  `Replace ${selectedCount} image(s)`
+                  t("cardIcon.replaceNImages", { count: selectedCount })
                 )}
               </Button>
             </div>
@@ -271,13 +274,20 @@ export function CardIconBatchReplaceDialog({
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1">
-              <Label>Pixel source</Label>
+              <Label>{t("cardIcon.pixelSource")}</Label>
               <p className="text-xs text-muted-foreground leading-snug">
-                <span className="font-semibold text-foreground">Original nutexb</span>: decode the .nutexb file on disk.{" "}
-                <span className="font-semibold text-foreground">__convert PNG</span>: use{" "}
-                <code className="rounded bg-muted px-1 py-0.5 text-[11px]">__convert</code> preview (
-                <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{"{name}.png"}</code>) — run export first if
-                previews are missing.
+                <span className="font-semibold text-foreground">{t("cardIcon.originalNutexb")}</span>
+                {t("cardIcon.decodeDisk")}{" "}
+                <span className="font-semibold text-foreground">{t("cardIcon.convertPng")}</span>
+                {t("cardIcon.usePreview")}{" "}
+                <code className="rounded bg-muted px-1 py-0.5 text-[11px]" data-i18n-ignore="">
+                  __convert
+                </code>{" "}
+                {t("cardIcon.previewParen")}
+                <code className="rounded bg-muted px-1 py-0.5 text-[11px]" data-i18n-ignore="">
+                  {"{name}.png"}
+                </code>
+                {t("cardIcon.runExport")}
               </p>
             </div>
             <Select
@@ -289,17 +299,17 @@ export function CardIconBatchReplaceDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="nutexb">Original nutexb</SelectItem>
-                <SelectItem value="convertPng">__convert PNG</SelectItem>
+                <SelectItem value="nutexb">{t("cardIcon.originalNutexb")}</SelectItem>
+                <SelectItem value="convertPng">{t("cardIcon.convertPng")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="flex items-center justify-between gap-2">
-            <Label>DDS Format</Label>
+            <Label>{t("common.ddsFormat")}</Label>
             <Select value={ddsFormat} onValueChange={setDdsFormat} disabled={isReplacing}>
               <SelectTrigger className="w-[220px] h-8">
-                <SelectValue placeholder="Select format" />
+                <SelectValue placeholder={t("common.selectFormat")} />
               </SelectTrigger>
               <SelectContent>
                 {DDS_FORMATS.map((opt) => (
@@ -313,13 +323,13 @@ export function CardIconBatchReplaceDialog({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Images ({itemsWithFileUrl.length} total)</Label>
+              <Label>{t("cardIcon.imagesTotal", { count: itemsWithFileUrl.length })}</Label>
               <div className="flex gap-2">
                 <Button size="sm" variant="ghost" onClick={selectAll} disabled={isReplacing}>
-                  Select All
+                  {t("cardIcon.selectAll")}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={deselectAll} disabled={isReplacing}>
-                  Deselect All
+                  {t("cardIcon.deselectAll")}
                 </Button>
               </div>
             </div>
@@ -327,7 +337,7 @@ export function CardIconBatchReplaceDialog({
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by name or index..."
+                placeholder={t("cardIcon.searchPlaceholder")}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9 h-8"
@@ -337,20 +347,22 @@ export function CardIconBatchReplaceDialog({
 
             {searchTerm.trim() && (
               <div className="text-xs text-muted-foreground">
-                Showing {filteredItems.length} of {itemsWithFileUrl.length} icons
+                {t("cardIcon.showingOf", { shown: filteredItems.length, total: itemsWithFileUrl.length })}
               </div>
             )}
 
             <p className="text-xs text-muted-foreground leading-snug">
-              Click a row to toggle. Hold <kbd className="rounded border border-border bg-muted px-1 py-0.5 text-[10px] font-mono">Shift</kbd> and click another row to select all items in between in the current list.
+              {t("cardIcon.shiftHint")}{" "}
+              <kbd className="rounded border border-border bg-muted px-1 py-0.5 text-[10px] font-mono">{t("cardIcon.shift")}</kbd>{" "}
+              {t("cardIcon.shiftHintRest")}
             </p>
 
             <div ref={listRef} className="h-[240px] overflow-auto rounded-md border border-border p-2">
               {filteredItems.length === 0 ? (
                 <div className="py-6 text-center text-sm text-muted-foreground">
                   {searchTerm.trim()
-                    ? `No icons found matching "${searchTerm.trim()}"`
-                    : "No images available"}
+                    ? t("cardIcon.noMatch", { term: searchTerm.trim() })
+                    : t("cardIcon.noImagesAvailable")}
                 </div>
               ) : (
                 <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
@@ -389,7 +401,10 @@ export function CardIconBatchReplaceDialog({
               <div className="space-y-2 pt-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">
-                    Processing {replaceProgress.current} / {replaceProgress.total}
+                    {t("cardIcon.processingOf", {
+                      current: replaceProgress.current,
+                      total: replaceProgress.total,
+                    })}
                   </span>
                   <span className="truncate max-w-[280px]" title={replaceProgress.currentFileName}>
                     {replaceProgress.currentFileName}

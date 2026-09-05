@@ -1,0 +1,113 @@
+{
+  "types": {
+    "billboard": "Billboard",
+    "model": "Model",
+    "strip": "Strip",
+    "meshEmitterWrapper": "Mesh emitter wrapper",
+    "wrapper": "Wrapper",
+    "container": "Container {{type}}"
+  },
+  "values": {
+    "baseOnly": "仅基础",
+    "missing": "缺失",
+    "noDocument": "无文档",
+    "sortedFrontToBack": "从前到后排序",
+    "sortedBackToFront": "从后到前排序",
+    "unsorted": "未排序（与顺序无关）",
+    "off": "关闭",
+    "units": "{{value}} 个单位",
+    "none": "无",
+    "unresolved": "未解析"
+  },
+  "aria": {
+    "documentActions": "EFXBN 文档操作",
+    "outliner": "EFXBN 区块大纲",
+    "properties": "EFXBN 属性",
+    "liveAuthor": "EFXBN 实时编辑"
+  },
+  "labels": {
+    "block": "区块 {{index}}",
+    "shaderVariants": "着色器变体",
+    "efxbnFile": "EFXBN 文件",
+    "blocks": "区块",
+    "localTexture": "本地纹理",
+    "tabs": "检查器标签页"
+  },
+  "status": {
+    "writing": "正在写入……",
+    "unsaved": "未保存 {{count}} 项",
+    "liveDraft": "实时草稿",
+    "unsavedEdits": "未保存的更改",
+    "clean": "干净"
+  },
+  "buttons": {
+    "solo": "单独显示",
+    "undoTitle": "撤销 {{change}}",
+    "nothingToUndo": "没有可撤销内容",
+    "redoTitle": "重做",
+    "resetTitle": "放弃所有未保存更改并恢复磁盘文件",
+    "reset": "重置",
+    "rewriteTitle": "从编辑文档重写 {{path}}",
+    "rewriteDefaultTitle": "从编辑文档重写 efxbn 文件",
+    "saveDirty": "保存 EFXBN（{{count}}）",
+    "save": "保存 EFXBN",
+    "showAllTitle": "显示所有区块",
+    "showAllAria": "显示所有 EFXBN 区块",
+    "soloTitle": "隐藏除选中区块外的所有区块",
+    "duplicateTitle": "在同一父级下复制选中区块，并使用独立曲线键",
+    "duplicateAria": "复制选中的 EFXBN 区块",
+    "deleteTitle": "删除选中区块，并重新编号指向其后的索引",
+    "deleteAria": "删除选中的 EFXBN 区块",
+    "hideBlock": "隐藏区块",
+    "showBlock": "显示区块",
+    "hideBlockAria": "隐藏 EFXBN 区块 {{index}}",
+    "showBlockAria": "显示 EFXBN 区块 {{index}}",
+    "dragTitle": "拖动到其他区块以重新设置父级，或拖到标题栏以设为根区块"
+  },
+  "tabs": {
+    "edit": "Edit",
+    "color": "Color",
+    "block": "Block",
+    "controls": "Controls",
+    "material": "Material"
+  },
+  "fields": {
+    "childBlocks": "子区块",
+    "lifetime": "生命周期",
+    "emit": "发射",
+    "delay": "延迟",
+    "spawnForm": "生成形式",
+    "actionFlags": "动作标志",
+    "depthBlend": "深度 / 混合",
+    "culling": "剔除",
+    "drawOrder": "绘制顺序",
+    "viewAngleRamp": "视角渐变",
+    "cameraFade": "摄像机淡出",
+    "model": "模型",
+    "animation": "动画",
+    "index": "索引",
+    "runtimeType": "运行时类型",
+    "treeLevel": "树层级"
+  },
+  "textureSlots": {
+    "color0": "颜色贴图",
+    "color1": "第二遍颜色",
+    "uv0": "UV 偏移",
+    "uv1": "第二遍 UV 偏移"
+  },
+  "sources": {
+    "pack": "当前包",
+    "common": "公共包",
+    "neither": "当前包和公共包中均不存在",
+    "resolvedPack": "已在当前编辑包中解析",
+    "resolvedCommon": "已在公共包 {{pack}} 中解析"
+  },
+  "empty": {
+    "noActiveControls": "没有活动控制通道。",
+    "noTextureSlots": "没有模型控制纹理槽。"
+  },
+  "help": {
+    "drawSchemeFlag": "运行时绘制方案标志字（元素 +0x390）",
+    "baseShaderOnly": "预览仅渲染基础着色器；此区块不会与游戏一致。"
+  }
+}

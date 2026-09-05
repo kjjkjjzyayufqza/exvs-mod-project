@@ -1,0 +1,86 @@
+{
+  "title": "武装エディター",
+  "outdated": "旧式",
+  "subtitle": "スキーマ駆動の armsparam · 完全なツールには Param Editor を優先",
+  "filePicker": {
+    "title": "armsparam ファイルを選択"
+  },
+  "toolbar": {
+    "load": "読み込む",
+    "reload": "再読み込み",
+    "reloadTooltip": "ディスクから再読み込み",
+    "save": "保存",
+    "saving": "保存中…"
+  },
+  "entryLabel": {
+    "noLabel": "（ラベルなし）",
+    "actionAt": "アクション",
+    "resourceAt": "リソース",
+    "ammo": "弾薬 {{initial}}/{{max}}",
+    "slot": "スロット {{index}}"
+  },
+  "counts": {
+    "entries": "{{count}} 件",
+    "fieldSpecs": "{{count}} フィールド仕様",
+    "entrySize": "エントリサイズ {{size}}",
+    "selected": "選択済み {{id}}"
+  },
+  "aria": {
+    "importExport": "インポートとエクスポート",
+    "entryTools": "エントリーツール"
+  },
+  "buttons": {
+    "import": "インポート",
+    "importTooltip": "16 進バイトまたはエントリー JSON をインポート",
+    "entryJson": "エントリー JSON",
+    "entryJsonTooltip": "選択したエントリーを JSON としてコピー",
+    "allJson": "すべての JSON",
+    "allJsonTooltip": "表示データ全体を JSON としてコピー",
+    "hex": "16 進",
+    "hexTooltip": "16 進プレビュー",
+    "duplicate": "複製",
+    "duplicateTooltip": "選択したエントリーを複製",
+    "add": "追加",
+    "addTooltip": "空のエントリーを追加",
+    "delete": "削除",
+    "deleteTooltip": "選択したエントリーを削除",
+    "edit": "編集",
+    "cancel": "キャンセル"
+  },
+  "empty": {
+    "selectEntry": "エントリーを選択してスキーマフィールドを編集",
+    "loadFile": "armsparam を読み込んでエントリーを編集",
+    "noEntrySelected": "エントリーが選択されていません",
+    "help": "{{file}} のパスを選択して「読み込む」を押してください。フィールドは Rust コマンドプール（ammoCount、initialAmmoCount、CSA/CSB の段階とタイミング、ネイティブ reload グループ、slotIndex、kind-7 ラベル）に従います。"
+  },
+  "status": {
+    "unsaved": "未保存の変更",
+    "unsavedShort": "未保存",
+    "schema": "スキーマ：{{type}}"
+  },
+  "hex": {
+    "title": "16 進プレビュー",
+    "offset": "オフセット",
+    "hex": "16 進",
+    "ascii": "Ascii",
+    "editHeader": "16 進バイトを編集 · {{count}} バイト · 1 行 16 バイト",
+    "subtitle": "16 進プレビュー：{{id}} · {{count}} バイト · リトルエンディアン行データ · {{mode}}",
+    "editing": "編集中",
+    "viewOnly": "表示のみ"
+  },
+  "toast": {
+    "loaded": "armsparam を読み込みました（{{count}} 件）",
+    "saved": "armsparam を保存しました",
+    "hexSaved": "16 進プレビューの変更をエントリーフィールドに保存しました",
+    "duplicated": "エントリーを複製しました",
+    "added": "空のエントリーを追加しました",
+    "deleted": "エントリーを削除しました"
+  },
+  "errors": {
+    "loadFailed": "armsparam を読み込めませんでした：{{error}}",
+    "saveFailed": "armsparam を保存できませんでした：{{error}}",
+    "fieldLayout": "エントリーフィールドレイアウトを解決できません。",
+    "noEntryDuplicate": "複製するエントリーがありません",
+    "noTemplate": "利用可能なエントリーテンプレートがありません"
+  }
+}

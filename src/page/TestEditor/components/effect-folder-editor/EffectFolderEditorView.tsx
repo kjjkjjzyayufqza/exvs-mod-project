@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Copy,
   FolderOpen,
@@ -70,6 +71,7 @@ export default function EffectFolderEditorView({
   onRequestFhm2dRepack,
   onOpenAsEffectProject,
 }: EffectFolderEditorViewProps) {
+  const { t } = useTranslation("test-effect-folder");
   const store = useConfigStore((state) => state.store);
   const suggestedPack = useMemo(
     () => resolveEffectPackFromStructureJson(workspaceRoot, structureJsonPath, workspaceDocument),
@@ -218,12 +220,12 @@ export default function EffectFolderEditorView({
         workspaceDocument,
       );
       if (!pack) {
-        setLoadError("Enter a valid effect folder path.");
+        setLoadError(t("editor.invalidPath"));
         return;
       }
       activatePack(pack);
     })();
-  }, [activatePack, folderInput, workspaceDocument, workspaceRoot]);
+  }, [activatePack, folderInput, t, workspaceDocument, workspaceRoot]);
 
   const headerPath = activePack?.folderPath ?? folderInput.trim();
 
@@ -233,17 +235,17 @@ export default function EffectFolderEditorView({
         <CardHeader className="shrink-0 space-y-3 p-0 pb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <CardTitle>Effect Folder</CardTitle>
+              <CardTitle>{t("editor.title")}</CardTitle>
               {headerPath ? (
-                <div className="mt-1 flex items-center gap-1 break-all text-xs text-muted-foreground">
+                <div className="mt-1 flex items-center gap-1 break-all text-xs text-muted-foreground" data-i18n-ignore="">
                   <span>{headerPath}</span>
                   {activePack ? (
                     <button
                       type="button"
                       onClick={() => void openPath(activePack.folderPath)}
                       className="shrink-0 rounded p-0.5 hover:bg-accent hover:text-accent-foreground"
-                      title="Open folder"
-                      aria-label="Open folder"
+                      title={t("actions.openFolder")}
+                      aria-label={t("actions.openFolder")}
                     >
                       <FolderOpen className="h-3.5 w-3.5" />
                     </button>
@@ -251,31 +253,33 @@ export default function EffectFolderEditorView({
                 </div>
               ) : (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Load a folder such as <span className="font-mono">006effect\0xHASH</span>. Structure JSON is
-                  inferred from the sibling file.
+                  {t("editor.loadExample", { example: "006effect\\0xHASH" })}
                 </p>
               )}
               {inventory ? (
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                  <span>{inventory.summary.totalFiles} files</span>
-                  <span>{inventory.summary.efxbnCount} efxbn</span>
-                  <span>{inventory.summary.modelCount} models</span>
-                  <span>{inventory.summary.textureCount} textures</span>
+                  <span>{t("editor.files", { count: inventory.summary.totalFiles })}</span>
+                  <span>{t("editor.efxbn", { count: inventory.summary.efxbnCount })}</span>
+                  <span>{t("editor.models", { count: inventory.summary.modelCount })}</span>
+                  <span>{t("editor.textures", { count: inventory.summary.textureCount })}</span>
                   {sharedRefCount > 0 ? (
                     <span className="text-sky-600 dark:text-sky-400">
-                      {sharedRefCount} refs from {EFFECT_FOLDER_COMMON_PACK_NAME}
+                      {t("editor.refsFrom", { count: sharedRefCount, pack: EFFECT_FOLDER_COMMON_PACK_NAME })}
                     </span>
                   ) : null}
                   {unresolvedRefCount > 0 ? (
                     <span className="text-amber-600 dark:text-amber-400">
-                      {unresolvedRefCount} unresolved refs
+                      {t("editor.unresolvedRefs", { count: unresolvedRefCount })}
                     </span>
                   ) : null}
                 </div>
               ) : null}
               {suggestedPack && !activePack ? (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Tree selection: <span className="break-all font-mono">{suggestedPack.folderPath}</span>
+                  {t("editor.treeSelection")}{" "}
+                  <span className="break-all font-mono" data-i18n-ignore="">
+                    {suggestedPack.folderPath}
+                  </span>
                 </p>
               ) : null}
             </div>
@@ -295,7 +299,7 @@ export default function EffectFolderEditorView({
                   ) : (
                     <RefreshCw className="h-4 w-4" />
                   )}
-                  Refresh
+                  {t("actions.refresh")}
                 </Button>
                 <Button
                   type="button"
@@ -306,7 +310,7 @@ export default function EffectFolderEditorView({
                   className={toolbarButtonClass}
                 >
                   <ShieldCheck className="h-4 w-4" />
-                  Validate
+                  {t("actions.validate")}
                 </Button>
                 <Button
                   type="button"
@@ -320,7 +324,7 @@ export default function EffectFolderEditorView({
                   className={toolbarButtonClass}
                 >
                   <Package className="h-4 w-4" />
-                  Repack
+                  {t("actions.repack")}
                 </Button>
                 <Button
                   type="button"
@@ -331,7 +335,7 @@ export default function EffectFolderEditorView({
                   className={toolbarButtonClass}
                 >
                   <Plus className="h-4 w-4" />
-                  Import
+                  {t("actions.import")}
                 </Button>
                 <Button
                   type="button"
@@ -342,7 +346,7 @@ export default function EffectFolderEditorView({
                   className={toolbarButtonClass}
                 >
                   <Copy className="h-4 w-4" />
-                  Copy
+                  {t("actions.copy")}
                 </Button>
                 <Button
                   type="button"
@@ -353,7 +357,7 @@ export default function EffectFolderEditorView({
                   className={toolbarButtonClass}
                 >
                   <Trash2 className="h-4 w-4" />
-                  Remove
+                  {t("actions.remove")}
                 </Button>
               </div>
             ) : null}
@@ -361,12 +365,13 @@ export default function EffectFolderEditorView({
 
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-0 max-w-2xl flex-1">
-              <Label className="text-[10px] text-muted-foreground">Effect folder</Label>
+              <Label className="text-[10px] text-muted-foreground">{t("editor.effectFolder")}</Label>
               <FilePathInput
                 value={folderInput}
                 onChange={(event) => setFolderInput(event.target.value)}
                 placeholder="E:\\workspace\\006effect\\0xHASH"
                 className="mt-0.5 font-mono text-xs"
+                data-i18n-ignore=""
               />
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -378,10 +383,10 @@ export default function EffectFolderEditorView({
                 className={toolbarButtonClass}
               >
                 <FolderOpen className="h-4 w-4" />
-                Browse
+                {t("actions.browse")}
               </Button>
               <Button type="button" size="sm" variant="secondary" onClick={loadFolder} className={toolbarButtonClass}>
-                Load
+                {t("actions.load")}
               </Button>
             </div>
           </div>
@@ -393,14 +398,14 @@ export default function EffectFolderEditorView({
           {!activePack ? (
             <div className="flex h-48 shrink-0 flex-col items-center justify-center gap-3 rounded-md border border-dashed bg-muted/5 text-sm text-muted-foreground">
               <FolderOpen className="h-8 w-8 opacity-50" />
-              <p>Set an effect folder path, then Load.</p>
+              <p>{t("editor.setPathThenLoad")}</p>
             </div>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border">
               {editor.loadState.status === "loading" ? (
                 <div className="flex flex-1 items-center justify-center p-4 text-sm text-muted-foreground">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Loading effect inventory...
+                  {t("editor.loadingInventory")}
                 </div>
               ) : null}
 
@@ -417,19 +422,19 @@ export default function EffectFolderEditorView({
                     <Input
                       value={editor.searchQuery}
                       onChange={(event) => editor.setSearchQuery(event.target.value)}
-                      placeholder="Search by name, hash, or path"
+                      placeholder={t("editor.searchPlaceholder")}
                       className="h-8 min-w-0 flex-1 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0"
                     />
                     <div className="flex shrink-0 items-center gap-1 border-l border-border/60 pl-2">
                       <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={editor.selectAllVisible}>
-                        Select visible
+                        {t("actions.selectVisible")}
                       </Button>
                       <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={editor.clearSelection}>
-                        Clear
+                        {t("actions.clear")}
                       </Button>
                       {editor.selectedItems.length > 0 ? (
                         <span className="whitespace-nowrap px-1 text-xs tabular-nums text-muted-foreground">
-                          {editor.selectedItems.length} selected
+                          {t("editor.selected", { count: editor.selectedItems.length })}
                         </span>
                       ) : null}
                       <Button
@@ -438,8 +443,8 @@ export default function EffectFolderEditorView({
                         variant="ghost"
                         className="h-7 w-7"
                         onClick={() => setListCollapsed((collapsed) => !collapsed)}
-                        title={listCollapsed ? "Show the entry list" : "Hide the entry list and widen the preview"}
-                        aria-label={listCollapsed ? "Show the entry list" : "Hide the entry list"}
+                        title={listCollapsed ? t("editor.showList") : t("editor.hideListTitle")}
+                        aria-label={listCollapsed ? t("editor.showList") : t("editor.hideList")}
                         aria-pressed={listCollapsed}
                       >
                         {listCollapsed ? (

@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import {
   AlertCircle,
   Box,
@@ -170,6 +171,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
   onImport,
   onCancel,
 }: DaeImportConfigModalBodyProps) {
+  const { t } = useTranslation("scene-dae-forms");
   const batchDiskMode = workflowMode === "batchDisk";
   const unitModelMode = workflowMode === "unitModel";
   const replaceNumshbMode = workflowMode === "unitModelReplaceNumshb";
@@ -328,7 +330,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
           />
 
           {batchDiskMode ? (
-            <DaeImportSection title={`Batch Sources (${entries.length})`}>
+            <DaeImportSection title={t("modal.batchSources", { count: entries.length })}>
               <div className="max-h-36 space-y-1 overflow-y-auto px-1">
                 {entries.map((candidate) => {
                   const failed =
@@ -355,17 +357,17 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
                         {candidate.analyzing ? (
                           <>
                             <Loader2 className="h-3 w-3 animate-spin" />
-                            Analyzing
+                            {t("status.analyzing")}
                           </>
                         ) : failed ? (
                           <>
                             <AlertCircle className="h-3 w-3" />
-                            Invalid
+                            {t("status.invalid")}
                           </>
                         ) : (
                           <>
                             <CheckCircle2 className="h-3 w-3" />
-                            Ready
+                            {t("status.ready")}
                           </>
                         )}
                       </span>
@@ -376,28 +378,28 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
             </DaeImportSection>
           ) : null}
 
-          <DaeImportSection title="Import Options">
+          <DaeImportSection title={t("modal.importOptions")}>
             {replaceNumshbMode ? (
-              <DaeImportFieldRow label="Import Mode">
+              <DaeImportFieldRow label={t("fields.importMode")}>
                 <span className="text-right text-[11px] font-medium">
-                  Convert mesh only (.numshb)
+                  {t("modes.meshOnly")}
                 </span>
               </DaeImportFieldRow>
             ) : unitModelMode ? (
-              <DaeImportFieldRow label="Import Mode">
+              <DaeImportFieldRow label={t("fields.importMode")}>
                 <span className="text-right text-[11px] font-medium">
-                  Add to Unit model package
+                  {t("modes.addUnitModel")}
                 </span>
               </DaeImportFieldRow>
             ) : batchDiskMode ? (
-              <DaeImportFieldRow label="Import Mode">
+              <DaeImportFieldRow label={t("fields.importMode")}>
                 <span className="text-right text-[11px] font-medium">
-                  Direct-to-disk batch
+                  {t("modes.batchDisk")}
                 </span>
               </DaeImportFieldRow>
             ) : (
               <>
-                <DaeImportFieldRow label="Import Mode">
+                <DaeImportFieldRow label={t("fields.importMode")}>
                   <Tabs
                     value={primaryMode}
                     onValueChange={(value) => {
@@ -412,18 +414,18 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
                         className="flex-1 text-[11px]"
                         disabled={config.directToDisk}
                       >
-                        Preview
+                        {t("modes.preview")}
                       </TabsTrigger>
                       <TabsTrigger value="ssbh" className="flex-1 text-[11px]">
-                        Convert SSBH
+                        {t("modes.convertSsbh")}
                       </TabsTrigger>
                     </TabsList>
                   </Tabs>
                 </DaeImportFieldRow>
 
                 <DaeImportBoolField
-                  label="Out-of-scene conversion"
-                  hint="Write files to disk and skip viewport loading"
+                  label={t("fields.outOfScene")}
+                  hint={t("hints.outOfScene")}
                   checked={config.directToDisk}
                   onCheckedChange={(checked) =>
                     updateConfig({
@@ -438,18 +440,18 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
 
             {config.directToDisk && !unitModelMode && !replaceNumshbMode && (
               <DaeImportFieldRow
-                label="Output Directory"
+                label={t("fields.outputDirectory")}
                 hint={
                   replaceFolderName
-                    ? `Replaces ${replaceFolderName} under the open stage folder`
-                    : "Writes model folder under this directory"
+                    ? t("hints.replacesFolder", { folder: replaceFolderName })
+                    : t("hints.writesModelFolder")
                 }
               >
                 {replaceFolderName ? (
                   <span className="block truncate px-1 text-[10px] text-muted-foreground">
                     {stageRoot
                       ? `${stageRoot}\\${replaceFolderName}\\0\\`
-                      : "Open a stage folder first"}
+                      : t("hints.openStageFirst")}
                   </span>
                 ) : (
                   <Button
@@ -460,7 +462,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
                     onClick={async () => {
                       const selected = await open({
                         directory: true,
-                        title: "Select static mesh output directory",
+                        title: t("actions.selectOutputDirectory"),
                         defaultPath: config.outputDirectory ?? stageRoot ?? undefined,
                       });
                       if (typeof selected === "string") {
@@ -470,7 +472,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
                   >
                     <FolderOpen className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">
-                      {config.outputDirectory ?? "Choose folder"}
+                      {config.outputDirectory ?? t("actions.chooseFolder")}
                     </span>
                   </Button>
                 )}
@@ -479,13 +481,13 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
 
             {!unitModelMode && !replaceNumshbMode ? (
               <DaeImportBoolField
-                label="Generate HKT Collision"
+                label={t("fields.generateHkt")}
                 hint={
                   hktAvailable
                     ? batchDiskMode
-                      ? "Generate Havok collision per file (default: shape-preserving, most compact)"
-                      : "Uses Havok tools with automatic profile selection"
-                    : "Havok tools are not available on this machine"
+                      ? t("hints.hktBatch")
+                      : t("hints.hktAutomatic")
+                    : t("hints.hktUnavailable")
                 }
                 checked={config.generateHkt}
                 disabled={!hktAvailable}
@@ -523,20 +525,20 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
 
         <div className="flex shrink-0 justify-end gap-2 border-t bg-muted/20 px-4 py-3">
           <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-            Cancel
+            {t("actions.cancel")}
           </Button>
           <Button type="button" size="sm" onClick={onImport} disabled={!canImport}>
             {replaceNumshbMode
-              ? "Convert NUMSHB"
+              ? t("actions.convertNumshb")
               : unitModelMode
-              ? "Add Unit Model"
+              ? t("actions.addUnitModel")
               : batchDiskMode
-              ? `Convert ${entries.length} File${entries.length === 1 ? "" : "s"} to Disk`
+              ? t("actions.convertFilesToDisk", { count: entries.length })
               : config.directToDisk
-              ? "Convert to Disk"
+              ? t("actions.convertToDisk")
               : primaryMode === "ssbh"
-                ? "Convert to SSBH"
-                : "Import"}
+                ? t("actions.convertToSsbh")
+                : t("actions.import")}
           </Button>
         </div>
     </div>
@@ -554,6 +556,7 @@ export function DaeImportConfigModal({
   onCancel,
   viewportSuspend,
 }: DaeImportConfigModalProps) {
+  const { t } = useTranslation("scene-dae-forms");
   const entry = entries[0];
   const config = entry?.config;
   const primaryMode = config ? getPrimaryMode(config) : "preview";
@@ -572,19 +575,19 @@ export function DaeImportConfigModal({
   const unitModelMode = workflowMode === "unitModel";
   const replaceNumshbMode = workflowMode === "unitModelReplaceNumshb";
   const title = replaceNumshbMode
-    ? "Convert mesh for replace"
+    ? t("titles.convertMeshReplace")
     : unitModelMode
-    ? "Import Unit Model"
+    ? t("titles.importUnitModel")
     : batchDiskMode
-      ? "Batch Import Static Mesh"
-      : "Import Static Mesh";
+      ? t("titles.batchImportStaticMesh")
+      : t("titles.importStaticMesh");
   const subtitle = replaceNumshbMode
-    ? `${entry.fileName} to NUMSHB only`
+    ? t("subtitles.toNumshbOnly", { file: entry.fileName })
     : unitModelMode
-    ? `${entry.fileName} to Unit model package`
+    ? t("subtitles.toUnitModelPackage", { file: entry.fileName })
     : batchDiskMode
-    ? `${entries.length} FBX/DAE file${entries.length === 1 ? "" : "s"} to disk`
-    : `${entry.fileName}${entries.length > 1 ? ` · +${entries.length - 1} more` : ""}`;
+    ? t("subtitles.filesToDisk", { count: entries.length })
+    : t("subtitles.entrySummary", { file: entry.fileName, extra: entries.length > 1 ? ` · +${entries.length - 1} more` : "" });
 
   const modalLayer = (
     <div

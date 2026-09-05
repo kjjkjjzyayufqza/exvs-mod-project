@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -15,17 +16,15 @@ import {
 
 export interface TextureQualityPreset {
   key: string;
-  label: string;
   maxDimension: number | null;
-  description: string;
   badge: string;
 }
 
 export const TEXTURE_QUALITY_PRESETS: TextureQualityPreset[] = [
-  { key: "draft", label: "Draft", maxDimension: 512, description: "Fast preview", badge: "512px" },
-  { key: "standard", label: "Standard", maxDimension: 1024, description: "Balanced", badge: "1K" },
-  { key: "high", label: "High", maxDimension: 2048, description: "Detailed", badge: "2K" },
-  { key: "original", label: "Original", maxDimension: null, description: "Native resolution", badge: "Full" },
+  { key: "draft", maxDimension: 512, badge: "512px" },
+  { key: "standard", maxDimension: 1024, badge: "1K" },
+  { key: "high", maxDimension: 2048, badge: "2K" },
+  { key: "original", maxDimension: null, badge: "Full" },
 ];
 
 export function getMaxDimensionForQuality(qualityKey: string): number | null {
@@ -107,6 +106,7 @@ export function TextureQualityPanel({
   textureDataMap,
   isDecoding,
 }: TextureQualityPanelProps) {
+  const { t } = useTranslation("scene-texture-dialogs");
   const stats = useMemo(() => computeTextureStats(textureDataMap), [textureDataMap]);
   const slotPreset = inferTextureSlotPreset(textureSlotLoadEnabled);
 
@@ -137,7 +137,7 @@ export function TextureQualityPanel({
               )}
             >
               <span className={cn("truncate text-[11px] font-medium", active && "text-foreground")}>
-                {preset.label}
+                {t(`quality.presets.${preset.key}.label`)}
               </span>
               <span
                 className={cn(
@@ -154,12 +154,12 @@ export function TextureQualityPanel({
 
       {quality === "original" && (
         <div className="text-[9px] text-amber-500 bg-amber-500/10 rounded px-2 py-1 leading-relaxed">
-          Full resolution may require more VRAM.
+          {t("quality.fullResolutionWarning")}
         </div>
       )}
 
       <div className="space-y-1.5 border-t border-border/30 pt-1.5">
-        <div className={PROP_LABEL}>Texture slots</div>
+        <div className={PROP_LABEL}>{t("quality.textureSlots")}</div>
         <ToggleGroup
           type="single"
           value={slotPreset}
@@ -172,7 +172,7 @@ export function TextureQualityPanel({
         >
           <ToggleGroupItem
             value="all"
-            aria-label="Load all texture slots"
+            aria-label={t("quality.loadAllAria")}
             className={cn(
               "min-h-0 flex-1 rounded-sm px-2 text-[11px] font-medium",
               "min-w-0! border-0! shadow-none! bg-transparent text-muted-foreground",
@@ -181,11 +181,11 @@ export function TextureQualityPanel({
               "focus-visible:z-10 focus-visible:ring-2! focus-visible:ring-ring!",
             )}
           >
-            Load all
+            {t("quality.loadAll")}
           </ToggleGroupItem>
           <ToggleGroupItem
             value="none"
-            aria-label="Load no texture slots"
+            aria-label={t("quality.loadNoneAria")}
             className={cn(
               "min-h-0 flex-1 rounded-sm border-y-0 border-r-0 border-l border-border/60 bg-transparent px-2 text-[11px] font-medium",
               "min-w-0! shadow-none! text-muted-foreground",
@@ -194,13 +194,13 @@ export function TextureQualityPanel({
               "focus-visible:z-10 focus-visible:ring-2! focus-visible:ring-ring!",
             )}
           >
-            Load none
+            {t("quality.loadNone")}
           </ToggleGroupItem>
         </ToggleGroup>
 
         <div className="mt-1.5 space-y-1">
           <div className="text-[10px] text-muted-foreground/80 leading-snug">
-            Per-channel overrides (decode + viewport). Presets above set all on or off at once.
+            {t("quality.overridesDescription")}
           </div>
           {TEXTURE_PREVIEW_SLOT_META.map(({ key, label, short }) => {
             const warning = SLOT_WARNINGS[key];
@@ -214,16 +214,16 @@ export function TextureQualityPanel({
                     className="mt-0.5 h-4 w-4 shrink-0"
                     checked={checked}
                     onCheckedChange={(v) => onTextureSlotToggle(key, v === true)}
-                    aria-label={label}
+                    aria-label={t(`quality.slots.${key}.label`, { defaultValue: label })}
                   />
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate text-[11px] leading-tight text-foreground">
                       <span className="font-medium">{short}</span>
-                      <span className="font-normal text-muted-foreground"> — {label}</span>
+                      <span className="font-normal text-muted-foreground"> — {t(`quality.slots.${key}.label`, { defaultValue: label })}</span>
                     </span>
                     {warning ? (
                       <span className="text-[10px] leading-snug text-amber-600/90 mt-0.5">
-                        {warning}
+                        {t(`quality.slots.${key}.warning`, { defaultValue: warning })}
                       </span>
                     ) : null}
                   </span>
@@ -236,23 +236,25 @@ export function TextureQualityPanel({
 
       <div className="space-y-1 border-t border-border/30 pt-1.5">
         <div className={PROP_ROW}>
-          <span className="text-[11px] text-muted-foreground">Unique textures</span>
+            <span className="text-[11px] text-muted-foreground">{t("quality.uniqueTextures")}</span>
           <span className="font-mono text-[11px]">{stats.uniqueCount}</span>
         </div>
         <div className={PROP_ROW}>
-          <span className="text-[11px] text-muted-foreground">RGBA total</span>
+          <span className="text-[11px] text-muted-foreground">{t("quality.rgbaTotal")}</span>
           <span className="font-mono text-[11px]">{formatBytes(stats.totalRgbaBytes)}</span>
         </div>
         {stats.maxWidth > 0 && (
           <div className={PROP_ROW}>
-            <span className="text-[11px] text-muted-foreground">Largest</span>
-            <span className="font-mono text-[11px]">{stats.maxWidth}&times;{stats.maxHeight}</span>
+            <span className="text-[11px] text-muted-foreground">{t("quality.largest")}</span>
+            <span className="font-mono text-[11px]" data-i18n-ignore="">
+              {stats.maxWidth}×{stats.maxHeight}
+            </span>
           </div>
         )}
 
         {sortedBuckets.length > 0 && (
           <div className="mt-1 space-y-0.5">
-            <div className="text-[10px] text-muted-foreground/60 mb-0.5">Distribution</div>
+            <div className="text-[10px] text-muted-foreground/60 mb-0.5">{t("quality.distribution")}</div>
             {sortedBuckets.map(([res, count]) => (
               <div key={res} className={PROP_ROW}>
                 <span className="font-mono text-[10px] text-muted-foreground">{res}</span>
@@ -264,7 +266,7 @@ export function TextureQualityPanel({
 
         {isDecoding && (
           <div className="text-[10px] text-blue-400 animate-pulse">
-            Decoding...
+            {t("quality.decoding")}
           </div>
         )}
       </div>

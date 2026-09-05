@@ -27,6 +27,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -133,6 +134,7 @@ export function UnitModelTexturePanel({
   focusTextureFilename = null,
   onOpenReferencingNumatb,
 }: Props) {
+  const { t } = useTranslation("unit-texture-panel");
   const focusKey = (focusTextureFilename ?? "").toLowerCase();
   const preview = useSsbhModelPreview();
   const loadedRoot = inferLoadedRoot(preview);
@@ -223,7 +225,7 @@ export function UnitModelTexturePanel({
       });
       return next;
     } catch (error) {
-      toast.error("Failed to list unit textures", { description: String(error) });
+      toast.error(t("errors.listFailed"), { description: String(error) });
       return null;
     } finally {
       setLoading(false);
@@ -298,18 +300,18 @@ export function UnitModelTexturePanel({
       try {
         await preview.reloadCurrentModel();
       } catch (error) {
-        toast.error("Texture changed, but preview reload failed", { description: String(error) });
+        toast.error(t("errors.previewReloadFailed"), { description: String(error) });
       }
     }
   }, [preview]);
 
   const handleAddTexture = useCallback(async () => {
     if (!activeRoot || !structurePath) {
-      toast.error("No unit model folder selected");
+      toast.error(t("errors.noUnitFolder"));
       return;
     }
     const selected = await open({
-      title: "Add unit texture",
+      title: t("dialogs.addTitle"),
       multiple: true,
       filters: [{ name: "Textures", extensions: ["nutexb", "png", "dds", "tga"] }],
       defaultPath:
@@ -348,7 +350,7 @@ export function UnitModelTexturePanel({
       const analyzed = await analyzeTextureAddCandidates(files, managerEntries);
       setAddCandidates(analyzed);
     } catch (error) {
-      toast.error("Failed to analyze textures", { description: String(error) });
+      toast.error(t("errors.analyzeFailed"), { description: String(error) });
     } finally {
       setAddAnalyzing(false);
     }
@@ -357,7 +359,7 @@ export function UnitModelTexturePanel({
   const handleRegisterPoolOrphans = useCallback(async () => {
     if (!activeRoot || !structurePath) return;
     if (isExvsCommon) {
-      toast.message("EXVS Common textures must be added through the managed Add action.");
+      toast.message(t("messages.exvsCommonAdd"));
       return;
     }
     setBusy("register");
@@ -372,12 +374,12 @@ export function UnitModelTexturePanel({
         warning.startsWith("Registered "),
       );
       if (registeredWarning) {
-        toast.success(registeredWarning);
+        toast.success(t("messages.registered", { detail: registeredWarning }));
       } else {
-        toast.message("No orphan pool textures found on disk");
+        toast.message(t("messages.noOrphans"));
       }
     } catch (error) {
-      toast.error("Failed to register pool textures", { description: String(error) });
+      toast.error(t("errors.registerFailed"), { description: String(error) });
       await refreshInventory();
     } finally {
       setBusy(null);
@@ -402,8 +404,8 @@ export function UnitModelTexturePanel({
             if (!existing?.nutexbPath) {
               throw new Error(
                 existing
-                  ? `Cannot replace ${candidate.filename}: existing texture has no path`
-                  : `Cannot replace ${candidate.filename}: matching texture not found`,
+                  ? t("errors.cannotRemoveReferenced")
+                  : t("errors.cannotRemoveReferenced"),
               );
             }
             await replaceNutexbInPlace({
@@ -456,15 +458,15 @@ export function UnitModelTexturePanel({
         }
         emitUnitTexturesChanged();
         const summaryParts: string[] = [];
-        if (addedCount > 0) summaryParts.push(`Added ${addedCount}`);
-        if (replacedCount > 0) summaryParts.push(`replaced ${replacedCount}`);
+        if (addedCount > 0) summaryParts.push(t("messages.exportedCount", { count: addedCount }));
+        if (replacedCount > 0) summaryParts.push(t("messages.exportedCount", { count: replacedCount }));
         toast.success(
           summaryParts.length > 0
-            ? `${summaryParts.join(", ")} unit texture(s)`
-            : "No unit textures changed",
+            ? summaryParts.join(", ")
+            : t("messages.noOrphans"),
         );
       } catch (error) {
-        toast.error("Failed to add unit texture", { description: String(error) });
+        toast.error(t("errors.addFailed"), { description: String(error) });
         await refreshInventory();
       } finally {
         setBusy(null);
@@ -482,7 +484,7 @@ export function UnitModelTexturePanel({
     async (entry: TextureManagerEntry, ddsFormat: DdsFormat) => {
       if (!entry.nutexbPath) return;
       const selected = await open({
-        title: `Replace ${entry.filename}`,
+        title: t("dialogs.replaceTitle", { name: entry.filename }),
         multiple: false,
         filters: [{ name: "Textures", extensions: ["nutexb", "png", "dds", "tga"] }],
         defaultPath:
@@ -507,9 +509,9 @@ export function UnitModelTexturePanel({
         await refreshInventory();
         await reloadPreviewAfterDiskChange();
         emitUnitTexturesChanged();
-        toast.success(`Replaced ${entry.filename}`);
+        toast.success(t("messages.replaced", { name: entry.filename }));
       } catch (error) {
-        toast.error("Failed to replace unit texture", { description: String(error) });
+        toast.error(t("errors.replaceFailed"), { description: String(error) });
       } finally {
         setBusy(null);
       }
@@ -521,15 +523,15 @@ export function UnitModelTexturePanel({
     async (texture: UnitModelTextureEntry) => {
       if (!activeRoot || !structurePath) return;
       if (!texture.canRemove) {
-        toast.error("Cannot remove a referenced texture", {
+        toast.error(t("errors.cannotRemoveReferenced"), {
           description: texture.referencedBy.length
             ? texture.referencedBy.join(", ")
-            : `Structure refs: ${texture.structureRefCount}`,
+            : t("labels.structureRefs", { count: texture.structureRefCount }),
         });
         return;
       }
-      const ok = await confirm(`Remove ${texture.filename}?`, {
-        title: "Remove unit texture",
+      const ok = await confirm(t("dialogs.removeConfirm", { name: texture.filename }), {
+        title: t("dialogs.removeTitle"),
         kind: "warning",
       });
       if (!ok) return;
@@ -554,9 +556,9 @@ export function UnitModelTexturePanel({
         clearSceneTextureThumbnailCache();
         bumpThumbnailCache();
         emitUnitTexturesChanged();
-        toast.success(`Removed ${texture.filename}`);
+        toast.success(t("messages.removed", { name: texture.filename }));
       } catch (error) {
-        toast.error("Failed to remove unit texture", { description: String(error) });
+        toast.error(t("errors.removeFailed"), { description: String(error) });
       } finally {
         setBusy(null);
       }
@@ -572,9 +574,9 @@ export function UnitModelTexturePanel({
         suggestedFilename: texture.filename.replace(/\.nutexb$/i, ".png"),
         dialogPathKey: UNIT_MODEL_EXPORT_TEXTURE_DIALOG_PATH_KEY,
       });
-      if (output) toast.success(`Exported ${getBaseName(output)}`);
+      if (output) toast.success(t("messages.exported", { name: getBaseName(output) }));
     } catch (error) {
-      toast.error("Failed to export unit texture", { description: String(error) });
+      toast.error(t("errors.exportFailed"), { description: String(error) });
     } finally {
       setBusy(null);
     }
@@ -583,12 +585,12 @@ export function UnitModelTexturePanel({
   const handleBatchExportTextures = useCallback(async () => {
     const textures = (inventory?.textures ?? []).filter((texture) => texture.exists);
     if (textures.length === 0) {
-      toast.error("No existing unit textures to export");
+      toast.error(t("errors.noTexturesToExport"));
       return;
     }
 
     const selected = await open({
-      title: "Batch export unit textures",
+      title: t("dialogs.batchExportTitle"),
       directory: true,
       multiple: false,
       defaultPath: await getStoredDialogDefaultPath(UNIT_MODEL_BATCH_EXPORT_TEXTURES_DIALOG_PATH_KEY),
@@ -632,11 +634,15 @@ export function UnitModelTexturePanel({
       }
 
       if (failures.length > 0) {
-        toast.error("Batch export finished with errors", {
-          description: `${textures.length - failures.length}/${textures.length} exported. ${failures[0]}`,
+        toast.error(t("errors.batchExportFailed"), {
+          description: t("messages.batchPartial", {
+            done: textures.length - failures.length,
+            total: textures.length,
+            detail: failures[0],
+          }),
         });
       } else {
-        toast.success(`Exported ${textures.length} texture(s)`);
+        toast.success(t("messages.exportedCount", { count: textures.length }));
       }
     } finally {
       setBusy(null);
@@ -660,7 +666,7 @@ export function UnitModelTexturePanel({
         emitUnitTexturesChanged();
         setPreviewEntry((prev) => (prev ? { ...prev, format: ddsFormat } : prev));
       } catch (error) {
-        toast.error("Failed to re-encode unit texture", { description: String(error) });
+        toast.error(t("errors.reencodeFailed"), { description: String(error) });
       } finally {
         setBusy(null);
       }
@@ -670,7 +676,7 @@ export function UnitModelTexturePanel({
 
   const copyPath = useCallback(async (texture: UnitModelTextureEntry) => {
     await navigator.clipboard.writeText(texture.path);
-    toast.success("Copied texture path");
+    toast.success(t("messages.copiedPath"));
   }, []);
 
   const openPreview = useCallback((texture: UnitModelTextureEntry) => {
@@ -693,7 +699,7 @@ export function UnitModelTexturePanel({
           <Input
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search .nutexb"
+            placeholder={t("labels.searchPlaceholder")}
             className="h-8 pl-7 text-xs"
             disabled={noRoot}
           />
@@ -705,7 +711,7 @@ export function UnitModelTexturePanel({
           className="h-8 w-8 shrink-0"
           onClick={() => void refreshInventory()}
           disabled={noRoot || loading}
-          title="Refresh"
+          title={t("actions.refresh")}
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
         </Button>
@@ -718,8 +724,8 @@ export function UnitModelTexturePanel({
           disabled={noRoot || busy !== null || !inventory?.textures.some((texture) => texture.exists)}
           title={
             batchExportProgress
-              ? `Exporting ${batchExportProgress.done}/${batchExportProgress.total}`
-              : "Batch export PNG"
+              ? t("progress.exporting", batchExportProgress)
+              : t("actions.batchExportPng")
           }
         >
           {busy === "batchExport" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
@@ -731,7 +737,7 @@ export function UnitModelTexturePanel({
           className="h-8 w-8 shrink-0"
           onClick={() => void handleRegisterPoolOrphans()}
           disabled={noRoot || busy !== null || isExvsCommon}
-          title="Register orphan textures already on disk in textures/"
+          title={t("actions.registerOrphans")}
         >
           {busy === "register" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
         </Button>
@@ -742,7 +748,7 @@ export function UnitModelTexturePanel({
           className="h-8 w-8 shrink-0"
           onClick={() => void handleAddTexture()}
           disabled={noRoot || busy !== null}
-          title="Add texture"
+          title={t("actions.add")}
         >
           <Plus className="h-4 w-4" />
         </Button>
@@ -752,7 +758,7 @@ export function UnitModelTexturePanel({
         <div className="flex min-w-0 items-center justify-between gap-2">
           <div className="min-w-0">
             <div className="truncate text-[11px] font-semibold">
-              {activeRoot ? getBaseName(activeRoot) : "No unit loaded"}
+              {activeRoot ? getBaseName(activeRoot) : t("states.noUnitLoaded")}
             </div>
             <div className="truncate font-mono text-[10px] text-muted-foreground" title={structurePath ?? undefined}>
               {structurePath ?? "-"}
@@ -774,7 +780,7 @@ export function UnitModelTexturePanel({
         {noRoot ? (
           <div className="flex h-32 flex-col items-center justify-center gap-1 text-muted-foreground">
             <ImageIcon className="h-6 w-6 opacity-40" />
-            <span className="text-[11px]">Open a unit model folder</span>
+            <span className="text-[11px]">{t("states.openFolder")}</span>
           </div>
         ) : loading && !inventory ? (
           <div className="space-y-2 p-2">
@@ -785,7 +791,7 @@ export function UnitModelTexturePanel({
         ) : filteredTextures.length === 0 ? (
           <div className="flex h-32 flex-col items-center justify-center gap-1 text-muted-foreground">
             <ImageIcon className="h-6 w-6 opacity-40" />
-            <span className="text-[11px]">{searchQuery.trim() ? "No matching textures" : "No .nutexb entries"}</span>
+            <span className="text-[11px]">{searchQuery.trim() ? t("states.noMatching") : t("states.noEntries")}</span>
           </div>
         ) : (
           <div className="relative w-full" style={{ height: textureRowVirtualizer.getTotalSize() }}>
@@ -890,6 +896,7 @@ function UnitTextureRow({
   onOpenReferencingNumatb?: (numatbBasename: string) => void;
   busy: boolean;
 }) {
+  const { t } = useTranslation("unit-texture-panel");
   const thumbnailDataUrl = getSceneTextureThumbnailDataUrl(texture.path, textureDataMap);
   const loadedData = lookupSceneTextureData(textureDataMap, texture.path);
   const dims =
@@ -915,7 +922,7 @@ function UnitTextureRow({
           event.stopPropagation();
           onPreview();
         }}
-        title="Preview"
+        title={t("actions.preview")}
       >
         {thumbnailDataUrl ? (
           <img src={thumbnailDataUrl} alt={texture.filename} className="h-full w-full object-cover" />
@@ -938,13 +945,13 @@ function UnitTextureRow({
         ) : null}
         {selected && onOpenReferencingNumatb && texture.referencedBy.length > 0 ? (
           <div className="mt-1 flex flex-wrap items-center gap-1">
-            <span className="text-[9px] text-muted-foreground">used by</span>
+            <span className="text-[9px] text-muted-foreground">{t("labels.usedBy")}</span>
             {texture.referencedBy.map((mat) => (
               <button
                 key={mat}
                 type="button"
                 className="rounded bg-muted px-1 py-0.5 font-mono text-[9px] text-muted-foreground transition-colors hover:bg-primary/15 hover:text-primary"
-                title={`Open ${mat}`}
+                title={t("actions.open", { name: mat })}
                 onClick={(event) => {
                   event.stopPropagation();
                   onOpenReferencingNumatb(mat);
@@ -961,32 +968,32 @@ function UnitTextureRow({
         <div className="flex items-center gap-1">
           {!texture.exists ? (
             <Badge variant="destructive" className="h-5 px-1.5 text-[9px]">
-              missing
+              {t("states.missing")}
             </Badge>
           ) : referenced ? (
             <Badge variant="secondary" className="h-5 px-1.5 text-[9px]" title={texture.referencedBy.join(", ")}>
-              ref {texture.numatbReferenceCount || texture.structureRefCount}
+              {t("labels.ref", { count: texture.numatbReferenceCount || texture.structureRefCount })}
             </Badge>
           ) : (
             <Badge variant="outline" className="h-5 px-1.5 text-[9px]">
-              loose
+              {t("states.loose")}
             </Badge>
           )}
         </div>
         <div className="flex items-center gap-0.5">
-          <IconButton title="Preview" onClick={onPreview} disabled={!texture.exists || busy}>
+          <IconButton title={t("actions.preview")} onClick={onPreview} disabled={!texture.exists || busy}>
             <Eye className="h-3.5 w-3.5" />
           </IconButton>
-          <IconButton title="Export PNG" onClick={onExport} disabled={!texture.exists || busy}>
+          <IconButton title={t("actions.exportPng")} onClick={onExport} disabled={!texture.exists || busy}>
             <Download className="h-3.5 w-3.5" />
           </IconButton>
-          <IconButton title="Replace" onClick={onReplace} disabled={!texture.exists || busy}>
+          <IconButton title={t("actions.replace")} onClick={onReplace} disabled={!texture.exists || busy}>
             <Replace className="h-3.5 w-3.5" />
           </IconButton>
-          <IconButton title="Copy path" onClick={onCopyPath} disabled={busy}>
+          <IconButton title={t("actions.copyPath")} onClick={onCopyPath} disabled={busy}>
             <Copy className="h-3.5 w-3.5" />
           </IconButton>
-          <IconButton title="Remove" onClick={onRemove} disabled={!texture.canRemove || busy} danger={texture.canRemove}>
+          <IconButton title={t("actions.remove")} onClick={onRemove} disabled={!texture.canRemove || busy} danger={texture.canRemove}>
             <Trash2 className="h-3.5 w-3.5" />
           </IconButton>
         </div>

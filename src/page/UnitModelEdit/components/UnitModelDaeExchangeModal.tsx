@@ -7,6 +7,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { FileBox } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SsbhDaeExchangePanel } from "@/components/ssbh-model-preview/SsbhDaeExchangePanel";
 import { useDaeSsbhSessionStore } from "@/components/ssbh-model-preview/store/daeSsbhSessionStore";
@@ -50,6 +51,7 @@ export function UnitModelDaeExchangeModal({
   onClose,
   onViewportSuspendChange,
 }: UnitModelDaeExchangeModalProps) {
+  const { t } = useTranslation("unit-add-extract");
   const titleId = useId();
   const getDimensions = useCallback(() => getDaeExchangeModalDimensions(), []);
   const viewportSuspend = useCallbackModalViewportSuspendInteraction(onViewportSuspendChange);
@@ -82,8 +84,8 @@ export function UnitModelDaeExchangeModal({
       cascadeIndex={0}
       zIndex={1}
       titleId={titleId}
-      title="DAE / FBX to SSBH"
-      subtitle="Import static mesh, configure materials, export SSBH bundle"
+      title={t("dae.title")}
+      subtitle={t("dae.subtitle")}
       headerIcon={<FileBox className="h-4 w-4 text-primary" />}
       onActivate={() => {}}
       onClose={onClose}

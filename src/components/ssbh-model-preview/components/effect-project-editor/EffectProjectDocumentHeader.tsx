@@ -20,7 +20,7 @@ function Cell({ label, value, mono }: { label: string; value: string; mono?: boo
 
 export function EffectProjectDocumentHeader({ draft }: Props) {
   return (
-    <div className="rounded border border-border/70 bg-muted/25 px-2 py-1.5">
+    <div className="rounded border border-border/70 bg-muted/25 px-2 py-1.5" data-i18n-ignore="">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <Cell label="Magic" value={draft.magic} mono />
         <Cell label="0x8 size" value={String(draft.fileSize)} mono />

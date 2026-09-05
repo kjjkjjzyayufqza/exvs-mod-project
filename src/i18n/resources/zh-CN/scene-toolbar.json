@@ -1,0 +1,87 @@
+{
+  "file": {
+    "label": "文件",
+    "openImportStage": "打开/导入场景",
+    "openStageFolder": "打开场景文件夹",
+    "importFhm2d": "导入 .fhm2d",
+    "extractFhm2d": "将 .fhm2d 解包到文件夹"
+  },
+  "save": {
+    "folderAria": "保存为文件夹",
+    "folderTooltip": "将更改保存到文件夹",
+    "fhm2dAria": "保存为 FHM2D",
+    "fhm2dTooltip": "重新打包并保存为 .fhm2d"
+  },
+  "import": {
+    "importMeshAria": "导入静态网格",
+    "importDaeTooltip": "导入 DAE / FBX",
+    "batchAria": "批量导入静态网格到磁盘",
+    "batchTooltip": "批量导入 DAE / FBX 到磁盘并生成 HKT"
+  },
+  "export": {
+    "selectedAria": "导出选中对象",
+    "selectedTooltip": "导出选中模型",
+    "hktAria": "将 HKT 导出为 OBJ",
+    "hktTooltip": "将 HKT 导出为 OBJ……"
+  },
+  "gizmo": {
+    "move": "移动",
+    "translate": "移动",
+    "rotate": "旋转",
+    "scale": "缩放",
+    "setMode": "将变换模式设为 {{mode}}",
+    "size": "操纵器大小"
+  },
+  "display": {
+    "grid": "网格",
+    "showGrid": "显示网格",
+    "hideGrid": "隐藏网格",
+    "axes": "坐标轴",
+    "showAxes": "显示坐标轴",
+    "hideAxes": "隐藏坐标轴",
+    "wireframe": "线框",
+    "enableWireframe": "启用线框",
+    "disableWireframe": "禁用线框",
+    "stats": "统计",
+    "showStats": "显示统计",
+    "hideStats": "隐藏统计",
+    "animeRender": "动画渲染",
+    "enableAnime": "启用动画渲染",
+    "disableAnime": "禁用动画渲染"
+  },
+  "more": {
+    "actions": "更多操作",
+    "resetCamera": "重置摄像机",
+    "clearCache": "清除缓存"
+  },
+  "textures": {
+    "noSlots": "此模型没有纹理槽。",
+    "loading": "加载中",
+    "loaded": "已加载",
+    "idle": "空闲",
+    "noLoaded": "当前没有已加载的 nutexb 纹理"
+  },
+  "placement": {
+    "noData": "没有放置数据",
+    "searchPlaceholder": "搜索行……",
+    "selected": "已选中",
+    "rows": "放置行",
+    "noMatches": "没有匹配筛选条件的行",
+    "resetRow": "将行重置为已加载状态",
+    "deleteRow": "删除放置行",
+    "selectToEdit": "选择放置行以编辑字段",
+    "addRow": "添加放置行",
+    "row": "行",
+    "types": {
+      "object": "对象",
+      "effect": "效果",
+      "sky": "天空",
+      "prop": "道具"
+    },
+    "rowCount_one": "{{count}} 行",
+    "rowCount_other": "{{count}} 行",
+    "matchCount_one": "{{count}} 个匹配项",
+    "matchCount_other": "{{count}} 个匹配项",
+    "objectNumber": "对象"
+  }
+}

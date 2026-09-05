@@ -4,6 +4,7 @@ import { exists, readTextFile } from "@tauri-apps/plugin-fs";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 import { useIsKeepAliveRouteActive } from "@/layout/KeepAliveContext";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -85,6 +86,7 @@ function UnitModelEditWorkspace({
   onStructureMutated: () => void;
   setModelImportViewportSuspend: (suspended: boolean) => void;
 }) {
+  const { t } = useTranslation("unit-weapon-page");
   const previewReloadTimer = useRef<number | null>(null);
 
   const clearPreviewReloadTimer = useCallback(() => {
@@ -220,7 +222,7 @@ function UnitModelEditWorkspace({
           preview.requestCameraFit();
         } catch (error) {
           console.error("Failed to reload unit model preview after package mutation", error);
-          toast.error("Preview reload failed", { description: String(error) });
+          toast.error(t("errors.previewReload"), { description: String(error) });
         }
       })();
     }, 200);
@@ -266,7 +268,7 @@ function UnitModelEditWorkspace({
             }
           } catch (error) {
             console.error("Failed to auto-sync unit model texture containers", error);
-            toast.error("Auto-fix failed", { description: String(error) });
+            toast.error(t("errors.autoFix"), { description: String(error) });
           }
           schedulePreviewReload();
           workspace.markValidationStale();
@@ -360,10 +362,10 @@ function UnitModelEditWorkspace({
       if (!workspace.structurePath || !node.fileUrl) return;
       const abs = resolveUnitModelNodeAbsPath(workspace.structurePath, node.fileUrl);
       if (!editors.openEditorForPath(abs)) {
-        toast.message(`No editor available for ${node.label}`);
+        toast.message(t("errors.noEditor", { name: node.label }));
       }
     },
-    [workspace.structurePath, editors],
+    [workspace.structurePath, editors, t],
   );
 
   const handleRevealNode = useCallback(
@@ -371,23 +373,23 @@ function UnitModelEditWorkspace({
       if (!workspace.structurePath || !node.fileUrl) return;
       const abs = resolveUnitModelNodeAbsPath(workspace.structurePath, node.fileUrl);
       void revealItemInDir(abs).catch((error) => {
-        toast.error("Failed to reveal in Explorer", {
-          description: `${abs}: ${String(error)}`,
+        toast.error(t("errors.reveal"), {
+          description: t("errors.revealDetail", { path: abs, error: String(error) }),
         });
       });
     },
-    [workspace.structurePath],
+    [workspace.structurePath, t],
   );
 
   const handleCopyNodePath = useCallback(
     (node: UnitModelTreeNode) => {
       if (!workspace.structurePath || !node.fileUrl) return;
       void writeText(resolveUnitModelNodeAbsPath(workspace.structurePath, node.fileUrl)).then(
-        () => toast.success("Copied path"),
-        (error) => toast.error("Failed to copy path", { description: String(error) }),
+        () => toast.success(t("messages.copied")),
+        (error) => toast.error(t("errors.copy"), { description: String(error) }),
       );
     },
-    [workspace.structurePath],
+    [workspace.structurePath, t],
   );
 
   const handleShowTextureInPanel = useCallback((node: UnitModelTreeNode) => {
@@ -429,10 +431,10 @@ function UnitModelEditWorkspace({
       if (foundUrl) {
         editors.openEditorForPath(resolveUnitModelNodeAbsPath(workspace.structurePath, foundUrl));
       } else {
-        toast.message(`Could not locate "${numatbBasename}" in the structure`);
+        toast.message(t("errors.numatbMissing", { name: numatbBasename }));
       }
     },
-    [workspace.structurePath, structureJson, editors],
+    [workspace.structurePath, structureJson, editors, t],
   );
   const { defaultLayout: persistedLayout, onLayoutChanged } = useDefaultLayout({
     id: "unit-model-edit-layout",
@@ -463,33 +465,35 @@ function UnitModelEditWorkspace({
 
   const daeExportDialogSubtitle = useMemo(() => {
     if (daeExportDialog.targets.length === 1) {
-      return daeExportDialog.targets[0]?.name ?? "Loaded model";
+      return daeExportDialog.targets[0]?.name ?? t("export.loadedModel");
     }
-    return `${daeExportDialog.targets.length} loaded models`;
-  }, [daeExportDialog.targets]);
+    return t("export.loadedModels", { count: daeExportDialog.targets.length });
+  }, [daeExportDialog.targets, t]);
 
   const daeExportDialogSummary = useMemo(() => {
     return (
       <p className="text-muted-foreground">
-        <span className="font-medium text-foreground">{daeExportDialog.targets.length}</span> loaded model
-        {daeExportDialog.targets.length > 1 ? "s" : ""} ready for FBX export
+        {t("export.summary", { count: daeExportDialog.targets.length })}
       </p>
     );
-  }, [daeExportDialog.targets.length]);
+  }, [daeExportDialog.targets.length, t]);
 
   const openDaeExportDialogForInstances = useCallback(
     (instances: readonly SsbhModelPreviewInstance[]) => {
       const payload = buildUnitModelExportDialogState(instances);
       if (!payload) {
-        toast.error("No disk-backed SSBH models can be exported");
+        toast.error(t("errors.noExport"));
         return;
       }
       if (payload.skipped.length > 0) {
         const labels = payload.skipped.map((entry) => entry.label).slice(0, 3);
-        const suffix =
-          payload.skipped.length > labels.length ? ` (+${payload.skipped.length - labels.length} more)` : "";
-        toast.message(`Skipping ${payload.skipped.length} non-disk instance(s)`, {
-          description: `${labels.join(", ")}${suffix}`,
+        const extra = payload.skipped.length - labels.length;
+        const skippedDetail =
+          extra > 0
+            ? labels.join(", ") + t("export.moreSuffix", { count: extra })
+            : labels.join(", ");
+        toast.message(t("export.skipping", { count: payload.skipped.length }), {
+          description: skippedDetail,
         });
       }
       setDaeExportDialog({
@@ -497,7 +501,7 @@ function UnitModelEditWorkspace({
         targets: payload.targets,
       });
     },
-    [],
+    [t],
   );
 
   const openDaeExportDialog = useCallback(() => {
@@ -528,19 +532,17 @@ function UnitModelEditWorkspace({
           });
           return;
         }
-        toast.error(
-          `Model "${modelLabel}" is not available for export (not in preview and no disk folder)`,
-        );
+        toast.error(t("export.unavailable", { name: modelLabel }));
       })();
     },
-    [openDaeExportDialogForInstances, preview.previewInstances, workspace.activeRoot],
+    [openDaeExportDialogForInstances, preview.previewInstances, workspace.activeRoot, t],
   );
 
   const handleDaeExport = useCallback(
     async (config: DaeExportConfig) => {
       const { targets } = daeExportDialog;
       setDaeExportDialog((prev) => ({ ...prev, open: false }));
-      toast.loading("Exporting loaded models...", { id: "unit-model-export" });
+      toast.loading(t("states.exporting"), { id: "unit-model-export" });
 
       try {
         const outputDir = config.outputDirectory;
@@ -550,7 +552,7 @@ function UnitModelEditWorkspace({
             : [],
         );
         if (entries.length === 0) {
-          throw new Error("No disk-backed SSBH models are available for FBX export");
+          throw new Error(t("errors.noExport"));
         }
         const result = await exportUnitModelsAsFbx(entries, outputDir, {
           scaleFactor: config.scaleFactor,
@@ -558,13 +560,14 @@ function UnitModelEditWorkspace({
           exportTextures: config.exportTextures,
         });
         if (result.totalFailed > 0) {
-          toast.warning(`Exported ${result.totalExported}, failed ${result.totalFailed}`, {
+          toast.warning(t("export.partial", {
+            exported: result.totalExported,
+            failed: result.totalFailed,
+          }), {
             description: result.errors.slice(0, 3).join("\n"),
           });
         } else {
-          toast.success(
-            `Exported ${result.totalExported} FBX file${result.totalExported === 1 ? "" : "s"}`,
-          );
+          toast.success(t("export.done", { count: result.totalExported }));
         }
 
         await rememberStoredDialogSelection(
@@ -573,12 +576,12 @@ function UnitModelEditWorkspace({
           "directory",
         );
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Failed to export model");
+        toast.error(err instanceof Error ? err.message : t("errors.export"));
       } finally {
         toast.dismiss("unit-model-export");
       }
     },
-    [daeExportDialog],
+    [daeExportDialog, t],
   );
 
   return (
@@ -635,16 +638,16 @@ function UnitModelEditWorkspace({
             >
               <TabsList className={UNIT_MODEL_HIERARCHY_TABS_LIST}>
                 <TabsTrigger value="structure" className={UNIT_MODEL_HIERARCHY_TAB_TRIGGER}>
-                  Structure
+                  {t("tabs.structure")}
                 </TabsTrigger>
                 <TabsTrigger value="textures" className={UNIT_MODEL_HIERARCHY_TAB_TRIGGER}>
-                  Textures
+                  {t("tabs.textures")}
                   {textureCount > 0 ? (
                     <span className={UNIT_MODEL_HIERARCHY_TAB_BADGE}>{textureCount}</span>
                   ) : null}
                 </TabsTrigger>
                 <TabsTrigger value="icons" className={UNIT_MODEL_HIERARCHY_TAB_TRIGGER}>
-                  Icons
+                  {t("tabs.icons")}
                   {weaponIconCount > 0 ? (
                     <span className={UNIT_MODEL_HIERARCHY_TAB_BADGE}>{weaponIconCount}</span>
                   ) : null}

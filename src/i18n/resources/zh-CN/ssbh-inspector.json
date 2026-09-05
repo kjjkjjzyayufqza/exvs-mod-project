@@ -1,0 +1,170 @@
+{
+  "actions": {
+    "exportPreviewMesh": "导出预览网格",
+    "hideAll": "全部隐藏",
+    "showAll": "全部显示",
+    "hideModel": "隐藏模型",
+    "showModel": "显示模型",
+    "loadAll": "全部加载",
+    "loadNone": "全部不加载",
+    "refreshStats": "刷新统计",
+    "clearAll": "全部清除",
+    "exportDae": "导出为 .dae…",
+    "exporting": "正在导出…",
+    "resetBonePose": "重置骨骼姿势",
+    "clearSelection": "清除选择",
+    "expandBoneGroup": "展开骨骼分组",
+    "collapseBoneGroup": "折叠骨骼分组"
+  },
+  "success": {
+    "exportedCollada": "已导出 COLLADA",
+    "exportSummary": "{{path}}\n对象：{{objects}} · 三角形：{{triangles}} {{textures}}",
+    "pngTextures": " · PNG 纹理：{{count}}",
+    "cacheCleared": "纹理预览缓存已清除"
+  },
+  "states": {
+    "loadingModel": "正在从磁盘加载模型……",
+    "decodingTextures": "正在解码独立纹理 {{done}}/{{total}}{{current}}"
+  },
+  "sections": {
+    "collection": "集合",
+    "displaySettings": "显示设置",
+    "exportCollada": "导出 COLLADA",
+    "textureCache": "纹理缓存",
+    "materialDebug": "材质调试",
+    "lighting": "灯光与环境",
+    "meshExplorer": "网格浏览器",
+    "boneExplorer": "骨骼浏览器",
+    "sceneStats": "场景统计",
+    "bundleDebug": "预览包调试",
+    "warnings": "警告"
+  },
+  "labels": {
+    "viewRange": "查看范围",
+    "controlRange": "控制范围",
+    "collectionSearch": "集合搜索",
+    "previewRenderStyle": "预览渲染风格",
+    "wireframe": "线框",
+    "skeleton": "骨架",
+    "grid": "网格",
+    "axes": "坐标轴",
+    "stats": "统计",
+    "textureFlipY": "纹理翻转 Y",
+    "flipUvU": "翻转 UV U",
+    "flipUvV": "翻转 UV V",
+    "normalMap": "法线贴图",
+    "scale": "缩放",
+    "upAxis": "上轴",
+    "debugViewMode": "调试视图模式",
+    "inspectDraw": "检查绘制",
+    "lightingPreset": "灯光预设",
+    "ambient": "环境光",
+    "directional": "方向光",
+    "lightX": "灯光 X",
+    "lightY": "灯光 Y",
+    "lightZ": "灯光 Z",
+    "backgroundColor": "背景色",
+    "boneListScope": "骨骼列表范围",
+    "jointSize": "关节大小",
+    "gizmoMode": "操纵器模式"
+  },
+  "help": {
+    "bloomLights": "动漫风格会在 3D 预览中加入辉光和更暖的灯光。",
+    "flipUvU": "水平镜像网格 UV（U → 1−U）",
+    "flipUvV": "垂直镜像网格 UV（V → 1−V）",
+    "exportCollada": "将已加载模型文件夹中与 3D 预览相同的网格（以及存在时的骨架）写入 .dae 文件。可选：把 numatb 引用的漫反射 nutexb 纹理导出为 PNG，放到 DAE 同级目录并绑定到 COLLADA。",
+    "textureCache": "键使用 Rust 计算的整文件 CRC32（IEEE）；nutexb 任意字节变化都会产生新键。清除会撤销内存中的 blob URL，并删除已持久化的 PNG 条目（IndexedDB）。",
+    "previewDecoding": "取消勾选某个槽位后，所有网格都会跳过加载该纹理（预览更快、占用更少 GPU 内存）。下方路径仍显示材质在磁盘上引用的内容。",
+    "lightingPreset": "柔和角色预设会提高环境光并减弱主光，减轻机体模型的低多边形棱面感。",
+    "boneExplorer": "层级与骨架一致。在此选择骨骼，或在视口中点击关节球体，然后拖动操纵器。3D 视图聚焦时：Maya 风格 W / E / R（或 1 / 2 / 3）对应移动 / 旋转 / 缩放；Ctrl+Z 撤销 / Ctrl+Shift+Z 或 Ctrl+Y 重做骨骼变换；Esc 清除当前骨骼。拖动操纵器时轨道旋转会暂停。",
+    "noSkinWeights": "此模型的网格 JSON 没有逐顶点骨骼权重——骨架线会移动，但几何体不会变形。"
+  },
+  "filters": {
+    "allModels": "所有模型",
+    "activeOnly": "仅当前"
+  },
+  "search": {
+    "placeholder": "搜索标签或路径"
+  },
+  "stats": {
+    "modelsShown": "显示 {{shown}} / {{total}} 个模型",
+    "vertices": "顶点",
+    "triangles": "三角形",
+    "drawCalls": "绘制调用",
+    "textures": "纹理",
+    "bones": "骨骼",
+    "memory": "内存：",
+    "persistent": "持久化：",
+    "notAvailable": "不可用"
+  },
+  "renderStyle": {
+    "standard": "标准",
+    "anime": "动漫（辉光 + 暖光）"
+  },
+  "export": {
+    "loadModelFirst": "请先在视口中加载模型以启用导出。",
+    "numatbTextures": "导出 numatb 漫反射纹理（nutexb → PNG，与 .dae 同目录，并更新 DAE 引用）"
+  },
+  "upAxis": {
+    "yUp": "Y 向上",
+    "zUp": "Z 向上",
+    "none": "无"
+  },
+  "debugView": {
+    "full": "完整",
+    "baseColor": "仅基础色",
+    "normals": "仅法线",
+    "roughnessMetalness": "粗糙度/金属度",
+    "emissive": "仅自发光",
+    "reflection": "仅反射"
+  },
+  "material": {
+    "selectDraw": "选择绘制",
+    "none": "无",
+    "noMaterials": "没有可用材质",
+    "previewDecoding": "预览纹理解码",
+    "selectedDetails": "所选材质详情"
+  },
+  "lighting": {
+    "custom": "自定义（滑块）",
+    "preset": {
+      "studio": "摄影棚（默认）",
+      "softCharacter": "柔和角色",
+      "harsh": "强对比"
+    },
+    "presetHelp": {
+      "studio": "均衡主光，适合检查形体和材质。",
+      "softCharacter": "更高环境光、更柔主光，减轻机体模型的低多边形棱面感。",
+      "harsh": "强主光、低补光，放大棱面和硬边。"
+    }
+  },
+  "mesh": {
+    "total": "共 {{count}} 个网格",
+    "all": "全部",
+    "none": "无",
+    "noMeshes": "未加载网格"
+  },
+  "bones": {
+    "activeModel": "当前模型",
+    "allVisible": "所有可见模型",
+    "move": "移动",
+    "rotate": "旋转",
+    "scale": "缩放",
+    "count": "{{count}} 根骨骼",
+    "noSkeleton": "未加载骨架",
+    "sizeValue": "{{value}}×"
+  },
+  "bundle": {
+    "active": "当前包",
+    "matlFiles": "已加载的 Matl 文件",
+    "matlEntries": "已合并的 Matl 条目",
+    "textureRefs": "纹理引用",
+    "resolvedNutexb": "已解析的 nutexb",
+    "matlPathList": "Matl 路径列表",
+    "noMatl": "未加载 Matl 文件",
+    "missingDrawLabels": "Matl 中缺失的绘制标签（{{count}}）",
+    "allDrawLabels": "所有绘制材质标签都存在于合并后的 Matl 条目中。",
+    "unresolvedTextureRefs": "未解析的纹理引用（{{unresolved}}/{{total}}）",
+    "allTexturesResolved": "所有收集到的纹理引用均已解析为磁盘上的 .nutexb 文件。"
+  }
+}

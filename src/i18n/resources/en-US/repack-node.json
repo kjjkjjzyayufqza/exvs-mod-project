@@ -1,0 +1,46 @@
+{
+  "title": "Properties",
+  "empty": {
+    "description": "Select an item to view its properties",
+    "noSelection": "No item selected"
+  },
+  "clipboard": {
+    "title": "Clipboard",
+    "nodesCopied": "{{count}} nodes copied",
+    "batch": "Batch",
+    "items": "{{count}} items",
+    "folders": "{{count}} folder(s)",
+    "files": "{{count}} file(s)",
+    "pasteOne": "Select a folder to paste this item",
+    "pasteMany": "Select a folder to paste these nodes"
+  },
+  "actions": {
+    "title": "Actions",
+    "copy": "Copy",
+    "paste": "Paste",
+    "delete": "Delete",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel"
+  },
+  "deleteDialog": {
+    "title": "Confirm delete",
+    "body": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
+    "folderContents": "This folder contains {{count}} item(s) which will also be deleted."
+  },
+  "rootCannotDelete": "Root node cannot be deleted",
+  "copied": {
+    "file": "Successfully copied file: \"{{name}}\"",
+    "folder": "Successfully copied folder: \"{{name}}\"",
+    "withChildren": "Successfully copied {{type}}: \"{{name}}\" (including {{count}} items)"
+  },
+  "types": {
+    "file": "file",
+    "folder": "folder"
+  },
+  "noValue": "No value",
+  "errors": {
+    "invalidHexOrInt": "Invalid hex or integer format",
+    "indexExists": "Index {{index}} already exists in SubFileData"
+  }
+}

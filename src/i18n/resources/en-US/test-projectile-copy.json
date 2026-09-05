@@ -1,0 +1,15 @@
+{
+  "title":"Copy projectile depiction effect","description":"{{hash}} · copy source-local EFXBN resources, then optionally write this row to another table",
+  "sections":{"entryHashes":"Entry hashes","efxbnPolicy":"EFXBN rename / overwrite","finalPaths":"Final output paths","plannedPaths":"Planned output paths","copiedFiles":"Copied files"},
+  "columns":{"field":"Field","hash":"Hash","leBytes":"LE bytes","status":"Status","path":"Path"},
+  "labels":{"sourceFolder":"Source effect folder","destinationFolder":"Destination effect folder","targetTable":"Target projectile_depiction_table.bin","source":"Source","output":"Output","replaceExisting":"If the target already has {{hash}}, replace that row"},
+  "help":{"sourceScan":"Reads the sibling _structure.json and on-disk files only. Inspecting a large pack parses every EFXBN and can take a few seconds."},
+  "actions":{"scanSource":"Scan source","scanDestination":"Scan destination","copyNew":"Copy as new","overwrite":"Overwrite existing","keepExisting":"Keep existing","close":"Close","cancel":"Cancel","next":"Next","back":"Back","copyEffectFiles":"Copy effect files","skipTable":"Skip table copy","writeRow":"Write depiction row"},
+  "picker":{"sourceFolder":"Select source effect folder","destinationFolder":"Select destination effect folder","targetTable":"Select projectile_depiction_table.bin"},
+  "states":{"empty":"Empty","scanSource":"Scan source to resolve","noEfxbn":"No EFXBN files in the copy set.","scanDestinationOutput":"Scan destination to resolve output path","notRun":"not run","unknown":"unknown"},
+  "aria":{"destinationName":"Destination file name for {{name}}","copyAction":"Copy action for {{name}}"},
+  "depiction":{"question":"Also copy depiction entry {{hash}} into a target projectile_depiction_table.bin?"},
+  "errors":{"sourceFolder":"Pick a source effect folder.","noEntry":"No depiction entry selected.","missingHashes":"Source folder is missing one or more required effect hashes. Fix the pack or hashes before copying.","destinationFolder":"Pick a destination effect folder.","targetTable":"Pick a target projectile_depiction_table.bin.","currentExists":"{{hash}} already exists in the current table. Confirm replace, then write again.","sameEntry":"The current file already contains this selected entry. Nothing to copy.","targetExists":"{{hash}} already exists in the target table. Confirm replace, then write again."},
+  "success":{"copiedFiles":"Copied {{count}} effect file(s)","replacedCurrent":"Replaced depiction entry in the current table (unsaved)","appendedCurrent":"Appended depiction entry to the current table (unsaved)","replacedDisk":"Replaced depiction entry on disk","appendedDisk":"Appended depiction entry on disk"},
+  "result":{"finished":"Finished","effectCopy":"Effect copy","copyCounts":"{{copied}} copied, {{skipped}} skipped","depictionRow":"Depiction row"}
+}

@@ -1,0 +1,11 @@
+{
+  "file": {"label":"File","openImportStage":"Open / Import stage","openStageFolder":"Open Stage Folder","importFhm2d":"Import .fhm2d","extractFhm2d":"Extract .fhm2d to folder"},
+  "save": {"folderAria":"Save as Folder","folderTooltip":"Save changes to folder","fhm2dAria":"Save as FHM2D","fhm2dTooltip":"Repack and save as .fhm2d"},
+  "import": {"importMeshAria":"Import static mesh","importDaeTooltip":"Import DAE / FBX","batchAria":"Batch import static meshes to disk","batchTooltip":"Batch import DAE / FBX to disk with HKT"},
+  "export": {"selectedAria":"Export selected objects","selectedTooltip":"Export selected model","hktAria":"Export HKT to OBJ","hktTooltip":"Export HKT to OBJ..."},
+  "gizmo": {"move":"Move","translate":"Move","rotate":"Rotate","scale":"Scale","setMode":"Set transform mode to {{mode}}","size":"Gizmo size"},
+  "display": {"grid":"Grid","showGrid":"Show grid","hideGrid":"Hide grid","axes":"Axes","showAxes":"Show axes","hideAxes":"Hide axes","wireframe":"Wireframe","enableWireframe":"Enable wireframe","disableWireframe":"Disable wireframe","stats":"Stats","showStats":"Show stats","hideStats":"Hide stats","animeRender":"Anime render","enableAnime":"Enable anime render","disableAnime":"Disable anime render"},
+  "more": {"actions":"More actions","resetCamera":"Reset Camera","clearCache":"Clear Cache"},
+  "textures": {"noSlots":"No texture slots found for this model.","loading":"loading","loaded":"loaded","idle":"idle","noLoaded":"No nutexb textures are currently loaded"},
+  "placement": {"noData":"No placement data","searchPlaceholder":"Search rows...","rowCount_one":"{{count}} row","rowCount_other":"{{count}} rows","selected":"selected","matchCount_one":"{{count}} match","matchCount_other":"{{count}} matches","rows":"Placement rows","noMatches":"No rows match the filter","resetRow":"Reset row to loaded state","deleteRow":"Delete placement row","selectToEdit":"Select a placement row to edit fields","addRow":"Add placement row","row":"Row","objectNumber":"obj","types":{"object":"Object","effect":"Effect","sky":"Sky","prop":"Prop"}}
+}

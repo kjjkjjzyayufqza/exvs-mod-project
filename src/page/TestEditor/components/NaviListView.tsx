@@ -4,6 +4,7 @@ import { dirname } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { FolderOpen, Info, RefreshCw, Save } from "lucide-react";
 
 import { AppRndModalShell } from "@/components/AppRndModalShell";
@@ -73,6 +74,7 @@ export default function NaviListView({
   onConsumePendingSelect,
   workspaceDocument,
 }: NaviListViewProps) {
+  const { t } = useTranslation("test-lists");
   const obDplCachePath = useConfigStore((state) => state.obDplCachePath);
   const obModPath = useConfigStore((state) => state.obModPath);
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
@@ -108,14 +110,14 @@ export default function NaviListView({
 
   const load = useCallback(async () => {
     if (!folderPath) {
-      setLoadState({ status: "error", filePath: "", message: "Folder path is empty" });
+      setLoadState({ status: "error", filePath: "", message: t("common.folderPathEmpty") });
       resetEditorState();
       return;
     }
     const content = await resolveContent("navi-list");
     const filePath = content.existing?.filePath ?? content.configured.filePath;
     if (!filePath) {
-      setLoadState({ status: "error", filePath: "", message: "Navi list content path is not configured" });
+      setLoadState({ status: "error", filePath: "", message: t("navi.notConfigured") });
       resetEditorState();
       return;
     }
@@ -236,7 +238,7 @@ export default function NaviListView({
   const performSave = useCallback(async () => {
     if (loadState.status !== "ready") return;
     if (!loadState.writable) {
-      toast.error("Legacy flat workspace content is read-only");
+      toast.error(t("common.legacyReadOnly"));
       return;
     }
     const filePath = loadState.filePath;
@@ -261,12 +263,12 @@ export default function NaviListView({
       });
       const content = await resolveContent("navi-list");
       onPackMutated?.(workspacePackIdentityFromResolved(content.existing ?? content.configured, "configured"));
-      toast.success("Saved navi_list.bin");
+      toast.success(t("navi.saved"));
       setHasChanges(false);
       onUnsavedChanges?.(false);
       setLoadState((prev) => (prev.status === "ready" ? { ...prev, list: sortedList } : prev));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to save navi_list.bin");
+      toast.error(error instanceof Error ? error.message : t("navi.saveFailed"));
     }
   }, [loadState, onPackMutated, onUnsavedChanges, resolveContent]);
 
@@ -301,7 +303,7 @@ export default function NaviListView({
   const handleInitPack = useCallback(async () => {
     const sourceFhm2dPath = buildNaviListSourceFhm2dPath(obDplCachePath ?? "");
     if (!sourceFhm2dPath) {
-      toast.error("Set the OB dplcache folder in FHM2D Init first");
+      toast.error(t("common.setObDplcacheInit"));
       return;
     }
     setIsInitializing(true);
@@ -311,7 +313,7 @@ export default function NaviListView({
         workspaceRoot: folderPath,
         workspaceDocument,
       });
-      toast.success("Unpacked navi_list");
+      toast.success(t("navi.unpacked"));
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -325,7 +327,7 @@ export default function NaviListView({
       ? rawPath.replace(/\//g, "\\")
       : rawPath.replace(/\\/g, "/");
     if (!(await exists(normalizedPath))) {
-      toast.error("Path does not exist");
+      toast.error(t("common.pathMissing"));
       return;
     }
     await openPath(normalizedPath);
@@ -335,7 +337,7 @@ export default function NaviListView({
     async (hash: number) => {
       const folder = resolveGuiPackFolder(hash, guiPackItems);
       if (!folder) {
-        toast.error("No extracted 009gui folder for this hash");
+        toast.error(t("common.noGuiFolder"));
         return;
       }
       await handleOpenPath(folder);
@@ -347,16 +349,16 @@ export default function NaviListView({
     async (hash: number, fieldKey: string) => {
       const plan = planGuiPackExtract(hash, fieldKey, guiPackItems);
       if (!plan) {
-        toast.error(hash === 0 ? "No pack hash" : "Pack is already extracted");
+        toast.error(hash === 0 ? t("common.noPackHash") : t("common.packAlreadyExtracted"));
         return;
       }
       const dplCachePath = (obDplCachePath ?? "").trim();
       if (!dplCachePath) {
-        toast.error("Set OB dplcache path in Config");
+        toast.error(t("common.setObDplcacheConfig"));
         return;
       }
       if (!folderPath) {
-        toast.error("Set EXVS2 Workspace folder first");
+        toast.error(t("common.setWorkspace"));
         return;
       }
       setExtractingGuiHash(plan.hash);
@@ -369,8 +371,8 @@ export default function NaviListView({
           packagePath: plan.packagePath,
           structureName: plan.structureName,
         });
-        toast.success(`Extracted ${extracted.name}`, {
-          description: `009gui/${extracted.workspaceRelative}`,
+        toast.success(t("navi.extracted", { name: extracted.name }), {
+          description: t("navi.guiPath", { path: extracted.workspaceRelative }),
         });
         await loadGuiPacks();
         onPackMutated?.({
@@ -408,9 +410,9 @@ export default function NaviListView({
       <div className="h-full w-full">
         <Card className="h-full flex flex-col border-none shadow-none rounded-none bg-transparent">
           <CardHeader className="p-0 pb-4">
-            <CardTitle>Navi List</CardTitle>
+            <CardTitle>{t("navi.title")}</CardTitle>
           </CardHeader>
-          <CardContent className="p-0 text-sm text-muted-foreground">Loading navi_list.bin...</CardContent>
+          <CardContent className="p-0 text-sm text-muted-foreground">{t("navi.loading")}</CardContent>
         </Card>
       </div>
     );
@@ -421,7 +423,7 @@ export default function NaviListView({
       <div className="h-full w-full">
         <Card className="border-none shadow-none rounded-none bg-transparent">
           <CardHeader className="p-0 pb-4">
-            <CardTitle>Navi List</CardTitle>
+            <CardTitle>{t("navi.title")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 p-0">
             {loadState.filePath ? (
@@ -431,10 +433,10 @@ export default function NaviListView({
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" onClick={() => void load()}>
                 <RefreshCw className="w-4 h-4 mr-1.5" />
-                Reload
+                {t("common.reload")}
               </Button>
               <Button size="sm" onClick={() => void handleInitPack()} disabled={isInitializing}>
-                {isInitializing ? "Initializing…" : "Init pack"}
+                {isInitializing ? t("common.initializing") : t("common.initPack")}
               </Button>
             </div>
           </CardContent>
@@ -446,7 +448,7 @@ export default function NaviListView({
   if (loadState.status !== "ready") {
     return (
       <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground">
-        Select this tab to load navi_list.bin
+        {t("navi.selectTab")}
       </div>
     );
   }
@@ -457,7 +459,7 @@ export default function NaviListView({
         <CardHeader className="p-0 pb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <CardTitle>Navi List</CardTitle>
+              <CardTitle>{t("navi.title")}</CardTitle>
               <div className="text-xs text-muted-foreground break-all mt-1 flex items-center gap-1">
                 {loadState.filePath}
                 <button
@@ -470,7 +472,7 @@ export default function NaviListView({
               </div>
               {fileMeta ? (
                 <div className="text-xs text-muted-foreground mt-1">
-                  {fileMeta.count} rows · {fileMeta.commands} commands
+                  {t("navi.rowsCommands", { count: fileMeta.count, commands: fileMeta.commands })}
                 </div>
               ) : null}
               <LegacyWorkspaceMoveNotice
@@ -486,11 +488,11 @@ export default function NaviListView({
             <div className="flex items-center gap-2 shrink-0">
               <Button size="sm" variant="outline" onClick={() => void load()} className="inline-flex items-center gap-2">
                 <RefreshCw className="w-4 h-4" />
-                Reload
+                {t("common.reload")}
               </Button>
               <Button size="sm" variant="outline" onClick={() => setIsInfoDialogOpen(true)}>
                 <Info className="w-4 h-4 mr-1.5" />
-                Info
+                {t("common.info")}
               </Button>
               <Button
                 size="sm"
@@ -499,7 +501,7 @@ export default function NaviListView({
                 className="inline-flex items-center gap-2"
               >
                 <Save className="w-4 h-4" />
-                Save File
+                {t("common.saveFile")}
               </Button>
             </div>
           </div>
@@ -527,17 +529,17 @@ export default function NaviListView({
       {isInfoDialogOpen ? (
         <AppRndModalShell
           titleId="navi-list-info-title"
-          title="Info"
+          title={t("common.info")}
           headerIcon={<Info className="h-5 w-5 text-primary" />}
           dimensions={NAVI_LIST_INFO_MODAL_DIMENSIONS}
           storageKey="app.rnd-size.navi-list-info"
           onClose={() => setIsInfoDialogOpen(false)}
         >
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-6 text-sm text-muted-foreground">
-            <p>Support navi table (`0x6FCC0FBA` / `012list/navi_list/navi_list.bin`).</p>
-            <p>Multiple rows may share the same Unique ID (one per costume).</p>
-            <p>Clone GUI appends Relena-based rows and remaps 009gui resource hashes.</p>
-            <p>Save this file, then Repack `0x6FCC0FBA` for the game to see new navi entries.</p>
+            <p>{t("navi.info.support")}</p>
+            <p>{t("navi.info.uniqueId")}</p>
+            <p>{t("navi.info.cloneGui")}</p>
+            <p>{t("navi.info.repack")}</p>
           </div>
         </AppRndModalShell>
       ) : null}

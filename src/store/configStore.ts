@@ -6,6 +6,13 @@ import {
   SCENE_GIZMO_SIZE_SETTING_KEY,
   normalizeSceneGizmoSize,
 } from "@/page/SceneEdit/utils/sceneEditorSettings";
+import {
+  APP_LOCALE_STORE_KEY,
+  normalizeAppLocale,
+  readAppLocaleMirror,
+  writeAppLocaleMirror,
+  type AppLocale,
+} from "@/i18n/locale";
 
 // Authoritative persistence for the sidebar collapse state lives in the Tauri
 // store (settings.json). The localStorage mirror is a non-authoritative cache
@@ -45,6 +52,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   repackInputPath: "",
   sceneEditGizmoSize: DEFAULT_SCENE_GIZMO_SIZE,
   sidebarOpen: readSidebarOpenMirror(),
+  locale: readAppLocaleMirror(),
 
   initStore: async () => {
     // Init the tauri store
@@ -66,6 +74,11 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     const storedSidebarOpen = await _store.get(SIDEBAR_OPEN_STORE_KEY);
     const sidebarOpen = storedSidebarOpen === undefined ? true : Boolean(storedSidebarOpen);
     writeSidebarOpenMirror(sidebarOpen);
+    const locale = normalizeAppLocale(
+      (await _store.get(APP_LOCALE_STORE_KEY)) ?? readAppLocaleMirror(),
+    );
+    writeAppLocaleMirror(locale);
+    await _store.set(APP_LOCALE_STORE_KEY, locale);
 
     // Update state with loaded values
     set({
@@ -79,6 +92,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       repackInputPath: repackInputPath as string,
       sceneEditGizmoSize,
       sidebarOpen,
+      locale,
     });
 
     // Save changes
@@ -136,6 +150,17 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     const { store } = get();
     if (store) {
       await store.set(SIDEBAR_OPEN_STORE_KEY, open);
+      await store.save();
+    }
+  },
+
+  setLocale: async (value: AppLocale) => {
+    const locale = normalizeAppLocale(value);
+    writeAppLocaleMirror(locale);
+    set({ locale });
+    const { store } = get();
+    if (store) {
+      await store.set(APP_LOCALE_STORE_KEY, locale);
       await store.save();
     }
   },

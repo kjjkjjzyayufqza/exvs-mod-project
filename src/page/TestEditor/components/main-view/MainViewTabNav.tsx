@@ -1,4 +1,5 @@
 import { ChevronDown } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,7 @@ const tabTriggerClassName = cn(
 );
 
 export function MainViewTabNav({ activeTab, unsavedTabMap }: MainViewTabNavProps) {
+  const { t } = useTranslation("test-workspace");
   const groups = groupMainViewTabs(MAIN_VIEW_TAB_META);
   const { collapsed, setCollapsed, toggleCollapsed } = useMainViewTabNavCollapsed();
   const activeTabLabel = findMainViewTabLabel(activeTab, MAIN_VIEW_TAB_META);
@@ -37,7 +39,7 @@ export function MainViewTabNav({ activeTab, unsavedTabMap }: MainViewTabNavProps
           "shrink-0 border-b border-border/70 px-4",
           "bg-[color-mix(in_oklch,var(--muted)_42%,var(--background))]",
         )}
-        aria-label="Editor sections"
+        aria-label={t("tabs.sectionsAria")}
       >
         <div className="flex items-center gap-2 py-1">
           <button
@@ -45,7 +47,7 @@ export function MainViewTabNav({ activeTab, unsavedTabMap }: MainViewTabNavProps
             onClick={toggleCollapsed}
             aria-expanded={!collapsed}
             aria-controls="mainview-tab-nav-panel"
-            title={collapsed ? "Expand editor tabs" : "Collapse editor tabs"}
+            title={collapsed ? t("tabs.expandTabs") : t("tabs.collapseTabs")}
             className={cn(
               "inline-flex h-6 shrink-0 items-center gap-1 rounded-[3px] px-1.5",
               "border border-border/40 bg-background/30 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground",
@@ -59,17 +61,17 @@ export function MainViewTabNav({ activeTab, unsavedTabMap }: MainViewTabNavProps
               className={cn("h-3 w-3 shrink-0 transition-transform duration-150", collapsed && "-rotate-90")}
               aria-hidden
             />
-            <span>Editors</span>
+            <span>{t("tabs.editors")}</span>
           </button>
 
           {collapsed ? (
             <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span className="whitespace-nowrap text-foreground">{activeTabLabel ?? "Editor"}</span>
+              <span className="whitespace-nowrap text-foreground">{activeTabLabel ?? t("tabs.editorFallback")}</span>
               {hasUnsaved ? (
                 <span
                   className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
-                  aria-label="Unsaved changes"
-                  title="Unsaved changes"
+                  aria-label={t("tabs.unsaved")}
+                  title={t("tabs.unsaved")}
                 />
               ) : null}
             </div>
@@ -92,8 +94,8 @@ export function MainViewTabNav({ activeTab, unsavedTabMap }: MainViewTabNavProps
                     {groupHasUnsaved ? (
                       <span
                         className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-amber-500 align-middle"
-                        aria-label="Unsaved changes in group"
-                        title="Unsaved changes"
+                        aria-label={t("tabs.unsavedInGroup")}
+                        title={t("tabs.unsaved")}
                       />
                     ) : null}
                   </span>
@@ -113,8 +115,8 @@ export function MainViewTabNav({ activeTab, unsavedTabMap }: MainViewTabNavProps
                             {tabHasUnsaved ? (
                               <span
                                 className="h-1.5 w-1.5 rounded-full bg-amber-500"
-                                aria-label="Unsaved changes"
-                                title="Unsaved changes"
+                                aria-label={t("tabs.unsaved")}
+                                title={t("tabs.unsaved")}
                               />
                             ) : null}
                           </span>

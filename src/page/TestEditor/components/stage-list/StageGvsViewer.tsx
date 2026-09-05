@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import type { StageDataGVSEntry, StageListGVS } from "@/models/stageList";
 import { StageGvsForm } from "./StageGvsForm";
+import { useTranslation } from "react-i18next";
 
 export type StageListGvsSortKey =
   | "index"
@@ -23,20 +24,20 @@ export type StageListGvsSortKey =
   | "stg_grd_2"
   | "unk12";
 
-const SORT_OPTIONS: Array<{ value: StageListGvsSortKey; label: string }> = [
-  { value: "index", label: "Index (min -> max)" },
-  { value: "unk1", label: "unk1 (min -> max)" },
-  { value: "fileName", label: "fileName (min -> max)" },
-  { value: "unk3", label: "unk3 (min -> max)" },
-  { value: "unk4", label: "unk4 (min -> max)" },
-  { value: "unk5", label: "unk5 (min -> max)" },
-  { value: "unk6", label: "unk6 (min -> max)" },
-  { value: "unk7", label: "unk7 (min -> max)" },
-  { value: "stg_grd_1", label: "stg_grd_1 (min -> max)" },
-  { value: "stg_full", label: "stg_full (min -> max)" },
-  { value: "stg_vs_2", label: "stg_vs_2 (min -> max)" },
-  { value: "stg_grd_2", label: "stg_grd_2 (min -> max)" },
-  { value: "unk12", label: "unk12 (min -> max)" },
+const SORT_KEYS: StageListGvsSortKey[] = [
+  "index",
+  "unk1",
+  "fileName",
+  "unk3",
+  "unk4",
+  "unk5",
+  "unk6",
+  "unk7",
+  "stg_grd_1",
+  "stg_full",
+  "stg_vs_2",
+  "stg_grd_2",
+  "unk12",
 ];
 
 interface StageGvsViewerProps {
@@ -68,6 +69,7 @@ export function StageGvsViewer({
   onComposingChange,
   searchDir = "",
 }: StageGvsViewerProps) {
+  const { t } = useTranslation("test-stage-list-view");
   const [internalInputValue, setInternalInputValue] = useState("");
   const [internalSearchTerm, setInternalSearchTerm] = useState("");
   const [internalIsComposing, setInternalIsComposing] = useState(false);
@@ -212,14 +214,14 @@ export function StageGvsViewer({
     <div className="flex h-full gap-4 min-h-0">
       <div className="w-1/3 border rounded-lg p-3 overflow-hidden flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-3">
-          <div className="font-semibold text-sm">GVS Stages ({stageListData.StageData.length})</div>
+          <div className="font-semibold text-sm">{t("gvsViewer.countLabel", { count: stageListData.StageData.length })}</div>
         </div>
 
         <div className="grid items-center gap-2 mb-3">
           <div className="relative flex-1 min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
             <Input
-              placeholder="Search by index, name, fileName, or unk..."
+              placeholder={t("gvsViewer.searchPlaceholder")}
               value={inputValue}
               onChange={(e) => handleInputChange(e.target.value)}
               onCompositionStart={handleCompositionStart}
@@ -241,12 +243,12 @@ export function StageGvsViewer({
               }}
             >
               <SelectTrigger className="h-8">
-                <SelectValue placeholder="Sort..." />
+                <SelectValue placeholder={t("gvsViewer.sortPlaceholder")} />
               </SelectTrigger>
               <SelectContent>
-                {SORT_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
+                {SORT_KEYS.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {t(`gvsViewer.sort.${value}`)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -256,7 +258,7 @@ export function StageGvsViewer({
 
         {searchTerm.trim() ? (
           <div className="text-xs text-muted-foreground mb-2">
-            Found {filteredRows.length} of {stageListData.StageData.length} entries
+            {t("gvsViewer.foundOf", { found: filteredRows.length, total: stageListData.StageData.length })}
           </div>
         ) : null}
 
@@ -297,9 +299,11 @@ export function StageGvsViewer({
                       item.idx === selectedIndex && "ring-2 ring-inset ring-primary bg-accent"
                     )}
                   >
-                    <div className="text-sm font-medium line-clamp-2 break-all">{stageName || `GVS Stage ${item.idx}`}</div>
+                    <div className="text-sm font-medium line-clamp-2 break-all">
+                      {stageName || t("gvsViewer.fallbackName", { index: item.idx })}
+                    </div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      Index: {item.idx} · fileName: {item.row.fileName} · unk12: {item.row.unk12}
+                      {t("gvsViewer.rowMeta", { index: item.idx, fileName: item.row.fileName, unk12: item.row.unk12 })}
                     </div>
                   </button>
                 </div>
@@ -309,7 +313,9 @@ export function StageGvsViewer({
 
           {sortedRows.length === 0 ? (
             <div className="text-center text-muted-foreground py-8 text-sm">
-              {searchTerm.trim() ? `No GVS entries found matching "${searchTerm.trim()}"` : "No GVS entries available"}
+              {searchTerm.trim()
+                ? t("gvsViewer.noMatch", { term: searchTerm.trim() })
+                : t("gvsViewer.noEntries")}
             </div>
           ) : null}
         </div>
@@ -324,7 +330,7 @@ export function StageGvsViewer({
           />
         ) : (
           <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-            Select a GVS entry to inspect
+            {t("gvsViewer.selectEntry")}
           </div>
         )}
       </div>

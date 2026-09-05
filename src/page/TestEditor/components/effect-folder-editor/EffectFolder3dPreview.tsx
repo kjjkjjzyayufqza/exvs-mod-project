@@ -1,13 +1,5 @@
-import {
-  useCallback,
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-  type MutableRefObject,
-} from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useReducer, useRef, useState, type MutableRefObject } from "react";
+import { useTranslation } from "react-i18next";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
 import { Box, Pause, PersonStanding, Play, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
@@ -109,6 +101,7 @@ function EfxbnPlaybackTransport({
   onScrub: (progress: number) => void;
   onScrubEnd: (progress: number) => void;
 }) {
+  const { t } = useTranslation("test-effect-folder");
   const draggingRef = useRef(false);
   const draftRef = useRef(progress);
   const [draft, setDraft] = useState(progress);
@@ -128,7 +121,7 @@ function EfxbnPlaybackTransport({
         variant="ghost"
         className="h-8 w-8"
         onClick={onTogglePlaying}
-        aria-label={playing ? "Pause EFXBN control preview" : "Play EFXBN control preview"}
+        aria-label={playing ? t("preview3d.pause") : t("preview3d.play")}
       >
         {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
       </Button>
@@ -138,7 +131,7 @@ function EfxbnPlaybackTransport({
         variant="ghost"
         className="h-8 w-8"
         onClick={onReset}
-        aria-label="Reset EFXBN control progress"
+        aria-label={t("preview3d.resetProgress")}
       >
         <RotateCcw className="h-4 w-4" />
       </Button>
@@ -171,10 +164,13 @@ function EfxbnPlaybackTransport({
           onScrub(next);
         }}
         className="h-1.5 min-w-32 flex-1 cursor-pointer accent-primary"
-        aria-label="EFXBN control progress"
+        aria-label={t("preview3d.progress")}
       />
       <span className="w-24 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
-        {Math.round((draft / 100) * frameCount)}f / {frameCount}f
+        {t("preview3d.frameProgress", {
+          current: Math.round((draft / 100) * frameCount),
+          total: frameCount,
+        })}
       </span>
       <Button
         type="button"
@@ -182,9 +178,9 @@ function EfxbnPlaybackTransport({
         variant="ghost"
         className="h-8 w-12 px-1 font-mono text-[11px]"
         onClick={onCycleSpeed}
-        aria-label={`EFXBN preview speed ${speed} times`}
+        aria-label={t("preview3d.speed", { speed })}
       >
-        {speed}x
+        {t("preview3d.speedTimes", { speed })}
       </Button>
     </div>
   );
@@ -351,6 +347,7 @@ export function EffectFolder3dPreview({
   previewSuspended = false,
   onEfxbnWritten,
 }: EffectFolder3dPreviewProps) {
+  const { t } = useTranslation("test-effect-folder");
   const sourceSummary = item.category === "efxbn" ? item.item.efxbn ?? null : null;
   const efxbnPath = item.category === "efxbn" ? item.item.path : null;
   const [document, setDocument] = useState<EfxbnDocument | null>(null);
@@ -483,12 +480,12 @@ export function EffectFolder3dPreview({
     if (writing) return;
     const live = documentRef.current;
     if (!live) {
-      toast.error("No EFXBN document is open");
+      toast.error(t("preview3d.errors.noDocument"));
       return;
     }
     if (!isEfxbnDocumentDirty(live)) {
-      toast.error("Nothing to save", {
-        description: "Change a field, a curve, a resource binding or the block tree first.",
+      toast.error(t("preview3d.errors.nothingToSave"), {
+        description: t("preview3d.errors.nothingToSaveDetail"),
       });
       return;
     }
@@ -500,7 +497,7 @@ export function EffectFolder3dPreview({
     try {
       payload = prepareEfxbnDocumentForWrite(live);
     } catch (error) {
-      toast.error("EFXBN document failed validation", {
+      toast.error(t("preview3d.errors.validationFailed"), {
         description: error instanceof Error ? error.message : String(error),
       });
       return;
@@ -509,16 +506,23 @@ export function EffectFolder3dPreview({
     const changes = live.changeLog.slice(-8);
     const more = live.changeLog.length - changes.length;
     const confirmed = await confirm(
-      `Rewrite ${payload.effects.length} block${payload.effects.length === 1 ? "" : "s"} and ` +
-        `${payload.controlLookupEntries.length} curve key${payload.controlLookupEntries.length === 1 ? "" : "s"}?\n\n` +
-        `${live.path}\n\n` +
-        `${changes.map((entry) => `• ${entry}`).join("\n")}` +
-        `${more > 0 ? `\n… and ${more} earlier change${more === 1 ? "" : "s"}` : ""}`,
+      t("preview3d.confirmRewrite", {
+        count: payload.effects.length,
+        blocks: payload.effects.length,
+        keys: payload.controlLookupEntries.length,
+        keyPlural:
+          payload.controlLookupEntries.length === 1
+            ? t("preview3d.keySingular")
+            : t("preview3d.keyPlural"),
+        path: live.path,
+        changes: changes.map((entry) => `• ${entry}`).join("\n"),
+        more: more > 0 ? t("preview3d.moreChanges", { count: more }) : "",
+      }),
       {
-        title: "Save EFXBN",
+        title: t("preview3d.saveTitle"),
         kind: "warning",
-        okLabel: "Save",
-        cancelLabel: "Cancel",
+        okLabel: t("preview3d.save"),
+        cancelLabel: t("actions.cancel"),
       },
     );
     if (!confirmed) return;
@@ -533,16 +537,16 @@ export function EffectFolder3dPreview({
         documentRef.current = next;
         return next;
       });
-      toast.success(`Wrote ${result.byteLen} bytes`, { description: result.path });
+      toast.success(t("preview3d.wroteBytes", { bytes: result.byteLen }), { description: result.path });
       onEfxbnWritten?.();
     } catch (error) {
-      toast.error("Failed to write EFXBN", {
+      toast.error(t("preview3d.errors.writeFailed"), {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
       setWriting(false);
     }
-  }, [onEfxbnWritten, writing]);
+  }, [onEfxbnWritten, t, writing]);
   const externalModelEffectCount = useMemo(() => {
     if (plan?.kind !== "efxbn") return 0;
     const localEffectIndexes = new Set(
@@ -578,21 +582,21 @@ export function EffectFolder3dPreview({
         if (cancelled) return;
         const stored = state?.hostModelPath ?? null;
         if (stored && !/\.numdlb$/i.test(stored)) {
-          toast.error("Stored host model is not a .numdlb file", { description: stored });
+          toast.error(t("preview3d.errors.hostNotNumdlb"), { description: stored });
           return;
         }
         setHostModelPath(stored);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        toast.error("Failed to read the stored host model", {
+        toast.error(t("preview3d.errors.hostReadFailed"), {
           description: error instanceof Error ? error.message : String(error),
         });
       });
     return () => {
       cancelled = true;
     };
-  }, [inventory.effectRoot]);
+  }, [inventory.effectRoot, t]);
 
   const handlePickHostModel = useCallback(async () => {
     const selected = await open({
@@ -605,22 +609,22 @@ export function EffectFolder3dPreview({
     try {
       await rememberEffectFolderHostModelPath(inventory.effectRoot, selected);
     } catch (error) {
-      toast.error("Failed to remember the host model", {
+      toast.error(t("preview3d.errors.hostRememberFailed"), {
         description: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [inventory.effectRoot]);
+  }, [inventory.effectRoot, t]);
 
   const handleClearHostModel = useCallback(async () => {
     setHostModelPath(null);
     try {
       await rememberEffectFolderHostModelPath(inventory.effectRoot, null);
     } catch (error) {
-      toast.error("Failed to clear the host model", {
+      toast.error(t("preview3d.errors.hostClearFailed"), {
         description: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [inventory.effectRoot]);
+  }, [inventory.effectRoot, t]);
 
   const handleEffectProgressChange = useCallback((progress: number) => {
     effectProgressRef.current = progress;
@@ -691,18 +695,27 @@ export function EffectFolder3dPreview({
     .map((hash) => hash.hex)
     .join(", ");
   const previewCounts = [
-    hasDiagnosticBlocks ? `${plan.effectBlocks.length} blocks` : null,
-    plan.targets.length > 0 ? `${plan.targets.length} models` : null,
-    plan.localTextureCount > 0 ? `${plan.localTextureCount} textures` : null,
-    sharedResourceCount > 0 ? `${sharedResourceCount} from ${EFFECT_FOLDER_COMMON_PACK_NAME}` : null,
+    hasDiagnosticBlocks ? t("preview3d.blocks", { count: plan.effectBlocks.length }) : null,
+    plan.targets.length > 0 ? t("preview3d.models", { count: plan.targets.length }) : null,
+    plan.localTextureCount > 0 ? t("preview3d.textures", { count: plan.localTextureCount }) : null,
+    sharedResourceCount > 0
+      ? t("preview3d.fromPack", { count: sharedResourceCount, pack: EFFECT_FOLDER_COMMON_PACK_NAME })
+      : null,
   ].filter(Boolean).join(" · ");
   const previewDiagnostics = [
     modelPoolPlan?.truncated
-      ? `Model pool capped at ${modelPoolPlan.totalCapacity}/${modelPoolPlan.totalRequired} instances across ${modelPoolPlan.limitedEffectCount} effects.`
+      ? t("preview3d.poolCapped", {
+          used: modelPoolPlan.totalCapacity,
+          required: modelPoolPlan.totalRequired,
+          effects: modelPoolPlan.limitedEffectCount,
+        })
       : null,
     externalModelEffectCount > 0
-      ? `${externalModelEffectCount} block${externalModelEffectCount === 1 ? "" : "s"} bind a model that resolved in neither this pack nor ${EFFECT_FOLDER_COMMON_PACK_NAME}` +
-        `${unresolvedModelList ? ` (${unresolvedModelList})` : ""}, so a flat proxy quad is drawn instead of the real mesh.`
+      ? t("preview3d.proxyBlocks", {
+          count: externalModelEffectCount,
+          pack: EFFECT_FOLDER_COMMON_PACK_NAME,
+          hashes: unresolvedModelList ? t("preview3d.hashList", { hashes: unresolvedModelList }) : "",
+        })
       : null,
   ].filter((message): message is string => message !== null);
   const isEfxbnWorkspace = hasDiagnosticBlocks && basePlan?.kind === "efxbn";
@@ -732,16 +745,17 @@ export function EffectFolder3dPreview({
   return (
     <section
       className={cn("flex min-h-0 flex-col", isEfxbnWorkspace ? "h-full min-h-0 flex-1 gap-0" : "space-y-2")}
-      aria-label={plan.kind === "efxbn" ? "EFXBN 3D preview" : "Model 3D preview"}
+      aria-label={plan.kind === "efxbn" ? t("preview3d.ariaEfxbn") : t("preview3d.ariaModel")}
     >
       <div className="flex h-10 shrink-0 items-center gap-2 border-b bg-muted/15 px-3">
         <PersonStanding className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="shrink-0 text-[11px] font-medium text-muted-foreground">Host model</span>
+        <span className="shrink-0 text-[11px] font-medium text-muted-foreground">{t("preview3d.hostModel")}</span>
         <span
           className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground"
           title={hostModelPath ?? undefined}
+          data-i18n-ignore=""
         >
-          {hostModelPath ? effectPreviewHostModelLabel(hostModelPath) : "none - soft particles cannot fade"}
+          {hostModelPath ? effectPreviewHostModelLabel(hostModelPath) : t("preview3d.noHost")}
         </span>
         <Button
           type="button"
@@ -750,7 +764,7 @@ export function EffectFolder3dPreview({
           className="h-8 shrink-0 px-2.5 text-[11px]"
           onClick={() => void handlePickHostModel()}
         >
-          {hostModelPath ? "Change" : "Choose .numdlb"}
+          {hostModelPath ? t("actions.change") : t("actions.chooseNumdlb")}
         </Button>
         {hostModelPath ? (
           <Button
@@ -759,7 +773,7 @@ export function EffectFolder3dPreview({
             variant="ghost"
             className="h-8 w-8 shrink-0"
             onClick={() => void handleClearHostModel()}
-            aria-label="Remove the host model from the preview scene"
+            aria-label={t("preview3d.removeHost")}
           >
             <X className="h-3.5 w-3.5" />
           </Button>
@@ -779,7 +793,7 @@ export function EffectFolder3dPreview({
       {!hasRenderableScene ? (
         <div className="flex min-h-32 flex-1 flex-col items-center justify-center rounded-md border border-dashed bg-muted/10 px-4 text-center">
           <Box className="mb-2 h-6 w-6 text-muted-foreground/60" aria-hidden />
-          <p className="text-xs text-muted-foreground">No preview data.</p>
+          <p className="text-xs text-muted-foreground">{t("preview3d.noPreview")}</p>
         </div>
       ) : (
         <div
@@ -839,7 +853,9 @@ export function EffectFolder3dPreview({
                           />
                         }
                         sceneOverlayAnimating={true}
-                        sceneOverlayLabel={`${basePlan.effectBlocks.length - hiddenEffectIndexes.size} visible blocks`}
+                        sceneOverlayLabel={t("preview3d.visibleBlocks", {
+                          count: basePlan.effectBlocks.length - hiddenEffectIndexes.size,
+                        })}
                         hostHiddenPreviewInstanceIds={hiddenPreviewInstanceIds}
                         hostInstanceTransformsRef={hostInstanceTransformsRef}
                       />
@@ -874,7 +890,7 @@ export function EffectFolder3dPreview({
                     />
                   ) : (
                     <p className="flex h-full items-center justify-center px-4 text-xs text-muted-foreground">
-                      Select a block to edit its curves.
+                      {t("preview3d.selectBlock")}
                     </p>
                   )}
                 </ResizablePanel>

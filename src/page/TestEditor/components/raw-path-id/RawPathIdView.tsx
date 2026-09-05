@@ -32,6 +32,7 @@ import {
   type RawPathIdKind,
 } from "./rawPathIdDocument";
 import { buildRawPathIdSourceFhm2dPath, initRawPathIdPack } from "./initRawPathIdPack";
+import { useTranslation } from "react-i18next";
 
 type LoadState =
   | { status: "idle" }
@@ -82,6 +83,7 @@ export default function RawPathIdView({
   onPackMutated,
   workspaceDocument,
 }: RawPathIdViewProps) {
+  const { t } = useTranslation("test-lists");
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [hasChanges, setHasChanges] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -103,7 +105,7 @@ export default function RawPathIdView({
 
   const load = useCallback(async () => {
     if (!folderPath) {
-      setLoadState({ status: "error", folderPath: "", message: "Folder path is empty" });
+      setLoadState({ status: "error", folderPath: "", message: t("common.folderPathEmpty") });
       setHasChanges(false);
       onUnsavedChanges?.(false);
       return;
@@ -184,13 +186,13 @@ export default function RawPathIdView({
     try {
       const entry = await derivePilotVoiceSource(voiceStem);
       if (loadState.entries.some((row) => row.key === entry.key)) {
-        toast.error(`${displayVoiceStem(entry.key)} is already in the table`);
+        toast.error(t("rawPath.alreadyInTable", { name: displayVoiceStem(entry.key) }));
         setSelectedKey(entry.key);
         return;
       }
       markChanged([...loadState.entries, entry]);
       setSelectedKey(entry.key);
-      toast.success(`Added ${displayVoiceStem(entry.key)}`);
+      toast.success(t("rawPath.added", { name: displayVoiceStem(entry.key) }));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     }
@@ -206,7 +208,7 @@ export default function RawPathIdView({
   const handleSave = useCallback(async () => {
     if (loadState.status !== "ready") return;
     if (!loadState.writable) {
-      toast.error("Legacy workspace content is read-only");
+      toast.error(t("common.legacyReadOnlyShort"));
       return;
     }
     try {
@@ -219,7 +221,7 @@ export default function RawPathIdView({
       setHasChanges(false);
       onUnsavedChanges?.(false);
       onPackMutated?.(workspacePackIdentityFromResolved(loadState.pack, "configured"));
-      toast.success("Saved");
+      toast.success(t("sound.saved"));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     }
@@ -228,7 +230,7 @@ export default function RawPathIdView({
   const handleInitPack = useCallback(async () => {
     const sourceFhm2dPath = buildRawPathIdSourceFhm2dPath(obDplCachePath ?? "");
     if (!sourceFhm2dPath) {
-      toast.error("Set the OB dplcache folder in FHM2D Init first");
+      toast.error(t("common.setObDplcacheInit"));
       return;
     }
     setIsInitializing(true);
@@ -239,7 +241,7 @@ export default function RawPathIdView({
         workspaceDocument,
       });
       lastLoadedKeyRef.current = "";
-      toast.success("Unpacked path table");
+      toast.success(t("rawPath.unpacked"));
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -266,11 +268,11 @@ export default function RawPathIdView({
   return (
     <SoundTableWorkbench
       isActive={isActive}
-      title="Voice file path"
-      purpose="Register which .nus3audio file a voice name should open."
+      title={t("rawPath.title")}
+      purpose={t("rawPath.purpose")}
       status={workbenchStatus}
       errorMessage={loadState.status === "error" ? loadState.message : null}
-      unpackLabel="Init pack"
+      unpackLabel={t("common.initPack")}
       unpacking={isInitializing}
       unpackDisabled={!folderPath}
       onUnpack={() => void handleInitPack()}
@@ -282,29 +284,29 @@ export default function RawPathIdView({
         loadState.status === "ready"
           ? [
               {
-                label: "Structure",
+                label: t("common.structure"),
                 value: loadState.pack.structureJsonPath,
                 onOpen: () => void openParentFolder(loadState.pack.structureJsonPath),
               },
               {
-                label: "JSON",
+                label: t("common.json"),
                 value: loadState.jsonPath,
                 onOpen: () => void openParentFolder(loadState.jsonPath),
               },
               {
-                label: "Index",
+                label: t("rawPath.index"),
                 value: loadState.vgsht1Path,
                 onOpen: () => void openParentFolder(loadState.vgsht1Path),
               },
               {
-                label: "Pack",
+                label: t("common.pack"),
                 value: `${RAW_PATH_ID_PACK_HASH}.fhm2d`,
               },
             ]
           : undefined
       }
       loadedLabel={
-        loadState.status === "ready" ? `Loaded: ${loadState.entries.length} streams` : undefined
+        loadState.status === "ready" ? t("sound.loadedStreams", { count: loadState.entries.length }) : undefined
       }
       notice={
         loadState.status === "ready" ? (
@@ -322,12 +324,12 @@ export default function RawPathIdView({
       addPanel={
         loadState.status === "ready" ? (
           <div className="rounded-lg bg-muted/40 p-3">
-            <div className="text-sm font-medium">Add a voice file</div>
+            <div className="text-sm font-medium">{t("rawPath.addVoice")}</div>
             <div className="mt-2 flex gap-2">
               <Input
                 value={voiceStem}
                 onChange={(event) => setVoiceStem(event.target.value)}
-                placeholder="VO_1000_P01_0"
+                placeholder={t("rawPath.stemPlaceholder")}
                 className="h-8 text-xs"
                 disabled={!loadState.writable}
               />
@@ -338,7 +340,7 @@ export default function RawPathIdView({
                 className="h-8"
               >
                 <Plus className="h-4 w-4" />
-                Add
+                {t("common.add")}
               </Button>
             </div>
             {pathPreview ? (
@@ -354,7 +356,7 @@ export default function RawPathIdView({
               <Input
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search"
+                placeholder={t("common.search")}
                 className="h-8 text-xs"
               />
               {(["voice", "all"] as const).map((group) => (
@@ -365,7 +367,7 @@ export default function RawPathIdView({
                   onClick={() => setGroupFilter(group)}
                   className="h-8 capitalize"
                 >
-                  {group}
+                  {group === "voice" ? t("rawPath.voice") : t("rawPath.all")}
                 </Button>
               ))}
             </div>
@@ -393,7 +395,7 @@ export default function RawPathIdView({
         loadState.status === "ready" && selected ? (
           <div className="space-y-4 rounded-lg bg-muted/20 p-4">
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Voice</Label>
+              <Label className="text-xs text-muted-foreground">{t("rawPath.voice")}</Label>
               <Input
                 value={displayVoiceStem(selected.key)}
                 onChange={(event) =>
@@ -406,7 +408,7 @@ export default function RawPathIdView({
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Audio file</Label>
+              <Label className="text-xs text-muted-foreground">{t("rawPath.audioFile")}</Label>
               <Input
                 value={selected.source}
                 onChange={(event) => void updateSelected({ source: event.target.value })}
@@ -416,7 +418,7 @@ export default function RawPathIdView({
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <Label className="text-xs">Kind</Label>
+                <Label className="text-xs">{t("rawPath.kind")}</Label>
                 <select
                   value={selected.kind}
                   onChange={(event) => void updateSelected({ kind: event.target.value as RawPathIdKind })}
@@ -431,7 +433,7 @@ export default function RawPathIdView({
                 </select>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Hash</Label>
+                <Label className="text-xs">{t("rawPath.hash")}</Label>
                 <Input
                   value={`0x${selected.hash.toString(16).toUpperCase().padStart(8, "0")}`}
                   readOnly
@@ -440,7 +442,7 @@ export default function RawPathIdView({
               </div>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Hashed path</Label>
+              <Label className="text-xs">{t("rawPath.hashedPath")}</Label>
               <Input value={selected.path} readOnly className="h-8 font-mono text-xs" />
             </div>
             <Button
@@ -451,11 +453,11 @@ export default function RawPathIdView({
               className="text-destructive"
             >
               <Trash2 className="h-4 w-4" />
-              Remove
+              {t("common.remove")}
             </Button>
           </div>
         ) : loadState.status === "ready" ? (
-          <div className="flex h-full items-center text-sm text-muted-foreground">Select a row, or add one.</div>
+          <div className="flex h-full items-center text-sm text-muted-foreground">{t("common.selectRowOrAdd")}</div>
         ) : null
       }
     />

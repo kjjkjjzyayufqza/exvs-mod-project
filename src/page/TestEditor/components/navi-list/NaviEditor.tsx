@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import {
   AlertDialog,
@@ -52,6 +53,7 @@ export function NaviEditor({
   onChange,
   onSelectChange,
 }: NaviEditorProps) {
+  const { t } = useTranslation("test-lists");
   const [internalSelectedIndex, setInternalSelectedIndex] = useState(-1);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteCandidateIndex, setDeleteCandidateIndex] = useState<number | null>(null);
@@ -147,7 +149,7 @@ export function NaviEditor({
   if (!naviListData) {
     return (
       <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground">
-        Select this tab to load navi_list.bin
+        {t("navi.selectTab")}
       </div>
     );
   }
@@ -156,10 +158,10 @@ export function NaviEditor({
     <div className="flex h-full gap-4 min-h-0">
       <div className="w-1/3 border rounded-lg p-3 overflow-hidden flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-3">
-          <div className="font-semibold text-sm">Navi ({entries.length})</div>
+          <div className="font-semibold text-sm">{t("navi.countLabel", { count: entries.length })}</div>
           <Button size="sm" onClick={handleAdd} disabled={!editable} className="inline-flex items-center gap-2">
             <Plus className="w-4 h-4" />
-            Add
+            {t("common.add")}
           </Button>
         </div>
         <NaviList
@@ -193,21 +195,21 @@ export function NaviEditor({
           />
         ) : (
           <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-            Select a navi row to edit
+            {t("navi.selectRow")}
           </div>
         )}
       </div>
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete navi row?</AlertDialogTitle>
+            <AlertDialogTitle>{t("navi.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the selected navi_list row from the staged table. Save File writes the change.
+              {t("navi.deleteDescription")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>{t("common.delete")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

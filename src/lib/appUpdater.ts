@@ -9,6 +9,28 @@ export const GITHUB_UPDATE_TOKEN_STORE_KEY = "githubUpdateToken";
 export const UPDATER_LATEST_JSON_URL =
   "https://github.com/kjjkjjzyayufqza/exvs-mod-project/releases/latest/download/latest.json";
 
+export const GITHUB_RELEASES_LATEST_API =
+  "https://api.github.com/repos/kjjkjjzyayufqza/exvs-mod-project/releases/latest";
+
+export type GithubLatestRelease = {
+  tag_name: string;
+  name: string | null;
+  body: string | null;
+  html_url: string;
+};
+
+export type AppUpdatePrompt = {
+  update: Update;
+  currentVersion: string;
+  latestVersion: string;
+  changelog: string;
+};
+
+export type DownloadProgressState = {
+  received: number;
+  total: number;
+};
+
 export function buildUpdaterHeaders(
   token: string | null | undefined,
 ): Record<string, string> | undefined {
@@ -62,6 +84,79 @@ export async function checkForAppUpdate(): Promise<Update | null> {
     headers,
     timeout: 30_000,
   });
+}
+
+export async function fetchLatestGithubRelease(): Promise<GithubLatestRelease | null> {
+  try {
+    return await invoke<GithubLatestRelease>("fetch_github_latest_release");
+  } catch {
+    return null;
+  }
+}
+
+export function pickChangelog(...candidates: Array<string | null | undefined>): string {
+  for (const candidate of candidates) {
+    const trimmed = candidate?.trim();
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+  return "";
+}
+
+export function stripVersionPrefix(version: string): string {
+  return version.trim().replace(/^v/i, "");
+}
+
+export function compareSemver(left: string, right: string): number {
+  const leftParts = stripVersionPrefix(left).split(/[.-]/);
+  const rightParts = stripVersionPrefix(right).split(/[.-]/);
+  const length = Math.max(leftParts.length, rightParts.length);
+  for (let index = 0; index < length; index += 1) {
+    const leftValue = Number.parseInt(leftParts[index] ?? "0", 10);
+    const rightValue = Number.parseInt(rightParts[index] ?? "0", 10);
+    const leftNumber = Number.isFinite(leftValue) ? leftValue : 0;
+    const rightNumber = Number.isFinite(rightValue) ? rightValue : 0;
+    if (leftNumber !== rightNumber) {
+      return leftNumber - rightNumber;
+    }
+  }
+  return 0;
+}
+
+export async function loadAppUpdatePrompt(): Promise<AppUpdatePrompt | null> {
+  const [update, release] = await Promise.all([
+    checkForAppUpdate().catch(() => null),
+    fetchLatestGithubRelease(),
+  ]);
+  if (!update) {
+    return null;
+  }
+  return {
+    update,
+    currentVersion: update.currentVersion,
+    latestVersion: update.version,
+    changelog: pickChangelog(release?.body, update.body),
+  };
+}
+
+export function accumulateDownloadProgress(
+  state: DownloadProgressState,
+  event: DownloadEvent,
+): DownloadProgressState & { percent: number | null } {
+  let received = state.received;
+  let total = state.total;
+  if (event.event === "Started") {
+    total = event.data.contentLength ?? 0;
+    received = 0;
+  } else if (event.event === "Progress") {
+    received += event.data.chunkLength;
+  }
+  return {
+    received,
+    total,
+    percent: total > 0 ? Math.min(100, Math.round((received / total) * 100)) : null,
+  };
 }
 
 export async function installAppUpdate(

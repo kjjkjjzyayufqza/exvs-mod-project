@@ -10,6 +10,7 @@ import JsonView from "@uiw/react-json-view"
 import { vscodeTheme } from "@uiw/react-json-view/vscode"
 import { Loader2, FileJson2, FolderOpen, ListTree, RefreshCcw, Copy } from "lucide-react"
 import { toast } from "sonner"
+import { useTranslation } from "react-i18next"
 import { AppRndModalShell } from "@/components/AppRndModalShell"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -79,6 +80,7 @@ const GVS_REPORT_DIMENSIONS = {
 }
 
 export function GvsMapToVs2Tool() {
+  const { t } = useTranslation("misc-tools-a")
   const [isOpen, setIsOpen] = useState(false)
   const [selectedBinPaths, setSelectedBinPaths] = useState<string[]>([])
   const [outputDir, setOutputDir] = useState("")
@@ -205,7 +207,7 @@ export function GvsMapToVs2Tool() {
     const targets = records.filter((item) => item.status === "success")
     if (targets.length === 0) {
       setGraphicParamLogText("")
-      toast.error("No successful folders available to scan")
+      toast.error(t("gvs.errors.noScanFolders"))
       return
     }
 
@@ -241,22 +243,22 @@ export function GvsMapToVs2Tool() {
     setIsStep21DialogOpen(true)
     void runGraphicParamScan().catch((error) => {
       setIsScanningGraphicParam(false)
-      toast.error(error instanceof Error ? error.message : "Failed to scan graphic_param files")
+      toast.error(error instanceof Error ? error.message : t("gvs.errors.scanFailed"))
     })
   }
 
   const handleCopyGraphicParamLog = async () => {
     if (!graphicParamLogText.trim()) {
-      toast.error("No scan content to copy")
+      toast.error(t("gvs.errors.noScanCopy"))
       return
     }
     await navigator.clipboard.writeText(graphicParamLogText)
-    toast.success("Copied graphic_param file list")
+    toast.success(t("gvs.success.copiedGraphicParam"))
   }
 
   const handleConvertGraphicParamToCsv = async () => {
     if (!graphicParamLogText.trim()) {
-      toast.error("No scan content to convert")
+      toast.error(t("gvs.errors.noScanConvert"))
       return
     }
 
@@ -266,7 +268,7 @@ export function GvsMapToVs2Tool() {
       .filter((line) => line.length > 0 && !line.startsWith("[NOT_FOUND]"))
 
     if (candidatePaths.length === 0) {
-      toast.error("No valid graphic_param file path found in scan result")
+      toast.error(t("gvs.errors.noGraphicParamPath"))
       return
     }
 
@@ -284,18 +286,22 @@ export function GvsMapToVs2Tool() {
       } catch (error) {
         failedItems.push({
           path: sourcePath,
-          reason: error instanceof Error ? error.message : "Unknown error",
+          reason: error instanceof Error ? error.message : t("common.unknownError"),
         })
       }
     }
 
     setIsConvertingGraphicParamCsv(false)
     if (successCount > 0) {
-      toast.success(`Converted ${successCount} graphic_param file(s) to graphic_param.csv`)
+      toast.success(t("gvs.success.convertedCsv", { count: successCount }))
     }
     if (failedItems.length > 0) {
       toast.error(
-        `Failed ${failedItems.length} file(s). First error: ${failedItems[0].path} - ${failedItems[0].reason}`
+        t("gvs.errors.convertFailed", {
+          count: failedItems.length,
+          path: failedItems[0].path,
+          reason: failedItems[0].reason,
+        })
       )
     }
   }
@@ -347,7 +353,7 @@ export function GvsMapToVs2Tool() {
       })
     } catch (error) {
       console.error("Failed to select .bin files", error)
-      toast.error("Failed to select .bin files")
+      toast.error(t("gvs.errors.selectBin"))
     }
   }
 
@@ -385,7 +391,7 @@ export function GvsMapToVs2Tool() {
           editedJsonNumatbFiles: [],
           fixedNumatbFiles: [],
           failedNumatbFiles: [],
-          errorMessage: hasStructureJson ? undefined : "Missing structure json beside selected folder",
+          errorMessage: hasStructureJson ? undefined : t("gvs.missingStructure"),
         })
       }
 
@@ -397,7 +403,7 @@ export function GvsMapToVs2Tool() {
       })
     } catch (error) {
       console.error("Failed to select Step2 folders", error)
-      toast.error("Failed to select Step2 folders")
+      toast.error(t("gvs.errors.selectStep2"))
     }
   }
 
@@ -413,7 +419,7 @@ export function GvsMapToVs2Tool() {
       setOutputDir(selected)
     } catch (error) {
       console.error("Failed to select output directory", error)
-      toast.error("Failed to select output directory")
+      toast.error(t("gvs.errors.selectOutput"))
     }
   }
 
@@ -428,7 +434,9 @@ export function GvsMapToVs2Tool() {
       })
     } catch (error) {
       console.error(`Failed to load detail: ${jsonPath}`, error)
-      toast.error(`Failed to load detail: ${error instanceof Error ? error.message : "Unknown error"}`)
+      toast.error(t("gvs.errors.loadDetail", {
+        message: error instanceof Error ? error.message : t("common.unknownError"),
+      }))
     } finally {
       setIsLoadingDetail(false)
     }
@@ -537,7 +545,7 @@ export function GvsMapToVs2Tool() {
           )
         )
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Unknown error"
+        const errorMessage = error instanceof Error ? error.message : t("common.unknownError")
         failCount += 1
         setRecords((prev) =>
           prev.map((item) =>
@@ -571,10 +579,10 @@ export function GvsMapToVs2Tool() {
 
     setIsConverting(false)
     if (okCount > 0) {
-      toast.success(`Step1 completed for ${okCount} file(s)`)
+      toast.success(t("gvs.success.step1", { count: okCount }))
     }
     if (failCount > 0) {
-      toast.error(`Failed ${failCount} file(s). Click failed rows to inspect message.`)
+      toast.error(t("gvs.errors.step1FailedCount", { count: failCount }))
     }
   }
 
@@ -659,7 +667,7 @@ export function GvsMapToVs2Tool() {
           )
         )
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Unknown error"
+        const errorMessage = error instanceof Error ? error.message : t("common.unknownError")
         failCount += 1
         setRecords((prev) =>
           prev.map((item) =>
@@ -689,10 +697,10 @@ export function GvsMapToVs2Tool() {
 
     setIsDebugGraphicParamExtracting(false)
     if (okCount > 0) {
-      toast.success(`Debug extracted graphic_param for ${okCount} file(s)`)
+      toast.success(t("gvs.success.debugGraphicParam", { count: okCount }))
     }
     if (failCount > 0) {
-      toast.error(`Debug extract failed for ${failCount} file(s)`)
+      toast.error(t("gvs.errors.debugExtractFailed", { count: failCount }))
     }
   }
 
@@ -775,7 +783,7 @@ export function GvsMapToVs2Tool() {
           )
         )
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Unknown error"
+        const errorMessage = error instanceof Error ? error.message : t("common.unknownError")
         failCount += 1
         setRecords((prev) =>
           prev.map((item) =>
@@ -805,16 +813,16 @@ export function GvsMapToVs2Tool() {
 
     setIsDebugNumatbExtracting(false)
     if (okCount > 0) {
-      toast.success(`Debug extracted numatb for ${okCount} file(s)`)
+      toast.success(t("gvs.success.debugNumatb", { count: okCount }))
     }
     if (failCount > 0) {
-      toast.error(`Debug numatb extract failed for ${failCount} file(s)`)
+      toast.error(t("gvs.errors.debugNumatbFailed", { count: failCount }))
     }
   }
 
   const handleStep2FixNumatbFiles = () => {
     void runStep2FixNumatbFiles().catch((error) => {
-      toast.error(error instanceof Error ? error.message : "Step2 failed")
+      toast.error(error instanceof Error ? error.message : t("gvs.errors.step2Failed"))
     })
   }
 
@@ -1130,9 +1138,9 @@ export function GvsMapToVs2Tool() {
                   editedJsonNumatbFiles: [],
                   failedNumatbFiles: [
                     {
-                      name: "(folder level)",
+                      name: t("gvs.folderLevel"),
                       stage: "patch_json",
-                      reason: "Failed before per-file processing",
+                      reason: t("gvs.failedBeforePerFile"),
                       detail: numatbErrorMessage,
                     },
                   ],
@@ -1151,20 +1159,20 @@ export function GvsMapToVs2Tool() {
 
     setIsFixingNumatb(false)
     if (fixedCount > 0) {
-      toast.success(`Step2 fixed numatb for ${fixedCount} file(s)`)
+      toast.success(t("gvs.success.step2Fixed", { count: fixedCount }))
     }
     if (noNumatbCount > 0) {
-      toast.info(`Step2 found no numatb in ${noNumatbCount} file(s)`)
+      toast.info(t("gvs.success.step2NoNumatb", { count: noNumatbCount }))
     }
     if (failedCount > 0) {
-      toast.error(`Step2 failed for ${failedCount} file(s)`)
+      toast.error(t("gvs.errors.step2FailedCount", { count: failedCount }))
       setIsStep2ReportDialogOpen(true)
     }
   }
 
   const handleStep3PackToObModPath = () => {
     void runStep3PackToObModPath().catch((error) => {
-      toast.error(error instanceof Error ? error.message : "Step3 failed")
+      toast.error(error instanceof Error ? error.message : t("gvs.errors.step3Failed"))
     })
   }
 
@@ -1179,7 +1187,7 @@ export function GvsMapToVs2Tool() {
       targetObModPath = String(fromStore ?? "").trim()
     }
     if (!targetObModPath) {
-      throw new Error("obModPath is empty. Please configure it in Config page first.")
+      throw new Error(t("gvs.obModPathEmpty"))
     }
 
     const step3Targets = records.filter(
@@ -1191,7 +1199,7 @@ export function GvsMapToVs2Tool() {
           item.numatbStatus === "idle")
     )
     if (step3Targets.length === 0) {
-      throw new Error("No Step3 candidates found. Ensure each folder has its sibling json file.")
+      throw new Error(t("gvs.noStep3Candidates"))
     }
 
     setIsPacking(true)
@@ -1266,7 +1274,7 @@ export function GvsMapToVs2Tool() {
           )
         )
       } catch (error) {
-        const packErrorMessage = error instanceof Error ? error.message : "Unknown error"
+        const packErrorMessage = error instanceof Error ? error.message : t("common.unknownError")
         packFailedCount += 1
         setRecords((prev) =>
           prev.map((item) =>
@@ -1291,10 +1299,10 @@ export function GvsMapToVs2Tool() {
 
     setIsPacking(false)
     if (packedCount > 0) {
-      toast.success(`Step3 packed ${packedCount} file(s) to obModPath`)
+      toast.success(t("gvs.success.step3Packed", { count: packedCount }))
     }
     if (packFailedCount > 0) {
-      toast.error(`Step3 failed for ${packFailedCount} file(s)`)
+      toast.error(t("gvs.errors.step3FailedCount", { count: packFailedCount }))
     }
   }
 
@@ -1320,13 +1328,13 @@ export function GvsMapToVs2Tool() {
   return (
     <>
       <Button variant="outline" className="w-full" onClick={() => setIsOpen(true)}>
-        Open GVS Map to VS2
+        {t("gvs.open")}
       </Button>
       {isOpen ? (
         <AppRndModalShell
           titleId="gvs-map-to-vs2-title"
-          title="GVS Map to VS2"
-          subtitle="Step1 extracts data, Step2 fixes numatb, Step3 packs output to obModPath"
+          title={t("gvs.title")}
+          subtitle={t("gvs.subtitle")}
           headerIcon={<ListTree className="h-4 w-4" />}
           dimensions={GVS_TOOL_DIMENSIONS}
           storageKey="gvs-map-to-vs2-dialog-size"
@@ -1339,7 +1347,7 @@ export function GvsMapToVs2Tool() {
             <Input
               value={outputDir}
               onChange={(e) => setOutputDir(e.target.value)}
-              placeholder="Select output directory, e.g. D:\\exports"
+              placeholder={t("gvs.outputPlaceholder")}
               disabled={isConverting || isAnyDebugExtracting || isFixingNumatb || isPacking}
             />
             <Button variant="outline" onClick={handleSelectOutputDir} disabled={isConverting || isAnyDebugExtracting || isFixingNumatb || isPacking}>
@@ -1347,9 +1355,9 @@ export function GvsMapToVs2Tool() {
             </Button>
           </div>
           <div className="md:col-span-5 flex items-center gap-2 justify-start md:justify-end">
-            <Badge variant="outline">Selected: {selectedBinPaths.length}</Badge>
-            <Badge variant="outline">Success: {successCount}</Badge>
-            {(isPending || isLoadingDetail) && <Badge variant="outline">Working...</Badge>}
+            <Badge variant="outline">{t("gvs.selectedCount", { count: selectedBinPaths.length })}</Badge>
+            <Badge variant="outline">{t("gvs.successCount", { count: successCount })}</Badge>
+            {(isPending || isLoadingDetail) && <Badge variant="outline">{t("gvs.working")}</Badge>}
           </div>
         </div>
 
@@ -1358,72 +1366,72 @@ export function GvsMapToVs2Tool() {
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={handleSelectBinFiles} disabled={isConverting || isAnyDebugExtracting || isFixingNumatb || isPacking}>
               <FolderOpen className="h-4 w-4 mr-2" />
-              Select .bin Files
+              {t("gvs.selectBin")}
             </Button>
             <Button variant="outline" onClick={handleSelectStep2Folders} disabled={isConverting || isAnyDebugExtracting || isFixingNumatb || isPacking}>
               <FolderOpen className="h-4 w-4 mr-2" />
-              Skip to Step2: Select Step2 Folders
+              {t("gvs.skipToStep2")}
             </Button>
           </div>
           {/* Row 2: Step1 workflow */}
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={handleStep1ExtractAndGenerateJson} disabled={!canRunStep1}>
               {isConverting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileJson2 className="h-4 w-4 mr-2" />}
-              Step1: Extract and Generate JSON
+              {t("gvs.step1")}
             </Button>
             <Button variant="outline" onClick={() => void handleDebugExtractGraphicParamOnly()} disabled={!canRunDebugGraphicParam}>
               {isDebugGraphicParamExtracting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              Debug: only extract graphic_param file
+              {t("gvs.debugGraphicParam")}
             </Button>
             <Button variant="outline" onClick={() => void handleDebugExtractNumatbOnly()} disabled={!canRunDebugNumatb}>
               {isDebugNumatbExtracting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              Debug: only extract numatb
+              {t("gvs.debugNumatb")}
             </Button>
           </div>
           {/* Row 3: Step2 workflow */}
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={handleStep2FixNumatbFiles} disabled={!canRunStep2}>
               {isFixingNumatb ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              Step2: Fix Numatb Files
+              {t("gvs.step2")}
             </Button>
             <Button
               variant="outline"
               onClick={() => setIsStep2ReportDialogOpen(true)}
               disabled={step2ReportRecords.length === 0}
             >
-              Step2 Details ({step2FailureFileCount})
+              {t("gvs.step2Details", { count: step2FailureFileCount })}
             </Button>
             <Button variant="outline" onClick={handleOpenStep21Dialog} disabled={!canRunStep21}>
-              Step2.1: log all graphic_param file url
+              {t("gvs.step21")}
             </Button>
           </div>
           {/* Row 4: Step3 workflow */}
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={handleStep3PackToObModPath} disabled={!canRunStep3}>
-              Step3: Pack to obModPath
+              {t("gvs.step3")}
             </Button>
           </div>
           {/* Row 5: Utility */}
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => setShowGuide((prev) => !prev)}>
-              {showGuide ? "Hide Guide" : "User Guide"}
+              {showGuide ? t("gvs.hideGuide") : t("gvs.showGuide")}
             </Button>
             <Button variant="outline" onClick={handleReset} disabled={isConverting || isAnyDebugExtracting || isFixingNumatb || isPacking}>
               <RefreshCcw className="h-4 w-4 mr-2" />
-              Reset
+              {t("gvs.reset")}
             </Button>
           </div>
         </div>
 
         {showGuide && (
           <Card className="p-3 text-sm space-y-2">
-            <div className="font-medium">Workflow Guide</div>
-            <div>Step1: Extract flat files and generate hash JSON from selected GVS .bin files.</div>
-            <div>Debug graphic_param: scan raw data by directional_lighting and extract only graphic_param file.</div>
-            <div>Debug numatb: extract only .numatb files from package without full Step1.</div>
-            <div>Direct Step2: Select extracted folders directly and run numatb fix without Step1.</div>
-            <div>Step2: Migrate extracted `.numatb` files from GVS format to EXVS2-compatible settings.</div>
-            <div>Step3: Pack the folder into FHM2D and output to `obModPath` as `0xHASH.fhm2d`.</div>
+            <div className="font-medium">{t("gvs.workflowGuide")}</div>
+            <div>{t("gvs.guideStep1")}</div>
+            <div>{t("gvs.guideDebugGraphicParam")}</div>
+            <div>{t("gvs.guideDebugNumatb")}</div>
+            <div>{t("gvs.guideDirectStep2")}</div>
+            <div>{t("gvs.guideStep2")}</div>
+            <div>{t("gvs.guideStep3")}</div>
           </Card>
         )}
 
@@ -1431,8 +1439,8 @@ export function GvsMapToVs2Tool() {
           ? createPortal(
               <AppRndModalShell
                 titleId="gvs-graphic-param-log-title"
-                title="Step2.1 Graphic Param URL Log"
-                subtitle="Copy this log when comparing graphic_param data"
+                title={t("gvs.logTitle")}
+                subtitle={t("gvs.logSubtitle")}
                 headerIcon={<FileJson2 className="h-4 w-4" />}
                 dimensions={GVS_LOG_DIMENSIONS}
                 storageKey="gvs-graphic-param-log-dialog-size"
@@ -1445,15 +1453,15 @@ export function GvsMapToVs2Tool() {
                       {isScanningGraphicParam ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Scanning...
+                          {t("gvs.scanning")}
                         </>
                       ) : (
-                        "Re-scan"
+                        t("gvs.rescan")
                       )}
                     </Button>
                     <Button variant="outline" onClick={() => void handleCopyGraphicParamLog()}>
                       <Copy className="h-4 w-4 mr-2" />
-                      Copy
+                      {t("common.copy")}
                     </Button>
                     <Button
                       variant="outline"
@@ -1463,10 +1471,10 @@ export function GvsMapToVs2Tool() {
                       {isConvertingGraphicParamCsv ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Converting...
+                          {t("gvs.converting")}
                         </>
                       ) : (
-                        "Convert to CSV"
+                        t("gvs.convertCsv")
                       )}
                     </Button>
                   </div>
@@ -1474,7 +1482,8 @@ export function GvsMapToVs2Tool() {
                     value={graphicParamLogText}
                     readOnly
                     className="min-h-0 flex-1 resize-none font-mono text-xs"
-                    placeholder="Scan result will appear here. One file path per line."
+                    placeholder={t("gvs.scanPlaceholder")}
+                    data-i18n-ignore=""
                   />
                 </div>
               </AppRndModalShell>,
@@ -1486,8 +1495,8 @@ export function GvsMapToVs2Tool() {
           ? createPortal(
               <AppRndModalShell
                 titleId="gvs-step2-report-title"
-                title="Step2 Detailed Error Report"
-                subtitle="Per-file failure details for Step2 NUMATB migration"
+                title={t("gvs.reportTitle")}
+                subtitle={t("gvs.reportSubtitle")}
                 headerIcon={<FileJson2 className="h-4 w-4" />}
                 dimensions={GVS_REPORT_DIMENSIONS}
                 storageKey="gvs-step2-report-dialog-size"
@@ -1512,45 +1521,45 @@ export function GvsMapToVs2Tool() {
                     >
                       <Card className="p-3 space-y-2 text-sm">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="font-medium truncate pr-2">{record.fileName}</div>
-                      <Badge variant="destructive">{record.numatbStatus}</Badge>
+                      <div className="font-medium truncate pr-2" data-i18n-ignore="">{record.fileName}</div>
+                      <Badge variant="destructive" data-i18n-ignore="">{record.numatbStatus}</Badge>
                     </div>
                     <div className="text-xs text-muted-foreground break-all">
-                      Folder: {record.outputFolderPath || record.inputPath}
+                      {t("gvs.folder")} <span data-i18n-ignore="">{record.outputFolderPath || record.inputPath}</span>
                     </div>
                     {record.numatbErrorMessage && (
                       <div className="text-xs text-red-600">
-                        Summary: {record.numatbErrorMessage}
+                        {t("gvs.summary")} <span data-i18n-ignore="">{record.numatbErrorMessage}</span>
                       </div>
                     )}
                     <div className="text-xs space-y-2">
                       <div>
                         <div className="font-medium mb-1">
-                          Stage 1: numatb -&gt; json success ({record.convertedToJsonNumatbFiles.length})
+                          {t("gvs.stage1", { count: record.convertedToJsonNumatbFiles.length })}
                         </div>
                         {record.convertedToJsonNumatbFiles.length > 0 ? (
-                          <div className="break-all">
+                          <div className="break-all" data-i18n-ignore="">
                             {record.convertedToJsonNumatbFiles.join(", ")}
                           </div>
                         ) : (
-                          <div className="text-muted-foreground">None</div>
+                          <div className="text-muted-foreground">{t("gvs.none")}</div>
                         )}
                       </div>
                       <div>
                         <div className="font-medium mb-1">
-                          Stage 2: json edit success ({record.editedJsonNumatbFiles.length})
+                          {t("gvs.stage2", { count: record.editedJsonNumatbFiles.length })}
                         </div>
                         {record.editedJsonNumatbFiles.length > 0 ? (
-                          <div className="break-all">
+                          <div className="break-all" data-i18n-ignore="">
                             {record.editedJsonNumatbFiles.join(", ")}
                           </div>
                         ) : (
-                          <div className="text-muted-foreground">None</div>
+                          <div className="text-muted-foreground">{t("gvs.none")}</div>
                         )}
                       </div>
                     </div>
                     <div className="text-xs">
-                      <div className="font-medium mb-1">Failed Files</div>
+                      <div className="font-medium mb-1">{t("gvs.failedFiles")}</div>
                       {record.failedNumatbFiles.length > 0 ? (
                         <div className="space-y-2">
                           {record.failedNumatbFiles.map((failedFile, index) => (
@@ -1559,17 +1568,17 @@ export function GvsMapToVs2Tool() {
                               className="rounded border p-2 space-y-1"
                             >
                               <div>
-                                <span className="font-medium">File:</span> {failedFile.name}
+                                <span className="font-medium">{t("gvs.file")}</span> <span data-i18n-ignore="">{failedFile.name}</span>
                               </div>
                               <div>
-                                <span className="font-medium">Stage:</span> {failedFile.stage}
+                                <span className="font-medium">{t("gvs.stage")}</span> <span data-i18n-ignore="">{failedFile.stage}</span>
                               </div>
                               <div>
-                                <span className="font-medium">Reason:</span> {failedFile.reason}
+                                <span className="font-medium">{t("gvs.reason")}</span> <span data-i18n-ignore="">{failedFile.reason}</span>
                               </div>
                               {failedFile.detail && (
                                 <div className="text-red-600 break-all">
-                                  <span className="font-medium">Detail:</span> {failedFile.detail}
+                                  <span className="font-medium">{t("gvs.detail")}</span> <span data-i18n-ignore="">{failedFile.detail}</span>
                                 </div>
                               )}
                             </div>
@@ -1577,14 +1586,14 @@ export function GvsMapToVs2Tool() {
                         </div>
                       ) : (
                         <div className="text-muted-foreground">
-                          No per-file item was captured, check summary message above.
+                          {t("gvs.noPerFile")}
                         </div>
                       )}
                     </div>
                     {record.fixedNumatbFiles.length > 0 && (
                       <div className="text-xs">
-                        <span className="font-medium">Fixed files:</span>{" "}
-                        {record.fixedNumatbFiles.join(", ")}
+                        <span className="font-medium">{t("gvs.fixedFiles")}</span>{" "}
+                        <span data-i18n-ignore="">{record.fixedNumatbFiles.join(", ")}</span>
                       </div>
                     )}
                       </Card>
@@ -1593,7 +1602,7 @@ export function GvsMapToVs2Tool() {
                 })}
                 {step2ReportRecords.length === 0 && (
                   <div className="p-3 text-muted-foreground">
-                    No Step2 details yet. Run Step2 first.
+                    {t("gvs.noStep2Details")}
                   </div>
                 )}
               </div>
@@ -1608,7 +1617,7 @@ export function GvsMapToVs2Tool() {
           <Card className="p-3">
             <div className="space-y-2">
               <div className="text-sm">
-                Processing {progress.current}/{progress.total}
+                {t("gvs.processing", { current: progress.current, total: progress.total })}
                 {progress.currentFile ? ` - ${progress.currentFile}` : ""}
               </div>
               <Progress value={progressPercent} />
@@ -1621,7 +1630,7 @@ export function GvsMapToVs2Tool() {
         <div className="grid grid-cols-12 gap-4 flex-1 min-h-0">
           <Card className="col-span-4 p-3 min-h-0 flex flex-col">
             <div className="flex items-center justify-between mb-2">
-              <div className="font-medium">Selected BIN Files</div>
+              <div className="font-medium">{t("gvs.selectedBinFiles")}</div>
               <Badge variant="outline">{records.length}</Badge>
             </div>
             <div
@@ -1645,13 +1654,13 @@ export function GvsMapToVs2Tool() {
                     onClick={() => {
                       if (item.status !== "success" || !item.outputJsonPath) {
                         if (item.status === "failed") {
-                          toast.error(item.errorMessage ?? "Step1 failed")
+                          toast.error(item.errorMessage ?? t("gvs.errors.step1Failed"))
                         } else if (item.status === "success" && !item.outputJsonPath) {
-                          toast.error(item.errorMessage ?? "Missing structure json")
+                          toast.error(item.errorMessage ?? t("gvs.missingStructureShort"))
                         } else if (item.numatbStatus === "fix_failed") {
-                          toast.error(item.numatbErrorMessage ?? "Step2 failed")
+                          toast.error(item.numatbErrorMessage ?? t("gvs.errors.step2Failed"))
                         } else if (item.packStatus === "pack_failed") {
-                          toast.error(item.packErrorMessage ?? "Step3 failed")
+                          toast.error(item.packErrorMessage ?? t("gvs.errors.step3Failed"))
                         }
                         return
                       }
@@ -1660,7 +1669,7 @@ export function GvsMapToVs2Tool() {
                     disabled={isLoadingDetail}
                   >
                     <div className="flex items-center justify-between">
-                      <div className="font-medium truncate pr-2">{item.fileName}</div>
+                      <div className="font-medium truncate pr-2" data-i18n-ignore="">{item.fileName}</div>
                       <Badge
                         variant={
                           item.status === "success"
@@ -1669,11 +1678,12 @@ export function GvsMapToVs2Tool() {
                               ? "destructive"
                               : "outline"
                         }
+                        data-i18n-ignore=""
                       >
                         {item.status}
                       </Badge>
                     </div>
-                    <div className="text-xs text-muted-foreground truncate mt-1">
+                    <div className="text-xs text-muted-foreground truncate mt-1" data-i18n-ignore="">
                       {item.status === "success"
                         ? item.outputFolderPath
                         : item.status === "failed"
@@ -1682,10 +1692,11 @@ export function GvsMapToVs2Tool() {
                     </div>
                     {item.status === "success" && (
                       <div className="text-xs mt-1 space-y-1">
-                        <div>Source: {item.sourceType}</div>
-                        JSON: {item.outputJsonPath}
+                        <div>{t("gvs.source")} <span data-i18n-ignore="">{item.sourceType}</span></div>
+                        <span data-i18n-ignore="">JSON: {item.outputJsonPath}</span>
                         <div>
-                          Fix Numatb:{" "}
+                          {t("gvs.fixNumatb")}{" "}
+                          <span data-i18n-ignore="">
                           {item.numatbStatus === "idle"
                             ? "idle"
                             : item.numatbStatus === "fixing"
@@ -1695,22 +1706,26 @@ export function GvsMapToVs2Tool() {
                                 : item.numatbStatus === "no_numatb"
                                   ? "no_numatb"
                                   : item.numatbErrorMessage}
+                          </span>
                         </div>
                         {item.fixedNumatbFiles.length > 0 && (
                           <div>
-                            Fixed files: {item.fixedNumatbFiles.join(", ")}
+                            {t("gvs.fixedFiles")} <span data-i18n-ignore="">{item.fixedNumatbFiles.join(", ")}</span>
                           </div>
                         )}
                         {item.failedNumatbFiles.length > 0 && (
                           <div>
-                            Failed files:{" "}
+                            {t("gvs.failedFilesLabel")}{" "}
+                            <span data-i18n-ignore="">
                             {item.failedNumatbFiles
                               .map((file) => `${file.name}(${file.stage}: ${file.reason})`)
                               .join(", ")}
+                            </span>
                           </div>
                         )}
                         <div>
-                          Pack:{" "}
+                          {t("gvs.pack")}{" "}
+                          <span data-i18n-ignore="">
                           {item.packStatus === "idle"
                             ? "idle"
                             : item.packStatus === "packing"
@@ -1718,6 +1733,7 @@ export function GvsMapToVs2Tool() {
                               : item.packStatus === "packed"
                                 ? item.packedFilePath
                                 : item.packErrorMessage}
+                          </span>
                         </div>
                       </div>
                     )}
@@ -1727,7 +1743,7 @@ export function GvsMapToVs2Tool() {
                 })}
                 {records.length === 0 && (
                   <div className="text-sm text-muted-foreground p-2">
-                    No selected files yet
+                    {t("gvs.noFiles")}
                   </div>
                 )}
               </div>
@@ -1737,11 +1753,12 @@ export function GvsMapToVs2Tool() {
           <Card className="col-span-8 p-3 min-h-0 flex flex-col">
             <div className="flex items-center gap-2 mb-2">
               <ListTree className="h-4 w-4" />
-              <div className="font-medium">Detail</div>
+              <div className="font-medium">{t("gvs.detailTitle")}</div>
             </div>
             <div className="min-h-0 flex-1 overflow-auto rounded-md border">
               <div className="p-2 text-sm">
                 {selectedJsonData ? (
+                  <div data-i18n-ignore="">
                   <JsonView
                     value={selectedJsonData}
                     style={vscodeTheme}
@@ -1749,9 +1766,10 @@ export function GvsMapToVs2Tool() {
                     collapsed={1}
                     enableClipboard={false}
                   />
+                  </div>
                 ) : (
                   <div className="text-muted-foreground">
-                    Select a generated JSON file to view detail
+                    {t("gvs.selectDetail")}
                   </div>
                 )}
               </div>

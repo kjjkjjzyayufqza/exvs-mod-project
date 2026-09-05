@@ -1,5 +1,6 @@
 import { useCallback, useDeferredValue, useMemo, useRef, useState, useTransition } from "react";
 import { Search } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { Input } from "@/components/ui/input";
@@ -29,15 +30,15 @@ type SortKey =
   | "displayNameRef"
   | "characterListPosition";
 
-const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
-  { value: "none", label: "No sort" },
-  { value: "index", label: "Index (min → max)" },
-  { value: "entryId", label: "Series ID (positive → negative)" },
-  { value: "iconFileIndex", label: "iconFileIndex (min → max)" },
-  { value: "recordLookupId", label: "recordLookupId (min → max)" },
-  { value: "unk0x08", label: "unk0x08 (min → max)" },
-  { value: "displayNameRef", label: "displayNameRef (min → max)" },
-  { value: "characterListPosition", label: "characterListPosition (min → max)" },
+const SORT_KEYS: SortKey[] = [
+  "none",
+  "index",
+  "entryId",
+  "iconFileIndex",
+  "recordLookupId",
+  "unk0x08",
+  "displayNameRef",
+  "characterListPosition",
 ];
 
 export function SeriesList({
@@ -50,6 +51,7 @@ export function SeriesList({
   onDelete,
   onCopy,
 }: SeriesListProps) {
+  const { t } = useTranslation("test-lists");
   const [searchTerm, setSearchTerm] = useState("");
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [sortKey, setSortKey] = useState<SortKey>("none");
@@ -142,7 +144,7 @@ export function SeriesList({
         <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
-            placeholder="Search by name or index..."
+            placeholder={t("series.searchPlaceholder")}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10 h-8"
@@ -156,12 +158,12 @@ export function SeriesList({
             }}
           >
             <SelectTrigger className="h-8">
-              <SelectValue placeholder="Sort..." />
+              <SelectValue placeholder={t("common.sortPlaceholder")} />
             </SelectTrigger>
             <SelectContent>
-              {SORT_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
+              {SORT_KEYS.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {t(`series.sort.${value}`)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -172,7 +174,7 @@ export function SeriesList({
 
       {searchTerm.trim() && (
         <div className="text-xs text-muted-foreground mb-2">
-          Found {filteredRows.length} of {seriesData.length} series
+          {t("common.foundOf", { found: filteredRows.length, total: seriesData.length, unit: t("series.unit") })}
         </div>
       )}
 
@@ -220,7 +222,7 @@ export function SeriesList({
 
         {sortedRows.length === 0 && (
           <div className="text-center text-muted-foreground py-8 text-sm">
-            {searchTerm.trim() ? `No series found matching "${searchTerm.trim()}"` : "No series available"}
+            {searchTerm.trim() ? t("series.noMatch", { term: searchTerm.trim() }) : t("series.noAvailable")}
           </div>
         )}
       </div>

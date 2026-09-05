@@ -1,4 +1,5 @@
 import { Eye, EyeOff } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { HavokMeshData } from "@/utils/havokXmlParser";
@@ -37,6 +38,7 @@ function labelForSource(sourceId: string, meta?: CollisionMeta): string {
 }
 
 export function CollisionListPanel({ sourceIds, meshDataMap, metaMap }: CollisionListPanelProps) {
+  const { t } = useTranslation("scene-page");
   const collisionVisibility = useSceneEditorStore((s) => s.collisionVisibility);
   const toggleCollisionVisibility = useSceneEditorStore((s) => s.toggleCollisionVisibility);
   const setAllCollisionVisibility = useSceneEditorStore((s) => s.setAllCollisionVisibility);
@@ -49,14 +51,14 @@ export function CollisionListPanel({ sourceIds, meshDataMap, metaMap }: Collisio
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between px-1">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Collision ({sourceIds.length})
+          {t("labels.collisionCount", { count: sourceIds.length })}
         </span>
         <Button
           variant="ghost"
           size="icon"
           className="h-5 w-5"
           onClick={() => setAllCollisionVisibility(!allVisible)}
-          title={allVisible ? "Hide All" : "Show All"}
+          title={allVisible ? t("labels.hideAll") : t("labels.showAll")}
         >
           {allVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
         </Button>
@@ -67,7 +69,7 @@ export function CollisionListPanel({ sourceIds, meshDataMap, metaMap }: Collisio
         getItemKey={(sourceId) => sourceId}
         className="max-h-[200px] overflow-y-auto"
         emptyState={
-          <p className="px-1.5 py-2 text-[10px] text-muted-foreground">No collision sources</p>
+          <p className="px-1.5 py-2 text-[10px] text-muted-foreground">{t("labels.noCollisionSources")}</p>
         }
         renderRow={(sourceId) => {
           const folder = folderLabel(sourceId);

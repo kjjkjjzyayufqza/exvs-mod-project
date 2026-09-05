@@ -1,0 +1,18 @@
+{
+  "common": { "cancel": "取消" },
+  "textureFormat": { "selectPlaceholder": "选择 DDS 格式" },
+  "texturePath": { "selectFile": "选择纹理文件" },
+  "textureReplace": {
+    "subtitle": "选择源文件前先选择转换格式",
+    "selectAndReplace": "选择文件并替换"
+  },
+  "texturePreview": {
+    "noPath": "没有可用的 nutexb 路径",
+    "loadFailed": "无法加载预览",
+    "zoomOut": "缩小",
+    "resetZoom": "重置缩放",
+    "zoomIn": "放大",
+    "subtitle": "纹理预览和 DDS 格式",
+    "loading": "正在加载预览……"
+  }
+}

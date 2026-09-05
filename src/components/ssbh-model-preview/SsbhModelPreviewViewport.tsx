@@ -8,6 +8,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -59,6 +60,7 @@ export const SsbhModelPreviewViewport = forwardRef<
   ref,
 ) {
   const p = useSsbhModelPreview();
+  const { t } = useTranslation("ssbh-root-c");
   const canvasExportHandleRef = useRef<SsbhModelCanvasExportHandle | null>(null);
   useImperativeHandle(
     ref,
@@ -150,12 +152,15 @@ export const SsbhModelPreviewViewport = forwardRef<
     <div className="flex h-full min-h-0 flex-col gap-2">
       {embedded ? (
         <div className="flex min-h-8 shrink-0 items-center gap-2 px-1 text-[11px]" aria-live="polite">
-          <span className="font-medium">3D preview</span>
+          <span className="font-medium">{t("viewport.preview")}</span>
           {p.loading ? (
-            <span className="text-muted-foreground">Loading model...</span>
+            <span className="text-muted-foreground">{t("viewport.loadingModel")}</span>
           ) : p.textureDecoding && p.textureDecodeProgress ? (
             <span className="truncate text-muted-foreground tabular-nums">
-              Textures {p.textureDecodeProgress.done}/{p.textureDecodeProgress.total}
+              {t("viewport.texturesProgress", {
+                done: p.textureDecodeProgress.done,
+                total: p.textureDecodeProgress.total,
+              })}
             </span>
           ) : p.loadError ? (
             <span className="min-w-0 truncate text-destructive" title={p.loadError}>
@@ -168,8 +173,8 @@ export const SsbhModelPreviewViewport = forwardRef<
           ) : (
             <span className="text-muted-foreground tabular-nums">
               {p.previewInstances.length > 0
-                ? `${p.previewInstances.length} model${p.previewInstances.length === 1 ? "" : "s"}`
-                : sceneOverlayLabel ?? "Empty scene"}
+                ? t("viewport.modelCount", { count: p.previewInstances.length })
+                : sceneOverlayLabel ?? t("viewport.emptyScene")}
             </span>
           )}
           <div className="min-w-0 flex-1" />
@@ -180,9 +185,9 @@ export const SsbhModelPreviewViewport = forwardRef<
             className="h-7 px-2 text-[10px]"
             onClick={() => p.setShowGrid(!p.showGrid)}
             aria-pressed={p.showGrid}
-            title="Toggle ground grid"
+            title={t("viewport.toggleGrid")}
           >
-            Grid
+            {t("viewport.grid")}
           </Button>
           <Button
             type="button"
@@ -191,9 +196,9 @@ export const SsbhModelPreviewViewport = forwardRef<
             className="h-7 px-2 text-[10px]"
             onClick={() => p.setWireframe(!p.wireframe)}
             aria-pressed={p.wireframe}
-            title="Toggle model wireframe"
+            title={t("viewport.toggleWireframe")}
           >
-            Wire
+            {t("viewport.wire")}
           </Button>
           <Button
             type="button"
@@ -202,9 +207,9 @@ export const SsbhModelPreviewViewport = forwardRef<
             className="h-7 px-2 text-[10px]"
             onClick={() => p.setShowAxesGizmo(!p.showAxesGizmo)}
             aria-pressed={p.showAxesGizmo}
-            title="Toggle axis gizmo"
+            title={t("viewport.toggleAxis")}
           >
-            Axis
+            {t("viewport.axis")}
           </Button>
           <Button
             type="button"
@@ -214,13 +219,13 @@ export const SsbhModelPreviewViewport = forwardRef<
             disabled={!p.draws.length && !sceneOverlay}
             onClick={p.requestCameraFit}
           >
-            Fit
+            {t("viewport.fit")}
           </Button>
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 shrink-0 px-1">
         <Button type="button" size="sm" variant="default" disabled={p.loading} onClick={() => void p.pickNumdlb()}>
-          Open .numdlb
+            {t("viewport.openNumdlb")}
         </Button>
         <Button
           type="button"
@@ -228,9 +233,9 @@ export const SsbhModelPreviewViewport = forwardRef<
           variant="secondary"
           disabled={p.loading}
           onClick={() => void p.pickAddNumdlb()}
-          title="Append a .numdlb instance without replacing current models"
+          title={t("viewport.appendNumdlb")}
         >
-          Add .numdlb
+          {t("viewport.addNumdlb")}
         </Button>
         <Button
           type="button"
@@ -238,9 +243,9 @@ export const SsbhModelPreviewViewport = forwardRef<
           variant="secondary"
           disabled={p.loading}
           onClick={() => p.setMemoryPreviewModalOpen(true)}
-          title="Load an .fhm2d package into a pure in-memory workspace and apply selected .numdlb entries to the viewport"
+          title={t("viewport.memoryPreviewHelp")}
         >
-          Memory Preview
+          {t("viewport.memoryPreview")}
         </Button>
         <Button
           type="button"
@@ -249,7 +254,7 @@ export const SsbhModelPreviewViewport = forwardRef<
           disabled={p.loading || p.previewBusy || !p.activePreviewInstanceId}
           onClick={() => void p.pickMotionNuanmbFile()}
         >
-          Open .nuanmb
+          {t("viewport.openNuanmb")}
         </Button>
         <Button
           type="button"
@@ -261,17 +266,17 @@ export const SsbhModelPreviewViewport = forwardRef<
               /* toast already shown in context */
             })
           }
-          title="Preview a pure animation FBX on the active model (no save dialog)"
+          title={t("viewport.previewFbxHelp")}
         >
-          Preview FBX
+          {t("viewport.previewFbx")}
         </Button>
         <SsbhModelPreviewQuickActions />
         <div
           className="flex items-center gap-2 rounded-md border border-border/50 px-2 py-1 shrink-0"
-          title="After a successful DAE or FBX export to SSBH, load the generated .numdlb in this preview"
+          title={t("viewport.autoLoadHelp")}
         >
           <span className="text-[11px] text-muted-foreground whitespace-nowrap select-none">
-            Auto-load after convert
+            {t("viewport.autoLoadAfterConvert")}
           </span>
           <Switch checked={p.autoLoadAfterConvertToSsbh} onCheckedChange={p.setAutoLoadAfterConvertToSsbh} />
         </div>
@@ -281,18 +286,21 @@ export const SsbhModelPreviewViewport = forwardRef<
           variant="ghost"
           disabled={!p.draws.length}
           onClick={p.requestCameraFit}
-          title="Re-center the camera on the model using its bounding box"
+          title={t("viewport.resetViewHelp")}
         >
-          Reset view
+          {t("viewport.resetView")}
         </Button>
         {p.loading ? (
-          <span className="text-muted-foreground">Loading model…</span>
+          <span className="text-muted-foreground">{t("viewport.loadingModel")}</span>
         ) : p.textureDecoding && p.textureDecodeProgress ? (
           <span
             className="max-w-[min(100%,280px)] truncate text-muted-foreground tabular-nums"
             title={p.textureDecodeProgress.currentLabel ?? undefined}
           >
-            Decoding unique textures {p.textureDecodeProgress.done}/{p.textureDecodeProgress.total}
+            {t("viewport.decodingTextures", {
+              done: p.textureDecodeProgress.done,
+              total: p.textureDecodeProgress.total,
+            })}
           </span>
         ) : null}
         {p.loadError ? <span className="text-destructive max-w-[240px] truncate">{p.loadError}</span> : null}

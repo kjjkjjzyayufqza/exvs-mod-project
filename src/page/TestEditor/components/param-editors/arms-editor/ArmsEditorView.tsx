@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { FilePathInput } from "@/components/ui/filePathInput";
@@ -76,6 +77,7 @@ function ArmsEntryLabel({
   row: EditorEntryRow;
   fileBytes: Uint8Array | null;
 }) {
+  const { t } = useTranslation("test-arms-editor");
   const ammo = numField(row.entry, "ammoCount");
   const initialAmmo = numField(row.entry, "initialAmmoCount");
   const slotIndex = numField(row.entry, "slotIndex");
@@ -116,15 +118,15 @@ function ArmsEntryLabel({
       ) : (
         <div className="min-w-0 break-all font-mono text-[10px] leading-snug text-muted-foreground/70">
           {labels.actionOffset
-            ? `action@${formatHash(labels.actionOffset)}`
+            ? `${t("entryLabel.actionAt")}@${formatHash(labels.actionOffset)}`
             : labels.resourceOffset
-              ? `res@${formatHash(labels.resourceOffset)}`
-              : "(no label)"}
+              ? `${t("entryLabel.resourceAt")}@${formatHash(labels.resourceOffset)}`
+              : t("entryLabel.noLabel")}
         </div>
       )}
       <div className="flex gap-2 font-mono text-[9px] tabular-nums text-muted-foreground">
-        <span>ammo {initialAmmo}/{ammo}</span>
-        <span>slot {slotIndex}</span>
+        <span>{t("entryLabel.ammo", { initial: initialAmmo, max: ammo })}</span>
+        <span>{t("entryLabel.slot", { index: slotIndex })}</span>
         {chargeInputFlags !== 0 ? (
           <span>
             {describeChargeInputFlags(chargeInputFlags)} ×{chargeStageCount}
@@ -139,6 +141,7 @@ export function ArmsEditorView({
   onUnsavedChanges,
   workspaceDefaultPath,
 }: ArmsEditorViewProps) {
+  const { t } = useTranslation("test-arms-editor");
   const [filePath, setFilePath] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -185,9 +188,9 @@ export function ArmsEditorView({
         ]);
         const bytes = new Uint8Array(raw);
         store.getState().setData(parsed, path, bytes);
-        toast.success(`Loaded armsparam (${parsed.entries.length} entries)`);
+        toast.success(t("toast.loaded", { count: parsed.entries.length }));
       } catch (e) {
-        toast.error(`Failed to load armsparam: ${e}`);
+        toast.error(t("errors.loadFailed", { error: String(e) }));
       } finally {
         setLoading(false);
       }
@@ -206,9 +209,9 @@ export function ArmsEditorView({
         paramType: PARAM_TYPE,
       });
       store.getState().markClean();
-      toast.success("Saved armsparam");
+      toast.success(t("toast.saved"));
     } catch (e) {
-      toast.error(`Failed to save armsparam: ${e}`);
+      toast.error(t("errors.saveFailed", { error: String(e) }));
     } finally {
       setSaving(false);
     }
@@ -249,7 +252,7 @@ export function ArmsEditorView({
     if (!hexPreview || !entry || !data) return;
     const fieldLayout = buildTypedEntryFieldLayout(data, selectedIndex);
     if (!fieldLayout) {
-      toast.error("Unable to resolve entry field layout.");
+      toast.error(t("errors.fieldLayout"));
       return;
     }
     const parsed = parseHexPreviewEditText(hexEditDraft, hexPreview.bytes.length);
@@ -260,7 +263,7 @@ export function ArmsEditorView({
     const nextEntry = applyHexBytesToTypedEntry(entry, fieldLayout, parsed.bytes);
     store.getState().replaceSelectedEntry(nextEntry);
     setHexPreviewMode("view");
-    toast.success("Hex preview changes saved to entry fields");
+    toast.success(t("toast.hexSaved"));
   }, [data, entry, hexEditDraft, hexPreview, selectedIndex, store]);
 
   const copySelectedEntryJson = useCallback(() => {
@@ -284,28 +287,28 @@ export function ArmsEditorView({
     if (!data) return;
     const created = createCopyAsNewTypedParamEntry(data.entries, selectedIndex);
     if (!created) {
-      toast.error("No entry to duplicate");
+      toast.error(t("errors.noEntryDuplicate"));
       return;
     }
     store.getState().appendEntry(created);
-    toast.success("Duplicated entry");
+    toast.success(t("toast.duplicated"));
   }, [data, selectedIndex, store]);
 
   const addEntry = useCallback(() => {
     if (!data) return;
     const created = createBlankTypedParamEntry(data.entries, selectedIndex);
     if (!created) {
-      toast.error("No entry template available");
+      toast.error(t("errors.noTemplate"));
       return;
     }
     store.getState().appendEntry(created);
-    toast.success("Added blank entry");
+    toast.success(t("toast.added"));
   }, [data, selectedIndex, store]);
 
   const deleteEntry = useCallback(() => {
     if (!data?.entries.length) return;
     store.getState().deleteSelectedEntry();
-    toast.success("Deleted entry");
+    toast.success(t("toast.deleted"));
   }, [data, store]);
 
   const headerSpecs = useMemo(() => {
@@ -323,12 +326,12 @@ export function ArmsEditorView({
     <div className="flex h-full min-h-0 flex-col bg-background">
       <header className="shrink-0 border-b border-border/60 bg-muted/10 px-3 py-2.5">
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <h2 className="text-sm font-semibold tracking-tight">Arms editor</h2>
+          <h2 className="text-sm font-semibold tracking-tight">{t("title")}</h2>
           <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">
-            outdated
+            {t("outdated")}
           </span>
           <span className="text-[10px] text-muted-foreground">
-            Schema-driven armsparam · prefer Param Editor for full tooling
+            {t("subtitle")}
           </span>
         </div>
 
@@ -340,7 +343,7 @@ export function ArmsEditorView({
             onChange={(e) => setFilePath(e.target.value)}
             picker={{
               kind: "file",
-              title: "Select armsparam file",
+              title: t("filePicker.title"),
               filters: [{ name: "Param", extensions: ["bin"] }],
               defaultPath: workspaceDefaultPath,
             }}
@@ -364,7 +367,7 @@ export function ArmsEditorView({
             ) : (
               <FolderOpen className="h-3.5 w-3.5" />
             )}
-            Load
+            {t("toolbar.load")}
           </Button>
           <Button
             size="sm"
@@ -375,10 +378,10 @@ export function ArmsEditorView({
               const path = store.getState().filePath;
               if (path) void loadFile(path);
             }}
-            title="Reload from disk"
+            title={t("toolbar.reloadTooltip")}
           >
             <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
-            Reload
+            {t("toolbar.reload")}
           </Button>
           <Button
             size="sm"
@@ -392,22 +395,22 @@ export function ArmsEditorView({
             ) : (
               <Save className="h-3.5 w-3.5" />
             )}
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("toolbar.saving") : t("toolbar.save")}
           </Button>
         </div>
 
         {headerSpecs && (
           <div className="mt-2 flex flex-wrap gap-3 font-mono text-[10px] tabular-nums text-muted-foreground">
-            <span>{entryCount} entries</span>
+            <span>{t("counts.entries", { count: entryCount })}</span>
             {headerSpecs.fieldCount > 0 && (
-              <span>{headerSpecs.fieldCount} field specs</span>
+              <span>{t("counts.fieldSpecs", { count: headerSpecs.fieldCount })}</span>
             )}
             {headerSpecs.entrySize != null && (
-              <span>entry size {headerSpecs.entrySize}</span>
+              <span>{t("counts.entrySize", { size: headerSpecs.entrySize })}</span>
             )}
             {selectedId != null && (
               <span className="text-foreground/80">
-                selected {formatHash(selectedId)}
+                {t("counts.selected", { id: formatHash(selectedId) })}
               </span>
             )}
           </div>
@@ -453,10 +456,7 @@ export function ArmsEditorView({
                   No armsparam loaded
                 </p>
                 <p className="max-w-sm text-[11px] leading-relaxed text-muted-foreground">
-                  Pick an <span className="font-mono">armsparam.bin</span> path,
-                  then Load. Fields follow the Rust command pool
-                  (ammoCount, initialAmmoCount, CSA/CSB stages and timing, native
-                  reload groups, slotIndex, and kind-7 labels).
+                  {t("empty.help", { file: "armsparam.bin" })}
                 </p>
               </div>
             </div>
@@ -482,7 +482,7 @@ export function ArmsEditorView({
                   <div
                     className="flex flex-wrap items-center gap-1 rounded-md border border-border/50 bg-background/70 p-0.5"
                     role="group"
-                    aria-label="Import and export"
+                    aria-label={t("aria.importExport")}
                   >
                     <Button
                       type="button"
@@ -490,11 +490,11 @@ export function ArmsEditorView({
                       variant="ghost"
                       className={TOOLBAR_BUTTON_CLASS}
                       disabled={!entry}
-                      title="Import hex bytes or entry JSON"
+                      title={t("buttons.importTooltip")}
                       onClick={() => setImportOpen(true)}
                     >
                       <FileInput className="h-3 w-3" />
-                      Import
+                      {t("buttons.import")}
                     </Button>
                     <Button
                       type="button"
@@ -502,11 +502,11 @@ export function ArmsEditorView({
                       variant="ghost"
                       className={TOOLBAR_BUTTON_CLASS}
                       disabled={!entry}
-                      title="Copy selected entry as JSON"
+                      title={t("buttons.entryJsonTooltip")}
                       onClick={copySelectedEntryJson}
                     >
                       <ClipboardCopy className="h-3 w-3" />
-                      Entry JSON
+                      {t("buttons.entryJson")}
                     </Button>
                     <Button
                       type="button"
@@ -514,17 +514,17 @@ export function ArmsEditorView({
                       variant="ghost"
                       className={TOOLBAR_BUTTON_CLASS}
                       disabled={!data.entries.length}
-                      title="Copy full view data as JSON"
+                      title={t("buttons.allJsonTooltip")}
                       onClick={copyFullViewJson}
                     >
                       <Braces className="h-3 w-3" />
-                      All JSON
+                      {t("buttons.allJson")}
                     </Button>
                   </div>
                   <div
                     className="flex flex-wrap items-center gap-1 rounded-md border border-border/50 bg-background/70 p-0.5"
                     role="group"
-                    aria-label="Entry tools"
+                    aria-label={t("aria.entryTools")}
                   >
                     <Button
                       type="button"
@@ -532,11 +532,11 @@ export function ArmsEditorView({
                       variant="ghost"
                       className={TOOLBAR_BUTTON_CLASS}
                       disabled={!entry}
-                      title="Hex preview"
+                      title={t("buttons.hexTooltip")}
                       onClick={() => setPreviewOpen(true)}
                     >
                       <Eye className="h-3 w-3" />
-                      Hex
+                      {t("buttons.hex")}
                     </Button>
                     <Button
                       type="button"
@@ -544,11 +544,11 @@ export function ArmsEditorView({
                       variant="ghost"
                       className={TOOLBAR_BUTTON_CLASS}
                       disabled={!data.entries.length && !entry}
-                      title="Duplicate selected entry"
+                      title={t("buttons.duplicateTooltip")}
                       onClick={duplicateEntry}
                     >
                       <CopyPlus className="h-3 w-3" />
-                      Duplicate
+                      {t("buttons.duplicate")}
                     </Button>
                     <Button
                       type="button"
@@ -556,11 +556,11 @@ export function ArmsEditorView({
                       variant="ghost"
                       className={TOOLBAR_BUTTON_CLASS}
                       disabled={!data.entries.length && !entry}
-                      title="Add blank entry"
+                      title={t("buttons.addTooltip")}
                       onClick={addEntry}
                     >
                       <Plus className="h-3 w-3" />
-                      Add
+                      {t("buttons.add")}
                     </Button>
                     <Button
                       type="button"
@@ -571,11 +571,11 @@ export function ArmsEditorView({
                         "text-destructive hover:bg-destructive/10 hover:text-destructive",
                       )}
                       disabled={!data.entries.length}
-                      title="Delete selected entry"
+                      title={t("buttons.deleteTooltip")}
                       onClick={deleteEntry}
                     >
                       <Trash2 className="h-3 w-3" />
-                      Delete
+                      {t("buttons.delete")}
                     </Button>
                   </div>
                 </div>
@@ -593,13 +593,13 @@ export function ArmsEditorView({
                 </div>
               ) : (
                 <div className="flex flex-1 items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
-                  Select an entry to edit schema fields
+                  {t("empty.selectEntry")}
                 </div>
               )}
             </>
           ) : (
             <div className="flex h-full items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
-              Load an armsparam to edit entries
+              {t("empty.loadFile")}
             </div>
           )}
         </aside>
@@ -612,9 +612,9 @@ export function ArmsEditorView({
         validationMessages={validationMessages}
         extra={
           dirty ? (
-            <span className="text-amber-600 dark:text-amber-400">Unsaved changes</span>
+            <span className="text-amber-600 dark:text-amber-400">{t("status.unsaved")}</span>
           ) : (
-            <span>Schema: {PARAM_TYPE}</span>
+            <span>{t("status.schema", { type: PARAM_TYPE })}</span>
           )
         }
       />
@@ -622,13 +622,11 @@ export function ArmsEditorView({
       {previewOpen ? (
         <AppRndModalShell
           titleId="arms-param-hex-preview-title"
-          title="Hex Preview"
+          title={t("hex.title")}
           subtitle={
             hexPreview
-              ? `${formatHash(hexPreview.entryId)} · ${hexPreview.bytes.length} bytes · little-endian row data${
-                  hexPreviewMode === "edit" ? " · editing" : " · view only"
-                }`
-              : "No entry selected"
+              ? t("hex.subtitle", { id: formatHash(hexPreview.entryId), count: hexPreview.bytes.length, mode: hexPreviewMode === "edit" ? t("hex.editing") : t("hex.viewOnly") })
+              : t("empty.noEntrySelected")
           }
           headerIcon={<Eye className="h-5 w-5 text-primary" />}
           headerActions={
@@ -642,13 +640,13 @@ export function ArmsEditorView({
                   onClick={beginHexEdit}
                 >
                   <Pencil className="h-3 w-3" />
-                  Edit
+                  {t("buttons.edit")}
                 </Button>
               ) : (
                 <div className="flex items-center gap-1.5">
                   {hexEditDirty ? (
                     <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-800 dark:text-amber-200">
-                      Unsaved
+                      {t("status.unsavedShort")}
                     </span>
                   ) : null}
                   <Button
@@ -659,7 +657,7 @@ export function ArmsEditorView({
                     onClick={cancelHexEdit}
                   >
                     <X className="h-3 w-3" />
-                    Cancel
+                    {t("buttons.cancel")}
                   </Button>
                   <Button
                     type="button"
@@ -668,7 +666,7 @@ export function ArmsEditorView({
                     onClick={saveHexEdit}
                   >
                     <Save className="h-3 w-3" />
-                    Save
+                    {t("toolbar.save")}
                   </Button>
                 </div>
               )
@@ -683,9 +681,9 @@ export function ArmsEditorView({
               hexPreviewMode === "view" ? (
                 <div className="overflow-auto rounded-md border bg-[#0d1117] text-[#d6deeb] shadow-inner">
                   <div className="grid select-none grid-cols-[6.5rem_minmax(24rem,1fr)_minmax(8rem,0.35fr)] border-b border-white/10 bg-white/5 px-3 py-2 font-mono text-[10px] uppercase tracking-wide text-slate-400">
-                    <span>Offset</span>
-                    <span>Hex</span>
-                    <span>Ascii</span>
+                    <span>{t("hex.offset")}</span>
+                    <span>{t("hex.hex")}</span>
+                    <span>{t("hex.ascii")}</span>
                   </div>
                   <div className="max-h-[calc(85vh-12rem)] overflow-auto px-3 font-mono text-[11px] leading-6">
                     {hexPreview.rows.map((row) => (
@@ -709,8 +707,7 @@ export function ArmsEditorView({
               ) : (
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border bg-[#0d1117] text-[#d6deeb] shadow-inner">
                   <div className="border-b border-white/10 bg-white/5 px-3 py-2 font-mono text-[10px] uppercase tracking-wide text-slate-400">
-                    Edit hex bytes · {hexPreview.bytes.length} bytes · 16 bytes
-                    per line
+                    {t("hex.editHeader", { count: hexPreview.bytes.length })}
                   </div>
                   <textarea
                     value={hexEditDraft}
@@ -722,7 +719,7 @@ export function ArmsEditorView({
               )
             ) : (
               <div className="flex h-28 items-center justify-center text-sm text-muted-foreground">
-                No entry selected
+                {t("empty.noEntrySelected")}
               </div>
             )}
           </div>

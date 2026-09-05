@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Check, ClipboardCopy, Loader2 } from "lucide-react";
@@ -54,6 +55,8 @@ export function CopyInfoToAiButton({
   variant = "outline",
   className,
 }: CopyInfoToAiButtonProps) {
+  const { t } = useTranslation("shared");
+  const resolvedLabel = label === "Copy info to AI" ? t("copyInfo.copy") : label;
   const [state, setState] = useState<"idle" | "busy" | "copied" | "error">("idle");
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -81,8 +84,8 @@ export function CopyInfoToAiButton({
       variant={variant}
       onClick={handleCopy}
       disabled={state === "busy"}
-      title={label}
-      aria-label={label}
+      title={resolvedLabel}
+      aria-label={resolvedLabel}
       className={cn(
         "gap-1.5 transition-colors active:translate-y-px",
         state === "copied" && "border-emerald-500/60 text-emerald-600 dark:text-emerald-400",
@@ -93,7 +96,7 @@ export function CopyInfoToAiButton({
       <Icon className={cn("h-3.5 w-3.5", state === "busy" && "animate-spin")} aria-hidden />
       {!isIcon && (
         <span className="text-xs font-medium">
-          {state === "copied" ? "Copied" : state === "error" ? "Copy failed" : label}
+          {state === "copied" ? t("copyInfo.copied") : state === "error" ? t("copyInfo.failed") : resolvedLabel}
         </span>
       )}
     </Button>

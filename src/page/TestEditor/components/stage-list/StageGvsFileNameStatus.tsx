@@ -3,6 +3,7 @@ import { CheckCircle2, XCircle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { GvsIndexedNameRef } from "./gvsFileNameSearch";
+import { useTranslation } from "react-i18next";
 
 interface StageGvsFileNameStatusProps {
   resolvedRef: GvsIndexedNameRef | null;
@@ -15,12 +16,13 @@ export function StageGvsFileNameStatus({
   isLoading,
   error,
 }: StageGvsFileNameStatusProps) {
+  const { t } = useTranslation("test-stage-list-view");
   if (!resolvedRef && !isLoading && !error) {
     return null;
   }
 
   if (isLoading) {
-    return <div className="w-3 h-3 animate-pulse bg-muted rounded-full" aria-label="Search Directory indexing" />;
+    return <div className="w-3 h-3 animate-pulse bg-muted rounded-full" aria-label={t("gvsFileNameStatus.indexing")} />;
   }
 
   if (error) {
@@ -41,8 +43,8 @@ export function StageGvsFileNameStatus({
 
   const hasMatch = resolvedRef.exists;
   const tooltip = hasMatch
-    ? `Indexed file exists at ${resolvedRef.filePath}. Click to open.`
-    : `Indexed file does not exist at ${resolvedRef.filePath}`;
+    ? t("gvsFileNameStatus.exists", { path: resolvedRef.filePath })
+    : t("gvsFileNameStatus.missing", { path: resolvedRef.filePath });
 
   return (
     <div

@@ -1,0 +1,23 @@
+{
+  "reload": "再読み込み",
+  "reset": "リセット",
+  "saving": "保存中...",
+  "save": "保存",
+  "close": "閉じる",
+  "noData": "データがありません。",
+  "editNuhlpb": "SSBH（.nuhlpb）ファイルを編集",
+  "loadingNuhlpb": "NUHLPB を読み込み中...",
+  "selectNumdlb": "ファイル一覧から `.numdlb` ファイルを選択してマッピングを編集します。",
+  "loadingNumdlb": "`.numdlb` マッピングを読み込み中...",
+  "noNumdlbData": "利用可能な `.numdlb` データがありません。",
+  "savedNumdlb": "`.numdlb` マッピングを保存しました",
+  "saveNumdlb": "NUMDLB を保存",
+  "editNumdlb": "SSBH（.numdlb）ファイルを編集",
+  "editShl": "SHL（.shl）モデルシェルを編集",
+  "loadingShl": "SHL を読み込み中...",
+  "copyShlTitle": "SHL 草稿 JSON 全体をコピー（AI / デバッグ用）",
+  "copyShlAria": "SHL JSON をコピー",
+  "copyJson": "JSON をコピー",
+  "numatbExported": "NUMATB を JSON としてエクスポートしました",
+  "numatbExportFailed": "NUMATB JSON のエクスポートに失敗しました"
+}

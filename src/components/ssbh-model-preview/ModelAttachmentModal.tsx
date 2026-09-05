@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link2, Plus, Save, Trash2, LayoutTemplate, Check } from "lucide-react";
 import { toast } from "sonner";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
@@ -47,6 +48,7 @@ function boneNamesFromInstance(skel: unknown | null | undefined): string[] | nul
 }
 
 export function ModelAttachmentModal() {
+  const { t } = useTranslation("ssbh-root-a");
   const p = useSsbhModelPreview();
   const [open, setOpen] = useState(false);
   const [bindings, setBindings] = useState<ModelBinding[]>([]);
@@ -71,7 +73,7 @@ export function ModelAttachmentModal() {
       const loaded = await loadAttachmentTemplateLibrary();
       setLibrary(loaded.templates);
     } catch (error) {
-      toast.error("Failed to load attachment templates", {
+      toast.error(t("attachment.loadTemplatesFailed"), {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -175,13 +177,13 @@ export function ModelAttachmentModal() {
         p.setActivePreviewInstanceId(resolved.primaryInstanceId);
       }
       for (const warning of resolved.warnings) {
-        toast.message("Attachment warning", { description: warning });
+        toast.message(t("attachment.warning"), { description: warning });
       }
-      toast.success("Attachments applied", {
-        description: `${resolved.attachments.length} edge(s) active`,
+      toast.success(t("attachment.applied"), {
+        description: t("attachment.edgesActive", { count: resolved.attachments.length }),
       });
     } catch (error) {
-      toast.error("Apply attachments failed", {
+      toast.error(t("attachment.applyFailed"), {
         description: error instanceof Error ? error.message : String(error),
       });
     }
@@ -194,6 +196,7 @@ export function ModelAttachmentModal() {
     primaryModelId,
     templateDescription,
     templateName,
+    t,
   ]);
 
   const handleSaveTemplate = useCallback(async () => {
@@ -207,13 +210,13 @@ export function ModelAttachmentModal() {
       });
       const next = await upsertAttachmentTemplate(template);
       setLibrary(next.templates);
-      toast.success("Attachment template saved", { description: template.name });
+      toast.success(t("attachment.templateSaved"), { description: template.name });
     } catch (error) {
-      toast.error("Save template failed", {
+      toast.error(t("attachment.saveFailed"), {
         description: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [bindings, edges, primaryModelId, templateDescription, templateName]);
+  }, [bindings, edges, primaryModelId, templateDescription, templateName, t]);
 
   const handleApplyTemplate = useCallback(
     async (template: AttachmentTemplate) => {
@@ -277,7 +280,7 @@ export function ModelAttachmentModal() {
         boneNamesByInstanceId,
       });
       if (resolved.errors.length > 0) {
-        toast.error("Template applied with unresolved models", {
+        toast.error(t("attachment.unresolvedModels"), {
           description: resolved.errors.join("; "),
         });
         return;
@@ -294,37 +297,40 @@ export function ModelAttachmentModal() {
       if (resolved.primaryInstanceId) {
         p.setActivePreviewInstanceId(resolved.primaryInstanceId);
       }
-      toast.success("Attachment template applied", {
-        description: `${template.name} · ${resolved.attachments.length} edge(s)`,
+      toast.success(t("attachment.templateApplied"), {
+        description: t("attachment.templateSummary", {
+          name: template.name,
+          count: resolved.attachments.length,
+        }),
       });
     },
-    [boneNamesByInstanceId, p],
+    [boneNamesByInstanceId, p, t],
   );
 
   const handleDeleteTemplate = useCallback(async (templateId: string) => {
     try {
       const next = await deleteAttachmentTemplate(templateId);
       setLibrary(next.templates);
-      toast.success("Template deleted");
+      toast.success(t("attachment.templateDeleted"));
     } catch (error) {
-      toast.error("Delete failed", {
+      toast.error(t("attachment.deleteFailed"), {
         description: error instanceof Error ? error.message : String(error),
       });
     }
-  }, []);
+  }, [t]);
 
   return (
     <>
       <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)}>
         <Link2 className="mr-1 h-3.5 w-3.5" />
-        Attachments
+        {t("attachment.button")}
       </Button>
 
       {open ? (
         <AppRndModalShell
           titleId="model-attachment-title"
-          title="Attachments & model IDs"
-          subtitle="Bind modelId → model, attach guest bones to host bones, save/apply templates"
+          title={t("attachment.title")}
+          subtitle={t("attachment.subtitle")}
           headerIcon={<Link2 className="h-5 w-5 text-primary" />}
           dimensions={MODEL_ATTACHMENT_DIMENSIONS}
           storageKey="app.rnd-size.model-attachment"
@@ -332,11 +338,11 @@ export function ModelAttachmentModal() {
           footer={
             <div className="flex flex-wrap items-center justify-end gap-2 p-3">
               <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
-                Close
+                {t("common.close")}
               </Button>
               <Button type="button" size="sm" variant="secondary" onClick={applyRuntimeAttachments}>
                 <Check className="mr-1 h-3.5 w-3.5" />
-                Apply to viewport
+                {t("attachment.applyToViewport")}
               </Button>
             </div>
           }
@@ -344,8 +350,7 @@ export function ModelAttachmentModal() {
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4 text-xs">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-muted-foreground">
-                Active viewport edges: {p.modelAttachments.length}. Motion keeps evaluating each
-                skeleton; attachments snap guest roots after bone updates.
+                {t("attachment.activeEdges", { count: p.modelAttachments.length })}
               </p>
               <Button
                 type="button"
@@ -354,21 +359,21 @@ export function ModelAttachmentModal() {
                 disabled={p.previewBusy}
                 onClick={() => void p.pickAddNumdlb()}
               >
-                Add .numdlb
+                {t("attachment.addNumdlb")}
               </Button>
             </div>
 
             {/* Model bindings */}
             <section className="space-y-2 rounded-md border border-border/70 p-3">
               <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Model ID bindings
+                {t("bindings.title")}
               </h3>
               <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
                 <div className="space-y-1">
-                  <Label className="text-[10px]">Preview model</Label>
+                  <Label className="text-[10px]">{t("bindings.previewModel")}</Label>
                   <Select value={draftBindInstanceId} onValueChange={setDraftBindInstanceId}>
                     <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Select model" />
+                      <SelectValue placeholder={t("bindings.selectModel")} />
                     </SelectTrigger>
                     <SelectContent>
                       {p.previewInstances.map((inst) => (
@@ -383,16 +388,17 @@ export function ModelAttachmentModal() {
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-[10px]">modelId (8 hex)</Label>
+                  <Label className="text-[10px]" data-i18n-ignore="">modelId (8 hex)</Label>
                   <Input
                     className="h-8 font-mono text-[11px]"
                     value={draftBindModelId}
                     placeholder="43309cab"
+                    data-i18n-ignore=""
                     onChange={(e) => setDraftBindModelId(e.target.value)}
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-[10px]">Role</Label>
+                  <Label className="text-[10px]">{t("bindings.role")}</Label>
                   <Select
                     value={draftBindRole}
                     onValueChange={(v) => setDraftBindRole(v as ModelBindingRole)}
@@ -400,7 +406,7 @@ export function ModelAttachmentModal() {
                     <SelectTrigger className="h-8 text-xs">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent data-i18n-ignore="">
                       {ROLE_OPTIONS.map((role) => (
                         <SelectItem key={role} value={role}>
                           {role}
@@ -436,25 +442,26 @@ export function ModelAttachmentModal() {
                         if (!primaryModelId) setPrimaryModelId(modelId);
                         if (!draftHostModelId) setDraftHostModelId(modelId);
                         else if (!draftGuestModelId) setDraftGuestModelId(modelId);
-                        toast.success(`Bound ${inst.displayLabel} → ${modelId}`);
+                        toast.success(t("attachment.bound", { label: inst.displayLabel, modelId }));
                       } catch (error) {
                         toast.error(error instanceof Error ? error.message : String(error));
                       }
                     }}
                   >
                     <Plus className="mr-1 h-3.5 w-3.5" />
-                    Bind
+                    {t("bindings.bind")}
                   </Button>
                 </div>
               </div>
               {bindings.length === 0 ? (
-                <p className="text-muted-foreground">No bindings yet.</p>
+                <p className="text-muted-foreground">{t("bindings.empty")}</p>
               ) : (
                 <ul className="space-y-1">
                   {bindings.map((binding) => (
                     <li
                       key={binding.modelId}
                       className="flex items-center justify-between gap-2 rounded border border-border/50 px-2 py-1 font-mono text-[11px]"
+                      data-i18n-ignore=""
                     >
                       <span className="min-w-0 truncate">
                         {binding.modelId}
@@ -466,7 +473,7 @@ export function ModelAttachmentModal() {
                         size="icon"
                         variant="ghost"
                         className="h-6 w-6"
-                        aria-label={`Remove binding ${binding.modelId}`}
+                        aria-label={t("bindings.removeAria", { modelId: binding.modelId })}
                         onClick={() => {
                           setBindings((prev) => prev.filter((b) => b.modelId !== binding.modelId));
                           const instanceId = instanceByModelId.get(binding.modelId);
@@ -480,15 +487,15 @@ export function ModelAttachmentModal() {
                 </ul>
               )}
               <div className="flex items-center gap-2">
-                <Label className="text-[10px] text-muted-foreground">Motion primary modelId</Label>
+                <Label className="text-[10px] text-muted-foreground">{t("bindings.motionPrimary")}</Label>
                 <Select value={primaryModelId || "__none__"} onValueChange={(v) => setPrimaryModelId(v === "__none__" ? "" : v)}>
                   <SelectTrigger className="h-7 w-[200px] text-[11px]">
-                    <SelectValue placeholder="None" />
+                    <SelectValue placeholder={t("bindings.none")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">None</SelectItem>
+                    <SelectItem value="__none__">{t("bindings.none")}</SelectItem>
                     {bindings.map((b) => (
-                      <SelectItem key={b.modelId} value={b.modelId}>
+                      <SelectItem key={b.modelId} value={b.modelId} data-i18n-ignore="">
                         {b.modelId}
                       </SelectItem>
                     ))}
@@ -500,14 +507,14 @@ export function ModelAttachmentModal() {
             {/* Edges */}
             <section className="space-y-2 rounded-md border border-border/70 p-3">
               <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Attachment edges (host bone → guest bone)
+                {t("edges.title")}
               </h3>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label className="text-[10px]">Host modelId</Label>
+                  <Label className="text-[10px]">{t("edges.hostModelId")}</Label>
                   <Select value={draftHostModelId} onValueChange={setDraftHostModelId}>
                     <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Host" />
+                      <SelectValue placeholder={t("edges.host")} />
                     </SelectTrigger>
                     <SelectContent>
                       {bindings.map((b) => (
@@ -524,19 +531,19 @@ export function ModelAttachmentModal() {
                     boneNames={hostBones ? [...hostBones] : null}
                     disabled={!hostBones?.length}
                     instanceId={`${idPrefix}-host`}
-                    ariaLabel="Select host bone"
+                    ariaLabel={t("edges.selectHostBone")}
                   />
                   {!hostBones?.length && draftHostModelId ? (
                     <p className="text-[10px] text-destructive">
-                      Host model not loaded or missing NUSKTB.
+                      {t("edges.hostMissingSkel")}
                     </p>
                   ) : null}
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[10px]">Guest modelId</Label>
+                  <Label className="text-[10px]">{t("edges.guestModelId")}</Label>
                   <Select value={draftGuestModelId} onValueChange={setDraftGuestModelId}>
                     <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Guest" />
+                      <SelectValue placeholder={t("edges.guest")} />
                     </SelectTrigger>
                     <SelectContent>
                       {bindings.map((b) => (
@@ -553,7 +560,7 @@ export function ModelAttachmentModal() {
                     boneNames={guestBones ? [...guestBones] : null}
                     disabled={!guestBones?.length}
                     instanceId={`${idPrefix}-guest`}
-                    ariaLabel="Select guest bone"
+                    ariaLabel={t("edges.selectGuestBone")}
                   />
                 </div>
               </div>
@@ -589,11 +596,11 @@ export function ModelAttachmentModal() {
                   }
                 }}
               >
-                <Plus className="mr-1 h-3.5 w-3.5" />
-                Add edge
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    {t("edges.add")}
               </Button>
               {edges.length === 0 ? (
-                <p className="text-muted-foreground">No edges yet.</p>
+                <p className="text-muted-foreground">{t("edges.empty")}</p>
               ) : (
                 <ul className="space-y-1">
                   {edges.map((edge) => (
@@ -611,9 +618,9 @@ export function ModelAttachmentModal() {
                               ),
                             );
                           }}
-                          aria-label="Enable edge"
+                          aria-label={t("edges.enableAria")}
                         />
-                        <span className="min-w-0 truncate font-mono">
+                        <span className="min-w-0 truncate font-mono" data-i18n-ignore="">
                           {edge.hostModelId}.{edge.hostBoneName} → {edge.guestModelId}.
                           {edge.guestBoneName}
                         </span>
@@ -623,7 +630,7 @@ export function ModelAttachmentModal() {
                         size="icon"
                         variant="ghost"
                         className="h-6 w-6"
-                        aria-label="Remove edge"
+                        aria-label={t("edges.removeAria")}
                         onClick={() => setEdges((prev) => prev.filter((item) => item.id !== edge.id))}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -638,25 +645,25 @@ export function ModelAttachmentModal() {
             <section className="space-y-2 rounded-md border border-border/70 p-3">
               <h3 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 <LayoutTemplate className="h-3.5 w-3.5" />
-                Template library
+                {t("library.title")}
               </h3>
               <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
                 <div className="space-y-1 md:col-span-1">
-                  <Label className="text-[10px]">Name</Label>
+                  <Label className="text-[10px]">{t("library.name")}</Label>
                   <Input
                     className="h-8 text-xs"
                     value={templateName}
                     onChange={(e) => setTemplateName(e.target.value)}
-                    placeholder="Gyan body+shield"
+                    placeholder={t("library.namePlaceholder")}
                   />
                 </div>
                 <div className="space-y-1 md:col-span-1">
-                  <Label className="text-[10px]">Description</Label>
+                  <Label className="text-[10px]">{t("library.description")}</Label>
                   <Input
                     className="h-8 text-xs"
                     value={templateDescription}
                     onChange={(e) => setTemplateDescription(e.target.value)}
-                    placeholder="Optional"
+                    placeholder={t("library.descriptionPlaceholder")}
                   />
                 </div>
                 <div className="flex items-end">
@@ -668,13 +675,13 @@ export function ModelAttachmentModal() {
                     onClick={() => void handleSaveTemplate()}
                   >
                     <Save className="mr-1 h-3.5 w-3.5" />
-                    Save template
+                    {t("library.save")}
                   </Button>
                 </div>
               </div>
               {library.length === 0 ? (
                 <p className="text-muted-foreground">
-                  {libraryBusy ? "Loading templates…" : "No saved templates."}
+                  {libraryBusy ? t("library.loading") : t("library.empty")}
                 </p>
               ) : (
                 <ul className="max-h-40 space-y-1 overflow-y-auto">
@@ -684,9 +691,12 @@ export function ModelAttachmentModal() {
                       className="flex items-center justify-between gap-2 rounded border border-border/50 px-2 py-1.5"
                     >
                       <div className="min-w-0">
-                        <div className="truncate font-medium">{template.name}</div>
+                        <div className="truncate font-medium" data-i18n-ignore="">{template.name}</div>
                         <div className="truncate text-[10px] text-muted-foreground">
-                          {template.bindings.length} model(s) · {template.edges.length} edge(s)
+                          {t("library.counts", {
+                            models: template.bindings.length,
+                            edges: template.edges.length,
+                          })}
                           {template.description ? ` · ${template.description}` : ""}
                         </div>
                       </div>
@@ -698,14 +708,14 @@ export function ModelAttachmentModal() {
                           className="h-7 text-[10px]"
                           onClick={() => void handleApplyTemplate(template)}
                         >
-                          Apply
+                          {t("library.apply")}
                         </Button>
                         <Button
                           type="button"
                           size="icon"
                           variant="ghost"
                           className="h-7 w-7"
-                          aria-label={`Delete ${template.name}`}
+                          aria-label={t("library.deleteAria", { name: template.name })}
                           onClick={() => void handleDeleteTemplate(template.id)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />

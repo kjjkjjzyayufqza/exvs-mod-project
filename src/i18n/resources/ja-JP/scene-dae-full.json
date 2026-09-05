@@ -1,0 +1,9 @@
+{
+  "analysis": { "waiting": "DAE の解析を待機中、または解析で変換を阻止するエラーが報告されました。" },
+  "output": { "title": "出力", "replaceNumshb": "一時的な .numshb のみを書き込みます。既存の NUMDLB、NUMATB、NUSKTB、JNTTBL、NUHLPB は変更しません。", "unitModel": "生成されたモデルファイルは Unit model models フォルダー{{stageRoot}}に登録されます。参照テクスチャは共有テクスチャプールに重複なく配置されます。", "batchDirect": "これらの SSBH と NUMATB 設定は {{count}} 個すべてのファイルで共有されます。各モデルは固有のディスクフォルダーに直接書き込まれます。", "direct": "SSBH ファイルは選択したディスクフォルダーに直接書き込まれます。", "memory": "SSBH ファイルは stage フォルダーを保存するまでメモリに保持されます{{stageRoot}}。", "batchFolderName": "各出力フォルダーは元の FBX/DAE ファイル名を使用します。", "modelFolderName": "モデルフォルダー名", "scale": "スケール", "upAxis": "上方向軸", "yUp": "Y-up", "zUp": "Z-up", "none": "なし", "flipUv": "UV（V）を反転", "flipUvHelp": "SSBH 変換中に V 座標を反転します。" },
+  "geometry": { "title": "ジオメトリを含める（{{selected}}/{{total}}）" },
+  "files": { "title": "出力ファイル", "replaceNote": "メッシュのみの置換では、その他の SSBH 出力は無効になります。", "writeLog": "ログを書き込む" },
+  "mapping": { "title": "NUMDLB マッピング" },
+  "profiles": { "title": "NUMATB プロファイル（テクスチャデータ）", "copyTitle": "NUMATB プロファイルデータ全体を JSON としてコピー（AI 分析用）", "copyLabel": "NUMATB プロファイルを JSON としてコピー" },
+  "validation": { "checking": "NUMATB テクスチャ参照を確認中…", "failed": "テクスチャ参照の検証に失敗しました：{{error}}", "fixTitle": "変換前に解決できないテクスチャ参照を修正：" }
+}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, Diamond } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -97,7 +98,7 @@ function EditorRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-1.5 py-0.5" title={title}>
+    <div className="flex items-center gap-1.5 py-0.5" title={title} data-i18n-ignore="">
       <DirtyDot dirty={Boolean(dirty)} />
       <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">{label}</span>
       <div className="flex w-[7.5rem] shrink-0 items-center justify-end gap-1">{children}</div>
@@ -166,6 +167,7 @@ function FieldWidget({
   onChange: (next: EfxbnDocument) => void;
   onError: (message: string) => void;
 }) {
+  const { t } = useTranslation("test-effect-folder");
   const block = doc.summary.effects[blockIndex];
   if (!block) return null;
   const value = readEfxbnField(block, field);
@@ -191,13 +193,13 @@ function FieldWidget({
         </SelectTrigger>
         <SelectContent>
           {field.options.map((option) => (
-            <SelectItem key={option.value} value={String(option.value)} className="text-[10px]">
+            <SelectItem key={option.value} value={String(option.value)} className="text-[10px]" data-i18n-ignore="">
               {option.label}
             </SelectItem>
           ))}
           {known ? null : (
             <SelectItem value={String(value)} className="text-[10px]">
-              {value} — not in the decoded table
+              {t("block.unknownEnum", { value })}
             </SelectItem>
           )}
         </SelectContent>
@@ -245,6 +247,7 @@ function FlagsWidget({
   onChange: (next: EfxbnDocument) => void;
   onError: (message: string) => void;
 }) {
+  const { t } = useTranslation("test-effect-folder");
   const block = doc.summary.effects[blockIndex];
   if (!block) return null;
   const value = readEfxbnField(block, field) >>> 0;
@@ -260,7 +263,7 @@ function FlagsWidget({
   };
 
   return (
-    <div className="space-y-1 rounded border bg-muted/10 p-1.5">
+    <div className="space-y-1 rounded border bg-muted/10 p-1.5" data-i18n-ignore="">
       <div className="flex items-center gap-1.5">
         <span className="min-w-0 flex-1 truncate text-[10px] font-medium">{field.label}</span>
         <Input
@@ -295,7 +298,7 @@ function FlagsWidget({
       ))}
       {remainder !== 0 ? (
         <p className="pl-1 text-[9px] text-muted-foreground">
-          {hexOf(remainder)} in bits with no derived name — preserved, editable through the hex box.
+          {t("block.unnamedBits", { hex: hexOf(remainder) })}
         </p>
       ) : null}
     </div>
@@ -331,6 +334,7 @@ function CurveRow({
   onError: (message: string) => void;
   onFocus: (name: EfxbnControlName) => void;
 }) {
+  const { t } = useTranslation("test-effect-folder");
   const constant = curve.keys.length === 1;
   const dirty = JSON.stringify(curve.keys) !== baselineKeys;
   const keyIndex = findEfxbnKeyAtProgress(curve.keys, progress);
@@ -364,6 +368,7 @@ function CurveRow({
       <button
         type="button"
         className="min-w-0 flex-1 truncate text-left font-mono text-[10px] text-muted-foreground"
+        data-i18n-ignore=""
         onClick={() => onFocus(curve.name)}
       >
         {curve.name}
@@ -393,8 +398,12 @@ function CurveRow({
         variant="ghost"
         className="h-6 w-6 shrink-0"
         disabled={disabled}
-        aria-label={`${keyIndex === null ? "Insert" : "Select"} key for ${curve.name} at frame ${Number(frame.toFixed(4))}`}
-        title={keyIndex === null ? "Insert a key at the playhead" : "Key exists at the playhead"}
+        aria-label={
+          keyIndex === null
+            ? t("block.insertKey", { name: curve.name, frame: Number(frame.toFixed(4)) })
+            : t("block.selectKey", { name: curve.name, frame: Number(frame.toFixed(4)) })
+        }
+        title={keyIndex === null ? t("block.insertPlayhead") : t("block.keyExists")}
         onClick={focusOrInsertKey}
       >
         <Diamond className={cn("h-3 w-3", keyIndex !== null && "fill-amber-400 text-amber-400")} />
@@ -424,21 +433,22 @@ function ResourceBinder({
   onChange: (next: EfxbnDocument) => void;
   onError: (message: string) => void;
 }) {
+  const { t } = useTranslation("test-effect-folder");
   const block = doc.summary.effects[blockIndex];
 
   const modelOptions = useMemo(() => {
-    const seen = new Map<number, { value: number; label: string }>();
+    const seen = new Map<number, { value: number; text: string }>();
     for (const model of inventory.models) {
-      seen.set(model.hash.signed, { value: model.hash.signed, label: `${model.name}  ${model.hash.hex}` });
+      seen.set(model.hash.signed, { value: model.hash.signed, text: `${model.name}  ${model.hash.hex}` });
     }
     for (const model of inventory.commonPack?.models ?? []) {
       if (seen.has(model.hash.signed)) continue;
       seen.set(model.hash.signed, {
         value: model.hash.signed,
-        label: `${model.name}  ${model.hash.hex}  (${EFFECT_FOLDER_COMMON_PACK_NAME})`,
+        text: `${model.name}  ${model.hash.hex}  (${EFFECT_FOLDER_COMMON_PACK_NAME})`,
       });
     }
-    return [...seen.values()].sort((left, right) => left.label.localeCompare(right.label));
+    return [...seen.values()].sort((left, right) => left.text.localeCompare(right.text));
   }, [inventory]);
 
   const textureLabelByHash = useMemo(() => {
@@ -458,7 +468,7 @@ function ResourceBinder({
     () =>
       doc.summary.textureParameters.map((parameter) => ({
         value: parameter.index,
-        label: `${parameter.index} — ${
+        text: `${parameter.index} — ${
           textureLabelByHash.get(parameter.colorMapHash.signed) ?? parameter.colorMapHash.hex
         }`,
       })),
@@ -480,33 +490,32 @@ function ResourceBinder({
     if (!Number.isFinite(signed)) return;
     if (!modelOptions.some((option) => option.value === signed) && signed !== 0) {
       onError(
-        `Model ${hexOf(signed)} resolves in neither this pack nor ${EFFECT_FOLDER_COMMON_PACK_NAME}; ` +
-          "the game would draw nothing for it.",
+        t("block.modelUnresolved", { hex: hexOf(signed), pack: EFFECT_FOLDER_COMMON_PACK_NAME }),
       );
       return;
     }
     guard(() => setEfxbnBlockModel(doc, blockIndex, signed));
   };
 
-  const slots: { key: EfxbnTextureSlotKey; label: string; current: number }[] = [
+  const slots: { key: EfxbnTextureSlotKey; slotKey: "color0" | "color1" | "uv0" | "uv1"; current: number }[] = [
     {
       key: { field: "colorTextureParameterIndex", component: 0 },
-      label: "Colour map",
+      slotKey: "color0",
       current: block.colorTextureParameterIndex[0],
     },
     {
       key: { field: "colorTextureParameterIndex", component: 1 },
-      label: "Pass-2 colour",
+      slotKey: "color1",
       current: block.colorTextureParameterIndex[1],
     },
     {
       key: { field: "uvTextureParameterIndex", component: 0 },
-      label: "UV offset map",
+      slotKey: "uv0",
       current: block.uvTextureParameterIndex[0],
     },
     {
       key: { field: "uvTextureParameterIndex", component: 1 },
-      label: "Pass-2 UV offset",
+      slotKey: "uv1",
       current: block.uvTextureParameterIndex[1],
     },
   ];
@@ -514,22 +523,22 @@ function ResourceBinder({
   return (
     <div className="space-y-1.5">
       <div className="space-y-0.5">
-        <span className="text-[10px] font-medium">Model</span>
+        <span className="text-[10px] font-medium">{t("block.model")}</span>
         <Select
           value={block.nudHandle === 0 ? NONE_VALUE : String(block.nudHandle)}
           disabled={disabled}
           onValueChange={(next) => (next === NONE_VALUE ? bindModel("0") : bindModel(next))}
         >
           <SelectTrigger className="h-7 px-1.5 text-[10px]">
-            <SelectValue placeholder="No model" />
+            <SelectValue placeholder={t("block.noModel")} />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={NONE_VALUE} className="text-[10px]">
-              No model (billboard / strip)
+              {t("block.noModelBillboard")}
             </SelectItem>
             {modelOptions.map((option) => (
-              <SelectItem key={option.value} value={String(option.value)} className="text-[10px]">
-                {option.label}
+              <SelectItem key={option.value} value={String(option.value)} className="text-[10px]" data-i18n-ignore="">
+                {option.text}
               </SelectItem>
             ))}
           </SelectContent>
@@ -537,15 +546,17 @@ function ResourceBinder({
         {block.nudHandle !== 0 &&
         !modelOptions.some((option) => option.value === block.nudHandle) ? (
           <p className="text-[9px] text-amber-600 dark:text-amber-400">
-            {hexOf(block.nudHandle)} resolves in neither this pack nor{" "}
-            {EFFECT_FOLDER_COMMON_PACK_NAME}. The preview draws a proxy quad.
+            {t("block.unresolvedModel", {
+              hex: hexOf(block.nudHandle),
+              pack: EFFECT_FOLDER_COMMON_PACK_NAME,
+            })}
           </p>
         ) : null}
       </div>
 
       {slots.map((slot) => (
         <div key={`${slot.key.field}.${slot.key.component}`} className="space-y-0.5">
-          <span className="text-[10px] font-medium">{slot.label}</span>
+          <span className="text-[10px] font-medium">{t(`block.slots.${slot.slotKey}`)}</span>
           <Select
             value={slot.current < 0 ? NONE_VALUE : String(slot.current)}
             disabled={disabled}
@@ -561,15 +572,15 @@ function ResourceBinder({
             }
           >
             <SelectTrigger className="h-7 px-1.5 text-[10px]">
-              <SelectValue placeholder="Unbound" />
+              <SelectValue placeholder={t("block.unbound")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={NONE_VALUE} className="text-[10px]">
-                Unbound (-1)
+              <SelectItem value={NONE_VALUE} className="text-[10px]" data-i18n-ignore="">
+                {t("block.unboundNone")}
               </SelectItem>
               {parameterOptions.map((option) => (
-                <SelectItem key={option.value} value={String(option.value)} className="text-[10px]">
-                  {option.label}
+                <SelectItem key={option.value} value={String(option.value)} className="text-[10px]" data-i18n-ignore="">
+                  {option.text}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -618,7 +629,9 @@ function Group({
         ) : (
           <ChevronRight className="h-3 w-3 opacity-60" />
         )}
-        <span className="flex-1 text-[10px] font-medium">{EFXBN_FIELD_GROUP_LABELS[group]}</span>
+        <span className="flex-1 text-[10px] font-medium" data-i18n-ignore="">
+          {EFXBN_FIELD_GROUP_LABELS[group]}
+        </span>
         {dirtyCount > 0 ? (
           <span className="font-mono text-[9px] text-amber-600 dark:text-amber-400">
             {dirtyCount}
@@ -639,21 +652,22 @@ function Group({
                 />
               </div>
             ) : (
-              <EditorRow
-                key={efxbnFieldId(entry)}
-                label={entry.label}
-                dirty={dirtyFields.has(efxbnFieldId(entry))}
-                title={`${entry.hint ? `${entry.hint}\n` : ""}block offset 0x${entry.offset.toString(16).toUpperCase()}`}
-              >
-                <FieldWidget
-                  field={entry}
-                  document={doc}
-                  blockIndex={blockIndex}
-                  disabled={disabled}
-                  onChange={onChange}
-                  onError={onError}
-                />
-              </EditorRow>
+              <div key={efxbnFieldId(entry)} data-i18n-ignore="">
+                <EditorRow
+                  label={entry.label}
+                  dirty={dirtyFields.has(efxbnFieldId(entry))}
+                  title={`${entry.hint ? `${entry.hint}\n` : ""}block offset 0x${entry.offset.toString(16).toUpperCase()}`}
+                >
+                  <FieldWidget
+                    field={entry}
+                    document={doc}
+                    blockIndex={blockIndex}
+                    disabled={disabled}
+                    onChange={onChange}
+                    onError={onError}
+                  />
+                </EditorRow>
+              </div>
             ),
           )
         : null}
@@ -673,6 +687,7 @@ export function EfxbnBlockEditor({
   onChange,
   onError,
 }: EfxbnBlockEditorProps) {
+  const { t } = useTranslation("test-effect-folder");
   const dirtyFields = useMemo(
     () => efxbnDirtyFieldIds(doc, blockIndex, EFXBN_FIELD_SCHEMA),
     [doc, blockIndex],
@@ -689,13 +704,13 @@ export function EfxbnBlockEditor({
   }, [doc, blockIndex]);
 
   if (!doc.summary.effects[blockIndex]) {
-    return <p className="p-2 text-[10px] text-muted-foreground">Select a block to edit it.</p>;
+    return <p className="p-2 text-[10px] text-muted-foreground">{t("block.selectBlock")}</p>;
   }
 
   return (
     <div className="space-y-1 p-1.5">
       <section className="border-b pb-2">
-        <h5 className="py-1 text-[10px] font-medium">Resources</h5>
+        <h5 className="py-1 text-[10px] font-medium">{t("block.resources")}</h5>
         <ResourceBinder
           document={doc}
           blockIndex={blockIndex}
@@ -708,9 +723,9 @@ export function EfxbnBlockEditor({
 
       <section className="border-b pb-1">
         <h5 className="py-1 text-[10px] font-medium">
-          Curves
+          {t("block.curves")}
           <span className="ml-1 font-normal text-muted-foreground">
-            - a filled diamond means a key exists at the playhead
+            - {t("block.curvesHelp")}
           </span>
         </h5>
         {curves.map(({ curve, baselineKeys }) => (

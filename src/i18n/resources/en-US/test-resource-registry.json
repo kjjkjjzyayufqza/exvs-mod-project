@@ -1,0 +1,110 @@
+{
+  "title": "Resource Registry",
+  "description": "Name to CRC32 mappings for stage and unit assets. Workspace entries override global defaults. Resource path CRC32 only, not param field-key hashes.",
+  "action": {
+    "reload": "Reload",
+    "new": "New",
+    "importJson": "Import JSON",
+    "importCustom": "Import custom_unit",
+    "export": "Export",
+    "createFirst": "Create first entry",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete"
+  },
+  "field": {
+    "search": "Search",
+    "source": "Source",
+    "category": "Category",
+    "slotFilter": "Slot filter",
+    "slot": "Slot",
+    "seed": "Seed",
+    "hash": "Hash",
+    "displayName": "Display name (optional)",
+    "notes": "Notes (optional)",
+    "saveTarget": "Save target",
+    "int32": "int32"
+  },
+  "placeholder": {
+    "search": "seed, hash, display name...",
+    "slot": "fileName, model..."
+  },
+  "source": {
+    "merged": "Merged",
+    "workspace": "Workspace",
+    "global": "Global"
+  },
+  "category": {
+    "all": "All"
+  },
+  "target": {
+    "workspace": "Workspace registry",
+    "global": "Global registry"
+  },
+  "count": {
+    "shown": "{{count}} shown",
+    "merged": "{{count}} merged total",
+    "workspace": "{{count}} workspace",
+    "global": "{{count}} global",
+    "conflicts": "{{count}} hash conflicts"
+  },
+  "empty": {
+    "noMatches": "No registry entries match your filters."
+  },
+  "dialog": {
+    "exportTitle": "Export resource registry",
+    "importTitle": "Import resource registry JSON",
+    "importCustomTitle": "Import custom_unit.json",
+    "editTitle": "Edit registry entry",
+    "newTitle": "New registry entry",
+    "subtitle": "Seed string is hashed with IEEE CRC32 to produce the int32 resource value.",
+    "deleteTitle": "Delete workspace entry?",
+    "deleteDescription": "This removes the mapping from the workspace registry file only. Global entries are not affected."
+  },
+  "toast": {
+    "copied": "{{label}} copied",
+    "entryUpdated": "Entry updated",
+    "entryCreated": "Entry created",
+    "exported": "Registry exported",
+    "importedEntries": "Imported {{count}} entries into workspace registry",
+    "importedWithWarnings": "Imported {{count}} entries with {{warnings}} hash warnings",
+    "importedUnitEntries": "Imported {{count}} unit entries from custom_unit.json"
+  },
+  "error": {
+    "seedRequired": "Seed is required",
+    "workspaceRequired": "Select a workspace folder first",
+    "duplicateHash": "Duplicate hash in global registry",
+    "saveFailed": "Failed to save",
+    "customUnitArray": "custom_unit.json must be an array",
+    "noWorkspace": "No workspace folder selected",
+    "registry": "{{message}}"
+  },
+  "collision": {
+    "clear": "Clear",
+    "title": "Resource hash collision",
+    "subtitle": "Confirm this CRC32 before applying it to the param field.",
+    "applySuggested": "Apply suggested",
+    "applyCurrent": "Apply current",
+    "body": "MOD or workspace already has assets for this CRC32. This is a resource path hash (CRC32 of seed), not a param field-key hash.",
+    "currentSeed": "Current seed",
+    "suggestedSeed": "Suggested seed",
+    "exhausted": "No free seed suffix found within 99 attempts. Choose a different base name."
+  },
+  "seedField": {
+    "duplicateSeed": "Hash already registered under a different seed",
+    "applied": "Applied resource hash",
+    "appliedFrom": "{{hash}} from seed \"{{seed}}\"",
+    "enterSeed": "Enter a seed string first",
+    "copied": "{{label}} copied",
+    "linked": "linked: {{seed}}",
+    "placeholder": "resource seed string",
+    "pickTitle": "Pick from registry",
+    "noEntries": "No registry entries for this slot.",
+    "applyTitle": "Apply seed to hash field",
+    "int32": "int32: {{value}}",
+    "saveAfterApply": "Save to workspace registry after apply",
+    "hashHex": "Hash hex",
+    "defaultLabel": "Seed ({{category}}/{{slot}})",
+    "evaluateFailed": "Failed to evaluate seed"
+  }
+}

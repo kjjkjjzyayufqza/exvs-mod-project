@@ -8,6 +8,7 @@ import { buildCardIconPreviewPath } from "./cardIconUtils";
 import type { CardIconItem } from "./cardIconStructure";
 import { CardIconReplaceDialog } from "./CardIconReplaceDialog";
 import { CardIconRemoveDialog } from "./CardIconRemoveDialog";
+import { useTranslation } from "react-i18next";
 
 interface CardIconCardProps {
   item: CardIconItem;
@@ -43,7 +44,8 @@ export function CardIconCard({
   isHovered = false,
   onHoverChange,
 }: CardIconCardProps) {
-  const nameLabel = item.name ?? "(empty)";
+  const { t } = useTranslation("test-lists");
+  const nameLabel = item.name ?? t("cardIcon.emptyParen");
   const previewPath =
     item.name && convertDirPath ? buildCardIconPreviewPath(convertDirPath, item.name) : null;
   const previewSrc = previewPath ? convertFileSrc(previewPath) : "/tauri.svg";
@@ -117,10 +119,10 @@ export function CardIconCard({
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium line-clamp-2 wrap-break-word">{nameLabel}</div>
         <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
-          <div>Index: {item.itemIndex}</div>
-          <div>fileIndex: {item.fileIndex ?? "-"}</div>
+          <div>{t("cardIcon.indexValue", { index: item.itemIndex })}</div>
+          <div data-i18n-ignore="">{t("cardIcon.fileIndexValue", { value: item.fileIndex ?? "-" })}</div>
           <div className="flex items-center gap-2">
-            <span className="shrink-0">Move to</span>
+            <span className="shrink-0">{t("cardIcon.moveTo")}</span>
             <Input
               value={moveToValue}
               onChange={(e) => setMoveToValue(e.target.value)}
@@ -136,7 +138,7 @@ export function CardIconCard({
               disabled={isUpdating || !editable}
               inputMode="numeric"
               className="h-6 w-16 text-xs"
-              aria-label="Move card icon to index"
+              aria-label={t("cardIcon.moveAria")}
             />
             <Button
               size="sm"
@@ -148,7 +150,7 @@ export function CardIconCard({
                 handleSave();
               }}
             >
-              Save
+              {t("common.save")}
             </Button>
             <span className="text-[10px] text-muted-foreground">
               0..{Math.max(0, totalCount - 1)}
@@ -169,7 +171,7 @@ export function CardIconCard({
             convertDirPath={convertDirPath ?? ""}
             selectedItem={item}
             onApplied={onReplaced}
-            triggerLabel="Edit Image"
+            triggerLabel={t("cardIcon.editImage")}
             disabled={!editable}
           />
         </div>

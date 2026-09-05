@@ -2,6 +2,7 @@ import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FolderOpen, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -84,6 +85,7 @@ export function buildQuickAddSubFileUrl(
 }
 
 export function QuickAddFilesModal({ open: dialogOpen, onOpenChange, onConfirm }: QuickAddFilesModalProps) {
+  const { t } = useTranslation("test-workspace");
   const bulkSelectId = useId();
   const prefixInputId = useId();
   const [rows, setRows] = useState<QuickAddFileRow[]>([]);
@@ -124,7 +126,7 @@ export function QuickAddFilesModal({ open: dialogOpen, onOpenChange, onConfirm }
     const selected = await open({
       multiple: true,
       directory: false,
-      title: "Select files to add",
+      title: t("quickAdd.selectFilesTitle"),
     });
     if (selected === null) return;
     const paths = Array.isArray(selected) ? selected : [selected];
@@ -142,7 +144,7 @@ export function QuickAddFilesModal({ open: dialogOpen, onOpenChange, onConfirm }
       }
       return next;
     });
-  }, []);
+  }, [t]);
 
   const applyBulkType = useCallback(() => {
     setRows((prev) => prev.map((r) => ({ ...r, fileType: bulkFileType })));
@@ -222,8 +224,8 @@ export function QuickAddFilesModal({ open: dialogOpen, onOpenChange, onConfirm }
   return (
     <AppRndModalShell
       titleId="quick-add-files-title"
-      title="Quick Add files"
-      subtitle={`${rows.length} selected file${rows.length === 1 ? "" : "s"}`}
+      title={t("quickAdd.title")}
+      subtitle={t("quickAdd.subtitle", { count: rows.length })}
       headerIcon={<FolderOpen className="h-5 w-5 text-primary" />}
       dimensions={QUICK_ADD_MODAL_DIMENSIONS}
       storageKey="app.rnd-size.quick-add-files"
@@ -237,19 +239,19 @@ export function QuickAddFilesModal({ open: dialogOpen, onOpenChange, onConfirm }
                 onCheckedChange={(checked) => setShareFileIndexAcrossFolders(checked === true)}
               />
               <span className="space-y-0.5">
-                <span className="block text-xs font-medium leading-tight">Share one SubFileData across selected folders</span>
+                <span className="block text-xs font-medium leading-tight">{t("quickAdd.shareTitle")}</span>
                 <span className="block text-[11px] leading-snug text-muted-foreground">
-                  Each selected file uses one shared fileIndex, and every selected folder references that same file.
+                  {t("quickAdd.shareHelp")}
                 </span>
               </span>
             </label>
           </div>
           <div className="flex justify-end gap-2 border-t px-6 py-4">
             <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
-              Cancel
+              {t("quickAdd.cancel")}
             </Button>
             <Button type="button" disabled={!canConfirm} onClick={handleConfirm}>
-              Confirm
+              {t("quickAdd.confirm")}
             </Button>
           </div>
         </div>
@@ -259,7 +261,7 @@ export function QuickAddFilesModal({ open: dialogOpen, onOpenChange, onConfirm }
           <div className="flex flex-wrap items-end gap-3">
             <Button type="button" variant="outline" size="sm" onClick={() => void pickFiles()}>
               <FolderOpen className="mr-2 h-4 w-4" />
-              Select files
+              {t("quickAdd.selectFiles")}
             </Button>
             <Button
               type="button"
@@ -270,11 +272,11 @@ export function QuickAddFilesModal({ open: dialogOpen, onOpenChange, onConfirm }
               onClick={removeSelectedRows}
             >
               <Trash2 className="h-4 w-4" />
-              Remove selected ({selectedPaths.size})
+              {t("quickAdd.removeSelected", { count: selectedPaths.size })}
             </Button>
             <div className="flex flex-wrap items-center gap-2">
               <Label htmlFor={bulkSelectId} className="text-xs text-muted-foreground">
-                Apply type to all
+                {t("quickAdd.applyTypeToAll")}
               </Label>
               <Select value={bulkFileType} onValueChange={setBulkFileType}>
                 <SelectTrigger id={bulkSelectId} className="h-8 w-[140px] text-xs">
@@ -283,38 +285,39 @@ export function QuickAddFilesModal({ open: dialogOpen, onOpenChange, onConfirm }
                 <SelectContent>
                   {FILE_TYPE_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                      {opt.label}
+                      <span data-i18n-ignore="">{opt.label}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <Button type="button" variant="secondary" size="sm" className="h-8 text-xs" onClick={applyBulkType}>
-                Apply to all rows
+                {t("quickAdd.applyToAllRows")}
               </Button>
             </div>
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor={prefixInputId} className="text-xs font-medium">
-              SubFileData fileUrl prefix (optional)
+              {t("quickAdd.fileUrlPrefix")}
             </Label>
             <Input
               id={prefixInputId}
               value={fileUrlPrefix}
               onChange={(e) => setFileUrlPrefix(e.target.value)}
-              placeholder="e.g. .\extra\ or 0xPACK\"
+              placeholder={t("quickAdd.prefixPlaceholder")}
               className="font-mono text-xs"
             />
             <p className="text-[11px] text-muted-foreground leading-snug">
-              When set, each entry uses <span className="font-mono">{".\\<prefix segments>\\<file name>"}</span> (this
-              field + selected file name). Leave empty to use{" "}
-              <span className="font-mono">{`.\\{baseDir}\\{fileIndex}{fileType}`}</span> only.
+              {t("quickAdd.prefixHelp", {
+                namedPattern: ".\\<prefix segments>\\<file name>",
+                slotPattern: `.\\{baseDir}\\{fileIndex}{fileType}`,
+              })}
             </p>
           </div>
 
           <div className="min-h-0">
             {rows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No files selected. Use Select files to choose one or more files.</p>
+              <p className="text-sm text-muted-foreground">{t("quickAdd.empty")}</p>
             ) : (
               <div className="overflow-hidden rounded-md border text-left text-xs">
                 <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_12rem_5rem] border-b bg-muted/80 backdrop-blur">
@@ -322,11 +325,11 @@ export function QuickAddFilesModal({ open: dialogOpen, onOpenChange, onConfirm }
                     <Checkbox
                       checked={allSelected ? true : someSelected ? "indeterminate" : false}
                       onCheckedChange={(v) => toggleSelectAll(v === true)}
-                      aria-label="Select all rows"
+                      aria-label={t("quickAdd.selectAll")}
                     />
                   </div>
-                  <div className="px-3 py-2 font-medium">File name</div>
-                  <div className="px-3 py-2 font-medium">File type</div>
+                  <div className="px-3 py-2 font-medium">{t("quickAdd.fileName")}</div>
+                  <div className="px-3 py-2 font-medium">{t("quickAdd.fileType")}</div>
                   <div className="px-3 py-2 font-medium" />
                 </div>
                 <div ref={rowsViewportRef} className="max-h-[min(42vh,360px)] overflow-auto">
@@ -348,11 +351,11 @@ export function QuickAddFilesModal({ open: dialogOpen, onOpenChange, onConfirm }
                             <Checkbox
                               checked={selectedPaths.has(row.path)}
                               onCheckedChange={(v) => toggleRowSelected(row.path, v === true)}
-                              aria-label={`Select ${row.name}`}
+                              aria-label={t("quickAdd.selectRow", { name: row.name })}
                             />
                           </div>
                           <div className="min-w-0 px-3 py-2">
-                            <span className="block truncate font-mono" title={row.path}>
+                            <span className="block truncate font-mono" title={row.path} data-i18n-ignore="">
                               {row.name}
                             </span>
                           </div>
@@ -364,7 +367,7 @@ export function QuickAddFilesModal({ open: dialogOpen, onOpenChange, onConfirm }
                               <SelectContent>
                                 {FILE_TYPE_OPTIONS.map((opt) => (
                                   <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                                    {opt.label}
+                                    <span data-i18n-ignore="">{opt.label}</span>
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -372,7 +375,7 @@ export function QuickAddFilesModal({ open: dialogOpen, onOpenChange, onConfirm }
                           </div>
                           <div className="px-3 py-2">
                             <Button type="button" variant="ghost" size="sm" className="h-8 text-[10px]" onClick={() => removeRow(index)}>
-                              Remove
+                              {t("quickAdd.remove")}
                             </Button>
                           </div>
                         </div>

@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { useTranslation } from "react-i18next";
 
 interface SceneViewportOverlayProps {
   isLoading?: boolean;
@@ -20,6 +21,7 @@ export const SceneViewportOverlay = memo(function SceneViewportOverlay({
   textureProgress,
   hktLoadProgress,
 }: SceneViewportOverlayProps) {
+  const { t } = useTranslation("scene-root-b");
   const hktPercent =
     hktLoadProgress && hktLoadProgress.total > 0
       ? Math.round((hktLoadProgress.loaded / hktLoadProgress.total) * 100)
@@ -32,8 +34,8 @@ export const SceneViewportOverlay = memo(function SceneViewportOverlay({
             <div className="w-10 h-10 border-[3px] border-muted-foreground/30 border-t-primary rounded-full animate-spin" />
             <span className="text-sm text-muted-foreground font-medium">
               {modelLoadProgress
-                ? `Streaming models (${modelLoadProgress.loaded}/${modelLoadProgress.total})...`
-                : "Loading stage..."}
+                ? t("overlay.streamingModels", modelLoadProgress)
+                : t("overlay.loadingStage")}
             </span>
             {modelLoadProgress && modelLoadProgress.total > 0 && (
               <div className="w-48 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -54,7 +56,7 @@ export const SceneViewportOverlay = memo(function SceneViewportOverlay({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <span className="truncate">
-                    Loading collision ({hktLoadProgress.loaded}/{hktLoadProgress.total})
+                    {t("overlay.loadingCollision", hktLoadProgress)}
                   </span>
                   <span className="text-white/60 ml-2 shrink-0">{hktPercent}%</span>
                 </div>
@@ -73,7 +75,7 @@ export const SceneViewportOverlay = memo(function SceneViewportOverlay({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <span className="truncate">
-                    Decoding textures ({textureProgress.done}/{textureProgress.total})
+                    {t("overlay.decodingTextures", textureProgress)}
                   </span>
                   <span className="text-white/60 ml-2 shrink-0">
                     {Math.round((textureProgress.done / textureProgress.total) * 100)}%

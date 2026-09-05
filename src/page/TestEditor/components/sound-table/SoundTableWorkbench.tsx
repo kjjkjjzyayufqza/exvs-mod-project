@@ -3,6 +3,7 @@ import { FolderOpen, PackagePlus, RefreshCw, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 export type SoundTableWorkbenchStatus = "idle" | "loading" | "missing" | "ready" | "error";
 
@@ -35,17 +36,18 @@ type SoundTableWorkbenchProps = {
 };
 
 function MetaLine({ label, value, onOpen }: SoundTableMetaLine) {
+  const { t } = useTranslation("test-lists");
   return (
     <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
       <span className="min-w-0 break-all">
-        {label}: {value || "-"}
+        {label}: <span data-i18n-ignore="">{value || "-"}</span>
       </span>
       {value && onOpen ? (
         <button
           type="button"
           onClick={onOpen}
           className="shrink-0 rounded p-0.5 hover:bg-accent hover:text-accent-foreground"
-          title="Open folder"
+          title={t("common.openFolder")}
         >
           <FolderOpen className="h-3.5 w-3.5" />
         </button>
@@ -60,7 +62,7 @@ export function SoundTableWorkbench({
   purpose,
   status,
   errorMessage,
-  unpackLabel = "Unpack",
+  unpackLabel,
   unpacking = false,
   unpackDisabled = false,
   onUnpack,
@@ -75,6 +77,8 @@ export function SoundTableWorkbench({
   listPanel,
   detailPanel,
 }: SoundTableWorkbenchProps) {
+  const { t } = useTranslation("test-lists");
+  const resolvedUnpackLabel = unpackLabel ?? t("sound.unpack");
   if (!isActive) {
     return <div className="h-full w-full" />;
   }
@@ -100,7 +104,7 @@ export function SoundTableWorkbench({
             <div className="flex shrink-0 items-center gap-2">
               <Button size="sm" variant="outline" onClick={onReload} className="inline-flex items-center gap-2">
                 <RefreshCw className="h-4 w-4" />
-                Reload
+                {t("common.reload")}
               </Button>
               {onSave ? (
                 <Button
@@ -110,7 +114,7 @@ export function SoundTableWorkbench({
                   className="inline-flex items-center gap-2"
                 >
                   <Save className="h-4 w-4" />
-                  Save File
+                  {t("common.saveFile")}
                 </Button>
               ) : null}
             </div>
@@ -118,7 +122,7 @@ export function SoundTableWorkbench({
         </CardHeader>
         <CardContent className="flex min-h-0 flex-1 flex-col p-0">
           {status === "loading" ? (
-            <div className="text-sm text-muted-foreground">Loading...</div>
+            <div className="text-sm text-muted-foreground">{t("common.loadingEllipsis")}</div>
           ) : null}
 
           {status === "missing" || status === "idle" || status === "error" ? (
@@ -126,13 +130,13 @@ export function SoundTableWorkbench({
               {status === "error" && errorMessage ? (
                 <div className="text-sm text-destructive">{errorMessage}</div>
               ) : (
-                <div className="text-sm text-muted-foreground">This table is not in the workspace yet.</div>
+                <div className="text-sm text-muted-foreground">{t("sound.tableMissing")}</div>
               )}
               <div className="flex items-center gap-2">
                 {onUnpack ? (
                   <Button size="sm" onClick={onUnpack} disabled={unpackDisabled || unpacking} className="inline-flex items-center gap-2">
                     <PackagePlus className="h-4 w-4" />
-                    {unpacking ? "Unpacking..." : unpackLabel}
+                    {unpacking ? t("sound.unpacking") : resolvedUnpackLabel}
                   </Button>
                 ) : null}
               </div>
@@ -155,7 +159,9 @@ export function SoundTableWorkbench({
 }
 
 export function soundTableMissingMessage(message: string): boolean {
-  return /No raw_path_id JSON|No pilotvoiceresourcetable|No bgm_table|No bgm_list|No BGM bank|Extract pack/i.test(message);
+  return /No raw_path_id JSON|No pilotvoiceresourcetable|No bgm_table|No bgm_list|No BGM bank|Extract pack|nus3bank|raw_path_id/i.test(
+    message,
+  );
 }
 
 export function displayVoiceStem(value: string): string {

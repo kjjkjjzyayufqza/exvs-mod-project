@@ -1,5 +1,6 @@
 import { memo, type MouseEvent } from "react";
 import type { NodeRendererProps } from "react-arborist";
+import { useTranslation } from "react-i18next";
 import {
   ChevronRight,
   ExternalLink,
@@ -56,6 +57,7 @@ type Props = NodeRendererProps<TestTreeNode> & {
 };
 
 function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
+  const { t } = useTranslation("test-workspace");
   const isDir = node.data.isDir;
   const {
     currentJsonPath,
@@ -145,8 +147,8 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
           {isPackDirty && (
             <span
               className="h-2 w-2 shrink-0 rounded-full bg-yellow-400"
-              aria-label="Pack changed"
-              title="Pack changed"
+              aria-label={t("fileTree.packChanged")}
+              title={t("fileTree.packChanged")}
             />
           )}
           <div
@@ -166,7 +168,7 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
               "hover:bg-muted-foreground/10",
               !isDir && "invisible pointer-events-none",
             )}
-            aria-label={node.isOpen ? "Collapse" : "Expand"}
+            aria-label={node.isOpen ? t("fileTree.collapse") : t("fileTree.expand")}
           >
             <ChevronRight
               className={cn(
@@ -215,8 +217,8 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
               event.stopPropagation();
               onToggleStar(node.data.path);
             }}
-            title={isStarred ? "Unstar (remove from top)" : "Star (pin to top)"}
-            aria-label={isStarred ? "Unstar" : "Star"}
+            title={isStarred ? t("fileTree.unstarTitle") : t("fileTree.starTitle")}
+            aria-label={isStarred ? t("fileTree.unstar") : t("fileTree.star")}
             aria-pressed={isStarred}
             className={cn(
               "flex h-5 w-5 shrink-0 items-center justify-center rounded-sm transition-opacity",
@@ -247,17 +249,17 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
       <ContextMenuContent className="min-w-[11rem] max-w-[20rem]">
         <ContextMenuItem onClick={() => onToggleStar(node.data.path)} className="flex items-center gap-2">
           <Star className={cn("h-4 w-4", isStarred && "fill-amber-400 text-amber-500")} />
-          <span>{isStarred ? "Unstar" : "Star"}</span>
+          <span>{isStarred ? t("fileTree.unstar") : t("fileTree.star")}</span>
         </ContextMenuItem>
         {!isDir && (
           <ContextMenuItem onClick={() => void handleOpenNodePath(node.data)} className="flex items-center gap-2">
             <ExternalLink className="h-4 w-4" />
-            <span>Open File</span>
+            <span>{t("fileTree.openFile")}</span>
           </ContextMenuItem>
         )}
         <ContextMenuItem onClick={() => void handleOpenNodeFolder(node.data)} className="flex items-center gap-2">
           <ExternalLink className="h-4 w-4" />
-          <span>Open Folder</span>
+            <span>{t("fileTree.openFolder")}</span>
         </ContextMenuItem>
         {canOpenEffectProject ? (
           <ContextMenuItem
@@ -267,7 +269,7 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
             className="flex items-center gap-2"
           >
             <Sparkles className="h-4 w-4" />
-            <span>Open as effect_project</span>
+            <span>{t("fileTree.openAsEffectProject")}</span>
           </ContextMenuItem>
         ) : null}
         {hasRepackItems ? <ContextMenuSeparator /> : null}
@@ -279,13 +281,15 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
           >
             <span className="flex items-center gap-2">
               <Package className="h-4 w-4 shrink-0" />
-              <span>Repack</span>
+              <span>{t("fileTree.repack")}</span>
             </span>
             {folderRepackDisabled ? (
               <span className="pl-6 text-[10px] leading-snug text-muted-foreground">
                 {folderStructureExists === false
-                  ? `No ${packTarget.hashFolderName}${STRUCTURE_JSON_SUFFIX} beside folder`
-                  : "Checking structure file…"}
+                  ? t("fileTree.noStructureBeside", {
+                      name: `${packTarget.hashFolderName}${STRUCTURE_JSON_SUFFIX}`,
+                    })
+                  : t("fileTree.checkingStructure")}
               </span>
             ) : null}
           </ContextMenuItem>

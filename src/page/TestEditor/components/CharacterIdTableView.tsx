@@ -49,6 +49,7 @@ import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace
 import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
 import { sanitizeFhm2dStructureName } from "@/utils/fhm2dStructureMetadata";
 import { MscSourceBatchDecompileView } from "./character-id-table/MscSourceBatchDecompileView";
+import { useTranslation } from "react-i18next";
 
 interface CharacterIdTableViewProps {
     folderPath: string;
@@ -186,11 +187,12 @@ function DebugMetric({
 }
 
 function DebugPathRow({ label, value }: { label: string; value: string }) {
+    const { t } = useTranslation("test-character-id-view");
     return (
         <div className="grid gap-1 border-t py-2 first:border-t-0 sm:grid-cols-[150px_minmax(0,1fr)]">
             <div className="text-xs font-medium text-muted-foreground">{label}</div>
             <div className="min-w-0 break-all font-mono text-xs">
-                {value || <span className="font-sans text-muted-foreground">Not configured</span>}
+                {value || <span className="font-sans text-muted-foreground">{t("notConfigured")}</span>}
             </div>
         </div>
     );
@@ -324,6 +326,7 @@ export default function CharacterIdTableView({
     onConsumePendingSelect,
     workspaceDocument,
 }: CharacterIdTableViewProps) {
+    const { t } = useTranslation("test-character-id-view");
     const pendingFromParentRef = useRef<number | null>(null);
     pendingFromParentRef.current = pendingSelectCharacterId ?? null;
 
@@ -1207,10 +1210,10 @@ export default function CharacterIdTableView({
         ? `${debugMscOutputPath.trim().replace(/[\\/]+$/, "")}\\${workspaceDocument.assetRoutes["unit.msc"]?.prefix ?? "040msc"}`
         : "";
     const debugRunStatus = !bulkMscProgress
-        ? "Not run yet"
+        ? t("debugNotRunYet")
         : bulkMscProgress.completed
-            ? "Completed"
-            : "Running";
+            ? t("debugCompleted")
+            : t("debugRunning");
 
     if (!isActive) {
         return <div className="h-full w-full" />;
@@ -1221,11 +1224,11 @@ export default function CharacterIdTableView({
             <div className="h-full w-full">
                 <Card className="h-full flex flex-col border-none shadow-none rounded-none bg-transparent">
                     <CardHeader className="p-0 pb-4">
-                        <CardTitle>Character ID Table</CardTitle>
+                        <CardTitle>{t("title")}</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3 p-0">
                         <div className="text-sm text-muted-foreground">
-                            Loading characteridtable.bin...
+                            {t("loadingTable")}
                         </div>
                     </CardContent>
                 </Card>
@@ -1238,17 +1241,17 @@ export default function CharacterIdTableView({
             <div className="h-full w-full">
                 <Card className="border-none shadow-none rounded-none bg-transparent">
                     <CardHeader className="p-0 pb-4">
-                        <CardTitle>Character ID Table</CardTitle>
+                        <CardTitle>{t("title")}</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3 p-0">
                         <div className="text-sm text-muted-foreground">
                             {loadState.filePath ? (
                                 <>
-                                    <div className="font-medium text-foreground">File</div>
+                                    <div className="font-medium text-foreground">{t("file")}</div>
                                     <div className="break-all">{loadState.filePath}</div>
                                 </>
                             ) : (
-                                <div className="break-all">Folder path is empty</div>
+                                <div className="break-all">{t("folderPathEmpty")}</div>
                             )}
                         </div>
                         <div className="text-sm text-destructive">{loadState.message}</div>
@@ -1276,15 +1279,15 @@ export default function CharacterIdTableView({
                 <CardHeader className="p-0 pb-4">
                     <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
-                            <CardTitle>Character ID Table</CardTitle>
+                            <CardTitle>{t("title")}</CardTitle>
                             <div className="text-xs text-muted-foreground break-all mt-1 flex items-center gap-1">
                                 {loadState.filePath}
                                 <button
                                     type="button"
                                     onClick={() => void handleOpenCharacterIdTableFolder()}
                                     className="shrink-0 p-0.5 rounded hover:bg-accent hover:text-accent-foreground"
-                                    title="Open folder"
-                                    aria-label="Open folder"
+                                    title={t("openFolder")}
+                                    aria-label={t("openFolder")}
                                 >
                                     <FolderOpen className="w-3.5 h-3.5" />
                                 </button>
@@ -1315,7 +1318,7 @@ export default function CharacterIdTableView({
                                 onClick={() => void handlePickImportJson()}
                                 disabled={!loadState.writable || isImporting || isExporting}
                                 className="inline-flex items-center gap-2"
-                                title="Import character id table from JSON"
+                                title={t("importTableTooltip")}
                             >
                                 <Upload className="w-4 h-4" />
                                 Import JSON
@@ -1326,7 +1329,7 @@ export default function CharacterIdTableView({
                                 onClick={() => void handleExportJson()}
                                 disabled={isExporting || isImporting || loadState.table.CharacterData.length === 0}
                                 className="inline-flex items-center gap-2"
-                                title="Export character id table to JSON"
+                                title={t("exportTableTooltip")}
                             >
                                 <Download className="w-4 h-4" />
                                 Export JSON
@@ -1337,7 +1340,7 @@ export default function CharacterIdTableView({
                                 onClick={() => setIsDebugDialogOpen(true)}
                                 disabled={loadState.table.CharacterData.length === 0}
                                 className="inline-flex items-center gap-2"
-                                title="Open Character ID debug tools"
+                                title={t("openDebugTooltip")}
                             >
                                 <Bug className="w-4 h-4" />
                                 Debug
@@ -1364,7 +1367,7 @@ export default function CharacterIdTableView({
                             <div className="relative mb-3">
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                                 <Input
-                                    placeholder="Search all fields (decimal or hex)..."
+                                    placeholder={t("searchPlaceholder")}
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     className="pl-10"
@@ -1414,7 +1417,7 @@ export default function CharacterIdTableView({
                                                                 handleCopy(idx);
                                                             }}
                                                             disabled={!loadState.writable}
-                                                            title="Copy as new"
+                                                            title={t("copyAsNew")}
                                                         >
                                                             <Copy className="w-4 h-4" />
                                                         </Button>
@@ -1427,7 +1430,7 @@ export default function CharacterIdTableView({
                                                                 openDeleteDialog(idx);
                                                             }}
                                                             disabled={!loadState.writable}
-                                                            title="Delete"
+                                                            title={t("delete")}
                                                         >
                                                             <Trash2 className="w-4 h-4" />
                                                         </Button>
@@ -1441,7 +1444,7 @@ export default function CharacterIdTableView({
                                     <div className="text-center text-muted-foreground py-8 text-sm">
                                         {deferredSearchTerm.trim()
                                             ? `No rows found matching "${deferredSearchTerm.trim()}"`
-                                            : "No rows found"}
+                                            : t("noRowsFound")}
                                     </div>
                                 )}
                             </div>
@@ -1451,15 +1454,15 @@ export default function CharacterIdTableView({
                             {selectedRow ? (
                                 <>
                                     <div className="flex items-center justify-between mb-4">
-                                        <div className="text-sm font-semibold">Edit Row (index: {selectedIndex})</div>
+                                        <div className="text-sm font-semibold">{t("editRow", { index: selectedIndex })}</div>
                                         <div className="text-xs text-muted-foreground">
-                                            Values can be edited as int32 or hex
+                                            {t("editableValues")}
                                         </div>
                                     </div>
                                     <div className="flex flex-wrap items-center gap-2 mb-4">
                                         <Button size="sm" variant="outline" onClick={() => void handleCopyFields()}>
                                             <Copy className="w-4 h-4 mr-2" />
-                                            Copy fields
+                                            {t("copyFields")}
                                         </Button>
                                         <Button
                                             size="sm"
@@ -1468,24 +1471,24 @@ export default function CharacterIdTableView({
                                             disabled={!loadState.writable || !clipboardPayload || clipboardPayload.sourceCharacterId === selectedRow.CharacterId}
                                         >
                                             <Clipboard className="w-4 h-4 mr-2" />
-                                            Paste fields
+                                            {t("pasteFields")}
                                         </Button>
                                         <Button
                                             size="sm"
                                             variant="secondary"
                                             onClick={() => setIsExtractConfirmOpen(true)}
                                             disabled={isExtractingAll || !obDplCachePath || !folderPath.trim()}
-                                            title="Extract all non-zero assets into the EXVS2 Workspace"
+                                            title={t("extractAllAssetsTooltip")}
                                         >
                                             <PackageOpen className="w-4 h-4 mr-2" />
-                                            {isExtractingAll ? "Extracting..." : "Extract All to Workspace"}
+                                            {isExtractingAll ? t("extracting") : t("extractAllToWorkspace")}
                                         </Button>
                                     </div>
 
                                     <ScrollArea className="flex-1 min-h-0">
                                         <div className="space-y-2 pr-2">
                                             <DualValueProperty
-                                                label="Character ID"
+                                                label={t("characterId")}
                                                 value={selectedRow.CharacterId}
                                                 property="CharacterId"
                                                 editable={loadState.writable}
@@ -1504,7 +1507,7 @@ export default function CharacterIdTableView({
 
                                             <div className="grid grid-cols-2 gap-2">
                                                 <DualValueProperty
-                                                    label="Model"
+                                                    label={t("model")}
                                                     value={selectedRow.Model}
                                                     property="Model"
                                                     editable={loadState.writable}
@@ -1534,7 +1537,7 @@ export default function CharacterIdTableView({
                                                 />
 
                                                 <DualValueProperty
-                                                    label="Effect"
+                                                    label={t("effect")}
                                                     value={selectedRow.Effect}
                                                     property="Effect"
                                                     editable={loadState.writable}
@@ -1564,7 +1567,7 @@ export default function CharacterIdTableView({
                                                 />
 
                                                 <DualValueProperty
-                                                    label="Sound"
+                                                    label={t("sound")}
                                                     value={selectedRow.Sound}
                                                     property="Sound"
                                                     editable={loadState.writable}
@@ -1594,7 +1597,7 @@ export default function CharacterIdTableView({
                                                 />
 
                                                 <DualValueProperty
-                                                    label="Param"
+                                                    label={t("param")}
                                                     value={selectedRow.Param}
                                                     property="Param"
                                                     editable={loadState.writable}
@@ -1624,7 +1627,7 @@ export default function CharacterIdTableView({
                                                 />
 
                                                 <DualValueProperty
-                                                    label="MSC"
+                                                    label={t("msc")}
                                                     value={selectedRow.Msc}
                                                     property="Msc"
                                                     editable={loadState.writable}
@@ -1654,7 +1657,7 @@ export default function CharacterIdTableView({
                                                 />
 
                                                 <DualValueProperty
-                                                    label="Motion"
+                                                    label={t("motion")}
                                                     value={selectedRow.Motion}
                                                     property="Motion"
                                                     editable={loadState.writable}
@@ -1702,7 +1705,7 @@ export default function CharacterIdTableView({
             >
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Extract All to Workspace</AlertDialogTitle>
+                        <AlertDialogTitle>{t("extractAllToWorkspace")}</AlertDialogTitle>
                         <AlertDialogDescription>
                             Extract all non-zero assets for Character ID {selectedRow?.CharacterId} into the
                             EXVS2 Workspace
@@ -1716,7 +1719,7 @@ export default function CharacterIdTableView({
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
                         <AlertDialogAction 
                             onClick={() => {
                                 setIsExtractConfirmOpen(false);
@@ -1742,19 +1745,19 @@ export default function CharacterIdTableView({
             >
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Row</AlertDialogTitle>
+                        <AlertDialogTitle>{t("deleteRow")}</AlertDialogTitle>
                         <AlertDialogDescription>
                             {deleteCandidateRow ? (
                                 <>
                                     Are you sure you want to delete Character ID {deleteCandidateRow.CharacterId} (index {deleteCandidateIndex})?
                                 </>
                             ) : (
-                                <>Are you sure you want to delete this row? This action cannot be undone.</>
+                                <>{t("deleteConfirm")}</>
                             )}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel onClick={closeDeleteDialog}>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel onClick={closeDeleteDialog}>{t("cancel")}</AlertDialogCancel>
                         <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">
                             Delete
                         </AlertDialogAction>
@@ -1774,7 +1777,7 @@ export default function CharacterIdTableView({
             >
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Overwrite fields</AlertDialogTitle>
+                        <AlertDialogTitle>{t("overwriteFields")}</AlertDialogTitle>
                         <AlertDialogDescription asChild>
                             <div className="space-y-2">
                                 {pasteCandidate ? (
@@ -1783,27 +1786,27 @@ export default function CharacterIdTableView({
                                             This will overwrite the selected row with values copied from Character ID {pasteCandidate.sourceCharacterId}.
                                         </div>
                                         <div className="grid grid-cols-2 gap-2 text-sm">
-                                            <div className="text-muted-foreground">Model</div>
+                                            <div className="text-muted-foreground">{t("model")}</div>
                                             <div>
                                                 {selectedRow?.Model} → {pasteCandidate.fields.Model}
                                             </div>
-                                            <div className="text-muted-foreground">Effect</div>
+                                            <div className="text-muted-foreground">{t("effect")}</div>
                                             <div>
                                                 {selectedRow?.Effect} → {pasteCandidate.fields.Effect}
                                             </div>
-                                            <div className="text-muted-foreground">Sound</div>
+                                            <div className="text-muted-foreground">{t("sound")}</div>
                                             <div>
                                                 {selectedRow?.Sound} → {pasteCandidate.fields.Sound}
                                             </div>
-                                            <div className="text-muted-foreground">Param</div>
+                                            <div className="text-muted-foreground">{t("param")}</div>
                                             <div>
                                                 {selectedRow?.Param} → {pasteCandidate.fields.Param}
                                             </div>
-                                            <div className="text-muted-foreground">MSC</div>
+                                            <div className="text-muted-foreground">{t("msc")}</div>
                                             <div>
                                                 {selectedRow?.Msc} → {pasteCandidate.fields.Msc}
                                             </div>
-                                            <div className="text-muted-foreground">Motion</div>
+                                            <div className="text-muted-foreground">{t("motion")}</div>
                                             <div>
                                                 {selectedRow?.Motion} → {pasteCandidate.fields.Motion}
                                             </div>
@@ -1818,7 +1821,7 @@ export default function CharacterIdTableView({
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel onClick={closePasteDialog}>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel onClick={closePasteDialog}>{t("cancel")}</AlertDialogCancel>
                         <AlertDialogAction onClick={confirmPaste} className="bg-blue-600 hover:bg-blue-700">
                             Overwrite
                         </AlertDialogAction>
@@ -1829,8 +1832,8 @@ export default function CharacterIdTableView({
             {isImportDialogOpen ? (
                 <AppRndModalShell
                     titleId="character-id-import-title"
-                    title="Import Character ID Table JSON"
-                    subtitle={importPreview ? `Valid ${importPreview.validCount} / ${importPreview.totalCount}` : "No file selected"}
+                    title={t("importTableTitle")}
+                    subtitle={importPreview ? t("validCounts", { valid: importPreview.validCount, total: importPreview.totalCount }) : t("noFileSelected")}
                     headerIcon={<Upload className="h-5 w-5 text-primary" />}
                     dimensions={CHARACTER_ID_IMPORT_MODAL_DIMENSIONS}
                     storageKey="app.rnd-size.character-id-import"
@@ -1885,7 +1888,7 @@ export default function CharacterIdTableView({
                                 </div>
                             </>
                         ) : (
-                            <div className="text-sm text-muted-foreground">No file selected</div>
+                            <div className="text-sm text-muted-foreground">{t("noFileSelected")}</div>
                         )}
                     </div>
                 </AppRndModalShell>
@@ -1894,8 +1897,8 @@ export default function CharacterIdTableView({
             {isDebugDialogOpen ? (
                 <AppRndModalShell
                     titleId="character-id-debug-title"
-                    title="MSC Source Debug"
-                    subtitle={`Scan ${bulkMscPlan.candidates.length} unique MSC package(s) from character_id_table.bin`}
+                    title={t("mscSourceDebug")}
+                    subtitle={t("scanSubtitle", { count: bulkMscPlan.candidates.length })}
                     headerIcon={<Bug className="h-5 w-5 text-primary" />}
                     dimensions={CHARACTER_ID_DEBUG_MODAL_DIMENSIONS}
                     storageKey="app.rnd-size.character-id-debug"
@@ -1934,17 +1937,17 @@ export default function CharacterIdTableView({
                     <div className="min-h-0 flex-1 overflow-y-auto p-6">
                         <Tabs defaultValue="extract" className="space-y-4">
                             <TabsList className="h-auto justify-start rounded-md">
-                                <TabsTrigger value="extract">Extract MSC</TabsTrigger>
-                                <TabsTrigger value="decompile">Decompile C</TabsTrigger>
+                                <TabsTrigger value="extract">{t("extractMsc")}</TabsTrigger>
+                                <TabsTrigger value="decompile">{t("decompileC")}</TabsTrigger>
                             </TabsList>
                             <TabsContent value="extract" className="mt-0">
                                 <div className="space-y-5">
                             <section className="rounded-md border bg-muted/10 p-4">
                                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                                     <div className="space-y-1">
-                                        <div className="text-base font-semibold">Bulk MSC source check</div>
+                                        <div className="text-base font-semibold">{t("bulkMscSourceCheck")}</div>
                                         <div className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
-                                            Scans unique non-zero MSC hashes from the loaded table. If the source .fhm2d is absent under the configured OB dplcache root, it is reported as No source file and skipped.
+                                            {t("scanDescription")}
                                         </div>
                                     </div>
                                     <div className="inline-flex w-fit items-center gap-2 rounded-md border bg-background px-3 py-2 text-xs font-medium">
@@ -1955,69 +1958,69 @@ export default function CharacterIdTableView({
                             </section>
 
                             <section className="space-y-3">
-                                <div className="text-sm font-semibold">Scan plan</div>
+                                <div className="text-sm font-semibold">{t("scanPlan")}</div>
                                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
                                     <DebugMetric
-                                        label="Table rows"
+                                        label={t("tableRows")}
                                         value={bulkMscPlan.totalRows}
-                                        detail="Rows loaded from character_id_table.bin"
+                                        detail={t("tableRowsDetail")}
                                     />
                                     <DebugMetric
-                                        label="MSC rows"
+                                        label={t("mscRows")}
                                         value={bulkMscPlan.nonZeroRows}
-                                        detail="Rows with a non-zero MSC value"
+                                        detail={t("mscRowsDetail")}
                                     />
                                     <DebugMetric
-                                        label="Unique packages"
+                                        label={t("uniquePackages")}
                                         value={bulkMscPlan.candidates.length}
-                                        detail="Deduplicated by MSC hash"
+                                        detail={t("uniquePackagesDetail")}
                                         tone="info"
                                     />
                                     <DebugMetric
-                                        label="Repeated refs"
+                                        label={t("repeatedRefs")}
                                         value={bulkMscPlan.duplicateRows}
-                                        detail="Extra rows pointing to an already scanned hash"
+                                        detail={t("repeatedRefsDetail")}
                                     />
                                     <DebugMetric
-                                        label="Zero MSC rows"
+                                        label={t("zeroMscRows")}
                                         value={bulkMscPlan.skippedZeroRows}
-                                        detail="Skipped before source lookup"
+                                        detail={t("zeroMscRowsDetail")}
                                     />
                                 </div>
                             </section>
 
                             <section className="space-y-3 rounded-md border p-4">
                                 <div className="flex flex-col gap-1">
-                                    <div className="text-sm font-semibold">Paths</div>
+                                    <div className="text-sm font-semibold">{t("paths")}</div>
                                     <div className="text-xs text-muted-foreground">
-                                        Output root is the workspace root for this debug export. The 040msc route folder is appended automatically.
+                                        {t("pathsDescription")}
                                     </div>
                                 </div>
                                 <FilePathInput
                                     value={debugMscOutputPath}
                                     onChange={(event) => setDebugMscOutputPath(event.target.value)}
                                     storeKey={CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY}
-                                    placeholder="Select MSC debug output root..."
+                                    placeholder={t("selectDebugOutputRootPlaceholder")}
                                     disabled={isExtractingAllMsc}
                                     picker={{
                                         kind: "folder",
                                         multiple: false,
-                                        title: "Select MSC debug output root",
+                                        title: t("selectDebugOutputRoot"),
                                     }}
                                 />
                                 <div className="rounded-md border bg-background/60 px-3">
-                                    <DebugPathRow label="Source root" value={obDplCachePath} />
-                                    <DebugPathRow label="Output root" value={debugMscOutputPath} />
-                                    <DebugPathRow label="Actual MSC output" value={bulkMscOutputRoute} />
+                                    <DebugPathRow label={t("sourceRoot")} value={obDplCachePath} />
+                                    <DebugPathRow label={t("outputRoot")} value={debugMscOutputPath} />
+                                    <DebugPathRow label={t("actualMscOutput")} value={bulkMscOutputRoute} />
                                 </div>
                             </section>
 
                             <section className="space-y-3 rounded-md border p-4">
                                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                                     <div className="space-y-1">
-                                        <div className="text-sm font-semibold">Run extraction</div>
+                                        <div className="text-sm font-semibold">{t("runExtraction")}</div>
                                         <div className="text-xs text-muted-foreground">
-                                            Existing sources are extracted. Missing sources are listed without creating empty output folders.
+                                            {t("runExtractionDescription")}
                                         </div>
                                     </div>
                                     <div className="flex flex-wrap gap-2">
@@ -2026,7 +2029,7 @@ export default function CharacterIdTableView({
                                             disabled={isExtractingAllMsc || !bulkMscReadyToRun}
                                         >
                                             <PackageOpen className="mr-2 h-4 w-4" />
-                                            {isExtractingAllMsc ? "Extracting MSC..." : "Extract All MSC"}
+                                            {isExtractingAllMsc ? t("extractingMsc") : t("extractAllMsc")}
                                         </Button>
                                         {bulkMscProgress?.lastOutputPath ? (
                                             <Button
@@ -2043,9 +2046,9 @@ export default function CharacterIdTableView({
                                     <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
                                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                         <div className="space-y-1">
-                                            {!obDplCachePath.trim() ? <div>OB dplcache path is not configured.</div> : null}
-                                            {!debugMscOutputPath.trim() ? <div>MSC output root is not configured.</div> : null}
-                                            {bulkMscPlan.candidates.length === 0 ? <div>No non-zero MSC values were found in the table.</div> : null}
+                                            {!obDplCachePath.trim() ? <div>{t("obDplcacheNotConfigured")}</div> : null}
+                                            {!debugMscOutputPath.trim() ? <div>{t("mscOutputNotConfigured")}</div> : null}
+                                            {bulkMscPlan.candidates.length === 0 ? <div>{t("noNonZeroMsc")}</div> : null}
                                         </div>
                                     </div>
                                 ) : null}
@@ -2075,30 +2078,30 @@ export default function CharacterIdTableView({
 
                                     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                                         <DebugMetric
-                                            label="Extracted"
+                                            label={t("extracted")}
                                             value={bulkMscProgress.successCount}
-                                            detail="Source existed and extraction completed"
+                                            detail={t("extractedDetail")}
                                             tone="success"
                                             icon={<CheckCircle2 className="h-4 w-4" />}
                                         />
                                         <DebugMetric
-                                            label="No source file"
+                                            label={t("noSourceFile")}
                                             value={bulkMscProgress.sourceMissingCount}
-                                            detail="No .fhm2d under the configured source root"
+                                            detail={t("noSourceFileDetail")}
                                             tone={bulkMscProgress.sourceMissingCount > 0 ? "warning" : "neutral"}
                                             icon={<CircleSlash className="h-4 w-4" />}
                                         />
                                         <DebugMetric
-                                            label="Extract errors"
+                                            label={t("extractErrors")}
                                             value={bulkMscProgress.extractionFailureCount}
-                                            detail="Source existed, but extraction failed"
+                                            detail={t("extractErrorsDetail")}
                                             tone={bulkMscProgress.extractionFailureCount > 0 ? "danger" : "neutral"}
                                             icon={<XCircle className="h-4 w-4" />}
                                         />
                                         <DebugMetric
-                                            label="Naming warnings"
+                                            label={t("namingWarnings")}
                                             value={bulkMscProgress.namingWarningCount}
-                                            detail="Extraction finished, naming metadata warned"
+                                            detail={t("namingWarningsDetail")}
                                             tone={bulkMscProgress.namingWarningCount > 0 ? "warning" : "neutral"}
                                             icon={<AlertTriangle className="h-4 w-4" />}
                                         />
@@ -2123,32 +2126,32 @@ export default function CharacterIdTableView({
 
                                     <div className="grid gap-3 lg:grid-cols-2">
                                         <DebugLogBlock
-                                            title="No source file"
+                                            title={t("noSourceFile")}
                                             count={bulkMscProgress.sourceMissingCount}
                                             items={bulkMscProgress.missingSources}
                                             tone="warning"
-                                            emptyText="No missing source files in this run."
+                                            emptyText={t("noMissingSources")}
                                         />
                                         <DebugLogBlock
-                                            title="Extract errors"
+                                            title={t("extractErrors")}
                                             count={bulkMscProgress.extractionFailureCount}
                                             items={bulkMscProgress.extractionErrors}
                                             tone="danger"
-                                            emptyText="No extraction errors in this run."
+                                            emptyText={t("noExtractErrors")}
                                         />
                                     </div>
 
                                     <DebugLogBlock
-                                        title="Naming warnings"
+                                        title={t("namingWarnings")}
                                         count={bulkMscProgress.namingWarningCount}
                                         items={bulkMscProgress.namingWarnings}
                                         tone="info"
-                                        emptyText="No naming warnings in this run."
+                                        emptyText={t("noNamingWarnings")}
                                     />
                                 </section>
                             ) : (
                                 <section className="rounded-md border bg-muted/10 p-4 text-sm text-muted-foreground">
-                                    No scan result yet. Run Extract All MSC to classify every unique MSC as extracted, no source file, extract error, or naming warning.
+                                    {t("noScanResult")}
                                 </section>
                             )}
                                 </div>

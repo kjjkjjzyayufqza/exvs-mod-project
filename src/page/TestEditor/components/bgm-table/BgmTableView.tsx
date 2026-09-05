@@ -43,6 +43,7 @@ import {
   initBgmBankUpdate02Pack,
 } from "./initBgmBankUpdate02Pack";
 import { parsePackageHashInput } from "../pilot-voice-resource/pilotVoiceResourceDocument";
+import { useTranslation } from "react-i18next";
 
 type LoadState =
   | { status: "idle" }
@@ -78,6 +79,7 @@ function HashField({
   disabled: boolean;
   onCommit: (next: number) => void;
 }) {
+  const { t } = useTranslation("test-lists");
   const [text, setText] = useState(value ? formatHash(value) : "");
   useEffect(() => {
     setText(value ? formatHash(value) : "");
@@ -96,7 +98,7 @@ function HashField({
           }
           onCommit(parsed);
         }}
-        placeholder="empty"
+        placeholder={t("common.empty")}
         disabled={disabled}
         className={cn("h-8 font-mono text-xs tabular-nums", empty && "border-amber-500")}
       />
@@ -111,6 +113,7 @@ export default function BgmTableView({
   onPackMutated,
   workspaceDocument,
 }: BgmTableViewProps) {
+  const { t } = useTranslation("test-lists");
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [hasChanges, setHasChanges] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -151,7 +154,7 @@ export default function BgmTableView({
 
   const load = useCallback(async () => {
     if (!folderPath) {
-      setLoadState({ status: "error", folderPath: "", message: "Folder path is empty" });
+      setLoadState({ status: "error", folderPath: "", message: t("common.folderPathEmpty") });
       setHasChanges(false);
       onUnsavedChanges?.(false);
       return;
@@ -258,14 +261,17 @@ export default function BgmTableView({
   const handleSave = useCallback(async () => {
     if (loadState.status !== "ready") return;
     if (!loadState.writable) {
-      toast.error("Legacy workspace content is read-only");
+      toast.error(t("common.legacyReadOnlyShort"));
       return;
     }
     const incomplete = loadState.table.entries.findIndex((entry) => emptyBgmTableFields(entry).length > 0);
     if (incomplete >= 0) {
       setSelectedIndex(incomplete);
       toast.error(
-        `Row ${incomplete} has empty fields: ${emptyBgmTableFields(loadState.table.entries[incomplete]).join(", ")}`,
+        t("sound.rowEmptyFields", {
+          row: incomplete,
+          fields: emptyBgmTableFields(loadState.table.entries[incomplete]).join(", "),
+        }),
       );
       return;
     }
@@ -275,7 +281,7 @@ export default function BgmTableView({
       setHasChanges(false);
       onUnsavedChanges?.(false);
       onPackMutated?.(workspacePackIdentityFromResolved(loadState.pack, "configured"));
-      toast.success("Saved");
+      toast.success(t("sound.saved"));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     }
@@ -284,7 +290,7 @@ export default function BgmTableView({
   const handleInitPack = useCallback(async () => {
     const sourceFhm2dPath = buildBgmTableSourceFhm2dPath(obDplCachePath ?? "");
     if (!sourceFhm2dPath) {
-      toast.error("Set the OB dplcache folder in FHM2D Init first");
+      toast.error(t("common.setObDplcacheInit"));
       return;
     }
     setIsInitializing(true);
@@ -295,7 +301,7 @@ export default function BgmTableView({
         workspaceDocument,
       });
       lastLoadedKeyRef.current = "";
-      toast.success("Unpacked BGM table");
+      toast.success(t("bgmTable.unpacked"));
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -307,7 +313,7 @@ export default function BgmTableView({
   const handleInitBank = useCallback(async () => {
     const sourceFhm2dPath = buildBgmBankUpdate02SourceFhm2dPath(obDplCachePath ?? "");
     if (!sourceFhm2dPath) {
-      toast.error("Set the OB dplcache folder in FHM2D Init first");
+      toast.error(t("common.setObDplcacheInit"));
       return;
     }
     setIsUnpackingBank(true);
@@ -317,7 +323,7 @@ export default function BgmTableView({
         workspaceRoot: folderPath,
         workspaceDocument,
       });
-      toast.success("Unpacked BGM_AC27_UPDATE_02 bank");
+      toast.success(t("bgmTable.unpackedBank"));
       await refreshRelatedPaths();
       onPackMutated?.(
         workspacePackIdentityFromResolved(
@@ -347,11 +353,11 @@ export default function BgmTableView({
   return (
     <SoundTableWorkbench
       isActive={isActive}
-      title="BGM table"
-      purpose="Register a BGM cueHash in bgm_table.vgsht2. Add the matching cue in Audio Editor."
+      title={t("bgmTable.title")}
+      purpose={t("bgmTable.purpose")}
       status={workbenchStatus}
       errorMessage={loadState.status === "error" ? loadState.message : null}
-      unpackLabel="Init pack"
+      unpackLabel={t("common.initPack")}
       unpacking={isInitializing}
       unpackDisabled={!folderPath}
       onUnpack={() => void handleInitPack()}
@@ -363,24 +369,24 @@ export default function BgmTableView({
         loadState.status === "ready"
           ? [
               {
-                label: "Structure",
+                label: t("common.structure"),
                 value: loadState.pack.structureJsonPath,
                 onOpen: () => void dirname(loadState.pack.structureJsonPath).then((target) => openPath(target)),
               },
               {
-                label: "File",
+                label: t("common.file"),
                 value: loadState.filePath,
                 onOpen: () => void dirname(loadState.filePath).then((target) => openPath(target)),
               },
               {
-                label: "Pack",
+                label: t("common.pack"),
                 value: `${BGM_TABLE_PACK_HASH}.fhm2d`,
               },
             ]
           : undefined
       }
       loadedLabel={
-        loadState.status === "ready" ? `Loaded: ${loadState.table.entries.length} cues` : undefined
+        loadState.status === "ready" ? t("sound.loadedCues", { count: loadState.table.entries.length }) : undefined
       }
       notice={
         loadState.status === "ready" ? (
@@ -401,13 +407,13 @@ export default function BgmTableView({
             <Input
               value={addCueName}
               onChange={(event) => setAddCueName(event.target.value)}
-              placeholder="vstg_battle_9004"
+              placeholder={t("bgmTable.cuePlaceholder")}
               disabled={!loadState.writable}
               className="h-8 font-mono text-xs"
             />
             <Button size="sm" onClick={() => void handleAdd()} disabled={!loadState.writable} className="h-8">
               <Plus className="h-4 w-4" />
-              Add
+              {t("common.add")}
             </Button>
           </div>
         ) : null
@@ -418,7 +424,7 @@ export default function BgmTableView({
             <Input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search"
+              placeholder={t("common.search")}
               className="h-8 text-xs"
             />
             <ScrollArea className="min-h-0 flex-1 rounded-md bg-muted/20">
@@ -438,10 +444,12 @@ export default function BgmTableView({
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate font-medium">{bgmEntryLabel(entry)}</span>
-                        <span className="shrink-0 text-[10px] text-muted-foreground">g{entry.bankGroup}</span>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                          {t("bgmTable.bankGroupAbbrev", { group: entry.bankGroup })}
+                        </span>
                       </div>
                       {missing.length > 0 ? (
-                        <div className="text-[10px] font-medium text-amber-600">warning</div>
+                        <div className="text-[10px] font-medium text-amber-600">{t("common.warning")}</div>
                       ) : null}
                     </button>
                   );
@@ -455,10 +463,14 @@ export default function BgmTableView({
         loadState.status === "ready" && selected && selectedIndex != null ? (
           <div className="space-y-4 rounded-lg bg-muted/20 p-4">
             {selectedEmpty.length > 0 ? (
-              <div className="text-xs font-medium text-amber-600">Empty: {selectedEmpty.join(", ")}</div>
+              <div className="text-xs font-medium text-amber-600">
+                {t("sound.emptyFields", { fields: selectedEmpty.join(", ") })}
+              </div>
             ) : null}
             <div className="space-y-1">
-              <Label className={cn("text-xs", selectedEmpty.includes("cueName") && "text-amber-600")}>Cue name</Label>
+              <Label className={cn("text-xs", selectedEmpty.includes("cueName") && "text-amber-600")}>
+                {t("bgmTable.cueName")}
+              </Label>
               <Input
                 value={selected.cueName ?? ""}
                 onChange={(event) => {
@@ -468,13 +480,13 @@ export default function BgmTableView({
                   markChanged({ ...loadState.table, entries });
                 }}
                 onBlur={() => void updateSelected({ cueName: selected.cueName ?? "" })}
-                placeholder="optional (CRC32 of bank cue)"
+                placeholder={t("bgmTable.cuePlaceholderHint")}
                 disabled={!loadState.writable}
                 className={cn("h-8 font-mono text-xs", selectedEmpty.includes("cueName") && "border-amber-500")}
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Bank group</Label>
+              <Label className="text-xs">{t("bgmTable.bankGroup")}</Label>
               <Input
                 type="number"
                 value={selected.bankGroup}
@@ -487,25 +499,25 @@ export default function BgmTableView({
               />
             </div>
             <HashField
-              label="cueHash (entryId)"
+              label={t("bgmTable.cueHashEntryId")}
               value={selected.entryId}
               empty={selectedEmpty.includes("cueHash")}
               disabled={!loadState.writable}
               onCommit={(entryId) => void updateSelected({ entryId })}
             />
             <HashField
-              label="cueLabelCrc"
+              label={t("bgmTable.cueLabelCrc")}
               value={selected.cueLabelCrc}
               empty={selectedEmpty.includes("cueLabelCrc")}
               disabled
               onCommit={() => undefined}
             />
-            <HashField label="routeSelector" value={selected.routeSelector} empty={false} disabled onCommit={() => undefined} />
+            <HashField label={t("bgmTable.routeSelector")} value={selected.routeSelector} empty={false} disabled onCommit={() => undefined} />
             {showGroup6Assets ? (
               <div className="space-y-2 rounded-md border border-border/60 p-3">
-                <div className="text-xs font-medium">Group 6 files (Audio Editor)</div>
+                <div className="text-xs font-medium">{t("bgmTable.group6")}</div>
                 <div className="break-all text-[11px] text-muted-foreground">
-                  Audio: {audioPath || "-"}
+                  {t("bgmTable.audio", { path: audioPath || "-" })}
                 </div>
                 {audioPath ? (
                   <Button
@@ -514,14 +526,16 @@ export default function BgmTableView({
                     className="h-7 text-xs"
                     onClick={async () => {
                       if (await exists(audioPath)) await openPath(audioPath);
-                      else toast.error("Audio file not found");
+                      else toast.error(t("common.audioNotFound"));
                     }}
                   >
-                    Open audio
+                    {t("common.openAudio")}
                   </Button>
                 ) : null}
                 <div className="break-all text-[11px] text-muted-foreground">
-                  Bank: {bankPath ?? `${BGM_BANK_UPDATE_02_PACK_HASH} not unpacked`}
+                  {t("bgmTable.bank", {
+                    path: bankPath ?? t("bgmTable.bankNotUnpacked", { hash: BGM_BANK_UPDATE_02_PACK_HASH }),
+                  })}
                 </div>
                 {bankPath ? (
                   <Button
@@ -530,7 +544,7 @@ export default function BgmTableView({
                     className="h-7 text-xs"
                     onClick={() => void dirname(bankPath).then((target) => openPath(target))}
                   >
-                    Open bank folder
+                    {t("common.openBankFolder")}
                   </Button>
                 ) : (
                   <Button
@@ -539,7 +553,7 @@ export default function BgmTableView({
                     disabled={isUnpackingBank}
                     onClick={() => void handleInitBank()}
                   >
-                    {isUnpackingBank ? "Unpacking bank..." : "Unpack UPDATE_02 bank"}
+                    {isUnpackingBank ? t("bgmTable.unpackingBank") : t("bgmTable.unpackBank")}
                   </Button>
                 )}
               </div>
@@ -552,11 +566,11 @@ export default function BgmTableView({
               className="text-destructive"
             >
               <Trash2 className="h-4 w-4" />
-              Remove
+              {t("common.remove")}
             </Button>
           </div>
         ) : loadState.status === "ready" ? (
-          <div className="flex h-full items-center text-sm text-muted-foreground">Select a row, or add one.</div>
+          <div className="flex h-full items-center text-sm text-muted-foreground">{t("common.selectRowOrAdd")}</div>
         ) : null
       }
     />

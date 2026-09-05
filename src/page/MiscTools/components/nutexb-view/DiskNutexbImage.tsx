@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { parseRgbaResponse } from "@/components/ssbh-model-preview/nutexbPreviewCache";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,7 @@ export function DiskNutexbImage({
   className?: string;
   maxDimension?: number;
 }) {
+  const { t } = useTranslation("misc-tools-b");
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [pngUrl, setPngUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +76,7 @@ export function DiskNutexbImage({
           className="pointer-events-none absolute inset-0 h-full w-full object-contain"
         />
       ) : pngUrl ? (
-        <img src={pngUrl} alt="" className="absolute inset-0 h-full w-full object-contain" />
+        <img src={pngUrl} alt={t("nutexb.previewAlt")} className="absolute inset-0 h-full w-full object-contain" />
       ) : null}
       {loading ? (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40">
@@ -82,7 +84,7 @@ export function DiskNutexbImage({
         </div>
       ) : null}
       {error ? (
-        <div className="absolute inset-x-1 bottom-1 line-clamp-2 text-[10px] text-destructive">{error}</div>
+        <div className="absolute inset-x-1 bottom-1 line-clamp-2 text-[10px] text-destructive" data-i18n-ignore="">{error}</div>
       ) : null}
     </div>
   );

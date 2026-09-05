@@ -17,6 +17,7 @@ import { StageList as StageListComponent, type StageListSortKey } from "./StageL
 import type { StageIconIndexPickerGroup } from "./StageIconIndexPickerPopover";
 import type { UseResourceRegistryResult } from "@/hooks/useResourceRegistry";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
+import { useTranslation } from "react-i18next";
 
 function createEmptyStage(id: number): StageListEntry {
   return {
@@ -96,6 +97,7 @@ export function StageEditor({
   stageIconIndexPickerError = null,
   resourceRegistry,
 }: StageEditorProps) {
+  const { t } = useTranslation("test-stage-list-view");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteCandidateIndex, setDeleteCandidateIndex] = useState<number | null>(null);
 
@@ -231,7 +233,7 @@ export function StageEditor({
   if (!stageListData) {
     return (
       <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground">
-        Select this tab to load stage_list.bin
+        {t("editor.selectTab")}
       </div>
     );
   }
@@ -240,10 +242,10 @@ export function StageEditor({
     <div className="flex h-full gap-4 min-h-0">
       <div className="w-1/3 border rounded-lg p-3 overflow-hidden flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-3">
-          <div className="font-semibold text-sm">Stages ({stageListData.entries.length})</div>
+          <div className="font-semibold text-sm">{t("editor.countLabel", { count: stageListData.entries.length })}</div>
           <Button size="sm" onClick={handleAdd} disabled={!editable} className="inline-flex items-center gap-2">
             <Plus className="w-4 h-4" />
-            Add
+            {t("actions.add")}
           </Button>
         </div>
 
@@ -287,7 +289,7 @@ export function StageEditor({
           />
         ) : (
           <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-            Select a stage to edit
+            {t("editor.selectToEdit")}
           </div>
         )}
       </div>
@@ -304,19 +306,17 @@ export function StageEditor({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Stage</AlertDialogTitle>
+            <AlertDialogTitle>{t("editor.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteCandidateStage ? (
-                <>Are you sure you want to delete stage #{deleteCandidateIndex}? This action cannot be undone.</>
-              ) : (
-                <>Are you sure you want to delete this stage? This action cannot be undone.</>
-              )}
+              {deleteCandidateStage
+                ? t("editor.deleteNamed", { index: deleteCandidateIndex })
+                : t("editor.deleteUntitled")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={closeDeleteDialog}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={closeDeleteDialog}>{t("actions.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} disabled={!editable} className="bg-red-600 hover:bg-red-700">
-              Delete
+              {t("actions.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

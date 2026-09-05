@@ -15,6 +15,7 @@ import {
 import { open } from "@tauri-apps/plugin-dialog";
 import { useNumatbStore, COMMON_ATTRIBUTES, getParamType, type ParamDataType } from "@/store/numatbStore";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Loader2, FileEdit, Save, RotateCcw, X, Plus, Copy, Trash2, Edit3 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,7 @@ interface AttributeEditorProps {
 }
 
 function AttributeEditor({ attribute, materialIndex, attributeIndex, onUpdate, onDelete }: AttributeEditorProps) {
+    const { t } = useTranslation("misc-tools-a");
     const dataType = getParamType(attribute.param_id, attribute.param.data);
     const data = attribute.param.data;
 
@@ -63,7 +65,7 @@ function AttributeEditor({ attribute, materialIndex, attributeIndex, onUpdate, o
                             checked={data.Boolean === 1}
                             onCheckedChange={(checked) => handleUpdate(checked ? 1 : 0)}
                         />
-                        <Label htmlFor={`${materialIndex}-${attributeIndex}-bool`} className="text-sm">
+                        <Label htmlFor={`${materialIndex}-${attributeIndex}-bool`} className="text-sm" data-i18n-ignore="">
                             {data.Boolean === 1 ? 'True' : 'False'}
                         </Label>
                     </div>
@@ -86,7 +88,7 @@ function AttributeEditor({ attribute, materialIndex, attributeIndex, onUpdate, o
                     <Input
                         value={data.String || ""}
                         onChange={(e) => handleUpdate(e.target.value)}
-                        placeholder="Enter text..."
+                        placeholder={t("numatb.enterText")}
                         className="text-sm font-mono"
                     />
                 );
@@ -96,7 +98,7 @@ function AttributeEditor({ attribute, materialIndex, attributeIndex, onUpdate, o
                     <Input
                         value={data.String1 || ""}
                         onChange={(e) => handleUpdate(e.target.value)}
-                        placeholder="Enter text..."
+                        placeholder={t("numatb.enterText")}
                         className="text-sm font-mono"
                     />
                 );
@@ -104,7 +106,7 @@ function AttributeEditor({ attribute, materialIndex, attributeIndex, onUpdate, o
             case 'Vector4':
                 const vector = data.Vector4 || { x: 0, y: 0, z: 0, w: 0 };
                 return (
-                    <div className="grid grid-cols-4 gap-1">
+                    <div className="grid grid-cols-4 gap-1" data-i18n-ignore="">
                         <Input
                             type="number"
                             step="0.01"
@@ -143,7 +145,7 @@ function AttributeEditor({ attribute, materialIndex, attributeIndex, onUpdate, o
             case 'Unk7':
                 const color = data.Unk7 || { r: 0, g: 0, b: 0, a: 0 };
                 return (
-                    <div className="grid grid-cols-4 gap-1">
+                    <div className="grid grid-cols-4 gap-1" data-i18n-ignore="">
                         <Input
                             type="number"
                             step="0.01"
@@ -181,7 +183,7 @@ function AttributeEditor({ attribute, materialIndex, attributeIndex, onUpdate, o
 
             case 'Sampler':
                 return (
-                    <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded">
+                    <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded" data-i18n-ignore="">
                         Sampler (Complex - Read Only)
                     </div>
                 );
@@ -189,7 +191,7 @@ function AttributeEditor({ attribute, materialIndex, attributeIndex, onUpdate, o
             default:
                 return (
                     <div className="text-xs text-muted-foreground">
-                        Unknown type
+                        {t("numatb.unknownType")}
                     </div>
                 );
         }
@@ -244,6 +246,7 @@ const MaterialDetail = memo(function MaterialDetail({
     onAddAttribute,
     onRemoveAttribute,
 }: MaterialDetailProps) {
+    const { t } = useTranslation("misc-tools-a");
     const attributeListRef = useRef<HTMLDivElement | null>(null);
     const attributes = useMemo(
         () => (material.attributes ?? []).map((attribute: any, attributeIndex: number) => ({
@@ -282,14 +285,14 @@ const MaterialDetail = memo(function MaterialDetail({
                             }}
                             autoFocus
                             className="text-lg font-semibold"
-                            placeholder="Enter material label..."
+                            placeholder={t("numatb.enterLabel")}
                         />
                         <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => onSaveLabelEdit(materialIndex)}
                             className="h-8 w-8 p-0"
-                            title="Save"
+                            title={t("numatb.save")}
                         >
                             <Save className="h-3.5 w-3.5" />
                         </Button>
@@ -298,38 +301,38 @@ const MaterialDetail = memo(function MaterialDetail({
                             size="sm"
                             onClick={onCancelLabelEdit}
                             className="h-8 w-8 p-0"
-                            title="Cancel"
+                            title={t("numatb.cancel")}
                         >
                             <X className="h-3.5 w-3.5" />
                         </Button>
                     </div>
                 ) : (
                     <div className="flex min-w-0 items-center gap-2">
-                        <h4 className="truncate text-lg font-semibold">{material.material_label}</h4>
+                        <h4 className="truncate text-lg font-semibold" data-i18n-ignore="">{material.material_label}</h4>
                         <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => onStartEditLabel(materialIndex, material.material_label)}
                             className="h-8 w-8 shrink-0 p-0"
-                            title="Edit label"
+                            title={t("numatb.editLabel")}
                         >
                             <Edit3 className="h-3.5 w-3.5" />
                         </Button>
                     </div>
                 )}
-                <span className="max-w-[40%] truncate text-sm text-muted-foreground">{material.shader_label}</span>
+                <span className="max-w-[40%] truncate text-sm text-muted-foreground" data-i18n-ignore="">{material.shader_label}</span>
             </div>
 
             <div className="flex items-center gap-2">
-                <Label className="shrink-0 text-sm font-medium">Add Attribute</Label>
+                <Label className="shrink-0 text-sm font-medium">{t("numatb.addAttribute")}</Label>
                 {availableAttributes.length === 0 ? (
-                    <span className="text-xs text-muted-foreground">All common attributes are already added</span>
+                    <span className="text-xs text-muted-foreground">{t("numatb.allAttributesAdded")}</span>
                 ) : (
                     <Select onValueChange={(value) => onAddAttribute(materialIndex, value)}>
                         <SelectTrigger className="h-8 flex-1 text-xs">
-                            <SelectValue placeholder="Select attribute to add..." />
+                            <SelectValue placeholder={t("numatb.selectAttribute")} />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent data-i18n-ignore="">
                             {availableAttributes.map((attribute) => (
                                 <SelectItem key={attribute} value={attribute} className="text-xs">
                                     {attribute}
@@ -342,9 +345,9 @@ const MaterialDetail = memo(function MaterialDetail({
 
             <Separator />
 
-            <div className="text-sm font-medium">Attributes ({attributes.length})</div>
+            <div className="text-sm font-medium">{t("numatb.attributes", { count: attributes.length })}</div>
             {attributes.length === 0 ? (
-                <div className="py-8 text-center text-sm text-muted-foreground">No attributes</div>
+                <div className="py-8 text-center text-sm text-muted-foreground">{t("numatb.noAttributes")}</div>
             ) : (
                 <div
                     ref={attributeListRef}
@@ -367,10 +370,10 @@ const MaterialDetail = memo(function MaterialDetail({
                                 >
                                     <div className="space-y-1 rounded-md border p-2">
                                         <div className="flex items-center justify-between gap-2">
-                                            <Label className="truncate text-xs font-medium text-muted-foreground">
+                                            <Label className="truncate text-xs font-medium text-muted-foreground" data-i18n-ignore="">
                                                 {attribute.param_id}
                                             </Label>
-                                            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground" data-i18n-ignore="">
                                                 {dataType}
                                             </span>
                                         </div>
@@ -400,6 +403,7 @@ const MaterialDetail = memo(function MaterialDetail({
 });
 
 export function NumatbEditor({ onClose }: NumatbEditorProps) {
+    const { t } = useTranslation("misc-tools-a");
     const [isOpen, setIsOpen] = useState(false);
     const [hasChanges, setHasChanges] = useState(false);
     const [editingLabel, setEditingLabel] = useState<number | null>(null);
@@ -460,11 +464,13 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                     name: fileName,
                     path: selected
                 });
-                toast.success(`Loaded ${fileName}`);
+                toast.success(t("numatb.loaded", { name: fileName }));
             }
         } catch (error) {
             console.error("Error selecting file:", error);
-            toast.error(`Failed to load file: ${error instanceof Error ? error.message : "Unknown error"}`);
+            toast.error(t("numatb.loadFailed", {
+                message: error instanceof Error ? error.message : t("common.unknownError"),
+            }));
         }
     };
 
@@ -479,7 +485,7 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
     const handleSave = useCallback(async () => {
         await saveFile();
         setHasChanges(false);
-        toast.success("File saved successfully!");
+        toast.success(t("numatb.saved"));
     }, [saveFile]);
 
     const handleReset = useCallback(() => {
@@ -556,13 +562,13 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
     return (
         <>
             <Button variant="outline" className="w-full" onClick={() => setIsOpen(true)}>
-                Open Numatb Editor
+                {t("numatb.open")}
             </Button>
             {isOpen ? (
                 <AppRndModalShell
                     titleId="misc-tools-numatb-editor-title"
-                    title={`Edit ${selectedFile?.name || "Numatb File"}`}
-                    subtitle="Select and edit .numatb material files"
+                    title={t("numatb.editTitle", { name: selectedFile?.name || t("numatb.fileFallback") })}
+                    subtitle={t("numatb.subtitle")}
                     headerIcon={<FileEdit className="h-5 w-5" />}
                     dimensions={NUMATB_MODAL_DIMENSIONS}
                     storageKey="misc-tools-numatb-editor-size"
@@ -576,12 +582,12 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                                 {isConverting ? (
                                     <>
                                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Loading...
+                                        {t("common.loading")}
                                     </>
                                 ) : (
                                     <>
                                         <FileEdit className="mr-2 h-4 w-4" />
-                                        Select Numatb File
+                                        {t("numatb.selectFile")}
                                     </>
                                 )}
                             </Button>
@@ -590,18 +596,18 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                         <div className="flex flex-1 items-center justify-center p-8">
                             <div className="flex items-center space-x-3">
                                 <Loader2 className="animate-spin h-5 w-5" />
-                                <span>Converting file...</span>
+                                <span>{t("numatb.converting")}</span>
                             </div>
                         </div>
                     ) : error ? (
                         <div className="flex flex-1 flex-col items-center justify-center space-y-4 p-8">
-                            <span className="text-red-600">{error}</span>
+                            <span className="text-red-600" data-i18n-ignore="">{error}</span>
                             <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => selectedFile && convertFile(selectedFile)}
                             >
-                                Try Again
+                                {t("numatb.tryAgain")}
                             </Button>
                         </div>
                     ) : numatbData ? (
@@ -619,7 +625,7 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                                             ) : (
                                                 <Save className="h-4 w-4" />
                                             )}
-                                            <span>{isSaving ? "Saving..." : "Save"}</span>
+                                            <span>{isSaving ? t("numatb.saving") : t("numatb.save")}</span>
                                         </Button>
 
                                         <Button
@@ -630,7 +636,7 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                                             className="flex items-center space-x-2"
                                         >
                                             <RotateCcw className="h-4 w-4" />
-                                            <span>Reset</span>
+                                            <span>{t("numatb.reset")}</span>
                                         </Button>
 
                                         <Button
@@ -641,7 +647,7 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                                             className="flex items-center space-x-2"
                                         >
                                             <Plus className="h-4 w-4" />
-                                            <span>Add Entry</span>
+                                            <span>{t("numatb.addEntry")}</span>
                                         </Button>
 
                                         <Button
@@ -652,7 +658,7 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                                             className="flex items-center space-x-2"
                                         >
                                             <Copy className="h-4 w-4" />
-                                            <span>Copy as New</span>
+                                            <span>{t("numatb.copyAsNew")}</span>
                                         </Button>
 
                                         <Button
@@ -663,12 +669,12 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                                             className="flex items-center space-x-2"
                                         >
                                             <FileEdit className="h-4 w-4" />
-                                            <span>Load Different File</span>
+                                            <span>{t("numatb.loadDifferent")}</span>
                                         </Button>
                                     </div>
 
                                     {hasChanges && (
-                                        <span className="text-sm text-orange-600">Unsaved changes</span>
+                                        <span className="text-sm text-orange-600">{t("numatb.unsaved")}</span>
                                     )}
                                 </div>
 
@@ -678,7 +684,7 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                                     <div className="w-64 flex-shrink-0">
                                         <div className="flex h-full min-h-0 flex-col rounded-lg border p-2">
                                             <Label className="mb-2 block text-sm font-medium">
-                                                Materials ({materials.length})
+                                                {t("numatb.materials", { count: materials.length })}
                                             </Label>
                                             <div
                                                 ref={materialListRef}
@@ -709,17 +715,20 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                                                                             : "hover:bg-muted"
                                                                     }`}
                                                                     onClick={() => setSelectedMaterialIndex(materialIndex)}
-                                                                    title={`${material.material_label} (${material.attributes?.length || 0} attributes)`}
+                                                                    title={t("numatb.materialTitle", {
+                                                                        name: material.material_label,
+                                                                        count: material.attributes?.length || 0,
+                                                                    })}
                                                                 >
                                                                     <div className="min-w-0 flex-1">
-                                                                        <div className="truncate font-medium">
-                                                                            {material.material_label || `Material ${materialIndex + 1}`}
+                                                                        <div className="truncate font-medium" data-i18n-ignore="">
+                                                                            {material.material_label || t("numatb.materialFallback", { index: materialIndex + 1 })}
                                                                         </div>
-                                                                        <div className="truncate text-xs text-muted-foreground">
+                                                                        <div className="truncate text-xs text-muted-foreground" data-i18n-ignore="">
                                                                             {material.shader_label}
                                                                         </div>
                                                                         <div className="mt-1 text-xs text-muted-foreground">
-                                                                            {material.attributes?.length || 0} attributes
+                                                                            {t("numatb.attributeCount", { count: material.attributes?.length || 0 })}
                                                                         </div>
                                                                     </div>
                                                                     <Button
@@ -730,7 +739,7 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                                                                             event.stopPropagation();
                                                                             setMaterialToDelete(materialIndex);
                                                                         }}
-                                                                        title="Delete material"
+                                                                        title={t("numatb.deleteMaterial")}
                                                                     >
                                                                         <Trash2 className="h-3.5 w-3.5" />
                                                                     </Button>
@@ -764,7 +773,7 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                         </div>
                     ) : (
                         <div className="flex h-32 flex-1 items-center justify-center text-muted-foreground">
-                            No data to display
+                            {t("numatb.noData")}
                         </div>
                     )}
 
@@ -776,17 +785,17 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                     >
                         <AlertDialogContent>
                             <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Material</AlertDialogTitle>
+                                <AlertDialogTitle>{t("numatb.deleteTitle")}</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    Are you sure you want to delete "
-                                    {materialToDelete === null
-                                        ? ""
-                                        : materials[materialToDelete]?.material_label || `Material ${materialToDelete + 1}`}
-                                    "? This action cannot be undone.
+                                    {t("numatb.deleteConfirm", {
+                                        name: materialToDelete === null
+                                            ? ""
+                                            : materials[materialToDelete]?.material_label || t("numatb.materialFallback", { index: (materialToDelete ?? 0) + 1 }),
+                                    })}
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogCancel>{t("numatb.cancel")}</AlertDialogCancel>
                                 <AlertDialogAction
                                     onClick={() => {
                                         if (materialToDelete !== null) {
@@ -796,7 +805,7 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                                     }}
                                     className="bg-red-600 hover:bg-red-700"
                                 >
-                                    Delete
+                                    {t("numatb.delete")}
                                 </AlertDialogAction>
                             </AlertDialogFooter>
                         </AlertDialogContent>

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { MeshDataJson, MeshObjectJson } from "@/components/ssbh-model-preview/types";
 
@@ -61,19 +62,21 @@ function MeshObjectRow({ obj }: { obj: MeshObjectJson }) {
 }
 
 function MeshTableHeader() {
+  const { t } = useTranslation("scene-page");
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_48px_72px_72px_48px_48px] border-b px-2 py-1.5 text-xs text-muted-foreground">
-      <span className="font-medium">Name</span>
-      <span className="text-right font-medium">Sub</span>
-      <span className="text-right font-medium">Vertices</span>
-      <span className="text-right font-medium">Triangles</span>
-      <span className="text-right font-medium">UVs</span>
-      <span className="text-right font-medium">Bones</span>
+      <span className="font-medium">{t("detailView.meshName")}</span>
+      <span className="text-right font-medium">{t("detailView.meshSub")}</span>
+      <span className="text-right font-medium">{t("detailView.meshVertices")}</span>
+      <span className="text-right font-medium">{t("detailView.meshTriangles")}</span>
+      <span className="text-right font-medium">{t("detailView.meshUvs")}</span>
+      <span className="text-right font-medium">{t("detailView.meshBones")}</span>
     </div>
   );
 }
 
 export function MeshReadonlyTab({ mesh }: MeshReadonlyTabProps) {
+  const { t } = useTranslation("scene-page");
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const meshData = mesh as MeshDataJson | null;
@@ -105,7 +108,7 @@ export function MeshReadonlyTab({ mesh }: MeshReadonlyTabProps) {
   if (!mesh) {
     return (
       <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-        No mesh data (.numshb) available
+        {t("detailView.emptyMesh")}
       </div>
     );
   }
@@ -116,9 +119,9 @@ export function MeshReadonlyTab({ mesh }: MeshReadonlyTabProps) {
   return (
     <div className="p-3 space-y-3">
       <div className="flex items-center gap-4 text-xs text-muted-foreground border-b pb-2">
-        <span>Objects: {objects.length}</span>
-        <span>Total Vertices: {totals.totalVertices.toLocaleString()}</span>
-        <span>Total Triangles: {totals.totalTriangles.toLocaleString()}</span>
+        <span>{t("detailView.meshObjects", { count: objects.length })}</span>
+        <span>{t("detailView.meshTotalVertices", { count: totals.totalVertices.toLocaleString() })}</span>
+        <span>{t("detailView.meshTotalTriangles", { count: totals.totalTriangles.toLocaleString() })}</span>
       </div>
       <div ref={scrollRef} className="overflow-auto max-h-[500px] text-xs">
         <MeshTableHeader />

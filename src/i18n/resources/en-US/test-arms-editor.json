@@ -1,0 +1,86 @@
+{
+  "title": "Arms editor",
+  "outdated": "outdated",
+  "subtitle": "Schema-driven armsparam · prefer Param Editor for full tooling",
+  "filePicker": {
+    "title": "Select armsparam file"
+  },
+  "toolbar": {
+    "load": "Load",
+    "reload": "Reload",
+    "reloadTooltip": "Reload from disk",
+    "save": "Save",
+    "saving": "Saving…"
+  },
+  "entryLabel": {
+    "noLabel": "(no label)",
+    "actionAt": "action",
+    "resourceAt": "res",
+    "ammo": "ammo {{initial}}/{{max}}",
+    "slot": "slot {{index}}"
+  },
+  "counts": {
+    "entries": "{{count}} entries",
+    "fieldSpecs": "{{count}} field specs",
+    "entrySize": "entry size {{size}}",
+    "selected": "selected {{id}}"
+  },
+  "aria": {
+    "importExport": "Import and export",
+    "entryTools": "Entry tools"
+  },
+  "buttons": {
+    "import": "Import",
+    "importTooltip": "Import hex bytes or entry JSON",
+    "entryJson": "Entry JSON",
+    "entryJsonTooltip": "Copy selected entry as JSON",
+    "allJson": "All JSON",
+    "allJsonTooltip": "Copy full view data as JSON",
+    "hex": "Hex",
+    "hexTooltip": "Hex preview",
+    "duplicate": "Duplicate",
+    "duplicateTooltip": "Duplicate selected entry",
+    "add": "Add",
+    "addTooltip": "Add blank entry",
+    "delete": "Delete",
+    "deleteTooltip": "Delete selected entry",
+    "edit": "Edit",
+    "cancel": "Cancel"
+  },
+  "empty": {
+    "selectEntry": "Select an entry to edit schema fields",
+    "loadFile": "Load an armsparam to edit entries",
+    "noEntrySelected": "No entry selected",
+    "help": "Pick an {{file}} path, then Load. Fields follow the Rust command pool (ammoCount, initialAmmoCount, CSA/CSB stages and timing, native reload groups, slotIndex, and kind-7 labels)."
+  },
+  "status": {
+    "unsaved": "Unsaved changes",
+    "unsavedShort": "Unsaved",
+    "schema": "Schema: {{type}}"
+  },
+  "hex": {
+    "title": "Hex Preview",
+    "offset": "Offset",
+    "hex": "Hex",
+    "ascii": "Ascii",
+    "editHeader": "Edit hex bytes · {{count}} bytes · 16 bytes per line",
+    "subtitle": "Hex preview: {{id}} · {{count}} bytes · little-endian row data · {{mode}}",
+    "editing": "editing",
+    "viewOnly": "view only"
+  },
+  "toast": {
+    "loaded": "Loaded armsparam ({{count}} entries)",
+    "saved": "Saved armsparam",
+    "hexSaved": "Hex preview changes saved to entry fields",
+    "duplicated": "Duplicated entry",
+    "added": "Added blank entry",
+    "deleted": "Deleted entry"
+  },
+  "errors": {
+    "loadFailed": "Failed to load armsparam: {{error}}",
+    "saveFailed": "Failed to save armsparam: {{error}}",
+    "fieldLayout": "Unable to resolve entry field layout.",
+    "noEntryDuplicate": "No entry to duplicate",
+    "noTemplate": "No entry template available"
+  }
+}

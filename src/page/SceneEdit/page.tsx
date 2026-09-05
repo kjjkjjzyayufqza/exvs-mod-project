@@ -3,6 +3,8 @@ import { useDefaultLayout } from "react-resizable-panels";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import * as THREE from "three";
 import {
   getStoredDialogDefaultPath,
@@ -313,21 +315,21 @@ const EMPTY_STAGE_TEXTURE_FILE_PATHS: StageTextureFilePathInventory = {
   infoTexturePaths: [],
 };
 
-function createStaticMeshImportSteps(fileName: string, directToDisk: boolean): ImportStep[] {
+function createStaticMeshImportSteps(fileName: string, directToDisk: boolean, t: TFunction): ImportStep[] {
   const steps: ImportStep[] = [
-    { step: "read", label: `Preparing ${fileName}...`, status: "active" },
-    { step: "check", label: "Checking file size and IPC path...", status: "pending" },
-    { step: "convert", label: "Waiting for Rust SSBH conversion...", status: "pending" },
-    { step: "artifacts", label: "Preparing converted SSBH artifacts...", status: "pending" },
+    { step: "read", label: t("progress.preparing", { fileName }), status: "active" },
+    { step: "check", label: t("progress.checking"), status: "pending" },
+    { step: "convert", label: t("progress.waitingConversion"), status: "pending" },
+    { step: "artifacts", label: t("progress.preparingArtifacts"), status: "pending" },
   ];
   if (directToDisk) {
-    steps.push({ step: "write", label: "Writing converted files to disk...", status: "pending" });
-    steps.push({ step: "hkt", label: "Generating HKT collision...", status: "pending" });
+    steps.push({ step: "write", label: t("progress.writing"), status: "pending" });
+    steps.push({ step: "hkt", label: t("progress.generatingHkt"), status: "pending" });
   } else {
-    steps.push({ step: "hkt", label: "Generating HKT collision...", status: "pending" });
-    steps.push({ step: "preview", label: "Building viewport preview...", status: "pending" });
+    steps.push({ step: "hkt", label: t("progress.generatingHkt"), status: "pending" });
+    steps.push({ step: "preview", label: t("progress.buildingPreview"), status: "pending" });
   }
-  steps.push({ step: "done", label: "Completing static mesh import...", status: "pending" });
+  steps.push({ step: "done", label: t("progress.completing"), status: "pending" });
   return steps;
 }
 
@@ -344,7 +346,7 @@ function staticMeshPhaseToStep(phase: string): string {
   }
 }
 
-function mapStaticMeshProgress(chunk: StaticMeshImportProgress): ImportProgressUpdate {
+function mapStaticMeshProgress(chunk: StaticMeshImportProgress, t: TFunction): ImportProgressUpdate {
   switch (chunk.kind) {
     case "status":
       return {
@@ -355,70 +357,70 @@ function mapStaticMeshProgress(chunk: StaticMeshImportProgress): ImportProgressU
     case "sourceFile":
       return {
         step: "check",
-        label: `Checked ${chunk.format} source size`,
-        detail: `${formatImportBytes(chunk.bytes)} - ${chunk.path}`,
+        label: t("progress.checkedSource", { format: chunk.format }),
+        detail: t("progress.sourceDetail", { bytes: formatImportBytes(chunk.bytes), path: chunk.path }),
         progress: 12,
       };
     case "ipcWarning":
       return {
         step: "check",
-        label: "Large file / IPC payload warning",
-        detail: `${chunk.message} (${formatImportBytes(chunk.bytes)})`,
+        label: t("progress.ipcWarning"),
+        detail: t("progress.ipcDetail", { message: chunk.message, bytes: formatImportBytes(chunk.bytes) }),
         progress: 14,
         tone: "warning",
       };
     case "convertStarted":
       return {
         step: "convert",
-        label: `Converting ${chunk.format} to SSBH in Rust...`,
-        detail: `${chunk.sourceName} -> ${chunk.baseFilename}`,
+        label: t("progress.converting", { format: chunk.format }),
+        detail: t("progress.convertDetail", { source: chunk.sourceName, target: chunk.baseFilename }),
         progress: 35,
       };
     case "convertFinished":
       return {
         step: "artifacts",
-        label: "SSBH conversion finished",
-        detail: `${chunk.fileCount} artifact(s), ${formatImportBytes(chunk.totalBytes)}`,
+        label: t("progress.conversionFinished"),
+        detail: t("progress.artifactsDetail", { count: chunk.fileCount, bytes: formatImportBytes(chunk.totalBytes) }),
         progress: 66,
       };
     case "writeStarted":
       return {
         step: "write",
-        label: "Writing converted files directly to disk...",
-        detail: `${chunk.outputDir}\\${chunk.baseFilename}`,
+        label: t("progress.writingDirect"),
+        detail: t("progress.outputDetail", { path: `${chunk.outputDir}\\${chunk.baseFilename}` }),
         progress: 72,
       };
     case "writeFinished":
       return {
         step: "write",
-        label: "Converted files written",
-        detail: `${chunk.fileCount} file(s) written`,
+        label: t("progress.filesWritten"),
+        detail: t("progress.writtenDetail", { count: chunk.fileCount }),
         progress: 82,
       };
     case "hktStarted":
       return {
         step: "hkt",
-        label: "Generating HKT collision in Rust...",
+        label: t("progress.generatingHktRust"),
         detail: chunk.sourceName,
         progress: 86,
       };
     case "hktFinished":
       return {
         step: "hkt",
-        label: "HKT collision generated",
-        detail: `${formatImportBytes(chunk.bytes)}, ${chunk.triangleCount} triangles`,
+        label: t("progress.hktGenerated"),
+        detail: t("progress.hktDetail", { bytes: formatImportBytes(chunk.bytes), triangles: chunk.triangleCount }),
         progress: 94,
       };
     case "complete":
       return {
         step: "artifacts",
-        label: "Rust conversion command completed",
+        label: t("progress.commandCompleted"),
         progress: 90,
       };
     case "error":
       return {
         step: "convert",
-        label: "Static mesh conversion failed",
+        label: t("progress.conversionFailed"),
         detail: chunk.message,
         progress: 100,
         tone: "warning",
@@ -488,12 +490,12 @@ function stageStructureCandidatesForPackRoot(packRoot: string): string[] {
   return [...new Set(candidates)];
 }
 
-async function promptStagePackMetadataMigration(packRoot: string): Promise<string> {
+async function promptStagePackMetadataMigration(packRoot: string, title: string): Promise<string> {
   for (const structureJsonPath of stageStructureCandidatesForPackRoot(packRoot)) {
     try {
       const result = await promptAndMigrateFhm2dStructureIfNeeded({
         structureJsonPath,
-        title: "Migrate Stage FHM2D structure",
+        title,
       });
       return result?.rootPath ?? packRoot;
     } catch {
@@ -554,6 +556,7 @@ function ResetIconButton({ onClick, label, disabled }: { onClick: () => void; la
 }
 
 export default function SceneEdit() {
+  const { t } = useTranslation("scene-page");
   const viewportRef = useRef<MapViewportHandle>(null);
   const allNodeIdsRef = useRef<string[]>([]);
   /** Stage root whose bundle load is currently in flight, to dedupe re-entrant opens. */
@@ -731,9 +734,9 @@ export default function SceneEdit() {
   const collisionVisibility = useSceneEditorStore((s) => s.collisionVisibility);
 
   const INITIAL_STEPS: ImportStep[] = [
-    { step: "read", label: "Reading file...", status: "pending" },
-    { step: "extract", label: "Decompressing FHM2D...", status: "pending" },
-    { step: "tree", label: "Parsing folder structure...", status: "pending" },
+    { step: "read", label: t("progress.readingFile"), status: "pending" },
+    { step: "extract", label: t("progress.decompressing"), status: "pending" },
+    { step: "tree", label: t("progress.parsingStructure"), status: "pending" },
   ];
 
   const handleProgressEvent = useCallback(
@@ -809,13 +812,13 @@ export default function SceneEdit() {
       if (!staticMeshProgressActiveRef.current) {
         return;
       }
-      const update = mapStaticMeshProgress(chunk);
+      const update = mapStaticMeshProgress(chunk, t);
       applyStaticMeshProgressUpdate(update);
       if (chunk.kind === "ipcWarning") {
-        toast.warning("Large static mesh import", { description: chunk.message });
+        toast.warning(t("warnings.largeMeshImport"), { description: chunk.message });
       }
     },
-    [applyStaticMeshProgressUpdate],
+    [applyStaticMeshProgressUpdate, t],
   );
 
   const unlistenRef = useRef<UnlistenFn | null>(null);
@@ -935,11 +938,11 @@ export default function SceneEdit() {
   useEffect(() => {
     if (textureWarnings.length > 0) {
       toast.warning(
-        `${textureWarnings.length} texture(s) failed to decode`,
+        t("warnings.textureDecode", { count: textureWarnings.length }),
         { description: textureWarnings.slice(0, 3).join("\n") },
       );
     }
-  }, [textureWarnings]);
+  }, [textureWarnings, t]);
 
   useEffect(() => {
     return () => {
@@ -982,10 +985,10 @@ export default function SceneEdit() {
     (size: number) => {
       const normalized = normalizeSceneGizmoSize(size);
       void setSceneEditGizmoSize(normalized).catch((err) => {
-        toast.error("Failed to save gizmo size", { description: String(err) });
+        toast.error(t("errors.saveGizmoSize"), { description: String(err) });
       });
     },
-    [setSceneEditGizmoSize],
+    [setSceneEditGizmoSize, t],
   );
 
   const applyPrimarySelectionState = useCallback(
@@ -1124,7 +1127,7 @@ export default function SceneEdit() {
       });
 
       if (hasLockedOrHiddenNode(requestedIds)) {
-        toast.error("Locked or hidden scene objects cannot be duplicated");
+        toast.error(t("errors.duplicateLocked"));
         return;
       }
 
@@ -1150,7 +1153,7 @@ export default function SceneEdit() {
         useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         useSceneEditorStore.getState().recordCommand({
           type: "duplicate-dae",
-          description: "Duplicate imported DAE actor",
+          description: t("actions.duplicateDae"),
           undo: () => {
             setImportedDaeObjects((prev) => prev.filter((obj) => !created.some((c) => c.id === obj.id)));
             created.forEach((c) => useSceneDirtyStore.getState().resetObject(c.name));
@@ -1169,7 +1172,7 @@ export default function SceneEdit() {
         setSelectedNodeIdRaw(nextSelectedId);
         setSelectedPlacementIdxRaw(null);
         if (nextSelectedId) useSceneEditorStore.getState().select(nextSelectedId);
-        toast.success(`Duplicated ${created.length} DAE object(s)`);
+        toast.success(t("success.duplicatedDae", { count: created.length }));
         return;
       }
 
@@ -1196,7 +1199,7 @@ export default function SceneEdit() {
         }
         useSceneEditorStore.getState().recordCommand({
           type: "duplicate-placement",
-          description: "Duplicate placement row",
+          description: t("actions.duplicatePlacement"),
           undo: () => {
             setPlacementEntries((prev) => prev.filter((_, i) => i !== result.insertedIndex));
             setSelectedPlacementIdxRaw(firstPlacementIdx);
@@ -1221,7 +1224,7 @@ export default function SceneEdit() {
             useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
           },
         });
-        toast.success("Placement row duplicated");
+        toast.success(t("success.placementDuplicated"));
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Failed to duplicate selection");
       }
@@ -1320,11 +1323,11 @@ export default function SceneEdit() {
 
       if (bundle.warnings.length > 0) {
         toast.warning(
-          `Stage loaded with ${bundle.warnings.length} warning(s)`,
+          t("success.stageWarnings", { count: bundle.warnings.length }),
           { description: bundle.warnings.slice(0, 3).join("\n") }
         );
       } else {
-        toast.success("Stage loaded successfully");
+        toast.success(t("success.stageLoaded"));
       }
     },
     []
@@ -1407,7 +1410,7 @@ export default function SceneEdit() {
 
       if (skeleton.warnings.length > 0) {
         toast.warning(
-          `Skeleton loaded with ${skeleton.warnings.length} warning(s)`,
+          t("success.skeletonWarnings", { count: skeleton.warnings.length }),
           { description: skeleton.warnings.slice(0, 3).join("\n") }
         );
       }
@@ -1468,7 +1471,7 @@ export default function SceneEdit() {
       console.warn("[SceneEdit] Failed to clear nutexb preview cache:", err);
     }
     viewportRef.current?.resetCamera();
-    toast.success("Scene memory and caches cleared");
+    toast.success(t("success.cacheCleared"));
   }, [resetState]);
 
   const handleOpenFolder = useCallback(async () => {
@@ -1481,7 +1484,7 @@ export default function SceneEdit() {
       if (!selected || typeof selected !== "string") return;
       await rememberStoredDialogSelection(SCENE_OPEN_FOLDER_DIALOG_PATH_KEY, selected, "directory");
 
-      const packRoot = await promptStagePackMetadataMigration(selected);
+      const packRoot = await promptStagePackMetadataMigration(selected, t("actions.migrateStructure"));
       const stageRoot = `${packRoot}\\0\\0`;
 
       // Guard against re-entrant loads of the same stage (the heavy bundle load was
@@ -1532,15 +1535,15 @@ export default function SceneEdit() {
             }
             setHavokMeshDataMap(map);
             setHavokMetaMap(meta);
-            toast.success(`Loaded ${map.size} collision mesh(es)`);
+            toast.success(t("success.collisionLoaded", { count: map.size }));
           } else {
-            toast.info("No HKT collision files found");
+            toast.info(t("info.noHktFiles"));
           }
         } catch (e) {
-          toast.error("Failed to load collision data", { description: String(e) });
+          toast.error(t("errors.collisionLoadFailed"), { description: String(e) });
         }
       }).catch((e) => {
-        toast.error("Havok scene session failed", { description: String(e) });
+        toast.error(t("errors.havokSessionFailed"), { description: String(e) });
       }).finally(() => {
         setHktLoadProgress(null);
       });
@@ -1619,11 +1622,11 @@ export default function SceneEdit() {
               setModelLoadProgress(null);
               if (streamIssues.length > 0) {
                 toast.warning(
-                  `Stage streamed with ${streamIssues.length} issue(s)`,
+                  t("warnings.stageStreamed", { count: streamIssues.length }),
                   { description: streamIssues.slice(0, 3).join("\n") },
                 );
               } else {
-                toast.success("Stage loaded successfully");
+                toast.success(t("success.stageLoaded"));
               }
               break;
           }
@@ -1644,7 +1647,7 @@ export default function SceneEdit() {
       });
     } catch (err: unknown) {
       loadTimer?.fail(err);
-      toast.error("Failed to load stage", { description: String(err) });
+      toast.error(t("errors.stageLoadFailed"), { description: String(err) });
     } finally {
       loadTimer?.end();
       setModelLoadProgress(null);
@@ -1689,7 +1692,7 @@ export default function SceneEdit() {
       });
     } catch (err: any) {
       setImportProgress((prev) => ({ ...prev, open: false }));
-      toast.error("FHM2D rename preview failed", { description: String(err) });
+      toast.error(t("errors.renamePreviewFailed"), { description: String(err) });
     } finally {
       setIsLoading(false);
     }
@@ -1707,7 +1710,7 @@ export default function SceneEdit() {
 
       const outputDir = await open({
         directory: true,
-        title: "Select output folder",
+        title: t("actions.selectOutputFolder"),
         defaultPath: await getStoredDialogDefaultPath(SCENE_EXTRACT_FHM2D_OUTPUT_DIALOG_PATH_KEY),
       });
       if (!outputDir || typeof outputDir !== "string") return;
@@ -1719,18 +1722,18 @@ export default function SceneEdit() {
         .pop()
         ?.replace(/\.fhm2d$/i, "") ?? "stage";
       const enteredName = window.prompt(
-        "Name for extracted FHM2D folder",
+        t("actions.extractedFolderName"),
         sanitizeFhm2dStructureName(sourceStem),
       );
       if (enteredName == null) return;
       const outputName = sanitizeFhm2dStructureName(enteredName);
 
       const extractSteps: SaveStepInfo[] = [
-        { id: "extract", label: "Extract FHM2D binary", status: "running" },
-        { id: "textures", label: "Consolidate textures to shared folder", status: "pending" },
-        { id: "done", label: "Complete", status: "pending" },
+        { id: "extract", label: t("progress.extractBinary"), status: "running" },
+        { id: "textures", label: t("progress.consolidateTextures"), status: "pending" },
+        { id: "done", label: t("progress.complete"), status: "pending" },
       ];
-      setSaveProgressState({ open: true, title: "Extract FHM2D", steps: extractSteps, canClose: false });
+      setSaveProgressState({ open: true, title: t("actions.extractFhm2d"), steps: extractSteps, canClose: false });
 
       const unlisten = await listen<{ step: string; label: string; detail: string | null }>(
         "extract-fhm2d-progress",
@@ -1774,12 +1777,12 @@ export default function SceneEdit() {
 
         if (result.warnings.length > 0) {
           toast.warning(
-            `Extracted with ${result.warnings.length} warning(s)`,
+            t("warnings.extractedWarnings", { count: result.warnings.length }),
             { description: result.warnings.slice(0, 3).join("\n") },
           );
         } else {
           const sizeMb = (result.totalBytes / (1024 * 1024)).toFixed(1);
-          toast.success(`Extracted ${result.totalFiles} files (${sizeMb} MB)`, {
+          toast.success(t("success.extractedFiles", { count: result.totalFiles, size: sizeMb }), {
             description: result.outputDir,
           });
         }
@@ -1794,7 +1797,7 @@ export default function SceneEdit() {
         ),
         canClose: true,
       }));
-      toast.error("FHM2D extraction failed", { description: String(err) });
+      toast.error(t("errors.extractionFailed"), { description: String(err) });
     }
   }, []);
 
@@ -1842,20 +1845,20 @@ export default function SceneEdit() {
             }
             console.log(`[Havok] Setting havokMeshDataMap with ${map.size} entries`);
             setHavokMeshDataMap(map);
-            toast.success(`Loaded ${map.size} collision mesh(es)`);
+            toast.success(t("success.collisionLoaded", { count: map.size }));
           } else {
             console.log("[Havok] No HKT files found in memory session");
-            toast.info("No HKT collision files found in this stage");
+            toast.info(t("info.noHktFilesStage"));
           }
         }).catch((e) => {
           console.error("[Havok] Failed to convert HKT from memory:", e);
-          toast.error("Failed to load collision data", { description: String(e) });
+          toast.error(t("errors.collisionLoadFailed"), { description: String(e) });
         });
       } else {
         console.log("[Havok] No sessionId, skipping HKT load");
       }
     } catch (err: any) {
-      toast.error("Failed to load stage into scene", { description: String(err) });
+      toast.error(t("errors.stageSceneLoadFailed"), { description: String(err) });
     } finally {
       setIsLoadingBundle(false);
     }
@@ -1912,9 +1915,7 @@ export default function SceneEdit() {
       setValidationDialog({ open: true, title, errors });
       const objectCount = Object.keys(errorFolders).length;
       toast.error(
-        `${errors.length} texture issue${errors.length !== 1 ? "s" : ""}${
-          objectCount ? ` on ${objectCount} object${objectCount !== 1 ? "s" : ""}` : ""
-        } blocked packing`,
+        t("errors.textureBlocked", { count: errors.length, objectCount }),
       );
     },
     [subModels],
@@ -1931,7 +1932,7 @@ export default function SceneEdit() {
         surfaceValidationErrors(result.errors, "Empty texture paths block packing");
         return false;
       } catch (err) {
-        toast.error("Texture validation failed", { description: String(err) });
+        toast.error(t("errors.textureValidationFailed"), { description: String(err) });
         return false;
       }
     },
@@ -1952,7 +1953,7 @@ export default function SceneEdit() {
 
     setSaveProgressState({
       open: true,
-      title: "Save as Folder",
+      title: t("actions.saveAsFolder"),
       steps: [],
       canClose: false,
       completionSummary: undefined,
@@ -2002,23 +2003,23 @@ export default function SceneEdit() {
 
       if (result.failedCount > 0 && result.convertedCount > 0) {
         toast.warning(
-          `Saved with partial results: ${result.convertedCount} converted, ${result.failedCount} failed (${result.failedNames.join(", ")})`,
+          t("success.partialSave", { converted: result.convertedCount, failed: result.failedCount, names: result.failedNames.join(", ") }),
         );
       } else if (result.failedCount > 0) {
         toast.error(
-          `All ${result.failedCount} DAE conversion(s) failed: ${result.failedNames.join(", ")}`,
+          t("errors.allDaeFailed", { count: result.failedCount, names: result.failedNames.join(", ") }),
         );
       } else if (result.convertedCount > 0) {
         toast.success(
-          `Folder saved; converted ${result.convertedCount} imported DAE object(s) to SSBH`,
+          t("success.folderConverted", { count: result.convertedCount }),
         );
       } else {
-        toast.success("Folder saved");
+        toast.success(t("success.folderSaved"));
       }
     } catch (err: any) {
       setSaveProgressState((prev) => ({ ...prev, canClose: true }));
       saveTimer.fail(err);
-      toast.error("Save failed", { description: String(err) });
+      toast.error(t("errors.saveFailed"), { description: String(err) });
     } finally {
       saveTimer.end();
     }
@@ -2045,7 +2046,7 @@ export default function SceneEdit() {
 
     setSaveProgressState({
       open: true,
-      title: "Save as FHM2D",
+      title: t("actions.saveAsFhm2d"),
       steps: [],
       canClose: false,
       completionSummary: undefined,
@@ -2099,11 +2100,11 @@ export default function SceneEdit() {
       ];
       setSaveProgressState((prev) => ({ ...prev, canClose: true, completionSummary }));
 
-      toast.success(`FHM2D saved (${(result.fhm2dSizeBytes / (1024 * 1024)).toFixed(1)} MB)`);
+      toast.success(t("success.fhm2dSaved", { size: (result.fhm2dSizeBytes / (1024 * 1024)).toFixed(1) }));
     } catch (err: any) {
       setSaveProgressState((prev) => ({ ...prev, canClose: true }));
       repackTimer.fail(err);
-      toast.error("FHM2D save failed", { description: String(err) });
+      toast.error(t("errors.fhm2dSaveFailed"), { description: String(err) });
     } finally {
       repackTimer.end();
     }
@@ -2170,7 +2171,7 @@ export default function SceneEdit() {
         useSceneEditorStore.getState().clearHistory();
         useSceneDirtyStore.getState().reset();
       useSceneTextureManagerStore.getState().markTexturesSaved();
-        toast.success("All changes reverted to loaded state");
+      toast.success(t("success.changesReverted"));
       },
     );
   }, [openResetDialog]);
@@ -2185,7 +2186,7 @@ export default function SceneEdit() {
         setGraphicParams(snap.graphicParams.map((p) => ({ ...p })));
         setAppliedGraphicParamKeys(new Set());
         useSceneDirtyStore.getState().markGlobalDirty("graphicParams");
-        toast.success("Graphic params reverted");
+      toast.success(t("success.graphicParamsReverted"));
       },
     );
   }, [openResetDialog]);
@@ -2200,7 +2201,7 @@ export default function SceneEdit() {
         setPlacementEntries(snap.placementEntries.map((e) => ({ ...e, rawFields: [...e.rawFields] })));
         setSelectedPlacementIdxRaw(null);
         useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
-        toast.success("Placements reverted");
+      toast.success(t("success.placementsReverted"));
       },
     );
   }, [openResetDialog]);
@@ -2210,7 +2211,7 @@ export default function SceneEdit() {
     if (!snap) return;
     const original = snap.placementEntries[index];
     if (!original) {
-      toast.error("This row was added after loading — use delete instead");
+      toast.error(t("errors.rowAddedAfterLoad"));
       return;
     }
     const before = placementEntries[index];
@@ -2224,7 +2225,7 @@ export default function SceneEdit() {
     useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
     useSceneEditorStore.getState().recordCommand({
       type: "reset-placement-row",
-      description: `Reset placement row #${index}`,
+          description: t("actions.resetPlacementRow", { index }),
       undo: () => {
         setPlacementEntries((prev) => {
           const next = [...prev];
@@ -2242,7 +2243,7 @@ export default function SceneEdit() {
         useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       },
     });
-    toast.success(`Placement row #${index} reverted`);
+        toast.success(t("success.placementRowReverted", { index }));
   }, [placementEntries]);
 
   const handleResetPlacementField = useCallback((index: number, fieldIndex: number) => {
@@ -2266,7 +2267,7 @@ export default function SceneEdit() {
     useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
     useSceneEditorStore.getState().recordCommand({
       type: "reset-placement-field",
-      description: "Reset placement field",
+        description: t("actions.resetPlacementField"),
       undo: () => {
         setPlacementEntries((prev) => {
           const next = [...prev];
@@ -2293,7 +2294,7 @@ export default function SceneEdit() {
       setBaseTransform({ ...DEFAULT_TRANSFORM });
       useSceneEditorStore.getState().recordCommand({
         type: "reset-transform",
-        description: "Reset base transform",
+        description: t("actions.resetBaseTransform"),
         undo: () => setBaseTransform(before),
         redo: () => setBaseTransform({ ...DEFAULT_TRANSFORM }),
       });
@@ -2306,7 +2307,7 @@ export default function SceneEdit() {
       });
       useSceneEditorStore.getState().recordCommand({
         type: "reset-transform",
-        description: "Reset standalone transform",
+        description: t("actions.resetStandaloneTransform"),
         undo: () => setStandaloneTransforms((prev) => { const next = new Map(prev); next.set(selectedNodeId, before); return next; }),
         redo: () => setStandaloneTransforms((prev) => { const next = new Map(prev); next.set(selectedNodeId, { ...DEFAULT_TRANSFORM }); return next; }),
       });
@@ -2328,7 +2329,7 @@ export default function SceneEdit() {
       useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       useSceneEditorStore.getState().recordCommand({
         type: "reset-placement-transform",
-        description: "Reset placement transform",
+        description: t("actions.resetPlacementTransform"),
         undo: () => { setPlacementEntries((prev) => { const next = [...prev]; next[selectedPlacementIdx] = before; return next; }); useSceneDirtyStore.getState().markGlobalDirty("placementOrder"); },
         redo: () => { setPlacementEntries((prev) => { const next = [...prev]; next[selectedPlacementIdx] = nextEntry; return next; }); useSceneDirtyStore.getState().markGlobalDirty("placementOrder"); },
       });
@@ -2381,7 +2382,7 @@ export default function SceneEdit() {
       useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       useSceneEditorStore.getState().recordCommand({
         type: "edit-placement-field",
-        description: "Edit placement transform",
+        description: t("actions.editPlacementTransform"),
         undo: () => {
           setPlacementEntries((prev) => {
             const next = [...prev];
@@ -2404,23 +2405,23 @@ export default function SceneEdit() {
   );
 
   const commitPlacementGizmo = useCallback(
-    (idx: number, t: TransformData) => {
+    (idx: number, transform: TransformData) => {
       if (!canEditNode(nodeIdForPlacementIndex(idx))) return;
       const previous = placementEntries[idx];
       if (!previous) return;
-      if (transformEquals(placementToTransform(previous), t)) return;
-      const nextEntry = patchPlacementRowTransform(previous, t, placementColMap);
+      if (transformEquals(placementToTransform(previous), transform)) return;
+      const nextEntry = patchPlacementRowTransform(previous, transform, placementColMap);
       setPlacementEntries((prev) => {
         const entry = prev[idx];
         if (!entry) return prev;
         const next = [...prev];
-        next[idx] = patchPlacementRowTransform(entry, t, placementColMap);
+        next[idx] = patchPlacementRowTransform(entry, transform, placementColMap);
         return next;
       });
       useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       useSceneEditorStore.getState().recordCommand({
         type: "gizmo-placement-transform",
-        description: "Move placement gizmo",
+        description: t("actions.movePlacementGizmo"),
         undo: () => {
           setPlacementEntries((prev) => {
             const next = [...prev];
@@ -2443,11 +2444,11 @@ export default function SceneEdit() {
   );
 
   const updateImportedDaeTransform = useCallback(
-    (nodeId: string, t: TransformData) => {
+    (nodeId: string, transform: TransformData) => {
       setImportedDaeObjects((prev) =>
         prev.map((obj) =>
           obj.id === nodeId
-            ? { ...obj, transform: t }
+            ? { ...obj, transform }
             : obj,
         ),
       );
@@ -2457,34 +2458,34 @@ export default function SceneEdit() {
   );
 
   const commitBaseGizmoTransform = useCallback(
-    (t: TransformData) => {
+    (transform: TransformData) => {
       if (!canEditNode("base")) return;
       const previous = baseTransform;
-      if (transformEquals(previous, t)) return;
-      setBaseTransform(t);
+      if (transformEquals(previous, transform)) return;
+      setBaseTransform(transform);
       useSceneEditorStore.getState().recordCommand({
         type: "gizmo-base-transform",
-        description: "Move base model gizmo",
+        description: t("actions.moveBaseGizmo"),
         undo: () => setBaseTransform(previous),
-        redo: () => setBaseTransform(t),
+        redo: () => setBaseTransform(transform),
       });
     },
     [baseTransform, canEditNode],
   );
 
   const commitStandaloneGizmoTransform = useCallback(
-    (nodeId: string, t: TransformData) => {
+    (nodeId: string, transform: TransformData) => {
       if (!canEditNode(nodeId)) return;
       const previous = standaloneTransforms.get(nodeId) ?? { ...DEFAULT_TRANSFORM };
-      if (transformEquals(previous, t)) return;
+      if (transformEquals(previous, transform)) return;
       setStandaloneTransforms((prev) => {
         const next = new Map(prev);
-        next.set(nodeId, t);
+        next.set(nodeId, transform);
         return next;
       });
       useSceneEditorStore.getState().recordCommand({
         type: "gizmo-standalone-transform",
-        description: "Move standalone model gizmo",
+        description: t("actions.moveStandaloneGizmo"),
         undo: () => {
           setStandaloneTransforms((prev) => {
             const next = new Map(prev);
@@ -2495,7 +2496,7 @@ export default function SceneEdit() {
         redo: () => {
           setStandaloneTransforms((prev) => {
             const next = new Map(prev);
-            next.set(nodeId, t);
+            next.set(nodeId, transform);
             return next;
           });
         },
@@ -2505,16 +2506,16 @@ export default function SceneEdit() {
   );
 
   const commitImportedDaeGizmoTransform = useCallback(
-    (nodeId: string, t: TransformData) => {
+    (nodeId: string, transform: TransformData) => {
       if (!canEditNode(nodeId)) return;
       const previous = importedDaeObjects.find((obj) => obj.id === nodeId)?.transform;
-      if (!previous || transformEquals(previous, t)) return;
-      updateImportedDaeTransform(nodeId, t);
+      if (!previous || transformEquals(previous, transform)) return;
+      updateImportedDaeTransform(nodeId, transform);
       useSceneEditorStore.getState().recordCommand({
         type: "gizmo-dae-transform",
-        description: "Move imported DAE gizmo",
+        description: t("actions.moveImportedDaeGizmo"),
         undo: () => updateImportedDaeTransform(nodeId, previous),
-        redo: () => updateImportedDaeTransform(nodeId, t),
+        redo: () => updateImportedDaeTransform(nodeId, transform),
       });
     },
     [canEditNode, importedDaeObjects, updateImportedDaeTransform],
@@ -2526,7 +2527,7 @@ export default function SceneEdit() {
         selectedNodeId ??
         (selectedPlacementIdx !== null ? nodeIdForPlacementIndex(selectedPlacementIdx) : null);
       if (!canEditNode(editableNodeId)) {
-        toast.error("Locked or hidden scene objects cannot be edited");
+      toast.error(t("errors.editLocked"));
         return;
       }
       if (selectedNodeId === "base") {
@@ -2535,7 +2536,7 @@ export default function SceneEdit() {
         setBaseTransform(next);
         useSceneEditorStore.getState().recordCommand({
           type: "edit-base-transform",
-          description: "Edit base transform",
+        description: t("actions.editBaseTransform"),
           undo: () => setBaseTransform(previous),
           redo: () => setBaseTransform(next),
         });
@@ -2555,7 +2556,7 @@ export default function SceneEdit() {
         });
         useSceneEditorStore.getState().recordCommand({
           type: "edit-standalone-transform",
-          description: "Edit standalone model transform",
+        description: t("actions.editStandaloneTransform"),
           undo: () => {
             setStandaloneTransforms((prev) => {
               const nextMap = new Map(prev);
@@ -2586,7 +2587,7 @@ export default function SceneEdit() {
         );
         useSceneEditorStore.getState().recordCommand({
           type: "edit-dae-transform",
-          description: "Edit DAE transform",
+        description: t("actions.editDaeTransform"),
           undo: () => updateImportedDaeTransform(selectedNodeId, previous),
           redo: () => updateImportedDaeTransform(selectedNodeId, nextTransform),
         });
@@ -2698,7 +2699,7 @@ export default function SceneEdit() {
       useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       useSceneEditorStore.getState().recordCommand({
         type: "edit-placement-field",
-        description: "Edit placement field",
+        description: t("actions.editPlacementField"),
         undo: () => {
           setPlacementEntries((prev) => {
             const next = [...prev];
@@ -2736,7 +2737,7 @@ export default function SceneEdit() {
       useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       useSceneEditorStore.getState().recordCommand({
         type: "add-placement-field",
-        description: "Add placement field",
+        description: t("actions.addPlacementField"),
         undo: () => {
           setPlacementEntries((prev) => {
             const next = [...prev];
@@ -2773,7 +2774,7 @@ export default function SceneEdit() {
       useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       useSceneEditorStore.getState().recordCommand({
         type: "remove-placement-field",
-        description: "Remove placement field pair",
+        description: t("actions.removePlacementFieldPair"),
         undo: () => {
           setPlacementEntries((prev) => {
             const next = [...prev];
@@ -2812,7 +2813,7 @@ export default function SceneEdit() {
       useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       useSceneEditorStore.getState().recordCommand({
         type: "add-typed-placement",
-        description: `Add ${vdkType} placement`,
+        description: t("actions.addPlacement", { type: vdkType }),
         undo: () => {
           setPlacementEntries((prev) => prev.filter((_, i) => i !== insertAt));
           handleClearSelection();
@@ -2851,7 +2852,7 @@ export default function SceneEdit() {
         }
         nodes.push({
           id: "__collision_group__",
-          label: `Collision (${colChildren.length})`,
+          label: t("labels.collisionCount", { count: colChildren.length }),
           role: "collision",
           children: colChildren,
         });
@@ -2906,14 +2907,14 @@ export default function SceneEdit() {
       }
       children.push({
         id: "__collision_group__",
-        label: `Collision (${colChildren.length})`,
+        label: t("labels.collisionCount", { count: colChildren.length }),
         role: "collision",
         children: colChildren,
       });
     }
 
     return children;
-  }, [treeRoot, placementEntries, importedDaeObjects, havokMetaMap]);
+  }, [treeRoot, placementEntries, importedDaeObjects, havokMetaMap, t]);
 
   const outlinerOrder = useSceneEditorStore((state) => state.outlinerOrder);
 
@@ -2928,19 +2929,19 @@ export default function SceneEdit() {
     if (!treeRoot) {
       return {
         id: "root",
-        label: "Scene",
+        label: t("tabs.scene"),
         role: "root",
         children,
       };
     }
     return { ...treeRoot, children };
-  }, [treeRoot, outlinerChildren, outlinerOrder]);
+  }, [treeRoot, outlinerChildren, outlinerOrder, t]);
 
   const handleOpenProperties = useCallback(
     (nodeId: string) => {
       const node = findNode(outlinerRoot, nodeId);
       if (!node) {
-        toast.error("Cannot find outliner node");
+      toast.error(t("errors.outlinerNodeMissing"));
         return;
       }
       openDetailViewSession(node);
@@ -2990,7 +2991,7 @@ export default function SceneEdit() {
       handleSelectNode(created[0]?.id ?? null);
       useSceneEditorStore.getState().recordCommand({
         type: "paste-dae",
-        description: "Paste imported DAE actor",
+        description: t("actions.pasteImportedDae"),
         undo: () => {
           setImportedDaeObjects((prev) => prev.filter((obj) => !created.some((c) => c.id === obj.id)));
           created.forEach((c) => useSceneDirtyStore.getState().resetObject(c.name));
@@ -3004,7 +3005,7 @@ export default function SceneEdit() {
           useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
       });
-      toast.success(`Pasted ${created.length} DAE object(s)`);
+      toast.success(t("success.pastedDae", { count: created.length }));
       return;
     }
 
@@ -3015,7 +3016,7 @@ export default function SceneEdit() {
       .filter((entry): entry is PlacementRow => Boolean(entry));
 
     if (copiedRows.length === 0) {
-      toast.error("Clipboard does not contain pasteable scene objects");
+      toast.error(t("errors.clipboardSceneObjects"));
       return;
     }
 
@@ -3029,7 +3030,7 @@ export default function SceneEdit() {
       useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
       useSceneEditorStore.getState().recordCommand({
         type: "paste-placement",
-        description: "Paste placement rows",
+        description: t("actions.pastePlacementRows"),
         undo: () => {
           setPlacementEntries((prev) =>
             prev.filter((_, i) => i < result.insertedStart || i >= result.insertedStart + result.insertedRows.length),
@@ -3049,7 +3050,7 @@ export default function SceneEdit() {
           useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         },
       });
-      toast.success(`Pasted ${result.insertedRows.length} placement row(s)`);
+      toast.success(t("success.pastedPlacementRows", { count: result.insertedRows.length }));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to paste selection");
     }
@@ -3200,7 +3201,7 @@ export default function SceneEdit() {
     async (nodeId: string) => {
       const target = resolveModelReplaceTarget(nodeId, subModels);
       if (!target) {
-        toast.error("This node cannot be replaced");
+      toast.error(t("errors.nodeCannotReplace"));
         return;
       }
       const selected = await open({
@@ -3280,7 +3281,7 @@ export default function SceneEdit() {
           setImportProgress({
             open: true,
             progress: 0,
-            steps: createStaticMeshImportSteps(entry.fileName, true),
+            steps: createStaticMeshImportSteps(entry.fileName, true, t),
           });
           const explicitBaseName = sessionState.outputBaseName.trim();
           const baseFilename =
@@ -3314,20 +3315,20 @@ export default function SceneEdit() {
           }
           applyStaticMeshProgressUpdate({
             step: "done",
-            label: "Direct-to-disk static mesh conversion completed",
+            label: t("progress.directConversionCompleted"),
             progress: 100,
           });
           for (const warning of result.warnings) {
             toast.warning(warning);
           }
-          toast.success(`Converted ${entry.fileName} to disk`, {
-            description: `${result.filesWritten.length} file(s) written to ${result.modelDir}`,
+          toast.success(t("success.convertedToDisk", { name: entry.fileName }), {
+            description: t("success.filesWrittenTo", { count: result.filesWritten.length, path: result.modelDir }),
           });
         } catch (err) {
           toast.error(
-            `Direct convert failed for ${entry.fileName}: ${
+            t("errors.directConvertFailed", { name: entry.fileName, message: 
               err instanceof Error ? err.message : String(err)
-            }`,
+            }),
           );
         } finally {
           staticMeshProgressActiveRef.current = false;
@@ -3363,7 +3364,7 @@ export default function SceneEdit() {
           setImportProgress({
             open: true,
             progress: 0,
-            steps: createStaticMeshImportSteps(entry.fileName, false),
+            steps: createStaticMeshImportSteps(entry.fileName, false, t),
           });
           const explicitBaseName = sessionState.outputBaseName.trim();
           const baseFilename =
@@ -3396,8 +3397,8 @@ export default function SceneEdit() {
           if (entry.config.loadToScene) {
             applyStaticMeshProgressUpdate({
               step: "preview",
-              label: "Receiving viewport preview bundle from Rust...",
-              detail: "Large mesh preview data may take time to cross IPC.",
+              label: t("progress.receivingPreview"),
+              detail: t("progress.largePreviewIpc"),
               progress: 94,
             });
             ssbhBundle = await sceneBuildImportPreviewBundle({
@@ -3412,18 +3413,18 @@ export default function SceneEdit() {
           } else {
             applyStaticMeshProgressUpdate({
               step: "preview",
-              label: "Static mesh SSBH conversion completed",
-              detail: "SSBH artifact preview bundle skipped to avoid large mesh IPC payloads.",
+              label: t("progress.staticConversionCompleted"),
+              detail: t("progress.previewSkipped"),
               progress: 94,
             });
           }
 
           if (entry.config.generateHkt) {
             if (result.hktGenerated) {
-              toast.success(`HKT collision generated for ${entry.fileName}`, {
+              toast.success(t("success.hktGenerated", { name: entry.fileName }), {
                 description:
                   result.hktDetail ??
-                  "Mesh collision stored in session memory.",
+                  t("success.meshCollisionStored"),
               });
               const havokResult = await sceneGetHavokMeta(activeSessionId, result.importId);
               if (havokResult) {
@@ -3440,7 +3441,7 @@ export default function SceneEdit() {
               const hktWarning =
                 result.warnings.find((w) => w.toLowerCase().includes("hkt")) ??
                 "HKT generation did not produce collision data.";
-              toast.warning(`HKT not generated for ${entry.fileName}`, {
+              toast.warning(t("warnings.hktNotGenerated", { name: entry.fileName }), {
                 description: hktWarning,
               });
             }
@@ -3455,7 +3456,7 @@ export default function SceneEdit() {
 
           applyStaticMeshProgressUpdate({
             step: "preview",
-            label: "Loading static mesh into viewport...",
+            label: t("progress.loadingViewport"),
             progress: 97,
           });
           const loaded = await loadStaticMeshFromPath(
@@ -3476,14 +3477,14 @@ export default function SceneEdit() {
           });
           applyStaticMeshProgressUpdate({
             step: "done",
-            label: "Static mesh preview import completed",
+            label: t("progress.previewImportCompleted"),
             progress: 100,
           });
           successCount++;
         } catch (err) {
           failCount++;
           toast.error(
-            `Convert failed for ${entry.fileName}: ${err instanceof Error ? err.message : String(err)}`,
+            t("errors.convertFailed", { name: entry.fileName, message: err instanceof Error ? err.message : String(err) }),
           );
         } finally {
           staticMeshProgressActiveRef.current = false;
@@ -3500,10 +3501,10 @@ export default function SceneEdit() {
 
       if (successCount > 0 && failCount === 0) {
         toast.success(
-          `Converted ${successCount} file(s) to SSBH in memory. Save the stage folder to write files.`,
+          t("success.convertedInMemory", { count: successCount }),
         );
       } else if (successCount > 0 && failCount > 0) {
-        toast.warning(`Converted ${successCount}, failed ${failCount}`);
+        toast.warning(t("warnings.convertedFailed", { converted: successCount, failed: failCount }));
       }
     },
     [sceneSessionId, stageRoot, handleSelectNode, handleStaticMeshProgress, applyStaticMeshProgressUpdate],
@@ -3515,12 +3516,12 @@ export default function SceneEdit() {
       const directToDisk = entry.config.directToDisk;
 
       if (!target.isBase && !subModels.some((s) => s.folderName === target.folderName)) {
-        toast.error(`Model slot "${target.folderName}" not found in the loaded stage`);
+        toast.error(t("errors.modelSlotMissing", { name: target.folderName }));
         return;
       }
 
       if (directToDisk && !stageRoot) {
-        toast.error("Open a stage folder before replacing with out-of-scene conversion");
+        toast.error(t("errors.openStageBeforeReplace"));
         return;
       }
 
@@ -3549,7 +3550,7 @@ export default function SceneEdit() {
         setImportProgress({
           open: true,
           progress: 0,
-          steps: createStaticMeshImportSteps(entry.fileName, directToDisk),
+          steps: createStaticMeshImportSteps(entry.fileName, directToDisk, t),
         });
 
         await assertSsbhSessionTextureReferencesResolvable({
@@ -3572,7 +3573,7 @@ export default function SceneEdit() {
               }
               applyStaticMeshProgressUpdate({
                 step: "write",
-                label: "Converting and writing replaced model to stage folder...",
+                label: t("progress.writingReplacement"),
                 progress: 50,
               });
               return runModelReplacementDirectToDisk({
@@ -3588,7 +3589,7 @@ export default function SceneEdit() {
                 loadBundleFromDisk: async () => {
                   applyStaticMeshProgressUpdate({
                     step: "preview",
-                    label: "Loading replaced model from disk...",
+                    label: t("progress.loadingReplacement"),
                     progress: 94,
                   });
                   return stageLoadModelSlotBundle(stageRoot, target.folderName);
@@ -3599,8 +3600,8 @@ export default function SceneEdit() {
           : await (async () => {
               applyStaticMeshProgressUpdate({
                 step: "preview",
-                label: "Receiving viewport preview bundle from Rust...",
-                detail: "Large mesh preview data may take time to cross IPC.",
+                label: t("progress.receivingPreview"),
+                detail: t("progress.largePreviewIpc"),
                 progress: 94,
               });
               return runModelReplacementPreview({
@@ -3649,11 +3650,11 @@ export default function SceneEdit() {
           );
           applyStaticMeshProgressUpdate({
             step: "done",
-            label: "Model replacement written to disk",
+            label: t("progress.replacementWritten"),
             progress: 100,
           });
-          toast.success(`Replaced ${target.folderName} on disk`, {
-            description: `${replacementPreview.diskResult.filesWritten.length} file(s) written to ${replacementPreview.diskResult.modelDir}`,
+          toast.success(t("success.replacedOnDisk", { name: target.folderName }), {
+            description: t("success.filesWrittenTo", { count: replacementPreview.diskResult.filesWritten.length, path: replacementPreview.diskResult.modelDir }),
           });
           return;
         }
@@ -3673,13 +3674,13 @@ export default function SceneEdit() {
 
         applyStaticMeshProgressUpdate({
           step: "done",
-          label: "Model replacement staged",
+          label: t("progress.replacementStaged"),
           progress: 100,
         });
-        toast.success(`Staged ${target.folderName} model replacement. Save the stage to commit.`);
+        toast.success(t("success.replacementStaged", { name: target.folderName }));
       } catch (err) {
         toast.error(
-          `Replace ${target.folderName} failed: ${err instanceof Error ? err.message : String(err)}`,
+          t("errors.replaceFailed", { name: target.folderName, message: err instanceof Error ? err.message : String(err) }),
         );
       } finally {
         staticMeshProgressActiveRef.current = false;
@@ -3711,7 +3712,7 @@ export default function SceneEdit() {
         exportObjects: viewportRef.current?.getSelectedExportObjects() ?? [],
       });
       if (!payload) {
-        toast.error("This object cannot be exported as a model");
+        toast.error(t("errors.objectNotExportable"));
         return false;
       }
       setDaeExportDialog({ open: true, ...payload });
@@ -3723,7 +3724,7 @@ export default function SceneEdit() {
   const handleExportSelectedDae = useCallback(() => {
     const objects = viewportRef.current?.getSelectedExportObjects() ?? [];
     if (objects.length === 0) {
-      toast.error("Select one or more scene objects before exporting");
+      toast.error(t("errors.selectObjectsToExport"));
       return;
     }
     openDaeExportDialogForNodeIds(objects.map((entry) => entry.name));
@@ -3737,12 +3738,12 @@ export default function SceneEdit() {
         toast.dismiss("hkt-to-obj");
         return;
       }
-      toast.success("HKT exported to OBJ", {
+      toast.success(t("success.hktExported"), {
         id: "hkt-to-obj",
         description: result.summary,
       });
     } catch (err) {
-      toast.error("HKT to OBJ failed", {
+      toast.error(t("errors.hktExportFailed"), {
         id: "hkt-to-obj",
         description: err instanceof Error ? err.message : String(err),
       });
@@ -3752,7 +3753,7 @@ export default function SceneEdit() {
   const handleExportDaeFromOutliner = useCallback(
     (nodeId: string) => {
       if (!(nodeVisibility[nodeId] ?? true)) {
-        toast.error("Cannot export a hidden object");
+        toast.error(t("errors.hiddenObjectExport"));
         return;
       }
       useSceneEditorStore.getState().select(nodeId);
@@ -3803,19 +3804,19 @@ export default function SceneEdit() {
           .filter((o): o is SceneExportObject => o !== null);
         if (daeObjects.length > 0) {
           const exported = await exportObjectsAsDAEToDirectory(daeObjects, outputDir);
-          toast.success(`Exported ${exported.length} DAE file${exported.length === 1 ? "" : "s"}`);
+      toast.success(t("success.exportedDae", { count: exported.length }));
         }
       }
 
       if (wantsFbx) {
         if (selectedExportObjects.length === 0) {
-          toast.warning("FBX export needs the selected object to be visible in the viewport");
+          toast.warning(t("warnings.fbxObjectVisible"));
         } else {
           const exported = await exportObjectsAsFBXToDirectory(selectedExportObjects, outputDir, {
             exportTextures: config.exportTextures,
             upAxis: config.upAxis,
           });
-          toast.success(`Exported ${exported.length} FBX file${exported.length === 1 ? "" : "s"}`);
+      toast.success(t("success.exportedFbx", { count: exported.length }));
         }
       }
     } catch (err) {
@@ -3866,7 +3867,7 @@ export default function SceneEdit() {
       });
 
       if (hasLockedOrHiddenNode(requestedIds)) {
-        toast.error("Locked or hidden scene objects cannot be deleted");
+        toast.error(t("errors.deleteLocked"));
         return;
       }
 
@@ -3902,7 +3903,7 @@ export default function SceneEdit() {
         });
         useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         handleClearSelection();
-        toast.success(`Deleted ${deleted.length} DAE object(s)`);
+      toast.success(t("success.deletedDae", { count: deleted.length }));
         return;
       }
 
@@ -3969,7 +3970,7 @@ export default function SceneEdit() {
         removeHavokOverlayForFolders(subModelIds);
         useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
         handleClearSelection();
-        toast.success(`Deleted ${subModelIds.length} sub-model(s)`);
+      toast.success(t("success.deletedSubModels", { count: subModelIds.length }));
         return;
       }
 
@@ -3999,7 +4000,7 @@ export default function SceneEdit() {
         // Tear down the base model's collision overlay so the viewport matches the deletion
         removeHavokOverlayForFolders(["base"]);
         handleClearSelection();
-        toast.success("Base model marked for deletion");
+          toast.success(t("success.baseMarkedDelete"));
         return;
       }
 
@@ -4091,7 +4092,7 @@ export default function SceneEdit() {
   const handleGenerateHkt = useCallback(
     async (ids: string[]) => {
       if (!sceneSessionId) {
-        toast.error("No scene session — open a stage first");
+          toast.error(t("errors.noSceneSession"));
         return;
       }
       for (const id of ids) {
@@ -4100,7 +4101,7 @@ export default function SceneEdit() {
         if (obj) {
           const hktSimplify = obj.hktSimplify ?? { ...DEFAULT_HKT_SIMPLIFY };
           try {
-            toast.loading(`Generating HKT for ${obj.name}...`, { id: `hkt-${id}` });
+            toast.loading(t("progress.generatingHktFor", { name: obj.name }), { id: `hkt-${id}` });
             const sessionImportId = await ensureImportedDaeSessionImport({
               sessionId: sceneSessionId,
               object: { ...obj, hktSimplify },
@@ -4135,9 +4136,9 @@ export default function SceneEdit() {
               );
             }
             useSceneDirtyStore.getState().markObjectModified(obj.name, "hkt");
-            toast.success(`HKT generated for ${obj.name}`, { id: `hkt-${id}` });
+            toast.success(t("success.hktGenerated", { name: obj.name }), { id: `hkt-${id}` });
           } catch (err) {
-            toast.error(`HKT failed for ${obj.name}: ${err instanceof Error ? err.message : String(err)}`, { id: `hkt-${id}` });
+              toast.error(t("errors.hktFailed", { name: obj.name, message: err instanceof Error ? err.message : String(err) }), { id: `hkt-${id}` });
           }
           continue;
         }
@@ -4158,7 +4159,7 @@ export default function SceneEdit() {
           const folderName = resolvedId;
           const hktSimplify = { ...DEFAULT_HKT_SIMPLIFY };
           try {
-            toast.loading(`Generating HKT for ${folderName}...`, { id: `hkt-${id}` });
+            toast.loading(t("progress.generatingHktFor", { name: folderName }), { id: `hkt-${id}` });
             await sceneGenerateHktFromMesh(sceneSessionId, folderName, hktSimplify);
             const havokResult = await sceneGetHavokMeta(sceneSessionId, `mesh-hkt-${folderName}`);
             if (havokResult) {
@@ -4175,9 +4176,9 @@ export default function SceneEdit() {
               );
             }
             useSceneDirtyStore.getState().markObjectModified(folderName, "hkt");
-            toast.success(`HKT generated for ${folderName}`, { id: `hkt-${id}` });
+            toast.success(t("success.hktGenerated", { name: folderName }), { id: `hkt-${id}` });
           } catch (err) {
-            toast.error(`HKT failed for ${folderName}: ${err instanceof Error ? err.message : String(err)}`, { id: `hkt-${id}` });
+              toast.error(t("errors.hktFailed", { name: folderName, message: err instanceof Error ? err.message : String(err) }), { id: `hkt-${id}` });
           }
           continue;
         }
@@ -4190,7 +4191,7 @@ export default function SceneEdit() {
     async (importId: string) => {
       if (!sceneSessionId) return;
       const selected = await open({
-        title: "Select HKT file",
+          title: t("actions.selectHktFile"),
         filters: [{ name: "Havok", extensions: ["hkt"] }],
         multiple: false,
       });
@@ -4206,7 +4207,7 @@ export default function SceneEdit() {
       }
 
       try {
-        toast.loading("Replacing HKT...", { id: `replace-hkt-${importId}` });
+          toast.loading(t("progress.replacingHkt"), { id: `replace-hkt-${importId}` });
         await sceneReplaceHkt(sceneSessionId, resolvedImportId, hktPath);
         const havokResult = await sceneGetHavokMeta(sceneSessionId, resolvedImportId);
         if (havokResult) {
@@ -4221,9 +4222,9 @@ export default function SceneEdit() {
         }
         const daeObj = importedDaeObjects.find((o) => o.id === importId);
         useSceneDirtyStore.getState().markObjectModified(daeObj ? daeObj.name : importId, "hkt");
-        toast.success("HKT replaced", { id: `replace-hkt-${importId}` });
+          toast.success(t("success.hktReplaced"), { id: `replace-hkt-${importId}` });
       } catch (err) {
-        toast.error(`Replace HKT failed: ${err instanceof Error ? err.message : String(err)}`, { id: `replace-hkt-${importId}` });
+          toast.error(t("errors.replaceHktFailed", { message: err instanceof Error ? err.message : String(err) }), { id: `replace-hkt-${importId}` });
       }
     },
     [sceneSessionId, subModels, importedDaeObjects],
@@ -4466,21 +4467,17 @@ export default function SceneEdit() {
         <AlertDialog open={clearCacheDialogOpen} onOpenChange={setClearCacheDialogOpen}>
           <AlertDialogContent showCloseButton>
             <AlertDialogHeader>
-              <AlertDialogTitle>Clear scene memory and caches?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This unloads the current stage (including memory-import sessions), clears decoded RGBA texture caches and
-                nutexb preview cache (IndexedDB + in-memory blobs). Unsaved CSV edits will be lost unless you saved to disk
-                first.
-              </AlertDialogDescription>
+              <AlertDialogTitle>{t("dialogs.clearCacheTitle")}</AlertDialogTitle>
+              <AlertDialogDescription>{t("dialogs.clearCacheDescription")}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+              <AlertDialogCancel type="button">{t("actions.cancel")}</AlertDialogCancel>
               <AlertDialogAction
                 type="button"
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 onClick={() => void handleConfirmClearCache()}
               >
-                Clear
+                {t("actions.clear")}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -4493,13 +4490,13 @@ export default function SceneEdit() {
               <AlertDialogDescription>{resetDialogState.description}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+              <AlertDialogCancel type="button">{t("actions.cancel")}</AlertDialogCancel>
               <AlertDialogAction
                 type="button"
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 onClick={() => { setResetDialogState((prev) => ({ ...prev, open: false })); resetDialogState.onConfirm(); }}
               >
-                Reset
+                {t("actions.reset")}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -4525,13 +4522,13 @@ export default function SceneEdit() {
               <Tabs defaultValue="outliner" className="flex h-full flex-col">
                 <TabsList className={SCENE_HIERARCHY_TABS_LIST}>
                   <TabsTrigger value="outliner" className={SCENE_HIERARCHY_TAB_TRIGGER}>
-                    Outliner
+              {t("tabs.outliner")}
                   </TabsTrigger>
                   <TabsTrigger value="textures" className={SCENE_HIERARCHY_TAB_TRIGGER}>
-                    Textures
+              {t("tabs.textures")}
                   </TabsTrigger>
                   <TabsTrigger value="structure" className={SCENE_HIERARCHY_TAB_TRIGGER}>
-                    Structure
+              {t("tabs.structure")}
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="outliner" className="mt-0 min-h-0 flex-1 overflow-hidden">
@@ -4556,7 +4553,7 @@ export default function SceneEdit() {
                     onReplaceModel={handleReplaceModel}
                   />
                   {havokMeshDataMap.size > 0 && (
-                    <MayaSection title="Collision" badge={havokMeshDataMap.size}>
+                    <MayaSection title={t("tabs.collision")} badge={havokMeshDataMap.size}>
                       <CollisionListPanel
                         sourceIds={Array.from(havokMeshDataMap.keys())}
                         meshDataMap={havokMeshDataMap}
@@ -4676,7 +4673,7 @@ export default function SceneEdit() {
               headerActions={
                 <ResetIconButton
                   onClick={handleResetSession}
-                  label="Reset all changes"
+                label={t("actions.resetAllChanges")}
                   disabled={!initialSnapshotRef.current}
                 />
               }
@@ -4687,11 +4684,11 @@ export default function SceneEdit() {
                 <>
                   {selectedTransform && (
                     <MayaSection
-                      title="Transform"
+                      title={t("tabs.transform")}
                       actions={
                         <ResetIconButton
                           onClick={handleResetTransform}
-                          label="Reset transform"
+                    label={t("actions.resetTransform")}
                           disabled={!initialSnapshotRef.current}
                         />
                       }
@@ -4711,7 +4708,7 @@ export default function SceneEdit() {
                     </MayaSection>
                   )}
 
-                  <MayaSection title="Scene">
+                  <MayaSection title={t("tabs.scene")}>
                     <SceneInfoContent
                       stageName={stageName}
                       stageRoot={stageRoot}
@@ -4722,13 +4719,13 @@ export default function SceneEdit() {
                   </MayaSection>
 
                   {selectedNodeId && (
-                    <MayaSection title="Asset Config" defaultOpen>
+                    <MayaSection title={t("tabs.assetConfig")} defaultOpen>
                       <SceneAssetConfigPanel assetId={selectedNodeId} />
                     </MayaSection>
                   )}
 
                   {selectedImportedDae && (
-                    <MayaSection title="HKT Collision" defaultOpen>
+                    <MayaSection title={t("tabs.hktCollision")} defaultOpen>
                       <HavokCollisionEditorPanel
                         sessionId={sceneSessionId}
                         sessionImportId={selectedImportedDae.sessionImportId}
@@ -4747,7 +4744,7 @@ export default function SceneEdit() {
                     </MayaSection>
                   )}
 
-                  <MayaSection title="Stats" defaultOpen={false}>
+                  <MayaSection title={t("tabs.stats")} defaultOpen={false}>
                     <SceneStatsContent
                       drawStats={drawStats}
                       subModelCount={effectiveSubModels.length}
@@ -4759,7 +4756,7 @@ export default function SceneEdit() {
               }
               textureContent={
                 <>
-                  <MayaSection title="Texture Quality" defaultOpen>
+                  <MayaSection title={t("tabs.textureQuality")} defaultOpen>
                     <TextureQualityPanel
                       quality={textureQuality}
                       onQualityChange={handleTextureQualityChange}
@@ -4772,7 +4769,7 @@ export default function SceneEdit() {
                   </MayaSection>
 
                   {selectedTextureObject && (
-                    <MayaSection title="Object Nutexb" defaultOpen>
+                    <MayaSection title={t("tabs.objectNutexb")} defaultOpen>
                       <ModelTextureSlotPanel
                         objectId={selectedTextureObject.objectId}
                         bundle={selectedTextureObject.bundle}
@@ -4786,7 +4783,7 @@ export default function SceneEdit() {
                   )}
 
                   <MayaSection
-                    title="Loaded Nutexb"
+                    title={t("tabs.loadedNutexb")}
                     badge={textureInventories.length || undefined}
                     defaultOpen={false}
                   >
@@ -4796,13 +4793,13 @@ export default function SceneEdit() {
               }
               graphicContent={
                 <MayaSection
-                  title="Graphic Param"
+                  title={t("tabs.graphicParam")}
                   badge={`${appliedGraphicParamKeys.size}/${graphicParams.length}`}
                   defaultOpen
                   actions={
                     <ResetIconButton
                       onClick={handleResetGraphicParams}
-                      label="Reset all graphic params"
+                      label={t("actions.resetGraphicParams")}
                       disabled={!initialSnapshotRef.current}
                     />
                   }
@@ -4826,13 +4823,13 @@ export default function SceneEdit() {
               }
               placementContent={
                 <MayaSection
-                  title="Placement"
+                    title={t("tabs.placement")}
                   badge={placementEntries.length || undefined}
                   defaultOpen
                   actions={
                     <ResetIconButton
                       onClick={handleResetPlacement}
-                      label="Reset all placements"
+                    label={t("actions.resetAllPlacements")}
                       disabled={!initialSnapshotRef.current}
                     />
                   }
@@ -4988,9 +4985,7 @@ export default function SceneEdit() {
                   }
                 } catch (error) {
                   toast.error(
-                    `Batch texture validation failed: ${
-                      error instanceof Error ? error.message : String(error)
-                    }`,
+                    t("errors.batchTextureValidation", { message: error instanceof Error ? error.message : String(error) }),
                   );
                   return;
                 }
@@ -5030,7 +5025,7 @@ export default function SceneEdit() {
                   created.forEach((c) => useSceneDirtyStore.getState().markObjectAdded(c.name));
                   useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
                   handleSelectNode(created[0]?.id ?? null);
-                  toast.success(`Imported ${created.length} DAE object(s) to scene`);
+      toast.success(t("success.importedDae", { count: created.length }));
                 } catch (err) {
                   toast.error(err instanceof Error ? err.message : "Failed to import DAE");
                 }

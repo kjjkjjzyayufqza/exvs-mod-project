@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -83,6 +84,7 @@ const EditableProperty = ({
   onCancelEdit: () => void;
   onValueChange: (value: string) => void;
 }) => {
+  const { t } = useTranslation("repack-node");
   const isEditing = editingProperty === property;
   const displayValue = value !== undefined ? String(value) : '';
 
@@ -93,7 +95,7 @@ const EditableProperty = ({
         {editable && !isEditing ? (
           <div className="space-y-2">
             <div className="text-sm text-muted-foreground font-mono p-2 bg-muted rounded-md min-h-[60px] whitespace-pre-wrap break-all">
-              {displayValue || 'No value'}
+              {displayValue || t("noValue")}
             </div>
             <Button
               size="sm"
@@ -102,7 +104,7 @@ const EditableProperty = ({
               onClick={() => onStartEdit(property, value || '')}
             >
               <Edit3 className="h-3 w-3 mr-2" />
-              Edit
+              {t("actions.edit")}
             </Button>
           </div>
         ) : editable && isEditing ? (
@@ -119,17 +121,17 @@ const EditableProperty = ({
             <div className="flex gap-2">
               <Button size="sm" onClick={onSaveEdit} className="flex-1">
                 <Save className="h-3 w-3 mr-2" />
-                Save
+                {t("actions.save")}
               </Button>
               <Button size="sm" variant="outline" onClick={onCancelEdit} className="flex-1">
                 <X className="h-3 w-3 mr-2" />
-                Cancel
+                {t("actions.cancel")}
               </Button>
             </div>
           </div>
         ) : (
           <div className="text-sm text-muted-foreground font-mono p-2 bg-muted rounded-md min-h-[60px] whitespace-pre-wrap break-all">
-            {displayValue || 'No value'}
+            {displayValue || t("noValue")}
           </div>
         )}
       </div>
@@ -207,6 +209,7 @@ export function NodePropertiesPanel({
   onCopy,
   onPaste,
 }: NodePropertiesPanelProps) {
+  const { t } = useTranslation("repack-node");
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -268,10 +271,19 @@ export function NodePropertiesPanel({
 
       // Show success message
       const itemType = selectedItem.data?.type || 'item';
-      const itemTypeText = itemType === 'Folder' ? 'folder' : 'file';
+      const itemTypeKey = itemType === 'Folder' ? 'types.folder' : 'types.file';
       const childrenCount = selectedItem.children ? selectedItem.children.length : 0;
-      const childrenText = childrenCount > 0 ? ` (including ${childrenCount} items)` : '';
-      toast.success(`Successfully copied ${itemTypeText}: "${selectedItem.name}"${childrenText}`);
+      if (childrenCount > 0) {
+        toast.success(t("copied.withChildren", {
+          type: t(itemTypeKey),
+          name: selectedItem.name,
+          count: childrenCount,
+        }));
+      } else {
+        toast.success(t(itemType === 'Folder' ? "copied.folder" : "copied.file", {
+          name: selectedItem.name,
+        }));
+      }
     }
   };
 
@@ -303,7 +315,7 @@ export function NodePropertiesPanel({
             value = parseInt(editValue, 10) || 0;
           }
         } catch {
-          setValidationError("Invalid hex or integer format");
+          setValidationError(t("errors.invalidHexOrInt"));
           return;
         }
       } else if (editingProperty.includes('Index') || editingProperty.includes('unk')) {
@@ -316,7 +328,7 @@ export function NodePropertiesPanel({
       if (editingProperty === 'index' && selectedItem.data?.type === 'Item') {
         const newIndex = parseInt(editValue) || 0;
         if (newIndex !== selectedItem.data.index && isIndexExists(newIndex)) {
-          setValidationError(`Index ${newIndex} already exists in SubFileData`);
+          setValidationError(t("errors.indexExists", { index: newIndex }));
           return;
         }
       }
@@ -344,13 +356,13 @@ export function NodePropertiesPanel({
     return (
       <Card className="flex h-full min-h-0 flex-col overflow-hidden rounded-none">
         <CardHeader className="shrink-0">
-          <CardTitle>Properties</CardTitle>
-          <CardDescription>Select an item to view its properties</CardDescription>
+          <CardTitle>{t("title")}</CardTitle>
+          <CardDescription>{t("empty.description")}</CardDescription>
         </CardHeader>
         <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto">
           <div className="text-center text-muted-foreground py-8">
             <Folder className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>No item selected</p>
+            <p>{t("empty.noSelection")}</p>
           </div>
           
           {/* Clipboard Status - Show even when no item is selected */}
@@ -358,39 +370,47 @@ export function NodePropertiesPanel({
             <>
               <Separator />
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Clipboard</Label>
+                <Label className="text-sm font-medium">{t("clipboard.title")}</Label>
                 <div className="bg-primary/10 border border-primary/30 rounded-lg p-3">
                   <div className="flex items-center gap-2">
                     <Info className="h-4 w-4 text-blue-600" />
                     <span className="text-sm font-medium text-blue-900">
-                      {clipboardItems.length === 1 ? firstCopiedItem.name : `${clipboardItems.length} nodes copied`}
+                      {clipboardItems.length === 1
+                        ? firstCopiedItem.name
+                        : t("clipboard.nodesCopied", { count: clipboardItems.length })}
                     </span>
                     <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
-                      {clipboardItems.length === 1 ? firstCopiedItem.data?.type || 'Unknown' : 'Batch'}
+                      {clipboardItems.length === 1 ? (
+                        <span data-i18n-ignore="">{firstCopiedItem.data?.type || "Unknown"}</span>
+                      ) : (
+                        t("clipboard.batch")
+                      )}
                     </span>
                     {clipboardItems.length === 1 && firstCopiedItem.data?.type === 'Item' && firstCopiedItem.data?.fileType && (
-                      <span className="text-xs px-2 py-1 bg-muted text-foreground rounded-full">
+                      <span className="text-xs px-2 py-1 bg-muted text-foreground rounded-full" data-i18n-ignore="">
                         {firstCopiedItem.data.fileType}
                       </span>
                     )}
                     {clipboardItems.length === 1 && firstCopiedItem.data?.type === 'Folder' && firstCopiedItem.children && (
                       <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
-                        {firstCopiedItem.children.length} items
+                        {t("clipboard.items", { count: firstCopiedItem.children.length })}
                       </span>
                     )}
                     {clipboardItems.length > 1 && copiedFolderCount > 0 && (
                       <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
-                        {copiedFolderCount} folder(s)
+                        {t("clipboard.folders", { count: copiedFolderCount })}
                       </span>
                     )}
                     {clipboardItems.length > 1 && copiedFileCount > 0 && (
                       <span className="text-xs px-2 py-1 bg-muted text-foreground rounded-full">
-                        {copiedFileCount} file(s)
+                        {t("clipboard.files", { count: copiedFileCount })}
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-blue-600 mt-1">
-                    {clipboardItems.length === 1 ? "Select a folder to paste this item" : "Select a folder to paste these nodes"}
+                    {clipboardItems.length === 1
+                      ? t("clipboard.pasteOne")
+                      : t("clipboard.pasteMany")}
                   </p>
                 </div>
               </div>
@@ -410,13 +430,13 @@ export function NodePropertiesPanel({
           ) : (
             <FileText className="h-5 w-5" />
           )}
-          Properties
+          {t("title")}
         </CardTitle>
       </CardHeader>
       <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto">
         {/* Name Section */}
         <div className="space-y-2">
-          <Label htmlFor="name">Name</Label>
+          <Label htmlFor="name" data-i18n-ignore="">Name</Label>
           {isEditing ? (
             <div className="flex gap-2">
               <Input
@@ -458,7 +478,7 @@ export function NodePropertiesPanel({
         <Separator />
 
         {/* Details Section */}
-        <div className="space-y-3">
+        <div className="space-y-3" data-i18n-ignore="">
           <div className="flex justify-between items-center">
             <Label className="text-sm font-medium">Type</Label>
             <span className="text-sm text-muted-foreground capitalize">
@@ -720,39 +740,47 @@ export function NodePropertiesPanel({
         {/* Clipboard Status */}
         {clipboardItems.length > 0 && firstCopiedItem && (
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Clipboard</Label>
+            <Label className="text-sm font-medium">{t("clipboard.title")}</Label>
             <div className="bg-primary/10 border border-primary/30 rounded-lg p-3">
               <div className="flex items-center gap-2">
                 <Info className="h-4 w-4 text-blue-600" />
                 <span className="text-sm font-medium text-blue-900">
-                  {clipboardItems.length === 1 ? firstCopiedItem.name : `${clipboardItems.length} nodes copied`}
+                  {clipboardItems.length === 1
+                    ? firstCopiedItem.name
+                    : t("clipboard.nodesCopied", { count: clipboardItems.length })}
                 </span>
                 <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
-                  {clipboardItems.length === 1 ? firstCopiedItem.data?.type || 'Unknown' : 'Batch'}
+                  {clipboardItems.length === 1 ? (
+                    <span data-i18n-ignore="">{firstCopiedItem.data?.type || "Unknown"}</span>
+                  ) : (
+                    t("clipboard.batch")
+                  )}
                 </span>
                 {clipboardItems.length === 1 && firstCopiedItem.data?.type === 'Item' && firstCopiedItem.data?.fileType && (
-                  <span className="text-xs px-2 py-1 bg-muted text-foreground rounded-full">
+                  <span className="text-xs px-2 py-1 bg-muted text-foreground rounded-full" data-i18n-ignore="">
                     {firstCopiedItem.data.fileType}
                   </span>
                 )}
                 {clipboardItems.length === 1 && firstCopiedItem.data?.type === 'Folder' && firstCopiedItem.children && (
                   <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
-                    {firstCopiedItem.children.length} items
+                    {t("clipboard.items", { count: firstCopiedItem.children.length })}
                   </span>
                 )}
                 {clipboardItems.length > 1 && copiedFolderCount > 0 && (
                   <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
-                    {copiedFolderCount} folder(s)
+                    {t("clipboard.folders", { count: copiedFolderCount })}
                   </span>
                 )}
                 {clipboardItems.length > 1 && copiedFileCount > 0 && (
                   <span className="text-xs px-2 py-1 bg-muted text-foreground rounded-full">
-                    {copiedFileCount} file(s)
+                    {t("clipboard.files", { count: copiedFileCount })}
                   </span>
                 )}
               </div>
               <p className="text-xs text-blue-600 mt-1">
-                {clipboardItems.length === 1 ? "Select a folder to paste this item" : "Select a folder to paste these nodes"}
+                {clipboardItems.length === 1
+                  ? t("clipboard.pasteOne")
+                  : t("clipboard.pasteMany")}
               </p>
             </div>
           </div>
@@ -762,7 +790,7 @@ export function NodePropertiesPanel({
         
         {/* Actions Section */}
         <div className="space-y-2">
-          <Label className="text-sm font-medium">Actions</Label>
+          <Label className="text-sm font-medium">{t("actions.title")}</Label>
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -771,7 +799,7 @@ export function NodePropertiesPanel({
               onClick={handleCopy}
             >
               <Copy className="h-4 w-4 mr-2" />
-              Copy
+              {t("actions.copy")}
             </Button>
             <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
               {/* <AlertDialogOverlay className="none" /> */}
@@ -783,27 +811,27 @@ export function NodePropertiesPanel({
                   disabled={selectedItem.id === 'root'}
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
+                  {t("actions.delete")}
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
+                  <AlertDialogTitle>{t("deleteDialog.title")}</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Are you sure you want to delete "{selectedItem.name}"? This action cannot be undone.
+                    {t("deleteDialog.body", { name: selectedItem.name })}
                     {selectedItem.data?.type === 'Folder' && selectedItem.children && selectedItem.children.length > 0 && (
                       <span className="block mt-2 text-red-600 font-medium">
-                        This folder contains {selectedItem.children.length} item(s) which will also be deleted.
+                        {t("deleteDialog.folderContents", { count: selectedItem.children.length })}
                       </span>
                     )}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <Button variant="outline" onClick={handleDeleteCancel}>
-                    Cancel
+                    {t("actions.cancel")}
                   </Button>
                   <Button variant="destructive" onClick={handleDeleteConfirm}>
-                    Delete
+                    {t("actions.delete")}
                   </Button>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -818,12 +846,12 @@ export function NodePropertiesPanel({
               className="w-full"
             >
               <Clipboard className="h-4 w-4 mr-2" />
-              Paste
+              {t("actions.paste")}
             </Button>
           )}
           {selectedItem.id === 'root' && (
             <p className="text-xs text-muted-foreground">
-              Root node cannot be deleted
+              {t("rootCannotDelete")}
             </p>
           )}
         </div>

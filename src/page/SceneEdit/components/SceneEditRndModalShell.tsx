@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 import { Rnd } from "react-rnd";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { getFloatingWindowLayer } from "@/components/floatingWindowLayer";
@@ -82,6 +83,7 @@ export function SceneEditRndModalShell({
   children,
   footer,
 }: SceneEditRndModalShellProps) {
+  const { t } = useTranslation("scene-root-b");
   const sceneViewportSuspend = useSceneModalViewportSuspendInteraction();
   const { startViewportSuspend, stopViewportSuspend, onDragHandlePointerDownCapture } =
     viewportSuspend ?? sceneViewportSuspend;
@@ -271,7 +273,7 @@ export function SceneEditRndModalShell({
               data-no-drag
               onClick={onClose}
               disabled={closeDisabled}
-              aria-label="Close"
+              aria-label={t("modal.close")}
             >
               <X className="h-4 w-4" />
             </Button>

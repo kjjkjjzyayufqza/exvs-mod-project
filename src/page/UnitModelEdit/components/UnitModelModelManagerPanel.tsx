@@ -1,4 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import type { TFunction } from "i18next";
+import { useTranslation } from "react-i18next";
 
 import { join, tempDir } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -128,13 +130,13 @@ interface UnitImportProgressState {
   steps: ImportStep[];
 }
 
-function createUnitImportSteps(fileName: string): ImportStep[] {
+function createUnitImportSteps(fileName: string, t: TFunction): ImportStep[] {
   return [
-    { step: "read", label: `Preparing ${fileName}...`, status: "active" },
-    { step: "convert", label: "Converting FBX/DAE to SSBH...", status: "pending" },
-    { step: "artifacts", label: "Building required Unit model files...", status: "pending" },
-    { step: "write", label: "Registering model and shared textures...", status: "pending" },
-    { step: "done", label: "Completing Unit model import...", status: "pending" },
+    { step: "read", label: t("manager.progress.preparing", { fileName }), status: "active" },
+    { step: "convert", label: t("manager.progress.converting"), status: "pending" },
+    { step: "artifacts", label: t("manager.progress.building"), status: "pending" },
+    { step: "write", label: t("manager.progress.registering"), status: "pending" },
+    { step: "done", label: t("manager.progress.completing"), status: "pending" },
   ];
 }
 
@@ -291,9 +293,9 @@ function emitUnitModelTexturesChanged(): void {
   window.dispatchEvent(new Event("unit-model-textures-changed"));
 }
 
-function showMutationSyncWarning(syncWarning?: string): void {
+function showMutationSyncWarning(syncWarning: string | undefined, warningText: string): void {
   if (!syncWarning) return;
-  toast.warning("Unit model texture container sync warning", {
+  toast.warning(warningText, {
     description: syncWarning,
   });
 }
@@ -314,6 +316,7 @@ export function UnitModelModelManagerPanel({
   className,
   profile = "unit",
 }: UnitModelModelManagerPanelProps) {
+  const { t } = useTranslation("unit-inspector-manager");
   const isExvsCommon = profile === "exvsCommon";
   const [busy, setBusy] = useState<string | null>(null);
   const [addFolderPreview, setAddFolderPreview] = useState<{
@@ -357,7 +360,7 @@ export function UnitModelModelManagerPanel({
 
   const handleAddFolder = async () => {
     if (!modelRoot || !structureJsonPath) {
-      toast.error("Open or extract a unit-model folder first.");
+      toast.error(t("manager.errors.openFolder"));
       return;
     }
     setBusy("add-folder");
@@ -365,7 +368,7 @@ export function UnitModelModelManagerPanel({
       const source = await open({
         directory: true,
         multiple: false,
-        title: "Select prepared Unit model SSBH folder",
+        title: t("manager.dialogs.selectSsbhFolder"),
         defaultPath:
           (await getStoredDialogDefaultPath(UNIT_MODEL_ADD_SSBH_FOLDER_DIALOG_PATH_KEY)) ??
           modelRoot ??
@@ -390,7 +393,7 @@ export function UnitModelModelManagerPanel({
       const texturePlan = buildSourceTexturePlan(validation, poolNames);
       setAddFolderPreview({ source, validation, texturePlan });
     } catch (error) {
-      toast.error("Prepared model folder is invalid", { description: String(error) });
+      toast.error(t("manager.errors.invalidPreparedFolder"), { description: String(error) });
     } finally {
       setBusy(null);
     }
@@ -400,7 +403,7 @@ export function UnitModelModelManagerPanel({
     if (!modelRoot || !structureJsonPath || !addFolderPreview) return;
     const { source, validation, texturePlan } = addFolderPreview;
     if (texturePlan.missing.length > 0) {
-      toast.error("Cannot add model while material textures are missing.");
+      toast.error(t("manager.errors.missingTextures"));
       return;
     }
     setBusy("add-folder");
@@ -414,21 +417,28 @@ export function UnitModelModelManagerPanel({
         structureJsonPath,
         commonModelId,
       );
-      toast.success(`Model '${validation.modelName}' added`, {
+      toast.success(t("manager.success.modelAdded", { name: validation.modelName }), {
         description: isExvsCommon
-          ? `${result.modelCount} models, ${result.totalFiles} files. Type-${EXVS_COMMON_NEW_SHL_MODEL_TYPE} SHL record added automatically.`
-          : `${result.modelCount} models, ${result.totalFiles} files. Empty NUHLPB created automatically.`,
+          ? t("manager.details.countsCommon", {
+              models: result.modelCount,
+              files: result.totalFiles,
+              type: EXVS_COMMON_NEW_SHL_MODEL_TYPE,
+            })
+          : t("manager.details.counts", {
+              models: result.modelCount,
+              files: result.totalFiles,
+            }),
       });
-      showMutationSyncWarning(result.syncWarning);
+      showMutationSyncWarning(result.syncWarning, t("manager.errors.textureSync"));
       if (validation.ignoredSourceNuhlpb && !isExvsCommon) {
-        toast.info("The source NUHLPB was ignored; a new empty NUHLPB was created.");
+        toast.info(t("manager.success.nuhlpbIgnored"));
       }
       setAddFolderPreview(null);
       setCommonModelIdText("");
       emitUnitModelTexturesChanged();
       onMutated?.();
     } catch (error) {
-      toast.error("Failed to add model", { description: String(error) });
+      toast.error(t("manager.errors.addFailed"), { description: String(error) });
     } finally {
       setBusy(null);
     }
@@ -436,7 +446,7 @@ export function UnitModelModelManagerPanel({
 
   const handleAddStaticMesh = async () => {
     if (!modelRoot || !structureJsonPath) {
-      toast.error("Open or extract a unit-model folder first.");
+      toast.error(t("manager.errors.openFolder"));
       return;
     }
     if (isExvsCommon) {
@@ -449,7 +459,7 @@ export function UnitModelModelManagerPanel({
 
   const startStaticMeshImport = async (commonModelId: number | null) => {
     if (!modelRoot || !structureJsonPath) {
-      toast.error("Open or extract a unit-model folder first.");
+      toast.error(t("manager.errors.openFolder"));
       return;
     }
     setBusy("analyze");
@@ -457,7 +467,7 @@ export function UnitModelModelManagerPanel({
       setCommonStaticMeshModelId(commonModelId);
       const selected = await open({
         multiple: false,
-        title: "Select FBX or DAE for Unit model import",
+        title: t("manager.dialogs.selectFbxDae"),
         filters: [{ name: "Static Mesh", extensions: ["fbx", "dae"] }],
         defaultPath:
           (await getStoredDialogDefaultPath(UNIT_MODEL_IMPORT_STATIC_MESH_DIALOG_PATH_KEY)) ??
@@ -585,7 +595,7 @@ export function UnitModelModelManagerPanel({
     setImportProgress({
       open: true,
       progress: 0,
-      steps: createUnitImportSteps(entry.fileName),
+      steps: createUnitImportSteps(entry.fileName, t),
     });
     try {
       await assertSsbhSessionTextureReferencesResolvable({
@@ -627,18 +637,25 @@ export function UnitModelModelManagerPanel({
         },
         handleStaticMeshProgress,
       );
-      toast.success(`Unit model '${baseFilename}' added`, {
+      toast.success(t("manager.success.unitModelAdded", { name: baseFilename }), {
         description: isExvsCommon
-          ? `${result.modelCount} models, ${result.totalFiles} files. Type-${EXVS_COMMON_NEW_SHL_MODEL_TYPE} SHL record added automatically.`
-          : `${result.modelCount} models, ${result.totalFiles} files. Empty NUHLPB created automatically.`,
+          ? t("manager.details.countsCommon", {
+              models: result.modelCount,
+              files: result.totalFiles,
+              type: EXVS_COMMON_NEW_SHL_MODEL_TYPE,
+            })
+          : t("manager.details.counts", {
+              models: result.modelCount,
+              files: result.totalFiles,
+            }),
       });
-      showMutationSyncWarning(result.syncWarning);
+      showMutationSyncWarning(result.syncWarning, t("manager.errors.textureSync"));
       setImportEntries([]);
       setCommonStaticMeshModelId(null);
       emitUnitModelTexturesChanged();
       onMutated?.();
     } catch (error) {
-      toast.error("Failed to import FBX/DAE as Unit model", {
+      toast.error(t("manager.errors.importFailed"), {
         description: error instanceof Error ? error.message : String(error),
       });
       setShowImportConfig(true);
@@ -658,15 +675,18 @@ export function UnitModelModelManagerPanel({
         structureJsonPath,
         isExvsCommon,
       );
-      toast.success("Model removed", {
-        description: `${result.modelCount} models, ${result.removedFiles.length} files deleted`,
+      toast.success(t("manager.success.modelRemoved"), {
+        description: t("manager.details.removed", {
+          models: result.modelCount,
+          files: result.removedFiles.length,
+        }),
       });
-      showMutationSyncWarning(result.syncWarning);
+      showMutationSyncWarning(result.syncWarning, t("manager.errors.textureSync"));
       setRemoveTarget(null);
       emitUnitModelTexturesChanged();
       onMutated?.();
     } catch (error) {
-      toast.error("Failed to remove model", { description: String(error) });
+      toast.error(t("manager.errors.removeFailed"), { description: String(error) });
     } finally {
       setBusy(null);
     }
@@ -679,7 +699,7 @@ export function UnitModelModelManagerPanel({
 
   const handleCreateNumatbTemplate = async (model: ModelSummary) => {
     if (!structureJsonPath) {
-      toast.error("Open or extract a unit-model folder first.");
+      toast.error(t("manager.errors.openFolder"));
       return;
     }
     setBusy(`template:${model.label}`);
@@ -702,7 +722,7 @@ export function UnitModelModelManagerPanel({
         },
       );
     } catch (error) {
-      toast.error("Failed to create NUMATB template", {
+      toast.error(t("manager.errors.templateFailed"), {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -712,7 +732,7 @@ export function UnitModelModelManagerPanel({
 
   const handleOpenReplace = (label: string, index: number) => {
     if (!modelRoot || !structureJsonPath) {
-      toast.error("Open or extract a unit-model folder first.");
+      toast.error(t("manager.errors.openFolder"));
       return;
     }
     setReplaceTarget({ label, index });
@@ -752,7 +772,7 @@ export function UnitModelModelManagerPanel({
 
   const handleChooseFullFolder = async () => {
     if (!modelRoot || !structureJsonPath || !replaceTarget) {
-      toast.error("Open or extract a unit-model folder first.");
+      toast.error(t("manager.errors.openFolder"));
       return;
     }
     const label = replaceTarget.label;
@@ -761,7 +781,7 @@ export function UnitModelModelManagerPanel({
       const source = await open({
         directory: true,
         multiple: false,
-        title: `Select replacement SSBH folder for ${label}`,
+        title: t("manager.dialogs.selectReplaceFolder", { label }),
         defaultPath:
           (await getStoredDialogDefaultPath(UNIT_MODEL_REPLACE_SSBH_FOLDER_DIALOG_PATH_KEY)) ??
           modelRoot ??
@@ -781,7 +801,7 @@ export function UnitModelModelManagerPanel({
       );
       setReplaceFolderPreview({ source, preview });
     } catch (error) {
-      toast.error("Prepared replacement folder is invalid", {
+      toast.error(t("manager.errors.invalidReplaceFolder"), {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -791,7 +811,7 @@ export function UnitModelModelManagerPanel({
 
   const handleChooseExistingNumshb = async () => {
     if (!modelRoot || !structureJsonPath || !replaceTarget) {
-      toast.error("Open or extract a unit-model folder first.");
+      toast.error(t("manager.errors.openFolder"));
       return;
     }
     const label = replaceTarget.label;
@@ -799,7 +819,7 @@ export function UnitModelModelManagerPanel({
     try {
       const selected = await open({
         multiple: false,
-        title: `Select replacement NUMSHB for ${label}`,
+        title: t("manager.dialogs.selectReplaceNumshb", { label }),
         filters: [{ name: "NUMSHB", extensions: ["numshb"] }],
         defaultPath:
           (await getStoredDialogDefaultPath(UNIT_MODEL_REPLACE_NUMSHB_DIALOG_PATH_KEY)) ??
@@ -823,7 +843,7 @@ export function UnitModelModelManagerPanel({
       setReplaceNumshbPreview({ source, preview });
       await cleanupReplaceTempDir(previousTemp);
     } catch (error) {
-      toast.error("Replacement NUMSHB is invalid", {
+      toast.error(t("manager.errors.invalidNumshb"), {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -833,14 +853,14 @@ export function UnitModelModelManagerPanel({
 
   const handleConvertReplaceNumshb = async () => {
     if (!modelRoot || !structureJsonPath || !replaceTarget) {
-      toast.error("Open or extract a unit-model folder first.");
+      toast.error(t("manager.errors.openFolder"));
       return;
     }
     setBusy("analyze");
     try {
       const selected = await open({
         multiple: false,
-        title: `Select FBX or DAE to convert as NUMSHB for ${replaceTarget.label}`,
+        title: t("manager.dialogs.selectConvertNumshb", { label: replaceTarget.label }),
         filters: [{ name: "Static Mesh", extensions: ["fbx", "dae"] }],
         defaultPath:
           (await getStoredDialogDefaultPath(UNIT_MODEL_REPLACE_NUMSHB_SOURCE_DIALOG_PATH_KEY)) ??
@@ -945,11 +965,11 @@ export function UnitModelModelManagerPanel({
     const entry = importEntries[0];
     const target = replaceTargetRef.current;
     if (!entry || !entry.analysis) {
-      toast.error("FBX/DAE analysis is not ready.");
+      toast.error(t("manager.errors.analysisNotReady"));
       return;
     }
     if (!modelRoot || !structureJsonPath || !target) {
-      toast.error("Replace target is missing. Reopen Replace and try again.");
+      toast.error(t("manager.errors.replaceTargetMissing"));
       return;
     }
     const session = useDaeSsbhSessionStore.getState();
@@ -960,8 +980,8 @@ export function UnitModelModelManagerPanel({
       open: true,
       progress: 20,
       steps: [
-        { step: "convert", label: "Converting FBX/DAE to NUMSHB...", status: "active" },
-        { step: "done", label: "Preparing replace preview...", status: "pending" },
+        { step: "convert", label: t("manager.progress.convertNumshb"), status: "active" },
+        { step: "done", label: t("manager.progress.replacePreview"), status: "pending" },
       ],
     });
     const stamp = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -1006,7 +1026,7 @@ export function UnitModelModelManagerPanel({
       setImportEntries([]);
       suppressReplaceCloseRef.current = false;
     } catch (error) {
-      toast.error("Failed to convert FBX/DAE to NUMSHB", {
+      toast.error(t("manager.errors.convertNumshbFailed"), {
         description: error instanceof Error ? error.message : String(error),
       });
       suppressReplaceCloseRef.current = true;
@@ -1023,7 +1043,7 @@ export function UnitModelModelManagerPanel({
     if (replaceScope === "numshb") {
       if (!replaceNumshbPreview) return;
       if (replaceNumshbPreview.preview.blockers.length > 0) {
-        toast.error("Cannot replace mesh while blockers remain.");
+        toast.error(t("manager.errors.replaceMeshBlocked"));
         return;
       }
       const targetName = replaceNumshbPreview.preview.target.modelName;
@@ -1035,8 +1055,8 @@ export function UnitModelModelManagerPanel({
           replaceNumshbPreview.source,
           structureJsonPath,
         );
-        toast.success(`Mesh for '${targetName}' replaced`, {
-          description: "Only the existing .numshb was overwritten.",
+        toast.success(t("manager.success.meshReplaced", { name: targetName }), {
+          description: t("manager.success.meshOverwrite"),
         });
         const tempPath = replaceNumshbPreview.tempDir;
         setReplaceTarget(null);
@@ -1044,7 +1064,7 @@ export function UnitModelModelManagerPanel({
         await cleanupReplaceTempDir(tempPath);
         onMutated?.();
       } catch (error) {
-        toast.error("Failed to replace mesh", {
+        toast.error(t("manager.errors.replaceMeshFailed"), {
           description: error instanceof Error ? error.message : String(error),
         });
       } finally {
@@ -1055,7 +1075,7 @@ export function UnitModelModelManagerPanel({
     if (!replaceFolderPreview) return;
     const { source, preview } = replaceFolderPreview;
     if (preview.blockers.length > 0) {
-      toast.error("Cannot replace model while blockers remain.");
+      toast.error(t("manager.errors.replaceModelBlocked"));
       return;
     }
     const targetName = preview.target.modelName;
@@ -1068,16 +1088,20 @@ export function UnitModelModelManagerPanel({
         structureJsonPath,
         isExvsCommon,
       );
-      toast.success(`Model '${targetName}' replaced`, {
-        description: `${result.modelCount} models, ${result.totalFiles} files. ${result.removedFiles.length} old file(s) removed.`,
+      toast.success(t("manager.success.modelReplaced", { name: targetName }), {
+        description: t("manager.details.replaced", {
+          models: result.modelCount,
+          files: result.totalFiles,
+          removed: result.removedFiles.length,
+        }),
       });
-      showMutationSyncWarning(result.syncWarning);
+      showMutationSyncWarning(result.syncWarning, t("manager.errors.textureSync"));
       setReplaceTarget(null);
       setReplaceFolderPreview(null);
       emitUnitModelTexturesChanged();
       onMutated?.();
     } catch (error) {
-      toast.error("Failed to replace model", {
+      toast.error(t("manager.errors.replaceModelFailed"), {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -1111,7 +1135,7 @@ export function UnitModelModelManagerPanel({
       <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
         <div className="flex items-center gap-1.5">
           <Boxes className="h-4 w-4 text-muted-foreground" aria-hidden />
-          <h2 className="text-sm font-semibold tracking-tight">Models</h2>
+          <h2 className="text-sm font-semibold tracking-tight">{t("manager.title")}</h2>
           {parsed.models.length > 0 ? (
             <span className="font-mono text-[11px] text-muted-foreground">{parsed.models.length}</span>
           ) : null}
@@ -1125,14 +1149,14 @@ export function UnitModelModelManagerPanel({
                 variant="outline"
                 className="gap-1.5"
                 disabled={!canMutate || busy !== null}
-                title="Add a model from FBX/DAE or a prepared SSBH folder"
+                title={t("manager.addTitle")}
               >
                 {busy !== null ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
                 ) : (
                   <Plus className="h-3.5 w-3.5" aria-hidden />
                 )}
-                <span className="text-xs font-medium">Add</span>
+                <span className="text-xs font-medium">{t("manager.add")}</span>
                 <ChevronDown className="h-3 w-3 text-muted-foreground" aria-hidden />
               </Button>
             </DropdownMenuTrigger>
@@ -1143,9 +1167,9 @@ export function UnitModelModelManagerPanel({
               >
                 <FileUp className="h-4 w-4" aria-hidden />
                 <span>
-                  <span className="block text-xs font-medium">Import FBX / DAE</span>
+                  <span className="block text-xs font-medium">{t("manager.importFbxDae")}</span>
                   <span className="block text-[10px] text-muted-foreground">
-                    Analyze, configure, and convert to SSBH
+                    {t("manager.importFbxDaeDescription")}
                   </span>
                 </span>
               </DropdownMenuItem>
@@ -1155,9 +1179,9 @@ export function UnitModelModelManagerPanel({
               >
                 <FolderPlus className="h-4 w-4" aria-hidden />
                 <span>
-                  <span className="block text-xs font-medium">Add SSBH Folder</span>
+                  <span className="block text-xs font-medium">{t("manager.addSsbhFolder")}</span>
                   <span className="block text-[10px] text-muted-foreground">
-                    Validate a complete prepared model folder
+                    {t("manager.addSsbhFolderDescription")}
                   </span>
                 </span>
               </DropdownMenuItem>
@@ -1165,7 +1189,7 @@ export function UnitModelModelManagerPanel({
           </DropdownMenu>
           {parsed.models.length > 0 ? (
             <CopyInfoToAiButton
-              label="Copy models to AI"
+              label={t("manager.copyModelsToAi")}
               buildPayload={() => ({
                 kind: "unit-model-list",
                 scope: "models",
@@ -1180,7 +1204,7 @@ export function UnitModelModelManagerPanel({
       <ScrollArea className="min-h-0 flex-1">
         {parsed.error ? (
           <div className="m-3 rounded-md border border-red-500/40 bg-red-500/5 p-3 text-xs text-red-600 dark:text-red-400">
-            Failed to read models: {parsed.error}
+            {t("manager.errors.readModels", { error: parsed.error })}
           </div>
         ) : parsed.models.length > 0 ? (
           <ul className="divide-y">
@@ -1206,7 +1230,7 @@ export function UnitModelModelManagerPanel({
                     <div className="min-w-0">
                       <p className="truncate text-[13px] font-medium leading-5">{model.label}</p>
                       <p className="truncate font-mono text-[10px] text-muted-foreground">
-                        {model.fileTypes.join(" ") || "no direct files"}
+                        {model.fileTypes.join(" ") || t("manager.noDirectFiles")}
                       </p>
                     </div>
                   </button>
@@ -1214,7 +1238,7 @@ export function UnitModelModelManagerPanel({
                     size="icon"
                     variant="ghost"
                     className="h-6 w-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                    label={`Copy ${model.label} info to AI`}
+                    label={t("manager.copyModelInfoToAi", { name: model.label })}
                     buildPayload={() => ({
                       kind: "unit-model",
                       scope: `model:${model.label}`,
@@ -1230,8 +1254,8 @@ export function UnitModelModelManagerPanel({
                       className="h-6 w-6 text-muted-foreground opacity-0 transition-colors hover:text-primary group-hover:opacity-100 focus-visible:opacity-100"
                       disabled={busy !== null}
                       onClick={() => onExportModel(model.label)}
-                      title={`Export ${model.label}`}
-                      aria-label={`Export ${model.label}`}
+                      title={t("manager.exportModel", { name: model.label })}
+                      aria-label={t("manager.exportModel", { name: model.label })}
                     >
                       <Download className="h-3.5 w-3.5" aria-hidden />
                     </Button>
@@ -1244,8 +1268,8 @@ export function UnitModelModelManagerPanel({
                       className="h-6 w-6 text-muted-foreground opacity-0 transition-colors hover:text-primary group-hover:opacity-100 focus-visible:opacity-100"
                       disabled={busy !== null}
                       onClick={() => void handleCreateNumatbTemplate(model)}
-                      title={`Create NUMATB template from ${model.label} (maya + nust)`}
-                      aria-label={`Create NUMATB template from ${model.label}`}
+                      title={t("manager.createNumatbTitle", { name: model.label })}
+                      aria-label={t("manager.createNumatbAria", { name: model.label })}
                     >
                       {busy === `template:${model.label}` ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -1263,8 +1287,8 @@ export function UnitModelModelManagerPanel({
                         className="h-6 w-6 text-muted-foreground opacity-0 transition-colors hover:text-primary group-hover:opacity-100 focus-visible:opacity-100"
                         disabled={busy !== null}
                         onClick={() => handleOpenReplace(model.label, modelIndex)}
-                        title={`Replace ${model.label}`}
-                        aria-label={`Replace ${model.label}`}
+                        title={t("manager.replaceModel", { name: model.label })}
+                        aria-label={t("manager.replaceModel", { name: model.label })}
                       >
                         {busy === `replace:${model.label}` ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -1279,8 +1303,8 @@ export function UnitModelModelManagerPanel({
                         className="h-6 w-6 text-muted-foreground opacity-0 transition-colors hover:text-red-600 group-hover:opacity-100 focus-visible:opacity-100 dark:hover:text-red-400"
                         disabled={busy !== null}
                         onClick={() => handleRequestRemove(model.label)}
-                        title={`Remove ${model.label}`}
-                        aria-label={`Remove ${model.label}`}
+                        title={t("manager.removeModel", { name: model.label })}
+                        aria-label={t("manager.removeModel", { name: model.label })}
                       >
                         {busy === `remove:${model.label}` ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -1298,7 +1322,7 @@ export function UnitModelModelManagerPanel({
           <div className="flex h-full flex-col items-center justify-center gap-2 px-6 py-12 text-center">
             <Boxes className="h-8 w-8 text-muted-foreground/50" aria-hidden />
             <p className="text-xs text-muted-foreground">
-              Extract or open a unit-model folder to list its models.
+              {t("manager.empty")}
             </p>
           </div>
         )}
@@ -1376,7 +1400,7 @@ export function UnitModelModelManagerPanel({
         open={importProgress.open}
         progress={importProgress.progress}
         steps={importProgress.steps}
-        title="Importing Unit Model"
+        title={t("manager.progress.title")}
         onClose={() =>
           setImportProgress((current) => ({ ...current, open: false }))
         }

@@ -1,0 +1,14 @@
+{
+  "bone.searchLabel": "搜索骨骼索引或名称",
+  "bone.searchPlaceholder": "搜索索引或名称…",
+  "bone.listLabel": "骨骼列表",
+  "bone.showingFirst": "显示前 {{shown}} 个，共 {{total}} 个骨骼。输入以搜索。",
+  "bone.listCapped": "列表为保证性能已截断。请缩小搜索范围。",
+  "common.noMatches": "没有匹配项。",
+  "material.listLabel": "材质标签",
+  "material.showingFirst": "显示前 {{shown}} 个，共 {{total}} 个。输入以搜索。",
+  "material.useCustom": "使用自定义",
+  "material.empty": "暂无材质标签。请在上方输入自定义名称。",
+  "material.placeholder": "选择或输入材质…",
+  "material.showSuggestions": "显示材质标签建议"
+}

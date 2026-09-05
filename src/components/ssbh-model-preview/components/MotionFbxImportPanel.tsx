@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { FileInput, Layers, LoaderCircle, TriangleAlert } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -70,10 +71,6 @@ function isAbsolutePath(path: string): boolean {
   return /^[a-zA-Z]:[\\/]/.test(t) || t.startsWith("\\\\") || t.startsWith("/");
 }
 
-function reportSummary(report: MotionConversionReport): string {
-  return `${report.frameCount} frames, ${report.durationSeconds.toFixed(3)}s @ 60 FPS`;
-}
-
 /**
  * Output must not equal FBX or NUSKTB.
  * Template may equal output (overwrite selected motion after first import).
@@ -100,6 +97,7 @@ export function MotionFbxImportPanel({
   disabled,
   onImported,
 }: MotionFbxImportPanelProps) {
+  const { t } = useTranslation("ssbh-motion");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<MotionConversionReport | null>(null);
@@ -153,11 +151,11 @@ export function MotionFbxImportPanel({
       setInspect(null);
       setStackName(null);
       setError(message);
-      toast.error("FBX inspect failed", { description: message });
+      toast.error(t("fbxImport.inspectFailed"), { description: message });
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [t]);
 
   const handleFbxPicked = useCallback(
     (value: string | string[]) => {
@@ -180,9 +178,9 @@ export function MotionFbxImportPanel({
     if (!source || !destination) return;
 
     if (!isAbsolutePath(destination)) {
-      setError("Output NUANMB must be an absolute path. Click the output field to choose a save location.");
-      toast.error("Output path required", {
-        description: "Click Output NUANMB and pick a save path (own file name).",
+      setError(t("fbxImport.outputAbsolute"));
+      toast.error(t("fbxImport.outputRequired"), {
+        description: t("fbxImport.outputRequiredHint"),
       });
       return;
     }
@@ -193,9 +191,11 @@ export function MotionFbxImportPanel({
       skeletonPath,
     });
     if (conflict) {
-      const message = `Output NUANMB path must not be the same as the ${conflict}. Choose a different file name/path.`;
+      const target =
+        conflict === "source FBX" ? t("fbxImport.conflictSourceFbx") : t("fbxImport.conflictSkeleton");
+      const message = t("fbxImport.outputSameAs", { target });
       setError(message);
-      toast.error("Invalid output path", { description: message });
+      toast.error(t("fbxImport.invalidOutputPath"), { description: message });
       return;
     }
     // Template == output is allowed (re-import overwrites the selected clip).
@@ -203,7 +203,7 @@ export function MotionFbxImportPanel({
     const chosenStack =
       stackName || (inspect?.stacks.length === 1 ? (inspect.stacks[0]?.name ?? "") : "");
     if (inspect && inspect.stacks.length > 1 && !chosenStack) {
-      setError("This FBX has multiple animation stacks. Choose one before import.");
+      setError(t("fbxImport.chooseStackBeforeImport"));
       return;
     }
 
@@ -224,12 +224,17 @@ export function MotionFbxImportPanel({
       setReport(nextReport);
       // Keep output field as the path the user chose / writer returned (own name).
       setOutputNuanmbPath(nextReport.outputPath);
-      toast.success("NUANMB imported", { description: reportSummary(nextReport) });
+      toast.success(t("fbxImport.imported"), {
+        description: t("fbxImport.summary", {
+          frames: nextReport.frameCount,
+          seconds: nextReport.durationSeconds.toFixed(3),
+        }),
+      });
       onImported(nextReport.outputPath);
     } catch (caughtError) {
       const message = errorMessage(caughtError);
       setError(message);
-      toast.error("Motion FBX import failed", { description: message });
+      toast.error(t("fbxImport.importFailed"), { description: message });
     } finally {
       setBusy(false);
     }
@@ -244,26 +249,24 @@ export function MotionFbxImportPanel({
     selectedNuanmbPath,
     skeletonPath,
     stackName,
+    t,
   ]);
 
   return (
-    <MayaSection title="Motion FBX import" icon={<FileInput className="h-3.5 w-3.5 opacity-80" />} defaultOpen>
+    <MayaSection title={t("fbxImport.title")} icon={<FileInput className="h-3.5 w-3.5 opacity-80" />} defaultOpen>
       <div className="flex flex-col gap-2 text-[10px]">
         <p className="text-muted-foreground">
-          Two independent paths (each remembered in its own config key): source{" "}
-          <span className="font-medium text-foreground">.fbx</span> and output{" "}
-          <span className="font-medium text-foreground">.nuanmb</span> (your chosen file name).
-          You may re-import to the same output (including the currently selected motion).
+          {t("fbxImport.hint")}
         </p>
 
         <div className="space-y-1">
           <Label htmlFor="motion-fbx-import-source" className="text-[10px] text-muted-foreground">
-            Source FBX
+            {t("fbxImport.sourceFbx")}
           </Label>
           <FilePathInput
             id="motion-fbx-import-source"
             className="h-8 cursor-pointer font-mono text-[10px]"
-            placeholder="Click to choose .fbx…"
+            placeholder={t("fbxImport.chooseFbxPlaceholder")}
             value={fbxPath}
             disabled={busy || disabled}
             storeKey={STORE_KEY_SOURCE_FBX}
@@ -278,7 +281,7 @@ export function MotionFbxImportPanel({
             picker={{
               kind: "file",
               multiple: false,
-              title: "Choose motion FBX",
+              title: t("fbxImport.chooseMotionFbx"),
               filters: [{ name: "FBX", extensions: ["fbx"] }],
               defaultPathKey: DIALOG_DIR_SOURCE_FBX,
               // No defaultPath override — last FBX dir comes only from this field's config.
@@ -288,12 +291,12 @@ export function MotionFbxImportPanel({
 
         <div className="space-y-1">
           <Label htmlFor="motion-fbx-import-output" className="text-[10px] text-muted-foreground">
-            Output NUANMB (own file name / path)
+            {t("fbxImport.outputNuanmb")}
           </Label>
           <FilePathInput
             id="motion-fbx-import-output"
             className="h-8 cursor-pointer font-mono text-[10px]"
-            placeholder="Click to choose output .nuanmb path…"
+            placeholder={t("fbxImport.chooseOutputPlaceholder")}
             value={outputNuanmbPath}
             disabled={busy || disabled}
             storeKey={STORE_KEY_OUTPUT_NUANMB}
@@ -301,7 +304,7 @@ export function MotionFbxImportPanel({
             onPickedValue={handleOutputPicked}
             picker={{
               kind: "save",
-              title: "Save imported NUANMB",
+              title: t("fbxImport.saveImported"),
               filters: [{ name: "NUANMB", extensions: ["nuanmb"] }],
               defaultPathKey: DIALOG_DIR_OUTPUT_NUANMB,
               defaultFileName: outputSaveFileName,
@@ -314,7 +317,7 @@ export function MotionFbxImportPanel({
           <div className="flex flex-col gap-1 rounded-sm border border-border/60 bg-muted/30 px-2 py-1.5">
             <span className="flex items-center gap-1 font-medium">
               <Layers className="h-3.5 w-3.5 opacity-80" />
-              This FBX has multiple animation stacks. Choose one:
+              {t("fbxImport.chooseStackLabel")}
             </span>
             <div className="flex flex-wrap gap-1">
               {inspect.stacks.map((stack) => (
@@ -327,7 +330,7 @@ export function MotionFbxImportPanel({
                   disabled={busy}
                   onClick={() => setStackName(stack.name)}
                 >
-                  {stack.name} ({stack.frameCount}f)
+                  {t("fbxImport.stackFrames", { name: stack.name, count: stack.frameCount })}
                 </Button>
               ))}
             </div>
@@ -347,7 +350,7 @@ export function MotionFbxImportPanel({
             ) : (
               <FileInput className="mr-1 h-3.5 w-3.5" />
             )}
-            Import FBX as NUANMB
+            {t("fbxImport.importButton")}
           </Button>
         </div>
 
@@ -363,20 +366,23 @@ export function MotionFbxImportPanel({
             htmlFor="motion-fbx-import-preserve-groups"
             className="text-[10px] font-normal text-muted-foreground"
           >
-            Preserve groups from selected NUANMB (visibility/material template only — not the output path)
+            {t("fbxImport.preserveGroups")}
           </Label>
         </div>
         {!selectedNuanmbPath ? (
           <p className="text-muted-foreground">
-            No NUANMB selected: the import writes a transform-only clip.
+            {t("fbxImport.noTemplate")}
           </p>
         ) : (
           <p className="text-muted-foreground wrap-anywhere">
-            Template (read-only): <span className="font-mono">{selectedNuanmbPath}</span>
+            {t("fbxImport.templateReadonly")}{" "}
+            <span className="font-mono" data-i18n-ignore="">
+              {selectedNuanmbPath}
+            </span>
           </p>
         )}
         <div className="flex items-center gap-1.5">
-          <span className="text-muted-foreground">Bone matching</span>
+          <span className="text-muted-foreground">{t("fbxImport.boneMatching")}</span>
           <Button
             type="button"
             size="sm"
@@ -385,7 +391,7 @@ export function MotionFbxImportPanel({
             disabled={busy || disabled}
             onClick={() => setPolicy("exactHierarchy")}
           >
-            Exact hierarchy
+            {t("fbxImport.exactHierarchy")}
           </Button>
           <Button
             type="button"
@@ -395,11 +401,11 @@ export function MotionFbxImportPanel({
             disabled={busy || disabled}
             onClick={() => setPolicy("nameOnly")}
           >
-            Name only
+            {t("fbxImport.nameOnly")}
           </Button>
         </div>
         {!skeletonPath ? (
-          <p className="text-destructive">Active model needs a NUSKTB to import motion.</p>
+          <p className="text-destructive">{t("fbxImport.needsNusktb")}</p>
         ) : null}
         {error ? (
           <p role="alert" className="flex gap-1.5 text-destructive wrap-anywhere">
@@ -411,8 +417,15 @@ export function MotionFbxImportPanel({
           <MotionReportCard
             title={report.actionName}
             rows={[
-              reportSummary(report),
-              `${report.matchedBones.length} bones matched, ${report.ignoredBones.length} ignored, ${report.preservedNonTransformGroupCount} groups preserved`,
+              t("fbxImport.summary", {
+                frames: report.frameCount,
+                seconds: report.durationSeconds.toFixed(3),
+              }),
+              t("fbxImport.matchSummary", {
+                matched: report.matchedBones.length,
+                ignored: report.ignoredBones.length,
+                groups: report.preservedNonTransformGroupCount,
+              }),
               report.outputPath,
             ]}
             warnings={report.warnings}

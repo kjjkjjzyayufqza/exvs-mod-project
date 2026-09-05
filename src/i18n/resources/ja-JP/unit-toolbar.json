@@ -1,0 +1,9 @@
+{
+  "file": {"label": "ファイル", "tooltip": "機体モデルを開く／抽出", "openFolder": "モデルフォルダーを開く", "extractFhm2d": ".fhm2d をフォルダーに抽出", "openExvsCommon": "EXVS Common を開く／抽出", "useLoadedRoot": "読み込み済みプレビューのルートを使用"},
+  "validate": {"aria": "機体モデルを検証", "tooltip": "再パック用に検証"},
+  "repack": {"aria": "機体モデルを再パック", "tooltip": "OB Mod フォルダーに再パック"},
+  "export": {"aria": "読み込み済みモデルを FBX としてエクスポート", "tooltip": "読み込み済みモデルを FBX としてエクスポート"},
+  "display": {"grid": "グリッドの切り替え", "axes": "軸の切り替え", "wireframe": "ワイヤーフレームの切り替え", "stats": "レンダー統計の切り替え", "resetCamera": "カメラをリセット"},
+  "more": {"actions": "その他の操作", "copyReviewPayload": "AI レビューペイロードをコピー"},
+  "status": {"checking": "確認中……", "ready": "再パックの準備完了", "pending": "検証待ち", "noFolder": "フォルダーなし", "issues_one": "{{count}} 件の問題", "issues_other": "{{count}} 件の問題", "exvsCommon": "EXVS Common · {{status}}"}
+}

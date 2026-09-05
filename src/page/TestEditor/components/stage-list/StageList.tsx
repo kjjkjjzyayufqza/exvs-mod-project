@@ -6,6 +6,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { StageListEntry } from "@/models/stageListEntry";
 import { cn } from "@/lib/utils";
 import { StageCard } from "./StageCard";
+import { useTranslation } from "react-i18next";
 
 export type StageListSortKey =
   | "none"
@@ -30,26 +31,26 @@ export type StageListSortKey =
 
 type SortKey = StageListSortKey;
 
-const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
-  { value: "none", label: "No sort" },
-  { value: "index", label: "Index (min → max)" },
-  { value: "entryId", label: "ID (positive → negative)" },
-  { value: "recordLookupId", label: "recordLookupId (min → max)" },
-  { value: "randomSelectWeightDefault", label: "randomSelectWeightDefault (min → max)" },
-  { value: "randomSelectWeightAlt", label: "randomSelectWeightAlt (min → max)" },
-  { value: "unk0x0c", label: "unk0x0c (min → max)" },
-  { value: "seriesAltGroupId", label: "seriesAltGroupId (min → max)" },
-  { value: "unk0x14", label: "unk0x14 (min → max)" },
-  { value: "vsSD", label: "vs_s_d (min → max)" },
-  { value: "fileName", label: "fileName (min → max)" },
-  { value: "selectOrderAlt", label: "selectOrderAlt (min → max)" },
-  { value: "vsSL", label: "vs_s_l (min → max)" },
-  { value: "seriesDefaultGroupId", label: "seriesDefaultGroupId (min → max)" },
-  { value: "unk0x34", label: "unk0x34 (min → max)" },
-  { value: "unk0x38", label: "unk0x38 (min → max)" },
-  { value: "selectOrderDefault", label: "selectOrderDefault (min → max)" },
-  { value: "vsSn", label: "vs_sn (min → max)" },
-  { value: "iconIndex", label: "Icon Index (min → max)" },
+const SORT_KEYS: SortKey[] = [
+  "none",
+  "index",
+  "entryId",
+  "recordLookupId",
+  "randomSelectWeightDefault",
+  "randomSelectWeightAlt",
+  "unk0x0c",
+  "seriesAltGroupId",
+  "unk0x14",
+  "vsSD",
+  "fileName",
+  "selectOrderAlt",
+  "vsSL",
+  "seriesDefaultGroupId",
+  "unk0x34",
+  "unk0x38",
+  "selectOrderDefault",
+  "vsSn",
+  "iconIndex",
 ];
 
 interface StageListProps {
@@ -89,6 +90,7 @@ export function StageList({
   stageIconConvertDirPath,
   stageIconBaseNameOrder,
 }: StageListProps) {
+  const { t } = useTranslation("test-stage-list-view");
   const [internalInputValue, setInternalInputValue] = useState("");
   const [internalSearchTerm, setInternalSearchTerm] = useState("");
   const [internalIsComposing, setInternalIsComposing] = useState(false);
@@ -247,7 +249,7 @@ export function StageList({
         <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
-            placeholder="Search by id, name, or unk..."
+            placeholder={t("list.searchPlaceholder")}
             value={inputValue}
             onChange={(e) => handleInputChange(e.target.value)}
             onCompositionStart={handleCompositionStart}
@@ -268,12 +270,12 @@ export function StageList({
             }}
           >
             <SelectTrigger className="h-8">
-              <SelectValue placeholder="Sort..." />
+              <SelectValue placeholder={t("list.sortPlaceholder")} />
             </SelectTrigger>
             <SelectContent>
-              {SORT_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
+              {SORT_KEYS.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {t(`list.sort.${value}`)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -283,7 +285,7 @@ export function StageList({
 
       {searchTerm.trim() && (
         <div className="text-xs text-muted-foreground mb-2">
-          Found {filteredRows.length} of {stageData.length} stages
+          {t("list.foundOf", { found: filteredRows.length, total: stageData.length })}
         </div>
       )}
 
@@ -338,8 +340,8 @@ export function StageList({
         {sortedRows.length === 0 && (
           <div className="text-center text-muted-foreground py-8 text-sm">
             {searchTerm.trim()
-              ? `No stages found matching "${searchTerm.trim()}"`
-              : "No stages available"}
+              ? t("list.noMatch", { term: searchTerm.trim() })
+              : t("list.noStages")}
           </div>
         )}
       </div>

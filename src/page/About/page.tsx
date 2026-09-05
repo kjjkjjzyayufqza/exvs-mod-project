@@ -1,8 +1,9 @@
+import { AboutAuthorAvatar } from "./components/AboutAuthorAvatar";
 import { AboutBrandMark } from "./components/AboutBrandMark";
 import { AboutLinkButton } from "./components/AboutLinkButton";
 import { AboutModule } from "./components/AboutModule";
 import { AboutSpecRow } from "./components/AboutSpecRow";
-import { AboutUpdateModule } from "./components/AboutUpdateModule";
+import { useTranslation } from "react-i18next";
 import {
   ATTRIBUTION_CANARY,
   AUTHOR_HANDLE,
@@ -15,11 +16,12 @@ import {
 } from "@/lib/authorIdentity";
 
 export default function AboutPage() {
+  const { t } = useTranslation("small-pages");
   return (
     <div className="h-full min-h-0 overflow-auto">
       <div className="mx-auto w-full max-w-6xl px-6 pb-20 pt-8">
         <p className="font-mono text-[11px] font-medium uppercase tracking-[0.28em] text-muted-foreground">
-          Identity / about
+          {t("about.identity")}
         </p>
 
         <div className="mt-5 grid items-start gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(16rem,0.85fr)]">
@@ -30,22 +32,21 @@ export default function AboutPage() {
                 {PRODUCT_NAME}
               </h1>
               <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
-                Source-available research editor for Over Boost and earlier Extreme
-                Vs. 2 revisions. Not an open-source product you can rebrand.
+                {t("about.tagline")}
               </p>
             </div>
           </header>
 
           <aside className="rounded-2xl bg-muted/45 px-5 py-4">
             <div className="flex items-start gap-4">
-              <AboutBrandMark className="size-16 lg:size-16" />
+              <AboutAuthorAvatar />
               <div className="min-w-0">
                 <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                  Author
+                  {t("about.author")}
                 </p>
                 <p className="mt-2 font-mono text-sm">{AUTHOR_HANDLE}</p>
                 <div className="mt-4">
-                  <AboutLinkButton href={SUPPORT_HOME} label="GitHub" />
+                  <AboutLinkButton href={SUPPORT_HOME} label={t("about.github")} />
                 </div>
               </div>
             </div>
@@ -53,51 +54,47 @@ export default function AboutPage() {
         </div>
 
         <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <AboutModule index="01" kicker="Handle" title="Who ships this">
+          <AboutModule index="01" kicker={t("about.handle")} title={t("about.whoShips")}>
             <dl>
-              <AboutSpecRow label="Author">{AUTHOR_HANDLE}</AboutSpecRow>
-              <AboutSpecRow label="Bundle">
+              <AboutSpecRow label={t("about.author")}>{AUTHOR_HANDLE}</AboutSpecRow>
+              <AboutSpecRow label={t("about.bundle")}>
                 <span className="break-all font-mono text-xs">{BUNDLE_ID}</span>
               </AboutSpecRow>
-              <AboutSpecRow label="Support">
+              <AboutSpecRow label={t("about.support")}>
                 <span className="break-all font-mono text-xs">{SUPPORT_HOME}</span>
               </AboutSpecRow>
             </dl>
           </AboutModule>
 
-          <AboutModule index="02" kicker="License" title="Three separate layers">
+          <AboutModule index="02" kicker={t("about.license")} title={t("about.layers")}>
             <dl>
-              <AboutSpecRow label="Code">PolyForm Shield 1.0.0 · LICENSE</AboutSpecRow>
-              <AboutSpecRow label="Docs">CC BY-NC-SA 4.0 · LICENSE-DOCS.md</AboutSpecRow>
-              <AboutSpecRow label="Use">ACCEPTABLE_USE.md · not a copyright license</AboutSpecRow>
+              <AboutSpecRow label={t("about.code")}>PolyForm Shield 1.0.0 · LICENSE</AboutSpecRow>
+              <AboutSpecRow label={t("about.docs")}>CC BY-NC-SA 4.0 · LICENSE-DOCS.md</AboutSpecRow>
+              <AboutSpecRow label={t("about.use")}>{t("about.useLicense")}</AboutSpecRow>
             </dl>
           </AboutModule>
 
           <AboutModule
             index="03"
-            kicker="Canary"
-            title="Attribution string"
+            kicker={t("about.canary")}
+            title={t("about.attribution")}
             className="md:col-span-2 xl:col-span-1"
           >
             <p className="break-all font-mono text-xs text-foreground">{ATTRIBUTION_CANARY}</p>
             <p className="mt-3 text-xs leading-relaxed">
-              Visible on purpose. A wrapped copy that keeps this page still names the author.
+              {t("about.visible")}
             </p>
           </AboutModule>
         </div>
 
-        <AboutUpdateModule />
-
-        <AboutModule index="04" kicker="Scope" title="Over Boost and earlier" className="mt-4">
+        <AboutModule index="04" kicker={t("about.scope")} title={t("about.scopeTitle")} className="mt-4">
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
             <p className="max-w-prose text-pretty">
-              Research and tooling target Over Boost (OB) and earlier Extreme Vs. 2
-              revisions only. Do not use this application against any later revision
-              that is still operated as a live arcade or online service.
+              {t("about.scopeBody")}
             </p>
             <div>
               <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                Live title · forbidden target
+                {t("about.liveForbidden")}
               </p>
               <ul className="mt-3 space-y-2 text-sm text-foreground">
                 <li>
@@ -114,16 +111,14 @@ export default function AboutPage() {
                 </li>
               </ul>
               <p className="mt-3 text-xs">
-                Aliases only: IB, EXVS2IB, イニブ. Successors are also forbidden.
-                Named here so the ban is not an abbreviation. Not a research target.
+                {t("about.liveAliases")}
               </p>
             </div>
           </div>
         </AboutModule>
 
         <p className="mt-10 max-w-prose text-xs leading-relaxed text-muted-foreground">
-          Not affiliated with Bandai Namco, Sunrise, or Extreme Vs. publishers.
-          Game binaries and dumps are not licensed by this project.
+          {t("about.disclaimer")}
         </p>
       </div>
     </div>

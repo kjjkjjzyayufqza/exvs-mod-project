@@ -1,0 +1,64 @@
+{
+  "attachment": {
+    "loadTemplatesFailed": "加载附件模板失败",
+    "warning": "附件警告",
+    "applied": "附件已应用",
+    "applyFailed": "应用附件失败",
+    "button": "附件",
+    "title": "附件与 model ID",
+    "subtitle": "将 modelId 绑定到模型，把客体骨骼接到宿主骨骼，并保存/应用模板",
+    "applyToViewport": "应用到视口",
+    "activeEdges": "当前视口边：{{count}}。动作仍会分别计算各骨架；附件会在骨骼更新后吸附客体根。",
+    "addNumdlb": "添加 .numdlb",
+    "templateSaved": "附件模板已保存",
+    "saveFailed": "保存模板失败",
+    "unresolvedModels": "模板已应用，但仍有未解析的模型",
+    "templateApplied": "附件模板已应用",
+    "templateSummary": "{{name}} · {{count}} 条边",
+    "edgesActive": "{{count}} 条边已激活",
+    "templateDeleted": "模板已删除",
+    "deleteFailed": "删除失败",
+    "bound": "已绑定 {{label}} → {{modelId}}"
+  },
+  "bindings": {
+    "title": "Model ID 绑定",
+    "previewModel": "预览模型",
+    "selectModel": "选择模型",
+    "role": "角色",
+    "bind": "绑定",
+    "empty": "还没有绑定。",
+    "removeAria": "移除绑定 {{modelId}}",
+    "motionPrimary": "动作主 modelId",
+    "none": "无"
+  },
+  "edges": {
+    "title": "附件边（宿主骨骼 → 客体骨骼）",
+    "hostModelId": "宿主 modelId",
+    "guestModelId": "客体 modelId",
+    "host": "宿主",
+    "guest": "客体",
+    "selectHostBone": "选择宿主骨骼",
+    "selectGuestBone": "选择客体骨骼",
+    "hostMissingSkel": "宿主模型未加载，或缺少 NUSKTB。",
+    "add": "添加边",
+    "empty": "还没有边。",
+    "enableAria": "启用边",
+    "removeAria": "移除边"
+  },
+  "library": {
+    "title": "模板库",
+    "name": "名称",
+    "description": "描述",
+    "namePlaceholder": "Gyan 机体+盾",
+    "descriptionPlaceholder": "可选",
+    "save": "保存模板",
+    "loading": "正在加载模板…",
+    "empty": "没有已保存的模板。",
+    "counts": "{{models}} 个模型 · {{edges}} 条边",
+    "apply": "应用",
+    "deleteAria": "删除 {{name}}"
+  },
+  "common": {
+    "close": "关闭"
+  }
+}

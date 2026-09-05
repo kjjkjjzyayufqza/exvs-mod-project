@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, Bone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VirtualizedList } from "@/page/SceneEdit/components/VirtualizedList";
@@ -56,6 +57,7 @@ function flattenVisibleBones(
 }
 
 export function SkeletonReadonlyTab({ skel }: SkeletonReadonlyTabProps) {
+  const { t } = useTranslation("scene-page");
   const skelData = skel as SkelDataJson | null;
   const bones = skelData?.bones ?? [];
   const tree = useMemo(() => buildBoneTree(bones), [bones]);
@@ -127,7 +129,7 @@ export function SkeletonReadonlyTab({ skel }: SkeletonReadonlyTabProps) {
   if (!skel) {
     return (
       <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-        No skeleton data (.nusktb) available
+        {t("detailView.emptySkeleton")}
       </div>
     );
   }
@@ -135,7 +137,7 @@ export function SkeletonReadonlyTab({ skel }: SkeletonReadonlyTabProps) {
   return (
     <div className="p-3 space-y-2">
       <div className="flex items-center justify-between text-xs text-muted-foreground border-b pb-2">
-        <span>Bone Count: {bones.length}</span>
+        <span>{t("detailView.boneCount", { count: bones.length })}</span>
       </div>
       <VirtualizedList
         items={visibleRows}

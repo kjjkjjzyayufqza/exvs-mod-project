@@ -8,6 +8,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
 
   return (
     <Sonner
+      data-i18n-ignore=""
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
       style={{ zIndex: "var(--z-toast)" } as React.CSSProperties}

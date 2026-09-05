@@ -26,6 +26,7 @@ import { CardIconAddDialog } from "./card-icon-list/CardIconAddDialog";
 import { CardIconBatchReplaceDialog } from "./card-icon-list/CardIconBatchReplaceDialog";
 import { extractCardIconItems, removeCardIconFromStructureJson } from "./card-icon-list/cardIconStructure";
 import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
+import { useTranslation } from "react-i18next";
 
 interface NutexbIconListViewProps {
   folderPath: string;
@@ -81,6 +82,7 @@ export function NutexbIconListView({
   secondaryHash,
   secondaryContentId,
 }: NutexbIconListViewProps) {
+  const { t } = useTranslation("test-lists");
   const primaryDescriptor = getWorkspaceContentDescriptor(contentId);
   const secondaryDescriptor = secondaryContentId ? getWorkspaceContentDescriptor(secondaryContentId) : null;
   const normalizedHash = normalizeHash(primaryDescriptor.hashHex || hash);
@@ -123,7 +125,7 @@ export function NutexbIconListView({
 
   const load = useCallback(async (options?: LoadOptions) => {
     if (!folderPath) {
-      setLoadState({ status: "error", filePath: "", message: "Folder path is empty" });
+      setLoadState({ status: "error", filePath: "", message: t("common.folderPathEmpty") });
       return;
     }
 
@@ -143,7 +145,7 @@ export function NutexbIconListView({
     try {
       const migration = await promptAndMigrateFhm2dStructureIfNeeded({
         structureJsonPath: filePath,
-        title: `Migrate ${title} FHM2D structure`,
+        title: t("nutexb.migrateTitle", { title }),
       });
       if (migration) {
         const migratedPack = applyFhm2dStructureMigrationToPack(remappedPack, migration);
@@ -187,7 +189,7 @@ export function NutexbIconListView({
       onUnsavedChanges?.(false);
     } catch (error) {
       console.error(error);
-      setLoadState({ status: "error", filePath, message: error instanceof Error ? error.message : "Unknown error" });
+      setLoadState({ status: "error", filePath, message: error instanceof Error ? error.message : t("common.unknownError") });
     }
   }, [contentId, folderPath, getItemStableKey, loadState, onUnsavedChanges, resolveContentPack, selectedIndex, title]);
 
@@ -212,7 +214,7 @@ export function NutexbIconListView({
     try {
       const migration = await promptAndMigrateFhm2dStructureIfNeeded({
         structureJsonPath: filePath,
-        title: `Migrate ${secondaryDescriptor?.label ?? "FHM2D"} structure`,
+        title: t("nutexb.migrateGeneric", { label: secondaryDescriptor?.label ?? "FHM2D" }),
       });
       if (migration) {
         const migratedPack = applyFhm2dStructureMigrationToPack(remappedPack, migration);
@@ -258,7 +260,7 @@ export function NutexbIconListView({
       setSecondaryLoadState({
         status: "error",
         filePath,
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: error instanceof Error ? error.message : t("common.unknownError"),
       });
     }
   }, [
@@ -347,12 +349,12 @@ export function NutexbIconListView({
 
   const handleRefreshNutexb = useCallback(async () => {
     if (!folderPath) {
-      toast.error("Folder path is empty");
+      toast.error(t("common.folderPathEmpty"));
       return;
     }
     if (loadState.status !== "ready") return;
     if (!loadState.writable) {
-      toast.error("Legacy flat workspace content is read-only");
+      toast.error(t("common.legacyReadOnly"));
       return;
     }
     if (isRefreshingNutexb) return;
@@ -368,14 +370,14 @@ export function NutexbIconListView({
           overwrite: true,
         }
       );
-      toast.success(`Converted ${result.converted} nutexb file(s) to PNG`);
+      toast.success(t("nutexb.convertedPng", { count: result.converted }));
       if (result.failed > 0) {
-        toast.error(`Failed to convert ${result.failed} file(s)`);
+        toast.error(t("nutexb.convertFailed", { count: result.failed }));
       }
       void load();
     } catch (error) {
       console.error(error);
-      toast.error("Failed to refresh nutexb previews");
+      toast.error(t("nutexb.refreshFailed"));
     } finally {
       setIsRefreshingNutexb(false);
     }
@@ -385,7 +387,7 @@ export function NutexbIconListView({
     if (!folderPath || !normalizedSecondaryHash) return;
     if (secondaryLoadState.status !== "ready") return;
     if (!secondaryLoadState.writable) {
-      toast.error("Legacy flat workspace content is read-only");
+      toast.error(t("common.legacyReadOnly"));
       return;
     }
     if (isRefreshingNutexbSecondary) return;
@@ -401,14 +403,14 @@ export function NutexbIconListView({
           overwrite: true,
         }
       );
-      toast.success(`Converted ${result.converted} nutexb file(s) to PNG`);
+      toast.success(t("nutexb.convertedPng", { count: result.converted }));
       if (result.failed > 0) {
-        toast.error(`Failed to convert ${result.failed} file(s)`);
+        toast.error(t("nutexb.convertFailed", { count: result.failed }));
       }
       void loadSecondary();
     } catch (error) {
       console.error(error);
-      toast.error("Failed to refresh nutexb previews");
+      toast.error(t("nutexb.refreshFailed"));
     } finally {
       setIsRefreshingNutexbSecondary(false);
     }
@@ -416,12 +418,12 @@ export function NutexbIconListView({
 
   const handleRemoveItem = useCallback(async (item: { itemIndex: number; fileIndex: number | null; fileUrl?: string | null }) => {
     if (!folderPath) {
-      toast.error("Folder path is empty");
+      toast.error(t("common.folderPathEmpty"));
       return;
     }
     if (loadState.status !== "ready") return;
     if (!loadState.writable) {
-      toast.error("Legacy flat workspace content is read-only");
+      toast.error(t("common.legacyReadOnly"));
       return;
     }
     if (isUpdating) return;
@@ -435,12 +437,12 @@ export function NutexbIconListView({
         itemIndex: item.itemIndex,
       });
       await writeTextFile(structurePath, JSON.stringify(nextStructJson, null, 2));
-      toast.success("Removed icon");
+      toast.success(t("nutexb.removed"));
       await load();
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Failed to remove icon: ${message}`);
+      const message = error instanceof Error ? error.message : t("common.unknownError");
+      toast.error(t("nutexb.removeFailed", { message }));
     } finally {
       setIsUpdating(false);
     }
@@ -450,7 +452,7 @@ export function NutexbIconListView({
     if (!folderPath || !normalizedSecondaryHash) return;
     if (secondaryLoadState.status !== "ready") return;
     if (!secondaryLoadState.writable) {
-      toast.error("Legacy flat workspace content is read-only");
+      toast.error(t("common.legacyReadOnly"));
       return;
     }
     if (isUpdating) return;
@@ -464,12 +466,12 @@ export function NutexbIconListView({
         itemIndex: item.itemIndex,
       });
       await writeTextFile(structurePath, JSON.stringify(nextStructJson, null, 2));
-      toast.success("Removed icon");
+      toast.success(t("nutexb.removed"));
       await loadSecondary();
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Failed to remove icon: ${message}`);
+      const message = error instanceof Error ? error.message : t("common.unknownError");
+      toast.error(t("nutexb.removeFailed", { message }));
     } finally {
       setIsUpdating(false);
     }
@@ -540,21 +542,21 @@ export function NutexbIconListView({
       const normalizedPath = isWindowsPath ? rawPath.replace(/\//g, "\\") : rawPath.replace(/\\/g, "/");
 
       if (normalizedPath.includes('"')) {
-        toast.error('Invalid path: contains a quote character (")');
+        toast.error(t("common.invalidQuotePath"));
         return;
       }
 
       const pathExists = await exists(normalizedPath);
       if (!pathExists) {
-        toast.error("Path does not exist");
+        toast.error(t("common.pathMissing"));
         return;
       }
 
       await openPath(normalizedPath);
     } catch (error) {
       console.error("Error opening path:", error);
-      const message = error instanceof Error ? error.message : "Unknown error";
-      toast.error(message ? `Failed to open: ${message}` : "Failed to open");
+      const message = error instanceof Error ? error.message : t("common.unknownError");
+      toast.error(message ? t("common.openFailedWithMessage", { message }) : t("common.openFailed"));
     }
   }, []);
 
@@ -593,7 +595,7 @@ export function NutexbIconListView({
           </CardHeader>
           <CardContent className="space-y-3 p-0">
             <div className="text-sm text-muted-foreground">
-              Loading {normalizedHash}_structure.json...
+              {t("nutexb.loadingStructure", { hash: normalizedHash })}
             </div>
           </CardContent>
         </Card>
@@ -612,17 +614,19 @@ export function NutexbIconListView({
             <div className="text-sm text-muted-foreground">
               {loadState.filePath ? (
                 <>
-                  <div className="font-medium text-foreground">File</div>
-                  <div className="break-all">{loadState.filePath}</div>
+                  <div className="font-medium text-foreground">{t("common.file")}</div>
+                  <div className="break-all" data-i18n-ignore="">
+                    {loadState.filePath}
+                  </div>
                 </>
               ) : (
-                <div className="break-all">Folder path is empty</div>
+                <div className="break-all">{t("common.folderPathEmpty")}</div>
               )}
             </div>
             <div className="text-sm text-destructive">{loadState.message}</div>
             <Button size="sm" onClick={() => void load()} className="inline-flex items-center gap-2">
               <RefreshCw className="w-4 h-4" />
-              Reload
+              {t("common.reload")}
             </Button>
           </CardContent>
         </Card>
@@ -633,7 +637,7 @@ export function NutexbIconListView({
   if (loadState.status !== "ready") {
     return (
       <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground">
-        Select this tab to load icons
+        {t("nutexb.selectTab")}
       </div>
     );
   }
@@ -644,9 +648,9 @@ export function NutexbIconListView({
     if (group === "first") {
       return (
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
-          <Button size="sm" variant="outline" onClick={() => void load()} className="inline-flex items-center gap-2" title="第一组 Reload">
+          <Button size="sm" variant="outline" onClick={() => void load()} className="inline-flex items-center gap-2" title={t("nutexb.reloadGroup", { group: 1 })}>
             <RefreshCw className="w-4 h-4" />
-            Reload
+            {t("common.reload")}
           </Button>
           <Button
             size="sm"
@@ -654,17 +658,17 @@ export function NutexbIconListView({
             onClick={() => void handleRefreshNutexb()}
             disabled={isRefreshingNutexb || !folderPath || !loadState.writable}
             className="inline-flex items-center gap-2"
-            title="第一组 Refresh Nutexb"
+            title={t("nutexb.refreshGroup", { group: 1 })}
           >
             {isRefreshingNutexb ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
-            Refresh Nutexb
+            {t("nutexb.refreshNutexb")}
           </Button>
           <CardIconBatchReplaceDialog
             folderPath={loadState.routeRootPath}
             convertDirPath={loadState.convertDirPath}
             items={loadState.items}
             onApplied={load}
-            triggerLabel="Replace Format"
+            triggerLabel={t("nutexb.replaceFormat")}
             disabled={!loadState.writable}
           />
           <CardIconAddDialog
@@ -681,9 +685,9 @@ export function NutexbIconListView({
     }
     return (
       <div className="flex items-center gap-2 shrink-0 flex-wrap">
-        <Button size="sm" variant="outline" onClick={() => void loadSecondary()} className="inline-flex items-center gap-2" title="第二组 Reload">
+        <Button size="sm" variant="outline" onClick={() => void loadSecondary()} className="inline-flex items-center gap-2" title={t("nutexb.reloadGroup", { group: 2 })}>
           <RefreshCw className="w-4 h-4" />
-          Reload
+          {t("common.reload")}
         </Button>
         <Button
           size="sm"
@@ -697,17 +701,17 @@ export function NutexbIconListView({
             !secondaryLoadState.writable
           }
           className="inline-flex items-center gap-2"
-          title="第二组 Refresh Nutexb"
+          title={t("nutexb.refreshGroup", { group: 2 })}
         >
           {isRefreshingNutexbSecondary ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
-          Refresh Nutexb
+          {t("nutexb.refreshNutexb")}
         </Button>
         <CardIconBatchReplaceDialog
           folderPath={secondaryLoadState.status === "ready" ? secondaryLoadState.routeRootPath : ""}
           convertDirPath={secondaryLoadState.status === "ready" ? secondaryLoadState.convertDirPath : ""}
           items={secondaryLoadState.status === "ready" ? secondaryLoadState.items : []}
           onApplied={loadSecondary}
-          triggerLabel="Replace Format"
+          triggerLabel={t("nutexb.replaceFormat")}
           disabled={secondaryLoadState.status !== "ready" || !secondaryLoadState.writable}
         />
         <CardIconAddDialog
@@ -731,28 +735,28 @@ export function NutexbIconListView({
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-1.5">
                 <CardTitle className="text-sm">{title}</CardTitle>
-                <span className="text-xs text-muted-foreground">两组</span>
+                <span className="text-xs text-muted-foreground">{t("nutexb.twoGroups")}</span>
               </div>
               <div className="flex gap-2 min-h-0">
               <div className="flex-1 min-w-0 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-sm font-medium shrink-0">第一组</span>
+                  <span className="text-sm font-medium shrink-0">{t("nutexb.group1")}</span>
                   {renderGroupActions("first")}
                 </div>
                 <div className="text-xs text-muted-foreground flex items-center gap-1">
-                  <span className="break-all truncate">Structure: {meta?.structurePath ?? "-"}</span>
+                  <span className="break-all truncate">{t("nutexb.structure", { path: meta?.structurePath ?? "-" })}</span>
                   {meta?.structurePath && (
                     <button
                       type="button"
                       onClick={() => void handleOpenStructureFolder()}
                       className="shrink-0 p-0.5 rounded hover:bg-accent hover:text-accent-foreground"
-                      title="Open folder"
+                      title={t("common.openFolder")}
                     >
                       <FolderOpen className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
-                <div className="text-xs text-muted-foreground">Loaded: {meta?.count ?? 0} icons</div>
+                <div className="text-xs text-muted-foreground">{t("nutexb.loadedIcons", { count: meta?.count ?? 0 })}</div>
                 <LegacyWorkspaceMoveNotice
                   workspaceRoot={folderPath}
                   workspaceDocument={workspaceDocument}
@@ -764,23 +768,23 @@ export function NutexbIconListView({
               </div>
               <div className="flex-1 min-w-0 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-sm font-medium shrink-0">第二组</span>
+                  <span className="text-sm font-medium shrink-0">{t("nutexb.group2")}</span>
                   {renderGroupActions("second")}
                 </div>
                 <div className="text-xs text-muted-foreground flex items-center gap-1">
-                  <span className="break-all truncate">Structure: {secondaryMeta?.structurePath ?? "-"}</span>
+                  <span className="break-all truncate">{t("nutexb.structure", { path: secondaryMeta?.structurePath ?? "-" })}</span>
                   {secondaryMeta?.structurePath && (
                     <button
                       type="button"
                       onClick={() => void handleOpenStructureFolderSecondary()}
                       className="shrink-0 p-0.5 rounded hover:bg-accent hover:text-accent-foreground"
-                      title="Open folder"
+                      title={t("common.openFolder")}
                     >
                       <FolderOpen className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
-                <div className="text-xs text-muted-foreground">Loaded: {secondaryMeta?.count ?? 0} icons</div>
+                <div className="text-xs text-muted-foreground">{t("nutexb.loadedIcons", { count: secondaryMeta?.count ?? 0 })}</div>
                 {secondaryLoadState.status === "ready" && secondaryContentId ? (
                   <LegacyWorkspaceMoveNotice
                     workspaceRoot={folderPath}
@@ -799,19 +803,19 @@ export function NutexbIconListView({
               <div className="min-w-0 flex-1">
                 <CardTitle>{title}</CardTitle>
                 <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                  <span className="break-all">Structure: {meta?.structurePath ?? "-"}</span>
+                  <span className="break-all">{t("nutexb.structure", { path: meta?.structurePath ?? "-" })}</span>
                   {meta?.structurePath && (
                     <button
                       type="button"
                       onClick={() => void handleOpenStructureFolder()}
                       className="shrink-0 p-0.5 rounded hover:bg-accent hover:text-accent-foreground"
-                      title="Open folder"
+                      title={t("common.openFolder")}
                     >
                       <FolderOpen className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
-                <div className="text-xs text-muted-foreground mt-1">Loaded: {meta?.count ?? 0} icons</div>
+                <div className="text-xs text-muted-foreground mt-1">{t("nutexb.loadedIcons", { count: meta?.count ?? 0 })}</div>
                 <LegacyWorkspaceMoveNotice
                   workspaceRoot={folderPath}
                   workspaceDocument={workspaceDocument}
@@ -822,13 +826,13 @@ export function NutexbIconListView({
                   className="mt-2"
                 />
                 <div className="text-xs text-muted-foreground break-all flex items-center gap-1 mt-2">
-                  Convert Dir: {meta?.convertDirPath ?? "-"}
+                  {t("nutexb.convertDir", { path: meta?.convertDirPath ?? "-" })}
                   {meta?.convertDirPath && (
                     <button
                       type="button"
                       onClick={() => void handleOpenConvertDir()}
                       className="shrink-0 p-0.5 rounded hover:bg-accent hover:text-accent-foreground"
-                      title="Open folder"
+                      title={t("common.openFolder")}
                     >
                       <FolderOpen className="w-3.5 h-3.5" />
                     </button>
@@ -877,13 +881,13 @@ export function NutexbIconListView({
                   />
                 ) : secondaryLoadState.status === "loading" ? (
                   <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">
-                    Loading {normalizedSecondaryHash}...
+                    {t("nutexb.loadingHash", { hash: normalizedSecondaryHash })}
                   </div>
                 ) : secondaryLoadState.status === "error" ? (
                   <div className="flex-1 flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground p-4">
                     <span className="text-destructive">{secondaryLoadState.message}</span>
                     <Button size="sm" variant="outline" onClick={() => void loadSecondary()}>
-                      Reload
+                      {t("common.reload")}
                     </Button>
                   </div>
                 ) : (

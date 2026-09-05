@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
+import type { TFunction } from "i18next";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
 import {
   AlertTriangle,
@@ -13,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -105,6 +107,7 @@ export function UnitModelWeaponIconPanel({
   focusFilename = null,
   readOnly = false,
 }: Props) {
+  const { t } = useTranslation("unit-weapon-page");
   const preview = useSsbhModelPreview();
   const isExvsCommon = isExvsCommonModelRoot(unitRoot);
   const mutationsLocked = readOnly || isExvsCommon;
@@ -163,7 +166,7 @@ export function UnitModelWeaponIconPanel({
       });
       return next;
     } catch (error) {
-      toast.error("Failed to list weapon icons", { description: String(error) });
+      toast.error(t("errors.listFailed"), { description: String(error) });
       return null;
     } finally {
       setLoading(false);
@@ -204,15 +207,15 @@ export function UnitModelWeaponIconPanel({
 
   const handleAdd = useCallback(async () => {
     if (!unitRoot || !structurePath) {
-      toast.error("No unit model folder selected");
+      toast.error(t("errors.noUnitFolder"));
       return;
     }
     if (mutationsLocked) {
-      toast.message("Weapon HUD icons are only edited on character packs.");
+      toast.message(t("messages.characterPacksOnly"));
       return;
     }
     const selected = await open({
-      title: "Add weapon HUD icon",
+      title: t("dialogs.addTitle"),
       multiple: true,
       filters: [{ name: "Textures", extensions: ["nutexb", "png", "dds", "tga"] }],
       defaultPath:
@@ -255,7 +258,7 @@ export function UnitModelWeaponIconPanel({
       const analyzed = await analyzeTextureAddCandidates(files, managerEntries);
       setAddCandidates(analyzed);
     } catch (error) {
-      toast.error("Failed to analyze weapon icons", { description: String(error) });
+      toast.error(t("errors.analyzeFailed"), { description: String(error) });
       setAddCandidates(null);
     } finally {
       setAddAnalyzing(false);
@@ -284,15 +287,15 @@ export function UnitModelWeaponIconPanel({
           notifyMutated(result.inventory);
         }
         const summaryParts: string[] = [];
-        if (result.addedCount > 0) summaryParts.push(`Added ${result.addedCount}`);
-        if (result.replacedCount > 0) summaryParts.push(`replaced ${result.replacedCount}`);
+        if (result.addedCount > 0) summaryParts.push(t("messages.added", { count: result.addedCount }));
+        if (result.replacedCount > 0) summaryParts.push(t("messages.replaced", { count: result.replacedCount }));
         toast.success(
           summaryParts.length > 0
             ? `${summaryParts.join(", ")} HUD icon(s)`
-            : "No HUD icons changed",
+            : t("messages.noChanges"),
         );
       } catch (error) {
-        toast.error("Failed to add weapon icon", { description: String(error) });
+        toast.error(t("errors.addFailed"), { description: String(error) });
         await refreshInventory();
       } finally {
         setBusy(null);
@@ -327,7 +330,7 @@ export function UnitModelWeaponIconPanel({
         });
         notifyMutated(next);
       } catch (error) {
-        toast.error("Failed to reorder weapon icons", { description: String(error) });
+        toast.error(t("errors.reorderFailed"), { description: String(error) });
         await refreshInventory();
       } finally {
         setBusy(null);
@@ -341,8 +344,8 @@ export function UnitModelWeaponIconPanel({
       if (!unitRoot || !structurePath) return;
       if (mutationsLocked) return;
       const confirmed = await confirm(
-        `Remove ${weaponIconHudLabel(icon.hudIndex)} (${icon.filename}) from the HUD table? Later icons shift down. This does not unbind MSC slots.`,
-        { title: "Remove weapon HUD icon", kind: "warning" },
+        t("dialogs.removeConfirm", { hud: weaponIconHudLabel(icon.hudIndex), filename: icon.filename }),
+        { title: t("dialogs.removeTitle"), kind: "warning" },
       );
       if (!confirmed) return;
       setBusy("remove");
@@ -353,9 +356,9 @@ export function UnitModelWeaponIconPanel({
           fileIndex: icon.fileIndex,
         });
         notifyMutated(next);
-        toast.success(`Removed ${icon.filename}`);
+        toast.success(t("messages.removed", { filename: icon.filename }));
       } catch (error) {
-        toast.error("Failed to remove weapon icon", { description: String(error) });
+        toast.error(t("errors.removeFailed"), { description: String(error) });
         await refreshInventory();
       } finally {
         setBusy(null);
@@ -370,7 +373,7 @@ export function UnitModelWeaponIconPanel({
         throw new Error(`Cannot replace ${entry.filename}: missing nutexb path`);
       }
       const selected = await open({
-        title: "Replace weapon HUD icon",
+        title: t("dialogs.replaceTitle"),
         multiple: false,
         filters: [{ name: "Textures", extensions: ["nutexb", "png", "dds", "tga"] }],
         defaultPath:
@@ -397,9 +400,9 @@ export function UnitModelWeaponIconPanel({
         bumpThumbnailCache();
         await refreshInventory();
         emitUnitTexturesChanged();
-        toast.success(`Replaced ${entry.filename}`);
+        toast.success(t("messages.replacedFile", { filename: entry.filename }));
       } catch (error) {
-        toast.error("Failed to replace weapon icon", { description: String(error) });
+        toast.error(t("errors.replaceFailed"), { description: String(error) });
       } finally {
         setBusy(null);
       }
@@ -414,9 +417,9 @@ export function UnitModelWeaponIconPanel({
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 items-center gap-1 border-b px-2 py-1">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[11px] font-semibold">Weapon HUD icons</div>
+          <div className="truncate text-[11px] font-semibold">{t("heading")}</div>
           <div className="truncate text-[10px] text-muted-foreground">
-            Structure order is HUD 0, 1, 2… not Explorer sort
+            {t("structureOrder")}
           </div>
         </div>
         <Button
@@ -426,7 +429,7 @@ export function UnitModelWeaponIconPanel({
           className="h-8 w-8 shrink-0"
           onClick={() => void refreshInventory()}
           disabled={noRoot || loading}
-          title="Refresh"
+          title={t("actions.refresh")}
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
         </Button>
@@ -437,7 +440,7 @@ export function UnitModelWeaponIconPanel({
           className="h-8 w-8 shrink-0"
           onClick={() => void handleAdd()}
           disabled={noRoot || busy !== null || mutationsLocked}
-          title="Add HUD icon (nutexb / png / dds / tga)"
+          title={t("actions.addTitle")}
         >
           {busy === "add" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
         </Button>
@@ -447,7 +450,7 @@ export function UnitModelWeaponIconPanel({
         <div className="flex min-w-0 items-center justify-between gap-2">
           <div className="min-w-0">
             <div className="truncate text-[11px] font-semibold">
-              {unitRoot ? getBaseName(unitRoot) : "No unit loaded"}
+              {unitRoot ? getBaseName(unitRoot) : t("states.noUnitLoaded")}
             </div>
             <div className="truncate font-mono text-[10px] text-muted-foreground" title={structurePath ?? undefined}>
               {structurePath ?? "-"}
@@ -459,11 +462,11 @@ export function UnitModelWeaponIconPanel({
         </div>
         {isExvsCommon ? (
           <div className="mt-2 text-[10px] text-muted-foreground">
-            EXVS Common packs do not own character HUD icons.
+            {t("messages.commonPacks") }
           </div>
         ) : (
           <div className="mt-2 text-[10px] text-muted-foreground">
-            A new art at the end does not create a bar. Bind the HUD slot in MSC / armsparam too.
+            {t("messages.bindHint") }
           </div>
         )}
         {inventory?.warnings.length ? (
@@ -478,14 +481,14 @@ export function UnitModelWeaponIconPanel({
         {noRoot ? (
           <div className="flex h-32 flex-col items-center justify-center gap-1 text-muted-foreground">
             <ImageIcon className="h-6 w-6 opacity-40" />
-            <span className="text-[11px]">Open a unit model folder</span>
+            <span className="text-[11px]">{t("states.openFolder")}</span>
           </div>
         ) : loading && !inventory ? (
-          <div className="p-2 text-[11px] text-muted-foreground">Loading HUD icons…</div>
+          <div className="p-2 text-[11px] text-muted-foreground">{t("states.loading")}</div>
         ) : icons.length === 0 ? (
           <div className="flex h-32 flex-col items-center justify-center gap-1 text-muted-foreground">
             <ImageIcon className="h-6 w-6 opacity-40" />
-            <span className="text-[11px]">No weapon_icon Folder yet</span>
+            <span className="text-[11px]">{t("states.empty")}</span>
           </div>
         ) : (
           icons.map((icon, index) => {
@@ -494,6 +497,7 @@ export function UnitModelWeaponIconPanel({
               <WeaponIconRow
                 key={icon.fileIndex}
                 icon={icon}
+                t={t}
                 selected={selectedIcon?.fileIndex === icon.fileIndex}
                 focused={focused}
                 textureDataMap={textureDataMap}
@@ -540,8 +544,8 @@ export function UnitModelWeaponIconPanel({
           analyzing={addAnalyzing}
           isConverting={busy === "add"}
           convertProgress={convertProgress}
-          title={`Add HUD icons (${addCandidates.length})`}
-          subtitle="PNG/DDS/TGA convert into weapon_icon; check a conflict row to replace"
+          title={t("dialogs.addCountTitle", { count: addCandidates.length })}
+          subtitle={t("dialogs.addSubtitle")}
           onClose={() => {
             if (busy !== "add") {
               setAddCandidates(null);
@@ -559,6 +563,7 @@ export function UnitModelWeaponIconPanel({
 
 function WeaponIconRow({
   icon,
+  t,
   selected,
   focused,
   textureDataMap,
@@ -574,6 +579,7 @@ function WeaponIconRow({
   onRemove,
 }: {
   icon: UnitModelWeaponIconEntry;
+  t: TFunction;
   selected: boolean;
   focused: boolean;
   textureDataMap: NutexbTextureDataMap;
@@ -608,7 +614,7 @@ function WeaponIconRow({
           event.stopPropagation();
           onPreview();
         }}
-        title="Preview"
+        title={t("actions.preview")}
       >
         {thumbnailDataUrl ? (
           <img src={thumbnailDataUrl} alt={icon.filename} className="h-full w-full object-cover" />
@@ -626,25 +632,25 @@ function WeaponIconRow({
             {icon.filename}
           </span>
         </div>
-        <div className="truncate text-[10px] text-muted-foreground">
+        <div className="truncate text-[10px] text-muted-foreground" data-i18n-ignore="">
           {icon.format} / {dims} / {formatBytes(icon.sizeBytes)} / fi {icon.fileIndex}
         </div>
       </div>
 
       <div className="flex shrink-0 items-center gap-0.5">
-        <IconButton title="Preview" onClick={onPreview} disabled={!icon.exists || busy}>
+        <IconButton title={t("actions.preview")} onClick={onPreview} disabled={!icon.exists || busy}>
           <Eye className="h-3.5 w-3.5" />
         </IconButton>
-        <IconButton title="Move HUD index up" onClick={onMoveUp} disabled={!canMoveUp || busy || mutationsLocked}>
+        <IconButton title={t("actions.moveUp")} onClick={onMoveUp} disabled={!canMoveUp || busy || mutationsLocked}>
           <ArrowUp className="h-3.5 w-3.5" />
         </IconButton>
-        <IconButton title="Move HUD index down" onClick={onMoveDown} disabled={!canMoveDown || busy || mutationsLocked}>
+        <IconButton title={t("actions.moveDown")} onClick={onMoveDown} disabled={!canMoveDown || busy || mutationsLocked}>
           <ArrowDown className="h-3.5 w-3.5" />
         </IconButton>
-        <IconButton title="Replace art" onClick={onReplace} disabled={!icon.exists || busy || mutationsLocked}>
+        <IconButton title={t("actions.replace")} onClick={onReplace} disabled={!icon.exists || busy || mutationsLocked}>
           <Replace className="h-3.5 w-3.5" />
         </IconButton>
-        <IconButton title="Remove from HUD table" onClick={onRemove} disabled={busy || mutationsLocked} danger>
+        <IconButton title={t("actions.remove")} onClick={onRemove} disabled={busy || mutationsLocked} danger>
           <Trash2 className="h-3.5 w-3.5" />
         </IconButton>
       </div>

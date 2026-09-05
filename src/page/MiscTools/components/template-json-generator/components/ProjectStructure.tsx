@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Plus, Download } from "lucide-react"
 import { TreeDataItem } from "@/lib/utils"
 import { useTemplateStore } from "@/store/templateStore"
+import { useTranslation } from "react-i18next"
 import { NodePropertiesPanel } from "@/components/repack-structure/NodePropertiesPanel"
 
 
@@ -48,6 +49,7 @@ export function ProjectStructure({
     onGenerateJson: () => void
     mode?: string
 }) {
+    const { t } = useTranslation("misc-tools-b")
     const treeRef = useRef<any>(null)
     const {
         treeData,
@@ -472,7 +474,7 @@ export function ProjectStructure({
                                 size="sm"
                             >
                                 <Plus className="h-4 w-4 mr-2" />
-                                Add Folder
+                                {t("template.addFolder")}
                             </Button>
                             <Button
                                 onClick={() => selectedItem && addNewNode(selectedItem.id, 'file')}
@@ -481,7 +483,7 @@ export function ProjectStructure({
                                 size="sm"
                             >
                                 <Plus className="h-4 w-4 mr-2" />
-                                Add File
+                                {t("template.addFile")}
                             </Button>
                             <Button
                                 onClick={onGenerateJson}
@@ -490,7 +492,7 @@ export function ProjectStructure({
                                 size="sm"
                             >
                                 <Download className="h-4 w-4 mr-2" />
-                                Generate JSON
+                                {t("template.generate")}
                             </Button>
                         </div>
 
@@ -498,15 +500,15 @@ export function ProjectStructure({
                             {/* Tree View Panel */}
                             <Card className="lg:col-span-2">
                                 <CardHeader>
-                                    <CardTitle>Template Structure</CardTitle>
+                                    <CardTitle>{t("template.structure")}</CardTitle>
                                     <CardDescription>
-                                        Drag and drop items to reorganize your project structure
+                                        {t("template.structureDescription")}
                                     </CardDescription>
                                     {completeProjectData && (
                                         <div className="flex gap-6 text-sm text-muted-foreground mt-2">
-                                            <span>Magic: <span className="font-bold">{completeProjectData.Magic}</span></span>
-                                            <span>Files: <span className="font-bold">{completeProjectData.Fhm2dTotalCount}</span></span>
-                                            <span>UnkCount: <span className="font-bold">{completeProjectData.UnkCount}</span></span>
+                                            <span>{t("template.magic")}: <span className="font-bold" data-i18n-ignore="">{completeProjectData.Magic}</span></span>
+                                            <span>{t("template.files")}: <span className="font-bold" data-i18n-ignore="">{completeProjectData.Fhm2dTotalCount}</span></span>
+                                            <span>{t("template.unkCount")}: <span className="font-bold" data-i18n-ignore="">{completeProjectData.UnkCount}</span></span>
                                         </div>
                                     )}
                                 </CardHeader>

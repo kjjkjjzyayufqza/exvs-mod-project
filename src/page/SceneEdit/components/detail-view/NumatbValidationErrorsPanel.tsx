@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { AlertTriangle, Check, Copy } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import type { NumatbEmptyTexturePathError } from "@/components/ssbh-model-preview/store/numatbTemplateStoreHelpers";
 
@@ -17,6 +18,7 @@ type NumatbValidationErrorsPanelProps = {
  * (empty texture paths) and offers a one-click copy of every message for AI-assisted fixing.
  */
 export function NumatbValidationErrorsPanel({ errors }: NumatbValidationErrorsPanelProps) {
+  const { t } = useTranslation("scene-page");
   const [copied, setCopied] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
   const getListScrollElement = useCallback(() => listRef.current, []);
@@ -40,9 +42,9 @@ export function NumatbValidationErrorsPanel({ errors }: NumatbValidationErrorsPa
       await writeText(errors.map((error) => error.message).join("\n"));
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
-      toast.success(`Copied ${errors.length} material error(s)`);
+      toast.success(t("detailView.copiedMaterialErrors", { count: errors.length }));
     } catch {
-      toast.error("Failed to copy errors to clipboard");
+      toast.error(t("detailView.copyErrorsFailed"));
     }
   };
 
@@ -52,7 +54,7 @@ export function NumatbValidationErrorsPanel({ errors }: NumatbValidationErrorsPa
         <div className="flex min-w-0 items-center gap-1.5 text-destructive">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate text-xs font-medium">
-            {errors.length} empty texture path{errors.length === 1 ? "" : "s"} — blocks save & repack
+            {t("detailView.emptyTexturePaths", { count: errors.length })}
           </span>
         </div>
         <Button
@@ -60,8 +62,8 @@ export function NumatbValidationErrorsPanel({ errors }: NumatbValidationErrorsPa
           variant="ghost"
           size="icon"
           className="h-7 w-7 shrink-0"
-          title="Copy all errors"
-          aria-label="Copy all material errors"
+          title={t("detailView.copyAllErrors")}
+          aria-label={t("detailView.copyAllMaterialErrors")}
           onClick={() => void handleCopy()}
         >
           {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
@@ -76,6 +78,7 @@ export function NumatbValidationErrorsPanel({ errors }: NumatbValidationErrorsPa
               <div
                 key={virtualRow.key}
                 className="absolute left-0 top-0 w-full pr-1 font-mono text-[10px] leading-snug text-destructive"
+                data-i18n-ignore=""
                 style={{
                   height: virtualRow.size,
                   transform: `translateY(${virtualRow.start}px)`,

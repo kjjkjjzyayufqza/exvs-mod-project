@@ -1,0 +1,7 @@
+{
+  "menu": { "focusSelected": "選択項目にフォーカス", "resetCamera": "カメラをリセット", "transformMode": "変形モード", "duplicate": "複製", "delete": "削除", "viewOptions": "表示オプション", "importStaticMesh": "静的メッシュをインポート…", "exportSelectedModel": "選択モデルをエクスポート…" },
+  "transform": { "title": "変形", "translate": "移動", "rotate": "回転", "scale": "拡縮" },
+  "view": { "showGrid": "グリッドを表示", "showAxes": "軸を表示", "wireframe": "ワイヤーフレーム" },
+  "axis": { "add": "{{key}}を追加", "reset": "軸をリセット", "remove": "{{key}}を削除", "rows": { "VDK_POSITION_X": { "label": "移動", "title": "移動" }, "VDK_ROTATION_X": { "label": "回転", "title": "回転" }, "VDK_SCALE_X": { "label": "拡縮", "title": "拡縮" } } },
+  "texture": { "selectFile": "テクスチャファイルを選択", "placeholder": "texture.nutexb", "inputLabel": "テクスチャパス", "browse": "テクスチャを参照" }
+}

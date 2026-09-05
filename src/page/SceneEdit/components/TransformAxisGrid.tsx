@@ -1,4 +1,5 @@
 import { Plus, RotateCcw, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import {
   PLACEMENT_TRANSFORM_ROWS,
@@ -41,11 +42,12 @@ export function TransformAxisGrid({
   onRemoveAxis,
   onResetField,
 }: TransformAxisGridProps) {
+  const { t } = useTranslation("scene-context");
   return (
     <div className="space-y-1">
       {showTitle && (
         <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Transform
+          {t("transform.title")}
         </div>
       )}
       <div className={MAYA_TRANSFORM_GRID}>
@@ -60,6 +62,7 @@ export function TransformAxisGrid({
           <TransformAxisGridRow
             key={row.label}
             row={row}
+            translate={t}
             bindings={bindings}
             headerFormat={headerFormat}
             initialRawFields={initialRawFields}
@@ -77,6 +80,7 @@ export function TransformAxisGrid({
 
 function TransformAxisGridRow({
   row,
+  translate,
   bindings,
   headerFormat,
   initialRawFields,
@@ -87,6 +91,7 @@ function TransformAxisGridRow({
   onResetField,
 }: {
   row: (typeof PLACEMENT_TRANSFORM_ROWS)[number];
+  translate: (key: string) => string;
   bindings: Map<string, TransformAxisBinding>;
   headerFormat: boolean;
   initialRawFields: string[] | null;
@@ -96,13 +101,16 @@ function TransformAxisGridRow({
   onRemoveAxis: (binding: TransformAxisBinding) => void;
   onResetField?: (valueIndex: number) => void;
 }) {
+  const axisKey = row.axes[0]?.key ?? "";
+  const label = translate(`axis.rows.${axisKey}.label`);
+  const title = translate(`axis.rows.${axisKey}.title`);
   if (row.axes.length === 1) {
     const binding = bindings.get(row.axes[0].key);
     if (!binding) return null;
     return (
       <>
-        <span className={MAYA_ROW_LABEL} title={row.title}>
-          {row.label}
+        <span className={MAYA_ROW_LABEL} title={title}>
+          {label}
         </span>
         <div className="col-span-3 min-w-0">
           <TransformAxisCell
@@ -123,8 +131,8 @@ function TransformAxisGridRow({
 
   return (
     <>
-      <span className={MAYA_ROW_LABEL} title={row.title}>
-        {row.label}
+      <span className={MAYA_ROW_LABEL} title={title}>
+        {label}
       </span>
       {row.axes.map((def, axisIndex) => {
         const binding = bindings.get(def.key);
@@ -169,6 +177,7 @@ function TransformAxisCell({
   onRemoveAxis: (binding: TransformAxisBinding) => void;
   onResetField?: (valueIndex: number) => void;
 }) {
+  const { t } = useTranslation("scene-context");
   const canMutateAxis = !headerFormat;
   const original =
     binding.present && binding.valueIndex !== null
@@ -183,7 +192,7 @@ function TransformAxisCell({
         className={cn(
           "flex h-6 min-w-0 items-center justify-center rounded-sm border border-dashed border-border/70 bg-muted/10 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary",
         )}
-        title={`Add ${binding.def.key}`}
+        title={t("axis.add", { key: binding.def.key })}
         onClick={() => onAddAxis(binding)}
         disabled={!canMutateAxis}
       >
@@ -222,7 +231,7 @@ function TransformAxisCell({
             type="button"
             className="inline-flex h-5 w-5 items-center justify-center text-muted-foreground hover:text-foreground"
             onClick={() => onResetField(binding.valueIndex!)}
-            aria-label="Reset axis"
+            aria-label={t("axis.reset")}
           >
             <RotateCcw className="h-2.5 w-2.5" />
           </button>
@@ -232,7 +241,7 @@ function TransformAxisCell({
             type="button"
             className="inline-flex h-5 w-5 items-center justify-center text-muted-foreground hover:text-destructive"
             onClick={() => onRemoveAxis(binding)}
-            aria-label={`Remove ${binding.def.key}`}
+            aria-label={t("axis.remove", { key: binding.def.key })}
           >
             <Trash2 className="h-2.5 w-2.5" />
           </button>

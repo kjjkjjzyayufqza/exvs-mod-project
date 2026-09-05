@@ -27,6 +27,7 @@ import {
   buildBgmBankUpdate02SourceFhm2dPath,
   initBgmBankUpdate02Pack,
 } from "../bgm-table/initBgmBankUpdate02Pack";
+import { useTranslation } from "react-i18next";
 
 type LoadState =
   | { status: "idle" }
@@ -49,8 +50,6 @@ type BgmBankViewProps = {
   workspaceDocument: TestEditorWorkspaceDocument;
 };
 
-const MISSING_BANK_MESSAGE = "No BGM bank nus3bank. Extract pack 0x0C568109.";
-
 export default function BgmBankView({
   folderPath,
   isActive,
@@ -58,6 +57,7 @@ export default function BgmBankView({
   onRequestFhm2dRepack,
   workspaceDocument,
 }: BgmBankViewProps) {
+  const { t } = useTranslation("test-lists");
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [isInitializing, setIsInitializing] = useState(false);
   const lastLoadedKeyRef = useRef("");
@@ -65,7 +65,7 @@ export default function BgmBankView({
 
   const load = useCallback(async () => {
     if (!folderPath) {
-      setLoadState({ status: "error", folderPath: "", message: "Folder path is empty" });
+      setLoadState({ status: "error", folderPath: "", message: t("common.folderPathEmpty") });
       return;
     }
     setLoadState({ status: "loading" });
@@ -75,11 +75,11 @@ export default function BgmBankView({
       );
       const pack = content.existing ?? content.configured;
       if (content.sourceLayout === "missing") {
-        throw new Error(MISSING_BANK_MESSAGE);
+        throw new Error(t("bgmBank.missingBank"));
       }
       const bankFilePath = await findNus3bankFile(pack.folderPath);
       if (!bankFilePath) {
-        throw new Error(MISSING_BANK_MESSAGE);
+        throw new Error(t("bgmBank.missingBank"));
       }
       const audioPath = await bgmUpdate02AudioPath(obDplCachePath ?? "");
       setLoadState({
@@ -110,7 +110,7 @@ export default function BgmBankView({
   const handleInitPack = useCallback(async () => {
     const sourceFhm2dPath = buildBgmBankUpdate02SourceFhm2dPath(obDplCachePath ?? "");
     if (!sourceFhm2dPath) {
-      toast.error("Set the OB dplcache folder in FHM2D Init first");
+      toast.error(t("common.setObDplcacheInit"));
       return;
     }
     setIsInitializing(true);
@@ -121,7 +121,7 @@ export default function BgmBankView({
         workspaceDocument,
       });
       lastLoadedKeyRef.current = "";
-      toast.success("Unpacked BGM_AC27_UPDATE_02 bank");
+      toast.success(t("bgmBank.unpacked"));
       const content = await resolveWorkspaceContent(folderPath, workspaceDocument, "bgm-bank-update-02");
       onPackMutated?.(workspacePackIdentityFromResolved(content.configured, "configured"));
       await load();
@@ -135,7 +135,7 @@ export default function BgmBankView({
   const handleRepack = useCallback(() => {
     if (loadState.status !== "ready") return;
     if (!loadState.writable) {
-      toast.error("Legacy workspace content is read-only");
+      toast.error(t("common.legacyReadOnlyShort"));
       return;
     }
     onRequestFhm2dRepack?.(workspacePackIdentityFromResolved(loadState.pack, "configured"));
@@ -153,11 +153,11 @@ export default function BgmBankView({
   return (
     <SoundTableWorkbench
       isActive={isActive}
-      title="BGM bank"
-      purpose="Unpack pack 0x0C568109 (group 6 BGM_AC27_UPDATE_02.nus3bank). Add or edit cues in EXVS2 Audio Editor, then Repack. This tab does not rewrite nus3 bytes."
+      title={t("bgmBank.title")}
+      purpose={t("bgmBank.purpose")}
       status={workbenchStatus}
       errorMessage={loadState.status === "error" ? loadState.message : null}
-      unpackLabel="Init pack"
+      unpackLabel={t("common.initPack")}
       unpacking={isInitializing}
       unpackDisabled={!folderPath}
       onUnpack={() => void handleInitPack()}
@@ -167,23 +167,23 @@ export default function BgmBankView({
         loadState.status === "ready"
           ? [
               {
-                label: "Structure",
+                label: t("common.structure"),
                 value: loadState.pack.structureJsonPath,
                 onOpen: () => void dirname(loadState.pack.structureJsonPath).then((target) => openPath(target)),
               },
               {
-                label: "Bank",
+                label: t("common.bank"),
                 value: loadState.bankFilePath,
                 onOpen: () => void dirname(loadState.bankFilePath).then((target) => openPath(target)),
               },
               {
-                label: "Pack",
+                label: t("common.pack"),
                 value: `${BGM_BANK_UPDATE_02_PACK_HASH}.fhm2d`,
               },
             ]
           : undefined
       }
-      loadedLabel={loadState.status === "ready" ? "Ready for Audio Editor" : undefined}
+      loadedLabel={loadState.status === "ready" ? t("bgmBank.ready") : undefined}
       notice={
         loadState.status === "ready" ? (
           <LegacyWorkspaceMoveNotice
@@ -200,7 +200,9 @@ export default function BgmBankView({
       listPanel={
         loadState.status === "ready" ? (
           <div className="space-y-2 rounded-md bg-muted/20 p-3 text-xs">
-            <div className="font-medium">BGM_AC27_UPDATE_02.nus3bank</div>
+            <div className="font-medium" data-i18n-ignore="">
+              {t("bgmBank.fileName")}
+            </div>
             <div className="break-all text-muted-foreground">{loadState.bankFilePath}</div>
           </div>
         ) : null
@@ -209,9 +211,9 @@ export default function BgmBankView({
         loadState.status === "ready" ? (
           <div className="space-y-4 rounded-lg bg-muted/20 p-4">
             <div className="space-y-1 text-xs leading-5 text-muted-foreground">
-              <div>1. Open this bank in EXVS2 Audio Editor.</div>
-              <div>2. Add the cue name to TONE (same spelling as the .nus3audio TNNM, e.g. COLORS_Flow at index 3).</div>
-              <div>3. Save the .nus3bank, then Repack this pack to data/x64/mod/0x0C568109.fhm2d.</div>
+              <div>{t("bgmBank.step1")}</div>
+              <div>{t("bgmBank.step2")}</div>
+              <div>{t("bgmBank.step3")}</div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -220,7 +222,7 @@ export default function BgmBankView({
                 className="h-8 text-xs"
                 onClick={() => void dirname(loadState.bankFilePath).then((target) => openPath(target))}
               >
-                Open bank folder
+                {t("common.openBankFolder")}
               </Button>
               {loadState.audioPath ? (
                 <Button
@@ -229,10 +231,10 @@ export default function BgmBankView({
                   className="h-8 text-xs"
                   onClick={async () => {
                     if (await exists(loadState.audioPath)) await openPath(loadState.audioPath);
-                    else toast.error("Audio file not found");
+                    else toast.error(t("common.audioNotFound"));
                   }}
                 >
-                  Open audio
+                  {t("common.openAudio")}
                 </Button>
               ) : null}
               <Button
@@ -242,7 +244,7 @@ export default function BgmBankView({
                 onClick={handleRepack}
               >
                 <Package className="mr-1 h-4 w-4" />
-                Repack
+                {t("common.repack")}
               </Button>
             </div>
           </div>

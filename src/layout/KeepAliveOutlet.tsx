@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
 import { findMatchedRouteUrl, pathMatchesRoute } from "@/router/pathMatch";
 import { RouterItems } from "@/router/router";
@@ -6,9 +7,10 @@ import { KeepAliveProvider } from "./KeepAliveContext";
 import { cn } from "@/lib/utils";
 
 function PageLoadingFallback() {
+  const { t } = useTranslation("shared");
   return (
     <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-      Loading…
+      {t("layout.loading")}
     </div>
   );
 }
@@ -18,6 +20,7 @@ function PageLoadingFallback() {
  * and are hidden with CSS so local state, context, and WebGL survive navigation.
  */
 export function KeepAliveOutlet() {
+  const { t } = useTranslation("shared");
   const { pathname } = useLocation();
   const matchedUrl = findMatchedRouteUrl(pathname);
 
@@ -66,7 +69,7 @@ export function KeepAliveOutlet() {
       })}
       {matchedUrl === null ? (
         <div className="bg-background/80 absolute inset-0 z-20 flex flex-1 items-center justify-center text-sm text-muted-foreground backdrop-blur-[1px]">
-          Unknown route: <span className="text-foreground ml-1 font-mono">{pathname || "/"}</span>
+          {t("layout.unknownRoute")} <span className="text-foreground ml-1 font-mono">{pathname || "/"}</span>
         </div>
       ) : null}
       </div>

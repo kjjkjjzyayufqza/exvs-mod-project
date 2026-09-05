@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { open } from "@tauri-apps/plugin-dialog";
 import { FileSearch } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -19,6 +20,7 @@ function parentDirOf(path: string): string | null {
 }
 
 export function DaeSsbhSourcePicker() {
+  const { t } = useTranslation("ssbh-motion");
   const { workspaceRoot } = useSsbhModelPreview();
   const { importKind, sourcePath, setImportKind, setSourcePath, setOutputBaseName, setOutputDir, loadAnalysis } =
     useDaeSsbhSessionStore(
@@ -40,7 +42,7 @@ export function DaeSsbhSourcePicker() {
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label className="text-[11px] text-muted-foreground">Import format</Label>
+        <Label className="text-[11px] text-muted-foreground">{t("daePicker.importFormat")}</Label>
         <select
           className="h-8 w-full rounded-md border border-input bg-background px-2 text-[11px]"
           value={importKind}
@@ -49,8 +51,8 @@ export function DaeSsbhSourcePicker() {
             setSourcePath(null);
           }}
         >
-          <option value="dae">COLLADA (.dae)</option>
-          <option value="fbx">FBX (.fbx)</option>
+          <option value="dae">{t("daePicker.colladaDae")}</option>
+          <option value="fbx">{t("daePicker.fbxFbx")}</option>
         </select>
       </div>
 
@@ -65,7 +67,7 @@ export function DaeSsbhSourcePicker() {
             onClick={() => {
               void (async () => {
                 const selected = await open({
-                  title: importKind === "dae" ? "Pick COLLADA source" : "Pick FBX source",
+                  title: importKind === "dae" ? t("daePicker.pickColladaTitle") : t("daePicker.pickFbxTitle"),
                   multiple: false,
                   filters:
                     importKind === "dae"
@@ -101,7 +103,7 @@ export function DaeSsbhSourcePicker() {
                     const analysis =
                       importKind === "dae" ? await ssbhAnalyzeDae(nextPath) : await ssbhAnalyzeFbx(nextPath);
                     loadAnalysis(analysis, { resetMaterialProfiles: true });
-                    toast.success(`Analyzed ${importKind.toUpperCase()} source`);
+                    toast.success(t("daePicker.analyzed", { kind: importKind.toUpperCase() }));
                   } catch (error) {
                     toast.error(String(error));
                   } finally {
@@ -112,14 +114,16 @@ export function DaeSsbhSourcePicker() {
             }}
           >
             <FileSearch className="mr-1 h-3.5 w-3.5" />
-            Pick {importKind === "dae" ? ".dae" : ".fbx"}
+            {importKind === "dae" ? t("daePicker.pickDae") : t("daePicker.pickFbx")}
           </Button>
         </div>
 
         {sourcePath ? (
-          <p className="break-all font-mono text-[10px] text-muted-foreground">{sourcePath}</p>
+          <p className="break-all font-mono text-[10px] text-muted-foreground" data-i18n-ignore="">
+            {sourcePath}
+          </p>
         ) : (
-          <p className="text-[11px] text-muted-foreground">Pick a source file; analysis runs automatically after selection.</p>
+          <p className="text-[11px] text-muted-foreground">{t("daePicker.pickHint")}</p>
         )}
       </div>
     </div>

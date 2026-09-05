@@ -1,0 +1,16 @@
+{
+  "nav.options": "Options",
+  "nav.settings": "Settings",
+  "nav.fhm2dInit": "FHM2D Init",
+  "nav.about": "About",
+  "nav.toggleSidebarShortcut": "Toggle Sidebar (Ctrl/Cmd+B)",
+  "sidebar.workspace": "EXVS2 Workspace",
+  "sidebar.singleFhm2d": "Single FHM2D",
+  "sidebar.sceneEdit": "Scene Edit",
+  "sidebar.unitModelEditor": "Unit Model Editor",
+  "sidebar.resourceRegistry": "Resource Registry",
+  "sidebar.miscTools": "Misc Tools",
+  "sidebar.config": "Config",
+  "sidebar.about": "About",
+  "common.toggleSidebar": "Toggle Sidebar"
+}

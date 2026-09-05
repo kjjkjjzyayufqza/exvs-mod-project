@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { exists } from "@tauri-apps/plugin-fs";
 import { ArrowDown, ArrowUp, ChevronDown, FolderOpen, Loader2 } from "lucide-react";
@@ -124,6 +125,7 @@ export function MotionFolderAddDialog({
   rootName,
   onAdd,
 }: MotionFolderAddDialogProps) {
+  const { t } = useTranslation("test-motion-add");
   const [mode, setMode] = useState<AddMotionMode>("file");
   const [sourcePath, setSourcePath] = useState("");
   const [sourceDir, setSourceDir] = useState("");
@@ -215,7 +217,7 @@ export function MotionFolderAddDialog({
       const paths = await listNuanmbFilesInDirectory(trimmed);
       if (paths.length === 0) {
         setClips([]);
-        setScanError("No .nuanmb files found in this folder");
+        setScanError(t("errors.noClips"));
         return;
       }
       setClips(defaultClipsFromPaths(paths));
@@ -225,7 +227,7 @@ export function MotionFolderAddDialog({
     } finally {
       setScanning(false);
     }
-  }, []);
+  }, [t]);
 
   const pickSourceFile = useCallback(async () => {
     const selected = await open({
@@ -290,13 +292,13 @@ export function MotionFolderAddDialog({
             (child) => child.kind === "item" && child.name === name.trim().replace(/\.nuanmb$/i, ""),
           );
           if (structureHit) {
-            structureNote = `Structure already has item "${name.trim()}" under this parent`;
+            structureNote = t("warnings.itemExists", { name: name.trim() });
           }
           rows.push({
             path: targetPath,
             kind: "file",
             exists: fileExists,
-            label: fileExists ? "exists" : "new",
+            label: fileExists ? t("status.exists") : t("status.new"),
           });
         } else {
           if (!folderName.trim() || clips.length === 0) {
@@ -314,14 +316,14 @@ export function MotionFolderAddDialog({
             clipNames: clips.map((clip) => clip.name),
           });
           if (preview.existingStructureFolder) {
-            structureNote = `Structure already has folder "${folderName.trim()}" under this parent`;
+            structureNote = t("warnings.folderExists", { name: folderName.trim() });
           }
           const folderExists = await exists(preview.folderPath);
           rows.push({
             path: preview.folderPath,
             kind: "folder",
             exists: folderExists,
-            label: folderExists ? "exists" : "new",
+            label: folderExists ? t("status.exists") : t("status.new"),
           });
           for (const filePath of preview.filePaths) {
             const fileExists = await exists(filePath);
@@ -329,7 +331,7 @@ export function MotionFolderAddDialog({
               path: filePath,
               kind: "file",
               exists: fileExists,
-              label: fileExists ? "exists" : "new",
+              label: fileExists ? t("status.exists") : t("status.new"),
             });
           }
         }
@@ -369,6 +371,7 @@ export function MotionFolderAddDialog({
     name,
     parentFolder,
     rootName,
+    t,
   ]);
 
   const hasExistingTargets = useMemo(
@@ -459,16 +462,16 @@ export function MotionFolderAddDialog({
     <Dialog open={dialogOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add motion</DialogTitle>
+          <DialogTitle>{t("title")}</DialogTitle>
           <DialogDescription>
             {mode === "file"
-              ? "Import one homemade .nuanmb. Hex fields are structure LE (int32 storage bytes). Output path is checked before confirm."
-              : "Import a folder of .nuanmb clips as one action bundle. Body clip should be first. Hex fields are structure LE only."}
+              ? t("help.fileDescription")
+              : t("help.folderDescription")}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
           <div className="grid gap-1.5">
-            <Label className="text-xs">Add mode</Label>
+            <Label className="text-xs">{t("fields.addMode")}</Label>
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
@@ -476,7 +479,7 @@ export function MotionFolderAddDialog({
                 variant={mode === "file" ? "default" : "outline"}
                 onClick={() => setMode("file")}
               >
-                Single .nuanmb
+                {t("actions.single")}
               </Button>
               <Button
                 type="button"
@@ -484,14 +487,14 @@ export function MotionFolderAddDialog({
                 variant={mode === "folder" ? "default" : "outline"}
                 onClick={() => setMode("folder")}
               >
-                Folder bundle
+                {t("actions.folder")}
               </Button>
             </div>
           </div>
 
           {mode === "file" ? (
             <div className="grid gap-1.5">
-              <Label className="text-xs">Source .nuanmb</Label>
+              <Label className="text-xs">{t("fields.sourceFile")}</Label>
               <div className="flex gap-2">
                 <FilePathInput
                   value={sourcePath}
@@ -500,13 +503,13 @@ export function MotionFolderAddDialog({
                 />
                 <Button type="button" variant="outline" onClick={() => void pickSourceFile()}>
                   <FolderOpen className="h-4 w-4" />
-                  Browse
+                  {t("actions.browse")}
                 </Button>
               </div>
             </div>
           ) : (
             <div className="grid gap-1.5">
-              <Label className="text-xs">Source folder (contains .nuanmb clips)</Label>
+              <Label className="text-xs">{t("fields.sourceFolder")}</Label>
               <div className="flex gap-2">
                 <FilePathInput
                   value={sourceDir}
@@ -515,14 +518,14 @@ export function MotionFolderAddDialog({
                 />
                 <Button type="button" variant="outline" onClick={() => void pickSourceDir()}>
                   <FolderOpen className="h-4 w-4" />
-                  Browse
+                  {t("actions.browse")}
                 </Button>
               </div>
-              {scanning ? <p className="text-[11px] text-muted-foreground">Scanning…</p> : null}
+              {scanning ? <p className="text-[11px] text-muted-foreground">{t("status.scanning")}</p> : null}
               {scanError ? <p className="text-[11px] text-destructive">{scanError}</p> : null}
               {!scanning && !scanError && clips.length > 0 ? (
                 <p className="text-[11px] text-muted-foreground">
-                  Found {clips.length} clip(s). Set each model id (LE) and order (body first) before adding.
+                  {t("help.foundClips", { count: clips.length })}
                 </p>
               ) : null}
             </div>
@@ -530,7 +533,7 @@ export function MotionFolderAddDialog({
 
           {mode === "file" ? (
             <div className="grid gap-1.5">
-              <Label className="text-xs">Name</Label>
+              <Label className="text-xs">{t("fields.name")}</Label>
               <Input
                 value={name}
                 onChange={(event) => {
@@ -542,7 +545,7 @@ export function MotionFolderAddDialog({
             </div>
           ) : (
             <div className="grid gap-1.5">
-              <Label className="text-xs">Bundle folder name (disk / structure)</Label>
+              <Label className="text-xs">{t("fields.bundleName")}</Label>
               <Input
                 value={folderName}
                 onChange={(event) => {
@@ -553,13 +556,13 @@ export function MotionFolderAddDialog({
                 placeholder={suggestedFolderName}
               />
               <p className="text-[11px] text-muted-foreground">
-                Game packs usually use sequential numbers under the parent (suggested: {suggestedFolderName}).
+                {t("help.suggestedName", { name: suggestedFolderName })}
               </p>
             </div>
           )}
 
           <div className="grid gap-1.5">
-            <Label className="text-xs">Parent folder</Label>
+            <Label className="text-xs">{t("fields.parentFolder")}</Label>
             <select
               value={parentFolderId}
               onChange={(event) => setParentFolderId(event.target.value)}
@@ -579,7 +582,7 @@ export function MotionFolderAddDialog({
               onClick={() => setAdvancedOpen((value) => !value)}
               className="flex w-full items-center justify-between px-3 py-2 text-xs font-medium hover:bg-muted/40"
             >
-              <span>{mode === "file" ? "Action metadata (required)" : "Action / clip metadata (required)"}</span>
+              <span>{mode === "file" ? t("sections.actionMetadata") : t("sections.clipMetadata")}</span>
               <ChevronDown
                 className={advancedOpen ? "h-4 w-4 rotate-180 transition-transform" : "h-4 w-4 transition-transform"}
               />
@@ -587,33 +590,32 @@ export function MotionFolderAddDialog({
             {advancedOpen ? (
               <div className="grid gap-3 border-t p-3">
                 <p className="text-[11px] text-muted-foreground">
-                  All hex ids are <span className="font-medium text-foreground">LE (structure int32 bytes)</span> — same
-                  spelling as structure JSON / motion editor LE mode (e.g. a621fd5e). Not MSC BE.
+                  {t("help.hexIds", { example: "a621fd5e" })}
                 </p>
                 {mode === "file" ? (
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
-                      <Label className="text-xs">unk1 (action ID, LE, required)</Label>
+                      <Label className="text-xs">{t("fields.actionId")}</Label>
                       <Input
                         value={unk1}
                         onChange={(event) => setUnk1(event.target.value)}
                         className="font-mono text-xs"
-                        placeholder="e.g. a621fd5e"
+                        placeholder={t("placeholders.actionId")}
                       />
                       {unk1.trim() && !isFilledHexId(unk1) ? (
-                        <p className="text-[11px] text-destructive">Must be 8-digit hex (optional 0x).</p>
+                        <p className="text-[11px] text-destructive">{t("errors.hex")}</p>
                       ) : null}
                     </div>
                     <div className="grid gap-1.5">
-                      <Label className="text-xs">unk2 (LE, required)</Label>
+                      <Label className="text-xs">{t("fields.unk2")}</Label>
                       <Input
                         value={unk2}
                         onChange={(event) => setUnk2(event.target.value)}
                         className="font-mono text-xs"
-                        placeholder="00000000 for single-file items"
+                        placeholder={t("placeholders.unk2")}
                       />
                       {unk2.trim() && !isFilledHexId(unk2) ? (
-                        <p className="text-[11px] text-destructive">Must be 8-digit hex (optional 0x).</p>
+                        <p className="text-[11px] text-destructive">{t("errors.hex")}</p>
                       ) : null}
                     </div>
                   </div>
@@ -621,34 +623,33 @@ export function MotionFolderAddDialog({
                   <>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="grid gap-1.5">
-                        <Label className="text-xs">Folder unk1 (action ID, LE, required)</Label>
+                        <Label className="text-xs">{t("fields.folderActionId")}</Label>
                         <Input
                           value={actionId}
                           onChange={(event) => setActionId(event.target.value)}
                           className="font-mono text-xs"
-                          placeholder="e.g. a621fd5e"
+                          placeholder={t("placeholders.actionId")}
                         />
                         {actionId.trim() && !isFilledHexId(actionId) ? (
-                          <p className="text-[11px] text-destructive">Must be 8-digit hex (optional 0x).</p>
+                          <p className="text-[11px] text-destructive">{t("errors.hex")}</p>
                         ) : null}
                       </div>
                       <div className="grid gap-1.5">
-                        <Label className="text-xs">Folder unk3 (group kind)</Label>
+                        <Label className="text-xs">{t("fields.groupKind")}</Label>
                         <Input
                           value={unk3}
                           onChange={(event) => setUnk3(event.target.value)}
                           className="font-mono text-xs"
-                          placeholder="2"
+                          placeholder={t("placeholders.groupKind")}
                         />
                       </div>
                     </div>
                     <p className="text-[11px] leading-relaxed text-muted-foreground">
-                      Child clips use item unk1 = 00000000. Set each clip unk2 (model id, LE). List order is pack order —
-                      put <span className="font-medium text-foreground">body first</span>.
+                      {t("help.clipOrder")}
                     </p>
                     <div className="grid gap-2">
                       <div className="flex items-center justify-between gap-2">
-                        <Label className="text-xs">Clips ({clips.length}) · order = pack order</Label>
+                        <Label className="text-xs">{t("fields.clips", { count: clips.length })}</Label>
                         <Button
                           type="button"
                           size="sm"
@@ -656,11 +657,11 @@ export function MotionFolderAddDialog({
                           disabled={!sourceDir.trim() || scanning}
                           onClick={() => void scanSourceDir(sourceDir)}
                         >
-                          Rescan
+                          {t("actions.rescan")}
                         </Button>
                       </div>
                       {clips.length === 0 ? (
-                        <p className="text-[11px] text-muted-foreground">Select a source folder with .nuanmb files.</p>
+                        <p className="text-[11px] text-muted-foreground">{t("help.selectSource")}</p>
                       ) : (
                         <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border bg-background p-2">
                           {clips.map((clip, index) => (
@@ -674,7 +675,7 @@ export function MotionFolderAddDialog({
                                 </span>
                               </div>
                               <div className="grid gap-1">
-                                <Label className="text-[10px] text-muted-foreground">Clip name</Label>
+                                <Label className="text-[10px] text-muted-foreground">{t("fields.clipName")}</Label>
                                 <Input
                                   value={clip.name}
                                   onChange={(event) => updateClip(index, { name: event.target.value })}
@@ -688,15 +689,15 @@ export function MotionFolderAddDialog({
                                 </p>
                               </div>
                               <div className="grid gap-1">
-                                <Label className="text-[10px] text-muted-foreground">unk2 (model ID, LE)</Label>
+                                <Label className="text-[10px] text-muted-foreground">{t("fields.modelId")}</Label>
                                 <Input
                                   value={clip.modelId}
                                   onChange={(event) => updateClip(index, { modelId: event.target.value })}
                                   className="font-mono text-xs"
-                                  placeholder="8-digit LE hex"
+                                  placeholder={t("placeholders.hex8")}
                                 />
                                 {clip.modelId.trim() && !isFilledHexId(clip.modelId) ? (
-                                  <p className="text-[10px] text-destructive">8-digit LE hex required</p>
+                                  <p className="text-[10px] text-destructive">{t("errors.hexRequired")}</p>
                                 ) : null}
                               </div>
                               <div className="flex items-start gap-0.5 pt-5">
@@ -707,8 +708,8 @@ export function MotionFolderAddDialog({
                                   className="h-7 w-7"
                                   disabled={index === 0}
                                   onClick={() => moveClip(index, "up")}
-                                  title="Move up"
-                                  aria-label={`Move clip ${index + 1} up`}
+                                  title={t("actions.moveUp")}
+                                  aria-label={t("actions.moveClipUp", { count: index + 1 })}
                                 >
                                   <ArrowUp className="h-3.5 w-3.5" />
                                 </Button>
@@ -719,8 +720,8 @@ export function MotionFolderAddDialog({
                                   className="h-7 w-7"
                                   disabled={index === clips.length - 1}
                                   onClick={() => moveClip(index, "down")}
-                                  title="Move down"
-                                  aria-label={`Move clip ${index + 1} down`}
+                                  title={t("actions.moveDown")}
+                                  aria-label={t("actions.moveClipDown", { count: index + 1 })}
                                 >
                                   <ArrowDown className="h-3.5 w-3.5" />
                                 </Button>
@@ -738,11 +739,11 @@ export function MotionFolderAddDialog({
 
           <div className="rounded-md border p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <h4 className="text-xs font-medium">Output targets</h4>
+              <h4 className="text-xs font-medium">{t("sections.outputTargets")}</h4>
               {checkingTargets ? (
                 <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
                   <Loader2 className="h-3 w-3 animate-spin" />
-                  Checking…
+                  {t("status.checking")}
                 </span>
               ) : null}
             </div>
@@ -754,7 +755,7 @@ export function MotionFolderAddDialog({
             ) : null}
             {targetPreview.length === 0 ? (
               <p className="text-[11px] text-muted-foreground">
-                Fill name / folder + clips to preview where files will be written.
+                {t("help.fillPreview")}
               </p>
             ) : (
               <ul className="max-h-40 space-y-1 overflow-y-auto font-mono text-[10px]">
@@ -767,8 +768,10 @@ export function MotionFolderAddDialog({
                         : "rounded border border-border/50 bg-muted/20 px-2 py-1 text-muted-foreground"
                     }
                   >
-                    <span className="mr-2 uppercase tracking-wide">{row.kind}</span>
-                    <span className={row.exists ? "font-semibold" : ""}>{row.exists ? "EXISTS" : "new"}</span>
+                    <span className="mr-2 uppercase tracking-wide">
+                      {row.kind === "file" ? t("fields.sourceFile") : t("fields.sourceFolder")}
+                    </span>
+                    <span className={row.exists ? "font-semibold" : ""}>{row.label}</span>
                     <div className="break-all">{row.path}</div>
                   </li>
                 ))}
@@ -782,11 +785,10 @@ export function MotionFolderAddDialog({
                   className="mt-0.5"
                 />
                 <span>
-                  <span className="font-medium text-foreground">Replace existing</span>
+                  <span className="font-medium text-foreground">{t("actions.replaceExisting")}</span>
                   <span className="text-muted-foreground">
                     {" "}
-                    — overwrite listed files and replace matching structure entry. Required when any target already
-                    exists.
+                    {t("help.replaceExisting")}
                   </span>
                 </span>
               </label>
@@ -795,17 +797,17 @@ export function MotionFolderAddDialog({
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("actions.cancel")}
           </Button>
           <Button type="button" disabled={!canSubmit} onClick={() => void handleAdd()}>
             {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             {hasExistingTargets && replaceExisting
               ? mode === "file"
-                ? "Replace motion"
-                : "Replace folder bundle"
+                ? t("actions.replaceMotion")
+                : t("actions.replaceFolder")
               : mode === "file"
-                ? "Add motion"
-                : "Add folder bundle"}
+                ? t("actions.addMotion")
+                : t("actions.addFolder")}
           </Button>
         </DialogFooter>
       </DialogContent>

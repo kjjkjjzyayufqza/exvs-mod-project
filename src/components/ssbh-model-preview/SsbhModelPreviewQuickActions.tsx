@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { openPath } from "@tauri-apps/plugin-opener";
 import {
   ClipboardCopy,
@@ -32,6 +33,7 @@ function shortPath(path: string, maxLen: number): string {
 }
 
 export function SsbhModelPreviewQuickActions({ className }: { className?: string }) {
+  const { t } = useTranslation("ssbh-root-c");
   const p = useSsbhModelPreview();
   const toolbarRef = useRef<HTMLDivElement>(null);
 
@@ -44,7 +46,7 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
       throw new Error("No model path to copy.");
     }
     await navigator.clipboard.writeText(path);
-    toast.success("Path copied to clipboard");
+    toast.success(t("toast.pathCopied"));
   }, [p.bundle?.modlPath]);
 
   const onOpenModelFolder = useCallback(async () => {
@@ -61,7 +63,7 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
   const onClearScene = useCallback(() => {
     try {
       p.clearScene();
-      toast.success("Scene cleared", { description: "Model unloaded from the 3D preview." });
+      toast.success(t("toast.sceneCleared"), { description: t("toast.modelUnloaded") });
     } catch (e) {
       toast.error(String(e));
     }
@@ -70,7 +72,7 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
   const onReload = useCallback(async () => {
     try {
       await p.reloadCurrentModel();
-      toast.success("Model reloaded from disk");
+      toast.success(t("toast.modelReloaded"));
     } catch (e) {
       toast.error(String(e));
     }
@@ -78,7 +80,7 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
 
   const onResetDisplay = useCallback(() => {
     p.resetDisplaySettingsToDefaults();
-    toast.success("Display settings reset", { description: "Lights, toggles, and UV options restored to defaults." });
+    toast.success(t("toast.displayReset"), { description: t("toast.displayResetDescription") });
   }, [p]);
 
   const onKeyDownToolbar = useCallback(
@@ -108,7 +110,7 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
       ref={toolbarRef}
       role="toolbar"
       tabIndex={0}
-      aria-label="3D preview quick actions"
+      aria-label={t("quickActions.ariaLabel")}
       onKeyDown={onKeyDownToolbar}
       className={cn("flex flex-wrap items-center gap-1 outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm", className)}
     >
@@ -117,22 +119,22 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
         size="sm"
         variant="outline"
         disabled={busy || !hasModel}
-        title="Unload the model from memory (files on disk are not deleted)"
+        title={t("quickActions.clearSceneHelp")}
         onClick={onClearScene}
       >
         <Eraser className="h-3.5 w-3.5 mr-1" />
-        Clear scene
+        {t("quickActions.clearScene")}
       </Button>
       <Button
         type="button"
         size="sm"
         variant="outline"
         disabled={busy || !hasModel || !hasOnlyDiskModels}
-        title="Reload the same .numdlb from disk"
+        title={t("quickActions.reloadHelp")}
         onClick={() => void onReload()}
       >
         {busy ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
-        Reload
+        {t("quickActions.reload")}
       </Button>
       <ModelAttachmentModal />
       <Button
@@ -143,7 +145,7 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
         onClick={() => void p.exportSceneConfig().catch((e) => toast.error(String(e)))}
       >
         <FileDown className="h-3.5 w-3.5 mr-1" />
-        Export scene
+        {t("quickActions.exportScene")}
       </Button>
       <Button
         type="button"
@@ -153,28 +155,27 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
         onClick={() => void p.importSceneConfig().catch((e) => toast.error(String(e)))}
       >
         <FileUp className="h-3.5 w-3.5 mr-1" />
-        Import scene
+        {t("quickActions.importScene")}
       </Button>
 
       <Popover>
         <PopoverTrigger asChild>
           <Button type="button" size="sm" variant="secondary" className="gap-1">
             <MoreHorizontal className="h-3.5 w-3.5" />
-            More
+            {t("quickActions.more")}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[min(100vw-24px,22rem)] p-0" align="start">
           <ScrollArea className="max-h-[min(70vh,420px)]">
             <div className="p-3 space-y-3">
               <p className="text-[10px] text-muted-foreground leading-snug -mt-0.5 pb-2 border-b border-border/60">
-                Open models from the toolbar: <span className="text-foreground/90">Open .numdlb</span> or{" "}
-                <span className="text-foreground/90">Add .numdlb</span>.
+                {t("quickActions.openFromToolbar")}
               </p>
               <div>
                 <div className="flex items-center justify-between gap-2 mb-1.5">
                   <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
                     <History className="h-3 w-3" />
-                    Recent
+                    {t("quickActions.recent")}
                   </span>
                   {p.recentModelPaths.length > 0 ? (
                     <Button
@@ -185,15 +186,15 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
                       disabled={busy}
                       onClick={() => {
                         p.clearRecentModelPaths();
-                        toast.message("Recent list cleared");
+                        toast.message(t("toast.recentCleared"));
                       }}
                     >
-                      Clear list
+                      {t("quickActions.clearList")}
                     </Button>
                   ) : null}
                 </div>
                 {p.recentModelPaths.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground py-1">No recent models yet.</p>
+                  <p className="text-[11px] text-muted-foreground py-1">{t("quickActions.noRecentModels")}</p>
                 ) : (
                   <ul className="space-y-0.5 max-h-[140px] overflow-y-auto pr-1">
                     {p.recentModelPaths.map((path) => (
@@ -215,7 +216,7 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 shrink-0"
-                          title="Remove from recent"
+                          title={t("quickActions.removeRecent")}
                           disabled={busy}
                           onClick={() => p.removeRecentModelPath(path)}
                         >
@@ -231,7 +232,7 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
 
               <div>
                 <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
-                  Path & files
+                  {t("quickActions.pathAndFiles")}
                 </p>
                 <div className="flex flex-col gap-1">
                   <Button
@@ -243,7 +244,7 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
                     onClick={() => void onCopyPath().catch((e) => toast.error(String(e)))}
                   >
                     <ClipboardCopy className="h-3.5 w-3.5 mr-2 shrink-0" />
-                    Copy .numdlb path
+                    {t("quickActions.copyNumdlbPath")}
                   </Button>
                   <Button
                     type="button"
@@ -254,7 +255,7 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
                     onClick={() => void onOpenModelFolder().catch((e) => toast.error(String(e)))}
                   >
                     <FolderInput className="h-3.5 w-3.5 mr-2 shrink-0" />
-                    Open folder in file manager
+                    {t("quickActions.openFolder")}
                   </Button>
                 </div>
               </div>
@@ -263,7 +264,7 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
 
               <div>
                 <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
-                  View & meshes
+                  {t("quickActions.viewAndMeshes")}
                 </p>
                 <div className="flex flex-col gap-2">
                   <Button
@@ -275,7 +276,7 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
                     onClick={onResetDisplay}
                   >
                     <Scan className="h-3.5 w-3.5 mr-2 shrink-0" />
-                    Reset display & lighting defaults
+                    {t("quickActions.resetDisplay")}
                   </Button>
                   <Button
                     type="button"
@@ -286,10 +287,10 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
                     onClick={p.showAllMeshes}
                   >
                     <Layers className="h-3.5 w-3.5 mr-2 shrink-0" />
-                    Show all mesh parts
+                    {t("quickActions.showAllMeshes")}
                   </Button>
                   <div className="flex items-center justify-between gap-2 rounded-md border border-border/50 px-2 py-1.5">
-                    <span className="text-[11px] text-muted-foreground">Wireframe</span>
+                    <span className="text-[11px] text-muted-foreground">{t("quickActions.wireframe")}</span>
                     <Switch checked={p.wireframe} onCheckedChange={p.setWireframe} disabled={!p.draws.length} />
                   </div>
                 </div>
@@ -300,12 +301,10 @@ export function SsbhModelPreviewQuickActions({ className }: { className?: string
               <div>
                 <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-1">
                   <HelpCircle className="h-3 w-3" />
-                  Shortcuts
+                  {t("quickActions.shortcuts")}
                 </p>
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
-                  Focus this toolbar (Tab), then <span className="text-foreground font-medium">F</span> fit camera,{" "}
-                  <span className="text-foreground font-medium">R</span> reload model. Viewport: LMB marquee select,
-                  RMB orbit, MMB pan, scroll zoom. Hold RMB + WASD/QE to fly. Alt+LMB orbit.
+                  {t("quickActions.shortcutsHelp")}
                 </p>
               </div>
             </div>

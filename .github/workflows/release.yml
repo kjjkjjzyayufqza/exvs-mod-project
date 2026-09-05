@@ -17,12 +17,51 @@ jobs:
     timeout-minutes: 180
     permissions:
       contents: write
+      actions: write
     env:
       CARGO_TERM_COLOR: always
       CARGO_NET_GIT_FETCH_WITH_CLI: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require release secrets
+        env:
+          CARGO_GIT_TOKEN: ${{ secrets.CARGO_GIT_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          EXVS_UPDATER_GITHUB_TOKEN: ${{ secrets.EXVS_UPDATER_GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          if (-not $env:CARGO_GIT_TOKEN) {
+            throw "Missing CARGO_GIT_TOKEN. Create a PAT with Contents: Read on kjjkjjzyayufqza/ssbh_lib and set it as the CARGO_GIT_TOKEN repository secret."
+          }
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
+            throw "Missing TAURI_SIGNING_PRIVATE_KEY. The NSIS updater artifacts cannot be signed without it."
+          }
+          if (-not $env:EXVS_UPDATER_GITHUB_TOKEN) {
+            Write-Host "EXVS_UPDATER_GITHUB_TOKEN is unset; the app will bake CARGO_GIT_TOKEN so private GitHub Releases stay readable."
+          }
+
+      - name: Prove updater token can read this repository
+        env:
+          GH_TOKEN: ${{ secrets.EXVS_UPDATER_GITHUB_TOKEN || secrets.CARGO_GIT_TOKEN }}
+        shell: pwsh
+        run: |
+          if (-not $env:GH_TOKEN) {
+            throw "No token available to bake into the updater. Set EXVS_UPDATER_GITHUB_TOKEN (Contents: Read on this repo) or a CARGO_GIT_TOKEN that can read this private repository."
+          }
+          $name = gh api repos/kjjkjjzyayufqza/exvs-mod-project --jq ".full_name"
+          if ($name -ne "kjjkjjzyayufqza/exvs-mod-project") {
+            throw "Updater token cannot read kjjkjjzyayufqza/exvs-mod-project"
+          }
+          Write-Host "Updater token can read $name"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Authenticate private Cargo git deps
         env:
@@ -53,9 +92,59 @@ jobs:
         with:
           workspaces: src-tauri
           prefix-key: release-windows
+          env-vars: EXVS_UPDATER_GITHUB_TOKEN
+        env:
+          EXVS_UPDATER_GITHUB_TOKEN: ${{ secrets.EXVS_UPDATER_GITHUB_TOKEN || secrets.CARGO_GIT_TOKEN }}
 
       - name: Stamp release version
         run: node .github/scripts/stamp-release-version.mjs "0.1.${{ github.run_number }}"
+
+      - name: Guard Tauri extra bins
+        run: python .github/scripts/check_tauri_bundle_bins.py --self-check
+
+      - name: Keep NSIS bundle app-only
+        run: python .github/scripts/prepare_tauri_app_only_bins.py
+
+      - name: Collect changelog
+        id: changelog
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $previous = ""
+          try {
+            $previous = gh release list --limit 1 --json tagName --jq ".[0].tagName"
+          } catch {
+            $previous = ""
+          }
+          if ($previous) {
+            git fetch --tags --force 2>$null | Out-Null
+            $log = git log "$previous..HEAD" --pretty=format:"- %s" 2>$null
+            if ($LASTEXITCODE -ne 0 -or -not $log) {
+              $log = git log -20 --pretty=format:"- %s"
+            }
+          } else {
+            $log = git log -20 --pretty=format:"- %s"
+          }
+          if ($log -is [array]) {
+            $log = $log -join "`n"
+          }
+          if (-not $log) {
+            $log = "- Windows release of EXVS Mod Project."
+          }
+          $body = @(
+            "Windows release of EXVS Mod Project.",
+            "",
+            $log,
+            "",
+            "- EXVS-Mod-Project-<version>-windows-x64.zip is the portable app plus the full tools folder.",
+            "- The NSIS installer is the auto-update package. Installed copies check this GitHub Release on every launch."
+          ) -join "`n"
+          $eof = "RELNOTES_EOF"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "body<<$eof"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value $body
+          Add-Content -Path $env:GITHUB_OUTPUT -Value $eof
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -67,31 +156,77 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          EXVS_UPDATER_GITHUB_TOKEN: ${{ secrets.EXVS_UPDATER_GITHUB_TOKEN }}
+          EXVS_UPDATER_GITHUB_TOKEN: ${{ secrets.EXVS_UPDATER_GITHUB_TOKEN || secrets.CARGO_GIT_TOKEN }}
         with:
           tagName: v__VERSION__
           releaseName: EXVS Mod Project v__VERSION__
-          releaseBody: |
-            Windows release of EXVS Mod Project.
-
-            - `EXVS-Mod-Project-<version>-windows-x64.zip` is the portable app plus the full `tools` folder.
-            - The NSIS installer is the auto-update package. Installed copies check this GitHub Release for newer versions.
+          releaseBody: ${{ steps.changelog.outputs.body }}
           releaseDraft: false
           prerelease: false
+          tauriScript: pnpm tauri
+          uploadUpdaterJson: true
+          uploadUpdaterSignatures: true
+          uploadWorkflowArtifacts: true
           updaterJsonPreferNsis: true
           args: --bundles nsis
+
+      - name: Resolve published version
+        id: published
+        shell: pwsh
+        run: |
+          $version = "${{ steps.tauri.outputs.appVersion }}".Trim()
+          if (-not $version) {
+            $version = "0.1.${{ github.run_number }}"
+          }
+          $tag = if ($version.StartsWith("v")) { $version } else { "v$version" }
+          "version=$version" | Add-Content $env:GITHUB_OUTPUT
+          "tag=$tag" | Add-Content $env:GITHUB_OUTPUT
+          Write-Host "published version $version tag $tag"
+
+      - name: Verify NSIS installer
+        shell: pwsh
+        run: |
+          $nsisDir = "src-tauri\target\release\bundle\nsis"
+          if (-not (Test-Path -LiteralPath $nsisDir)) {
+            throw "NSIS bundle directory was not created: $nsisDir"
+          }
+          $setup = Get-ChildItem -LiteralPath $nsisDir -File | Where-Object { $_.Name -like "*setup.exe" }
+          if (-not $setup) {
+            throw "NSIS installer (*setup.exe) was not produced under $nsisDir"
+          }
+          Write-Host "NSIS installer: $($setup.FullName)"
+          $sig = Get-ChildItem -LiteralPath $nsisDir -File | Where-Object { $_.Name -like "*setup.exe.sig" }
+          if (-not $sig) {
+            throw "NSIS updater signature (*setup.exe.sig) was not produced under $nsisDir"
+          }
+          Write-Host "NSIS signature: $($sig.FullName)"
+
+      - name: Verify GitHub Release updater assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.published.outputs.tag }}"
+          $assets = gh release view $tag --json assets --jq ".assets[].name"
+          Write-Host $assets
+          if ($assets -notmatch "latest.json") {
+            throw "GitHub Release $tag is missing latest.json"
+          }
+          if ($assets -notmatch "setup.exe") {
+            throw "GitHub Release $tag is missing the NSIS setup.exe"
+          }
 
       - name: Pack portable zip
         shell: pwsh
         run: |
           .\.github\scripts\pack-portable-zip.ps1 `
-            -Version "${{ steps.tauri.outputs.appVersion }}" `
-            -OutputZip "EXVS-Mod-Project-${{ steps.tauri.outputs.appVersion }}-windows-x64.zip"
+            -Version "${{ steps.published.outputs.version }}" `
+            -OutputZip "EXVS-Mod-Project-${{ steps.published.outputs.version }}-windows-x64.zip"
 
       - name: Upload portable zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "v${{ steps.tauri.outputs.appVersion }}" `
-            "EXVS-Mod-Project-${{ steps.tauri.outputs.appVersion }}-windows-x64.zip" `
+          gh release upload "${{ steps.published.outputs.tag }}" `
+            "EXVS-Mod-Project-${{ steps.published.outputs.version }}-windows-x64.zip" `
             --clobber

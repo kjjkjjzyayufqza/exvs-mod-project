@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import {
   AlertDialog,
@@ -49,6 +50,7 @@ export function SeriesEditor({
   onRefreshSeriesImages,
   onChange,
 }: SeriesEditorProps) {
+  const { t } = useTranslation("test-lists");
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteCandidateIndex, setDeleteCandidateIndex] = useState<number | null>(null);
@@ -213,7 +215,7 @@ export function SeriesEditor({
   if (!seriesListData) {
     return (
       <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground">
-        Select this tab to load series_list.bin
+        {t("series.selectTab")}
       </div>
     );
   }
@@ -222,10 +224,10 @@ export function SeriesEditor({
     <div className="flex h-full gap-4 min-h-0">
       <div className="w-1/3 border rounded-lg p-3 overflow-hidden flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-3">
-          <div className="font-semibold text-sm">Series ({seriesListData.entries.length})</div>
+          <div className="font-semibold text-sm">{t("series.countLabel", { count: seriesListData.entries.length })}</div>
           <Button size="sm" onClick={handleAdd} disabled={!editable} className="inline-flex items-center gap-2">
             <Plus className="w-4 h-4" />
-            Add
+            {t("common.add")}
           </Button>
         </div>
 
@@ -257,7 +259,7 @@ export function SeriesEditor({
           />
         ) : (
           <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-            Select a series to edit
+            {t("series.selectToEdit")}
           </div>
         )}
       </div>
@@ -274,21 +276,22 @@ export function SeriesEditor({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Series</AlertDialogTitle>
+            <AlertDialogTitle>{t("series.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteCandidateSeries ? (
-                <>
-                  Are you sure you want to delete "{deleteCandidateSeries.name || ""}" (index {deleteCandidateIndex})?
-                </>
+                t("series.deleteNamed", {
+                  name: deleteCandidateSeries.name || "",
+                  index: deleteCandidateIndex,
+                })
               ) : (
-                <>Are you sure you want to delete this series? This action cannot be undone.</>
+                t("series.deleteUntitled")
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={closeDeleteDialog}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={closeDeleteDialog}>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} disabled={!editable} className="bg-red-600 hover:bg-red-700">
-              Delete
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

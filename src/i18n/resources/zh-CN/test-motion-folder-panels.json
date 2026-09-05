@@ -1,0 +1,93 @@
+{
+  "title": "动作文件夹",
+  "actions": {
+    "openFolder": "打开文件夹",
+    "browse": "浏览",
+    "load": "加载",
+    "selectVisible": "选择可见项",
+    "clear": "清除",
+    "cancel": "取消",
+    "refresh": "刷新",
+    "save": "保存",
+    "add": "添加",
+    "replace": "替换",
+    "remove": "移除"
+  },
+  "labels": {
+    "motionFolder": "动作文件夹",
+    "rootName": "根名称",
+    "structureJson": "结构 JSON"
+  },
+  "placeholders": {
+    "folderPath": "E:\\workspace\\003motion\\0xHASH",
+    "search": "按名称、unk1、unk2、fileIndex 或路径搜索"
+  },
+  "states": {
+    "unsaved": "未保存",
+    "setPathThenLoad": "设置动作文件夹路径，然后点击加载。",
+    "selectDetails": "选择文件夹或动作项查看详情。",
+    "loadingInventory": "正在加载动作清单……"
+  },
+  "errors": {
+    "invalidFolderPath": "请输入有效的动作文件夹路径。"
+  },
+  "aria": {
+    "leStructureHex": "小端结构十六进制",
+    "beMscHex": "大端 MSC 值十六进制"
+  },
+  "summary": {
+    "title": "资源包摘要",
+    "motions": "动作",
+    "folders": "文件夹",
+    "nonzeroUnk1": "非零 unk1",
+    "nonzeroUnk2": "非零 unk2",
+    "warnings": "清单警告",
+    "parseLinks": "parse links"
+  },
+  "help": {
+    "loadExample": "加载类似 {{example}} 的文件夹。结构 JSON 会从同级文件推断。",
+    "hexLeTitle": "显示结构 JSON 的 LE 字节（例如 a621fd5e）",
+    "hexBeTitle": "显示 MSC 整数拼写 / 字节交换（例如 5efd21a6）",
+    "hexFieldTitle": "LE = 结构 JSON 字节；BE = MSC 整数拼写（字节交换）"
+  },
+  "status": {
+    "treeSelection": "树选择：",
+    "selected": "已选 {{count}} 项",
+    "entries": "{{count}} 个条目"
+  },
+  "detail": {
+    "heading": "{{kind}}详情",
+    "folder": "文件夹",
+    "motionItem": "动作项",
+    "entryIdentity": "条目标识",
+    "hexDisplay": "十六进制显示：{{endian}}。结构 JSON 始终存储 LE 字节；MSC C / 运行时整数使用字节交换后的拼写。",
+    "label": "标签",
+    "path": "路径",
+    "children": "子项",
+    "editEntry": "编辑条目",
+    "name": "名称",
+    "apply": "应用",
+    "fileBinding": "文件绑定",
+    "openFile": "打开文件",
+    "replaceExt": "替换 {{ext}}",
+    "openParent": "打开父文件夹",
+    "childOrder": "子项顺序",
+    "noChildren": "此文件夹还没有子项。",
+    "orderHelp": "多片段动作的结构顺序很重要：把 {{body}} 模型片段放在最前，然后是机翼 / 武器 / 其他通道。更改后需要保存。",
+    "body": "body",
+    "moveUp": "上移",
+    "moveDown": "下移",
+    "moveNamedUp": "上移 {{name}}",
+    "moveNamedDown": "下移 {{name}}"
+  },
+  "remove": {
+    "title_one": "移除动作条目？",
+    "title_other": "移除动作条目？",
+    "description_one": "这将移除所选结构条目。",
+    "description_other": "这将移除 {{count}} 个所选结构条目。",
+    "deleteFromDisk": "从磁盘删除文件"
+  },
+  "tree": {
+    "empty": "没有动作结构条目。"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "exact": [
+    "CC BY-NC-SA 4.0 · LICENSE-DOCS.md",
+    "PolyForm Shield 1.0.0 · LICENSE",
+    "base",
+    "`${entry.vdkType}#${idx}`",
+    "`${prefix}${meta.displayName}`",
+    "`${sub.folderName} (${index})`"
+  ],
+  "excludedPathPrefixes": [
+    "src/page/TestEditor/components/character-id-table/",
+    "src/page/TestEditor/components/character-list/",
+    "src/page/TestEditor/components/param-editor/",
+    "src/page/TestEditor/components/param-editors/",
+    "src/page/TestEditor/components/CharacterCostView.tsx",
+    "src/page/TestEditor/components/CharacterIdTableView.tsx",
+    "src/page/TestEditor/components/CharacterListView.tsx",
+    "src/components/ssbh-model-preview/JnttblEditorBody.tsx",
+    "src/components/ssbh-model-preview/JnttblFileEditorPanel.tsx",
+    "src/components/ssbh-model-preview/NuhlpbEditorBody.tsx",
+    "src/components/ssbh-model-preview/ShlEditorBody.tsx",
+    "src/components/ssbh-model-preview/NumdlbMappingEditorBody.tsx",
+    "src/components/ssbh-model-preview/NumatbTemplateEditorModalBody.tsx",
+    "src/components/ssbh-model-preview/components/NumatbMaterialEntryEditor.tsx",
+    "src/components/ssbh-model-preview/components/NumatbTemplateEditor.tsx",
+    "src/components/ssbh-model-preview/components/NumdlbMaterialMappingEditor.tsx",
+    "src/components/ssbh-model-preview/components/effect-project-editor/EffectProjectEntryDetailPanel.tsx"
+  ],
+  "patterns": [
+    "^0x[0-9A-Fa-f]+$",
+    "^[A-Z0-9_./:+-]{2,}$",
+    "^\\.[A-Za-z0-9]+$",
+    "^(?:https?://|file:|[A-Za-z]:[\\\\/]|\\.\\.?[\\\\/])",
+    "^[A-Za-z0-9_]+\\([^)]*\\)$"
+  ]
+}

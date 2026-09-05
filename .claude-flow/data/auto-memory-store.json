@@ -1,0 +1,14 @@
+[
+  {
+    "id": "task-ssbh-i18n-inspector-modals",
+    "key": "ssbh-i18n-inspector-modals",
+    "content": "Task completed: ssbh-i18n-inspector-modals",
+    "namespace": "tasks",
+    "type": "task-outcome",
+    "metadata": {
+      "success": true,
+      "quality": 0.85
+    },
+    "createdAt": 1788584684048
+  }
+]

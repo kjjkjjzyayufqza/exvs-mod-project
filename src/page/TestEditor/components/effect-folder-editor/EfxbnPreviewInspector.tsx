@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 import type {
   EffectFolderInventory,
   EfxbnEffectSummary,
@@ -63,11 +64,11 @@ import {
 } from "./efxbnSimulation";
 
 /** Slot roles as the shader consumes them, so the panel does not read as four identical maps. */
-const EFXBN_TEXTURE_SLOT_LABELS: Record<EfxbnTextureSlot, string> = {
-  color0: "Colour map",
-  color1: "Pass-2 colour",
-  uv0: "UV offset",
-  uv1: "Pass-2 UV offset",
+const EFXBN_TEXTURE_SLOT_KEYS: Record<EfxbnTextureSlot, string> = {
+  color0: "textureSlots.color0",
+  color1: "textureSlots.color1",
+  uv0: "textureSlots.uv0",
+  uv1: "textureSlots.uv1",
 };
 
 export type EfxbnPreviewInspectorPane = "all" | "outliner" | "properties";
@@ -98,29 +99,29 @@ type EfxbnPreviewInspectorProps = {
   onWrite?: () => void;
 };
 
-function typeName(block: EfxbnEffectSummary): string {
-  if (block.effectType === EFXBN_ELEMENT_TYPE.billboard) return "Billboard";
-  if (block.effectType === EFXBN_ELEMENT_TYPE.model) return "Model";
-  if (block.effectType === EFXBN_ELEMENT_TYPE.strip) return "Strip";
+function typeName(block: EfxbnEffectSummary, t: (key: string, options?: Record<string, unknown>) => string): string {
+  if (block.effectType === EFXBN_ELEMENT_TYPE.billboard) return t("types.billboard");
+  if (block.effectType === EFXBN_ELEMENT_TYPE.model) return t("types.model");
+  if (block.effectType === EFXBN_ELEMENT_TYPE.strip) return t("types.strip");
   if (block.effectType === 9) {
     return block.spawnFormType === 9 || block.spawnFormType === 10
-      ? "Mesh emitter wrapper"
-      : "Wrapper";
+      ? t("types.meshEmitterWrapper")
+      : t("types.wrapper");
   }
   // Types 6, 8, 10 and 11 are structural containers with no proven authoring name.
-  return `Container ${block.effectType}`;
+  return t("types.container", { type: block.effectType });
 }
 
 /** Short enough for a badge in a narrow inspector; the full pack name goes in the tooltip. */
-function resourceSourceLabel(source: EffectFolderResourceSource): string {
-  return source === "pack" ? "pack" : "common";
+function resourceSourceLabel(source: EffectFolderResourceSource, t: (key: string) => string): string {
+  return source === "pack" ? t("sources.pack") : t("sources.common");
 }
 
-function resourceSourceTitle(source: EffectFolderResourceSource | null): string {
-  if (source === null) return "Present in neither this pack nor the shared pack";
+function resourceSourceTitle(source: EffectFolderResourceSource | null, t: (key: string, options?: Record<string, unknown>) => string): string {
+  if (source === null) return t("sources.neither");
   return source === "pack"
-    ? "Resolved in the pack being edited"
-    : `Resolved in the shared pack ${EFFECT_FOLDER_COMMON_PACK_NAME}`;
+    ? t("sources.resolvedPack")
+    : t("sources.resolvedCommon", { pack: EFFECT_FOLDER_COMMON_PACK_NAME });
 }
 
 /** The block that lists `index` as a child, or null when it is a root. */
@@ -160,6 +161,7 @@ export function EfxbnPreviewInspector({
   onRedo,
   onWrite,
 }: EfxbnPreviewInspectorProps) {
+  const { t } = useTranslation("test-efxbn-preview");
   const selectedBlock =
     plan.effectBlocks.find((block) => block.index === selectedEffectIndex) ?? plan.effectBlocks[0] ?? null;
   const activeControls =
@@ -181,22 +183,22 @@ export function EfxbnPreviewInspector({
   const drawOrderLabel = selectedBlock
     ? efxbnRequiresParticleDepthSort(selectedBlock)
       ? efxbnParticleSortsFrontToBack(selectedBlock)
-        ? "sorted front to back"
-        : "sorted back to front"
-      : "unsorted (order-independent)"
+      ? t("values.sortedFrontToBack")
+        : t("values.sortedBackToFront")
+      : t("values.unsorted")
     : "";
   const viewAngleRamp = selectedBlock ? resolveEfxbnViewAngleRamp(selectedBlock) : null;
   const viewAngleRampLabel = !selectedBlock
     ? ""
     : viewAngleRamp === null
-      ? "off"
+      ? t("values.off")
       : `a ${viewAngleRamp.startColor[3].toFixed(2)} → ${viewAngleRamp.endColor[3].toFixed(2)} · pow ${viewAngleRamp.power.toFixed(2)}`;
   const cameraFadeRange = selectedBlock ? resolveEfxbnCameraFadeRange(selectedBlock) : null;
   const cameraFadeLabel = !selectedBlock
     ? ""
     : cameraFadeRange === null
-      ? "off"
-      : `${cameraFadeRange.toFixed(2)} units`;
+      ? t("values.off")
+      : t("values.units", { value: cameraFadeRange.toFixed(2) });
   // Most blocks bind a model that only exists in the shared pack, so the ID alone does not say
   // whether the preview found it — the resolved source does.
   const modelTarget = selectedBlock
@@ -205,8 +207,8 @@ export function EfxbnPreviewInspector({
   const modelLabel = !selectedBlock
     ? ""
     : selectedBlock.modelHash.signed === 0
-      ? "none"
-      : `${selectedBlock.modelHash.hex} · ${modelTarget ? resourceSourceLabel(modelTarget.source) : "unresolved"}`;
+      ? t("values.none")
+      : `${selectedBlock.modelHash.hex} · ${modelTarget ? resourceSourceLabel(modelTarget.source, t) : t("values.unresolved")}`;
   const draftDirty = doc ? isEfxbnDocumentDirty(doc) : false;
   const dirtyBlocks = doc ? efxbnDirtyBlockIndexes(doc) : new Set<number>();
   const dirtyCount = dirtyBlocks.size;
@@ -215,7 +217,7 @@ export function EfxbnPreviewInspector({
   const showOutliner = pane !== "properties";
   const showProperties = pane !== "outliner";
   const asideLabel =
-    pane === "outliner" ? "EFXBN block outliner" : pane === "properties" ? "EFXBN properties" : "EFXBN live author";
+    pane === "outliner" ? t("aria.outliner") : pane === "properties" ? t("aria.properties") : t("aria.liveAuthor");
 
   const runCommand = (run: (current: EfxbnDocument) => EfxbnDocument) => {
     if (!doc || !onDocumentChange) return;
@@ -239,7 +241,7 @@ export function EfxbnPreviewInspector({
       <div className="shrink-0 border-b px-2.5 py-2">
         <div className="flex items-center gap-1.5">
           <Layers3 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="min-w-0 truncate text-xs font-medium">Blocks</span>
+          <span className="min-w-0 truncate text-xs font-medium">{t("labels.blocks")}</span>
           <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
             {plan.effectBlocks.length}
           </span>
@@ -253,7 +255,7 @@ export function EfxbnPreviewInspector({
                   : "border-emerald-500/35 text-emerald-400",
               )}
             >
-              {draftDirty ? `${dirtyCount} unsaved` : "live draft"}
+              {draftDirty ? t("status.unsaved", { count: dirtyCount }) : t("status.liveDraft")}
             </Badge>
           ) : null}
         </div>
@@ -264,8 +266,8 @@ export function EfxbnPreviewInspector({
             variant="ghost"
             className="h-8 w-8 shrink-0"
             onClick={onShowAll}
-            title="Show all blocks"
-            aria-label="Show all EFXBN blocks"
+            title={t("buttons.showAllTitle")}
+            aria-label={t("buttons.showAllAria")}
           >
             <Eye className="h-4 w-4" />
           </Button>
@@ -276,9 +278,9 @@ export function EfxbnPreviewInspector({
               variant="ghost"
               className="h-8 shrink-0 px-2 text-[11px]"
               onClick={() => onSolo(selectedBlock.index)}
-              title="Hide every block except the selected block"
+              title={t("buttons.soloTitle")}
             >
-              Solo
+              {t("buttons.solo")}
             </Button>
           ) : null}
           {canEdit && selectedBlock ? (
@@ -299,8 +301,8 @@ export function EfxbnPreviewInspector({
                     ),
                   )
                 }
-                title="Duplicate the selected block under the same parent, with its own curve keys"
-                aria-label="Duplicate the selected EFXBN block"
+                title={t("buttons.duplicateTitle")}
+                aria-label={t("buttons.duplicateAria")}
               >
                 <CopyPlus className="h-3.5 w-3.5" />
               </Button>
@@ -311,8 +313,8 @@ export function EfxbnPreviewInspector({
                 className="h-8 w-8 shrink-0 text-destructive"
                 disabled={writing || plan.effectBlocks.length <= 1}
                 onClick={() => runCommand((current) => deleteEfxbnBlock(current, selectedBlock.index))}
-                title="Delete the selected block and renumber every index that pointed past it"
-                aria-label="Delete the selected EFXBN block"
+                title={t("buttons.deleteTitle")}
+                aria-label={t("buttons.deleteAria")}
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
@@ -358,8 +360,8 @@ export function EfxbnPreviewInspector({
                 variant="ghost"
                 className="h-7 w-7 shrink-0 text-muted-foreground"
                 onClick={() => onSetEffectVisible(block.index, !visible)}
-                title={visible ? "Hide block" : "Show block"}
-                aria-label={`${visible ? "Hide" : "Show"} EFXBN block ${block.index}`}
+                title={visible ? t("buttons.hideBlock") : t("buttons.showBlock")}
+                aria-label={t(visible ? "buttons.hideBlockAria" : "buttons.showBlockAria", { index: block.index })}
               >
                 {visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
               </Button>
@@ -380,7 +382,7 @@ export function EfxbnPreviewInspector({
                     runCommand((current) => reparentEfxbnBlock(current, moved, block.index));
                   }}
                   className="h-7 w-2 shrink-0 cursor-grab rounded-sm bg-border/60 active:cursor-grabbing"
-                  title="Drag onto another block to reparent it, or onto the header strip to make it a root"
+                  title={t("buttons.dragTitle")}
                   aria-hidden
                 />
               ) : null}
@@ -401,20 +403,20 @@ export function EfxbnPreviewInspector({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5 truncate text-[11px] font-medium">
-                    Block {String(block.index).padStart(2, "0")}
+                {t("labels.block", { index: String(block.index).padStart(2, "0") })}
                     {blockDirty ? (
                       <span
                         className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400"
-                        title="Unsaved edits"
-                        aria-label="Unsaved edits"
+                        title={t("status.unsavedEdits")}
+                        aria-label={t("status.unsavedEdits")}
                       />
                     ) : null}
                   </span>
-                  <span className="block truncate text-[10px] text-muted-foreground">{typeName(block)}</span>
+                  <span className="block truncate text-[10px] text-muted-foreground">{typeName(block, t)}</span>
                 </span>
-                {target?.animationPath ? <span className="text-[9px] text-muted-foreground">A</span> : null}
+                {target?.animationPath ? <span className="text-[9px] text-muted-foreground" data-i18n-ignore="">A</span> : null}
                 {blockTextures.some((binding) => binding.file) ? (
-                  <ImageIcon className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Local texture" />
+                  <ImageIcon className="h-3 w-3 shrink-0 text-muted-foreground" aria-label={t("labels.localTexture")} />
                 ) : null}
               </button>
             </div>
@@ -432,21 +434,21 @@ export function EfxbnPreviewInspector({
           {pane === "properties" ? (
             <div className="mb-2 flex min-w-0 items-baseline gap-2">
               <span className="truncate text-xs font-medium">
-                Block {String(selectedBlock.index).padStart(2, "0")}
+                {t("labels.block", { index: String(selectedBlock.index).padStart(2, "0") })}
               </span>
-              <span className="truncate text-[11px] text-muted-foreground">{typeName(selectedBlock)}</span>
+              <span className="truncate text-[11px] text-muted-foreground">{typeName(selectedBlock, t)}</span>
             </div>
           ) : null}
-          <TabsList className="flex h-8 w-full shrink-0 justify-start gap-0.5 overflow-x-auto rounded-md p-0.5">
+          <TabsList className="flex h-8 w-full shrink-0 justify-start gap-0.5 overflow-x-auto rounded-md p-0.5" aria-label={t("labels.tabs")}>
             {canEdit ? (
-              <TabsTrigger value="edit" className="h-7 shrink-0 rounded px-2.5 text-[11px]">Edit</TabsTrigger>
+              <TabsTrigger value="edit" className="h-7 shrink-0 rounded px-2.5 text-[11px]">{t("tabs.edit")}</TabsTrigger>
             ) : null}
             {liveAuthor ? (
-              <TabsTrigger value="color" className="h-7 shrink-0 rounded px-2.5 text-[11px]">Color</TabsTrigger>
+              <TabsTrigger value="color" className="h-7 shrink-0 rounded px-2.5 text-[11px]">{t("tabs.color")}</TabsTrigger>
             ) : null}
-            <TabsTrigger value="block" className="h-7 shrink-0 rounded px-2.5 text-[11px]">Block</TabsTrigger>
-            <TabsTrigger value="controls" className="h-7 shrink-0 rounded px-2.5 text-[11px]">Controls</TabsTrigger>
-            <TabsTrigger value="material" className="h-7 shrink-0 rounded px-2.5 text-[11px]">Material</TabsTrigger>
+            <TabsTrigger value="block" className="h-7 shrink-0 rounded px-2.5 text-[11px]">{t("tabs.block")}</TabsTrigger>
+            <TabsTrigger value="controls" className="h-7 shrink-0 rounded px-2.5 text-[11px]">{t("tabs.controls")}</TabsTrigger>
+            <TabsTrigger value="material" className="h-7 shrink-0 rounded px-2.5 text-[11px]">{t("tabs.material")}</TabsTrigger>
           </TabsList>
 
           {canEdit && doc && inventory && onDocumentChange && onEditorError ? (
@@ -487,39 +489,39 @@ export function EfxbnPreviewInspector({
           ) : null}
 
           <TabsContent value="block" className="custom-scrollbar-thin mt-2 min-h-0 flex-1 overflow-y-auto">
-            <InspectorRow label="Index" value={String(selectedBlock.index)} />
-            <InspectorRow label="Runtime type" value={`${selectedBlock.effectType} (${typeName(selectedBlock)})`} />
-            <InspectorRow label="Tree level" value={String(selectedBlock.level)} />
+            <InspectorRow label={t("fields.index")} value={String(selectedBlock.index)} />
+            <InspectorRow label={t("fields.runtimeType")} value={`${selectedBlock.effectType} (${typeName(selectedBlock, t)})`} />
+            <InspectorRow label={t("fields.treeLevel")} value={String(selectedBlock.level)} />
             {isEfxbnEmitterBlock(selectedBlock) ? (
               <InspectorRow
-                label="Child blocks"
+                label={t("fields.childBlocks")}
                 value={efxbnChildIndexes(selectedBlock).join(", ")}
               />
             ) : null}
             <InspectorRow
-              label="Lifetime"
+              label={t("fields.lifetime")}
               value={`${selectedBlock.lifeTimeBase.toFixed(3)} ± ${(selectedBlock.lifeTimeRandom * 100).toFixed(1)}%`}
             />
             <InspectorRow
-              label="Emit"
+              label={t("fields.emit")}
               value={`${selectedBlock.numEmit} / ${selectedBlock.intervalBase.toFixed(3)}f`}
             />
-            <InspectorRow label="Delay" value={`${selectedBlock.delayEmitTimeBase.toFixed(3)}f`} />
-            <InspectorRow label="Spawn form" value={String(selectedBlock.spawnFormType)} />
+            <InspectorRow label={t("fields.delay")} value={`${selectedBlock.delayEmitTimeBase.toFixed(3)}f`} />
+            <InspectorRow label={t("fields.spawnForm")} value={String(selectedBlock.spawnFormType)} />
             <InspectorRow
-              label="Action flags"
+              label={t("fields.actionFlags")}
               value={`0x${selectedBlock.actionFlags.toString(16).toUpperCase().padStart(8, "0")}`}
             />
             <InspectorRow
-              label="Depth / blend"
+              label={t("fields.depthBlend")}
               value={`Z${selectedBlock.zTestEnable ? "T" : "-"}${efxbnRuntime(selectedBlock).zWriteEnable ? "W" : "-"} · ${blendStateLabel}`}
             />
-            <InspectorRow label="Culling" value={cullingTypeLabel} />
-            <InspectorRow label="Draw order" value={drawOrderLabel} />
-            <InspectorRow label="View-angle ramp" value={viewAngleRampLabel} />
-            <InspectorRow label="Camera fade" value={cameraFadeLabel} />
-            <InspectorRow label="Model" value={modelLabel} />
-            <InspectorRow label="Animation" value={selectedBlock.animationHash.signed === 0 ? "none" : selectedBlock.animationHash.hex} />
+            <InspectorRow label={t("fields.culling")} value={cullingTypeLabel} />
+            <InspectorRow label={t("fields.drawOrder")} value={drawOrderLabel} />
+            <InspectorRow label={t("fields.viewAngleRamp")} value={viewAngleRampLabel} />
+            <InspectorRow label={t("fields.cameraFade")} value={cameraFadeLabel} />
+            <InspectorRow label={t("fields.model")} value={modelLabel} />
+            <InspectorRow label={t("fields.animation")} value={selectedBlock.animationHash.signed === 0 ? t("values.none") : selectedBlock.animationHash.hex} />
           </TabsContent>
 
           <TabsContent value="controls" className="custom-scrollbar-thin mt-2 min-h-0 flex-1 overflow-y-auto">
@@ -536,17 +538,18 @@ export function EfxbnPreviewInspector({
                 </div>
               ))
             ) : (
-              <p className="py-2 text-[10px] text-muted-foreground">No active control lanes.</p>
+              <p className="py-2 text-[10px] text-muted-foreground">{t("empty.noActiveControls")}</p>
             )}
           </TabsContent>
 
           <TabsContent value="material" className="custom-scrollbar-thin mt-2 min-h-0 flex-1 overflow-y-auto">
             <div className="border-b border-border/45 py-1.5">
               <div className="flex items-center gap-2 overflow-hidden">
-                <span className="min-w-0 truncate text-[9px] font-medium">Shader variants</span>
+                <span className="min-w-0 truncate text-[9px] font-medium">{t("labels.shaderVariants")}</span>
                 <span
                   className="ml-auto shrink-0 font-mono text-[9px] text-muted-foreground"
-                  title="Runtime draw-scheme flag word (element +0x390)"
+                  title={t("help.drawSchemeFlag")}
+                  data-i18n-ignore=""
                 >
                   0x{drawSchemeFlag.toString(16).toUpperCase()}
                 </span>
@@ -559,12 +562,12 @@ export function EfxbnPreviewInspector({
                     </Badge>
                   ))
                 ) : (
-                  <span className="text-[9px] text-muted-foreground">base only</span>
+                  <span className="text-[9px] text-muted-foreground">{t("values.baseOnly")}</span>
                 )}
               </div>
               {shaderVariants.length > 0 ? (
                 <p className="mt-1 text-[9px] text-amber-600 dark:text-amber-400">
-                  Preview renders the base shader only; this block will not match the game.
+                  {t("help.baseShaderOnly")}
                 </p>
               ) : null}
             </div>
@@ -576,7 +579,7 @@ export function EfxbnPreviewInspector({
                 >
                   <div className="flex items-center gap-2">
                     <span className="min-w-0 truncate text-[9px] font-medium">
-                      {EFXBN_TEXTURE_SLOT_LABELS[binding.slot]}
+                      {t(EFXBN_TEXTURE_SLOT_KEYS[binding.slot])}
                     </span>
                     <span className="shrink-0 font-mono text-[9px] text-muted-foreground">
                       #{binding.controlIndex}
@@ -584,22 +587,22 @@ export function EfxbnPreviewInspector({
                     <Badge
                       variant={binding.source ? "outline" : "secondary"}
                       className="ml-auto h-4 shrink-0 px-1 text-[8px]"
-                      title={resourceSourceTitle(binding.source)}
+                  title={resourceSourceTitle(binding.source, t)}
                     >
-                      {binding.source ? resourceSourceLabel(binding.source) : "missing"}
+                      {binding.source ? resourceSourceLabel(binding.source, t) : t("values.missing")}
                     </Badge>
                   </div>
                   <div className="mt-1 truncate font-mono text-[9px] text-muted-foreground" title={binding.file?.path}>
                     {binding.parameter.colorMapHash.hex}
                   </div>
-                  <div className="mt-1 flex gap-2 text-[9px] text-muted-foreground">
+                  <div className="mt-1 flex gap-2 text-[9px] text-muted-foreground" data-i18n-ignore="">
                     <span>UV {binding.parameter.uvPatternType}</span>
                     <span>flags 0x{binding.parameter.textureSettingFlags.toString(16).toUpperCase()}</span>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="py-2 text-[10px] text-muted-foreground">No model-control texture slots.</p>
+              <p className="py-2 text-[10px] text-muted-foreground">{t("empty.noTextureSlots")}</p>
             )}
           </TabsContent>
         </Tabs>
@@ -613,28 +616,28 @@ export function EfxbnPreviewInspector({
               ? "border-amber-500/25 bg-amber-500/[0.06]"
               : "border-border/60 bg-muted/15",
           )}
-          aria-label="EFXBN document actions"
+          aria-label={t("aria.documentActions")}
         >
           <div className="mb-1.5 flex min-w-0 flex-wrap items-center gap-1.5">
-            <span className="truncate text-[10px] font-medium text-muted-foreground">EFXBN file</span>
+            <span className="truncate text-[10px] font-medium text-muted-foreground">{t("labels.efxbnFile")}</span>
             {draftDirty ? (
               <Badge
                 variant="outline"
                 className="h-4 shrink-0 border-amber-500/40 px-1.5 text-[8px] text-amber-400"
               >
-                {dirtyCount} unsaved
+                {t("status.unsaved", { count: dirtyCount })}
               </Badge>
             ) : (
               <Badge
                 variant="outline"
                 className="h-4 shrink-0 border-emerald-500/30 px-1.5 text-[8px] text-emerald-400"
               >
-                clean
+                {t("status.clean")}
               </Badge>
             )}
             {writing ? (
               <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-[8px] text-muted-foreground">
-                writing
+                {t("status.writing")}
               </Badge>
             ) : null}
           </div>
@@ -642,7 +645,7 @@ export function EfxbnPreviewInspector({
             className="mb-2 truncate font-mono text-[9px] text-muted-foreground"
             title={doc?.path}
           >
-            {doc?.path || "No document"}
+            {doc?.path || t("values.noDocument")}
           </p>
           <div className="flex flex-wrap items-center gap-1.5">
             {onUndo ? (
@@ -653,7 +656,7 @@ export function EfxbnPreviewInspector({
                 className="h-8 w-8 shrink-0"
                 disabled={!doc || !canUndoEfxbn(doc) || writing}
                 onClick={onUndo}
-                title={doc && canUndoEfxbn(doc) ? `Undo ${doc.changeLog.at(-1) ?? ""}` : "Nothing to undo"}
+                title={doc && canUndoEfxbn(doc) ? t("buttons.undoTitle", { change: doc.changeLog.at(-1) ?? "" }) : t("buttons.nothingToUndo")}
               >
                 <Undo2 className="h-3.5 w-3.5" />
               </Button>
@@ -666,7 +669,7 @@ export function EfxbnPreviewInspector({
                 className="h-8 w-8 shrink-0"
                 disabled={!doc || !canRedoEfxbn(doc) || writing}
                 onClick={onRedo}
-                title="Redo"
+                title={t("buttons.redoTitle")}
               >
                 <Redo2 className="h-3.5 w-3.5" />
               </Button>
@@ -679,10 +682,10 @@ export function EfxbnPreviewInspector({
                 className="h-8 shrink-0 gap-1.5 px-2.5 text-[11px]"
                 disabled={!draftDirty || writing}
                 onClick={onRevert}
-                title="Discard every unsaved change and return to the file on disk"
+                title={t("buttons.resetTitle")}
               >
                 <RotateCcw className="h-3.5 w-3.5" />
-                Reset
+                {t("buttons.reset")}
               </Button>
             ) : null}
             {onWrite ? (
@@ -697,12 +700,12 @@ export function EfxbnPreviewInspector({
                 onClick={onWrite}
                 title={
                   doc?.path
-                    ? `Rewrite ${doc.path} from the edited document`
-                    : "Rewrite the efxbn file from the edited document"
+                    ? t("buttons.rewriteTitle", { path: doc.path })
+                    : t("buttons.rewriteDefaultTitle")
                 }
               >
                 <Save className="h-3.5 w-3.5" />
-                {writing ? "Writing…" : draftDirty ? `Save EFXBN (${dirtyCount})` : "Save EFXBN"}
+                {writing ? t("status.writing") : draftDirty ? t("buttons.saveDirty", { count: dirtyCount }) : t("buttons.save")}
               </Button>
             ) : null}
           </div>

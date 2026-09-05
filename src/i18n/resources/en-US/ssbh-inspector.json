@@ -1,0 +1,170 @@
+{
+  "actions": {
+    "exportPreviewMesh": "Export preview mesh to COLLADA",
+    "hideAll": "Hide all",
+    "showAll": "Show all",
+    "hideModel": "Hide model",
+    "showModel": "Show model",
+    "loadAll": "Load all",
+    "loadNone": "Load none",
+    "refreshStats": "Refresh stats",
+    "clearAll": "Clear all",
+    "exportDae": "Export to .dae…",
+    "exporting": "Exporting…",
+    "resetBonePose": "Reset bone pose",
+    "clearSelection": "Clear selection",
+    "expandBoneGroup": "Expand bone group",
+    "collapseBoneGroup": "Collapse bone group"
+  },
+  "success": {
+    "exportedCollada": "Exported COLLADA",
+    "exportSummary": "{{path}}\nObjects: {{objects}} · Triangles: {{triangles}} {{textures}}",
+    "pngTextures": " · PNG textures: {{count}}",
+    "cacheCleared": "Texture preview cache cleared"
+  },
+  "states": {
+    "loadingModel": "Loading model from disk…",
+    "decodingTextures": "Decoding unique textures {{done}}/{{total}}{{current}}"
+  },
+  "sections": {
+    "collection": "Collection",
+    "displaySettings": "Display settings",
+    "exportCollada": "Export COLLADA",
+    "textureCache": "Texture cache",
+    "materialDebug": "Material debug",
+    "lighting": "Lighting & environment",
+    "meshExplorer": "Mesh explorer",
+    "boneExplorer": "Bone explorer",
+    "sceneStats": "Scene statistics",
+    "bundleDebug": "Preview bundle debug",
+    "warnings": "Warnings"
+  },
+  "labels": {
+    "viewRange": "View range",
+    "controlRange": "Control range",
+    "collectionSearch": "Collection search",
+    "previewRenderStyle": "Preview render style",
+    "wireframe": "Wireframe",
+    "skeleton": "Skeleton",
+    "grid": "Grid",
+    "axes": "Axes",
+    "stats": "Stats",
+    "textureFlipY": "Texture Flip Y",
+    "flipUvU": "Flip UV U",
+    "flipUvV": "Flip UV V",
+    "normalMap": "Normal Map",
+    "scale": "Scale",
+    "upAxis": "Up axis",
+    "debugViewMode": "Debug view mode",
+    "inspectDraw": "Inspect draw",
+    "lightingPreset": "Lighting preset",
+    "ambient": "Ambient",
+    "directional": "Directional",
+    "lightX": "Light X",
+    "lightY": "Light Y",
+    "lightZ": "Light Z",
+    "backgroundColor": "Background color",
+    "boneListScope": "Bone list scope",
+    "jointSize": "Joint size",
+    "gizmoMode": "Gizmo mode"
+  },
+  "help": {
+    "bloomLights": "Anime style adds bloom and warmer lights in the 3D preview.",
+    "flipUvU": "Mirror mesh UV horizontally (U → 1−U)",
+    "flipUvV": "Mirror mesh UV vertically (V → 1−V)",
+    "exportCollada": "Writes the same mesh (and skeleton when present) as the 3D preview from the loaded model folder to a .dae file. Optional: export diffuse nutexb textures referenced in numatb as PNG next to the DAE and bind them in the COLLADA file.",
+    "textureCache": "Keys use full-file CRC32 (IEEE) from Rust; any nutexb byte change produces a new key. Clearing revokes in-memory blob URLs and removes persisted PNG entries (IndexedDB).",
+    "previewDecoding": "Uncheck a slot to skip loading that texture for all meshes (faster preview, less GPU memory). Paths below still show what the material references on disk.",
+    "lightingPreset": "Soft character reduces low-poly faceting on unit models (higher ambient, softer key).",
+    "boneExplorer": "Hierarchy matches the skeleton. Select a bone here or click joint spheres in the viewport, then drag the gizmo. With the 3D view focused: Maya-style W / E / R (or 1 / 2 / 3) for Move / Rotate / Scale; Ctrl+Z undo / Ctrl+Shift+Z or Ctrl+Y redo bone transforms; Esc clears the active bone. Orbit pauses while dragging the gizmo.",
+    "noSkinWeights": "This model has no per-vertex bone weights in the mesh JSON — skeleton lines will move but geometry will not deform."
+  },
+  "filters": {
+    "allModels": "All models",
+    "activeOnly": "Active only"
+  },
+  "search": {
+    "placeholder": "Search label or path"
+  },
+  "stats": {
+    "modelsShown": "{{shown}}/{{total}} models shown",
+    "vertices": "Vertices",
+    "triangles": "Triangles",
+    "drawCalls": "Draw calls",
+    "textures": "Textures",
+    "bones": "Bones",
+    "memory": "Memory:",
+    "persistent": "Persistent:",
+    "notAvailable": "n/a"
+  },
+  "renderStyle": {
+    "standard": "Standard",
+    "anime": "Anime (bloom + warm lights)"
+  },
+  "export": {
+    "loadModelFirst": "Load a model in the viewport to enable export.",
+    "numatbTextures": "Export numatb diffuse textures (nutexb → PNG in the same folder as the .dae, update DAE references)"
+  },
+  "upAxis": {
+    "yUp": "Y-up",
+    "zUp": "Z-up",
+    "none": "None"
+  },
+  "debugView": {
+    "full": "Full",
+    "baseColor": "Base color only",
+    "normals": "Normals only",
+    "roughnessMetalness": "Roughness/metalness",
+    "emissive": "Emissive only",
+    "reflection": "Reflection only"
+  },
+  "material": {
+    "selectDraw": "Select draw",
+    "none": "None",
+    "noMaterials": "No materials available",
+    "previewDecoding": "Preview texture decoding",
+    "selectedDetails": "Selected material details"
+  },
+  "lighting": {
+    "custom": "Custom (sliders)",
+    "preset": {
+      "studio": "Studio (default)",
+      "softCharacter": "Soft character",
+      "harsh": "Harsh contrast"
+    },
+    "presetHelp": {
+      "studio": "Balanced key light — good for inspecting form and materials.",
+      "softCharacter": "Higher ambient, softer key — hides low-poly faceting on unit models.",
+      "harsh": "Strong key, low fill — exaggerates facets and hard edges."
+    }
+  },
+  "mesh": {
+    "total": "{{count}} total meshes",
+    "all": "All",
+    "none": "None",
+    "noMeshes": "No meshes loaded"
+  },
+  "bones": {
+    "activeModel": "Active model",
+    "allVisible": "All visible models",
+    "move": "Move",
+    "rotate": "Rotate",
+    "scale": "Scale",
+    "count": "{{count}} bones",
+    "noSkeleton": "No skeleton loaded",
+    "sizeValue": "{{value}}×"
+  },
+  "bundle": {
+    "active": "Active bundle",
+    "matlFiles": "Matl files loaded",
+    "matlEntries": "Matl entries merged",
+    "textureRefs": "Texture refs",
+    "resolvedNutexb": "Resolved nutexb",
+    "matlPathList": "Matl path list",
+    "noMatl": "No matl files loaded",
+    "missingDrawLabels": "Draw labels missing in matl ({{count}})",
+    "allDrawLabels": "All draw material labels exist in merged matl entries.",
+    "unresolvedTextureRefs": "Unresolved texture refs ({{unresolved}}/{{total}})",
+    "allTexturesResolved": "All collected texture refs resolved to on-disk .nutexb files."
+  }
+}

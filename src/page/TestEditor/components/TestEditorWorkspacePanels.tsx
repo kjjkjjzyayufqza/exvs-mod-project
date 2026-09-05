@@ -1,5 +1,6 @@
 import { memo, useCallback, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { usePanelRef } from "react-resizable-panels";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,7 @@ export const TestEditorWorkspacePanels = memo(function TestEditorWorkspacePanels
   center,
   right,
 }: Props) {
+  const { t } = useTranslation("test-workspace");
   const infoPanelRef = usePanelRef();
   const [infoCollapsed, setInfoCollapsed] = useState(false);
 
@@ -62,7 +64,7 @@ export const TestEditorWorkspacePanels = memo(function TestEditorWorkspacePanels
           <button
             type="button"
             onClick={toggleInfoPanel}
-            title={infoCollapsed ? "Expand info panel" : "Collapse info panel"}
+            title={infoCollapsed ? t("panels.expandInfo") : t("panels.collapseInfo")}
             aria-expanded={!infoCollapsed}
             aria-controls="test-editor-info-content"
             className={cn(
@@ -80,7 +82,7 @@ export const TestEditorWorkspacePanels = memo(function TestEditorWorkspacePanels
             )}
             {infoCollapsed ? (
               <span className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-semibold uppercase tracking-[0.14em]">
-                Info
+                {t("panels.info")}
               </span>
             ) : null}
           </button>

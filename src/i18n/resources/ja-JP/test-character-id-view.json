@@ -1,0 +1,27 @@
+{
+  "title": "キャラクター ID テーブル",
+  "file": "ファイル",
+  "folderPathEmpty": "フォルダー パスが空です",
+  "openFolder": "フォルダーを開く",
+  "importTableTooltip": "JSON からキャラクター ID テーブルをインポート",
+  "exportTableTooltip": "キャラクター ID テーブルを JSON にエクスポート",
+  "openDebugTooltip": "キャラクター ID デバッグ ツールを開く",
+  "searchPlaceholder": "すべてのフィールドを検索（10 進数または 16 進数）...",
+  "copyAsNew": "新しい行としてコピー",
+  "delete": "削除",
+  "extractAllAssetsTooltip": "すべての非ゼロ リソースを EXVS2 ワークスペースに抽出",
+  "extractAllToWorkspace": "すべてワークスペースに抽出",
+  "cancel": "キャンセル",
+  "deleteRow": "行を削除",
+  "deleteConfirm": "この行を削除しますか？この操作は取り消せません。",
+  "overwriteFields": "フィールドを上書き",
+  "noFileSelected": "ファイルが選択されていません",
+  "extractMsc": "MSC を抽出",
+  "decompileC": "C を逆コンパイル",
+  "bulkMscSourceCheck": "MSC ソース一括チェック",
+  "scanPlan": "スキャン計画",
+  "paths": "パス",
+  "selectDebugOutputRootPlaceholder": "MSC デバッグ出力ルートを選択...",
+  "runExtraction": "抽出を実行"
+  ,"notConfigured": "未設定", "model": "モデル", "effect": "エフェクト", "sound": "サウンド", "param": "パラメータ", "msc": "MSC", "motion": "モーション", "characterId": "キャラクター ID", "importTableTitle": "キャラクター ID テーブル JSON をインポート", "mscSourceDebug": "MSC ソース デバッグ", "loadingTable": "characteridtable.bin を読み込み中...", "noRowsFound": "行が見つかりません", "editRow": "行を編集（インデックス：{{index}}）", "editableValues": "値は int32 または 16 進数で編集できます", "copyFields": "フィールドをコピー", "pasteFields": "フィールドを貼り付け", "extracting": "抽出中...", "debugNotRunYet": "未実行", "debugCompleted": "完了", "debugRunning": "実行中", "validCounts": "有効 {{valid}} / {{total}}", "scanSubtitle": "character_id_table.bin から {{count}} 個の一意な MSC パッケージをスキャン", "scanDescription": "読み込んだテーブルの一意な非ゼロ MSC ハッシュをスキャンします。設定した OB dplcache ルートに .fhm2d ソースがない場合は、ソースなしとして報告してスキップします。", "tableRows": "テーブル行数", "tableRowsDetail": "character_id_table.bin から読み込んだ行", "mscRows": "MSC 行数", "mscRowsDetail": "MSC 値が非ゼロの行", "uniquePackages": "一意なパッケージ", "uniquePackagesDetail": "MSC ハッシュで重複排除", "repeatedRefs": "重複参照", "repeatedRefsDetail": "既にスキャンしたハッシュを指す追加行", "zeroMscRows": "ゼロ MSC 行", "zeroMscRowsDetail": "ソース検索前にスキップ", "pathsDescription": "出力ルートはデバッグ出力のワークスペースルートです。040msc ルートフォルダーは自動的に追加されます。", "selectDebugOutputRoot": "MSC デバッグ出力ルートを選択", "sourceRoot": "ソースルート", "outputRoot": "出力ルート", "actualMscOutput": "実際の MSC 出力", "runExtractionDescription": "存在するソースを抽出します。見つからないソースは空の出力フォルダーを作成せず一覧表示します。", "extractingMsc": "MSC 抽出中...", "extractAllMsc": "すべての MSC を抽出", "extracted": "抽出済み", "extractedDetail": "ソースが存在し抽出完了", "noSourceFile": "ソースファイルなし", "noSourceFileDetail": "設定したソースルートに .fhm2d がありません", "extractErrors": "抽出エラー", "extractErrorsDetail": "ソースは存在しますが抽出に失敗しました", "namingWarnings": "命名警告", "namingWarningsDetail": "抽出完了、命名メタデータに警告", "noMissingSources": "この実行で不足したソースファイルはありません。", "noExtractErrors": "この実行で抽出エラーはありません。", "noNamingWarnings": "この実行で命名警告はありません。", "noScanResult": "スキャン結果はまだありません。すべての MSC を抽出を実行して分類してください。"
+}

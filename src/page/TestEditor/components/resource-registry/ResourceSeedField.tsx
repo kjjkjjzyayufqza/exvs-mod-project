@@ -22,6 +22,7 @@ import type { ResourceRegistryCategory } from "@/services/resourceRegistry/types
 import type { UseResourceRegistryResult } from "@/hooks/useResourceRegistry";
 import { ResourceSeedCollisionDialog } from "./ResourceSeedCollisionDialog";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
+import { useTranslation } from "react-i18next";
 
 interface ResourceSeedFieldProps {
   category: ResourceRegistryCategory;
@@ -54,6 +55,7 @@ export function ResourceSeedField({
   initialSeed = "",
   compact = false,
 }: ResourceSeedFieldProps) {
+  const { t } = useTranslation("test-resource-registry");
   const [seed, setSeed] = useState("");
   const [saveToRegistry, setSaveToRegistry] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -112,22 +114,22 @@ export function ResourceSeedField({
           seed: row.seed,
         });
         if (!result.ok && result.reason === "duplicate_hash") {
-          toast.warning("Hash already registered under a different seed");
+          toast.warning(t("seedField.duplicateSeed"));
         }
       }
       setSeed(row.seed);
       onSeedChange?.(row.seed);
-      toast.success("Applied resource hash", {
-        description: `${row.hashHex} from seed "${row.seed}"`,
+      toast.success(t("seedField.applied"), {
+        description: t("seedField.appliedFrom", { hash: row.hashHex, seed: row.seed }),
       });
     },
-    [category, onApplyHash, onSeedChange, registry, saveToRegistry, slot],
+    [category, onApplyHash, onSeedChange, registry, saveToRegistry, slot, t],
   );
 
   const handleApply = useCallback(async () => {
     const trimmed = seed.trim();
     if (!trimmed) {
-      toast.error("Enter a seed string first");
+      toast.error(t("seedField.enterSeed"));
       return;
     }
     setBusy(true);
@@ -144,11 +146,11 @@ export function ResourceSeedField({
       setCollisionOpen(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      toast.error(message || "Failed to evaluate seed");
+      toast.error(message || t("seedField.evaluateFailed"));
     } finally {
       setBusy(false);
     }
-  }, [applySuggestion, pathParams, seed]);
+  }, [applySuggestion, pathParams, seed, t]);
 
   const registryMatches = useMemo(() => {
     const q = seed.trim().toLowerCase();
@@ -167,7 +169,7 @@ export function ResourceSeedField({
 
   const copyValue = async (value: string, labelText: string) => {
     await writeText(value);
-    toast.success(`${labelText} copied`);
+    toast.success(t("seedField.copied", { label: labelText }));
   };
 
   return (
@@ -175,11 +177,11 @@ export function ResourceSeedField({
       {!compact ? (
         <div className="flex items-center justify-between gap-2">
           <Label className="text-xs font-medium">
-            {label ?? `Seed (${category}/${slot})`}
+            {label ?? t("seedField.defaultLabel", { category, slot })}
           </Label>
           {knownEntry ? (
             <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[50%]">
-              linked: {knownEntry.seed}
+              {t("seedField.linked", { seed: knownEntry.seed })}
             </span>
           ) : null}
         </div>
@@ -192,7 +194,7 @@ export function ResourceSeedField({
             setSeed(e.target.value);
             onSeedChange?.(e.target.value);
           }}
-          placeholder="resource seed string"
+          placeholder={t("seedField.placeholder")}
           className="h-7 text-xs font-mono"
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -203,7 +205,7 @@ export function ResourceSeedField({
         />
         <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
           <PopoverTrigger asChild>
-            <Button type="button" variant="outline" size="icon" className="h-7 w-7 shrink-0" title="Pick from registry">
+            <Button type="button" variant="outline" size="icon" className="h-7 w-7 shrink-0" title={t("seedField.pickTitle")}>
               <BookOpen className="h-3.5 w-3.5" />
             </Button>
           </PopoverTrigger>
@@ -211,7 +213,7 @@ export function ResourceSeedField({
             <ScrollArea className="max-h-64">
               <div className="p-2 space-y-1">
                 {registryMatches.length === 0 ? (
-                  <p className="text-xs text-muted-foreground p-2">No registry entries for this slot.</p>
+                  <p className="text-xs text-muted-foreground p-2">{t("seedField.noEntries")}</p>
                 ) : (
                   registryMatches.map((entry) => (
                     <button
@@ -224,8 +226,8 @@ export function ResourceSeedField({
                         setPickerOpen(false);
                       }}
                     >
-                      <div className="font-mono truncate">{entry.seed}</div>
-                      <div className="text-muted-foreground font-mono">{entry.hashHex}</div>
+                      <div className="font-mono truncate" data-i18n-ignore="">{entry.seed}</div>
+                      <div className="text-muted-foreground font-mono" data-i18n-ignore="">{entry.hashHex}</div>
                     </button>
                   ))
                 )}
@@ -239,7 +241,7 @@ export function ResourceSeedField({
           className="h-7 w-7 shrink-0"
           disabled={busy}
           onClick={() => void handleApply()}
-          title="Apply seed to hash field"
+          title={t("seedField.applyTitle")}
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
         </Button>
@@ -247,14 +249,14 @@ export function ResourceSeedField({
 
       {preview ? (
         <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono text-muted-foreground">
-          <span>{preview.hashHex}</span>
-          <span>int32: {preview.hashInt32}</span>
+          <span data-i18n-ignore="">{preview.hashHex}</span>
+          <span>{t("seedField.int32", { value: preview.hashInt32 })}</span>
           <Button
             type="button"
             variant="ghost"
             size="icon"
             className="h-5 w-5"
-            onClick={() => void copyValue(preview.hashHex, "Hash hex")}
+            onClick={() => void copyValue(preview.hashHex, t("seedField.hashHex"))}
           >
             <Copy className="h-3 w-3" />
           </Button>
@@ -268,7 +270,7 @@ export function ResourceSeedField({
           onCheckedChange={(v) => setSaveToRegistry(v === true)}
         />
         <Label htmlFor={`save-registry-${category}-${slot}`} className="text-[10px] text-muted-foreground">
-          Save to workspace registry after apply
+          {t("seedField.saveAfterApply")}
         </Label>
       </div>
 

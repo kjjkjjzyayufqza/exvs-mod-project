@@ -6,6 +6,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DDS_FORMATS } from "@/lib/ddsFormats";
+import { useTranslation } from "react-i18next";
 
 export type DdsFormat = (typeof DDS_FORMATS)[number]["value"];
 
@@ -24,6 +25,7 @@ export function TextureFormatSelect({
   disabled,
   triggerClassName,
 }: TextureFormatSelectProps) {
+  const { t } = useTranslation("scene-root-c");
   return (
     <Select
       value={value}
@@ -31,7 +33,7 @@ export function TextureFormatSelect({
       disabled={disabled}
     >
       <SelectTrigger className={triggerClassName ?? "h-7 text-xs w-[180px]"}>
-        <SelectValue placeholder="Select DDS format" />
+        <SelectValue placeholder={t("textureFormat.selectPlaceholder")} />
       </SelectTrigger>
       <SelectContent>
         {DDS_FORMATS.map((opt) => (

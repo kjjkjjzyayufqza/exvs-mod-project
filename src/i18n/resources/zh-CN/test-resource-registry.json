@@ -1,0 +1,110 @@
+{
+  "title": "资源注册表",
+  "description": "舞台和机体资源的名称到 CRC32 映射。工作区条目会覆盖全局默认值。这里只显示资源路径 CRC32，不是参数字段键哈希。",
+  "action": {
+    "reload": "重新加载",
+    "new": "新建",
+    "importJson": "导入 JSON",
+    "importCustom": "导入 custom_unit",
+    "export": "导出",
+    "createFirst": "创建第一条记录",
+    "cancel": "取消",
+    "save": "保存",
+    "delete": "删除"
+  },
+  "field": {
+    "search": "搜索",
+    "source": "来源",
+    "category": "类别",
+    "slotFilter": "槽位筛选",
+    "slot": "槽位",
+    "seed": "种子",
+    "hash": "哈希",
+    "displayName": "显示名称（可选）",
+    "notes": "备注（可选）",
+    "saveTarget": "保存目标",
+    "int32": "int32"
+  },
+  "placeholder": {
+    "search": "seed、hash、显示名称…",
+    "slot": "fileName、model…"
+  },
+  "source": {
+    "merged": "合并",
+    "workspace": "工作区",
+    "global": "全局"
+  },
+  "category": {
+    "all": "全部"
+  },
+  "target": {
+    "workspace": "工作区注册表",
+    "global": "全局注册表"
+  },
+  "count": {
+    "shown": "显示 {{count}} 条",
+    "merged": "合并共 {{count}} 条",
+    "workspace": "工作区 {{count}} 条",
+    "global": "全局 {{count}} 条",
+    "conflicts": "{{count}} 个哈希冲突"
+  },
+  "empty": {
+    "noMatches": "没有匹配当前筛选条件的注册表条目。"
+  },
+  "dialog": {
+    "exportTitle": "导出资源注册表",
+    "importTitle": "导入资源注册表 JSON",
+    "importCustomTitle": "导入 custom_unit.json",
+    "editTitle": "编辑注册表条目",
+    "newTitle": "新建注册表条目",
+    "subtitle": "种子字符串将使用 IEEE CRC32 哈希为 int32 资源值。",
+    "deleteTitle": "删除工作区条目？",
+    "deleteDescription": "这只会从工作区注册表文件移除映射，不会影响全局条目。"
+  },
+  "toast": {
+    "copied": "已复制 {{label}}",
+    "entryUpdated": "条目已更新",
+    "entryCreated": "条目已创建",
+    "exported": "注册表已导出",
+    "importedEntries": "已将 {{count}} 条目导入工作区注册表",
+    "importedWithWarnings": "已导入 {{count}} 条目，含 {{warnings}} 个哈希警告",
+    "importedUnitEntries": "已从 custom_unit.json 导入 {{count}} 个机体条目"
+  },
+  "error": {
+    "seedRequired": "必须填写种子",
+    "workspaceRequired": "请先选择工作区文件夹",
+    "duplicateHash": "全局注册表中存在重复哈希",
+    "saveFailed": "保存失败",
+    "customUnitArray": "custom_unit.json 必须是数组",
+    "noWorkspace": "未选择工作区文件夹",
+    "registry": "{{message}}"
+  },
+  "collision": {
+    "clear": "空闲",
+    "title": "资源哈希冲突",
+    "subtitle": "在应用到 param 字段前请确认此 CRC32。",
+    "applySuggested": "应用建议值",
+    "applyCurrent": "应用当前值",
+    "body": "MOD 或工作区已有此 CRC32 的资源。这是资源路径哈希（种子的 CRC32），不是参数字段键哈希。",
+    "currentSeed": "当前种子",
+    "suggestedSeed": "建议种子",
+    "exhausted": "在 99 次尝试内找不到空闲种子后缀。请改用其他基名。"
+  },
+  "seedField": {
+    "duplicateSeed": "该哈希已在不同种子下注册",
+    "applied": "已应用资源哈希",
+    "appliedFrom": "{{hash}} 来自种子“{{seed}}”",
+    "enterSeed": "请先输入种子字符串",
+    "copied": "已复制 {{label}}",
+    "linked": "已关联：{{seed}}",
+    "placeholder": "资源种子字符串",
+    "pickTitle": "从注册表选择",
+    "noEntries": "此槽位没有注册表条目。",
+    "applyTitle": "将种子应用到哈希字段",
+    "int32": "int32：{{value}}",
+    "saveAfterApply": "应用后保存到工作区注册表",
+    "hashHex": "Hash hex",
+    "defaultLabel": "种子（{{category}}/{{slot}}）",
+    "evaluateFailed": "无法评估种子"
+  }
+}

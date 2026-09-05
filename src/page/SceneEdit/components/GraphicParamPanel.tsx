@@ -1,4 +1,5 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -182,6 +183,7 @@ export function GraphicParamPanel({
   onClearApplied,
   onResetValue,
 }: GraphicParamPanelProps) {
+  const { t } = useTranslation("scene-structure-graphic");
   const [filter, setFilter] = useState("");
   const [editKeys, setEditKeys] = useState(false);
   const deferredFilter = useDeferredValue(filter);
@@ -224,11 +226,11 @@ export function GraphicParamPanel({
         data-testid="graphic-param-panel"
         className={`flex min-h-0 flex-col items-center gap-2 py-3 text-center text-[10px] text-muted-foreground ${PROP_PANEL}`}
       >
-        <span>No parameters</span>
+        <span>{t("graphic.noParameters")}</span>
         <AddParameterPopover params={params} initialGroupId={DEFAULT_ADD_GROUP_ID} onAdd={onAdd}>
           <Button type="button" size="sm" variant="outline" className={cn(PROP_BTN, "gap-1")}>
             <Plus className="h-3.5 w-3.5" />
-            Add parameter
+            {t("graphic.addParameter")}
           </Button>
         </AddParameterPopover>
       </div>
@@ -241,7 +243,7 @@ export function GraphicParamPanel({
         <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute left-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground/70" />
           <Input
-            placeholder="Search parameters..."
+            placeholder={t("graphic.searchPlaceholder")}
             className={cn(PROP_INPUT, "pl-6")}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
@@ -261,7 +263,7 @@ export function GraphicParamPanel({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-[10px]">
-            {editKeys ? "Hide raw CSV keys" : "Edit raw CSV keys"}
+            {editKeys ? t("graphic.hideRawKeys") : t("graphic.editRawKeys")}
           </TooltipContent>
         </Tooltip>
         <Tooltip>
@@ -271,7 +273,7 @@ export function GraphicParamPanel({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-[10px]">
-            Apply all to preview ({params.length})
+            {t("graphic.applyAll", { count: params.length })}
           </TooltipContent>
         </Tooltip>
         <Tooltip>
@@ -281,7 +283,7 @@ export function GraphicParamPanel({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-[10px]">
-            Clear preview overrides ({appliedCount})
+            {t("graphic.clearApplied", { count: appliedCount })}
           </TooltipContent>
         </Tooltip>
         <AddParameterPopover params={params} initialGroupId={DEFAULT_ADD_GROUP_ID} onAdd={onAdd}>
@@ -290,8 +292,8 @@ export function GraphicParamPanel({
             size="sm"
             variant="outline"
             className={PROP_BTN_ICON}
-            aria-label="Add parameter"
-            title="Add parameter"
+            aria-label={t("graphic.addParameter")}
+            title={t("graphic.addParameter")}
           >
             <Plus className="h-3.5 w-3.5" />
           </Button>
@@ -300,11 +302,11 @@ export function GraphicParamPanel({
 
       <div className="flex items-center justify-between px-0.5 text-[9px] text-muted-foreground tabular-nums">
         <span>
-          Preview <span className="text-foreground/80">{appliedCount}</span> / {params.length}
+          {t("graphic.previewCount", { applied: appliedCount, total: params.length })}
         </span>
         {filterActive && (
           <span>
-            Showing {totalFilteredCount} match{totalFilteredCount === 1 ? "" : "es"}
+            {t("graphic.showingMatches", { count: totalFilteredCount })}
           </span>
         )}
       </div>
@@ -314,7 +316,7 @@ export function GraphicParamPanel({
           data-testid="graphic-param-filter-empty"
           className="py-2 text-center text-[10px] text-muted-foreground"
         >
-          No matching parameters
+          {t("graphic.noMatchingParameters")}
         </p>
       ) : (
         <div className="space-y-1.5">
@@ -333,15 +335,15 @@ export function GraphicParamPanel({
                     <ChevronRight
                       className={cn("h-3 w-3 shrink-0 transition-transform", !collapsed && "rotate-90")}
                     />
-                    <span className="truncate">{cat.label}</span>
+                    <span className="truncate">{t(`graphic.categories.${cat.id}`)}</span>
                     <span className="ml-auto font-mono text-[9px] opacity-60">{items.length}</span>
                   </button>
                   <AddParameterPopover params={params} initialGroupId={cat.id} onAdd={onAdd} align="end">
                     <button
                       type="button"
                       className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground opacity-70 hover:bg-background/80 hover:text-foreground hover:opacity-100"
-                      aria-label={`Add ${cat.label} parameter`}
-                      title={`Add ${cat.label} parameter`}
+                      aria-label={t("graphic.addCategoryParameter", { category: t(`graphic.categories.${cat.id}`) })}
+                      title={t("graphic.addCategoryParameter", { category: t(`graphic.categories.${cat.id}`) })}
                       onClick={(e) => e.stopPropagation()}
                     >
                       <Plus className="h-3 w-3" />
@@ -468,6 +470,7 @@ function AddParameterPopover({
   align?: "start" | "center" | "end";
   children: ReactNode;
 }) {
+  const { t } = useTranslation("scene-structure-graphic");
   const [open, setOpen] = useState(false);
   const [groupId, setGroupId] = useState(initialGroupId);
   const [mode, setMode] = useState<GraphicParamAddMode>("scalar");
@@ -510,15 +513,15 @@ function AddParameterPopover({
       <PopoverContent align={align} side="bottom" className="w-72 p-2">
         <div className="space-y-2">
           <div className="space-y-0.5">
-            <div className="text-[11px] font-semibold text-foreground">Add parameter</div>
+            <div className="text-[11px] font-semibold text-foreground">{t("graphic.addParameter")}</div>
             <p className="text-[9px] leading-snug text-muted-foreground">
-              Pick a renderer group first. Misc is only for unknown keys.
+              {t("graphic.addDescription")}
             </p>
           </div>
 
           <div className="space-y-1">
             <label className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-              Group
+              {t("graphic.group")}
             </label>
             <Select
               value={groupId}
@@ -535,7 +538,7 @@ function AddParameterPopover({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-[9px] leading-snug text-muted-foreground">{preset.note}</p>
+            <p className="text-[9px] leading-snug text-muted-foreground">{t(`graphic.notes.${groupId}`)}</p>
           </div>
 
           <div className="grid grid-cols-2 gap-1">
@@ -556,7 +559,7 @@ function AddParameterPopover({
                   setValueDraft(nextPreset.value);
                 }}
               >
-                {nextMode === "scalar" ? "Scalar" : "RGB set"}
+                {nextMode === "scalar" ? t("graphic.scalar") : t("graphic.rgbSet")}
               </button>
             ))}
           </div>
@@ -564,7 +567,7 @@ function AddParameterPopover({
           <div className="grid grid-cols-[minmax(0,1fr)_4.5rem] gap-1">
             <div className="space-y-1">
               <label className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-                {mode === "rgb" ? "Key stem" : "Key"}
+                {mode === "rgb" ? t("graphic.keyStem") : t("graphic.key")}
               </label>
               <Input
                 className={PROP_INPUT}
@@ -578,7 +581,7 @@ function AddParameterPopover({
             </div>
             <div className="space-y-1">
               <label className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-                Value
+              {t("graphic.value")}
               </label>
               <Input
                 className={cn(PROP_INPUT, "text-right")}
@@ -594,7 +597,7 @@ function AddParameterPopover({
 
           <div className="rounded-sm border border-border/45 bg-muted/15 px-2 py-1.5">
             <div className="mb-1 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-              Will create
+              {t("graphic.willCreate")}
             </div>
             {canAdd ? (
               <div className="space-y-0.5 font-mono text-[9px] text-foreground/85">
@@ -606,7 +609,7 @@ function AddParameterPopover({
                 ))}
               </div>
             ) : (
-              <div className="text-[9px] text-muted-foreground">Enter a key first.</div>
+              <div className="text-[9px] text-muted-foreground">{t("graphic.enterKey")}</div>
             )}
           </div>
 
@@ -618,7 +621,7 @@ function AddParameterPopover({
               className={PROP_BTN}
               onClick={() => setOpen(false)}
             >
-              Cancel
+              {t("graphic.cancel")}
             </Button>
             <Button
               type="button"
@@ -627,7 +630,7 @@ function AddParameterPopover({
               disabled={!canAdd}
               onClick={handleSubmit}
             >
-              Add
+              {t("graphic.add")}
             </Button>
           </div>
         </div>
@@ -777,7 +780,7 @@ const ColorInspectorRow = memo(function ColorInspectorRow({
             {r.key.replace(/_r$/i, "")}
           </span>
         ) : (
-          <span className={INSPECTOR_LABEL} title={`${r.key}, ${g.key}, ${b.key}`}>
+          <span className={INSPECTOR_LABEL} data-i18n-ignore="" title={`${r.key}, ${g.key}, ${b.key}`}>
             {row.label}
           </span>
         )}
@@ -851,7 +854,7 @@ function ApplyPin({
       checked={checked}
       onCheckedChange={(value) => onCheckedChange(!!value)}
       className="h-3.5 w-3.5 shrink-0 rounded-[3px] border-border/80 data-[state=checked]:border-primary data-[state=checked]:bg-primary"
-      aria-label="Apply to preview"
+      aria-label={useTranslation("scene-structure-graphic").t("graphic.applyToPreview")}
     />
   );
 }
@@ -1033,14 +1036,14 @@ function RowActions({
               type="button"
               className={`inline-flex ${PROP_BTN_ICON} items-center justify-center rounded-sm text-muted-foreground hover:text-foreground`}
               onClick={onReset}
-              aria-label="Reset value"
+              aria-label={useTranslation("scene-structure-graphic").t("graphic.resetValue")}
             >
               <RotateCcw className="h-3 w-3" />
             </button>
           </TooltipTrigger>
           {originalValue !== undefined && (
             <TooltipContent side="bottom" className="text-[10px]">
-              Reset to {originalValue}
+              {useTranslation("scene-structure-graphic").t("graphic.resetTo", { value: originalValue })}
             </TooltipContent>
           )}
         </Tooltip>
@@ -1049,7 +1052,7 @@ function RowActions({
         type="button"
         className={`inline-flex ${PROP_BTN_ICON} items-center justify-center rounded-sm text-muted-foreground hover:text-destructive`}
         onClick={onDelete}
-        aria-label="Delete parameter"
+        aria-label={useTranslation("scene-structure-graphic").t("graphic.deleteParameter")}
       >
         <Trash2 className="h-3 w-3" />
       </button>

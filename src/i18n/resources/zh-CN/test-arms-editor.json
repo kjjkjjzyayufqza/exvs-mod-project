@@ -1,0 +1,86 @@
+{
+  "title": "武装编辑器",
+  "outdated": "已过时",
+  "subtitle": "由架构驱动的 armsparam · 完整工具请优先使用 Param Editor",
+  "filePicker": {
+    "title": "选择 armsparam 文件"
+  },
+  "toolbar": {
+    "load": "加载",
+    "reload": "重新加载",
+    "reloadTooltip": "从磁盘重新加载",
+    "save": "保存",
+    "saving": "正在保存…"
+  },
+  "entryLabel": {
+    "noLabel": "（无标签）",
+    "actionAt": "动作",
+    "resourceAt": "资源",
+    "ammo": "弹药 {{initial}}/{{max}}",
+    "slot": "槽位 {{index}}"
+  },
+  "counts": {
+    "entries": "{{count}} 个条目",
+    "fieldSpecs": "{{count}} 个字段规范",
+    "entrySize": "条目大小 {{size}}",
+    "selected": "已选择 {{id}}"
+  },
+  "aria": {
+    "importExport": "导入和导出",
+    "entryTools": "条目工具"
+  },
+  "buttons": {
+    "import": "导入",
+    "importTooltip": "导入十六进制字节或条目 JSON",
+    "entryJson": "条目 JSON",
+    "entryJsonTooltip": "将选中条目复制为 JSON",
+    "allJson": "全部 JSON",
+    "allJsonTooltip": "复制完整视图数据为 JSON",
+    "hex": "十六进制",
+    "hexTooltip": "十六进制预览",
+    "duplicate": "复制",
+    "duplicateTooltip": "复制选中条目",
+    "add": "添加",
+    "addTooltip": "添加空白条目",
+    "delete": "删除",
+    "deleteTooltip": "删除选中条目",
+    "edit": "编辑",
+    "cancel": "取消"
+  },
+  "empty": {
+    "selectEntry": "选择条目以编辑架构字段",
+    "loadFile": "加载 armsparam 以编辑条目",
+    "noEntrySelected": "未选择条目",
+    "help": "选择 {{file}} 路径，然后点击“加载”。字段遵循 Rust 命令池（ammoCount、initialAmmoCount、CSA/CSB 阶段和时序、原生 reload 组、slotIndex 及 kind-7 标签）。"
+  },
+  "status": {
+    "unsaved": "有未保存的更改",
+    "unsavedShort": "未保存",
+    "schema": "架构：{{type}}"
+  },
+  "hex": {
+    "title": "十六进制预览",
+    "offset": "偏移量",
+    "hex": "十六进制",
+    "ascii": "Ascii",
+    "editHeader": "编辑十六进制字节 · {{count}} 字节 · 每行 16 字节",
+    "subtitle": "十六进制预览：{{id}} · {{count}} 字节 · 小端行数据 · {{mode}}",
+    "editing": "编辑中",
+    "viewOnly": "仅查看"
+  },
+  "toast": {
+    "loaded": "已加载 armsparam（{{count}} 个条目）",
+    "saved": "已保存 armsparam",
+    "hexSaved": "十六进制预览更改已保存到条目字段",
+    "duplicated": "已复制条目",
+    "added": "已添加空白条目",
+    "deleted": "已删除条目"
+  },
+  "errors": {
+    "loadFailed": "无法加载 armsparam：{{error}}",
+    "saveFailed": "无法保存 armsparam：{{error}}",
+    "fieldLayout": "无法解析条目字段布局。",
+    "noEntryDuplicate": "没有可复制的条目",
+    "noTemplate": "没有可用的条目模板"
+  }
+}

@@ -21,6 +21,7 @@ import { EffectProjectToolbar } from "./components/effect-project-editor/EffectP
 import { formatHexU32 } from "./components/effect-project-editor/effectProjectDisplayUtils";
 import type { EffectProjectAuxiliarySnapshot } from "./effectProjectAuxiliaryCache";
 import { Badge } from "@/components/ui/badge";
+import { useTranslation } from "react-i18next";
 
 type Props = {
   data: EffectProjectEditorDocument;
@@ -94,6 +95,7 @@ export function EffectProjectEditorBody({
   disabled,
   auxiliary,
 }: Props) {
+  const { t } = useTranslation("ssbh-motion");
   const [draft, setDraft] = useState<EffectProjectEditorDocument>(() => cloneEffectProjectDocument(data));
   const [searchQuery, setSearchQuery] = useState("");
   const [searchMatchedIndices, setSearchMatchedIndices] = useState<number[]>(() =>
@@ -297,7 +299,7 @@ export function EffectProjectEditorBody({
   return (
     <div className="space-y-2 text-[10px]">
       <EffectProjectDocumentHeader draft={draft} />
-      <div className="flex flex-wrap items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1" data-i18n-ignore="">
         <Badge variant={auxiliary.status === "scanning" ? "outline" : "secondary"} className="h-6 px-1.5 text-[9px]">
           aux {auxiliary.status}
         </Badge>
@@ -322,9 +324,9 @@ export function EffectProjectEditorBody({
       {auxiliary.errors.length > 0 ? (
         <details className="rounded border border-border/60 bg-muted/10 px-2 py-1">
           <summary className="cursor-pointer text-[10px] text-muted-foreground">
-            Auxiliary scan errors ({auxiliary.errors.length})
+            {t("effectProject.scanErrors", { count: auxiliary.errors.length })}
           </summary>
-          <div className="mt-1 space-y-0.5 font-mono text-[9px] text-destructive/90">
+          <div className="mt-1 space-y-0.5 font-mono text-[9px] text-destructive/90" data-i18n-ignore="">
             {auxiliary.errors.map((error, index) => (
               <p key={`${error.kind}:${error.path}:${index}`} className="truncate" title={`${error.path}: ${error.message}`}>
                 [{error.kind}] {error.path} - {error.message}
@@ -347,7 +349,7 @@ export function EffectProjectEditorBody({
         />
 
         {draft.entries.length === 0 ? (
-          <p className="mt-3 py-6 text-center text-[11px] text-muted-foreground">No effect project rows.</p>
+          <p className="mt-3 py-6 text-center text-[11px] text-muted-foreground">{t("effectProject.noRows")}</p>
         ) : (
           <div className="mt-3 grid min-h-[min(52vh,380px)] grid-cols-1 gap-3 xl:min-h-0 xl:h-[min(52vh,480px)] xl:grid-cols-[minmax(220px,280px)_minmax(0,1fr)]">
             <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border bg-card">
@@ -366,8 +368,8 @@ export function EffectProjectEditorBody({
               {selectedRowIndex === null || selectedEntry === null ? (
                 <p className="px-3 py-10 text-center text-[11px] text-muted-foreground">
                   {visibleRowIndices.length === 0 && draft.entries.length > 0
-                    ? "No rows match the filter."
-                    : "Select a row from the list."}
+                    ? t("effectProject.noMatch")
+                    : t("effectProject.selectRow")}
                 </p>
               ) : (
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">

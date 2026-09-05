@@ -8,6 +8,7 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { Rnd } from "react-rnd";
 import { X } from "lucide-react";
@@ -147,6 +148,7 @@ export function AppRndModalShell({
   footer,
   className,
 }: AppRndModalShellProps) {
+  const { t } = useTranslation("shared");
   const stableDimensions = useMemo(
     () => ({
       width: dimensions.width,
@@ -326,7 +328,7 @@ export function AppRndModalShell({
               data-no-drag
               onClick={onClose}
               disabled={closeDisabled}
-              aria-label="Close"
+              aria-label={t("common.close")}
             >
               <X className="h-4 w-4" />
             </Button>

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getStageFileNamePaths } from "./stageFileNameRef";
+import { useTranslation } from "react-i18next";
 
 interface StageFileNameStatusIconsProps {
   fileNameValue: number;
@@ -26,9 +27,10 @@ function StatusBadge({
   tooltip: string;
   onClick?: () => void;
 }) {
+  const { t } = useTranslation("test-stage-list-view");
   if (fileExists === null) {
     return (
-      <div className="w-3 h-3 animate-pulse bg-muted rounded-full" aria-label={`${label} loading`} />
+      <div className="w-3 h-3 animate-pulse bg-muted rounded-full" aria-label={t("fileNameStatus.loadingAria", { label })} />
     );
   }
   return (
@@ -57,6 +59,7 @@ export function StageFileNameStatusIcons({
   stageModelRouteRootPath,
   onReveal,
 }: StageFileNameStatusIconsProps) {
+  const { t } = useTranslation("test-stage-list-view");
   const [paths, setPaths] = useState<{
     obFilePath: string;
     modFilePath: string;
@@ -96,7 +99,7 @@ export function StageFileNameStatusIcons({
       await openPath(folder);
     } catch (err) {
       console.error("Failed to open OB folder:", err);
-      toast.error("Failed to open source folder");
+      toast.error(t("errors.openSourceFailed"));
     }
   };
 
@@ -107,7 +110,7 @@ export function StageFileNameStatusIcons({
       await openPath(folder);
     } catch (err) {
       console.error("Failed to open MOD folder:", err);
-      toast.error("Failed to open mod folder");
+      toast.error(t("errors.openModFailed"));
     }
   };
 
@@ -120,19 +123,19 @@ export function StageFileNameStatusIcons({
       <StatusBadge
         exists={obExists}
         label="OB"
-        tooltip={obExists ? "Source .fhm2d exists. Click to open folder." : "Source .fhm2d missing"}
+        tooltip={obExists ? t("fileNameStatus.sourceExists") : t("fileNameStatus.sourceMissing")}
         onClick={obExists ? handleOpenObFolder : undefined}
       />
       <StatusBadge
         exists={modExists}
         label="MOD"
-        tooltip={modExists ? "Mod .fhm2d exists. Click to open folder." : "Mod .fhm2d missing"}
+        tooltip={modExists ? t("fileNameStatus.modExists") : t("fileNameStatus.modMissing")}
         onClick={modExists ? handleOpenModFolder : undefined}
       />
       <StatusBadge
         exists={wsExists}
         label="WS"
-        tooltip={wsExists ? "Extracted folder exists. Click to filter the file tree." : "Not extracted in workspace"}
+        tooltip={wsExists ? t("fileNameStatus.wsExists") : t("fileNameStatus.wsMissing")}
         onClick={wsExists && paths?.wsFolderPath ? () => onReveal?.(paths.wsFolderPath) : undefined}
       />
     </div>

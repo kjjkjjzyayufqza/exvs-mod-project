@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -51,6 +52,7 @@ type PendingFbxPreview = {
 };
 
 export function SsbhModelPreviewMotionPanel() {
+  const { t } = useTranslation("ssbh-motion");
   const p = useSsbhModelPreview();
   const [tab, setTab] = useState<MotionPanelTab>("source");
   const [previewBusyLocal, setPreviewBusyLocal] = useState(false);
@@ -82,11 +84,11 @@ export function SsbhModelPreviewMotionPanel() {
 
   const runFbxPreview = async () => {
     if (!activeInstance) {
-      toast.error("Select a target model first");
+      toast.error(t("motionPanel.selectTargetFirst"));
       return;
     }
     if (!skeletonPath) {
-      toast.error("Active model needs a NUSKTB to preview motion FBX");
+      toast.error(t("motionPanel.needsNusktbPreview"));
       return;
     }
 
@@ -98,7 +100,7 @@ export function SsbhModelPreviewMotionPanel() {
     setPreviewBusyLocal(true);
     try {
       const picked = await open({
-        title: "Choose animation FBX to preview",
+        title: t("motionPanel.chooseFbxPreview"),
         multiple: false,
         filters: [{ name: "FBX", extensions: ["fbx"] }],
         defaultPath: getDialogDefaultPath(
@@ -112,8 +114,8 @@ export function SsbhModelPreviewMotionPanel() {
       const inspect = await inspectMotionFbx(picked.trim());
       if (inspect.stacks.length > 1) {
         setPendingFbx({ fbxPath: picked.trim(), inspect });
-        toast.message("This FBX has multiple animation stacks", {
-          description: "Pick one below to preview on the selected model.",
+        toast.message(t("motionPanel.multipleStacks"), {
+          description: t("motionPanel.pickStack"),
         });
         return;
       }
@@ -137,7 +139,7 @@ export function SsbhModelPreviewMotionPanel() {
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between gap-2">
             <Label className="text-[10px] font-medium tracking-wide text-muted-foreground">
-              Target model
+              {t("motionPanel.targetModel")}
             </Label>
             {activeInstance && p.previewInstances.length > 1 ? (
               <span
@@ -148,7 +150,7 @@ export function SsbhModelPreviewMotionPanel() {
                     : "bg-muted text-muted-foreground",
                 )}
               >
-                {p.previewViewMode === "single" ? "Solo" : "All visible"}
+                {p.previewViewMode === "single" ? t("motionPanel.solo") : t("motionPanel.allVisible")}
               </span>
             ) : null}
           </div>
@@ -172,7 +174,7 @@ export function SsbhModelPreviewMotionPanel() {
           >
             <SelectTrigger className="h-8 text-[11px]">
               <Box className="mr-1 h-3.5 w-3.5 shrink-0 opacity-80" />
-              <SelectValue placeholder="Select a model" />
+              <SelectValue placeholder={t("motionPanel.selectModel")} />
             </SelectTrigger>
             <SelectContent>
               {p.previewInstances.map((instance) => (
@@ -186,8 +188,8 @@ export function SsbhModelPreviewMotionPanel() {
             <div className="flex flex-wrap items-center gap-1.5">
               <p className="flex-1 text-[9px] leading-snug text-muted-foreground">
                 {p.previewViewMode === "single"
-                  ? "Solo hides unrelated models; attached guests/hosts of this target stay visible."
-                  : "Switching target isolates to Active only so other meshes cannot steal focus. Attached weapons stay visible."}
+                  ? t("motionPanel.soloHint")
+                  : t("motionPanel.isolateHint")}
               </p>
               {p.previewViewMode === "single" ? (
                 <Button
@@ -197,9 +199,9 @@ export function SsbhModelPreviewMotionPanel() {
                   className="h-6 shrink-0 px-1.5 text-[10px]"
                   disabled={busy}
                   onClick={() => p.setPreviewViewMode("all")}
-                  title="Show every loaded model in the viewport again"
+                  title={t("motionPanel.showAllTitle")}
                 >
-                  Show all
+                  {t("motionPanel.showAll")}
                 </Button>
               ) : (
                 <Button
@@ -212,9 +214,9 @@ export function SsbhModelPreviewMotionPanel() {
                     p.setPreviewViewMode("single");
                     p.setPreviewControlScope("single");
                   }}
-                  title="Hide unrelated models; attached guests/hosts of the target stay visible"
+                  title={t("motionPanel.soloTargetTitle")}
                 >
-                  Solo target
+                  {t("motionPanel.soloTarget")}
                 </Button>
               )}
             </div>
@@ -225,15 +227,15 @@ export function SsbhModelPreviewMotionPanel() {
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between gap-2">
               <Label className="text-[10px] font-medium tracking-wide text-muted-foreground">
-                Active clip
+                {t("motionPanel.activeClip")}
               </Label>
               {p.motionPlaying ? (
                 <span className="rounded-sm bg-primary/15 px-1.5 py-0.5 font-mono text-[9px] font-medium text-primary">
-                  Playing
+                  {t("motionPanel.playing")}
                 </span>
               ) : hasClip ? (
                 <span className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[9px] text-muted-foreground">
-                  Loaded
+                  {t("motionPanel.loaded")}
                 </span>
               ) : null}
             </div>
@@ -251,22 +253,23 @@ export function SsbhModelPreviewMotionPanel() {
           </div>
         ) : (
           <p className="rounded-md border border-dashed border-border/70 bg-muted/20 px-2.5 py-2 text-[10px] leading-relaxed text-muted-foreground">
-            Load a <span className="font-medium text-foreground">.nuanmb</span>, a motion folder, or
-            preview a pure animation{" "}
-            <span className="font-medium text-foreground">.fbx</span> onto the selected model.
+            {t("motionPanel.emptyHint")}
           </p>
         )}
 
         {p.motionSampling ? (
-          <p className="text-[10px] text-muted-foreground">Validating skeleton and sampling clip…</p>
+          <p className="text-[10px] text-muted-foreground">{t("motionPanel.sampling")}</p>
         ) : compatibility ? (
           <p className="text-[10px] text-emerald-600 dark:text-emerald-400">
-            Compatible: {compatibility.matchedBoneCount}/{compatibility.animationTransformNodeCount}{" "}
-            animated bones matched this model&apos;s {compatibility.skeletonBoneCount}-bone nusktb.
+            {t("motionPanel.compatible", {
+              matched: compatibility.matchedBoneCount,
+              nodes: compatibility.animationTransformNodeCount,
+              bones: compatibility.skeletonBoneCount,
+            })}
           </p>
         ) : null}
         {p.motionSampleError ? (
-          <p className="text-[10px] text-destructive wrap-anywhere">{p.motionSampleError}</p>
+          <p className="text-[10px] text-destructive wrap-anywhere" data-i18n-ignore="">{p.motionSampleError}</p>
         ) : null}
       </div>
 
@@ -277,13 +280,13 @@ export function SsbhModelPreviewMotionPanel() {
       >
         <TabsList className="grid h-8 w-full shrink-0 grid-cols-3 rounded-md bg-muted/40 p-0.5">
           <TabsTrigger value="source" className={TAB_TRIGGER}>
-            Source
+            {t("motionPanel.tabSource")}
           </TabsTrigger>
           <TabsTrigger value="convert" className={TAB_TRIGGER}>
-            Convert
+            {t("motionPanel.tabConvert")}
           </TabsTrigger>
           <TabsTrigger value="edit" className={TAB_TRIGGER}>
-            Edit
+            {t("motionPanel.tabEdit")}
           </TabsTrigger>
         </TabsList>
 
@@ -291,7 +294,7 @@ export function SsbhModelPreviewMotionPanel() {
           <section className="rounded-md border border-border/60 bg-muted/10 p-2.5">
             <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               <Clapperboard className="h-3.5 w-3.5 opacity-80" />
-              Open for preview
+              {t("motionPanel.openForPreview")}
             </div>
             <div className="grid grid-cols-1 gap-1.5">
               <Button
@@ -303,20 +306,20 @@ export function SsbhModelPreviewMotionPanel() {
                 onClick={() => {
                   void runFbxPreview();
                 }}
-                title="Preview a pure animation FBX on the selected model (temp convert, no save dialog)"
+                title={t("motionPanel.previewFbxTitle")}
               >
                 {previewBusyLocal ? (
                   <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                 ) : (
                   <FileInput className="mr-1.5 h-3.5 w-3.5" />
                 )}
-                Preview animation FBX
+                {t("motionPanel.previewAnimationFbx")}
               </Button>
               {pendingFbx ? (
                 <div className="rounded-md border border-border/60 bg-muted/30 px-2 py-1.5">
                   <div className="mb-1 flex items-center gap-1 text-[10px] font-medium">
                     <Layers className="h-3.5 w-3.5 opacity-80" />
-                    Multiple stacks — pick one to preview
+                    {t("motionPanel.pickStackHeading")}
                   </div>
                   <p
                     className="mb-1.5 truncate font-mono text-[9px] text-muted-foreground"
@@ -337,7 +340,7 @@ export function SsbhModelPreviewMotionPanel() {
                           void runFbxPreviewWithStack(pendingFbx.fbxPath, stack.name);
                         }}
                       >
-                        {stack.name} ({stack.frameCount}f)
+                        {t("motionPanel.stackFrames", { name: stack.name, count: stack.frameCount })}
                       </Button>
                     ))}
                     <Button
@@ -348,7 +351,7 @@ export function SsbhModelPreviewMotionPanel() {
                       disabled={busy}
                       onClick={() => setPendingFbx(null)}
                     >
-                      Cancel
+                      {t("motionPanel.cancel")}
                     </Button>
                   </div>
                 </div>
@@ -363,7 +366,7 @@ export function SsbhModelPreviewMotionPanel() {
                   onClick={() => void p.pickMotionNuanmbFile()}
                 >
                   <FileVideo className="mr-1.5 h-3.5 w-3.5" />
-                  Open .nuanmb
+                  {t("motionPanel.openNuanmb")}
                 </Button>
                 <Button
                   type="button"
@@ -378,18 +381,17 @@ export function SsbhModelPreviewMotionPanel() {
                   }
                 >
                   <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
-                  Open folder
+                  {t("motionPanel.openFolder")}
                 </Button>
               </div>
             </div>
             <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-              Preview FBX samples the file onto the active model&apos;s skeleton and plays it in the
-              viewport. Use Convert when you need a permanent .nuanmb on disk.
+              {t("motionPanel.previewHelp")}
             </p>
           </section>
 
           <section className="rounded-md border border-border/50 p-2">
-            <div className="mb-1.5 text-[10px] font-medium text-muted-foreground">Clip actions</div>
+            <div className="mb-1.5 text-[10px] font-medium text-muted-foreground">{t("motionPanel.clipActions")}</div>
             <div className="flex flex-wrap gap-1.5">
               <Button
                 type="button"
@@ -400,7 +402,7 @@ export function SsbhModelPreviewMotionPanel() {
                 onClick={p.reloadMotionClip}
               >
                 <RefreshCw className="mr-1 h-3.5 w-3.5" />
-                Reload
+                {t("motionPanel.reload")}
               </Button>
               <Button
                 type="button"
@@ -411,7 +413,7 @@ export function SsbhModelPreviewMotionPanel() {
                 onClick={p.resetMotionPose}
               >
                 <RotateCcw className="mr-1 h-3.5 w-3.5" />
-                T-pose
+                {t("motionPanel.tPose")}
               </Button>
               <Button
                 type="button"
@@ -427,29 +429,29 @@ export function SsbhModelPreviewMotionPanel() {
                 onClick={p.clearMotion}
               >
                 <X className="mr-1 h-3.5 w-3.5" />
-                Clear
+                {t("motionPanel.clear")}
               </Button>
             </div>
           </section>
 
           <MayaSection
-            title="Clip metadata"
+            title={t("motionPanel.clipMetadata")}
             icon={<ListTree className="h-3.5 w-3.5 opacity-80" />}
             defaultOpen={false}
           >
             <div className="flex flex-col gap-2 text-[10px]">
               <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground">Final frame index</span>
+                <span className="text-muted-foreground">{t("motionPanel.finalFrameIndex")}</span>
                 <span className="font-mono tabular-nums">
                   {p.motionManifest?.finalFrameIndex?.toFixed(3) ?? "—"}
                 </span>
               </div>
               <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground">Groups</span>
+                <span className="text-muted-foreground">{t("motionPanel.groups")}</span>
                 <span className="font-mono tabular-nums">{manifestGroups}</span>
               </div>
               <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground">Skeleton match</span>
+                <span className="text-muted-foreground">{t("motionPanel.skeletonMatch")}</span>
                 <span className="font-mono tabular-nums">
                   {compatibility
                     ? `${compatibility.matchedBoneCount}/${compatibility.animationTransformNodeCount}`
@@ -458,8 +460,8 @@ export function SsbhModelPreviewMotionPanel() {
               </div>
               {p.motionManifest?.groupSummaries?.map((g) => (
                 <div key={g.groupType + g.nodeCount} className="rounded border border-border/40 px-2 py-1">
-                  <div className="font-medium">{g.groupType}</div>
-                  <div className="text-muted-foreground">Nodes: {g.nodeCount}</div>
+                  <div className="font-medium" data-i18n-ignore="">{g.groupType}</div>
+                  <div className="text-muted-foreground">{t("motionPanel.nodes", { count: g.nodeCount })}</div>
                 </div>
               ))}
             </div>
@@ -468,8 +470,7 @@ export function SsbhModelPreviewMotionPanel() {
 
         <TabsContent value="convert" className="mt-2 space-y-3 focus-visible:outline-none">
           <p className="text-[10px] leading-relaxed text-muted-foreground">
-            Disk write tools. For a quick look at an animation FBX on the scene model, use{" "}
-            <span className="font-medium text-foreground">Source → Preview animation FBX</span>.
+            {t("motionPanel.convertHint")}
           </p>
           <MotionFbxImportPanel
             skeletonPath={skeletonPath}
@@ -499,7 +500,7 @@ export function SsbhModelPreviewMotionPanel() {
         <TabsContent value="edit" className="mt-2 space-y-3 focus-visible:outline-none">
           <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
             <Scissors className="h-3.5 w-3.5 opacity-80" />
-            Trim / retime the selected NUANMB and write a new file.
+            {t("motionPanel.trimHint")}
           </div>
           <MotionClipOpsPanel
             key={p.motionSelectedNuanmbPath ?? "no-clip"}

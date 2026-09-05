@@ -2,6 +2,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { exists } from "@tauri-apps/plugin-fs";
 import { PackageCheck } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
@@ -33,7 +34,6 @@ type PackEntry = {
   selected: boolean;
 };
 
-const LABEL_MISSING = "Missing structure file";
 const LISTENING_REPACK_DIMENSIONS = {
   width: 640,
   height: 620,
@@ -49,6 +49,7 @@ export default function ListeningRepackDialog({
   onPackRepacked,
   onComplete,
 }: ListeningRepackDialogProps) {
+  const { t } = useTranslation("test-workspace");
   const [entries, setEntries] = useState<PackEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -82,7 +83,7 @@ export default function ListeningRepackDialog({
           if (structureExists) {
             const migration = await promptAndMigrateFhm2dStructureIfNeeded({
               structureJsonPath: structurePath,
-              title: "Migrate listening repack structure",
+              title: t("repackDialog.migrateTitle"),
             });
             if (migration) {
               const migratedPack = applyFhm2dStructureMigrationToPack(remappedPack, migration);
@@ -104,7 +105,7 @@ export default function ListeningRepackDialog({
       } catch (error) {
         console.error("Failed to prepare repack list", error);
         if (!cancelled) {
-          toast.error("Failed to prepare repack list");
+          toast.error(t("repackDialog.prepareFailed"));
           setEntries([]);
         }
       } finally {
@@ -116,7 +117,7 @@ export default function ListeningRepackDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, dirtyPacks]);
+  }, [open, dirtyPacks, t]);
 
   const selectedEntries = useMemo(
     () => entries.filter((entry) => entry.exists && entry.selected),
@@ -147,7 +148,7 @@ export default function ListeningRepackDialog({
     }
     const modDir = modFolderPath?.trim();
     if (!modDir) {
-      toast.error("Configure OB Mod path in Config before repacking");
+      toast.error(t("repackDialog.configureModPath"));
       return;
     }
     setIsRunning(true);
@@ -164,26 +165,26 @@ export default function ListeningRepackDialog({
               // Use written .fhm2d path stem (HashName), not workspace folder name.
               const removed = await removeMatchingModVgsht2(modDir, repackResult.outputPath);
               if (removed) {
-                toast.success(`Repacked to mod: ${repackResult.outputPath}`, {
-                  description: "Removed matching .vgsht2 (same stem as .fhm2d)",
+                toast.success(t("repackDialog.repackedToMod", { path: repackResult.outputPath }), {
+                  description: t("repackDialog.removedVgsht2"),
                 });
               } else {
-                toast.success(`Repacked to mod: ${repackResult.outputPath}`);
+                toast.success(t("repackDialog.repackedToMod", { path: repackResult.outputPath }));
               }
             } catch (removeErr) {
               console.error(`Failed to remove matching .vgsht2 beside ${repackResult.outputPath}`, removeErr);
               toast.error(
-                `Repacked to mod but failed to remove .vgsht2: ${(removeErr as Error).message}`,
+                t("repackDialog.repackedButVgsht2Failed", { message: (removeErr as Error).message }),
               );
             }
           } else {
-            toast.success(`Repacked to mod: ${repackResult.outputPath}`);
+            toast.success(t("repackDialog.repackedToMod", { path: repackResult.outputPath }));
           }
           onPackRepacked(entry.packKey);
         } catch (error) {
           console.error(`Repack failed for ${entry.packKey}`, error);
           toast.error(
-            `Repack failed for ${entry.packKey}: ${(error as Error).message}`,
+            t("repackDialog.repackFailed", { packKey: entry.packKey, message: (error as Error).message }),
           );
         }
       }
@@ -206,8 +207,8 @@ export default function ListeningRepackDialog({
   return (
     <AppRndModalShell
       titleId="listening-repack-title"
-      title="Repack Changes"
-      subtitle="Repack changed packs into the configured OB Mod folder"
+      title={t("repackDialog.title")}
+      subtitle={t("repackDialog.subtitle")}
       headerIcon={<PackageCheck className="h-4 w-4" />}
       dimensions={LISTENING_REPACK_DIMENSIONS}
       storageKey="listening-repack-dialog-size"
@@ -216,21 +217,19 @@ export default function ListeningRepackDialog({
       footer={
         <div className="flex justify-end gap-2 px-4 py-3">
           <Button variant="outline" onClick={handleClose} disabled={isRunning}>
-            Cancel
+            {t("repackDialog.cancel")}
           </Button>
           <Button onClick={handleConfirm} disabled={isRunning || selectedEntries.length === 0 || !modFolderPath?.trim()}>
-            {isRunning ? "Repacking..." : "Repack"}
+            {isRunning ? t("repackDialog.repacking") : t("repackDialog.repack")}
           </Button>
         </div>
       }
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
-        <p className="text-sm text-muted-foreground">
-          Packs are written as <code>0xHASH.fhm2d</code> using each pack&apos;s <code>_structure.json</code>.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("repackDialog.writtenAs")}</p>
         {!modFolderPath?.trim() ? (
           <p className="text-sm text-amber-600 dark:text-amber-500">
-            OB Mod path is not configured. Set it in Config before repacking.
+            {t("repackDialog.modPathMissing")}
           </p>
         ) : null}
         <label className="flex cursor-pointer items-center gap-2 text-sm">
@@ -239,18 +238,12 @@ export default function ListeningRepackDialog({
             disabled={isRunning}
             onCheckedChange={(checked) => setRemoveVgsht2InMod(Boolean(checked))}
           />
-          <span>
-            After repack, remove the <code>.vgsht2</code> with the same stem as the written{" "}
-            <code>.fhm2d</code> (HashName) in the OB Mod folder (e.g. folder{" "}
-            <code>Gyan_model</code> → <code>0x49235031.fhm2d</code> → remove{" "}
-            <code>0x49235031.vgsht2</code>). Requires OB Mod path in
-            Config.
-          </span>
+          <span>{t("repackDialog.removeVgsht2")}</span>
         </label>
         {isLoading ? (
-          <div className="text-sm text-muted-foreground">Preparing list...</div>
+          <div className="text-sm text-muted-foreground">{t("repackDialog.preparing")}</div>
         ) : entries.length === 0 ? (
-          <div className="text-sm text-muted-foreground">No folders to repack.</div>
+          <div className="text-sm text-muted-foreground">{t("repackDialog.empty")}</div>
         ) : (
           <div ref={listRef} className="min-h-0 flex-1 overflow-auto overscroll-contain">
             <div className="relative w-full" style={{ height: rowVirtualizer.getTotalSize() }}>
@@ -272,13 +265,13 @@ export default function ListeningRepackDialog({
                         toggleSelection(entry.packKey, Boolean(checked))
                       }
                     />
-                    <div className="flex flex-col">
+                    <div className="flex flex-col" data-i18n-ignore="">
                       <span className="font-medium">{entry.packKey}</span>
                       <span className="break-all text-xs text-muted-foreground">
                         {entry.structurePath}
                       </span>
                       {!entry.exists ? (
-                        <span className="text-xs text-yellow-600">{LABEL_MISSING}</span>
+                        <span className="text-xs text-yellow-600">{t("repackDialog.missingStructure")}</span>
                       ) : null}
                     </div>
                   </label>

@@ -1,0 +1,100 @@
+{
+  "title": "FHM2D Init",
+  "subtitle": "Extract into workspace prefixes (012list / 041cpm / 009gui / 006effect)",
+  "errors": {
+    "workspaceFolderRequired": "Please set the EXVS2 Workspace folder first.",
+    "sourceFolderRequired": "Please set the source folder first.",
+    "invalidSourceFolder": "Invalid source folder.",
+    "sourceFileNotFound": "Source file not found: {{path}}",
+    "namingFailed": "Extract finished but FHM naming failed: {{name}}",
+    "extractFailed": "Extract failed: {{message}}",
+    "noItemsSelected": "No items selected.",
+    "copyPathFailed": "Failed to copy path.",
+    "openFolderFailed": "Failed to open folder."
+  },
+  "success": {
+    "extractCompleted": "Extract completed: {{name}}",
+    "output": "Output: {{relative}}\n{{path}}",
+    "batchComplete": "Batch extraction complete: {{success}} succeeded, {{failed}} failed.",
+    "pathCopied": "Path copied to clipboard."
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "batch": "Batch",
+    "batchMode": "Batch Mode",
+    "selectAll": "Select All ({{count}})",
+    "extractItems": "Extract {{count}} items",
+    "copyPath": "Copy Path",
+    "again": "Again",
+    "extract": "Extract",
+    "close": "Close",
+    "cancel": "Cancel"
+  },
+  "descriptions": {
+    "character_id_table": "character_id_table.bin under 012list",
+    "character_list": "character_list.bin under 012list",
+    "navi_list": "support navi table → 012list/navi_list",
+    "bgm_list": "HUD titles → 012list/bgm_list/bgm_list.bin",
+    "character_cost": "unit cost, HP → 041cpm/for_outgame",
+    "striker_table": "host unit → striker slot1/slot2 → 041cpm/strikertable",
+    "common_effect": "shared unit FX → 006effect/000common_001",
+    "raw_path_id": "unpack 0x264D1CA7 and name inner files from vs2 meta → 090sound/raw_path_id",
+    "pilot_voice_resource": "unpack 0x8C428AF2 and name 7 root tables → 090sound/090sound",
+    "bgm_table": "unpack 0x5E92AAEC bgm_table.vgsht2 → 090sound/bgm_table",
+    "bgm_bank_update_02": "unpack 0x0C568109 group 6 nus3bank → 090sound/bgm_ac27_update_02"
+  },
+  "labels": {
+    "sourceFolder": "Source Folder",
+    "sourceFolderPlaceholder": "Select source folder...",
+    "workspaceFolder": "EXVS2 Workspace Folder (workspace root)",
+    "workspacePlaceholder": "e.g. E:\\XB\\mod",
+    "configDescription": "Uses Tauri config {{configKey}} (same as the EXVS2 Workspace open folder), not {{gamePath}} (game inject) or {{outputPath}}. Packs write under {{routes}}."
+  },
+  "stats": {
+    "available": "{{available}} / {{total}} files available",
+    "selected": "{{count}} selected"
+  },
+  "states": {
+    "ready": "Ready",
+    "scanning": "Scanning...",
+    "configureFolders": "Configure folders",
+    "noMatchingFiles": "No matching files found",
+    "missing": "Missing"
+  },
+  "search": {
+    "placeholder": "Search files...",
+    "filter": "Filter"
+  },
+  "filters": {
+    "all": "All Files",
+    "available": "Available Only",
+    "list": "List Type",
+    "nutexb": "NUTEXB Type"
+  },
+  "columns": {
+    "name": "Name",
+    "type": "Type",
+    "status": "Status",
+    "lastUsed": "Last Used"
+  },
+  "fields": {
+    "id": "ID",
+    "format": "Format",
+    "autoDetect": "auto-detect",
+    "path": "Path",
+    "modified": "Modified",
+    "size": "Size",
+    "relative": "Relative",
+    "fullFolder": "Full folder",
+    "structureJson": "Structure JSON",
+    "route": "Route",
+    "prefix": "Prefix"
+  },
+  "dialog": {
+    "title": "Name extracted FHM2D pack",
+    "subtitle": "Writes under the workspace route prefix (same layout as TestEditor / mod folders).",
+    "outputReviewAria": "Output path review",
+    "outputReview": "Output path (review before extract)",
+    "exportFolderRequired": "Set Export Folder first. Expected layout: {{exportRoot}}/{{prefix}}/{{name}}"
+  }
+}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +40,7 @@ export function ModelTextureSlotPanel({
   onTexturePathChange,
   modelLabel,
 }: ModelTextureSlotPanelProps) {
+  const { t } = useTranslation("scene-toolbar");
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const textures = useMemo(
     () => collectBundleTextureInventory(
@@ -54,7 +56,7 @@ export function ModelTextureSlotPanel({
   if (textures.length === 0) {
     return (
       <div className="py-2 text-center text-[10px] italic text-muted-foreground">
-        No texture slots found for this model.
+        {t("textures.noSlots")}
       </div>
     );
   }
@@ -78,7 +80,7 @@ export function ModelTextureSlotPanel({
                 <Skeleton className="h-3.5 flex-1" />
                 <Badge variant="outline" className="h-4 gap-0.5 px-1 text-[9px]">
                   <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                  loading
+                  {t("textures.loading")}
                 </Badge>
               </div>
               <div className="ml-5 space-y-1">
@@ -111,7 +113,7 @@ export function ModelTextureSlotPanel({
                 {tex.internalName}
               </label>
               <Badge variant="outline" className="text-[9px] h-4 px-1">
-                {tex.loaded ? "loaded" : "idle"}
+                {tex.loaded ? t("textures.loaded") : t("textures.idle")}
               </Badge>
               {onTexturePathChange && (
                 <Button
@@ -159,12 +161,13 @@ export function GlobalLoadedTexturePanel({
 }: {
   objects: ObjectTextureInventory[];
 }) {
+  const { t } = useTranslation("scene-toolbar");
   const loaded = useMemo(() => collectGlobalLoadedNutexbInventory(objects), [objects]);
 
   if (loaded.length === 0) {
     return (
       <div className="text-[10px] text-muted-foreground italic py-1">
-        No nutexb textures are currently loaded
+        {t("textures.noLoaded")}
       </div>
     );
   }

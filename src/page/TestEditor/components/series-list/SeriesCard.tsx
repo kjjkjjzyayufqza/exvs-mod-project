@@ -1,5 +1,6 @@
 import { Copy, Trash2 } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -31,6 +32,7 @@ export function SeriesCard({
   onDelete,
   onCopy,
 }: SeriesCardProps) {
+  const { t } = useTranslation("test-lists");
   const baseName = resolveMappedSeriesBaseName(seriesImageSeriesBaseNameOrder, series.iconFileIndex);
   const fileName = baseName ? formatSeriesPngFileNameFromBaseName(baseName) : null;
   const imageFilePath = (() => {
@@ -77,7 +79,7 @@ export function SeriesCard({
           </TooltipProvider>
           <div className="text-xs text-muted-foreground space-y-0.5">
             <div>ID: {series.entryId}</div>
-            <div>Index: {index}</div>
+            <div>{t("series.indexLabel", { index })}</div>
           </div>
         </div>
       </div>
@@ -93,7 +95,7 @@ export function SeriesCard({
             if (!editable) return;
             onCopy();
           }}
-          title="Copy as new"
+          title={t("series.copyAsNew")}
         >
           <Copy className="w-4 h-4" />
         </Button>
@@ -107,7 +109,7 @@ export function SeriesCard({
             if (!editable) return;
             onDelete();
           }}
-          title="Delete"
+          title={t("common.delete")}
         >
           <Trash2 className="w-4 h-4" />
         </Button>

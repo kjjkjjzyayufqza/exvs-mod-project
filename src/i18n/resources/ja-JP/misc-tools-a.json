@@ -1,0 +1,10 @@
+{
+  "common": {"loading":"読み込み中…","format":"形式","preview":"プレビュー","overwrite":"元のファイルを上書き"},
+  "fbx": {"open":"FBX アイテム名変更を開く","title":"FBX アイテム名変更","subtitle":"FBX ファイルを読み込み、エクスポート名の対応を編集","selectFile":"FBX ファイルを選択","mappingAria":"FBX 名称マッピング JSON"},
+  "fhm2dImage": {"title":"FHM2D 画像ビュー","subtitle":"メモリ内のみで処理します。サムネイルは必要時にデコード（同時最大 3 件、128px）。","choose":"FHM2D を選択","empty":"FHM2D パックを選択してください。ディスクには書き込みません。","filterPlaceholder":"画像とその他のファイルをフィルター…","images":"画像","noImages":"このパックに画像ファイルはありません","otherFiles":"その他のファイル","noOtherFiles":"その他のファイルはありません"},
+  "compress": {"loading":"画像を圧縮中…","title":"PNG 画像コンプレッサー","subtitle":"pngquant で PNG ファイルを圧縮","quality":"圧縮品質（%）","maxCompression":"0%（最大圧縮）","lossless":"100%（無損）"},
+  "resize": {"loading":"画像サイズを変更中…","title":"PNG 画像リサイズ","subtitle":"ImageMagick で画像ファイルのサイズを変更","width":"幅","height":"高さ"},
+  "convert": {"loading":"画像を nutexb に変換中…","title":"画像から Nutexb への変換","subtitle":"画像ファイルを nutexb に一括変換","outputPlaceholder":"nutexb ファイルの出力先を選択"},
+  "numatb": {"title":"Numatb エディター","subtitle":".numatb マテリアルファイルを選択して編集"},
+  "gvs": {"title":"GVS マップから VS2"}
+}

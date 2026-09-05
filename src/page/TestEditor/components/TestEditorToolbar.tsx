@@ -1,4 +1,5 @@
 import { Loader2, RefreshCw, Package, Eraser, Settings2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { FilePathInput } from "@/components/ui/filePathInput";
 
@@ -25,6 +26,7 @@ export function TestEditorToolbar({
   onRepack,
   onClearDirty,
 }: TestEditorToolbarProps) {
+  const { t } = useTranslation("test-workspace");
   return (
     <div className="flex items-center justify-between gap-4 bg-background px-4">
       <div className="flex flex-1 items-center gap-2 max-w-xl">
@@ -42,7 +44,7 @@ export function TestEditorToolbar({
               onPickFolder(picked);
             }}
             disabled={isLoading}
-            placeholder="Select Workspace Root Folder..."
+            placeholder={t("toolbar.folderPlaceholder")}
             className="h-9 pl-9 text-sm w-full bg-muted/50 hover:bg-muted transition-colors"
           />
         </div>
@@ -52,7 +54,7 @@ export function TestEditorToolbar({
           className="h-9 w-9 shrink-0"
           onClick={onRefresh}
           disabled={isLoading || !currentDir}
-          title="Refresh Workspace"
+          title={t("toolbar.refresh")}
         >
           <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
         </Button>
@@ -62,8 +64,8 @@ export function TestEditorToolbar({
           className="h-9 w-9 shrink-0"
           onClick={onOpenWorkspaceLayout}
           disabled={isLoading || !currentDir}
-          title="Workspace layout"
-          aria-label="Workspace layout"
+          title={t("toolbar.layout")}
+          aria-label={t("toolbar.layout")}
         >
           <Settings2 className="h-4 w-4" />
         </Button>
@@ -76,7 +78,7 @@ export function TestEditorToolbar({
           onClick={onRepack}
           className="relative h-9 px-4 font-medium"
         >
-          Repack Changes
+          {t("toolbar.repackChanges")}
           {hasDirtyFolders && (
             <span className="ml-2 flex h-2 w-2 rounded-full bg-yellow-400 animate-pulse" />
           )}
@@ -87,7 +89,7 @@ export function TestEditorToolbar({
           disabled={!hasDirtyFolders || isLoading}
           onClick={onClearDirty}
           className="h-9 w-9 shrink-0"
-          title="Clear dirty state (skip repacking)"
+          title={t("toolbar.clearDirty")}
         >
           <Eraser className="h-4 w-4" />
         </Button>

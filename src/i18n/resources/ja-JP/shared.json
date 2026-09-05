@@ -1,0 +1,11 @@
+{
+  "common.close": "閉じる",
+  "copyInfo.copy": "AI に情報をコピー",
+  "copyInfo.copied": "コピーしました",
+  "copyInfo.failed": "コピーに失敗しました",
+  "tree.collapse": "折りたたむ",
+  "tree.expand": "展開",
+  "tree.missingBarispecular": "barispecular テクスチャファイルがありません",
+  "nav.toggleSidebar": "サイドバーを切り替え（Ctrl/Cmd+B）",
+  "nav.about": "概要"
+}

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 
@@ -124,6 +125,7 @@ function TreeRow({
   modifiedPaths,
   structureJsonPath,
 }: TreeRowProps) {
+  const { t } = useTranslation("unit-source-tree");
   const isFolder = node.kind === "folder";
   const isOpen = expanded.has(node.id);
   const isSelected = node.kind === "item" && selectedFileIndex != null && node.fileIndex === selectedFileIndex;
@@ -175,15 +177,15 @@ function TreeRow({
         {hasUnsaved ? (
           <span
             className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
-            title="Unsaved edits"
-            aria-label="Unsaved edits"
+            title={t("tree.unsaved")}
+            aria-label={t("tree.unsaved")}
           />
         ) : null}
         {wasModified ? (
           <span
             className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500"
-            title="Modified this session"
-            aria-label="Modified this session"
+            title={t("tree.modified")}
+            aria-label={t("tree.modified")}
           />
         ) : null}
         {node.kind === "item" && node.fileType ? (
@@ -201,7 +203,7 @@ function TreeRow({
         size="icon"
         variant="ghost"
         className="h-6 w-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-        label={`Copy ${isFolder ? node.role ?? "folder" : node.label} info to AI`}
+        label={t("tree.copyNodeInfo", { name: isFolder ? node.role ?? t("tree.folder") : node.label })}
         buildPayload={() => ({
           kind: "unit-model-structure-node",
           scope: isFolder ? `folder:${node.role ?? "unknown"}` : `item:${node.fileIndex}`,
@@ -221,25 +223,25 @@ function TreeRow({
             {editableKind ? (
               <ContextMenuItem onSelect={() => onOpenEditor?.(node)}>
                 <Pencil className="mr-2 h-3.5 w-3.5" />
-                Edit {editableKind.toUpperCase()}…
+                {t("tree.edit", { kind: editableKind.toUpperCase() })}
               </ContextMenuItem>
             ) : null}
             {isNutexb ? (
               <ContextMenuItem onSelect={() => onShowTextureInPanel?.(node)}>
                 <ImageIcon className="mr-2 h-3.5 w-3.5" />
                 {isWeaponIconFileUrl(node.fileUrl) || node.role === "weapon-icon"
-                  ? "Show in Icons"
-                  : "Show in Textures"}
+                  ? t("tree.showIcons")
+                  : t("tree.showTextures")}
               </ContextMenuItem>
             ) : null}
             {editableKind || isNutexb ? <ContextMenuSeparator /> : null}
             <ContextMenuItem onSelect={() => onRevealNode?.(node)}>
               <ExternalLink className="mr-2 h-3.5 w-3.5" />
-              Reveal in Explorer
+              {t("tree.reveal")}
             </ContextMenuItem>
             <ContextMenuItem onSelect={() => onCopyNodePath?.(node)}>
               <ClipboardCopy className="mr-2 h-3.5 w-3.5" />
-              Copy path
+              {t("tree.copyPath")}
             </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
@@ -292,6 +294,7 @@ export function UnitModelStructureTreeView({
   modifiedPaths,
   className,
 }: UnitModelStructureTreeViewProps) {
+  const { t } = useTranslation("unit-source-tree");
   const parsed = useMemo<{ tree: UnitModelStructureTree | null; error: string | null }>(() => {
     if (structureJson == null) return { tree: null, error: null };
     try {
@@ -316,7 +319,7 @@ export function UnitModelStructureTreeView({
 
   const handleAutoFixNumatbProfiles = useCallback(async () => {
     if (!modelRoot?.trim() || !structureJsonPath?.trim()) {
-      toast.error("No unit model folder loaded");
+      toast.error(t("tree.noFolder"));
       return;
     }
     if (profileFixBusy) return;
@@ -327,11 +330,11 @@ export function UnitModelStructureTreeView({
         structureJsonPath: structureJsonPath.trim(),
       });
       if (analysis.fixed === 0) {
-        toast.success("NUMATB profiles look correct", {
-          description: `Scanned ${analysis.scanned} numatb file(s); no rename needed.`,
+        toast.success(t("tree.profileOk"), {
+          description: t("tree.profileScanNoRename", { count: analysis.scanned }),
         });
         for (const warning of analysis.warnings.slice(0, 3)) {
-          toast.warning("Profile scan warning", { description: warning });
+          toast.warning(t("tree.profileWarning"), { description: warning });
         }
         return;
       }
@@ -346,12 +349,12 @@ export function UnitModelStructureTreeView({
         analysis.fixes.length > 8 ? `\n…and ${analysis.fixes.length - 8} more` : "";
       const ok = await confirm(
         [
-          `Detected ${analysis.fixes.length} numatb file(s) to rename so basenames match the game .numdlb list.`,
+          t("tree.fixConfirm.detected", { count: analysis.fixes.length }),
           "",
-          "Content rule: non-empty shader_label → nust slot; empty → maya slot.",
-          "Target names come from sibling .numdlb material paths (basename only).",
+          t("tree.fixConfirm.contentRule"),
+          t("tree.fixConfirm.targetNames"),
           "",
-          "Will NOT modify any .numdlb. Only renames .numatb on disk + structure JSON.",
+          t("tree.fixConfirm.willNotModify"),
           "",
           ...previewLines,
           more,
@@ -359,7 +362,7 @@ export function UnitModelStructureTreeView({
           .filter(Boolean)
           .join("\n"),
         {
-          title: "Auto-fix NUMATB names (numdlb untouched)",
+        title: t("tree.fixConfirm.title"),
           kind: "warning",
         },
       );
@@ -369,15 +372,15 @@ export function UnitModelStructureTreeView({
         modelRoot: modelRoot.trim(),
         structureJsonPath: structureJsonPath.trim(),
       });
-      toast.success(`Fixed ${result.fixed} numatb profile name(s)`, {
-        description: `Scanned ${result.scanned}; skipped ${result.skipped}.`,
+      toast.success(t("tree.fixed", { count: result.fixed }), {
+        description: t("tree.fixedDescription", { scanned: result.scanned, skipped: result.skipped }),
       });
       for (const warning of result.warnings.slice(0, 3)) {
-        toast.warning("Profile fix warning", { description: warning });
+        toast.warning(t("tree.profileWarning"), { description: warning });
       }
       onMutated?.();
     } catch (error) {
-      toast.error("Failed to auto-fix NUMATB profiles", {
+      toast.error(t("tree.fixFailed"), {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -389,14 +392,13 @@ export function UnitModelStructureTreeView({
     <div className={cn("flex h-full min-h-0 flex-col border-r bg-card/40", className)}>
       <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold tracking-tight">Structure</h2>
+          <h2 className="text-sm font-semibold tracking-tight">{t("tree.heading")}</h2>
           {parsed.tree ? (
             <p className="truncate font-mono text-[11px] text-muted-foreground">
-              magic {parsed.tree.summary.magic} · {parsed.tree.summary.totalFiles} files ·{" "}
-              {parsed.tree.summary.modelCount} models · {parsed.tree.summary.textureCount} textures
+              {t("tree.summary", { magic: parsed.tree.summary.magic, files: parsed.tree.summary.totalFiles, models: parsed.tree.summary.modelCount, textures: parsed.tree.summary.textureCount })}
             </p>
           ) : (
-            <p className="truncate text-[11px] text-muted-foreground">No model loaded</p>
+            <p className="truncate text-[11px] text-muted-foreground">{t("tree.noModel")}</p>
           )}
         </div>
         {parsed.tree ? (
@@ -407,7 +409,7 @@ export function UnitModelStructureTreeView({
               size="sm"
               className="h-7 gap-1 px-2 text-[11px]"
               disabled={profileFixBusy || !modelRoot || !structureJsonPath}
-              title="Detect maya/nust from shader_label and rename mismatched .numatb + structure JSON"
+              title={t("tree.autoFixTitle")}
               onClick={() => void handleAutoFixNumatbProfiles()}
             >
               {profileFixBusy ? (
@@ -415,10 +417,10 @@ export function UnitModelStructureTreeView({
               ) : (
                 <Wrench className="h-3.5 w-3.5" />
               )}
-              Auto-fix profiles
+              {t("tree.autoFix")}
             </Button>
             <CopyInfoToAiButton
-              label="Copy structure to AI"
+              label={t("tree.copyStructure")}
               buildPayload={() => ({
                 kind: "unit-model-structure-tree",
                 scope: "structure-tree",
@@ -433,7 +435,7 @@ export function UnitModelStructureTreeView({
       <ScrollArea className="min-h-0 flex-1">
         {parsed.error ? (
           <div className="m-3 rounded-md border border-red-500/40 bg-red-500/5 p-3 text-xs text-red-600 dark:text-red-400">
-            Failed to parse structure JSON: {parsed.error}
+            {t("tree.parseFailed")}: {parsed.error}
           </div>
         ) : parsed.tree ? (
           <ul className="px-1.5 py-2">
@@ -457,7 +459,7 @@ export function UnitModelStructureTreeView({
           <div className="flex h-full flex-col items-center justify-center gap-2 px-6 py-12 text-center">
             <Folder className="h-8 w-8 text-muted-foreground/50" aria-hidden />
             <p className="text-xs text-muted-foreground">
-              Extract or open a unit-model folder to inspect its structure tree.
+              {t("tree.empty")}
             </p>
           </div>
         )}

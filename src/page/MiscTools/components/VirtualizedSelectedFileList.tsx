@@ -3,6 +3,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { FileImage, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
 
 export type SelectedFileListItem = {
   path: string;
@@ -23,6 +24,7 @@ export function VirtualizedSelectedFileList({
   showPreview = false,
   height = 240,
 }: VirtualizedSelectedFileListProps) {
+  const { t } = useTranslation("misc-tools-b");
   const viewportRef = useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
     count: items.length,
@@ -70,7 +72,7 @@ export function VirtualizedSelectedFileList({
                     <p className="truncate text-xs text-muted-foreground">{item.description}</p>
                   ) : null}
                   <p className="text-xs text-muted-foreground">
-                    {virtualRow.index + 1} of {items.length}
+                    {t("common.indexOfTotal", { index: virtualRow.index + 1, total: items.length })}
                   </p>
                 </div>
                 <Button
@@ -78,7 +80,7 @@ export function VirtualizedSelectedFileList({
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 shrink-0"
-                  aria-label="Remove file"
+                  aria-label={t("common.removeFile")}
                   onClick={() => onRemove(item.path)}
                 >
                   <X className="h-3.5 w-3.5" />

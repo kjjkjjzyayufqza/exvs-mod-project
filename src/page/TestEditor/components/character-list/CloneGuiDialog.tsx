@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { Copy, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -81,6 +82,7 @@ export function CloneGuiDialog({
   onJumpToNaviList,
   workspaceDocument = DEFAULT_TEST_EDITOR_WORKSPACE,
 }: CloneGuiDialogProps) {
+  const { t } = useTranslation("test-clone-gui");
   const obDplCachePath = useConfigStore((s) => s.obDplCachePath);
   const testEditorFolder = useConfigStore((s) => s.testEditorFolder);
   const obModPath = useConfigStore((s) => s.obModPath);
@@ -138,19 +140,19 @@ export function CloneGuiDialog({
 
   const loadPreview = useCallback(async () => {
     if (!writable) {
-      throw new Error("Character list is read-only");
+      throw new Error(t("errors.readOnly"));
     }
     if (!previewRequest.dplCachePath) {
-      throw new Error("Set OB dplcache path in Config");
+      throw new Error(t("errors.dplcachePath"));
     }
     if (!previewRequest.workspaceRoot) {
-      throw new Error("Set EXVS2 Workspace folder first");
+      throw new Error(t("errors.workspaceFolder"));
     }
     if (!previewRequest.targetEntryId) {
-      throw new Error("Select a character first");
+      throw new Error(t("errors.selectCharacter"));
     }
     if (!previewRequest.donorEntryId) {
-      throw new Error("Enter a donor character ID");
+      throw new Error(t("errors.donorId"));
     }
     return invoke<CloneGuiSetResult>("clone_character_gui_set", {
       request: {
@@ -236,7 +238,7 @@ export function CloneGuiDialog({
 
   async function handleConfirm() {
     if (selectedCount === 0) {
-      setError("Select at least one row to clone");
+      setError(t("errors.selectRow"));
       return;
     }
     setBusy(true);
@@ -257,7 +259,7 @@ export function CloneGuiDialog({
         },
       });
       if (!targetEntry) {
-        throw new Error("Select a character first");
+        throw new Error(t("errors.selectCharacter"));
       }
       const nextEntries = characterList.entries.map((entry) =>
         entry.entryId === targetEntry.entryId
@@ -289,13 +291,13 @@ export function CloneGuiDialog({
       const firstFolder = result.packs[0]?.outputPath;
       if (firstFolder) onRevealTreeFolder?.(firstFolder);
       const naviLine = result.navi
-        ? ` Navi unique id ${result.navi.newCharacterUniqueId}; save/repack ${NAVI_LIST_PACK_HASH_HEX}.`
+        ? ` ${t("success.naviLine", { uniqueId: result.navi.newCharacterUniqueId, hash: NAVI_LIST_PACK_HASH_HEX })}`
         : "";
-      toast.success(`Cloned ${result.packs.length} 009gui pack(s)`, {
-        description: `Extracted into mod workspace ${workspaceGuiRoot}.${naviLine} Save character_list and Repack 0xDFD38C70.`,
+      toast.success(t("success.cloned", { count: result.packs.length }), {
+        description: t("success.clonedDescription", { workspace: workspaceGuiRoot, naviLine }),
         action: firstFolder
           ? {
-              label: "Open Folder",
+              label: t("actions.openFolder"),
               onClick: () => {
                 void openPath(firstFolder);
               },
@@ -304,10 +306,10 @@ export function CloneGuiDialog({
       });
       if (result.navi && onJumpToNaviList) {
         const uniqueId = result.navi.newCharacterUniqueId;
-        toast.success("Navi list updated", {
-          description: `Appended ${result.navi.appendedEntryIds.length} row(s). Repack ${NAVI_LIST_PACK_HASH_HEX}.`,
+        toast.success(t("success.naviUpdated"), {
+          description: t("success.naviUpdatedDescription", { count: result.navi.appendedEntryIds.length, hash: NAVI_LIST_PACK_HASH_HEX }),
           action: {
-            label: "Open Navi List",
+            label: t("actions.openNaviList"),
             onClick: () => onJumpToNaviList(uniqueId),
           },
         });
@@ -315,7 +317,7 @@ export function CloneGuiDialog({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
-      toast.error(`Clone GUI failed: ${message}`);
+      toast.error(t("errors.cloneFailed", { message }));
     } finally {
       setBusy(false);
     }
@@ -325,50 +327,46 @@ export function CloneGuiDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[85vh] max-w-5xl flex-col overflow-hidden">
         <DialogHeader>
-          <DialogTitle>Clone GUI</DialogTitle>
+          <DialogTitle>{t("title")}</DialogTitle>
           <DialogDescription>
-            Clone the donor unit's 009gui packs onto the selected character. Inner files extract into
-            EXVS2 Workspace 009gui folders with a new HashName for later Repack. Inner .lm /
-            textures are not edited.
+            {t("help.description")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>Target character ID</Label>
+              <Label>{t("fields.targetId")}</Label>
               <Input value={targetEntryId || ""} readOnly />
             </div>
             <div className="space-y-1">
-              <Label>Donor character ID</Label>
+              <Label>{t("fields.donorId")}</Label>
               <Input
                 value={donorEntryId}
                 onChange={(event) => setDonorEntryId(event.target.value)}
-                placeholder="character_list entryId"
+                placeholder={t("placeholders.donorId")}
               />
               {donorEntry ? (
                 <div className="text-xs text-muted-foreground">
-                  {donorEntry.characterName || "Unnamed"} · unique {donorEntry.characterUniqueId}
+                  {donorEntry.characterName || t("status.unnamed")} · {t("status.unique")} {donorEntry.characterUniqueId}
                 </div>
               ) : Number(donorEntryId) ? (
-                <div className="text-xs text-destructive">Donor entry not in character_list</div>
+                <div className="text-xs text-destructive">{t("errors.donorNotFound")}</div>
               ) : null}
             </div>
           </div>
 
           <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            <div>Workspace output folder: {workspaceGuiRoot || "(set EXVS2 Workspace folder)"}</div>
-            <div>
-              Unpack donor FHM2D from dplcache, OB mod, or an existing 009gui extract. Structure HashName becomes 0xNEW for Repack.
-            </div>
+            <div>{t("fields.workspaceOutput")}: {workspaceGuiRoot || t("status.workspaceUnset")}</div>
+            <div>{t("help.unpack")}</div>
             {copyToObMod && obModPath ? (
-              <div>Also repack the extracted folder into: {obModPath}\0xNEW.fhm2d</div>
+              <div>{t("help.repackTo")}: {obModPath}\0xNEW.fhm2d</div>
             ) : null}
           </div>
 
           {mixedDonor ? (
             <p className="text-sm text-amber-600">
-              28001001 mixes 016 cut-in with 028 boost/scP.
+              {t("warnings.mixedDonor")}
             </p>
           ) : null}
 
@@ -378,7 +376,7 @@ export function CloneGuiDialog({
               onCheckedChange={(value) => setCopyToObMod(value === true)}
               disabled={!obModPath}
             />
-            Also copy renamed packs to OB Mod folder
+            {t("actions.copyToObMod")}
           </label>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -389,7 +387,7 @@ export function CloneGuiDialog({
               onClick={() => setSelectedKeys(new Set((preview?.packs ?? []).map((pack) => pack.fieldKey)))}
               disabled={!preview}
             >
-              Select all
+              {t("actions.selectAll")}
             </Button>
             <Button
               type="button"
@@ -398,21 +396,21 @@ export function CloneGuiDialog({
               onClick={() => setSelectedKeys(new Set())}
               disabled={!preview}
             >
-              Select none
+              {t("actions.selectNone")}
             </Button>
-            <span className="text-xs text-muted-foreground">{selectedCount} selected</span>
+            <span className="text-xs text-muted-foreground">{t("status.selected", { count: selectedCount })}</span>
           </div>
 
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           {(preview?.warnings ?? []).map((warning) => (
             <p key={warning} className="text-sm text-amber-600">
-              {warning}
+              {t("warnings.backend", { message: warning })}
             </p>
           ))}
 
           <PackGroup
-            title="Pilot GUI"
-            hint="Writes character_list fields on the target unit"
+            title={t("groups.pilot.title")}
+            hint={t("groups.pilot.hint")}
             packs={pilotPacks}
             selectedKeys={selectedKeys}
             copyToObMod={copyToObMod}
@@ -431,8 +429,8 @@ export function CloneGuiDialog({
             disabled={busy || Boolean(completed)}
           />
           <PackGroup
-            title="MS Properties"
-            hint="Writes character_list MS hash fields on the target unit"
+            title={t("groups.ms.title")}
+            hint={t("groups.ms.hint")}
             packs={msPacks}
             selectedKeys={selectedKeys}
             copyToObMod={copyToObMod}
@@ -451,8 +449,8 @@ export function CloneGuiDialog({
             disabled={busy || Boolean(completed)}
           />
           <PackGroup
-            title="Navi GUI"
-            hint={`Copies navi_list rows that share the donor seriesId, then remaps their GUI hashes (${NAVI_LIST_PACK_HASH_HEX})`}
+            title={t("groups.navi.title")}
+            hint={t("groups.navi.hint", { hash: NAVI_LIST_PACK_HASH_HEX })}
             packs={naviPacks}
             selectedKeys={selectedKeys}
             copyToObMod={copyToObMod}
@@ -472,15 +470,14 @@ export function CloneGuiDialog({
           />
 
           {!preview && !busy ? (
-            <p className="text-sm text-muted-foreground">Preview will list copy paths here.</p>
+            <p className="text-sm text-muted-foreground">{t("status.previewEmpty")}</p>
           ) : null}
 
           {completed ? (
             <section className="space-y-2 rounded-md border border-emerald-700/40 bg-emerald-950/20 p-3">
-              <div className="text-sm font-medium">Clone finished — debug</div>
+              <div className="text-sm font-medium">{t("status.finished")}</div>
               <div className="text-xs text-muted-foreground">
-                structure.json Name is the custom pack name. HashName is the new game pack id.
-                Inner files were extracted; payloads were not edited.
+                {t("help.finished")}
               </div>
               {completed.navi ? (
                 <div className="text-xs">
@@ -492,13 +489,13 @@ export function CloneGuiDialog({
               <div className="space-y-2">
                 {completed.packs.map((pack) => (
                   <div key={pack.fieldKey} className="rounded border bg-background/60 p-2 font-mono text-[11px]">
-                    <div>field={pack.fieldKey}</div>
-                    <div>Name={pack.structureName || pack.donorName}</div>
-                    <div>HashName={pack.newFileName.replace(/\.fhm2d$/i, "")}</div>
-                    <div>innerFiles={pack.innerFileCount} bytes={pack.byteLen}</div>
-                    <div className="break-all">extract={pack.outputPath}</div>
-                    <div className="break-all">structureJson={pack.structureJsonPath}</div>
-                    <div>bind={pack.bindTarget}</div>
+                  <div>{t("labels.field")}={pack.fieldKey}</div>
+                  <div>{t("labels.name")}={pack.structureName || pack.donorName}</div>
+                  <div>{t("labels.hashName")}={pack.newFileName.replace(/\.fhm2d$/i, "")}</div>
+                  <div>{t("labels.innerFiles")}={pack.innerFileCount} {t("labels.bytes")}={pack.byteLen}</div>
+                  <div className="break-all">{t("labels.extract")}={pack.outputPath}</div>
+                  <div className="break-all">{t("labels.structureJson")}={pack.structureJsonPath}</div>
+                  <div>{t("labels.bind")}={pack.bindTarget}</div>
                     {pack.outputPath ? (
                       <Button
                         type="button"
@@ -511,11 +508,11 @@ export function CloneGuiDialog({
                         }}
                       >
                         <FolderOpen className="mr-1 h-3.5 w-3.5" />
-                        Open folder
+                        {t("actions.openFolder")}
                       </Button>
                     ) : null}
                     {pack.obModOutputPath ? (
-                      <div className="break-all">obMod={pack.obModOutputPath}</div>
+                      <div className="break-all">{t("labels.obMod")}={pack.obModOutputPath}</div>
                     ) : null}
                   </div>
                 ))}
@@ -526,14 +523,14 @@ export function CloneGuiDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
-            {completed ? "Close" : "Cancel"}
+            {completed ? t("actions.close") : t("actions.cancel")}
           </Button>
           <Button
             onClick={() => void handleConfirm()}
             disabled={busy || !writable || !preview || selectedCount === 0 || Boolean(completed)}
           >
             <Copy className="mr-1.5 h-4 w-4" />
-            {busy ? "Working…" : `Clone ${selectedCount} pack${selectedCount === 1 ? "" : "s"}`}
+            {busy ? t("status.working") : t("actions.clone", { count: selectedCount })}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -570,6 +567,7 @@ function PackGroup({
   onStructureNameChange: (fieldKey: string, value: string) => void;
   disabled: boolean;
 }) {
+  const { t } = useTranslation("test-clone-gui");
   if (packs.length === 0) return null;
   return (
     <section className="space-y-2">
@@ -615,10 +613,10 @@ function PackGroup({
                   <span className="text-muted-foreground">{formatByteSize(pack.byteLen)}</span>
                 </div>
                 <div className="text-muted-foreground">
-                  Bind: <span className="font-mono text-foreground">{pack.bindTarget || pack.fieldKey}</span>
+                  {t("labels.bind")}: <span className="font-mono text-foreground">{pack.bindTarget || pack.fieldKey}</span>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-muted-foreground">structure.json Name (custom)</div>
+                  <div className="text-muted-foreground">{t("labels.structureName")}</div>
                   <Input
                     value={structureNames[pack.fieldKey] ?? pack.donorName}
                     onChange={(event) => onStructureNameChange(pack.fieldKey, event.target.value)}
@@ -627,33 +625,30 @@ function PackGroup({
                   />
                 </div>
                 <div>
-                  HashName:{" "}
+                  {t("labels.hashName")}:{" "}
                   <span className="font-mono">{donorFile}</span>
                   <span className="px-1 text-muted-foreground">→</span>
                   <span className="font-mono">{newFile}</span>
                 </div>
                 <div className="text-muted-foreground">
-                  HashName is CRC32 of the custom Name
-                  {renamed
-                    ? "; extract folder uses the new Name so the original donor folder is kept."
-                    : "; same Name keeps the donor folder (clone fails if it already exists)."}
+                  {t("help.hashName", { suffix: renamed ? t("help.renamedSuffix") : t("help.sameNameSuffix") })}
                 </div>
                 {displayed.outputPath ? (
                   <div className="break-all">
-                    mod workspace folder: <span className="font-mono">{displayed.outputPath}</span>
+                    {t("labels.modWorkspace")}: <span className="font-mono">{displayed.outputPath}</span>
                   </div>
                 ) : null}
                 <div className="break-all">
-                  Unpack from: <span className="font-mono">{pack.sourcePath}</span>
+                  {t("labels.unpackFrom")}: <span className="font-mono">{pack.sourcePath}</span>
                 </div>
                 {displayed.structureJsonPath ? (
                   <div className="break-all">
-                    Structure: <span className="font-mono">{displayed.structureJsonPath}</span>
+                    {t("labels.structure")}: <span className="font-mono">{displayed.structureJsonPath}</span>
                   </div>
                 ) : null}
                 {copyToObMod && pack.obModOutputPath ? (
                   <div className="break-all">
-                    Repack to OB Mod: <span className="font-mono">{pack.obModOutputPath}</span>
+                    {t("labels.repackObMod")}: <span className="font-mono">{pack.obModOutputPath}</span>
                   </div>
                 ) : null}
               </div>

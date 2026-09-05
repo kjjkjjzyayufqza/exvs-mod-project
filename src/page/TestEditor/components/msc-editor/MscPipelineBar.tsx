@@ -1,4 +1,5 @@
 import { AlertCircle, CheckCircle2, Circle, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type { MscSlotStatus, MscVerifyState } from "./mscPipeline";
 
@@ -48,26 +49,28 @@ function StageFlag({ tone, label, title }: StageFlagProps) {
   );
 }
 
-function verifyFlagProps(state: MscVerifyState | undefined): StageFlagProps {
+function verifyFlagProps(state: MscVerifyState | undefined, t: (key: string, options?: Record<string, unknown>) => string): StageFlagProps {
   if (!state) {
-    return { tone: "idle", label: "VERIFY", title: "Round-trip not verified yet" };
+    return { tone: "idle", label: "VERIFY", title: t("pipeline.unverified") };
   }
   switch (state.status) {
     case "verifying":
-      return { tone: "busy", label: "VERIFY", title: "Round-trip verify running" };
+      return { tone: "busy", label: "VERIFY", title: t("pipeline.verifying") };
     case "match":
       return {
         tone: "ok",
         label: "VERIFY",
-        title: `Round-trip byte-identical (${state.totalSize} bytes)`,
+        title: t("pipeline.match", { bytes: state.totalSize }),
       };
     case "mismatch":
       return {
         tone: "bad",
         label: "VERIFY",
-        title:
-          `Round-trip diverges at offset 0x${state.firstDivergenceOffset.toString(16)} ` +
-          `(original ${state.originalSize} bytes, recompiled ${state.recompiledSize} bytes)`,
+        title: t("pipeline.mismatch", {
+          offset: `0x${state.firstDivergenceOffset.toString(16)}`,
+          original: state.originalSize,
+          recompiled: state.recompiledSize,
+        }),
       };
     case "error":
       return { tone: "bad", label: "VERIFY", title: state.message };
@@ -81,6 +84,7 @@ function verifyFlagProps(state: MscVerifyState | undefined): StageFlagProps {
  * and verify state), not decoration.
  */
 export function MscPipelineBar({ slots, verifyStates }: MscPipelineBarProps) {
+  const { t } = useTranslation("test-msc-workspace-ui");
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
       {slots.map((slot) => (
@@ -102,8 +106,8 @@ export function MscPipelineBar({ slots, verifyStates }: MscPipelineBarProps) {
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <StageFlag tone={slot.hasSource ? "ok" : "idle"} label="SRC" />
-            <StageFlag tone={slot.hasDecompiled ? "ok" : "idle"} label="C" />
-            <StageFlag {...verifyFlagProps(verifyStates?.[slot.index])} />
+            <StageFlag tone={slot.hasDecompiled ? "ok" : "idle"} label={t("pipeline.c")} />
+            <StageFlag {...verifyFlagProps(verifyStates?.[slot.index], t)} />
           </div>
         </div>
       ))}
