@@ -21,6 +21,10 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
       CARGO_NET_GIT_FETCH_WITH_CLI: true
+      # CI-only: Cargo.toml release uses thin LTO + codegen-units=1 (slow).
+      # These env overrides keep a stripped Release binary without the 35m link.
+      CARGO_PROFILE_RELEASE_LTO: "off"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -92,6 +96,7 @@ jobs:
         with:
           workspaces: src-tauri
           prefix-key: release-windows
+          cache-on-failure: true
           env-vars: EXVS_UPDATER_GITHUB_TOKEN
         env:
           EXVS_UPDATER_GITHUB_TOKEN: ${{ secrets.EXVS_UPDATER_GITHUB_TOKEN || secrets.CARGO_GIT_TOKEN }}
