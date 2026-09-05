@@ -66,6 +66,7 @@ external/texturewiz-offline/
 tmp/author-avatar*
 tmp/my-editor/
 *.local
+.local/
 .worktrees/
 
 # Python bytecode and caches

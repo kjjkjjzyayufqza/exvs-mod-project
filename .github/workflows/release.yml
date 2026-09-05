@@ -1,9 +1,9 @@
 name: release
 
+# Windows NSIS publishing is local: pnpm release:windows
+# (see .github/scripts/publish-windows-release.ps1). This workflow is an
+# optional fallback and does not run on push.
 on:
-  push:
-    branches:
-      - release
   workflow_dispatch:
 
 concurrency:
@@ -12,7 +12,6 @@ concurrency:
 
 jobs:
   publish:
-    if: github.ref == 'refs/heads/release'
     runs-on: windows-latest
     timeout-minutes: 180
     permissions:

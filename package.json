@@ -17,7 +17,8 @@
     "test": "vitest run",
     "test:scene": "vitest run src/page/SceneEdit",
     "test:all": "vitest run --config vitest.all.config.ts",
-    "check:i18n-coverage": "node scripts/check_i18n_coverage.mjs"
+    "check:i18n-coverage": "node scripts/check_i18n_coverage.mjs",
+    "release:windows": "pwsh -NoProfile -File .github/scripts/publish-windows-release.ps1"
   },
   "dependencies": {
     "@comfyorg/fbx-exporter-three": "^1.0.1",

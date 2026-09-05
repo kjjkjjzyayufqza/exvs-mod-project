@@ -54,7 +54,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY5NzM2N0NCQkQzNzVGQzkKUldUSlh6ZTl5MmR6YWJVaWJzbnhaeUZ4WWNILzRPT1l2K0lmYmpNSmtRREVLaDhyVlBoVmtqeCsK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlDNzIwNjVDRUZCQUQ4NTgKUldSWTJMcnZYQVp5bkg3M2JuWTRJVEdIMzhKa2xDMUNSQXFaTmNidmtCUlNnYmFtSUs0bHpuUC8K",
       "endpoints": [
         "https://github.com/kjjkjjzyayufqza/exvs-mod-project/releases/latest/download/latest.json"
       ],
