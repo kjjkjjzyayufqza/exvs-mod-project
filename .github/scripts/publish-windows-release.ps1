@@ -155,8 +155,12 @@ finally {
 }
 
 $nsisDir = Join-Path $RepoRoot "src-tauri\target\release\bundle\nsis"
-$setup = Get-ChildItem -LiteralPath $nsisDir -File | Where-Object { $_.Name -like "*setup.exe" } | Select-Object -First 1
-$sig = Get-ChildItem -LiteralPath $nsisDir -File | Where-Object { $_.Name -like "*setup.exe.sig" } | Select-Object -First 1
+$setup = Get-ChildItem -LiteralPath $nsisDir -File |
+    Where-Object { $_.Name -like "*${Version}*setup.exe" -and $_.Name -notlike "*.sig" } |
+    Select-Object -First 1
+$sig = Get-ChildItem -LiteralPath $nsisDir -File |
+    Where-Object { $_.Name -like "*${Version}*setup.exe.sig" } |
+    Select-Object -First 1
 if (-not $setup) {
     throw "NSIS installer was not produced under $nsisDir"
 }
