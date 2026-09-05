@@ -74,12 +74,15 @@ finally {
 if (-not $Version) {
     $previous = ""
     try {
-        $previous = gh release list --limit 1 --json tagName --jq ".[0].tagName"
+        $previous = (gh release list --limit 1 | Select-Object -First 1)
     } catch {
         $previous = ""
     }
-    if ($previous -match '^v?0\.1\.(\d+)$') {
+    $tagMatch = [regex]::Match([string]$previous, 'v?(\d+\.\d+\.\d+)')
+    if ($tagMatch.Success -and $tagMatch.Groups[1].Value -match '^0\.1\.(\d+)$') {
         $Version = "0.1.$([int]$Matches[1] + 1)"
+    } elseif ($tagMatch.Success) {
+        $Version = "0.1.1"
     } else {
         $Version = "0.1.1"
     }
@@ -91,7 +94,14 @@ $tag = "v$Version"
 
 $previousNotesTag = ""
 try {
-    $previousNotesTag = gh release list --limit 1 --json tagName --jq ".[0].tagName"
+    $previousNotesLine = (gh release list --limit 1 | Select-Object -First 1)
+    $notesTagMatch = [regex]::Match([string]$previousNotesLine, 'v?\d+\.\d+\.\d+')
+    if ($notesTagMatch.Success) {
+        $previousNotesTag = $notesTagMatch.Value
+        if ($previousNotesTag -notmatch '^v') {
+            $previousNotesTag = "v$previousNotesTag"
+        }
+    }
 } catch {
     $previousNotesTag = ""
 }
@@ -114,7 +124,7 @@ $notes = @(
     "",
     $log,
     "",
-    "- EXVS-Mod-Project-$Version-windows-x64.zip is the portable app plus the full tools folder.",
+    "- EXVS-Mod-Project-$Version-windows-x64.zip is the portable app.",
     "- The NSIS installer is the auto-update package. Installed copies check this GitHub Release on every launch."
 ) -join "`n"
 

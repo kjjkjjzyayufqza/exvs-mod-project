@@ -39,14 +39,6 @@
         "title": "Numatb 编辑器",
         "description": "编辑 .numatb 文件中的材质属性"
       },
-      "compress": {
-        "title": "图像压缩器",
-        "description": "压缩 PNG 图像以减小体积并尽量保持画质"
-      },
-      "resize": {
-        "title": "图像调整器",
-        "description": "按指定尺寸批量调整图像大小"
-      },
       "fhm2dImage": {
         "title": "FHM2D 图像查看器",
         "description": "在内存中打开 FHM2D，浏览全部贴图并列出其他文件"

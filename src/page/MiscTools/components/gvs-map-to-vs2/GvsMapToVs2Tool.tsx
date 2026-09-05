@@ -2,9 +2,8 @@ import { useVirtualizer } from "@tanstack/react-virtual"
 import { useCallback, useMemo, useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
 import { open } from "@tauri-apps/plugin-dialog"
-import { invoke } from "@tauri-apps/api/core"
 import { exists, mkdir, readDir, readFile, readTextFile, writeFile, writeTextFile } from "@tauri-apps/plugin-fs"
-import { basename, dirname, join, resourceDir } from "@tauri-apps/api/path"
+import { basename, dirname, join } from "@tauri-apps/api/path"
 import { Command } from "@tauri-apps/plugin-shell"
 import JsonView from "@uiw/react-json-view"
 import { vscodeTheme } from "@uiw/react-json-view/vscode"
@@ -27,6 +26,8 @@ import {
   extractOnlyNumatbFiles,
   type GvsMapToVs2OutputMeta,
 } from "./gvsMapToVs2Service"
+import { ssbhTemplateReadNumatb, ssbhTemplateWriteNumatb } from "@/components/ssbh-model-preview/ssbhDaeIoService"
+import { ensureMatlDataSerdeFields, type MatlDataJson } from "@/components/ssbh-model-preview/daeSsbhTypes"
 
 type ConvertRecord = {
   sourceType: "bin" | "folder"
@@ -51,13 +52,6 @@ type ConvertRecord = {
   errorMessage?: string
   numatbErrorMessage?: string
   packErrorMessage?: string
-}
-
-type ShellExecOutput = {
-  success: boolean
-  exitCode: number | null
-  stdout: string
-  stderr: string
 }
 
 const GVS_TOOL_DIMENSIONS = {
@@ -826,48 +820,6 @@ export function GvsMapToVs2Tool() {
     })
   }
 
-  const formatShellOutput = (result: ShellExecOutput): string => {
-    const code = result.exitCode === null ? "null" : String(result.exitCode)
-    const stdout = result.stdout.trim()
-    const stderr = result.stderr.trim()
-    const parts: string[] = [`exitCode=${code}`, `success=${String(result.success)}`]
-    if (stdout.length > 0) {
-      parts.push(`stdout=${stdout}`)
-    }
-    if (stderr.length > 0) {
-      parts.push(`stderr=${stderr}`)
-    }
-    return parts.join(" | ")
-  }
-
-  const runProcessAndCapture = async (
-    executable: string,
-    args: string[]
-  ): Promise<ShellExecOutput> => {
-    const result = await invoke<ShellExecOutput>("exec_process_with_output", {
-      executable,
-      args,
-    })
-    return result
-  }
-
-  const waitForFileReady = async (
-    filePath: string,
-    options?: { retries?: number; intervalMs?: number }
-  ): Promise<boolean> => {
-    const retries = options?.retries ?? 5
-    const intervalMs = options?.intervalMs ?? 80
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      if (await exists(filePath)) {
-        return true
-      }
-      if (attempt < retries) {
-        await new Promise((resolve) => setTimeout(resolve, intervalMs))
-      }
-    }
-    return false
-  }
-
   const extractErrorDetail = (error: unknown): string => {
     if (error instanceof Error && error.message.trim().length > 0) {
       return error.message
@@ -900,13 +852,6 @@ export function GvsMapToVs2Tool() {
     const targets = records.filter((item) => item.status === "success")
     if (targets.length === 0) {
       throw new Error("No successful Step1 records available for Step2.")
-    }
-
-    const resourcePath = await resourceDir()
-    const toolPath = await join(resourcePath, "tools", "ssbh_data_json.exe")
-    const toolExists = await exists(toolPath)
-    if (!toolExists) {
-      throw new Error(`Tool not found: ${toolPath}`)
     }
 
     setIsFixingNumatb(true)
@@ -993,26 +938,19 @@ export function GvsMapToVs2Tool() {
           let currentStage: ConvertRecord["failedNumatbFiles"][number]["stage"] = "numatb_to_json"
 
           try {
-            const convertToJsonCommand = await runProcessAndCapture(toolPath, [
-              numatbPath,
-              jsonPath,
-            ])
-            if (!convertToJsonCommand.success) {
-              throw new Error(
-                `numatb_to_json failed: ${formatShellOutput(convertToJsonCommand)}`
-              )
+            const jsonContent = (await ssbhTemplateReadNumatb(numatbPath)) as {
+              major_version?: number
+              minor_version: number
+              entries: Array<{
+                shader_label: string
+                textures?: Array<{ param_id: string; data: string }>
+                booleans?: Array<{ param_id: string; data: boolean }>
+              }>
             }
-            const jsonCreated = await waitForFileReady(jsonPath)
-            if (!jsonCreated) {
-              throw new Error(
-                `numatb_to_json output missing: expected ${jsonPath} | ${formatShellOutput(convertToJsonCommand)}`
-              )
-            }
+            await writeTextFile(jsonPath, JSON.stringify(jsonContent, null, 2))
             convertedToJsonNumatbFiles.push(entryName)
 
             currentStage = "patch_json"
-            const jsonBuffer = await readTextFile(jsonPath)
-            const jsonContent = JSON.parse(jsonBuffer)
             jsonContent.minor_version = 6
 
             for (const row of jsonContent.entries) {
@@ -1030,13 +968,12 @@ export function GvsMapToVs2Tool() {
 
               const hasBaseColorMapInTextures = () =>
                 textures.some(
-                  (t: { param_id: string }) =>
-                    t.param_id === "BaseColorMap" || t.param_id === "BaseColorMapLayer1"
+                  (t) => t.param_id === "BaseColorMap" || t.param_id === "BaseColorMapLayer1",
                 )
               const hasUseBaseColorMap = () =>
-                booleans.some((b: { param_id: string }) => b.param_id === "UseBaseColorMap")
+                booleans.some((b) => b.param_id === "UseBaseColorMap")
               const hasUseDiffuseMap = () =>
-                booleans.some((b: { param_id: string }) => b.param_id === "UseDiffuseMap")
+                booleans.some((b) => b.param_id === "UseDiffuseMap")
 
               if (row.shader_label === "") {
                 textures.forEach(patchTextureParamId)
@@ -1071,21 +1008,19 @@ export function GvsMapToVs2Tool() {
                   booleans.push({ param_id: "UseBaseColorMap", data: true })
                 }
               }
+
+              row.textures = textures
+              row.booleans = booleans
             }
 
             await writeTextFile(jsonPath, JSON.stringify(jsonContent, null, 2))
             editedJsonNumatbFiles.push(entryName)
 
             currentStage = "json_to_numatb"
-            const convertToNumatbCommand = await runProcessAndCapture(toolPath, [
-              jsonPath,
+            await ssbhTemplateWriteNumatb(
               numatbPath,
-            ])
-            if (!convertToNumatbCommand.success) {
-              throw new Error(
-                `json_to_numatb failed: ${formatShellOutput(convertToNumatbCommand)}`
-              )
-            }
+              ensureMatlDataSerdeFields(jsonContent as unknown as MatlDataJson),
+            )
 
             fixedNumatbFiles.push(entryName)
           } catch (fileError) {

@@ -11,7 +11,7 @@
 
 import { readTextFile } from "@tauri-apps/plugin-fs";
 
-import allowedRangesJson from "../../tools/allowed_ranges.json";
+import allowedRangesJson from "@/assets/allowed_ranges.json";
 
 export type AllowedRange = [number, number];
 
@@ -121,7 +121,7 @@ export function checkStringCoverage(str: string, ranges: AllowedRange[]): String
 }
 
 /**
- * Get the bundled default allowed ranges (from tools/allowed_ranges.json).
+ * Get the bundled default allowed ranges (from src/assets/allowed_ranges.json).
  * Use this for synchronous validation without loading from disk.
  */
 export function getDefaultRanges(): AllowedRange[] {

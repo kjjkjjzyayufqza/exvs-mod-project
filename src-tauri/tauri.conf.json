@@ -46,9 +46,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": {
-      "../tools/**/*": "./tools/"
-    },
     "createUpdaterArtifacts": true
   },
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",

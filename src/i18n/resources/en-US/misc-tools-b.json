@@ -39,14 +39,6 @@
         "title": "Numatb Editor",
         "description": "Edit material properties in .numatb files"
       },
-      "compress": {
-        "title": "Image Compressor",
-        "description": "Compress PNG images to reduce file size while maintaining quality"
-      },
-      "resize": {
-        "title": "Image Resizer",
-        "description": "Resize images to specified dimensions with batch processing support"
-      },
       "fhm2dImage": {
         "title": "FHM2D Image View",
         "description": "Open an FHM2D in memory, browse every texture, and list the other files"

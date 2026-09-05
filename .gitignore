@@ -1,7 +1,6 @@
 # UnlicensedGameMaterial — publisher binaries and full dumps.
 # Keep them on the local disk (WorkingTreePreserve); never commit.
-# Toolchain CLIs under tools/ stay tracked; JSON fixtures (*.numatb.json) are
-# not matched by these extension rules.
+# JSON fixtures (*.numatb.json) are not matched by these extension rules.
 vsac27_Release.exe.md
 *Release.exe.md
 vsac*.exe
@@ -37,10 +36,10 @@ dplcache*/
 *.arc
 *.pac
 *.iso
-# Game executables (toolchain CLIs under tools/ stay tracked)
+# Game and helper executables stay local; do not commit tools/*.exe
 *.exe
-!tools/*.exe
-!tools/**/*.exe
+tools/custom_unit.json
+tools/ob_unit.json
 
 # Logs
 logs
@@ -71,6 +70,7 @@ tmp/my-editor/
 
 # Python bytecode and caches
 __pycache__/
+.pytest_cache/
 *.py[cod]
 *$py.class
 

@@ -6,8 +6,6 @@ import { FBXItemRename } from "./components/fbx-item-rename/FBXItemRename"
 import { TemplateJsonGenerator } from "./components/template-json-generator/TemplateJsonGenerator"
 import { ImgToNutexbTool } from "./components/img-to-nutexb/ImgToNutexbTool"
 import { NumatbEditor } from "./components/numatb-editor/NumatbEditor"
-import { ImageCompressTool } from "./components/image-compress/ImageCompressTool"
-import { ImageResizeTool } from "./components/image-resize/ImageResizeTool"
 import { GvsMapToVs2Tool } from "./components/gvs-map-to-vs2/GvsMapToVs2Tool"
 import { Fhm2dImageViewTool } from "./components/fhm2d-image-view/Fhm2dImageViewTool"
 import { NutexbViewTool } from "./components/nutexb-view/NutexbViewTool"
@@ -161,38 +159,6 @@ export default function MiscToolsPage() {
             </CardHeader>
             <CardContent>
               <NumatbEditor />
-            </CardContent>
-          </Card>
-
-          {/* Image Compressor */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2">
-                <ImageIcon className="h-5 w-5" />
-                {t("page.cards.compress.title")}
-              </CardTitle>
-              <CardDescription>
-                {t("page.cards.compress.description")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ImageCompressTool />
-            </CardContent>
-          </Card>
-
-          {/* Image Resizer */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2">
-                <ImageIcon className="h-5 w-5" />
-                {t("page.cards.resize.title")}
-              </CardTitle>
-              <CardDescription>
-                {t("page.cards.resize.description")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ImageResizeTool />
             </CardContent>
           </Card>
 

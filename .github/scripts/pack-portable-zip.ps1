@@ -6,30 +6,6 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-function Copy-ToolsDirectory {
-    param(
-        [Parameter(Mandatory = $true)][string]$Source,
-        [Parameter(Mandatory = $true)][string]$Destination
-    )
-
-    New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-    $entries = Get-ChildItem -Force -LiteralPath $Source
-    foreach ($entry in $entries) {
-        if ($entry.Name -eq "__pycache__") {
-            continue
-        }
-        if ($entry.Extension -in @(".pyc", ".pyo")) {
-            continue
-        }
-        $target = Join-Path $Destination $entry.Name
-        if ($entry.PSIsContainer) {
-            Copy-ToolsDirectory -Source $entry.FullName -Destination $target
-        } else {
-            Copy-Item -LiteralPath $entry.FullName -Destination $target
-        }
-    }
-}
-
 $releaseDir = Join-Path $RepoRoot "src-tauri\target\release"
 $exeCandidates = @(
     (Join-Path $releaseDir "EXVS Mod Project.exe"),
@@ -48,16 +24,10 @@ if (Test-Path -LiteralPath $stageRoot) {
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 Copy-Item -LiteralPath $exe -Destination (Join-Path $stage "EXVS Mod Project.exe")
 
-$toolsSource = Join-Path $RepoRoot "tools"
-if (-not (Test-Path -LiteralPath $toolsSource)) {
-    throw "tools folder was not found at $toolsSource"
-}
-Copy-ToolsDirectory -Source $toolsSource -Destination (Join-Path $stage "tools")
-
 $readme = @"
 EXVS Mod Project $Version
 
-Portable Windows build. Keep EXVS Mod Project.exe next to the tools folder.
+Portable Windows build.
 The NSIS installer from the same GitHub Release is the auto-update package.
 "@
 Set-Content -LiteralPath (Join-Path $stage "README.txt") -Value $readme -Encoding utf8
