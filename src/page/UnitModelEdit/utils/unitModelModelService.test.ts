@@ -427,7 +427,7 @@ describe("unitModelModelService", () => {
           generateHkt: false,
           hktSimplify: {
             enabled: false,
-            planalityAngleDeg: 15,
+            planarityAngleDeg: 15,
             minTriangleArea: 0.000001,
             weldEpsilon: 0.001,
             targetTriangleRatio: null,
