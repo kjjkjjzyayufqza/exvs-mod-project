@@ -34,6 +34,16 @@ export function buildTypedParamEntryClipboardPayload(
   }
 }
 
+export function formatTypedParamEntryJson(
+  fileType: string,
+  data: TypedParamFile,
+  selectedEntryIndex: number,
+): string | null {
+  const payload = buildTypedParamEntryClipboardPayload(fileType, data, selectedEntryIndex)
+  if (!payload) return null
+  return JSON.stringify(payload, null, 2)
+}
+
 export function buildTypedParamFileClipboardPayload(
   fileType: string,
   data: TypedParamFile,

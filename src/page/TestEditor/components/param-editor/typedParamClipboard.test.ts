@@ -7,6 +7,7 @@ import {
   buildTypedParamFileClipboardPayload,
   copyTypedParamEntryJsonToClipboard,
   copyTypedParamFileJsonToClipboard,
+  formatTypedParamEntryJson,
 } from "./typedParamClipboard"
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
@@ -48,6 +49,13 @@ describe("typedParamClipboard", () => {
     expect(payload.entries).toEqual(sampleData.entries)
     expect(payload.trailingData).toEqual(sampleData.trailingData)
     expect(payload.entries).not.toBe(sampleData.entries)
+  })
+
+  it("formats selected entry JSON for the JSON view", () => {
+    const text = formatTypedParamEntryJson("vernier_table", sampleData, 0)
+    expect(text).toBe(
+      JSON.stringify(buildTypedParamEntryClipboardPayload("vernier_table", sampleData, 0), null, 2),
+    )
   })
 
   it("copies selected entry JSON to clipboard", async () => {

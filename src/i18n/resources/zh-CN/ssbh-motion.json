@@ -170,6 +170,7 @@
     "stackFrames": "{{name}} ({{count}}f)",
     "importButton": "将 FBX 导入为 NUANMB",
     "preserveGroups": "保留所选 NUANMB 的组（仅可见性/材质模板 — 不是输出路径）",
+    "omitAthHelperBones": "跳过 ATH_* 辅助骨",
     "noTemplate": "未选择 NUANMB：导入将写入仅含变换的片段。",
     "templateReadonly": "模板（只读）：",
     "boneMatching": "骨骼匹配",

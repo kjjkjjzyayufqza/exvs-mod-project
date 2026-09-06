@@ -175,6 +175,21 @@ Homemade NUANMB folder（DCC `*_out.fbx` 导入、Rebellion `tks11a` / `0xa0cd8d
 | K3 | 677 出弹帧去掉 `sys_4A(0x1, 0x7, 0/1)`，仍 `sys_4F(0, 0x1, CDA9F563/564)` | **出弹那一帧条仍空** | group-7 清光不是出弹帧 owner | 2026-08-30 user: 也还是一样 |
 | K4 | 677 `sys_4F(0, 0, CDA9F563/564, 1)`（slot 0 + 第 4 参）或 `sys_4F(0, 0x1, hash)` | **打包进游戏后**，出弹帧仍清正在蓄的 CSA 条 | `sys_4F(0, 0x5, CDA9F563/564)` **三参**。`arg2=0x5` 是 `func_589` 跳过 `0x90000` 的虚拟出弹槽，不是弹药槽 1。第 4 参是**该 slot 的蓄力消费 bool**（`sub_1405BCF00`），不是 CS 槽编号；slot 0 + `1` = 清 CSA。ENTER 的 `global681=0x1` 仍管副射弹药 | 2026-08-30 user **E3** 打包后确认 |
 
+## L. `sys_4A` effect group
+
+| # | 被证伪的做法 | 实机症状 | 正确方向 | 来源 |
+|---|--------------|----------|----------|------|
+| L1 | 同一 tick 把 `0xdc4314cd` 和另一 `sys_4A` 写进**同一 group**（只改 slot，例如 `0x7/0` → `0x7/1`） | 后写覆盖先写；闪光或气场消失 | group 分流：`0xdc4314cd` 用 `0x6/0`，`0x2133778d` 用 `0x7/0`。地面 dash 676 也不要把该 hash 写进光剑 group `0x8` | [bird-melee-n-followup](./wing-zero-rebellion-bird-melee-n-followup.md) §`sys_4A` 2026-08-21 E3；dash 见 [special-n-bird-dash](./wing-zero-rebellion-special-n-bird-dash.md) §676 闪光 |
+
+## M. Victory extra shell / `sys_4B`
+
+| # | 被证伪的做法 | 实机症状 | 正确方向 | 来源 |
+|---|--------------|----------|----------|------|
+| M1 | 自制胜利 `func_870` 首帧 `sys_4B(0x2, 0x04dc16ce, 0, 0x8525ad9a)` + `func_308` 同 Folder + `func_314` 挂 SHL Part 白机 | **完全没有第二台** | 不要把自制 Folder Runtime 当 `sys_4B` attach action。Hambrabi extras 的第 4 参是该 extra 自己的 clip | [victory-pose](./wing-zero-rebellion-victory-pose.md) §9；2026-09-05 user |
+| M2 | 同 M1 但 `sys_4B` 第 4 参改成本机 Part 挂载 `0x4094b0f4`，骨 hash 仍为 0，且 spawn 只写在 `func_870` | **仍看不见白机** | 胜利 ENTER 是 `func_480`；`func_186()==1` 时 tick 是 `func_871`，`func_870` 根本不跑。`func_871` 的 `sys_4B(0x3)` 还会清掉 ENTER 挂件。E3 2026-09-05：改到 `func_480`（`func_884` 之后）并在 `func_871` 再挂一次后，白机以 **T 姿**出现 | 同上；2026-09-05 user |
+| M3 | 白机可见之后仍用 `0x4094b0f4` + 骨 0 当整机 extra | **有动作，但挂在错误的骨头上，不是 GBL_RT** | 骨 0 已是 jnttbl GBL_RT；错的是 arg4。不要武器挂载 `0x4094b0f4`。白翅膀 `0x7914aada` 用主机翅膀那组 `0xad1a39fb` / `0xae17be24`，第 5 参 parent 白 body `0x04dc16ce` | 同上；2026-09-05 user |
+| M4 | 整机 extra 抄 `func_190` 的 `0x810a8bef`（`down_faceup_gnd_fr`）当 `sys_4B` arg4，并把 `0xfa0` 写进 `sys_47(0x10)` | **body+wing 都动，但往前坠**。Blender 白机 GBL_RT 与主机重合 | `0x810a8bef` 是倒地 clip。Hambrabi extra 第 4 参是该 extra 自己的 Folder。`sys_47(0x10)` 是旋转（deg×100），`0xfa0`=+40°；平移用 `sys_47(0x11)`。不要在 MSC 里猜 90° 微调 | 同上；2026-09-05 user |
+
 ---
 
 ## 待提取（本表尚未覆盖）

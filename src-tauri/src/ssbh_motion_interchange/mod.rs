@@ -31,7 +31,7 @@ pub use motion_clip::{
 pub use motion_fbx_import::{import_motion_fbx, MotionFbxImportRequest};
 pub use nuanmb::{
     read_motion_skeleton, read_nuanmb_as_motion_clip, write_motion_clip_as_nuanmb,
-    NuanmbWriteReport,
+    write_motion_clip_as_nuanmb_with_options, NuanmbWriteOptions, NuanmbWriteReport,
 };
 pub use validate::{validate_rig_binding, RigBindingPolicy, RigBindingReport};
 

@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Braces,
-  ClipboardCopy,
   CopyPlus,
   Eye,
   FileInput,
+  FileJson,
   FolderOpen,
   Loader2,
   Pencil,
@@ -45,10 +45,10 @@ import {
   readTypedEntryId,
 } from "../../param-editor/paramEntryUtils";
 import {
-  copyTypedParamEntryJsonToClipboard,
   copyTypedParamFileJsonToClipboard,
 } from "../../param-editor/typedParamClipboard";
 import { TypedParamImportDialog } from "../../param-editor/TypedParamImportDialog";
+import { TypedParamJsonViewDialog } from "../../param-editor/TypedParamJsonViewDialog";
 
 const STORE_KEY = "paramEditors.v2.fp.armsparam";
 const PARAM_TYPE = "armsparam";
@@ -146,6 +146,7 @@ export function ArmsEditorView({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [jsonViewOpen, setJsonViewOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [hexPreviewMode, setHexPreviewMode] = useState<"view" | "edit">("view");
   const [hexEditDraft, setHexEditDraft] = useState("");
@@ -265,11 +266,6 @@ export function ArmsEditorView({
     setHexPreviewMode("view");
     toast.success(t("toast.hexSaved"));
   }, [data, entry, hexEditDraft, hexPreview, selectedIndex, store]);
-
-  const copySelectedEntryJson = useCallback(() => {
-    if (!data) return;
-    void copyTypedParamEntryJsonToClipboard(PARAM_TYPE, data, selectedIndex);
-  }, [data, selectedIndex]);
 
   const copyFullViewJson = useCallback(() => {
     if (!data) return;
@@ -502,11 +498,11 @@ export function ArmsEditorView({
                       variant="ghost"
                       className={TOOLBAR_BUTTON_CLASS}
                       disabled={!entry}
-                      title={t("buttons.entryJsonTooltip")}
-                      onClick={copySelectedEntryJson}
+                      title={t("buttons.jsonViewTooltip")}
+                      onClick={() => setJsonViewOpen(true)}
                     >
-                      <ClipboardCopy className="h-3 w-3" />
-                      {t("buttons.entryJson")}
+                      <FileJson className="h-3 w-3" />
+                      {t("buttons.jsonView")}
                     </Button>
                     <Button
                       type="button"
@@ -734,6 +730,19 @@ export function ArmsEditorView({
           data={data}
           selectedEntryIndex={selectedIndex}
           onApply={applyImportedEntry}
+        />
+      ) : null}
+      {data ? (
+        <TypedParamJsonViewDialog
+          open={jsonViewOpen}
+          onOpenChange={setJsonViewOpen}
+          fileType={PARAM_TYPE}
+          data={data}
+          selectedEntryIndex={selectedIndex}
+          onApply={applyImportedEntry}
+          onClone={(nextEntry) => {
+            store.getState().appendEntry(nextEntry);
+          }}
         />
       ) : null}
     </div>

@@ -265,6 +265,7 @@ fn main() {
                 template_nuanmb_path: Some(input.clone()),
                 animation_stack_name: None,
                 rig_binding_policy: Default::default(),
+                omit_ath_helper_bones: true,
             },
         )
         .unwrap_or_else(|e| panic!("FBX import failed: {e}"));

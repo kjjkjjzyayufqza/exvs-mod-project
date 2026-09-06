@@ -31,7 +31,7 @@ Game motion packages are **two skeletons**. A composed Blender scene (body + win
 3. **Isolation is selection/visibility, not unparenting.** Keep `ATH_BACKPACK` bone-parent and `CHILD_OF` on wing `GBL_RT` for preview. Hide/deselect the other armature before export.
 4. **Keep every bone.** `use_armature_deform_only=False`, `bake_anim_use_all_bones=True`, `add_leaf_bones=False`, `bake_anim_simplify_factor=0.0`.
 5. **One action per file.** `bake_anim_use_all_actions=False`, `bake_anim_use_nla_strips=False`.
-6. **Do not author `ATH_*` keys.** Strip them in DCC. Writer also omits them. Policy: `docs/nuanmb-ath-helper-bone-policy.md`.
+6. **Host clips: do not author `ATH_*` keys.** Strip them in DCC. Writer also omits them. **Extra / Part clips** (Rebellion white `ZeroEW_White_Body`): keep every bone, including ATH animation — the extra has no host NUHLPB. Policy: `docs/nuanmb-ath-helper-bone-policy.md`.
 7. **Game-style filenames.** Do not ship `ZeroEW_Body_from_gwtv_out.fbx` as the import file. Pairing is by `001hito_` vs `410wzerowing_` prefix.
 8. **Do not map TV wing bones onto Rebellion wing.** TV `WING_*` vs Rebellion `LMAIN_*` / `RMAIN_*` are incompatible. Wing clips come from `410wzerowing_*` FBX, not from gwtv body_tf.
 

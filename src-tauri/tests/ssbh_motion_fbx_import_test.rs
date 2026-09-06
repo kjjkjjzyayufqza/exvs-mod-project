@@ -108,6 +108,7 @@ fn import_rejects_output_equal_to_input() {
         template_nuanmb_path: None,
         animation_stack_name: None,
         rig_binding_policy: RigBindingPolicy::ExactHierarchy,
+        omit_ath_helper_bones: true,
     })
     .unwrap_err()
     .to_string();
@@ -123,6 +124,7 @@ fn import_rejects_non_nuanmb_output() {
         template_nuanmb_path: None,
         animation_stack_name: None,
         rig_binding_policy: RigBindingPolicy::ExactHierarchy,
+        omit_ath_helper_bones: true,
     })
     .unwrap_err()
     .to_string();
@@ -141,6 +143,7 @@ fn manifest_free_import_round_trips_synthetic_motion() {
         template_nuanmb_path: None,
         animation_stack_name: None,
         rig_binding_policy: RigBindingPolicy::ExactHierarchy,
+        omit_ath_helper_bones: true,
     })
     .unwrap();
 
@@ -211,6 +214,7 @@ fn import_with_template_preserves_non_transform_groups() {
         template_nuanmb_path: Some(template_path.to_string_lossy().to_string()),
         animation_stack_name: Some("fixture_action".to_string()),
         rig_binding_policy: RigBindingPolicy::ExactHierarchy,
+        omit_ath_helper_bones: true,
     })
     .unwrap();
     assert_eq!(report.preserved_non_transform_group_count, 1);
@@ -279,6 +283,7 @@ fn real_nuanmb_round_trips_through_manifest_free_import() {
         template_nuanmb_path: Some(nuanmb_path.to_string_lossy().to_string()),
         animation_stack_name: Some("real_source".to_string()),
         rig_binding_policy: RigBindingPolicy::ExactHierarchy,
+        omit_ath_helper_bones: true,
     })
     .unwrap();
     assert_eq!(report.frame_count, source.frames.len());
@@ -380,6 +385,7 @@ fn blender_roundtrip_reimports_complete_motion_fbx() {
         template_nuanmb_path: Some(nuanmb_path.to_string_lossy().to_string()),
         animation_stack_name: None,
         rig_binding_policy: RigBindingPolicy::ExactHierarchy,
+        omit_ath_helper_bones: true,
     })
     .unwrap();
     assert_eq!(report.frame_count, source.frames.len());

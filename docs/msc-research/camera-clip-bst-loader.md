@@ -255,9 +255,16 @@ POC default hook hash `0x7EB6FE0E` is an `00system` clip (3 shots), not a winlos
 
 ## 7. Three.js / editor implication
 
-Do **not** attach a FOV+offset-only proxy (already rejected).
+Do **not** treat authored FOV+offset as a complete native pose. `644930` is still unproven (§6.3).
 
-Shipped OB battle clips are compiled 0x134 parameter playback. `646C20` does not start `CCameraMotion` when `0xC488848F == 0`, and every OB row is 0. A later preview would have to reimplement `646C20` copies + `647590` (v0 hold vs v1 lerp vs v2/v3*`dt`, duration at `+28`), not sample `big.nuanmb`. Channel eval is E2 from asm; dt units are still L2. Keep the table editor as the shipped surface until an in-game H/P/F on framing.
+The table editor’s viewport is a stand-in orbit (`evalCameraClip.ts` `cameraWorldPosition`):
+
+- Word40 is a **signed extra** on `PREVIEW_LOOKAT_RADIUS` (36), not the look-at radius. Rebellion `0xFD5FD16A` shot 0 is **−5.5** with FOV 11; ENTER `0x8CA6CC45` is **0**. Using those as the sphere radius puts the camera inside the dummy (blue fill). FOV stays authored so 11 still zooms versus 65.
+- Three.js preview **negates pitch Y** (`y = lookAt.y - distance * sin(pitch)`). HUD still shows the compiled radian. `0x9AC77769` shot 0 stays authored **+30.6° / yaw −146°**; the invert is an editor match, not a `644930` proof.
+- Editor **view zoom** (`cameraTablePreviewViewZoom`) scales the stand-in orbit only. It is not authored FOV/offset.
+- This is preview convention, not a `644930` proof. Do not copy it into a native reconstruct. `0xE4DE8A17` / ch3 on that pack are still unapplied.
+
+Shipped OB battle clips are compiled 0x134 parameter playback. `646C20` does not start `CCameraMotion` when `0xC488848F == 0`, and every OB row is 0. Channel eval (`646C20` copies + `647590`) is E2 from asm; dt units are still L2. Keep the table editor as the shipped surface until an in-game H/P/F on framing.
 
 Do **not**: invent clip hashes; pass row ids to `sys_53`; treat menu nuanmb as winlose clips; flip common-pack `read_only`; unpack `0xCB665375` again.
 

@@ -3,8 +3,10 @@
 //! 220-byte rows. Named overlay is table-pinned on OB `02winlose.vgsht2`:
 //! clip hash (word25 / `0x980ABFA6`), sort key (word43 / `0xE52F114D`),
 //! FOV (word16 / `0x749B8F0E`), offset (word40 / `0xD20F0173`),
-//! first-shot flag (word11 / `0x4AF79689`). Clip hash is what `sys_53(0x4, hash)`
-//! looks up. Do not invent clip hashes; do not treat row ids as `sys_53` args.
+//! first-shot flag (word11 / `0x4AF79689`). Clip hash and sort key persist from
+//! the overlay on save. Rows are rewritten in unsigned `entry_id` order.
+//! Clip hash is what `sys_53(0x4, hash)` looks up. Do not invent clip hashes;
+//! do not treat row ids as `sys_53` args.
 
 use crate::format::param_bin_format::{
     build_param_binary, read_param_binary, ParamBinaryFile, PARAM_BIN_MAGIC,
@@ -64,7 +66,8 @@ pub struct CameraTableEntry {
     pub clip_hash: u32,
     pub sort_key: u32,
     pub fov: Option<f32>,
-    pub offset: f32,
+    /// Word40. `None` is the authored NaN inherit-previous marker; JSON uses `null`.
+    pub offset: Option<f32>,
     pub first_shot: u32,
 }
 
@@ -196,13 +199,14 @@ fn overlay_entries(file: &ParamBinaryFile) -> Result<Vec<CameraTableEntry>, Stri
             ));
         }
         let fov = read_f32_at(raw, OFF_FOV)?;
+        let offset = read_f32_at(raw, OFF_OFFSET)?;
         entries.push(CameraTableEntry {
             entry_id: file.entry_ids.get(entry_index).copied().unwrap_or(0),
             entry_index: entry_index as u32,
             clip_hash: read_u32_at(raw, OFF_CLIP_HASH)?,
             sort_key: read_u32_at(raw, OFF_SORT_KEY)?,
             fov: finite_f32(fov),
-            offset: read_f32_at(raw, OFF_OFFSET)?,
+            offset: finite_f32(offset),
             first_shot: read_u32_at(raw, OFF_FIRST_SHOT)?,
         });
     }
@@ -281,10 +285,60 @@ fn apply_named_overlay(file: &mut ParamBinaryFile, entries: &[CameraTableEntry])
             raw.resize(ENTRY_SIZE as usize, 0);
         }
         let fov = entry.fov.unwrap_or(f32::NAN);
+        let offset = entry.offset.unwrap_or(f32::NAN);
         write_u32_at(raw, OFF_FIRST_SHOT, entry.first_shot)?;
         write_f32_at(raw, OFF_FOV, fov)?;
-        write_f32_at(raw, OFF_OFFSET, entry.offset)?;
+        write_f32_at(raw, OFF_OFFSET, offset)?;
+        write_u32_at(raw, OFF_CLIP_HASH, entry.clip_hash)?;
+        write_u32_at(raw, OFF_SORT_KEY, entry.sort_key)?;
     }
+    Ok(())
+}
+
+fn sort_camera_table_file(payload: &mut CameraTableFile) -> Result<(), String> {
+    let count = payload.entries_raw.len();
+    if payload.entries.len() != count || payload.entry_ids.len() != count {
+        return Err("entries and entriesRaw length mismatch".to_string());
+    }
+    for (index, entry) in payload.entries.iter().enumerate() {
+        if entry.entry_id == 0 {
+            return Err("camera row id must not be 0".to_string());
+        }
+        payload.entry_ids[index] = entry.entry_id;
+    }
+    let mut seen = std::collections::HashSet::with_capacity(count);
+    for &id in &payload.entry_ids {
+        if !seen.insert(id) {
+            return Err(format!("duplicate camera row id 0x{id:08X}"));
+        }
+    }
+    let mut order: Vec<usize> = (0..count).collect();
+    order.sort_by(|&left, &right| {
+        payload.entry_ids[left]
+            .cmp(&payload.entry_ids[right])
+            .then(left.cmp(&right))
+    });
+    if order.iter().copied().eq(0..count) {
+        return Ok(());
+    }
+    let entry_ids: Vec<u32> = order.iter().map(|&index| payload.entry_ids[index]).collect();
+    let entries_raw: Vec<Vec<u8>> = order
+        .iter()
+        .map(|&index| payload.entries_raw[index].clone())
+        .collect();
+    let entries: Vec<CameraTableEntry> = order
+        .iter()
+        .enumerate()
+        .map(|(next_index, &index)| {
+            let mut entry = payload.entries[index].clone();
+            entry.entry_index = next_index as u32;
+            entry.entry_id = entry_ids[next_index];
+            entry
+        })
+        .collect();
+    payload.entry_ids = entry_ids;
+    payload.entries_raw = entries_raw;
+    payload.entries = entries;
     Ok(())
 }
 
@@ -303,6 +357,7 @@ pub fn write_pack(data_json: &Value, file_path: &str) -> Result<Value, String> {
             payload.header.entry_size
         ));
     }
+    sort_camera_table_file(&mut payload)?;
 
     let mut file = ParamBinaryFile {
         header: crate::format::param_bin_format::ParamBinaryHeader {
@@ -338,6 +393,7 @@ pub fn write_pack(data_json: &Value, file_path: &str) -> Result<Value, String> {
     parse_bytes(&bytes)?;
     fs::write(file_path, &bytes).map_err(|e| format!("Write failed: {e}"))?;
     payload.file_path = Some(file_path.to_string());
+    payload.entry_ids = file.entry_ids.clone();
     payload.entries = overlay_entries(&file)?;
     payload.entries_raw = file.entries_raw;
     payload.header.file_size = bytes.len() as u32;
@@ -403,4 +459,26 @@ pub fn synthetic_json_for_tests() -> Value {
         "packHash": PACK_HASH,
         "defaultFamily": DEFAULT_FAMILY,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CameraTableEntry;
+
+    #[test]
+    fn camera_table_entry_deserializes_null_offset() {
+        let value = serde_json::json!({
+            "entryId": 1,
+            "entryIndex": 0,
+            "clipHash": 1,
+            "sortKey": 1,
+            "fov": null,
+            "offset": null,
+            "firstShot": 0
+        });
+        let entry: CameraTableEntry =
+            serde_json::from_value(value).expect("null offset must deserialize like fov");
+        assert!(entry.fov.is_none());
+        assert!(entry.offset.is_none());
+    }
 }

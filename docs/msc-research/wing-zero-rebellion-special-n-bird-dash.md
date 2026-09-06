@@ -1,7 +1,7 @@
 # Wing Zero Rebellion：普通形态特格接 N → 鸟冲刺（`0x928ca34f` dash）
 
 **Date:** 2026-08-25（无杆惯性 2026-08-27 实机确认）  
-**Status:** 实机确认成功  
+**Status:** 实机确认成功（dash 本体）；受击枪/刀 TRS 为 E1，待 H5  
 **Kind:** MSC `2.c` 普通形态特格取消窗 → 鸟形态短冲刺 → 松杆回普通  
 **Primary tree:** `E:\XB\mod\040msc\wing_gundam_zero_rebellion_msc\`
 
@@ -264,8 +264,8 @@ EXVS2OB wiki（玩家向，不能当 syscall 证据）：
 | ACTIVE | tick：`func_593()` 后、且 `phase==1 && 184==2` 才 `locked_loop_move`。每帧 `sys_46(0, lock_err)` + `sys_46(0x1, 0x1, yaw, 0, mag)`。不要在 677 函数体里写 `sys_46` |
 | EXIT 有杆 | 679 不拆，随后 `252`。0.c 地面表接 analog |
 | EXIT 无杆 | 先拷 mag → `untransform_keep_move`（拆鸟、不清 `0x4000`、不 `296(0)`）→ `sys_46(0x4,0x4,0x64)` → 每帧 `sys_46(0x1, 0x1, 0, 0xfffff830, 508)`，`508 *= 0x5a/0x64`。`508<=0x14` 或再 30f 才 `296(0)+252` |
-| INTERRUPT | `interrupt_bird_form_to_ground`：`169(0x4000)` + `296(0)`。受击必须刹住 |
-| RESPAWN | `func_41` 见非 dash hash 时清 dash 旗 |
+| INTERRUPT | `func_41` → `rebellion_dash_land_keep_move`（`169(0x4000)` + 拆挂件 + 清 `sys_47(0x11)` + `func_884`）。**不要**走 `interrupt_bird_form_to_ground`：`global143` 保持 0，那条 helper 根本不会跑 |
+| RESPAWN | `func_874` → `stop_effects` |
 
 | 状态 | 写入者 | 无杆 EXIT | INTERRUPT |
 |------|--------|-----------|-----------|
@@ -397,6 +397,7 @@ void rebellion_normal_special_n_bird_dash_tick()
 | 677 加窗 / `coast` 闩 | 无限飞，或一关窗又没惯性 |
 | `func_296(0)` 后改写空中 idle `0x2`，用 `func_287(0x3ed)` 当接地 | 垂直下坠、仍像飞行、突然停。`0x2` 不是 dash 通道 |
 | 无杆 679 走 `land_keep_move`（`func_169(0x4000)`） | 拆掉 `0x4000`，`0x1` 不再是 dash 所有权 |
+| `func_41` dash 受击只清 `dash_active` 旗 | `global143` 已是 0，鸟 helper 不跑；`attach_in` 的 `sys_47(0x11)` 留在枪/刀上 |
 | `coast==0` 再赋 `0x3e8` | 滑完被当成没开始，每帧重开 10 帧，无杆会一直飞 |
 | 无杆 679 `0x1` 清零或先 `func_296(0)` | 落地继承到的是 0；关电机关掉的是 3D 飞行向量 |
 | `sys_46(0, lock_err+arc)` 再沿机头飞 | `0x40000/5` 相对机头。一帧后 `lock_err≈-arc`，command≈0，固定斜线，不是绕锁 |
@@ -416,10 +417,10 @@ void rebellion_normal_special_n_bird_dash_tick()
 | ACTIVE start | `dash_loop` 首帧：HUD + 卸手持 + `0x38` + `attach_in`；立刻 `252` |
 | ACTIVE shoot | 每帧 `dash_loop` 维持连接态 + 593 后锁冲 30 帧 |
 | EXIT 有杆 | `func_81(0x77b100ff)` → 原生 `func_452` analog；不要赌 `func_41` 空档 |
-| EXIT 无杆 | 679 重写 `0x1` 当前速度 + `0xf` 淡出，`dash_land_keep_move` 不 `func_296(0)`，让落地继承 |
+| EXIT 无杆 | 679 → `untransform_keep_move`（拆鸟、不清 `0x4000`、不 `296(0)`）。**不要**走 `dash_land_keep_move` |
 | ACTIVE shoot | `0x1004000`、loop `0x38`、tick 在 593 后锁前冲 30 帧 |
 | EXIT 自然 | 679：无杆拆鸟 + `252`；`func_93` 离开 hash |
-| INTERRUPT | `func_41` FORCED_RECOVERY；`stop_effects` 清 dash 旗和 `0x3d` |
+| INTERRUPT | `func_41` 见非 dash hash 时 `rebellion_dash_land_keep_move`：清旗、拆鸟挂件、snap 枪/刀 `sys_47(0x11)`、`func_884` 接手。排除 `0x77b100ff` / `0x9475130e` |
 | RESPAWN | `func_874` → `stop_effects` |
 
 ---
@@ -432,8 +433,63 @@ void rebellion_normal_special_n_bird_dash_tick()
 | `global142` | 鸟行 `0xc2b19d13` | 鸟行 | 普通 `0xc2b19d12` | 普通 |
 | `global24` `0x4000` | shoot 的 `func_167(0x1004000)` | 保持 | `func_169(0x4000)` | 清 |
 | `dash_active` | `1` | `1` | `stop_effects` → `0` | `0` |
+| 枪/刀 `sys_47(0x10)` / `sys_47(0x11)` | `attach_in` 鸟位移 | 保持 | `restore_normal_hand_weapons` snap 0 | **必须 snap 0**；只清旗会把鸟 TRS 留在手上 |
 | `0x3d` | 不写 | 不写 | 清 | 清 |
 | 当前 hash | `0x928ca34f` | 同左 | `func_93` 离开 | 受击/idle 等 |
+
+---
+
+## 受击时枪/刀仍停在鸟位移（2026-09-06）
+
+**Status:** E1 source-pinned; in-game H5 untested
+
+地面特格接 N 的 dash **禁止**写 `global143=0x2`。`cut_in_loop` 仍会 `rebellion_bird_props_attach_in()`，给双手枪 `0xcb1fd274` / `0x521683ce` 和剑柄 `0x1c5c91a8` / `0x5fefab7` 写 `sys_47(0x11)` 鸟挂点（枪约 `(300,100,±350)`，刀约 `(100,-250,±140)`）。
+
+受击时 `func_41` 以前只把 `dash_active` 清零。`rebellion_interrupt_bird_form_to_ground()` 要 `global143==0x2` 才进，所以拆挂件 / `rebellion_restore_normal_hand_weapons()`（先 snap TRS 再 `func_884`）整段跳过。原生 `func_15` → `func_882` 在 `global143==0` 时也会直接 `func_884()` 把手持装回手上，但 **不会** 清 `sys_47(0x11)`。画面已经是 normal，枪和刀还带着飞行位移。
+
+`rebellion_dash_land_keep_move()` 本来就是 hit/cancel helper，此前 **零调用点**（679 无杆走 `untransform_keep_move`，故意不 `func_169(0x4000)`）。现行：`func_41` 在离开 `0x928ca34f` 且不是 analog `0x77b100ff` / 变形 `0x9475130e` 时调用它；helper 在 `func_884` 后再 snap 一次 duration-0 TRS，打断 676 刚开始的 fly-in lerp。
+
+不要用 `restore_ms_after_bird`：dash 不锁存 `global170`。不要把这条改成鸟 FORCED_RECOVERY。
+
+```text
+H5  hypothesis: 特格接 N dash 刚 attach_in 就被打，func_41 走 dash_land_keep_move 后枪/刀回到手持原点
+P5  prediction: 受击动作里双枪或双刀贴手，没有鸟挂点平移；无杆 679 / 有杆 analog 外观不变
+F5  falsifier: 受击后枪或刀仍漂在胸前/身侧；或松杆惯性消失；或按住方向进 analog 时提前拆鸟
+```
+
+---
+
+## 676 闪光 vs 光剑 group 8（2026-09-05，待实机）
+
+**Status:** E1 source + E2/E3 analog from [bird-melee-n-followup](./wing-zero-rebellion-bird-melee-n-followup.md) `sys_4A` group split. Dash left-blade symptom is **untested** after this change.
+
+```text
+H: 676 在 cut_in_loop 之后把 0xdc4314cd 写进 group 8 slot 0，与
+   rebellion_play_saber_beam_fx 的 0x2BE700A2（R slot 0 / L slot 1）同组。
+   该 hash 已证整组后写覆盖，只改 slot 不够。
+P: 闪光改到 group 6 slot 0（与 stop_effects / 鸟近战入口相同）后，
+   普通特格接左/前/右格斗变鸟时左右红色刃都在，闪光仍在。
+F: 左刃仍缺；或闪光消失；或右刃也没了。
+```
+
+`rebellion_normal_special_n_bird_dash_start` 原写法：
+
+```c
+rebellion_transform_cut_in_loop();  // play_saber_beam_fx group 8
+sys_4A(0, 0xdc4314cd, global20, 0x1, 0x8, 0);  // BAD: saber group
+sys_4A(0, 0x2133778d, global20, 0x1, 0x7, 0);  // aura, keep
+```
+
+现行：`0xdc4314cd` → group `0x6` slot `0`。不要再把它写回 group `0x8`。`sys_4A(0xb, 0x8)` 会整组清光剑，那是特射闪电的坑，不要抄到 dash。
+
+所有权：
+
+| Effect | Group | Slot | 生命周期 |
+|--------|------:|-----:|----------|
+| 676 闪光 `0xdc4314cd` | `0x6` | `0` | start 生成；`stop_effects` 清 |
+| 676 气场 `0x2133778d` | `0x7` | `0` | start 生成；`stop_effects` 清 |
+| 红刃 `0x2BE700A2` R `0x1c5c91a8` | `0x8` | `0` | `attach_in` / `play_saber_beam_fx` |
+| 红刃 `0x2BE700A2` L `0x5fefab7` | `0x8` | `0x1` | 同上 |
 
 ---
 

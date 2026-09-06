@@ -21,12 +21,14 @@ export interface ConfigState {
   imgToNutexbOutputPath?: string;
   repackInputPath?: string;
   sceneEditGizmoSize?: number;
+  cameraPreviewViewZoom: number;
   sidebarOpen: boolean;
   locale: AppLocale;
 
   // Methods to update settings
   setRepackInputPath: (path: string) => Promise<void>;
   setSceneEditGizmoSize: (size: number) => Promise<void>;
+  setCameraPreviewViewZoom: (zoom: number) => Promise<void>;
   setSidebarOpen: (open: boolean) => Promise<void>;
   setLocale: (locale: AppLocale) => Promise<void>;
 }

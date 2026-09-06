@@ -1,1 +1,93 @@
-{"title":{"typedEntry":"{{fileType}} 型エントリ"},"list":{"title":"エントリ","filteredCount":"{{visible}} / {{total}}","rows":"{{count}} 行","pending":"…","fields":"{{count}} フィールド"},"legend":{"file":"ファイル {{count}}","copy":"コピー {{count}}","new":"新規 {{count}}","edited":"編集済み {{count}}","highlight":"ハイライト {{count}}"},"search":{"entriesPlaceholder":"ID / フィールド / 値を検索…","fieldsPlaceholder":"フィールドを絞り込み…"},"aria":{"importExport":"インポートとエクスポート","entryTools":"エントリーツール"},"buttons":{"import":"インポート","importTooltip":"16進バイトまたはエントリーJSONをインポート","entryJson":"エントリーJSON","entryJsonTooltip":"選択したエントリーをJSONとしてコピー","allJson":"すべてのJSON","allJsonTooltip":"現在のビューのデータをJSONとしてコピー","hex":"16進","hexTooltip":"16進プレビュー","copyEffect":"効果をコピー","copyEffectTooltip":"このエントリーの効果ハッシュを別の効果パックへコピー","duplicate":"複製","add":"追加","delete":"削除","edit":"編集","cancel":"キャンセル","save":"保存"},"field":{"emptyString":"（空の文字列）"},"empty":{"entriesSearch":"検索に一致するエントリーはありません。","noEntrySelected":"エントリーが選択されていません","fieldsFilter":"フィルターに一致するフィールドはありません。"},"status":{"unsaved":"未保存"},"hex":{"title":"16進プレビュー","editHeader":"16進バイトを編集 · {{count}}バイト · 1行16バイト","offset":"オフセット","hex":"16進","ascii":"ASCII"},"errors":{"fieldLayout":"エントリーフィールドのレイアウトを解決できません。"},"toast":{"hexSaved":"16進プレビューの変更をエントリーフィールドに保存しました"}}
+{
+  "title": {
+    "typedEntry": "{{fileType}} 型エントリ"
+  },
+  "list": {
+    "title": "エントリ",
+    "filteredCount": "{{visible}} / {{total}}",
+    "rows": "{{count}} 行",
+    "pending": "…",
+    "fields": "{{count}} フィールド"
+  },
+  "legend": {
+    "file": "ファイル {{count}}",
+    "copy": "コピー {{count}}",
+    "new": "新規 {{count}}",
+    "edited": "編集済み {{count}}",
+    "highlight": "ハイライト {{count}}"
+  },
+  "search": {
+    "entriesPlaceholder": "ID / フィールド / 値を検索…",
+    "fieldsPlaceholder": "フィールドを絞り込み…"
+  },
+  "aria": {
+    "importExport": "インポートとエクスポート",
+    "entryTools": "エントリーツール"
+  },
+  "buttons": {
+    "import": "インポート",
+    "importTooltip": "16進バイトまたはエントリーJSONを選択行へインポート",
+    "jsonView": "JSON",
+    "jsonViewTooltip": "選択したエントリーJSONを表示・編集",
+    "allJson": "すべてのJSON",
+    "allJsonTooltip": "現在のビューのデータをJSONとしてコピー",
+    "hex": "16進",
+    "hexTooltip": "16進プレビュー",
+    "copyEffect": "効果をコピー",
+    "copyEffectTooltip": "このエントリーの効果ハッシュを別の効果パックへコピー",
+    "duplicate": "複製",
+    "duplicateTooltip": "選択したエントリーを新しい entryId で複製",
+    "add": "追加",
+    "delete": "削除",
+    "edit": "編集",
+    "cancel": "キャンセル",
+    "save": "保存"
+  },
+  "jsonView": {
+    "title": "エントリーJSON",
+    "subtitle": "適用は現在行を上書き、複製は新しい entryId を追加",
+    "viewOnly": "表示のみ",
+    "editing": "編集中",
+    "badge": "エントリーJSON",
+    "ready": "準備完了",
+    "paste": "貼り付け",
+    "format": "整形",
+    "copy": "JSONをコピー",
+    "clone": "新規として複製",
+    "apply": "現在行に適用",
+    "editAria": "エントリーJSONを編集",
+    "toast": {
+      "applied": "JSONを選択したエントリーに適用しました",
+      "cloned": "JSONから新しいエントリーを複製しました",
+      "copied": "エントリーJSONをコピーしました",
+      "copyFailed": "JSONのコピーに失敗しました",
+      "pasteEmpty": "クリップボードが空です",
+      "pasteFailed": "クリップボードの読み取りに失敗しました",
+      "invalid": "無効なJSONです"
+    }
+  },
+  "field": {
+    "emptyString": "（空の文字列）"
+  },
+  "empty": {
+    "entriesSearch": "検索に一致するエントリーはありません。",
+    "noEntrySelected": "エントリーが選択されていません",
+    "fieldsFilter": "フィルターに一致するフィールドはありません。"
+  },
+  "status": {
+    "unsaved": "未保存"
+  },
+  "hex": {
+    "title": "16進プレビュー",
+    "editHeader": "16進バイトを編集 · {{count}}バイト · 1行16バイト",
+    "offset": "オフセット",
+    "hex": "16進",
+    "ascii": "ASCII"
+  },
+  "errors": {
+    "fieldLayout": "エントリーフィールドのレイアウトを解決できません。"
+  },
+  "toast": {
+    "hexSaved": "16進プレビューの変更をエントリーフィールドに保存しました"
+  }
+}

@@ -113,9 +113,9 @@ pub struct NuanmbClipTransformRequest {
 
 /// NUANMB → transformed NUANMB. ClipOps v1 output is transform-only.
 ///
-/// Write-back uses `write_motion_clip_as_nuanmb`, which **never** re-emits
-/// `ATH_*` helper Transform nodes (homemade motions must not convert ATH).
-/// See `docs/nuanmb-ath-helper-bone-policy.md`.
+/// Write-back uses `write_motion_clip_as_nuanmb`, which **defaults to omitting**
+/// `ATH_*` helper Transform nodes (host homemade policy). ClipOps has no
+/// keep-ATH checkbox. See `docs/nuanmb-ath-helper-bone-policy.md`.
 pub fn transform_nuanmb_clip(
     request: NuanmbClipTransformRequest,
 ) -> Result<MotionConversionReport, MotionInterchangeError> {

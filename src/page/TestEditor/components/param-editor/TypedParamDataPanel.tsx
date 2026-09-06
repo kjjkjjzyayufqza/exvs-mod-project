@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
-import { Search, CopyPlus, Eye, Plus, Trash2, Pencil, Save, X, ClipboardCopy, Braces, FileInput, Copy } from "lucide-react"
+import { Search, CopyPlus, Eye, Plus, Trash2, Pencil, Save, X, Braces, FileInput, FileJson, Copy } from "lucide-react"
 import { AppRndModalShell } from "@/components/AppRndModalShell"
 import { Button } from "@/components/ui/button"
 import { formatHash } from "@/models/commandTable"
@@ -34,10 +34,10 @@ import {
 import { ParamEntryListBadges } from "./ParamEntryListBadges"
 import { ParamEntryListRow } from "./ParamEntryListRow"
 import {
-  copyTypedParamEntryJsonToClipboard,
   copyTypedParamFileJsonToClipboard,
 } from "./typedParamClipboard"
 import { TypedParamImportDialog } from "./TypedParamImportDialog"
+import { TypedParamJsonViewDialog } from "./TypedParamJsonViewDialog"
 import { ProjectileDepictionCopyDialog } from "./ProjectileDepictionCopyDialog"
 import { isProjectileDepictionTableFileType } from "./projectileDepictionCopy"
 import {
@@ -200,6 +200,7 @@ export function TypedParamDataPanel({
   const [entrySearch, setEntrySearch] = useState("")
   const [previewOpen, setPreviewOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [jsonViewOpen, setJsonViewOpen] = useState(false)
   const [copyEffectOpen, setCopyEffectOpen] = useState(false)
   const [hexPreviewMode, setHexPreviewMode] = useState<"view" | "edit">("view")
   const [hexEditDraft, setHexEditDraft] = useState("")
@@ -470,10 +471,6 @@ export function TypedParamDataPanel({
     [persistHighlightedEntryIds],
   )
 
-  const copySelectedEntryJson = useCallback(() => {
-    void copyTypedParamEntryJsonToClipboard(fileType, data, selectedEntryIndex)
-  }, [data, fileType, selectedEntryIndex])
-
   const copyFullViewJson = useCallback(() => {
     void copyTypedParamFileJsonToClipboard(fileType, data)
   }, [data, fileType])
@@ -487,6 +484,16 @@ export function TypedParamDataPanel({
     },
     [data, onChange, selectedEntryIndex],
   )
+
+  const cloneImportedEntry = (nextEntry: TypedParamEntry) => {
+    const sourceEntryId = readTypedEntryId(data.entries[selectedEntryIndex] ?? {}, selectedEntryIndex)
+    appendEntry(nextEntry, {
+      origin: "copied",
+      sourceEntryId,
+      sourceIndex: selectedEntryIndex,
+      isDirty: true,
+    })
+  }
 
   return (
     <div className="grid h-full min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[minmax(220px,280px)_minmax(0,1fr)]">
@@ -625,11 +632,11 @@ export function TypedParamDataPanel({
                   variant="ghost"
                   className={PANEL_TOOLBAR_BUTTON_CLASS}
                   disabled={!entry}
-                  title={t("buttons.entryJsonTooltip")}
-                  onClick={copySelectedEntryJson}
+                  title={t("buttons.jsonViewTooltip")}
+                  onClick={() => setJsonViewOpen(true)}
                 >
-                  <ClipboardCopy className="h-3 w-3" />
-                  {t("buttons.entryJson")}
+                  <FileJson className="h-3 w-3" />
+                  {t("buttons.jsonView")}
                 </Button>
                 <Button
                   type="button"
@@ -680,6 +687,7 @@ export function TypedParamDataPanel({
                   size="sm"
                   variant="ghost"
                   className={PANEL_TOOLBAR_BUTTON_CLASS}
+                  title={t("buttons.duplicateTooltip")}
                   onClick={copyEntryAsNew}
                 >
                   <CopyPlus className="h-3 w-3" />
@@ -836,6 +844,15 @@ export function TypedParamDataPanel({
         data={data}
         selectedEntryIndex={selectedEntryIndex}
         onApply={applyImportedEntry}
+      />
+      <TypedParamJsonViewDialog
+        open={jsonViewOpen}
+        onOpenChange={setJsonViewOpen}
+        fileType={fileType}
+        data={data}
+        selectedEntryIndex={selectedEntryIndex}
+        onApply={applyImportedEntry}
+        onClone={cloneImportedEntry}
       />
       {isProjectileDepictionTableFileType(fileType) ? (
         <ProjectileDepictionCopyDialog

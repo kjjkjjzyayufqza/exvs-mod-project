@@ -1,8 +1,9 @@
 use app_lib::ssbh_motion_interchange::{
     export_nuanmb_to_cascadeur_bridge, import_cascadeur_bridge_to_nuanmb, read_cascadeur_bridge,
     read_nuanmb_as_motion_clip, validate_rig_binding, write_cascadeur_bridge,
-    write_motion_clip_as_nuanmb, CascadeurBridgeManifest, CascadeurToNuanmbRequest, MotionBone,
-    MotionClip, MotionFrame, MotionSkeleton, NuanmbToCascadeurRequest, RigBindingPolicy,
+    write_motion_clip_as_nuanmb, write_motion_clip_as_nuanmb_with_options, CascadeurBridgeManifest,
+    CascadeurToNuanmbRequest, MotionBone, MotionClip, MotionFrame, MotionSkeleton,
+    NuanmbToCascadeurRequest, NuanmbWriteOptions, RigBindingPolicy,
 };
 use glam::{Mat4, Quat, Vec3};
 use ssbh_data::{
@@ -277,6 +278,81 @@ fn nuanmb_writer_strips_ath_helper_bones() {
         .collect();
     assert_eq!(names, vec!["BASE", "KOSHI"]);
     assert!(!names.iter().any(|name| name.starts_with("ATH_")));
+}
+
+/// Extra / Part homemade clips keep `ATH_*` when omit is disabled.
+#[test]
+fn nuanmb_writer_keeps_ath_helper_bones_when_omit_disabled() {
+    use ssbh_data::anim_data::GroupType;
+
+    let directory = tempfile::tempdir().unwrap();
+    let output_path = directory.path().join("keep_ath.nuanmb");
+    let clip = MotionClip {
+        name: "extra_part".to_string(),
+        sample_rate_hz: 60,
+        skeleton: MotionSkeleton {
+            bones: vec![
+                MotionBone {
+                    name: "BASE".to_string(),
+                    parent_index: None,
+                    rest_local: identity_transform(),
+                },
+                MotionBone {
+                    name: "ATH_TE_R".to_string(),
+                    parent_index: Some(0),
+                    rest_local: identity_transform(),
+                },
+                MotionBone {
+                    name: "ATH_BACKPACK".to_string(),
+                    parent_index: Some(0),
+                    rest_local: identity_transform(),
+                },
+                MotionBone {
+                    name: "KOSHI".to_string(),
+                    parent_index: Some(0),
+                    rest_local: identity_transform(),
+                },
+            ],
+        },
+        frames: vec![MotionFrame {
+            local_transforms: vec![
+                identity_transform(),
+                Transform {
+                    scale: Vec3::ONE,
+                    rotation: Quat::IDENTITY,
+                    translation: Vec3::new(9.0, 0.0, 0.0),
+                },
+                Transform {
+                    scale: Vec3::ONE,
+                    rotation: Quat::IDENTITY,
+                    translation: Vec3::new(8.0, 0.0, 0.0),
+                },
+                identity_transform(),
+            ],
+        }],
+    };
+
+    write_motion_clip_as_nuanmb_with_options(
+        &clip,
+        None,
+        &output_path,
+        NuanmbWriteOptions {
+            omit_ath_helper_bones: false,
+        },
+    )
+    .unwrap();
+    let output = AnimData::from_file(&output_path).unwrap();
+    let transform = output
+        .groups
+        .iter()
+        .find(|group| group.group_type == GroupType::Transform)
+        .expect("transform group");
+    let names: Vec<&str> = transform
+        .nodes
+        .iter()
+        .map(|node| node.name.as_str())
+        .collect();
+    assert_eq!(names, vec!["BASE", "ATH_TE_R", "ATH_BACKPACK", "KOSHI"]);
 }
 
 /// Import/writer must emit stock CompScale+Visibility, **Translate on every

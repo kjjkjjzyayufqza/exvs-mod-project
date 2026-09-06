@@ -46,4 +46,19 @@ describe("TypedParamDataPanel Copy Effect button", () => {
     )
     expect(screen.queryByRole("button", { name: "Copy Effect" })).not.toBeInTheDocument()
   })
+
+  it("shows Import, JSON view, and Clone for typed param entries", () => {
+    render(
+      <TypedParamDataPanel
+        fileType="armsparam"
+        data={sampleData()}
+        selectedEntryIndex={0}
+        onSelectEntry={() => {}}
+        onChange={() => {}}
+      />,
+    )
+    expect(screen.getByRole("button", { name: "Import" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /^JSON$/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Clone" })).toBeInTheDocument()
+  })
 })

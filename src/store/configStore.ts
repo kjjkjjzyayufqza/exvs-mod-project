@@ -7,6 +7,12 @@ import {
   normalizeSceneGizmoSize,
 } from "@/page/SceneEdit/utils/sceneEditorSettings";
 import {
+  CAMERA_PREVIEW_VIEW_ZOOM_SETTING_KEY,
+  normalizeCameraPreviewViewZoom,
+  readCameraPreviewViewZoomMirror,
+  writeCameraPreviewViewZoomMirror,
+} from "@/page/TestEditor/components/camera-table/cameraPreviewSettings";
+import {
   APP_LOCALE_STORE_KEY,
   normalizeAppLocale,
   readAppLocaleMirror,
@@ -51,6 +57,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   imgToNutexbOutputPath: "",
   repackInputPath: "",
   sceneEditGizmoSize: DEFAULT_SCENE_GIZMO_SIZE,
+  cameraPreviewViewZoom: readCameraPreviewViewZoomMirror(),
   sidebarOpen: readSidebarOpenMirror(),
   locale: readAppLocaleMirror(),
 
@@ -71,6 +78,10 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     const sceneEditGizmoSize = normalizeSceneGizmoSize(
       await _store.get(SCENE_GIZMO_SIZE_SETTING_KEY),
     );
+    const cameraPreviewViewZoom = normalizeCameraPreviewViewZoom(
+      await _store.get(CAMERA_PREVIEW_VIEW_ZOOM_SETTING_KEY),
+    );
+    writeCameraPreviewViewZoomMirror(cameraPreviewViewZoom);
     const storedSidebarOpen = await _store.get(SIDEBAR_OPEN_STORE_KEY);
     const sidebarOpen = storedSidebarOpen === undefined ? true : Boolean(storedSidebarOpen);
     writeSidebarOpenMirror(sidebarOpen);
@@ -91,6 +102,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       imgToNutexbOutputPath: imgToNutexbOutputPath as string,
       repackInputPath: repackInputPath as string,
       sceneEditGizmoSize,
+      cameraPreviewViewZoom,
       sidebarOpen,
       locale,
     });
@@ -123,6 +135,11 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     if (key === "imgToNutexbOutputPath") set({ imgToNutexbOutputPath: String(value ?? "") });
     if (key === "repackInputPath") set({ repackInputPath: String(value ?? "") });
     if (key === SCENE_GIZMO_SIZE_SETTING_KEY) set({ sceneEditGizmoSize: normalizeSceneGizmoSize(value) });
+    if (key === CAMERA_PREVIEW_VIEW_ZOOM_SETTING_KEY) {
+      const cameraPreviewViewZoom = normalizeCameraPreviewViewZoom(value);
+      writeCameraPreviewViewZoomMirror(cameraPreviewViewZoom);
+      set({ cameraPreviewViewZoom });
+    }
   },
 
   setRepackInputPath: async (path: string) => {
@@ -142,6 +159,17 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       await store.save();
     }
     set({ sceneEditGizmoSize: normalized });
+  },
+
+  setCameraPreviewViewZoom: async (zoom: number) => {
+    const normalized = normalizeCameraPreviewViewZoom(zoom);
+    writeCameraPreviewViewZoomMirror(normalized);
+    set({ cameraPreviewViewZoom: normalized });
+    const { store } = get();
+    if (store) {
+      await store.set(CAMERA_PREVIEW_VIEW_ZOOM_SETTING_KEY, normalized);
+      await store.save();
+    }
   },
 
   setSidebarOpen: async (open: boolean) => {

@@ -103,6 +103,7 @@ describe("MotionFbxImportPanel", () => {
           templateNuanmbPath: "E:\\unit\\attack.nuanmb",
           animationStackName: "attack_edit",
           rigBindingPolicy: "exactHierarchy",
+          omitAthHelperBones: true,
         },
       }),
     );
@@ -148,6 +149,30 @@ describe("MotionFbxImportPanel", () => {
       }),
     );
     expect(onImportedMock).toHaveBeenCalledWith("E:\\unit\\attack.nuanmb");
+  });
+
+  it("sends omitAthHelperBones false when skip ATH is unchecked", async () => {
+    openMock.mockResolvedValueOnce("E:\\edit\\attack_edit.fbx");
+    saveMock.mockResolvedValueOnce("E:\\out\\attack_edit.nuanmb");
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "ssbh_inspect_motion_fbx") return Promise.resolve(inspectReport);
+      if (command === "ssbh_import_motion_fbx") return Promise.resolve(importReport);
+      return Promise.reject(new Error(`unexpected command ${command}`));
+    });
+    renderPanel();
+
+    fireEvent.click(screen.getByLabelText(/Source FBX/i));
+    await waitFor(() => expect(openMock).toHaveBeenCalled());
+    fireEvent.click(screen.getByLabelText(/Output NUANMB/i));
+    await waitFor(() => expect(saveMock).toHaveBeenCalled());
+    fireEvent.click(screen.getByLabelText(/Skip ATH/i));
+    fireEvent.click(screen.getByRole("button", { name: /Import FBX as NUANMB/i }));
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("ssbh_import_motion_fbx", {
+        request: expect.objectContaining({ omitAthHelperBones: false }),
+      }),
+    );
   });
 
   it("omits the template when preserve groups is unchecked", async () => {

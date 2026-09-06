@@ -4,6 +4,7 @@ import {
   buildTypedEntryFieldLayout,
   buildTypedEntryHexPreview,
   isTypedEntryFieldKey,
+  nextTypedEntryId,
   parseHexPreviewEditText,
 } from "./paramEntryUtils"
 import type { TypedParamEntryClipboardPayload } from "./typedParamClipboard"
@@ -304,6 +305,34 @@ export function applyTypedParamImport(
   }
 
   return { ok: true, format: "entry-json", entry: validated.entry }
+}
+
+export function applyTypedParamEntryJson(
+  text: string,
+  fileType: string,
+  data: TypedParamFile,
+  selectedEntryIndex: number,
+): TypedParamImportApplyResult {
+  const preview = previewTypedParamImport(text, fileType, data, selectedEntryIndex)
+  if (preview.format === "hex") {
+    return { ok: false, error: "JSON view does not accept hex bytes. Use Import for hex." }
+  }
+  return applyTypedParamImport(text, fileType, data, selectedEntryIndex)
+}
+
+export function cloneTypedParamEntryFromJson(
+  text: string,
+  fileType: string,
+  data: TypedParamFile,
+  selectedEntryIndex: number,
+): TypedParamImportApplyResult {
+  const applied = applyTypedParamEntryJson(text, fileType, data, selectedEntryIndex)
+  if (!applied.ok) return applied
+  return {
+    ok: true,
+    format: "entry-json",
+    entry: { ...applied.entry, entryId: nextTypedEntryId(data.entries) },
+  }
 }
 
 export function isTypedParamEntryClipboardPayload(value: unknown): value is TypedParamEntryClipboardPayload {

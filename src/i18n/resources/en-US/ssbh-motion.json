@@ -170,6 +170,7 @@
     "stackFrames": "{{name}} ({{count}}f)",
     "importButton": "Import FBX as NUANMB",
     "preserveGroups": "Preserve groups from selected NUANMB (visibility/material template only — not the output path)",
+    "omitAthHelperBones": "Skip ATH_* helper bones",
     "noTemplate": "No NUANMB selected: the import writes a transform-only clip.",
     "templateReadonly": "Template (read-only):",
     "boneMatching": "Bone matching",

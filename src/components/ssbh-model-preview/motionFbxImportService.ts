@@ -2,8 +2,8 @@
  * FBX → NUANMB import client.
  *
  * Backend write path:
- * - Omits all `ATH_*` helper bones (do not author/edit/convert ATH tracks).
- *   Policy: `docs/nuanmb-ath-helper-bone-policy.md`.
+ * - Omits `ATH_*` helper bones by default (`omitAthHelperBones: true`).
+ *   Uncheck for extra/Part clips. Policy: `docs/nuanmb-ath-helper-bone-policy.md`.
  * - Uncompressed Anim v1.2 only (no residual 0x3409/0x4409).
  * - Emits stock `CompensateScale` + `Visibility` on every Transform track so
  *   in-game playback matches EXVS2 body clips (editor-only dense TRS is not enough).
@@ -34,6 +34,7 @@ export type MotionFbxImportRequest = {
   templateNuanmbPath: string | null;
   animationStackName: string | null;
   rigBindingPolicy: RigBindingPolicyValue;
+  omitAthHelperBones: boolean;
 };
 
 /** Preview-only: convert FBX→temp NUANMB without asking the user for a save path. */
@@ -43,6 +44,7 @@ export type MotionFbxPreviewRequest = {
   templateNuanmbPath: string | null;
   animationStackName: string | null;
   rigBindingPolicy: RigBindingPolicyValue;
+  omitAthHelperBones?: boolean;
 };
 
 export type MotionConversionReport = {
@@ -112,6 +114,7 @@ export async function previewMotionFbx(
     templateNuanmbPath: request.templateNuanmbPath,
     animationStackName: request.animationStackName,
     rigBindingPolicy: request.rigBindingPolicy,
+    omitAthHelperBones: request.omitAthHelperBones ?? true,
   });
 }
 

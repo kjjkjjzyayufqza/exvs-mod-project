@@ -306,7 +306,7 @@ hold 内额外写 live yaw，也不改变第二发 followup 的快照瞄准。
 8. **点按窗用 motion 时间区间，不要只靠 `func_309` 边沿。**  
 9. **主射 `0x1` 和特射 `0x100` 都要能点按。**  
 10. **不要 `func_81` 后觉醒 hash，也不要把第二发做成 3 圈重进。**
-11. **第一发闪电用点按第二发那套 `rebellion_twinbuster_charge_fx_*`（`0x43221BFF` group 8）。** 不要 `0x6c04bf01` + 开火 `sys_4A(0x1, 0x7)`；觉醒开火不要 `sys_4A(0xb, 0x8)`。
+11. **觉醒中第一发才用点按第二发那套 `rebellion_twinbuster_charge_fx_*`。** 不觉醒第一发不要 `0x43221BFF`。觉醒开火不要 `sys_4A(0xb, 0x8)`。
 
 ---
 
@@ -327,22 +327,20 @@ hold 内额外写 live yaw，也不改变第二发 followup 的快照瞄准。
 
 **Status:** E1 source-pinned; L3 untested
 
-用户：平时 / 觉醒特射都会直接出两发红的，缺闪电；闪电就是正常特射**第二发**那套。
+用户更正（2026-09-05）：**只有普通形态 + 觉醒中（`sys_0(0xc0000)`）的第一发**才用第二发那套闪电。不觉醒的平时第一发 `CDA9F55A/B` 不要 `0x43221BFF`。
 
-| 路径 | 弹 | 以前的 muzzle FX | 现在 |
-|------|----|------------------|------|
-| 平时第一发 | `CDA9F55A/B` | hold 时 `0x6c04bf01` 挂 `0xC59B3FEC` group 7，开火立刻 `sys_4A(0x1, 0x7)` 清掉 | hold+开火 keep `rebellion_twinbuster_charge_fx_*` |
-| 觉醒 / burst 第一发 | `CDA9F55C/D` | 同上，再在开火帧 `sys_4A(0xb, 0x8)` 把 group 8 也清掉 | 同一套 keep；**不要** `sys_4A(0xb, 0x8)` |
-| 点按第二发 | `CDA9F55C/D` | `0x43221BFF` 挂合成枪 `0xaad46c` bone `0x3`/`0x7` group 8，开火期间 keep | 不变 |
-
-第二发已经证实能看见的闪电是 `rebellion_twinbuster_charge_fx_start/keep/end`，不是 group-7 `0x6c04bf01`。
+| 路径 | 弹 | muzzle FX |
+|------|----|-----------|
+| 平时第一发（不觉醒） | `CDA9F55A/B` | 无第二发闪电。不要 `charge_fx_start` |
+| 觉醒 / burst 第一发 | `CDA9F55C/D` | hold+开火 keep `rebellion_twinbuster_charge_fx_*`。**不要**开火帧 `sys_4A(0xb, 0x8)` |
+| 点按第二发 | `CDA9F55C/D` | 不变：`0x43221BFF` 挂 `0xaad46c` bone `0x3`/`0x7` group 8 |
 
 ```text
-H9  hypothesis: first-shot hold+fire uses the same 0x43221BFF keep as tap second shot, in both normal A/B and burst C/D
-P9  prediction: 15f freeze already shows both-barrel lightning; it stays while the two red beams play; tap followup pause lightning unchanged
-F9  falsifier: first fire still has no lightning; tap second shot lost lightning; CSA bar dumped (do not sys_4A(0x1, 0x7) on 677)
+H10 hypothesis: non-burst first shot A/B has no 0x43221BFF; burst first shot C/D keeps the tap-second-shot lightning
+P10 prediction: 不觉醒特射第一发无闪电；觉醒中第一发两发红弹带闪电；点按第二发闪电仍在
+F10 falsifier: 不觉醒第一发仍有闪电；觉醒第一发仍无闪电；点按第二发丢闪电
 ```
 
-EXIT：自然放到 `0x14b4` / `func_925` recovery / `func_924` 空弹都 `charge_fx_end`。点按不要在 677 里 end，followup 会 `start` 再接。INTERRUPT：不要在 `func_93` 里 end（BD/跳可进 `func_93` 而招还活着）；下一发 `ACTION_AC_SPECIAL_SHOT_ALT_2` ENTER 会 end leftover。
+EXIT：自然放到 `0x14b4` / `func_925` recovery / `func_924` 空弹都 `charge_fx_end`（未 start 则 no-op）。点按不要在 677 里 end，followup 会 `start` 再接。INTERRUPT：不要在 `func_93` 里 end；下一发 `ACTION_AC_SPECIAL_SHOT_ALT_2` ENTER 会 end leftover。
 
 ---

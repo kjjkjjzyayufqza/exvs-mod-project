@@ -14,6 +14,7 @@ fn main() {
         template_nuanmb_path: None,
         animation_stack_name: None,
         rig_binding_policy: RigBindingPolicy::default(),
+        omit_ath_helper_bones: true,
     })
     .expect("import");
     println!(

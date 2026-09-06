@@ -130,11 +130,28 @@ fn motion_skeleton_from_ssbh(skeleton: &SkelData) -> MotionSkeleton {
     }
 }
 
+/// Default NUANMB write: omit `ATH_*` helper Transform nodes (host Body/wing).
+/// Extra / Part clips pass [`NuanmbWriteOptions::omit_ath_helper_bones`] =
+/// `false`. See `docs/nuanmb-ath-helper-bone-policy.md`.
+#[derive(Debug, Clone, Copy)]
+pub struct NuanmbWriteOptions {
+    pub omit_ath_helper_bones: bool,
+}
+
+impl Default for NuanmbWriteOptions {
+    fn default() -> Self {
+        Self {
+            omit_ath_helper_bones: true,
+        }
+    }
+}
+
 /// Write a `MotionClip` as an EXVS2 Anim v1.2 NUANMB (**uncompressed only**).
 ///
-/// **ATH policy:** every homemade / converted motion must **omit** `ATH_*`
-/// Transform nodes. See `docs/nuanmb-ath-helper-bone-policy.md` and
-/// [`is_ath_helper_bone`]. Do not author, edit, or bake helper-bone tracks here.
+/// **ATH policy (default):** host Body / host wing homemade clips **omit**
+/// `ATH_*` Transform nodes. Extra / Part clips may keep them via
+/// [`write_motion_clip_as_nuanmb_with_options`]. See
+/// `docs/nuanmb-ath-helper-bone-policy.md` and [`is_ath_helper_bone`].
 ///
 /// **In-game layout (Import FBX path):** stock body clips always carry
 /// `CompensateScale` + `Visibility` on Transform tracks. `ssbh_data`'s
@@ -149,12 +166,25 @@ pub fn write_motion_clip_as_nuanmb(
     template_path: Option<&Path>,
     output_path: &Path,
 ) -> Result<NuanmbWriteReport, MotionInterchangeError> {
+    write_motion_clip_as_nuanmb_with_options(
+        clip,
+        template_path,
+        output_path,
+        NuanmbWriteOptions::default(),
+    )
+}
+
+pub fn write_motion_clip_as_nuanmb_with_options(
+    clip: &MotionClip,
+    template_path: Option<&Path>,
+    output_path: &Path,
+    options: NuanmbWriteOptions,
+) -> Result<NuanmbWriteReport, MotionInterchangeError> {
     clip.validate()?;
     ensure_extension(output_path, "nuanmb")?;
     // Template may equal output: load template fully into memory first, then
     // overwrite the file (re-import / overwrite selected motion).
-    // ATH_* helpers are stripped inside transform_group_from_clip — never converted.
-    let transform_group = transform_group_from_clip(clip);
+    let transform_group = transform_group_from_clip(clip, options.omit_ath_helper_bones);
     let (groups, preserved_non_transform_group_count) = if let Some(template_path) = template_path {
         ensure_extension(template_path, "nuanmb")?;
         let template = AnimData::from_file(template_path).map_err(|error| {
@@ -187,16 +217,9 @@ pub fn write_motion_clip_as_nuanmb(
 
 /// EXVS2 helper / attachment bones (`ATH_*`).
 ///
-/// **Policy (do not weaken):**
-/// - Must **not** be modified by modders as part of custom body/shot NUANMB.
-/// - Must **not** be converted / baked when writing homemade motions (FBX import,
-///   ClipOps, Cascadeur write-back, or any `MotionClip` → NUANMB path).
-/// - Omit the **whole Transform node**. Do **not** emit rest/identity/constant
-///   tracks as a substitute — present tracks still fight NUHLPB + rest hang-off.
-///
-/// Driven in-game by **NUHLPB constraints + skeleton rest**, not NUANMB tracks.
-/// Baking full TRS from DCC/FBX onto `ATH_*` produces twisted armor / vernier /
-/// shield attachments. Canonical doc: `docs/nuanmb-ath-helper-bone-policy.md`.
+/// **Host Body / host wing (do not weaken):** omit the whole Transform node.
+/// Extra / Part clips may keep ATH when the import checkbox is unchecked.
+/// Canonical doc: `docs/nuanmb-ath-helper-bone-policy.md`.
 ///
 /// Match is on the leaf name after `|` / `:` stripping; prefix `ATH_` is
 /// case-insensitive.
@@ -208,10 +231,11 @@ pub(crate) fn is_ath_helper_bone(name: &str) -> bool {
 
 /// Build the Transform group for a clip.
 ///
-/// **ATH_* bones are never written** (see [`is_ath_helper_bone`]). Skeleton bone
-/// indices stay aligned with `frame.local_transforms` so filtered helpers do not
-/// shift sampling of remaining bones.
-fn transform_group_from_clip(clip: &MotionClip) -> GroupData {
+/// When `omit_ath_helper_bones` is true (host Body default), `ATH_*` nodes are
+/// skipped (see [`is_ath_helper_bone`]). Skeleton bone indices stay aligned
+/// with `frame.local_transforms` so filtered helpers do not shift sampling of
+/// remaining bones.
+fn transform_group_from_clip(clip: &MotionClip, omit_ath_helper_bones: bool) -> GroupData {
     GroupData {
         group_type: GroupType::Transform,
         nodes: clip
@@ -221,7 +245,7 @@ fn transform_group_from_clip(clip: &MotionClip) -> GroupData {
             .enumerate()
             // Keep original bone_index so frame samples stay aligned with the
             // full skeleton even when ATH_* helpers are omitted from the group.
-            .filter(|(_, bone)| !is_ath_helper_bone(&bone.name))
+            .filter(|(_, bone)| !omit_ath_helper_bones || !is_ath_helper_bone(&bone.name))
             .map(|(bone_index, bone)| NodeData {
                 name: bone.name.clone(),
                 tracks: vec![TrackData {

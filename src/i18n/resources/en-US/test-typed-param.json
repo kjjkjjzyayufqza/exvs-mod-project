@@ -1,1 +1,93 @@
-{"title":{"typedEntry":"{{fileType}} typed entry"},"list":{"title":"Entries","filteredCount":"{{visible}} / {{total}}","rows":"{{count}} rows","pending":"...","fields":"{{count}} fields"},"legend":{"file":"File {{count}}","copy":"Copy {{count}}","new":"New {{count}}","edited":"Edited {{count}}","highlight":"Highlight {{count}}"},"search":{"entriesPlaceholder":"Search id / field / value...","fieldsPlaceholder":"Filter field…"},"aria":{"importExport":"Import and export","entryTools":"Entry tools"},"buttons":{"import":"Import","importTooltip":"Import hex bytes or entry JSON","entryJson":"Entry JSON","entryJsonTooltip":"Copy selected entry as JSON","allJson":"All JSON","allJsonTooltip":"Copy full view data as JSON","hex":"Hex","hexTooltip":"Hex preview","copyEffect":"Copy Effect","copyEffectTooltip":"Copy this entry's effect hashes into another effect pack","duplicate":"Duplicate","add":"Add","delete":"Delete","edit":"Edit","cancel":"Cancel","save":"Save"},"field":{"emptyString":"(empty string)"},"empty":{"entriesSearch":"No entries match the search.","noEntrySelected":"No entry selected","fieldsFilter":"No fields match the filter."},"status":{"unsaved":"Unsaved"},"hex":{"title":"Hex Preview","editHeader":"Edit hex bytes · {{count}} bytes · 16 bytes per line","offset":"Offset","hex":"Hex","ascii":"Ascii"},"errors":{"fieldLayout":"Unable to resolve entry field layout."},"toast":{"hexSaved":"Hex preview changes saved to entry fields"}}
+{
+  "title": {
+    "typedEntry": "{{fileType}} typed entry"
+  },
+  "list": {
+    "title": "Entries",
+    "filteredCount": "{{visible}} / {{total}}",
+    "rows": "{{count}} rows",
+    "pending": "...",
+    "fields": "{{count}} fields"
+  },
+  "legend": {
+    "file": "File {{count}}",
+    "copy": "Copy {{count}}",
+    "new": "New {{count}}",
+    "edited": "Edited {{count}}",
+    "highlight": "Highlight {{count}}"
+  },
+  "search": {
+    "entriesPlaceholder": "Search id / field / value...",
+    "fieldsPlaceholder": "Filter field…"
+  },
+  "aria": {
+    "importExport": "Import and export",
+    "entryTools": "Entry tools"
+  },
+  "buttons": {
+    "import": "Import",
+    "importTooltip": "Import hex bytes or entry JSON onto the selected row",
+    "jsonView": "JSON",
+    "jsonViewTooltip": "View and edit selected entry JSON",
+    "allJson": "All JSON",
+    "allJsonTooltip": "Copy full view data as JSON",
+    "hex": "Hex",
+    "hexTooltip": "Hex preview",
+    "copyEffect": "Copy Effect",
+    "copyEffectTooltip": "Copy this entry's effect hashes into another effect pack",
+    "duplicate": "Clone",
+    "duplicateTooltip": "Clone selected entry with a new entryId",
+    "add": "Add",
+    "delete": "Delete",
+    "edit": "Edit",
+    "cancel": "Cancel",
+    "save": "Save"
+  },
+  "jsonView": {
+    "title": "Entry JSON",
+    "subtitle": "Apply overwrites this row; Clone adds a new unique entryId",
+    "viewOnly": "view only",
+    "editing": "editing",
+    "badge": "Entry JSON",
+    "ready": "Ready",
+    "paste": "Paste",
+    "format": "Format",
+    "copy": "Copy JSON",
+    "clone": "Clone as new",
+    "apply": "Apply to current",
+    "editAria": "Edit entry JSON",
+    "toast": {
+      "applied": "Applied JSON to the selected entry",
+      "cloned": "Cloned a new entry from JSON",
+      "copied": "Copied entry JSON",
+      "copyFailed": "Failed to copy JSON",
+      "pasteEmpty": "Clipboard is empty",
+      "pasteFailed": "Failed to read clipboard",
+      "invalid": "Invalid JSON"
+    }
+  },
+  "field": {
+    "emptyString": "(empty string)"
+  },
+  "empty": {
+    "entriesSearch": "No entries match the search.",
+    "noEntrySelected": "No entry selected",
+    "fieldsFilter": "No fields match the filter."
+  },
+  "status": {
+    "unsaved": "Unsaved"
+  },
+  "hex": {
+    "title": "Hex Preview",
+    "editHeader": "Edit hex bytes · {{count}} bytes · 16 bytes per line",
+    "offset": "Offset",
+    "hex": "Hex",
+    "ascii": "Ascii"
+  },
+  "errors": {
+    "fieldLayout": "Unable to resolve entry field layout."
+  },
+  "toast": {
+    "hexSaved": "Hex preview changes saved to entry fields"
+  }
+}

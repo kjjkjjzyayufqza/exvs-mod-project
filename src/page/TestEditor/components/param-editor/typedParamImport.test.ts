@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest"
 import type { TypedParamFile } from "./typedParamTypes"
 import { buildTypedParamEntryClipboardPayload } from "./typedParamClipboard"
 import {
+  applyTypedParamEntryJson,
   applyTypedParamImport,
+  cloneTypedParamEntryFromJson,
   detectTypedParamImportFormat,
   previewTypedParamImport,
 } from "./typedParamImport"
@@ -130,5 +132,31 @@ describe("typedParamImport", () => {
     const preview = previewTypedParamImport(JSON.stringify(broken), "vernier_table", sampleData, 0)
     expect(preview.ok).toBe(false)
     expect(preview.error).toContain("Missing field")
+  })
+
+  it("rejects hex bytes in the JSON-only apply path", () => {
+    const result = applyTypedParamEntryJson("78 56 34 12 FE FF FF FF", "vernier_table", sampleData, 0)
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error).toContain("hex")
+  })
+
+  it("clones entry JSON with a new unique entryId", () => {
+    const payload = buildTypedParamEntryClipboardPayload("vernier_table", sampleData, 0)
+    expect(payload).not.toBeNull()
+    if (!payload) return
+
+    const edited = {
+      ...payload,
+      entry: {
+        ...payload.entry,
+        ammoCount: 2,
+      },
+    }
+    const result = cloneTypedParamEntryFromJson(JSON.stringify(edited), "vernier_table", sampleData, 0)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.entry.ammoCount).toBe(2)
+    expect(result.entry.entryId).toBe(0x12345679)
   })
 })

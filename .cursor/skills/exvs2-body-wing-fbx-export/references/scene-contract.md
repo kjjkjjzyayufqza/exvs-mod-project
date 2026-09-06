@@ -51,4 +51,13 @@ Exclude `OLD_*` and the other armature's meshes even if a modifier was copied by
 
 ## `ATH_*` bones
 
-They stay on the **skeleton**. They must not have animation keys in homemade clips. Strip keys in DCC (`strip_ath_keys` in the export script). NUANMB writer also omits ATH Transform nodes (`docs/nuanmb-ath-helper-bone-policy.md`).
+They stay on the **skeleton**.
+
+- **Host Body / host wing homemade clips:** do not author `ATH_*` keys. Strip
+  keys in DCC (`strip_ath_keys`). NUANMB writer omits ATH Transform nodes.
+- **Extra / Part clips** (Rebellion white `ZeroEW_White_Body` / `body_whitel`):
+  keep every bone, including ATH animation. The extra is not driven by host
+  NUHLPB. Do not call `strip_ath_keys` on that armature.
+
+Policy: `docs/nuanmb-ath-helper-bone-policy.md`. Victory extra owner:
+`docs/msc-research/wing-zero-rebellion-victory-pose.md` §9.

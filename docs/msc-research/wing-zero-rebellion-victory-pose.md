@@ -216,3 +216,94 @@ F  falsifier:   仍播 winbgn01 / 播失败 / 鸟形态下 T 姿或无动作 / �
 ```
 
 一次只改一个判断变量：要么只换 `0x4e` hash，要么只加 `func_186()==2` 分支，不要同时改鸟 form 清理。带一个 `sys_58` 探针在新 tick 首帧，用来分辨“没进新函数”和“进了但 clip 错”。
+
+---
+
+## 9. White Part extra on homemade win (2026-09-05)
+
+SHL slot 10 is Part(3) `0x04dc16ce` (editor LE `CE16DC04`), folder `016gundmw_001wgzero_001_body_whitel`. Not a second Body(0).
+
+```text
+H  Hambrabi func_1135 shape: sys_4B(0x2, white, 0, homemade 0x8525ad9a) + func_308 + func_314 after func_74 in func_870
+P  victory shows a second white body (T-pose OK)
+F  完全没有第二台  <- observed; packed 2.dscex grew with the helper
+```
+
+**Status:** E3- M1 (homemade Folder as `sys_4B` arg4). E3- M2 (`0x4094b0f4` + bone 0, still no visible white). User forbids `sys_58` probes.
+
+`body_normal.jnttbl` rec 0 is hash `0` / boneIndex `0` (GBL_RT). Bone 0 is a valid mount, so M2 may have overlaid the player.
+
+```text
+H  sys_47(0x10, 0x04dc16ce, 0, 0xfa0, 0, 0, 0) after the M2 attach slides the Part off GBL_RT
+P  a second body appears beside the winner; win-start 0xed66f76 on the main body (group 0xa slot 0x3)
+F  still no second body / no start FX on the main body
+```
+
+**Status:** E3 2026-09-05 user: second body visible on win, T-pose. Call site was `func_480` after `func_884` (and `func_871` re-spawn after its `sys_4B(0x3)`). M1/M2 failed because spawn lived only in `func_870`.
+
+T-pose is expected: `win_pose` children are only `unk2=9c5e24c7` (main body) and `unk2=c1a9c1f6` (main wing). White Part `0x04dc16ce` / editor LE `CE16DC04` has no child. `func_308` the same Folder on that id has nothing to bind.
+
+Next one-variable (motion pack, not MSC attach): same Folder `win_pose`, add a child that reuses the body `*_win_pose_out.nuanmb` with `unk2=ce16dc04`. Do not make a second Folder. No white wing SHL row yet, so do not add a wing child until that model exists.
+
+Keep `sys_47(0x10)` +X `0xfa0` until the user wants overlay/side-by-side tuned. Probe `sys_4A` on ENTER removed after this E3.
+
+Motion pack later added `win_pose` children `unk2=ce16dc04` (white body) and `unk2=daaa1479` (white wing). **Status:** E3 2026-09-05 user: white body plays the pose.
+
+```text
+H  keep 0x4094b0f4 + bone 0 after motion children exist
+P  white body stands on host GBL_RT beside the winner
+F  white body animates but is glued to the wrong bone  <- observed
+```
+
+`0x4094b0f4` is the weapon/Part attach (`ATH_TE_*` / saber). Bone 0 is already GBL_RT in `body_normal` / `body_whitel` jnttbl; the wrong visual was arg4, not a missing GBL_RT hash. `func_190`'s `0x810a8bef` is **not** an identity bind — see M4 / `down_faceup_gnd_fr` below.
+
+SHL slot 11 Type1 `0x7914aada` (editor LE `DAAA1479`) reuses folder `wep_wing00`. Host wing is `sys_4B(0x2, 0xf6c1a9c1, 0xad1a39fb, 0xae17be24)`. White wing must pass parent `0x04dc16ce` or it becomes a second host backpack wing. White `ATH_BACKPACK` jnttbl hash is the same `0xAD1A39FB`.
+
+```text
+H  helper: sys_4B(0x2, 0x04dc16ce, 0, 0x810a8bef) then func_308 homemade, then sys_4B(0x2, 0x7914aada, 0xad1a39fb, 0xae17be24, 0x04dc16ce) + func_308 same Folder
+P  white body on host GBL_RT (+X 0xfa0); white wing on white ATH_BACKPACK; both play win_pose
+F  still glued to a limb / no white wing / white wing on host backpack / wing T-pose  <- body+wing OK; extra 往前坠 (M4)
+```
+
+**Status:** E3 2026-09-05 user: white body+wing play, but extra **pitches forward / 往前坠** vs Blender. Blender `ZeroEW_White_Body` GBL_RT matches host (REL euler 0). The extra is not authored tilted.
+
+`0x810a8bef` is motion Item `001hito_000common_000common_001_down_faceup_gnd_fr` (LE `ef8b0a81`). That is a knockdown clip, not an identity bind. `sys_47(0x10)` is **rotate** (deg×100); `0xfa0` on X is +40°, not +X translate. `sys_47(0x11)` is translate.
+
+```text
+H  sys_4B arg4 = homemade 0x8525ad9a like Hambrabi extras (M1 was func_870-only invisibility); sys_47(0x11, white, 0, 0xfa0, 0, 0, 0) for the side offset
+P  white stands like Blender / host GBL_RT; still +X beside host; wing stays on white backpack
+F  still 往前坠 / extra vanishes (M1 class) / extra flies far / overlay on host
+```
+
+Do not compensate with a guessed `sys_47(0x10)` 90° tweak while GBL_RT already matches in Blender. Do not `sys_4B(0, id)`. Do not `sys_58`.
+
+**Status:** E3 2026-09-05 user: orientation OK; distance tuned on `sys_47(0x11)`.
+
+```text
+H  ENTER global170=0 so func_884 mounts host guns 0xcb1fd274/0x521683ce; after white spawn, sys_4B hilts 0x1c5c91a8/0x5fefab7 on white 0x1b/0x1a with parent 0x04dc16ce + rebellion_play_saber_beam_fx
+P  host dual guns; white dual sabers + red 0x2BE700A2 blades; host has no hilts
+F  hilts still on host / guns missing / hilts on white with no beam / hilts at host origin / FX on host hands
+```
+
+Do not attach hilts without the 5th-arg parent (they glue to the current body). SHL has one of each hilt. `func_884` `sys_4B(0x3)` still runs before spawn.
+
+### Extra `body_whitel` must keep `ATH_*` in the motion
+
+Host Body homemade clips omit `ATH_*` (NUHLPB + rest). White extra
+`0x04dc16ce` is SHL Part(3), not Body(0). It does **not** run the host helper
+solver, so saber sockets (`ATH_TE_R90` / `ATH_TE_L90`), backpack
+(`ATH_BACKPACK`), and the rest of the 28 `ATH_*` bones stay at rest unless
+the extra NUANMB records them.
+
+DCC source: Blender `ZeroEW_White_Body` (52 bones, same names as host).
+Export isolation: armature + three `ZeroEW_White_Body_SHAPE_*` meshes.
+Do **not** `strip_ath_keys` on this armature.
+
+| File | Role |
+|---|---|
+| `D:\output\exvs2\wing_gundam_zero_rebellion\motion\win_pose\001hito_016gundmw_001wgzero_001_body_win_pose_white_out.fbx` | Extra body FBX; all 28 `ATH_*` names present (2026-09-05) |
+| Host `…_body_win_pose_out.fbx` | Host Body; ATH still omitted at NUANMB write |
+
+Policy: `docs/nuanmb-ath-helper-bone-policy.md` → Extra / Part exception.
+Import this extra FBX with **Skip ATH_* helper bones** unchecked so helper
+tracks stay in the NUANMB. Host body import stays checked.

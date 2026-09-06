@@ -3,9 +3,13 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    dcc_fbx::read_dcc_motion_clip, read_motion_skeleton, write_motion_clip_as_nuanmb,
-    MotionConversionReport, MotionInterchangeError, RigBindingPolicy,
+    dcc_fbx::read_dcc_motion_clip, read_motion_skeleton, write_motion_clip_as_nuanmb_with_options,
+    MotionConversionReport, MotionInterchangeError, NuanmbWriteOptions, RigBindingPolicy,
 };
+
+fn default_omit_ath_helper_bones() -> bool {
+    true
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -17,13 +21,18 @@ pub struct MotionFbxImportRequest {
     pub animation_stack_name: Option<String>,
     #[serde(default)]
     pub rig_binding_policy: RigBindingPolicy,
+    /// Host Body/wing default: omit `ATH_*`. Uncheck in the Import panel for
+    /// extra/Part clips. Missing JSON deserializes to `true`.
+    #[serde(default = "default_omit_ath_helper_bones")]
+    pub omit_ath_helper_bones: bool,
 }
 
 /// Manifest-free MotionFbxImport: DCC FBX + NUSKTB (+ template) → new NUANMB.
 ///
-/// Output Transform tracks never include `ATH_*` helper bones (stripped by
-/// `write_motion_clip_as_nuanmb`). Homemade motions must not convert or author
-/// ATH animation — see `docs/nuanmb-ath-helper-bone-policy.md`.
+/// Output Transform tracks omit `ATH_*` helper bones unless
+/// [`MotionFbxImportRequest::omit_ath_helper_bones`] is `false` (extra/Part).
+/// Host homemade clips should keep the default — see
+/// `docs/nuanmb-ath-helper-bone-policy.md`.
 ///
 /// Encoding is **uncompressed** EXVS2 v1.2 with stock `CompensateScale` +
 /// `Visibility` on every Transform track, and near-constant hold snaps to
@@ -67,7 +76,14 @@ pub fn import_motion_fbx(
         request.animation_stack_name.as_deref(),
         request.rig_binding_policy,
     )?;
-    let write_report = write_motion_clip_as_nuanmb(&clip, template_path.as_deref(), &output_path)?;
+    let write_report = write_motion_clip_as_nuanmb_with_options(
+        &clip,
+        template_path.as_deref(),
+        &output_path,
+        NuanmbWriteOptions {
+            omit_ath_helper_bones: request.omit_ath_helper_bones,
+        },
+    )?;
 
     let mut warnings = binding.warnings.clone();
     if template_path.is_none() {

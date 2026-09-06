@@ -106,6 +106,7 @@ export function MotionFbxImportPanel({
   const [inspect, setInspect] = useState<MotionFbxInspectReport | null>(null);
   const [stackName, setStackName] = useState<string | null>(null);
   const [preserveGroups, setPreserveGroups] = useState(true);
+  const [omitAthHelperBones, setOmitAthHelperBones] = useState(true);
   const [policy, setPolicy] = useState<RigBindingPolicyValue>("exactHierarchy");
 
   const canImport =
@@ -220,6 +221,7 @@ export function MotionFbxImportPanel({
         templateNuanmbPath: templatePath,
         animationStackName: chosenStack || null,
         rigBindingPolicy: policy,
+        omitAthHelperBones,
       });
       setReport(nextReport);
       // Keep output field as the path the user chose / writer returned (own name).
@@ -244,6 +246,7 @@ export function MotionFbxImportPanel({
     inspectFbx,
     onImported,
     outputNuanmbPath,
+    omitAthHelperBones,
     policy,
     preserveGroups,
     selectedNuanmbPath,
@@ -367,6 +370,21 @@ export function MotionFbxImportPanel({
             className="text-[10px] font-normal text-muted-foreground"
           >
             {t("fbxImport.preserveGroups")}
+          </Label>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Checkbox
+            id="motion-fbx-import-omit-ath"
+            className="h-3 w-3 [&_svg]:h-2.5 [&_svg]:w-2.5"
+            checked={omitAthHelperBones}
+            disabled={busy || disabled}
+            onCheckedChange={(checked) => setOmitAthHelperBones(checked === true)}
+          />
+          <Label
+            htmlFor="motion-fbx-import-omit-ath"
+            className="text-[10px] font-normal text-muted-foreground"
+          >
+            {t("fbxImport.omitAthHelperBones")}
           </Label>
         </div>
         {!selectedNuanmbPath ? (

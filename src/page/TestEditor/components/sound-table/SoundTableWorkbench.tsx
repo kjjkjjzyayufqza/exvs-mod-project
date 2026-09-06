@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { FolderOpen, PackagePlus, RefreshCw, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 
 export type SoundTableWorkbenchStatus = "idle" | "loading" | "missing" | "ready" | "error";
@@ -91,7 +90,7 @@ export function SoundTableWorkbench({
         <CardHeader className="p-0 pb-4">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <CardTitle>{title}</CardTitle>
+              <CardTitle className="text-balance">{title}</CardTitle>
               {purpose ? (
                 <p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground text-pretty">{purpose}</p>
               ) : null}
@@ -99,13 +98,18 @@ export function SoundTableWorkbench({
                 <MetaLine key={line.label} {...line} />
               ))}
               {loadedLabel ? (
-                <div className="mt-1 text-xs text-muted-foreground">{loadedLabel}</div>
+                <div className="mt-1 text-xs tabular-nums text-muted-foreground">{loadedLabel}</div>
               ) : null}
               {notice}
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {toolbarExtra}
-              <Button size="sm" variant="outline" onClick={onReload} className="inline-flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onReload}
+                className="inline-flex h-9 items-center gap-2 transition-[background-color,box-shadow,transform] duration-150 ease-out active:scale-[0.96]"
+              >
                 <RefreshCw className="h-4 w-4" />
                 {t("common.reload")}
               </Button>
@@ -114,7 +118,7 @@ export function SoundTableWorkbench({
                   size="sm"
                   onClick={onSave}
                   disabled={!writable || !canSave}
-                  className="inline-flex items-center gap-2"
+                  className="inline-flex h-9 items-center gap-2 transition-[background-color,box-shadow,transform] duration-150 ease-out active:scale-[0.96]"
                 >
                   <Save className="h-4 w-4" />
                   {t("common.saveFile")}
@@ -152,7 +156,7 @@ export function SoundTableWorkbench({
                 {addPanel}
                 <div className="min-h-0 flex-1">{listPanel}</div>
               </aside>
-              <section className={cn("min-h-0 overflow-auto")}>{detailPanel}</section>
+              <section className="min-h-0 overflow-auto">{detailPanel}</section>
             </div>
           ) : null}
         </CardContent>

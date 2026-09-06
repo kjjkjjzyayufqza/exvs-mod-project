@@ -22,7 +22,7 @@ as the product default.
 
 Related:
 
-- `docs/nuanmb-ath-helper-bone-policy.md` — never author `ATH_*` tracks  
+- `docs/nuanmb-ath-helper-bone-policy.md` — omit `ATH_*` on host Body/wing clips; **keep** them on extra/Part clips  
 - `docs/adr/0002-motion-fbx-import-direct-ufbx.md` — direct ufbx import  
 - `docs/ssbh-wmmt2-merge-animation-regression.md` — TransformFlags semantics  
 - `docs/msc-research/homemade-motion-clock-vs-game-frame.md` — MSC **playback**

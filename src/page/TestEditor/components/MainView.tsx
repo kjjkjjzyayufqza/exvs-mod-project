@@ -1036,9 +1036,13 @@ const MainView = ({
                   isActive
                     ? "relative z-10 flex-1"
                     : "pointer-events-none invisible absolute inset-0 z-0 overflow-hidden",
-                  isActive
-                    ? "h-full w-full flex-1 overflow-auto px-4 pt-4"
-                    : "px-4 pt-4",
+                  tab.value === "camera-table"
+                    ? isActive
+                      ? "h-full w-full flex-1 overflow-hidden p-0"
+                      : "p-0"
+                    : isActive
+                      ? "h-full w-full flex-1 overflow-auto px-4 pt-4"
+                      : "px-4 pt-4",
                 )}
                 aria-hidden={!isActive}
                 {...(!isActive ? { inert: true } : {})}

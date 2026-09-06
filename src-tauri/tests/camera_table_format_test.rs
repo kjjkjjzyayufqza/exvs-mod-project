@@ -85,7 +85,7 @@ fn named_overlay_roundtrips_fov_offset_and_keeps_clip_hash() {
                 clip_hash: 0x8CA6_CC45,
                 sort_key: 2,
                 fov: Some(100.0),
-                offset: -5.5,
+                offset: Some(-5.5),
                 first_shot: 3,
             },
             CameraTableEntry {
@@ -94,7 +94,7 @@ fn named_overlay_roundtrips_fov_offset_and_keeps_clip_hash() {
                 clip_hash: 0xDEAD_BEEF,
                 sort_key: 99,
                 fov: None,
-                offset: 4.0,
+                offset: Some(4.0),
                 first_shot: 0,
             },
         ],
@@ -110,13 +110,11 @@ fn named_overlay_roundtrips_fov_offset_and_keeps_clip_hash() {
 
     assert_eq!(
         u32::from_le_bytes(reparsed.entries_raw[0][OFF_CLIP_HASH..OFF_CLIP_HASH + 4].try_into().unwrap()),
-        0x8CA6_CC45,
-        "clip hash must stay read-only on save"
+        0x8CA6_CC45
     );
     assert_eq!(
         u32::from_le_bytes(reparsed.entries_raw[0][OFF_SORT_KEY..OFF_SORT_KEY + 4].try_into().unwrap()),
-        2,
-        "sort key must stay read-only on save"
+        2
     );
     assert_eq!(
         f32::from_le_bytes(reparsed.entries_raw[0][OFF_FOV..OFF_FOV + 4].try_into().unwrap()),
@@ -135,10 +133,16 @@ fn named_overlay_roundtrips_fov_offset_and_keeps_clip_hash() {
     );
     assert_eq!(
         u32::from_le_bytes(reparsed.entries_raw[1][OFF_CLIP_HASH..OFF_CLIP_HASH + 4].try_into().unwrap()),
-        0x8CA6_CC45,
-        "attempted clip-hash edit must not write"
+        0xDEAD_BEEF,
+        "overlay clip hash must persist"
+    );
+    assert_eq!(
+        u32::from_le_bytes(reparsed.entries_raw[1][OFF_SORT_KEY..OFF_SORT_KEY + 4].try_into().unwrap()),
+        99,
+        "overlay sort key must persist"
     );
     assert_eq!(written["entries"][0]["clipHash"], 0x8CA6_CC45u64);
+    assert_eq!(written["entries"][1]["clipHash"], 0xDEAD_BEEFu64);
 
     payload.entries.clear();
     let bad = serde_json::to_value(&payload).unwrap();
@@ -146,6 +150,122 @@ fn named_overlay_roundtrips_fov_offset_and_keeps_clip_hash() {
     assert!(err.contains("length mismatch"), "{err}");
 
     let _ = (CMD_CLIP_HASH, CMD_FIRST_SHOT, CMD_FOV, CMD_OFFSET, CMD_SORT_KEY);
+}
+
+#[test]
+fn write_pack_sorts_rows_by_unsigned_entry_id() {
+    let file = synthetic_file(vec![
+        (0x2222_2222, 0x8CA6_CC45, 3, Some(20.0), 1.0, 0),
+        (0x1111_1111, 0xFD5F_D16A, 2, Some(11.0), -5.5, 3),
+    ]);
+    let mut payload = CameraTableFile {
+        header: CameraTableHeader {
+            magic: file.header.magic,
+            unk_04: file.header.unk_04,
+            file_size: file.header.file_size,
+            unk_0c: file.header.unk_0c,
+            entry_count: file.header.entry_count,
+            commands_count: file.header.commands_count,
+            entry_size: file.header.entry_size,
+            unk_1c: file.header.unk_1c,
+        },
+        field_specs: empty_synthetic_specs(),
+        entry_ids: file.entry_ids.clone(),
+        entries_raw: file.entries_raw.clone(),
+        trailing_data: Vec::new(),
+        entries: vec![
+            CameraTableEntry {
+                entry_id: 0x2222_2222,
+                entry_index: 0,
+                clip_hash: 0x8CA6_CC45,
+                sort_key: 3,
+                fov: Some(20.0),
+                offset: Some(1.0),
+                first_shot: 0,
+            },
+            CameraTableEntry {
+                entry_id: 0x1111_1111,
+                entry_index: 1,
+                clip_hash: 0xFD5F_D16A,
+                sort_key: 2,
+                fov: Some(11.0),
+                offset: Some(-5.5),
+                first_shot: 3,
+            },
+        ],
+        file_path: None,
+        family: Some("02winlose".to_string()),
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("02winlose.vgsht2");
+    let json = serde_json::to_value(&payload).unwrap();
+    let written = write_pack(&json, out.to_str().unwrap()).expect("write");
+    let reparsed = parse_bytes(&std::fs::read(&out).unwrap()).expect("reparse");
+
+    assert_eq!(reparsed.entry_ids, vec![0x1111_1111, 0x2222_2222]);
+    assert_eq!(
+        u32::from_le_bytes(reparsed.entries_raw[0][OFF_CLIP_HASH..OFF_CLIP_HASH + 4].try_into().unwrap()),
+        0xFD5F_D16A
+    );
+    assert_eq!(
+        u32::from_le_bytes(reparsed.entries_raw[1][OFF_CLIP_HASH..OFF_CLIP_HASH + 4].try_into().unwrap()),
+        0x8CA6_CC45
+    );
+    assert_eq!(written["entryIds"][0], 0x1111_1111u64);
+    assert_eq!(written["entries"][0]["entryId"], 0x1111_1111u64);
+    assert_eq!(written["entries"][0]["entryIndex"], 0);
+    assert_eq!(written["entries"][1]["entryId"], 0x2222_2222u64);
+
+    payload.entries[0].entry_id = 0x1111_1111;
+    payload.entries[1].entry_id = 0x1111_1111;
+    let dup = serde_json::to_value(&payload).unwrap();
+    let err = write_pack(&dup, out.to_str().unwrap()).unwrap_err();
+    assert!(err.contains("duplicate"), "{err}");
+}
+
+#[test]
+fn write_pack_accepts_null_offset_and_writes_nan() {
+    let file = synthetic_file(vec![(0x1111_1111, 0x8CA6_CC45, 2, Some(65.0), 0.0, 3)]);
+    let payload = CameraTableFile {
+        header: CameraTableHeader {
+            magic: file.header.magic,
+            unk_04: file.header.unk_04,
+            file_size: file.header.file_size,
+            unk_0c: file.header.unk_0c,
+            entry_count: file.header.entry_count,
+            commands_count: file.header.commands_count,
+            entry_size: file.header.entry_size,
+            unk_1c: file.header.unk_1c,
+        },
+        field_specs: empty_synthetic_specs(),
+        entry_ids: file.entry_ids.clone(),
+        entries_raw: file.entries_raw.clone(),
+        trailing_data: Vec::new(),
+        entries: vec![CameraTableEntry {
+            entry_id: 0x1111_1111,
+            entry_index: 0,
+            clip_hash: 0x8CA6_CC45,
+            sort_key: 2,
+            fov: Some(65.0),
+            offset: None,
+            first_shot: 3,
+        }],
+        file_path: None,
+        family: Some("02winlose".to_string()),
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("02winlose.vgsht2");
+    let json = serde_json::to_value(&payload).unwrap();
+    assert!(json["entries"][0]["offset"].is_null());
+    let written = write_pack(&json, out.to_str().unwrap()).expect("null offset must save");
+    assert!(written["entries"][0]["offset"].is_null());
+    let reparsed = parse_bytes(&std::fs::read(&out).unwrap()).expect("reparse");
+    assert!(
+        f32::from_le_bytes(reparsed.entries_raw[0][OFF_OFFSET..OFF_OFFSET + 4].try_into().unwrap())
+            .is_nan()
+    );
 }
 
 #[test]

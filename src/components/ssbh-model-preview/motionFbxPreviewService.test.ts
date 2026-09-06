@@ -60,6 +60,7 @@ describe("previewMotionFbx", () => {
           templateNuanmbPath: null,
           animationStackName: null,
           rigBindingPolicy: "exactHierarchy",
+          omitAthHelperBones: true,
         }),
       }),
     );

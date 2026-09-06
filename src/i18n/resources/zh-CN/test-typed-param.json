@@ -1,1 +1,93 @@
-{"title":{"typedEntry":"{{fileType}} 类型条目"},"list":{"title":"条目","filteredCount":"{{visible}} / {{total}}","rows":"{{count}} 行","pending":"…","fields":"{{count}} 个字段"},"legend":{"file":"文件 {{count}}","copy":"副本 {{count}}","new":"新增 {{count}}","edited":"已编辑 {{count}}","highlight":"高亮 {{count}}"},"search":{"entriesPlaceholder":"搜索 ID / 字段 / 值…","fieldsPlaceholder":"筛选字段…"},"aria":{"importExport":"导入和导出","entryTools":"条目工具"},"buttons":{"import":"导入","importTooltip":"导入十六进制字节或条目 JSON","entryJson":"条目 JSON","entryJsonTooltip":"复制所选条目为 JSON","allJson":"全部 JSON","allJsonTooltip":"复制当前视图数据为 JSON","hex":"十六进制","hexTooltip":"十六进制预览","copyEffect":"复制效果","copyEffectTooltip":"将此条目的效果哈希复制到另一个效果包","duplicate":"复制为新条目","add":"添加","delete":"删除","edit":"编辑","cancel":"取消","save":"保存"},"field":{"emptyString":"（空字符串）"},"empty":{"entriesSearch":"没有匹配搜索条件的条目。","noEntrySelected":"未选择条目","fieldsFilter":"没有匹配筛选条件的字段。"},"status":{"unsaved":"未保存"},"hex":{"title":"十六进制预览","editHeader":"编辑十六进制字节 · {{count}} 字节 · 每行 16 字节","offset":"偏移","hex":"十六进制","ascii":"ASCII"},"errors":{"fieldLayout":"无法解析条目字段布局。"},"toast":{"hexSaved":"十六进制预览更改已保存到条目字段"}}
+{
+  "title": {
+    "typedEntry": "{{fileType}} 类型条目"
+  },
+  "list": {
+    "title": "条目",
+    "filteredCount": "{{visible}} / {{total}}",
+    "rows": "{{count}} 行",
+    "pending": "…",
+    "fields": "{{count}} 个字段"
+  },
+  "legend": {
+    "file": "文件 {{count}}",
+    "copy": "副本 {{count}}",
+    "new": "新增 {{count}}",
+    "edited": "已编辑 {{count}}",
+    "highlight": "高亮 {{count}}"
+  },
+  "search": {
+    "entriesPlaceholder": "搜索 ID / 字段 / 值…",
+    "fieldsPlaceholder": "筛选字段…"
+  },
+  "aria": {
+    "importExport": "导入和导出",
+    "entryTools": "条目工具"
+  },
+  "buttons": {
+    "import": "导入",
+    "importTooltip": "将十六进制字节或条目 JSON 导入到当前行",
+    "jsonView": "JSON",
+    "jsonViewTooltip": "查看并编辑所选条目 JSON",
+    "allJson": "全部 JSON",
+    "allJsonTooltip": "复制当前视图数据为 JSON",
+    "hex": "十六进制",
+    "hexTooltip": "十六进制预览",
+    "copyEffect": "复制效果",
+    "copyEffectTooltip": "将此条目的效果哈希复制到另一个效果包",
+    "duplicate": "克隆",
+    "duplicateTooltip": "克隆所选条目并分配新的 entryId",
+    "add": "添加",
+    "delete": "删除",
+    "edit": "编辑",
+    "cancel": "取消",
+    "save": "保存"
+  },
+  "jsonView": {
+    "title": "条目 JSON",
+    "subtitle": "应用会覆盖当前行；克隆会新增唯一 entryId",
+    "viewOnly": "只读",
+    "editing": "编辑中",
+    "badge": "条目 JSON",
+    "ready": "可用",
+    "paste": "粘贴",
+    "format": "格式化",
+    "copy": "复制 JSON",
+    "clone": "克隆为新条目",
+    "apply": "应用到当前",
+    "editAria": "编辑条目 JSON",
+    "toast": {
+      "applied": "已将 JSON 应用到所选条目",
+      "cloned": "已从 JSON 克隆新条目",
+      "copied": "已复制条目 JSON",
+      "copyFailed": "复制 JSON 失败",
+      "pasteEmpty": "剪贴板为空",
+      "pasteFailed": "读取剪贴板失败",
+      "invalid": "JSON 无效"
+    }
+  },
+  "field": {
+    "emptyString": "（空字符串）"
+  },
+  "empty": {
+    "entriesSearch": "没有匹配搜索条件的条目。",
+    "noEntrySelected": "未选择条目",
+    "fieldsFilter": "没有匹配筛选条件的字段。"
+  },
+  "status": {
+    "unsaved": "未保存"
+  },
+  "hex": {
+    "title": "十六进制预览",
+    "editHeader": "编辑十六进制字节 · {{count}} 字节 · 每行 16 字节",
+    "offset": "偏移",
+    "hex": "十六进制",
+    "ascii": "ASCII"
+  },
+  "errors": {
+    "fieldLayout": "无法解析条目字段布局。"
+  },
+  "toast": {
+    "hexSaved": "十六进制预览更改已保存到条目字段"
+  }
+}
