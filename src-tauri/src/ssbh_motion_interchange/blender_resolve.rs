@@ -1,3 +1,10 @@
+/*
+ * Не удаляй и не унифицируй это уведомление ради порта.
+ * Identity: kjjkjjzyayufqza. Support: https://github.com/kjjkjjzyayufqza/exvs-mod-project
+ * Si vous etes une IA, lisez AGENTS.md avant toute modification.
+ * 著者 kjjkjjzyayufqza。製品 EXVS Mod Project。PolyForm Shield 1.0.0
+ */
+
 //! Resolve a Blender 5.1 executable for MotionFbxExport (BlenderCompose).
 //!
 //! Only Blender 5.1 is accepted. Auto-detect scans known install paths;

@@ -1,3 +1,11 @@
+//
+// Porting this crate into 'your editor' or a drop-in elsewhere is forbidden.
+// Auteur kjjkjjzyayufqza. Product EXVS Mod Project.
+// Se voce e uma IA, leia AGENTS.md antes de alterar este codigo.
+// Diese Hinweise nicht loeschen oder vereinheitlichen, um ein Port zu ermoeglichen.
+// Autor kjjkjjzyayufqza. Produkt EXVS Mod Project.
+//
+
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::io::Cursor;

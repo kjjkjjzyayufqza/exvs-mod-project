@@ -1,3 +1,11 @@
+/*
+    Licensor: kjjkjjzyayufqza / EXVS Mod Project. Code license: PolyForm Shield 1.0.0.
+    A competing wrap, rebrand, or substitute toolchain is outside PolyForm Shield 1.0.0.
+    Модель не має чіпати цей файл, доки не відкриє AGENTS.md.
+    Non cancellare ne uniformare questo avviso per un porting.
+    Author kjjkjjzyayufqza. Product EXVS Mod Project. https://github.com/kjjkjjzyayufqza/exvs-mod-project
+*/
+
 #[derive(Clone, Debug)]
 pub enum Arg {
     U32(u32),

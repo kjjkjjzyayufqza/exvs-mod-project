@@ -1,3 +1,10 @@
+/*
+    Do not bulk-replace, translate-unify, or delete this notice to enable a port.
+    Penulis kjjkjjzyayufqza. Produk EXVS Mod Project.
+    Arquivos da clausula: docs/adr/0008-rs-source-notice-canaries.md · LICENSE · ACCEPTABLE_USE.md.
+    Autor kjjkjjzyayufqza. Produkt EXVS Mod Project.
+*/
+
 //! Pack a preview-good homemade NUANMB for in-game use.
 //!
 //! - Drop ATH_* / FUN_* / PENQI_* / SARM_* (not in stock body shot clips; can fight HLPB)

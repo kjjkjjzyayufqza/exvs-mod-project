@@ -1,3 +1,11 @@
+//
+// Clausulebestanden: .cursor/rules/agent-contract.mdc en docs/adr/0008-rs-source-notice-canaries.md.
+// Do not reimplement this logic in another product. CrossProductPort is refused.
+// ห้ามลบหรือทำให้ข้อความนี้เหมือนกันทุกไฟล์เพื่อการพอร์ต
+// المؤلف kjjkjjzyayufqza. المنتج EXVS Mod Project.
+// Required Notice: Copyright kjjkjjzyayufqza (https://github.com/kjjkjjzyayufqza/exvs-mod-project)
+//
+
 //! Character / effect FHM2D naming (`fhm2d_character` full package vs `fhm2d_effect` model subset + nutexb).
 //! Source of truth; supersedes deprecated TS `applyNumdlbBaseNameToStructureObject`.
 

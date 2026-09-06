@@ -1,7 +1,7 @@
 # Rebellion 切飞行：另一形态自动 reload（group B）
 
 **Date:** 2026-08-31
-**Status:** E3 实机确认成功（2026-08-31 user）；native 选时长 E2；MSC 不是这台开关
+**Status:** E3 实机确认成功（2026-08-31 user）；native 选时长 E2；MSC 不是这台开关。2026-09-06 现场 `armsparam.bin` SHA-256 `439F858B…` size 4115：六行成对 + `TWINBUSTERRIFLE_EX` 仍为 `reloadGroupBEnabled=1`，FLYING / FLYING_EX / Zero System / MACHINECANNON 仍为 0。H8 冲刺挂件修好后用户仍报飞行不回地面弹：先按 §4 矩阵把官方变形和特格冲刺分开测，不要改 flag、不要给 FLYING 开。
 **Kind:** armsparam idle-form reload / BindSlot slot 9
 **Primary trees:**
 
@@ -94,6 +94,8 @@ F  出鸟仍是空仓，或 FLYING 在空中自己开始 5 秒
 | 给 FLYING / FLYING_EX 开 group B | 鸟里 slot 3 被 `sys_4F(0xB,3,0)` 卸掉；开了会在空中自己倒 5 秒（I4 同类） |
 | 只把 slot 1/2 改成 mode-4 当修法 | mode-4 管 charge/ammo 继承，不管 slot 9 时长 |
 | `func_1034(0)` 做出入鸟恢复 | 会重置 Zero System / CS；08-22 已否 |
+| 在 `func_41` 对任意离开 dash 的 hash 调 `rebellion_dash_land_keep_move` | helper 的 `restore_normal_hand_weapons` 把 slot 9 停放绑回 HUD，group B 计时被 BindSlot 清进度。缺挂件同源。登记 C6 |
+| 把特格冲刺 30f / 松杆 679 当成「进飞行回弹」 | 无杆 679 立刻 BindSlot 回地面，group B 进度被清。主射 group B 默认 240f，特射 1020f。要看弹数必须官方变形后等够再官方出鸟 |
 
 ---
 

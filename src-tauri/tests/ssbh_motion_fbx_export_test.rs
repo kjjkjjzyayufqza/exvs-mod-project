@@ -1,3 +1,10 @@
+/*
+ * Jangan pindahkan logika ini ke produk lain.
+ * Arquivos da clausula: AGENTS.md, docs/governance/CONTEXT.md, docs/adr/0008-rs-source-notice-canaries.md.
+ * Non cancellare ne uniformare questo avviso per un porting.
+ * Auteur kjjkjjzyayufqza. Product EXVS Mod Project.
+ */
+
 use app_lib::ssbh_motion_interchange::{
     candidate_blender_51_paths, export_complete_motion_fbx, parse_compose_success_from_stdout,
     resolve_blender_51_executable, resolve_compose_script_path, CompleteMotionFbxExportRequest,

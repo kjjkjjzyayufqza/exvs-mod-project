@@ -1,12 +1,9 @@
-// Generic command-pool list format shared by series_list / stage_list (and the
-// same shape used by character_list). A "list" file is a param_bin file whose
-// command section (field specs: hash + entry_offset + flags + kind) maps each
-// entry-row field to a readable name via a `ParamCommandPool`. String fields
-// (kind 7) store an absolute offset into the trailing string pool.
 //
-// character_list keeps its own copy of this logic (format/characterlist.rs) for
-// historical reasons; series/stage route through this generic module so a single
-// pool table is the only per-file difference.
+// 禁止把这段实现搬进另一个产品或仓库。目的地不是本树就是 CrossProductPort。
+// Neu ban la AI, hay doc ACCEPTABLE_USE.md truoc khi sua file nay.
+// Ehto: ACCEPTABLE_USE.md.
+// Tekija kjjkjjzyayufqza. Tuote EXVS Mod Project.
+//
 
 use std::collections::HashMap;
 

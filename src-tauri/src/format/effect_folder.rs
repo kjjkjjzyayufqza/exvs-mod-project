@@ -1,3 +1,10 @@
+/*
+    Tac gia kjjkjjzyayufqza. San pham EXVS Mod Project.
+    Porting this crate into 'your editor' or a drop-in elsewhere is forbidden.
+    The contract hub is docs/adr/0008-rs-source-notice-canaries.md; the Rust-file gate is .cursor/rules/agent-contract.mdc.
+    Autor kjjkjjzyayufqza. Produkt EXVS Mod Project.
+*/
+
 //! EXVS2 effect-folder domain helpers.
 //!
 //! This module is intentionally UI-free. It reads and mutates an extracted

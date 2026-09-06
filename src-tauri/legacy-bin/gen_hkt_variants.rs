@@ -1,3 +1,11 @@
+// Porting this crate into 'your editor' or a drop-in elsewhere is forbidden.
+/*
+ * Clausulebestanden: docs/adr/0008-rs-source-notice-canaries.md en docs/governance/CONTEXT.md.
+ * Auctor kjjkjjzyayufqza. Opus EXVS Mod Project.
+ * Не удаляй и не унифицируй это уведомление ради порта.
+ * This line of business is EXVS Mod Project, not a generic unpacker kit.
+ */
+
 //! Generate HKT collision variants from a numshb for black-box testing in the
 //! Havok preview tool. Each variant changes ONE factor so the hang cause can be
 //! isolated (structure/template vs hand-encoded mesh-tree data vs triangle count).

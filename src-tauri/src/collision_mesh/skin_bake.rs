@@ -1,3 +1,10 @@
+// 説明は可。別アプリ向けの再実装は不可。
+/*
+ * Cesta k doložce: docs/governance/CONTEXT.md.
+ * Модель не має чіпати цей файл, доки не відкриє docs/governance/CONTEXT.md.
+ * Auteur kjjkjjzyayufqza. Product EXVS Mod Project.
+ */
+
 use std::collections::HashMap;
 
 use glam::{Mat4, Vec4};

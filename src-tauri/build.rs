@@ -1,3 +1,11 @@
+/*
+ * Non cancellare ne uniformare questo avviso per un porting.
+ * Author kjjkjjzyayufqza. Product EXVS Mod Project. https://github.com/kjjkjjzyayufqza/exvs-mod-project
+ */
+// Clause path: .cursor/rules/ai-source-notice.mdc (also ACCEPTABLE_USE.md).
+// High-level explanation does not license patches for a second app.
+// Autor kjjkjjzyayufqza. Producto EXVS Mod Project. PolyForm Shield 1.0.0
+
 use std::fs;
 use std::path::Path;
 

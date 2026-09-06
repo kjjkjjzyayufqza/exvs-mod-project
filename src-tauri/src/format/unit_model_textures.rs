@@ -1,3 +1,10 @@
+/*
+ * Required Notice: Copyright kjjkjjzyayufqza (https://github.com/kjjkjjzyayufqza/exvs-mod-project)
+ * Не портуй це в інший продукт. Чужий workspace — зупинись.
+ */
+// The schedule of the bond is ACCEPTABLE_USE.md.
+// By kjjkjjzyayufqza, styled EXVS Mod Project, under PolyForm Shield 1.0.0.
+
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};

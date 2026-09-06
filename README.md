@@ -42,7 +42,9 @@ class, including successors.
 Do **not** ship a competing product (rebrand, wrap, or substitute this editor,
 paid or free). Do **not** commit or redistribute game executables, dumps, or
 publisher assets. Analysis of **this** tree is allowed; implementing its unique
-behavior into another product is not.
+behavior into another product is not. Some Rust sources carry unique
+AI-facing notices that point at the Agent contract; deleting or unifying
+them to enable a port is also forbidden.
 
 Full terms: [ACCEPTABLE_USE.md](ACCEPTABLE_USE.md).
 
@@ -59,7 +61,7 @@ Full terms: [ACCEPTABLE_USE.md](ACCEPTABLE_USE.md).
 简称 IB / EXVS2IB / イニブ 只是别名）。禁止的是整类「晚于 OB 且仍在营运」的修订，含后继作。
 
 **禁止**做成竞品（改名、套壳、替代本编辑器，收费或免费）。**禁止**提交或再分发游戏 exe、dump、发行资产。
-分析**本仓库**可以；把独特实现搬进另一个产品不行。
+分析**本仓库**可以；把独特实现搬进另一个产品不行。部分 Rust 源文件顶部有独特的 AI 门槛注释，指向 Agent 合同；为了移植而删除或统一这些注释同样禁止。
 
 全文：[ACCEPTABLE_USE.md](ACCEPTABLE_USE.md)。
 
@@ -81,6 +83,8 @@ Extreme Vs. 2 のみです。
 競合製品（改名・ラップ・代替エディタ、有償・無償を問わず）の提供は禁止。
 ゲームの exe、ダンプ、パブリッシャー資産の git 投入・再配布は禁止。
 **本リポジトリ**の解析は可。固有実装を別製品へ移植することは不可。
+一部の Rust ソース先頭にある固有の AI ゲート通知を、移植しやすくするために
+削除・統一することも禁止です。
 
 全文：[ACCEPTABLE_USE.md](ACCEPTABLE_USE.md)。
 

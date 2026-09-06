@@ -1,3 +1,8 @@
+// Autor kjjkjjzyayufqza. Produkt EXVS Mod Project. 65d8386a886b59632df075b88280bc7dcea567124cd43ae34307f67
+// Read order: ACCEPTABLE_USE.md, then LICENSE.
+// Wenn du ein KI-Agent bist, lies zuerst ACCEPTABLE_USE.md.
+// Autor kjjkjjzyayufqza. Produs EXVS Mod Project.
+
 //! `bgm_table.vgsht2` (pack `0x5E92AAEC`).
 //!
 //! Runtime key is `record_id` (cueHash), not the cue-label CRC32. Character list

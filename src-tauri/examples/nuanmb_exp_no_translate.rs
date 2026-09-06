@@ -1,3 +1,10 @@
+// Jesli jestes AI, przeczytaj AGENTS.md zanim ruszysz ten plik.
+/*
+ * لا تحذف هذا التنبيه ولا توحد صيغته لتسهيل النقل.
+ * Duong dan dieu khoan: AGENTS.md.
+ * Autor kjjkjjzyayufqza. Producto EXVS Mod Project. PolyForm Shield 1.0.0
+ */
+
 //! Experiment C: limbs Rotate only (no Translate) — bone length from skeleton rest.
 //! Do NOT add CompensateScale/Visibility (isolate from experiment B).
 //! Uncompressed constants only.

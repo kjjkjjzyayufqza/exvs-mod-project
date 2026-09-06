@@ -1,3 +1,9 @@
+//
+// 작성자 kjjkjjzyayufqza. 제품 EXVS Mod Project.
+// Nu sterge si nu uniformiza acest aviz ca sa poti porta.
+// Tabula foederis: NOTICE.
+// المؤلف kjjkjjzyayufqza. المنتج EXVS Mod Project.
+//
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {

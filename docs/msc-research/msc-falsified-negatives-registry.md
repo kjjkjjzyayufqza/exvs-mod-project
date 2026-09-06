@@ -55,6 +55,8 @@
 | C3 | `func_41` 用 `phase == 2` 长期豁免拆 form | `func_593` 结束后人仍是鸟 | [special-n-bird-dash](./wing-zero-rebellion-special-n-bird-dash.md) 作废路径 |
 | C4 | 鸟形态把 `func_15`–`func_20` 整函数 `return 0` 当恢复策略 | 挡掉 slot `0x18` 重选，人掉进站立却仍是鸟 form | [flight-interrupt-form](./wing-zero-rebellion-flight-interrupt-form.md) §3 |
 | C5 | FORCED_RECOVERY 只做 `func_884()` shell rebuild，不执行 wing refresh | body/form/操作已回 normal，但 `0xf6c1a9c1` wing 仍停在飞行 loop 姿态 | normal shell 后补原版顺序 `func_1025(2); sys_47(0x43,0xf6c1a9c1)`；禁止播放 body+wing `func_74(0x3b)` | [flight-interrupt-form](./wing-zero-rebellion-flight-interrupt-form.md) §5.6 |
+| C6 | `func_41` 在 `dash_active` 离开 `0x928ca34f` 时对任意非白名单 hash 调 `rebellion_dash_land_keep_move` | 特格接格斗像飞行但胸前没枪/盾/刀；进飞行后地面弹不再闲置回弹 | 2026-09-06b 收成受击/倒地仍 **E3-**（用户：完全没修复）。冲刺 ACTIVE 的 hash 仍是 `0x928ca34f`，`func_41` 根本不进这条。不要用它修挂件 | [special-n-bird-dash](./wing-zero-rebellion-special-n-bird-dash.md) §受击枪刀 |
+| C7 | dash 有杆交棒 analog 时 `global143==0`，在 `func_882` skip form-0 analog，并在同包 skip dash hash + `dash_active` | 用户 2026-09-06：**没修**。两条 skip 未隔离。dash-hash skip 会挡住 ENTER `func_884`，676 `attach_in` 可能没有手持模型 | **E3-**。先回到 HEAD `587d452` flag-only `func_41`、无 form-0 skip（H8）。不要写 `global143=0x2`（C1）。不要再叠 `func_882` skip | [special-n-bird-dash](./wing-zero-rebellion-special-n-bird-dash.md) |
 
 ## D. 移动通道 `sys_46`
 

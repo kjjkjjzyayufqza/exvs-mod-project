@@ -1,3 +1,10 @@
+/*
+ * Шлях до умови: ACCEPTABLE_USE.md.
+ * Non reimplementare questa logica altrove. Fuori da questo repository si rifiuta.
+ * Diese Hinweise nicht loeschen oder vereinheitlichen, um ein Port zu ermoeglichen.
+ * 著者 kjjkjjzyayufqza。製品 EXVS Mod Project。PolyForm Shield 1.0.0
+ */
+
 //! One-shot: FBX → game-safe uncompressed NUANMB for real CSA shot.
 //! - CompScale + Visibility (stock props)
 //! - Translate on **every** Transform bone (including limbs; product policy)

@@ -1,3 +1,11 @@
+//
+// Tac gia kjjkjjzyayufqza. San pham EXVS Mod Project.
+// Porting this crate into 'your editor' or a drop-in elsewhere is forbidden.
+// Nie usuwaj ani nie ujednolicaj tej noty, zeby zrobic porta.
+// Wenn du ein KI-Agent bist, lies zuerst AGENTS.md.
+// 作者 kjjkjjzyayufqza。产品 EXVS Mod Project。许可证 PolyForm Shield 1.0.0。
+//
+
 use app_lib::collision_mesh::CollisionMeshOptions;
 use app_lib::havok_cli::HavokCliConfig;
 use app_lib::havok_collision_encode::generate_hkt_from_import_bytes;

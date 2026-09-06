@@ -1,7 +1,7 @@
 # Wing Zero Rebellion：普通形态特格接 N → 鸟冲刺（`0x928ca34f` dash）
 
 **Date:** 2026-08-25（无杆惯性 2026-08-27 实机确认）  
-**Status:** 实机确认成功（dash 本体）；受击枪/刀 TRS 为 E1，待 H5  
+**Status:** 实机确认成功（dash 本体 2026-08-27；H8 挂件 2026-09-06 user）。H5/H6/H7 **E3-**。现行 `func_41` dash 只清旗；`func_882` 不 skip form-0 analog / dash hash  
 **Kind:** MSC `2.c` 普通形态特格取消窗 → 鸟形态短冲刺 → 松杆回普通  
 **Primary tree:** `E:\XB\mod\040msc\wing_gundam_zero_rebellion_msc\`
 
@@ -264,7 +264,7 @@ EXVS2OB wiki（玩家向，不能当 syscall 证据）：
 | ACTIVE | tick：`func_593()` 后、且 `phase==1 && 184==2` 才 `locked_loop_move`。每帧 `sys_46(0, lock_err)` + `sys_46(0x1, 0x1, yaw, 0, mag)`。不要在 677 函数体里写 `sys_46` |
 | EXIT 有杆 | 679 不拆，随后 `252`。0.c 地面表接 analog |
 | EXIT 无杆 | 先拷 mag → `untransform_keep_move`（拆鸟、不清 `0x4000`、不 `296(0)`）→ `sys_46(0x4,0x4,0x64)` → 每帧 `sys_46(0x1, 0x1, 0, 0xfffff830, 508)`，`508 *= 0x5a/0x64`。`508<=0x14` 或再 30f 才 `296(0)+252` |
-| INTERRUPT | `func_41` → `rebellion_dash_land_keep_move`（`169(0x4000)` + 拆挂件 + 清 `sys_47(0x11)` + `func_884`）。**不要**走 `interrupt_bird_form_to_ground`：`global143` 保持 0，那条 helper 根本不会跑 |
+| INTERRUPT | `func_41` **只清** `dash_active` / elapsed / speed / phase（HEAD `587d452`，与 08-27 E3 冲刺相同）。`rebellion_dash_land_keep_move` 在源码里存在但 **零调用点**。H5/H6 调它是 E3-（C6）。**不要**走 `interrupt_bird_form_to_ground`：`global143` 保持 0 |
 | RESPAWN | `func_874` → `stop_effects` |
 
 | 状态 | 写入者 | 无杆 EXIT | INTERRUPT |
@@ -420,7 +420,7 @@ void rebellion_normal_special_n_bird_dash_tick()
 | EXIT 无杆 | 679 → `untransform_keep_move`（拆鸟、不清 `0x4000`、不 `296(0)`）。**不要**走 `dash_land_keep_move` |
 | ACTIVE shoot | `0x1004000`、loop `0x38`、tick 在 593 后锁前冲 30 帧 |
 | EXIT 自然 | 679：无杆拆鸟 + `252`；`func_93` 离开 hash |
-| INTERRUPT | `func_41` 见非 dash hash 时 `rebellion_dash_land_keep_move`：清旗、拆鸟挂件、snap 枪/刀 `sys_47(0x11)`、`func_884` 接手。排除 `0x77b100ff` / `0x9475130e` |
+| INTERRUPT | `func_41` 只清 dash 旗（HEAD）。不要调 `dash_land_keep_move`（C6）。不要在 `func_882` skip form-0 analog 或 dash hash（C7/H7） |
 | RESPAWN | `func_874` → `stop_effects` |
 
 ---
@@ -433,28 +433,44 @@ void rebellion_normal_special_n_bird_dash_tick()
 | `global142` | 鸟行 `0xc2b19d13` | 鸟行 | 普通 `0xc2b19d12` | 普通 |
 | `global24` `0x4000` | shoot 的 `func_167(0x1004000)` | 保持 | `func_169(0x4000)` | 清 |
 | `dash_active` | `1` | `1` | `stop_effects` → `0` | `0` |
-| 枪/刀 `sys_47(0x10)` / `sys_47(0x11)` | `attach_in` 鸟位移 | 保持 | `restore_normal_hand_weapons` snap 0 | **必须 snap 0**；只清旗会把鸟 TRS 留在手上 |
+| 枪/刀 `sys_47(0x10)` / `sys_47(0x11)` | `attach_in` 鸟位移 | 保持 | `restore_normal_hand_weapons` snap 0 | HEAD 只清旗：受击后鸟 TRS 可能留在手上（会话开始的原症状）。C6 禁止用 `dash_land` 修这个 |
 | `0x3d` | 不写 | 不写 | 清 | 清 |
 | 当前 hash | `0x928ca34f` | 同左 | `func_93` 离开 | 受击/idle 等 |
 
 ---
 
-## 受击时枪/刀仍停在鸟位移（2026-09-06）
+## 受击时枪/刀仍停在鸟位移；随后缺挂件（2026-09-06；git 回退 2026-09-06c）
 
-**Status:** E1 source-pinned; in-game H5 untested
+**Status:** H5/H6/H7 **E3-**。`040msc` git：HEAD `587d452`（2026-09-05）的 `func_41` dash 就是只清旗；`rebellion_dash_land_keep_move` 零调用。`5e84bc1`（2026-08-25，C1）从 dash ENTER 删掉 `global143=0x2` 之后，官方 `func_882` analog skip（要 form `0x2`）对 dash 交棒不再生效。本会话未提交的 H5–H7 都叠在 dirty tree 上。
 
-地面特格接 N 的 dash **禁止**写 `global143=0x2`。`cut_in_loop` 仍会 `rebellion_bird_props_attach_in()`，给双手枪 `0xcb1fd274` / `0x521683ce` 和剑柄 `0x1c5c91a8` / `0x5fefab7` 写 `sys_47(0x11)` 鸟挂点（枪约 `(300,100,±350)`，刀约 `(100,-250,±140)`）。
+地面特格接 N 的 dash **禁止**写 `global143=0x2`。`cut_in_loop` 仍会 `rebellion_bird_props_attach_in()`，给双手枪 `0xcb1fd274` / `0x521683ce` 和剑柄 `0x1c5c91a8` / `0x5fefab7` 写 `sys_47(0x11)` 鸟挂点。盾 `0x6e06aa03` 只在鸟挂点。会话开始时受击仍看得见枪刀（只是鸟位移）= 当时 676 `attach_in` 是成功的。
 
-受击时 `func_41` 以前只把 `dash_active` 清零。`rebellion_interrupt_bird_form_to_ground()` 要 `global143==0x2` 才进，所以拆挂件 / `rebellion_restore_normal_hand_weapons()`（先 snap TRS 再 `func_884`）整段跳过。原生 `func_15` → `func_882` 在 `global143==0` 时也会直接 `func_884()` 把手持装回手上，但 **不会** 清 `sys_47(0x11)`。画面已经是 normal，枪和刀还带着飞行位移。
+`rebellion_dash_land_keep_move()` 会 `stop_effects`、拆鸟挂件、`restore_normal_hand_weapons`（BindSlot 把地面行绑回 HUD）。676 `install_bird_weapon_bar` 才把地面行停到 slot 9 走 group B。H5 对任意离开 dash 的 hash 调它 → 缺挂件 + 弹不回（C6）。H6 收成受击/倒地仍 E3-：ACTIVE 的 hash 仍是 `0x928ca34f`。
 
-`rebellion_dash_land_keep_move()` 本来就是 hit/cancel helper，此前 **零调用点**（679 无杆走 `untransform_keep_move`，故意不 `func_169(0x4000)`）。现行：`func_41` 在离开 `0x928ca34f` 且不是 analog `0x77b100ff` / 变形 `0x9475130e` 时调用它；helper 在 `func_884` 后再 snap 一次 duration-0 TRS，打断 676 刚开始的 fly-in lerp。
+H7 在 `func_882` 加了两条 form-0 return：analog `0x77b100ff`，以及 **dash hash + `dash_active`**。后一条会挡住 dash ENTER 的 `func_884`（`sys_4B` 出手持模型）。676 `attach_in` 只写已存在模型的 `sys_47(0x11)`。用户 2026-09-06：没修。两条 skip 捆在同一包，无法隔离 analog。
 
-不要用 `restore_ms_after_bird`：dash 不锁存 `global170`。不要把这条改成鸟 FORCED_RECOVERY。
+不要用 `restore_ms_after_bird`：dash 不锁存 `global170`。不要改 `reloadGroupBEnabled`：现场 6 行成对武装仍是 1。H8 已对照 HEAD。
 
 ```text
-H5  hypothesis: 特格接 N dash 刚 attach_in 就被打，func_41 走 dash_land_keep_move 后枪/刀回到手持原点
-P5  prediction: 受击动作里双枪或双刀贴手，没有鸟挂点平移；无杆 679 / 有杆 analog 外观不变
-F5  falsifier: 受击后枪或刀仍漂在胸前/身侧；或松杆惯性消失；或按住方向进 analog 时提前拆鸟
+H5  hypothesis: 特格接 N dash 刚 attach_in 就被打（hash 0x4cdc9902 / 0x1ad4e055 / 0xef809e66），func_41 走 dash_land_keep_move 后枪/刀回到手持原点
+P5  prediction: 受击动作里双枪或双刀贴手；无杆 679 惯性仍在；有杆 analog 胸前仍有枪盾刀
+F5  falsifier: 受击后枪或刀仍漂；或松杆惯性消失；或按住方向进 analog 时提前拆鸟
+
+H6  hypothesis: 2026-09-06 任意非白名单 hash 调 dash_land_keep_move 是缺挂件 + 地面弹不回的同一原因
+P6  prediction: 只对受击/硬直/倒地调 helper 后，特格接 N/左/右/前格 30f 冲刺和有杆 analog 胸前有枪盾刀；打空地面弹 → 官方变形等数秒 → 出鸟弹数增加
+F6  falsifier: 冲刺/analog 仍无挂件；或官方变形后地面弹仍不闲置回弹；或受击时枪刀又停在鸟位移
+
+H6  **E3-** 2026-09-06 user: 完全没修复。ACTIVE 期间 `global3` 仍是 `0x928ca34f`，`func_41` 不拆。
+
+H7  hypothesis: 有杆 679→analog `0x77b100ff` 时 `global143` 仍为 0，`func_95` class `0x1` 进 `func_15`→`func_882`→`func_884`。form 0 + analog 直接 return；同包还 skip 了 dash hash + dash_active。
+P7  prediction: 按住方向进 analog 后胸前有枪盾刀；进 analog 再响一次 676 link SE
+F7  falsifier: 仍无挂件；或受击不再回手持；或无杆惯性没了
+H7  **E3-** 2026-09-06 user: 没修。两条 skip 未隔离。dash-hash skip 可能让 676 attach_in 没有手持模型。
+
+H8  hypothesis: 缺挂件是本会话 uncommitted 的 func_41/func_882/TRS，不是 HEAD 已提交 dash（08-27 E3 冲刺 + 会话开始受击仍带鸟位移）
+P8  prediction: 撤回后特格接 N 的 30f 冲刺胸前有枪盾刀
+F8  falsifier: HEAD 行为也没有胸前挂件 → 再查 5e84bc1 的 attach_in 一帧 + 677 不 remount；不要在同一包再叠 func_882 skip
+H8  **E3** 2026-09-06 user: 修好了特格接近战冲刺。同一回报：官方/飞行闲置回弹仍无（group B 开关仍在；见 unused-form 笔记）。
 ```
 
 ---

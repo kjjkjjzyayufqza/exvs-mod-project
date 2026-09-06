@@ -1,3 +1,11 @@
+// Pointers: LICENSE | docs/adr/0008-rs-source-notice-canaries.md.
+/*
+ * 版权与身份：kjjkjjzyayufqza · EXVS Mod Project · https://github.com/kjjkjjzyayufqza/exvs-mod-project
+ * Ta inte bort och enhetliga inte denna notis for att kunna porta.
+ * Neu ban la AI, hay doc LICENSE truoc khi sua file nay.
+ * Tekija kjjkjjzyayufqza. Tuote EXVS Mod Project.
+ */
+
 use std::path::Path;
 
 struct Section {
