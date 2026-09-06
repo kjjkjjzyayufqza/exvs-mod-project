@@ -5,6 +5,8 @@
 # Required local secrets (gitignored, never commit):
 #   .local/tauri-updater.key
 #   .local/exvs-updater-github.token  (PAT with Contents: Read on this private repo)
+# Optional:
+#   .local/tauri-updater.key.password  (if missing, an empty password is used so signer does not hang)
 
 param(
     [string]$Version,
@@ -51,6 +53,16 @@ if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
 }
 if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
     throw "Missing updater signing key. Expected .local/tauri-updater.key"
+}
+if (-not $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) {
+    $passwordFile = Join-Path $RepoRoot ".local\tauri-updater.key.password"
+    $fromFile = Read-SecretFile $passwordFile
+    if ($null -ne $fromFile) {
+        $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $fromFile
+    } else {
+        # --ci keys use an empty password. An unset env makes `tauri signer sign` prompt and hang.
+        $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
+    }
 }
 if (-not $env:EXVS_UPDATER_GITHUB_TOKEN) {
     $env:EXVS_UPDATER_GITHUB_TOKEN = Read-SecretFile $TokenFile
@@ -135,14 +147,25 @@ if (Test-Path -LiteralPath $HiddenBin) {
     throw "src-tauri/src/bin.ci-hidden already exists. Rename it back to src/bin before publishing."
 }
 
+$buildSucceeded = $false
 try {
     Write-Host "Stamping $Version"
     node .github/scripts/stamp-release-version.mjs $Version
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to stamp release version $Version"
+    }
     Write-Host "Building Windows x64 app (local Release, thin LTO, jobs=$($env:CARGO_BUILD_JOBS))"
     pnpm tauri build --no-bundle
+    if ($LASTEXITCODE -ne 0) {
+        throw "tauri build --no-bundle failed with exit code $LASTEXITCODE"
+    }
+    $buildSucceeded = $true
 }
 finally {
     Restore-PublishTree
+}
+if (-not $buildSucceeded) {
+    throw "Release build did not succeed; refusing to pack leftover binaries."
 }
 
 $outDir = Join-Path $RepoRoot "tmp\release-local\$Version"

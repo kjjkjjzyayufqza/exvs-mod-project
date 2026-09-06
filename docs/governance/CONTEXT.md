@@ -120,9 +120,12 @@ _Avoid_: burying identity in path-settings Config
 
 **SupportHome**:
 The canonical support URL is the GitHub repository
-github.com/kjjkjjzyayufqza/exvs-mod-project. No other channel unless the
-author adds one.
-_Avoid_: inventing Discord, email, or donation links
+github.com/kjjkjjzyayufqza/exvs-mod-project.
+
+**BuyMeACoffee**:
+Author-added tip URL https://buymeacoffee.com/kjjkjj. Shown on About and
+GitHub FUNDING.yml. Does not replace SupportHome.
+_Avoid_: inventing additional Discord, email, or donation links
 
 **AppIcon**:
 The author-supplied mark in `icon.png`. It is the native app icon, the About

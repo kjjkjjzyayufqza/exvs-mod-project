@@ -49,6 +49,14 @@ describe("AboutPage", () => {
     );
   });
 
+  it("shows GitHub and Buy Me a Coffee links", () => {
+    render(<AboutPage />);
+
+    expect(screen.getByRole("button", { name: "GitHub" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Buy Me a Coffee" })).toBeInTheDocument();
+    expect(screen.getByText("https://buymeacoffee.com/kjjkjj")).toBeInTheDocument();
+  });
+
   it("does not expose an auto-update Release control", () => {
     render(<AboutPage />);
 

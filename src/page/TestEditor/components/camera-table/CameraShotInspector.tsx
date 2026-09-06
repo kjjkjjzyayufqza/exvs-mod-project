@@ -276,7 +276,7 @@ export function CameraShotInspector({
           <Field label={t("cameraTable.offset")}>
             <Input
               type="number"
-              value={Number.isFinite(shot.offset) ? shot.offset : 0}
+              value={typeof shot.offset === "number" && Number.isFinite(shot.offset) ? shot.offset : 0}
               disabled={!writable}
               onChange={(event) => {
                 const next = Number(event.target.value);

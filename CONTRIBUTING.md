@@ -13,3 +13,4 @@ product you can rebrand.
    allowed. Implementing unique behavior into another product is not.
 
 Support: https://github.com/kjjkjjzyayufqza/exvs-mod-project
+Buy Me a Coffee: https://buymeacoffee.com/kjjkjj

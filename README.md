@@ -4,7 +4,7 @@
 
 # EXVS Mod Project
 
-**by [kjjkjjzyayufqza](https://github.com/kjjkjjzyayufqza)**
+**by [kjjkjjzyayufqza](https://github.com/kjjkjjzyayufqza)** · [Buy Me a Coffee](https://buymeacoffee.com/kjjkjj)
 
 Source-available research editor for EXVS2 **Over Boost and earlier**.
 Rust + React on Tauri v2: MSC decompile/recompile, binary formats, models,
@@ -19,6 +19,8 @@ This is **not** OSI open source. You may not wrap it as a competing product.
 | Use | [ACCEPTABLE_USE.md](ACCEPTABLE_USE.md) |
 
 Support: https://github.com/kjjkjjzyayufqza/exvs-mod-project
+
+Buy Me a Coffee: https://buymeacoffee.com/kjjkjj
 
 Not affiliated with Bandai Namco, Sunrise, or Extreme Vs. publishers.
 

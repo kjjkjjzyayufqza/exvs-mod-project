@@ -513,7 +513,10 @@ export function previewCameraTableImport(
       format: "clip-json",
       ok: true,
       shotCount: extracted.shots.length,
-      fieldCount: extracted.shots.reduce((count, shot) => count + (isRecord(shot) ? Object.keys(shot).length : 0), 0),
+      fieldCount: extracted.shots.reduce<number>(
+        (count, shot) => count + (isRecord(shot) ? Object.keys(shot).length : 0),
+        0,
+      ),
       clipHash: payloadHash ?? pack.clipHash,
       warning: warningParts.filter(Boolean).join(" ") || undefined,
     };

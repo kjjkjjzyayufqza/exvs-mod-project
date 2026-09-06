@@ -21,6 +21,8 @@
   "about.urlError": "Could not open or copy the URL",
   "about.tagline": "Source-available research editor for Over Boost and earlier Extreme Vs. 2 revisions. Not an open-source product you can rebrand.",
   "about.github": "GitHub",
+  "about.buyMeACoffee": "Buy Me a Coffee",
+  "about.coffee": "Coffee",
   "about.useLicense": "ACCEPTABLE_USE.md · not a copyright license",
   "about.scopeBody": "Research and tooling target Over Boost (OB) and earlier Extreme Vs. 2 revisions only. Do not use this application against any later revision that is still operated as a live arcade or online service.",
   "about.liveAliases": "Aliases only: IB, EXVS2IB, イニブ. Successors are also forbidden. Named here so the ban is not an abbreviation. Not a research target.",
