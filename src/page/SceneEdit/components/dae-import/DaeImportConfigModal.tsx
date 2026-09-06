@@ -44,7 +44,12 @@ import {
 } from "./daeImportConfigProfiles";
 
 export type DaeImportPrimaryMode = "preview" | "ssbh";
-export type DaeImportWorkflowMode = "standard" | "batchDisk" | "unitModel" | "unitModelReplaceNumshb";
+export type DaeImportWorkflowMode =
+  | "standard"
+  | "batchDisk"
+  | "unitModel"
+  | "unitModelReplaceNumshb"
+  | "unitModelReplaceFull";
 
 const VIEWPORT_MARGIN = 48;
 const SSBH_MAX_WIDTH = 1080;
@@ -173,7 +178,8 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
 }: DaeImportConfigModalBodyProps) {
   const { t } = useTranslation("scene-dae-forms");
   const batchDiskMode = workflowMode === "batchDisk";
-  const unitModelMode = workflowMode === "unitModel";
+  const replaceFullMode = workflowMode === "unitModelReplaceFull";
+  const unitModelMode = workflowMode === "unitModel" || replaceFullMode;
   const replaceNumshbMode = workflowMode === "unitModelReplaceNumshb";
   const primaryMode = getPrimaryMode(config);
   const hktAvailable = isHktGenerationAvailable(havokInfo);
@@ -305,7 +311,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
     (batchDiskMode ? allEntriesReady : !entry.analyzing) &&
     !blockedByHkt &&
     (!config.generateHkt || hktAvailable) &&
-    (replaceNumshbMode
+    (replaceNumshbMode || replaceFullMode
       ? (entry.analysis?.canConvert ?? false) && ssbhReady
       : config.directToDisk
         ? Boolean(config.outputDirectory) && (entry.analysis?.canConvert ?? false) && ssbhReady
@@ -383,6 +389,12 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
               <DaeImportFieldRow label={t("fields.importMode")}>
                 <span className="text-right text-[11px] font-medium">
                   {t("modes.meshOnly")}
+                </span>
+              </DaeImportFieldRow>
+            ) : replaceFullMode ? (
+              <DaeImportFieldRow label={t("fields.importMode")}>
+                <span className="text-right text-[11px] font-medium">
+                  {t("modes.replaceUnitModel")}
                 </span>
               </DaeImportFieldRow>
             ) : unitModelMode ? (
@@ -516,6 +528,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
               batchCount={batchDiskMode ? entries.length : 1}
               unitModelMode={unitModelMode}
               replaceNumshbMode={replaceNumshbMode}
+              replaceFullMode={replaceFullMode}
               textureReferenceIssues={textureReferenceValidation.issues}
               textureReferenceValidationError={textureReferenceValidation.error}
               textureReferencesValidating={textureReferenceValidation.validating}
@@ -530,6 +543,8 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
           <Button type="button" size="sm" onClick={onImport} disabled={!canImport}>
             {replaceNumshbMode
               ? t("actions.convertNumshb")
+              : replaceFullMode
+              ? t("actions.replaceUnitModel")
               : unitModelMode
               ? t("actions.addUnitModel")
               : batchDiskMode
@@ -572,10 +587,13 @@ export function DaeImportConfigModal({
 
   if (!entry || !config) return null;
   const batchDiskMode = workflowMode === "batchDisk";
-  const unitModelMode = workflowMode === "unitModel";
+  const replaceFullMode = workflowMode === "unitModelReplaceFull";
+  const unitModelMode = workflowMode === "unitModel" || replaceFullMode;
   const replaceNumshbMode = workflowMode === "unitModelReplaceNumshb";
   const title = replaceNumshbMode
     ? t("titles.convertMeshReplace")
+    : replaceFullMode
+    ? t("titles.convertFullReplace")
     : unitModelMode
     ? t("titles.importUnitModel")
     : batchDiskMode
@@ -583,6 +601,8 @@ export function DaeImportConfigModal({
       : t("titles.importStaticMesh");
   const subtitle = replaceNumshbMode
     ? t("subtitles.toNumshbOnly", { file: entry.fileName })
+    : replaceFullMode
+    ? t("subtitles.toReplaceSlot", { file: entry.fileName })
     : unitModelMode
     ? t("subtitles.toUnitModelPackage", { file: entry.fileName })
     : batchDiskMode

@@ -344,3 +344,46 @@ F10 falsifier: 不觉醒第一发仍有闪电；觉醒第一发仍无闪电；�
 EXIT：自然放到 `0x14b4` / `func_925` recovery / `func_924` 空弹都 `charge_fx_end`（未 start 则 no-op）。点按不要在 677 里 end，followup 会 `start` 再接。INTERRUPT：不要在 `func_93` 里 end；下一发 `ACTION_AC_SPECIAL_SHOT_ALT_2` ENTER 会 end leftover。
 
 ---
+
+## 10. 点按第二发必须先查栏位弹药（2026-09-06）
+
+**Status:** E1 source-pinned; L3 untested
+
+第二发 `CDA9F55C/D` 是一对：`sys_4F(0, 0x2, C)` 走 `global681` 弹药槽会扣弹，`sys_4F(0, 0x5, D)` 是 `func_589` 跳过 `0x90000` 的虚槽（registry K4）**不扣弹**。空仓时 `0x5` 仍会出梁，看起来就像第二发不检查弹药、可以一直打。
+
+闸在进招快照 `rebellion_alt2_ammo_at_enter = sys_0(0x90000, global681, 0x1)`（`global681=0x2` 之后立刻拍）。
+
+`sys_0(0x90000, slot, 0)` 是 `func_593` 空仓门（677/678），**不是**剩余发数。跨机体要数「还够不够 2 发再打虚槽 0x5」时用第三参 `0x1`：
+
+- `007gundmx_004gundmx_001` `func_1162`
+- `020gnseed_014calamt_001` `func_1002`
+- `017gyakch_007nglrff_001` 开火 extras
+- `066suisei_002pharct_001` `func_979`
+
+形状都是 `if (sys_0(0x90000, slot, 0x1) >= 0x2) { sys_4F(0, 0x5, …); }`。那些机体随后 `sys_4F(0x7, slot, 0x2)` 是因为**全部**出弹都在 0x5；本招第一发已经 `sys_4F(0, 0x2)` 会扣弹，不要再抄 `0x7`。
+
+H12 E3-：开火帧 arg 0 `> 1` 仍出 0x5。  
+H13 E3-：进招 arg 0 快照 `> 1` 仍出 0x5（2026-09-06 user 实测）。
+
+| 点 | 条件 |
+|----|------|
+| 第一发 `0x5` A/B 或 C/D | **`rebellion_alt2_ammo_at_enter >= 0x2`**（arg 0x1 计数） |
+| `func_923` 点按窗 | ENTER `>= 0x2` **且** 当时 arg 0 `!= 0` |
+| 925 `CDA9F55C`（`0x2`） | arg 0 `!= 0` |
+| 925 `CDA9F55D`（`0x5`） | **不打** |
+
+不要 `sys_4F(0x7, 2)`。不要把第二发放进 `678`。EW `016gundmw` `func_923` 只 `sys_4F(0, global681, 0xad4e53b3)`，没有 0x5 双发。
+
+```text
+H12 hypothesis: followup 0x5 fires only when the pre-fire arg-0 snapshot is > 1
+Result: E3- 2026-09-06 user. Arg 0 is empty-vs-not.
+
+H13 hypothesis: ENTER snapshot with arg 0 gates first-shot 0x5 and tap
+Result: E3- 2026-09-06 user. Same wrong field.
+
+H14 hypothesis: ENTER sys_0(0x90000, global681, 0x1) >= 0x2 matches corpus extra-shot gates
+P14 prediction: HUD 1 returns 1 and skips 0x5 + tap; HUD 2 first twin, tap second is 0x2 C only
+F14 falsifier: HUD 1 still spawns 0x5; HUD 2 loses first-shot twin
+```
+
+---

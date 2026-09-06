@@ -19,7 +19,7 @@ import type {
 } from "../utils/unitModelModelService";
 import { UnitModelSourceValidationPreview } from "./UnitModelSourceValidationPreview";
 
-export type UnitModelReplaceScope = "full" | "numshb";
+export type UnitModelReplaceScope = "full" | "numshb" | "fullFbx";
 
 const LIST_CAP = 10;
 
@@ -110,10 +110,10 @@ export function UnitModelReplaceFolderModal({
   onCancel,
 }: UnitModelReplaceFolderModalProps) {
   const blockers =
-    scope === "full" ? (fullPreview?.blockers ?? []) : (numshbPreview?.blockers ?? []);
+    scope === "numshb" ? (numshbPreview?.blockers ?? []) : (fullPreview?.blockers ?? []);
   const warnings =
-    scope === "full" ? (fullPreview?.warnings ?? []) : (numshbPreview?.warnings ?? []);
-  const hasPreview = scope === "full" ? Boolean(fullPreview) : Boolean(numshbPreview);
+    scope === "numshb" ? (numshbPreview?.warnings ?? []) : (fullPreview?.warnings ?? []);
+  const hasPreview = scope === "numshb" ? Boolean(numshbPreview) : Boolean(fullPreview);
   const canConfirm = hasPreview && blockers.length === 0 && !busy;
   const identityName = fullPreview?.target.modelName ?? numshbPreview?.target.modelName ?? targetModelName;
   const identityIndex = fullPreview?.target.modelIndex ?? numshbPreview?.target.modelIndex ?? targetModelIndex;
@@ -160,7 +160,7 @@ export function UnitModelReplaceFolderModal({
 
           <section className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-2.5">
             <p className="text-[11px] font-medium">{t("scope.label")}</p>
-            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
               <button
                 type="button"
                 disabled={busy}
@@ -175,6 +175,22 @@ export function UnitModelReplaceFolderModal({
                 <span className="block text-[11px] font-medium">{t("scope.full.title")}</span>
                 <span className="mt-0.5 block text-[10px] text-muted-foreground">
                   {t("scope.full.help")}
+                </span>
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onScopeChange("fullFbx")}
+                className={cn(
+                  "rounded-md border px-2.5 py-2 text-left transition-colors",
+                  scope === "fullFbx"
+                    ? "border-primary bg-primary/10"
+                    : "border-border/60 hover:bg-muted/40",
+                )}
+              >
+                <span className="block text-[11px] font-medium">{t("scope.fullFbx.title")}</span>
+                <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                  {t("scope.fullFbx.help")}
                 </span>
               </button>
               <button
@@ -210,6 +226,18 @@ export function UnitModelReplaceFolderModal({
                 <FolderOpen className="h-3.5 w-3.5" aria-hidden />
                 {t("source.full")}
               </Button>
+            ) : scope === "fullFbx" ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5"
+                disabled={busy}
+                onClick={onConvertFbx}
+              >
+                <FileUp className="h-3.5 w-3.5" aria-hidden />
+                {t("source.convertFull")}
+              </Button>
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 <Button
@@ -238,7 +266,7 @@ export function UnitModelReplaceFolderModal({
             )}
           </section>
 
-          {scope === "full" && fullPreview ? (
+          {(scope === "full" || scope === "fullFbx") && fullPreview ? (
             <FullReplacePreview preview={fullPreview} />
           ) : null}
           {scope === "numshb" && numshbPreview ? (

@@ -176,6 +176,7 @@ Homemade NUANMB folder（DCC `*_out.fbx` 导入、Rebellion `tks11a` / `0xa0cd8d
 | K2 | 676 起手去掉 `sys_58(0x1, 0x436f1f0a)` | 按下副射条仍在；**射出弹那一帧仍清空** | 蓄力循环 SE 不是出弹帧 owner | 2026-08-30 user: 按下没问题，射出弹才会清空 |
 | K3 | 677 出弹帧去掉 `sys_4A(0x1, 0x7, 0/1)`，仍 `sys_4F(0, 0x1, CDA9F563/564)` | **出弹那一帧条仍空** | group-7 清光不是出弹帧 owner | 2026-08-30 user: 也还是一样 |
 | K4 | 677 `sys_4F(0, 0, CDA9F563/564, 1)`（slot 0 + 第 4 参）或 `sys_4F(0, 0x1, hash)` | **打包进游戏后**，出弹帧仍清正在蓄的 CSA 条 | `sys_4F(0, 0x5, CDA9F563/564)` **三参**。`arg2=0x5` 是 `func_589` 跳过 `0x90000` 的虚拟出弹槽，不是弹药槽 1。第 4 参是**该 slot 的蓄力消费 bool**（`sub_1405BCF00`），不是 CS 槽编号；slot 0 + `1` = 清 CSA。ENTER 的 `global681=0x1` 仍管副射弹药 | 2026-08-30 user **E3** 打包后确认 |
+| K5 | ALT_2 用 `sys_0(0x90000, global681, 0) > 1`（开火帧或进招快照）决定要不要 `sys_4F(0, 0x5)` | **HUD 只剩 1 发时点按仍出 0x5** | arg 0 是空仓门，不是发数。计数是 `sys_0(0x90000, slot, 0x1) >= 0x2`（007gundmx `func_1162` / Calamity / Gyan extras）。点按第二发不要打虚槽 `0x5`。不要抄那些机体的 `sys_4F(0x7, slot, 0x2)` | [alt2-gerobi-stop-and-followup](./alt2-gerobi-stop-and-followup.md) §10；2026-09-06 user |
 
 ## L. `sys_4A` effect group
 

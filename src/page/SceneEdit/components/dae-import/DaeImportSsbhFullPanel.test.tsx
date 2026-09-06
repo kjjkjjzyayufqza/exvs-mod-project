@@ -173,4 +173,34 @@ describe("DaeImportSsbhFullPanel", () => {
       expect(screen.getByRole("checkbox", { name })).toBeDisabled();
     }
   });
+
+  it("locks full SSBH outputs and shows replace copy in full-replace mode", async () => {
+    useDaeSsbhSessionStore.setState({
+      writeNumdlb: false,
+      writeNumshb: false,
+      writeNusktb: false,
+      writeNumatb: false,
+      writeMayaProfile: false,
+    });
+
+    render(
+      <DaeImportSsbhFullPanel
+        analysis={analysis}
+        sourcePath={analysis.daePath}
+        stageRoot="E:\\unit\\0"
+        directToDisk
+        unitModelMode
+        replaceFullMode
+      />,
+    );
+
+    await waitFor(() => {
+      expect(useDaeSsbhSessionStore.getState().writeNumdlb).toBe(true);
+    });
+
+    expect(screen.getByText(/overwrite the current model slot/i)).toBeInTheDocument();
+    expect(screen.getByTestId("numdlb-mapping-editor")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: ".numdlb" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: ".jnttbl" })).toBeDisabled();
+  });
 });

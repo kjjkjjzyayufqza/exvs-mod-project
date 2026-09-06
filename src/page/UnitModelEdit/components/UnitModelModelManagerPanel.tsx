@@ -73,6 +73,7 @@ import {
   removeUnitModelModel,
   replaceUnitModelModel,
   replaceUnitModelNumshb,
+  stageUnitModelStaticMesh,
   validateUnitModelSourceFolder,
   type UnitModelNumshbReplacePreview,
   type UnitModelReplacePreview,
@@ -93,6 +94,7 @@ import {
   UNIT_MODEL_IMPORT_STATIC_MESH_DIALOG_PATH_KEY,
   UNIT_MODEL_REPLACE_NUMSHB_DIALOG_PATH_KEY,
   UNIT_MODEL_REPLACE_NUMSHB_SOURCE_DIALOG_PATH_KEY,
+  UNIT_MODEL_REPLACE_FULL_SOURCE_DIALOG_PATH_KEY,
   UNIT_MODEL_REPLACE_SSBH_FOLDER_DIALOG_PATH_KEY,
 } from "../utils/unitModelEditorSettings";
 import {
@@ -331,10 +333,11 @@ export function UnitModelModelManagerPanel({
     label: string;
     index: number;
   } | null>(null);
-  const [replaceScope, setReplaceScope] = useState<UnitModelReplaceScope>("numshb");
+  const [replaceScope, setReplaceScope] = useState<UnitModelReplaceScope>("fullFbx");
   const [replaceFolderPreview, setReplaceFolderPreview] = useState<{
     source: string;
     preview: UnitModelReplacePreview;
+    tempDir?: string;
   } | null>(null);
   const [replaceNumshbPreview, setReplaceNumshbPreview] = useState<{
     source: string;
@@ -755,7 +758,7 @@ export function UnitModelModelManagerPanel({
     if (suppressReplaceCloseRef.current || showImportConfig || importProgress.open) {
       return;
     }
-    const tempPath = replaceNumshbPreview?.tempDir;
+    const tempPath = replaceNumshbPreview?.tempDir ?? replaceFolderPreview?.tempDir;
     setReplaceTarget(null);
     setReplaceFolderPreview(null);
     setReplaceNumshbPreview(null);
@@ -763,7 +766,7 @@ export function UnitModelModelManagerPanel({
   };
 
   const handleReplaceScopeChange = (scope: UnitModelReplaceScope) => {
-    const tempPath = replaceNumshbPreview?.tempDir;
+    const tempPath = replaceNumshbPreview?.tempDir ?? replaceFolderPreview?.tempDir;
     setReplaceScope(scope);
     setReplaceFolderPreview(null);
     setReplaceNumshbPreview(null);
@@ -961,6 +964,116 @@ export function UnitModelModelManagerPanel({
     }
   };
 
+  const handleConvertReplaceFull = async () => {
+    if (!modelRoot || !structureJsonPath || !replaceTarget) {
+      toast.error(t("manager.errors.openFolder"));
+      return;
+    }
+    setBusy("analyze");
+    try {
+      const selected = await open({
+        multiple: false,
+        title: t("manager.dialogs.selectConvertFull", { label: replaceTarget.label }),
+        filters: [{ name: "Static Mesh", extensions: ["fbx", "dae"] }],
+        defaultPath:
+          (await getStoredDialogDefaultPath(UNIT_MODEL_REPLACE_FULL_SOURCE_DIALOG_PATH_KEY)) ??
+          modelRoot ??
+          undefined,
+      });
+      const filePath = Array.isArray(selected) ? selected[0] : selected;
+      if (!filePath) return;
+      await rememberStoredDialogSelection(
+        UNIT_MODEL_REPLACE_FULL_SOURCE_DIALOG_PATH_KEY,
+        filePath,
+        "file",
+      );
+      const fileName = filePath.split(/[/\\]/).pop() ?? "model.fbx";
+      const baseFilename = sanitizeBaseFilename(fileName);
+      const sourceFormat = detectStaticMeshImportFormat(fileName);
+      let config = createDefaultDaeImportConfig(baseFilename);
+      config.loadToScene = false;
+      config.convertToSsbh = true;
+      config.generateHkt = false;
+      config.directToDisk = true;
+      config.outputDirectory = modelRoot;
+      config.ssbhConfig.writeNumdlb = true;
+      config.ssbhConfig.writeNumshb = true;
+      config.ssbhConfig.writeNusktb = true;
+      config.ssbhConfig.writeNumatb = true;
+      config.ssbhConfig.writeJnttbl = true;
+      config.ssbhConfig.writeMayaProfile = true;
+      config = applyUnitModelFbxImportDefaults(config, sourceFormat);
+
+      const entry: DaeImportEntry = {
+        importId: `unit_model_replace_full_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        fileName,
+        filePath,
+        sourceFormat,
+        analysis: null,
+        config,
+        analyzing: true,
+        analyzeError: null,
+      };
+
+      const session = useDaeSsbhSessionStore.getState();
+      session.resetSession();
+      session.setOutputBaseName(baseFilename);
+      session.setWriteNumdlb(true);
+      session.setWriteNumshb(true);
+      session.setWriteNusktb(true);
+      session.setWriteNumatb(true);
+      session.setWriteMayaProfile(true);
+      if (sourceFormat === "fbx") {
+        session.setImportKind("fbx");
+        session.setFlipUv(true);
+      }
+
+      suppressReplaceCloseRef.current = true;
+      setImportWorkflow("unitModelReplaceFull");
+      setImportEntries([entry]);
+      setShowImportConfig(true);
+      try {
+        const analysis =
+          entry.sourceFormat === "fbx"
+            ? await ssbhAnalyzeFbx(filePath)
+            : await ssbhAnalyzeDae(filePath);
+        setImportEntries((current) =>
+          current.map((candidate) =>
+            candidate.importId === entry.importId
+              ? {
+                  ...candidate,
+                  analysis,
+                  config: applyUnitModelFbxImportDefaults(
+                    syncDaeImportConfigUpAxisFromAnalysis(
+                      candidate.config,
+                      analysis,
+                    ),
+                    candidate.sourceFormat,
+                  ),
+                  analyzing: false,
+                }
+              : candidate,
+          ),
+        );
+      } catch (error) {
+        setImportEntries((current) =>
+          current.map((candidate) =>
+            candidate.importId === entry.importId
+              ? {
+                  ...candidate,
+                  analyzing: false,
+                  analyzeError:
+                    error instanceof Error ? error.message : String(error),
+                }
+              : candidate,
+          ),
+        );
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const handleConfirmReplaceNumshbConvert = async () => {
     const entry = importEntries[0];
     const target = replaceTargetRef.current;
@@ -1038,6 +1151,93 @@ export function UnitModelModelManagerPanel({
     }
   };
 
+  const handleConfirmReplaceFullConvert = async () => {
+    const entry = importEntries[0];
+    const target = replaceTargetRef.current;
+    if (!entry || !entry.analysis) {
+      toast.error(t("manager.errors.analysisNotReady"));
+      return;
+    }
+    if (!modelRoot || !structureJsonPath || !target) {
+      toast.error(t("manager.errors.replaceTargetMissing"));
+      return;
+    }
+    const session = useDaeSsbhSessionStore.getState();
+    const baseFilename = sanitizeBaseFilename(session.outputBaseName);
+    setBusy(`replace:${target.label}`);
+    setShowImportConfig(false);
+    setImportProgress({
+      open: true,
+      progress: 0,
+      steps: createUnitImportSteps(entry.fileName, t),
+    });
+    const stamp = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const outputDir = await join(await tempDir(), "unit-model-replace-full", stamp);
+    try {
+      await mkdir(outputDir, { recursive: true });
+      await assertSsbhSessionTextureReferencesResolvable({
+        sessionState: session,
+        sourcePath: entry.filePath,
+        stageRoot: modelRoot,
+      });
+      const importConfig = buildSsbhSessionImportConfig(
+        entry.config,
+        session,
+        baseFilename,
+        { geometryNames: session.includeGeometryNames },
+      );
+      importConfig.loadToScene = false;
+      importConfig.convertToSsbh = true;
+      importConfig.generateHkt = false;
+      if (!importConfig.ssbhConfig) {
+        throw new Error("SSBH conversion settings are missing.");
+      }
+      importConfig.ssbhConfig = {
+        ...importConfig.ssbhConfig,
+        baseFilename,
+        writeNumdlb: true,
+        writeNumshb: true,
+        writeNusktb: true,
+        writeNumatb: true,
+        writeJnttbl: true,
+        writeMayaProfile: true,
+      };
+      await stageUnitModelStaticMesh(
+        {
+          modelRoot,
+          outputDir,
+          sourcePath: entry.filePath,
+          config: importConfig,
+          includeGeometryNames: [...session.includeGeometryNames],
+        },
+        handleStaticMeshProgress,
+      );
+      const preview = await previewUnitModelModelReplacement(
+        modelRoot,
+        target.label,
+        outputDir,
+        structureJsonPath,
+      );
+      const previousTemp = replaceFolderPreview?.tempDir;
+      setReplaceTarget(target);
+      setReplaceScope("fullFbx");
+      setReplaceFolderPreview({ source: outputDir, preview, tempDir: outputDir });
+      await cleanupReplaceTempDir(previousTemp);
+      setImportEntries([]);
+      suppressReplaceCloseRef.current = false;
+    } catch (error) {
+      toast.error(t("manager.errors.convertFullFailed"), {
+        description: error instanceof Error ? error.message : String(error),
+      });
+      suppressReplaceCloseRef.current = true;
+      setShowImportConfig(true);
+      await cleanupReplaceTempDir(outputDir);
+    } finally {
+      setImportProgress({ open: false, progress: 0, steps: [] });
+      setBusy(null);
+    }
+  };
+
   const handleConfirmReplaceFolder = async () => {
     if (!modelRoot || !structureJsonPath || !replaceTarget) return;
     if (replaceScope === "numshb") {
@@ -1096,8 +1296,10 @@ export function UnitModelModelManagerPanel({
         }),
       });
       showMutationSyncWarning(result.syncWarning, t("manager.errors.textureSync"));
+      const tempPath = replaceFolderPreview.tempDir;
       setReplaceTarget(null);
       setReplaceFolderPreview(null);
+      await cleanupReplaceTempDir(tempPath);
       emitUnitModelTexturesChanged();
       onMutated?.();
     } catch (error) {
@@ -1363,7 +1565,11 @@ export function UnitModelModelManagerPanel({
         onScopeChange={handleReplaceScopeChange}
         onChooseFullFolder={() => void handleChooseFullFolder()}
         onChooseExistingNumshb={() => void handleChooseExistingNumshb()}
-        onConvertFbx={() => void handleConvertReplaceNumshb()}
+        onConvertFbx={() =>
+          void (replaceScope === "fullFbx"
+            ? handleConvertReplaceFull()
+            : handleConvertReplaceNumshb())
+        }
         onConfirm={() => void handleConfirmReplaceFolder()}
         onCancel={handleCloseReplace}
       />
@@ -1387,7 +1593,9 @@ export function UnitModelModelManagerPanel({
           onImport={() =>
             void (importWorkflow === "unitModelReplaceNumshb"
               ? handleConfirmReplaceNumshbConvert()
-              : handleConfirmStaticMeshImport())
+              : importWorkflow === "unitModelReplaceFull"
+                ? handleConfirmReplaceFullConvert()
+                : handleConfirmStaticMeshImport())
           }
           onCancel={() => {
             suppressReplaceCloseRef.current = false;

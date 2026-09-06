@@ -25,6 +25,7 @@ export const UNIT_MODEL_ADD_SSBH_FOLDER_DIALOG_PATH_KEY = "unitModelEdit.addSsbh
 export const UNIT_MODEL_REPLACE_SSBH_FOLDER_DIALOG_PATH_KEY = "unitModelEdit.replaceSsbhFolder";
 export const UNIT_MODEL_REPLACE_NUMSHB_DIALOG_PATH_KEY = "unitModelEdit.replaceNumshb";
 export const UNIT_MODEL_REPLACE_NUMSHB_SOURCE_DIALOG_PATH_KEY = "unitModelEdit.replaceNumshbSource";
+export const UNIT_MODEL_REPLACE_FULL_SOURCE_DIALOG_PATH_KEY = "unitModelEdit.replaceFullSource";
 export const UNIT_MODEL_IMPORT_STATIC_MESH_DIALOG_PATH_KEY = "unitModelEdit.importStaticMesh";
 export const UNIT_MODEL_ADD_TEXTURE_DIALOG_PATH_KEY = "unitModelEdit.addTexture";
 export const UNIT_MODEL_ADD_WEAPON_ICON_DIALOG_PATH_KEY = "unitModelEdit.addWeaponIcon";

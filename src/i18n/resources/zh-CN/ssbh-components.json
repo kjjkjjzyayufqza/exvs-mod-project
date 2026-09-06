@@ -10,5 +10,11 @@
   "material.useCustom": "使用自定义",
   "material.empty": "暂无材质标签。请在上方输入自定义名称。",
   "material.placeholder": "选择或输入材质…",
-  "material.showSuggestions": "显示材质标签建议"
+  "material.showSuggestions": "显示材质标签建议",
+  "shader.listLabel": "着色器标签",
+  "shader.showingFirst": "显示前 {{shown}} 个，共 {{total}} 个。输入以搜索。",
+  "shader.useCustom": "使用自定义",
+  "shader.empty": "暂无着色器标签。请在上方输入自定义名称。",
+  "shader.placeholder": "选择或输入着色器…",
+  "shader.showSuggestions": "显示着色器标签建议"
 }

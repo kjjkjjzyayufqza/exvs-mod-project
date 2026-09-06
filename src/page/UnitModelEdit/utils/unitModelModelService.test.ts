@@ -31,6 +31,7 @@ import {
   removeUnitModelModel,
   replaceUnitModelModel,
   replaceUnitModelNumshb,
+  stageUnitModelStaticMesh,
   validateUnitModelSourceFolder,
 } from "./unitModelModelService";
 
@@ -396,5 +397,56 @@ describe("unitModelModelService", () => {
 
     mocks.channels[0]?.onmessage?.({ kind: "complete" });
     expect(onProgress).toHaveBeenCalledWith({ kind: "complete" });
+  });
+
+  it("stages converted SSBH into an output folder without adding a model", async () => {
+    mocks.invokeMock.mockResolvedValue({
+      outputDir: "C:\\Temp\\unit-model-replace-full\\stamp",
+      fileCount: 8,
+    });
+    const onProgress = vi.fn();
+
+    const result = await stageUnitModelStaticMesh(
+      {
+        modelRoot: "E:/unit/0",
+        outputDir: "C:/Temp/unit-model-replace-full/stamp",
+        sourcePath: "E:/source/model.fbx",
+        includeGeometryNames: ["SHAPE_ROOTShape", "SHAPE_ROOTShape__sub1"],
+        config: {
+          loadToScene: false,
+          convertToSsbh: true,
+          generateHkt: false,
+          hktSimplify: {
+            enabled: false,
+            planalityAngleDeg: 15,
+            minTriangleArea: 0.000001,
+            weldEpsilon: 0.001,
+            targetTriangleRatio: null,
+            maxTargetTriangles: null,
+            strategy: "shapePreserving",
+            hullTargetFaces: null,
+            quadMergeEnabled: true,
+            preset: "none",
+            hullPreset: "balanced",
+          },
+          ssbhConfig: null,
+        },
+      },
+      onProgress,
+    );
+
+    expect(result.fileCount).toBe(8);
+    expect(mocks.invokeMock).toHaveBeenCalledWith(
+      "unit_model_stage_static_mesh",
+      expect.objectContaining({
+        options: expect.objectContaining({
+          modelRoot: "E:\\unit\\0",
+          outputDir: "C:\\Temp\\unit-model-replace-full\\stamp",
+          sourcePath: "E:\\source\\model.fbx",
+          includeGeometryNames: ["SHAPE_ROOTShape", "SHAPE_ROOTShape__sub1"],
+        }),
+        onProgress: mocks.channels[0],
+      }),
+    );
   });
 });

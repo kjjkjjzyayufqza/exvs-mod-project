@@ -10,5 +10,11 @@
   "material.useCustom": "Use custom",
   "material.empty": "No material labels yet. Type a custom name above.",
   "material.placeholder": "Select or type material...",
-  "material.showSuggestions": "Show material label suggestions"
+  "material.showSuggestions": "Show material label suggestions",
+  "shader.listLabel": "Shader labels",
+  "shader.showingFirst": "Showing first {{shown}} of {{total}}. Type to search.",
+  "shader.useCustom": "Use custom",
+  "shader.empty": "No shader labels yet. Type a custom name above.",
+  "shader.placeholder": "Select or type shader...",
+  "shader.showSuggestions": "Show shader label suggestions"
 }

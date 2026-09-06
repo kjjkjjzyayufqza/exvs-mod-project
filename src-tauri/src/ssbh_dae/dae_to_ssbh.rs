@@ -210,8 +210,40 @@ pub fn convert_import_scene_file(
     Ok((converted_files, stats))
 }
 
-/// VS2 mesh write path stores `subindex` 0 on disk for every object; modl entries must use 0 as well.
-/// Distinct objects therefore require unique geometry names in the DAE.
+/// Reverse the DAE/FBX export encoding used when `subindex > 0`.
+///
+/// Export writes `{name}` for subindex 0 and `{name}__sub{N}` for N > 0
+/// (`dae_export` / `ssbh_fbx`). Convert restores `(name, N)` so the written
+/// NUMSHB and NUMDLB share the same identities. Split suffixes such as
+/// `__part0` are left unchanged.
+pub fn decode_exported_mesh_object_name(export_name: &str) -> (String, u64) {
+    const MARKER: &str = "__sub";
+    if let Some(idx) = export_name.rfind(MARKER) {
+        let base = &export_name[..idx];
+        let digits = &export_name[idx + MARKER.len()..];
+        if !base.is_empty() && !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) {
+            if let Ok(subindex) = digits.parse::<u64>() {
+                return (base.to_string(), subindex);
+            }
+        }
+    }
+    (export_name.to_string(), 0)
+}
+
+/// Identity used to match a mesh object against a NUMDLB entry.
+/// Encoded export names stored at subindex 0 are decoded; already-decoded
+/// `(name, subindex)` pairs from vanilla files are kept as-is.
+pub fn decode_exported_mesh_object_identity(name: &str, subindex: u64) -> (String, u64) {
+    if subindex == 0 {
+        decode_exported_mesh_object_name(name)
+    } else {
+        (name.to_string(), subindex)
+    }
+}
+
+/// Import geometry names must stay unique (VS2 FBX/DAE objects cannot share a
+/// name). After decode, mesh/modl identities are `(name, subindex)` pairs and
+/// may repeat the base name.
 fn ensure_unique_geometry_names_for_vs2(meshes: &[Vs2PreparedMesh]) -> Result<()> {
     let mut seen = HashSet::new();
     for m in meshes {
@@ -224,12 +256,26 @@ fn ensure_unique_geometry_names_for_vs2(meshes: &[Vs2PreparedMesh]) -> Result<()
                 m.name
             );
             return Err(anyhow!(
-                "Duplicate geometry name '{}' in DAE: VS2 export requires unique names (mesh subindex is always 0 on disk)",
+                "Duplicate geometry name '{}' in DAE: VS2 export requires unique names before __subN decode",
                 m.name
             ));
         }
     }
     eprintln!("[dae_to_ssbh] all {} geometry names are unique", seen.len());
+    Ok(())
+}
+
+fn ensure_unique_decoded_mesh_identities(objects: &[MeshObjectData]) -> Result<()> {
+    let mut seen = HashSet::new();
+    for object in objects {
+        if !seen.insert((object.name.clone(), object.subindex)) {
+            return Err(anyhow!(
+                "Duplicate mesh object identity '{}' subindex {} after decoding export names",
+                object.name,
+                object.subindex
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -550,10 +596,11 @@ fn convert_prepared_meshes_to_ssbh(
 
         let (binormals, tangents) = generate_binormals_and_tangents(&vertices, &normals);
         let bone_influences = convert_dae_bone_influences_to_ssbh(&dae_mesh.bone_influences);
+        let (object_name, subindex) = decode_exported_mesh_object_name(&dae_mesh.name);
 
         let mesh_object = MeshObjectData {
-            name: dae_mesh.name.clone(),
-            subindex: 0,
+            name: object_name,
+            subindex,
             positions: vec![AttributeData {
                 name: String::new(),
                 data: VectorData::Vector3(vertices.iter().copied().map(Vec3::from).collect()),
@@ -628,6 +675,7 @@ fn convert_prepared_meshes_to_ssbh(
     if mesh_objects.is_empty() {
         return Err(anyhow!("No valid mesh objects were created from DAE data"));
     }
+    ensure_unique_decoded_mesh_identities(&mesh_objects)?;
 
     Ok(MeshData {
         major_version: 1,
@@ -657,6 +705,7 @@ fn convert_prepared_model_to_ssbh(
         if mesh.vertices.is_empty() {
             continue;
         }
+        let (object_name, subindex) = decode_exported_mesh_object_name(&mesh.name);
         let material_label = if configured_entries.is_empty() {
             "DefaultMaterial".to_string()
         } else {
@@ -665,6 +714,7 @@ fn convert_prepared_model_to_ssbh(
             configured_entries
                 .get(&key)
                 .or_else(|| configured_entries.get(&source_key))
+                .or_else(|| configured_entries.get(&(object_name.as_str(), subindex)))
                 .ok_or_else(|| anyhow!("Missing numdlb mapping for mesh '{}'", mesh.name))?
                 .trim()
                 .to_string()
@@ -676,8 +726,8 @@ fn convert_prepared_model_to_ssbh(
             ));
         }
         entries.push(ModlEntryData {
-            mesh_object_name: mesh.name.clone(),
-            mesh_object_subindex: 0,
+            mesh_object_name: object_name,
+            mesh_object_subindex: subindex,
             material_label,
         });
     }
@@ -796,6 +846,48 @@ fn generate_default_colorset1_data(vertex_count: usize) -> Vec<[f32; 2]> {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[test]
+    fn decode_exported_mesh_object_name_restores_subindex_suffix() {
+        assert_eq!(
+            decode_exported_mesh_object_name("SHAPE_ROOTShape"),
+            ("SHAPE_ROOTShape".to_string(), 0)
+        );
+        assert_eq!(
+            decode_exported_mesh_object_name("SHAPE_ROOTShape__sub1"),
+            ("SHAPE_ROOTShape".to_string(), 1)
+        );
+        assert_eq!(
+            decode_exported_mesh_object_name("SHAPE_ROOTShape__sub1__part0"),
+            ("SHAPE_ROOTShape__sub1__part0".to_string(), 0)
+        );
+        assert_eq!(
+            decode_exported_mesh_object_identity("SHAPE_ROOTShape__sub2", 0),
+            ("SHAPE_ROOTShape".to_string(), 2)
+        );
+        assert_eq!(
+            decode_exported_mesh_object_identity("SHAPE_ROOTShape", 1),
+            ("SHAPE_ROOTShape".to_string(), 1)
+        );
+    }
+
+    #[test]
+    fn convert_meshes_to_ssbh_decodes_export_subindex_suffix() {
+        let mesh_data = convert_meshes_to_ssbh(
+            &[
+                make_mesh_with_unique_triangle_vertices("SHAPE_ROOTShape", 1),
+                make_mesh_with_unique_triangle_vertices("SHAPE_ROOTShape__sub1", 1),
+            ],
+            &DaeConvertConfig::default(),
+        )
+        .expect("mesh conversion");
+
+        assert_eq!(mesh_data.objects.len(), 2);
+        assert_eq!(mesh_data.objects[0].name, "SHAPE_ROOTShape");
+        assert_eq!(mesh_data.objects[0].subindex, 0);
+        assert_eq!(mesh_data.objects[1].name, "SHAPE_ROOTShape");
+        assert_eq!(mesh_data.objects[1].subindex, 1);
+    }
 
     fn make_mesh_with_unique_triangle_vertices(name: &str, triangle_count: usize) -> DaeMesh {
         let mut vertices = Vec::with_capacity(triangle_count * 3);

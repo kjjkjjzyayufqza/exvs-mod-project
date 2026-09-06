@@ -377,3 +377,32 @@ export async function importUnitModelStaticMesh(
     params.structureJsonPath,
   );
 }
+
+export interface UnitModelStaticMeshStageResult {
+  outputDir: string;
+  fileCount: number;
+}
+
+export async function stageUnitModelStaticMesh(
+  params: {
+    modelRoot: string;
+    outputDir: string;
+    sourcePath: string;
+    config: ImportConfig;
+    includeGeometryNames: string[];
+  },
+  onProgress: (progress: StaticMeshImportProgress) => void,
+): Promise<UnitModelStaticMeshStageResult> {
+  const channel = new Channel<StaticMeshImportProgress>();
+  channel.onmessage = onProgress;
+  return await invoke<UnitModelStaticMeshStageResult>("unit_model_stage_static_mesh", {
+    options: {
+      modelRoot: toWindowsPath(params.modelRoot),
+      outputDir: toWindowsPath(params.outputDir),
+      sourcePath: toWindowsPath(params.sourcePath),
+      config: params.config,
+      includeGeometryNames: params.includeGeometryNames,
+    },
+    onProgress: channel,
+  });
+}

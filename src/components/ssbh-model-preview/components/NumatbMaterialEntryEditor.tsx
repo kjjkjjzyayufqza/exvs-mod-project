@@ -21,6 +21,8 @@ import {
   ssbhEditorPortalThemeClass,
   useSsbhEditorTheme,
 } from "./ssbhEditorTheme";
+import { MaterialLabelCombobox } from "./MaterialLabelCombobox";
+import { numatbShaderLabelOptions } from "../numatbShaderLabelPresets";
 
 const ATTRIBUTE_ROW_ESTIMATE_SIZE = 72;
 
@@ -280,7 +282,12 @@ export function NumatbMaterialEntryEditor({
         </div>
         <div className="space-y-1">
           <Label className="text-[11px] text-muted-foreground">Shader label</Label>
-          <Input value={entry.shader_label} onChange={(event) => onChangeShaderLabel(event.target.value)} className="h-8 text-[11px]" />
+          <MaterialLabelCombobox
+            value={entry.shader_label}
+            options={numatbShaderLabelOptions(entry.shader_label)}
+            onChange={onChangeShaderLabel}
+            i18nPrefix="shader"
+          />
         </div>
       </div>
 

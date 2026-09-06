@@ -287,6 +287,7 @@ interface NumatbStore {
   convertFile: (file: FileInfo) => Promise<void>;
   updateAttribute: (materialIndex: number, attributeIndex: number, newValue: any, dataType: ParamDataType) => void;
   updateMaterialLabel: (materialIndex: number, newLabel: string) => void;
+  updateShaderLabel: (materialIndex: number, newShaderLabel: string) => void;
   addAttribute: (materialIndex: number, paramId: string) => void;
   removeAttribute: (materialIndex: number, attributeIndex: number) => void;
   addMaterialEntry: () => void;
@@ -402,6 +403,13 @@ export const useNumatbStore = create<NumatbStore>()(
     set((state) => {
       if (!state.numatbData?.Matl?.V16?.entries?.[materialIndex]) return;
       state.numatbData.Matl.V16.entries[materialIndex].material_label = newLabel;
+    });
+  },
+
+  updateShaderLabel: (materialIndex: number, newShaderLabel: string) => {
+    set((state) => {
+      if (!state.numatbData?.Matl?.V16?.entries?.[materialIndex]) return;
+      state.numatbData.Matl.V16.entries[materialIndex].shader_label = newShaderLabel;
     });
   },
 

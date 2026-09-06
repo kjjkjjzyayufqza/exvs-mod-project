@@ -1,6 +1,6 @@
 {
   "title": "Replace model",
-  "description": "Choose whether to swap the whole SSBH set or overwrite only the mesh file.",
+  "description": "Choose a prepared SSBH folder, convert FBX/DAE into a full set, or overwrite only the mesh file.",
   "identity": {
     "preserved": "Target identity is preserved",
     "index": "index {{index}}",
@@ -15,13 +15,18 @@
     "numshb": {
       "title": "Mesh only (.numshb)",
       "help": "Overwrite the existing NUMSHB. Leave every other file untouched."
+    },
+    "fullFbx": {
+      "title": "Full replace from FBX / DAE",
+      "help": "Convert and overwrite mesh, NUMDLB, skeleton, both NUMATB files, JNTTBL, and textures."
     }
   },
   "source": {
     "label": "Source",
     "full": "Choose prepared SSBH folder",
     "numshb": "Choose existing .numshb",
-    "convert": "Convert FBX / DAE"
+    "convert": "Convert FBX / DAE",
+    "convertFull": "Convert FBX / DAE"
   },
   "warnings": "Warnings",
   "blockers": "Blockers",

@@ -38,6 +38,7 @@ interface DaeImportSsbhFullPanelProps {
   batchCount?: number;
   unitModelMode?: boolean;
   replaceNumshbMode?: boolean;
+  replaceFullMode?: boolean;
 }
 
 export function DaeImportSsbhFullPanel({
@@ -51,6 +52,7 @@ export function DaeImportSsbhFullPanel({
   batchCount = 1,
   unitModelMode = false,
   replaceNumshbMode = false,
+  replaceFullMode = false,
 }: DaeImportSsbhFullPanelProps) {
   const { t } = useTranslation("scene-dae-full");
   const setSourcePath = useDaeSsbhSessionStore((state) => state.setSourcePath);
@@ -186,6 +188,8 @@ export function DaeImportSsbhFullPanel({
         <p className="text-[11px] text-muted-foreground">
           {replaceNumshbMode
             ? t("output.replaceNumshb")
+            : replaceFullMode
+            ? t("output.replaceFull")
             : unitModelMode
             ? t("output.unitModel", { stageRoot: stageRoot ? ` (${stageRoot})` : "" })
             : directToDisk

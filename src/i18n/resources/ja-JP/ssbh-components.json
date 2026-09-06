@@ -10,5 +10,11 @@
   "material.useCustom": "カスタムを使用",
   "material.empty": "マテリアルラベルはまだありません。上でカスタム名を入力してください。",
   "material.placeholder": "マテリアルを選択または入力…",
-  "material.showSuggestions": "マテリアルラベルの候補を表示"
+  "material.showSuggestions": "マテリアルラベルの候補を表示",
+  "shader.listLabel": "シェーダーラベル",
+  "shader.showingFirst": "{{total}} 個中、先頭 {{shown}} 個を表示。入力して検索してください。",
+  "shader.useCustom": "カスタムを使用",
+  "shader.empty": "シェーダーラベルはまだありません。上でカスタム名を入力してください。",
+  "shader.placeholder": "シェーダーを選択または入力…",
+  "shader.showSuggestions": "シェーダーラベルの候補を表示"
 }

@@ -23,6 +23,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MaterialLabelCombobox } from "@/components/ssbh-model-preview/components/MaterialLabelCombobox";
+import { numatbShaderLabelOptions } from "@/components/ssbh-model-preview/numatbShaderLabelPresets";
 
 interface NumatbEditorProps {
     onClose?: () => void;
@@ -231,6 +233,7 @@ interface MaterialDetailProps {
     ) => void;
     onAddAttribute: (materialIndex: number, paramId: string) => void;
     onRemoveAttribute: (materialIndex: number, attributeIndex: number) => void;
+    onChangeShaderLabel: (materialIndex: number, nextShaderLabel: string) => void;
 }
 
 const MaterialDetail = memo(function MaterialDetail({
@@ -245,6 +248,7 @@ const MaterialDetail = memo(function MaterialDetail({
     onAttributeUpdate,
     onAddAttribute,
     onRemoveAttribute,
+    onChangeShaderLabel,
 }: MaterialDetailProps) {
     const { t } = useTranslation("misc-tools-a");
     const attributeListRef = useRef<HTMLDivElement | null>(null);
@@ -320,7 +324,14 @@ const MaterialDetail = memo(function MaterialDetail({
                         </Button>
                     </div>
                 )}
-                <span className="max-w-[40%] truncate text-sm text-muted-foreground" data-i18n-ignore="">{material.shader_label}</span>
+                <div className="w-[min(40%,16rem)] shrink-0">
+                    <MaterialLabelCombobox
+                        value={material.shader_label ?? ""}
+                        options={numatbShaderLabelOptions(material.shader_label)}
+                        onChange={(nextShaderLabel) => onChangeShaderLabel(materialIndex, nextShaderLabel)}
+                        i18nPrefix="shader"
+                    />
+                </div>
             </div>
 
             <div className="flex items-center gap-2">
@@ -421,6 +432,7 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
         resetConversion,
         updateAttribute,
         updateMaterialLabel,
+        updateShaderLabel,
         addAttribute,
         removeAttribute,
         addMaterialEntry,
@@ -523,6 +535,11 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
         setEditingLabel(null);
         setEditingLabelValue("");
     }, [editingLabelValue, updateMaterialLabel]);
+
+    const handleChangeShaderLabel = useCallback((materialIndex: number, nextShaderLabel: string) => {
+        updateShaderLabel(materialIndex, nextShaderLabel);
+        setHasChanges(true);
+    }, [updateShaderLabel]);
 
     const handleCancelLabelEdit = useCallback(() => {
         setEditingLabel(null);
@@ -766,6 +783,7 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
                                                 onAttributeUpdate={handleAttributeUpdate}
                                                 onAddAttribute={handleAddAttribute}
                                                 onRemoveAttribute={handleRemoveAttribute}
+                                                onChangeShaderLabel={handleChangeShaderLabel}
                                             />
                                         ) : null}
                                     </div>

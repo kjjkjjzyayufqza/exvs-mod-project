@@ -10,10 +10,11 @@ describe("MaterialLabelCombobox", () => {
     expect(screen.getByDisplayValue("bodyMtl")).toBeInTheDocument();
   });
 
-  it("opens the option list on focus", () => {
-    render(<MaterialLabelCombobox value="" options={options} onChange={() => {}} />);
+  it("shows every option on focus even when a value is already set", () => {
+    render(<MaterialLabelCombobox value="bodyMtl" options={options} onChange={() => {}} />);
     fireEvent.focus(screen.getByRole("combobox"));
     expect(screen.getByText("wingMtl")).toBeInTheDocument();
+    expect(screen.getByText("headMtl")).toBeInTheDocument();
   });
 
   it("selecting an option calls onChange with that label", () => {
@@ -60,5 +61,25 @@ describe("MaterialLabelCombobox", () => {
     fireEvent.focus(input);
     fireEvent.blur(input);
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("lists shader presets and commits a typed override", () => {
+    const onChange = vi.fn();
+    render(
+      <MaterialLabelCombobox
+        value="vsngCharaBasic"
+        options={["vsngCharaBasic", "FeStandard"]}
+        i18nPrefix="shader"
+        onChange={onChange}
+      />,
+    );
+    const input = screen.getByRole("combobox");
+    fireEvent.focus(input);
+    expect(screen.getByText("FeStandard")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("FeStandard"));
+    expect(onChange).toHaveBeenCalledWith("FeStandard");
+    fireEvent.change(input, { target: { value: "vstgStandard_VertexColor" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onChange).toHaveBeenCalledWith("vstgStandard_VertexColor");
   });
 });

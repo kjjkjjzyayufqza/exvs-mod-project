@@ -33,6 +33,8 @@ interface MaterialLabelComboboxProps {
   disabled?: boolean;
   className?: string;
   placeholder?: string;
+  /** i18n key prefix under `ssbh-components`. Defaults to material-label copy. */
+  i18nPrefix?: "material" | "shader";
 }
 
 function dedupeOptions(options: string[]): string[] {
@@ -69,10 +71,10 @@ function measureMenuPosition(anchor: HTMLElement): MenuPosition {
 }
 
 /**
- * Searchable material-label picker with create-new support. Generic sibling of
- * SceneTextureSelectPicker: portal-rendered menu, ChevronsUpDown toggle, up/down flip, and a
- * "Use custom" row for values not yet in the option set. Options are typically the union of a
- * model's maya+nust numatb material_labels plus the labels already used in the numdlb rows.
+ * Searchable string picker with create-new support. Used for numdlb material labels and
+ * numatb shader labels. Generic sibling of SceneTextureSelectPicker: portal-rendered menu,
+ * ChevronsUpDown toggle, up/down flip, and a "Use custom" row for values not yet in the
+ * option set.
  */
 export function MaterialLabelCombobox({
   value,
@@ -80,12 +82,13 @@ export function MaterialLabelCombobox({
   onChange,
   disabled,
   className,
-  placeholder = "Select or type material...",
+  placeholder,
+  i18nPrefix = "material",
 }: MaterialLabelComboboxProps) {
   const { t } = useTranslation("ssbh-components");
   const instanceId = useId();
-  const listboxId = `${instanceId}-material-listbox`;
-  const inputId = `${instanceId}-material-input`;
+  const listboxId = `${instanceId}-${i18nPrefix}-listbox`;
+  const inputId = `${instanceId}-${i18nPrefix}-input`;
   const anchorRef = useRef<HTMLDivElement>(null);
 
   const [open, setOpen] = useState(false);
@@ -116,7 +119,9 @@ export function MaterialLabelCombobox({
   }, [open, inputValue]);
 
   const allOptions = useMemo(() => dedupeOptions(options), [options]);
-  const queryTrim = deferredQuery.trim().toLowerCase();
+  const committedTrim = value.trim().toLowerCase();
+  const draftTrim = deferredQuery.trim().toLowerCase();
+  const queryTrim = draftTrim && draftTrim !== committedTrim ? draftTrim : "";
 
   const filteredOptions = useMemo(() => {
     if (!queryTrim) return allOptions.slice(0, MAX_OPTIONS_WITHOUT_QUERY);
@@ -165,10 +170,10 @@ export function MaterialLabelCombobox({
               }}
               onWheel={(event) => event.stopPropagation()}
             >
-              <div id={listboxId} role="listbox" aria-label={t("material.listLabel")} className="p-1">
+              <div id={listboxId} role="listbox" aria-label={t(`${i18nPrefix}.listLabel`)} className="p-1">
                 {allOptions.length > MAX_OPTIONS_WITHOUT_QUERY && !queryTrim && (
                   <p className="px-2 py-1 text-[10px] text-muted-foreground">
-                    {t("material.showingFirst", { shown: MAX_OPTIONS_WITHOUT_QUERY, total: allOptions.length })}
+                    {t(`${i18nPrefix}.showingFirst`, { shown: MAX_OPTIONS_WITHOUT_QUERY, total: allOptions.length })}
                   </p>
                 )}
 
@@ -202,14 +207,14 @@ export function MaterialLabelCombobox({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => selectOption(inputValue.trim())}
                   >
-                    <span className="text-muted-foreground">{t("material.useCustom")}:</span>
+                    <span className="text-muted-foreground">{t(`${i18nPrefix}.useCustom`)}:</span>
                     <span className="truncate font-mono">{inputValue.trim()}</span>
                   </button>
                 )}
 
                 {filteredOptions.length === 0 && !queryTrim && (
                   <p className="px-2 py-4 text-center text-[11px] text-muted-foreground">
-                    {t("material.empty")}
+                    {t(`${i18nPrefix}.empty`)}
                   </p>
                 )}
               </div>
@@ -224,7 +229,7 @@ export function MaterialLabelCombobox({
       <div ref={anchorRef} className={cn("relative w-full", className)}>
         <Input
           id={inputId}
-          name={`${instanceId}-material`}
+          name={`${instanceId}-${i18nPrefix}`}
           role="combobox"
           aria-expanded={open}
           aria-controls={open ? listboxId : undefined}
@@ -232,7 +237,7 @@ export function MaterialLabelCombobox({
           value={inputValue}
           disabled={disabled}
           autoComplete="off"
-          placeholder={placeholder ?? t("material.placeholder")}
+          placeholder={placeholder ?? t(`${i18nPrefix}.placeholder`)}
           className="h-8 pr-7 text-[11px]"
           onFocus={() => setOpen(true)}
           onChange={(event) => setInputValue(event.target.value)}
@@ -256,7 +261,7 @@ export function MaterialLabelCombobox({
           variant="ghost"
           size="icon"
           disabled={disabled}
-          aria-label={t("material.showSuggestions")}
+          aria-label={t(`${i18nPrefix}.showSuggestions`)}
           className="absolute right-0 top-0 h-8 w-7 shrink-0 text-muted-foreground"
           onClick={() => setOpen((current) => !current)}
         >

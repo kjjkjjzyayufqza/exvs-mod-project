@@ -291,6 +291,7 @@ pub fn run() {
             scene_session_commands::scene_convert_static_mesh_to_stage_files,
             scene_session_commands::scene_convert_static_mesh_to_stage_files_streamed,
             scene_session_commands::unit_model_import_static_mesh,
+            scene_session_commands::unit_model_stage_static_mesh,
             scene_session_commands::scene_validate_import_texture_refs,
             scene_session_commands::scene_get_havok_meta,
             scene_session_commands::scene_list_havok_meta,

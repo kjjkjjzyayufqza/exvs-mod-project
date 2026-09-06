@@ -1,6 +1,6 @@
 {
   "title": "替换模型",
-  "description": "选择替换完整 SSBH 集合，或仅覆盖网格文件。",
+  "description": "选择已准备的 SSBH 文件夹、从 FBX/DAE 转换整套文件，或仅覆盖网格文件。",
   "identity": {
     "preserved": "保留目标标识",
     "index": "索引 {{index}}",
@@ -15,13 +15,18 @@
     "numshb": {
       "title": "仅网格（.numshb）",
       "help": "覆盖现有 NUMSHB，其他文件保持不变。"
+    },
+    "fullFbx": {
+      "title": "从 FBX / DAE 完整替换",
+      "help": "转换并覆盖网格、NUMDLB、骨架、两个 NUMATB、JNTTBL 和纹理。"
     }
   },
   "source": {
     "label": "来源",
     "full": "选择已准备的 SSBH 文件夹",
     "numshb": "选择现有 .numshb",
-    "convert": "转换 FBX / DAE"
+    "convert": "转换 FBX / DAE",
+    "convertFull": "转换 FBX / DAE"
   },
   "warnings": "警告",
   "blockers": "阻止项",
