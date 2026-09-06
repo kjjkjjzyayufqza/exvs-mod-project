@@ -255,7 +255,7 @@ describe("unitModelModelService", () => {
     });
   });
 
-  it("previews and commits NUMSHB-only replacement without texture container sync", async () => {
+  it("previews and commits mesh-and-material replacement without texture container sync", async () => {
     mocks.invokeMock
       .mockResolvedValueOnce({
         target: {
@@ -268,8 +268,15 @@ describe("unitModelModelService", () => {
           numatbPaths: [],
           nuhlpbPath: null,
         },
-        sourceNumshbPath: "E:\\src\\body.numshb",
+        sourceDir: "E:\\src\\body",
+        sourceNumshbPath: "E:\\src\\body\\body.numshb",
+        sourceNumdlbPath: "E:\\src\\body\\body.numdlb",
+        sourceMayaNumatbPath: "E:\\src\\body\\body__maya__.numatb",
+        sourceNustNumatbPath: "E:\\src\\body\\body__nust__.numatb",
         targetNumshbPath: "E:\\unit\\0\\models\\alpha\\alpha.numshb",
+        targetNumdlbPath: "E:\\unit\\0\\models\\alpha\\alpha.numdlb",
+        targetMayaNumatbPath: "E:\\unit\\0\\models\\alpha\\alpha__maya__.numatb",
+        targetNustNumatbPath: "E:\\unit\\0\\models\\alpha\\alpha__nust__.numatb",
         meshObjects: {
           source: [],
           targetNumdlbEntries: [],
@@ -282,6 +289,8 @@ describe("unitModelModelService", () => {
           targetBoneNames: [],
           matchingBoneNames: 0,
           missingInTargetSkeleton: [],
+          sourceSkelBoneCount: null,
+          matchingSkelBoneNames: null,
         },
         stats: {
           sourceObjectCount: 0,
@@ -302,13 +311,13 @@ describe("unitModelModelService", () => {
     await previewUnitModelNumshbReplacement(
       "E:/unit/0",
       "alpha",
-      "E:/src/body.numshb",
+      "E:/src/body",
       "E:/unit/0_structure.json",
     );
     await replaceUnitModelNumshb(
       "E:/unit/0",
       "alpha",
-      "E:/src/body.numshb",
+      "E:/src/body",
       "E:/unit/0_structure.json",
     );
 
@@ -319,14 +328,14 @@ describe("unitModelModelService", () => {
         modelRoot: "E:\\unit\\0",
         structureJsonPath: "E:\\unit\\0_structure.json",
         targetModelName: "alpha",
-        sourceNumshbPath: "E:\\src\\body.numshb",
+        sourceDir: "E:\\src\\body",
       },
     );
     expect(mocks.invokeMock).toHaveBeenNthCalledWith(2, "replace_unit_model_numshb", {
       modelRoot: "E:\\unit\\0",
       structureJsonPath: "E:\\unit\\0_structure.json",
       targetModelName: "alpha",
-      sourceNumshbPath: "E:\\src\\body.numshb",
+      sourceDir: "E:\\src\\body",
     });
     expect(mocks.invokeMock).not.toHaveBeenCalledWith(
       "sync_unit_model_texture_containers",

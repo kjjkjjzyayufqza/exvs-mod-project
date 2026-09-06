@@ -1,6 +1,6 @@
 {
   "title": "Replace model",
-  "description": "Choose a prepared SSBH folder, convert FBX/DAE into a full set, or overwrite only the mesh file.",
+  "description": "Choose a prepared SSBH folder, convert FBX/DAE into a full set, or overwrite mesh and materials in place.",
   "identity": {
     "preserved": "Target identity is preserved",
     "index": "index {{index}}",
@@ -13,8 +13,8 @@
       "help": "Swap mesh, model, skeleton, materials, and JNTTBL."
     },
     "numshb": {
-      "title": "Mesh only (.numshb)",
-      "help": "Overwrite the existing NUMSHB. Leave every other file untouched."
+      "title": "Mesh and materials",
+      "help": "Overwrite NUMSHB, NUMDLB, and both NUMATB files. Skeleton, JNTTBL, NUHLPB, textures, and structure JSON stay."
     },
     "fullFbx": {
       "title": "Full replace from FBX / DAE",
@@ -24,7 +24,7 @@
   "source": {
     "label": "Source",
     "full": "Choose prepared SSBH folder",
-    "numshb": "Choose existing .numshb",
+    "numshb": "Choose folder with NUMSHB, NUMDLB, and both NUMATB files",
     "convert": "Convert FBX / DAE",
     "convertFull": "Convert FBX / DAE"
   },
@@ -32,15 +32,16 @@
   "blockers": "Blockers",
   "cancel": "Cancel",
   "replacing": "Replacing...",
-  "replaceMesh": "Replace mesh",
+  "replaceMesh": "Replace mesh and materials",
   "replaceContents": "Replace contents",
   "preview": {
     "compatibility": "Compatibility",
     "texturePlan": "Texture commit plan",
     "inPlace": "In-place overwrite",
-    "untouched": "Untouched: NUMDLB, both NUMATB files, NUSKTB, JNTTBL, NUHLPB, textures, and structure JSON.",
-    "meshObjects": "Mesh objects vs NUMDLB",
-    "skinBones": "Skin bones vs target NUSKTB"
+    "untouched": "Untouched: NUSKTB, JNTTBL, NUHLPB, textures, and structure JSON.",
+    "meshObjects": "Mesh objects vs current NUMDLB",
+    "skinBones": "Skin bones vs target NUSKTB",
+    "skinBonesHelp": "Compares bone names only. The target skeleton is not replaced. Missing names warn but do not block."
   },
   "counts": {
     "targetBones": "Target bones",

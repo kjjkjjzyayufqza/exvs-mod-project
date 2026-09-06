@@ -87,8 +87,15 @@ export interface UnitModelNumdlbEntryRef {
 
 export interface UnitModelNumshbReplacePreview {
   target: UnitModelReplaceTargetPreview;
+  sourceDir: string;
   sourceNumshbPath: string;
+  sourceNumdlbPath: string;
+  sourceMayaNumatbPath: string;
+  sourceNustNumatbPath: string;
   targetNumshbPath: string;
+  targetNumdlbPath: string;
+  targetMayaNumatbPath: string;
+  targetNustNumatbPath: string;
   meshObjects: {
     source: UnitModelMeshObjectRef[];
     targetNumdlbEntries: UnitModelNumdlbEntryRef[];
@@ -101,6 +108,8 @@ export interface UnitModelNumshbReplacePreview {
     targetBoneNames: string[];
     matchingBoneNames: number;
     missingInTargetSkeleton: string[];
+    sourceSkelBoneCount: number | null;
+    matchingSkelBoneNames: number | null;
   };
   stats: {
     sourceObjectCount: number;
@@ -284,12 +293,12 @@ export async function previewUnitModelModelReplacement(
 export async function replaceUnitModelNumshb(
   modelRoot: string,
   targetModelName: string,
-  sourceNumshbPath: string,
+  sourceDir: string,
   structureJsonPath?: string,
 ): Promise<UnitModelMutationResult> {
   const trimmedRoot = modelRoot.trim();
   const trimmedName = targetModelName.trim();
-  const trimmedSource = sourceNumshbPath.trim();
+  const trimmedSource = sourceDir.trim();
   if (!trimmedRoot) {
     throw new Error("Unit model root is required.");
   }
@@ -297,25 +306,25 @@ export async function replaceUnitModelNumshb(
     throw new Error("Target model name is required.");
   }
   if (!trimmedSource) {
-    throw new Error("Source NUMSHB path is required.");
+    throw new Error("Source folder is required.");
   }
   return await invoke<UnitModelMutationResult>("replace_unit_model_numshb", {
     modelRoot: toWindowsPath(trimmedRoot),
     structureJsonPath: structureJsonPath ? toWindowsPath(structureJsonPath) : null,
     targetModelName: trimmedName,
-    sourceNumshbPath: toWindowsPath(trimmedSource),
+    sourceDir: toWindowsPath(trimmedSource),
   });
 }
 
 export async function previewUnitModelNumshbReplacement(
   modelRoot: string,
   targetModelName: string,
-  sourceNumshbPath: string,
+  sourceDir: string,
   structureJsonPath?: string,
 ): Promise<UnitModelNumshbReplacePreview> {
   const trimmedRoot = modelRoot.trim();
   const trimmedName = targetModelName.trim();
-  const trimmedSource = sourceNumshbPath.trim();
+  const trimmedSource = sourceDir.trim();
   if (!trimmedRoot) {
     throw new Error("Unit model root is required.");
   }
@@ -323,13 +332,13 @@ export async function previewUnitModelNumshbReplacement(
     throw new Error("Target model name is required.");
   }
   if (!trimmedSource) {
-    throw new Error("Source NUMSHB path is required.");
+    throw new Error("Source folder is required.");
   }
   return await invoke<UnitModelNumshbReplacePreview>("preview_unit_model_numshb_replacement", {
     modelRoot: toWindowsPath(trimmedRoot),
     structureJsonPath: structureJsonPath ? toWindowsPath(structureJsonPath) : null,
     targetModelName: trimmedName,
-    sourceNumshbPath: toWindowsPath(trimmedSource),
+    sourceDir: toWindowsPath(trimmedSource),
   });
 }
 

@@ -3,6 +3,7 @@ import {
   buildDrawListFromBundle,
   buildMatlLookup,
   cloneBuiltMeshDrawsForInstance,
+  decodeExportedMeshObjectIdentity,
   resolveMaterialBinding,
   resolveMaterialTexturePaths,
   createStageSafeTextureSlotLoadEnabled,
@@ -307,6 +308,56 @@ describe("buildDrawListFromBundle", () => {
     expect(uv).toBeDefined();
     expect(uv2).toBeDefined();
     expect(uv2?.array).toEqual(uv?.array);
+  });
+
+  it("matches Smash-style numdlb subindex entries to VS2 __subN mesh names", () => {
+    expect(decodeExportedMeshObjectIdentity("SHAPE_ROOTShape__sub1", 0)).toEqual({
+      name: "SHAPE_ROOTShape",
+      subindex: 1,
+    });
+    expect(decodeExportedMeshObjectIdentity("SHAPE_ROOTShape__sub1__part0", 0)).toEqual({
+      name: "SHAPE_ROOTShape__sub1__part0",
+      subindex: 0,
+    });
+
+    const triangle = {
+      parent_bone_name: "",
+      vertex_indices: [0, 1, 2],
+      positions: [
+        {
+          name: "Position0",
+          data: { Vector3: [[0, 0, 0], [1, 0, 0], [0, 1, 0]] as [number, number, number][] },
+        },
+      ],
+      normals: [
+        {
+          name: "Normal0",
+          data: { Vector3: [[0, 0, 1], [0, 0, 1], [0, 0, 1]] as [number, number, number][] },
+        },
+      ],
+    };
+    const modl: ModlDataJson = {
+      entries: [
+        { mesh_object_name: "SHAPE_ROOTShape", mesh_object_subindex: 0, material_label: "emiMtl" },
+        { mesh_object_name: "SHAPE_ROOTShape", mesh_object_subindex: 1, material_label: "pbr1Mtl" },
+      ],
+    };
+    const mesh: MeshDataJson = {
+      major_version: 1,
+      minor_version: 8,
+      is_vs2: true,
+      objects: [
+        { name: "SHAPE_ROOTShape", subindex: 0, ...triangle },
+        { name: "SHAPE_ROOTShape__sub1", subindex: 0, ...triangle },
+      ],
+    };
+
+    const draws = buildDrawListFromBundle(modl, mesh, null);
+    expect(draws).toHaveLength(2);
+    expect(draws[0]?.materialLabel).toBe("emiMtl");
+    expect(draws[1]?.materialLabel).toBe("pbr1Mtl");
+    expect(draws[1]?.meshObjectName).toBe("SHAPE_ROOTShape");
+    expect(draws[1]?.meshObjectSubindex).toBe(1);
   });
 
   it("builds geometry from binary __bin views without inline arrays", () => {

@@ -69,19 +69,11 @@ export function DaeImportSsbhFullPanel({
   useEffect(() => {
     if (!unitModelMode && !replaceNumshbMode) return;
     const state = useDaeSsbhSessionStore.getState();
-    if (replaceNumshbMode) {
-      state.setWriteNumdlb(false);
-      state.setWriteNumshb(true);
-      state.setWriteNusktb(false);
-      state.setWriteNumatb(false);
-      state.setWriteMayaProfile(false);
-    } else {
-      state.setWriteNumdlb(true);
-      state.setWriteNumshb(true);
-      state.setWriteNusktb(true);
-      state.setWriteNumatb(true);
-      state.setWriteMayaProfile(true);
-    }
+    state.setWriteNumdlb(true);
+    state.setWriteNumshb(true);
+    state.setWriteNusktb(true);
+    state.setWriteNumatb(true);
+    state.setWriteMayaProfile(true);
     const fileName = sourcePath.split(/[/\\]/).pop() ?? "";
     if (detectStaticMeshImportFormat(fileName) === "fbx") {
       state.setImportKind("fbx");
@@ -293,6 +285,11 @@ export function DaeImportSsbhFullPanel({
               onCheckedChange={(c) => session.setWriteNusktb(c === true)}
             />
             .nusktb
+            {replaceNumshbMode ? (
+              <span className="text-[10px] text-muted-foreground">
+                {t("files.nusktbTemp")}
+              </span>
+            ) : null}
           </label>
           <label className="flex cursor-pointer items-center gap-2 text-[11px]">
             <Checkbox
@@ -331,7 +328,6 @@ export function DaeImportSsbhFullPanel({
         </div>
       </DaeImportPanelSection>
 
-      {replaceNumshbMode ? null : (
       <DaeImportPanelSection title={t("mapping.title")}>
         <NumdlbMaterialMappingEditor
           rows={session.numdlbEntries}
@@ -342,77 +338,72 @@ export function DaeImportSsbhFullPanel({
           embedTableWithoutInnerScroll
         />
       </DaeImportPanelSection>
-      )}
 
-      {replaceNumshbMode ? null : (
-        <>
-          <DaeImportPanelSection
-            title={t("profiles.title")}
-            headerEnd={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0"
-                title={t("profiles.copyTitle")}
-                aria-label={t("profiles.copyLabel")}
-                onClick={() => void handleCopyNumatbProfilesJson()}
-              >
-                <Copy className="h-3.5 w-3.5" />
-              </Button>
-            }
+      <DaeImportPanelSection
+        title={t("profiles.title")}
+        headerEnd={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0"
+            title={t("profiles.copyTitle")}
+            aria-label={t("profiles.copyLabel")}
+            onClick={() => void handleCopyNumatbProfilesJson()}
           >
-            <NumatbTemplateEditor />
-          </DaeImportPanelSection>
+            <Copy className="h-3.5 w-3.5" />
+          </Button>
+        }
+      >
+        <NumatbTemplateEditor />
+      </DaeImportPanelSection>
 
-          <MissingTexturePathFillPanel
-            slots={fillTextureSlots}
-            onFillSlot={(slot, basename) => {
-              applyTexturePathFillToProfiles(
-                updateProfileAttribute,
-                addProfileAttribute,
-                () => {
-                  const state = useDaeSsbhSessionStore.getState();
-                  return { mayaFile: state.mayaFile, nustFile: state.nustFile };
-                },
-                slot,
-                basename,
-              );
-            }}
-          />
-          {textureReferencesValidating ? (
-            <p className="text-[11px] text-muted-foreground">
-              {t("validation.checking")}
-            </p>
-          ) : null}
-          {textureReferenceValidationError ? (
-            <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
-              <p className="text-[11px] text-destructive">
-                {t("validation.failed", { error: textureReferenceValidationError })}
-              </p>
-            </div>
-          ) : null}
-          <MissingTexturePathFillPanel
-            slots={textureReferenceIssues.map((issue) => issue.slot)}
-            title={t("validation.fixTitle")}
-            getSlotMessage={(slot) =>
-              textureReferenceIssueMessages.get(missingTexturePathSlotKey(slot)) ?? null
-            }
-            onFillSlot={(slot, basename) => {
-              applyTexturePathFillToProfiles(
-                updateProfileAttribute,
-                addProfileAttribute,
-                () => {
-                  const state = useDaeSsbhSessionStore.getState();
-                  return { mayaFile: state.mayaFile, nustFile: state.nustFile };
-                },
-                slot,
-                basename,
-              );
-            }}
-          />
-        </>
-      )}
+      <MissingTexturePathFillPanel
+        slots={fillTextureSlots}
+        onFillSlot={(slot, basename) => {
+          applyTexturePathFillToProfiles(
+            updateProfileAttribute,
+            addProfileAttribute,
+            () => {
+              const state = useDaeSsbhSessionStore.getState();
+              return { mayaFile: state.mayaFile, nustFile: state.nustFile };
+            },
+            slot,
+            basename,
+          );
+        }}
+      />
+      {textureReferencesValidating ? (
+        <p className="text-[11px] text-muted-foreground">
+          {t("validation.checking")}
+        </p>
+      ) : null}
+      {textureReferenceValidationError ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
+          <p className="text-[11px] text-destructive">
+            {t("validation.failed", { error: textureReferenceValidationError })}
+          </p>
+        </div>
+      ) : null}
+      <MissingTexturePathFillPanel
+        slots={textureReferenceIssues.map((issue) => issue.slot)}
+        title={t("validation.fixTitle")}
+        getSlotMessage={(slot) =>
+          textureReferenceIssueMessages.get(missingTexturePathSlotKey(slot)) ?? null
+        }
+        onFillSlot={(slot, basename) => {
+          applyTexturePathFillToProfiles(
+            updateProfileAttribute,
+            addProfileAttribute,
+            () => {
+              const state = useDaeSsbhSessionStore.getState();
+              return { mayaFile: state.mayaFile, nustFile: state.nustFile };
+            },
+            slot,
+            basename,
+          );
+        }}
+      />
     </div>
   );
 }

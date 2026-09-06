@@ -233,7 +233,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
     ],
   );
   const textureReferenceValidation = useNumatbTextureReferenceValidation({
-    enabled: primaryMode === "ssbh" && !replaceNumshbMode,
+    enabled: primaryMode === "ssbh",
     sourcePath: entry.filePath,
     stageRoot: config.directToDisk ? config.outputDirectory : stageRoot,
     slots: declaredTextureSlots,
@@ -243,7 +243,6 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
     if (primaryMode !== "ssbh") return true;
     if (!ssbhSession.outputBaseName.trim()) return false;
     if (ssbhSession.includeGeometryNames.length === 0) return false;
-    if (replaceNumshbMode) return true;
     if (!ssbhSession.numdlbEntries.every((r) => r.materialLabel.trim())) return false;
     const missing = collectMissingTexturePathsForExportSession(
       ssbhSession.mayaFile,
@@ -259,7 +258,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
       textureReferenceValidation.issues.length === 0 &&
       !textureReferenceValidation.error
     );
-  }, [primaryMode, replaceNumshbMode, ssbhSession, textureReferenceValidation]);
+  }, [primaryMode, ssbhSession, textureReferenceValidation]);
 
   const updateConfig = (partial: Partial<DaeImportConfig>) => {
     onConfigChange(entry.importId, { ...config, ...partial });

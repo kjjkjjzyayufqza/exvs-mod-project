@@ -912,12 +912,54 @@ function mergeMatlEntries(a: MatlEntryJson, b: MatlEntryJson): MatlEntryJson {
   };
 }
 
+const MESH_EXPORT_SUBINDEX_MARKER = "__sub";
+
+/**
+ * Reverse the DAE/FBX export encoding `{name}__sub{N}` used when a Smash-style
+ * `(name, subindex > 0)` object is written as a unique VS2 geometry name.
+ * `__partN` split suffixes are left unchanged because they are not all-digit.
+ */
+export function decodeExportedMeshObjectIdentity(
+  name: string,
+  subindex: number,
+): { name: string; subindex: number } {
+  if (subindex !== 0) {
+    return { name, subindex };
+  }
+  const marker = name.lastIndexOf(MESH_EXPORT_SUBINDEX_MARKER);
+  if (marker <= 0) {
+    return { name, subindex: 0 };
+  }
+  const base = name.slice(0, marker);
+  const digits = name.slice(marker + MESH_EXPORT_SUBINDEX_MARKER.length);
+  if (!base || !digits || !/^\d+$/.test(digits)) {
+    return { name, subindex: 0 };
+  }
+  return { name: base, subindex: Number(digits) };
+}
+
+function sameMeshObjectIdentity(
+  leftName: string,
+  leftSubindex: number,
+  rightName: string,
+  rightSubindex: number,
+): boolean {
+  const left = decodeExportedMeshObjectIdentity(leftName, leftSubindex);
+  const right = decodeExportedMeshObjectIdentity(rightName, rightSubindex);
+  return left.name === right.name && left.subindex === right.subindex;
+}
+
 function findMeshObject(
   objects: MeshObjectJson[],
   entry: ModlEntryJson,
 ): MeshObjectJson | undefined {
-  return objects.find(
-    (o) => o.name === entry.mesh_object_name && o.subindex === entry.mesh_object_subindex,
+  return objects.find((object) =>
+    sameMeshObjectIdentity(
+      object.name,
+      object.subindex,
+      entry.mesh_object_name,
+      entry.mesh_object_subindex,
+    ),
   );
 }
 

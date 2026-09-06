@@ -821,9 +821,9 @@ export function UnitModelModelManagerPanel({
     setBusy(`replace:${label}`);
     try {
       const selected = await open({
+        directory: true,
         multiple: false,
         title: t("manager.dialogs.selectReplaceNumshb", { label }),
-        filters: [{ name: "NUMSHB", extensions: ["numshb"] }],
         defaultPath:
           (await getStoredDialogDefaultPath(UNIT_MODEL_REPLACE_NUMSHB_DIALOG_PATH_KEY)) ??
           modelRoot ??
@@ -834,7 +834,7 @@ export function UnitModelModelManagerPanel({
       await rememberStoredDialogSelection(
         UNIT_MODEL_REPLACE_NUMSHB_DIALOG_PATH_KEY,
         source,
-        "file",
+        "directory",
       );
       const preview = await previewUnitModelNumshbReplacement(
         modelRoot,
@@ -886,12 +886,12 @@ export function UnitModelModelManagerPanel({
       config.generateHkt = false;
       config.directToDisk = true;
       config.outputDirectory = modelRoot;
-      config.ssbhConfig.writeNumdlb = false;
+      config.ssbhConfig.writeNumdlb = true;
       config.ssbhConfig.writeNumshb = true;
-      config.ssbhConfig.writeNusktb = false;
-      config.ssbhConfig.writeNumatb = false;
+      config.ssbhConfig.writeNusktb = true;
+      config.ssbhConfig.writeNumatb = true;
       config.ssbhConfig.writeJnttbl = false;
-      config.ssbhConfig.writeMayaProfile = false;
+      config.ssbhConfig.writeMayaProfile = true;
       config = applyUnitModelFbxImportDefaults(config, sourceFormat);
 
       const entry: DaeImportEntry = {
@@ -908,11 +908,11 @@ export function UnitModelModelManagerPanel({
       const session = useDaeSsbhSessionStore.getState();
       session.resetSession();
       session.setOutputBaseName(baseFilename);
-      session.setWriteNumdlb(false);
+      session.setWriteNumdlb(true);
       session.setWriteNumshb(true);
-      session.setWriteNusktb(false);
-      session.setWriteNumatb(false);
-      session.setWriteMayaProfile(false);
+      session.setWriteNusktb(true);
+      session.setWriteNumatb(true);
+      session.setWriteMayaProfile(true);
       if (sourceFormat === "fbx") {
         session.setImportKind("fbx");
         session.setFlipUv(true);
@@ -1109,32 +1109,39 @@ export function UnitModelModelManagerPanel({
         upAxis: session.upAxis,
         includeGeometryNames: [...session.includeGeometryNames],
         writeLog: false,
-        writeNumdlb: false,
+        writeNumdlb: true,
         writeNumshb: true,
-        writeNusktb: false,
-        writeNumatb: false,
-        writeMayaProfile: false,
-        numdlbEntries: [],
-        mayaFile: null,
-        nustFile: null,
+        writeNusktb: true,
+        writeNumatb: true,
+        writeMayaProfile: true,
+        numdlbEntries: [...session.numdlbEntries],
+        mayaFile: session.mayaFile,
+        nustFile: session.nustFile,
       };
       const converted =
         entry.sourceFormat === "fbx"
           ? await ssbhConvertFbxToSsbh({ fbxPath: entry.filePath, ...convertParams })
           : await ssbhConvertDaeToSsbh({ daePath: entry.filePath, ...convertParams });
-      const source = converted.files.numshbPath?.trim();
-      if (!source) {
-        throw new Error("Conversion did not produce a .numshb file.");
+      const missingOutputs = [
+        ["NUMSHB", converted.files.numshbPath],
+        ["NUMDLB", converted.files.numdlbPath],
+        ["Maya NUMATB", converted.files.mayaNumatbPath],
+        ["Nust NUMATB", converted.files.nustNumatbPath],
+      ].filter(([, path]) => !path?.trim());
+      if (missingOutputs.length > 0) {
+        throw new Error(
+          `Conversion did not produce ${missingOutputs.map(([label]) => label).join(", ")}.`,
+        );
       }
       const preview = await previewUnitModelNumshbReplacement(
         modelRoot,
         target.label,
-        source,
+        outputDir,
         structureJsonPath,
       );
       const previousTemp = replaceNumshbPreview?.tempDir;
       setReplaceTarget(target);
-      setReplaceNumshbPreview({ source, preview, tempDir: outputDir });
+      setReplaceNumshbPreview({ source: outputDir, preview, tempDir: outputDir });
       await cleanupReplaceTempDir(previousTemp);
       setImportEntries([]);
       suppressReplaceCloseRef.current = false;

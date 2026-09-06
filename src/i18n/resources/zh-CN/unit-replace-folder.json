@@ -1,6 +1,6 @@
 {
   "title": "替换模型",
-  "description": "选择已准备的 SSBH 文件夹、从 FBX/DAE 转换整套文件，或仅覆盖网格文件。",
+  "description": "选择已准备的 SSBH 文件夹、从 FBX/DAE 转换整套文件，或原位覆盖网格和材质球。",
   "identity": {
     "preserved": "保留目标标识",
     "index": "索引 {{index}}",
@@ -13,8 +13,8 @@
       "help": "替换网格、模型、骨架、材质和 JNTTBL。"
     },
     "numshb": {
-      "title": "仅网格（.numshb）",
-      "help": "覆盖现有 NUMSHB，其他文件保持不变。"
+      "title": "仅网格和材质球",
+      "help": "一起覆盖 NUMSHB、NUMDLB 和两个 NUMATB。骨架、JNTTBL、NUHLPB、纹理和结构 JSON 保持不变。"
     },
     "fullFbx": {
       "title": "从 FBX / DAE 完整替换",
@@ -24,7 +24,7 @@
   "source": {
     "label": "来源",
     "full": "选择已准备的 SSBH 文件夹",
-    "numshb": "选择现有 .numshb",
+    "numshb": "选择含 NUMSHB、NUMDLB 和两个 NUMATB 的文件夹",
     "convert": "转换 FBX / DAE",
     "convertFull": "转换 FBX / DAE"
   },
@@ -32,15 +32,16 @@
   "blockers": "阻止项",
   "cancel": "取消",
   "replacing": "正在替换……",
-  "replaceMesh": "替换网格",
+  "replaceMesh": "替换网格和材质球",
   "replaceContents": "替换内容",
   "preview": {
     "compatibility": "兼容性",
     "texturePlan": "纹理提交计划",
     "inPlace": "原位覆盖",
-    "untouched": "不变项：NUMDLB、两个 NUMATB 文件、NUSKTB、JNTTBL、NUHLPB、纹理和结构 JSON。",
-    "meshObjects": "网格对象与 NUMDLB 对比",
-    "skinBones": "蒙皮骨骼与目标 NUSKTB 对比"
+    "untouched": "不变项：NUSKTB、JNTTBL、NUHLPB、纹理和结构 JSON。",
+    "meshObjects": "网格对象与当前 NUMDLB 对比",
+    "skinBones": "蒙皮骨骼与目标 NUSKTB 对比",
+    "skinBonesHelp": "只比骨头名字；目标骨架不替换。名字对不上只警告，不阻止确认。"
   },
   "counts": {
     "targetBones": "目标骨骼",

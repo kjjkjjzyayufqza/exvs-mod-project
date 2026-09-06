@@ -203,4 +203,43 @@ describe("DaeImportSsbhFullPanel", () => {
     expect(screen.getByRole("checkbox", { name: ".numdlb" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: ".jnttbl" })).toBeDisabled();
   });
+
+  it("locks mesh-and-material outputs and shows mapping editors in replace-numshb mode", async () => {
+    useDaeSsbhSessionStore.setState({
+      writeNumdlb: false,
+      writeNumshb: false,
+      writeNusktb: false,
+      writeNumatb: false,
+      writeMayaProfile: false,
+    });
+
+    render(
+      <DaeImportSsbhFullPanel
+        analysis={analysis}
+        sourcePath={analysis.daePath}
+        stageRoot="E:\\unit\\0"
+        directToDisk
+        replaceNumshbMode
+      />,
+    );
+
+    await waitFor(() => {
+      const state = useDaeSsbhSessionStore.getState();
+      expect(state.writeNumdlb).toBe(true);
+      expect(state.writeNumshb).toBe(true);
+      expect(state.writeNusktb).toBe(true);
+      expect(state.writeNumatb).toBe(true);
+      expect(state.writeMayaProfile).toBe(true);
+    });
+
+    expect(screen.getByText(/writes temporary numshb, numdlb, and both numatb/i)).toBeInTheDocument();
+    expect(screen.getByText(/temporary only/i)).toBeInTheDocument();
+    expect(screen.getByTestId("numdlb-mapping-editor")).toBeInTheDocument();
+    expect(screen.getByTestId("numatb-template-editor")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: ".jnttbl" })).not.toBeInTheDocument();
+    for (const name of [".numdlb", ".numshb", "__nust__.numatb", "__maya__.numatb"]) {
+      expect(screen.getByRole("checkbox", { name })).toBeDisabled();
+    }
+    expect(screen.getByRole("checkbox", { name: /\.nusktb/i })).toBeDisabled();
+  });
 });

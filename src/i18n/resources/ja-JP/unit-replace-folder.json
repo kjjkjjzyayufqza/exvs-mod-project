@@ -1,1 +1,71 @@
-{"title":"モデルを置換","description":"準備済み SSBH フォルダー、FBX/DAE からの一式変換、またはメッシュのみ上書きを選択します。","identity":{"preserved":"対象の識別情報を保持","index":"インデックス {{index}}","help":"モデル名、順序、NUHLPB は対象側に保持されます。"},"scope":{"label":"置換範囲","full":{"title":"SSBH フォルダー全体","help":"メッシュ、モデル、スケルトン、マテリアル、JNTTBL を置換します。"},"numshb":{"title":"メッシュのみ（.numshb）","help":"既存の NUMSHB を上書きし、他のファイルは変更しません。"},"fullFbx":{"title":"FBX / DAE から一式置換","help":"変換してメッシュ、NUMDLB、スケルトン、両方の NUMATB、JNTTBL、テクスチャを上書きします。"}},"source":{"label":"ソース","full":"準備済み SSBH フォルダーを選択","numshb":"既存の .numshb を選択","convert":"FBX / DAE を変換","convertFull":"FBX / DAE を変換"},"warnings":"警告","blockers":"ブロッカー","cancel":"キャンセル","replacing":"置換中…","replaceMesh":"メッシュを置換","replaceContents":"内容を置換","preview":{"compatibility":"互換性","texturePlan":"テクスチャ適用計画","inPlace":"インプレース上書き","untouched":"変更なし：NUMDLB、両方の NUMATB ファイル、NUSKTB、JNTTBL、NUHLPB、テクスチャ、構造 JSON。","meshObjects":"メッシュオブジェクトと NUMDLB の比較","skinBones":"スキンボーンと対象 NUSKTB の比較"},"counts":{"targetBones":"対象ボーン","sourceBones":"ソースボーン","matchingNames":"一致する名前","referenced":"参照","copied":"コピー済み","reused":"再利用","missing":"不足","objects":"オブジェクト","vertices":"頂点","triangles":"三角形","missingInSkeleton":"スケルトンに不足"},"lists":{"missingInSource":"ソースに不足","newInSource":"ソースに追加","keptMaterials":"保持するマテリアル","removedMaterials":"削除するマテリアル","addedMaterials":"追加するマテリアル","orphaned":"置換後に削除される可能性あり","kept":"保持","allInfluenceBonesExist":"対象スケルトンにすべての影響ボーンがあります"}}
+{
+  "title": "モデルを置換",
+  "description": "準備済み SSBH フォルダー、FBX/DAE からの一式変換、またはメッシュとマテリアルのインプレース上書きを選択します。",
+  "identity": {
+    "preserved": "対象の識別情報を保持",
+    "index": "インデックス {{index}}",
+    "help": "モデル名、順序、NUHLPB は対象側に保持されます。"
+  },
+  "scope": {
+    "label": "置換範囲",
+    "full": {
+      "title": "SSBH フォルダー全体",
+      "help": "メッシュ、モデル、スケルトン、マテリアル、JNTTBL を置換します。"
+    },
+    "numshb": {
+      "title": "メッシュとマテリアル",
+      "help": "NUMSHB、NUMDLB、両方の NUMATB を上書きします。スケルトン、JNTTBL、NUHLPB、テクスチャ、構造 JSON は変更しません。"
+    },
+    "fullFbx": {
+      "title": "FBX / DAE から一式置換",
+      "help": "変換してメッシュ、NUMDLB、スケルトン、両方の NUMATB、JNTTBL、テクスチャを上書きします。"
+    }
+  },
+  "source": {
+    "label": "ソース",
+    "full": "準備済み SSBH フォルダーを選択",
+    "numshb": "NUMSHB、NUMDLB、両方の NUMATB を含むフォルダーを選択",
+    "convert": "FBX / DAE を変換",
+    "convertFull": "FBX / DAE を変換"
+  },
+  "warnings": "警告",
+  "blockers": "ブロッカー",
+  "cancel": "キャンセル",
+  "replacing": "置換中…",
+  "replaceMesh": "メッシュとマテリアルを置換",
+  "replaceContents": "内容を置換",
+  "preview": {
+    "compatibility": "互換性",
+    "texturePlan": "テクスチャ適用計画",
+    "inPlace": "インプレース上書き",
+    "untouched": "変更なし：NUSKTB、JNTTBL、NUHLPB、テクスチャ、構造 JSON。",
+    "meshObjects": "メッシュオブジェクトと現在の NUMDLB の比較",
+    "skinBones": "スキンボーンと対象 NUSKTB の比較",
+    "skinBonesHelp": "ボーン名のみを比較します。対象スケルトンは置換しません。名前の不一致は警告のみで、確認はブロックしません。"
+  },
+  "counts": {
+    "targetBones": "対象ボーン",
+    "sourceBones": "ソースボーン",
+    "matchingNames": "一致する名前",
+    "referenced": "参照",
+    "copied": "コピー済み",
+    "reused": "再利用",
+    "missing": "不足",
+    "objects": "オブジェクト",
+    "vertices": "頂点",
+    "triangles": "三角形",
+    "missingInSkeleton": "スケルトンに不足"
+  },
+  "lists": {
+    "missingInSource": "ソースに不足",
+    "newInSource": "ソースに追加",
+    "keptMaterials": "保持するマテリアル",
+    "removedMaterials": "削除するマテリアル",
+    "addedMaterials": "追加するマテリアル",
+    "orphaned": "置換後に削除される可能性あり",
+    "kept": "保持",
+    "allInfluenceBonesExist": "対象スケルトンにすべての影響ボーンがあります",
+    "none": "なし",
+    "more": "+{{count}} 件"
+  }
+}

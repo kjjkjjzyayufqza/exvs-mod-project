@@ -413,7 +413,12 @@ function NumshbReplacePreview({ preview }: { preview: UnitModelNumshbReplacePrev
     <>
       <section className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-2.5">
         <p className="text-[11px] font-medium">{t("preview.inPlace")}</p>
-        <p className="font-mono text-[10px] text-muted-foreground">{preview.targetNumshbPath}</p>
+        <ul className="space-y-0.5 font-mono text-[10px] text-muted-foreground">
+          <li>{preview.targetNumshbPath}</li>
+          <li>{preview.targetNumdlbPath}</li>
+          <li>{preview.targetMayaNumatbPath}</li>
+          <li>{preview.targetNustNumatbPath}</li>
+        </ul>
         <p className="text-[10px] text-muted-foreground">
           {t("preview.untouched")}
         </p>
@@ -449,6 +454,7 @@ function NumshbReplacePreview({ preview }: { preview: UnitModelNumshbReplacePrev
       </section>
       <section className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-2.5">
         <p className="text-[11px] font-medium">{t("preview.skinBones")}</p>
+        <p className="text-[10px] text-muted-foreground">{t("preview.skinBonesHelp")}</p>
         <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
           <CountRow label={t("counts.matchingNames")} value={skeleton.matchingBoneNames} />
           <CountRow
@@ -456,6 +462,10 @@ function NumshbReplacePreview({ preview }: { preview: UnitModelNumshbReplacePrev
             value={skeleton.missingInTargetSkeleton.length}
             tone={skeleton.missingInTargetSkeleton.length > 0 ? "warning" : "default"}
           />
+          <CountRow label={t("counts.targetBones")} value={skeleton.targetBoneNames.length} />
+          {skeleton.sourceSkelBoneCount != null ? (
+            <CountRow label={t("counts.sourceBones")} value={skeleton.sourceSkelBoneCount} />
+          ) : null}
         </div>
         <NameList items={skeleton.missingInTargetSkeleton} empty={t("lists.allInfluenceBonesExist")} />
       </section>

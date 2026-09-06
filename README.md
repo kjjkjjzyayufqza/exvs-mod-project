@@ -6,12 +6,6 @@
 
 **by [kjjkjjzyayufqza](https://github.com/kjjkjjzyayufqza)**
 
-<p align="center">
-  <a href="https://buymeacoffee.com/kjjkjj">
-    <img src="buy-me-a-coffee.png" alt="Buy Me a Coffee" height="60">
-  </a>
-</p>
-
 Source-available research editor for EXVS2 **Over Boost and earlier**.
 Rust + React on Tauri v2: MSC decompile/recompile, binary formats, models,
 motion, pack/repack.
@@ -175,3 +169,21 @@ Do not start a bare `pnpm dev` server; use `pnpm start` so the Tauri shell is pr
 | `docs/` | Format specs and research notes |
 
 IDE: [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+
+---
+
+## Support
+
+If this project has helped you, you can buy me a coffee.
+
+觉得这个项目对你有帮助的话，可以请我喝杯咖啡。
+
+[Buy Me a Coffee](https://buymeacoffee.com/kjjkjj)
+
+https://buymeacoffee.com/kjjkjj
+
+<p align="center">
+  <a href="https://buymeacoffee.com/kjjkjj">
+    <img src="buy-me-a-coffee.png" alt="Buy Me a Coffee" height="60">
+  </a>
+</p>
