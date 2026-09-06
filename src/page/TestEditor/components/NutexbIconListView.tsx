@@ -26,7 +26,9 @@ import { CardIconAddDialog } from "./card-icon-list/CardIconAddDialog";
 import { CardIconBatchReplaceDialog } from "./card-icon-list/CardIconBatchReplaceDialog";
 import { extractCardIconItems, removeCardIconFromStructureJson } from "./card-icon-list/cardIconStructure";
 import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
+import { CatalogPackToolbarButtons } from "./workspace-layout/CatalogPackToolbarButtons";
 import { useTranslation } from "react-i18next";
+import { useConfigStore } from "@/store/configStore";
 
 interface NutexbIconListViewProps {
   folderPath: string;
@@ -83,6 +85,20 @@ export function NutexbIconListView({
   secondaryContentId,
 }: NutexbIconListViewProps) {
   const { t } = useTranslation("test-lists");
+  const obDplCachePath = useConfigStore((state) => state.obDplCachePath);
+  const catalogPackLabels = useMemo(
+    () => ({
+      initPack: t("common.initPack"),
+      initializing: t("common.initializing"),
+      renameZeroBin: t("common.renameZeroBin"),
+      renaming: t("common.renaming"),
+      setObDplcacheInit: t("common.setObDplcacheInit"),
+      unpacked: t("common.unpacked"),
+      alreadyNamed: t("common.alreadyNamed"),
+      formatRenamed: (names: string) => t("common.renamedFiles", { names }),
+    }),
+    [t],
+  );
   const primaryDescriptor = getWorkspaceContentDescriptor(contentId);
   const secondaryDescriptor = secondaryContentId ? getWorkspaceContentDescriptor(secondaryContentId) : null;
   const normalizedHash = normalizeHash(primaryDescriptor.hashHex || hash);
@@ -624,10 +640,21 @@ export function NutexbIconListView({
               )}
             </div>
             <div className="text-sm text-destructive">{loadState.message}</div>
-            <Button size="sm" onClick={() => void load()} className="inline-flex items-center gap-2">
-              <RefreshCw className="w-4 h-4" />
-              {t("common.reload")}
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button size="sm" onClick={() => void load()} className="inline-flex items-center gap-2">
+                <RefreshCw className="w-4 h-4" />
+                {t("common.reload")}
+              </Button>
+              <CatalogPackToolbarButtons
+                contentId={contentId}
+                folderPath={folderPath}
+                workspaceDocument={workspaceDocument}
+                dplCachePath={obDplCachePath ?? ""}
+                reload={load}
+                showRename={false}
+                labels={catalogPackLabels}
+              />
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -652,6 +679,15 @@ export function NutexbIconListView({
             <RefreshCw className="w-4 h-4" />
             {t("common.reload")}
           </Button>
+          <CatalogPackToolbarButtons
+            contentId={contentId}
+            folderPath={folderPath}
+            workspaceDocument={workspaceDocument}
+            dplCachePath={obDplCachePath ?? ""}
+            reload={load}
+            showRename={false}
+            labels={catalogPackLabels}
+          />
           <Button
             size="sm"
             variant="outline"
@@ -689,6 +725,17 @@ export function NutexbIconListView({
           <RefreshCw className="w-4 h-4" />
           {t("common.reload")}
         </Button>
+        {secondaryContentId ? (
+          <CatalogPackToolbarButtons
+            contentId={secondaryContentId}
+            folderPath={folderPath}
+            workspaceDocument={workspaceDocument}
+            dplCachePath={obDplCachePath ?? ""}
+            reload={loadSecondary}
+            showRename={false}
+            labels={catalogPackLabels}
+          />
+        ) : null}
         <Button
           size="sm"
           variant="outline"

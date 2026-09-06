@@ -56,6 +56,14 @@ import { initStrikerTablePack } from "@/page/TestEditor/components/striker-table
 import { STRIKER_TABLE_PACK_NAME } from "@/page/TestEditor/components/striker-table/strikerTableDocument";
 import { initCameraPack } from "@/page/TestEditor/components/camera-table/initCameraPack";
 import { CAMERA_TABLE_PACK_NAME } from "@/page/TestEditor/components/camera-table/cameraTableDocument";
+import { initNaviListPack } from "@/page/TestEditor/components/navi-list/initNaviListPack";
+import { initWorkspaceContentPack } from "@/services/testEditorWorkspace/initWorkspaceContentPack";
+import {
+    FHM2D_INIT_CONTENT_BY_ITEM_ID,
+    GENERIC_FHM2D_INIT_ITEM_IDS,
+    workspaceContentExtractSpec,
+} from "@/services/testEditorWorkspace/workspaceContentExtract";
+import type { WorkspaceContentId } from "@/services/testEditorWorkspace/contentCatalog";
 import {
   BGM_BANK_UPDATE_02_PACK_NAME,
   BGM_TABLE_PACK_NAME,
@@ -84,6 +92,7 @@ type InitListItem = {
     hash: string;
     /** Workspace route id (TestEditor assetRoutes). */
     routeId: string;
+    contentId?: WorkspaceContentId;
     format?: Fhm2d_type_format;
     formatLabel: string;
     /**
@@ -123,6 +132,8 @@ const FHM2D_ITEMS: InitListItem[] = [
         name: "Character ID Table",
         hash: "0x036B9E67",
         routeId: "list.character",
+        contentId: "character-id-table",
+        format: Fhm2d_type_format.fhm2d_list,
         formatLabel: "list",
         descriptionKey: "character_id_table",
     },
@@ -131,6 +142,8 @@ const FHM2D_ITEMS: InitListItem[] = [
         name: "Character List",
         hash: "0xDFD38C70",
         routeId: "list.character",
+        contentId: "character-list",
+        format: Fhm2d_type_format.fhm2d_list,
         formatLabel: "list",
         descriptionKey: "character_list",
     },
@@ -139,6 +152,8 @@ const FHM2D_ITEMS: InitListItem[] = [
         name: "Series List",
         hash: "0xb7367090",
         routeId: "list.series",
+        contentId: "series-list",
+        format: Fhm2d_type_format.fhm2d_list,
         formatLabel: "list",
     },
     {
@@ -146,6 +161,8 @@ const FHM2D_ITEMS: InitListItem[] = [
         name: "Navi List",
         hash: "0x6FCC0FBA",
         routeId: "list.navi",
+        contentId: "navi-list",
+        format: Fhm2d_type_format.fhm2d_list,
         formatLabel: "list",
         fixedPackName: "navi_list",
         descriptionKey: "navi_list",
@@ -157,6 +174,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         routeId: "list.character",
         format: Fhm2d_type_format.fhm2d_list,
         formatLabel: "list",
+        contentId: "bgm-list",
         fixedPackName: BGM_LIST_PACK_NAME,
         descriptionKey: "bgm_list",
     },
@@ -165,6 +183,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         name: "Stage List",
         hash: "0xCE74091E",
         routeId: "list.stage",
+        contentId: "stage-list",
         format: Fhm2d_type_format.fhm2d_stage_list,
         formatLabel: "list",
     },
@@ -173,6 +192,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         name: "Stage Image List",
         hash: "0x3CC8B10B",
         routeId: "gui.stage-icons",
+        contentId: "stage-icons-primary",
         format: Fhm2d_type_format.fhm2d_all_nutexb,
         formatLabel: "all_nutexb",
     },
@@ -181,6 +201,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         name: "Stage Image List 2",
         hash: "0x0CEE3991",
         routeId: "gui.stage-icons",
+        contentId: "stage-icons-secondary",
         format: Fhm2d_type_format.fhm2d_all_nutexb,
         formatLabel: "all_nutexb",
     },
@@ -189,6 +210,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         name: "Series Image List",
         hash: "0xA0253AA0",
         routeId: "gui.series-icons",
+        contentId: "series-icons",
         format: Fhm2d_type_format.fhm2d_all_nutexb,
         formatLabel: "all_nutexb",
     },
@@ -197,6 +219,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         name: "Card Icon List",
         hash: "0x49235031",
         routeId: "gui.card-icons",
+        contentId: "card-icons",
         format: Fhm2d_type_format.fhm2d_all_nutexb,
         formatLabel: "all_nutexb",
     },
@@ -205,6 +228,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         name: "Character Cost",
         hash: "0xFF832E7F",
         routeId: "param.for-outgame",
+        contentId: "character-cost",
         format: Fhm2d_type_format.fhm2d_character_cost,
         formatLabel: "character_cost",
         descriptionKey: "character_cost",
@@ -214,6 +238,7 @@ const FHM2D_ITEMS: InitListItem[] = [
         name: "Striker Table",
         hash: "0xFEEB79F0",
         routeId: "unit.param",
+        contentId: "striker-table",
         format: Fhm2d_type_format.fhm2d_striker_table,
         formatLabel: "striker_table",
         fixedPackName: STRIKER_TABLE_PACK_NAME,
@@ -597,32 +622,8 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
     async function handleExtract(item: InitListItem, nameOverride?: string) {
         if (isExtracting) return;
 
-        if (item.id === "raw_path_id" && nameOverride === undefined) {
-            await handleExtract(item, item.fixedPackName ?? RAW_PATH_ID_PACK_NAME);
-            return;
-        }
-        if (item.id === "pilot_voice_resource" && nameOverride === undefined) {
-            await handleExtract(item, item.fixedPackName ?? PILOT_VOICE_RESOURCE_PACK_NAME);
-            return;
-        }
-        if (item.id === "bgm_table" && nameOverride === undefined) {
-            await handleExtract(item, item.fixedPackName ?? BGM_TABLE_PACK_NAME);
-            return;
-        }
-        if (item.id === "bgm_list" && nameOverride === undefined) {
-            await handleExtract(item, item.fixedPackName ?? BGM_LIST_PACK_NAME);
-            return;
-        }
-        if (item.id === "bgm_bank_update_02" && nameOverride === undefined) {
-            await handleExtract(item, item.fixedPackName ?? BGM_BANK_UPDATE_02_PACK_NAME);
-            return;
-        }
-        if (item.id === "striker_table" && nameOverride === undefined) {
-            await handleExtract(item, item.fixedPackName ?? STRIKER_TABLE_PACK_NAME);
-            return;
-        }
-        if (item.id === "exvs_common_camera" && nameOverride === undefined) {
-            await handleExtract(item, item.fixedPackName ?? CAMERA_TABLE_PACK_NAME);
+        if (nameOverride === undefined && (item.contentId || item.fixedPackName)) {
+            await handleExtract(item, item.fixedPackName ?? defaultExtractName(item));
             return;
         }
 
@@ -675,11 +676,14 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
 
         try {
             await assertFhm2dMagic(inputPath);
+            const catalogContentId = item.contentId ?? FHM2D_INIT_CONTENT_BY_ITEM_ID[item.id];
+            const spec = catalogContentId ? workspaceContentExtractSpec(catalogContentId) : null;
             const listOutputFileName =
-                item.format === Fhm2d_type_format.fhm2d_stage_list ||
+                spec?.listOutputFileName ??
+                (item.format === Fhm2d_type_format.fhm2d_stage_list ||
                 item.format === Fhm2d_type_format.fhm2d_list
                     ? `${item.id}.bin`
-                    : undefined;
+                    : undefined);
 
             const extractResult = item.id === "raw_path_id"
                 ? await initRawPathIdPack({
@@ -713,6 +717,17 @@ export default function Fhm2dInitModal({ isOpen, onClose }: Fhm2dInitModalProps)
                     })
                 : item.id === "exvs_common_camera"
                     ? await initCameraPack({
+                        sourceFhm2dPath: inputPath,
+                        workspaceRoot: outBase,
+                    })
+                : item.id === "navi_list"
+                    ? await initNaviListPack({
+                        sourceFhm2dPath: inputPath,
+                        workspaceRoot: outBase,
+                    })
+                : catalogContentId && GENERIC_FHM2D_INIT_ITEM_IDS.has(item.id)
+                    ? await initWorkspaceContentPack({
+                        contentId: catalogContentId,
                         sourceFhm2dPath: inputPath,
                         workspaceRoot: outBase,
                     })

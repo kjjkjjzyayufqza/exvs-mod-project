@@ -98,8 +98,8 @@ describe("ssbhCanvasPerformance", () => {
     expect(getSsbhAdaptiveDpr(1.25, 0.5)).toBe(1);
   });
 
-  it("disables anime post fx only while the canvas is regressed", () => {
-    expect(shouldDisableSsbhAnimePostFx("anime", 0.5)).toBe(true);
+  it("keeps anime post fx enabled while the canvas is regressed", () => {
+    expect(shouldDisableSsbhAnimePostFx("anime", 0.5)).toBe(false);
     expect(shouldDisableSsbhAnimePostFx("anime", 1)).toBe(false);
     expect(shouldDisableSsbhAnimePostFx("standard", 0.5)).toBe(false);
   });

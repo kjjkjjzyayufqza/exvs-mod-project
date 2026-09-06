@@ -541,8 +541,9 @@ function AdaptiveCanvasPerformanceController({
   const disableAnimePostFx = shouldDisableSsbhAnimePostFx(previewRenderStyle, current);
 
   useEffect(() => {
-    setDpr(motionActive ? getSsbhAdaptiveDpr(resolvedBaseDpr, current) : resolvedBaseDpr);
-  }, [current, motionActive, resolvedBaseDpr, setDpr]);
+    const useAdaptiveDpr = motionActive && previewRenderStyle !== "anime";
+    setDpr(useAdaptiveDpr ? getSsbhAdaptiveDpr(resolvedBaseDpr, current) : resolvedBaseDpr);
+  }, [current, motionActive, previewRenderStyle, resolvedBaseDpr, setDpr]);
 
   // Keep the drawing buffer at full device resolution across viewport resizes.
   // With a `demand` frameloop, a regressed/low DPR (set during interaction or
@@ -601,9 +602,12 @@ function AdaptiveCanvasPerformanceController({
     if (!motionActive) {
       return;
     }
-    regress();
+    // Keep anime bloom mounted at a stable DPR for the whole clip.
+    if (previewRenderStyle !== "anime") {
+      regress();
+    }
     invalidate();
-  }, [motionActive, regress, invalidate]);
+  }, [motionActive, previewRenderStyle, regress, invalidate]);
 
   return (
     <>
@@ -1338,9 +1342,11 @@ const Scene = memo(function Scene({
   }, [motionStatesByInstanceId]);
 
   const handlePerformanceInteraction = useCallback(() => {
-    regress();
+    if (previewRenderStyle !== "anime") {
+      regress();
+    }
     invalidate();
-  }, [regress, invalidate]);
+  }, [previewRenderStyle, regress, invalidate]);
 
   const isUnrealViewport = viewportControls === "unreal";
   const unrealSelectionEnabled =

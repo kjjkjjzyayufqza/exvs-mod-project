@@ -32,8 +32,8 @@ import {
   type FontCoverageError,
 } from "./character-list/FontCoverageErrorDialog";
 import { NaviEditor } from "./navi-list/NaviEditor";
-import { buildNaviListSourceFhm2dPath, initNaviListPack } from "./navi-list/initNaviListPack";
 import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
+import { CatalogPackToolbarButtons } from "./workspace-layout/CatalogPackToolbarButtons";
 
 interface NaviListViewProps {
   folderPath: string;
@@ -76,11 +76,23 @@ export default function NaviListView({
 }: NaviListViewProps) {
   const { t } = useTranslation("test-lists");
   const obDplCachePath = useConfigStore((state) => state.obDplCachePath);
+  const catalogPackLabels = useMemo(
+    () => ({
+      initPack: t("common.initPack"),
+      initializing: t("common.initializing"),
+      renameZeroBin: t("common.renameZeroBin"),
+      renaming: t("common.renaming"),
+      setObDplcacheInit: t("common.setObDplcacheInit"),
+      unpacked: t("navi.unpacked"),
+      alreadyNamed: t("common.alreadyNamed"),
+      formatRenamed: (names: string) => t("common.renamedFiles", { names }),
+    }),
+    [t],
+  );
   const obModPath = useConfigStore((state) => state.obModPath);
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [hasChanges, setHasChanges] = useState(false);
   const [isInfoDialogOpen, setIsInfoDialogOpen] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [seriesPickerItems, setSeriesPickerItems] = useState<SeriesIdPickerItem[]>([]);
   const [seriesPickerLoading, setSeriesPickerLoading] = useState(false);
@@ -300,28 +312,6 @@ export default function NaviListView({
     await performSave();
   }, [loadState, performSave]);
 
-  const handleInitPack = useCallback(async () => {
-    const sourceFhm2dPath = buildNaviListSourceFhm2dPath(obDplCachePath ?? "");
-    if (!sourceFhm2dPath) {
-      toast.error(t("common.setObDplcacheInit"));
-      return;
-    }
-    setIsInitializing(true);
-    try {
-      await initNaviListPack({
-        sourceFhm2dPath,
-        workspaceRoot: folderPath,
-        workspaceDocument,
-      });
-      toast.success(t("navi.unpacked"));
-      await load();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsInitializing(false);
-    }
-  }, [folderPath, load, obDplCachePath, workspaceDocument]);
-
   const handleOpenPath = useCallback(async (rawPath: string) => {
     const normalizedPath = /^[a-zA-Z]:[\\/]/.test(rawPath) || rawPath.startsWith("\\\\")
       ? rawPath.replace(/\//g, "\\")
@@ -331,7 +321,7 @@ export default function NaviListView({
       return;
     }
     await openPath(normalizedPath);
-  }, []);
+  }, [t]);
 
   const handleOpenGuiPackFolder = useCallback(
     async (hash: number) => {
@@ -430,14 +420,19 @@ export default function NaviListView({
               <div className="text-sm break-all">{loadState.filePath}</div>
             ) : null}
             <div className="text-sm text-destructive">{loadState.message}</div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button size="sm" variant="outline" onClick={() => void load()}>
                 <RefreshCw className="w-4 h-4 mr-1.5" />
                 {t("common.reload")}
               </Button>
-              <Button size="sm" onClick={() => void handleInitPack()} disabled={isInitializing}>
-                {isInitializing ? t("common.initializing") : t("common.initPack")}
-              </Button>
+              <CatalogPackToolbarButtons
+                contentId="navi-list"
+                folderPath={folderPath}
+                workspaceDocument={workspaceDocument}
+                dplCachePath={obDplCachePath ?? ""}
+                reload={load}
+                labels={catalogPackLabels}
+              />
             </div>
           </CardContent>
         </Card>
@@ -490,6 +485,14 @@ export default function NaviListView({
                 <RefreshCw className="w-4 h-4" />
                 {t("common.reload")}
               </Button>
+              <CatalogPackToolbarButtons
+                contentId="navi-list"
+                folderPath={folderPath}
+                workspaceDocument={workspaceDocument}
+                dplCachePath={obDplCachePath ?? ""}
+                reload={load}
+                labels={catalogPackLabels}
+              />
               <Button size="sm" variant="outline" onClick={() => setIsInfoDialogOpen(true)}>
                 <Info className="w-4 h-4 mr-1.5" />
                 {t("common.info")}

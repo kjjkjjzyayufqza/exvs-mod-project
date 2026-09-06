@@ -1,10 +1,10 @@
 import { exists } from "@tauri-apps/plugin-fs";
-import { ExtractFHMData, ExtractType } from "@/models/fhm2d";
-import { resolveWorkspaceContent } from "@/services/testEditorWorkspace/contentCatalog";
-import { DEFAULT_TEST_EDITOR_WORKSPACE } from "@/services/testEditorWorkspace/defaults";
+import { Fhm2d_type_format } from "@/models/fhm2d";
+import { initWorkspaceContentPack } from "@/services/testEditorWorkspace/initWorkspaceContentPack";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 
 export const NAVI_LIST_PACK_HASH = "0x6FCC0FBA";
+export const NAVI_LIST_FILE_NAME = "navi_list.bin";
 
 export type InitNaviListPackInput = {
   sourceFhm2dPath: string;
@@ -27,19 +27,15 @@ export async function initNaviListPack(input: InitNaviListPackInput) {
     throw new Error(`Source FHM2D not found: ${sourceFhm2dPath}`);
   }
 
-  const content = await resolveWorkspaceContent(
+  const result = await initWorkspaceContentPack({
+    contentId: "navi-list",
+    sourceFhm2dPath,
     workspaceRoot,
-    input.workspaceDocument ?? DEFAULT_TEST_EDITOR_WORKSPACE,
-    "navi-list",
-  );
-  const pack = content.configured;
-  const extractResult = await ExtractFHMData(sourceFhm2dPath, pack.folderPath, ExtractType.SingleFolder);
-  if (extractResult.namingError) {
-    throw new Error(extractResult.namingError);
-  }
+    workspaceDocument: input.workspaceDocument,
+  });
   return {
-    folderPath: pack.folderPath,
-    structureJsonPath: pack.structureJsonPath,
-    filePath: content.configured.filePath,
+    ...result,
+    format: Fhm2d_type_format.fhm2d_list,
+    fileName: NAVI_LIST_FILE_NAME,
   };
 }

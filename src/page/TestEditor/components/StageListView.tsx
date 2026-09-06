@@ -48,6 +48,7 @@ import { promptAndMigrateWorkspaceContentIfNeeded } from "@/services/testEditorW
 import { resolveWorkspaceRouteRoot } from "@/services/testEditorWorkspace/paths";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
+import { CatalogPackToolbarButtons } from "./workspace-layout/CatalogPackToolbarButtons";
 
 const STAGE_LIST_HASH = "0xCE74091E";
 const STAGE_INFO_MODAL_DIMENSIONS = {
@@ -154,6 +155,19 @@ export default function StageListView({
 }: StageListViewProps) {
   const { t } = useTranslation("test-stage-list-view");
   const getSetting = useConfigStore((s) => s.getSetting);
+  const catalogPackLabels = useMemo(
+    () => ({
+      initPack: t("actions.initPack"),
+      initializing: t("actions.initializing"),
+      renameZeroBin: t("actions.renameZeroBin"),
+      renaming: t("actions.renaming"),
+      setObDplcacheInit: t("errors.setObDplcacheInit"),
+      unpacked: t("toast.unpacked"),
+      alreadyNamed: t("toast.alreadyNamed"),
+      formatRenamed: (names: string) => t("toast.renamedFiles", { names }),
+    }),
+    [t],
+  );
   const resourceRegistry = useResourceRegistry(folderPath || null);
   const [obDplCachePath, setObDplCachePath] = useState("");
   const [obModPath, setObModPath] = useState("");
@@ -836,11 +850,19 @@ export default function StageListView({
               )}
             </div>
             <div className="text-sm text-destructive">{loadState.message}</div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button size="sm" onClick={() => void handleReloadActive()} className="inline-flex items-center gap-2">
                 <RefreshCw className="w-4 h-4" />
                 {t("actions.reload")}
               </Button>
+              <CatalogPackToolbarButtons
+                contentId="stage-list"
+                folderPath={folderPath}
+                workspaceDocument={workspaceDocument}
+                dplCachePath={obDplCachePath}
+                reload={load}
+                labels={catalogPackLabels}
+              />
               <Button
                 size="sm"
                 variant="outline"
@@ -911,6 +933,14 @@ export default function StageListView({
                   <RefreshCw className="w-4 h-4" />
                   {t("actions.reload")}
                 </Button>
+                <CatalogPackToolbarButtons
+                  contentId="stage-list"
+                  folderPath={folderPath}
+                  workspaceDocument={workspaceDocument}
+                  dplCachePath={obDplCachePath}
+                  reload={load}
+                  labels={catalogPackLabels}
+                />
                 <Button
                   size="sm"
                   variant="outline"

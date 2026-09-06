@@ -61,6 +61,7 @@ import {
   type WorkspaceGuiPack,
 } from "./character-list/guiPackIndex";
 import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
+import { CatalogPackToolbarButtons } from "./workspace-layout/CatalogPackToolbarButtons";
 import { useConfigStore } from "@/store/configStore";
 
 interface CharacterListViewProps {
@@ -843,6 +844,20 @@ export default function CharacterListView({
     void loadGuiPacks();
   }, [load, loadBgmPicker, loadCardIconMap, loadCharacterIdTableIds, loadGuiPacks, loadSeriesPicker]);
 
+  const catalogPackLabels = useMemo(
+    () => ({
+      initPack: t("initPack"),
+      initializing: t("initializing"),
+      renameZeroBin: t("renameZeroBin"),
+      renaming: t("renaming"),
+      setObDplcacheInit: t("setObDplcacheInit"),
+      unpacked: t("unpacked"),
+      alreadyNamed: t("alreadyNamed"),
+      formatRenamed: (names: string) => t("renamedFiles", { names }),
+    }),
+    [t],
+  );
+
   const jumpToCharacterIdTable = useMemo(() => {
     if (!onJumpToCharacterIdTable) {
       return undefined;
@@ -929,10 +944,20 @@ export default function CharacterListView({
               )}
             </div>
             <div className="text-sm text-destructive">{loadState.message}</div>
-            <Button size="sm" onClick={handleReloadAll} className="inline-flex items-center gap-2">
-              <RefreshCw className="w-4 h-4" />
-              {t("reload")}
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button size="sm" onClick={handleReloadAll} className="inline-flex items-center gap-2">
+                <RefreshCw className="w-4 h-4" />
+                {t("reload")}
+              </Button>
+              <CatalogPackToolbarButtons
+                contentId="character-list"
+                folderPath={folderPath}
+                workspaceDocument={workspaceDocument}
+                dplCachePath={obDplCachePath ?? ""}
+                reload={handleReloadAll}
+                labels={catalogPackLabels}
+              />
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -986,6 +1011,14 @@ export default function CharacterListView({
                 <RefreshCw className="w-4 h-4" />
                 {t("reload")}
               </Button>
+              <CatalogPackToolbarButtons
+                contentId="character-list"
+                folderPath={folderPath}
+                workspaceDocument={workspaceDocument}
+                dplCachePath={obDplCachePath ?? ""}
+                reload={handleReloadAll}
+                labels={catalogPackLabels}
+              />
               <Button
                 size="sm"
                 variant="outline"

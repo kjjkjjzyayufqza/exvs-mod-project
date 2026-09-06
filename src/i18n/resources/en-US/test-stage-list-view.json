@@ -12,6 +12,10 @@
   },
   "actions": {
     "reload": "Reload",
+    "initPack": "Init pack",
+    "initializing": "Initializing…",
+    "renameZeroBin": "Rename 0.bin",
+    "renaming": "Renaming…",
     "gvsLoad": "Load GVS",
     "openFolder": "Open folder",
     "importStagesTitle": "Import stages from JSON",
@@ -35,6 +39,7 @@
   },
   "errors": {
     "folderPathEmpty": "Folder path is empty",
+    "setObDplcacheInit": "Set the OB dplcache folder in FHM2D Init first",
     "contentPathNotConfigured": "Stage list content path is not configured",
     "legacyReadOnly": "Legacy flat workspace content is read-only",
     "saveFailed": "Failed to save stage_list.bin",
@@ -67,6 +72,9 @@
   },
   "toast": {
     "saved": "Saved stage_list.bin",
+    "unpacked": "Unpacked stage_list",
+    "renamedFiles": "Renamed {{names}}",
+    "alreadyNamed": "Files already use catalog names",
     "loadedGvs": "Loaded GVS variant view",
     "reloadedGvs": "Reloaded GVS variant",
     "copiedNames": "Copied {{count}} name(s) to the clipboard",

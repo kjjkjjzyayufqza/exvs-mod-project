@@ -8,7 +8,6 @@ import {
   ATTRIBUTION_CANARY,
   AUTHOR_HANDLE,
   BUNDLE_ID,
-  BUY_ME_A_COFFEE,
   LIVE_TITLE_EN,
   LIVE_TITLE_JA,
   LIVE_TITLE_ZH,
@@ -46,9 +45,8 @@ export default function AboutPage() {
                   {t("about.author")}
                 </p>
                 <p className="mt-2 font-mono text-sm">{AUTHOR_HANDLE}</p>
-                <div className="mt-4 flex flex-col items-start gap-2">
+                <div className="mt-4">
                   <AboutLinkButton href={SUPPORT_HOME} label={t("about.github")} />
-                  <AboutLinkButton href={BUY_ME_A_COFFEE} label={t("about.buyMeACoffee")} />
                 </div>
               </div>
             </div>
@@ -64,9 +62,6 @@ export default function AboutPage() {
               </AboutSpecRow>
               <AboutSpecRow label={t("about.support")}>
                 <span className="break-all font-mono text-xs">{SUPPORT_HOME}</span>
-              </AboutSpecRow>
-              <AboutSpecRow label={t("about.coffee")}>
-                <span className="break-all font-mono text-xs">{BUY_ME_A_COFFEE}</span>
               </AboutSpecRow>
             </dl>
           </AboutModule>

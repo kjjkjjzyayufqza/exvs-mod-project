@@ -20,6 +20,8 @@ import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace
 import { SeriesEditor } from "./series-list/SeriesEditor";
 import { extractA0253FirstFolderSeriesBaseNameOrder } from "./series-list/seriesImage";
 import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
+import { CatalogPackToolbarButtons } from "./workspace-layout/CatalogPackToolbarButtons";
+import { useConfigStore } from "@/store/configStore";
 
 interface SeriesListViewProps {
   folderPath: string;
@@ -70,6 +72,20 @@ export default function SeriesListView({
   workspaceDocument,
 }: SeriesListViewProps) {
   const { t } = useTranslation("test-lists");
+  const obDplCachePath = useConfigStore((state) => state.obDplCachePath);
+  const catalogPackLabels = useMemo(
+    () => ({
+      initPack: t("common.initPack"),
+      initializing: t("common.initializing"),
+      renameZeroBin: t("common.renameZeroBin"),
+      renaming: t("common.renaming"),
+      setObDplcacheInit: t("common.setObDplcacheInit"),
+      unpacked: t("common.unpacked"),
+      alreadyNamed: t("common.alreadyNamed"),
+      formatRenamed: (names: string) => t("common.renamedFiles", { names }),
+    }),
+    [t],
+  );
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [hasChanges, setHasChanges] = useState(false);
   const [isRefreshingNutexb, setIsRefreshingNutexb] = useState(false);
@@ -390,10 +406,20 @@ export default function SeriesListView({
               )}
             </div>
             <div className="text-sm text-destructive">{loadState.message}</div>
-            <Button size="sm" onClick={() => void load()} className="inline-flex items-center gap-2">
-              <RefreshCw className="w-4 h-4" />
-              {t("common.reload")}
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button size="sm" onClick={() => void load()} className="inline-flex items-center gap-2">
+                <RefreshCw className="w-4 h-4" />
+                {t("common.reload")}
+              </Button>
+              <CatalogPackToolbarButtons
+                contentId="series-list"
+                folderPath={folderPath}
+                workspaceDocument={workspaceDocument}
+                dplCachePath={obDplCachePath ?? ""}
+                reload={load}
+                labels={catalogPackLabels}
+              />
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -482,6 +508,14 @@ export default function SeriesListView({
                 <RefreshCw className="w-4 h-4" />
                 {t("common.reload")}
               </Button>
+              <CatalogPackToolbarButtons
+                contentId="series-list"
+                folderPath={folderPath}
+                workspaceDocument={workspaceDocument}
+                dplCachePath={obDplCachePath ?? ""}
+                reload={load}
+                labels={catalogPackLabels}
+              />
               <Button
                 size="sm"
                 variant="outline"

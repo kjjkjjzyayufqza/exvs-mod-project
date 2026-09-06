@@ -150,7 +150,15 @@ export function shouldDisableSsbhAnimePostFx(
   if (!Number.isFinite(performanceCurrent) || performanceCurrent <= 0) {
     throw new Error(`Anime post FX gating requires a positive finite performance current, got ${performanceCurrent}.`);
   }
-  return previewRenderStyle === "anime" && performanceCurrent < 0.999;
+  // Anime bloom + warm-light look is a user-selected preview style. Motion
+  // playback switches the canvas to an always-on frameloop; OrbitControls
+  // damping and motion regression keep performance.current below 1 for the
+  // whole clip, so gating EffectComposer on that value made glow vanish until
+  // pause.
+  if (previewRenderStyle !== "anime") {
+    return false;
+  }
+  return false;
 }
 
 export function getSsbhPerfMonitorOptions(

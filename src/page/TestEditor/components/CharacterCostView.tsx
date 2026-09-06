@@ -41,6 +41,8 @@ import { resolveWorkspaceContent } from "@/services/testEditorWorkspace/contentC
 import { promptAndMigrateWorkspaceContentIfNeeded } from "@/services/testEditorWorkspace/contentMigration";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
+import { CatalogPackToolbarButtons } from "./workspace-layout/CatalogPackToolbarButtons";
+import { useConfigStore } from "@/store/configStore";
 
 const CHARACTER_COST_IMPORT_MODAL_DIMENSIONS = {
   width: 520,
@@ -118,6 +120,20 @@ export default function CharacterCostView({
   workspaceDocument,
 }: CharacterCostViewProps) {
   const { t } = useTranslation("test-character-cost");
+  const obDplCachePath = useConfigStore((state) => state.obDplCachePath);
+  const catalogPackLabels = useMemo(
+    () => ({
+      initPack: t("initPack"),
+      initializing: t("initializing"),
+      renameZeroBin: t("renameZeroBin"),
+      renaming: t("renaming"),
+      setObDplcacheInit: t("setObDplcacheInit"),
+      unpacked: t("unpacked"),
+      alreadyNamed: t("alreadyNamed"),
+      formatRenamed: (names: string) => t("renamedFiles", { names }),
+    }),
+    [t],
+  );
   const [subTab, setSubTab] = useState<CharacterCostSubTab>("playable");
   const [panelState, setPanelState] = useState<Record<CharacterCostSubTab, LoadState>>(emptyPanels);
   const [dirty, setDirty] = useState<Record<CharacterCostSubTab, boolean>>(emptyDirty);
@@ -270,6 +286,11 @@ export default function CharacterCostView({
     setNewRowIndicesByTab(emptyNewRowIndices());
     await loadPanel(subTab, { preserveSelectionId });
   }, [loadPanel, selectedRow?.CharacterId, subTab]);
+
+  const reloadCostPack = useCallback(async () => {
+    lastLoadKeyRef.current = { playable: "", boss: "", zako: "" };
+    await loadPanel(subTab);
+  }, [loadPanel, subTab]);
 
   const estimateRowSize = useCallback(() => 52, []);
   const rowVirtualizer = useVirtualizer({
@@ -607,10 +628,20 @@ export default function CharacterCostView({
                 )}
               </div>
               <div className="text-sm text-destructive">{loadState.message}</div>
-              <Button size="sm" onClick={() => void loadPanel(subTab)} className="inline-flex items-center gap-2">
-                <RefreshCw className="w-4 h-4" />
-                {t("reload")}
-              </Button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button size="sm" onClick={() => void loadPanel(subTab)} className="inline-flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4" />
+                  {t("reload")}
+                </Button>
+                <CatalogPackToolbarButtons
+                  contentId="character-cost"
+                  folderPath={folderPath}
+                  workspaceDocument={workspaceDocument}
+                  dplCachePath={obDplCachePath ?? ""}
+                  reload={reloadCostPack}
+                  labels={catalogPackLabels}
+                />
+              </div>
             </CardContent>
           </Card>
         </Tabs>
@@ -668,6 +699,14 @@ export default function CharacterCostView({
                     <RefreshCw className="w-4 h-4" />
                     {t("reload")}
                   </Button>
+                  <CatalogPackToolbarButtons
+                    contentId="character-cost"
+                    folderPath={folderPath}
+                    workspaceDocument={workspaceDocument}
+                    dplCachePath={obDplCachePath ?? ""}
+                    reload={reloadCostPack}
+                    labels={catalogPackLabels}
+                  />
                   <Button
                     size="sm"
                     variant="outline"

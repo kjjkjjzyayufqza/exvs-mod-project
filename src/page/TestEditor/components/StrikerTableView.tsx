@@ -49,6 +49,8 @@ import {
 import { promptAndMigrateWorkspaceContentIfNeeded } from "@/services/testEditorWorkspace/contentMigration";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
+import { CatalogPackToolbarButtons } from "./workspace-layout/CatalogPackToolbarButtons";
+import { useConfigStore } from "@/store/configStore";
 
 const STRIKER_TABLE_IMPORT_MODAL_DIMENSIONS = {
   width: 520,
@@ -90,6 +92,20 @@ export default function StrikerTableView({
   workspaceDocument,
 }: StrikerTableViewProps) {
   const { t } = useTranslation("test-striker-table");
+  const obDplCachePath = useConfigStore((state) => state.obDplCachePath);
+  const catalogPackLabels = useMemo(
+    () => ({
+      initPack: t("actions.initPack"),
+      initializing: t("actions.initializing"),
+      renameZeroBin: t("actions.renameZeroBin"),
+      renaming: t("actions.renaming"),
+      setObDplcacheInit: t("errors.setObDplcacheInit"),
+      unpacked: t("success.unpacked"),
+      alreadyNamed: t("success.alreadyNamed"),
+      formatRenamed: (names: string) => t("success.renamedFiles", { names }),
+    }),
+    [t],
+  );
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [hasChanges, setHasChanges] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -486,10 +502,20 @@ export default function StrikerTableView({
             )}
           </div>
           <div className="text-sm text-destructive">{loadState.message}</div>
-          <Button size="sm" onClick={() => void load()} className="inline-flex items-center gap-2">
-            <RefreshCw className="w-4 h-4" />
-            {t("actions.reload")}
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" onClick={() => void load()} className="inline-flex items-center gap-2">
+              <RefreshCw className="w-4 h-4" />
+              {t("actions.reload")}
+            </Button>
+            <CatalogPackToolbarButtons
+              contentId="striker-table"
+              folderPath={folderPath}
+              workspaceDocument={workspaceDocument}
+              dplCachePath={obDplCachePath ?? ""}
+              reload={load}
+              labels={catalogPackLabels}
+            />
+          </div>
         </CardContent>
       </Card>
     );
@@ -532,6 +558,14 @@ export default function StrikerTableView({
                 <RefreshCw className="w-4 h-4" />
                 {t("actions.reload")}
               </Button>
+              <CatalogPackToolbarButtons
+                contentId="striker-table"
+                folderPath={folderPath}
+                workspaceDocument={workspaceDocument}
+                dplCachePath={obDplCachePath ?? ""}
+                reload={load}
+                labels={catalogPackLabels}
+              />
               <Button
                 size="sm"
                 variant="outline"

@@ -12,6 +12,10 @@
   },
   "actions": {
     "reload": "重新加载",
+    "initPack": "初始化 pack",
+    "initializing": "正在初始化…",
+    "renameZeroBin": "重命名 0.bin",
+    "renaming": "正在重命名…",
     "gvsLoad": "加载 GVS",
     "openFolder": "打开文件夹",
     "importStagesTitle": "从 JSON 导入关卡",
@@ -35,6 +39,7 @@
   },
   "errors": {
     "folderPathEmpty": "文件夹路径为空",
+    "setObDplcacheInit": "请先在 FHM2D Init 中设置 OB dplcache 文件夹",
     "contentPathNotConfigured": "未配置关卡列表内容路径",
     "legacyReadOnly": "旧版扁平工作区内容为只读",
     "saveFailed": "无法保存 stage_list.bin",
@@ -67,6 +72,9 @@
   },
   "toast": {
     "saved": "已保存 stage_list.bin",
+    "unpacked": "已解包 stage_list",
+    "renamedFiles": "已重命名 {{names}}",
+    "alreadyNamed": "文件已是正式名",
     "loadedGvs": "已加载 GVS 变体视图",
     "reloadedGvs": "已重新加载 GVS 变体",
     "copiedNames": "已将 {{count}} 个名称复制到剪贴板",

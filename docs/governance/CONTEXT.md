@@ -123,8 +123,9 @@ The canonical support URL is the GitHub repository
 github.com/kjjkjjzyayufqza/exvs-mod-project.
 
 **BuyMeACoffee**:
-Author-added tip URL https://buymeacoffee.com/kjjkjj. Shown on About and
-GitHub FUNDING.yml. Does not replace SupportHome.
+Author-added tip URL https://buymeacoffee.com/kjjkjj. Shown as the README
+button, GitHub FUNDING.yml Sponsor listing, and the repository website.
+Not an in-app About control. Does not replace SupportHome.
 _Avoid_: inventing additional Discord, email, or donation links
 
 **AppIcon**:

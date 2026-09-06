@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { invoke } from "@tauri-apps/api/core"
-import { writeFile } from "@tauri-apps/plugin-fs"
+import { dirname, join } from "@tauri-apps/api/path"
+import { exists, writeFile } from "@tauri-apps/plugin-fs"
 import { Download, FileUp, RefreshCw, Save } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -17,6 +18,11 @@ import { TypedParamDataPanel } from "./TypedParamDataPanel"
 import type { TypedParamFile } from "./typedParamTypes"
 import { isProjectileDepictionTableFileType } from "./projectileDepictionCopy"
 import { sortTypedParamFileByUnsignedEntryId } from "./paramEntryUtils"
+import { renameExtractPayloads } from "@/services/testEditorWorkspace/renameExtractPayloads"
+import {
+  CHARACTER_PARAM_PAYLOAD_NAMES,
+  characterParamFileNameForKind,
+} from "@/services/testEditorWorkspace/workspaceContentExtract"
 
 type TypedKindSession = {
   path: string
@@ -56,12 +62,14 @@ export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath
   const [kindId, setKindId] = useState<ParamKindId>("armsparam" as ParamKindId)
   const [currentPath, setCurrentPath] = useState("")
   const getSetting = useConfigStore((s) => s.getSetting)
+  const setSetting = useConfigStore((s) => s.setSetting)
   const kind = getParamKind(kindId)
   const pathKey = kind?.pathKey ?? "paramEditor.v2.fp.armsparam"
 
   const [sessions, setSessions] = useState<Partial<Record<ParamKindId, KindSession>>>({})
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [isApplyingNames, setIsApplyingNames] = useState(false)
 
   const session = sessions[kindId] ?? EMPTY_KIND_SESSION
   const typed = session.typed
@@ -215,6 +223,40 @@ export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath
       ? "Chr sys param"
       : ""
 
+  const handleApplyNames = useCallback(async () => {
+    const path = currentPath.trim()
+    if (!path) {
+      toast.error("Pick a param file first")
+      return
+    }
+    setIsApplyingNames(true)
+    try {
+      const folderPath = await dirname(path)
+      const result = await renameExtractPayloads({
+        folderPath,
+        names: CHARACTER_PARAM_PAYLOAD_NAMES,
+      })
+      const named = characterParamFileNameForKind(kindId)
+      if (named) {
+        const nextPath = await join(folderPath, named)
+        setCurrentPath(nextPath)
+        await setSetting(pathKey, nextPath)
+        if (await exists(nextPath)) {
+          await loadFile(nextPath)
+        }
+      }
+      if (result.renamed.length > 0) {
+        toast.success(`Renamed ${result.renamed.join(", ")}`)
+      } else {
+        toast.success("Param files already use catalog names")
+      }
+    } catch (error) {
+      toast.error(String(error))
+    } finally {
+      setIsApplyingNames(false)
+    }
+  }, [currentPath, kindId, loadFile, pathKey, setSetting])
+
   return (
     <div className="flex h-full min-h-0 w-full max-w-full flex-col gap-4 pb-4">
       <div className="flex shrink-0 flex-col gap-3 border-b pb-4">
@@ -226,6 +268,15 @@ export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!currentPath.trim() || loading || isApplyingNames}
+              onClick={() => void handleApplyNames()}
+            >
+              {isApplyingNames ? "Applying names…" : "Apply names"}
+            </Button>
             <Button
               type="button"
               size="sm"

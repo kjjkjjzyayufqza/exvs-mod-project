@@ -20,6 +20,10 @@
   },
   "actions": {
     "reload": "重新加载",
+    "initPack": "初始化 pack",
+    "initializing": "正在初始化…",
+    "renameZeroBin": "重命名 0.bin",
+    "renaming": "正在重命名…",
     "openFolder": "打开文件夹",
     "importJson": "导入 JSON",
     "exportJson": "导出 JSON",
@@ -32,11 +36,15 @@
   },
   "success": {
     "saved": "已保存 {{fileName}}",
+    "unpacked": "已解包 Striker Table",
+    "renamedFiles": "已重命名 {{names}}",
+    "alreadyNamed": "文件已是正式名",
     "exported": "已导出 {{count}} 行",
     "imported": "已导入 {{count}} 行"
   },
   "errors": {
     "folderPathEmpty": "文件夹路径为空",
+    "setObDplcacheInit": "请先在 FHM2D Init 中设置 OB dplcache 文件夹",
     "notConfigured": "此工作区未配置 Striker Table。",
     "legacyReadOnly": "旧版扁平工作区内容为只读",
     "duplicateHostIds": "重复的 HostUnitId：{{ids}}",

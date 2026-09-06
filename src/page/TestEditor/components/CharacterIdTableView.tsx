@@ -47,6 +47,7 @@ import { resolveWorkspaceContent } from "@/services/testEditorWorkspace/contentC
 import { promptAndMigrateWorkspaceContentIfNeeded } from "@/services/testEditorWorkspace/contentMigration";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
+import { CatalogPackToolbarButtons } from "./workspace-layout/CatalogPackToolbarButtons";
 import { sanitizeFhm2dStructureName } from "@/utils/fhm2dStructureMetadata";
 import { MscSourceBatchDecompileView } from "./character-id-table/MscSourceBatchDecompileView";
 import { useTranslation } from "react-i18next";
@@ -369,6 +370,20 @@ export default function CharacterIdTableView({
     const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
     const [pasteCandidate, setPasteCandidate] = useState<ClipboardPayload | null>(null);
     const [clipboardPayload, setClipboardPayload] = useState<ClipboardPayload | null>(null);
+
+    const catalogPackLabels = useMemo(
+        () => ({
+            initPack: t("initPack"),
+            initializing: t("initializing"),
+            renameZeroBin: t("renameZeroBin"),
+            renaming: t("renaming"),
+            setObDplcacheInit: t("setObDplcacheInit"),
+            unpacked: t("unpacked"),
+            alreadyNamed: t("alreadyNamed"),
+            formatRenamed: (names: string) => t("renamedFiles", { names }),
+        }),
+        [t],
+    );
 
     const lastLoadedKeyRef = useRef<string>("");
     const pendingScrollCharacterIdRef = useRef<number | null>(null);
@@ -1255,10 +1270,20 @@ export default function CharacterIdTableView({
                             )}
                         </div>
                         <div className="text-sm text-destructive">{loadState.message}</div>
-                        <Button size="sm" onClick={() => void load()} className="inline-flex items-center gap-2">
-                            <RefreshCw className="w-4 h-4" />
-                            Reload
-                        </Button>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <Button size="sm" onClick={() => void load()} className="inline-flex items-center gap-2">
+                                <RefreshCw className="w-4 h-4" />
+                                Reload
+                            </Button>
+                            <CatalogPackToolbarButtons
+                                contentId="character-id-table"
+                                folderPath={folderPath}
+                                workspaceDocument={workspaceDocument}
+                                dplCachePath={obDplCachePath}
+                                reload={load}
+                                labels={catalogPackLabels}
+                            />
+                        </div>
                     </CardContent>
                 </Card>
             </div>
@@ -1312,6 +1337,14 @@ export default function CharacterIdTableView({
                                 <RefreshCw className="w-4 h-4" />
                                 Reload
                             </Button>
+                            <CatalogPackToolbarButtons
+                                contentId="character-id-table"
+                                folderPath={folderPath}
+                                workspaceDocument={workspaceDocument}
+                                dplCachePath={obDplCachePath}
+                                reload={load}
+                                labels={catalogPackLabels}
+                            />
                             <Button
                                 size="sm"
                                 variant="outline"

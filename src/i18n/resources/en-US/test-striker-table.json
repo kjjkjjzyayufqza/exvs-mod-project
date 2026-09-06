@@ -20,6 +20,10 @@
   },
   "actions": {
     "reload": "Reload",
+    "initPack": "Init pack",
+    "initializing": "Initializing…",
+    "renameZeroBin": "Rename 0.bin",
+    "renaming": "Renaming…",
     "openFolder": "Open folder",
     "importJson": "Import JSON",
     "exportJson": "Export JSON",
@@ -32,11 +36,15 @@
   },
   "success": {
     "saved": "Saved {{fileName}}",
+    "unpacked": "Unpacked striker table",
+    "renamedFiles": "Renamed {{names}}",
+    "alreadyNamed": "Files already use catalog names",
     "exported": "Exported {{count}} rows",
     "imported": "Imported {{count}} rows"
   },
   "errors": {
     "folderPathEmpty": "Folder path is empty",
+    "setObDplcacheInit": "Set the OB dplcache folder in FHM2D Init first",
     "notConfigured": "Striker table is not configured for this workspace.",
     "legacyReadOnly": "Legacy flat workspace content is read-only",
     "duplicateHostIds": "Duplicate HostUnitId values: {{ids}}",
