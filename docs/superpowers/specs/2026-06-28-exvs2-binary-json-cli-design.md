@@ -2,8 +2,7 @@
 
 > **Status (2026-07-05):** Implemented in the Tauri crate. Operational reference:
 > `docs/exvs2-json-cli.md`. The CLI now has `inspect`, scoped JSON `edit`, and
-> `correlate` commands. Cross-repo pickup for :
-> `docs\EXVS2JsonCli.md`.
+> `correlate` commands.
 
 **Goal:** define the CLI an AI agent needs to quickly convert known EXVS2
 binary/resource files into structured JSON and correlate them with unit,

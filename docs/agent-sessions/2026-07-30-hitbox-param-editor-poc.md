@@ -2,8 +2,7 @@
 
 **日期：** 2026-07-30  
 **目标：** 延续 Claude 会话 `f610c67c-78bc-4fb6-b6fc-2472c7187615`，把
-`hitgroupiddef` / `interactionid` 的逆向结论接入主 Param Editor，并在
-`` 实现可关闭的全单位近战碰撞体叠加层。
+`hitgroupiddef` / `interactionid` 的逆向结论接入主 Param Editor。
 
 ## 相关证据
 
@@ -26,15 +25,6 @@
   `paramEditor.v2.fp.*` 持久化键，不改变当前文件的 dirty/save 状态。
 - 将数值属性面板的回调边界收紧为 `number`，字符串字段仍只在支持字符串写入的
   `PropertyField` 路径中传递。
-
-### 
-
-- 新增 `MeleeHitboxGizmo`，默认关闭；支持静态球、扫掠胶囊轴线、单位上限与限频统计。
-- 与 projectile overlay 共用 `DebugLineRenderer` 帧批处理，在 Present 尾部只 flush
-  一次，避免每个 subsystem 重复修改 D3D11 状态。
-- 两条 swapchain 创建路径、Present、shutdown、配置解析和工程文件均已接线。
-- 完整实现和二进制证据见
-  `docs\EXVS2MeleeHitboxGizmo.md`。
 
 ## 验证
 

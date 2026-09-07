@@ -107,8 +107,7 @@ not proven physical-collider controls for every projectile family. In the
 checked Gyan Suibaku path, `0x13662C98` and `0x138B3675` are consumed by
 transform/orientation logic rather than as collider extents, and custom id
 `900300001` has the same collision-looking field values as native Suibaku
-`10050102`. Do not use these labels alone to design a long ship collider; see
-`docs\EXVS2ProjectileCollision900300001.md`.
+`10050102`. Do not use these labels alone to design a long ship collider.
 
 | Hash | Offset | Kind | Field Name | Notes |
 |------|--------|------|------------|-------|
@@ -883,7 +882,6 @@ _Projectile visual depiction fields. RTTI: CProjectileDepictionTableDataHolder@G
 _In-game command guide / move list per unit. 902 entries across 107 units._
 _Sequential hashes 0..8 (not VDK hashes). IDA: LookupCommandDescriptorByHash (0x1401A8BD0), Decide_Command UI (sub_140915070)._
 _File: `vs2/x64/800etcetera/commandlist/commandlist.bin`_
-_Detailed doc: [xDocs/commandlist_bin.md](xDocs/commandlist_bin.md)_
 
 | Hash | Offset | Kind | Field Name | Notes |
 |------|--------|------|------------|-------|
@@ -940,7 +938,6 @@ _Detailed doc: [xDocs/commandlist_bin.md](xDocs/commandlist_bin.md)_
 _Burst/Awakening system parameters. 6 entries = 6 burst types._
 _File: `vs2/x64/100system/awakening_param/awakening_param.vgsht2`_
 _IDA: sub_140612F30 (EnableAwakening handler). Renders GBuffer effects on activation._
-_Detailed doc: [xDocs/100system_files.md](xDocs/100system_files.md#awakening_param)_
 
 | Rows | Cols | Stride | Kind distribution |
 |------|------|--------|-------------------|
@@ -954,7 +951,6 @@ _Detailed doc: [xDocs/100system_files.md](xDocs/100system_files.md#awakening_par
 ## battle_system_param (100system, cmd=54, entry_size=220)
 _Global battle system parameters. Single-row global config._
 _File: `vs2/x64/100system/battle_system_param/battle_system_param.vgsht2`_
-_Detailed doc: [xDocs/100system_files.md](xDocs/100system_files.md#battle_system_param)_
 
 | Rows | Cols | Stride | Kind distribution |
 |------|------|--------|-------------------|

@@ -95,5 +95,4 @@ vs2 参考树：`E:\XB\解包\vs2\bak\009gui`。源字节：OB `dplcache_release
 - `src-tauri/src/format/characterlist.rs` command pool
 - Test Editor Character Form LMB Properties
 - `src/assets/fhm2d-name-map.generated.json`（character_list 整数列 × 包表）
-- `xDocs\character_list_research\command_system_status_20260419.md`（`sub_140533CF0` / `sub_140533A60`）
 - OB `dplcache_release\0x031E4B34.fhm2d` / `0x07D48515.fhm2d` 存在性

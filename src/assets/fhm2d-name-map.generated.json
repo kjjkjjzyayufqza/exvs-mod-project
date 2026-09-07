@@ -10,10 +10,7 @@
     "metaRoot": "E:\\XB\\解包\\vs2\\meta",
     "obFileRoot": "E:\\XB\\解包\\com\\file",
     "obDplcacheRoot": "E:\\OBHK0.3_v27\\data\\x64\\dplcache_release",
-    "aiString": [
-      "ai_string_v1.txt",
-      "ai_string_v14.txt"
-    ],
+    "aiString": [],
     "obUnit": "tools\\ob_unit.json",
     "manualOverrides": "tools\\fhm2d_name_mapping_overrides.json",
     "characterList": {

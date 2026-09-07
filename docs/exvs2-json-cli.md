@@ -7,9 +7,6 @@ editor backend.
 
 Design background: `docs/superpowers/specs/2026-06-28-exvs2-binary-json-cli-design.md`
 
-Cross-repo pickup note for projectile hook work:
-`docs\EXVS2JsonCli.md`
-
 ## Source Layout
 
 | Path | Role |
@@ -230,8 +227,7 @@ Use `rawLeBytes` for IDA byte search. Use `hex` for human-readable correlation.
   native consumer path.
 - For custom Gyan ship id `900300001`, those collision-looking fields match
   native Suibaku `10050102`; the proven direction is a scoped native
-  `CShellCollision` multi-sphere patch, not a data-only bulletparam edit. See
-  `docs\EXVS2ProjectileCollision900300001.md`.
+  `CShellCollision` multi-sphere patch, not a data-only bulletparam edit.
 
 ### `hitgroupiddef` / `interactionid` / `grapparam` (hitbox tables)
 

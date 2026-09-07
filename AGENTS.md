@@ -462,8 +462,7 @@ cargo build --bin exvs2_json
 ```
 
 JSON output envelope always sets `"tool": "exvs2-json"`. Reuses the same Rust
-parsers as the desktop editor backend. Cross-repo pickup for  hook
-research: `docs\EXVS2JsonCli.md`.
+parsers as the desktop editor backend.
 
 ### `fhm2d-extract` (Cargo binary: `fhm2d_extract`)
 

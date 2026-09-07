@@ -1,9 +1,9 @@
 {
   "format": "exvs2_nuf_allowed_ranges_v1",
   "sources": [
-    "xDocs/LocalizedText_research/font/ac_common/ac_common.nuf",
-    "xDocs/LocalizedText_research/font/ac_tag/ac_tag.nuf",
-    "xDocs/LocalizedText_research/font/eu_head/eu_head.nuf"
+    "ac_common.nuf",
+    "ac_tag.nuf",
+    "eu_head.nuf"
   ],
   "present_codepoints": 7100,
   "present_codepoints_per_file": {

@@ -4,7 +4,6 @@
 
 ### Source Materials
 - Previous Claude agent analysis: `docs/unit-task-automata-vtable-reference.md`, `docs/unit-task-automata-process.md`
-- Binary strings: `FIND_STRING.MD` (69780 lines, 1597 UnitTaskAutomata RTTI entries)
 - IDB: `E:\OBHK0.3_v27\vsac27_Release.exe.i64`
 - IDA Pro MCP: Connected and operational
 

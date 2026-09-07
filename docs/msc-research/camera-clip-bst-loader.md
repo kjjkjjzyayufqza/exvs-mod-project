@@ -17,9 +17,7 @@ Victory-camera *selection* stays in [wing-zero-rebellion-victory-camera.md](./wi
 | **Menu / god** | `sub_140987F20(this, resourceHandle, …)` → `sub_140677410` → `sub_140677450` | loose `*.nuanmb` + `camera_motion.nusktb` (`camera1` / `cameraShape1`) | `VDK::GAM::CCameraMotion` |
 | **Battle / winlose / waza** | `sys_53(0x4)` → `sub_140682BF0` case 4 → `sub_14063F270(controller, 3)` → `sub_140646AD0(player, clip_hash, strength, 0)` | four `camera/parameters/*.vgsht2` **only** | clip BST at `qword_1421155D0+0x268D28` |
 
-OB pack: `E:\XB\mod\002chara\000common_000common_001\camera\`.  
-POC hook: `\game\cameraDebug.cpp`.  
-POC compile walk: `xDocs\command_system_research\camera_command_tracker_20260419.md` (`sub_1405B83C0` / `sub_1405DC540`).
+OB pack: `E:\XB\mod\002chara\000common_000common_001\camera\`.
 
 `big.nuanmb` strings are `camera1`, `FarClip`, `FieldOfView`, `NearClip`, `Rotate`, `Translate`. That is the **menu** skeleton, not a winlose clip.
 

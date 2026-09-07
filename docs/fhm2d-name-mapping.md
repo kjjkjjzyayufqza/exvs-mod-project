@@ -8,8 +8,6 @@ hash-to-readable-name dictionary for extracted FHM2D workspaces.
 - `E:\XB\解包\vs2\x64`
 - `E:\XB\解包\vs2\bak`
 - `E:\XB\解包\vs2\meta`
-- `ai_string_v1.txt`
-- `ai_string_v14.txt`
 - `E:\XB\解包\com\file\012list\character_list\character_list.json`
 - `E:\OBHK0.3_v27\data\x64\dplcache_release`
 - `tools\ob_unit.json`
@@ -95,8 +93,6 @@ python tools\build_fhm2d_name_mapping.py `
   --meta-root "E:\XB\解包\vs2\meta" `
   --ob-file-root "E:\XB\解包\com\file" `
   --ob-dplcache-root "E:\OBHK0.3_v27\data\x64\dplcache_release" `
-  --ai-string "ai_string_v1.txt" `
-  --ai-string "ai_string_v14.txt" `
   --character-list "E:\XB\解包\com\file\012list\character_list\character_list.json" `
   --ob-unit "tools\ob_unit.json" `
   --manual-overrides "tools\fhm2d_name_mapping_overrides.json" `

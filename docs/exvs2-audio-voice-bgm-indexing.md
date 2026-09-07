@@ -1,12 +1,6 @@
 # EXVS2 音频索引：格式规格与编辑器落地
 
-本文是给 TAURI_PROJECT 编辑器用的**格式规格**。完整逆向证据链在
-`xDocs\audio_research\`（8 篇），本文只保留实现所需内容。
-
-手工改表的操作手册（字节级偏移、逐步任务、故障排查）在
-`xDocs\audio_research\HANDBOOK_unit_audio.md`；
-配套的参考实现是同目录的 `parse_audio_index.py`（读 + 校验）与
-`patch_audio_tables.py`（字节级读写）。编辑器实现应与这两个脚本的行为对齐。
+本文是给 TAURI_PROJECT 编辑器用的**格式规格**，只保留实现所需内容。
 
 基线：`E:\OBHK0.3_v27`（`vsac27_Release.exe`，base `0x140000000`）。
 对照：`E:\XB\解包\vs2\x64`（明文，有真名）。
@@ -259,8 +253,7 @@ Sound FHM2D 解包在 Rust 里按 magic 命名（`apply_raw_path_id_names` → `
 
 ## 参考解析器
 
-`xDocs\audio_research\parse_audio_index.py`
-—— 解析 `raw_path_id`（双文件）+ `vrtbl` + `.vot`，与 `character_list.json`
+解析 `raw_path_id`（双文件）+ `vrtbl` + `.vot`，与 `character_list.json`
 交叉 join，把上面每条不变量都当断言。可作为 Rust 侧实现的对照。
 
 OB 基线输出：
