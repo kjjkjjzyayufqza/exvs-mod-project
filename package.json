@@ -12,7 +12,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri-build": "tauri build",
+    "tauri-build": "pwsh -NoProfile -File scripts/tauri-build-local.ps1",
     "start": "tauri dev",
     "test": "vitest run",
     "test:scene": "vitest run src/page/SceneEdit",

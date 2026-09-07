@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { StageListGVS } from "@/models/stageList";
 import type { StageListData, StageListEntry } from "@/models/stageListEntry";
-import { useConfigStore } from "@/store/configStore";
+import { trimmedConfigPath, useConfigStore } from "@/store/configStore";
 import { useResourceRegistry } from "@/hooks/useResourceRegistry";
 import { StageEditor } from "./stage-list/StageEditor";
 import type { StageListSortKey } from "./stage-list/StageList";
@@ -154,7 +154,8 @@ export default function StageListView({
   workspaceDocument,
 }: StageListViewProps) {
   const { t } = useTranslation("test-stage-list-view");
-  const getSetting = useConfigStore((s) => s.getSetting);
+  const obDplCachePath = useConfigStore((s) => trimmedConfigPath(s.obDplCachePath));
+  const obModPath = useConfigStore((s) => trimmedConfigPath(s.obModPath));
   const catalogPackLabels = useMemo(
     () => ({
       initPack: t("actions.initPack"),
@@ -169,8 +170,6 @@ export default function StageListView({
     [t],
   );
   const resourceRegistry = useResourceRegistry(folderPath || null);
-  const [obDplCachePath, setObDplCachePath] = useState("");
-  const [obModPath, setObModPath] = useState("");
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [hasChanges, setHasChanges] = useState(false);
   const [isInfoDialogOpen, setIsInfoDialogOpen] = useState(false);
@@ -333,14 +332,6 @@ export default function StageListView({
       resetEditorState();
     }
   }, [folderPath, resetEditorState, resolveContentFilePath]);
-
-  useEffect(() => {
-    const loadConfig = async () => {
-      setObDplCachePath((await getSetting<string>("obDplCachePath")) || "");
-      setObModPath((await getSetting<string>("obModPath")) || "");
-    };
-    void loadConfig();
-  }, [getSetting]);
 
   useEffect(() => {
     if (!isActive) return;

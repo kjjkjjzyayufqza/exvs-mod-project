@@ -29,7 +29,7 @@ import { useTestEditorFolderWatch } from "./hooks/useTestEditorFolderWatch";
 import { collectStructureJsonPathKeys, normalizeStructureJsonPathKey } from "./components/fileTreeNodeRowUtils";
 import { TestEditorWorkspaceArea } from "./components/TestEditorWorkspaceArea";
 import { isExvsCommonPackIdentity } from "@/page/UnitModelEdit/utils/exvsCommonService";
-import { TEST_EDITOR_FOLDER_STORE_KEY, useConfigStore } from "@/store/configStore";
+import { TEST_EDITOR_FOLDER_STORE_KEY, trimmedConfigPath, useConfigStore } from "@/store/configStore";
 import { TestEditorToolbar } from "./components/TestEditorToolbar";
 import ListeningRepackDialog from "./components/ListeningRepackDialog";
 import { resolveMscWorkspaceFolderPathForSelection } from "./utils/mscWorkspaceUtils";
@@ -111,6 +111,7 @@ const TestEditorPage = () => {
   const { t } = useTranslation("test-workspace");
   const store = useConfigStore((s) => s.store);
   const getSetting = useConfigStore((s) => s.getSetting);
+  const obModPath = useConfigStore((s) => trimmedConfigPath(s.obModPath));
   const [treeData, setTreeData] = useState<TestTreeNode[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentDir, setCurrentDir] = useState("");
@@ -125,7 +126,6 @@ const TestEditorPage = () => {
   const [isRepackDialogOpen, setIsRepackDialogOpen] = useState(false);
   const [repackDialogPacks, setRepackDialogPacks] = useState<WorkspacePackIdentity[] | null>(null);
   const [isWorkspaceLayoutOpen, setIsWorkspaceLayoutOpen] = useState(false);
-  const [obModPath, setObModPath] = useState("");
   const isPageActive = useTestEditorPageActive();
   const workspaceLayout = useTestEditorWorkspace(currentDir || null);
   const treeDataRef = useRef<TestTreeNode[]>([]);
@@ -286,14 +286,6 @@ const TestEditorPage = () => {
 
     hydrate();
   }, [store, getSetting, loadFolder]);
-
-  useEffect(() => {
-    const loadObModPath = async () => {
-      const path = (await getSetting<string>("obModPath")) ?? "";
-      setObModPath(path);
-    };
-    loadObModPath();
-  }, [getSetting]);
 
   const { starOrder, toggleStar, starredPathSet } = useFileTreeStarOrder(
     currentDir || undefined

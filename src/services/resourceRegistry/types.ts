@@ -107,11 +107,11 @@ export function buildRegistryEntryFromSeed(input: {
 }
 
 export function mergeEntryKey(entry: Pick<ResourceRegistryEntry, "category" | "slot" | "seed">): string {
-  return `${entry.category}\0${entry.slot}\0${entry.seed}`;
+  return `${entry.category}\u0000${entry.slot}\u0000${entry.seed}`;
 }
 
 export function hashEntryKey(
   entry: Pick<ResourceRegistryEntry, "category" | "slot" | "hashInt32">,
 ): string {
-  return `${entry.category}\0${entry.slot}\0${entry.hashInt32}`;
+  return `${entry.category}\u0000${entry.slot}\u0000${entry.hashInt32}`;
 }

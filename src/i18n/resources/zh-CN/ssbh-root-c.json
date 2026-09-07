@@ -90,6 +90,9 @@
     "texturesProgress": "纹理 {{done}}/{{total}}",
     "decodingTextures": "正在解码独立纹理 {{done}}/{{total}}",
     "modelCount_one": "{{count}} 个模型",
-    "modelCount_other": "{{count}} 个模型"
+    "modelCount_other": "{{count}} 个模型",
+    "webglFailed": "3D 预览无法启动",
+    "webglFailedHelp": "无法创建 WebGL 上下文。编辑器其余部分仍可使用。",
+    "webglRetry": "重试 3D 预览"
   }
 }

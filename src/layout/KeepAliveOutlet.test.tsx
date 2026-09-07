@@ -25,8 +25,13 @@ const mocks = vi.hoisted(() => {
     );
   }
 
+  function BoomPage(): React.ReactElement {
+    throw new Error("unit-model boom");
+  }
+
   return {
     secondRoute,
+    boomRoute: "/UnitModelEdit" as const,
     RouterItems: [
       {
         title: "EXVS2 Workspace",
@@ -37,6 +42,11 @@ const mocks = vi.hoisted(() => {
         title: "Single FHM2D",
         url: secondRoute,
         element: React.createElement("div", { "data-testid": "second-page" }, "second-page"),
+      },
+      {
+        title: "Unit Model Editor",
+        url: "/UnitModelEdit",
+        element: React.createElement(BoomPage),
       },
     ],
   };
@@ -78,5 +88,36 @@ describe("KeepAliveOutlet", () => {
     await waitFor(() => {
       expect(screen.getByTestId("home-count")).toHaveTextContent("1");
     });
+  });
+
+  it("keeps other KeepAlive pages mounted when one page throws", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const router = createMemoryRouter(
+      [
+        {
+          path: "*",
+          element: <KeepAliveOutlet />,
+        },
+      ],
+      { initialEntries: ["/"] },
+    );
+
+    render(<RouterProvider router={router} />);
+    expect(screen.getByTestId("home-count")).toHaveTextContent("0");
+
+    await act(async () => {
+      await router.navigate(mocks.boomRoute);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      await router.navigate("/");
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("home-count")).toHaveTextContent("0");
+    });
+    consoleError.mockRestore();
   });
 });

@@ -7,5 +7,7 @@
   "tree.expand": "展開",
   "tree.missingBarispecular": "barispecular テクスチャファイルがありません",
   "nav.toggleSidebar": "サイドバーを切り替え（Ctrl/Cmd+B）",
-  "nav.about": "概要"
+  "nav.about": "概要",
+  "layout.pageError": "このページの読み込みに失敗しました。",
+  "layout.pageErrorRetry": "再試行"
 }

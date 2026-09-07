@@ -4,6 +4,7 @@ import { useLocation } from "react-router-dom";
 import { findMatchedRouteUrl, pathMatchesRoute } from "@/router/pathMatch";
 import { RouterItems } from "@/router/router";
 import { KeepAliveProvider } from "./KeepAliveContext";
+import { PageErrorBoundary } from "./PageErrorBoundary";
 import { cn } from "@/lib/utils";
 
 function PageLoadingFallback() {
@@ -61,9 +62,11 @@ export function KeepAliveOutlet() {
             aria-hidden={!active}
             {...(!active ? { inert: true } : {})}
           >
-            <Suspense fallback={<PageLoadingFallback />}>
-              {item.element}
-            </Suspense>
+            <PageErrorBoundary resetKey={item.url}>
+              <Suspense fallback={<PageLoadingFallback />}>
+                {item.element}
+              </Suspense>
+            </PageErrorBoundary>
           </div>
         );
       })}

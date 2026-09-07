@@ -87,7 +87,7 @@ export function DaeImportSsbhFullPanel({
       return;
     }
 
-    const analysisKey = `${sourcePath}\0${analysis.geometryNames.join("\u0001")}`;
+    const analysisKey = `${sourcePath}\u0000${analysis.geometryNames.join("\u0001")}`;
     if (loadedAnalysisKeyRef.current === analysisKey) {
       return;
     }
@@ -122,7 +122,7 @@ export function DaeImportSsbhFullPanel({
 
   const fillTextureResetKey = useMemo(
     () =>
-      `${sourcePath}\0${analysis?.geometryNames?.join("\u0001") ?? ""}\0${session.numatbProfileReplacementRevision}`,
+      `${sourcePath}\u0000${analysis?.geometryNames?.join("\u0001") ?? ""}\u0000${session.numatbProfileReplacementRevision}`,
     [sourcePath, analysis, session.numatbProfileReplacementRevision],
   );
 

@@ -202,7 +202,7 @@ export function buildSsbhSessionImportConfig(
     "pbr1Mtl";
   const mappingsByGeometry = new Map(
     configuredMappings.map((entry) => [
-      `${entry.meshObjectName}\0${entry.meshObjectSubindex}`,
+      `${entry.meshObjectName}\u0000${entry.meshObjectSubindex}`,
       entry.materialLabel,
     ]),
   );
@@ -211,7 +211,7 @@ export function buildSsbhSessionImportConfig(
         meshObjectName,
         meshObjectSubindex: 0,
         materialLabel:
-          mappingsByGeometry.get(`${meshObjectName}\0${0}`)?.trim() ||
+          mappingsByGeometry.get(`${meshObjectName}\u0000${0}`)?.trim() ||
           configuredMappings[index]?.materialLabel.trim() ||
           fallbackMaterialLabel,
       }))

@@ -13,6 +13,8 @@
   "nav.about": "关于",
   "layout.loading": "加载中…",
   "layout.unknownRoute": "未知路由：",
+  "layout.pageError": "此页面加载失败。",
+  "layout.pageErrorRetry": "重试",
   "tree.testAction": "测试",
   "updater.title": "发现新版本",
   "updater.subtitle": "版本 {{version}} 已发布",

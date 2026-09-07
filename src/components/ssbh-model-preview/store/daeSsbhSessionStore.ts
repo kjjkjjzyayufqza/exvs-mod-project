@@ -102,7 +102,7 @@ export function buildAnalysisLoadKey(
   if (!sourcePath) {
     return null;
   }
-  return `${sourcePath}\0${geometryNames.join("\u0001")}`;
+  return `${sourcePath}\u0000${geometryNames.join("\u0001")}`;
 }
 
 export function shouldPreserveMaterialProfilesOnAnalysisLoad(

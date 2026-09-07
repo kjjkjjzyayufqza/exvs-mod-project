@@ -13,6 +13,8 @@
   "nav.about": "About",
   "layout.loading": "Loading…",
   "layout.unknownRoute": "Unknown route:",
+  "layout.pageError": "This page failed to load.",
+  "layout.pageErrorRetry": "Retry",
   "tree.testAction": "Test",
   "updater.title": "Update available",
   "updater.subtitle": "Version {{version}} is ready",

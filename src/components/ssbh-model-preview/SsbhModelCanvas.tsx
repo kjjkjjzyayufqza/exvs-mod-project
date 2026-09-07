@@ -114,6 +114,12 @@ import {
 } from "./ssbhTextureUpload";
 import type { BuiltMeshDraw, SkelDataJson, SsbhModelPreviewInstance } from "./types";
 import { composeGuestAttachRootMatrix } from "./attachmentTemplateService";
+import { SsbhWebGlPreviewGuard } from "./SsbhWebGlPreviewGuard";
+import {
+  applySafeWebGlDrawingBufferSize,
+  createSsbhWebGlRenderer,
+  isUsableSsbhWebGlHostSize,
+} from "./ssbhWebGlRenderer";
 
 /** Local matrix product rootBone → attachBone (stops at non-Bone parent). Feedback-free. */
 function boneLocalChainMatrix(attachBone: Bone, out: Matrix4): Matrix4 {
@@ -552,9 +558,10 @@ function AdaptiveCanvasPerformanceController({
   // Resizing therefore snaps DPR back to base and forces one fresh frame.
   useEffect(() => {
     const applyNativeSize = () => {
+      if (!applySafeWebGlDrawingBufferSize(gl, viewportWidth, viewportHeight, resolvedBaseDpr)) {
+        return;
+      }
       setDpr(resolvedBaseDpr);
-      gl.setPixelRatio(resolvedBaseDpr);
-      gl.setSize(viewportWidth, viewportHeight, false);
       invalidate();
     };
     applyNativeSize();
@@ -579,11 +586,12 @@ function AdaptiveCanvasPerformanceController({
     if (!target) return;
     let raf = 0;
     const applyObservedSize = () => {
-      const width = Math.max(1, Math.round(target.clientWidth));
-      const height = Math.max(1, Math.round(target.clientHeight));
+      const width = Math.round(target.clientWidth);
+      const height = Math.round(target.clientHeight);
+      if (!applySafeWebGlDrawingBufferSize(gl, width, height, resolvedBaseDpr)) {
+        return;
+      }
       setDpr(resolvedBaseDpr);
-      gl.setPixelRatio(resolvedBaseDpr);
-      gl.setSize(width, height, false);
       invalidate();
     };
     const observer = new ResizeObserver(() => {
@@ -2433,6 +2441,21 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
     showSkeleton: restSceneProps.showSkeleton,
   });
 
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [hostSize, setHostSize] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const update = () => {
+      setHostSize({ width: host.clientWidth, height: host.clientHeight });
+    };
+    const observer = new ResizeObserver(update);
+    observer.observe(host);
+    update();
+    return () => observer.disconnect();
+  }, []);
+  const canvasReady = isUsableSsbhWebGlHostSize(hostSize.width, hostSize.height);
+
   const handleCanvasKeyDown = useCallback(
     (e: ReactKeyboardEvent<HTMLDivElement>) => {
       const mod = e.ctrlKey || e.metaKey;
@@ -2501,6 +2524,7 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
 
   return (
     <div
+      ref={hostRef}
       className="relative h-full min-h-[420px] w-full rounded-md border bg-black/40 outline-none overscroll-contain focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       tabIndex={0}
       onWheel={(e) => {
@@ -2515,15 +2539,21 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
       onKeyDown={handleCanvasKeyDown}
     >
       {isUnrealViewport ? <ViewportMarqueeOverlay rect={marqueeRect} /> : null}
+      <SsbhWebGlPreviewGuard>
+      {canvasReady ? (
       <Canvas
         className="h-full w-full touch-none"
         frameloop={previewSuspended ? "never" : renderLoopActive ? "always" : "demand"}
-        gl={{
-          antialias: canvasPerformanceProfile.antialias,
-          alpha: false,
-          powerPreference: "high-performance",
-          logarithmicDepthBuffer: true,
-        }}
+        gl={(defaults) =>
+          createSsbhWebGlRenderer({
+            ...defaults,
+            antialias: canvasPerformanceProfile.antialias,
+            alpha: false,
+            powerPreference: "high-performance",
+            failIfMajorPerformanceCaveat: false,
+            logarithmicDepthBuffer: true,
+          })
+        }
         performance={adaptivePerformanceOptions}
         dpr={canvasPerformanceProfile.dpr}
         camera={{ position: [2.4, 1.6, 2.8], fov: 50, near: 0.02, far: 5e6 }}
@@ -2563,6 +2593,8 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
           onMarqueeRectChange={setMarqueeRect}
         />
       </Canvas>
+      ) : null}
+      </SsbhWebGlPreviewGuard>
     </div>
   );
 });

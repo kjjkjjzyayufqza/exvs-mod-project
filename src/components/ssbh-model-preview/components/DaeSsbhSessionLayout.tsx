@@ -94,7 +94,7 @@ export function DaeSsbhSessionLayout() {
   );
 
   const fillTextureSlots = useStableMissingTextureFillSlots(
-    `${session.sourcePath ?? ""}\0${session.numatbProfileReplacementRevision}`,
+    `${session.sourcePath ?? ""}\u0000${session.numatbProfileReplacementRevision}`,
     session.mayaFile,
     session.nustFile,
     currentTextureSlots,

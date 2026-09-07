@@ -45,5 +45,8 @@
   "viewport.openNuanmb": ".nuanmb を開く",
   "viewport.previewFbx": "FBXをプレビュー",
   "viewport.autoLoadAfterConvert": "変換後に自動読み込み",
-  "viewport.resetView": "ビューをリセット"
+  "viewport.resetView": "ビューをリセット",
+  "viewport.webglFailed": "3Dプレビューを開始できませんでした",
+  "viewport.webglFailedHelp": "WebGL コンテキストを作成できませんでした。エディターの他の部分は引き続き使用できます。",
+  "viewport.webglRetry": "3Dプレビューを再試行"
 }

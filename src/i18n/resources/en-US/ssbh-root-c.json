@@ -90,6 +90,9 @@
     "texturesProgress": "Textures {{done}}/{{total}}",
     "decodingTextures": "Decoding unique textures {{done}}/{{total}}",
     "modelCount_one": "{{count}} model",
-    "modelCount_other": "{{count}} models"
+    "modelCount_other": "{{count}} models",
+    "webglFailed": "3D preview failed to start",
+    "webglFailedHelp": "The WebGL context could not be created. The rest of the editor is still available.",
+    "webglRetry": "Retry 3D preview"
   }
 }

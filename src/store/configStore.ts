@@ -30,6 +30,12 @@ export const CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY = "characterIdDebugM
 /** EXVS2 Workspace open-folder root; also FHM2D Init workspace extract root. */
 export const TEST_EDITOR_FOLDER_STORE_KEY = "testEditorFolder";
 
+let initStoreInFlight: Promise<void> | null = null;
+
+export function trimmedConfigPath(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 export function readSidebarOpenMirror(): boolean {
   try {
     return window.localStorage.getItem(SIDEBAR_OPEN_MIRROR_KEY) !== "false";
@@ -61,8 +67,9 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   sidebarOpen: readSidebarOpenMirror(),
   locale: readAppLocaleMirror(),
 
-  initStore: async () => {
-    // Init the tauri store
+  initStore: () => {
+    if (initStoreInFlight) return initStoreInFlight;
+    initStoreInFlight = (async () => {
     const _store = await Store.load("settings.json");
     set({ store: _store });
 
@@ -107,11 +114,17 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       locale,
     });
 
-    // Save changes
     await _store.save();
+    })().finally(() => {
+      initStoreInFlight = null;
+    });
+    return initStoreInFlight;
   },
 
   getSetting: async <T = unknown,>(key: string): Promise<T | undefined> => {
+    if (!get().store) {
+      await get().initStore();
+    }
     const { store } = get();
     if (!store) return undefined;
     const value = await store.get(key);
@@ -119,8 +132,13 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   },
 
   setSetting: async (key: string, value: unknown): Promise<void> => {
+    if (!get().store) {
+      await get().initStore();
+    }
     const { store } = get();
-    if (!store) return;
+    if (!store) {
+      throw new Error("Config store failed to initialize");
+    }
 
     await store.set(key, value);
     await store.save();

@@ -34,7 +34,7 @@ import {
     pickCharacterIdTableImportPreview,
     type CharacterIdTableImportPreview,
 } from "./character-id-table/CharacterIdTableJson";
-import { CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY, useConfigStore } from "@/store/configStore";
+import { CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY, trimmedConfigPath, useConfigStore } from "@/store/configStore";
 import { useResourceRegistry } from "@/hooks/useResourceRegistry";
 import { AssetRefInfo, getAssetRefInfo } from "./character-id-table/assetRef";
 import { CharacterAssetField } from "./character-id-table/CharacterAssetField";
@@ -337,23 +337,13 @@ export default function CharacterIdTableView({
     const [hasChanges, setHasChanges] = useState(false);
     const deferredSearchTerm = useDeferredValue(searchTerm);
 
-    const getSetting = useConfigStore((s) => s.getSetting);
+    const setSetting = useConfigStore((s) => s.setSetting);
+    const obDplCachePath = useConfigStore((s) => trimmedConfigPath(s.obDplCachePath));
+    const obModPath = useConfigStore((s) => trimmedConfigPath(s.obModPath));
+    const extractOutputPath = useConfigStore((s) => trimmedConfigPath(s.extractOutputPath));
+    const debugMscOutputPath = useConfigStore((s) => trimmedConfigPath(s.characterIdDebugMscOutputPath));
     const resourceRegistry = useResourceRegistry(folderPath || null);
-    const [obDplCachePath, setObDplCachePath] = useState("");
-    const [obModPath, setObModPath] = useState("");
-    const [extractOutputPath, setExtractOutputPath] = useState("");
-    const [debugMscOutputPath, setDebugMscOutputPath] = useState("");
     const [isExtractingAll, setIsExtractingAll] = useState(false);
-
-    useEffect(() => {
-        const loadConfig = async () => {
-            setObDplCachePath(await getSetting<string>("obDplCachePath") || "");
-            setObModPath(await getSetting<string>("obModPath") || "");
-            setExtractOutputPath(await getSetting<string>("extractOutputPath") || "");
-            setDebugMscOutputPath(await getSetting<string>(CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY) || "");
-        };
-        loadConfig();
-    }, [getSetting]);
 
     const [isExporting, setIsExporting] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
@@ -2031,7 +2021,12 @@ export default function CharacterIdTableView({
                                 </div>
                                 <FilePathInput
                                     value={debugMscOutputPath}
-                                    onChange={(event) => setDebugMscOutputPath(event.target.value)}
+                                    onChange={(event) => {
+                                        void setSetting(
+                                            CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY,
+                                            event.target.value,
+                                        );
+                                    }}
                                     storeKey={CHARACTER_ID_DEBUG_MSC_OUTPUT_PATH_SETTING_KEY}
                                     placeholder={t("selectDebugOutputRootPlaceholder")}
                                     disabled={isExtractingAllMsc}

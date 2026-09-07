@@ -184,11 +184,11 @@ function reconcileMaterialMappings(
   savedRows: NumdlbMappingRow[],
 ): NumdlbMappingRow[] {
   const savedByGeometry = new Map(
-    savedRows.map((row) => [`${row.meshObjectName}\0${row.meshObjectSubindex}`, row]),
+    savedRows.map((row) => [`${row.meshObjectName}\u0000${row.meshObjectSubindex}`, row]),
   );
   return currentRows.map((row, index) => {
     const saved =
-      savedByGeometry.get(`${row.meshObjectName}\0${row.meshObjectSubindex}`) ?? savedRows[index];
+      savedByGeometry.get(`${row.meshObjectName}\u0000${row.meshObjectSubindex}`) ?? savedRows[index];
     return saved?.materialLabel.trim()
       ? { ...row, materialLabel: saved.materialLabel }
       : row;
