@@ -18,8 +18,10 @@ slot1), `E:\XB\mod\040msc\016gundmw_001wgzero_001` (playable `16001001`).
 - Table / packs: `docs/striker-research/exvs2-striker-system.md`
 - Host input boundary:
   [0c-to-2c-input-action-boundary](./0c-to-2c-input-action-boundary.md)
-- Registry J1/J2:
+- Registry J1/J2/J3:
   [msc-falsified-negatives-registry](./msc-falsified-negatives-registry.md) §J
+- Vs Player HUD OOB (对战崩、训练不崩；不是 `sys_51`):
+  [vs-player-hud-cost-index-oob](./vs-player-hud-cost-index-oob.md)
 
 Do not mix this with `native-unit-task` automata.
 

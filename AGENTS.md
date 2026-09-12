@@ -534,6 +534,7 @@ Current project rule entry points:
 - `fhm2d-extract` artifact isolation: `.cursor/rules/fhm2d-extract-artifacts.mdc`
 - No release builds: `.cursor/rules/no-release-builds.mdc`
 - MSC research cluster routing: `.cursor/rules/msc-research-index.mdc`
+- EXVS2-POC notes stay local: `.cursor/rules/exvs2-poc-local-only.mdc`
 - Homemade NUANMB motion clock: `.cursor/rules/msc-homemade-motion-clock.mdc`
 - Cross-agent hub: `AGENTS.md`
 - Claude pointer (do not fork rules there): `CLAUDE.md`

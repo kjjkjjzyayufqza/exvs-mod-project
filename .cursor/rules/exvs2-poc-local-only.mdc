@@ -1,0 +1,26 @@
+---
+description: EXVS2-POC implementation notes stay on the local disk and must never be committed
+alwaysApply: true
+---
+
+# EXVS2-POC notes stay local
+
+Do not record the EXVS2-POC project in this repository's committed history.
+
+The native hook/DLL work lives in `E:\research\EXVS2-POC`. That tree is a
+separate local project. Agents working from this repo must not:
+
+- Copy POC source, `bngrw.dll`, game exe patches, or hook diaries into git
+- Write POC development process markdown under `docs/` that would be committed
+- Commit `vsac27_Release.exe` or any patched game image
+
+Crash/ABI evidence that belongs in the MSC catalog may stay in
+`docs/msc-research/` (example: `vs-player-hud-cost-index-oob.md`). That note
+is the engine fact, not a POC changelog.
+
+If a POC-only note is written under this tree, put it in a gitignored path:
+
+- `docs/exvs2-poc/`
+- files already listed in `.gitignore` for this rule
+
+Those files stay on the local disk. They are not submitted.

@@ -167,6 +167,7 @@ Homemade NUANMB folder（DCC `*_out.fbx` 导入、Rebellion `tks11a` / `0xa0cd8d
 |---|--------------|----------|----------|------|
 | J1 | 把 `sys_51(0x20000, 0, 0x2, slot, type)` 当成 unit-task automata / 宿主 `bulletparam` 召唤 | 独立 `5xxxxxxxx` 被带去改错层 | 独立机体只走 `sys_51` + `strikertable[host][slot]` | [sys51-independent-striker-vs-automata](./sys51-independent-striker-vs-automata.md) |
 | J2 | `2.c` 已调 `sys_51`，但 `0.c` 去掉 EW 的 `sys_0(0x90000, 1)` + `d0001 && !d000b` 再交 `ACTION_AB_SUB` | **动作播了、援护机体不出** | 前后副射进门必须带这两道 native ready 门；不要套到左右/N 自制副射 | 同上 §`0.c` gate；Rebellion 2026-08-29 **E3** 补门后 `516001001` 出现 |
+| J3 | 对战 Rebellion+`516001001` AV（RVA `0x7CE3B6`）用改 `sys_51` / automata / 去掉 `0.c` 门来修 | 崩在 `CAcSeqBattleFlow_Player` 费用 HUD 收集，不是 syscall；训练 `vtbl+0xD0` 是空函数所以不崩 | 对齐 `7D90B0`：`sub_1407CE240` 在读 `CBattleManager+0x2C284` 前 `v23 >= 0xB` 则走现成清零。不要把索引夹成 0。不要把游戏 exe 推进 git。Native skip 在本地 hook 工程实现，不要把该工程的过程笔记写进本仓库 | [vs-player-hud-cost-index-oob](./vs-player-hud-cost-index-oob.md)；对战日志 2026-09-07 **E3-observed** + OB IDA **E2**（层判错，尚未做过失败 MSC 包） |
 
 ## K. CSA 蓄力条 / `sys_4F(0)` / `sys_58(0x436f1f0a)`
 

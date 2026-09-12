@@ -162,3 +162,12 @@ was not required for this spawn test.
 striker must land on cluster `striker-sys51` **before** `native-unit-task`.
 Automata docs stay valid for throwshield / hammershot / host-weapon
 summons only.
+
+## Vs HUD crash is a different bug
+
+Rebellion 对战里「一召唤就崩」、训练不崩，**不是** `sys_51` 类错误，也不是
+J2 那种不出机体。崩点是 `CAcSeqBattleFlow_Player` 费用/段位 HUD 用 hashmap
+payload `+0x10` 无边界索引 `CBattleManager+0x2C284`（RVA `0x7CE3B6`）。
+训练同槽虚表是空函数。Owner：
+[vs-player-hud-cost-index-oob](./vs-player-hud-cost-index-oob.md)。
+Registry J3。不要为这个 AV 改 MSC。

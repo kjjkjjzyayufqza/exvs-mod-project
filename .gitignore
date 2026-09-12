@@ -96,6 +96,13 @@ __pycache__/
 # Agent-generated MCP tool schema dumps (not project source)
 mcps/
 
+# EXVS2-POC implementation notes stay local; never commit.
+# Rule: .cursor/rules/exvs2-poc-local-only.mdc
+# Crash/ABI evidence may remain in docs/msc-research/; POC process/plans do not.
+/docs/exvs2-poc/
+/docs/agent-sessions/2026-09-07-vs-hud-cost-index-oob.md
+/docs/msc-research/2026-09-08-vs-hud-cost-index-oob-plan.md
+
 # Out-of-scope version research (see .cursor/rules/version-scope.mdc).
 # These notes reference a revision this project does not target. They stay on
 # local disk only and must never be committed.
