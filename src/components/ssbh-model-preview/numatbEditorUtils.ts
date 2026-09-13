@@ -312,6 +312,30 @@ export function applyRemoveProfileMaterialEntry(
   return profile === "maya" ? { ...bundle, mayaFile: nextFile } : { ...bundle, nustFile: nextFile };
 }
 
+export function applyCopyProfileMaterialEntry(
+  bundle: NumatbModalBundle,
+  profile: NumatbProfileKind,
+  materialIndex: number,
+): NumatbModalBundle {
+  const file = profile === "maya" ? bundle.mayaFile : bundle.nustFile;
+  const entry = file.entries[materialIndex];
+  if (!entry) return bundle;
+
+  const labels = new Set(file.entries.map((item) => item.material_label.trim().toLowerCase()));
+  const baseLabel = `${entry.material_label.trim() || "Material"}_copy`;
+  let label = baseLabel;
+  for (let suffix = 2; labels.has(label.toLowerCase()); suffix += 1) {
+    label = `${baseLabel}_${suffix}`;
+  }
+
+  const copy = cloneStructured(entry);
+  copy.material_label = label;
+  const entries = [...file.entries];
+  entries.splice(materialIndex + 1, 0, copy);
+  const nextFile = { ...file, entries };
+  return profile === "maya" ? { ...bundle, mayaFile: nextFile } : { ...bundle, nustFile: nextFile };
+}
+
 export function applyTemplateToBundle(
   bundle: NumatbModalBundle,
   mayaFile: MatlDataJson,

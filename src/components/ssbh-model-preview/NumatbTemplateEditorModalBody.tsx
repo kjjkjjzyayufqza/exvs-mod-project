@@ -16,6 +16,7 @@ import { ssbhTemplateReadNumatb } from "./ssbhDaeIoService";
 import {
   applyAddProfileAttribute,
   applyAddProfileMaterialEntry,
+  applyCopyProfileMaterialEntry,
   applyRemoveProfileAttribute,
   applyRemoveProfileMaterialEntry,
   applySetProfileFile,
@@ -134,6 +135,16 @@ export function NumatbTemplateEditorModalBody({
       [activeProfile]: entries.length,
     }));
     setNewMaterialLabel("");
+    setMaterialQuery("");
+  };
+
+  const handleCopyMaterial = (materialIndex: number) => {
+    if (disabled) return;
+    onChange(applyCopyProfileMaterialEntry(bundle, activeProfile, materialIndex));
+    setSelectedMaterialByProfile((current) => ({
+      ...current,
+      [activeProfile]: materialIndex + 1,
+    }));
     setMaterialQuery("");
   };
 
@@ -507,11 +518,10 @@ export function NumatbTemplateEditorModalBody({
                     const { entry, index } = item;
                     const isActive = selectedMaterialIndex === index;
                     return (
-                      <button
+                      <div
                         key={`${activeProfile}:${index}`}
-                        type="button"
                         className={cn(
-                          "absolute left-0 top-0 flex w-full flex-col items-start justify-center gap-0.5 border-b px-3 text-left transition-colors",
+                          "absolute left-0 top-0 flex w-full items-center border-b pr-1 text-left transition-colors",
                           isActive
                             ? "bg-primary/10 text-foreground ring-1 ring-inset ring-primary/30"
                             : "hover:bg-muted/50",
@@ -520,21 +530,38 @@ export function NumatbTemplateEditorModalBody({
                           height: `${virtualRow.size}px`,
                           transform: `translateY(${virtualRow.start}px)`,
                         }}
-                        disabled={disabled}
-                        onClick={() =>
-                          setSelectedMaterialByProfile((current) => ({
-                            ...current,
-                            [activeProfile]: index,
-                          }))
-                        }
                       >
-                        <span className="w-full truncate font-mono text-[11px]">
-                          {entry.material_label || `Material ${index + 1}`}
-                        </span>
-                        <span className="w-full truncate text-[10px] text-muted-foreground">
-                          {entry.shader_label || "(empty shader)"}
-                        </span>
-                      </button>
+                        <button
+                          type="button"
+                          className="flex h-full min-w-0 flex-1 flex-col items-start justify-center gap-0.5 px-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                          disabled={disabled}
+                          onClick={() =>
+                            setSelectedMaterialByProfile((current) => ({
+                              ...current,
+                              [activeProfile]: index,
+                            }))
+                          }
+                        >
+                          <span className="w-full truncate font-mono text-[11px]">
+                            {entry.material_label || `Material ${index + 1}`}
+                          </span>
+                          <span className="w-full truncate text-[10px] text-muted-foreground">
+                            {entry.shader_label || "(empty shader)"}
+                          </span>
+                        </button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+                          disabled={disabled}
+                          title="Copy as new material"
+                          aria-label={`Copy ${entry.material_label || `Material ${index + 1}`} as new material`}
+                          onClick={() => handleCopyMaterial(index)}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     );
                   })}
                 </div>
