@@ -1709,6 +1709,14 @@ fn build_file_index_map(sub: &[OutputSubFileData]) -> Result<HashMap<i32, usize>
 }
 
 pub(super) fn parse_nutexb_name(bytes: &[u8]) -> Result<String, String> {
+    if bytes.starts_with(b"HBSS") {
+        let raw = crate::nutexb_lib::read_legacy_nutexb_name(&mut Cursor::new(bytes))?;
+        let cleaned = sanitize_file_name(raw.replace(['/', '\\'], "_").trim());
+        if cleaned.is_empty() {
+            return Err("Empty nutexb internal name".to_string());
+        }
+        return Ok(cleaned);
+    }
     let size = bytes.len();
     if size < 8 {
         return Err("Invalid nutexb size".to_string());

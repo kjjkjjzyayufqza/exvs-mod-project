@@ -1,222 +1,134 @@
-# Local Windows x64 zip build + GitHub Release upload.
-# Usage: pnpm release:windows
-# Optional: pwsh -File .github/scripts/publish-windows-release.ps1 -Version 0.1.1
-#
-# Required local secrets (gitignored, never commit):
-#   .local/tauri-updater.key
-#   .local/exvs-updater-github.token  (PAT with Contents: Read on this private repo)
-# Optional:
-#   .local/tauri-updater.key.password  (if missing, an empty password is used so signer does not hang)
-
+# Build, sign, and publish the current committed Windows release.
+# pnpm version:bump [patch|minor|major|X.Y.Z] updates versions separately.
+# pnpm release:publish [-SkipUpload] [-NotesFile path]
 param(
     [string]$Version,
-    [switch]$SkipUpload
+    [switch]$SkipUpload,
+    [string]$NotesFile
 )
 
 $ErrorActionPreference = "Stop"
-
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 Set-Location -LiteralPath $RepoRoot
-
 $OwnerRepo = "kjjkjjzyayufqza/exvs-mod-project"
-$KeyFile = Join-Path $RepoRoot ".local\tauri-updater.key"
-$TokenFile = Join-Path $RepoRoot ".local\exvs-updater-github.token"
-$HiddenBin = Join-Path $RepoRoot "src-tauri\src\bin.ci-hidden"
-$SrcBin = Join-Path $RepoRoot "src-tauri\src\bin"
-$StampedPaths = @(
-    (Join-Path $RepoRoot "package.json"),
-    (Join-Path $RepoRoot "src-tauri\tauri.conf.json"),
-    (Join-Path $RepoRoot "src-tauri\Cargo.toml")
-)
 
-function Read-SecretFile([string]$Path) {
-    if (-not (Test-Path -LiteralPath $Path)) {
-        return $null
-    }
-    return (Get-Content -LiteralPath $Path -Raw).Trim()
+function Assert-NativeSuccess([string]$Action) {
+    if ($LASTEXITCODE -ne 0) { throw "$Action failed (exit $LASTEXITCODE)" }
 }
 
-function Restore-PublishTree {
-    if (Test-Path -LiteralPath $HiddenBin) {
-        if (Test-Path -LiteralPath $SrcBin) {
-            throw "Cannot restore src/bin: both src/bin and src/bin.ci-hidden exist"
-        }
-        Rename-Item -LiteralPath $HiddenBin -NewName "bin"
-    }
-    foreach ($path in $StampedPaths) {
-        git checkout -- $path
-    }
+node .github/scripts/stamp-release-version.mjs --check
+Assert-NativeSuccess "Version check"
+$currentVersion = (Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json).version
+if ($Version -and $Version -ne $currentVersion) {
+    throw "Version is $currentVersion. Run pnpm version:bump $Version first."
 }
-
-if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
-    $env:TAURI_SIGNING_PRIVATE_KEY = Read-SecretFile $KeyFile
-}
-if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
-    throw "Missing updater signing key. Expected .local/tauri-updater.key"
-}
-if (-not $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) {
-    $passwordFile = Join-Path $RepoRoot ".local\tauri-updater.key.password"
-    $fromFile = Read-SecretFile $passwordFile
-    if ($null -ne $fromFile) {
-        $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $fromFile
-    } else {
-        # --ci keys use an empty password. An unset env makes `tauri signer sign` prompt and hang.
-        $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
-    }
-}
-if (-not $env:EXVS_UPDATER_GITHUB_TOKEN) {
-    $env:EXVS_UPDATER_GITHUB_TOKEN = Read-SecretFile $TokenFile
-}
-if (-not $env:EXVS_UPDATER_GITHUB_TOKEN) {
-    throw "Missing updater GitHub token. Create a PAT with Contents: Read on $OwnerRepo and save it to .local/exvs-updater-github.token (one line, no quotes)."
-}
-
-$previousGhToken = $env:GH_TOKEN
-try {
-    $env:GH_TOKEN = $env:EXVS_UPDATER_GITHUB_TOKEN
-    $name = gh api "repos/$OwnerRepo" --jq ".full_name"
-    if ($name -ne $OwnerRepo) {
-        throw "EXVS_UPDATER_GITHUB_TOKEN cannot read $OwnerRepo"
-    }
-}
-finally {
-    $env:GH_TOKEN = $previousGhToken
-}
-
-if (-not $Version) {
-    $previous = ""
-    try {
-        $previous = (gh release list --limit 1 | Select-Object -First 1)
-    } catch {
-        $previous = ""
-    }
-    $tagMatch = [regex]::Match([string]$previous, 'v?(\d+\.\d+\.\d+)')
-    if ($tagMatch.Success -and $tagMatch.Groups[1].Value -match '^0\.1\.(\d+)$') {
-        $Version = "0.1.$([int]$Matches[1] + 1)"
-    } elseif ($tagMatch.Success) {
-        $Version = "0.1.1"
-    } else {
-        $Version = "0.1.1"
-    }
-}
-if ($Version -notmatch '^\d+\.\d+\.\d+$') {
-    throw "Version must be semver like 0.1.1, got $Version"
-}
+$Version = $currentVersion
 $tag = "v$Version"
-
-$previousNotesTag = ""
-try {
-    $previousNotesLine = (gh release list --limit 1 | Select-Object -First 1)
-    $notesTagMatch = [regex]::Match([string]$previousNotesLine, 'v?\d+\.\d+\.\d+')
-    if ($notesTagMatch.Success) {
-        $previousNotesTag = $notesTagMatch.Value
-        if ($previousNotesTag -notmatch '^v') {
-            $previousNotesTag = "v$previousNotesTag"
-        }
-    }
-} catch {
-    $previousNotesTag = ""
-}
-if ($previousNotesTag) {
-    $log = git log "$previousNotesTag..HEAD" --pretty=format:"- %s" 2>$null
-    if ($LASTEXITCODE -ne 0 -or -not $log) {
-        $log = git log -20 --pretty=format:"- %s"
-    }
-} else {
-    $log = git log -20 --pretty=format:"- %s"
-}
-if ($log -is [array]) {
-    $log = $log -join "`n"
-}
-if (-not $log) {
-    $log = "- Windows release of EXVS Mod Project."
-}
-$notes = @(
-    "Windows x64 release of EXVS Mod Project.",
-    "",
-    $log,
-    "",
-    "- EXVS-Mod-Project-$Version-windows-x64.zip is the Windows x64 build.",
-    "- Installed copies check this GitHub Release on every launch."
-) -join "`n"
-
-$cpu = [Environment]::ProcessorCount
-$env:CARGO_BUILD_JOBS = [Math]::Max(2, [Math]::Min(6, $cpu)).ToString()
-
-if (Test-Path -LiteralPath $HiddenBin) {
-    throw "src-tauri/src/bin.ci-hidden already exists. Rename it back to src/bin before publishing."
+$commit = (git rev-parse HEAD).Trim()
+Assert-NativeSuccess "Resolve release commit"
+$changes = @(git status --porcelain --untracked-files=no)
+Assert-NativeSuccess "Check release tree"
+if ($changes.Count -gt 0) {
+    throw "Commit tracked changes before publishing, or build from a clean release worktree."
 }
 
-$buildSucceeded = $false
-try {
-    Write-Host "Stamping $Version"
-    node .github/scripts/stamp-release-version.mjs $Version
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to stamp release version $Version"
-    }
-    Write-Host "Building Windows x64 app (local Release, thin LTO, jobs=$($env:CARGO_BUILD_JOBS))"
-    pnpm tauri build --no-bundle
-    if ($LASTEXITCODE -ne 0) {
-        throw "tauri build --no-bundle failed with exit code $LASTEXITCODE"
-    }
-    $buildSucceeded = $true
+if (-not $SkipUpload) {
+    $releases = gh release list --repo $OwnerRepo --limit 1000 --json tagName | ConvertFrom-Json
+    Assert-NativeSuccess "Read GitHub releases"
+    if ($releases.tagName -contains $tag) { throw "GitHub Release $tag already exists" }
 }
-finally {
-    Restore-PublishTree
+
+$key = $env:TAURI_SIGNING_PRIVATE_KEY
+if (-not $key) {
+    $keyFile = Join-Path $RepoRoot ".local\tauri-updater.key"
+    if (Test-Path -LiteralPath $keyFile) {
+        $key = (Get-Content -LiteralPath $keyFile -Raw).Trim()
+    }
 }
-if (-not $buildSucceeded) {
-    throw "Release build did not succeed; refusing to pack leftover binaries."
+if (-not $key) { throw "Missing TAURI_SIGNING_PRIVATE_KEY or .local/tauri-updater.key" }
+$password = $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+if ($null -eq $password) {
+    $passwordFile = Join-Path $RepoRoot ".local\tauri-updater.key.password"
+    $password = if (Test-Path -LiteralPath $passwordFile) {
+        (Get-Content -LiteralPath $passwordFile -Raw).Trim()
+    } else { "" }
 }
 
 $outDir = Join-Path $RepoRoot "tmp\release-local\$Version"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-
-$zipName = "EXVS-Mod-Project-$Version-windows-x64.zip"
-$zipRel = "tmp\release-local\$Version\$zipName"
-& (Join-Path $PSScriptRoot "pack-portable-zip.ps1") -Version $Version -OutputZip $zipRel -RepoRoot $RepoRoot
-$zipPath = Join-Path $RepoRoot $zipRel
-$sigPath = "$zipPath.sig"
-if (Test-Path -LiteralPath $sigPath) {
-    Remove-Item -LiteralPath $sigPath -Force
+if ($NotesFile) {
+    $notes = Get-Content -LiteralPath $NotesFile -Raw
+} else {
+    $previousTag = git describe --tags --abbrev=0 HEAD 2>$null
+    $range = if ($LASTEXITCODE -eq 0 -and $previousTag) { "$previousTag..HEAD" } else { "HEAD" }
+    $log = @(git log $range -20 --pretty=format:"- %s")
+    Assert-NativeSuccess "Collect release notes"
+    $notes = @(
+        "Windows x64 release of EXVS Mod Project.",
+        "",
+        ($log -join "`n"),
+        "",
+        "Portable Windows x64 ZIP with a signed automatic-update manifest."
+    ) -join "`n"
 }
-Write-Host "Signing $zipPath"
-pnpm tauri signer sign $zipPath
-if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $sigPath)) {
-    throw "Windows x64 zip signature was not produced at $sigPath"
+$notesPath = Join-Path $outDir "release-notes.md"
+[System.IO.File]::WriteAllText($notesPath, $notes)
+
+$previousToken = $env:EXVS_UPDATER_GITHUB_TOKEN
+$previousKey = $env:TAURI_SIGNING_PRIVATE_KEY
+$previousPassword = $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+$zipName = "EXVS-Mod-Project-$Version-windows-x64.zip"
+$zipPath = Join-Path $outDir $zipName
+$sigPath = "$zipPath.sig"
+try {
+    # Public releases must never embed a private GitHub access token in the EXE.
+    $env:EXVS_UPDATER_GITHUB_TOKEN = $null
+    $env:TAURI_SIGNING_PRIVATE_KEY = $key
+    $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $password
+    Write-Host "Building $tag from $commit (Release profile)"
+    pnpm exec tauri build --no-bundle
+    Assert-NativeSuccess "Release build"
+
+    $exe = Join-Path $RepoRoot "src-tauri\target\release\app.exe"
+    if (-not (Test-Path -LiteralPath $exe)) { throw "Release app.exe was not produced" }
+    $exeVersion = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion
+    if ($exeVersion -ne $Version) { throw "EXE version '$exeVersion' does not match $Version" }
+
+    & (Join-Path $PSScriptRoot "pack-portable-zip.ps1") -Version $Version -OutputZip $zipPath -RepoRoot $RepoRoot
+    if (Test-Path -LiteralPath $sigPath) { Remove-Item -LiteralPath $sigPath -Force }
+    pnpm exec tauri signer sign "--password=$password" $zipPath
+    Assert-NativeSuccess "Sign portable ZIP"
+    if (-not (Test-Path -LiteralPath $sigPath)) { throw "ZIP signature was not produced" }
+}
+finally {
+    $env:EXVS_UPDATER_GITHUB_TOKEN = $previousToken
+    $env:TAURI_SIGNING_PRIVATE_KEY = $previousKey
+    $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $previousPassword
 }
 
 Write-Host "ZIP: $zipPath"
 Write-Host "SIG: $sigPath"
+if ($SkipUpload) { return }
 
-if ($SkipUpload) {
-    Write-Host "SkipUpload set; not creating a GitHub Release."
-    return
+git diff --quiet HEAD --
+Assert-NativeSuccess "Confirm build did not change tracked release files"
+$localTag = git rev-parse --verify --quiet "refs/tags/$tag^{commit}"
+if ($LASTEXITCODE -eq 0) {
+    if ($localTag -ne $commit) { throw "Local tag $tag points at another commit" }
+} else {
+    git tag $tag $commit
+    Assert-NativeSuccess "Create release tag"
 }
-
-$existingTag = $false
-try {
-    gh release view $tag 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) {
-        $existingTag = $true
-    }
-} catch {
-    $existingTag = $false
-}
-if ($existingTag) {
-    throw "GitHub Release $tag already exists"
-}
-
-gh release create $tag `
-    --title "EXVS Mod Project $tag" `
-    --notes $notes `
-    --latest `
-    $zipPath
-
-$assets = gh api "repos/$OwnerRepo/releases/tags/$tag" | ConvertFrom-Json
-$zipAsset = $assets.assets | Where-Object { $_.name -eq $zipName } | Select-Object -First 1
-if (-not $zipAsset) {
-    throw "Uploaded release $tag is missing $zipName"
-}
+# The tag publishes the exact commit used for the build; no branch is force-pushed.
+git push origin "refs/tags/$tag"
+Assert-NativeSuccess "Push release tag"
+gh release create $tag --repo $OwnerRepo --verify-tag --draft `
+    --title "EXVS Mod Project $tag" --notes-file $notesPath $zipPath $sigPath
+Assert-NativeSuccess "Create draft release"
+$release = gh api "repos/$OwnerRepo/releases/tags/$tag" | ConvertFrom-Json
+Assert-NativeSuccess "Read uploaded release"
+$zipAsset = $release.assets | Where-Object { $_.name -eq $zipName } | Select-Object -First 1
+if (-not $zipAsset) { throw "Draft release is missing $zipName" }
 
 $latest = [ordered]@{
     version = $Version
@@ -225,14 +137,21 @@ $latest = [ordered]@{
     platforms = @{
         "windows-x86_64" = @{
             signature = (Get-Content -LiteralPath $sigPath -Raw).Trim()
-            url = "https://api.github.com/repos/$OwnerRepo/releases/assets/$($zipAsset.id)"
+            url = $zipAsset.browser_download_url
         }
     }
 }
 $latestPath = Join-Path $outDir "latest.json"
-$json = $latest | ConvertTo-Json -Depth 6
-[System.IO.File]::WriteAllText($latestPath, $json)
-gh release upload $tag $latestPath --clobber
-
-Write-Host "Published $tag"
-Write-Host "https://github.com/$OwnerRepo/releases/tag/$tag"
+[System.IO.File]::WriteAllText($latestPath, ($latest | ConvertTo-Json -Depth 6))
+gh release upload $tag --repo $OwnerRepo $latestPath
+Assert-NativeSuccess "Upload updater manifest"
+$assets = gh release view $tag --repo $OwnerRepo --json assets | ConvertFrom-Json
+Assert-NativeSuccess "Verify uploaded assets"
+foreach ($name in @($zipName, "$zipName.sig", "latest.json")) {
+    if (-not ($assets.assets | Where-Object { $_.name -eq $name -and $_.size -gt 0 })) {
+        throw "Draft release is missing a complete $name asset"
+    }
+}
+gh release edit $tag --repo $OwnerRepo --draft=false --latest
+Assert-NativeSuccess "Publish complete release"
+Write-Host "Published https://github.com/$OwnerRepo/releases/tag/$tag"

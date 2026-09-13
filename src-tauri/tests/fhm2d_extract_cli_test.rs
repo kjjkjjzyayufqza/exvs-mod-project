@@ -9,6 +9,97 @@ use app_lib::format::fhm2d::{extract_fhm2d_to_folder_with_layout, ExtractLayout,
 use std::fs;
 use std::path::{Path, PathBuf};
 
+fn unit_model_regression_artifact_root() -> PathBuf {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../tmp/fhm2d-extract/unit-model-bugs-25002001");
+    fs::create_dir_all(&root).unwrap();
+    root
+}
+
+#[test]
+fn unit_model_regression_legacy_texture_name_uses_checked_relative_pointer() {
+    let dir = tempfile::tempdir_in(unit_model_regression_artifact_root()).unwrap();
+    let path = dir.path().join("legacy.nutexb");
+    let mut bytes = vec![0u8; 0xb0];
+    bytes[..4].copy_from_slice(b"HBSS");
+    bytes[0x10..0x14].copy_from_slice(b" XET");
+    bytes[0x14..0x16].copy_from_slice(&1u16.to_le_bytes());
+    // Relocate the name away from the real sample's 0x58 address.
+    bytes[0x20..0x28].copy_from_slice(&0x70u64.to_le_bytes());
+    bytes[0x90..0x9f].copy_from_slice(b"legacy_specular");
+    fs::write(&path, &bytes).unwrap();
+    assert_eq!(app_lib::nutexb_lib::read_nutexb_name(&path).unwrap(), "legacy_specular");
+    for pointer in [0, u64::MAX, 0x1000] {
+        let mut invalid = bytes.clone();
+        invalid[0x20..0x28].copy_from_slice(&pointer.to_le_bytes());
+        fs::write(&path, invalid).unwrap();
+        assert!(app_lib::nutexb_lib::read_nutexb_name(&path).is_err());
+    }
+    let mut empty = bytes.clone();
+    empty[0x90] = 0;
+    fs::write(&path, empty).unwrap();
+    assert!(app_lib::nutexb_lib::read_nutexb_name(&path).is_err());
+    bytes[0x90..].fill(b'x');
+    fs::write(&path, &bytes).unwrap();
+    assert!(app_lib::nutexb_lib::read_nutexb_name(&path).is_err());
+    fs::write(&path, &bytes[..0x20]).unwrap();
+    assert!(app_lib::nutexb_lib::read_nutexb_name(&path).is_err());
+}
+
+#[test]
+fn unit_model_regression_25002001_extracts_named_models_without_changing_payloads() {
+    use app_lib::format::fhm2d::extract_fhm2d_to_memory_impl;
+    use app_lib::format::unit_model_extract::extract_unit_model_fhm2d_to_folder_impl;
+
+    let source = std::env::var_os("UNIT_MODEL_25002001_FIXTURE").map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(
+            "E:/OBHK0.3_v27/data/x64/dplcache_release/0x4222d007.fhm2d"));
+    if !source.is_file() {
+        eprintln!("skip real OB sample: set UNIT_MODEL_25002001_FIXTURE");
+        return;
+    }
+    let bytes = fs::read(&source).unwrap();
+    let original_hash = crc32fast::hash(&bytes);
+    let memory = extract_fhm2d_to_memory_impl(&bytes, "hildol", Some(Fhm2dFormat::Character)).unwrap();
+    assert!(memory.naming_error.is_none(), "{:?}", memory.naming_error);
+    let dir = tempfile::Builder::new().prefix("after-")
+        .tempdir_in(unit_model_regression_artifact_root()).unwrap();
+    let root = dir.path().join("hildol");
+    let result = extract_unit_model_fhm2d_to_folder_impl(
+        source.to_str().unwrap(), root.to_str().unwrap(), false,
+    ).unwrap();
+    assert_eq!(result.total_files, 119);
+    assert_eq!(result.model_count, 11);
+    let doc: serde_json::Value = serde_json::from_slice(
+        &fs::read(&result.structure_json_path).unwrap()).unwrap();
+    let files = doc["SubFileData"].as_array().unwrap();
+    let mut legacy_count = 0;
+    let mut model_count = 0;
+    for record in files {
+        let index = record["fileIndex"].as_i64().unwrap() as i32;
+        let original = memory.files.iter().find(|f| f.file_index == index).unwrap();
+        let relative = record["fileUrl"].as_str().unwrap().replace('\\', "/");
+        let path = dir.path().join(relative.trim_start_matches("./"));
+        assert_eq!(fs::read(&path).unwrap(), original.data, "fileIndex={index}");
+        if original.file_type == ".nutexb" {
+            let name = app_lib::nutexb_lib::read_nutexb_name(&path).unwrap();
+            assert!(!name.is_empty());
+            if original.data.starts_with(b"HBSS") { legacy_count += 1; }
+        }
+        if original.file_type == ".numdlb" {
+            assert!(relative.contains("/models/025gigloo_002hildol_001"), "{relative}");
+            app_lib::ssbh_preview::load_model_preview_bundle(path.to_str().unwrap())
+                .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            model_count += 1;
+        }
+    }
+    assert_eq!(legacy_count, 3);
+    assert_eq!(model_count, 11);
+    assert_eq!(crc32fast::hash(&fs::read(&source).unwrap()), original_hash);
+    let kept = dir.keep();
+    eprintln!("Named Unit Model Editor fixture retained at {}", kept.display());
+}
+
 #[test]
 fn help_mentions_required_type_and_layout() {
     let help = run_cli_with_args(["--help"]).expect("help");

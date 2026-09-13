@@ -1,7 +1,7 @@
 {
   "name": "exvs-mod-project",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.6",
   "license": "SEE LICENSE IN LICENSE",
   "author": "kjjkjjzyayufqza",
   "description": "Source-available EXVS2 Over Boost (and earlier) asset editor by kjjkjjzyayufqza. Not for live later revisions.",
@@ -18,7 +18,9 @@
     "test:scene": "vitest run src/page/SceneEdit",
     "test:all": "vitest run --config vitest.all.config.ts",
     "check:i18n-coverage": "node scripts/check_i18n_coverage.mjs",
-    "release:windows": "pwsh -NoProfile -File .github/scripts/publish-windows-release.ps1"
+    "version:bump": "node .github/scripts/stamp-release-version.mjs",
+    "release:publish": "pwsh -NoProfile -File .github/scripts/publish-windows-release.ps1",
+    "release:windows": "pnpm release:publish"
   },
   "dependencies": {
     "@comfyorg/fbx-exporter-three": "^1.0.1",

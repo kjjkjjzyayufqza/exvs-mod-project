@@ -2866,6 +2866,16 @@ fn split_maya_nust_numatbs(paths: &[PathBuf]) -> Result<(PathBuf, PathBuf), Stri
                 maya = Some(path.clone());
             }
             Some("nust") => {
+                // Numbered NUST variants belong to special material states. Mesh replacement
+                // only changes the base pair, preserving every target variant in place.
+                let stem = path.file_stem().and_then(|name| name.to_str())
+                    .unwrap_or("").to_ascii_lowercase();
+                if stem.strip_suffix("__nust__")
+                    .and_then(|base| base.rsplit_once("_m"))
+                    .is_some_and(|(_, index)| index.len() >= 3 && index.bytes().all(|b| b.is_ascii_digit()))
+                {
+                    continue;
+                }
                 if nust.is_some() {
                     return Err(
                         "Expected exactly one __nust__.numatb, found more than one.".to_string()

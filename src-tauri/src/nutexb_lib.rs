@@ -51,7 +51,52 @@ const NUTEXB_FOOTER_SIZE_V12: u64 = 112;
 const NUTEXB_FOOTER_MAGIC: &[u8; 4] = b"46XT";
 const NUTEXB_NAME_SIZE: usize = 0x40;
 
-/// The texture name stored in the nutexb footer, read without touching the image data.
+/// Read the name from a legacy HBSS/TEX v1.0 header without decoding image data.
+/// OB unit 25002001 includes this layout alongside footer-based NUTEXB files.
+pub(crate) fn read_legacy_nutexb_name<R: std::io::Read + std::io::Seek>(
+    reader: &mut R,
+) -> Result<String, String> {
+    use std::io::SeekFrom;
+
+    let mut header = [0u8; 0x28];
+    reader.seek(SeekFrom::Start(0)).map_err(|e| e.to_string())?;
+    reader.read_exact(&mut header).map_err(|e| format!("Truncated legacy TEX header: {e}"))?;
+    if &header[..4] != b"HBSS" || &header[0x10..0x14] != b" XET" {
+        return Err("Invalid legacy TEX header magic".to_string());
+    }
+    let major = u16::from_le_bytes(header[0x14..0x16].try_into().unwrap());
+    let minor = u16::from_le_bytes(header[0x16..0x18].try_into().unwrap());
+    if (major, minor) != (1, 0) {
+        return Err(format!("Unsupported legacy TEX version: {major}.{minor}"));
+    }
+    // SSBH string pointers are relative to the pointer field, not the file start.
+    let relative = u64::from_le_bytes(header[0x20..0x28].try_into().unwrap());
+    let offset = 0x20u64.checked_add(relative)
+        .filter(|&offset| relative != 0 && offset >= header.len() as u64)
+        .ok_or_else(|| "Invalid legacy TEX name pointer".to_string())?;
+    let size = reader.seek(SeekFrom::End(0)).map_err(|e| e.to_string())?;
+    if offset >= size {
+        return Err("Legacy TEX name pointer is outside the file".to_string());
+    }
+    reader.seek(SeekFrom::Start(offset)).map_err(|e| e.to_string())?;
+    let mut bytes = Vec::new();
+    for _ in 0..(size - offset).min(4096) {
+        let mut byte = [0u8; 1];
+        reader.read_exact(&mut byte).map_err(|e| e.to_string())?;
+        if byte[0] == 0 {
+            let name = String::from_utf8(bytes)
+                .map_err(|e| format!("Invalid legacy TEX name UTF-8: {e}"))?;
+            if name.trim().is_empty() {
+                return Err("Empty legacy TEX internal name".to_string());
+            }
+            return Ok(name);
+        }
+        bytes.push(byte[0]);
+    }
+    Err("Unterminated legacy TEX internal name".to_string())
+}
+
+/// The internal texture name, read without touching the image data.
 ///
 /// This is the name the game resolves numatb texture references against: fhm2d records
 /// carry no names of their own, so neither the file name nor the structure entry has any
@@ -62,6 +107,12 @@ pub fn read_nutexb_name(path: &Path) -> Result<String, String> {
 
     let mut file =
         File::open(path).map_err(|e| format!("Failed to open nutexb {}: {e}", path.display()))?;
+    let mut magic = [0u8; 4];
+    file.read_exact(&mut magic)
+        .map_err(|e| format!("Failed to read nutexb header {}: {e}", path.display()))?;
+    if &magic == b"HBSS" {
+        return read_legacy_nutexb_name(&mut std::io::BufReader::new(file));
+    }
     let size = file
         .seek(SeekFrom::End(-4))
         .map_err(|e| format!("Failed to seek nutexb {}: {e}", path.display()))?
