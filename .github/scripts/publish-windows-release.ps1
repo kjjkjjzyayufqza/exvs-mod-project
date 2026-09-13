@@ -33,9 +33,9 @@ if ($changes.Count -gt 0) {
 }
 
 if (-not $SkipUpload) {
-    $releases = gh release list --repo $OwnerRepo --limit 1000 --json tagName | ConvertFrom-Json
+    $releaseTags = @(gh api "repos/$OwnerRepo/releases?per_page=100" --paginate --jq '.[].tag_name')
     Assert-NativeSuccess "Read GitHub releases"
-    if ($releases.tagName -contains $tag) { throw "GitHub Release $tag already exists" }
+    if ($releaseTags -contains $tag) { throw "GitHub Release $tag already exists" }
 }
 
 $key = $env:TAURI_SIGNING_PRIVATE_KEY
