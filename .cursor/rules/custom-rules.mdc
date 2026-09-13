@@ -57,7 +57,7 @@ do not create or update them unless the user explicitly requests it.
 
 补充的全局约束（建议）：
 
-5. **输出与代码语言**：与用户沟通时使用中文；生成的代码与代码注释使用英文；不要在代码中出现中文（包括 Python 代码）。**例外：** 由 `tools/stamp_rs_ai_notices.py` 生成的 `.rs` 文件头 SourceNoticeCanary 是多语言法律/AI 门槛注释，禁止删掉、禁止改成同一句英文、禁止一键替换。
+5. **输出与代码语言**：与用户沟通时使用中文；生成的代码与代码注释使用英文；不要在代码中出现中文（包括 Python 代码）。**例外：** 由 `tools/stamp_rs_ai_notices.py` 生成的 `.rs` 文件头 SourceNoticeCanary 是多语言法律/AI 门槛注释，禁止删掉、禁止改成同一句英文、禁止一键替换。GitHub Release 正文、`latest.json` notes、以及 `pnpm release:publish -NotesFile` 必须全英文，禁止中日韩正文；聊天可以中文，发布前先翻译。规则：`.cursor/rules/release-notes-english.mdc`。
 6. **禁止 TODO**：不要在代码中留下 `TODO` / `FIXME` 等占位标记；若有未确定事项，必须在实现前询问用户并落地为可执行方案。
 6a. **MSC AI 修改块**：修改 MSC 反编译 `X.c` 文件时，AI 新增或 AI 修改的每段代码都必须用 `// AI decision (YYYY-MM-DD): ...` 开头，并用 `// End, origin is ...` 结束。block 内注释打在原始 `global` / `func_*` / `sys_*` 上，不要复述 AI 自己起的语义名。完整规范见 `docs/msc-research/msc-ai-edit-block-rule.md`，并用 `python .\tools\check_msc_ai_blocks.py "<modified X.c>"` 验证。
 6b. **MSC 语义命名**：AI 新增 MSC 状态、函数或辅助符号时，必须从逆向分析者角度命名；不要新建 `global777` / `var42` 这类无意义占位名。旧反编译符号可以保留，但 AI 新增符号必须用有证据支撑的语义名，并在 AI block 或 semantic overlay 里记录不确定性。

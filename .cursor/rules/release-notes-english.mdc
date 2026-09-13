@@ -1,0 +1,36 @@
+---
+description: GitHub release notes, latest.json notes, and -NotesFile content must be English only
+alwaysApply: true
+---
+
+# English-only GitHub release notes
+
+Chat with the user may stay Chinese. GitHub Release bodies, updater
+`latest.json` notes, and `pnpm release:publish -NotesFile` content must be
+English.
+
+## Required
+
+- Write the release title, body, and updater notes in English.
+- Translate user-facing change lists before publishing. Do not paste Chinese
+  chat summaries into `-NotesFile` or `gh release`.
+- Prefer short product bullets: what shipped, who it helps, how to run the ZIP.
+- Keep identifiers as-is (`25002001`, `HBSS`, `_m001`, `pnpm version:bump`).
+
+## Forbidden
+
+- Chinese, Japanese, or Korean prose in GitHub Release notes or `latest.json`.
+- Mixing an English header with CJK bullets.
+- Using `git log` subjects as notes when those subjects contain CJK. Rewrite
+  the notes in English first.
+
+## Publisher gate
+
+`pnpm release:publish` rejects notes that contain CJK. Fix the notes file or
+commit messages, then publish again.
+
+## Related
+
+- Project hub: `AGENTS.md`
+- Human docs: `docs/windows-release.md`
+- Publisher: `.github/scripts/publish-windows-release.ps1`

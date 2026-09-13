@@ -36,6 +36,11 @@ version already present in the files; it never bumps or reverts them. Tracked
 changes must be committed. A clean worktree can be used when other work is
 pending in the main checkout.
 
+Release notes are English only: the GitHub Release body, updater `latest.json`
+notes, and any `-NotesFile`. Chat with the user may stay Chinese; translate
+before publishing. The publisher rejects CJK. Rule:
+`.cursor/rules/release-notes-english.mdc`.
+
 Requirements: Windows, pnpm, the Rust/Tauri build tools, authenticated `gh`
 with release write access, and the existing updater signing key in
 `TAURI_SIGNING_PRIVATE_KEY` or gitignored `.local/tauri-updater.key`.

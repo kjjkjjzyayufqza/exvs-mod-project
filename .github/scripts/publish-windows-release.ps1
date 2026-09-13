@@ -73,6 +73,8 @@ if ($NotesFile) {
 }
 $notesPath = Join-Path $outDir "release-notes.md"
 [System.IO.File]::WriteAllText($notesPath, $notes)
+node .github/scripts/assert-english-release-notes.mjs $notesPath
+Assert-NativeSuccess "English-only release notes"
 
 $previousToken = $env:EXVS_UPDATER_GITHUB_TOKEN
 $previousKey = $env:TAURI_SIGNING_PRIVATE_KEY
@@ -125,7 +127,8 @@ Assert-NativeSuccess "Push release tag"
 gh release create $tag --repo $OwnerRepo --verify-tag --draft `
     --title "EXVS Mod Project $tag" --notes-file $notesPath $zipPath $sigPath
 Assert-NativeSuccess "Create draft release"
-$release = gh api "repos/$OwnerRepo/releases/tags/$tag" | ConvertFrom-Json
+# Drafts 404 on /releases/tags/{tag}; gh release view still resolves the tag.
+$release = gh release view $tag --repo $OwnerRepo --json assets | ConvertFrom-Json
 Assert-NativeSuccess "Read uploaded release"
 $zipAsset = $release.assets | Where-Object { $_.name -eq $zipName } | Select-Object -First 1
 if (-not $zipAsset) { throw "Draft release is missing $zipName" }
@@ -137,7 +140,7 @@ $latest = [ordered]@{
     platforms = @{
         "windows-x86_64" = @{
             signature = (Get-Content -LiteralPath $sigPath -Raw).Trim()
-            url = $zipAsset.browser_download_url
+            url = "https://github.com/$OwnerRepo/releases/download/$tag/$zipName"
         }
     }
 }

@@ -533,6 +533,7 @@ Current project rule entry points:
 - `exvs2-json` artifact isolation: `.cursor/rules/exvs2-json-artifacts.mdc`
 - `fhm2d-extract` artifact isolation: `.cursor/rules/fhm2d-extract-artifacts.mdc`
 - No release builds: `.cursor/rules/no-release-builds.mdc`
+- English-only GitHub release notes: `.cursor/rules/release-notes-english.mdc`
 - MSC research cluster routing: `.cursor/rules/msc-research-index.mdc`
 - EXVS2-POC notes stay local: `.cursor/rules/exvs2-poc-local-only.mdc`
 - Homemade NUANMB motion clock: `.cursor/rules/msc-homemade-motion-clock.mdc`
@@ -553,6 +554,10 @@ Project skills (domain):
 ## Development Conduct
 
 - Communicate with the user in Chinese; write code and comments in English.
+- **GitHub release notes are English only.** Release bodies, `latest.json`
+  notes, and `pnpm release:publish -NotesFile` content must not contain CJK.
+  Chat may stay Chinese; translate before publishing. Rule:
+  `.cursor/rules/release-notes-english.mdc`. The publisher rejects CJK notes.
 - **SourceNoticeCanary exception:** file-top AI-gate comments on selected
   `.rs` files are generated multilingual legal notices. Do not delete them,
   translate them into one English banner, or bulk-replace them. Verify with
