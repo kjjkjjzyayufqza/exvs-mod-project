@@ -25,6 +25,7 @@ export function exportCompleteMotionFbx(
 }
 
 const BLENDER_51_PATH_STORAGE_KEY = "exvs2.blender51Path";
+const BLENDER_PATH_CHANGED_EVENT = "exvs2-blender-path-changed";
 
 export function getBlender51PathOverride(): string | null {
   try {
@@ -40,10 +41,24 @@ export function setBlender51PathOverride(path: string | null): void {
     const trimmed = path?.trim() ?? "";
     if (trimmed.length === 0) {
       localStorage.removeItem(BLENDER_51_PATH_STORAGE_KEY);
-      return;
+    } else {
+      localStorage.setItem(BLENDER_51_PATH_STORAGE_KEY, trimmed);
     }
-    localStorage.setItem(BLENDER_51_PATH_STORAGE_KEY, trimmed);
   } catch {
     // localStorage may be unavailable in some test environments
   }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(BLENDER_PATH_CHANGED_EVENT));
+  }
+}
+
+export function subscribeBlenderExecutablePath(
+  onChange: (path: string | null) => void,
+): () => void {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+  const handler = () => onChange(getBlender51PathOverride());
+  window.addEventListener(BLENDER_PATH_CHANGED_EVENT, handler);
+  return () => window.removeEventListener(BLENDER_PATH_CHANGED_EVENT, handler);
 }

@@ -1,19 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
-import { open, save } from "@tauri-apps/plugin-dialog";
-import { FileOutput, FolderSearch, LoaderCircle, TriangleAlert } from "lucide-react";
+import { useCallback, useState } from "react";
+import { save } from "@tauri-apps/plugin-dialog";
+import { FileOutput, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { DialogLastPathKey, getDialogDefaultPath, rememberDialogSelection } from "@/utils/dialogLastPath";
 import {
   exportCompleteMotionFbx,
   getBlender51PathOverride,
-  setBlender51PathOverride,
   type CompleteMotionFbxExportReport,
 } from "../motionFbxExportService";
 import { MayaSection } from "../MayaInspectorSection";
+import { BlenderExecutablePathField } from "./BlenderExecutablePathField";
 import { MotionReportCard } from "./MotionReportCard";
 
 type MotionFbxExportPanelProps = {
@@ -68,30 +67,8 @@ export function MotionFbxExportPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<CompleteMotionFbxExportReport | null>(null);
-  const [blenderPath, setBlenderPath] = useState("");
   const canExport =
     Boolean(selectedNuanmbPath && skeletonPath && numdlbPath) && !busy && !disabled;
-
-  useEffect(() => {
-    setBlenderPath(getBlender51PathOverride() ?? "");
-  }, []);
-
-  const persistBlenderPath = useCallback((value: string) => {
-    setBlenderPath(value);
-    setBlender51PathOverride(value.trim() || null);
-  }, []);
-
-  const pickBlenderPath = useCallback(async () => {
-    const picked = await open({
-      title: t("fbxExport.chooseBlender"),
-      multiple: false,
-      filters: [{ name: "Blender", extensions: ["exe"] }],
-      defaultPath: blenderPath || getDialogDefaultPath(DialogLastPathKey.ssbhBlender51Exe, undefined),
-    });
-    if (typeof picked !== "string" || !picked.trim()) return;
-    persistBlenderPath(picked.trim());
-    rememberDialogSelection(DialogLastPathKey.ssbhBlender51Exe, picked, "file");
-  }, [blenderPath, persistBlenderPath, t]);
 
   const exportMotionFbx = useCallback(async () => {
     if (!selectedNuanmbPath || !skeletonPath || !numdlbPath) return;
@@ -106,13 +83,12 @@ export function MotionFbxExportPanel({
     setBusy(true);
     setError(null);
     try {
-      const override = blenderPath.trim() || getBlender51PathOverride();
       const nextReport = await exportCompleteMotionFbx({
         nuanmbPath: selectedNuanmbPath,
         nusktbPath: skeletonPath,
         numdlbPath,
         outputFbxPath: outputFbxPath.trim(),
-        blenderPath: override,
+        blenderPath: getBlender51PathOverride(),
         actionName: null,
       });
       rememberDialogSelection(DialogLastPathKey.ssbhMotionFbxExport, outputFbxPath, "file");
@@ -130,7 +106,7 @@ export function MotionFbxExportPanel({
     } finally {
       setBusy(false);
     }
-  }, [blenderPath, numdlbPath, selectedNuanmbPath, skeletonPath, t, workspaceRoot]);
+  }, [numdlbPath, selectedNuanmbPath, skeletonPath, t, workspaceRoot]);
 
   return (
     <MayaSection title={t("fbxExport.title")} icon={<FileOutput className="h-3.5 w-3.5 opacity-80" />} defaultOpen>
@@ -154,30 +130,7 @@ export function MotionFbxExportPanel({
             {t("fbxExport.exportComplete")}
           </Button>
         </div>
-        <details className="group">
-          <summary className="cursor-pointer list-none rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-            <span className="select-none">{t("fbxExport.blenderPath")}</span>
-          </summary>
-          <div className="mt-1 flex gap-1">
-            <Input
-              className="h-7 text-[10px]"
-              value={blenderPath}
-              placeholder={t("fbxExport.autoDetect")}
-              onChange={(event) => persistBlenderPath(event.target.value)}
-              disabled={busy || disabled}
-            />
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-7 shrink-0 text-[10px]"
-              disabled={busy || disabled}
-              onClick={() => void pickBlenderPath()}
-            >
-              <FolderSearch className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </details>
+        <BlenderExecutablePathField disabled={busy || disabled} />
         {!numdlbPath || !skeletonPath ? (
           <p className="text-destructive">{t("fbxExport.needsFiles")}</p>
         ) : null}

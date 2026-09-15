@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { DialogLastPathKey, getDialogDefaultPath, rememberDialogSelection } from "@/utils/dialogLastPath";
 import { exportCompleteMotionFbx, getBlender51PathOverride } from "../motionFbxExportService";
 import { MayaSection } from "../MayaInspectorSection";
+import { BlenderExecutablePathField } from "./BlenderExecutablePathField";
 import { MotionReportCard } from "./MotionReportCard";
 
 type MotionBatchExportPanelProps = {
@@ -153,6 +154,7 @@ export function MotionBatchExportPanel({
         <p className="text-muted-foreground">
           {t("batchExport.hint")}
         </p>
+        <BlenderExecutablePathField disabled={running || disabled} />
         <div className="flex items-center gap-1.5">
           <span className="tabular-nums text-muted-foreground">
             {t("batchExport.selectedCount", { selected: targets.length, total: nuanmbPaths.length })}

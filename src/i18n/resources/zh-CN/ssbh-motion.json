@@ -209,17 +209,17 @@
     "all": "全部",
     "none": "全不选",
     "exportAll": "全部导出到文件夹（{{count}}）",
-    "blenderFailed": "无法解析 Blender 5.1；其余片段已跳过。"
+    "blenderFailed": "无法解析 Blender 可执行文件；其余片段已跳过。"
   },
   "fbxExport": {
-    "chooseBlender": "选择 Blender 5.1 可执行文件",
+    "chooseBlender": "选择 blender.exe",
     "saveFbx": "保存 Complete Motion FBX",
     "exported": "已导出动作 FBX",
     "failed": "动作 FBX 导出失败",
     "title": "动作 FBX 导出",
-    "hint": "通过 Blender 5.1 以 60 FPS 导出一份 CompleteMotionFbx（模型 + 绑定动作）。在 DCC 中编辑后，再通过下方导入 FBX 带回。",
+    "hint": "通过本机 Blender（建议 5.1 或更新）以 60 FPS 导出一份 CompleteMotionFbx（模型 + 绑定动作）。可随时指定新的 blender.exe。在 DCC 中编辑后，再通过下方导入 FBX 带回。",
     "exportComplete": "导出完整 FBX",
-    "blenderPath": "Blender 5.1 路径（可选覆盖）",
+    "blenderPath": "Blender 可执行文件路径（可随时更改）",
     "autoDetect": "留空则自动检测",
     "needsFiles": "当前模型需要 NUMDLB 和 NUSKTB 才能导出。",
     "selectNuanmb": "请选择要导出的 NUANMB。",

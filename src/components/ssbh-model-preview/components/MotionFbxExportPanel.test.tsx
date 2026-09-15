@@ -90,14 +90,36 @@ describe("MotionFbxExportPanel", () => {
     renderPanel();
 
     fireEvent.change(screen.getByPlaceholderText(/Auto-detect/i), {
-      target: { value: "C:\\Program Files\\Blender Foundation\\Blender 5.1\\blender.exe" },
+      target: { value: "D:\\Apps\\Blender\\blender.exe" },
     });
     fireEvent.click(screen.getByRole("button", { name: /Export complete FBX/i }));
 
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith("ssbh_export_complete_motion_fbx", {
         request: expect.objectContaining({
-          blenderPath: "C:\\Program Files\\Blender Foundation\\Blender 5.1\\blender.exe",
+          blenderPath: "D:\\Apps\\Blender\\blender.exe",
+        }),
+      }),
+    );
+  });
+
+  it("uses the latest blender.exe path after it is changed again", async () => {
+    saveMock.mockResolvedValueOnce("E:\\export\\attack.fbx");
+    invokeMock.mockResolvedValueOnce(report);
+    renderPanel();
+
+    fireEvent.change(screen.getByPlaceholderText(/Auto-detect/i), {
+      target: { value: "D:\\old\\blender.exe" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/Auto-detect/i), {
+      target: { value: "E:\\new\\blender.exe" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Export complete FBX/i }));
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith("ssbh_export_complete_motion_fbx", {
+        request: expect.objectContaining({
+          blenderPath: "E:\\new\\blender.exe",
         }),
       }),
     );

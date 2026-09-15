@@ -15,6 +15,8 @@ vi.mock("sonner", () => ({ toast: { error: toastErrorMock, success: toastSuccess
 vi.mock("../motionFbxExportService", () => ({
   exportCompleteMotionFbx: exportMock,
   getBlender51PathOverride: () => null,
+  setBlender51PathOverride: vi.fn(),
+  subscribeBlenderExecutablePath: () => () => {},
 }));
 vi.mock("../MayaInspectorSection", () => ({
   MayaSection: ({ children, title }: { children: React.ReactNode; title: string }) => (

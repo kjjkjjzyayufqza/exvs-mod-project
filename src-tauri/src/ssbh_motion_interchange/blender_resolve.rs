@@ -5,23 +5,32 @@
  * 著者 kjjkjjzyayufqza。製品 EXVS Mod Project。PolyForm Shield 1.0.0
  */
 
-//! Resolve a Blender 5.1 executable for MotionFbxExport (BlenderCompose).
+//! Resolve a Blender executable for MotionFbxExport (BlenderCompose).
 //!
-//! Only Blender 5.1 is accepted. Auto-detect scans known install paths;
-//! a non-empty override must exist as a file and look like a 5.1 install.
+//! A non-empty override is accepted as long as it is an existing Blender
+//! executable (`blender.exe` / `blender`). Auto-detect still prefers common
+//! 5.1 install paths, then other Blender Foundation / Steam / Scoop copies.
 
 use std::path::{Path, PathBuf};
 
 use super::MotionInterchangeError;
 
-/// Known install locations for Blender 5.1, in preference order.
+fn blender_file_name() -> &'static str {
+    if cfg!(windows) {
+        "blender.exe"
+    } else {
+        "blender"
+    }
+}
+
+/// Known install locations for Blender, in preference order.
 ///
 /// Paths may not exist on the current machine; callers filter with
 /// [`Path::is_file`] or use [`resolve_blender_51_executable`].
 pub fn candidate_blender_51_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
 
-    // Official Windows installer default location.
+    // Official Windows installer default location (preferred compose target).
     paths.push(PathBuf::from(
         r"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe",
     ));
@@ -32,26 +41,52 @@ pub fn candidate_blender_51_paths() -> Vec<PathBuf> {
     ));
 
     if let Ok(program_files) = std::env::var("ProgramFiles") {
-        let candidate =
-            PathBuf::from(program_files).join(r"Blender Foundation\Blender 5.1\blender.exe");
-        push_unique(&mut paths, candidate);
+        let foundation = PathBuf::from(&program_files).join(r"Blender Foundation");
+        push_unique(
+            &mut paths,
+            foundation.join(r"Blender 5.1").join(blender_file_name()),
+        );
+        push_foundation_installs(&mut paths, &foundation);
     }
     if let Ok(program_files_x86) = std::env::var("ProgramFiles(x86)") {
-        let candidate =
-            PathBuf::from(program_files_x86).join(r"Blender Foundation\Blender 5.1\blender.exe");
-        push_unique(&mut paths, candidate);
+        let foundation = PathBuf::from(&program_files_x86).join(r"Blender Foundation");
+        push_unique(
+            &mut paths,
+            foundation.join(r"Blender 5.1").join(blender_file_name()),
+        );
+        push_foundation_installs(&mut paths, &foundation);
+        push_unique(
+            &mut paths,
+            PathBuf::from(program_files_x86)
+                .join(r"Steam\steamapps\common\Blender")
+                .join(blender_file_name()),
+        );
+    }
+    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+        push_foundation_installs(
+            &mut paths,
+            &PathBuf::from(local_app_data).join(r"Programs\Blender Foundation"),
+        );
+    }
+    if let Ok(user_profile) = std::env::var("USERPROFILE") {
+        push_unique(
+            &mut paths,
+            PathBuf::from(user_profile)
+                .join(r"scoop\apps\blender\current")
+                .join(blender_file_name()),
+        );
     }
 
     paths
 }
 
-/// Resolve Blender 5.1 for MotionFbxExport.
+/// Resolve a Blender executable for MotionFbxExport.
 ///
 /// - If `override_path` is `Some` and non-empty after trim: require an existing
-///   file whose path string contains `5.1` or whose parent directory is named
-///   `Blender 5.1`.
+///   file whose name is `blender.exe` or `blender`. The parent folder does not
+///   need to contain `5.1`.
 /// - Otherwise scan [`candidate_blender_51_paths`] and return the first existing file.
-/// - If nothing is found, return a clear error (install Blender 5.1 or set override).
+/// - If nothing is found, return a clear error (install Blender or set override).
 pub fn resolve_blender_51_executable(
     override_path: Option<&Path>,
 ) -> Result<PathBuf, MotionInterchangeError> {
@@ -68,8 +103,8 @@ pub fn resolve_blender_51_executable(
     }
 
     Err(MotionInterchangeError::Compose(
-        "Blender 5.1 executable not found. Install Blender 5.1 from \
-         https://www.blender.org/ or set the Blender 5.1 path override."
+        "Blender executable not found. Install Blender from \
+         https://www.blender.org/ or set the blender.exe path in Motion FBX export."
             .to_string(),
     ))
 }
@@ -77,37 +112,74 @@ pub fn resolve_blender_51_executable(
 fn resolve_override(path: &Path) -> Result<PathBuf, MotionInterchangeError> {
     if !path.exists() {
         return Err(MotionInterchangeError::Compose(format!(
-            "Blender 5.1 executable override does not exist: {}",
+            "Blender executable override does not exist: {}",
             path.display()
         )));
     }
     if !path.is_file() {
         return Err(MotionInterchangeError::Compose(format!(
-            "Blender 5.1 executable override is not a file: {}",
+            "Blender executable override is not a file: {}",
             path.display()
         )));
     }
-    if !path_looks_like_blender_51(path) {
+    if !looks_like_blender_executable(path) {
         return Err(MotionInterchangeError::Compose(format!(
-            "override path is not a Blender 5.1 executable (path must contain \
-             \"5.1\" or parent directory \"Blender 5.1\"): {}",
+            "override path is not a Blender executable (choose blender.exe): {}",
             path.display()
         )));
     }
     Ok(path.to_path_buf())
 }
 
-/// True when the path string contains `5.1`, or the immediate parent directory
-/// is named `Blender 5.1` (strict 5.1 only; no silent version fallback).
-fn path_looks_like_blender_51(path: &Path) -> bool {
-    let path_str = path.to_string_lossy();
-    if path_str.contains("5.1") {
-        return true;
-    }
-    path.parent()
-        .and_then(|parent| parent.file_name())
+/// True when the file name is a Blender binary, regardless of install folder.
+fn looks_like_blender_executable(path: &Path) -> bool {
+    path.file_name()
         .and_then(|name| name.to_str())
-        == Some("Blender 5.1")
+        .is_some_and(|name| {
+            let lower = name.to_ascii_lowercase();
+            lower == "blender.exe" || lower == "blender" || lower == "blender.bin"
+        })
+}
+
+fn push_foundation_installs(paths: &mut Vec<PathBuf>, foundation_dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(foundation_dir) else {
+        return;
+    };
+    let mut found = Vec::new();
+    for entry in entries.flatten() {
+        let dir = entry.path();
+        if !dir.is_dir() {
+            continue;
+        }
+        let exe = dir.join(blender_file_name());
+        if exe.is_file() {
+            found.push(exe);
+        }
+    }
+    found.sort_by(|left, right| {
+        blender_auto_detect_rank(right)
+            .cmp(&blender_auto_detect_rank(left))
+            .then_with(|| left.as_os_str().cmp(right.as_os_str()))
+    });
+    for exe in found {
+        push_unique(paths, exe);
+    }
+}
+
+fn blender_auto_detect_rank(path: &Path) -> u8 {
+    let parent = path
+        .parent()
+        .and_then(|dir| dir.file_name())
+        .and_then(|name| name.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if parent.contains("5.1") {
+        3
+    } else if parent.contains("5.") {
+        2
+    } else {
+        1
+    }
 }
 
 fn is_empty_path(path: &Path) -> bool {

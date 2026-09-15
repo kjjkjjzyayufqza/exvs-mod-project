@@ -209,17 +209,17 @@
     "all": "All",
     "none": "None",
     "exportAll": "Export all to folder ({{count}})",
-    "blenderFailed": "Blender 5.1 failed to resolve; the remaining clips were skipped."
+    "blenderFailed": "Blender executable failed to resolve; the remaining clips were skipped."
   },
   "fbxExport": {
-    "chooseBlender": "Choose Blender 5.1 executable",
+    "chooseBlender": "Choose blender.exe",
     "saveFbx": "Save Complete Motion FBX",
     "exported": "Motion FBX exported",
     "failed": "Motion FBX export failed",
     "title": "Motion FBX export",
-    "hint": "Export one CompleteMotionFbx (model + bound action) via Blender 5.1 at 60 FPS. Edit it in a DCC, then bring it back below via Import FBX.",
+    "hint": "Export one CompleteMotionFbx (model + bound action) via local Blender (5.1 or newer recommended) at 60 FPS. You can set a new blender.exe path at any time. Edit it in a DCC, then bring it back below via Import FBX.",
     "exportComplete": "Export complete FBX",
-    "blenderPath": "Blender 5.1 path (optional override)",
+    "blenderPath": "Blender executable path (change anytime)",
     "autoDetect": "Auto-detect if empty",
     "needsFiles": "Active model needs NUMDLB and NUSKTB for export.",
     "selectNuanmb": "Select a NUANMB to export.",

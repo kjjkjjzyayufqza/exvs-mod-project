@@ -12,14 +12,18 @@ use app_lib::ssbh_motion_interchange::{
 use std::path::{Path, PathBuf};
 
 #[test]
-fn missing_override_path_errors_with_blender_51_message() {
-    let missing = PathBuf::from(r"C:\definitely\missing\Blender 5.1\blender.exe");
+fn missing_override_path_errors_with_blender_message() {
+    let missing = PathBuf::from(r"C:\definitely\missing\portable-blender\blender.exe");
     let error = resolve_blender_51_executable(Some(&missing))
         .expect_err("missing override must fail")
         .to_string();
     assert!(
-        error.contains("Blender 5.1"),
-        "error should mention Blender 5.1, got: {error}"
+        error.contains("Blender"),
+        "error should mention Blender, got: {error}"
+    );
+    assert!(
+        error.to_ascii_lowercase().contains("does not exist"),
+        "missing override should say the path does not exist, got: {error}"
     );
 }
 
@@ -36,16 +40,16 @@ fn empty_override_falls_through_to_candidates() {
                 path.display()
             );
             assert!(
-                path_looks_like_51_for_test(&path),
-                "resolved path must look like Blender 5.1: {}",
+                looks_like_blender_executable_for_test(&path),
+                "resolved path must be a Blender executable: {}",
                 path.display()
             );
         }
         Err(error) => {
             let message = error.to_string();
             assert!(
-                message.contains("Blender 5.1"),
-                "missing install error should mention Blender 5.1, got: {message}"
+                message.contains("Blender"),
+                "missing install error should mention Blender, got: {message}"
             );
             assert!(
                 !message.to_ascii_lowercase().contains("empty"),
@@ -79,19 +83,32 @@ fn resolve_succeeds_for_override_under_folder_containing_5_1() {
 }
 
 #[test]
-fn override_file_without_5_1_marker_is_rejected() {
+fn override_accepts_blender_exe_outside_versioned_folder() {
     let temp_root = tempfile::tempdir().expect("temp dir");
-    let blender_dir = temp_root.path().join("Blender 4.2");
+    let blender_dir = temp_root.path().join("portable-blender");
     std::fs::create_dir_all(&blender_dir).expect("create blender dir");
     let blender_exe = blender_dir.join("blender.exe");
     std::fs::write(&blender_exe, b"fake-blender").expect("create fake blender.exe");
 
-    let error = resolve_blender_51_executable(Some(&blender_exe))
-        .expect_err("non-5.1 override must fail")
+    let resolved = resolve_blender_51_executable(Some(&blender_exe))
+        .expect("any existing blender.exe override should resolve");
+    assert_eq!(resolved, blender_exe);
+}
+
+#[test]
+fn override_rejects_non_blender_filename() {
+    let temp_root = tempfile::tempdir().expect("temp dir");
+    let blender_dir = temp_root.path().join("tools");
+    std::fs::create_dir_all(&blender_dir).expect("create tools dir");
+    let other_exe = blender_dir.join("python.exe");
+    std::fs::write(&other_exe, b"not-blender").expect("create fake python.exe");
+
+    let error = resolve_blender_51_executable(Some(&other_exe))
+        .expect_err("non-blender override must fail")
         .to_string();
     assert!(
-        error.contains("Blender 5.1"),
-        "error should mention Blender 5.1, got: {error}"
+        error.contains("blender.exe"),
+        "error should tell the user to choose blender.exe, got: {error}"
     );
 }
 
@@ -176,8 +193,12 @@ fn complete_motion_export_rejects_missing_blender_override() {
     .expect_err("missing blender override must fail")
     .to_string();
     assert!(
-        error.contains("Blender 5.1"),
-        "error should mention Blender 5.1, got: {error}"
+        error.contains("Blender"),
+        "error should mention Blender, got: {error}"
+    );
+    assert!(
+        error.to_ascii_lowercase().contains("does not exist"),
+        "missing override should say the path does not exist, got: {error}"
     );
 }
 
@@ -210,13 +231,11 @@ INFO: something
     ));
 }
 
-fn path_looks_like_51_for_test(path: &Path) -> bool {
-    let path_str = path.to_string_lossy();
-    if path_str.contains("5.1") {
-        return true;
-    }
-    path.parent()
-        .and_then(|parent| parent.file_name())
+fn looks_like_blender_executable_for_test(path: &Path) -> bool {
+    path.file_name()
         .and_then(|name| name.to_str())
-        == Some("Blender 5.1")
+        .is_some_and(|name| {
+            let lower = name.to_ascii_lowercase();
+            lower == "blender.exe" || lower == "blender" || lower == "blender.bin"
+        })
 }
