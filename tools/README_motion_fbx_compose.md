@@ -7,7 +7,7 @@ skinned meshes + action).
 ## Invocation
 
 ```text
-blender -b -P src-tauri/scripts/motion_fbx_compose.py -- \
+blender -b -P tools/motion_fbx_compose.py -- \
   --model-fbx <path> \
   --motion-json <path> \
   --output-fbx <path>

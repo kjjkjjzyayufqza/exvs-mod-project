@@ -24,8 +24,9 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 pub use blender_compose::{
-    export_complete_motion_fbx, parse_compose_success_from_stdout, resolve_compose_script_path,
-    CompleteMotionFbxExportReport, CompleteMotionFbxExportRequest,
+    export_complete_motion_fbx, materialize_embedded_compose_script,
+    parse_compose_success_from_stdout, resolve_compose_script_path, CompleteMotionFbxExportReport,
+    CompleteMotionFbxExportRequest,
 };
 pub use blender_resolve::{candidate_blender_51_paths, resolve_blender_51_executable};
 pub use clip_ops::{

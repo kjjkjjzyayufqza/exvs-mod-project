@@ -29,6 +29,21 @@ if (Test-Path -LiteralPath $stageRoot) {
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 Copy-Item -LiteralPath $exe -Destination (Join-Path $stage "EXVS Mod Project.exe")
 
+# Motion FBX export runs Blender with this sidecar. Keep it next to the exe so
+# a portable ZIP / copied folder works without the source tree. Do not ship
+# the rest of repo tools/ (MSC checkers, research catalogs).
+$composeScript = Join-Path $RepoRoot "tools\motion_fbx_compose.py"
+if (-not (Test-Path -LiteralPath $composeScript)) {
+    throw "Missing $composeScript"
+}
+$stageTools = Join-Path $stage "tools"
+New-Item -ItemType Directory -Force -Path $stageTools | Out-Null
+Copy-Item -LiteralPath $composeScript -Destination (Join-Path $stageTools "motion_fbx_compose.py")
+$composeReadme = Join-Path $RepoRoot "tools\README_motion_fbx_compose.md"
+if (Test-Path -LiteralPath $composeReadme) {
+    Copy-Item -LiteralPath $composeReadme -Destination (Join-Path $stageTools "README_motion_fbx_compose.md")
+}
+
 $zipPath = if ([System.IO.Path]::IsPathRooted($OutputZip)) {
     [System.IO.Path]::GetFullPath($OutputZip)
 } else {
@@ -44,4 +59,23 @@ if (Test-Path -LiteralPath $zipPath) {
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [System.IO.Compression.ZipFile]::CreateFromDirectory($stage, $zipPath)
+
+$archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+try {
+    $entryNames = @(
+        $archive.Entries | ForEach-Object { $_.FullName.Replace('\', '/') }
+    )
+    foreach ($required in @(
+            "EXVS Mod Project.exe",
+            "tools/motion_fbx_compose.py"
+        )) {
+        if ($entryNames -notcontains $required) {
+            throw "Portable ZIP is missing $required. Entries: $($entryNames -join ', ')"
+        }
+    }
+}
+finally {
+    $archive.Dispose()
+}
+
 Write-Host "wrote $zipPath"

@@ -1,7 +1,8 @@
 //! BlenderCompose orchestrator for CompleteMotionFbx export.
 //!
 //! Builds temp staging inputs (model-only FBX + MotionJson pose-basis frames),
-//! runs the shipped headless Blender 5.1 script, validates output, and cleans
+//! runs the headless Blender 5.1 script (`tools/motion_fbx_compose.py`, also
+//! embedded in the binary), validates output, and cleans
 //! staging always. Motion travels as JSON rather than an animation-only FBX
 //! because Blender's FBX importer drops all-constant animation curves, which
 //! silently reverted bones whose animated value differs from rest.
@@ -22,6 +23,9 @@ use super::{MotionClip, MotionInterchangeError};
 const COMPOSE_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const COMPOSE_SCRIPT_NAME: &str = "motion_fbx_compose.py";
 const COMPOSE_SCRIPT_ENV: &str = "EXVS2_MOTION_FBX_COMPOSE_SCRIPT";
+/// Shipped compose script. Blender still needs a `.py` path for `-P`; when no
+/// on-disk copy is found we write this into the staging directory.
+const EMBEDDED_COMPOSE_SCRIPT: &str = include_str!("../../../tools/motion_fbx_compose.py");
 
 /// Request to export a single CompleteMotionFbx (model + bound motion).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -266,7 +270,10 @@ fn run_compose_with_staging(
 
     write_motion_basis_json(&staging.motion_json, clip, &action_name)?;
 
-    let script_path = resolve_compose_script_path()?;
+    let script_path = match resolve_compose_script_path() {
+        Ok(path) => path,
+        Err(_) => materialize_embedded_compose_script(&staging.temp_dir)?,
+    };
     let compose_output = run_blender_compose(
         blender_path,
         &script_path,
@@ -359,10 +366,12 @@ fn paths_equal(a: &Path, b: &Path) -> bool {
     a == b
 }
 
-/// Resolve headless compose script path.
+/// Resolve headless compose script path on disk.
 ///
-/// Order: env `EXVS2_MOTION_FBX_COMPOSE_SCRIPT`, then `CARGO_MANIFEST_DIR/scripts/`,
-/// then cwd-relative `src-tauri/scripts/` (and `scripts/`), then beside executable.
+/// Order: env `EXVS2_MOTION_FBX_COMPOSE_SCRIPT`, repo `tools/`, cwd `tools/`,
+/// then `tools/` (or the file itself) next to the executable. Callers that
+/// already have a staging directory should fall back to
+/// [`materialize_embedded_compose_script`] so a copied exe still works.
 pub fn resolve_compose_script_path() -> Result<PathBuf, MotionInterchangeError> {
     if let Ok(env_value) = std::env::var(COMPOSE_SCRIPT_ENV) {
         let trimmed = env_value.trim();
@@ -378,46 +387,65 @@ pub fn resolve_compose_script_path() -> Result<PathBuf, MotionInterchangeError> 
         }
     }
 
-    if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
-        let candidate = Path::new(manifest_dir)
-            .join("scripts")
-            .join(COMPOSE_SCRIPT_NAME);
+    for candidate in compose_script_disk_candidates() {
         if candidate.is_file() {
             return Ok(candidate);
         }
     }
 
+    Err(MotionInterchangeError::Compose(format!(
+        "compose script {COMPOSE_SCRIPT_NAME} not found (set {COMPOSE_SCRIPT_ENV} or install tools/{COMPOSE_SCRIPT_NAME} next to the app)"
+    )))
+}
+
+/// Write the compile-time compose script into `dir` and return that path.
+pub fn materialize_embedded_compose_script(dir: &Path) -> Result<PathBuf, MotionInterchangeError> {
+    std::fs::create_dir_all(dir).map_err(|error| {
+        MotionInterchangeError::Compose(format!(
+            "failed to create compose script directory {}: {error}",
+            dir.display()
+        ))
+    })?;
+    let dest = dir.join(COMPOSE_SCRIPT_NAME);
+    std::fs::write(&dest, EMBEDDED_COMPOSE_SCRIPT).map_err(|error| {
+        MotionInterchangeError::Compose(format!(
+            "failed to write embedded compose script {}: {error}",
+            dest.display()
+        ))
+    })?;
+    Ok(dest)
+}
+
+fn compose_script_disk_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
+        let manifest = Path::new(manifest_dir);
+        candidates.push(manifest.join("..").join("tools").join(COMPOSE_SCRIPT_NAME));
+        candidates.push(manifest.join("scripts").join(COMPOSE_SCRIPT_NAME));
+    }
     if let Ok(cwd) = std::env::current_dir() {
         for relative in [
+            PathBuf::from("tools").join(COMPOSE_SCRIPT_NAME),
             PathBuf::from("src-tauri")
                 .join("scripts")
                 .join(COMPOSE_SCRIPT_NAME),
             PathBuf::from("scripts").join(COMPOSE_SCRIPT_NAME),
         ] {
-            let candidate = cwd.join(relative);
-            if candidate.is_file() {
-                return Ok(candidate);
-            }
+            candidates.push(cwd.join(relative));
         }
     }
-
     if let Ok(exe) = std::env::current_exe() {
         if let Some(exe_dir) = exe.parent() {
             for relative in [
+                PathBuf::from("tools").join(COMPOSE_SCRIPT_NAME),
                 PathBuf::from("scripts").join(COMPOSE_SCRIPT_NAME),
                 PathBuf::from(COMPOSE_SCRIPT_NAME),
             ] {
-                let candidate = exe_dir.join(relative);
-                if candidate.is_file() {
-                    return Ok(candidate);
-                }
+                candidates.push(exe_dir.join(relative));
             }
         }
     }
-
-    Err(MotionInterchangeError::Compose(format!(
-        "compose script {COMPOSE_SCRIPT_NAME} not found (set {COMPOSE_SCRIPT_ENV} or install scripts next to the app)"
-    )))
+    candidates
 }
 
 struct ComposeProcessOutput {

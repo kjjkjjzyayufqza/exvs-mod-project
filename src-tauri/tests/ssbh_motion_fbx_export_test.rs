@@ -6,8 +6,9 @@
  */
 
 use app_lib::ssbh_motion_interchange::{
-    candidate_blender_51_paths, export_complete_motion_fbx, parse_compose_success_from_stdout,
-    resolve_blender_51_executable, resolve_compose_script_path, CompleteMotionFbxExportRequest,
+    candidate_blender_51_paths, export_complete_motion_fbx, materialize_embedded_compose_script,
+    parse_compose_success_from_stdout, resolve_blender_51_executable, resolve_compose_script_path,
+    CompleteMotionFbxExportRequest,
 };
 use std::path::{Path, PathBuf};
 
@@ -203,7 +204,7 @@ fn complete_motion_export_rejects_missing_blender_override() {
 }
 
 #[test]
-fn compose_script_resolver_finds_cargo_manifest_script_when_present() {
+fn compose_script_resolver_finds_repo_tools_script_when_present() {
     let script = resolve_compose_script_path().expect("compose script should resolve in dev tree");
     assert!(
         script.is_file(),
@@ -213,6 +214,28 @@ fn compose_script_resolver_finds_cargo_manifest_script_when_present() {
     assert_eq!(
         script.file_name().and_then(|name| name.to_str()),
         Some("motion_fbx_compose.py")
+    );
+    let path_text = script.to_string_lossy();
+    assert!(
+        path_text.contains("tools"),
+        "dev resolve should prefer repo tools/, got {}",
+        script.display()
+    );
+}
+
+#[test]
+fn materialize_embedded_compose_script_writes_python() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let script = materialize_embedded_compose_script(dir.path())
+        .expect("embedded compose script should write");
+    assert_eq!(
+        script.file_name().and_then(|name| name.to_str()),
+        Some("motion_fbx_compose.py")
+    );
+    let text = std::fs::read_to_string(&script).expect("read materialized script");
+    assert!(
+        text.contains("def compose(") && text.contains("--model-fbx"),
+        "embedded script must be the Blender compose pipeline"
     );
 }
 
