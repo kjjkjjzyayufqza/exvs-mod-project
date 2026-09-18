@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  adjacentEfxbnKey,
   efxbnDataToPixel,
   efxbnPixelToData,
   evaluateEfxbnCurve,
@@ -8,6 +9,7 @@ import {
   frameToEfxbnProgress,
   initialEfxbnGraphView,
   insertSampledEfxbnKey,
+  pickNearestEfxbnKey,
   progressToEfxbnFrame,
 } from "./efxbnCurveMath";
 
@@ -51,6 +53,13 @@ describe("EFXBN linear evaluation", () => {
   it("finds a key using a small progress tolerance", () => {
     expect(findEfxbnKeyAtProgress(keys, 100.000001)).toBe(1);
     expect(findEfxbnKeyAtProgress(keys, 50)).toBeNull();
+  });
+
+  it("picks the nearest authored key when the playhead is between keys", () => {
+    expect(pickNearestEfxbnKey(keys, 50)).toEqual({ key: 0, value: 1 });
+    expect(pickNearestEfxbnKey(keys, 80)).toEqual({ key: 100, value: 3 });
+    expect(adjacentEfxbnKey(keys, 0, 1)).toEqual({ key: 100, value: 3 });
+    expect(adjacentEfxbnKey(keys, 100, -1)).toEqual({ key: 0, value: 1 });
   });
 });
 

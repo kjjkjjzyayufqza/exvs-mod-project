@@ -57,6 +57,35 @@ export function findEfxbnKeyAtProgress(
   return index >= 0 ? index : null;
 }
 
+/** The key at `progress`, otherwise the closest authored key on that curve. */
+export function pickNearestEfxbnKey(
+  keys: readonly EfxbnCurveKey[],
+  progress: number,
+): EfxbnCurveKey | null {
+  if (keys.length === 0) return null;
+  const atProgress = findEfxbnKeyAtProgress(keys, progress);
+  if (atProgress !== null) return keys[atProgress]!;
+  return keys.reduce((best, entry) =>
+    Math.abs(entry.key - progress) < Math.abs(best.key - progress) ? entry : best,
+  );
+}
+
+/** Previous or next key relative to the playhead. Stays on the end key when there is no further one. */
+export function adjacentEfxbnKey(
+  keys: readonly EfxbnCurveKey[],
+  progress: number,
+  direction: -1 | 1,
+): EfxbnCurveKey | null {
+  if (keys.length === 0) return null;
+  const ordered = [...keys].sort((left, right) => left.key - right.key);
+  if (direction < 0) {
+    return (
+      [...ordered].reverse().find((entry) => entry.key < progress - EFXBN_KEY_EPSILON) ?? ordered[0]!
+    );
+  }
+  return ordered.find((entry) => entry.key > progress + EFXBN_KEY_EPSILON) ?? ordered.at(-1)!;
+}
+
 export function insertSampledEfxbnKey(
   keys: readonly EfxbnCurveKey[],
   progress: number,

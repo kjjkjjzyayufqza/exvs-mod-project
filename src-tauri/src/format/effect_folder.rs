@@ -36,6 +36,11 @@ pub struct EffectFolderSelection {
 pub struct EffectFolderCopyEfxbnPolicy {
     pub file_index: i32,
     pub dest_file_name: Option<String>,
+    /// When set, the destination Item hash (`unk3`) is this value instead of the
+    /// source hash. In-place clones need a free dest hash; otherwise the copy is
+    /// skipped as "destination already has this hash".
+    #[serde(default)]
+    pub dest_hash_id: Option<i32>,
     #[serde(default)]
     pub overwrite: bool,
     #[serde(default)]
@@ -2433,8 +2438,9 @@ fn append_source_item_to_destination(
     let Some(source_record) = source_map.get(file_index) else {
         return Ok(());
     };
-    let hash = item_hash(entry).unwrap_or(0);
-    let key = format!("{}:{hash}", source_record.actual_ext);
+    let source_hash = item_hash(entry).unwrap_or(0);
+    let dest_hash = policy.and_then(|item| item.dest_hash_id).unwrap_or(source_hash);
+    let key = format!("{}:{source_hash}", source_record.actual_ext);
     if !copied_keys.insert(key.clone()) {
         return Ok(());
     }
@@ -2449,15 +2455,15 @@ fn append_source_item_to_destination(
         Some(name) => Some(sanitize_effect_copy_dest_file_name(&name)?),
         None => None,
     };
-    if destination_has_item_hash(dest_forest, dest_data, &source_record.actual_ext, hash) {
+    if destination_has_item_hash(dest_forest, dest_data, &source_record.actual_ext, dest_hash) {
         if overwrite {
             let dest_record =
-                find_dest_record_by_hash(dest_forest, dest_data, &source_record.actual_ext, hash)
+                find_dest_record_by_hash(dest_forest, dest_data, &source_record.actual_ext, dest_hash)
                     .ok_or_else(|| {
                     format!(
                         "Destination already has {} hash {} but the file record is missing.",
                         source_record.actual_ext,
-                        EffectFolderHash::from_i32(hash).hex
+                        EffectFolderHash::from_i32(dest_hash).hex
                     )
                 })?;
             let dest_path = dest_record.path.clone();
@@ -2468,7 +2474,7 @@ fn append_source_item_to_destination(
         skipped.push(format!(
             "Destination already has {} hash {}.",
             source_record.actual_ext,
-            EffectFolderHash::from_i32(hash).hex
+            EffectFolderHash::from_i32(dest_hash).hex
         ));
         return Ok(());
     }
@@ -2476,7 +2482,7 @@ fn append_source_item_to_destination(
         return Err(format!(
             "Overwrite requested for {} hash {}, but the destination pack does not have it.",
             source_record.actual_ext,
-            EffectFolderHash::from_i32(hash).hex
+            EffectFolderHash::from_i32(dest_hash).hex
         ));
     }
 
@@ -2507,7 +2513,11 @@ fn append_source_item_to_destination(
     copy_one_file(&source_record.path, &target)?;
     let new_file_index = next_file_index(&dest_structure.sub_file_data);
     let file_url = file_url_for_target(dest_json_dir, &target);
-    let display_name = source_record.file_base_name.clone();
+    let display_name = dest_name
+        .as_deref()
+        .map(stem)
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| source_record.file_base_name.clone());
     dest_structure.sub_file_data.push(json!({
         "index": dest_structure.sub_file_data.len(),
         "fileType": source_record.file_type,
@@ -2519,11 +2529,17 @@ fn append_source_item_to_destination(
     if let SubFileStructureEntry::Item {
         file_index,
         original_file_index,
+        unk3,
+        display_name: item_name,
         ..
     } = &mut new_entry
     {
         *file_index = new_file_index;
         *original_file_index = new_file_index;
+        *unk3 = dest_hash;
+        if dest_name.is_some() {
+            *item_name = Some(display_name.clone());
+        }
     }
     let node = Node::Item {
         entry_index: 0,

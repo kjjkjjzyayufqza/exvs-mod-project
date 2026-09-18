@@ -1,12 +1,14 @@
 import { classifyWorkspacePackPath } from "@/services/testEditorWorkspace/packIdentity";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import type {
+  EffectFolderCopyEfxbnPolicy,
   EffectFolderFileItem,
   EffectFolderModel,
   EffectFolderSelection,
   EffectFolderHash,
 } from "@/services/effectFolder/effectFolderService";
-import { inferEffectFolderStructurePath } from "@/services/effectFolder/effectFolderService";
+import { getBaseName, inferEffectFolderStructurePath } from "@/services/effectFolder/effectFolderService";
+import { crc32Ieee } from "@/utils/crc32Ieee";
 import { resolveMigratedFhm2dFolderPath } from "@/utils/fhm2dFolderPathResolution";
 import { STRUCTURE_JSON_SUFFIX } from "../fileTreeNodeRowUtils";
 
@@ -550,4 +552,199 @@ export function buildEffectFolderCopyPlan(params: {
       unsupportedCount,
     },
   };
+}
+
+export type EfxbnCloneIdentityDraft = {
+  fileIndex: number;
+  sourceName: string;
+  sourcePath: string;
+  sourceHash: EffectFolderHash | null;
+  destFileName: string;
+  destHashInput: string;
+};
+
+export type EfxbnCloneIdentityValidation = {
+  fileIndex: number;
+  ok: boolean;
+  errorKey: string | null;
+};
+
+export function normalizeFolderPath(path: string): string {
+  return path.trim().replace(/\//g, "\\").replace(/\\+$/g, "").toLowerCase();
+}
+
+export function pathsReferToSameFolder(left: string, right: string): boolean {
+  const a = normalizeFolderPath(left);
+  const b = normalizeFolderPath(right);
+  return a.length > 0 && a === b;
+}
+
+export function efxbnDisplayFileName(item: EffectFolderFileItem): string {
+  const fromPath = getBaseName(item.path);
+  if (fromPath) return fromPath;
+  if (item.name && item.name.includes(".")) return item.name;
+  const ext = item.actualExt || ".efxbn";
+  const stem = item.name || item.fileBaseName || `efxbn_${item.fileIndex}`;
+  return stem.toLowerCase().endsWith(ext.toLowerCase()) ? stem : `${stem}${ext}`;
+}
+
+export function suggestCopiedEfxbnFileName(sourceName: string): string {
+  const trimmed = sourceName.trim() || "effect.efxbn";
+  const stem = trimmed.replace(/\.efxbn$/i, "") || "effect";
+  return `${stem}_copy.efxbn`;
+}
+
+export function efxbnFileNameStem(name: string): string {
+  const trimmed = name.trim() || "effect.efxbn";
+  return trimmed.replace(/\.efxbn$/i, "") || "effect";
+}
+
+export function hashPreviewFromSigned(signed: number): EffectFolderHash {
+  const unsigned = signed >>> 0;
+  return {
+    signed: signed | 0,
+    unsigned,
+    hex: `0x${unsigned.toString(16).toUpperCase().padStart(8, "0")}`,
+  };
+}
+
+export function hashHexFromDestFileName(destFileName: string): string {
+  return crc32Ieee(efxbnFileNameStem(destFileName)).hashHex;
+}
+
+export function isSingleEfxbnFileName(name: string): boolean {
+  const trimmed = name.trim();
+  if (!trimmed) return false;
+  if (/[\\/]/.test(trimmed) || trimmed === "." || trimmed === ".." || trimmed.includes("..")) {
+    return false;
+  }
+  return true;
+}
+
+export function normalizeCopiedEfxbnFileName(name: string, fallback: string): string {
+  const trimmed = name.trim() || fallback.trim() || "effect.efxbn";
+  if (/\.efxbn$/i.test(trimmed)) return trimmed;
+  return `${trimmed}.efxbn`;
+}
+
+export function createEfxbnCloneIdentityDrafts(
+  items: EffectListItem[],
+  inPlace: boolean,
+): EfxbnCloneIdentityDraft[] {
+  const drafts: EfxbnCloneIdentityDraft[] = [];
+  const seen = new Set<number>();
+  for (const item of items) {
+    if (item.category !== "efxbn") continue;
+    if (seen.has(item.item.fileIndex)) continue;
+    seen.add(item.item.fileIndex);
+    const sourceName = efxbnDisplayFileName(item.item);
+    const destFileName = inPlace ? suggestCopiedEfxbnFileName(sourceName) : sourceName;
+    drafts.push({
+      fileIndex: item.item.fileIndex,
+      sourceName,
+      sourcePath: item.item.path,
+      sourceHash: item.item.hash,
+      destFileName,
+      destHashInput: inPlace ? hashHexFromDestFileName(destFileName) : "",
+    });
+  }
+  return drafts;
+}
+
+export function destEfxbnNameSetFromItems(items: EffectListItem[]): Set<string> {
+  const names = new Set<string>();
+  for (const item of items) {
+    if (item.category !== "efxbn") continue;
+    names.add(efxbnDisplayFileName(item.item).toLowerCase());
+  }
+  return names;
+}
+
+export function destEfxbnHashSetFromItems(items: EffectListItem[]): Set<number> {
+  const hashes = new Set<number>();
+  for (const item of items) {
+    if (item.category !== "efxbn" || !item.item.hash) continue;
+    hashes.add(item.item.hash.unsigned >>> 0);
+    hashes.add(item.item.hash.signed >>> 0);
+  }
+  return hashes;
+}
+
+export function validateEfxbnCloneIdentityDrafts(
+  drafts: EfxbnCloneIdentityDraft[],
+  params: {
+    inPlace: boolean;
+    existingNames: Set<string>;
+    existingHashes: Set<number>;
+  },
+): EfxbnCloneIdentityValidation[] {
+  const claimedNames = new Set<string>();
+  const claimedHashes = new Set<number>();
+  return drafts.map((draft) => {
+    const destNameRaw = draft.destFileName.trim();
+    if (params.inPlace && !destNameRaw) {
+      return { fileIndex: draft.fileIndex, ok: false, errorKey: "destNameRequiredInPlace" };
+    }
+    if (destNameRaw && !isSingleEfxbnFileName(destNameRaw)) {
+      return { fileIndex: draft.fileIndex, ok: false, errorKey: "destNameInvalid" };
+    }
+    const destName = destNameRaw
+      ? normalizeCopiedEfxbnFileName(destNameRaw, draft.sourceName).toLowerCase()
+      : "";
+    if (destName) {
+      if (params.inPlace && params.existingNames.has(destName)) {
+        return { fileIndex: draft.fileIndex, ok: false, errorKey: "destNameTaken" };
+      }
+      if (claimedNames.has(destName)) {
+        return { fileIndex: draft.fileIndex, ok: false, errorKey: "duplicateDestName" };
+      }
+      claimedNames.add(destName);
+    }
+
+    const destHashRaw = draft.destHashInput.trim();
+    if (!destHashRaw) {
+      if (params.inPlace) {
+        return { fileIndex: draft.fileIndex, ok: false, errorKey: "destHashRequiredInPlace" };
+      }
+      return { fileIndex: draft.fileIndex, ok: true, errorKey: null };
+    }
+    const destHash = parseHashInput(destHashRaw);
+    if (destHash == null) {
+      return { fileIndex: draft.fileIndex, ok: false, errorKey: "invalidDestHash" };
+    }
+    const destHashSigned = destHash | 0;
+    const destHashUnsigned = destHash >>> 0;
+    if (params.inPlace && draft.sourceHash && destHashSigned === (draft.sourceHash.signed | 0)) {
+      return { fileIndex: draft.fileIndex, ok: false, errorKey: "destHashUnchanged" };
+    }
+    if (params.inPlace && params.existingHashes.has(destHashUnsigned)) {
+      return { fileIndex: draft.fileIndex, ok: false, errorKey: "destHashTaken" };
+    }
+    if (claimedHashes.has(destHashUnsigned)) {
+      return { fileIndex: draft.fileIndex, ok: false, errorKey: "duplicateDestHash" };
+    }
+    claimedHashes.add(destHashUnsigned);
+    claimedHashes.add(destHashSigned >>> 0);
+    return { fileIndex: draft.fileIndex, ok: true, errorKey: null };
+  });
+}
+
+export function toEfxbnCloneCopyPolicies(drafts: EfxbnCloneIdentityDraft[]): EffectFolderCopyEfxbnPolicy[] {
+  return drafts.map((draft) => {
+    const destNameRaw = draft.destFileName.trim();
+    const destHashRaw = draft.destHashInput.trim();
+    const destHash = destHashRaw ? parseHashInput(destHashRaw) : null;
+    const policy: EffectFolderCopyEfxbnPolicy = {
+      fileIndex: draft.fileIndex,
+      destFileName: destNameRaw
+        ? normalizeCopiedEfxbnFileName(destNameRaw, draft.sourceName)
+        : null,
+      overwrite: false,
+      skip: false,
+    };
+    if (destHash != null) {
+      policy.destHashId = destHash | 0;
+    }
+    return policy;
+  });
 }

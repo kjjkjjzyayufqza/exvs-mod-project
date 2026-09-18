@@ -3,7 +3,8 @@ use std::fs;
 use std::path::Path;
 
 use app_lib::format::effect_folder::{
-    copy_effect_folder_selection, inspect_effect_folder, sanitize_effect_copy_dest_file_name,
+    copy_effect_folder_selection, copy_effect_folder_selection_with_policies, import_effect_file,
+    inspect_effect_folder, sanitize_effect_copy_dest_file_name, EffectFolderCopyEfxbnPolicy,
     EffectFolderSelection,
 };
 use serde_json::json;
@@ -1057,6 +1058,89 @@ fn sanitize_effect_copy_dest_file_name_rejects_path_escapes() {
     assert!(sanitize_effect_copy_dest_file_name("..\\evil.efxbn").is_err());
     assert!(sanitize_effect_copy_dest_file_name("../evil.efxbn").is_err());
     assert!(sanitize_effect_copy_dest_file_name("sub/107.efxbn").is_err());
+}
+
+#[test]
+fn copies_efxbn_in_place_with_new_filename_and_hash() {
+    let temp = tempfile::tempdir().expect("create temporary pack");
+    let (pack_root, structure_path) = create_empty_target(&temp);
+    let pack_root = pack_root.to_string_lossy().to_string();
+    let structure_path = structure_path.to_string_lossy().to_string();
+
+    import_effect_file(
+        &pack_root,
+        Some(&structure_path),
+        None,
+        "efxbn",
+        0x2C3BAA73u32 as i32,
+        Some("source.efxbn"),
+    )
+    .expect("import source efxbn");
+
+    let before = inspect_effect_folder(&pack_root, Some(&structure_path)).expect("inspect before");
+    let source = before
+        .efxbns
+        .iter()
+        .find(|item| item.file_base_name == "source")
+        .expect("imported source efxbn");
+    let source_file_index = source.file_index;
+    let source_hash = source.hash.as_ref().expect("source hash").signed;
+    assert_eq!(source_hash, 0x2C3BAA73u32 as i32);
+
+    let dest_hash = 0x1111_1111i32;
+    let result = copy_effect_folder_selection_with_policies(
+        &pack_root,
+        Some(&structure_path),
+        &pack_root,
+        Some(&structure_path),
+        &[EffectFolderSelection {
+            kind: "efxbn".to_string(),
+            file_index: Some(source_file_index),
+            hash_id: None,
+            name: None,
+        }],
+        &[EffectFolderCopyEfxbnPolicy {
+            file_index: source_file_index,
+            dest_file_name: Some("cloned.efxbn".to_string()),
+            dest_hash_id: Some(dest_hash),
+            overwrite: false,
+            skip: false,
+        }],
+    )
+    .expect("in-place clone");
+
+    assert!(
+        result.copied_files.iter().any(|path| Path::new(path)
+            .file_name()
+            .is_some_and(|name| name == "cloned.efxbn")),
+        "cloned file should be copied: {:?}",
+        result.copied_files
+    );
+    assert!(
+        result
+            .skipped
+            .iter()
+            .all(|msg| !msg.contains("0x2C3BAA73")),
+        "remapped clone must not skip the source hash: {:?}",
+        result.skipped
+    );
+
+    let after = inspect_effect_folder(&pack_root, Some(&structure_path)).expect("inspect after");
+    assert_eq!(after.efxbns.len(), 2);
+    assert!(after.efxbns.iter().any(|item| {
+        item.file_base_name == "source"
+            && item
+                .hash
+                .as_ref()
+                .is_some_and(|hash| hash.signed == source_hash)
+    }));
+    assert!(after.efxbns.iter().any(|item| {
+        item.file_base_name == "cloned"
+            && item
+                .hash
+                .as_ref()
+                .is_some_and(|hash| hash.signed == dest_hash)
+    }));
 }
 
 /// The first real corpus `.efxbn` this machine can reach, or `None` when the game tree is absent.

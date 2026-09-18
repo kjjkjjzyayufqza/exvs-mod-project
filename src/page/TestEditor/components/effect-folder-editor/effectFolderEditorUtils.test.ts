@@ -5,14 +5,20 @@ import "./EffectFolderCopyDialog";
 import { makeEfxbnEffectBlock } from "./efxbnTestFactory";
 import {
   buildEffectFolderCopyPlan,
+  createEfxbnCloneIdentityDrafts,
+  destEfxbnHashSetFromItems,
+  destEfxbnNameSetFromItems,
   effectListItemKey,
   filterEffectListItems,
   formatEffectFolderHash,
+  hashHexFromDestFileName,
   parseHashInput,
   effectFolderHashMatchesQuery,
   resolveEffectPackFromFolderPath,
   resolveEffectPackFromStructureJson,
+  toEfxbnCloneCopyPolicies,
   toEffectFolderSelections,
+  validateEfxbnCloneIdentityDrafts,
   type EffectListItem,
 } from "./effectFolderEditorUtils";
 
@@ -347,5 +353,92 @@ describe("buildEffectFolderCopyPlan", () => {
     expect(plan.summary.unsupportedCount).toBe(1);
     expect(plan.summary.transferFileCount).toBe(0);
     expect(plan.warnings.length).toBeGreaterThan(0);
+  });
+});
+
+describe("efxbn clone identity drafts", () => {
+  const efxbnItem: EffectListItem = {
+    category: "efxbn",
+    item: {
+      fileIndex: 3,
+      fileType: ".efxbn",
+      actualExt: ".efxbn",
+      fileUrl: "info/effect_a.efxbn",
+      fileBaseName: "effect_a",
+      name: "effect_a",
+      path: "E:/workspace/006effect/0xHASH/info/effect_a.efxbn",
+      hash: { signed: 123, unsigned: 123, hex: "0x0000007B" },
+      unk2: "00000000",
+      missing: false,
+    },
+  };
+
+  it("defaults in-place clones to a new filename and CRC32 hash", () => {
+    const drafts = createEfxbnCloneIdentityDrafts([efxbnItem], true);
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]?.destFileName).toBe("effect_a_copy.efxbn");
+    expect(drafts[0]?.destHashInput).toBe(hashHexFromDestFileName("effect_a_copy.efxbn"));
+    expect(toEfxbnCloneCopyPolicies(drafts)[0]).toMatchObject({
+      fileIndex: 3,
+      destFileName: "effect_a_copy.efxbn",
+      destHashId: parseHashInput(drafts[0]!.destHashInput),
+    });
+  });
+
+  it("rejects in-place clones that reuse the source hash or filename", () => {
+    const existingNames = destEfxbnNameSetFromItems([efxbnItem]);
+    const existingHashes = destEfxbnHashSetFromItems([efxbnItem]);
+    const sameHash = validateEfxbnCloneIdentityDrafts(
+      [
+        {
+          fileIndex: 3,
+          sourceName: "effect_a.efxbn",
+          sourcePath: efxbnItem.item.path,
+          sourceHash: efxbnItem.item.hash,
+          destFileName: "effect_a_copy.efxbn",
+          destHashInput: "0x0000007B",
+        },
+      ],
+      { inPlace: true, existingNames, existingHashes },
+    );
+    expect(sameHash[0]?.ok).toBe(false);
+    expect(sameHash[0]?.errorKey).toBe("destHashUnchanged");
+
+    const sameName = validateEfxbnCloneIdentityDrafts(
+      [
+        {
+          fileIndex: 3,
+          sourceName: "effect_a.efxbn",
+          sourcePath: efxbnItem.item.path,
+          sourceHash: efxbnItem.item.hash,
+          destFileName: "effect_a.efxbn",
+          destHashInput: "0x11111111",
+        },
+      ],
+      { inPlace: true, existingNames, existingHashes },
+    );
+    expect(sameName[0]?.ok).toBe(false);
+    expect(sameName[0]?.errorKey).toBe("destNameTaken");
+  });
+
+  it("accepts an in-place clone with a free name and hash", () => {
+    const results = validateEfxbnCloneIdentityDrafts(
+      [
+        {
+          fileIndex: 3,
+          sourceName: "effect_a.efxbn",
+          sourcePath: efxbnItem.item.path,
+          sourceHash: efxbnItem.item.hash,
+          destFileName: "effect_a_copy.efxbn",
+          destHashInput: "0x11111111",
+        },
+      ],
+      {
+        inPlace: true,
+        existingNames: destEfxbnNameSetFromItems([efxbnItem]),
+        existingHashes: destEfxbnHashSetFromItems([efxbnItem]),
+      },
+    );
+    expect(results[0]).toEqual({ fileIndex: 3, ok: true, errorKey: null });
   });
 });

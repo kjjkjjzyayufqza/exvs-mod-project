@@ -1,32 +1,56 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Diamond, Maximize2, Trash2 } from "lucide-react";
+import {
+  ClipboardPaste,
+  Copy,
+  Diamond,
+  Eye,
+  Maximize2,
+  Redo2,
+  RotateCcw,
+  Trash2,
+  Undo2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { EfxbnGraphCanvas, type EfxbnGraphCurveView } from "./EfxbnGraphCanvas";
 import {
+  canRedoEfxbn,
+  canUndoEfxbn,
   EFXBN_CONTROL_NAMES,
   readEfxbnCurve,
+  redoEfxbn,
   replaceEfxbnCurves,
+  undoEfxbn,
   type EfxbnControlName,
   type EfxbnCurveKey,
   type EfxbnCurveReplacement,
   type EfxbnDocument,
 } from "./efxbnDocument";
 import {
+  adjacentEfxbnKey,
   evaluateEfxbnCurve,
   findEfxbnKeyAtProgress,
   frameToEfxbnProgress,
   initialEfxbnGraphView,
   insertSampledEfxbnKey,
+  pickNearestEfxbnKey,
   progressToEfxbnFrame,
   type EfxbnGraphView,
 } from "./efxbnCurveMath";
 import {
+  deleteEfxbnSelectedKeys,
+  inspectorChannelName,
+  isEfxbnEditableHotkeyTarget,
+  mergeEfxbnPastedKeys,
   moveEfxbnSelectedKeys,
+  offsetEfxbnCopiedKeys,
+  refsForEfxbnControl,
   sameEfxbnGraphKeyRef,
+  sanitizeEfxbnGraphSelection,
+  selectEfxbnChannelKeys,
   type EfxbnGraphKeyRef,
 } from "./efxbnGraphInteraction";
 
@@ -72,6 +96,11 @@ const CHANNEL_COLORS: Record<EfxbnControlName, string> = {
   colorA: "#CBD5E1",
   worldGravityAccel: "#FACC15",
   directionAccel: "#FB923C",
+};
+
+type GraphClipboard = {
+  keys: readonly EfxbnCurveKey[];
+  originProgress: number;
 };
 
 function formatNumber(value: number): string {
@@ -158,8 +187,15 @@ export function EfxbnGraphEditor({
   onError,
 }: EfxbnGraphEditorProps) {
   const { t } = useTranslation("test-effect-folder");
+  const editorRef = useRef<HTMLElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const clipboardRef = useRef<GraphClipboard | null>(null);
+  const progressRef = useRef(progress);
+  const focusedControlRef = useRef(focusedControlName);
+  progressRef.current = progress;
+  focusedControlRef.current = focusedControlName;
   const [size, setSize] = useState({ width: 800, height: 300 });
+  const [hasClipboard, setHasClipboard] = useState(false);
   const [visibleControls, setVisibleControls] = useState<ReadonlySet<EfxbnControlName>>(
     () => new Set(EFXBN_CONTROL_NAMES),
   );
@@ -203,9 +239,12 @@ export function EfxbnGraphEditor({
   }, []);
 
   useEffect(() => {
-    setSelection([]);
-    const nextCurves = EFXBN_CONTROL_NAMES.map((name) =>
-      readEfxbnCurve(document.summary, blockIndex, name).keys,
+    const name = focusedControlRef.current;
+    const keys = readEfxbnCurve(document.summary, blockIndex, name).keys;
+    const nearest = pickNearestEfxbnKey(keys, progressRef.current);
+    setSelection(nearest ? [{ controlName: name, sourceKey: nearest.key }] : []);
+    const nextCurves = EFXBN_CONTROL_NAMES.map((controlName) =>
+      readEfxbnCurve(document.summary, blockIndex, controlName).keys,
     );
     setView(initialEfxbnGraphView(normalizeView ? nextCurves.map(normalizeCurve) : nextCurves));
   }, [blockIndex, document.path]);
@@ -226,7 +265,47 @@ export function EfxbnGraphEditor({
     [curves],
   );
 
+  useEffect(() => {
+    setSelection((current) => {
+      const next = sanitizeEfxbnGraphSelection(current, curveByName);
+      if (
+        next.length === current.length &&
+        next.every((entry, index) => sameEfxbnGraphKeyRef(entry, current[index]!))
+      ) {
+        return current;
+      }
+      return next;
+    });
+  }, [curveByName]);
+
   const reportError = (error: unknown) => onError(error instanceof Error ? error.message : String(error));
+
+  const applySelection = (next: readonly EfxbnGraphKeyRef[]) => {
+    setSelection(next);
+    const names = [...new Set(next.map((entry) => entry.controlName))];
+    if (names.length === 1) onFocusedControlNameChange(names[0]!);
+  };
+
+  const selectChannel = (name: EfxbnControlName, event?: Pick<ReactMouseEvent, "shiftKey" | "ctrlKey" | "metaKey">) => {
+    onFocusedControlNameChange(name);
+    setSelection(
+      selectEfxbnChannelKeys({
+        controlName: name,
+        keys: curveByName[name] ?? [],
+        progress,
+        mode: event?.ctrlKey || event?.metaKey ? "all" : "nearest",
+        current: selection,
+        additive: Boolean(event?.shiftKey),
+      }),
+    );
+    editorRef.current?.focus();
+  };
+
+  const soloControls = (names: readonly EfxbnControlName[]) => {
+    const already =
+      visibleControls.size === names.length && names.every((name) => visibleControls.has(name));
+    setVisibleControls(already ? new Set(EFXBN_CONTROL_NAMES) : new Set(names));
+  };
 
   const insertFocusedKey = () => {
     try {
@@ -300,22 +379,97 @@ export function EfxbnGraphEditor({
   const deleteSelection = () => {
     if (writing || selection.length === 0) return;
     try {
-      const replacements = [...new Set(selection.map((entry) => entry.controlName))].map((name) => {
-        const selectedKeys = selection.filter((entry) => entry.controlName === name);
-        return {
-          controlName: name,
-          keys: curveByName[name].filter(
-            (key) => !selectedKeys.some((entry) => Math.abs(entry.sourceKey - key.key) <= 1e-5),
-          ),
-        };
+      const { replacements, keptLastKey } = deleteEfxbnSelectedKeys({
+        curves: curveByName,
+        selected: selection,
       });
+      if (replacements.length === 0) {
+        if (keptLastKey) onError(t("graph.keepLastKey"));
+        return;
+      }
       onDocumentChange(
         replaceEfxbnCurves(document, blockIndex, replacements, `Delete ${selection.length} graph keys`),
       );
-      setSelection([]);
+      const deletedNames = new Set(replacements.map((entry) => entry.controlName));
+      setSelection(selection.filter((entry) => !deletedNames.has(entry.controlName)));
+      if (keptLastKey) onError(t("graph.keepLastKey"));
     } catch (error) {
       reportError(error);
     }
+  };
+
+  const copySelection = () => {
+    const copied = selection.flatMap((selected) => {
+      const entry = (curveByName[selected.controlName] ?? []).find(
+        (candidate) => Math.abs(candidate.key - selected.sourceKey) <= 1e-5,
+      );
+      return entry ? [{ ...entry }] : [];
+    });
+    const payload = copied.length > 0 ? copied : (curveByName[focusedControlName] ?? []).map((entry) => ({ ...entry }));
+    if (payload.length === 0) return;
+    clipboardRef.current = {
+      keys: payload,
+      originProgress: payload[0]!.key,
+    };
+    setHasClipboard(true);
+  };
+
+  const pasteClipboard = () => {
+    if (writing) return;
+    const clipboard = clipboardRef.current;
+    if (!clipboard || clipboard.keys.length === 0) return;
+    try {
+      const pasted = offsetEfxbnCopiedKeys(clipboard.keys, clipboard.originProgress, progress);
+      const keys = mergeEfxbnPastedKeys(curveByName[focusedControlName] ?? [], pasted);
+      onDocumentChange(
+        replaceEfxbnCurves(
+          document,
+          blockIndex,
+          [{ controlName: focusedControlName, keys }],
+          `Paste ${pasted.length} keys onto ${focusedControlName}`,
+        ),
+      );
+      setSelection(pasted.map((entry) => ({ controlName: focusedControlName, sourceKey: entry.key })));
+    } catch (error) {
+      reportError(error);
+    }
+  };
+
+  const resetFocusedChannel = () => {
+    if (writing) return;
+    const baseline = curves.find((curve) => curve.name === focusedControlName)?.baselineKeys;
+    if (!baseline) return;
+    try {
+      onDocumentChange(
+        replaceEfxbnCurves(
+          document,
+          blockIndex,
+          [{ controlName: focusedControlName, keys: baseline.map((entry) => ({ ...entry })) }],
+          `Reset ${focusedControlName}`,
+        ),
+      );
+      const nearest = pickNearestEfxbnKey(baseline, progress);
+      setSelection(nearest ? [{ controlName: focusedControlName, sourceKey: nearest.key }] : []);
+    } catch (error) {
+      reportError(error);
+    }
+  };
+
+  const jumpFocusedKey = (direction: -1 | 1) => {
+    const next = adjacentEfxbnKey(curveByName[focusedControlName] ?? [], progress, direction);
+    if (!next) return;
+    onProgressChange(next.key);
+    setSelection([{ controlName: focusedControlName, sourceKey: next.key }]);
+  };
+
+  const handleUndo = () => {
+    if (writing || !canUndoEfxbn(document)) return;
+    onDocumentChange(undoEfxbn(document));
+  };
+
+  const handleRedo = () => {
+    if (writing || !canRedoEfxbn(document)) return;
+    onDocumentChange(redoEfxbn(document));
   };
 
   const selectedEntries = selection.flatMap((selected) => {
@@ -333,6 +487,8 @@ export function EfxbnGraphEditor({
   const commonProgress = common((entry) => entry.key);
   const commonFrame = commonProgress === null ? null : progressToEfxbnFrame(commonProgress, frameCount);
   const commonValue = common((entry) => entry.value);
+  const selectedChannel = inspectorChannelName(selection, focusedControlName);
+  const playheadValue = evaluateEfxbnCurve(curveByName[focusedControlName] ?? [{ key: 0, value: 0 }], progress);
 
   const patchSelection = (patch: { key?: number; value?: number }) => {
     if (writing || selection.length === 0) return;
@@ -364,23 +520,89 @@ export function EfxbnGraphEditor({
   });
   const playheadFrame = progressToEfxbnFrame(progress, frameCount);
   const keyAtPlayhead = findEfxbnKeyAtProgress(curveByName[focusedControlName], progress) !== null;
+  const focusedDirty = curves.some(
+    (curve) =>
+      curve.name === focusedControlName && JSON.stringify(curve.keys) !== JSON.stringify(curve.baselineKeys),
+  );
+  const showingAllChannels = visibleControls.size === EFXBN_CONTROL_NAMES.length;
 
   return (
     <section
-      className="flex h-full min-h-[220px] flex-col bg-background"
+      ref={editorRef}
+      tabIndex={0}
+      className="flex h-full min-h-[220px] flex-col bg-background outline-none focus-visible:ring-1 focus-visible:ring-ring"
       aria-label={t("graph.ariaEditor")}
       onKeyDown={(event) => {
-        if (event.target instanceof HTMLInputElement) return;
+        if (isEfxbnEditableHotkeyTarget(event.target)) return;
+        const key = event.key.toLowerCase();
+        const mod = event.ctrlKey || event.metaKey;
+        if (mod && key === "a") {
+          event.preventDefault();
+          const names = event.shiftKey
+            ? EFXBN_CONTROL_NAMES.filter((name) => visibleControls.has(name))
+            : [focusedControlName];
+          applySelection(names.flatMap((name) => refsForEfxbnControl(name, curveByName[name] ?? [])));
+          return;
+        }
+        if (mod && key === "c") {
+          event.preventDefault();
+          copySelection();
+          return;
+        }
+        if (mod && key === "v") {
+          event.preventDefault();
+          pasteClipboard();
+          return;
+        }
         if (event.key.toLowerCase() === "f" && selectedDisplayKeys.length > 0) {
           event.preventDefault();
           setView(fitSelectionView(selectedDisplayKeys));
         } else if (event.key === "Home") {
           event.preventDefault();
           setView(initialEfxbnGraphView(visibleDisplayKeys));
+        } else if (event.key === "Delete" || event.key === "Backspace") {
+          event.preventDefault();
+          deleteSelection();
+        } else if (event.key === "Escape") {
+          setSelection([]);
+        } else if (key === "i" && !mod) {
+          event.preventDefault();
+          insertFocusedKey();
+        } else if (event.key === "[") {
+          event.preventDefault();
+          jumpFocusedKey(-1);
+        } else if (event.key === "]") {
+          event.preventDefault();
+          jumpFocusedKey(1);
         }
       }}
     >
-      <div className="flex h-10 shrink-0 items-center gap-1.5 border-b px-3">
+      <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2">
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          disabled={writing || !canUndoEfxbn(document)}
+          aria-label={t("graph.undo")}
+          title={canUndoEfxbn(document) ? t("graph.undoTitle", { change: document.changeLog.at(-1) ?? "" }) : t("graph.nothingToUndo")}
+          onClick={handleUndo}
+        >
+          <Undo2 className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          disabled={writing || !canRedoEfxbn(document)}
+          aria-label={t("graph.redo")}
+          title={t("graph.redoTitle")}
+          onClick={handleRedo}
+        >
+          <Redo2 className="h-3.5 w-3.5" />
+        </Button>
+        <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
         <Button
           type="button"
           size="icon"
@@ -407,6 +629,31 @@ export function EfxbnGraphEditor({
         >
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          disabled={selectedEntries.length === 0 && (curveByName[focusedControlName]?.length ?? 0) === 0}
+          aria-label={t("graph.copyKeys")}
+          title={t("graph.copyKeys")}
+          onClick={copySelection}
+        >
+          <Copy className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          disabled={writing || !hasClipboard}
+          aria-label={t("graph.pasteKeys")}
+          title={t("graph.pasteKeys")}
+          onClick={pasteClipboard}
+        >
+          <ClipboardPaste className="h-3.5 w-3.5" />
+        </Button>
+        <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
         <Button
           type="button"
           size="sm"
@@ -438,33 +685,60 @@ export function EfxbnGraphEditor({
         >
           {normalizeView ? t("graph.normalize") : t("graph.absolute")}
         </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 gap-1 px-2 text-[10px]"
+          disabled={showingAllChannels}
+          aria-label={t("graph.showAllChannels")}
+          title={t("graph.showAllChannels")}
+          onClick={() => setVisibleControls(new Set(EFXBN_CONTROL_NAMES))}
+        >
+          <Eye className="h-3 w-3" />
+        </Button>
         <span className="ml-auto font-mono text-[9px] tabular-nums text-muted-foreground" data-i18n-ignore="">
           {t("graph.frameLabel", { value: formatNumber(playheadFrame ?? progress) })} / {formatNumber(frameCount)} | {formatNumber(progress)}%
         </span>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(280px,1fr)_200px]">
+      <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(280px,1fr)_210px]">
         <aside className="custom-scrollbar-thin overflow-y-auto border-r px-1.5 py-1.5" aria-label={t("graph.channels")}>
           {CHANNEL_GROUPS.map((group) => (
             <div key={group.heading} className="mb-1">
-              <p className="px-1 py-1 text-[10px] font-medium text-muted-foreground" data-i18n-ignore="">
+              <button
+                type="button"
+                className="flex w-full items-center px-1 py-1 text-left text-[10px] font-medium text-muted-foreground hover:text-foreground"
+                data-i18n-ignore=""
+                title={t("graph.soloGroup")}
+                onClick={() => selectChannel(group.names[0]!)}
+                onDoubleClick={() => soloControls(group.names)}
+              >
                 {group.heading}
-              </p>
+              </button>
               {group.names.map((name) => {
                 const curve = curves.find((entry) => entry.name === name)!;
                 const dirty = JSON.stringify(curve.keys) !== JSON.stringify(curve.baselineKeys);
                 const current = evaluateEfxbnCurve(curve.keys, progress);
+                const selected = selectedChannel === name || focusedControlName === name;
                 return (
                   <div
                     key={name}
                     className={cn(
                       "grid grid-cols-[18px_8px_minmax(0,1fr)_auto] items-center gap-1 rounded px-1 py-1",
-                      focusedControlName === name && "bg-muted",
+                      selected && "bg-muted",
+                      focusedControlName === name && "ring-1 ring-inset ring-border",
                     )}
+                    onClick={(event) => selectChannel(name, event)}
+                    onDoubleClick={(event) => {
+                      event.preventDefault();
+                      soloControls([name]);
+                    }}
                   >
                     <Checkbox
                       checked={visibleControls.has(name)}
                       aria-label={t("graph.showCurve", { name })}
+                      onClick={(event) => event.stopPropagation()}
                       onCheckedChange={(checked) => {
                         setVisibleControls((currentVisible) => {
                           const next = new Set(currentVisible);
@@ -479,11 +753,15 @@ export function EfxbnGraphEditor({
                       type="button"
                       className="min-w-0 truncate text-left font-mono text-[11px]"
                       data-i18n-ignore=""
-                      onClick={() => onFocusedControlNameChange(name)}
+                      aria-pressed={focusedControlName === name}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        selectChannel(name, event);
+                      }}
                     >
                       {name}
                     </button>
-                    <span className={cn("font-mono text-[10px] text-muted-foreground", dirty && "text-amber-400")}>
+                    <span className={cn("font-mono text-[10px] tabular-nums text-muted-foreground", dirty && "text-amber-400")}>
                       {curve.keys.length === 1 ? formatNumber(current) : `${curve.keys.length}k`}
                     </span>
                   </div>
@@ -503,7 +781,7 @@ export function EfxbnGraphEditor({
             frameCount={frameCount}
             selection={selection}
             disabled={writing}
-            onSelectionChange={setSelection}
+            onSelectionChange={applySelection}
             onPreviewDrag={() => undefined}
             onCommitDrag={commitMove}
             onDeleteSelection={deleteSelection}
@@ -515,15 +793,30 @@ export function EfxbnGraphEditor({
         </div>
 
         <aside className="border-l p-3" aria-label={t("graph.selectedValues")}>
-          <p className="mb-2 text-xs font-medium">{t("graph.selectedKey")}</p>
+          <p className="mb-2 text-xs font-medium">
+            {t("graph.selectedKey")}
+            <span className="ml-1 font-mono text-[10px] text-muted-foreground" data-i18n-ignore="">
+              {selectedChannel === "mixed" ? t("graph.mixed") : selectedChannel}
+            </span>
+          </p>
           <div className="space-y-2">
             <label className="block space-y-1">
               <span className="text-[9px] text-muted-foreground">{t("graph.channel")}</span>
               <Input
-                value={selection.length === 1 ? selection[0]!.controlName : selection.length > 1 ? t("graph.mixed") : t("graph.none")}
+                aria-label={t("graph.channel")}
+                value={selectedChannel === "mixed" ? t("graph.mixed") : selectedChannel}
                 readOnly
                 className="h-7 px-1.5 font-mono text-[10px]"
                 data-i18n-ignore=""
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-[9px] text-muted-foreground">{t("graph.playheadValue")}</span>
+              <Input
+                aria-label={t("graph.playheadValue")}
+                value={formatNumber(playheadValue)}
+                readOnly
+                className="h-7 px-1.5 font-mono text-[10px] tabular-nums"
               />
             </label>
             <label className="block space-y-1">
@@ -556,7 +849,19 @@ export function EfxbnGraphEditor({
                 onCommit={(value) => patchSelection({ value })}
               />
             </label>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-7 w-full justify-start gap-1 px-1.5 text-[10px]"
+              disabled={writing || !focusedDirty}
+              onClick={resetFocusedChannel}
+            >
+              <RotateCcw className="h-3 w-3" />
+              {t("graph.resetChannel")}
+            </Button>
             <p className="font-mono text-[9px] text-muted-foreground">{t("graph.selectedCount", { count: selection.length })}</p>
+            <p className="text-[9px] leading-snug text-muted-foreground">{t("graph.shortcuts")}</p>
           </div>
         </aside>
       </div>

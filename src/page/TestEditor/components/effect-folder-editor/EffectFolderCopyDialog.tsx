@@ -22,17 +22,29 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { FilePathInput } from "@/components/ui/filePathInput";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   inferEffectFolderStructurePath,
+  type EffectFolderCopyEfxbnPolicy,
   type EffectFolderCopyResult,
 } from "@/services/effectFolder/effectFolderService";
 import {
   buildEffectFolderCopyPlan,
+  createEfxbnCloneIdentityDrafts,
+  destEfxbnHashSetFromItems,
+  destEfxbnNameSetFromItems,
   formatEffectFolderHash,
+  hashHexFromDestFileName,
+  hashPreviewFromSigned,
+  parseHashInput,
+  pathsReferToSameFolder,
+  toEfxbnCloneCopyPolicies,
+  validateEfxbnCloneIdentityDrafts,
+  type EfxbnCloneIdentityDraft,
   type EffectCopyPlanEntry,
   type EffectFolderCopyPlan,
   type EffectListItem,
@@ -50,6 +62,7 @@ type EffectFolderCopyDialogProps = {
   onCopy: (destination: {
     effectRoot: string;
     structureJsonPath: string;
+    policies?: EffectFolderCopyEfxbnPolicy[];
   }) => Promise<EffectFolderCopyResult | void>;
 };
 
@@ -203,6 +216,106 @@ function PlanEntryRow({ entry }: { entry: EffectCopyPlanEntry }) {
   );
 }
 
+function CloneIdentityPanel({
+  drafts,
+  inPlace,
+  disabled,
+  onChange,
+  onFillHashFromName,
+}: {
+  drafts: EfxbnCloneIdentityDraft[];
+  inPlace: boolean;
+  disabled: boolean;
+  onChange: (fileIndex: number, patch: Partial<EfxbnCloneIdentityDraft>) => void;
+  onFillHashFromName: (fileIndex: number) => void;
+}) {
+  const { t } = useTranslation("test-effect-folder");
+  if (drafts.length === 0) {
+    return inPlace ? (
+      <p className="rounded-md border border-dashed px-3 py-4 text-[11px] text-muted-foreground">
+        {t("copyDialog.inPlaceNeedsEfxbn")}
+      </p>
+    ) : null;
+  }
+
+  return (
+    <section className="space-y-2">
+      <div className="space-y-0.5">
+        <h3 className="text-xs font-semibold tracking-tight">{t("copyDialog.cloneIdentities")}</h3>
+        <p className="text-[11px] text-muted-foreground">
+          {inPlace ? t("copyDialog.cloneHelpInPlace") : t("copyDialog.cloneHelp")}
+        </p>
+      </div>
+      <div className="space-y-2">
+        {drafts.map((draft) => {
+          const parsedHash = parseHashInput(draft.destHashInput);
+          const parsedPreview = parsedHash == null ? null : hashPreviewFromSigned(parsedHash);
+          return (
+            <div key={draft.fileIndex} className="space-y-2 rounded-md border bg-card/40 p-2.5">
+              <div className="min-w-0">
+                <div className="truncate text-xs font-medium">{draft.sourceName}</div>
+                {draft.sourceHash ? (
+                  <div className="font-mono text-[10px] text-muted-foreground" data-i18n-ignore="">
+                    {formatEffectFolderHash(draft.sourceHash)}
+                  </div>
+                ) : null}
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-1">
+                  <Label htmlFor={`effect-copy-name-${draft.fileIndex}`} className="text-[10px]">
+                    {t("copyDialog.destFileName")}
+                  </Label>
+                  <Input
+                    id={`effect-copy-name-${draft.fileIndex}`}
+                    value={draft.destFileName}
+                    onChange={(event) => onChange(draft.fileIndex, { destFileName: event.target.value })}
+                    placeholder={draft.sourceName}
+                    className="h-8 font-mono text-[11px]"
+                    disabled={disabled}
+                    spellCheck={false}
+                    data-i18n-ignore=""
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <Label htmlFor={`effect-copy-hash-${draft.fileIndex}`} className="text-[10px]">
+                    {t("copyDialog.destHash")}
+                  </Label>
+                  <div className="flex gap-1.5">
+                    <Input
+                      id={`effect-copy-hash-${draft.fileIndex}`}
+                      value={draft.destHashInput}
+                      onChange={(event) => onChange(draft.fileIndex, { destHashInput: event.target.value })}
+                      placeholder={t("copyDialog.destHashPlaceholder")}
+                      className="h-8 font-mono text-[11px]"
+                      disabled={disabled}
+                      spellCheck={false}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 shrink-0 px-2 text-[10px]"
+                      disabled={disabled}
+                      onClick={() => onFillHashFromName(draft.fileIndex)}
+                    >
+                      {t("copyDialog.fillHashFromName")}
+                    </Button>
+                  </div>
+                  {parsedPreview ? (
+                    <div className="font-mono text-[10px] text-muted-foreground" data-i18n-ignore="">
+                      {formatEffectFolderHash(parsedPreview)}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function SelectionListPanel({ title, empty, entries }: { title: string; empty: string; entries: EffectCopyPlanEntry[] }) {
   return (
     <section className="space-y-2">
@@ -292,6 +405,7 @@ function ResultPanel({ result }: { result: EffectFolderCopyResult }) {
 export function EffectFolderCopyDialog({
   open: dialogOpen,
   onOpenChange,
+  sourceEffectRoot,
   selectedItems,
   allItems,
   busy = false,
@@ -299,6 +413,7 @@ export function EffectFolderCopyDialog({
 }: EffectFolderCopyDialogProps) {
   const { t } = useTranslation("test-effect-folder");
   const [destinationRoot, setDestinationRoot] = useState("");
+  const [cloneDrafts, setCloneDrafts] = useState<EfxbnCloneIdentityDraft[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<DialogPhase>("plan");
   const [lastResult, setLastResult] = useState<EffectFolderCopyResult | null>(null);
@@ -309,24 +424,32 @@ export function EffectFolderCopyDialog({
     [allItems, selectedItems],
   );
 
-  const destinationStructurePath = useMemo(() => {
-    const trimmed = destinationRoot.trim();
-    if (!trimmed) return "";
-    try {
-      return inferEffectFolderStructurePath(trimmed);
-    } catch {
-      return "";
-    }
-  }, [destinationRoot]);
+  const inPlace = useMemo(
+    () => pathsReferToSameFolder(sourceEffectRoot, destinationRoot),
+    [destinationRoot, sourceEffectRoot],
+  );
+
+  const cloneValidations = useMemo(
+    () =>
+      validateEfxbnCloneIdentityDrafts(cloneDrafts, {
+        inPlace,
+        existingNames: destEfxbnNameSetFromItems(allItems),
+        existingHashes: destEfxbnHashSetFromItems(allItems),
+      }),
+    [allItems, cloneDrafts, inPlace],
+  );
+
+  const firstCloneError = cloneValidations.find((item) => !item.ok)?.errorKey ?? null;
 
   useEffect(() => {
     if (!dialogOpen) return;
-    setDestinationRoot("");
+    setDestinationRoot(sourceEffectRoot);
+    setCloneDrafts(createEfxbnCloneIdentityDrafts(selectedItems, true));
     setError(null);
     setPhase("plan");
     setLastResult(null);
     setActiveTab("overview");
-  }, [dialogOpen]);
+  }, [dialogOpen, selectedItems, sourceEffectRoot]);
 
   const pickDestinationFolder = useCallback(async () => {
     const selected = await open({ directory: true, multiple: false });
@@ -334,6 +457,24 @@ export function EffectFolderCopyDialog({
       setDestinationRoot(selected);
       setError(null);
     }
+  }, []);
+
+  const updateCloneDraft = useCallback((fileIndex: number, patch: Partial<EfxbnCloneIdentityDraft>) => {
+    setCloneDrafts((current) =>
+      current.map((draft) => (draft.fileIndex === fileIndex ? { ...draft, ...patch } : draft)),
+    );
+    setError(null);
+  }, []);
+
+  const fillHashFromName = useCallback((fileIndex: number) => {
+    setCloneDrafts((current) =>
+      current.map((draft) =>
+        draft.fileIndex === fileIndex
+          ? { ...draft, destHashInput: hashHexFromDestFileName(draft.destFileName) }
+          : draft,
+      ),
+    );
+    setError(null);
   }, []);
 
   const handleSubmit = useCallback(async () => {
@@ -350,6 +491,10 @@ export function EffectFolderCopyDialog({
       setError(t("copyDialog.errors.nothingTransferable"));
       return;
     }
+    if (firstCloneError) {
+      setError(t(`copyDialog.errors.${firstCloneError}`));
+      return;
+    }
 
     let structureJsonPath: string;
     try {
@@ -361,7 +506,11 @@ export function EffectFolderCopyDialog({
 
     setError(null);
     try {
-      const result = await onCopy({ effectRoot: trimmed, structureJsonPath });
+      const result = await onCopy({
+        effectRoot: trimmed,
+        structureJsonPath,
+        policies: toEfxbnCloneCopyPolicies(cloneDrafts),
+      });
       if (result) {
         setLastResult(result);
         setPhase("result");
@@ -373,18 +522,28 @@ export function EffectFolderCopyDialog({
       setError(copyError instanceof Error ? copyError.message : String(copyError));
       setActiveTab("overview");
     }
-  }, [destinationRoot, onCopy, onOpenChange, plan.summary.transferFileCount, selectedItems.length, t]);
+  }, [
+    cloneDrafts,
+    destinationRoot,
+    firstCloneError,
+    onCopy,
+    onOpenChange,
+    plan.summary.transferFileCount,
+    selectedItems.length,
+    t,
+  ]);
 
   const canSubmit =
     !busy &&
     selectedItems.length > 0 &&
     plan.summary.transferFileCount > 0 &&
     destinationRoot.trim().length > 0 &&
+    firstCloneError == null &&
     phase === "plan";
 
   return (
     <Dialog open={dialogOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(88vh,760px)] w-[min(94vw,760px)] max-w-3xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="flex max-h-[min(88vh,820px)] w-[min(94vw,860px)] max-w-4xl flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 space-y-1.5 border-b px-5 pb-3 pt-5 text-left">
           <DialogTitle className="pr-8 text-base">{t("copyDialog.title")}</DialogTitle>
           <DialogDescription className="sr-only">{t("copyDialog.description")}</DialogDescription>
@@ -395,9 +554,16 @@ export function EffectFolderCopyDialog({
           <ScrollArea className="h-[min(58vh,560px)]">
             <div className="space-y-4 px-5 py-4">
               <section className="space-y-1.5 rounded-lg border bg-muted/15 p-3">
-                <Label htmlFor="effect-copy-destination" className="text-[11px]">
-                  {t("copyDialog.destinationFolder")}
-                </Label>
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="effect-copy-destination" className="text-[11px]">
+                    {t("copyDialog.destinationFolder")}
+                  </Label>
+                  {inPlace ? (
+                    <Badge variant="outline" className="h-5 rounded-sm px-1.5 text-[10px]">
+                      {t("copyDialog.inPlace")}
+                    </Badge>
+                  ) : null}
+                </div>
                 <div className="flex gap-2">
                   <FilePathInput
                     id="effect-copy-destination"
@@ -411,6 +577,19 @@ export function EffectFolderCopyDialog({
                     disabled={busy || phase === "result"}
                     data-i18n-ignore=""
                   />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => {
+                      setDestinationRoot(sourceEffectRoot);
+                      setError(null);
+                    }}
+                    disabled={busy || phase === "result"}
+                  >
+                    {t("copyDialog.useCurrentPack")}
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -443,6 +622,10 @@ export function EffectFolderCopyDialog({
                 <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
                   {error}
                 </div>
+              ) : firstCloneError && phase === "plan" ? (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                  {t(`copyDialog.errors.${firstCloneError}`)}
+                </div>
               ) : null}
 
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -456,6 +639,13 @@ export function EffectFolderCopyDialog({
                 </TabsList>
 
                 <TabsContent value="overview" className="mt-3 space-y-4 focus-visible:outline-none">
+                  <CloneIdentityPanel
+                    drafts={cloneDrafts}
+                    inPlace={inPlace}
+                    disabled={busy || phase === "result"}
+                    onChange={updateCloneDraft}
+                    onFillHashFromName={fillHashFromName}
+                  />
                   <SelectionListPanel
                     title={t("copyDialog.selection")}
                     empty={t("copyDialog.errors.noSelection")}

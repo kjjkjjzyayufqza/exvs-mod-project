@@ -5,7 +5,9 @@ import type {
 } from "./efxbnDocument";
 import { EFXBN_KEY_EPSILON } from "./efxbnDocument";
 import {
+  findEfxbnKeyAtProgress,
   frameToEfxbnProgress,
+  pickNearestEfxbnKey,
   progressToEfxbnFrame,
 } from "./efxbnCurveMath";
 
@@ -57,6 +59,103 @@ export function mergeEfxbnKeySelection(
     if (!next.some((candidate) => sameEfxbnGraphKeyRef(candidate, entry))) next.push(entry);
   }
   return next;
+}
+
+export function refsForEfxbnControl(
+  controlName: EfxbnControlName,
+  keys: readonly EfxbnCurveKey[],
+): EfxbnGraphKeyRef[] {
+  return keys.map((entry) => ({ controlName, sourceKey: entry.key }));
+}
+
+export function selectEfxbnChannelKeys(input: {
+  controlName: EfxbnControlName;
+  keys: readonly EfxbnCurveKey[];
+  progress: number;
+  mode: "nearest" | "all";
+  current: readonly EfxbnGraphKeyRef[];
+  additive: boolean;
+}): EfxbnGraphKeyRef[] {
+  const channelRefs =
+    input.mode === "all"
+      ? refsForEfxbnControl(input.controlName, input.keys)
+      : (() => {
+          const nearest = pickNearestEfxbnKey(input.keys, input.progress);
+          return nearest ? [{ controlName: input.controlName, sourceKey: nearest.key }] : [];
+        })();
+  if (!input.additive) return channelRefs;
+  return mergeEfxbnKeySelection(input.current, channelRefs);
+}
+
+export function sanitizeEfxbnGraphSelection(
+  selection: readonly EfxbnGraphKeyRef[],
+  curves: Partial<Record<EfxbnControlName, readonly EfxbnCurveKey[]>>,
+): EfxbnGraphKeyRef[] {
+  return selection.filter((entry) =>
+    (curves[entry.controlName] ?? []).some(
+      (key) => Math.abs(key.key - entry.sourceKey) <= EFXBN_KEY_EPSILON,
+    ),
+  );
+}
+
+export function inspectorChannelName(
+  selection: readonly EfxbnGraphKeyRef[],
+  focusedControlName: EfxbnControlName,
+): EfxbnControlName | "mixed" {
+  const names = [...new Set(selection.map((entry) => entry.controlName))];
+  if (names.length > 1) return "mixed";
+  return names[0] ?? focusedControlName;
+}
+
+export function isEfxbnEditableHotkeyTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
+}
+
+export function offsetEfxbnCopiedKeys(
+  keys: readonly EfxbnCurveKey[],
+  originProgress: number,
+  targetProgress: number,
+): EfxbnCurveKey[] {
+  const delta = targetProgress - originProgress;
+  return keys.map((entry) => ({ key: entry.key + delta, value: entry.value }));
+}
+
+export function mergeEfxbnPastedKeys(
+  existing: readonly EfxbnCurveKey[],
+  pasted: readonly EfxbnCurveKey[],
+): EfxbnCurveKey[] {
+  const next = existing.map((entry) => ({ ...entry }));
+  for (const paste of pasted) {
+    const index = findEfxbnKeyAtProgress(next, paste.key);
+    if (index !== null) next[index] = { key: paste.key, value: paste.value };
+    else next.push({ key: paste.key, value: paste.value });
+  }
+  return next.sort((left, right) => left.key - right.key);
+}
+
+export function deleteEfxbnSelectedKeys(input: {
+  curves: Partial<Record<EfxbnControlName, readonly EfxbnCurveKey[]>>;
+  selected: readonly EfxbnGraphKeyRef[];
+}): { replacements: EfxbnCurveReplacement[]; keptLastKey: boolean } {
+  let keptLastKey = false;
+  const replacements: EfxbnCurveReplacement[] = [];
+  for (const name of new Set(input.selected.map((entry) => entry.controlName))) {
+    const source = input.curves[name];
+    if (!source) throw new Error(`EFXBN graph has no curve ${name}`);
+    const selectedKeys = input.selected.filter((entry) => entry.controlName === name);
+    const remaining = source.filter(
+      (key) => !selectedKeys.some((entry) => Math.abs(entry.sourceKey - key.key) <= EFXBN_KEY_EPSILON),
+    );
+    if (remaining.length === source.length) continue;
+    if (remaining.length === 0) {
+      keptLastKey = true;
+      continue;
+    }
+    replacements.push({ controlName: name, keys: remaining });
+  }
+  return { replacements, keptLastKey };
 }
 
 export function boxSelectEfxbnKeys(

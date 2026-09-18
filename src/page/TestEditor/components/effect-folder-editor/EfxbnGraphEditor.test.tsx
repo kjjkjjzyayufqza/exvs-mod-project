@@ -280,6 +280,69 @@ describe("EfxbnGraphEditor", () => {
     );
     expect(screen.getByRole("button", { name: /insert key for colorR/i })).toBeDisabled();
     expect(screen.getByRole("slider", { name: "EFXBN progress" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
+  });
+
+  it("inspects the left-hand channel in the selected-key panel", async () => {
+    const user = userEvent.setup();
+    const onFocusedControlNameChange = vi.fn();
+    render(
+      <EfxbnGraphEditor
+        document={makeDocument()}
+        blockIndex={0}
+        progress={25}
+        frameCount={100}
+        focusedControlName="colorR"
+        onFocusedControlNameChange={onFocusedControlNameChange}
+        onProgressChange={vi.fn()}
+        onDocumentChange={vi.fn()}
+        onError={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("textbox", { name: "Channel" })).toHaveValue("colorR");
+    await user.click(screen.getByRole("button", { name: "spawnForm0" }));
+    expect(onFocusedControlNameChange).toHaveBeenCalledWith("spawnForm0");
+    expect(screen.getByRole("textbox", { name: "Channel" })).toHaveValue("spawnForm0");
+    expect(screen.getByRole("spinbutton", { name: "Selected EFXBN key value" })).toHaveValue(0);
+  });
+
+  it("undoes a graph insert from the graph toolbar", async () => {
+    const user = userEvent.setup();
+    const document = makeDocument();
+    const onDocumentChange = vi.fn();
+    const view = (
+      <EfxbnGraphEditor
+        document={document}
+        blockIndex={0}
+        progress={25}
+        frameCount={100}
+        focusedControlName="colorR"
+        onFocusedControlNameChange={vi.fn()}
+        onProgressChange={vi.fn()}
+        onDocumentChange={onDocumentChange}
+        onError={vi.fn()}
+      />
+    );
+    const { rerender } = render(view);
+    await user.click(screen.getByRole("button", { name: "Insert key for colorR at frame 25" }));
+    const next = onDocumentChange.mock.calls[0]![0] as EfxbnDocument;
+    rerender(
+      <EfxbnGraphEditor
+        document={next}
+        blockIndex={0}
+        progress={25}
+        frameCount={100}
+        focusedControlName="colorR"
+        onFocusedControlNameChange={vi.fn()}
+        onProgressChange={vi.fn()}
+        onDocumentChange={onDocumentChange}
+        onError={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    const undone = onDocumentChange.mock.calls[1]![0] as EfxbnDocument;
+    expect(readEfxbnCurve(undone.summary, 0, "colorR").keys).toEqual([{ key: 0, value: 1 }]);
   });
 });
 

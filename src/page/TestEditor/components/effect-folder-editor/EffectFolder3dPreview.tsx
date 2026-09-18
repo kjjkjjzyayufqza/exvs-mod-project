@@ -47,6 +47,7 @@ import {
   reduceEfxbnTransport,
   type EfxbnTransportAction,
 } from "./efxbnProgressScrub";
+import { isEfxbnEditableHotkeyTarget } from "./efxbnGraphInteraction";
 import {
   getEffectFolderWorkspaceState,
   rememberEffectFolderHostModelPath,
@@ -547,6 +548,31 @@ export function EffectFolder3dPreview({
       setWriting(false);
     }
   }, [onEfxbnWritten, t, writing]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (writing || !documentRef.current) return;
+      if (isEfxbnEditableHotkeyTarget(event.target)) return;
+      const mod = event.ctrlKey || event.metaKey;
+      if (!mod) return;
+      const key = event.key.toLowerCase();
+      if (key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        handleUndo();
+      } else if (key === "y" || (key === "z" && event.shiftKey)) {
+        event.preventDefault();
+        handleRedo();
+      } else if (key === "s") {
+        event.preventDefault();
+        if (documentRef.current && isEfxbnDocumentDirty(documentRef.current)) {
+          void handleWriteDocument();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleRedo, handleUndo, handleWriteDocument, writing]);
+
   const externalModelEffectCount = useMemo(() => {
     if (plan?.kind !== "efxbn") return 0;
     const localEffectIndexes = new Set(

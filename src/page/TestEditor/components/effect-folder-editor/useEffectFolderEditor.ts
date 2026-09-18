@@ -16,6 +16,7 @@ import {
 import {
   effectListItemKey,
   filterEffectListItems,
+  pathsReferToSameFolder,
   toEffectFolderSelections,
   type EffectInventoryCategory,
   type EffectListItem,
@@ -415,6 +416,7 @@ export function useEffectFolderEditor({
     async (destination: {
       effectRoot: string;
       structureJsonPath: string;
+      policies?: Parameters<typeof copyEffectFolderSelection>[0]["policies"];
     }): Promise<Awaited<ReturnType<typeof copyEffectFolderSelection>>> => {
       if (selectedItems.length === 0) {
         throw new Error("No effect entries selected to copy.");
@@ -427,11 +429,16 @@ export function useEffectFolderEditor({
           destinationEffectRoot: destination.effectRoot,
           destinationStructureJsonPath: destination.structureJsonPath,
           selections: toEffectFolderSelections(selectedItems),
+          policies: destination.policies ?? [],
         });
         const copiedCount = result.copiedFiles.length;
         toast.success(`Copied ${copiedCount} file(s) to destination pack`);
         if (result.skipped.length > 0) {
           toast.message(`${result.skipped.length} item(s) skipped`);
+        }
+        if (copiedCount > 0 && pathsReferToSameFolder(effectRoot, destination.effectRoot)) {
+          markMutated();
+          await reload({ silent: true, preserveSelection: true });
         }
         return result;
       } catch (error) {
@@ -441,7 +448,7 @@ export function useEffectFolderEditor({
         setBusyAction(null);
       }
     },
-    [effectRoot, selectedItems, structureJsonPath],
+    [effectRoot, markMutated, reload, selectedItems, structureJsonPath],
   );
 
   return {

@@ -578,6 +578,7 @@ export async function deleteEffectFolderEntries(params: {
 export interface EffectFolderCopyEfxbnPolicy {
   fileIndex: number;
   destFileName?: string | null;
+  destHashId?: number | null;
   overwrite?: boolean;
   skip?: boolean;
 }
