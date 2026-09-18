@@ -11,13 +11,13 @@ mod character_id_preview;
 pub mod collision_mesh;
 mod commands;
 mod console_color;
-mod github_release;
 #[cfg(debug_assertions)]
 mod dev_tools_sync;
 pub mod exvs2_json_cli;
 pub mod fhm2d_extract_cli;
 mod fhm2d_memory_preview;
 pub mod format;
+mod github_release;
 pub mod havok_cli;
 pub mod havok_collision_encode;
 pub mod havok_mesh_encode;

@@ -5129,7 +5129,11 @@ mod tests {
                 minor_version: 6,
                 entries: Vec::new(),
             }
-            .write_to_file(artifacts_dir.path().join(format!("{base}__{profile}__.numatb")))
+            .write_to_file(
+                artifacts_dir
+                    .path()
+                    .join(format!("{base}__{profile}__.numatb")),
+            )
             .unwrap();
         }
 

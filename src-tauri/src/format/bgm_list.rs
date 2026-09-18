@@ -122,7 +122,12 @@ pub fn donor_source_group(entries: &[ListEntry], skip_entry_id: Option<u32>) -> 
 }
 
 fn next_unused(occupied: &HashSet<u32>) -> u32 {
-    let mut candidate = occupied.iter().copied().max().unwrap_or(0).saturating_add(1);
+    let mut candidate = occupied
+        .iter()
+        .copied()
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1);
     if candidate == 0 {
         candidate = 1;
     }
@@ -303,7 +308,10 @@ fn discover_bgm_list(folder: &Path) -> Result<PathBuf, String> {
             continue;
         }
         if found.is_some() {
-            return Err(format!("Multiple bgm_list files under {}", folder.display()));
+            return Err(format!(
+                "Multiple bgm_list files under {}",
+                folder.display()
+            ));
         }
         found = Some(path);
     }

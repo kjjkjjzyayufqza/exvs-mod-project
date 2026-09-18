@@ -1,7 +1,7 @@
 # Rebellion 飞行中觉醒：武装栏变回 normal
 
-**Date:** 2026-09-06
-**Status:** E1 source-pinned; L3 untested
+**Date:** 2026-09-06 (implemented 2026-09-12)
+**Status:** E1 source-pinned; L3 untested. Latch is in current `2.c`; do not re-derive.
 **Kind:** HUD BindSlot ownership (burst `global23` vs bird bar)
 **Primary trees:**
 
@@ -55,7 +55,15 @@ Param   E:\XB\mod\041cpm\wing_gundam_zero_rebellion_param\armsparam.bin
 
 ---
 
-## 3. 当前契约（E1，2026-09-06）
+## 2b. 用户路径（2026-09-12，E1）
+
+地面觉醒已开（`global23=1`，`global770=1`，slot 3 已是 `FLYING_EX`）→ 特格接近战进 dash。`func_26` 先跑 `func_879`（本帧 `770>=1` 所以不绑），然后 676 一次 `cut_in_loop` → `install`。旧 `install` 把 `global770` 清 0。下一帧 `func_879`：`global143!=0x2` 且 `770<1` → `func_1034(3)` 把 slot 3 绑回 `0x8D5B747A`。BD+双击进飞走 `transform_start` 的 `global143=0x2`，同一条 `func_879` 整段跳过，所以没第三栏。
+
+现行：`install` 置 latch、**不再清** `global770`。`func_879` 看 latch 不看 `global143`。
+
+---
+
+## 3. 当前契约（E1，2026-09-12 已写入 2.c）
 
 | 时机 | 政策 |
 |------|------|
@@ -86,6 +94,10 @@ Param   E:\XB\mod\041cpm\wing_gundam_zero_rebellion_param\armsparam.bin
 H9  hypothesis: burst during transform start / analog 0x77b100ff / dash keeps bird HUD
 P9  prediction: slots 0-2 stay trans_mode rows; slot 3 stays empty; no FLYING cell
 F9  falsifier: MS rifles + 飞翔 return; OR slot 3 starts 5s in air (I4); OR leaving burst while still flying swaps to MS EX
+
+H10 hypothesis: already-burst ground special-N dash no longer rebinds FLYING_EX
+P10 prediction: right HUD has bird 0/1/2 only; no extra MS 飞翔 cell. BD analog burst flight unchanged
+F10 falsifier: extra right-side MS/FLYING cell after 特格->近战->冲刺 while burst; OR analog burst flight loses bird bar; OR land while burst never gets FLYING_EX
 ```
 
 ---
@@ -98,3 +110,4 @@ F9  falsifier: MS rifles + 飞翔 return; OR slot 3 starts 5s in air (I4); OR le
 | 鸟形态整函数 `return` `func_879` | 停掉 `func_314` 翼维护 |
 | 出鸟后仍把 latch 留着 | 觉醒中出鸟就再也换不上 FLYING_EX |
 | 给鸟行再抄一套 `func_1034(3)` 地面 EX | 那正是本 bug |
+| `install` 里把 `global770` 清 0 | 已觉醒的 dash 下一拍会被当成 `global23` 上升沿 |

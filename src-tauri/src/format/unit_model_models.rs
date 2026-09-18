@@ -2436,8 +2436,12 @@ pub fn preview_unit_model_numshb_replacement(
         })
         .collect();
     let target_numdlb_entries = {
-        let modl = ModlData::from_file(target_numdlb)
-            .map_err(|e| format!("Failed to read target numdlb {}: {e}", target_numdlb.display()))?;
+        let modl = ModlData::from_file(target_numdlb).map_err(|e| {
+            format!(
+                "Failed to read target numdlb {}: {e}",
+                target_numdlb.display()
+            )
+        })?;
         modl.entries
             .into_iter()
             .map(|entry| UnitModelNumdlbEntryRef {
@@ -2465,14 +2469,20 @@ pub fn preview_unit_model_numshb_replacement(
     let kept: Vec<UnitModelMeshObjectRef> = source_objects
         .iter()
         .filter(|object| {
-            target_keys.contains(&mesh_object_canonical_identity(&object.name, object.subindex))
+            target_keys.contains(&mesh_object_canonical_identity(
+                &object.name,
+                object.subindex,
+            ))
         })
         .cloned()
         .collect();
     let new_in_source: Vec<UnitModelMeshObjectRef> = source_objects
         .iter()
         .filter(|object| {
-            !target_keys.contains(&mesh_object_canonical_identity(&object.name, object.subindex))
+            !target_keys.contains(&mesh_object_canonical_identity(
+                &object.name,
+                object.subindex,
+            ))
         })
         .cloned()
         .collect();
@@ -2511,10 +2521,8 @@ pub fn preview_unit_model_numshb_replacement(
     let (source_skel_bone_count, matching_skel_bone_names) = match source.nusktb.as_ref() {
         Some(path) => {
             let names = read_skel_bone_names(path)?;
-            let source_keys: HashSet<String> = names
-                .iter()
-                .map(|name| name.to_ascii_lowercase())
-                .collect();
+            let source_keys: HashSet<String> =
+                names.iter().map(|name| name.to_ascii_lowercase()).collect();
             let matching = source_keys.intersection(&target_bone_keys).count();
             (Some(names.len()), Some(matching))
         }
@@ -2535,9 +2543,7 @@ pub fn preview_unit_model_numshb_replacement(
         warnings.push("Source NUMSHB contains no mesh objects.".to_string());
     }
     if source_modl_keys != source_keys {
-        warnings.push(
-            "Source NUMDLB entries do not match source NUMSHB mesh objects.".to_string(),
-        );
+        warnings.push("Source NUMDLB entries do not match source NUMSHB mesh objects.".to_string());
     }
     if !missing_in_source.is_empty() || !new_in_source.is_empty() {
         warnings.push(format!(
@@ -2786,12 +2792,9 @@ fn scan_mesh_material_source(source_dir: &Path) -> Result<MeshMaterialSource, St
         ));
     }
     let mut by_extension: HashMap<String, Vec<PathBuf>> = HashMap::new();
-    for entry in fs::read_dir(source_dir).map_err(|e| {
-        format!(
-            "Failed to read source dir {}: {e}",
-            source_dir.display()
-        )
-    })? {
+    for entry in fs::read_dir(source_dir)
+        .map_err(|e| format!("Failed to read source dir {}: {e}", source_dir.display()))?
+    {
         let path = entry
             .map_err(|e| format!("Failed to read source entry: {e}"))?
             .path();
@@ -2799,7 +2802,10 @@ fn scan_mesh_material_source(source_dir: &Path) -> Result<MeshMaterialSource, St
             continue;
         }
         let extension = ext_lower(&path);
-        if matches!(extension.as_str(), ".numdlb" | ".numshb" | ".nusktb" | ".numatb") {
+        if matches!(
+            extension.as_str(),
+            ".numdlb" | ".numshb" | ".nusktb" | ".numatb"
+        ) {
             by_extension.entry(extension).or_default().push(path);
         }
     }
@@ -2823,7 +2829,11 @@ fn scan_mesh_material_source(source_dir: &Path) -> Result<MeshMaterialSource, St
     let numshb = exactly_one(".numshb")?;
     let numatbs = by_extension.get(".numatb").cloned().unwrap_or_default();
     let (maya_numatb, nust_numatb) = split_maya_nust_numatbs(&numatbs)?;
-    let nusktb = match by_extension.get(".nusktb").map(Vec::as_slice).unwrap_or(&[]) {
+    let nusktb = match by_extension
+        .get(".nusktb")
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
+    {
         [file] => Some(file.clone()),
         _ => None,
     };
@@ -2868,11 +2878,17 @@ fn split_maya_nust_numatbs(paths: &[PathBuf]) -> Result<(PathBuf, PathBuf), Stri
             Some("nust") => {
                 // Numbered NUST variants belong to special material states. Mesh replacement
                 // only changes the base pair, preserving every target variant in place.
-                let stem = path.file_stem().and_then(|name| name.to_str())
-                    .unwrap_or("").to_ascii_lowercase();
-                if stem.strip_suffix("__nust__")
+                let stem = path
+                    .file_stem()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("")
+                    .to_ascii_lowercase();
+                if stem
+                    .strip_suffix("__nust__")
                     .and_then(|base| base.rsplit_once("_m"))
-                    .is_some_and(|(_, index)| index.len() >= 3 && index.bytes().all(|b| b.is_ascii_digit()))
+                    .is_some_and(|(_, index)| {
+                        index.len() >= 3 && index.bytes().all(|b| b.is_ascii_digit())
+                    })
                 {
                     continue;
                 }
@@ -2894,9 +2910,7 @@ fn split_maya_nust_numatbs(paths: &[PathBuf]) -> Result<(PathBuf, PathBuf), Stri
     }
     match (maya, nust) {
         (Some(maya), Some(nust)) => Ok((maya, nust)),
-        _ => Err(
-            "Need exactly one __maya__.numatb and one __nust__.numatb.".to_string(),
-        ),
+        _ => Err("Need exactly one __maya__.numatb and one __nust__.numatb.".to_string()),
     }
 }
 
@@ -4345,7 +4359,11 @@ mod tests {
                 minor_version: 6,
                 entries: Vec::new(),
             }
-            .write_to_file(source_dir.path().join(format!("foreign__{profile}__.numatb")))
+            .write_to_file(
+                source_dir
+                    .path()
+                    .join(format!("foreign__{profile}__.numatb")),
+            )
             .unwrap();
         }
 

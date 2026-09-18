@@ -4,8 +4,8 @@ use app_lib::format::gui_pack_clone::{
     extract_workspace_gui_pack, find_preview_nutexb, gui_clone_extract_relative,
     gui_clone_hash_key, list_workspace_gui_packs, pack_file_name, parse_hash_name_token,
     parse_pack_hash_from_name, structure_display_name, structure_hash_name,
-    vs2_gui_extract_relative, CloneGuiSetRequest, ExtractWorkspaceGuiPackRequest, NAVI_GUI_PACKS,
-    MS_GUI_FIELDS, NAVI_SERIES_ID_HASH, NAVI_UNIQUE_ID_HASH, PILOT_GUI_FIELDS,
+    vs2_gui_extract_relative, CloneGuiSetRequest, ExtractWorkspaceGuiPackRequest, MS_GUI_FIELDS,
+    NAVI_GUI_PACKS, NAVI_SERIES_ID_HASH, NAVI_UNIQUE_ID_HASH, PILOT_GUI_FIELDS,
 };
 use app_lib::format::list_command_pool::{ListData, ListEntry};
 use app_lib::format::navilist::{build_navilist_data, parse_navilist_data};
@@ -202,7 +202,9 @@ fn find_preview_nutexb_prefers_pack_name() {
     fs::write(temp.path().join("other.nutexb"), b"a").unwrap();
     fs::write(temp.path().join("vs_p_l_016_001_c01.nutexb"), b"b").unwrap();
     let found = find_preview_nutexb(temp.path(), "vs_p_l_016_001_c01").unwrap();
-    assert!(found.replace('\\', "/").ends_with("vs_p_l_016_001_c01.nutexb"));
+    assert!(found
+        .replace('\\', "/")
+        .ends_with("vs_p_l_016_001_c01.nutexb"));
 }
 
 #[test]
@@ -245,7 +247,10 @@ fn extract_workspace_gui_pack_keeps_hash_and_auto_names_folder() {
         extracted.workspace_relative.replace('\\', "/"),
         "image/pilot/vs_p_l/vs_p_l_016_001_c01"
     );
-    assert_eq!(first_extracted_payload(Path::new(&extracted.folder_path)), b"VS-P-L");
+    assert_eq!(
+        first_extracted_payload(Path::new(&extracted.folder_path)),
+        b"VS-P-L"
+    );
     assert_eq!(
         structure_hash_name(Path::new(&extracted.structure_json_path)).unwrap(),
         "0x9233D6AC"
@@ -257,14 +262,12 @@ fn extract_workspace_gui_pack_keeps_hash_and_auto_names_folder() {
     .unwrap();
     let listed = list_workspace_gui_packs(&workspace).unwrap();
     assert_eq!(listed.len(), 1);
-    assert!(
-        listed[0]
-            .preview_nutexb_path
-            .as_ref()
-            .unwrap()
-            .replace('\\', "/")
-            .ends_with("vs_p_l_016_001_c01.nutexb")
-    );
+    assert!(listed[0]
+        .preview_nutexb_path
+        .as_ref()
+        .unwrap()
+        .replace('\\', "/")
+        .ends_with("vs_p_l_016_001_c01.nutexb"));
     let err = extract_workspace_gui_pack(ExtractWorkspaceGuiPackRequest {
         dpl_cache_path: dpl.display().to_string(),
         workspace_root: workspace.display().to_string(),
@@ -735,8 +738,7 @@ fn clone_preview_uses_workspace_extract_when_dplcache_pack_is_missing() {
     assert_eq!(preview.packs.len(), 1);
     assert_eq!(preview.packs[0].donor_hash, cloned_hash);
     assert_eq!(preview.packs[0].donor_name, "custom_vs_p_l");
-    assert!(preview
-        .packs[0]
+    assert!(preview.packs[0]
         .source_path
         .replace('\\', "/")
         .ends_with("custom_vs_p_l"));
@@ -820,7 +822,10 @@ fn clone_navi_follows_donor_series_not_hardcoded_relena() {
     .unwrap();
     assert_eq!(preview.packs.len(), 1);
     assert_eq!(preview.packs[0].donor_hash, gundam_navi);
-    assert_ne!(preview.packs[0].donor_hash, NAVI_GUI_PACKS[0].fallback_donor_hash);
+    assert_ne!(
+        preview.packs[0].donor_hash,
+        NAVI_GUI_PACKS[0].fallback_donor_hash
+    );
 }
 
 fn write_tiny_ob_fhm2d(dir: &Path, hash: u32, payload: &[u8]) -> PathBuf {

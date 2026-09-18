@@ -11,8 +11,8 @@
 use crate::msc_toolchain::ast::{print_c, CExpr, CFunc, CStmt};
 use crate::msc_toolchain::binary::{Command, Item, MscFile, Param};
 use crate::msc_toolchain::opcode::{
-    assign_name, binary_name, stack_pops, unary_name, CMD_CALL, CMD_CALL3, CMD_ELSE, CMD_IF,
-    CMD_IF_NOT, CMD_PUSH_INT, CMD_PUSH_SHORT, CMD_PUSH_VAR, CMD_SET_MAIN, CMD_SYS, CMD_TRY,
+    assign_name, binary_name, unary_name, CMD_CALL, CMD_CALL3, CMD_ELSE, CMD_IF, CMD_IF_NOT,
+    CMD_PUSH_INT, CMD_PUSH_SHORT, CMD_PUSH_VAR, CMD_SET_MAIN, CMD_SYS, CMD_TRY,
 };
 
 #[derive(Clone, Debug)]
@@ -98,10 +98,6 @@ fn param_label_in_slice(param: &Param, items: &[Work]) -> bool {
         Work::Label { pos, name } => param_targets_label(param, *pos, name),
         _ => false,
     })
-}
-
-fn is_cmd_op(w: &Work, op: u8) -> bool {
-    matches!(w, Work::Cmd(c) if c.op == op)
 }
 
 fn pull_out_loops(commands: &[Work]) -> Vec<Work> {

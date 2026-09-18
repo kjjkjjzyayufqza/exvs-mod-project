@@ -172,11 +172,6 @@ fn resolve_exvs_sys(cmd: &Command, popped: &[Option<Command>], resolve: &mut dyn
     }
     let Some(kind) = cmd.u32_at(1) else { return };
     let indices: Option<u32> = if kind == 1 {
-        let table = const_int(
-            popped
-                .get(popped.len().wrapping_sub(1))
-                .and_then(|x| x.as_ref()),
-        );
         // popped[0] is last popped = last arg? Python: popped.append(stack.pop()) so popped[0] is last pushed = last arg
         // _source_arg_int(popped, 0) -> index = len-1-0 = last element of popped?
         // _popped_index_for_source_arg: index = len(popped)-1-source_arg_index
@@ -307,12 +302,6 @@ fn walk_script(
                             called,
                             &local_defs,
                         );
-                        if let Some(Item::Cmd(orig)) = script.items.get_mut(
-                            // can't easily map back; mutate popped clone then copy params onto matching command by pos
-                            idx,
-                        ) {
-                            // apply by scanning items for commandPosition match of p0
-                        }
                         apply_resolved(&mut script.items, &p0);
                     }
                 }

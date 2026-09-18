@@ -90,12 +90,6 @@ impl<'a> Lexer<'a> {
         self.src.get(self.i).copied()
     }
 
-    fn bump(&mut self) -> Option<u8> {
-        let c = self.peek_char()?;
-        self.i += 1;
-        Some(c)
-    }
-
     fn skip_ws(&mut self) {
         loop {
             match self.peek_char() {

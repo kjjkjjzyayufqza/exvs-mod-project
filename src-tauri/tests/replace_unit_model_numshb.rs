@@ -7,8 +7,8 @@ use app_lib::format::unit_model_models::{
 };
 use serde_json::json;
 use ssbh_data::hlpb_data::HlpbData;
-use ssbh_data::modl_data::ModlEntryData;
 use ssbh_data::matl_data::MatlEntryData;
+use ssbh_data::modl_data::ModlEntryData;
 use ssbh_data::prelude::{MatlData, MeshData, ModlData, SkelData};
 
 fn write_min_source(dir: &Path, base: &str) {
@@ -174,7 +174,11 @@ fn write_replace_fixture(parent: &Path) -> (PathBuf, PathBuf, PathBuf, PathBuf) 
 
 fn write_mesh_material_source(dir: &Path, base: &str, object_name: &str, parent_bone: &str) {
     write_min_source(dir, base);
-    write_mesh_with_parent(&dir.join(format!("{base}.numshb")), object_name, parent_bone);
+    write_mesh_with_parent(
+        &dir.join(format!("{base}.numshb")),
+        object_name,
+        parent_bone,
+    );
     ModlData {
         major_version: 1,
         minor_version: 0,
@@ -221,7 +225,11 @@ fn replace_numshb_overwrites_mesh_materials_and_leaves_skeleton_untouched() {
                 uv_transforms: Vec::new(),
             }],
         }
-        .write_to_file(source_dir.path().join(format!("foreign__{profile}__.numatb")))
+        .write_to_file(
+            source_dir
+                .path()
+                .join(format!("foreign__{profile}__.numatb")),
+        )
         .unwrap();
     }
 
@@ -429,12 +437,15 @@ fn preview_missing_bone_names_are_warnings_not_blockers() {
 }
 
 fn add_special_nust_variants(dir: &Path, base: &str) -> Vec<PathBuf> {
-    ["m001", "m002", "m010"].into_iter().map(|variant| {
-        let path = dir.join(format!("{base}_{variant}__nust__.numatb"));
-        // Deliberately opaque: base replacement must not parse these special profiles.
-        fs::write(&path, format!("special profile {base} {variant}")).unwrap();
-        path
-    }).collect()
+    ["m001", "m002", "m010"]
+        .into_iter()
+        .map(|variant| {
+            let path = dir.join(format!("{base}_{variant}__nust__.numatb"));
+            // Deliberately opaque: base replacement must not parse these special profiles.
+            fs::write(&path, format!("special profile {base} {variant}")).unwrap();
+            path
+        })
+        .collect()
 }
 
 fn register_special_nust_variants(structure_path: &Path, paths: &[PathBuf]) {
@@ -451,11 +462,14 @@ fn register_special_nust_variants(structure_path: &Path, paths: &[PathBuf]) {
             "fileBaseName": name,
             "fileUrl": format!(".\\PKG\\models\\alpha\\{}.numatb", name),
         }));
-        tree.splice(10..10, [
-            make_folder(32, 1, 0),
-            SubFileStructureEntry::EndMark { end_mark_count: 1 },
-            make_item(index, "21000000", 2, name),
-        ]);
+        tree.splice(
+            10..10,
+            [
+                make_folder(32, 1, 0),
+                SubFileStructureEntry::EndMark { end_mark_count: 1 },
+                make_item(index, "21000000", 2, name),
+            ],
+        );
     }
     if let SubFileStructureEntry::Folder { folder_count, .. } = &mut tree[2] {
         *folder_count += 2 * paths.len() as i32;
@@ -477,33 +491,52 @@ fn assert_special_nust_replacement(source_has_variants: bool) {
     register_special_nust_variants(&structure_path, &variants);
     let structure_before = fs::read(&structure_path).unwrap();
     let special_before: Vec<_> = variants.iter().map(|p| fs::read(p).unwrap()).collect();
-    let source_before: Vec<_> = fs::read_dir(source.path()).unwrap().map(|e| {
-        let path = e.unwrap().path();
-        let bytes = fs::read(&path).unwrap();
-        (path, bytes)
-    }).collect();
+    let source_before: Vec<_> = fs::read_dir(source.path())
+        .unwrap()
+        .map(|e| {
+            let path = e.unwrap().path();
+            let bytes = fs::read(&path).unwrap();
+            (path, bytes)
+        })
+        .collect();
     let preview = preview_unit_model_numshb_replacement(
-        root.to_str().unwrap(), Some(structure_path.to_str().unwrap()),
-        "alpha", source.path().to_str().unwrap(),
-    ).unwrap();
+        root.to_str().unwrap(),
+        Some(structure_path.to_str().unwrap()),
+        "alpha",
+        source.path().to_str().unwrap(),
+    )
+    .unwrap();
     assert!(preview.blockers.is_empty(), "{:?}", preview.blockers);
-    assert!(preview.target_nust_numatb_path.ends_with("alpha__nust__.numatb"));
+    assert!(preview
+        .target_nust_numatb_path
+        .ends_with("alpha__nust__.numatb"));
     replace_unit_model_numshb(
-        root.to_str().unwrap(), Some(structure_path.to_str().unwrap()),
-        "alpha", source.path().to_str().unwrap(),
-    ).unwrap();
-    assert_eq!(fs::read(target.join("alpha.numshb")).unwrap(),
-        fs::read(source.path().join("foreign.numshb")).unwrap());
+        root.to_str().unwrap(),
+        Some(structure_path.to_str().unwrap()),
+        "alpha",
+        source.path().to_str().unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        fs::read(target.join("alpha.numshb")).unwrap(),
+        fs::read(source.path().join("foreign.numshb")).unwrap()
+    );
     for profile in ["maya", "nust"] {
-        assert_eq!(fs::read(target.join(format!("alpha__{profile}__.numatb"))).unwrap(),
-            fs::read(source.path().join(format!("foreign__{profile}__.numatb"))).unwrap());
+        assert_eq!(
+            fs::read(target.join(format!("alpha__{profile}__.numatb"))).unwrap(),
+            fs::read(source.path().join(format!("foreign__{profile}__.numatb"))).unwrap()
+        );
     }
     assert_eq!(fs::read(&structure_path).unwrap(), structure_before);
     for (path, before) in variants.iter().zip(special_before) {
         assert_eq!(fs::read(path).unwrap(), before);
     }
     for (path, before) in source_before {
-        assert_eq!(fs::read(path).unwrap(), before, "source must remain untouched");
+        assert_eq!(
+            fs::read(path).unwrap(),
+            before,
+            "source must remain untouched"
+        );
     }
 }
 
@@ -527,9 +560,13 @@ fn unit_model_regression_special_nust_cannot_substitute_for_missing_base() {
     add_special_nust_variants(source.path(), "foreign");
     fs::remove_file(source.path().join("foreign__nust__.numatb")).unwrap();
     let error = preview_unit_model_numshb_replacement(
-        root.to_str().unwrap(), Some(structure.to_str().unwrap()),
-        "alpha", source.path().to_str().unwrap(),
-    ).err().expect("missing base must be rejected");
+        root.to_str().unwrap(),
+        Some(structure.to_str().unwrap()),
+        "alpha",
+        source.path().to_str().unwrap(),
+    )
+    .err()
+    .expect("missing base must be rejected");
     assert!(error.contains("Need exactly one"), "{error}");
 }
 
@@ -539,11 +576,18 @@ fn unit_model_regression_ambiguous_base_nust_still_rejected() {
     let (root, structure, _, _) = write_replace_fixture(parent.path());
     let source = tempfile::tempdir().unwrap();
     write_mesh_material_source(source.path(), "foreign", "Body", "");
-    fs::copy(source.path().join("foreign__nust__.numatb"),
-        source.path().join("another__nust__.numatb")).unwrap();
+    fs::copy(
+        source.path().join("foreign__nust__.numatb"),
+        source.path().join("another__nust__.numatb"),
+    )
+    .unwrap();
     let error = preview_unit_model_numshb_replacement(
-        root.to_str().unwrap(), Some(structure.to_str().unwrap()),
-        "alpha", source.path().to_str().unwrap(),
-    ).err().expect("ambiguous base must be rejected");
+        root.to_str().unwrap(),
+        Some(structure.to_str().unwrap()),
+        "alpha",
+        source.path().to_str().unwrap(),
+    )
+    .err()
+    .expect("ambiguous base must be rejected");
     assert!(error.contains("found more than one"), "{error}");
 }

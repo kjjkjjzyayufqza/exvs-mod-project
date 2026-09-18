@@ -17,8 +17,7 @@ fn main() {
         eprintln!("usage: repack_fhm2d <structure.json> <output.fhm2d>");
         std::process::exit(2);
     }
-    match app_lib::format::fhm2d_pack::repack_fhm2d_from_structure(&args[1], &args[2], true, None)
-    {
+    match app_lib::format::fhm2d_pack::repack_fhm2d_from_structure(&args[1], &args[2], true, None) {
         Ok(result) => println!(
             "ok files={} bytes={} -> {}",
             result.total_files, result.output_size, result.output_path

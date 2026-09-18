@@ -79,7 +79,7 @@ F2  falsifier:  变形过程中弹立刻下坠
 
 当前 `ACTION_BC_SPECIAL_MELEE_BIRD_LANDING` 下落链仍是 2026-08-23：A ENTER `interrupt`，A 到 `0x708`，wait 只等 `!func_287(0x3ed)`。取消只加一件事：wait / ground 每 tick `func_123(0x3bf)` + `func_123(0xc00000)`。A 段不开窗（F7）。没有 `func_233` / `func_81` / `0x9a5` / `wait_remain`。
 
-`0x3bf` = 主射 `0x1` + 格斗 `0x3e` + 副射 `0x80` + 特射 `0x100` + 特格 `0x200`。ENTER 已拆鸟，取消走普通形态 `0.c` 表。
+`0x3bf` 曾是主射 `0x1` + 格斗 `0x3e` + 副射 `0x80` + 特射 `0x100` + 特格 `0x200`。2026-09-12 用户：只能格斗/特射/特格，不能射击。现行 `0x33e` = `0x3e|0x100|0x200`，去掉 `0x1` 和 `0x80`。`0xc00000` 仍在。ENTER 已拆鸟，取消走普通形态 `0.c` 表。不要开在 A 段（F7）。
 
 ### 预注册（本包）
 

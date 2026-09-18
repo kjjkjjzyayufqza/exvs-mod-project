@@ -533,6 +533,7 @@ Current project rule entry points:
 - `exvs2-json` artifact isolation: `.cursor/rules/exvs2-json-artifacts.mdc`
 - `fhm2d-extract` artifact isolation: `.cursor/rules/fhm2d-extract-artifacts.mdc`
 - No release builds: `.cursor/rules/no-release-builds.mdc`
+- Rust warnings: `.cursor/rules/rust-no-warnings.mdc`
 - English-only GitHub release notes: `.cursor/rules/release-notes-english.mdc`
 - MSC research cluster routing: `.cursor/rules/msc-research-index.mdc`
 - EXVS2-POC notes stay local: `.cursor/rules/exvs2-poc-local-only.mdc`
@@ -614,6 +615,10 @@ Project skills (domain):
   Never rename a param key without adding the old name to that file's legacy alias
   table in the same change.
 - Do not start dev servers unless the user explicitly asks.
+- **Rust rustc warnings are forbidden** on the default check surface. After
+  editing `src-tauri/**/*.rs`, run debug `cargo check --lib --bins` from
+  `src-tauri/` and delete unused code rather than adding `#[allow]`. Rule:
+  `.cursor/rules/rust-no-warnings.mdc`.
 - Prefer reusing existing utility functions, components, and data models.
 - Each `page` component should have a corresponding `components/` directory.
 - Use `useTransition` for heavy UI updates that should not block input; use
@@ -624,6 +629,10 @@ Project skills (domain):
 - For non-MSC changes, run exactly one narrowest reliable semantic verifier for
   each change, then stop on pass. Do not add generic build/lint/type/full-suite
   checks afterward.
+- **Rust edits:** after changing `src-tauri/**/*.rs`, that verifier is debug
+  `cargo check --lib --bins` from `src-tauri/`. This crate must emit zero rustc
+  warnings. Prefer deleting unused code over `#[allow]`. Rule:
+  `.cursor/rules/rust-no-warnings.mdc`.
 - After changing SourceNoticeCanary templates or selection, run
   `python tools/stamp_rs_ai_notices.py --check`. There is no `--strip`.
 - **MSC runtime-first verification budget (mandatory):** automated checks only

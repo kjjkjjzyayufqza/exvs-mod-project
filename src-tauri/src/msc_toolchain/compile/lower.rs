@@ -17,7 +17,6 @@ struct FnCtx<'a> {
     local_index: HashMap<String, usize>,
     local_types: HashMap<String, String>,
     globals: &'a HashMap<String, usize>,
-    global_types: &'a HashMap<String, String>,
     functions: &'a HashMap<String, String>,
     syscalls: &'a HashMap<String, u32>,
     push_short: bool,
@@ -45,13 +44,6 @@ impl<'a> FnCtx<'a> {
 
     fn last_cmd(&self) -> Option<&Cmd> {
         self.out.iter().rev().find_map(|it| match it {
-            Item::Cmd(c) => Some(c),
-            Item::Label(_) => None,
-        })
-    }
-
-    fn last_cmd_mut(&mut self) -> Option<&mut Cmd> {
-        self.out.iter_mut().rev().find_map(|it| match it {
             Item::Cmd(c) => Some(c),
             Item::Label(_) => None,
         })
@@ -594,10 +586,8 @@ fn normalize_condition_expr(node: &Expr) -> Expr {
 
 pub fn lower_unit(unit: &Unit, push_short: bool) -> Result<Vec<Vec<Item>>, String> {
     let mut globals = HashMap::new();
-    let mut global_types = HashMap::new();
-    for (i, (ty, name)) in unit.globals.iter().enumerate() {
+    for (i, (_ty, name)) in unit.globals.iter().enumerate() {
         globals.insert(name.clone(), i);
-        global_types.insert(name.clone(), ty.clone());
     }
     let mut functions = HashMap::new();
     for f in &unit.functions {
@@ -620,7 +610,6 @@ pub fn lower_unit(unit: &Unit, push_short: bool) -> Result<Vec<Vec<Item>>, Strin
                 .collect(),
             local_types: f.args.iter().map(|(t, n)| (n.clone(), t.clone())).collect(),
             globals: &globals,
-            global_types: &global_types,
             functions: &functions,
             syscalls: &syscalls,
             push_short,

@@ -1,0 +1,35 @@
+---
+description: Default Rust check surface must stay rustc-warning-free; do not silence with allow
+globs: src-tauri/**/*.rs
+alwaysApply: true
+---
+
+# Rust warnings (mandatory)
+
+The rust-analyzer flycheck and agent default check are **debug**
+`cargo check --lib --bins` in `src-tauri/` (no `--release`, no extra features).
+That surface must emit **zero rustc warnings** from this crate.
+
+## After any `.rs` edit
+
+1. Run `cargo check --lib --bins` from `src-tauri/` (debug profile).
+2. Stop only when this crate prints no `warning:`. Do not treat dependency
+   noise as a pass if `app` / `app_lib` still warns.
+3. Do **not** run `--all-targets`, `--all-features`, `clippy`, or `--release`
+   unless the user asked or the change lives in tests/examples/legacy bins.
+
+## How to fix (in order)
+
+1. Delete unused imports, functions, methods, and unread fields.
+2. Prefix a binding with `_` only when the pattern/signature must keep it.
+3. `#[allow(...)]` is last-resort for genuine FFI / format-layout / feature-gated
+   surfaces. Do not add it to clear a warning you introduced.
+
+## Forbidden
+
+- Leaving rustc warnings for the next agent.
+- `#[allow(dead_code)]` / `#[allow(unused_*)]` as the default fix.
+- Broad `#![allow(...)]` on a module to hide new dead code.
+- Claiming check-clean without a fresh `cargo check --lib --bins` after the edit.
+
+Related: `AGENTS.md`, `.cursor/rules/no-release-builds.mdc`.

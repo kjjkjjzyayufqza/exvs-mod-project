@@ -268,7 +268,10 @@ pub fn parse_pack(folder_path: &str, family: &str) -> Result<Value, String> {
     file_to_json(parsed, &path)
 }
 
-fn apply_named_overlay(file: &mut ParamBinaryFile, entries: &[CameraTableEntry]) -> Result<(), String> {
+fn apply_named_overlay(
+    file: &mut ParamBinaryFile,
+    entries: &[CameraTableEntry],
+) -> Result<(), String> {
     if entries.len() != file.entries_raw.len() {
         return Err(format!(
             "camera table entry count {} != raw count {}",
@@ -321,7 +324,10 @@ fn sort_camera_table_file(payload: &mut CameraTableFile) -> Result<(), String> {
     if order.iter().copied().eq(0..count) {
         return Ok(());
     }
-    let entry_ids: Vec<u32> = order.iter().map(|&index| payload.entry_ids[index]).collect();
+    let entry_ids: Vec<u32> = order
+        .iter()
+        .map(|&index| payload.entry_ids[index])
+        .collect();
     let entries_raw: Vec<Vec<u8>> = order
         .iter()
         .map(|&index| payload.entries_raw[index].clone())
@@ -343,8 +349,8 @@ fn sort_camera_table_file(payload: &mut CameraTableFile) -> Result<(), String> {
 }
 
 pub fn write_pack(data_json: &Value, file_path: &str) -> Result<Value, String> {
-    let mut payload: CameraTableFile =
-        serde_json::from_value(data_json.clone()).map_err(|e| format!("Deserialize failed: {e}"))?;
+    let mut payload: CameraTableFile = serde_json::from_value(data_json.clone())
+        .map_err(|e| format!("Deserialize failed: {e}"))?;
     if payload.entries.len() != payload.entries_raw.len() {
         return Err("entries and entriesRaw length mismatch".to_string());
     }

@@ -566,7 +566,9 @@ fn fallback_gui_package_path(field_key: &str, name: &str) -> String {
         format!("009gui/image/pilot/vs_p_r/{name}")
     } else if field_key == "scP" || name.starts_with("sc_p_") {
         format!("009gui/image/pilot/sc_p/{name}")
-    } else if field_key == "lmbCutIn" || field_key == "lmbPilotClothing" || name.starts_with("st_p_")
+    } else if field_key == "lmbCutIn"
+        || field_key == "lmbPilotClothing"
+        || name.starts_with("st_p_")
     {
         format!("009gui/flash/pilot/{name}")
     } else if field_key == "lmbBoost"
@@ -604,16 +606,9 @@ fn resolve_pack_identity(
         return (name, format!("009gui/{relative}"));
     }
     if field.fallback_donor_hash != 0 && donor_hash == field.fallback_donor_hash {
-        return (
-            field.donor_name.to_string(),
-            field.package_path.to_string(),
-        );
+        return (field.donor_name.to_string(), field.package_path.to_string());
     }
-    let name = format!(
-        "{}{:08x}",
-        field_name_prefix(field.camel_key),
-        donor_hash
-    );
+    let name = format!("{}{:08x}", field_name_prefix(field.camel_key), donor_hash);
     let path = fallback_gui_package_path(field.camel_key, &name);
     (name, path)
 }
@@ -707,14 +702,17 @@ fn rewrite_cloned_structure_json(
 ) -> Result<(), String> {
     let text = fs::read_to_string(src_json)
         .map_err(|e| format!("Read donor structure json failed: {e}"))?;
-    let mut value: Value =
-        serde_json::from_str(&text).map_err(|e| format!("Parse donor structure json failed: {e}"))?;
+    let mut value: Value = serde_json::from_str(&text)
+        .map_err(|e| format!("Parse donor structure json failed: {e}"))?;
     if let Some(obj) = value.as_object_mut() {
         obj.insert(
             "HashName".to_string(),
             Value::String(format!("0x{new_hash:08X}")),
         );
-        obj.insert("Name".to_string(), Value::String(structure_name.to_string()));
+        obj.insert(
+            "Name".to_string(),
+            Value::String(structure_name.to_string()),
+        );
     }
     if let Some(entries) = value.get_mut("SubFileData").and_then(Value::as_array_mut) {
         for entry in entries {
@@ -1230,7 +1228,8 @@ pub fn extract_workspace_gui_pack(
         .filter(|value| !value.is_empty())
         .map(PathBuf::from);
     let source = resolve_gui_source(&dpl, ob_mod.as_deref(), request.hash)?;
-    let extract_dir = gui_extract_folder(&workspace, request.package_path.as_str(), &structure_name);
+    let extract_dir =
+        gui_extract_folder(&workspace, request.package_path.as_str(), &structure_name);
     let cloned = clone_gui_pack_extract(
         &source,
         request.hash,
@@ -1245,7 +1244,10 @@ pub fn extract_workspace_gui_pack(
         name: cloned.structure_name,
         folder_path: extract_dir.display().to_string(),
         structure_json_path: cloned.structure_json_path,
-        workspace_relative: vs2_gui_extract_relative(request.package_path.as_str(), &structure_name),
+        workspace_relative: vs2_gui_extract_relative(
+            request.package_path.as_str(),
+            &structure_name,
+        ),
         preview_nutexb_path: find_preview_nutexb(&extract_dir, &structure_name),
     })
 }
@@ -1262,11 +1264,7 @@ fn resolve_structure_name(
         .unwrap_or_else(|| donor_name.to_string())
 }
 
-fn decorate_cloned_pack(
-    pack: &mut ClonedPack,
-    job: &CloneJob,
-    ob_mod: Option<&Path>,
-) {
+fn decorate_cloned_pack(pack: &mut ClonedPack, job: &CloneJob, ob_mod: Option<&Path>) {
     pack.field_key = job.field_key.clone();
     pack.donor_name = job.donor_name.clone();
     pack.donor_hash = job.donor_hash;
@@ -1369,9 +1367,12 @@ pub fn clone_character_gui_set(request: CloneGuiSetRequest) -> Result<CloneGuiSe
     }
     if clone_navi {
         if let Some((_, parsed, _)) = navi_data.as_ref() {
-            let donor_series =
-                character_list_u32_field(&request.character_list, request.donor_entry_id, "seriesId")
-                    .unwrap_or(0);
+            let donor_series = character_list_u32_field(
+                &request.character_list,
+                request.donor_entry_id,
+                "seriesId",
+            )
+            .unwrap_or(0);
             let navi_jobs = navi_jobs_from_list(
                 parsed,
                 donor_series,
@@ -1615,8 +1616,7 @@ fn pilot_jobs_from_character_list(
         if donor_hash == 0 {
             continue;
         }
-        let (donor_name, package_path) =
-            resolve_pack_identity(field, donor_hash, workspace_packs);
+        let (donor_name, package_path) = resolve_pack_identity(field, donor_hash, workspace_packs);
         jobs.push(CloneJob {
             field_key: field.camel_key.to_string(),
             donor_name,

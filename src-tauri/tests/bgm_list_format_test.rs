@@ -1,8 +1,8 @@
-use app_lib::format::fhm2d::{list_payload_extract_name, Fhm2dFormat};
 use app_lib::format::bgm_list::{
     derive_entry, empty_table, parse_bytes, sort_by_record_id, validate_entry, write_pack,
     BGM_LIST_COMMAND_POOL, CMD_CUE_HASH, CMD_MUSIC_ID, CMD_TITLE, CMD_TITLE_WITH_NOTE,
 };
+use app_lib::format::fhm2d::{list_payload_extract_name, Fhm2dFormat};
 use app_lib::format::list_command_pool::{
     build_list, list_data_to_json, list_entry_from_json_value,
 };
@@ -16,7 +16,9 @@ const TITLE_EDIT_NOTE: &str = "\u{266A}Unit theme";
 const CUE_HASH_A: u32 = 0xBBF2_FFFB;
 const CUE_HASH_B: u32 = 0xCA1B_47DB;
 
-fn occupied_from(table: &app_lib::format::list_command_pool::ListData) -> (HashSet<u32>, HashSet<u32>) {
+fn occupied_from(
+    table: &app_lib::format::list_command_pool::ListData,
+) -> (HashSet<u32>, HashSet<u32>) {
     let records = table.entries.iter().map(|e| e.entry_id).collect();
     let music = table
         .entries
@@ -29,8 +31,14 @@ fn occupied_from(table: &app_lib::format::list_command_pool::ListData) -> (HashS
 #[test]
 fn list_extract_type_renames_payload_to_catalog_filename() {
     assert_eq!(Fhm2dFormat::parse_cli("list").unwrap(), Fhm2dFormat::List);
-    assert_eq!(Fhm2dFormat::parse_cli("bgm_list").unwrap(), Fhm2dFormat::List);
-    assert_eq!(Fhm2dFormat::parse_cli("fhm2d_list").unwrap(), Fhm2dFormat::List);
+    assert_eq!(
+        Fhm2dFormat::parse_cli("bgm_list").unwrap(),
+        Fhm2dFormat::List
+    );
+    assert_eq!(
+        Fhm2dFormat::parse_cli("fhm2d_list").unwrap(),
+        Fhm2dFormat::List
+    );
     assert_eq!(Fhm2dFormat::List.as_cli_str(), "list");
     let (url, ext, base) = list_payload_extract_name("bgm_list", "bgm_list.bin");
     assert_eq!(url, ".\\bgm_list\\bgm_list.bin");
@@ -77,7 +85,10 @@ fn parse_mutate_insert_roundtrip_keeps_kind7_titles_and_sorted_ids() {
     assert_eq!(parsed.entries.len(), 2);
     assert!(parsed.entry_ids.windows(2).all(|w| w[0] <= w[1]));
     assert_eq!(
-        parsed.entries[1].strings.get(&CMD_TITLE).map(String::as_str),
+        parsed.entries[1]
+            .strings
+            .get(&CMD_TITLE)
+            .map(String::as_str),
         Some(TITLE_A)
     );
     assert_eq!(
@@ -133,16 +144,16 @@ fn parse_mutate_insert_roundtrip_keeps_kind7_titles_and_sorted_ids() {
         Some(TITLE_EDIT)
     );
     assert_eq!(
-        edited
-            .strings
-            .get(&CMD_TITLE_WITH_NOTE)
-            .map(String::as_str),
+        edited.strings.get(&CMD_TITLE_WITH_NOTE).map(String::as_str),
         Some(TITLE_EDIT_NOTE)
     );
     let new_row = reparsed
         .entries
         .iter()
-        .find(|e| e.commands.get(&CMD_CUE_HASH) == Some(&CUE_HASH_B) && e.commands.get(&CMD_MUSIC_ID) != Some(&50))
+        .find(|e| {
+            e.commands.get(&CMD_CUE_HASH) == Some(&CUE_HASH_B)
+                && e.commands.get(&CMD_MUSIC_ID) != Some(&50)
+        })
         .expect("inserted cueHash row");
     assert_eq!(
         new_row.strings.get(&CMD_TITLE).map(String::as_str),
@@ -164,7 +175,10 @@ fn signed_json_cue_hash_roundtrips() {
     let entry = list_entry_from_json_value(&json_val, BGM_LIST_COMMAND_POOL).expect("json");
     assert_eq!(entry.entry_id, 120);
     assert_eq!(entry.commands.get(&CMD_CUE_HASH).copied(), Some(expected));
-    assert_eq!(entry.strings.get(&CMD_TITLE).map(String::as_str), Some(TITLE_A));
+    assert_eq!(
+        entry.strings.get(&CMD_TITLE).map(String::as_str),
+        Some(TITLE_A)
+    );
 }
 
 #[test]

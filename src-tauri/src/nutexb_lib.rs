@@ -60,7 +60,9 @@ pub(crate) fn read_legacy_nutexb_name<R: std::io::Read + std::io::Seek>(
 
     let mut header = [0u8; 0x28];
     reader.seek(SeekFrom::Start(0)).map_err(|e| e.to_string())?;
-    reader.read_exact(&mut header).map_err(|e| format!("Truncated legacy TEX header: {e}"))?;
+    reader
+        .read_exact(&mut header)
+        .map_err(|e| format!("Truncated legacy TEX header: {e}"))?;
     if &header[..4] != b"HBSS" || &header[0x10..0x14] != b" XET" {
         return Err("Invalid legacy TEX header magic".to_string());
     }
@@ -71,14 +73,17 @@ pub(crate) fn read_legacy_nutexb_name<R: std::io::Read + std::io::Seek>(
     }
     // SSBH string pointers are relative to the pointer field, not the file start.
     let relative = u64::from_le_bytes(header[0x20..0x28].try_into().unwrap());
-    let offset = 0x20u64.checked_add(relative)
+    let offset = 0x20u64
+        .checked_add(relative)
         .filter(|&offset| relative != 0 && offset >= header.len() as u64)
         .ok_or_else(|| "Invalid legacy TEX name pointer".to_string())?;
     let size = reader.seek(SeekFrom::End(0)).map_err(|e| e.to_string())?;
     if offset >= size {
         return Err("Legacy TEX name pointer is outside the file".to_string());
     }
-    reader.seek(SeekFrom::Start(offset)).map_err(|e| e.to_string())?;
+    reader
+        .seek(SeekFrom::Start(offset))
+        .map_err(|e| e.to_string())?;
     let mut bytes = Vec::new();
     for _ in 0..(size - offset).min(4096) {
         let mut byte = [0u8; 1];

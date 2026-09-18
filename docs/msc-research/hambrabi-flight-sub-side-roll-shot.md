@@ -793,6 +793,8 @@ chrsysparam table0 列 = 字段（本文件 row 数据从 `0x2c` 起，action ha
 
 **VFX 2026-09-02（用户）：** 飞行副射 START 的 `0x1A4E9B2A`（`saberstrip_003`）和 extras 的 `0xBE700A2`（`saber_003`）已移除。收招 `sys_4A(0x1, 0x9, 0x1)` 清 group 9 拖尾。不要 `sys_4A(0x1, 0x7)`（K3 / 鸟双枪 group 7）。
 
+**VFX 2026-09-12（用户）：** 左右侧转都会少一把光剑。677 `0xB44D558A` 和 extras `0x7758882D` 打在 `sys_4A` group 8 slot 0，盖掉 `rebellion_play_saber_beam_fx` 的右剑 `0x2BE700A2` / `0x1c5c91a8`。两发都不是要的视觉（同日 09-02）。已从 677 / tick 去掉，不再占用 group 8。不要 `sys_4A(0xb, 0x8)`。
+
 ```text
 H  hypothesis: four Hambrabi/this-unit sys_4A hashes are distinguishable
    on flight-sub START / shot1 / shot2 / shot3

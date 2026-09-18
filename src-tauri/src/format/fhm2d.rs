@@ -2135,7 +2135,10 @@ mod tests {
             )]),
         };
         let map = build_folder_map(&root).expect("shared fileIndex is valid");
-        assert_eq!(map.get(&402).map(Vec::as_slice), Some(["0", "0"].as_slice()));
+        assert_eq!(
+            map.get(&402).map(Vec::as_slice),
+            Some(["0", "0"].as_slice())
+        );
         assert_eq!(map.len(), 1);
     }
 
@@ -2273,7 +2276,10 @@ mod tests {
             "bgm_list",
         )
         .expect("rename list payload");
-        assert_eq!(output.sub_file_data[0].file_url, ".\\bgm_list\\bgm_list.bin");
+        assert_eq!(
+            output.sub_file_data[0].file_url,
+            ".\\bgm_list\\bgm_list.bin"
+        );
         assert_eq!(
             output.sub_file_data[0].file_base_name.as_deref(),
             Some("bgm_list")

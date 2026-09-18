@@ -141,10 +141,9 @@ pub fn decompile_msc(
     );
     let output_c = PathBuf::from(&output_path);
     let log = resolve_decompile_log_path(&output_c, Some(Path::new(&log_path)));
-    op.finish(
-        decompile_file(input_path.as_ref(), &output_c, &log),
-        |_| format!("wrote {output_path}"),
-    )
+    op.finish(decompile_file(input_path.as_ref(), &output_c, &log), |_| {
+        format!("wrote {output_path}")
+    })
 }
 
 #[tauri::command]
