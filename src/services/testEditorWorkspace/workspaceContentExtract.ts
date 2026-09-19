@@ -25,6 +25,11 @@ export const FHM2D_INIT_CONTENT_BY_ITEM_ID: Record<string, WorkspaceContentId> =
   bgm_table: "bgm-table",
   bgm_bank_update_02: "bgm-bank-update-02",
   exvs_common_camera: "camera-table",
+  // Arcade (Triad Battle) mission data.
+  triad_battle_list: "triad-battle-list",
+  scene_id_table: "scene-id-table",
+  outmission: "outmission",
+  pilot_name_list: "pilot-name-list",
 };
 
 /** Init modal items that extract via initWorkspaceContentPack (no dedicated init*Pack). */
@@ -38,6 +43,10 @@ export const GENERIC_FHM2D_INIT_ITEM_IDS = new Set([
   "stage_image_list_2",
   "series_image_list",
   "card_icon_list",
+  "triad_battle_list",
+  "scene_id_table",
+  "outmission",
+  "pilot_name_list",
 ]);
 
 export const CHARACTER_COST_PAYLOAD_NAMES = [
@@ -81,6 +90,12 @@ const WORKSPACE_CONTENT_EXTRACT_FORMAT: Partial<Record<WorkspaceContentId, Fhm2d
   "pilot-voice-resource": Fhm2d_type_format.fhm2d_sound,
   "bgm-table": Fhm2d_type_format.fhm2d_sound,
   "bgm-bank-update-02": Fhm2d_type_format.fhm2d_sound,
+  // Mission packs hold several payloads, or payloads the backend identifies by
+  // content rather than by name, so they extract as plain folders.
+  "triad-battle-list": Fhm2d_type_format.fhm2d_list,
+  "scene-id-table": Fhm2d_type_format.fhm2d_list,
+  outmission: Fhm2d_type_format.fhm2d_list,
+  "pilot-name-list": Fhm2d_type_format.fhm2d_list,
 };
 
 export function workspaceContentExtractSpec(

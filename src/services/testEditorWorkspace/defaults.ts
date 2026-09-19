@@ -68,6 +68,21 @@ export const DEFAULT_TEST_EDITOR_WORKSPACE: TestEditorWorkspaceDocument = Object
       kind: "fhm2d-pack",
       label: "Navi List",
     }),
+    "list.triad": freezeRoute({
+      prefix: "012list",
+      kind: "fhm2d-pack",
+      label: "Triad Battle List",
+    }),
+    "mission.data": freezeRoute({
+      prefix: "051mission",
+      kind: "fhm2d-pack",
+      label: "Mission Data",
+    }),
+    "mission.script": freezeRoute({
+      prefix: "051mission",
+      kind: "fhm2d-pack",
+      label: "Mission Script",
+    }),
     "gui.card-icons": freezeRoute({
       prefix: "009gui",
       kind: "fhm2d-pack",

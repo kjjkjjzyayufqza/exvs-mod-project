@@ -412,6 +412,41 @@ Existing research notes are not rewritten by this index.
   - Do not copy EW host arg5 0x4/0x5/0x6 onto 516001001 and expect a unique attack; that id only wires index 0. Do not treat arg5 as approach-type.
   - Do not treat vs Rebellion+516 crash RVA 0x7CE3B6 as a sys_51 / automata / 0.c gate bug. Do not MSC-patch it. Align 7CE240 with 7D90B0 (skip v23>=0xB). Do not clamp the index to 0. Do not commit a patched vsac27_Release.exe.
 
+### `mission-script` — Arcade Triad Battle mission scripts, course/scene tables and BSFO
+
+- **kind:** global
+- **aliases:** `mission script`, `mismsexc`, `CMissionScript`, `triad`, `triad battle`, `arcade mode`, `arcade course`, `course list`, `triad_battle_course_list`, `triad_battle_scene_list`, `sceneidtable`, `outmission`, `BSFO`, `0xE952325A`, `0xA073DA71`, `0xF7B91DE7`, `sys_0 0x400`, `0x40e`, `X-99`, `mission route`, `custom route`
+- **notes:** Research 2026-09-19 (E1/E2, no in-game runs). Dormant scenes a022-a024/b023-b024/c022-c024/d015 have package + sceneidtable + BSFO but no scene_list or course row.
+- **settled:**
+  - OB truth is E:\OBHK0.3_v27. GX210JPN_27 051mission is byte-identical to VS2 and is older data.
+  - Arcade routes live in 012list/triad_battle_list/triad_battle_course_list (0xE952325A), not in 051mission/trialset. Stage order is columns A0645740 -> 396D06FA -> 4E6A366C (sub_1405380A0, E2).
+  - One 32-bit scene key is the row id of scene_list and sceneidtable, the course stage reference, and the fhm2d file id (Item.unk1) of the scene's BSFO in outmission.
+  - Script package hash = crc32_update(0xAA71E366, UPPER(name)) ^ 0xFFFFFFFF; scene key uses state 0x7B60F97C (E2, 342/343 OBHK).
+  - CMissionScript (vftable 0x1415D6908) lives at CSeqBattleApp+1184 and installs only sys_0 = sub_140DBEE10.
+  - sys_0(0x400) handler sub_140DC45A0 never reads P9/P10/P12/P15/P18/P19/P22/P23/P24/P40/P41 (E2).
+  - sys_0(0x349) has no case in the OB dispatcher and always returns 0 (E2).
+  - Course column 52751120 is the unlock type (sub_1407DA520, types 1..10); A/B/C-99 use type 3 arg 2. Type 1 = clear course arg0.
+  - BSFO sec4[2] equals the script 0x40e stage hash for 341/341 OBHK scenes; sec4[0] scene class 0 <-> win flag 0x1, 1..3 <-> win flag 0x2.
+  - Mission script header: 0x08 = 0x000002FD; 0x1C = the number of file-scope int globalN declarations (343/343 OBHK).
+  - Every OBHK mission script closes its FIRST function with opcode 0x01 before END, and no other function carries one (343/343).
+  - Mission continue (0x05) targets the first byte of the loop closing branch, four before the label the entry else uses (2390/2390 sites).
+  - Mission function offset tables are never address-sorted (0/544 OB+GX), unlike unit scripts (134/136 sorted); the decompiler names functions by table slot so a recompile restores the order.
+  - ScriptProfile::Mission round-trips 342/343 OBHK scripts byte-for-byte; 000triad_battle_f013_001 still gains one else and is refused by the guard.
+  - mission_script_config reads slots from 340/343 scripts and rewrites waves in 163/343; untouched template functions are copied through verbatim.
+  - The 51 sys_0(0x400) parameters are carried through verbatim; only the 14 the engine reads are overwritten on an edit.
+- **read_first:**
+  - `docs/mission-research/exvs2-ob-triad-mission-architecture.md`
+- **related:**
+  - `docs/superpowers/plans/2026-09-19-triad-mission-route-editor.md`
+  - `docs/exvs-msc-syscall-handler-table.md`
+- **do_not:**
+  - Do not tune values through dead 0x400 parameters (P9/P10/P12/P15/P18/P19/P22/P23/P24/P40/P41).
+  - Do not rely on sys_0(0x349) as a target count.
+  - Do not write a recompiled mission script back into a package until mission_round_trip_status returns Identical for that exact file.
+  - Do not treat 051mission/trialset as the arcade route graph; it is the unmaintained legacy trial mode.
+  - Do not treat an msclang-recompiled mission script as verified until it round-trips byte-identically (header 0x2FD, 0x1C rule, opcode 0x01).
+  - Do not carry global numbers between template versions: OBHK shifted win/lose/BGM from global14/15/17 to global16/17/19.
+
 ### `wing-zero-rebellion` — Wing Zero Rebellion MSC / bird-form transform port
 
 - **kind:** unit

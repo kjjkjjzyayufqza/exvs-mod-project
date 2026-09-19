@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  detectMscWorkspaceModeFromNames,
   getMscConvertLogPath,
   getMscConvertOutputPath,
   getMscRepackOutputPath,
@@ -51,6 +52,45 @@ describe("traditional MSC paths", () => {
     expect(getMscRepackOutputPath("E:/workspace/side7_battle.c", "traditional")).toBe(
       "E:/workspace/side7_battle.bin",
     );
+  });
+});
+
+describe("mission MSC paths", () => {
+  const folder = "E:/XB/mod/051mission/000triad_battle_a001_001";
+  const source = `${folder}/000triad_battle_a001_001.mismsexc`;
+
+  it("treats .mismsexc as the mission folder marker", () => {
+    expect(isMscFolderMarkerFile("000triad_battle_a001_001.mismsexc", "mission")).toBe(true);
+    expect(isMscFolderMarkerFile("0.bin", "mission")).toBe(false);
+    expect(isMscFolderMarkerFile("0.bscex", "mission")).toBe(false);
+  });
+
+  it("converts and logs beside the scene-named script", () => {
+    expect(getMscConvertOutputPath(source, "mission")).toBe(`${folder}/000triad_battle_a001_001.c`);
+    expect(getMscConvertLogPath(source, "mission")).toBe(`${folder}/000triad_battle_a001_001.txt`);
+  });
+
+  it("repacks the scene-named C file back to .mismsexc", () => {
+    expect(getMscRepackOutputPath(`${folder}/000triad_battle_a001_001.c`, "mission")).toBe(source);
+  });
+});
+
+describe("detectMscWorkspaceModeFromNames", () => {
+  it("prefers unit pack slots over a sibling mission script", () => {
+    expect(detectMscWorkspaceModeFromNames(["0.bscex", "000triad_battle_a001_001.mismsexc"])).toBe(
+      "unit",
+    );
+  });
+
+  it("detects a mission folder from .mismsexc", () => {
+    expect(detectMscWorkspaceModeFromNames(["000triad_battle_a001_001.mismsexc", "0.bin"])).toBe(
+      "mission",
+    );
+  });
+
+  it("returns null for traditional bins or empty folders", () => {
+    expect(detectMscWorkspaceModeFromNames(["0.bin"])).toBeNull();
+    expect(detectMscWorkspaceModeFromNames([])).toBeNull();
   });
 });
 

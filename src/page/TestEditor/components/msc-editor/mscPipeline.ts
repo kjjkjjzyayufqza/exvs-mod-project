@@ -9,7 +9,10 @@
  * recompiles back to its source extension in place.
  */
 
-import type { MscWorkspaceMode } from "../../utils/mscWorkspaceUtils";
+import {
+  MISSION_SCRIPT_EXTENSION,
+  type MscWorkspaceMode,
+} from "../../utils/mscWorkspaceUtils";
 
 export interface MscFileInfo {
   name: string;
@@ -44,6 +47,7 @@ export function getMscFileRole(
 ): MscFileRole {
   const lower = name.toLowerCase();
   if (mode === "traditional" && lower.endsWith(".bin")) return "script";
+  if (mode === "mission" && lower.endsWith(MISSION_SCRIPT_EXTENSION)) return "script";
   if (mode === "unit" && SCRIPT_EXTENSIONS.some((ext) => lower.endsWith(ext))) return "script";
   if (lower.endsWith(".resolved.md")) return "resolved";
   if (lower.endsWith(".c")) return "c";
@@ -55,7 +59,7 @@ export function isMscRepackableCFile(
   name: string,
   mode: MscWorkspaceMode,
 ): boolean {
-  return mode === "traditional" ? name.toLowerCase().endsWith(".c") : isMscPackScriptCFile(name);
+  return mode === "unit" ? isMscPackScriptCFile(name) : name.toLowerCase().endsWith(".c");
 }
 
 export interface MscSlotStatus extends MscPackSlot {
@@ -65,6 +69,30 @@ export interface MscSlotStatus extends MscPackSlot {
   hasSource: boolean;
   hasDecompiled: boolean;
   hasLog: boolean;
+}
+
+/** One pipeline slot per `.mismsexc` in a mission-script folder. */
+export function computeMissionSlotStatuses(fileNames: readonly string[]): MscSlotStatus[] {
+  const present = new Set(fileNames.map((name) => name.toLowerCase()));
+  return fileNames
+    .filter((name) => name.toLowerCase().endsWith(MISSION_SCRIPT_EXTENSION))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    .map((sourceName, index) => {
+      const stem = sourceName.slice(0, -MISSION_SCRIPT_EXTENSION.length);
+      const decompiledName = `${stem}.c`;
+      const logName = `${stem}.txt`;
+      return {
+        index,
+        sourceExtension: MISSION_SCRIPT_EXTENSION,
+        roleLabel: "Mission",
+        sourceName,
+        decompiledName,
+        logName,
+        hasSource: true,
+        hasDecompiled: present.has(decompiledName.toLowerCase()),
+        hasLog: present.has(logName.toLowerCase()),
+      };
+    });
 }
 
 /** Derive per-slot pipeline state from the (unfiltered) folder listing. */

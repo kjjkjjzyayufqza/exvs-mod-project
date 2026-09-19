@@ -4,10 +4,12 @@
   },
   "tabs": {
     "unit": "机体 MSC",
+    "mission": "关卡 MSC",
     "traditional": "传统 MSC"
   },
   "workspace": {
     "unitTitle": "机体 MSC 工作区",
+    "missionTitle": "关卡 MSC 工作区",
     "traditionalTitle": "传统 MSC 工作区",
     "root": "工作区根目录：{{path}}"
   },
@@ -64,6 +66,7 @@
   "empty": {
     "noFiles": "没有文件匹配当前筛选条件",
     "selectUnit": "请选择至少包含一个 {{exts}} 文件的文件夹。",
+    "selectMission": "请选择包含 {{ext}} 街机关卡脚本的文件夹。转换会写出同名 .c / .txt，重打包写回 .mismsexc。",
     "selectTraditional": "请选择包含 {{ext}} MSC 脚本的文件夹。支持任意文件名。"
   },
   "dialog": {
@@ -102,6 +105,7 @@
     "batchPartial": "{{verb}} {{done}}/{{total}} 个文件，{{failed}} 个失败",
     "prepareConvertFailed": "无法为 {{name}} 准备转换：{{message}}",
     "needUnitScripts": "所选文件夹必须至少包含一个 .bscex、.cscex 或 .dscex 文件",
+    "needMissionScripts": "所选文件夹必须至少包含一个 .mismsexc 文件",
     "needTraditionalScripts": "所选文件夹必须至少包含一个 .bin 文件",
     "decompiledNoSnapshot": "已反编译 {{name}}，但无法为差异对比快照 {{path}}：{{message}}",
     "overlayUpdated": "已用 {{summary}} 中的 {{renames}} 处回调重命名更新 {{path}}",

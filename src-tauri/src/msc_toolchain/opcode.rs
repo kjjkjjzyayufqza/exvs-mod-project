@@ -1,3 +1,6 @@
+/// Closes the first function of a mission script. The unit compiler never
+/// emits it; the shipped mission scripts all carry exactly one.
+pub const CMD_MISSION_TAIL: u8 = 0x01;
 pub const CMD_BEGIN: u8 = 0x02;
 pub const CMD_END: u8 = 0x03;
 pub const CMD_JUMP: u8 = 0x04;

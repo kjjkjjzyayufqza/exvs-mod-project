@@ -42,7 +42,11 @@
     "pilot_voice_resource": "unpack 0x8C428AF2 and name 7 root tables → 090sound/090sound",
     "bgm_table": "unpack 0x5E92AAEC bgm_table.vgsht2 → 090sound/bgm_table",
     "bgm_bank_update_02": "unpack 0x0C568109 group 6 nus3bank → 090sound/bgm_ac27_update_02",
-    "exvs_common_camera": "unpack 0xCB665375 EXVS common (camera/parameters/*.vgsht2) → 002chara/000common_000common_001"
+    "exvs_common_camera": "unpack 0xCB665375 EXVS common (camera/parameters/*.vgsht2) → 002chara/000common_000common_001",
+    "triad_battle_list": "arcade course / scene / ribbon tables → 012list/triad_battle_list",
+    "scene_id_table": "scene key → mission script package → 051mission/sceneidtable",
+    "outmission": "one briefing (loading screen) per scene → 051mission/outmission",
+    "pilot_name_list": "pilot names a mission slot can use → 051mission/pilot_name_list"
   },
   "labels": {
     "sourceFolder": "Source Folder",

@@ -307,7 +307,7 @@ describe("MscWorkspaceView", () => {
   });
 
   it("shows Resolve Overlay action for 2.c", async () => {
-    readDirMock.mockResolvedValueOnce([
+    readDirMock.mockResolvedValue([
       { isFile: true, name: "0.c" },
       { isFile: true, name: "2.c" },
     ]);
@@ -326,7 +326,7 @@ describe("MscWorkspaceView", () => {
   });
 
   it("shows Open action for resolved overlay sidecars", async () => {
-    readDirMock.mockResolvedValueOnce([
+    readDirMock.mockResolvedValue([
       { isFile: true, name: "2.resolved.md" },
     ]);
 
@@ -439,7 +439,7 @@ describe("MscWorkspaceView", () => {
 
   it("writes resolved callback names directly into 2.c on Resolve Overlay", async () => {
     const user = userEvent.setup();
-    readDirMock.mockResolvedValueOnce([
+    readDirMock.mockResolvedValue([
       { isFile: true, name: "0.c" },
       { isFile: true, name: "2.c" },
     ]);
@@ -482,15 +482,10 @@ describe("MscWorkspaceView", () => {
 
   it("keeps the decompiled C view visible after Resolve Overlay", async () => {
     const user = userEvent.setup();
-    readDirMock
-      .mockResolvedValueOnce([
-        { isFile: true, name: "0.c" },
-        { isFile: true, name: "2.c" },
-      ])
-      .mockResolvedValueOnce([
-        { isFile: true, name: "0.c" },
-        { isFile: true, name: "2.c" },
-      ]);
+    readDirMock.mockResolvedValue([
+      { isFile: true, name: "0.c" },
+      { isFile: true, name: "2.c" },
+    ]);
 
     existsMock.mockImplementation(async (path: string) => {
       return [
@@ -679,5 +674,25 @@ describe("MscWorkspaceView", () => {
         path: "E:/workspace/041cpm/0x12345678/chrsysparam.csyspm",
       });
     });
+  });
+
+  it("switches to Mission MSC and offers Convert when the folder holds a .mismsexc", async () => {
+    readDirMock.mockResolvedValue([
+      { isFile: true, name: "000triad_battle_a001_001.mismsexc" },
+    ]);
+
+    render(
+      <MscWorkspaceView
+        workspaceRoot="E:/XB/mod"
+        workspaceDefaultPath="E:/XB/mod/040msc"
+        mscFolderPath="E:/XB/mod/051mission/000triad_battle_a001_001"
+        onMscFolderChange={() => {}}
+        isActive
+      />,
+    );
+
+    expect(await screen.findByRole("tab", { name: "Mission MSC", selected: true })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /^convert$/i })).toBeInTheDocument();
+    expect(screen.getAllByText("000triad_battle_a001_001.mismsexc").length).toBeGreaterThan(0);
   });
 });

@@ -198,6 +198,34 @@ name = "bgm_list_format_test"
 path = "tests/bgm_list_format_test.rs"
 
 [[test]]
+name = "triad_mission_format_test"
+path = "tests/triad_mission_format_test.rs"
+
+[[test]]
+name = "bsfo_format_test"
+path = "tests/bsfo_format_test.rs"
+
+[[test]]
+name = "triad_route_tables_test"
+path = "tests/triad_route_tables_test.rs"
+
+[[test]]
+name = "triad_route_validate_test"
+path = "tests/triad_route_validate_test.rs"
+
+[[test]]
+name = "triad_route_workspace_test"
+path = "tests/triad_route_workspace_test.rs"
+
+[[test]]
+name = "msc_mission_profile_test"
+path = "tests/msc_mission_profile_test.rs"
+
+[[test]]
+name = "mission_script_config_test"
+path = "tests/mission_script_config_test.rs"
+
+[[test]]
 name = "camera_table_format_test"
 path = "tests/camera_table_format_test.rs"
 

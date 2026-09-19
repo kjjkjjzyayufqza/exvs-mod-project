@@ -8,13 +8,21 @@ const MSC_SCRIPT_EXTENSION_BY_C_FILE_BASENAME = {
   "2": ".dscex",
 } as const;
 
-export type MscWorkspaceMode = "unit" | "traditional";
+export const MISSION_SCRIPT_EXTENSION = ".mismsexc";
+
+export type MscWorkspaceMode = "unit" | "mission" | "traditional";
 
 function getLowerCaseFileExtension(name: string): string {
-  const dotIndex = name.lastIndexOf(".");
-  if (dotIndex < 0) {
+  const extension = tryLowerCaseExtension(name);
+  if (!extension) {
     throw new Error(`MSC workspace: file has no extension: ${name}`);
   }
+  return extension;
+}
+
+function tryLowerCaseExtension(name: string): string | null {
+  const dotIndex = name.lastIndexOf(".");
+  if (dotIndex < 0) return null;
   return name.slice(dotIndex).toLowerCase();
 }
 
@@ -29,11 +37,27 @@ export function isMscFolderMarkerFile(
   name: string,
   mode: MscWorkspaceMode = "unit",
 ): boolean {
-  const extension = getLowerCaseFileExtension(name);
+  const extension = tryLowerCaseExtension(name);
+  if (!extension) return false;
   if (mode === "traditional") {
     return extension === ".bin";
   }
+  if (mode === "mission") {
+    return extension === MISSION_SCRIPT_EXTENSION;
+  }
   return MSC_FOLDER_MARKERS.includes(extension as (typeof MSC_FOLDER_MARKERS)[number]);
+}
+
+/** Unit packs win over mission scripts if a folder somehow contains both. */
+export function detectMscWorkspaceModeFromNames(
+  names: readonly string[],
+): Exclude<MscWorkspaceMode, "traditional"> | null {
+  let hasMission = false;
+  for (const name of names) {
+    if (isMscFolderMarkerFile(name, "unit")) return "unit";
+    if (isMscFolderMarkerFile(name, "mission")) hasMission = true;
+  }
+  return hasMission ? "mission" : null;
 }
 
 export function getMscConvertOutputPath(
@@ -44,6 +68,12 @@ export function getMscConvertOutputPath(
   if (mode === "traditional") {
     if (extension !== ".bin") {
       throw new Error(`MSC workspace: unsupported traditional convert source: ${scriptPath}`);
+    }
+    return replaceTrailingExtension(scriptPath, extension, ".c");
+  }
+  if (mode === "mission") {
+    if (extension !== MISSION_SCRIPT_EXTENSION) {
+      throw new Error(`MSC workspace: unsupported mission convert source: ${scriptPath}`);
     }
     return replaceTrailingExtension(scriptPath, extension, ".c");
   }
@@ -61,6 +91,12 @@ export function getMscConvertLogPath(
   if (mode === "traditional") {
     if (extension !== ".bin") {
       throw new Error(`MSC workspace: unsupported traditional convert source: ${scriptPath}`);
+    }
+    return replaceTrailingExtension(scriptPath, extension, ".txt");
+  }
+  if (mode === "mission") {
+    if (extension !== MISSION_SCRIPT_EXTENSION) {
+      throw new Error(`MSC workspace: unsupported mission convert source: ${scriptPath}`);
     }
     return replaceTrailingExtension(scriptPath, extension, ".txt");
   }
@@ -89,6 +125,9 @@ export function getMscRepackOutputPath(
   if (mode === "traditional") {
     return replaceTrailingExtension(cFilePath, extension, ".bin");
   }
+  if (mode === "mission") {
+    return replaceTrailingExtension(cFilePath, extension, MISSION_SCRIPT_EXTENSION);
+  }
   const targetExtension =
     MSC_SCRIPT_EXTENSION_BY_C_FILE_BASENAME[
       baseName as keyof typeof MSC_SCRIPT_EXTENSION_BY_C_FILE_BASENAME
@@ -109,18 +148,24 @@ export function getMscResolvedOverlayPath(cFilePath: string): string {
 }
 
 /**
- * Returns true if the directory contains at least one file with a .bscex / .cscex / .dscex suffix (non-recursive).
+ * Returns true if the directory contains at least one script the given mode
+ * recognises. With no mode, unit or mission markers both count so tree
+ * selection can open either pack. Traditional `.bin` stays opt-in.
  */
 export async function folderContainsMscScriptFiles(
   dirPath: string,
-  mode: MscWorkspaceMode = "unit",
+  mode?: MscWorkspaceMode,
 ): Promise<boolean> {
   const trimmed = dirPath.trim();
   if (!trimmed) {
     return false;
   }
   const entries = await readDir(trimmed);
-  return entries.some((e) => e.isFile && e.name && isMscFolderMarkerFile(e.name, mode));
+  return entries.some((e) => {
+    if (!e.isFile || !e.name) return false;
+    if (mode) return isMscFolderMarkerFile(e.name, mode);
+    return isMscFolderMarkerFile(e.name, "unit") || isMscFolderMarkerFile(e.name, "mission");
+  });
 }
 
 type MscWorkspaceSelectionNode = Pick<TestTreeNode, "path" | "isDir">;

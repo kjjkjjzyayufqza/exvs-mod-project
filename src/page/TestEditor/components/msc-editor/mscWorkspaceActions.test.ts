@@ -175,6 +175,21 @@ describe("verifyMscRoundtrip", () => {
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
+  it("verifies a mission C file against the sibling .mismsexc", async () => {
+    const result = await verifyMscRoundtrip({
+      cFilePath: "E:/XB/mod/051mission/000triad_battle_a001_001/000triad_battle_a001_001.c",
+      mode: "mission",
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("verify_msc_roundtrip_from_c", {
+      cPath: "E:/XB/mod/051mission/000triad_battle_a001_001/000triad_battle_a001_001.c",
+      originalPath: "E:/XB/mod/051mission/000triad_battle_a001_001/000triad_battle_a001_001.mismsexc",
+    });
+    expect(result.originalPath).toBe(
+      "E:/XB/mod/051mission/000triad_battle_a001_001/000triad_battle_a001_001.mismsexc",
+    );
+  });
+
   it("does not spawn Python tools for in-process verify", async () => {
     await verifyMscRoundtrip({ cFilePath: "E:/msc/unit/1.c" });
     expect(commandCreateMock).not.toHaveBeenCalled();

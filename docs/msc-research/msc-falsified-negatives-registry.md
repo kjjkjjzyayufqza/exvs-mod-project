@@ -131,6 +131,7 @@
 | G1 | 用 `msclang_modern.py` / `msc_core` codegen 打游戏包 | body 形状变化，**游戏崩溃** | [msc-repack-runnable-guide](./msc-repack-runnable-guide.md) |
 | G2 | 改了 `0.c` 只重打 `2.dscex` | 0.c 侧改动不生效 | [special-n-bird-dash](./wing-zero-rebellion-special-n-bird-dash.md) §编译 |
 | G3 | 把「反编译回环一致」当成行为正确的证据 | 回环只证明 **E1**（字节码忠实），证明不了 L3 | [audit-protocol](./msc-evidence-grade-and-ingame-audit-protocol.md) §5 #6 |
+| G4 | 不查守卫就把重编后的 mission 脚本（`.mismsexc`）打回包 | 2026-09-19 之前：函数偏移表被按地址排序写出（原版 544 个 OB/GX mission 脚本**没有一个**是地址序，机体脚本 134/136 是，所以一直没暴露）。现已按表槽位还原，342/343 逐字节一致 | 写回前必须 `msc_toolchain::mission_round_trip_status()` 返回 `Identical`；`000triad_battle_f013_001` 仍返回 `Diverged`（重编多一条 `else`），该文件不可写回 | 2026-09-19 corpus measurement (E1) |
 
 ## H. 自制 motion 时钟 / `func_309` / `func_310`
 

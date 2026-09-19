@@ -9,6 +9,7 @@
 use crate::msc_toolchain::compile::parse::{Expr, Function, Stmt, Unit};
 use crate::msc_toolchain::ir::{Arg, Cmd, Item};
 use crate::msc_toolchain::opcode as op;
+use crate::msc_toolchain::profile::ScriptProfile;
 use std::collections::HashMap;
 
 struct FnCtx<'a> {
@@ -19,6 +20,7 @@ struct FnCtx<'a> {
     globals: &'a HashMap<String, usize>,
     functions: &'a HashMap<String, String>,
     syscalls: &'a HashMap<String, u32>,
+    profile: ScriptProfile,
     push_short: bool,
     next_label: u32,
     is_not: bool,
@@ -518,7 +520,19 @@ impl<'a> FnCtx<'a> {
                 let Some(cond) = loop_cond else {
                     return Err("continue outside loop".into());
                 };
-                self.emit(Cmd::new(op::CMD_JUMP5, vec![Arg::Label(cond)]));
+                // Mission scripts address the first byte of the loop's
+                // closing conditional branch, four bytes before the label the
+                // entry `else` uses; all 2390 `continue` sites in the 343
+                // shipped scripts encode it that way. No shipped unit script
+                // uses `continue` at all, so the unit profile keeps the
+                // encoding the msclang reference emits.
+                let target = match self.profile {
+                    ScriptProfile::Mission => {
+                        Arg::LabelBefore(cond, op::size_of(op::CMD_IF_NOT) as u32 - 1)
+                    }
+                    ScriptProfile::Unit => Arg::Label(cond),
+                };
+                self.emit(Cmd::new(op::CMD_JUMP5, vec![target]));
             }
         }
         Ok(())
@@ -584,7 +598,16 @@ fn normalize_condition_expr(node: &Expr) -> Expr {
     }
 }
 
-pub fn lower_unit(unit: &Unit, push_short: bool) -> Result<Vec<Vec<Item>>, String> {
+/// Lower every function of a parsed unit to bytecode items.
+///
+/// Mission scripts close their first function with opcode `0x01` before the
+/// `END`; all 343 shipped OBHK mission scripts do, and no other function in
+/// any of them does. The unit profile never emits it.
+pub fn lower_unit(
+    unit: &Unit,
+    push_short: bool,
+    profile: ScriptProfile,
+) -> Result<Vec<Vec<Item>>, String> {
     let mut globals = HashMap::new();
     for (i, (_ty, name)) in unit.globals.iter().enumerate() {
         globals.insert(name.clone(), i);
@@ -598,9 +621,10 @@ pub fn lower_unit(unit: &Unit, push_short: bool) -> Result<Vec<Vec<Item>>, Strin
         syscalls.insert(format!("sys_{:X}", i), i);
     }
 
-    let compile_one = |f: &Function| -> Result<Vec<Item>, String> {
+    let compile_one = |index: usize, f: &Function| -> Result<Vec<Item>, String> {
         let mut ctx = FnCtx {
             out: Vec::new(),
+            profile,
             locals: f.args.iter().map(|(_, n)| n.clone()).collect(),
             local_index: f
                 .args
@@ -635,6 +659,9 @@ pub fn lower_unit(unit: &Unit, push_short: bool) -> Result<Vec<Vec<Item>>, Strin
             vec![Arg::U32(argc), Arg::U32(varc)],
         )));
         items.extend(ctx.out);
+        if profile == ScriptProfile::Mission && index == 0 {
+            items.push(Item::Cmd(Cmd::new(op::CMD_MISSION_TAIL, vec![])));
+        }
         items.push(Item::Cmd(Cmd::new(op::CMD_END, vec![])));
         Ok(items)
     };
@@ -642,8 +669,16 @@ pub fn lower_unit(unit: &Unit, push_short: bool) -> Result<Vec<Vec<Item>>, Strin
     // Tiny units stay serial: rayon pool warmup can exceed a 0.1ms budget.
     if unit.functions.len() >= 32 {
         use rayon::prelude::*;
-        unit.functions.par_iter().map(compile_one).collect()
+        unit.functions
+            .par_iter()
+            .enumerate()
+            .map(|(index, f)| compile_one(index, f))
+            .collect()
     } else {
-        unit.functions.iter().map(compile_one).collect()
+        unit.functions
+            .iter()
+            .enumerate()
+            .map(|(index, f)| compile_one(index, f))
+            .collect()
     }
 }

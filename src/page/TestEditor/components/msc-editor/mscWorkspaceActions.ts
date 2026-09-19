@@ -6,7 +6,7 @@ import {
   applyMscResolvedOverlayToScript2,
   type MscResolvedOverlayStatus,
 } from "../../utils/mscResolvedOverlay";
-import { getMscRepackOutputPath } from "../../utils/mscWorkspaceUtils";
+import { getMscRepackOutputPath, type MscWorkspaceMode } from "../../utils/mscWorkspaceUtils";
 import { type MscRoundtripCompareReport } from "./mscPipeline";
 
 export async function decompileMscScript(params: {
@@ -43,8 +43,9 @@ export interface MscRoundtripVerifyResult {
  */
 export async function verifyMscRoundtrip(params: {
   cFilePath: string;
+  mode?: MscWorkspaceMode;
 }): Promise<MscRoundtripVerifyResult> {
-  const originalPath = getMscRepackOutputPath(params.cFilePath);
+  const originalPath = getMscRepackOutputPath(params.cFilePath, params.mode);
   if (!(await exists(originalPath))) {
     throw new Error(
       `MSC round-trip verify: original script not found: ${originalPath}. Keep the source script next to its C file.`,

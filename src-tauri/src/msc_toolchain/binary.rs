@@ -130,9 +130,20 @@ pub fn parse_msc(data: &[u8]) -> Result<MscFile, String> {
         off += string_size;
     }
 
+    // The offset table is not always in layout order: no shipped mission
+    // script has an address-sorted table, while unit scripts do. Bodies are
+    // still read in layout order, but each one is named after the table slot
+    // that points at it, so a recompile can put the table back the way it was.
+    let mut slot_of_offset: std::collections::HashMap<u32, usize> =
+        std::collections::HashMap::with_capacity(script_offsets.len());
+    for (slot, offset) in script_offsets.iter().enumerate() {
+        slot_of_offset.entry(*offset).or_insert(slot);
+    }
+
     let mut scripts = Vec::with_capacity(entry_count);
     for abs in &sorted {
         let i = first_index[abs];
+        let slot = slot_of_offset.get(abs).copied().unwrap_or(i);
         let start = sorted[i];
         let end = if i + 1 < sorted.len() {
             sorted[i + 1]
@@ -140,7 +151,7 @@ pub fn parse_msc(data: &[u8]) -> Result<MscFile, String> {
             end_of_scripts
         };
         let mut script = Script {
-            name: format!("func_{i}"),
+            name: format!("func_{slot}"),
             start: start.wrapping_sub(0x30),
             end: end.wrapping_sub(0x30),
             items: Vec::new(),

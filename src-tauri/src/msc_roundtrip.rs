@@ -112,7 +112,9 @@ pub fn verify_c_source_against_original(
     c_source: &str,
     original_msc: &[u8],
 ) -> Result<MscRoundtripCompareReport, String> {
-    let recompiled = crate::msc_toolchain::compile_in_process(c_source)?;
+    let profile = crate::msc_toolchain::profile::ScriptProfile::detect(original_msc)?;
+    let recompiled =
+        crate::msc_toolchain::compile_in_process_with_profile(c_source, profile)?;
     Ok(compare_msc_roundtrip_bytes(original_msc, &recompiled))
 }
 

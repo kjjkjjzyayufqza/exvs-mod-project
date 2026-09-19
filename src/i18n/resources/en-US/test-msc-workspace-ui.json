@@ -4,10 +4,12 @@
   },
   "tabs": {
     "unit": "Unit MSC",
+    "mission": "Mission MSC",
     "traditional": "Traditional MSC"
   },
   "workspace": {
     "unitTitle": "Unit MSC Workspace",
+    "missionTitle": "Mission MSC Workspace",
     "traditionalTitle": "Traditional MSC Workspace",
     "root": "Workspace root: {{path}}"
   },
@@ -64,6 +66,7 @@
   "empty": {
     "noFiles": "No files match the current filter",
     "selectUnit": "Select a folder containing at least one {{exts}} file.",
+    "selectMission": "Select a folder containing a {{ext}} arcade mission script. Convert writes a same-stem .c / .txt; Repack writes the .mismsexc back.",
     "selectTraditional": "Select a folder containing {{ext}} MSC scripts. Arbitrary file names are supported."
   },
   "dialog": {
@@ -102,6 +105,7 @@
     "batchPartial": "{{verb}} {{done}}/{{total}} file(s), {{failed}} failed",
     "prepareConvertFailed": "Failed to prepare convert for {{name}}: {{message}}",
     "needUnitScripts": "Selected folder must contain at least one .bscex, .cscex, or .dscex file",
+    "needMissionScripts": "Selected folder must contain at least one .mismsexc file",
     "needTraditionalScripts": "Selected folder must contain at least one .bin file",
     "decompiledNoSnapshot": "Decompiled {{name}}, but could not snapshot {{path}} for diffing: {{message}}",
     "overlayUpdated": "Updated {{path}} with {{renames}} callback rename(s) from {{summary}}",

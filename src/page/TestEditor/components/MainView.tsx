@@ -12,6 +12,7 @@ import NaviListView from "./NaviListView";
 import CardIconListView from "./CardIconListView";
 import StageIconListView from "./StageIconListView";
 import StageListView from "./StageListView";
+import { TriadRouteView } from "./triad-route/TriadRouteView";
 import MscWorkspaceView from "./msc-editor/MscWorkspaceView";
 import ParamEditorView from "./param-editor/ParamEditorView";
 import { BulletEditorView } from "./param-editors/bullet-editor/BulletEditorView";
@@ -49,6 +50,8 @@ interface MainViewProps {
   /** Folder path for MSC Workspace when the tree selection is a folder (or file parent) that contains .bscex/.cscex/.dscex files. */
   mscWorkspaceFolderPath?: string | null;
   onMscWorkspaceFolderChange?: (path: string | null) => void;
+  /** Open a folder in MSC Workspace and switch to that tab. */
+  onActivateMscWorkspace?: (path: string) => void;
   onUnsavedChanges?: (hasChanges: boolean) => void;
   onRevealTreeFolder?: (path: string) => void;
   workspaceDocument: TestEditorWorkspaceDocument;
@@ -242,6 +245,21 @@ const tabs: StageTab[] = [
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}
         workspaceDocument={props.workspaceDocument}
+      />
+    ),
+  },
+  {
+    name: "Triad Route Editor",
+    value: "triad-route",
+    render: (props: MainViewProps) => (
+      <TriadRouteView
+        folderPath={props.folderPath ?? ""}
+        workspaceDocument={props.workspaceDocument}
+        isActive={false}
+        onUnsavedChanges={props.onUnsavedChanges}
+        onPackMutated={props.onPackMutated}
+        onRevealTreeFolder={props.onRevealTreeFolder}
+        onOpenMscFolder={props.onActivateMscWorkspace}
       />
     ),
   },
@@ -971,6 +989,17 @@ const MainView = ({
     pendingNaviUniqueId,
   ]);
 
+  const activateMscWorkspace = useCallback((path: string) => {
+    onMscWorkspaceFolderChange?.(path);
+    setActiveTab("msc-workspace");
+    setVisitedTabs((prev) => {
+      if (prev.has("msc-workspace")) return prev;
+      const next = new Set(prev);
+      next.add("msc-workspace");
+      return next;
+    });
+  }, [onMscWorkspaceFolderChange]);
+
   const handleTabChange = useCallback((value: string) => {
     setActiveTab(value);
     setVisitedTabs((prev) => {
@@ -987,6 +1016,7 @@ const MainView = ({
       folderPath,
       mscWorkspaceFolderPath,
       onMscWorkspaceFolderChange,
+      onActivateMscWorkspace: activateMscWorkspace,
       onUnsavedChanges,
       onRevealTreeFolder,
       workspaceDocument,

@@ -53,6 +53,10 @@ describe("workspace content catalog", () => {
     ["bgm-list", "list.character", "0xC91627E8", "bgm_list.bin"],
     ["bgm-bank-update-02", "unit.sound", "0x0C568109", null],
     ["camera-table", "unit.model", "0xCB665375", "camera/parameters/02winlose.vgsht2"],
+    ["triad-battle-list", "list.triad", "0xE952325A", null],
+    ["scene-id-table", "mission.data", "0xA073DA71", null],
+    ["outmission", "mission.data", "0xF7B91DE7", null],
+    ["pilot-name-list", "mission.data", "0x80113E3D", null],
   ] as const)("defines %s", (id, routeId, hashHex, relativeFilePath) => {
     expect(getWorkspaceContentDescriptor(id)).toMatchObject({
       id,
@@ -60,6 +64,31 @@ describe("workspace content catalog", () => {
       hashHex,
       relativeFilePath,
     });
+  });
+
+  it("maps the arcade mission content to its 012list and 051mission routes", () => {
+    const routes = DEFAULT_TEST_EDITOR_WORKSPACE.assetRoutes;
+    expect(routes["list.triad"]?.prefix).toBe("012list");
+    expect(routes["mission.data"]?.prefix).toBe("051mission");
+    expect(routes["mission.script"]?.prefix).toBe("051mission");
+  });
+
+  it("resolves the triad battle list under its configured 012list folder", async () => {
+    withExistingPaths([
+      "E:/workspace/012list/triad_battle_list",
+      "E:/workspace/012list/triad_battle_list_structure.json",
+    ]);
+
+    const result = await resolveWorkspaceContent(
+      "E:/workspace",
+      DEFAULT_TEST_EDITOR_WORKSPACE,
+      "triad-battle-list",
+    );
+
+    expect(result.existing?.folderPath).toBe("E:/workspace/012list/triad_battle_list");
+    // The package holds three tables, so no single file path is pinned here:
+    // the backend tells them apart by their column sets.
+    expect(result.configured.filePath).toBeNull();
   });
 
   it("resolves Character ID table under its mapped configured 012list folder", async () => {

@@ -11,6 +11,9 @@ pub enum Arg {
     U32(u32),
     Func(String),
     Label(u32),
+    /// A label address minus a fixed byte count, for the one encoding where a
+    /// jump names an instruction that another label points *into*.
+    LabelBefore(u32, u32),
 }
 
 #[derive(Clone, Debug)]

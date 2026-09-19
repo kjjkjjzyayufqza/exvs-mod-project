@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  computeMissionSlotStatuses,
   computeMscSlotStatuses,
   getMscFileRole,
   getMscPackSlotIndexForCFile,
@@ -29,6 +30,12 @@ describe("getMscFileRole", () => {
     expect(getMscFileRole("0.bscex", "traditional")).toBe("other");
   });
 
+  it("classifies scene-named .mismsexc as mission scripts", () => {
+    expect(getMscFileRole("000triad_battle_a001_001.mismsexc", "mission")).toBe("script");
+    expect(getMscFileRole("0.bin", "mission")).toBe("other");
+    expect(getMscFileRole("000triad_battle_a001_001.mismsexc", "unit")).toBe("other");
+  });
+
   it("classifies decompiled C, logs, and other files", () => {
     expect(getMscFileRole("0.c")).toBe("c");
     expect(getMscFileRole("2.resolved.md")).toBe("resolved");
@@ -42,6 +49,11 @@ describe("isMscRepackableCFile", () => {
     expect(isMscRepackableCFile("000triad_battle_a001_001.c", "traditional")).toBe(true);
     expect(isMscRepackableCFile("000triad_battle_a001_001.c", "unit")).toBe(false);
   });
+
+  it("accepts the scene-named C file in mission mode", () => {
+    expect(isMscRepackableCFile("000triad_battle_a001_001.c", "mission")).toBe(true);
+    expect(isMscRepackableCFile("0.c", "mission")).toBe(true);
+  });
 });
 
 describe("isMscPackScriptCFile", () => {
@@ -50,6 +62,25 @@ describe("isMscPackScriptCFile", () => {
     expect(isMscPackScriptCFile("2.C")).toBe(true);
     expect(isMscPackScriptCFile("3.c")).toBe(false);
     expect(isMscPackScriptCFile("helper.c")).toBe(false);
+  });
+});
+
+describe("computeMissionSlotStatuses", () => {
+  it("builds one slot from the scene-named script and its C sidecar", () => {
+    const slots = computeMissionSlotStatuses([
+      "000triad_battle_a001_001.mismsexc",
+      "000triad_battle_a001_001.c",
+      "0.bin",
+    ]);
+    expect(slots).toHaveLength(1);
+    expect(slots[0]).toMatchObject({
+      index: 0,
+      sourceName: "000triad_battle_a001_001.mismsexc",
+      decompiledName: "000triad_battle_a001_001.c",
+      hasSource: true,
+      hasDecompiled: true,
+      hasLog: false,
+    });
   });
 });
 

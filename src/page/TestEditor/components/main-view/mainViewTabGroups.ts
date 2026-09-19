@@ -1,10 +1,18 @@
-export type MainViewTabGroupId = "pack" | "character" | "sound" | "stage" | "msc" | "param";
+export type MainViewTabGroupId =
+  | "pack"
+  | "character"
+  | "sound"
+  | "stage"
+  | "mission"
+  | "msc"
+  | "param";
 
 export const MAIN_VIEW_TAB_GROUP_ORDER: MainViewTabGroupId[] = [
   "pack",
   "character",
   "sound",
   "stage",
+  "mission",
   "msc",
   "param",
 ];
@@ -14,6 +22,7 @@ export const MAIN_VIEW_TAB_GROUP_LABELS: Record<MainViewTabGroupId, string> = {
   character: "Character",
   sound: "Sound",
   stage: "Stage",
+  mission: "Mission",
   msc: "MSC",
   param: "Param",
 };
@@ -44,6 +53,7 @@ export const MAIN_VIEW_TAB_META: MainViewTabMeta[] = [
   { value: "card-icon-list", name: "Card Icon List", shortName: "Card icons", group: "stage" },
   { value: "stage-icon-list", name: "Stage Icon List", shortName: "Stage icons", group: "stage" },
   { value: "stage-list", name: "Stage List", shortName: "Stages", group: "stage" },
+  { value: "triad-route", name: "Triad Route Editor", shortName: "Triad", group: "mission" },
   { value: "msc-workspace", name: "MSC Workspace", shortName: "MSC", group: "msc" },
   { value: "param-editor", name: "Param Editor", shortName: "Param", group: "param" },
   // Legacy per-type editors — prefer Param Editor; labels mark them as outdated.

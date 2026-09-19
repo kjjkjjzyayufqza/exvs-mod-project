@@ -135,6 +135,42 @@ export const WORKSPACE_CONTENT_CATALOG = Object.freeze({
     defaultPackName: "000common_000common_001",
     label: "Camera Table",
   },
+  // Arcade (Triad Battle) route data. Every one of these packages holds more
+  // than one payload, or a payload whose extracted filename is not fixed, so
+  // no relativeFilePath is pinned: the backend identifies the files by their
+  // column sets and by the package structure JSON.
+  "triad-battle-list": {
+    id: "triad-battle-list",
+    routeId: "list.triad",
+    hashHex: "0xE952325A",
+    relativeFilePath: null,
+    defaultPackName: "triad_battle_list",
+    label: "Triad Battle List",
+  },
+  "scene-id-table": {
+    id: "scene-id-table",
+    routeId: "mission.data",
+    hashHex: "0xA073DA71",
+    relativeFilePath: null,
+    defaultPackName: "sceneidtable",
+    label: "Scene ID Table",
+  },
+  outmission: {
+    id: "outmission",
+    routeId: "mission.data",
+    hashHex: "0xF7B91DE7",
+    relativeFilePath: null,
+    defaultPackName: "outmission",
+    label: "Mission Briefings",
+  },
+  "pilot-name-list": {
+    id: "pilot-name-list",
+    routeId: "mission.data",
+    hashHex: "0x80113E3D",
+    relativeFilePath: null,
+    defaultPackName: "pilot_name_list",
+    label: "Pilot Name List",
+  },
 } as const);
 
 export type WorkspaceContentId = keyof typeof WORKSPACE_CONTENT_CATALOG;

@@ -40,6 +40,7 @@ mod ssbh_motion;
 pub mod ssbh_motion_interchange;
 pub mod ssbh_preview;
 mod stage_commands;
+mod triad_route_commands;
 
 pub use ssbh_motion::smoke_decode_and_sample_nuanmb;
 
@@ -184,6 +185,13 @@ pub fn run() {
             chrsysparam_commands::validate_chrsysparam_data,
             chrsysparam_commands::export_chrsysparam_document,
             chrsysparam_commands::import_chrsysparam_document,
+            triad_route_commands::load_triad_workspace,
+            triad_route_commands::load_triad_briefing,
+            triad_route_commands::load_triad_stage_script,
+            triad_route_commands::rename_triad_briefings,
+            triad_route_commands::validate_triad_route,
+            triad_route_commands::apply_triad_route,
+            triad_route_commands::generate_triad_scene_identity,
             commands::parse_shl_file,
             commands::build_shl_file,
             commands::parse_raw_path_id_pack,

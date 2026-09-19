@@ -49,6 +49,7 @@ import {
   rememberDialogSelection,
 } from "@/utils/dialogLastPath";
 import {
+  detectMscWorkspaceModeFromNames,
   folderContainsMscScriptFiles,
   getMscConvertLogPath,
   getMscConvertOutputPath,
@@ -57,6 +58,7 @@ import {
 } from "../../utils/mscWorkspaceUtils";
 import {
   compareByLeadingIndex,
+  computeMissionSlotStatuses,
   computeMscSlotStatuses,
   getMscFileRole,
   getMscPackSlotIndexForCFile,
@@ -147,6 +149,13 @@ const TRADITIONAL_FILE_TYPES: FileTypeOption[] = [
   { value: "txt", dump: ".txt" },
 ];
 
+const MISSION_FILE_TYPES: FileTypeOption[] = [
+  { value: "all", textKey: "fileTypes.all" },
+  { value: "c", dump: ".c" },
+  { value: "txt", dump: ".txt" },
+  { value: "mismsexc", dump: ".mismsexc" },
+];
+
 function matchesFileType(fileName: string, type: string): boolean {
   const lower = fileName.toLowerCase();
   if (type === "all") return true;
@@ -165,6 +174,26 @@ function getFileIcon(fileName: string, mode: MscWorkspaceMode) {
     default:
       return <FileText className="size-4 text-muted-foreground" />;
   }
+}
+
+function workspaceTitleKey(
+  mode: MscWorkspaceMode,
+): "workspace.unitTitle" | "workspace.missionTitle" | "workspace.traditionalTitle" {
+  if (mode === "mission") return "workspace.missionTitle";
+  if (mode === "traditional") return "workspace.traditionalTitle";
+  return "workspace.unitTitle";
+}
+
+function DialogPath({ path }: { path: string }) {
+  return (
+    <code
+      title={path}
+      data-i18n-ignore=""
+      className="block min-w-0 max-w-full overflow-hidden break-all rounded bg-muted px-1.5 py-1 font-mono text-[11px] leading-snug"
+    >
+      {path}
+    </code>
+  );
 }
 
 export default function MscWorkspaceView({
@@ -198,18 +227,24 @@ export default function MscWorkspaceView({
   const [editorCommand, setEditorCommand] = useState<string>(() => getMscExternalEditorCommand());
   const [autoRepackFhm2d, setAutoRepackFhm2dState] = useState(() => getMscAutoRepackFhm2d());
 
-  const activeFolderPath = workspaceMode === "unit" ? mscFolderPath : traditionalFolderPath;
-  const fileTypes = workspaceMode === "unit" ? UNIT_FILE_TYPES : TRADITIONAL_FILE_TYPES;
+  const activeFolderPath =
+    workspaceMode === "traditional" ? traditionalFolderPath : mscFolderPath;
+  const fileTypes =
+    workspaceMode === "unit"
+      ? UNIT_FILE_TYPES
+      : workspaceMode === "mission"
+        ? MISSION_FILE_TYPES
+        : TRADITIONAL_FILE_TYPES;
 
   const isBusy = processingFile !== null || batch !== null || isFolderRepacking;
   const showScriptFiles = workspaceMode !== "unit" || unitPanel === "scripts";
 
   const setActiveFolderPath = useCallback(
     (path: string) => {
-      if (workspaceMode === "unit") {
-        onMscFolderChange?.(path);
-      } else {
+      if (workspaceMode === "traditional") {
         setTraditionalFolderPath(path);
+      } else {
+        onMscFolderChange?.(path);
       }
     },
     [onMscFolderChange, workspaceMode],
@@ -265,6 +300,26 @@ export default function MscWorkspaceView({
     setSearchQuery("");
   }, [workspaceMode]);
 
+  useEffect(() => {
+    if (!mscFolderPath) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const entries = await readDir(mscFolderPath);
+        if (cancelled) return;
+        const detected = detectMscWorkspaceModeFromNames(
+          entries.filter((entry) => entry.isFile && entry.name).map((entry) => entry.name as string),
+        );
+        if (detected) setWorkspaceMode(detected);
+      } catch {
+        // Keep the current tab if the folder cannot be listed yet.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mscFolderPath]);
+
   const filteredFiles = useMemo(
     () =>
       allFiles.filter(
@@ -279,7 +334,12 @@ export default function MscWorkspaceView({
     () => groupMscFiles(filteredFiles, workspaceMode),
     [filteredFiles, workspaceMode],
   );
-  const slots = useMemo(() => computeMscSlotStatuses(allFiles.map((f) => f.name)), [allFiles]);
+  const slots = useMemo(() => {
+    const names = allFiles.map((f) => f.name);
+    return workspaceMode === "mission"
+      ? computeMissionSlotStatuses(names)
+      : computeMscSlotStatuses(names);
+  }, [allFiles, workspaceMode]);
 
   const scriptTargets = useMemo(
     () =>
@@ -302,10 +362,10 @@ export default function MscWorkspaceView({
       // Prefer last picked folder (the folder itself), then current MSC path,
       // then workspace MSC route root. Never force-open the parent of the last pick.
       const defaultPath = getDialogDefaultPath(
-        workspaceMode === "unit"
-          ? DialogLastPathKey.mscWorkspaceFolder
-          : DialogLastPathKey.traditionalMscWorkspaceFolder,
-        activeFolderPath ?? (workspaceMode === "unit" ? workspaceDefaultPath : workspaceRoot),
+        workspaceMode === "traditional"
+          ? DialogLastPathKey.traditionalMscWorkspaceFolder
+          : DialogLastPathKey.mscWorkspaceFolder,
+        activeFolderPath ?? (workspaceMode === "traditional" ? workspaceRoot : workspaceDefaultPath),
       );
       const selected = await open({
         directory: true,
@@ -316,14 +376,18 @@ export default function MscWorkspaceView({
       const ok = await folderContainsMscScriptFiles(selected, workspaceMode);
       if (!ok) {
         toast.error(
-          workspaceMode === "unit" ? t("toast.needUnitScripts") : t("toast.needTraditionalScripts"),
+          workspaceMode === "unit"
+            ? t("toast.needUnitScripts")
+            : workspaceMode === "mission"
+              ? t("toast.needMissionScripts")
+              : t("toast.needTraditionalScripts"),
         );
         return;
       }
       const dialogKey =
-        workspaceMode === "unit"
-          ? DialogLastPathKey.mscWorkspaceFolder
-          : DialogLastPathKey.traditionalMscWorkspaceFolder;
+        workspaceMode === "traditional"
+          ? DialogLastPathKey.traditionalMscWorkspaceFolder
+          : DialogLastPathKey.mscWorkspaceFolder;
       rememberDialogSelection(dialogKey, selected, "directory");
       setActiveFolderPath(selected);
     } catch (e) {
@@ -423,7 +487,7 @@ export default function MscWorkspaceView({
           }),
         );
       }
-      const slotIndex = Number.parseInt(file.name, 10);
+      const slotIndex = workspaceMode === "unit" ? Number.parseInt(file.name, 10) : 0;
       if (Number.isInteger(slotIndex)) {
         setSlotVerifyState(slotIndex, null);
       }
@@ -440,7 +504,7 @@ export default function MscWorkspaceView({
       const outputPath = getMscRepackOutputPath(inputPath, workspaceMode);
       await repackMscScript({ inputPath, outputPath });
       // The original script changed, so any previous verify verdict is stale.
-      const slotIndex = Number.parseInt(file.name, 10);
+      const slotIndex = workspaceMode === "unit" ? Number.parseInt(file.name, 10) : 0;
       if (Number.isInteger(slotIndex)) {
         setSlotVerifyState(slotIndex, null);
       }
@@ -562,11 +626,11 @@ export default function MscWorkspaceView({
 
   const handleVerifyRoundtrip = useCallback(
     async (file: MscFileInfo) => {
-      const slotIndex = getMscPackSlotIndexForCFile(file.name);
+      const slotIndex = workspaceMode === "unit" ? getMscPackSlotIndexForCFile(file.name) : 0;
       try {
         setProcessingFile(file.name);
         setSlotVerifyState(slotIndex, { status: "verifying" });
-        const result = await verifyMscRoundtrip({ cFilePath: file.path });
+        const result = await verifyMscRoundtrip({ cFilePath: file.path, mode: workspaceMode });
         setSlotVerifyState(slotIndex, verifyStateFromReport(result.report));
         const summary = summarizeMscRoundtripReport(result.report);
         if (result.report.isMatch) {
@@ -586,7 +650,7 @@ export default function MscWorkspaceView({
         await fetchFiles();
       }
     },
-    [setSlotVerifyState, fetchFiles, t],
+    [setSlotVerifyState, fetchFiles, t, workspaceMode],
   );
 
   const runBatch = useCallback(
@@ -729,7 +793,7 @@ export default function MscWorkspaceView({
               icon: <Wand2 />,
             });
           }
-          if (workspaceMode === "unit") {
+          if (workspaceMode === "unit" || workspaceMode === "mission") {
             actions.push({
               key: "verify",
               label: working ? t("actions.verifying") : t("actions.verify"),
@@ -804,6 +868,7 @@ export default function MscWorkspaceView({
     >
       <TabsList aria-label={t("aria.workspaceType")}>
         <TabsTrigger value="unit">{t("tabs.unit")}</TabsTrigger>
+        <TabsTrigger value="mission">{t("tabs.mission")}</TabsTrigger>
         <TabsTrigger value="traditional">{t("tabs.traditional")}</TabsTrigger>
       </TabsList>
     </Tabs>
@@ -829,10 +894,12 @@ export default function MscWorkspaceView({
           <FolderOpen className="size-10 opacity-50" />
           <div className="max-w-md space-y-2 text-sm">
             <p className="font-medium text-foreground">
-              {workspaceMode === "unit" ? t("workspace.unitTitle") : t("workspace.traditionalTitle")}
+              {t(workspaceTitleKey(workspaceMode))}
             </p>
             {workspaceMode === "unit" ? (
               <p>{t("empty.selectUnit", { exts: ".bscex, .cscex, or .dscex" })}</p>
+            ) : workspaceMode === "mission" ? (
+              <p>{t("empty.selectMission", { ext: ".mismsexc" })}</p>
             ) : (
               <p>{t("empty.selectTraditional", { ext: ".bin" })}</p>
             )}
@@ -860,7 +927,7 @@ export default function MscWorkspaceView({
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 flex-1 space-y-1">
               <h2 className="text-lg font-semibold tracking-tight">
-                {workspaceMode === "unit" ? t("workspace.unitTitle") : t("workspace.traditionalTitle")}
+                {t(workspaceTitleKey(workspaceMode))}
               </h2>
               <p className="break-all font-mono text-[11px] text-muted-foreground" title={activeFolderPath} data-i18n-ignore="">
                 {activeFolderPath}
@@ -886,7 +953,7 @@ export default function MscWorkspaceView({
             </div>
           </div>
 
-          {workspaceMode === "unit" ? (
+          {workspaceMode === "unit" || workspaceMode === "mission" ? (
             <MscPipelineBar slots={slots} verifyStates={verifyStates} />
           ) : null}
 
@@ -1069,8 +1136,8 @@ export default function MscWorkspaceView({
       </div>
 
       <AlertDialog open={confirm !== null} onOpenChange={(next) => !next && !isBusy && setConfirm(null)}>
-        <AlertDialogContent className="max-w-xl">
-          <AlertDialogHeader>
+        <AlertDialogContent className="max-w-[min(36rem,calc(100%-2rem))] overflow-hidden sm:max-w-xl">
+          <AlertDialogHeader className="min-w-0 text-left">
             <AlertDialogTitle>
               {confirm?.mode === "convert-one"
                 ? t("dialog.convertToC")
@@ -1079,24 +1146,20 @@ export default function MscWorkspaceView({
                   : t("dialog.repackAll")}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
-              <div className="space-y-3 text-sm text-muted-foreground">
+              <div className="min-w-0 space-y-3 overflow-hidden text-sm text-muted-foreground">
                 {confirm?.mode === "convert-one" ? (
                   <>
-                    <p>
+                    <p className="break-words">
                       {t("dialog.convertFile", { name: confirm.file.name })}
                     </p>
-                    <div className="space-y-1">
+                    <div className="min-w-0 space-y-1.5">
                       <p className="font-medium text-foreground">{t("dialog.outputTargets")}</p>
-                      <p>
-                        <code className="rounded bg-muted px-1 py-0.5 font-mono">{confirm.outputPath}</code>
-                      </p>
-                      <p>
-                        <code className="rounded bg-muted px-1 py-0.5 font-mono">{confirm.logPath}</code>
-                      </p>
+                      <DialogPath path={confirm.outputPath} />
+                      <DialogPath path={confirm.logPath} />
                     </div>
                   </>
                 ) : confirm ? (
-                  <p>
+                  <p className="break-words">
                     {confirm.mode === "decompile-all"
                       ? t("dialog.batchDecompile", {
                           count: confirm.targets.length,
@@ -1110,14 +1173,12 @@ export default function MscWorkspaceView({
                 ) : null}
 
                 {confirm && confirm.overwrite.length > 0 ? (
-                  <div className="space-y-1">
+                  <div className="min-w-0 space-y-1.5">
                     <p className="font-medium text-amber-600 dark:text-amber-500">
                       {t("dialog.willOverwrite")}
                     </p>
                     {confirm.overwrite.map((path) => (
-                      <p key={path} data-i18n-ignore="">
-                        <code className="rounded bg-muted px-1 py-0.5 font-mono">{path}</code>
-                      </p>
+                      <DialogPath key={path} path={path} />
                     ))}
                   </div>
                 ) : (

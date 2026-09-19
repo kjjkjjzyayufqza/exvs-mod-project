@@ -1,13 +1,27 @@
 use crate::msc_toolchain::ir::{Arg, Item};
 use crate::msc_toolchain::opcode::{format_of, size_of};
+use crate::msc_toolchain::profile::ScriptProfile;
 
-const MAGIC: &[u8] = b"\xB2\xAC\xBC\xBA\xE6\x90\x32\x01\x0A\x21\xAF\x16\x00\x00\x00\x00";
+/// Bytes 0x00..0x08: the container magic, identical for every script kind.
+const MAGIC_PREFIX: &[u8] = b"\xB2\xAC\xBC\xBA\xE6\x90\x32\x01";
 
 fn cmd_size(op: u8) -> usize {
     size_of(op)
 }
 
-pub fn emit_file(scripts: &[Vec<Item>], function_names: &[String], strings: &[String]) -> Vec<u8> {
+/// Emit a compiled script.
+///
+/// `global_count` is the number of file-scope global declarations. The mission
+/// header records it at `0x1C`; unit scripts keep the historical heuristic
+/// that predates this parameter.
+pub fn emit_file(
+    scripts: &[Vec<Item>],
+    function_names: &[String],
+    strings: &[String],
+    profile: ScriptProfile,
+    global_count: u32,
+    table_order: &[usize],
+) -> Vec<u8> {
     let mut positions = Vec::with_capacity(scripts.len());
     let mut current: u32 = 0x10;
     let mut name_to_pos = std::collections::HashMap::new();
@@ -24,10 +38,15 @@ pub fn emit_file(scripts: &[Vec<Item>], function_names: &[String], strings: &[St
     }
     let entries_offset = current;
     let entry_point = name_to_pos.get("main").copied().unwrap_or(0x10);
-    let unk: u32 = if !strings.is_empty() || scripts.len() > 10 {
-        0x16
-    } else {
-        0
+    let unk: u32 = match profile {
+        ScriptProfile::Mission => global_count,
+        ScriptProfile::Unit => {
+            if !strings.is_empty() || scripts.len() > 10 {
+                0x16
+            } else {
+                0
+            }
+        }
     };
     let mut max_str = strings.iter().map(|s| s.len()).max().unwrap_or(0);
     if max_str % 0x10 != 0 {
@@ -35,7 +54,9 @@ pub fn emit_file(scripts: &[Vec<Item>], function_names: &[String], strings: &[St
     }
 
     let mut out = Vec::with_capacity(entries_offset as usize + 0x80);
-    out.extend_from_slice(MAGIC);
+    out.extend_from_slice(MAGIC_PREFIX);
+    out.extend_from_slice(&profile.version_word().to_le_bytes());
+    out.extend_from_slice(&0u32.to_le_bytes());
     out.extend_from_slice(&entries_offset.to_le_bytes());
     out.extend_from_slice(&entry_point.to_le_bytes());
     out.extend_from_slice(&(scripts.len() as u32).to_le_bytes());
@@ -72,6 +93,11 @@ pub fn emit_file(scripts: &[Vec<Item>], function_names: &[String], strings: &[St
                     Some(Arg::U32(v)) => *v,
                     Some(Arg::Func(name)) => name_to_pos.get(name).copied().unwrap_or(0),
                     Some(Arg::Label(id)) => label_pos.get(id).copied().unwrap_or(0),
+                    Some(Arg::LabelBefore(id, back)) => label_pos
+                        .get(id)
+                        .copied()
+                        .unwrap_or(0)
+                        .saturating_sub(*back),
                     None => 0,
                 };
                 match ch {
@@ -87,8 +113,15 @@ pub fn emit_file(scripts: &[Vec<Item>], function_names: &[String], strings: &[St
     while out.len() % 0x10 != 0 {
         out.push(0);
     }
-    for p in &positions {
-        out.extend_from_slice(&p.to_le_bytes());
+    // `table_order[i]` is the slot the i-th laid-out script occupies in the
+    // offset table. Scripts are laid out in source order; the table is not.
+    let mut table = vec![0u32; positions.len()];
+    for (index, position) in positions.iter().enumerate() {
+        let slot = table_order.get(index).copied().unwrap_or(index);
+        table[slot.min(positions.len().saturating_sub(1))] = *position;
+    }
+    for entry in &table {
+        out.extend_from_slice(&entry.to_le_bytes());
     }
     while out.len() % 0x10 != 0 {
         out.push(0);

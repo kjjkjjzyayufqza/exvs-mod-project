@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   groupMainViewTabs,
+  MAIN_VIEW_TAB_GROUP_LABELS,
   MAIN_VIEW_TAB_GROUP_ORDER,
   MAIN_VIEW_TAB_META,
   shouldKeepMainViewTabMounted,
@@ -72,5 +73,23 @@ describe("mainViewTabGroups", () => {
     expect(shouldKeepMainViewTabMounted("interaction-editor", false, false)).toBe(true);
     expect(shouldKeepMainViewTabMounted("folder-structure", false, false)).toBe(false);
     expect(shouldKeepMainViewTabMounted("folder-structure", false, true)).toBe(true);
+  });
+});
+
+describe("mission group", () => {
+  it("lists the triad route editor in its own group before MSC", () => {
+    expect(MAIN_VIEW_TAB_GROUP_ORDER.indexOf("mission")).toBeGreaterThanOrEqual(0);
+    expect(MAIN_VIEW_TAB_GROUP_ORDER.indexOf("mission")).toBeLessThan(
+      MAIN_VIEW_TAB_GROUP_ORDER.indexOf("msc"),
+    );
+    expect(MAIN_VIEW_TAB_GROUP_LABELS.mission).toBe("Mission");
+
+    const tab = MAIN_VIEW_TAB_META.find((entry) => entry.value === "triad-route");
+    expect(tab).toMatchObject({ group: "mission", shortName: "Triad" });
+  });
+
+  it("keeps the triad route editor mounted while it holds an unsaved draft", () => {
+    expect(shouldKeepMainViewTabMounted("triad-route", false, true)).toBe(true);
+    expect(shouldKeepMainViewTabMounted("triad-route", false, false)).toBe(false);
   });
 });

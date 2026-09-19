@@ -26,6 +26,33 @@ const writeTextFileMock = vi.mocked(writeTextFile);
 const renameMock = vi.mocked(rename);
 
 describe("workspaceContentExtractSpec", () => {
+  it("extracts the arcade mission packs as plain folders", () => {
+    // These packs hold several payloads, or payloads whose extracted names the
+    // backend identifies by content, so no single output name is imposed.
+    for (const id of ["triad-battle-list", "scene-id-table", "outmission", "pilot-name-list"] as const) {
+      expect(workspaceContentExtractSpec(id)).toEqual({
+        contentId: id,
+        format: Fhm2d_type_format.fhm2d_list,
+        listOutputFileName: undefined,
+      });
+    }
+  });
+
+  it("wires every mission init item to its catalog content", () => {
+    expect(FHM2D_INIT_CONTENT_BY_ITEM_ID.triad_battle_list).toBe("triad-battle-list");
+    expect(FHM2D_INIT_CONTENT_BY_ITEM_ID.scene_id_table).toBe("scene-id-table");
+    expect(FHM2D_INIT_CONTENT_BY_ITEM_ID.outmission).toBe("outmission");
+    expect(FHM2D_INIT_CONTENT_BY_ITEM_ID.pilot_name_list).toBe("pilot-name-list");
+    for (const id of ["triad_battle_list", "scene_id_table", "outmission", "pilot_name_list"]) {
+      expect(GENERIC_FHM2D_INIT_ITEM_IDS.has(id)).toBe(true);
+    }
+  });
+
+  it("leaves mission packs out of the single-payload rename table", () => {
+    expect(payloadNamesForContent("triad-battle-list")).toBeNull();
+    expect(payloadNamesForContent("outmission")).toBeNull();
+  });
+
   it("maps list packs to fhm2d_list and catalog file names", () => {
     expect(workspaceContentExtractSpec("character-id-table")).toEqual({
       contentId: "character-id-table",
