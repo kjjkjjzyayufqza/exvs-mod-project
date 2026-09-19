@@ -51,7 +51,6 @@ export const MAIN_VIEW_TAB_META: MainViewTabMeta[] = [
   { value: "arms-editor", name: "Arms Editor (outdated)", shortName: "Arms (outdated)", group: "param" },
   { value: "speed-editor", name: "Speed Editor (outdated)", shortName: "Speed (outdated)", group: "param" },
   { value: "character-editor", name: "Character Editor (outdated)", shortName: "Char param (outdated)", group: "param" },
-  { value: "chrsys-editor", name: "ChrSys Editor (outdated)", shortName: "ChrSys (outdated)", group: "param" },
   { value: "grap-editor", name: "Grap Editor (outdated)", shortName: "Grap (outdated)", group: "param" },
   { value: "depiction-editor", name: "Depiction Editor (outdated)", shortName: "Depiction (outdated)", group: "param" },
   { value: "hitgroup-editor", name: "HitGroup Editor (outdated)", shortName: "HitGroup (outdated)", group: "param" },

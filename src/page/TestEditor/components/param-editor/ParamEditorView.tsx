@@ -11,8 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils"
 import { useConfigStore } from "@/store/configStore"
 import { FILE_TYPE_LABELS } from "@/models/commandTable"
-import { ChrSysDataPanel } from "./ChrSysDataPanel"
-import type { ChrSysParamFile } from "./chrSysTypes"
+import { ChrSysActionTableEditor } from "../chrsys-action-table/ChrSysActionTableEditor"
+import type { ChrSysParamFile } from "../chrsys-action-table/chrSysTypes"
 import { PARAM_KINDS, type ParamKindId, resolveTypedFileTypeForPath, getParamKind } from "./paramKinds"
 import { TypedParamDataPanel } from "./TypedParamDataPanel"
 import type { TypedParamFile } from "./typedParamTypes"
@@ -404,8 +404,10 @@ export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath
                     }
                   />
                 ) : kindSession.chr ? (
-                  <ChrSysDataPanel
+                  <ChrSysActionTableEditor
+                    key={`${kindRow.id}:${kindSession.loadSession}`}
                     data={kindSession.chr.data}
+                    sourcePath={kindSession.chr.path}
                     onChange={(nextData) =>
                       patchKindSession(kindRow.id, (prev) =>
                         prev.chr

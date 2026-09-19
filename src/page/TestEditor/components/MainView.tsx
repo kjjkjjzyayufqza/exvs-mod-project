@@ -18,7 +18,6 @@ import { BulletEditorView } from "./param-editors/bullet-editor/BulletEditorView
 import { ArmsEditorView } from "./param-editors/arms-editor/ArmsEditorView";
 import { SpeedEditorView } from "./param-editors/speed-editor/SpeedEditorView";
 import { CharacterEditorView } from "./param-editors/character-editor/CharacterEditorView";
-import { ChrSysEditorView } from "./param-editors/chrsys-editor/ChrSysEditorView";
 import { GrapEditorView } from "./param-editors/grap-editor/GrapEditorView";
 import { DepictionEditorView } from "./param-editors/depiction-editor/DepictionEditorView";
 import { HitGroupEditorView } from "./param-editors/hitgroup-editor/HitGroupEditorView";
@@ -258,6 +257,7 @@ const tabs: StageTab[] = [
         onUnsavedChanges={props.onUnsavedChanges}
         workspaceDefaultPath={props.workspaceRouteRoots["msc.workspace"]}
         modFolderPath={props.modFolderPath}
+        paramRouteRoot={props.workspaceRouteRoots["unit.param"]}
       />
     ),
   },
@@ -306,16 +306,6 @@ const tabs: StageTab[] = [
     value: "character-editor",
     render: (props: MainViewProps) => (
       <CharacterEditorView
-        onUnsavedChanges={props.onUnsavedChanges}
-        workspaceDefaultPath={props.workspaceRouteRoots["unit.param"]}
-      />
-    ),
-  },
-  {
-    name: "ChrSys Editor (outdated)",
-    value: "chrsys-editor",
-    render: (props: MainViewProps) => (
-      <ChrSysEditorView
         onUnsavedChanges={props.onUnsavedChanges}
         workspaceDefaultPath={props.workspaceRouteRoots["unit.param"]}
       />
@@ -885,6 +875,7 @@ const MainView = ({
               onUnsavedChanges={handleMscWorkspaceUnsaved}
               workspaceDefaultPath={props.workspaceRouteRoots["msc.workspace"]}
               modFolderPath={props.modFolderPath}
+              paramRouteRoot={props.workspaceRouteRoots["unit.param"]}
             />
           ),
         };

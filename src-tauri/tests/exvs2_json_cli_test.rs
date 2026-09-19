@@ -293,6 +293,7 @@ fn inspect_hitbox_tables_auto_detect_and_summarize() {
                 summary: true,
                 raw_fields: false,
                 roundtrip_check: false,
+                msc_dir: None,
             },
         )
         .unwrap_or_else(|e| panic!("{file_name} should inspect: {e}"));
@@ -325,6 +326,7 @@ fn inspect_hitbox_tables_roundtrip_is_byte_identical() {
                     summary: true,
                     raw_fields: false,
                     roundtrip_check: true,
+                    msc_dir: None,
                 },
             )
             .unwrap_or_else(|e| panic!("{path} should inspect: {e}"));
@@ -389,6 +391,7 @@ fn edit_hitgroupiddef_sets_sphere_radius_and_reinspects() {
             summary: false,
             raw_fields: false,
             roundtrip_check: true,
+            msc_dir: None,
         },
     )
     .expect("edited hitgroupiddef should re-inspect");
@@ -510,6 +513,7 @@ fn inspect_jnttbl_emits_hash_metadata_and_duplicate_warnings() {
             summary: false,
             raw_fields: false,
             roundtrip_check: true,
+            msc_dir: None,
         },
     )
     .expect("JNTT fixture should parse");
@@ -553,6 +557,7 @@ fn inspect_character_id_table_emits_all_resource_columns() {
             summary: false,
             raw_fields: false,
             roundtrip_check: false,
+            msc_dir: None,
         },
     )
     .expect("character_id_table fixture should parse");
@@ -595,6 +600,7 @@ fn inspect_nusktb_auto_detects_and_summarizes_bones() {
             summary: true,
             raw_fields: false,
             roundtrip_check: true,
+            msc_dir: None,
         },
     )
     .expect("nusktb fixture should parse");
@@ -622,6 +628,7 @@ fn inspect_numdlb_emits_model_links() {
             summary: true,
             raw_fields: false,
             roundtrip_check: false,
+            msc_dir: None,
         },
     )
     .expect("numdlb fixture should parse");
@@ -643,6 +650,7 @@ fn inspect_numshb_emits_object_stats_without_raw_fields() {
             summary: false,
             raw_fields: false,
             roundtrip_check: false,
+            msc_dir: None,
         },
     )
     .expect("numshb fixture should parse");
@@ -696,6 +704,7 @@ fn edit_jnttbl_adds_entry_from_json_request() {
             summary: false,
             raw_fields: false,
             roundtrip_check: false,
+            msc_dir: None,
         },
     )
     .expect("edited JNTT should parse");
@@ -738,6 +747,7 @@ fn edit_character_id_table_sets_resource_column() {
             summary: false,
             raw_fields: false,
             roundtrip_check: false,
+            msc_dir: None,
         },
     )
     .expect("edited character table should parse");

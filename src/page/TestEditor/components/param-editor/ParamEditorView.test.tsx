@@ -99,8 +99,8 @@ vi.mock("./TypedParamDataPanel", () => ({
   ),
 }))
 
-vi.mock("./ChrSysDataPanel", () => ({
-  ChrSysDataPanel: () => <div>Chr sys panel</div>,
+vi.mock("../chrsys-action-table/ChrSysActionTableEditor", () => ({
+  ChrSysActionTableEditor: () => <div>Chr sys action table</div>,
 }))
 
 describe("ParamEditorView table type changes", () => {

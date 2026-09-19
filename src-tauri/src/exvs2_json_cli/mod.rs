@@ -7,6 +7,7 @@
 
 mod args;
 mod character_id_table;
+mod chrsysparam;
 mod correlate;
 mod edit;
 mod inspect;

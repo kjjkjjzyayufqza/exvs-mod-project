@@ -41,7 +41,7 @@ After a release build, the executable is `exvs2_json.exe` under
 ### `inspect`
 
 ```powershell
-exvs2-json inspect "<known-exvs2-file-path>" [--type <type>] [--pretty] [--summary] [--raw-fields] [--roundtrip-check]
+exvs2-json inspect "<known-exvs2-file-path>" [--type <type>] [--pretty] [--summary] [--raw-fields] [--roundtrip-check] [--msc-dir <msc-script-dir>]
 ```
 
 - Auto-detects type from magic bytes and filename when possible.
@@ -95,6 +95,7 @@ builders:
 - `grapparam`
 - `navi-list`
 - `pilot-list`
+- `chrsysparam`
 
 SSBH files (`nusktb`, `numshb`, `numdlb`) remain inspect-only because their
 rewrite path may be semantically valid but not byte-identical.
@@ -122,6 +123,8 @@ Supported operations:
   `deleteCharacterRow`
 - typed param tables: `setParamField`, `copyParamEntry`, `upsertParamEntry`,
   `deleteParamEntry`
+- `chrsysparam`: `setChrSysField`, `appendChrSysRow`, `deleteChrSysRow`,
+  `replaceChrSysDocument`
 
 For typed param tables, `copyParamEntry` and newly inserted `upsertParamEntry`
 rows are inserted by unsigned `entryId` order. Official Param samples keep the
@@ -144,9 +147,28 @@ tool-side round-trip.
 | `grapparam` | `grapparam` | filename |
 | `navi-list` | `navi_list` | filename contains `navi_list` (`.vgsht2` / `.bin`) |
 | `pilot-list` | `pilot_list` | filename contains `pilot_list` (`.vgsht2` / `.bin`) |
+| `chrsysparam` | `chrsysparam` | magic `AF AC AC B4` (`.csyspm`) |
 | `nusktb` | `nusktb` | `.nusktb`, or `HBSS` + `LEKS` tag at `0x10` |
 | `numshb` | `numshb` | `.numshb`, or `HBSS` + `HSEM` tag at `0x10` |
 | `numdlb` | `numdlb` | `.numdlb` / `.nusrcmdlb`, or `HBSS` + `LDOM` tag at `0x10` |
+
+### chrsysparam notes
+
+`chrsysparam.csyspm` is the new-generation MSC action table. `inspect` reports one entry per
+action row (hash, form mask, command/lever, archetype group, route/flags, derived links,
+transition range) plus the engine-rule issue list; `--summary` omits the full document.
+
+Pass `--msc-dir <unit MSC folder>` to resolve the paired scripts: group ENTER callbacks and the
+three phase hooks are then printed as real `func_N` names (raw bytecode pointers are resolved
+through the sibling `2.txt` with the `+0x30` bias), and hook keys missing from the 2.c phase
+resolver are reported as errors.
+
+```powershell
+exvs2-json inspect "E:\XB\mod!cpm\<unit>\chrsysparam.csyspm" --msc-dir "E:\XB\mod msc\<unit>" --summary --pretty
+exvs2-json edit "E:\XB\mod!cpm\<unit>\chrsysparam.csyspm" --request-json "{\"operations\":[{\"op\":\"appendChrSysRow\",\"table\":\"action\",\"cloneFromRow\":13,\"fields\":{\"actionHash\":\"0x13570001\"}}]}" --output "<new-file>" --pretty
+```
+
+Format and editing rules: `docs/msc-research/chrsysparam-action-table-native-contract.md`.
 
 ### SSBH inspect notes
 

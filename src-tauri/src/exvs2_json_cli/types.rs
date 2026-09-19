@@ -14,6 +14,7 @@ pub enum InspectType {
     GrapParam,
     NaviList,
     PilotList,
+    ChrSysParam,
     Nusktb,
     Numshb,
     Numdlb,
@@ -34,6 +35,7 @@ impl InspectType {
             InspectType::GrapParam => "grapparam",
             InspectType::NaviList => "navi_list",
             InspectType::PilotList => "pilot_list",
+            InspectType::ChrSysParam => "chrsysparam",
             InspectType::Nusktb => "nusktb",
             InspectType::Numshb => "numshb",
             InspectType::Numdlb => "numdlb",
@@ -54,6 +56,7 @@ impl InspectType {
             "grapparam" | "grap_param" | "grap" => Ok(InspectType::GrapParam),
             "navi_list" | "navilist" => Ok(InspectType::NaviList),
             "pilot_list" | "pilotlist" => Ok(InspectType::PilotList),
+            "chrsysparam" | "chrsys" | "csyspm" => Ok(InspectType::ChrSysParam),
             "nusktb" | "skel" | "ssbh_skel" => Ok(InspectType::Nusktb),
             "numshb" | "mesh" | "ssbh_mesh" => Ok(InspectType::Numshb),
             "numdlb" | "modl" | "ssbh_modl" => Ok(InspectType::Numdlb),
@@ -79,6 +82,7 @@ impl InspectType {
                 | InspectType::GrapParam
                 | InspectType::NaviList
                 | InspectType::PilotList
+                | InspectType::ChrSysParam
         )
     }
 }
@@ -90,4 +94,5 @@ pub struct InspectOptions {
     pub summary: bool,
     pub raw_fields: bool,
     pub roundtrip_check: bool,
+    pub msc_dir: Option<String>,
 }

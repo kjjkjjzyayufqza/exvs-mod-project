@@ -47,6 +47,7 @@ CLUSTER_RANGED = "ranged"
 CLUSTER_HOMEMADE_MOTION = "homemade-motion-clock"
 CLUSTER_REGISTRY = "registry"
 CLUSTER_CROSS_UNIT = "cross-unit"
+CLUSTER_CHRSYSPARAM = "chrsysparam"
 CLUSTER_PARAM_MSC = "param-msc"
 CLUSTER_NATIVE_UNIT_TASK = "native-unit-task"
 CLUSTER_CAMERA_CLIP_BST = "camera-clip-bst"
@@ -59,6 +60,7 @@ CLUSTER_HAMBRABI = "unit-hambrabi"
 CLUSTER_GYAN = "gyan"
 CLUSTER_RX_78_2 = "unit-rx-78-2"
 CLUSTER_UNICORN = "unit-unicorn"
+CLUSTER_FULL_ARMOR_UNICORN = "unit-full-armor-unicorn"
 CLUSTER_KSHATRIYA = "unit-kshatriya"
 CLUSTER_SINANJU = "unit-sinanju"
 CLUSTER_DELTA_PLUS = "unit-delta-plus"
@@ -214,6 +216,7 @@ CLUSTERS: tuple[Cluster, ...] = (
             "sys_0",
         ),
         read_first=(
+            "docs/exvs-msc-syscall-handler-table.md",
             "docs/exvs-msc-syscall-4f-native-handler.md",
             "docs/exvs-msc-syscall-4f-notes.md",
             R("sys46-script-parameter-atlas.md"),
@@ -633,6 +636,54 @@ CLUSTERS: tuple[Cluster, ...] = (
         settled=(
             "Unit pages under docs/msc-research/units/<id>-<slug>/ are the per-unit homes.",
             "Do not use 0xBDBE6FEA as official OB v27 Delta Plus evidence.",
+        ),
+    ),
+    Cluster(
+        id=CLUSTER_CHRSYSPARAM,
+        title="chrsysparam.csyspm action table: native contract and editing rules",
+        kind="global",
+        aliases=(
+            "chrsysparam",
+            "csyspm",
+            "action table",
+            "action matrix",
+            "new script MSC",
+            "external action table",
+            "sys_41",
+            "ChrsysCommandChecker",
+            "0x700000",
+            "0x700001",
+            "0x700002",
+            "0x700003",
+            "command record",
+            "archetype group",
+            "phase resolver",
+            "derived action",
+            "action row",
+            "route flags",
+        ),
+        read_first=(R("chrsysparam-action-table-native-contract.md"),),
+        related=(
+            R("msc-generation-param-bridge-comparison.md"),
+            R("0c-to-2c-input-action-boundary.md"),
+            R("hambrabi-flight-sub-side-roll-shot.md"),
+        ),
+        settled=(
+            "table0 cell address is table + 0x10 + 4*(row*columns + field): the MSC field index IS the column index, with no offset.",
+            "The unit loader only checks magic 0xB4ACACAF and version 0x00010000; unit id, table count and shape are never validated.",
+            "sys_41(0, 4) builds at most 128 command records from action rows 1..128; row 0 is always skipped and rows past 128 are invisible to input and to 0x700003.",
+            "A row is input-selectable only when field 0x03 != 400, 0x03 % 100 != 31 and field 0x0A != 39; every other row runs through derived links or script calls.",
+            "sys_0(0x700002) reads a 54-entry engine table indexed by field 0x0A with no bounds check, so group > 0x35 reads past it.",
+            "0x700003 filters by form mask and the disabled set 0x1E, and keeps the LAST matching row when hashes repeat.",
+            "sys_1(0x7xxxxx, ...) is a stub that returns 0: scripts cannot write the table at runtime.",
+            "Field 0x7C is the ENTER hook, 0x02 the per-tick hook and 0x7D the EXIT hook (2.c slots 0x11 / 0x10 / 0x12).",
+            "Scripts address rows only through the hash map and 0x700003, so adding or deleting action rows does not shift any hardcoded index.",
+        ),
+        do_not=(
+            "Do not treat field index as column+1; that was a note-counting artefact, not engine behaviour.",
+            "Do not delete an action row whose hash is still a derived target of another row, and do not delete a transition row inside a live 0x7E/0x7F range.",
+            "Do not point a row at an archetype group with no case in the 2.c group resolver: func_241 then binds the hash to 0, so an input-selectable row does nothing.",
+            "Do not expect a homemade action registered outside the table to inherit row parameters: global496 resolves to row 0 (all zero) unless the script sets global511.",
         ),
     ),
     Cluster(
@@ -1247,6 +1298,44 @@ CLUSTERS: tuple[Cluster, ...] = (
         kind="unit",
         aliases=("Unicorn", "15001001", "001UNIGUN", "NT-D", "Destroy mode"),
         read_first=(R("units/15001001-unicorn/README.md"),),
+    ),
+    Cluster(
+        id=CLUSTER_FULL_ARMOR_UNICORN,
+        title="15008001 Full Armor Unicorn MSC: special melee map and start-form research",
+        kind="unit",
+        aliases=(
+            "Full Armor Unicorn",
+            "15008001",
+            "015gndmuc_008faunig_001",
+            "全装備独角兽",
+            "特格",
+            "special melee",
+            "func_1293",
+            "func_1313",
+            "func_1314",
+            "func_1315",
+            "func_1308",
+            "func_1311",
+            "func_418",
+            "start form",
+            "init form",
+            "NT-D start",
+        ),
+        read_first=(R("units/15008001-full-armor-unicorn/README.md"),),
+        related=(R("chrsysparam-action-table-native-contract.md"),),
+        settled=(
+            "Forms: global143 0 = full armor, 1 = armor purge, 2 = NT-D; func_1313/1314/1315 switch character/speed param, arms slots and model visibility.",
+            "Init path is func_1 -> func_1293 -> func_285 (action table registration) + func_1313 (form 0).",
+            "global143 is mirrored to runtime field 0x17 by func_41, and 0.c reads it back as global39, so only 2.c has to set it.",
+            "Special melee rows: 7/9/10 (form 0), 24/25 (form 1), 49-52 (form 2).",
+            "Rows 9/10/24/25 summon an assist through sys_51(0x20000, 0, 0x2, field 0x1E, field 0x1F); field 0x1F is 8 for neutral and 9 for the lever variant.",
+            "Group 0x26 (rows 49-52) resolves field 0x1C as a FUNCTION KEY (func_437) rather than a motion hash: 0xBF4422AE -> func_1308 -> SHOOT func_1311.",
+            "Direction is implemented three different ways on this unit: separate rows (9 vs 10), a hook latch (func_1032 global963), and an in-phase branch (func_1311 global172 & 0x10).",
+        ),
+        do_not=(
+            "Do not assume field 0x1C means the same thing across groups: it is a motion hash for group 0x35 and a function key for group 0x26.",
+            "Do not expect func_1315 alone to give the NT-D silhouette: the armor part visibility is driven by the sys_47(0x12, 0x82d7298d, ...) calls inside the transform action func_1066.",
+        ),
     ),
     Cluster(
         id=CLUSTER_KSHATRIYA,

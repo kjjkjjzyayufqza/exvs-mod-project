@@ -7,8 +7,9 @@
 
 use app_lib::ssbh_motion_interchange::{
     candidate_blender_51_paths, export_complete_motion_fbx, materialize_embedded_compose_script,
-    parse_compose_success_from_stdout, resolve_blender_51_executable, resolve_compose_script_path,
-    CompleteMotionFbxExportRequest,
+    parse_compose_success_from_stdout, request_stop_motion_fbx_compose, resolve_blender_51_executable,
+    resolve_compose_script_path, snapshot_compose_job, windows_hidden_process_creation_flags,
+    CompleteMotionFbxExportRequest, WINDOWS_CREATE_NO_WINDOW,
 };
 use std::path::{Path, PathBuf};
 
@@ -252,6 +253,26 @@ INFO: something
     assert!(!parse_compose_success_from_stdout(
         "{\"ok\":false,\"error\":\"x\"}\n"
     ));
+}
+
+#[test]
+fn idle_compose_job_is_not_running() {
+    let status = snapshot_compose_job();
+    assert!(!status.running);
+    assert_eq!(status.pid, None);
+    assert!(status.stdout_tail.is_empty());
+    assert!(status.stderr_tail.is_empty());
+}
+
+#[test]
+fn stop_without_job_returns_false() {
+    assert!(!request_stop_motion_fbx_compose());
+}
+
+#[test]
+fn hidden_process_flag_is_create_no_window() {
+    assert_eq!(windows_hidden_process_creation_flags(), 0x0800_0000);
+    assert_eq!(WINDOWS_CREATE_NO_WINDOW, 0x0800_0000);
 }
 
 fn looks_like_blender_executable_for_test(path: &Path) -> bool {

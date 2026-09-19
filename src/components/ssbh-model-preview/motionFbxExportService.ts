@@ -24,6 +24,41 @@ export function exportCompleteMotionFbx(
   return invoke<CompleteMotionFbxExportReport>("ssbh_export_complete_motion_fbx", { request });
 }
 
+export type MotionFbxComposeJobStatus = {
+  running: boolean;
+  stopRequested: boolean;
+  pid: number | null;
+  blenderPath: string | null;
+  outputFbx: string | null;
+  elapsedMs: number;
+  stdoutTail: string;
+  stderrTail: string;
+};
+
+export const IDLE_MOTION_FBX_COMPOSE_JOB: MotionFbxComposeJobStatus = {
+  running: false,
+  stopRequested: false,
+  pid: null,
+  blenderPath: null,
+  outputFbx: null,
+  elapsedMs: 0,
+  stdoutTail: "",
+  stderrTail: "",
+};
+
+export function getMotionFbxComposeJobStatus(): Promise<MotionFbxComposeJobStatus> {
+  return invoke<MotionFbxComposeJobStatus>("ssbh_motion_fbx_compose_job_status");
+}
+
+export function stopMotionFbxCompose(): Promise<boolean> {
+  return invoke<boolean>("ssbh_stop_motion_fbx_compose");
+}
+
+export function isMotionFbxComposeStopped(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /stopped by user/i.test(message);
+}
+
 const BLENDER_51_PATH_STORAGE_KEY = "exvs2.blender51Path";
 const BLENDER_PATH_CHANGED_EVENT = "exvs2-blender-path-changed";
 

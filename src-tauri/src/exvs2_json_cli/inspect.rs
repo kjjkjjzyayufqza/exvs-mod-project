@@ -12,6 +12,7 @@ use std::fs;
 use serde_json::{json, Map, Value};
 
 use super::character_id_table::{inspect_character_id_table, CHARACTER_ID_TABLE_MAGIC};
+use super::chrsysparam::inspect_chrsysparam;
 use super::ssbh::{detect_ssbh_type, inspect_numdlb, inspect_numshb, inspect_nusktb, SSBH_MAGIC};
 use super::types::{InspectOptions, InspectType};
 use super::util::{
@@ -76,6 +77,7 @@ pub fn inspect_bytes(
         InspectType::GrapParam => inspect_grapparam(bytes, &options)?,
         InspectType::NaviList => inspect_navi_list(bytes, &options)?,
         InspectType::PilotList => inspect_pilot_list(bytes, &options)?,
+        InspectType::ChrSysParam => inspect_chrsysparam(bytes, &options)?,
         InspectType::Nusktb => inspect_nusktb(bytes, &options, &mut warnings)?,
         InspectType::Numshb => inspect_numshb(bytes, &options, &mut warnings)?,
         InspectType::Numdlb => inspect_numdlb(bytes, &options, &mut warnings)?,
@@ -111,6 +113,9 @@ pub(crate) fn detect_type(
     }
     if bytes.starts_with(&CHARACTER_ID_TABLE_MAGIC) {
         return Ok(InspectType::CharacterIdTable);
+    }
+    if bytes.starts_with(&crate::format::chrsysparam::CHRSYSPARAM_MAGIC.to_le_bytes()) {
+        return Ok(InspectType::ChrSysParam);
     }
 
     let lower = source_path.replace('\\', "/").to_ascii_lowercase();

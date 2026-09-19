@@ -25,8 +25,10 @@ use serde::{Deserialize, Serialize};
 
 pub use blender_compose::{
     export_complete_motion_fbx, materialize_embedded_compose_script,
-    parse_compose_success_from_stdout, resolve_compose_script_path, CompleteMotionFbxExportReport,
-    CompleteMotionFbxExportRequest,
+    parse_compose_success_from_stdout, request_stop_motion_fbx_compose, resolve_compose_script_path,
+    snapshot_compose_job, windows_hidden_process_creation_flags, CompleteMotionFbxExportReport,
+    CompleteMotionFbxExportRequest, MotionFbxComposeJobStatus, COMPOSE_STOPPED_BY_USER,
+    WINDOWS_CREATE_NO_WINDOW,
 };
 pub use blender_resolve::{candidate_blender_51_paths, resolve_blender_51_executable};
 pub use clip_ops::{
@@ -189,6 +191,16 @@ pub async fn ssbh_export_complete_motion_fbx(
     request: CompleteMotionFbxExportRequest,
 ) -> Result<CompleteMotionFbxExportReport, String> {
     run_blocking(move || export_complete_motion_fbx(request)).await
+}
+
+#[tauri::command]
+pub fn ssbh_motion_fbx_compose_job_status() -> MotionFbxComposeJobStatus {
+    snapshot_compose_job()
+}
+
+#[tauri::command]
+pub fn ssbh_stop_motion_fbx_compose() -> bool {
+    request_stop_motion_fbx_compose()
 }
 
 #[tauri::command]

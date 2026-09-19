@@ -37,6 +37,8 @@ struct InspectArgs {
     raw_fields: bool,
     #[arg(long = "roundtrip-check")]
     roundtrip_check: bool,
+    #[arg(long = "msc-dir", value_name = "MSC_SCRIPT_DIR")]
+    msc_dir: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -120,6 +122,7 @@ pub(crate) fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
                 summary: args.summary,
                 raw_fields: args.raw_fields,
                 roundtrip_check: args.roundtrip_check,
+                msc_dir: args.msc_dir,
             },
         ))),
         Command::Edit(args) => {

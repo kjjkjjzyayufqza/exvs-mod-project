@@ -14,11 +14,11 @@ pub(crate) fn normalize_type_name(value: &str) -> String {
 }
 
 pub(crate) fn supported_type_list() -> &'static str {
-    "jnttbl, character-id-table, vernier-table, armsparam, bulletparam, speedparam, projectile-depiction-table, hitgroupiddef, interactionid, grapparam, navi-list, pilot-list, nusktb, numshb, numdlb"
+    "jnttbl, character-id-table, vernier-table, armsparam, bulletparam, speedparam, projectile-depiction-table, hitgroupiddef, interactionid, grapparam, navi-list, pilot-list, chrsysparam, nusktb, numshb, numdlb"
 }
 
 pub(crate) fn supported_edit_type_list() -> &'static str {
-    "jnttbl, character-id-table, vernier-table, armsparam, bulletparam, speedparam, projectile-depiction-table, hitgroupiddef, interactionid, grapparam, navi-list, pilot-list"
+    "jnttbl, character-id-table, vernier-table, armsparam, bulletparam, speedparam, projectile-depiction-table, hitgroupiddef, interactionid, grapparam, navi-list, pilot-list, chrsysparam"
 }
 
 pub(crate) fn format_json(value: &Value, pretty: bool) -> Result<String, String> {
@@ -32,18 +32,18 @@ pub(crate) fn format_json(value: &Value, pretty: bool) -> Result<String, String>
 pub(crate) fn usage() -> String {
     [
         "Usage:",
-        r#"  exvs2-json inspect "<known-exvs2-file-path>" [--type <type>] [--pretty] [--summary] [--raw-fields] [--roundtrip-check]"#,
+        r#"  exvs2-json inspect "<known-exvs2-file-path>" [--type <type>] [--pretty] [--summary] [--raw-fields] [--roundtrip-check] [--msc-dir <msc-script-dir>]"#,
         r#"  exvs2-json edit "<known-exvs2-file-path>" --request <edit.json> --output <new-file> [--type <type>] [--pretty] [--dry-run]"#,
         r#"  exvs2-json edit "<known-exvs2-file-path>" --request-json <json> --output <new-file> [--type <type>] [--pretty] [--dry-run]"#,
         r#"  exvs2-json correlate --unit <bucket> --weapon <task-name> --id <dispatcher-id> [--pretty]"#,
         "",
         "Supported inspect types:",
         "  jnttbl, character-id-table, vernier-table, armsparam, bulletparam, speedparam, projectile-depiction-table,",
-        "  hitgroupiddef, interactionid, grapparam, navi-list, pilot-list, nusktb, numshb, numdlb",
+        "  hitgroupiddef, interactionid, grapparam, navi-list, pilot-list, chrsysparam, nusktb, numshb, numdlb",
         "",
         "Supported edit types:",
         "  jnttbl, character-id-table, vernier-table, armsparam, bulletparam, speedparam, projectile-depiction-table,",
-        "  hitgroupiddef, interactionid, grapparam, navi-list, pilot-list",
+        "  hitgroupiddef, interactionid, grapparam, navi-list, pilot-list, chrsysparam",
     ]
     .join("\n")
 }

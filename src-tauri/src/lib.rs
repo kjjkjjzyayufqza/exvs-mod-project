@@ -8,6 +8,7 @@
 use tauri::Manager;
 
 mod character_id_preview;
+mod chrsysparam_commands;
 pub mod collision_mesh;
 mod commands;
 mod console_color;
@@ -109,6 +110,8 @@ pub fn run() {
             ssbh_motion::ssbh_load_motion_clip,
             ssbh_motion::ssbh_sample_motion_frame,
             ssbh_motion_interchange::ssbh_export_complete_motion_fbx,
+            ssbh_motion_interchange::ssbh_motion_fbx_compose_job_status,
+            ssbh_motion_interchange::ssbh_stop_motion_fbx_compose,
             ssbh_motion_interchange::ssbh_inspect_motion_fbx,
             ssbh_motion_interchange::ssbh_import_motion_fbx,
             ssbh_motion_interchange::ssbh_transform_nuanmb_clip,
@@ -174,8 +177,13 @@ pub fn run() {
             commands::build_command_table_file,
             commands::parse_typed_param_file,
             commands::build_typed_param_file,
-            commands::parse_chrsysparam_file,
-            commands::build_chrsysparam_file,
+            chrsysparam_commands::parse_chrsysparam_file,
+            chrsysparam_commands::build_chrsysparam_file,
+            chrsysparam_commands::get_chrsysparam_schema,
+            chrsysparam_commands::resolve_chrsysparam_msc_links,
+            chrsysparam_commands::validate_chrsysparam_data,
+            chrsysparam_commands::export_chrsysparam_document,
+            chrsysparam_commands::import_chrsysparam_document,
             commands::parse_shl_file,
             commands::build_shl_file,
             commands::parse_raw_path_id_pack,

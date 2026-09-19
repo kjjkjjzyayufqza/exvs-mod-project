@@ -190,6 +190,7 @@ pub fn edit_bytes(
             parse_pilotlist_data,
             build_pilotlist_data,
         )?,
+        InspectType::ChrSysParam => super::chrsysparam::edit_chrsysparam(bytes, operations)?,
         InspectType::Nusktb | InspectType::Numshb | InspectType::Numdlb => unreachable!(),
     };
 

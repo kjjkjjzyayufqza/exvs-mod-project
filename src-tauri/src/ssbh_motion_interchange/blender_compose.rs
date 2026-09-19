@@ -10,6 +10,8 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -23,6 +25,12 @@ use super::{MotionClip, MotionInterchangeError};
 const COMPOSE_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const COMPOSE_SCRIPT_NAME: &str = "motion_fbx_compose.py";
 const COMPOSE_SCRIPT_ENV: &str = "EXVS2_MOTION_FBX_COMPOSE_SCRIPT";
+/// Windows `CREATE_NO_WINDOW`. Stops blender.exe from allocating a console that
+/// steals foreground focus on every clip.
+pub const WINDOWS_CREATE_NO_WINDOW: u32 = 0x0800_0000;
+pub const COMPOSE_STOPPED_BY_USER: &str = "stopped by user";
+const COMPOSE_LOG_CAP: usize = 32_768;
+const COMPOSE_STATUS_TAIL: usize = 4_000;
 /// Shipped compose script. Blender still needs a `.py` path for `-P`; when no
 /// on-disk copy is found we write this into the staging directory.
 const EMBEDDED_COMPOSE_SCRIPT: &str = include_str!("../../../tools/motion_fbx_compose.py");
@@ -49,6 +57,199 @@ pub struct CompleteMotionFbxExportReport {
     pub duration_seconds: f32,
     pub blender_path: String,
     pub warnings: Vec<String>,
+}
+
+/// Live snapshot of the in-flight headless Blender compose process.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct MotionFbxComposeJobStatus {
+    pub running: bool,
+    pub stop_requested: bool,
+    pub pid: Option<u32>,
+    pub blender_path: Option<String>,
+    pub output_fbx: Option<String>,
+    pub elapsed_ms: u64,
+    pub stdout_tail: String,
+    pub stderr_tail: String,
+}
+
+struct ActiveComposeJob {
+    pid: u32,
+    blender_path: String,
+    output_fbx: String,
+    started: Instant,
+    stdout: Arc<Mutex<String>>,
+    stderr: Arc<Mutex<String>>,
+    stop_requested: Arc<AtomicBool>,
+}
+
+static ACTIVE_COMPOSE_JOB: Mutex<Option<ActiveComposeJob>> = Mutex::new(None);
+
+fn lock_active_job() -> std::sync::MutexGuard<'static, Option<ActiveComposeJob>> {
+    ACTIVE_COMPOSE_JOB
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+pub fn windows_hidden_process_creation_flags() -> u32 {
+    WINDOWS_CREATE_NO_WINDOW
+}
+
+fn apply_background_process_flags(command: &mut Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(WINDOWS_CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = command;
+    }
+}
+
+pub fn snapshot_compose_job() -> MotionFbxComposeJobStatus {
+    let guard = lock_active_job();
+    match guard.as_ref() {
+        Some(job) => MotionFbxComposeJobStatus {
+            running: true,
+            stop_requested: job.stop_requested.load(Ordering::SeqCst),
+            pid: Some(job.pid),
+            blender_path: Some(job.blender_path.clone()),
+            output_fbx: Some(job.output_fbx.clone()),
+            elapsed_ms: job.started.elapsed().as_millis() as u64,
+            stdout_tail: tail_log(&job.stdout, COMPOSE_STATUS_TAIL),
+            stderr_tail: tail_log(&job.stderr, COMPOSE_STATUS_TAIL),
+        },
+        None => MotionFbxComposeJobStatus {
+            running: false,
+            stop_requested: false,
+            pid: None,
+            blender_path: None,
+            output_fbx: None,
+            elapsed_ms: 0,
+            stdout_tail: String::new(),
+            stderr_tail: String::new(),
+        },
+    }
+}
+
+pub fn request_stop_motion_fbx_compose() -> bool {
+    let pid = {
+        let guard = lock_active_job();
+        match guard.as_ref() {
+            Some(job) => {
+                job.stop_requested.store(true, Ordering::SeqCst);
+                job.pid
+            }
+            None => return false,
+        }
+    };
+    kill_process_tree(pid);
+    true
+}
+
+fn clear_active_if_pid(pid: u32) {
+    let mut guard = lock_active_job();
+    if guard.as_ref().is_some_and(|job| job.pid == pid) {
+        *guard = None;
+    }
+}
+
+fn register_active_job(
+    pid: u32,
+    blender_path: &Path,
+    output_fbx: &Path,
+    stdout: Arc<Mutex<String>>,
+    stderr: Arc<Mutex<String>>,
+    stop_requested: Arc<AtomicBool>,
+) -> Result<(), MotionInterchangeError> {
+    let mut guard = lock_active_job();
+    if guard.is_some() {
+        return Err(MotionInterchangeError::Compose(
+            "another Blender compose job is already running".to_string(),
+        ));
+    }
+    *guard = Some(ActiveComposeJob {
+        pid,
+        blender_path: blender_path.to_string_lossy().to_string(),
+        output_fbx: output_fbx.to_string_lossy().to_string(),
+        started: Instant::now(),
+        stdout,
+        stderr,
+        stop_requested,
+    });
+    Ok(())
+}
+
+struct ActiveJobGuard {
+    pid: u32,
+}
+
+impl Drop for ActiveJobGuard {
+    fn drop(&mut self) {
+        clear_active_if_pid(self.pid);
+    }
+}
+
+fn append_log(buffer: &Arc<Mutex<String>>, bytes: &[u8]) {
+    let text = String::from_utf8_lossy(bytes);
+    let mut guard = buffer.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    guard.push_str(&text);
+    if guard.len() > COMPOSE_LOG_CAP {
+        let excess = guard.len() - COMPOSE_LOG_CAP;
+        guard.drain(..excess);
+    }
+}
+
+fn clone_log(buffer: &Arc<Mutex<String>>) -> String {
+    buffer
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+}
+
+fn tail_log(buffer: &Arc<Mutex<String>>, max_chars: usize) -> String {
+    let text = clone_log(buffer);
+    let count = text.chars().count();
+    if count <= max_chars {
+        return text;
+    }
+    text.chars().skip(count - max_chars).collect()
+}
+
+fn spawn_log_reader(pipe: impl Read + Send + 'static, buffer: Arc<Mutex<String>>) -> thread::JoinHandle<()> {
+    thread::spawn(move || {
+        let mut reader = pipe;
+        let mut chunk = [0u8; 4096];
+        loop {
+            match reader.read(&mut chunk) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => append_log(&buffer, &chunk[..n]),
+            }
+        }
+    })
+}
+
+fn kill_process_tree(pid: u32) {
+    #[cfg(windows)]
+    {
+        let mut command = Command::new("taskkill");
+        command.args(["/PID", &pid.to_string(), "/T", "/F"]);
+        apply_background_process_flags(&mut command);
+        command.stdin(Stdio::null());
+        command.stdout(Stdio::null());
+        command.stderr(Stdio::null());
+        let _ = command.status();
+    }
+    #[cfg(not(windows))]
+    {
+        let mut command = Command::new("kill");
+        command.args(["-TERM", &pid.to_string()]);
+        command.stdin(Stdio::null());
+        command.stdout(Stdio::null());
+        command.stderr(Stdio::null());
+        let _ = command.status();
+    }
 }
 
 /// Internal staging inputs written under a temp directory (not user-facing).
@@ -472,7 +673,8 @@ fn run_blender_compose(
         }
     }
 
-    let mut child = Command::new(blender_path)
+    let mut command = Command::new(blender_path);
+    command
         .arg("-b")
         .arg("-P")
         .arg(script_path)
@@ -483,42 +685,69 @@ fn run_blender_compose(
         .arg(motion_json)
         .arg("--output-fbx")
         .arg(output_fbx)
+        .env("PYTHONUNBUFFERED", "1")
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| {
-            MotionInterchangeError::Compose(format!(
-                "failed to spawn Blender 5.1 at {}: {error}",
-                blender_path.display()
-            ))
-        })?;
+        .stderr(Stdio::piped());
+    apply_background_process_flags(&mut command);
 
-    let mut stdout_pipe = child.stdout.take().ok_or_else(|| {
+    let mut child = command.spawn().map_err(|error| {
+        MotionInterchangeError::Compose(format!(
+            "failed to spawn Blender 5.1 at {}: {error}",
+            blender_path.display()
+        ))
+    })?;
+
+    let stdout_pipe = child.stdout.take().ok_or_else(|| {
         MotionInterchangeError::Compose("Blender process stdout pipe missing".to_string())
     })?;
-    let mut stderr_pipe = child.stderr.take().ok_or_else(|| {
+    let stderr_pipe = child.stderr.take().ok_or_else(|| {
         MotionInterchangeError::Compose("Blender process stderr pipe missing".to_string())
     })?;
 
-    let stdout_handle = thread::spawn(move || {
-        let mut buf = Vec::new();
-        let _ = stdout_pipe.read_to_end(&mut buf);
-        buf
-    });
-    let stderr_handle = thread::spawn(move || {
-        let mut buf = Vec::new();
-        let _ = stderr_pipe.read_to_end(&mut buf);
-        buf
-    });
+    let stdout_log = Arc::new(Mutex::new(String::new()));
+    let stderr_log = Arc::new(Mutex::new(String::new()));
+    let stop_requested = Arc::new(AtomicBool::new(false));
+    let pid = child.id();
+    if let Err(error) = register_active_job(
+        pid,
+        blender_path,
+        output_fbx,
+        Arc::clone(&stdout_log),
+        Arc::clone(&stderr_log),
+        Arc::clone(&stop_requested),
+    ) {
+        let _ = child.kill();
+        kill_process_tree(pid);
+        let _ = child.wait();
+        return Err(error);
+    }
+    let _job_guard = ActiveJobGuard { pid };
+
+    let stdout_handle = spawn_log_reader(stdout_pipe, Arc::clone(&stdout_log));
+    let stderr_handle = spawn_log_reader(stderr_pipe, Arc::clone(&stderr_log));
 
     let started = Instant::now();
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status,
             Ok(None) => {
+                if stop_requested.load(Ordering::SeqCst) {
+                    let _ = child.kill();
+                    kill_process_tree(pid);
+                    let _ = child.wait();
+                    let _ = stdout_handle.join();
+                    let _ = stderr_handle.join();
+                    return Err(MotionInterchangeError::Compose(
+                        COMPOSE_STOPPED_BY_USER.to_string(),
+                    ));
+                }
                 if started.elapsed() >= COMPOSE_TIMEOUT {
                     let _ = child.kill();
+                    kill_process_tree(pid);
                     let _ = child.wait();
+                    let _ = stdout_handle.join();
+                    let _ = stderr_handle.join();
                     return Err(MotionInterchangeError::Compose(format!(
                         "Blender compose timed out after {} seconds",
                         COMPOSE_TIMEOUT.as_secs()
@@ -534,10 +763,16 @@ fn run_blender_compose(
         }
     };
 
-    let stdout_bytes = stdout_handle.join().unwrap_or_default();
-    let stderr_bytes = stderr_handle.join().unwrap_or_default();
-    let stdout = String::from_utf8_lossy(&stdout_bytes).into_owned();
-    let stderr = String::from_utf8_lossy(&stderr_bytes).into_owned();
+    let _ = stdout_handle.join();
+    let _ = stderr_handle.join();
+    let stdout = clone_log(&stdout_log);
+    let stderr = clone_log(&stderr_log);
+
+    if stop_requested.load(Ordering::SeqCst) {
+        return Err(MotionInterchangeError::Compose(
+            COMPOSE_STOPPED_BY_USER.to_string(),
+        ));
+    }
 
     if !status.success() {
         let stderr_snip = truncate_for_error(&stderr, 2_000);
@@ -748,5 +983,24 @@ Read blend: /tmp/startup.blend
         })
         .expect_err("output equal input must fail");
         assert!(error.to_string().contains("must not equal"));
+    }
+
+    #[test]
+    fn idle_compose_job_is_not_running() {
+        let status = snapshot_compose_job();
+        assert!(!status.running);
+        assert!(status.pid.is_none());
+        assert!(status.stdout_tail.is_empty());
+    }
+
+    #[test]
+    fn stop_without_job_returns_false() {
+        assert!(!request_stop_motion_fbx_compose());
+    }
+
+    #[test]
+    fn hidden_process_flag_is_create_no_window() {
+        assert_eq!(windows_hidden_process_creation_flags(), 0x0800_0000);
+        assert_eq!(WINDOWS_CREATE_NO_WINDOW, 0x0800_0000);
     }
 }

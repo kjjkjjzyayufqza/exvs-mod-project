@@ -2370,21 +2370,6 @@ pub fn build_typed_param_file(
 }
 
 #[tauri::command]
-pub fn parse_chrsysparam_file(path: &str) -> Result<Value, String> {
-    let data = fs::read(path).map_err(|e| format!("Failed to read file: {e}"))?;
-    let parsed = crate::format::chrsysparam::parse_chrsysparam(&data)?;
-    serde_json::to_value(&parsed).map_err(|e| format!("Serialize failed: {e}"))
-}
-
-#[tauri::command]
-pub fn build_chrsysparam_file(file_json: Value, output_path: &str) -> Result<(), String> {
-    let file: crate::format::chrsysparam::ChrSysParamFile =
-        serde_json::from_value(file_json).map_err(|e| format!("Deserialize failed: {e}"))?;
-    let bytes = crate::format::chrsysparam::build_chrsysparam(&file)?;
-    fs::write(output_path, &bytes).map_err(|e| format!("Write failed: {e}"))
-}
-
-#[tauri::command]
 pub fn parse_shl_file(path: &str) -> Result<Value, String> {
     // A `shell_*.shl` is a legacy root control bin that is not part of the native Unit
     // folder layout: unpackers frequently deduplicate the shared shell across packages and

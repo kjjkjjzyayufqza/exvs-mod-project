@@ -1,0 +1,118 @@
+{
+  "toolbar": {
+    "actions": "Actions",
+    "transitions": "Transitions",
+    "unit": "unit {{id}}",
+    "scriptLinked": "{{fn}} · {{hooks}} hooks",
+    "scriptLinkedNone": "no script link",
+    "cloneRow": "Clone row",
+    "deleteRow": "Delete",
+    "importJson": "Import JSON",
+    "exportJson": "Export JSON",
+    "filterPlaceholder": "Filter by row, hash or command"
+  },
+  "command": {
+    "shot": "Shot",
+    "melee": "Melee",
+    "meleeVariant": "Melee (bit {{bit}})",
+    "sub": "Sub",
+    "specialShot": "Special shot",
+    "specialMelee": "Special melee",
+    "burstAttack": "Burst attack",
+    "shotCharge": "Shot charge",
+    "meleeCharge": "Melee charge",
+    "awakening": "Awakening",
+    "derivedOnly": "Derived only",
+    "scriptOnly": "Script only",
+    "buttonBit": "Button bit {{bit}}",
+    "tier": "{{command}} lv{{tier}}"
+  },
+  "lever": {
+    "neutral": "N",
+    "front": "Front",
+    "back": "Back",
+    "left": "Left",
+    "right": "Right",
+    "side": "Side",
+    "frontBack": "Front/Back",
+    "anyDirection": "Any direction",
+    "combo": "Lever {{bits}}",
+    "schedule": "Schedule 0x{{value}}",
+    "condition": "Condition 0x{{value}}",
+    "special71": "Special 71"
+  },
+  "row": {
+    "summaryInput": "{{lever}} {{command}}",
+    "summaryOther": "{{command}} · {{lever}}",
+    "forms": "form {{forms}}",
+    "formsAll": "every form",
+    "derivedBadge": "derived",
+    "noActionHash": "no action hash",
+    "empty": "empty",
+    "transitionSummary": "mode {{mode}} · state {{state}}"
+  },
+  "flow": {
+    "input": "0.c input",
+    "row": "Row {{row}}",
+    "handlers": "2.c handlers",
+    "followUps": "Follow-ups",
+    "enter": "enter",
+    "tick": "tick",
+    "exit": "exit",
+    "none": "none",
+    "noGroupEnter": "no group ENTER",
+    "from": "from",
+    "transitions": "transitions {{first}}..{{last}}",
+    "group": "Group 0x{{group}}",
+    "slot": "slot {{slot}}",
+    "frames": "{{value}}f"
+  },
+  "detail": {
+    "selectRow": "Select a row.",
+    "showZeroColumns": "Show zero columns",
+    "hideZeroColumns": "Hide zero columns",
+    "allZero": "All {{value}} columns are zero in this row.",
+    "footnote": "Row hash {{hash}} · groups and hooks resolve against the linked 2.c; evidence grades follow docs/msc-research/msc-evidence-grade-and-ingame-audit-protocol.md",
+    "evidenceTitle": "Evidence grade {{grade}}"
+  },
+  "sections": {
+    "identity": "Identity",
+    "inputCommand": "Input command",
+    "routing": "Routing",
+    "phaseHooks": "Script hooks",
+    "derivedChain": "Derived chain",
+    "motionTuning": "Motion tuning",
+    "archetypeParams": "Archetype parameters",
+    "transition": "Transition",
+    "unused": "Unread columns"
+  },
+  "issues": {
+    "title": "Engine checks",
+    "errors": "{{value}} errors",
+    "warnings": "{{value}} warnings",
+    "none": "No engine-rule problems: hashes unique, groups in range, derived targets and hooks resolve."
+  },
+  "panel": {
+    "pickFile": "Pick file",
+    "reload": "Reload",
+    "save": "Save",
+    "saving": "Saving...",
+    "unsaved": "Unsaved changes",
+    "unresolved": "no chrsysparam.csyspm resolved",
+    "loading": "Loading action table...",
+    "notLoaded": "No action table loaded",
+    "notUnitRoute": "This folder is not under the unit MSC route (040msc/<unit>), so the paired chrsysparam.csyspm cannot be derived. Pick the file manually.",
+    "saved": "Saved chrsysparam.csyspm",
+    "pickTitle": "Select chrsysparam.csyspm",
+    "notFound": "No paired chrsysparam.csyspm found. Tried:\n{{paths}}\nPick the file manually."
+  },
+  "toast": {
+    "cloned": "Cloned row {{from}} to {{to}}",
+    "deleted": "Deleted row {{row}}",
+    "wrote": "Wrote {{path}}",
+    "imported": "Imported document",
+    "exportTitle": "Export chrsysparam document",
+    "importTitle": "Import chrsysparam document",
+    "unexpectedShape": "{{command}} returned an unexpected shape for {{path}}"
+  }
+}

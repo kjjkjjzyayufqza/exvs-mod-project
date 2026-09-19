@@ -1,0 +1,118 @@
+{
+  "toolbar": {
+    "actions": "动作表",
+    "transitions": "转移表",
+    "unit": "机体 {{id}}",
+    "scriptLinked": "{{fn}} · {{hooks}} 个钩子",
+    "scriptLinkedNone": "未链接脚本",
+    "cloneRow": "复制行",
+    "deleteRow": "删除",
+    "importJson": "导入 JSON",
+    "exportJson": "导出 JSON",
+    "filterPlaceholder": "按行号、Hash 或指令筛选"
+  },
+  "command": {
+    "shot": "主射",
+    "melee": "格斗",
+    "meleeVariant": "格斗（位 {{bit}}）",
+    "sub": "副射",
+    "specialShot": "特射",
+    "specialMelee": "特格",
+    "burstAttack": "觉醒技",
+    "shotCharge": "射击CS",
+    "meleeCharge": "格斗CS",
+    "awakening": "觉醒",
+    "derivedOnly": "派生专用",
+    "scriptOnly": "脚本专用",
+    "buttonBit": "按键位 {{bit}}",
+    "tier": "{{command}}{{tier}}段"
+  },
+  "lever": {
+    "neutral": "N",
+    "front": "前",
+    "back": "后",
+    "left": "左",
+    "right": "右",
+    "side": "横",
+    "frontBack": "前后",
+    "anyDirection": "方向",
+    "combo": "杆位 {{bits}}",
+    "schedule": "调度 0x{{value}}",
+    "condition": "条件 0x{{value}}",
+    "special71": "特殊 71"
+  },
+  "row": {
+    "summaryInput": "{{lever}}{{command}}",
+    "summaryOther": "{{command}} · {{lever}}",
+    "forms": "形态 {{forms}}",
+    "formsAll": "全形态",
+    "derivedBadge": "派生",
+    "noActionHash": "无 action hash",
+    "empty": "空行",
+    "transitionSummary": "模式 {{mode}} · 状态 {{state}}"
+  },
+  "flow": {
+    "input": "0.c 输入",
+    "row": "第 {{row}} 行",
+    "handlers": "2.c 处理函数",
+    "followUps": "后续",
+    "enter": "进招",
+    "tick": "每帧",
+    "exit": "结束",
+    "none": "无",
+    "noGroupEnter": "该组没有 ENTER",
+    "from": "来自",
+    "transitions": "转移 {{first}}..{{last}}",
+    "group": "组 0x{{group}}",
+    "slot": "槽 {{slot}}",
+    "frames": "{{value}} 帧"
+  },
+  "detail": {
+    "selectRow": "请选择一行。",
+    "showZeroColumns": "显示全零列",
+    "hideZeroColumns": "隐藏全零列",
+    "allZero": "该行这 {{value}} 列全为 0。",
+    "footnote": "行 Hash {{hash}} · 组与钩子按已链接的 2.c 解析；证据等级见 docs/msc-research/msc-evidence-grade-and-ingame-audit-protocol.md",
+    "evidenceTitle": "证据等级 {{grade}}"
+  },
+  "sections": {
+    "identity": "身份",
+    "inputCommand": "输入指令",
+    "routing": "路由",
+    "phaseHooks": "脚本钩子",
+    "derivedChain": "派生链",
+    "motionTuning": "动作调整",
+    "archetypeParams": "原型参数",
+    "transition": "转移",
+    "unused": "未读列"
+  },
+  "issues": {
+    "title": "引擎检查",
+    "errors": "{{value}} 个错误",
+    "warnings": "{{value}} 个警告",
+    "none": "没有引擎规则问题：Hash 唯一、组在范围内、派生目标与钩子都能解析。"
+  },
+  "panel": {
+    "pickFile": "选择文件",
+    "reload": "重新加载",
+    "save": "保存",
+    "saving": "保存中……",
+    "unsaved": "有未保存修改",
+    "unresolved": "未定位到 chrsysparam.csyspm",
+    "loading": "正在加载动作表……",
+    "notLoaded": "未加载动作表",
+    "notUnitRoute": "该文件夹不在 040msc/<unit> 路由下，无法推导配对的 chrsysparam.csyspm，请手动选择文件。",
+    "saved": "已保存 chrsysparam.csyspm",
+    "pickTitle": "选择 chrsysparam.csyspm",
+    "notFound": "没有找到配对的 chrsysparam.csyspm。已尝试：\n{{paths}}\n请手动选择文件。"
+  },
+  "toast": {
+    "cloned": "已把第 {{from}} 行复制为第 {{to}} 行",
+    "deleted": "已删除第 {{row}} 行",
+    "wrote": "已写入 {{path}}",
+    "imported": "已导入文档",
+    "exportTitle": "导出 chrsysparam 文档",
+    "importTitle": "导入 chrsysparam 文档",
+    "unexpectedShape": "{{command}} 对 {{path}} 返回了非预期的数据结构"
+  }
+}

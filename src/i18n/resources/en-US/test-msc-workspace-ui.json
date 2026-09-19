@@ -114,5 +114,10 @@
     "verifying": "Round-trip verify running",
     "match": "Round-trip byte-identical ({{bytes}} bytes)",
     "mismatch": "Round-trip diverges at offset {{offset}} (original {{original}} bytes, recompiled {{recompiled}} bytes)"
+  },
+  "panels": {
+    "scripts": "Scripts",
+    "actionTable": "Action table",
+    "actionTableHint": "chrsysparam.csyspm rows that bind input to 2.c handlers"
   }
 }

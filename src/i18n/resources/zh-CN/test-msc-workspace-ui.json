@@ -114,5 +114,10 @@
     "verifying": "正在进行往返校验",
     "match": "往返字节一致（{{bytes}} 字节）",
     "mismatch": "往返在偏移 {{offset}} 处不一致（原始 {{original}} 字节，重编译 {{recompiled}} 字节）"
+  },
+  "panels": {
+    "scripts": "脚本",
+    "actionTable": "动作表",
+    "actionTableHint": "chrsysparam.csyspm 行：把输入绑定到 2.c 回调"
   }
 }

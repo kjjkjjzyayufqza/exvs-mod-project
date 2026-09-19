@@ -654,4 +654,30 @@ describe("MscWorkspaceView", () => {
     });
     expect(invokeMock).not.toHaveBeenCalledWith("compile_msc", expect.anything());
   });
+  it("loads the paired chrsysparam action table only after the panel is opened", async () => {
+    const user = userEvent.setup();
+    readDirMock.mockResolvedValue([{ isFile: true, name: "2.c" }]);
+    existsMock.mockImplementation(async (path: string) => path.endsWith("chrsysparam.csyspm"));
+
+    render(
+      <MscWorkspaceView
+        workspaceRoot="E:/workspace"
+        mscFolderPath="E:/workspace/040msc/0x12345678"
+        onMscFolderChange={() => {}}
+        paramRouteRoot="E:/workspace/041cpm"
+        isActive
+      />,
+    );
+
+    await screen.findByRole("tab", { name: "Action table" });
+    expect(invokeMock).not.toHaveBeenCalledWith("parse_chrsysparam_file", expect.anything());
+
+    await user.click(screen.getByRole("tab", { name: "Action table" }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("parse_chrsysparam_file", {
+        path: "E:/workspace/041cpm/0x12345678/chrsysparam.csyspm",
+      });
+    });
+  });
 });

@@ -40,6 +40,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ChrSysActionTablePanel } from "./ChrSysActionTablePanel";
 import { toast } from "sonner";
 import { exists, readDir, readTextFile } from "@tauri-apps/plugin-fs";
 import {
@@ -96,7 +97,11 @@ interface MscWorkspaceViewProps {
   onUnsavedChanges?: (hasChanges: boolean) => void;
   workspaceDefaultPath?: string;
   modFolderPath?: string;
+  /** Root of the paired unit param route (041cpm); used to locate chrsysparam.csyspm. */
+  paramRouteRoot?: string;
 }
+
+type UnitPanel = "scripts" | "actionTable";
 
 type BatchKind = "decompile" | "repack";
 
@@ -167,11 +172,14 @@ export default function MscWorkspaceView({
   mscFolderPath,
   onMscFolderChange,
   isActive,
+  onUnsavedChanges,
   workspaceDefaultPath,
   modFolderPath,
+  paramRouteRoot,
 }: MscWorkspaceViewProps) {
   const { t } = useTranslation("test-msc-workspace-ui");
   const [workspaceMode, setWorkspaceMode] = useState<MscWorkspaceMode>("unit");
+  const [unitPanel, setUnitPanel] = useState<UnitPanel>("scripts");
   const [traditionalFolderPath, setTraditionalFolderPath] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [fileType, setFileType] = useState<string>("all");
@@ -194,6 +202,7 @@ export default function MscWorkspaceView({
   const fileTypes = workspaceMode === "unit" ? UNIT_FILE_TYPES : TRADITIONAL_FILE_TYPES;
 
   const isBusy = processingFile !== null || batch !== null || isFolderRepacking;
+  const showScriptFiles = workspaceMode !== "unit" || unitPanel === "scripts";
 
   const setActiveFolderPath = useCallback(
     (path: string) => {
@@ -800,6 +809,18 @@ export default function MscWorkspaceView({
     </Tabs>
   );
 
+  const unitPanelTabs =
+    workspaceMode === "unit" ? (
+      <Tabs value={unitPanel} onValueChange={(value) => setUnitPanel(value as UnitPanel)} className="shrink-0">
+        <TabsList>
+          <TabsTrigger value="scripts">{t("panels.scripts")}</TabsTrigger>
+          <TabsTrigger value="actionTable" title={t("panels.actionTableHint")}>
+            {t("panels.actionTable")}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+    ) : null;
+
   if (!activeFolderPath) {
     return (
       <div className="flex h-full min-h-48 flex-col gap-4 px-4 pb-4">
@@ -831,7 +852,10 @@ export default function MscWorkspaceView({
   return (
     <>
       <div className="flex h-full flex-col gap-4 pb-4">
-        {workspaceModeTabs}
+        <div className="flex flex-wrap items-center gap-2">
+          {workspaceModeTabs}
+          {unitPanelTabs}
+        </div>
         <div className="flex shrink-0 flex-col gap-3 border-b pb-4">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0 flex-1 space-y-1">
@@ -878,6 +902,7 @@ export default function MscWorkspaceView({
             </div>
           ) : null}
 
+          {showScriptFiles ? (
           <div className="flex flex-wrap items-center gap-2">
             <Input
               placeholder={t("search.placeholder")}
@@ -919,9 +944,10 @@ export default function MscWorkspaceView({
               {t("editor.autoRepack")}
             </label>
           </div>
+          ) : null}
         </div>
 
-        {preview ? (
+        {showScriptFiles && preview ? (
           <div className="flex max-h-[45%] min-h-0 shrink-0 flex-col overflow-hidden rounded-md border">
             <div className="flex shrink-0 items-center justify-between gap-2 border-b bg-muted/40 px-3 py-1.5">
               <div className="flex min-w-0 items-center gap-2">
@@ -991,6 +1017,7 @@ export default function MscWorkspaceView({
           </div>
         ) : null}
 
+        {showScriptFiles ? (
         <div className="flex-1 space-y-4 overflow-y-auto pr-2">
           {isLoading && allFiles.length === 0 ? (
             <div className="space-y-2">
@@ -1024,6 +1051,21 @@ export default function MscWorkspaceView({
             ))
           )}
         </div>
+) : null}
+        {workspaceMode === "unit" ? (
+          <div
+            className={cn("min-h-0 flex-1", showScriptFiles && "hidden")}
+            aria-hidden={showScriptFiles}
+            {...(showScriptFiles ? { inert: true } : {})}
+          >
+            <ChrSysActionTablePanel
+              mscFolderPath={activeFolderPath}
+              paramRouteRoot={paramRouteRoot}
+              active={!showScriptFiles}
+              onUnsavedChanges={onUnsavedChanges}
+            />
+          </div>
+        ) : null}
       </div>
 
       <AlertDialog open={confirm !== null} onOpenChange={(next) => !next && !isBusy && setConfirm(null)}>

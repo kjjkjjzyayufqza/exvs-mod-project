@@ -166,6 +166,10 @@ name = "exvs2_json_cli_test"
 path = "tests/exvs2_json_cli_test.rs"
 
 [[test]]
+name = "chrsysparam_format_test"
+path = "tests/chrsysparam_format_test.rs"
+
+[[test]]
 name = "fhm2d_extract_cli_test"
 path = "tests/fhm2d_extract_cli_test.rs"
 
