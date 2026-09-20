@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { PackageOpen, Search, Sparkles, Star } from "lucide-react";
+import { Copy, PackageOpen, Search, Sparkles, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,10 @@ type RouteBrowserProps = {
   selectedCourseRowId: number | null;
   onSelectCourse: (course: CourseRow) => void;
   onClaimDormantGroup: (group: DormantSceneGroup) => void;
+  /** Mint a new course from this one, with brand-new scene folders. */
+  onCloneCourse: (course: CourseRow) => void;
+  /** An open draft whose course row is not in the table yet, if any. */
+  unsavedCourse?: { name: string; courseId: number; category: number; stages: number } | null;
 };
 
 function matches(course: CourseRow, needle: string): boolean {
@@ -44,6 +48,8 @@ export function RouteBrowser({
   selectedCourseRowId,
   onSelectCourse,
   onClaimDormantGroup,
+  onCloneCourse,
+  unsavedCourse,
 }: RouteBrowserProps) {
   const { t } = useTranslation("test-triad-route");
   const [query, setQuery] = useState("");
@@ -114,53 +120,100 @@ export function RouteBrowser({
       <ScrollArea className="min-h-0 flex-1 pr-2.5">
         {tab === "courses" ? (
           <div className="flex flex-col gap-4">
+            {/*
+              A route created from the wizard exists only as a draft until it
+              is saved, so it is absent from this list — which reads as "my
+              new course vanished". Showing it, marked unsaved, says where it
+              is and what is still missing.
+            */}
+            {unsavedCourse ? (
+              <div className="flex min-h-11 items-center gap-2 rounded-md border border-amber-500/50 bg-amber-500/5 px-2.5 py-1.5">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded bg-amber-500/15 text-[10px] font-semibold tabular-nums">
+                  {categoryLetter(unsavedCourse.category) ?? unsavedCourse.category}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium">{unsavedCourse.name || "—"}</p>
+                  <p className="truncate text-[11px] tabular-nums text-muted-foreground">
+                    {t("browser.courseId", { id: unsavedCourse.courseId })} ·{" "}
+                    {t("browser.stages", { count: unsavedCourse.stages })}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                  {t("browser.unsavedCourse")}
+                </span>
+              </div>
+            ) : null}
             {categories.map(({ category, rows }) => (
               <section key={category} className="flex flex-col gap-1">
                 <h4 className="sticky top-0 z-[1] bg-background/95 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground backdrop-blur">
                   {t("browser.categoryLabel", { letter: categoryLetter(category) ?? category })}
                 </h4>
                 {rows.map((course) => (
-                  <button
+                  <div
                     key={course.rowId}
-                    type="button"
-                    aria-current={course.rowId === selectedCourseRowId ? "true" : undefined}
-                    onClick={() => onSelectCourse(course)}
                     className={cn(
-                      "flex min-h-11 items-center gap-2 rounded-md border px-2.5 py-1.5 text-left",
-                      "transition-[background-color,border-color,transform] duration-150 ease-out",
-                      "hover:bg-accent active:translate-y-px",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      "group flex min-h-11 items-center gap-1 rounded-md border pr-1",
+                      "transition-[background-color,border-color] duration-150 ease-out",
+                      "hover:bg-accent focus-within:ring-2 focus-within:ring-ring",
                       course.rowId === selectedCourseRowId && "border-primary bg-accent",
                     )}
                   >
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded bg-muted text-[10px] font-semibold tabular-nums">
-                      {categoryLetter(course.category) ?? course.category}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="flex items-center gap-1.5 truncate text-xs font-medium">
-                        {course.name}
-                        {course.variant > 0 ? (
-                          <Badge
-                            variant="outline"
-                            className="h-4 shrink-0 px-1 text-[10px] tabular-nums"
-                          >
-                            {t("browser.variant", { number: course.variant })}
-                          </Badge>
-                        ) : null}
-                      </p>
-                      <p className="truncate text-[11px] tabular-nums text-muted-foreground">
-                        {t("browser.courseId", { id: course.courseId })} ·{" "}
-                        {t("browser.stages", {
-                          count: course.stageSceneKeys.filter((key) => key !== 0).length,
-                        })}
-                        {course.initiallyOpen === 1 ? ` · ${t("browser.initiallyOpen")}` : ""}
-                      </p>
-                    </div>
-                    <span className="flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums text-muted-foreground">
-                      <Star className="size-3" />
-                      {course.starRating}
-                    </span>
-                  </button>
+                    <button
+                      type="button"
+                      aria-current={course.rowId === selectedCourseRowId ? "true" : undefined}
+                      onClick={() => onSelectCourse(course)}
+                      className={cn(
+                        "flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2.5 text-left",
+                        "transition-transform duration-150 ease-out active:translate-y-px",
+                        "focus-visible:outline-none",
+                      )}
+                    >
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded bg-muted text-[10px] font-semibold tabular-nums">
+                        {categoryLetter(course.category) ?? course.category}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-1.5 truncate text-xs font-medium">
+                          {course.name}
+                          {course.variant > 0 ? (
+                            <Badge
+                              variant="outline"
+                              className="h-4 shrink-0 px-1 text-[10px] tabular-nums"
+                            >
+                              {t("browser.variant", { number: course.variant })}
+                            </Badge>
+                          ) : null}
+                        </p>
+                        <p className="truncate text-[11px] tabular-nums text-muted-foreground">
+                          {t("browser.courseId", { id: course.courseId })} ·{" "}
+                          {t("browser.stages", {
+                            count: course.stageSceneKeys.filter((key) => key !== 0).length,
+                          })}
+                          {course.initiallyOpen === 1 ? ` · ${t("browser.initiallyOpen")}` : ""}
+                        </p>
+                      </div>
+                      <span className="flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums text-muted-foreground">
+                        <Star className="size-3" />
+                        {course.starRating}
+                      </span>
+                    </button>
+                    {/*
+                      Cloning is a per-course action, so it lives on the row
+                      rather than in a menu: picking the donor is the first
+                      decision, and it is the same list a modder is already
+                      reading.
+                    */}
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="size-7 shrink-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-visible:opacity-100"
+                      title={t("browser.cloneCourse", { name: course.name })}
+                      aria-label={t("browser.cloneCourse", { name: course.name })}
+                      onClick={() => onCloneCourse(course)}
+                    >
+                      <Copy className="size-3.5" />
+                    </Button>
+                  </div>
                 ))}
               </section>
             ))}

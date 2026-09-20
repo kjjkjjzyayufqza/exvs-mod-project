@@ -70,7 +70,12 @@ fn table_byte_size(rows: usize, columns: usize, name: &str) -> Result<usize, Str
     rows.checked_mul(columns)
         .and_then(|cells| cells.checked_mul(4))
         .and_then(|cell_bytes| cell_bytes.checked_add(TABLE_HEADER_SIZE))
-        .ok_or_else(|| format!("ChrSysParam {} table size overflows ({}x{})", name, rows, columns))
+        .ok_or_else(|| {
+            format!(
+                "ChrSysParam {} table size overflows ({}x{})",
+                name, rows, columns
+            )
+        })
 }
 
 fn read_table(
@@ -163,7 +168,8 @@ pub fn parse_chrsysparam(data: &[u8]) -> Result<ChrSysParamFile, String> {
             action_offset, HEADER_SIZE
         ));
     }
-    let (action_table, action_end) = read_table(data, action_offset, ACTION_TABLE_MARKER, "action")?;
+    let (action_table, action_end) =
+        read_table(data, action_offset, ACTION_TABLE_MARKER, "action")?;
 
     let transition_offset = read_u32_at(data, TRANSITION_TABLE_OFFSET_FIELD)? as usize;
     if transition_offset != action_end {
@@ -172,8 +178,12 @@ pub fn parse_chrsysparam(data: &[u8]) -> Result<ChrSysParamFile, String> {
             transition_offset, action_end
         ));
     }
-    let (transition_table, transition_end) =
-        read_table(data, transition_offset, TRANSITION_TABLE_MARKER, "transition")?;
+    let (transition_table, transition_end) = read_table(
+        data,
+        transition_offset,
+        TRANSITION_TABLE_MARKER,
+        "transition",
+    )?;
     if transition_end != data.len() {
         return Err(format!(
             "ChrSysParam has {} trailing bytes after the transition table end 0x{:X}",
@@ -232,8 +242,11 @@ fn write_table(out: &mut Vec<u8>, table: &ChrSysParamTable) {
 
 pub fn build_chrsysparam(file: &ChrSysParamFile) -> Result<Vec<u8>, String> {
     let action_size = validate_table_shape(&file.action_table, ACTION_TABLE_MARKER, "action")?;
-    let transition_size =
-        validate_table_shape(&file.transition_table, TRANSITION_TABLE_MARKER, "transition")?;
+    let transition_size = validate_table_shape(
+        &file.transition_table,
+        TRANSITION_TABLE_MARKER,
+        "transition",
+    )?;
     let transition_offset = HEADER_SIZE + action_size;
     let total = transition_offset
         .checked_add(transition_size)
@@ -260,7 +273,11 @@ mod tests {
 
     fn synth_container(action_rows: u32, action_columns: u32) -> Vec<u8> {
         let action_cells = (0..action_rows)
-            .map(|row| (0..action_columns).map(|column| row * 1000 + column).collect())
+            .map(|row| {
+                (0..action_columns)
+                    .map(|column| row * 1000 + column)
+                    .collect()
+            })
             .collect();
         build_chrsysparam(&ChrSysParamFile {
             unit_id: 15_008_001,
@@ -297,7 +314,10 @@ mod tests {
         let rebuilt = build_chrsysparam(&parsed).expect("rebuild");
         let reparsed = parse_chrsysparam(&rebuilt).expect("reparse");
         assert_eq!(reparsed.action_table.rows.len(), 3);
-        assert_eq!(read_u32_at(&rebuilt, TRANSITION_TABLE_OFFSET_FIELD).unwrap(), 0x1C + 0x10 + 3 * 4 * 4);
+        assert_eq!(
+            read_u32_at(&rebuilt, TRANSITION_TABLE_OFFSET_FIELD).unwrap(),
+            0x1C + 0x10 + 3 * 4 * 4
+        );
         assert_eq!(reparsed, parsed);
     }
 
@@ -315,7 +335,11 @@ mod tests {
         source[TRANSITION_TABLE_OFFSET_FIELD..TRANSITION_TABLE_OFFSET_FIELD + 4]
             .copy_from_slice(&0x40u32.to_le_bytes());
         let err = parse_chrsysparam(&source).expect_err("gap must be rejected");
-        assert!(err.contains("does not follow"), "unexpected error text: {}", err);
+        assert!(
+            err.contains("does not follow"),
+            "unexpected error text: {}",
+            err
+        );
     }
 
     #[test]
@@ -331,7 +355,11 @@ mod tests {
         let mut parsed = parse_chrsysparam(&synth_container(2, 4)).expect("parse");
         parsed.action_table.rows[1].pop();
         let err = build_chrsysparam(&parsed).expect_err("ragged row must be rejected");
-        assert!(err.contains("row 1 has 3 cells"), "unexpected error text: {}", err);
+        assert!(
+            err.contains("row 1 has 3 cells"),
+            "unexpected error text: {}",
+            err
+        );
     }
 
     #[test]

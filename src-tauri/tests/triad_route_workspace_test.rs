@@ -20,8 +20,7 @@ use app_lib::format::bsfo::{Bsfo, SCENE_CLASS_STANDARD};
 use app_lib::format::param_entry_schema::{KIND_I32, KIND_U32};
 use app_lib::format::triad_course::{columns as tc, CourseTable, SceneTable};
 use app_lib::format::triad_route_document::{
-    BriefingDraft, CourseDraft, RouteBuildMode, StageDraft, TriadRouteDocument,
-    TRIAD_ROUTE_SCHEMA,
+    BriefingDraft, CourseDraft, RouteBuildMode, StageDraft, TriadRouteDocument, TRIAD_ROUTE_SCHEMA,
 };
 use app_lib::format::triad_route_workspace::{
     apply_route, discover_single_table, discover_triad_tables, format_structure_file_id,
@@ -153,17 +152,28 @@ fn pilot_name_table_bytes() -> Vec<u8> {
 }
 
 /// A minimal but structurally valid briefing: one player slot, one enemy.
+///
+/// Slot 1 is left undefined the way the shipped files do it, so the sec3 list
+/// stays positional: record 0 is slot 0, record 2 is slot 2.
 fn briefing_bytes(map_hash: u32) -> Vec<u8> {
     let sec2_len = 496usize;
+    const PLAYER_CAST: i32 = 0;
+    const ENEMY_CAST: i32 = 1;
     let units: Vec<[i32; 4]> = vec![[0, PLAYER_SUIT, 10101, 0], [0, ENEMY_SUIT, 0, 0]];
-    let slots: Vec<[i32; 4]> = vec![[PLAYER_SUIT, 1, 0, 0], [ENEMY_SUIT, 1, 2, 1]];
+    let slots: Vec<[i32; 4]> = vec![
+        [PLAYER_SUIT, 1, PLAYER_CAST, 0],
+        [0, 0, -1, 0],
+        [ENEMY_SUIT, 1, ENEMY_CAST, 1],
+    ];
 
     let mut sec0 = [0i32; 12];
-    sec0[1] = 1;
-    sec0[2] = 2;
+    // Player side draws cast 0; the enemy is framed as the boss.
+    sec0[0] = PLAYER_CAST;
+    sec0[1] = -1;
+    sec0[2] = ENEMY_CAST;
     sec0[3] = -1;
     sec0[4] = -1;
-    for word in sec0.iter_mut().skip(8).take(3) {
+    for word in sec0.iter_mut().skip(5).take(6) {
         *word = -1;
     }
 
@@ -306,7 +316,10 @@ fn the_three_route_tables_are_found_by_their_columns_not_their_names() {
     let files = discover_triad_tables(&workspace.dir("0xE952325A")).unwrap();
     assert!(files.course.ends_with("1.bin"));
     assert!(files.scene.ends_with("2.bin"));
-    assert_eq!(files.ribbon.as_deref().map(|p| p.ends_with("0.bin")), Some(true));
+    assert_eq!(
+        files.ribbon.as_deref().map(|p| p.ends_with("0.bin")),
+        Some(true)
+    );
 }
 
 #[test]
@@ -314,7 +327,10 @@ fn discovery_ignores_backups_and_reports_a_missing_table() {
     let workspace = Workspace::build();
     let list_dir = workspace.dir("0xE952325A");
     fs::write(list_dir.join("1.bin.bak"), course_table_bytes()).unwrap();
-    assert!(discover_triad_tables(&list_dir).is_ok(), "a .bak is not a second course table");
+    assert!(
+        discover_triad_tables(&list_dir).is_ok(),
+        "a .bak is not a second course table"
+    );
 
     fs::remove_file(list_dir.join("1.bin")).unwrap();
     let error = discover_triad_tables(&list_dir).unwrap_err();
@@ -343,11 +359,8 @@ fn briefings_are_indexed_by_the_scene_key_in_the_structure_json() {
 #[test]
 fn package_roots_are_scanned_for_hash_named_archives() {
     let workspace = Workspace::build();
-    let hashes = scan_package_hashes(&[workspace
-        .dir("packages")
-        .to_string_lossy()
-        .into_owned()])
-    .unwrap();
+    let hashes =
+        scan_package_hashes(&[workspace.dir("packages").to_string_lossy().into_owned()]).unwrap();
     assert_eq!(hashes, BTreeSet::from([A1_PACKAGE, A22_PACKAGE]));
     assert!(scan_package_hashes(&["Z:/does/not/exist".to_string()]).is_err());
 }
@@ -404,8 +417,8 @@ fn a_stage_briefing_can_be_read_back_as_an_editor_draft() {
     let draft = load_briefing(&workspace.dir("0xF7B91DE7"), A22_SCENE).unwrap();
     assert_eq!(draft.map_hash, MAP_HILLS);
     assert_eq!(draft.time_limit_seconds, 180);
-    assert_eq!(draft.slots.len(), 2);
-    assert_eq!(draft.boss_slots, vec![2]);
+    assert_eq!(draft.slots.len(), 3);
+    assert_eq!(draft.boss_cast, vec![1]);
     assert!(load_briefing(&workspace.dir("0xF7B91DE7"), 0xDEAD_BEEF).is_err());
 }
 
@@ -423,7 +436,12 @@ fn dormant_route(workspace: &Workspace) -> TriadRouteDocument {
             unit
         })
         .collect();
-    route_with(briefing, RouteBuildMode::ActivateDormant, A22_SCENE, A22_PACKAGE)
+    route_with(
+        briefing,
+        RouteBuildMode::ActivateDormant,
+        A22_SCENE,
+        A22_PACKAGE,
+    )
 }
 
 fn route_with(
@@ -471,7 +489,11 @@ fn activating_a_dormant_scene_writes_the_course_and_scene_rows() {
     let applied = apply_route(&dormant_route(&workspace), &paths).unwrap();
 
     assert_eq!(applied.stage_package_hashes, vec![A22_PACKAGE]);
-    assert_eq!(applied.written.len(), 3, "course table, scene table, briefing");
+    assert_eq!(
+        applied.written.len(),
+        3,
+        "course table, scene table, briefing"
+    );
 
     let files = discover_triad_tables(&workspace.dir("0xE952325A")).unwrap();
     let courses = CourseTable::parse(&read(Path::new(&files.course)))
@@ -490,7 +512,9 @@ fn activating_a_dormant_scene_writes_the_course_and_scene_rows() {
         .rows()
         .unwrap();
     assert_eq!(scenes.len(), 2);
-    assert!(scenes.iter().any(|row| row.scene_key == A22_SCENE && row.scene_no == 253));
+    assert!(scenes
+        .iter()
+        .any(|row| row.scene_key == A22_SCENE && row.scene_no == 253));
 
     let briefing = load_briefing(&workspace.dir("0xF7B91DE7"), A22_SCENE).unwrap();
     assert_eq!(briefing.time_limit_seconds, 300);
@@ -630,7 +654,10 @@ fn a_scene_with_no_briefing_is_refused_without_writing() {
 
     let error = apply_route(&document, &paths).unwrap_err();
     assert!(error.contains("briefing"), "{error}");
-    assert_eq!(read(&workspace.dir("0xE952325A").join("1.bin")), pristine_course);
+    assert_eq!(
+        read(&workspace.dir("0xE952325A").join("1.bin")),
+        pristine_course
+    );
     assert_eq!(
         read(&workspace.dir("0xA073DA71").join("0.bin")),
         pristine_scene_ids,
@@ -655,13 +682,13 @@ fn a_briefing_edit_survives_the_roundtrip_through_the_package_folder() {
     let paths = workspace.paths();
     let mut document = dormant_route(&workspace);
     document.stages[0].briefing.map_hash = 0xFE67_F4F9;
-    document.stages[0].briefing.boss_slots = vec![];
+    document.stages[0].briefing.boss_cast = vec![];
     apply_route(&document, &paths).unwrap();
 
     let index = index_briefings(&workspace.dir("0xF7B91DE7")).unwrap();
     let bsfo = Bsfo::parse(&read(index.path_for(A22_SCENE).unwrap())).unwrap();
     assert_eq!(bsfo.map_hash(), 0xFE67_F4F9);
-    assert_eq!(bsfo.boss_slots(), vec![-1, -1, -1]);
+    assert_eq!(bsfo.boss_cast(), vec![-1, -1, -1]);
     assert_eq!(bsfo.time_limit_seconds(), 300);
 
     // The other scene's briefing must be untouched.
@@ -674,7 +701,8 @@ fn a_briefing_edit_survives_the_roundtrip_through_the_package_folder() {
 /// written into the real mission script, not just into the tables.
 #[test]
 fn a_stage_line_up_is_written_into_the_mission_script() {
-    const SHIPPED: &str = "../tmp/fhm2d-extract/mission-obhk-named/missionscript/000triad_battle_a022_001.mismsexc";
+    const SHIPPED: &str =
+        "../tmp/fhm2d-extract/mission-obhk-named/missionscript/000triad_battle_a022_001.mismsexc";
     let shipped = Path::new(SHIPPED);
     if !shipped.is_file() {
         eprintln!("mission corpus absent; skipping the script write");
@@ -692,9 +720,12 @@ fn a_stage_line_up_is_written_into_the_mission_script() {
     fs::copy(shipped, &script_path).unwrap();
 
     let before = read(&script_path);
-    let config =
-        app_lib::format::triad_route_workspace::load_stage_script(&paths.script_dirs, A22_SCENE, None)
-            .expect("the stage script reads");
+    let config = app_lib::format::triad_route_workspace::load_stage_script(
+        &paths.script_dirs,
+        A22_SCENE,
+        None,
+    )
+    .expect("the stage script reads");
     assert_eq!(config.slots.len(), 8, "the shipped line-up");
 
     let mut document = dormant_route(&workspace);
@@ -716,7 +747,10 @@ fn a_stage_line_up_is_written_into_the_mission_script() {
 
     let applied = apply_route(&document, &paths).expect("writes");
     assert!(
-        applied.written.iter().any(|w| w.path.ends_with(".mismsexc")),
+        applied
+            .written
+            .iter()
+            .any(|w| w.path.ends_with(".mismsexc")),
         "the script is among the written files"
     );
 
@@ -834,7 +868,8 @@ fn briefings_can_be_renamed_to_their_scene_names() {
 /// still find it, because the header says what it is.
 #[test]
 fn a_stage_script_is_found_even_when_the_payload_keeps_its_index_name() {
-    const SHIPPED: &str = "../tmp/fhm2d-extract/mission-obhk-named/missionscript/000triad_battle_a022_001.mismsexc";
+    const SHIPPED: &str =
+        "../tmp/fhm2d-extract/mission-obhk-named/missionscript/000triad_battle_a022_001.mismsexc";
     if !Path::new(SHIPPED).is_file() {
         eprintln!("mission corpus absent; skipping");
         return;
@@ -869,7 +904,10 @@ fn discovery_errors_say_what_was_looked_for_and_where() {
 
     let error = discover_single_table(&empty, "sceneidtable").unwrap_err();
     assert!(error.contains("sceneidtable"), "{error}");
-    assert!(error.contains("scripts"), "names the folder it checked: {error}");
+    assert!(
+        error.contains("scripts"),
+        "names the folder it checked: {error}"
+    );
 
     let error = discover_single_table(&empty.join("nope"), "sceneidtable").unwrap_err();
     assert!(error.contains("does not exist"), "{error}");
@@ -877,7 +915,10 @@ fn discovery_errors_say_what_was_looked_for_and_where() {
     // A folder holding the wrong tables says what it found instead.
     let wrong = workspace.dir("0xA073DA71");
     let error = discover_triad_tables(&wrong).unwrap_err();
-    assert!(error.contains("0.bin"), "lists the files it examined: {error}");
+    assert!(
+        error.contains("0.bin"),
+        "lists the files it examined: {error}"
+    );
 
     let error = app_lib::format::triad_route_workspace::find_stage_script(
         &workspace.paths().script_dirs,

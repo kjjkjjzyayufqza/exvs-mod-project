@@ -41,9 +41,12 @@ pub fn parse_cell_value(value: &Value, context: &str) -> Result<u32, String> {
             if hex.is_empty() || hex.len() > 8 {
                 return Err(format!("{context}: '{text}' must have 1 to 8 hex digits"));
             }
-            u32::from_str_radix(hex, 16).map_err(|_| format!("{context}: '{text}' is not valid hex"))
+            u32::from_str_radix(hex, 16)
+                .map_err(|_| format!("{context}: '{text}' is not valid hex"))
         }
-        other => Err(format!("{context}: expected an integer or 0x hex string, found {other}")),
+        other => Err(format!(
+            "{context}: expected an integer or 0x hex string, found {other}"
+        )),
     }
 }
 
@@ -176,8 +179,14 @@ mod tests {
     #[test]
     fn cells_accept_decimal_and_hex_but_reject_other_shapes() {
         assert_eq!(parse_cell_value(&json!(-1), "t").unwrap(), u32::MAX);
-        assert_eq!(parse_cell_value(&json!(4294967295u64), "t").unwrap(), u32::MAX);
-        assert_eq!(parse_cell_value(&json!("0xdfd66752"), "t").unwrap(), 0xDFD6_6752);
+        assert_eq!(
+            parse_cell_value(&json!(4294967295u64), "t").unwrap(),
+            u32::MAX
+        );
+        assert_eq!(
+            parse_cell_value(&json!("0xdfd66752"), "t").unwrap(),
+            0xDFD6_6752
+        );
         assert!(parse_cell_value(&json!("123"), "t").is_err());
         assert!(parse_cell_value(&json!("0x123456789"), "t").is_err());
         assert!(parse_cell_value(&json!(1.5), "t").is_err());
@@ -210,14 +219,20 @@ mod tests {
             .as_object_mut()
             .unwrap()
             .remove("formIndex");
-        assert!(from_document(&missing).unwrap_err().contains("formIndex is missing"));
+        assert!(from_document(&missing)
+            .unwrap_err()
+            .contains("formIndex is missing"));
 
         let mut unknown = document.clone();
         unknown["actionTable"]["rows"][1]["fields"]["bogus"] = json!(1);
-        assert!(from_document(&unknown).unwrap_err().contains("unknown key 'bogus'"));
+        assert!(from_document(&unknown)
+            .unwrap_err()
+            .contains("unknown key 'bogus'"));
 
         let mut misnumbered = document;
         misnumbered["actionTable"]["rows"][1]["row"] = json!(5);
-        assert!(from_document(&misnumbered).unwrap_err().contains("renumber"));
+        assert!(from_document(&misnumbered)
+            .unwrap_err()
+            .contains("renumber"));
     }
 }

@@ -52,6 +52,7 @@ pub mod triad_course;
 pub mod triad_route_document;
 pub mod triad_route_validate;
 pub mod triad_route_workspace;
+pub mod triad_scene_create;
 pub mod triad_table;
 pub mod unit_model_extract;
 pub mod unit_model_migrate;

@@ -49,6 +49,68 @@ fn unit_model_regression_legacy_texture_name_uses_checked_relative_pointer() {
     assert!(app_lib::nutexb_lib::read_nutexb_name(&path).is_err());
 }
 
+fn hildol_texture_dir() -> Option<PathBuf> {
+    let retained = unit_model_regression_artifact_root().join("after-OUaEhx/hildol/textures");
+    retained.is_dir().then_some(retained)
+}
+
+#[test]
+fn unit_model_regression_legacy_tex_v10_exports_png() {
+    let Some(textures) = hildol_texture_dir() else {
+        eprintln!("skip: missing retained hildol texture fixture");
+        return;
+    };
+    let cases = [
+        (
+            "025gigloo_002hildol_001_pbr1_specular.nutexb",
+            1024,
+            1024,
+            "bc1",
+        ),
+        (
+            "025gigloo_002hildol_001_pbr2_specular.nutexb",
+            1024,
+            1024,
+            "bc1",
+        ),
+        ("025gigloo_002hildol_001_pbr2_diffuse.nutexb", 0, 0, ""),
+    ];
+    let dir = tempfile::tempdir_in(unit_model_regression_artifact_root()).unwrap();
+    for (filename, expect_w, expect_h, expect_fmt) in cases {
+        let path = textures.join(filename);
+        if !path.is_file() {
+            panic!("missing fixture {}", path.display());
+        }
+        let info = app_lib::nutexb_lib::read_nutexb_info(path.to_str().unwrap())
+            .unwrap_or_else(|error| panic!("{filename} read_nutexb_info: {error}"));
+        assert!(!info.name.is_empty(), "{filename} empty name");
+        assert!(
+            info.width > 0 && info.height > 0,
+            "{filename} {}x{}",
+            info.width,
+            info.height
+        );
+        if expect_w > 0 {
+            assert_eq!(info.width, expect_w, "{filename} width");
+            assert_eq!(info.height, expect_h, "{filename} height");
+        }
+        if !expect_fmt.is_empty() {
+            assert!(
+                info.image_format.to_ascii_lowercase().contains(expect_fmt),
+                "{filename} format={}",
+                info.image_format
+            );
+        }
+        let png = dir.path().join(filename.replace(".nutexb", ".png"));
+        app_lib::nutexb_lib::export_nutexb_to_png(path.to_str().unwrap(), png.to_str().unwrap())
+            .unwrap_or_else(|error| panic!("{filename} export_nutexb_to_png: {error}"));
+        let decoded =
+            image::open(&png).unwrap_or_else(|error| panic!("{filename} open png: {error}"));
+        assert_eq!(decoded.width(), info.width, "{filename} png width");
+        assert_eq!(decoded.height(), info.height, "{filename} png height");
+    }
+}
+
 #[test]
 fn unit_model_regression_25002001_extracts_named_models_without_changing_payloads() {
     use app_lib::format::fhm2d::extract_fhm2d_to_memory_impl;

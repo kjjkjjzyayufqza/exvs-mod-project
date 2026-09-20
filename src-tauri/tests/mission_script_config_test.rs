@@ -114,8 +114,10 @@ fn nearly_every_shipped_script_exposes_its_slots() {
         parsed >= total - 3,
         "slot editing should cover every triad scene: {parsed}/{total}
 {}",
-        refused.iter().take(5).cloned().collect::<Vec<_>>().join("
-")
+        refused.iter().take(5).cloned().collect::<Vec<_>>().join(
+            "
+"
+        )
     );
     assert!(
         waves_editable * 100 >= total * 40,
@@ -139,8 +141,12 @@ fn a_non_standard_phase_function_blocks_only_wave_edits() {
             continue;
         }
         let bytes = fs::read(&file).expect("readable");
-        let Ok(out) = decompile_in_process(&bytes) else { continue };
-        let Ok(script) = MissionScript::parse(&out.c_source) else { continue };
+        let Ok(out) = decompile_in_process(&bytes) else {
+            continue;
+        };
+        let Ok(script) = MissionScript::parse(&out.c_source) else {
+            continue;
+        };
         if script.waves_editable() || script.raw_slots().is_empty() {
             continue;
         }
@@ -169,7 +175,10 @@ fn a_non_standard_phase_function_blocks_only_wave_edits() {
         checked = true;
         break;
     }
-    assert!(checked, "the corpus should contain a non-standard phase function");
+    assert!(
+        checked,
+        "the corpus should contain a non-standard phase function"
+    );
 }
 
 /// Writing an unchanged configuration must reproduce the original bytes.
@@ -214,7 +223,11 @@ fn a_rewritten_script_still_parses_back_to_the_same_configuration() {
     assert_eq!(reparsed.config(), script.config());
 }
 
-fn one_versus_ten(base: &StageScriptConfig, player_suit: i32, enemy_suit: i32) -> StageScriptConfig {
+fn one_versus_ten(
+    base: &StageScriptConfig,
+    player_suit: i32,
+    enemy_suit: i32,
+) -> StageScriptConfig {
     const ENEMY_COUNT: i32 = 10;
     let mut slots = vec![ScriptSlot {
         slot: 0,
@@ -280,8 +293,12 @@ fn writes_a_one_versus_ten_stage_that_compiles_and_reads_back() {
     let compiled = compile_mission_in_process(&rewritten).expect("the new script compiles");
 
     // The written script must say exactly what was asked for.
-    let readback = MissionScript::parse(&decompile_in_process(&compiled).expect("decompiles").c_source)
-        .expect("the compiled script decompiles back into the template shape");
+    let readback = MissionScript::parse(
+        &decompile_in_process(&compiled)
+            .expect("decompiles")
+            .c_source,
+    )
+    .expect("the compiled script decompiles back into the template shape");
     let got = readback.config();
     assert_eq!(got.slots.len(), 11, "one player plus ten enemies");
     assert_eq!(got.slots[0].team, 0);
@@ -291,7 +308,10 @@ fn writes_a_one_versus_ten_stage_that_compiles_and_reads_back() {
         "ten enemies"
     );
     assert!(
-        got.slots.iter().filter(|s| s.team == 1).all(|s| s.unit_id == enemy_suit),
+        got.slots
+            .iter()
+            .filter(|s| s.team == 1)
+            .all(|s| s.unit_id == enemy_suit),
         "every enemy is the same suit"
     );
     assert_eq!(
@@ -299,7 +319,10 @@ fn writes_a_one_versus_ten_stage_that_compiles_and_reads_back() {
         (2..12).collect::<Vec<i32>>(),
         "all ten deploy at the start"
     );
-    assert!(got.waves.is_empty(), "nothing is held back for a later wave");
+    assert!(
+        got.waves.is_empty(),
+        "nothing is held back for a later wave"
+    );
     assert_eq!(got.map_hash, wanted.map_hash);
     assert_eq!(got.team_costs[1], 20_000);
     assert_eq!(
@@ -340,9 +363,12 @@ fn a_wave_survives_the_write_and_read_back() {
 
     let rewritten = script.with_config(&wanted, &template).expect("rewrites");
     let compiled = compile_mission_in_process(&rewritten).expect("compiles");
-    let readback =
-        MissionScript::parse(&decompile_in_process(&compiled).expect("decompiles").c_source)
-            .expect("reparses");
+    let readback = MissionScript::parse(
+        &decompile_in_process(&compiled)
+            .expect("decompiles")
+            .c_source,
+    )
+    .expect("reparses");
     let got = readback.config();
 
     assert_eq!(got.opening_slots, vec![2, 3, 4, 5, 6]);

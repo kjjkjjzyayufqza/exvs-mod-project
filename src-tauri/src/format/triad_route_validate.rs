@@ -18,18 +18,23 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
+use crate::format::bsfo::NO_CAST as BSFO_NO_CAST;
 use crate::format::triad_course::{
     UNLOCK_TYPE_CLEAR_COUNT, UNLOCK_TYPE_CLEAR_COURSE, UNLOCK_TYPE_SERVER_ONLY,
 };
 use crate::format::triad_route_document::{
-    RouteBuildMode, StageDraft, TriadRouteDocument, MAX_ENEMY_SIDE_UNITS, MAX_PLAYER_SIDE_UNITS,
-    MAX_STAGES_PER_COURSE, TRIAD_ROUTE_SCHEMA, WIN_FLAG_TARGET_COUNT,
+    BriefingDraft, RouteBuildMode, StageDraft, TriadRouteDocument, MAX_ENEMY_SIDE_UNITS,
+    MAX_PLAYER_SIDE_UNITS, MAX_STAGES_PER_COURSE, TRIAD_ROUTE_SCHEMA, WIN_FLAG_TARGET_COUNT,
 };
 
 /// Category 6 is F: single-stage courses.
 const CATEGORY_F: i32 = 6;
 /// Briefing scene class that pairs with a "wipe them out" win condition.
 const SCENE_CLASS_STANDARD: i32 = 0;
+/// Loading-screen capacity, which is the BSFO sec0 layout, not a battle limit:
+/// two player-side portraits, three boss frames, three further enemies.
+const MAX_PLAYER_SIDE_DRAWN: usize = 2;
+const MAX_ENEMY_SIDE_DRAWN: usize = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -127,11 +132,7 @@ pub struct RouteValidationContext {
 }
 
 impl RouteValidationContext {
-    fn check_membership(
-        &self,
-        set: &BTreeSet<u32>,
-        value: u32,
-    ) -> Membership {
+    fn check_membership(&self, set: &BTreeSet<u32>, value: u32) -> Membership {
         if set.is_empty() {
             Membership::Unknown
         } else if set.contains(&value) {
@@ -186,7 +187,11 @@ pub fn validate_route(
     for stage in &document.stages {
         validate_stage(document, stage, context, &mut issues);
     }
-    issues.sort_by(|a, b| a.severity.cmp(&b.severity).then(a.location.cmp(&b.location)));
+    issues.sort_by(|a, b| {
+        a.severity
+            .cmp(&b.severity)
+            .then(a.location.cmp(&b.location))
+    });
     issues
 }
 
@@ -610,13 +615,17 @@ fn validate_briefing(
 ) {
     let briefing = &stage.briefing;
 
-    if let Membership::Missing = context.check_membership(&context.known_map_hashes, briefing.map_hash)
+    if let Membership::Missing =
+        context.check_membership(&context.known_map_hashes, briefing.map_hash)
     {
         issues.push(ValidationIssue::new(
             "briefing-map-unknown",
             Severity::Error,
             at.to_string(),
-            format!("briefing map 0x{:08X} is not in the stage list", briefing.map_hash),
+            format!(
+                "briefing map 0x{:08X} is not in the stage list",
+                briefing.map_hash
+            ),
         ));
     }
     if briefing.time_limit_seconds <= 0 {
@@ -631,17 +640,8 @@ fn validate_briefing(
         ));
     }
 
-    let slot_numbers: BTreeSet<i32> = briefing.slots.iter().map(|s| s.slot).collect();
-    for boss in &briefing.boss_slots {
-        if !slot_numbers.contains(boss) {
-            issues.push(ValidationIssue::new(
-                "briefing-boss-slot-unlisted",
-                Severity::Error,
-                at.to_string(),
-                format!("boss slot {boss} is not one of the briefing's listed slots"),
-            ));
-        }
-    }
+    validate_briefing_cast(briefing, issues, at);
+
     if briefing.units.is_empty() {
         issues.push(ValidationIssue::new(
             "briefing-units-empty",
@@ -662,6 +662,78 @@ fn validate_briefing(
                 format!("briefing shows unknown unit id {}", unit.unit_id),
             ));
         }
+    }
+}
+
+/// The loading screen draws cast entries, not battle slots.
+///
+/// Every reference here is an index into the briefing's own cast list, so a
+/// stale index is not a cosmetic slip: the screen either draws the wrong suit
+/// or the file is refused at write time.
+fn validate_briefing_cast(briefing: &BriefingDraft, issues: &mut Vec<ValidationIssue>, at: &str) {
+    let cast_size = briefing.units.len();
+    let in_cast = |index: i32| index >= 0 && (index as usize) < cast_size;
+
+    for (slot, entry) in briefing.slots.iter().enumerate() {
+        if entry.cast_index != BSFO_NO_CAST && !in_cast(entry.cast_index) {
+            issues.push(ValidationIssue::new(
+                "briefing-cast-index-invalid",
+                Severity::Error,
+                at.to_string(),
+                format!(
+                    "battle slot {slot} is drawn from cast entry {}, but the briefing has {cast_size}",
+                    entry.cast_index
+                ),
+            ));
+        }
+    }
+
+    let sides: [(&str, &Vec<i32>, usize); 3] = [
+        ("player side", &briefing.player_cast, MAX_PLAYER_SIDE_DRAWN),
+        ("boss frames", &briefing.boss_cast, MAX_ENEMY_SIDE_DRAWN),
+        ("enemy side", &briefing.enemy_cast, MAX_ENEMY_SIDE_DRAWN),
+    ];
+    for (role, drawn, capacity) in sides {
+        if drawn.len() > capacity {
+            issues.push(ValidationIssue::new(
+                "briefing-side-over-capacity",
+                Severity::Error,
+                at.to_string(),
+                format!(
+                    "the {role} of the loading screen holds {capacity} suits, the briefing draws {}",
+                    drawn.len()
+                ),
+            ));
+        }
+        for index in drawn {
+            if !in_cast(*index) {
+                issues.push(ValidationIssue::new(
+                    "briefing-draw-unlisted",
+                    Severity::Error,
+                    at.to_string(),
+                    format!(
+                        "the {role} draws cast entry {index}, which the briefing does not list"
+                    ),
+                ));
+            }
+        }
+    }
+
+    if briefing.player_cast.is_empty() {
+        issues.push(ValidationIssue::new(
+            "briefing-player-side-blank",
+            Severity::Warning,
+            at.to_string(),
+            "the loading screen draws nobody on the player side".to_string(),
+        ));
+    }
+    if briefing.boss_cast.is_empty() && briefing.enemy_cast.is_empty() {
+        issues.push(ValidationIssue::new(
+            "briefing-enemy-side-blank",
+            Severity::Warning,
+            at.to_string(),
+            "the loading screen draws nobody on the enemy side".to_string(),
+        ));
     }
 }
 
@@ -821,30 +893,17 @@ fn validate_script(
         }
     }
 
-    // The briefing frames these slots as bosses, so they must be units the
-    // script actually treats as objectives.
-    for boss in &briefing.boss_slots {
-        match script.slots.iter().find(|slot| slot.slot == *boss) {
-            None => issues.push(ValidationIssue::new(
-                "boss-slot-not-in-script",
-                Severity::Error,
-                at.to_string(),
-                format!("the briefing marks slot {boss} as a boss but the script has no such slot"),
-            )),
-            Some(slot) if slot.is_player_side() => issues.push(ValidationIssue::new(
-                "boss-slot-on-player-side",
-                Severity::Error,
-                at.to_string(),
-                format!("slot {boss} is framed as a boss but spawns on the player side"),
-            )),
-            Some(_) => {}
-        }
-    }
-
-    // The briefing's slot list should mirror the script's, or the VS screen
-    // shows a different line-up than the one that spawns.
+    // The briefing's slot list is positional: record `i` is battle slot `i`.
+    // A record the script has no slot for, or a slot with no record, means the
+    // VS screen is reading a different line-up than the one that spawns.
     let script_slots: BTreeSet<i32> = script.slots.iter().map(|s| s.slot).collect();
-    let briefing_slots: BTreeSet<i32> = briefing.slots.iter().map(|s| s.slot).collect();
+    let briefing_slots: BTreeSet<i32> = briefing
+        .slots
+        .iter()
+        .enumerate()
+        .filter(|(_, entry)| entry.cast_index != BSFO_NO_CAST || entry.unit_id != 0)
+        .filter_map(|(slot, _)| i32::try_from(slot).ok())
+        .collect();
     for missing in script_slots.difference(&briefing_slots) {
         issues.push(ValidationIssue::new(
             "briefing-slot-missing",
@@ -861,21 +920,29 @@ fn validate_script(
             format!("the briefing lists slot {extra}, which the script never spawns"),
         ));
     }
-    for entry in &briefing.slots {
-        if let Some(slot) = script.slots.iter().find(|s| s.slot == entry.slot) {
-            if slot.unit_id != entry.unit_id {
+    for (slot, entry) in briefing.slots.iter().enumerate() {
+        let Ok(slot) = i32::try_from(slot) else {
+            continue;
+        };
+        if let Some(script_slot) = script.slots.iter().find(|s| s.slot == slot) {
+            if script_slot.unit_id != entry.unit_id {
                 issues.push(ValidationIssue::new(
                     "briefing-slot-unit-mismatch",
                     Severity::Warning,
                     at.to_string(),
                     format!(
-                        "slot {} shows unit {} on the briefing but spawns unit {}",
-                        entry.slot, entry.unit_id, slot.unit_id
+                        "slot {slot} shows unit {} on the briefing but spawns unit {}",
+                        entry.unit_id, script_slot.unit_id
                     ),
                 ));
             }
         }
     }
+
+    // A drawn cast entry inherits its side from the slots that use it, so a
+    // boss frame filled with a player-side unit draws the wrong suit even
+    // though every index is in range.
+    validate_drawn_sides(briefing, script, issues, at);
 
     for slot in &script.opening_slots {
         if !script_slots.contains(slot) {
@@ -904,6 +971,83 @@ fn validate_script(
                 Severity::Warning,
                 at.to_string(),
                 format!("wave {position} deploys nothing"),
+            ));
+        }
+    }
+}
+
+/// Check each drawn cast entry against the side its battle slots fight on.
+///
+/// A cast entry has no side of its own; it inherits one from the slots drawn
+/// from it. An entry no slot uses is drawn but never spawns, which is how a
+/// briefing ends up advertising an opponent the stage does not have.
+fn validate_drawn_sides(
+    briefing: &BriefingDraft,
+    script: &crate::format::triad_route_document::StageScriptConfig,
+    issues: &mut Vec<ValidationIssue>,
+    at: &str,
+) {
+    let mut player_side: BTreeSet<i32> = BTreeSet::new();
+    let mut enemy_side: BTreeSet<i32> = BTreeSet::new();
+    for (slot, entry) in briefing.slots.iter().enumerate() {
+        if entry.cast_index == BSFO_NO_CAST {
+            continue;
+        }
+        let Ok(slot) = i32::try_from(slot) else {
+            continue;
+        };
+        let Some(script_slot) = script.slots.iter().find(|s| s.slot == slot) else {
+            continue;
+        };
+        if script_slot.is_player_side() {
+            player_side.insert(entry.cast_index);
+        } else {
+            enemy_side.insert(entry.cast_index);
+        }
+    }
+
+    let unit_of = |index: i32| briefing.cast_unit_id(index).unwrap_or(0);
+    for index in &briefing.player_cast {
+        if enemy_side.contains(index) && !player_side.contains(index) {
+            issues.push(ValidationIssue::new(
+                "briefing-player-draws-enemy",
+                Severity::Error,
+                at.to_string(),
+                format!(
+                    "the player side of the loading screen draws unit {}, which the script spawns on the enemy side",
+                    unit_of(*index)
+                ),
+            ));
+        }
+    }
+    for index in briefing.boss_cast.iter().chain(briefing.enemy_cast.iter()) {
+        if player_side.contains(index) && !enemy_side.contains(index) {
+            issues.push(ValidationIssue::new(
+                "briefing-enemy-draws-player",
+                Severity::Error,
+                at.to_string(),
+                format!(
+                    "the enemy side of the loading screen draws unit {}, which the script spawns on the player side",
+                    unit_of(*index)
+                ),
+            ));
+        }
+    }
+    for index in briefing
+        .player_cast
+        .iter()
+        .chain(briefing.boss_cast.iter())
+        .chain(briefing.enemy_cast.iter())
+    {
+        if !player_side.contains(index) && !enemy_side.contains(index) {
+            issues.push(ValidationIssue::new(
+                "briefing-draws-absent-unit",
+                Severity::Warning,
+                at.to_string(),
+                format!(
+                    "the loading screen draws unit {}, which no battle slot spawns",
+                    unit_of(*index)
+                ),
             ));
         }
     }

@@ -29,7 +29,10 @@ pub fn build_chrsysparam_file(file_json: Value, output_path: &str) -> Result<(),
 }
 
 #[tauri::command]
-pub fn get_chrsysparam_schema(action_columns: u32, transition_columns: u32) -> Result<Value, String> {
+pub fn get_chrsysparam_schema(
+    action_columns: u32,
+    transition_columns: u32,
+) -> Result<Value, String> {
     let routes: Vec<Value> = ROUTE_TABLE
         .iter()
         .enumerate()
@@ -56,7 +59,10 @@ pub fn resolve_chrsysparam_msc_links(script_dir: &str) -> Result<Value, String> 
 }
 
 #[tauri::command]
-pub fn validate_chrsysparam_data(file_json: Value, links_json: Option<Value>) -> Result<Value, String> {
+pub fn validate_chrsysparam_data(
+    file_json: Value,
+    links_json: Option<Value>,
+) -> Result<Value, String> {
     let file = file_from_json(file_json)?;
     let links: Option<ChrSysMscLinks> = links_json
         .map(|value| serde_json::from_value(value).map_err(|e| format!("Invalid MSC links: {e}")))

@@ -30,8 +30,8 @@ use serde_json::Value;
 
 use crate::format::bsfo::Bsfo;
 use crate::format::mission_hash::identify_triad_scene;
-use crate::format::mission_script_config::MissionScript;
 use crate::format::mission_pilot_names::{PilotNameEntry, PilotNameList};
+use crate::format::mission_script_config::MissionScript;
 use crate::format::scene_id_table::{SceneIdRow, SceneIdTable};
 use crate::format::triad_course::{
     identify_table, CourseRow, CourseTable, RibbonRow, RibbonTable, SceneRow, SceneTable,
@@ -40,12 +40,12 @@ use crate::format::triad_course::{
 use crate::format::triad_route_document::{
     BriefingDraft, RouteBuildMode, StageScriptConfig, TriadRouteDocument,
 };
+use crate::format::triad_route_validate::{CourseRowIdentity, RouteValidationContext};
+use crate::format::triad_table::TriadTable;
 use crate::msc_toolchain::{
     compile_mission_in_process, decompile_in_process, mission_round_trip_status,
     MissionRoundTripStatus,
 };
-use crate::format::triad_route_validate::{CourseRowIdentity, RouteValidationContext};
-use crate::format::triad_table::TriadTable;
 
 /// Extensions the extractor gives the table payloads.
 const TABLE_EXTENSIONS: [&str; 3] = ["bin", "vgsht2", "dat"];
@@ -448,7 +448,8 @@ pub fn load_workspace(paths: &TriadWorkspacePaths) -> Result<TriadWorkspaceSnaps
         None => Vec::new(),
     };
 
-    let scene_id_path = discover_single_table(Path::new(&paths.scene_id_table_dir), "sceneidtable")?;
+    let scene_id_path =
+        discover_single_table(Path::new(&paths.scene_id_table_dir), "sceneidtable")?;
     let scene_id_table = SceneIdTable::parse(&read_file(&scene_id_path)?)?;
     let scene_id_rows = scene_id_table.rows()?;
 
@@ -596,7 +597,10 @@ pub fn rename_briefings_to_scene_names(dir: &Path) -> Result<BriefingRenameRepor
 
     let mut report = BriefingRenameReport::default();
     let mut planned: Vec<(PathBuf, PathBuf)> = Vec::new();
-    let Some(entries) = structure.get_mut("SubFileData").and_then(Value::as_array_mut) else {
+    let Some(entries) = structure
+        .get_mut("SubFileData")
+        .and_then(Value::as_array_mut)
+    else {
         return Err(format!("{} has no SubFileData", structure_path.display()));
     };
 
@@ -654,8 +658,13 @@ pub fn rename_briefings_to_scene_names(dir: &Path) -> Result<BriefingRenameRepor
         }
     }
     for (from, to) in &planned {
-        fs::rename(from, to)
-            .map_err(|e| format!("failed to rename {} to {}: {e}", from.display(), to.display()))?;
+        fs::rename(from, to).map_err(|e| {
+            format!(
+                "failed to rename {} to {}: {e}",
+                from.display(),
+                to.display()
+            )
+        })?;
     }
     let rendered = serde_json::to_string_pretty(&structure)
         .map_err(|e| format!("failed to serialise the structure JSON: {e}"))?;
@@ -686,7 +695,10 @@ pub fn find_stage_script(
     for dir in script_dirs {
         let root = Path::new(dir);
         let folder = root.join(&name);
-        let candidates = [folder.join(format!("{name}.mismsexc")), root.join(format!("{name}.mismsexc"))];
+        let candidates = [
+            folder.join(format!("{name}.mismsexc")),
+            root.join(format!("{name}.mismsexc")),
+        ];
         for candidate in candidates {
             if candidate.is_file() {
                 return Ok(candidate);
@@ -709,7 +721,11 @@ pub fn find_stage_script(
         } else {
             looked_in.join(" and ")
         },
-        if script_dirs.is_empty() { "" } else { " (use \"unpack this stage's script\")" }
+        if script_dirs.is_empty() {
+            ""
+        } else {
+            " (use \"unpack this stage's script\")"
+        }
     ))
 }
 
@@ -729,13 +745,19 @@ fn single_mission_script(dir: &Path) -> Result<Option<PathBuf>, String> {
         if !path.is_file() {
             continue;
         }
-        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
         if name.ends_with(".bak") || name.ends_with("_structure.json") {
             continue;
         }
         if path.extension().and_then(|e| e.to_str()) == Some("mismsexc") {
             if by_extension.is_some() {
-                return Err(format!("{} holds more than one mission script", dir.display()));
+                return Err(format!(
+                    "{} holds more than one mission script",
+                    dir.display()
+                ));
             }
             by_extension = Some(path);
             continue;
@@ -801,7 +823,11 @@ pub struct AppliedRoute {
     pub stage_package_hashes: Vec<u32>,
 }
 
-fn write_with_backup(path: &Path, bytes: &[u8], written: &mut Vec<WrittenFile>) -> Result<(), String> {
+fn write_with_backup(
+    path: &Path,
+    bytes: &[u8],
+    written: &mut Vec<WrittenFile>,
+) -> Result<(), String> {
     let backup = path.with_extension(match path.extension().and_then(|e| e.to_str()) {
         Some(extension) => format!("{extension}.bak"),
         None => "bak".to_string(),
@@ -825,12 +851,94 @@ fn write_with_backup(path: &Path, bytes: &[u8], written: &mut Vec<WrittenFile>) 
 /// the workspace exactly as it was. The caller is expected to have run the
 /// validator; this function still refuses structurally impossible input rather
 /// than writing a table the game cannot read.
+/// What one planned write touches, so the UI can group the preview.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PlanKind {
+    CourseTable,
+    SceneTable,
+    SceneIdTable,
+    Briefing,
+    Script,
+}
+
+/// One file `apply_route` would replace, described before it is written.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlannedWrite {
+    pub path: String,
+    pub kind: PlanKind,
+    /// 1-based stage this write belongs to, for the per-stage entries.
+    pub stage_index: Option<u8>,
+    pub byte_len: usize,
+    /// False when the write creates the file rather than replacing it.
+    pub replaces_existing: bool,
+    /// True when the bytes are identical to what is already on disk.
+    pub unchanged: bool,
+}
+
+/// Everything a save would do, computed without touching the workspace.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutePlan {
+    pub writes: Vec<PlannedWrite>,
+    pub stage_package_hashes: Vec<u32>,
+}
+
+/// Describe the save without performing it.
+///
+/// This runs the same code path `apply_route` does and stops before the
+/// writes, so a preview cannot drift from what saving actually does.
+pub fn plan_route(
+    document: &TriadRouteDocument,
+    paths: &TriadWorkspacePaths,
+) -> Result<RoutePlan, String> {
+    let planned = build_route_writes(document, paths)?;
+    let writes = planned
+        .iter()
+        .map(|(path, bytes, kind, stage_index)| {
+            let existing = fs::read(path).ok();
+            PlannedWrite {
+                path: path.display().to_string(),
+                kind: *kind,
+                stage_index: *stage_index,
+                byte_len: bytes.len(),
+                replaces_existing: existing.is_some(),
+                unchanged: existing.as_deref() == Some(bytes.as_slice()),
+            }
+        })
+        .collect();
+    Ok(RoutePlan {
+        writes,
+        stage_package_hashes: document.stage_package_hashes(),
+    })
+}
+
 pub fn apply_route(
     document: &TriadRouteDocument,
     paths: &TriadWorkspacePaths,
 ) -> Result<AppliedRoute, String> {
+    let planned = build_route_writes(document, paths)?;
+    let mut written = Vec::with_capacity(planned.len());
+    for (path, bytes, _, _) in &planned {
+        write_with_backup(path, bytes, &mut written)?;
+    }
+
+    Ok(AppliedRoute {
+        written,
+        stage_package_hashes: document.stage_package_hashes(),
+    })
+}
+
+/// Compute every file a save would write, in the order it would write them.
+type RouteWrite = (PathBuf, Vec<u8>, PlanKind, Option<u8>);
+
+fn build_route_writes(
+    document: &TriadRouteDocument,
+    paths: &TriadWorkspacePaths,
+) -> Result<Vec<RouteWrite>, String> {
     let files = discover_triad_tables(Path::new(&paths.triad_list_dir))?;
-    let mut planned: Vec<(PathBuf, Vec<u8>)> = Vec::new();
+    let mut planned: Vec<RouteWrite> = Vec::new();
 
     let course_path = PathBuf::from(&files.course);
     let mut course_table = CourseTable::parse(&read_file(&course_path)?)?;
@@ -838,7 +946,12 @@ pub fn apply_route(
     let mut course_row = course_table.row(course_index)?;
     document.merge_into_course_row(&mut course_row)?;
     course_table.apply(course_index, &course_row)?;
-    planned.push((course_path, course_table.build()?));
+    planned.push((
+        course_path,
+        course_table.build()?,
+        PlanKind::CourseTable,
+        None,
+    ));
 
     let scene_path = PathBuf::from(&files.scene);
     let mut scene_table = SceneTable::parse(&read_file(&scene_path)?)?;
@@ -856,7 +969,7 @@ pub fn apply_route(
         scene_changed = true;
     }
     if scene_changed {
-        planned.push((scene_path, scene_table.build()?));
+        planned.push((scene_path, scene_table.build()?, PlanKind::SceneTable, None));
     }
 
     let scene_id_path =
@@ -885,7 +998,12 @@ pub fn apply_route(
         }
     }
     if scene_id_changed {
-        planned.push((scene_id_path, scene_id_table.build()?));
+        planned.push((
+            scene_id_path,
+            scene_id_table.build()?,
+            PlanKind::SceneIdTable,
+            None,
+        ));
     }
 
     let briefings = index_briefings(Path::new(&paths.outmission_dir))?;
@@ -898,7 +1016,12 @@ pub fn apply_route(
         })?;
         let mut bsfo = Bsfo::parse(&read_file(path)?)?;
         stage.briefing.apply_to(&mut bsfo)?;
-        planned.push((path.to_path_buf(), bsfo.build()?));
+        planned.push((
+            path.to_path_buf(),
+            bsfo.build()?,
+            PlanKind::Briefing,
+            Some(stage.index),
+        ));
     }
 
     for stage in &document.stages {
@@ -924,24 +1047,22 @@ pub fn apply_route(
             }
         }
         let script = MissionScript::parse(&decompile_in_process(&original)?.c_source)?;
-        let template = script
-            .raw_slots()
-            .last()
-            .cloned()
-            .ok_or_else(|| format!("{} defines no unit slots to use as a template", path.display()))?;
+        let template = script.raw_slots().last().cloned().ok_or_else(|| {
+            format!(
+                "{} defines no unit slots to use as a template",
+                path.display()
+            )
+        })?;
         let rewritten = script.with_config(config, &template)?;
-        planned.push((path, compile_mission_in_process(&rewritten)?));
+        planned.push((
+            path,
+            compile_mission_in_process(&rewritten)?,
+            PlanKind::Script,
+            Some(stage.index),
+        ));
     }
 
-    let mut written = Vec::with_capacity(planned.len());
-    for (path, bytes) in &planned {
-        write_with_backup(path, bytes, &mut written)?;
-    }
-
-    Ok(AppliedRoute {
-        written,
-        stage_package_hashes: document.stage_package_hashes(),
-    })
+    Ok(planned)
 }
 
 fn resolve_course_index(

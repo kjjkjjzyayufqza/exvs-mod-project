@@ -14,8 +14,10 @@ import { cn } from "@/lib/utils";
 import { courseFieldIssues, issuesForSection } from "@/services/triadRoute/issueLocation";
 import {
   categoryLetter,
+  NO_CAST,
   UNLOCK_TYPE,
   type CourseDraft,
+  type StageDraft,
   type ValidationIssue,
 } from "@/services/triadRoute/types";
 import { Field, fieldRing } from "./fields";
@@ -33,6 +35,8 @@ const CATEGORIES = [1, 2, 3, 4, 5, 6];
 
 type CourseEditorPanelProps = {
   course: CourseDraft;
+  /** Every stage of this course, so the select-screen suits can be placed. */
+  stages: StageDraft[];
   units: UnitNameMap;
   issues: ValidationIssue[];
   focus: IssueFocusRequest | null;
@@ -40,8 +44,29 @@ type CourseEditorPanelProps = {
   onChange: (course: CourseDraft) => void;
 };
 
+/** Stages whose briefing or script uses one suit, by 1-based stage index. */
+function stagesUsingUnit(stages: StageDraft[], unitId: number): number[] {
+  if (unitId === 0) return [];
+  return stages
+    .filter((stage) => {
+      const inCast = stage.briefing.units.some((unit) => unit.unitId === unitId);
+      const inSlots = stage.briefing.slots.some(
+        (entry) => entry.castIndex !== NO_CAST && entry.unitId === unitId,
+      );
+      const inScript = (stage.script?.slots ?? []).some((slot) => slot.unitId === unitId);
+      return inCast || inSlots || inScript;
+    })
+    .map((stage) => stage.index);
+}
+
 /**
  * The course row a modder actually cares about.
+ *
+ * Everything here is course-wide: one row covers all three stages, so this
+ * panel deliberately does not follow the stage picker below it. The four
+ * select-screen suits are the clearest trap — they are the montage the course
+ * list shows, not the stage's opponents — so each one says which stages
+ * actually field it.
  *
  * Identity is id + variant, not id alone: the shipped table holds several
  * rows per course id. Unlock type 0 is explained on the field, because
@@ -49,6 +74,7 @@ type CourseEditorPanelProps = {
  */
 export function CourseEditorPanel({
   course,
+  stages,
   units,
   issues,
   focus,
@@ -61,6 +87,10 @@ export function CourseEditorPanel({
 
   const sectionIssues = useMemo(() => issuesForSection(issues, "course"), [issues]);
   const byField = useMemo(() => courseFieldIssues(issues), [issues]);
+  const stagesByDisplayUnit = useMemo(
+    () => course.displayUnitIds.map((unitId) => stagesUsingUnit(stages, unitId)),
+    [course.displayUnitIds, stages],
+  );
 
   return (
     <section
@@ -73,8 +103,8 @@ export function CourseEditorPanel({
     >
       <SectionHeader
         icon={ScrollText}
-        title={t("course.title")}
-        description={t("course.description")}
+        title={t("course.title", { name: course.name || "—" })}
+        description={t("course.description", { count: stages.length })}
         issues={sectionIssues}
       />
 
@@ -247,23 +277,36 @@ export function CourseEditorPanel({
           {t("course.initiallyOpen")}
         </label>
 
-        <Field label={t("course.displayUnits")} issues={byField.displayUnitIds} className="md:col-span-2">
+        <Field
+          label={t("course.displayUnits")}
+          issues={byField.displayUnitIds}
+          hint={t("course.displayUnitsHint")}
+          className="md:col-span-2"
+        >
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {course.displayUnitIds.map((unitId, position) => (
-              <UnitSelect
-                key={position}
-                value={unitId}
-                units={units}
-                disabled={disabled}
-                placeholder={t("course.displayUnits")}
-                onChange={(next) => {
-                  const displayUnitIds: [number, number, number, number] = [
-                    ...course.displayUnitIds,
-                  ];
-                  displayUnitIds[position] = next;
-                  onChange({ ...course, displayUnitIds });
-                }}
-              />
+              <div key={position} className="flex min-w-0 flex-col gap-1">
+                <UnitSelect
+                  value={unitId}
+                  units={units}
+                  disabled={disabled}
+                  placeholder={t("course.displayUnits")}
+                  onChange={(next) => {
+                    const displayUnitIds: [number, number, number, number] = [
+                      ...course.displayUnitIds,
+                    ];
+                    displayUnitIds[position] = next;
+                    onChange({ ...course, displayUnitIds });
+                  }}
+                />
+                <p className="truncate text-[10px] text-muted-foreground">
+                  {stagesByDisplayUnit[position].length > 0
+                    ? t("course.displayUnitStages", {
+                        stages: stagesByDisplayUnit[position].join(", "),
+                      })
+                    : t("course.displayUnitNoStage")}
+                </p>
+              </div>
             ))}
           </div>
         </Field>

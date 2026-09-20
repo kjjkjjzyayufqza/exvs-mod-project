@@ -57,7 +57,11 @@ impl ScriptProfile {
 
     /// Profile implied by a script filename's extension, if it names one.
     pub fn from_extension(extension: &str) -> Option<Self> {
-        match extension.trim_start_matches('.').to_ascii_lowercase().as_str() {
+        match extension
+            .trim_start_matches('.')
+            .to_ascii_lowercase()
+            .as_str()
+        {
             MISSION_EXTENSION => Some(Self::Mission),
             "bscex" | "cscex" | "dscex" => Some(Self::Unit),
             _ => None,

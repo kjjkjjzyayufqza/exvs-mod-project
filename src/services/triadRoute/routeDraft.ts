@@ -9,15 +9,21 @@
  */
 
 import {
+  MAX_ENEMY_SIDE_DRAWN,
   MAX_ENEMY_SIDE_UNITS,
+  MAX_PLAYER_SIDE_DRAWN,
   MAX_PLAYER_SIDE_UNITS,
   MAX_STAGES_PER_COURSE,
   LOSE_FLAG,
+  NO_CAST,
   SCENE_CLASS,
   TRIAD_ROUTE_SCHEMA,
   WIN_FLAG,
   type BriefingDraft,
+  type BsfoBriefingUnit,
+  type BsfoSlotEntry,
   type CourseRow,
+  type CreatedScene,
   type DormantScene,
   type IssueSeverity,
   type ScriptSlot,
@@ -74,6 +80,100 @@ export interface SquadLineup {
   slots: ScriptSlot[];
   script: StageScriptConfig;
   briefing: BriefingDraft;
+}
+
+/** The BSFO half of a briefing: the cast, the per-slot list and who is drawn. */
+export type BriefingCast = Pick<
+  BriefingDraft,
+  "units" | "slots" | "playerCast" | "bossCast" | "enemyCast"
+>;
+
+/** Cast entries are per side: the same suit on both sides needs two portraits. */
+function castKey(slot: ScriptSlot): string {
+  return `${slot.team === 0 ? "player" : "enemy"}:${slot.unitId}`;
+}
+
+/**
+ * Derive a briefing's cast and slot list from what the script spawns.
+ *
+ * The screen draws cast entries, not slots, so this is what keeps the two in
+ * step: one cast entry per distinct suit per side, one positional record per
+ * battle slot pointing at its entry, and a drawn set that fills the eight
+ * portraits the layout has. Pilot ids and boss choices are carried over from
+ * `previous` by suit, because the script has neither.
+ */
+export function buildBriefingCast(
+  scriptSlots: readonly ScriptSlot[],
+  previous?: BriefingDraft,
+): BriefingCast {
+  const units: BsfoBriefingUnit[] = [];
+  const castByKey = new Map<string, number>();
+  const pilotByUnit = new Map<number, number>();
+  for (const unit of previous?.units ?? []) {
+    if (unit.pilotId !== 0 && !pilotByUnit.has(unit.unitId)) {
+      pilotByUnit.set(unit.unitId, unit.pilotId);
+    }
+  }
+
+  const ordered = [...scriptSlots].sort((left, right) => left.slot - right.slot);
+  for (const slot of ordered) {
+    const key = castKey(slot);
+    if (castByKey.has(key)) continue;
+    castByKey.set(key, units.length);
+    units.push({
+      word0: 0,
+      unitId: slot.unitId,
+      pilotId: pilotByUnit.get(slot.unitId) ?? 0,
+      word3: 0,
+    });
+  }
+  // Shipped briefings carry a zero-filled tail (most hold 33 entries for a
+  // handful of suits), so a rebuilt cast keeps the file's original length
+  // rather than shortening a section the game reads by its header count.
+  while (units.length < (previous?.units.length ?? 0)) {
+    units.push({ word0: 0, unitId: 0, pilotId: 0, word3: 0 });
+  }
+
+  const highestSlot = ordered.length > 0 ? ordered[ordered.length - 1].slot : -1;
+  const slots: BsfoSlotEntry[] = Array.from({ length: highestSlot + 1 }, () => ({
+    unitId: 0,
+    flags: 0,
+    castIndex: NO_CAST,
+    word3: 0,
+  }));
+  for (const slot of ordered) {
+    if (slot.slot < 0) continue;
+    slots[slot.slot] = {
+      unitId: slot.unitId,
+      flags: 1,
+      castIndex: castByKey.get(castKey(slot)) ?? NO_CAST,
+      word3: 0,
+    };
+  }
+
+  const castOf = (side: "player" | "enemy") =>
+    [...castByKey.entries()]
+      .filter(([key]) => key.startsWith(`${side}:`))
+      .map(([, index]) => index)
+      .sort((left, right) => left - right);
+
+  const enemyCastEntries = castOf("enemy");
+  const keptBosses = (previous?.bossCast ?? [])
+    .map((index) => previous?.units[index]?.unitId)
+    .filter((unitId): unitId is number => unitId !== undefined)
+    .map((unitId) => castByKey.get(`enemy:${unitId}`))
+    .filter((index): index is number => index !== undefined);
+  const bossCast = [...new Set(keptBosses)].slice(0, MAX_ENEMY_SIDE_DRAWN);
+
+  return {
+    units,
+    slots,
+    playerCast: castOf("player").slice(0, MAX_PLAYER_SIDE_DRAWN),
+    bossCast,
+    enemyCast: enemyCastEntries
+      .filter((index) => !bossCast.includes(index))
+      .slice(0, MAX_ENEMY_SIDE_DRAWN),
+  };
 }
 
 /**
@@ -198,19 +298,7 @@ export function buildSquadLineup(options: SquadLineupOptions): SquadLineup {
     mapHash,
     timeLimitSeconds,
     hasTarget: destroyTargets,
-    bossSlots: [],
-    units: slots.map((slot) => ({
-      word0: 0,
-      unitId: slot.unitId,
-      pilotId: 0,
-      word3: 0,
-    })),
-    slots: slots.map((slot) => ({
-      unitId: slot.unitId,
-      flags: 1,
-      slot: slot.slot,
-      order: slot.displayOrder,
-    })),
+    ...buildBriefingCast(slots),
   };
 
   return { slots, script, briefing };
@@ -296,6 +384,80 @@ export function createDormantRouteDraft(options: DormantRouteOptions): TriadRout
       goldScore: options.goldScore ?? template.goldScore,
       starRating: options.starRating ?? template.starRating,
       displayUnitIds: options.displayUnitIds ?? [...template.displayUnitIds],
+    },
+    stages,
+    ribbons: [],
+  };
+}
+
+export interface ClonedRouteOptions {
+  /** Course whose settings and stage order the copy starts from. */
+  source: CourseRow;
+  /** Scenes already materialised on disk, in stage order. */
+  created: CreatedScene[];
+  /** Briefings read back from the newly created files, in the same order. */
+  briefings: BriefingDraft[];
+  courseId: number;
+  name: string;
+  category: number;
+  numberInCategory: number;
+  firstSceneNumber: number;
+  initiallyOpen?: boolean;
+  starRating?: number;
+  goldScore?: number;
+}
+
+/**
+ * Turn freshly created scenes into a route project.
+ *
+ * This is the new-scene path: the files exist because the caller cloned them,
+ * but no table mentions them yet, so the document is `new-scenes` and the
+ * writer is allowed to add the sceneidtable rows.
+ */
+export function createClonedRouteDraft(options: ClonedRouteOptions): TriadRouteDocument {
+  const { source, created, briefings } = options;
+  if (created.length < 1) {
+    throw new Error("a route needs at least one stage");
+  }
+  if (created.length > MAX_STAGES_PER_COURSE) {
+    throw new Error(
+      `a course plays at most ${MAX_STAGES_PER_COURSE} stages, got ${created.length}`,
+    );
+  }
+  if (briefings.length !== created.length) {
+    throw new Error(
+      `expected one briefing per stage: ${created.length} stages, ${briefings.length} briefings`,
+    );
+  }
+
+  const stages: StageDraft[] = created.map((scene, index) => ({
+    index: index + 1,
+    sceneKey: scene.sceneKey,
+    sceneName: scene.sceneName,
+    sceneNo: options.firstSceneNumber + index,
+    scriptPackageHash: scene.packageHash,
+    briefing: briefings[index],
+    script: null,
+  }));
+
+  return {
+    schema: TRIAD_ROUTE_SCHEMA,
+    mode: "new-scenes",
+    course: {
+      rowId: null,
+      templateRowId: source.rowId,
+      courseId: options.courseId,
+      name: options.name,
+      category: options.category,
+      numberInCategory: options.numberInCategory,
+      initiallyOpen: options.initiallyOpen ?? true,
+      unlockType: 0,
+      unlockArg0: 0,
+      unlockArg1: 0,
+      variant: 0,
+      goldScore: options.goldScore ?? source.goldScore,
+      starRating: options.starRating ?? source.starRating,
+      displayUnitIds: [...source.displayUnitIds],
     },
     stages,
     ribbons: [],

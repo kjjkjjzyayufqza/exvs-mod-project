@@ -1117,10 +1117,7 @@ fn copies_efxbn_in_place_with_new_filename_and_hash() {
         result.copied_files
     );
     assert!(
-        result
-            .skipped
-            .iter()
-            .all(|msg| !msg.contains("0x2C3BAA73")),
+        result.skipped.iter().all(|msg| !msg.contains("0x2C3BAA73")),
         "remapped clone must not skip the source hash: {:?}",
         result.skipped
     );

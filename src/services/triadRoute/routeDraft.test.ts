@@ -11,6 +11,7 @@ import {
 } from "./routeDraft";
 import {
   MAX_ENEMY_SIDE_UNITS,
+  NO_CAST,
   SCENE_CLASS,
   TRIAD_ROUTE_SCHEMA,
   WIN_FLAG,
@@ -140,11 +141,50 @@ describe("buildSquadLineup", () => {
 
     expect(lineup.briefing.mapHash).toBe(MAP_HILLS);
     expect(lineup.briefing.timeLimitSeconds).toBe(300);
-    expect(lineup.briefing.slots.map((entry) => entry.slot)).toEqual(
-      lineup.slots.map((slot) => slot.slot),
+    // The briefing's slot list is positional: entry i describes battle slot i,
+    // so the unused partner slot 1 is a placeholder rather than a gap.
+    const highestSlot = Math.max(...lineup.slots.map((slot) => slot.slot));
+    expect(lineup.briefing.slots).toHaveLength(highestSlot + 1);
+    lineup.slots.forEach((slot) => {
+      expect(lineup.briefing.slots[slot.slot].unitId).toBe(slot.unitId);
+    });
+    expect(lineup.briefing.slots[1].castIndex).toBe(NO_CAST);
+  });
+
+  it("gives the ten identical enemies one shared cast entry", () => {
+    const lineup = buildSquadLineup({
+      playerUnitId: PLAYER_SUIT,
+      enemyUnitId: RX78,
+      enemyCount: 10,
+    });
+
+    // The loading screen draws a cast, not a roster: ten copies of one suit
+    // are one portrait, and the player's own RX-78 is a separate entry
+    // because a cast entry belongs to one side.
+    expect(lineup.briefing.units.map((unit) => unit.unitId)).toEqual([PLAYER_SUIT, RX78]);
+    expect(lineup.briefing.playerCast).toEqual([0]);
+    expect(lineup.briefing.enemyCast).toEqual([1]);
+    const enemyCast = lineup.slots
+      .filter((slot) => slot.team === 1)
+      .map((slot) => lineup.briefing.slots[slot.slot].castIndex);
+    expect(new Set(enemyCast)).toEqual(new Set([1]));
+  });
+
+  it("draws the CPU partner on the player side", () => {
+    const lineup = buildSquadLineup({
+      playerUnitId: PLAYER_SUIT,
+      partnerUnitId: RX78,
+      enemyUnitId: RX78,
+      enemyCount: 2,
+    });
+
+    expect(lineup.briefing.playerCast).toHaveLength(2);
+    const drawn = lineup.briefing.playerCast.map(
+      (index) => lineup.briefing.units[index].unitId,
     );
-    expect(lineup.briefing.units).toHaveLength(11);
-    expect(lineup.briefing.units.filter((unit) => unit.unitId === RX78)).toHaveLength(10);
+    expect(drawn).toEqual([PLAYER_SUIT, RX78]);
+    // The same suit on the other side keeps its own portrait.
+    expect(lineup.briefing.enemyCast).toEqual([2]);
   });
 
   it("pairs a wipe-out win condition with the standard briefing class", () => {
@@ -155,7 +195,7 @@ describe("buildSquadLineup", () => {
     });
     expect(lineup.script.winFlags & WIN_FLAG.wipeOut).toBeTruthy();
     expect(lineup.briefing.sceneClass).toBe(SCENE_CLASS.standard);
-    expect(lineup.briefing.bossSlots).toEqual([]);
+    expect(lineup.briefing.bossCast).toEqual([]);
   });
 
   it("switches to a boss briefing when the fight is framed as a target hunt", () => {
@@ -187,7 +227,9 @@ describe("createDormantRouteDraft", () => {
         mapHash: MAP_HILLS,
         timeLimitSeconds: 180,
         hasTarget: false,
-        bossSlots: [],
+        playerCast: [],
+        bossCast: [],
+        enemyCast: [],
         units: [],
         slots: [],
       })),
@@ -249,7 +291,9 @@ describe("setStageLineup", () => {
         mapHash: MAP_HILLS,
         timeLimitSeconds: 180,
         hasTarget: false,
-        bossSlots: [],
+        playerCast: [],
+        bossCast: [],
+        enemyCast: [],
         units: [],
         slots: [],
       })),
@@ -265,7 +309,8 @@ describe("setStageLineup", () => {
 
     expect(next).not.toBe(draft);
     expect(next.stages[0].script?.slots).toHaveLength(11);
-    expect(next.stages[0].briefing.slots).toHaveLength(11);
+    // Positional: slots 0..11, with slot 1 reserved for a CPU partner.
+    expect(next.stages[0].briefing.slots).toHaveLength(12);
     expect(next.stages[1].script).toBeNull();
     expect(draft.stages[0].script).toBeNull();
   });
@@ -285,7 +330,9 @@ describe("setStageLineup", () => {
           mapHash: MAP_HILLS,
           timeLimitSeconds: 180,
           hasTarget: false,
-          bossSlots: [],
+          playerCast: [],
+          bossCast: [],
+          enemyCast: [],
           units: [],
           slots: [],
         },

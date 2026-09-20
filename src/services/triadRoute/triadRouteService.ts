@@ -10,8 +10,11 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AppliedRoute,
   BriefingDraft,
+  CreatedScene,
+  NewSceneRequest,
   StageScriptConfig,
   GeneratedSceneIdentity,
+  RoutePlan,
   RouteValidationContext,
   RouteValidationResult,
   TriadRouteDocument,
@@ -119,5 +122,53 @@ export async function generateTriadSceneIdentity(params: {
     stageNumbers: params.stageNumbers,
     existingSceneKeys: params.existingSceneKeys,
     existingPackageHashes: params.existingPackageHashes,
+  });
+}
+
+/**
+ * Create the files a set of brand-new scenes needs, by cloning donors.
+ *
+ * The whole course is created in one call so the second stage cannot be given
+ * an id the first one just claimed. Nothing is written for a scene whose name
+ * hashes onto an id already in use; the call fails instead.
+ */
+export async function createTriadScenes(
+  requests: NewSceneRequest[],
+  existingSceneKeys: number[],
+  existingPackageHashes: number[],
+): Promise<CreatedScene[]> {
+  return await invoke<CreatedScene[]>("create_triad_scenes", {
+    requestsJson: requests,
+    existingSceneKeys,
+    existingPackageHashes,
+  });
+}
+
+/** Hash scene names the modder typed, with the same clash check. */
+export async function hashTriadSceneNames(
+  names: string[],
+  existingSceneKeys: number[],
+  existingPackageHashes: number[],
+): Promise<GeneratedSceneIdentity[]> {
+  return await invoke<GeneratedSceneIdentity[]>("hash_triad_scene_names", {
+    names,
+    existingSceneKeys,
+    existingPackageHashes,
+  });
+}
+
+/**
+ * Describe what saving would write, without writing anything.
+ *
+ * Runs the same planner the save does, so the preview cannot describe a
+ * different set of files than the one that lands on disk.
+ */
+export async function previewTriadRoute(
+  document: TriadRouteDocument,
+  paths: TriadWorkspacePaths,
+): Promise<RoutePlan> {
+  return await invoke<RoutePlan>("preview_triad_route", {
+    documentJson: document,
+    pathsJson: paths,
   });
 }

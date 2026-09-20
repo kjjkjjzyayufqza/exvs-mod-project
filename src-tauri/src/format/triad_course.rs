@@ -222,7 +222,11 @@ fn parse_extra_key(key: &str) -> Result<u32, String> {
     u32::from_str_radix(digits, 16).map_err(|e| format!("bad extra column key {key}: {e}"))
 }
 
-fn collect_extra(table: &TriadTable, index: usize, named: &[u32]) -> Result<BTreeMap<String, i32>, String> {
+fn collect_extra(
+    table: &TriadTable,
+    index: usize,
+    named: &[u32],
+) -> Result<BTreeMap<String, i32>, String> {
     let mut extra = BTreeMap::new();
     for hash in table.column_hashes() {
         if named.contains(&hash) {
@@ -528,7 +532,10 @@ impl SceneTable {
         if identify_table(&table.column_hashes())? != TriadTableKind::Scene {
             return Err("file is not the triad scene list".to_string());
         }
-        require_columns(&table, &[(c::RECORD_ID, KIND_U32), (c::SCENE_SELF_KEY, KIND_I32)])?;
+        require_columns(
+            &table,
+            &[(c::RECORD_ID, KIND_U32), (c::SCENE_SELF_KEY, KIND_I32)],
+        )?;
         Ok(Self { table })
     }
 

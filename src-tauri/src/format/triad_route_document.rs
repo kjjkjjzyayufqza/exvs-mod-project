@@ -70,6 +70,11 @@ pub struct CourseDraft {
 }
 
 /// The briefing (BSFO) fields a modder edits for one stage.
+///
+/// `player_cast` / `boss_cast` / `enemy_cast` are indices into `units`, the
+/// cast list, and are what the loading screen actually draws. `slots` is the
+/// per-battle-slot list, indexed by slot number — far longer than the screen,
+/// because it covers every wave.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BriefingDraft {
@@ -77,9 +82,19 @@ pub struct BriefingDraft {
     pub map_hash: u32,
     pub time_limit_seconds: i32,
     pub has_target: bool,
-    pub boss_slots: Vec<i32>,
+    /// Up to two cast entries drawn on the player side.
+    pub player_cast: Vec<i32>,
+    /// Up to three cast entries framed as bosses.
+    pub boss_cast: Vec<i32>,
+    /// Up to three further cast entries drawn on the enemy side.
+    pub enemy_cast: Vec<i32>,
     pub units: Vec<BsfoBriefingUnit>,
     pub slots: Vec<BsfoSlotEntry>,
+}
+
+/// Drop the `-1` padding a sec0 display run carries.
+fn drawn(positions: Vec<i32>) -> Vec<i32> {
+    positions.into_iter().filter(|entry| *entry >= 0).collect()
 }
 
 impl BriefingDraft {
@@ -90,11 +105,9 @@ impl BriefingDraft {
             map_hash: bsfo.map_hash(),
             time_limit_seconds: bsfo.time_limit_seconds(),
             has_target: bsfo.has_target(),
-            boss_slots: bsfo
-                .boss_slots()
-                .into_iter()
-                .filter(|slot| *slot >= 0)
-                .collect(),
+            player_cast: drawn(bsfo.player_cast()),
+            boss_cast: drawn(bsfo.boss_cast()),
+            enemy_cast: drawn(bsfo.enemy_cast()),
             units: bsfo.units.clone(),
             slots: bsfo.slots.clone(),
         }
@@ -102,15 +115,28 @@ impl BriefingDraft {
 
     /// Write the editable fields back onto a parsed BSFO, leaving every
     /// undecoded word of the original file in place.
+    ///
+    /// The cast goes in before anything that points into it, so replacing a
+    /// briefing wholesale never trips the reference checks on the way through.
     pub fn apply_to(&self, bsfo: &mut Bsfo) -> Result<(), String> {
         bsfo.set_scene_class(self.scene_class)?;
         bsfo.set_map_hash(self.map_hash);
         bsfo.set_time_limit_seconds(self.time_limit_seconds)?;
         bsfo.set_has_target(self.has_target);
-        bsfo.set_boss_slots(&self.boss_slots)?;
         bsfo.set_units(self.units.clone())?;
         bsfo.set_slots(self.slots.clone())?;
+        bsfo.set_player_cast(&self.player_cast)?;
+        bsfo.set_boss_cast(&self.boss_cast)?;
+        bsfo.set_enemy_cast(&self.enemy_cast)?;
         Ok(())
+    }
+
+    /// The suit drawn at one cast index, for messages and previews.
+    pub fn cast_unit_id(&self, cast_index: i32) -> Option<i32> {
+        usize::try_from(cast_index)
+            .ok()
+            .and_then(|index| self.units.get(index))
+            .map(|unit| unit.unit_id)
     }
 }
 

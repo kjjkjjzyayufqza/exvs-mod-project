@@ -2,14 +2,17 @@
 
 use std::path::Path;
 
-use app_lib::exvs2_json_cli::{edit_bytes, inspect_bytes, EditBytesOptions, InspectOptions, InspectType};
+use app_lib::exvs2_json_cli::{
+    edit_bytes, inspect_bytes, EditBytesOptions, InspectOptions, InspectType,
+};
 use app_lib::format::chrsysparam::{build_chrsysparam, parse_chrsysparam};
 use app_lib::format::chrsysparam_document::{from_document, to_document};
 use app_lib::format::chrsysparam_msc_links::resolve_msc_links;
 use app_lib::format::chrsysparam_validate::{validate_chrsysparam, ChrSysIssueLevel};
 use serde_json::{json, Value};
 
-const DEGENERATE_SAMPLE: &str = "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\0x08248A8D\\chrsysparam.csyspm";
+const DEGENERATE_SAMPLE: &str =
+    "E:\\XB\\\u{89e3}\u{5305}\\com\\file\\0x08248A8D\\chrsysparam.csyspm";
 const FA_UNICORN_PARAM: &str = "E:\\XB\\mod\\041cpm\\015gndmuc_008faunig_001\\chrsysparam.csyspm";
 const FA_UNICORN_MSC: &str = "E:\\XB\\mod\\040msc\\015gndmuc_008faunig_001";
 
@@ -36,9 +39,18 @@ fn full_armor_unicorn_round_trips_byte_exact_through_binary_and_document() {
     assert_eq!(build_chrsysparam(&parsed).expect("build"), source);
 
     let document = to_document(&parsed);
-    assert_eq!(document["actionTable"]["rows"][1]["fields"]["actionHash"], json!("0xDFD66752"));
-    assert_eq!(document["actionTable"]["rows"][15]["fields"]["formIndex"], json!(1));
-    assert_eq!(document["actionTable"]["rows"][1]["fields"]["transitionRangeFirst"], json!(-1));
+    assert_eq!(
+        document["actionTable"]["rows"][1]["fields"]["actionHash"],
+        json!("0xDFD66752")
+    );
+    assert_eq!(
+        document["actionTable"]["rows"][15]["fields"]["formIndex"],
+        json!(1)
+    );
+    assert_eq!(
+        document["actionTable"]["rows"][1]["fields"]["transitionRangeFirst"],
+        json!(-1)
+    );
     let text = serde_json::to_string_pretty(&document).expect("serialize");
     let reparsed: Value = serde_json::from_str(&text).expect("deserialize");
     let rebuilt = build_chrsysparam(&from_document(&reparsed).expect("import")).expect("build");
@@ -118,11 +130,17 @@ fn cli_edit_clones_edits_and_deletes_rows() {
         options(),
     )
     .expect("append");
-    assert_eq!(added.report["operationsApplied"][0]["result"]["newRow"], json!(96));
+    assert_eq!(
+        added.report["operationsApplied"][0]["result"]["newRow"],
+        json!(96)
+    );
     let parsed = parse_chrsysparam(&added.bytes).expect("reparse");
     assert_eq!(parsed.action_table.rows.len(), 97);
     assert_eq!(parsed.action_table.rows[96][0x2E], 0x1357_0001);
-    assert_eq!(parsed.action_table.rows[96][0x02], parsed.action_table.rows[13][0x02]);
+    assert_eq!(
+        parsed.action_table.rows[96][0x02],
+        parsed.action_table.rows[13][0x02]
+    );
 
     let restored = edit_bytes(
         FA_UNICORN_PARAM,
@@ -141,5 +159,8 @@ fn cli_edit_clones_edits_and_deletes_rows() {
     )
     .err()
     .expect("row 8 is the derived target of row 7");
-    assert!(refused.contains("derived target of row 7"), "unexpected: {refused}");
+    assert!(
+        refused.contains("derived target of row 7"),
+        "unexpected: {refused}"
+    );
 }

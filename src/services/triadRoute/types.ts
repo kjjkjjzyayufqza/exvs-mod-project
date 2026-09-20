@@ -218,6 +218,7 @@ export interface TriadWorkspacePaths {
   scriptDirs: string[];
 }
 
+/** One entry of the briefing's cast: a suit + pilot the screen can draw. */
 export interface BsfoBriefingUnit {
   word0: number;
   unitId: number;
@@ -225,19 +226,43 @@ export interface BsfoBriefingUnit {
   word3: number;
 }
 
+/**
+ * What the briefing knows about one battle slot.
+ *
+ * The entry's **position** in `BriefingDraft.slots` is the slot number, the
+ * same one the mission script's `sys_0(0x400, <slot>, ...)` defines.
+ */
 export interface BsfoSlotEntry {
   unitId: number;
   flags: number;
-  slot: number;
-  order: number;
+  /** Index into `BriefingDraft.units`; `NO_CAST` for an undefined slot. */
+  castIndex: number;
+  /** Undecoded (0..3 in shipped files); carried through verbatim. */
+  word3: number;
 }
 
+/** Empty display position, or a slot the script does not define. */
+export const NO_CAST = -1;
+
+/** Portraits the loading screen holds, which is the BSFO sec0 layout. */
+export const MAX_PLAYER_SIDE_DRAWN = 2;
+export const MAX_ENEMY_SIDE_DRAWN = 3;
+
+/**
+ * The loading screen for one stage.
+ *
+ * `playerCast` / `bossCast` / `enemyCast` index into `units` and are the only
+ * thing the screen draws. `slots` is the whole battle roster including every
+ * later wave, so it is normally much longer than the six enemy portraits.
+ */
 export interface BriefingDraft {
   sceneClass: number;
   mapHash: number;
   timeLimitSeconds: number;
   hasTarget: boolean;
-  bossSlots: number[];
+  playerCast: number[];
+  bossCast: number[];
+  enemyCast: number[];
   units: BsfoBriefingUnit[];
   slots: BsfoSlotEntry[];
 }
@@ -354,6 +379,33 @@ export interface RouteValidationResult {
   notChecked: ReferenceList[];
 }
 
+/** What part of the route a planned write touches. */
+export type PlanKind =
+  | "course-table"
+  | "scene-table"
+  | "scene-id-table"
+  | "briefing"
+  | "script";
+
+/** One file saving would replace, described before it is written. */
+export interface PlannedWrite {
+  path: string;
+  kind: PlanKind;
+  /** 1-based stage this write belongs to, for the per-stage entries. */
+  stageIndex: number | null;
+  byteLen: number;
+  /** False when the write creates the file rather than replacing it. */
+  replacesExisting: boolean;
+  /** True when the bytes match what is already on disk. */
+  unchanged: boolean;
+}
+
+/** Everything a save would do, computed without touching the workspace. */
+export interface RoutePlan {
+  writes: PlannedWrite[];
+  stagePackageHashes: number[];
+}
+
 export interface WrittenFile {
   path: string;
   backupPath: string;
@@ -370,6 +422,33 @@ export interface GeneratedSceneIdentity {
   packageHash: number;
   sceneKeyCollision: string | null;
   packageHashCollision: string | null;
+}
+
+/**
+ * One scene to materialise by cloning a donor.
+ *
+ * Only the name travels: the backend recomputes both hashes from it, so a
+ * folder can never end up carrying a `HashName` its own name does not produce.
+ */
+export interface NewSceneRequest {
+  dplCacheDir: string;
+  workspaceRoot: string;
+  /** Route prefix the mission scripts unpack under, e.g. `051mission`. */
+  scriptPrefix: string;
+  outmissionDir: string;
+  donorSceneKey: number;
+  donorPackageHash: number;
+  sceneName: string;
+}
+
+/** What one created scene now owns on disk. */
+export interface CreatedScene {
+  sceneName: string;
+  sceneKey: number;
+  packageHash: number;
+  scriptFolder: string;
+  scriptFile: string;
+  briefingFile: string;
 }
 
 /** Render a 32-bit id the way the research notes and the game data write it. */

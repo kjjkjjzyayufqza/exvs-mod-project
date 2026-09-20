@@ -7,7 +7,9 @@ use serde_json::{json, Value};
 use super::edit::op_name;
 use super::types::InspectOptions;
 use super::util::{format_hex_u32, insert_object_field, insert_roundtrip};
-use crate::format::chrsysparam::{build_chrsysparam, parse_chrsysparam, ChrSysParamFile, ChrSysParamTable};
+use crate::format::chrsysparam::{
+    build_chrsysparam, parse_chrsysparam, ChrSysParamFile, ChrSysParamTable,
+};
 use crate::format::chrsysparam_document::{from_document, parse_cell_value, to_document};
 use crate::format::chrsysparam_msc_links::{resolve_msc_links, ChrSysMscLinks};
 use crate::format::chrsysparam_schema::{field_specs, route_for_row, ChrSysTableKind};
@@ -121,7 +123,9 @@ fn table_kind(operation: &Value) -> Result<ChrSysTableKind, String> {
     match operation.get("table").and_then(Value::as_str) {
         Some("action") => Ok(ChrSysTableKind::Action),
         Some("transition") => Ok(ChrSysTableKind::Transition),
-        other => Err(format!("chrsysparam operation needs table 'action' or 'transition', got {other:?}")),
+        other => Err(format!(
+            "chrsysparam operation needs table 'action' or 'transition', got {other:?}"
+        )),
     }
 }
 
@@ -136,9 +140,13 @@ fn row_index(operation: &Value, key: &str, table: &ChrSysParamTable) -> Result<u
     let row = operation
         .get(key)
         .and_then(Value::as_u64)
-        .ok_or_else(|| format!("chrsysparam operation needs non-negative integer '{key}'"))? as usize;
+        .ok_or_else(|| format!("chrsysparam operation needs non-negative integer '{key}'"))?
+        as usize;
     if row >= table.rows.len() {
-        return Err(format!("{key} {row} is out of range (table has {} rows)", table.rows.len()));
+        return Err(format!(
+            "{key} {row} is out of range (table has {} rows)",
+            table.rows.len()
+        ));
     }
     Ok(row)
 }
@@ -153,13 +161,22 @@ fn field_index(kind: ChrSysTableKind, columns: u32, field: &Value) -> Result<usi
         other => parse_cell_value(other, "field")?,
     };
     if index >= columns {
-        return Err(format!("field 0x{index:X} is outside the {columns} table columns"));
+        return Err(format!(
+            "field 0x{index:X} is outside the {columns} table columns"
+        ));
     }
     Ok(index as usize)
 }
 
-fn apply_overrides(kind: ChrSysTableKind, columns: u32, row: &mut [u32], overrides: Option<&Value>) -> Result<(), String> {
-    let Some(overrides) = overrides else { return Ok(()) };
+fn apply_overrides(
+    kind: ChrSysTableKind,
+    columns: u32,
+    row: &mut [u32],
+    overrides: Option<&Value>,
+) -> Result<(), String> {
+    let Some(overrides) = overrides else {
+        return Ok(());
+    };
     let overrides = overrides
         .as_object()
         .ok_or_else(|| "'fields' must be an object of field key -> value".to_string())?;
@@ -170,7 +187,11 @@ fn apply_overrides(kind: ChrSysTableKind, columns: u32, row: &mut [u32], overrid
     Ok(())
 }
 
-fn delete_row(file: &mut ChrSysParamFile, kind: ChrSysTableKind, row: usize) -> Result<Value, String> {
+fn delete_row(
+    file: &mut ChrSysParamFile,
+    kind: ChrSysTableKind,
+    row: usize,
+) -> Result<Value, String> {
     if row == 0 {
         return Err("row 0 is reserved and cannot be deleted".to_string());
     }
@@ -179,7 +200,9 @@ fn delete_row(file: &mut ChrSysParamFile, kind: ChrSysTableKind, row: usize) -> 
             let hash = cell(&file.action_table.rows[row], ACTION_HASH);
             if hash != 0 {
                 if let Some(source) = file.action_table.rows.iter().position(|candidate| {
-                    DERIVED_FIELDS.clone().any(|field| cell(candidate, field) == hash)
+                    DERIVED_FIELDS
+                        .clone()
+                        .any(|field| cell(candidate, field) == hash)
                 }) {
                     return Err(format!(
                         "action row {row} (0x{hash:08X}) is a derived target of row {source}; clear that link first"
@@ -213,7 +236,10 @@ fn delete_row(file: &mut ChrSysParamFile, kind: ChrSysTableKind, row: usize) -> 
     }
 }
 
-pub(super) fn edit_chrsysparam(bytes: &[u8], operations: &[Value]) -> Result<(Vec<u8>, Vec<Value>), String> {
+pub(super) fn edit_chrsysparam(
+    bytes: &[u8],
+    operations: &[Value],
+) -> Result<(Vec<u8>, Vec<Value>), String> {
     let mut file = parse_chrsysparam(bytes)?;
     let mut applied = Vec::with_capacity(operations.len());
     for operation in operations {

@@ -107,7 +107,10 @@ fn the_mission_body_is_the_unit_body_plus_one_tail_opcode() {
     let at = (0..unit_body.len())
         .find(|&i| mission_body[i] != unit_body[i])
         .expect("the bodies must diverge at the inserted opcode");
-    assert_eq!(mission_body[at], 0x01, "the inserted byte is the tail opcode");
+    assert_eq!(
+        mission_body[at], 0x01,
+        "the inserted byte is the tail opcode"
+    );
 
     let mut without_tail = mission_body.to_vec();
     without_tail.remove(at);

@@ -7,9 +7,10 @@
 
 use app_lib::ssbh_motion_interchange::{
     candidate_blender_51_paths, export_complete_motion_fbx, materialize_embedded_compose_script,
-    parse_compose_success_from_stdout, request_stop_motion_fbx_compose, resolve_blender_51_executable,
-    resolve_compose_script_path, snapshot_compose_job, windows_hidden_process_creation_flags,
-    CompleteMotionFbxExportRequest, WINDOWS_CREATE_NO_WINDOW,
+    parse_compose_success_from_stdout, request_stop_motion_fbx_compose,
+    resolve_blender_51_executable, resolve_compose_script_path, snapshot_compose_job,
+    windows_hidden_process_creation_flags, CompleteMotionFbxExportRequest,
+    WINDOWS_CREATE_NO_WINDOW,
 };
 use std::path::{Path, PathBuf};
 

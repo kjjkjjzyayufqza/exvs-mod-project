@@ -11,15 +11,19 @@ use std::path::Path;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::format::mission_hash::{check_collisions, triad_scene_identity, SceneIdentity};
+use crate::format::mission_hash::{
+    check_collisions, family_hash, triad_scene_identity, SceneIdentity, SCENE_KEY_STATE,
+    SCRIPT_PACKAGE_STATE,
+};
 use crate::format::triad_route_document::TriadRouteDocument;
 use crate::format::triad_route_validate::{
     has_blocking_issue, validate_route, RouteValidationContext,
 };
 use crate::format::triad_route_workspace::{
-    apply_route, load_briefing, load_stage_script, load_workspace,
+    apply_route, load_briefing, load_stage_script, load_workspace, plan_route,
     rename_briefings_to_scene_names, TriadWorkspacePaths,
 };
+use crate::format::triad_scene_create::{create_triad_scene, taken_ids, NewSceneRequest};
 
 fn paths_from_json(value: Value) -> Result<TriadWorkspacePaths, String> {
     serde_json::from_value(value).map_err(|e| format!("Invalid workspace paths: {e}"))
@@ -98,6 +102,17 @@ pub fn validate_triad_route(document_json: Value, context_json: Value) -> Result
     })
 }
 
+/// Describe what saving would write, without writing anything.
+///
+/// Runs the same planner `apply_triad_route` does, so the preview and the
+/// save can never describe different things.
+#[tauri::command]
+pub fn preview_triad_route(document_json: Value, paths_json: Value) -> Result<Value, String> {
+    let document = document_from_json(document_json)?;
+    let paths = paths_from_json(paths_json)?;
+    to_value(&plan_route(&document, &paths)?)
+}
+
 #[tauri::command]
 pub fn apply_triad_route(document_json: Value, paths_json: Value) -> Result<Value, String> {
     let document = document_from_json(document_json)?;
@@ -148,4 +163,76 @@ pub fn generate_triad_scene_identity(
         .collect::<Result<Vec<_>, String>>()?;
 
     to_value(&generated)
+}
+
+/// Hash scene names the modder typed, with the same clash check.
+///
+/// `generate_triad_scene_identity` builds official-style names from a category
+/// and a number; this is its sibling for a name the modder edited, so the
+/// dialog can show what a folder will be called and what it hashes to while
+/// they are still typing, instead of after the files exist.
+#[tauri::command]
+pub fn hash_triad_scene_names(
+    names: Vec<String>,
+    existing_scene_keys: Vec<u32>,
+    existing_package_hashes: Vec<u32>,
+) -> Result<Value, String> {
+    if names.is_empty() {
+        return Err("at least one scene name is required".to_string());
+    }
+    let scene_keys: HashSet<u32> = existing_scene_keys.into_iter().collect();
+    let package_hashes: HashSet<u32> = existing_package_hashes.into_iter().collect();
+
+    let hashed = names
+        .iter()
+        .map(|name| {
+            let trimmed = name.trim();
+            let identity = SceneIdentity {
+                scene_key: family_hash(SCENE_KEY_STATE, trimmed)?,
+                package_hash: family_hash(SCRIPT_PACKAGE_STATE, trimmed)?,
+                name: trimmed.to_string(),
+            };
+            Ok(GeneratedSceneIdentity {
+                scene_key_collision: check_collisions(identity.scene_key, &scene_keys).err(),
+                package_hash_collision: check_collisions(identity.package_hash, &package_hashes)
+                    .err(),
+                identity,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    to_value(&hashed)
+}
+
+/// Create the files a brand-new scene needs, by cloning a donor scene.
+///
+/// The stages of one course are created together so a later stage cannot be
+/// handed an id an earlier one just took. Each scene is materialised in turn
+/// and the ids it claims join the taken set before the next one is checked.
+#[tauri::command]
+pub fn create_triad_scenes(
+    requests_json: Value,
+    existing_scene_keys: Vec<u32>,
+    existing_package_hashes: Vec<u32>,
+) -> Result<Value, String> {
+    let requests: Vec<NewSceneRequest> = serde_json::from_value(requests_json)
+        .map_err(|e| format!("Invalid new-scene request: {e}"))?;
+    if requests.is_empty() {
+        return Err("at least one scene is required".to_string());
+    }
+    let outmission = requests[0].outmission_dir.clone();
+    let (mut scene_keys, mut package_hashes) = taken_ids(
+        Path::new(outmission.trim_end_matches(['/', '\\'])),
+        &existing_scene_keys,
+        &existing_package_hashes,
+    )?;
+
+    let mut created = Vec::with_capacity(requests.len());
+    for request in &requests {
+        let scene = create_triad_scene(request, &scene_keys, &package_hashes)?;
+        scene_keys.insert(scene.scene_key);
+        package_hashes.insert(scene.package_hash);
+        created.push(scene);
+    }
+    to_value(&created)
 }

@@ -14,7 +14,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use app_lib::format::bsfo::{BsfoBriefingUnit, BsfoSlotEntry, SCENE_CLASS_BOSS, SCENE_CLASS_STANDARD};
+use app_lib::format::bsfo::{
+    BsfoBriefingUnit, BsfoSlotEntry, NO_CAST, SCENE_CLASS_BOSS, SCENE_CLASS_STANDARD,
+};
 use app_lib::format::triad_route_document::{
     BriefingDraft, CourseDraft, RouteBuildMode, ScriptSlot, ScriptWave, StageDraft,
     StageScriptConfig, TriadRouteDocument, TRIAD_ROUTE_SCHEMA, WIN_FLAG_TARGET_COUNT,
@@ -92,33 +94,73 @@ fn one_versus_ten_script() -> StageScriptConfig {
     }
 }
 
+/// Mirror a script into a briefing the way the editor's generator does: one
+/// cast entry per suit per side, one positional record per battle slot.
 fn briefing_for(script: &StageScriptConfig, scene_class: i32) -> BriefingDraft {
+    let mut units: Vec<BsfoBriefingUnit> = Vec::new();
+    let mut cast_of: Vec<(i32, i32, i32)> = Vec::new();
+    let highest = script
+        .slots
+        .iter()
+        .map(|slot| slot.slot)
+        .max()
+        .unwrap_or(-1);
+    let mut slots = vec![
+        BsfoSlotEntry {
+            unit_id: 0,
+            flags: 0,
+            cast_index: NO_CAST,
+            word3: 0,
+        };
+        (highest + 1).max(0) as usize
+    ];
+
+    for slot in &script.slots {
+        let side = i32::from(!slot.is_player_side());
+        let cast_index = match cast_of
+            .iter()
+            .find(|(team, unit_id, _)| *team == side && *unit_id == slot.unit_id)
+        {
+            Some((_, _, index)) => *index,
+            None => {
+                let index = units.len() as i32;
+                units.push(BsfoBriefingUnit {
+                    word0: 0,
+                    unit_id: slot.unit_id,
+                    pilot_id: 0,
+                    word3: 0,
+                });
+                cast_of.push((side, slot.unit_id, index));
+                index
+            }
+        };
+        slots[slot.slot as usize] = BsfoSlotEntry {
+            unit_id: slot.unit_id,
+            flags: 1,
+            cast_index,
+            word3: 0,
+        };
+    }
+
+    let side_cast = |side: i32| -> Vec<i32> {
+        cast_of
+            .iter()
+            .filter(|(team, _, _)| *team == side)
+            .map(|(_, _, index)| *index)
+            .collect()
+    };
+    let enemy_cast = side_cast(1);
+
     BriefingDraft {
         scene_class,
         map_hash: script.map_hash,
         time_limit_seconds: 300,
         has_target: false,
-        boss_slots: vec![2],
-        units: script
-            .slots
-            .iter()
-            .map(|slot| BsfoBriefingUnit {
-                word0: 0,
-                unit_id: slot.unit_id,
-                pilot_id: 0,
-                word3: 0,
-            })
-            .collect(),
-        slots: script
-            .slots
-            .iter()
-            .map(|slot| BsfoSlotEntry {
-                unit_id: slot.unit_id,
-                flags: 1,
-                slot: slot.slot,
-                order: slot.display_order,
-            })
-            .collect(),
+        player_cast: side_cast(0).into_iter().take(2).collect(),
+        boss_cast: enemy_cast.iter().copied().take(1).collect(),
+        enemy_cast: enemy_cast.into_iter().skip(1).take(3).collect(),
+        units,
+        slots,
     }
 }
 
@@ -188,9 +230,7 @@ fn codes(issues: &[app_lib::format::triad_route_validate::ValidationIssue]) -> V
     issues.iter().map(|i| i.code.clone()).collect()
 }
 
-fn errors(
-    issues: &[app_lib::format::triad_route_validate::ValidationIssue],
-) -> Vec<String> {
+fn errors(issues: &[app_lib::format::triad_route_validate::ValidationIssue]) -> Vec<String> {
     issues
         .iter()
         .filter(|i| i.severity == Severity::Error)
@@ -258,7 +298,11 @@ fn opening_a_shipped_course_survives_json_roundtrip() {
         "JSON round-trip made A-1 a duplicate of itself: {:?}",
         errors(&issues)
     );
-    assert!(!has_blocking_issue(&issues), "unexpected blockers: {:?}", errors(&issues));
+    assert!(
+        !has_blocking_issue(&issues),
+        "unexpected blockers: {:?}",
+        errors(&issues)
+    );
 }
 
 /// Type 0 is the shipped default. It is documented on the unlock field, not
@@ -384,9 +428,7 @@ fn a_new_scene_is_reported_as_unverified_rather_than_broken() {
     let mut context = context();
     context.scene_id_table.clear();
     context.available_package_hashes.clear();
-    context
-        .available_package_hashes
-        .insert(0x1111_1111);
+    context.available_package_hashes.insert(0x1111_1111);
 
     let issues = validate_route(&document, &context);
     let found = codes(&issues);
@@ -476,20 +518,19 @@ fn an_unloaded_reference_list_does_not_invent_errors() {
 }
 
 #[test]
-fn a_boss_slot_the_script_never_spawns_blocks_the_save() {
+fn a_boss_frame_pointing_outside_the_cast_blocks_the_save() {
     let mut document = one_versus_ten_document();
-    document.stages[0].briefing.boss_slots = vec![99];
+    document.stages[0].briefing.boss_cast = vec![99];
     let issues = validate_route(&document, &context());
-    let failed = errors(&issues);
-    assert!(failed.contains(&"briefing-boss-slot-unlisted".to_string()));
-    assert!(failed.contains(&"boss-slot-not-in-script".to_string()));
+    assert!(errors(&issues).contains(&"briefing-draw-unlisted".to_string()));
 }
 
 #[test]
 fn a_briefing_that_disagrees_with_the_spawn_list_is_a_warning() {
     let mut document = one_versus_ten_document();
     document.stages[0].briefing.slots.pop();
-    document.stages[0].briefing.slots[1].unit_id = PLAYER_SUIT;
+    // Record 2 is battle slot 2, the first enemy the script spawns.
+    document.stages[0].briefing.slots[2].unit_id = PLAYER_SUIT;
     let issues = validate_route(&document, &context());
     let found = codes(&issues);
     assert!(found.contains(&"briefing-slot-missing".to_string()));
@@ -533,7 +574,9 @@ fn unlock_types_are_gated_by_how_well_they_are_understood() {
 
     document.course.unlock_type = 1;
     document.course.unlock_arg0 = 0;
-    assert!(errors(&validate_route(&document, &context())).contains(&"unlock-arg-missing".to_string()));
+    assert!(
+        errors(&validate_route(&document, &context())).contains(&"unlock-arg-missing".to_string())
+    );
 
     document.course.unlock_arg0 = 1;
     assert!(!has_blocking_issue(&validate_route(&document, &context())));
@@ -544,10 +587,8 @@ fn unlock_types_are_gated_by_how_well_they_are_understood() {
     assert!(!has_blocking_issue(&issues));
 
     document.course.unlock_type = 5;
-    assert!(
-        errors(&validate_route(&document, &context()))
-            .contains(&"unlock-type-unsupported".to_string())
-    );
+    assert!(errors(&validate_route(&document, &context()))
+        .contains(&"unlock-type-unsupported".to_string()));
 }
 
 #[test]
@@ -623,15 +664,11 @@ fn an_opening_wave_that_deploys_an_undefined_slot_blocks_the_save() {
 }
 
 #[test]
-fn a_boss_slot_on_the_player_side_blocks_the_save() {
+fn a_boss_frame_holding_a_player_side_suit_blocks_the_save() {
     let mut document = one_versus_ten_document();
-    document.stages[0].briefing.boss_slots = vec![0];
-    document.stages[0].briefing.slots.push(app_lib::format::bsfo::BsfoSlotEntry {
-        unit_id: PLAYER_SUIT,
-        flags: 1,
-        slot: 0,
-        order: 0,
-    });
+    // Cast entry 0 is the player's own suit, so framing it as the boss draws
+    // the wrong side even though the index itself is valid.
+    document.stages[0].briefing.boss_cast = vec![0];
     let issues = validate_route(&document, &context());
-    assert!(errors(&issues).contains(&"boss-slot-on-player-side".to_string()));
+    assert!(errors(&issues).contains(&"briefing-enemy-draws-player".to_string()));
 }

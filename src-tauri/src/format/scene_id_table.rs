@@ -114,7 +114,8 @@ impl SceneIdTable {
             .table
             .row_index(scene_key)
             .ok_or_else(|| format!("scene 0x{scene_key:08X} has no sceneidtable row"))?;
-        self.table.set_word(index, SCRIPT_PACKAGE_HASH, package_hash)
+        self.table
+            .set_word(index, SCRIPT_PACKAGE_HASH, package_hash)
     }
 
     pub fn remove(&mut self, scene_key: u32) -> Result<(), String> {

@@ -167,11 +167,10 @@ fn build_scene_key_index() -> HashMap<u32, TriadSceneName> {
     for category in TRIAD_CATEGORIES {
         for course_number in 1..=REVERSE_INDEX_MAX_COURSE {
             for stage_number in 1..=3u16 {
-                for variant in std::iter::once(None)
-                    .chain((1..=REVERSE_INDEX_MAX_VARIANT).map(Some))
+                for variant in
+                    std::iter::once(None).chain((1..=REVERSE_INDEX_MAX_VARIANT).map(Some))
                 {
-                    let Ok(name) =
-                        triad_scene_name(category, course_number, stage_number, variant)
+                    let Ok(name) = triad_scene_name(category, course_number, stage_number, variant)
                     else {
                         continue;
                     };

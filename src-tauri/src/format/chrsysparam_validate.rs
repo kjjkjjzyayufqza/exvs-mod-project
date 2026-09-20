@@ -116,7 +116,8 @@ fn check_action_rows(file: &ChrSysParamFile, issues: &mut Vec<ChrSysIssue>) {
                 "action",
                 Some(0),
                 None,
-                "row 0 is skipped by every consumer (loops start at 1) but holds non-zero data".to_string(),
+                "row 0 is skipped by every consumer (loops start at 1) but holds non-zero data"
+                    .to_string(),
             ));
         }
     }
@@ -170,7 +171,10 @@ fn check_action_rows(file: &ChrSysParamFile, issues: &mut Vec<ChrSysIssue>) {
                 format!("emptyAmmoPolicy {} is not 0..3", cell(row, 0x09) as i32),
             ));
         }
-        if let Some(field) = FORM_FIELDS.iter().find(|field| (cell(row, **field) as i32) >= 32) {
+        if let Some(field) = FORM_FIELDS
+            .iter()
+            .find(|field| (cell(row, **field) as i32) >= 32)
+        {
             issues.push(issue(
                 ChrSysIssueLevel::Warning,
                 "action",
@@ -241,8 +245,8 @@ fn check_action_rows(file: &ChrSysParamFile, issues: &mut Vec<ChrSysIssue>) {
         let first = cell(row, 0x7E) as i32;
         let last = cell(row, 0x7F) as i32;
         let transition_rows = file.transition_table.rows.len() as i32;
-        let range_ok = (first == -1 && last == -1)
-            || (0 <= first && first <= last && last < transition_rows);
+        let range_ok =
+            (first == -1 && last == -1) || (0 <= first && first <= last && last < transition_rows);
         if !range_ok {
             issues.push(issue(
                 ChrSysIssueLevel::Error,
@@ -258,14 +262,22 @@ fn check_action_rows(file: &ChrSysParamFile, issues: &mut Vec<ChrSysIssue>) {
     }
 }
 
-fn check_script_links(file: &ChrSysParamFile, links: &ChrSysMscLinks, issues: &mut Vec<ChrSysIssue>) {
+fn check_script_links(
+    file: &ChrSysParamFile,
+    links: &ChrSysMscLinks,
+    issues: &mut Vec<ChrSysIssue>,
+) {
     let groups: BTreeSet<u32> = links
         .group_callbacks
         .iter()
         .filter(|entry| entry.function.is_some() || entry.raw_value.is_some())
         .map(|entry| entry.key)
         .collect();
-    let phases: BTreeSet<u32> = links.phase_callbacks.iter().map(|entry| entry.key).collect();
+    let phases: BTreeSet<u32> = links
+        .phase_callbacks
+        .iter()
+        .map(|entry| entry.key)
+        .collect();
 
     for (index, row) in file.action_table.rows.iter().enumerate().skip(1) {
         if cell(row, 0x2E) == 0 {
@@ -318,7 +330,10 @@ fn check_script_links(file: &ChrSysParamFile, links: &ChrSysMscLinks, issues: &m
     }
 }
 
-pub fn validate_chrsysparam(file: &ChrSysParamFile, links: Option<&ChrSysMscLinks>) -> Vec<ChrSysIssue> {
+pub fn validate_chrsysparam(
+    file: &ChrSysParamFile,
+    links: Option<&ChrSysMscLinks>,
+) -> Vec<ChrSysIssue> {
     let mut issues = Vec::new();
     check_action_rows(file, &mut issues);
     if let Some(links) = links {
@@ -329,7 +344,9 @@ pub fn validate_chrsysparam(file: &ChrSysParamFile, links: Option<&ChrSysMscLink
 
 #[cfg(test)]
 mod tests {
-    use super::super::chrsysparam::{ChrSysParamTable, ACTION_TABLE_MARKER, TRANSITION_TABLE_MARKER};
+    use super::super::chrsysparam::{
+        ChrSysParamTable, ACTION_TABLE_MARKER, TRANSITION_TABLE_MARKER,
+    };
     use super::*;
 
     fn blank_row() -> Vec<u32> {
@@ -374,9 +391,15 @@ mod tests {
             .filter(|issue| issue.level == ChrSysIssueLevel::Error)
             .map(|issue| issue.message.as_str())
             .collect();
-        assert!(messages.iter().any(|m| m.contains("is used by rows [1, 2]")));
-        assert!(messages.iter().any(|m| m.contains("derived action 0x33333333 has no row")));
-        assert!(messages.iter().any(|m| m.contains("outside the engine route table")));
+        assert!(messages
+            .iter()
+            .any(|m| m.contains("is used by rows [1, 2]")));
+        assert!(messages
+            .iter()
+            .any(|m| m.contains("derived action 0x33333333 has no row")));
+        assert!(messages
+            .iter()
+            .any(|m| m.contains("outside the engine route table")));
     }
 
     #[test]
@@ -391,8 +414,10 @@ mod tests {
             })
             .collect();
         let issues = validate_chrsysparam(&file_with(rows), None);
-        assert!(issues.iter().any(|issue| issue.level == ChrSysIssueLevel::Error
-            && issue.message.contains("command records")));
+        assert!(issues
+            .iter()
+            .any(|issue| issue.level == ChrSysIssueLevel::Error
+                && issue.message.contains("command records")));
     }
 
     #[test]

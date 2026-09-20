@@ -11,13 +11,30 @@
 //! One file per triad scene, stored in the `outmission` package (`0xF7B91DE7`)
 //! under the scene key as its fhm2d file id. It drives the loading / briefing
 //! screen only: which suits and pilots are drawn on the player side and the
-//! enemy side, which slot is the boss, the map, the scene class and the time
-//! limit. What actually spawns in battle lives in the mission script; the game
-//! does not cross-check the two, so a mismatch simply shows a briefing that
-//! lies about the fight.
+//! enemy side, which of them is the boss, the map, the scene class and the
+//! time limit. What actually spawns in battle lives in the mission script; the
+//! game does not cross-check the two, so a mismatch simply shows a briefing
+//! that lies about the fight.
 //!
 //! Layout is a fixed header followed by five contiguous sections:
 //! `header(0x24) | sec0(48) | sec1(16*N) | sec2(496) | sec3(16*M) | sec4(176)`.
+//!
+//! How the three lists relate (E2, measured over the 341 shipped OBHK files
+//! against their decompiled scripts — see
+//! docs/mission-research/exvs2-ob-triad-mission-architecture.md §8.3):
+//!
+//! - **sec1 is the cast**: one entry per suit + pilot the screen draws and
+//!   preloads. Nothing is drawn that is not in it.
+//! - **sec3 is positional**: record `i` describes battle slot `i`, the same
+//!   number the script's `sys_0(0x400, i, ...)` defines. A slot the script
+//!   leaves undefined still gets a record, zero-filled. Its third word is a
+//!   **cast index**, not a slot number: it says which sec1 entry that slot is
+//!   drawn from, and several slots share one entry when the same suit
+//!   respawns (186 of the 341 files repeat a cast index).
+//! - **sec0 chooses what is on screen**, again by cast index: `[0..2]` the
+//!   player side, `[2..5]` the boss frames, `[5..8]` the other enemies, `-1`
+//!   for an unused position. The units in a scene are usually many more than
+//!   the eight positions, so the briefing shows a subset, not the roster.
 
 use serde::{Deserialize, Serialize};
 
@@ -36,9 +53,12 @@ pub const SCENE_CLASS_RANDOM: i32 = 1;
 pub const SCENE_CLASS_TARGET: i32 = 2;
 pub const SCENE_CLASS_BOSS: i32 = 3;
 
-/// sec0 word indices.
-const SEC0_BOSS_SLOTS: std::ops::Range<usize> = 2..5;
-const SEC0_ENEMY_DISPLAY_SLOTS: std::ops::Range<usize> = 5..8;
+/// sec0 word indices. Every entry is an index into `Bsfo::units` — the cast
+/// list — or `-1` for an empty display position, never a battle slot number
+/// (see the module header).
+const SEC0_PLAYER_CAST: std::ops::Range<usize> = 0..2;
+const SEC0_BOSS_CAST: std::ops::Range<usize> = 2..5;
+const SEC0_ENEMY_CAST: std::ops::Range<usize> = 5..8;
 /// sec4 word indices.
 const SEC4_SCENE_CLASS: usize = 0;
 const SEC4_MAP_HASH: usize = 2;
@@ -46,7 +66,10 @@ const SEC4_TIME_LIMIT_PRIMARY: usize = 3;
 const SEC4_HAS_TARGET: usize = 4;
 const SEC4_TIME_LIMIT_MIRROR: usize = 5;
 
-/// One sec1 record: a suit + pilot the briefing draws and preloads.
+/// One sec1 record: a suit + pilot in the briefing's cast.
+///
+/// The cast is what the screen can draw; `Bsfo::player_cast`, `boss_cast` and
+/// `enemy_cast` pick entries out of it by index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BsfoBriefingUnit {
@@ -56,7 +79,11 @@ pub struct BsfoBriefingUnit {
     pub word3: i32,
 }
 
-/// One sec3 record: a battle slot the briefing lists.
+/// One sec3 record: what the briefing knows about one battle slot.
+///
+/// The record's **position** in `Bsfo::slots` is the slot number, matching the
+/// script's `sys_0(0x400, <slot>, ...)`; the list is therefore never sorted or
+/// deduplicated, because moving a record renumbers the slot it describes.
 ///
 /// `flags` is a 4-byte field whose individual bits are not yet decoded; it is
 /// carried through verbatim so an edit never destroys it.
@@ -65,11 +92,15 @@ pub struct BsfoBriefingUnit {
 pub struct BsfoSlotEntry {
     pub unit_id: i32,
     pub flags: u32,
-    /// Matches the mission script's `sys_0(0x400)` slot number.
-    pub slot: i32,
-    /// Mirrors the slot's `P13` ordering value.
-    pub order: i32,
+    /// Index into `Bsfo::units`: which cast entry this slot is drawn from.
+    /// `-1` marks a slot the script does not define.
+    pub cast_index: i32,
+    /// Undecoded; 0..=3 in every shipped file. Carried through verbatim.
+    pub word3: i32,
 }
+
+/// No cast entry: an unused sec0 display position or an undefined slot.
+pub const NO_CAST: i32 = -1;
 
 /// A parsed BSFO file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -81,9 +112,11 @@ pub struct Bsfo {
     /// Header `0x0C` byte3: no observed meaning. Preserved as read.
     pub reserved_count_byte: u8,
     pub sec0: Vec<i32>,
+    /// Section 1: the cast the screen draws from.
     pub units: Vec<BsfoBriefingUnit>,
     /// Section 2 is 496 zero bytes in every shipped file; kept verbatim anyway.
     pub sec2_raw: Vec<u8>,
+    /// Section 3, indexed by battle slot number.
     pub slots: Vec<BsfoSlotEntry>,
     pub sec4: Vec<i32>,
 }
@@ -188,8 +221,8 @@ impl Bsfo {
             slots.push(BsfoSlotEntry {
                 unit_id: read_i32(data, at)?,
                 flags: read_u32(data, at + 4)?,
-                slot: read_i32(data, at + 8)?,
-                order: read_i32(data, at + 12)?,
+                cast_index: read_i32(data, at + 8)?,
+                word3: read_i32(data, at + 12)?,
             });
         }
 
@@ -241,6 +274,15 @@ impl Bsfo {
             .map_err(|_| format!("BSFO: {} briefing units exceed 255", self.units.len()))?;
         let slot_count = u8::try_from(self.slots.len())
             .map_err(|_| format!("BSFO: {} slots exceed 255", self.slots.len()))?;
+        for (slot, entry) in self.slots.iter().enumerate() {
+            self.check_cast_index(entry.cast_index, &format!("slot {slot}"))?;
+        }
+        for index in SEC0_PLAYER_CAST
+            .chain(SEC0_BOSS_CAST)
+            .chain(SEC0_ENEMY_CAST)
+        {
+            self.check_cast_index(self.sec0[index], &format!("sec0[{index}]"))?;
+        }
 
         let sec0_at = HEADER_SIZE;
         let sec1_at = sec0_at + SEC0_WORDS * 4;
@@ -279,8 +321,8 @@ impl Bsfo {
         for slot in &self.slots {
             out.extend_from_slice(&slot.unit_id.to_le_bytes());
             out.extend_from_slice(&slot.flags.to_le_bytes());
-            out.extend_from_slice(&slot.slot.to_le_bytes());
-            out.extend_from_slice(&slot.order.to_le_bytes());
+            out.extend_from_slice(&slot.cast_index.to_le_bytes());
+            out.extend_from_slice(&slot.word3.to_le_bytes());
         }
         for word in &self.sec4 {
             out.extend_from_slice(&word.to_le_bytes());
@@ -334,60 +376,92 @@ impl Bsfo {
         self.sec4[SEC4_HAS_TARGET] = i32::from(value);
     }
 
-    /// Slot indices the briefing frames as bosses; `-1` means "no boss here".
-    pub fn boss_slots(&self) -> Vec<i32> {
-        self.sec0[SEC0_BOSS_SLOTS].to_vec()
+    /// Cast entries drawn on the player side; `-1` means "nothing here".
+    pub fn player_cast(&self) -> Vec<i32> {
+        self.sec0[SEC0_PLAYER_CAST].to_vec()
     }
 
-    /// Set up to three boss slots; shorter input clears the remaining entries.
-    pub fn set_boss_slots(&mut self, slots: &[i32]) -> Result<(), String> {
-        let capacity = SEC0_BOSS_SLOTS.len();
-        if slots.len() > capacity {
+    /// Cast entries framed as bosses on the enemy side.
+    pub fn boss_cast(&self) -> Vec<i32> {
+        self.sec0[SEC0_BOSS_CAST].to_vec()
+    }
+
+    /// Cast entries drawn on the enemy side next to the bosses.
+    pub fn enemy_cast(&self) -> Vec<i32> {
+        self.sec0[SEC0_ENEMY_CAST].to_vec()
+    }
+
+    pub fn set_player_cast(&mut self, cast: &[i32]) -> Result<(), String> {
+        self.set_display_positions(SEC0_PLAYER_CAST, cast, "player-side")
+    }
+
+    pub fn set_boss_cast(&mut self, cast: &[i32]) -> Result<(), String> {
+        self.set_display_positions(SEC0_BOSS_CAST, cast, "boss")
+    }
+
+    pub fn set_enemy_cast(&mut self, cast: &[i32]) -> Result<(), String> {
+        self.set_display_positions(SEC0_ENEMY_CAST, cast, "enemy-side")
+    }
+
+    /// Fill one sec0 display run; shorter input clears the rest to `-1`.
+    fn set_display_positions(
+        &mut self,
+        positions: std::ops::Range<usize>,
+        cast: &[i32],
+        role: &str,
+    ) -> Result<(), String> {
+        let capacity = positions.len();
+        if cast.len() > capacity {
             return Err(format!(
-                "BSFO: at most {capacity} boss slots, got {}",
-                slots.len()
+                "BSFO: the briefing draws at most {capacity} {role} suits, got {}",
+                cast.len()
             ));
         }
-        for (position, target) in SEC0_BOSS_SLOTS.enumerate() {
-            self.sec0[target] = slots.get(position).copied().unwrap_or(-1);
+        for entry in cast {
+            self.check_cast_index(*entry, role)?;
+        }
+        for (position, target) in positions.enumerate() {
+            self.sec0[target] = cast.get(position).copied().unwrap_or(NO_CAST);
         }
         Ok(())
     }
 
-    /// Extra enemy slots the briefing displays alongside the bosses.
-    pub fn enemy_display_slots(&self) -> Vec<i32> {
-        self.sec0[SEC0_ENEMY_DISPLAY_SLOTS].to_vec()
+    /// The suit a cast index draws, or `None` for an empty position.
+    pub fn cast_unit_id(&self, cast_index: i32) -> Option<i32> {
+        usize::try_from(cast_index)
+            .ok()
+            .and_then(|index| self.units.get(index))
+            .map(|unit| unit.unit_id)
     }
 
-    /// Battle slots the briefing lists on the enemy side of the VS screen.
-    ///
-    /// The mission script decides team membership; the briefing only mirrors it
-    /// through the slot numbers, so the caller passes the script's enemy slots.
-    pub fn enemy_slot_numbers(&self, player_slots: &[i32]) -> Vec<i32> {
-        self.slots
-            .iter()
-            .map(|entry| entry.slot)
-            .filter(|slot| !player_slots.contains(slot))
-            .collect()
+    fn check_cast_index(&self, cast_index: i32, role: &str) -> Result<(), String> {
+        if cast_index == NO_CAST || (cast_index >= 0 && (cast_index as usize) < self.units.len()) {
+            return Ok(());
+        }
+        Err(format!(
+            "BSFO: {role} points at cast entry {cast_index}, but the briefing has {} of them",
+            self.units.len()
+        ))
     }
 
-    /// Replace the whole sec3 slot list, keeping it ordered by slot number.
+    /// Replace the whole sec3 list. Position `i` is battle slot `i`, so the
+    /// order is kept exactly as given and repeated cast indices are allowed.
     pub fn set_slots(&mut self, slots: Vec<BsfoSlotEntry>) -> Result<(), String> {
         if u8::try_from(slots.len()).is_err() {
             return Err(format!("BSFO: {} slots exceed 255", slots.len()));
         }
-        let mut ordered = slots;
-        ordered.sort_by_key(|entry| entry.slot);
-        for pair in ordered.windows(2) {
-            if pair[0].slot == pair[1].slot {
-                return Err(format!("BSFO: duplicate slot {}", pair[0].slot));
-            }
+        for (slot, entry) in slots.iter().enumerate() {
+            self.check_cast_index(entry.cast_index, &format!("slot {slot}"))?;
         }
-        self.slots = ordered;
+        self.slots = slots;
         Ok(())
     }
 
-    /// Replace the whole sec1 briefing-unit list.
+    /// Replace the whole sec1 cast list.
+    ///
+    /// Shrinking the cast can strand a slot record or a display position, so
+    /// the caller is expected to set those next; `build` refuses a file whose
+    /// references still dangle.
     pub fn set_units(&mut self, units: Vec<BsfoBriefingUnit>) -> Result<(), String> {
         if u8::try_from(units.len()).is_err() {
             return Err(format!("BSFO: {} briefing units exceed 255", units.len()));

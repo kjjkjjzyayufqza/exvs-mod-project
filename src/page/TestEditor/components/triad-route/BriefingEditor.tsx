@@ -14,7 +14,11 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { issuesForSection } from "@/services/triadRoute/issueLocation";
+import { buildBriefingCast } from "@/services/triadRoute/routeDraft";
 import {
+  MAX_ENEMY_SIDE_DRAWN,
+  MAX_PLAYER_SIDE_DRAWN,
+  NO_CAST,
   SCENE_CLASS,
   type BriefingDraft,
   type ScriptSlot,
@@ -26,10 +30,8 @@ import { FOCUS_FLASH_CLASS, useIssueFocus, type IssueFocusRequest } from "./issu
 import { unitLabel, type UnitNameMap } from "./triadRouteWorkspace";
 
 const SCENE_CLASSES = Object.values(SCENE_CLASS);
-/** Slots 0 and 1 are the player's in every shipped scene. */
-const LAST_PLAYER_SLOT = 1;
-/** The briefing draws at most three slots as bosses. */
-const MAX_BOSS_SLOTS = 3;
+/** Select value standing in for "this portrait is empty". */
+const EMPTY_VALUE = "none";
 
 type BriefingEditorProps = {
   briefing: BriefingDraft;
@@ -42,62 +44,145 @@ type BriefingEditorProps = {
   onChange: (briefing: BriefingDraft) => void;
 };
 
-interface SideEntry {
-  slot: number;
-  unitId: number;
+/** Which battle slots draw from each cast entry, in slot order. */
+function slotsByCastIndex(briefing: BriefingDraft): Map<number, number[]> {
+  const usage = new Map<number, number[]>();
+  briefing.slots.forEach((entry, slot) => {
+    if (entry.castIndex === NO_CAST) return;
+    const seen = usage.get(entry.castIndex);
+    if (seen) seen.push(slot);
+    else usage.set(entry.castIndex, [slot]);
+  });
+  return usage;
 }
 
-function SideColumn({
-  heading,
-  entries,
+/**
+ * Cast entries worth showing, with their real indices.
+ *
+ * Shipped files pad the cast out with zeroed entries — most hold 33 for a
+ * handful of suits — so listing all of them buries the real ones. A zeroed
+ * entry that something still points at is kept: the random-course briefings
+ * use placeholder entries with no suit id.
+ */
+function usableCast(
+  briefing: BriefingDraft,
+  usage: Map<number, number[]>,
+): { index: number; unitId: number; pilotId: number }[] {
+  const referenced = new Set([
+    ...briefing.playerCast,
+    ...briefing.bossCast,
+    ...briefing.enemyCast,
+    ...usage.keys(),
+  ]);
+  return briefing.units
+    .map((unit, index) => ({ index, unitId: unit.unitId, pilotId: unit.pilotId }))
+    .filter((entry) => entry.unitId !== 0 || entry.pilotId !== 0 || referenced.has(entry.index));
+}
+
+/**
+ * Put `value` at one position of a drawn side, keeping the list compact.
+ *
+ * The file pads each side with `-1`, but the draft carries only the filled
+ * positions, so emptying the first of two portraits moves the second up
+ * rather than leaving a hole the writer would have to guess at.
+ */
+function setDrawnPosition(
+  drawn: number[],
+  position: number,
+  value: number | null,
+  capacity: number,
+): number[] {
+  const next: (number | null)[] = Array.from({ length: capacity }, (_, index) =>
+    index < drawn.length ? drawn[index] : null,
+  );
+  next[position] = value;
+  return next.filter((entry): entry is number => entry !== null);
+}
+
+interface CastEntry {
+  index: number;
+  unitId: number;
+  pilotId: number;
+}
+
+function CastPortrait({
+  castIndex,
+  cast,
   units,
-  bossSlots,
-  align,
+  usage,
+  label,
+  isBoss,
+  disabled,
+  onChange,
 }: {
-  heading: string;
-  entries: SideEntry[];
+  castIndex: number | null;
+  cast: CastEntry[];
   units: UnitNameMap;
-  bossSlots: number[];
-  align: "left" | "right";
+  usage: Map<number, number[]>;
+  label: string;
+  isBoss?: boolean;
+  disabled?: boolean;
+  onChange: (castIndex: number | null) => void;
 }) {
   const { t } = useTranslation("test-triad-route");
+  const drawnSlots = castIndex === null ? [] : (usage.get(castIndex) ?? []);
+
   return (
-    <div className={cn("flex min-w-0 flex-col gap-1", align === "right" && "items-end text-right")}>
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-        {heading}
-      </p>
-      {entries.map((entry) => (
-        <div
-          key={entry.slot}
-          className={cn(
-            "flex w-full items-center gap-2 rounded-md border bg-card/60 px-2 py-1 text-xs",
-            align === "right" && "flex-row-reverse text-right",
-            bossSlots.includes(entry.slot) && "border-amber-500/45 bg-amber-500/5",
-          )}
-        >
-          <span className="shrink-0 rounded bg-muted px-1 font-mono text-[10px] tabular-nums">
-            {entry.slot}
+    <div
+      className={cn(
+        "flex min-w-0 flex-col gap-1 rounded-md border bg-card/60 p-2",
+        isBoss && "border-amber-500/45 bg-amber-500/5",
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {label}
+        </span>
+        {isBoss ? (
+          <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400">
+            {t("briefing.boss")}
           </span>
-          <span className="truncate">{unitLabel(units, entry.unitId)}</span>
-          {bossSlots.includes(entry.slot) ? (
-            <span className="shrink-0 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-              {t("briefing.boss")}
-            </span>
-          ) : null}
-        </div>
-      ))}
-      {entries.length === 0 ? (
-        <span className="text-xs text-muted-foreground">{"—"}</span>
-      ) : null}
+        ) : null}
+      </div>
+      <Select
+        value={castIndex === null ? EMPTY_VALUE : String(castIndex)}
+        disabled={disabled}
+        onValueChange={(value) => onChange(value === EMPTY_VALUE ? null : Number(value))}
+      >
+        <SelectTrigger className="h-8 w-full min-w-0 text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={EMPTY_VALUE}>{t("briefing.emptyPortrait")}</SelectItem>
+          {cast.map((entry) => (
+            <SelectItem key={entry.index} value={String(entry.index)}>
+              {t("briefing.castOption", {
+                index: entry.index,
+                unit: unitLabel(units, entry.unitId),
+              })}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p className="truncate text-[10px] text-muted-foreground">
+        {castIndex === null
+          ? t("briefing.emptyPortraitHint")
+          : drawnSlots.length > 0
+            ? t("briefing.drawnFromSlots", { slots: drawnSlots.join(", ") })
+            : t("briefing.drawnFromNoSlot")}
+      </p>
     </div>
   );
 }
 
 /**
- * The loading screen: which suits are drawn on each side, the map, the class
- * and the time. It is presentation only — the script decides what spawns —
- * so the preview below the fields shows the two sides the way the briefing
- * will, with the player on the left and the enemies on the right.
+ * The loading screen, as the file actually describes it.
+ *
+ * BSFO holds a cast list and eight display positions that point into it: two
+ * on the player side, three boss frames and three more enemies. The battle
+ * roster below it can be far longer — every wave has a slot — so showing the
+ * roster as "the enemies" is how the screen ends up disagreeing with the
+ * fight. What is drawn is picked here, portrait by portrait.
  */
 export function BriefingEditor({
   briefing,
@@ -115,48 +200,41 @@ export function BriefingEditor({
     () => issuesForSection(issues, "briefing", stageIndex),
     [issues, stageIndex],
   );
-
-  const playerSlotNumbers = useMemo(
-    () => new Set((slots ?? []).filter((slot) => slot.team === 0).map((slot) => slot.slot)),
-    [slots],
+  const usage = useMemo(() => slotsByCastIndex(briefing), [briefing]);
+  const cast = useMemo(() => usableCast(briefing, usage), [briefing, usage]);
+  const battleSlotCount = useMemo(
+    () => briefing.slots.filter((entry) => entry.castIndex !== NO_CAST).length,
+    [briefing.slots],
   );
-
-  const sides = useMemo(() => {
-    // Without a script the side split is unknown; slot 0 and 1 are the
-    // player's in every shipped scene, so fall back to that convention.
-    if (slots === null) {
-      const toEntry = (entry: { slot: number; unitId: number }): SideEntry => ({
-        slot: entry.slot,
-        unitId: entry.unitId,
-      });
-      return {
-        player: briefing.slots.filter((e) => e.slot <= LAST_PLAYER_SLOT).map(toEntry),
-        enemy: briefing.slots.filter((e) => e.slot > LAST_PLAYER_SLOT).map(toEntry),
-      };
-    }
-    const player: SideEntry[] = [];
-    const enemy: SideEntry[] = [];
-    for (const entry of briefing.slots) {
-      const target = playerSlotNumbers.has(entry.slot) ? player : enemy;
-      target.push({ slot: entry.slot, unitId: entry.unitId });
-    }
-    return { player, enemy };
-  }, [briefing.slots, playerSlotNumbers, slots]);
 
   const syncFromSlots = () => {
     if (!slots) return;
+    onChange({ ...briefing, ...buildBriefingCast(slots, briefing) });
+  };
+
+  const changePlayer = (position: number, castIndex: number | null) =>
     onChange({
       ...briefing,
-      units: slots.map((slot) => ({ word0: 0, unitId: slot.unitId, pilotId: 0, word3: 0 })),
-      slots: slots.map((slot) => ({
-        unitId: slot.unitId,
-        flags: 1,
-        slot: slot.slot,
-        order: slot.displayOrder,
-      })),
-      bossSlots: briefing.bossSlots.filter((boss) => slots.some((slot) => slot.slot === boss)),
+      playerCast: setDrawnPosition(
+        briefing.playerCast,
+        position,
+        castIndex,
+        MAX_PLAYER_SIDE_DRAWN,
+      ),
     });
-  };
+  const changeBoss = (position: number, castIndex: number | null) =>
+    onChange({
+      ...briefing,
+      bossCast: setDrawnPosition(briefing.bossCast, position, castIndex, MAX_ENEMY_SIDE_DRAWN),
+    });
+  const changeEnemy = (position: number, castIndex: number | null) =>
+    onChange({
+      ...briefing,
+      enemyCast: setDrawnPosition(briefing.enemyCast, position, castIndex, MAX_ENEMY_SIDE_DRAWN),
+    });
+
+  const portrait = (drawn: number[], position: number) =>
+    position < drawn.length ? drawn[position] : null;
 
   return (
     <section
@@ -169,7 +247,7 @@ export function BriefingEditor({
     >
       <SectionHeader
         icon={MonitorPlay}
-        title={t("briefing.title")}
+        title={t("briefing.title", { index: stageIndex })}
         description={t("briefing.description")}
         issues={sectionIssues}
         actions={
@@ -178,7 +256,7 @@ export function BriefingEditor({
             size="sm"
             variant="outline"
             disabled={disabled || !slots}
-            title={slots ? undefined : t("stages.scriptNotRead")}
+            title={slots ? t("briefing.syncFromSquadHint") : t("stages.scriptNotRead")}
             onClick={syncFromSlots}
           >
             <Wand2 className="mr-1.5 size-3.5" />
@@ -242,33 +320,9 @@ export function BriefingEditor({
           />
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs font-medium">{t("briefing.bossSlots")}</Label>
-          <Input
-            value={briefing.bossSlots.join(", ")}
-            disabled={disabled}
-            placeholder="2, 3"
-            inputMode="numeric"
-            className="tabular-nums"
-            onChange={(event) =>
-              onChange({
-                ...briefing,
-                bossSlots: event.target.value
-                  .split(",")
-                  .map((part) => Number(part.trim()))
-                  .filter((value) => Number.isInteger(value) && value >= 0)
-                  .slice(0, MAX_BOSS_SLOTS),
-              })
-            }
-          />
-          <p className="text-[11px] text-muted-foreground" style={{ textWrap: "pretty" }}>
-            {t("briefing.bossSlotsHint")}
-          </p>
-        </div>
-
         <label
           className={cn(
-            "flex min-h-10 cursor-pointer select-none items-center gap-2 rounded-md px-1 text-xs md:col-span-2",
+            "flex min-h-10 cursor-pointer select-none items-center gap-2 self-end rounded-md px-1 text-xs",
             "transition-[background-color] duration-150 ease-out hover:bg-accent/50",
             disabled && "cursor-default opacity-60",
           )}
@@ -282,25 +336,135 @@ export function BriefingEditor({
         </label>
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 rounded-md border bg-background/60 p-3">
-        <SideColumn
-          heading={`${t("briefing.playerSide")} · ${t("briefing.unitCount", { count: sides.player.length })}`}
-          entries={sides.player}
-          units={units}
-          bossSlots={briefing.bossSlots}
-          align="left"
-        />
-        <span className="self-center text-xs font-semibold tracking-wider text-muted-foreground">
-          VS
-        </span>
-        <SideColumn
-          heading={`${t("briefing.enemySide")} · ${t("briefing.unitCount", { count: sides.enemy.length })}`}
-          entries={sides.enemy}
-          units={units}
-          bossSlots={briefing.bossSlots}
-          align="right"
-        />
+      <div className="flex flex-col gap-2 rounded-md border bg-background/60 p-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <p className="text-xs font-medium">{t("briefing.drawnTitle")}</p>
+          <p className="text-[11px] text-muted-foreground" style={{ textWrap: "pretty" }}>
+            {t("briefing.drawnHint", { count: battleSlotCount })}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {t("briefing.playerSide")}
+            </p>
+            {Array.from({ length: MAX_PLAYER_SIDE_DRAWN }, (_, position) => (
+              <CastPortrait
+                key={position}
+                castIndex={portrait(briefing.playerCast, position)}
+                cast={cast}
+                units={units}
+                usage={usage}
+                label={t("briefing.playerPortrait", { position: position + 1 })}
+                disabled={disabled}
+                onChange={(castIndex) => changePlayer(position, castIndex)}
+              />
+            ))}
+          </div>
+
+          <span className="self-center text-xs font-semibold tracking-wider text-muted-foreground">
+            VS
+          </span>
+
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {t("briefing.enemySide")}
+            </p>
+            {Array.from({ length: MAX_ENEMY_SIDE_DRAWN }, (_, position) => (
+              <CastPortrait
+                key={`boss-${position}`}
+                castIndex={portrait(briefing.bossCast, position)}
+                cast={cast}
+                units={units}
+                usage={usage}
+                label={t("briefing.bossPortrait", { position: position + 1 })}
+                isBoss
+                disabled={disabled}
+                onChange={(castIndex) => changeBoss(position, castIndex)}
+              />
+            ))}
+            {Array.from({ length: MAX_ENEMY_SIDE_DRAWN }, (_, position) => (
+              <CastPortrait
+                key={`enemy-${position}`}
+                castIndex={portrait(briefing.enemyCast, position)}
+                cast={cast}
+                units={units}
+                usage={usage}
+                label={t("briefing.enemyPortrait", { position: position + 1 })}
+                disabled={disabled}
+                onChange={(castIndex) => changeEnemy(position, castIndex)}
+              />
+            ))}
+          </div>
+        </div>
       </div>
+
+      <CastList briefing={briefing} cast={cast} units={units} usage={usage} />
     </section>
+  );
+}
+
+/** Everything the briefing can draw, and which battle slots use each entry. */
+function CastList({
+  briefing,
+  cast,
+  units,
+  usage,
+}: {
+  briefing: BriefingDraft;
+  cast: CastEntry[];
+  units: UnitNameMap;
+  usage: Map<number, number[]>;
+}) {
+  const { t } = useTranslation("test-triad-route");
+  const drawn = useMemo(
+    () => new Set([...briefing.playerCast, ...briefing.bossCast, ...briefing.enemyCast]),
+    [briefing.playerCast, briefing.bossCast, briefing.enemyCast],
+  );
+  const padding = briefing.units.length - cast.length;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-xs font-medium">{t("briefing.castTitle", { count: cast.length })}</p>
+      {cast.length === 0 ? (
+        <p className="text-xs text-muted-foreground">{t("briefing.castEmpty")}</p>
+      ) : (
+        <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+          {cast.map((entry) => {
+            const slots = usage.get(entry.index) ?? [];
+            return (
+              <li
+                key={entry.index}
+                className={cn(
+                  "flex min-w-0 items-center gap-2 rounded-md border px-2 py-1 text-xs",
+                  drawn.has(entry.index) ? "bg-card/60" : "border-dashed text-muted-foreground",
+                )}
+              >
+                <span className="shrink-0 rounded bg-muted px-1 font-mono text-[10px] tabular-nums">
+                  {entry.index}
+                </span>
+                <span className="truncate">{unitLabel(units, entry.unitId)}</span>
+                {entry.pilotId !== 0 ? (
+                  <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
+                    {t("briefing.castPilot", { id: entry.pilotId })}
+                  </span>
+                ) : null}
+                <span className="ml-auto shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                  {slots.length > 0
+                    ? t("briefing.castSlots", { slots: slots.join(", ") })
+                    : t("briefing.castNoSlot")}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {padding > 0 ? (
+        <p className="text-[10px] text-muted-foreground">
+          {t("briefing.castPadding", { count: padding })}
+        </p>
+      ) : null}
+    </div>
   );
 }

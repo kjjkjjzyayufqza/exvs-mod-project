@@ -4,31 +4,20 @@ import { MoreHorizontal, RefreshCw, Route as RouteIcon, Save, Tags } from "lucid
 import { exists } from "@tauri-apps/plugin-fs";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import type {
-  TestEditorWorkspaceDocument,
-  WorkspacePackIdentity,
-} from "@/services/testEditorWorkspace/types";
-import {
-  createDormantRouteDraft,
-  setStageLineup,
-  summariseIssues,
-  type SquadLineup,
-} from "@/services/triadRoute/routeDraft";
+import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
+import { createClonedRouteDraft, createDormantRouteDraft, setStageLineup, summariseIssues, type SquadLineup } from "@/services/triadRoute/routeDraft";
 import { parseIssueLocation } from "@/services/triadRoute/issueLocation";
 import {
   applyTriadRoute,
+  createTriadScenes,
   loadTriadBriefing,
   loadTriadStageScript,
   loadTriadWorkspace,
+  previewTriadRoute,
   renameTriadBriefings,
   validateTriadRoute,
 } from "@/services/triadRoute/triadRouteService";
@@ -38,7 +27,9 @@ import {
   type BriefingDraft,
   type CourseRow,
   type DormantSceneGroup,
+  type NewSceneRequest,
   type ReferenceList,
+  type RoutePlan,
   type StageDraft,
   type TriadRouteDocument,
   type TriadWorkspaceSnapshot,
@@ -47,7 +38,8 @@ import {
 import { CourseEditorPanel } from "./CourseEditorPanel";
 import { MissingPacksNotice } from "./MissingPacksNotice";
 import { RouteBrowser } from "./RouteBrowser";
-import { RouteWizardDialog, type RouteWizardValues } from "./RouteWizardDialog";
+import { RouteWizardDialog, type RouteWizardRequest, type RouteWizardValues, type WizardDonorStage } from "./RouteWizardDialog";
+import { SavePreviewDialog } from "./SavePreviewDialog";
 import { StageInspector } from "./StageInspector";
 import { ValidationPanel } from "./ValidationPanel";
 import type { IssueFocusRequest } from "./issueFocus";
@@ -112,14 +104,7 @@ function errorMessage(error: unknown): string {
  * workspace folders only; putting the route in the game is the existing
  * repack step.
  */
-export function TriadRouteView({
-  folderPath,
-  workspaceDocument,
-  onUnsavedChanges,
-  onPackMutated,
-  onRevealTreeFolder,
-  onOpenMscFolder,
-}: TriadRouteViewProps) {
+export function TriadRouteView({ folderPath, workspaceDocument, onUnsavedChanges, onPackMutated, onRevealTreeFolder, onOpenMscFolder }: TriadRouteViewProps) {
   const { t } = useTranslation("test-triad-route");
   const obDplCachePath = useConfigStore((store) => store.obDplCachePath);
   const [state, setState] = useState<LoadState>({ status: "idle" });
@@ -135,7 +120,11 @@ export function TriadRouteView({
   const [focus, setFocus] = useState<IssueFocusRequest | null>(null);
   const [isChecking, startChecking] = useTransition();
   const [isSaving, setIsSaving] = useState(false);
-  const [wizardGroup, setWizardGroup] = useState<DormantSceneGroup | null>(null);
+  const [plan, setPlan] = useState<RoutePlan | null>(null);
+  const [isPlanning, setIsPlanning] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [wizardRequest, setWizardRequest] = useState<RouteWizardRequest | null>(null);
+  const [isCreatingScenes, setIsCreatingScenes] = useState(false);
   const [scriptErrors, setScriptErrors] = useState<Record<number, string>>({});
   const [readingStage, setReadingStage] = useState<number | null>(null);
   const [scriptFolderState, setScriptFolderState] = useState<{
@@ -144,6 +133,8 @@ export function TriadRouteView({
   }>({ path: null, exists: false });
   const [isInitialising, setIsInitialising] = useState(false);
   const loadTokenRef = useRef(0);
+  /** Newest snapshot, readable before a `setState` has been applied. */
+  const snapshotRef = useRef<TriadWorkspaceSnapshot | null>(null);
 
   const load = useCallback(async () => {
     const token = (loadTokenRef.current += 1);
@@ -156,17 +147,31 @@ export function TriadRouteView({
         }
         return;
       }
-      const [snapshot, units] = await Promise.all([
-        loadTriadWorkspace(packs.paths),
-        loadUnitNames(folderPath, workspaceDocument).catch(() => emptyUnitCatalog()),
-      ]);
+      const [snapshot, units] = await Promise.all([loadTriadWorkspace(packs.paths), loadUnitNames(folderPath, workspaceDocument).catch(() => emptyUnitCatalog())]);
       if (token !== loadTokenRef.current) return;
+      snapshotRef.current = snapshot;
       setState({ status: "ready", packs, snapshot, units });
     } catch (error) {
       if (token !== loadTokenRef.current) return;
       setState({ status: "error", message: errorMessage(error) });
     }
   }, [folderPath, workspaceDocument]);
+
+  /**
+   * Re-read the tables without tearing the page down.
+   *
+   * Creating a scene puts a briefing and a package on disk that the snapshot
+   * loaded at open time knows nothing about, and the checker reads the
+   * snapshot: without this the brand-new stage is reported as having no
+   * briefing. The fresh snapshot is returned as well as stored, because the
+   * caller needs it before React has re-rendered.
+   */
+  const refreshSnapshot = useCallback(async (packs: ResolvedTriadPacks): Promise<TriadWorkspaceSnapshot> => {
+    const snapshot = await loadTriadWorkspace(packs.paths);
+    snapshotRef.current = snapshot;
+    setState((current) => (current.status === "ready" ? { ...current, snapshot } : current));
+    return snapshot;
+  }, []);
 
   // MainView only mounts the active tab's content, so being rendered is what
   // "visible" means here; the `isActive` prop it passes is a legacy constant.
@@ -175,10 +180,7 @@ export function TriadRouteView({
     void load();
   }, [folderPath, state.status, load]);
 
-  const hasChanges = useMemo(
-    () => draft !== null && JSON.stringify(draft) !== baseline,
-    [draft, baseline],
-  );
+  const hasChanges = useMemo(() => draft !== null && JSON.stringify(draft) !== baseline, [draft, baseline]);
 
   useEffect(() => {
     onUnsavedChanges?.(hasChanges);
@@ -186,8 +188,9 @@ export function TriadRouteView({
 
   const runValidation = useCallback(
     (document: TriadRouteDocument) => {
-      if (state.status !== "ready") return;
-      const context = state.snapshot.validationContext;
+      const snapshot = snapshotRef.current;
+      if (state.status !== "ready" || !snapshot) return;
+      const context = snapshot.validationContext;
       startChecking(() => {
         void validateTriadRoute(document, context)
           .then((result) =>
@@ -264,18 +267,10 @@ export function TriadRouteView({
       if (state.status !== "ready") return;
       try {
         const keys = course.stageSceneKeys.filter((key) => key !== 0);
-        const briefings = await Promise.all(
-          keys.map((key) => loadTriadBriefing(state.packs.paths.outmissionDir, key)),
-        );
-        const sceneNumbers = new Map(
-          state.snapshot.scenes.map((scene) => [scene.sceneKey, scene.sceneNo]),
-        );
-        const packages = new Map(
-          state.snapshot.sceneIdRows.map((row) => [row.sceneKey, row.packageHash]),
-        );
-        const sceneNames = new Map(
-          state.snapshot.sceneIdRows.map((row) => [row.sceneKey, row.sceneName]),
-        );
+        const briefings = await Promise.all(keys.map((key) => loadTriadBriefing(state.packs.paths.outmissionDir, key)));
+        const sceneNumbers = new Map(state.snapshot.scenes.map((scene) => [scene.sceneKey, scene.sceneNo]));
+        const packages = new Map(state.snapshot.sceneIdRows.map((row) => [row.sceneKey, row.packageHash]));
+        const sceneNames = new Map(state.snapshot.sceneIdRows.map((row) => [row.sceneKey, row.sceneName]));
         const stages: StageDraft[] = keys.map((key, index) => ({
           index: index + 1,
           sceneKey: key,
@@ -320,19 +315,13 @@ export function TriadRouteView({
   const createFromDormant = useCallback(
     async (group: DormantSceneGroup, values: RouteWizardValues) => {
       if (state.status !== "ready") return;
-      const template = state.snapshot.courses.find(
-        (course) => course.category === values.category,
-      ) ?? state.snapshot.courses[0];
+      const template = state.snapshot.courses.find((course) => course.category === values.category) ?? state.snapshot.courses[0];
       if (!template) {
         toast.error(t("load.emptyCourseTable"));
         return;
       }
       try {
-        const briefings: BriefingDraft[] = await Promise.all(
-          group.scenes.map((scene) =>
-            loadTriadBriefing(state.packs.paths.outmissionDir, scene.sceneKey),
-          ),
-        );
+        const briefings: BriefingDraft[] = await Promise.all(group.scenes.map((scene) => loadTriadBriefing(state.packs.paths.outmissionDir, scene.sceneKey)));
         const next = createDormantRouteDraft({
           template,
           scenes: group.scenes,
@@ -346,7 +335,7 @@ export function TriadRouteView({
           starRating: values.starRating,
           goldScore: values.goldScore,
         });
-        setWizardGroup(null);
+        setWizardRequest(null);
         setScriptErrors({});
         setActiveStage(1);
         adoptDraft(next, { dirty: true });
@@ -355,6 +344,105 @@ export function TriadRouteView({
       }
     },
     [state, t, adoptDraft],
+  );
+
+  /**
+   * Mint a course's worth of brand-new scenes from a donor course.
+   *
+   * Each scene is a folder the game has never seen, so the files come first:
+   * the backend clones the donor's script package under the new name, derives
+   * both hashes from that name and registers the briefing in the outmission
+   * package. Only once they exist is a draft built, because the route tables
+   * are written against files, not intentions.
+   */
+  const createFromClone = useCallback(
+    async (source: CourseRow, donors: WizardDonorStage[], values: RouteWizardValues) => {
+      if (state.status !== "ready") return;
+      if (values.sceneNames.length < 1 || donors.length < 1) {
+        toast.error(t("wizard.sceneNameCountMismatch"));
+        return;
+      }
+      const dplCacheDir = obDplCachePath?.trim() ?? "";
+      if (!dplCacheDir) {
+        toast.error(t("load.sourceMissing"));
+        return;
+      }
+      const scriptPrefix = workspaceDocument.assetRoutes["mission.script"]?.prefix ?? "051mission";
+      // The stage count is chosen in the wizard, so it can ask for more stages
+      // than the donor course has. Donors then repeat: stage 4 of a one-stage
+      // donor is another copy of that stage, which is a usable starting point
+      // rather than a reason to refuse.
+      const requests: NewSceneRequest[] = values.sceneNames.map((sceneName, index) => {
+        const donor = donors[index % donors.length];
+        return {
+          dplCacheDir,
+          workspaceRoot: folderPath,
+          scriptPrefix,
+          outmissionDir: state.packs.paths.outmissionDir,
+          donorSceneKey: donor.sceneKey,
+          donorPackageHash: donor.packageHash,
+          sceneName: sceneName.trim(),
+        };
+      });
+
+      setIsCreatingScenes(true);
+      try {
+        const created = await createTriadScenes(
+          requests,
+          state.snapshot.sceneIdRows.map((row) => row.sceneKey),
+          state.snapshot.validationContext.availablePackageHashes,
+        );
+        // The new briefing and package only exist now, so the tables have to
+        // be re-read before the draft is checked against them.
+        await refreshSnapshot(state.packs);
+        const briefings: BriefingDraft[] = await Promise.all(created.map((scene) => loadTriadBriefing(state.packs.paths.outmissionDir, scene.sceneKey)));
+        const next = createClonedRouteDraft({
+          source,
+          created,
+          briefings,
+          courseId: values.courseId,
+          name: values.name,
+          category: values.category,
+          numberInCategory: values.numberInCategory,
+          firstSceneNumber: values.firstSceneNumber,
+          initiallyOpen: values.initiallyOpen,
+          starRating: values.starRating,
+          goldScore: values.goldScore,
+        });
+        setWizardRequest(null);
+        setScriptErrors({});
+        setActiveStage(1);
+        adoptDraft(next, { dirty: true });
+        toast.success(t("wizard.created", { count: created.length }));
+      } catch (error) {
+        toast.error(t("wizard.createFailed", { message: errorMessage(error) }));
+      } finally {
+        setIsCreatingScenes(false);
+      }
+    },
+    [state, t, adoptDraft, obDplCachePath, folderPath, workspaceDocument, refreshSnapshot],
+  );
+
+  /** Scene keys already spoken for, stable so the wizard does not re-hash. */
+  const takenSceneKeys = useMemo(() => (state.status === "ready" ? state.snapshot.sceneIdRows.map((row) => row.sceneKey) : []), [state]);
+
+  /** Donor stages for a course, resolved through the sceneidtable rows. */
+  const donorStagesFor = useCallback(
+    (course: CourseRow): WizardDonorStage[] => {
+      if (state.status !== "ready") return [];
+      const byKey = new Map(state.snapshot.sceneIdRows.map((row) => [row.sceneKey, row]));
+      return course.stageSceneKeys
+        .filter((key) => key !== 0)
+        .map((key) => {
+          const row = byKey.get(key);
+          return {
+            sceneKey: key,
+            packageHash: row?.packageHash ?? 0,
+            sceneName: row?.sceneName ?? null,
+          };
+        });
+    },
+    [state],
   );
 
   /**
@@ -373,11 +461,7 @@ export function TriadRouteView({
       if (stage.script && !options?.reload) return;
       setReadingStage(stageIndex);
       try {
-        const script = await loadTriadStageScript(
-          state.packs.paths.scriptDirs,
-          stage.sceneKey,
-          stage.sceneName,
-        );
+        const script = await loadTriadStageScript(state.packs.paths.scriptDirs, stage.sceneKey, stage.sceneName);
         setScriptErrors((current) => {
           const next = { ...current };
           delete next[stageIndex];
@@ -385,14 +469,10 @@ export function TriadRouteView({
         });
         const next: TriadRouteDocument = {
           ...draft,
-          stages: draft.stages.map((entry) =>
-            entry.index === stageIndex ? { ...entry, script } : entry,
-          ),
+          stages: draft.stages.map((entry) => (entry.index === stageIndex ? { ...entry, script } : entry)),
         };
         setDraft(next);
-        setBaseline((current) =>
-          current === null ? null : JSON.stringify(next),
-        );
+        setBaseline((current) => (current === null ? null : JSON.stringify(next)));
         runValidation(next);
       } catch (error) {
         setScriptErrors((current) => ({ ...current, [stageIndex]: errorMessage(error) }));
@@ -403,10 +483,7 @@ export function TriadRouteView({
     [state, draft, runValidation],
   );
 
-  const activeStageNeedsScript =
-    draft?.stages.find((entry) => entry.index === activeStage)?.script === null &&
-    scriptErrors[activeStage] === undefined &&
-    readingStage === null;
+  const activeStageNeedsScript = draft?.stages.find((entry) => entry.index === activeStage)?.script === null && scriptErrors[activeStage] === undefined && readingStage === null;
 
   useEffect(() => {
     if (state.status !== "ready" || !activeStageNeedsScript) return;
@@ -487,12 +564,38 @@ export function TriadRouteView({
     }
   }, [state, t]);
 
-  const save = useCallback(async () => {
+  /**
+   * Work out what saving would write, and show it before writing it.
+   *
+   * A save touches up to five packages at once, so the modder gets the list
+   * first rather than a toast afterwards saying a number of files changed.
+   */
+  const requestSave = useCallback(async () => {
     if (state.status !== "ready" || !draft) return;
     if (checks.blocked) {
       toast.error(t("save.blocked"));
       return;
     }
+    setPlanError(null);
+    setPlan(null);
+    setIsPlanning(true);
+    try {
+      setPlan(await previewTriadRoute(draft, state.packs.paths));
+    } catch (error) {
+      setPlanError(errorMessage(error));
+    } finally {
+      setIsPlanning(false);
+    }
+  }, [state, draft, checks.blocked, t]);
+
+  const closePlan = useCallback(() => {
+    setPlan(null);
+    setPlanError(null);
+    setIsPlanning(false);
+  }, []);
+
+  const save = useCallback(async () => {
+    if (state.status !== "ready" || !draft) return;
     setIsSaving(true);
     try {
       const applied = await applyTriadRoute(draft, state.packs.paths);
@@ -504,6 +607,7 @@ export function TriadRouteView({
         onPackMutated?.(pack);
       }
       toast.success(t("save.done", { count: applied.written.length }));
+      closePlan();
       adoptDraft(null);
       setScriptErrors({});
       await load();
@@ -512,26 +616,17 @@ export function TriadRouteView({
     } finally {
       setIsSaving(false);
     }
-  }, [state, draft, checks.blocked, onPackMutated, t, load, adoptDraft]);
+  }, [state, draft, onPackMutated, t, load, adoptDraft, closePlan]);
 
-  const stage = useMemo(
-    () => draft?.stages.find((entry) => entry.index === activeStage) ?? draft?.stages[0] ?? null,
-    [draft, activeStage],
-  );
+  const stage = useMemo(() => draft?.stages.find((entry) => entry.index === activeStage) ?? draft?.stages[0] ?? null, [draft, activeStage]);
   const summary = useMemo(() => summariseIssues(checks.issues), [checks.issues]);
 
   useEffect(() => {
     let cancelled = false;
-    const expected = stage
-      ? buildExpectedStageScriptFolder(folderPath, workspaceDocument, stage.sceneName)
-      : null;
-    const candidates = [
-      expected,
-      ...buildStageScriptFolderCandidates(
-        state.status === "ready" ? state.packs.paths.scriptDirs : [],
-        stage?.sceneName ?? null,
-      ),
-    ].filter((path): path is string => Boolean(path));
+    const expected = stage ? buildExpectedStageScriptFolder(folderPath, workspaceDocument, stage.sceneName) : null;
+    const candidates = [expected, ...buildStageScriptFolderCandidates(state.status === "ready" ? state.packs.paths.scriptDirs : [], stage?.sceneName ?? null)].filter((path): path is string =>
+      Boolean(path),
+    );
 
     const probe = async () => {
       for (const path of candidates) {
@@ -566,15 +661,7 @@ export function TriadRouteView({
 
   if (state.status === "missing") {
     const packs = state.packs;
-    return (
-      <MissingPacksNotice
-        packs={packs}
-        dplCacheDir={obDplCachePath ?? ""}
-        isInitialising={isInitialising}
-        onInitialise={() => void initialiseMissingPacks(packs)}
-        onReload={() => void load()}
-      />
-    );
+    return <MissingPacksNotice packs={packs} dplCacheDir={obDplCachePath ?? ""} isInitialising={isInitialising} onInitialise={() => void initialiseMissingPacks(packs)} onReload={() => void load()} />;
   }
 
   if (state.status === "error") {
@@ -607,28 +694,18 @@ export function TriadRouteView({
           </div>
           {draft ? (
             <span className="flex min-w-0 items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1 text-xs">
-              {letter ? (
-                <span className="flex size-5 shrink-0 items-center justify-center rounded bg-background font-semibold">
-                  {letter}
-                </span>
-              ) : null}
+              {letter ? <span className="flex size-5 shrink-0 items-center justify-center rounded bg-background font-semibold">{letter}</span> : null}
               <span className="truncate font-medium">{draft.course.name || "—"}</span>
               <span className="shrink-0 tabular-nums text-muted-foreground">
                 {t("browser.courseId", { id: draft.course.courseId })}
-                {draft.course.variant > 0
-                  ? ` · ${t("browser.variant", { number: draft.course.variant })}`
-                  : ""}
+                {draft.course.variant > 0 ? ` · ${t("browser.variant", { number: draft.course.variant })}` : ""}
               </span>
             </span>
           ) : null}
         </div>
 
         <div className="flex items-center gap-1.5">
-          {hasChanges ? (
-            <span className="px-1.5 text-[11px] font-medium tabular-nums text-amber-600 dark:text-amber-400">
-              {t("common.unsaved")}
-            </span>
-          ) : null}
+          {hasChanges ? <span className="px-1.5 text-[11px] font-medium tabular-nums text-amber-600 dark:text-amber-400">{t("common.unsaved")}</span> : null}
           {draft ? (
             <Button type="button" variant="ghost" size="sm" onClick={discard}>
               {t("common.discard")}
@@ -638,26 +715,15 @@ export function TriadRouteView({
             type="button"
             size="sm"
             disabled={!draft || checks.blocked || isSaving}
-            onClick={() => void save()}
+            onClick={() => void requestSave()}
             title={checks.blocked ? t("save.blockedBy", { count: summary.error }) : undefined}
           >
             <Save className={cn("mr-1.5 size-4", isSaving && "animate-pulse")} />
-            {isSaving
-              ? t("save.saving")
-              : checks.blocked
-                ? t("save.blockedBy", { count: summary.error })
-                : t("save.action")}
+            {isSaving ? t("save.saving") : checks.blocked ? t("save.blockedBy", { count: summary.error }) : t("save.action")}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="size-9"
-                aria-label={t("save.more")}
-                title={t("save.more")}
-              >
+              <Button type="button" size="icon" variant="ghost" className="size-9" aria-label={t("save.more")} title={t("save.more")}>
                 <MoreHorizontal className="size-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -690,19 +756,30 @@ export function TriadRouteView({
           dormantScenes={state.snapshot.dormantScenes}
           selectedCourseRowId={draft?.course.rowId ?? null}
           onSelectCourse={(course) => void openCourse(course)}
-          onClaimDormantGroup={setWizardGroup}
+          onClaimDormantGroup={(group) => setWizardRequest({ kind: "dormant", group })}
+          unsavedCourse={
+            draft && draft.course.rowId === null
+              ? {
+                  name: draft.course.name,
+                  courseId: draft.course.courseId,
+                  category: draft.course.category,
+                  stages: draft.stages.length,
+                }
+              : null
+          }
+          onCloneCourse={(course) =>
+            setWizardRequest({
+              kind: "clone",
+              source: course,
+              donors: donorStagesFor(course),
+            })
+          }
         />
 
         {draft && stage ? (
           <ScrollArea className="min-h-0 min-w-0">
             <div className="flex flex-col gap-3 pr-2.5 pb-3">
-              <CourseEditorPanel
-                course={draft.course}
-                units={state.units}
-                issues={checks.issues}
-                focus={focus}
-                onChange={(course) => editDraft({ ...draft, course })}
-              />
+              <CourseEditorPanel course={draft.course} stages={draft.stages} units={state.units} issues={checks.issues} focus={focus} onChange={(course) => editDraft({ ...draft, course })} />
               <StageInspector
                 stage={stage}
                 stages={draft.stages}
@@ -714,14 +791,10 @@ export function TriadRouteView({
                 onChangeStage={(next) =>
                   editDraft({
                     ...draft,
-                    stages: draft.stages.map((entry) =>
-                      entry.index === next.index ? next : entry,
-                    ),
+                    stages: draft.stages.map((entry) => (entry.index === next.index ? next : entry)),
                   })
                 }
-                onGenerateLineup={(lineup: SquadLineup) =>
-                  editDraft(setStageLineup(draft, stage.index, lineup))
-                }
+                onGenerateLineup={(lineup: SquadLineup) => editDraft(setStageLineup(draft, stage.index, lineup))}
                 scriptFolder={scriptFolderState.path}
                 scriptFolderExists={scriptFolderState.exists}
                 onOpenScriptFolder={(path) => void openScriptFolder(path)}
@@ -739,15 +812,32 @@ export function TriadRouteView({
         )}
       </div>
 
+      <SavePreviewDialog
+        plan={plan}
+        isPlanning={isPlanning}
+        planError={planError}
+        isSaving={isSaving}
+        onCancel={closePlan}
+        onConfirm={() => void save()}
+      />
+
       <RouteWizardDialog
-        group={wizardGroup}
+        request={wizardRequest}
         courses={state.snapshot.courses}
         scenes={state.snapshot.scenes}
         template={state.snapshot.courses[0] ?? null}
-        onCancel={() => setWizardGroup(null)}
-        onCreate={(values) =>
-          wizardGroup ? void createFromDormant(wizardGroup, values) : undefined
-        }
+        existingSceneKeys={takenSceneKeys}
+        existingPackageHashes={state.snapshot.validationContext.availablePackageHashes}
+        isCreating={isCreatingScenes}
+        onCancel={() => setWizardRequest(null)}
+        onCreate={(values) => {
+          if (!wizardRequest) return;
+          if (wizardRequest.kind === "dormant") {
+            void createFromDormant(wizardRequest.group, values);
+            return;
+          }
+          void createFromClone(wizardRequest.source, wizardRequest.donors, values);
+        }}
       />
     </div>
   );
@@ -778,10 +868,7 @@ function EmptyEditor({ hint }: { hint: string }) {
       <p className="text-sm font-medium" style={{ textWrap: "balance" }}>
         {t("editor.emptyTitle")}
       </p>
-      <p
-        className="max-w-md text-xs text-muted-foreground"
-        style={{ textWrap: "pretty" }}
-      >
+      <p className="max-w-md text-xs text-muted-foreground" style={{ textWrap: "pretty" }}>
         {hint}
       </p>
     </div>

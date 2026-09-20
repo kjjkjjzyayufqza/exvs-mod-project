@@ -289,6 +289,23 @@ export function StageInspector({
         </div>
       </div>
 
+      {/*
+        The loading screen sits directly under the stage's identity: it is the
+        first thing a modder compares against the game, and burying it below
+        the slot table is what made the course row above look like this
+        stage's line-up.
+      */}
+      <BriefingEditor
+        briefing={stage.briefing}
+        slots={stage.script?.slots ?? null}
+        units={units}
+        issues={issues}
+        focus={focus}
+        stageIndex={stage.index}
+        disabled={disabled}
+        onChange={(briefing) => onChangeStage({ ...stage, briefing })}
+      />
+
       <SquadReplace
         units={units}
         currentMapHash={stage.briefing.mapHash}
@@ -344,17 +361,6 @@ export function StageInspector({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <BriefingEditor
-        briefing={stage.briefing}
-        slots={stage.script?.slots ?? null}
-        units={units}
-        issues={issues}
-        focus={focus}
-        stageIndex={stage.index}
-        disabled={disabled}
-        onChange={(briefing) => onChangeStage({ ...stage, briefing })}
-      />
     </section>
   );
 }

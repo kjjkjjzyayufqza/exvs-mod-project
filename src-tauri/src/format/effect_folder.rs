@@ -2439,7 +2439,9 @@ fn append_source_item_to_destination(
         return Ok(());
     };
     let source_hash = item_hash(entry).unwrap_or(0);
-    let dest_hash = policy.and_then(|item| item.dest_hash_id).unwrap_or(source_hash);
+    let dest_hash = policy
+        .and_then(|item| item.dest_hash_id)
+        .unwrap_or(source_hash);
     let key = format!("{}:{source_hash}", source_record.actual_ext);
     if !copied_keys.insert(key.clone()) {
         return Ok(());
@@ -2457,15 +2459,19 @@ fn append_source_item_to_destination(
     };
     if destination_has_item_hash(dest_forest, dest_data, &source_record.actual_ext, dest_hash) {
         if overwrite {
-            let dest_record =
-                find_dest_record_by_hash(dest_forest, dest_data, &source_record.actual_ext, dest_hash)
-                    .ok_or_else(|| {
-                    format!(
-                        "Destination already has {} hash {} but the file record is missing.",
-                        source_record.actual_ext,
-                        EffectFolderHash::from_i32(dest_hash).hex
-                    )
-                })?;
+            let dest_record = find_dest_record_by_hash(
+                dest_forest,
+                dest_data,
+                &source_record.actual_ext,
+                dest_hash,
+            )
+            .ok_or_else(|| {
+                format!(
+                    "Destination already has {} hash {} but the file record is missing.",
+                    source_record.actual_ext,
+                    EffectFolderHash::from_i32(dest_hash).hex
+                )
+            })?;
             let dest_path = dest_record.path.clone();
             copy_one_file_replace(&source_record.path, &dest_path)?;
             copied.push(dest_path.to_string_lossy().to_string());

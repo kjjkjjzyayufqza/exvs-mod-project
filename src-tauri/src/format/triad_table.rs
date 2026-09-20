@@ -386,7 +386,10 @@ impl TriadTable {
                 };
                 let at = spec.entry_offset as usize;
                 let slot = raw.get_mut(at..at + 4).ok_or_else(|| {
-                    format!("row {index}: string column 0x{:08X} out of range", spec.hash)
+                    format!(
+                        "row {index}: string column 0x{:08X} out of range",
+                        spec.hash
+                    )
                 })?;
                 slot.copy_from_slice(&offset.to_le_bytes());
             }
@@ -415,8 +418,11 @@ pub fn build_table_bytes(
         })
         .collect();
 
-    let pool_start =
-        0x20 + field_specs.len() * 4 + field_specs.len() * 12 + rows.len() * 4 + rows.len() * entry_size;
+    let pool_start = 0x20
+        + field_specs.len() * 4
+        + field_specs.len() * 12
+        + rows.len() * 4
+        + rows.len() * entry_size;
 
     let mut pool: Vec<u8> = Vec::new();
     let mut entries_raw = Vec::with_capacity(rows.len());

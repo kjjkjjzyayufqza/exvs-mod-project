@@ -121,9 +121,10 @@ fn parse_int_token(token: &str) -> Option<u32> {
         return u32::from_str_radix(hex, 16).ok();
     }
     if let Some(negative) = token.strip_prefix('-') {
-        return negative.parse::<i64>().ok().and_then(|value| {
-            (value <= i64::from(i32::MAX) + 1).then(|| (-value) as i32 as u32)
-        });
+        return negative
+            .parse::<i64>()
+            .ok()
+            .and_then(|value| (value <= i64::from(i32::MAX) + 1).then(|| (-value) as i32 as u32));
     }
     token.parse::<u32>().ok()
 }
@@ -138,7 +139,9 @@ fn function_token_after(text: &str, marker: &str) -> Option<String> {
     token.starts_with("func_").then(|| token.to_string())
 }
 
-fn find_registration(functions: &[ScriptFunction]) -> Result<(&ScriptFunction, String, String, String), String> {
+fn find_registration(
+    functions: &[ScriptFunction],
+) -> Result<(&ScriptFunction, String, String, String), String> {
     let registration = functions
         .iter()
         .find(|function| {
@@ -156,13 +159,23 @@ fn find_registration(functions: &[ScriptFunction]) -> Result<(&ScriptFunction, S
         .windows(2)
         .find(|pair| pair[1].starts_with("func_241(") && pair[0].contains(" = func_"))
         .and_then(|pair| function_token_after(&pair[0], " = "))
-        .ok_or_else(|| format!("{}: cannot find the group resolver call before func_241", registration.name))?;
+        .ok_or_else(|| {
+            format!(
+                "{}: cannot find the group resolver call before func_241",
+                registration.name
+            )
+        })?;
 
     let phase_line = registration
         .body
         .iter()
         .find(|line| line.starts_with("sys_1(0x10001, 0x10,"))
-        .ok_or_else(|| format!("{}: cannot find the phase slot 0x10 registration", registration.name))?;
+        .ok_or_else(|| {
+            format!(
+                "{}: cannot find the phase slot 0x10 registration",
+                registration.name
+            )
+        })?;
     let after_row = phase_line
         .splitn(4, ',')
         .nth(3)
@@ -307,7 +320,9 @@ fn field_globals(functions: &[ScriptFunction], row_reader: &str) -> Vec<FieldGlo
     let mut loaded: BTreeMap<u32, (String, String)> = BTreeMap::new();
     for function in functions {
         for line in &function.body {
-            let Some(index) = line.find(&marker) else { continue };
+            let Some(index) = line.find(&marker) else {
+                continue;
+            };
             let global = &line[..index];
             if !global.starts_with("global") || global.contains(' ') {
                 continue;
@@ -336,7 +351,10 @@ fn field_globals(functions: &[ScriptFunction], row_reader: &str) -> Vec<FieldGlo
             }
             for token in global_tokens(line) {
                 if wanted.contains(token) {
-                    readers.entry(token).or_default().insert(function.name.as_str());
+                    readers
+                        .entry(token)
+                        .or_default()
+                        .insert(function.name.as_str());
                 }
             }
         }
@@ -496,9 +514,13 @@ void func_15()
     #[test]
     fn resolves_registration_resolvers_and_row_loader() {
         let functions = split_functions(SAMPLE).expect("split");
-        let (registration, group, phase, reader) = find_registration(&functions).expect("registration");
+        let (registration, group, phase, reader) =
+            find_registration(&functions).expect("registration");
         assert_eq!(registration.name, "func_10");
-        assert_eq!((group.as_str(), phase.as_str(), reader.as_str()), ("func_11", "func_12", "func_13"));
+        assert_eq!(
+            (group.as_str(), phase.as_str(), reader.as_str()),
+            ("func_11", "func_12", "func_13")
+        );
 
         let pointers = BTreeMap::from([(0x130, "func_30".to_string())]);
         let groups = parse_resolver(&functions[1], &pointers);
@@ -508,7 +530,10 @@ void func_15()
         assert_eq!(groups[1].raw_value, Some(0x100));
 
         let phases = parse_resolver(&functions[2], &pointers);
-        assert_eq!(phases.iter().map(|entry| entry.key).collect::<Vec<_>>(), vec![0x7f9e131d, 0x81e0f737]);
+        assert_eq!(
+            phases.iter().map(|entry| entry.key).collect::<Vec<_>>(),
+            vec![0x7f9e131d, 0x81e0f737]
+        );
 
         let globals = field_globals(&functions, "func_13");
         assert_eq!(globals.len(), 2);
@@ -518,8 +543,15 @@ void func_15()
 
     #[test]
     fn classic_scripts_are_rejected_explicitly() {
-        let functions = split_functions("void func_0()\n{\n    func_241(0x1, func_2);\n}\n").expect("split");
-        let err = find_registration(&functions).err().expect("classic script must be rejected");
-        assert!(err.contains("not an external action-table generation"), "unexpected: {}", err);
+        let functions =
+            split_functions("void func_0()\n{\n    func_241(0x1, func_2);\n}\n").expect("split");
+        let err = find_registration(&functions)
+            .err()
+            .expect("classic script must be rejected");
+        assert!(
+            err.contains("not an external action-table generation"),
+            "unexpected: {}",
+            err
+        );
     }
 }

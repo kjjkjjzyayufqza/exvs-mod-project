@@ -23,11 +23,12 @@ use std::{
 
 use std::str::FromStr;
 
+use binrw::BinRead;
 use crc32fast::Hasher as Crc32Hasher;
 use image_dds::image::RgbaImage;
 use image_dds::{dds_from_image, ImageFormat as DdsImageFormat, Mipmaps, Quality};
-use nutexb::NutexbFile;
-use nutexb::NutexbFormat;
+use nutexb::{NutexbFile, NutexbFormat, Surface};
+use ssbh_lib::{SsbhArray, SsbhByteBuffer, SsbhString};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -99,6 +100,143 @@ pub(crate) fn read_legacy_nutexb_name<R: std::io::Read + std::io::Seek>(
         bytes.push(byte[0]);
     }
     Err("Unterminated legacy TEX internal name".to_string())
+}
+
+/// HBSS/TEX v1.0 stores width, format, and mip buffers in the SSBH header, not a trailing 46XT footer.
+#[derive(BinRead)]
+#[br(little, magic = b"HBSS")]
+struct LegacyTexFile {
+    #[br(align_before = 0x10)]
+    inner: LegacyTexInner,
+}
+
+#[derive(BinRead)]
+#[br(little, magic = b" XET")]
+struct LegacyTexInner {
+    major: u16,
+    minor: u16,
+    _type_tag: u32,
+    _unk0: u32,
+    name: SsbhString,
+    _name2: SsbhString,
+    width: u32,
+    height: u32,
+    depth: u32,
+    image_format: u32,
+    unk2: u32,
+    unk3: u32,
+    mip_layers: SsbhArray<SsbhArray<SsbhByteBuffer>>,
+}
+
+fn nutexb_format_from_u32(value: u32) -> Result<NutexbFormat, String> {
+    match value {
+        0x0100 => Ok(NutexbFormat::R8Unorm),
+        0x0400 => Ok(NutexbFormat::R8G8B8A8Unorm),
+        0x0405 => Ok(NutexbFormat::R8G8B8A8Srgb),
+        0x0434 => Ok(NutexbFormat::R32G32B32A32Float),
+        0x0450 => Ok(NutexbFormat::B8G8R8A8Unorm),
+        0x0455 => Ok(NutexbFormat::B8G8R8A8Srgb),
+        0x0480 => Ok(NutexbFormat::BC1Unorm),
+        0x0485 => Ok(NutexbFormat::BC1Srgb),
+        0x0490 => Ok(NutexbFormat::BC2Unorm),
+        0x0495 => Ok(NutexbFormat::BC2Srgb),
+        0x04A0 => Ok(NutexbFormat::BC3Unorm),
+        0x04A5 => Ok(NutexbFormat::BC3Srgb),
+        0x0180 => Ok(NutexbFormat::BC4Unorm),
+        0x0185 => Ok(NutexbFormat::BC4Snorm),
+        0x0280 => Ok(NutexbFormat::BC5Unorm),
+        0x0285 => Ok(NutexbFormat::BC5Snorm),
+        0x04D7 => Ok(NutexbFormat::BC6Ufloat),
+        0x04D8 => Ok(NutexbFormat::BC6Sfloat),
+        0x04E0 => Ok(NutexbFormat::BC7Unorm),
+        0x04E5 => Ok(NutexbFormat::BC7Srgb),
+        _ => Err(format!(
+            "Unsupported legacy TEX image format: 0x{value:04X}"
+        )),
+    }
+}
+
+fn read_legacy_tex_v10_as_nutexb(bytes: &[u8]) -> Result<NutexbFile, String> {
+    let mut cursor = Cursor::new(bytes);
+    let parsed = LegacyTexFile::read(&mut cursor)
+        .map_err(|e| format!("Failed to parse HBSS/TEX v1.0: {e}"))?;
+    let inner = parsed.inner;
+    if (inner.major, inner.minor) != (1, 0) {
+        return Err(format!(
+            "Unsupported legacy TEX version: {}.{}",
+            inner.major, inner.minor
+        ));
+    }
+    if inner.mip_layers.elements.is_empty() {
+        return Err("Legacy TEX has no mip layers".to_string());
+    }
+    let mipmap_count = inner.mip_layers.elements[0].elements.len() as u32;
+    if mipmap_count == 0 {
+        return Err("Legacy TEX layer has no mipmaps".to_string());
+    }
+    let mut data = Vec::new();
+    for (layer_index, layer) in inner.mip_layers.elements.iter().enumerate() {
+        if layer.elements.len() as u32 != mipmap_count {
+            return Err(format!(
+                "Legacy TEX layer {layer_index} mip count {} != {mipmap_count}",
+                layer.elements.len()
+            ));
+        }
+        for mip in &layer.elements {
+            if mip.elements.is_empty() {
+                return Err(format!("Legacy TEX layer {layer_index} has an empty mip"));
+            }
+            data.extend_from_slice(&mip.elements);
+        }
+    }
+    let name = inner.name.to_string_lossy();
+    if name.trim().is_empty() {
+        return Err("Empty legacy TEX internal name".to_string());
+    }
+    let layer_count = inner.mip_layers.elements.len() as u32;
+    let image_format = nutexb_format_from_u32(inner.image_format)?;
+    let mut nutexb = NutexbFile::from_surface_unswizzled(
+        &Surface {
+            width: inner.width,
+            height: inner.height,
+            depth: inner.depth.max(1),
+            image_data: &data,
+            mipmap_count,
+            layer_count,
+            image_format,
+        },
+        name,
+    );
+    nutexb.footer.unk2 = inner.unk2;
+    nutexb.footer.unk3 = inner.unk3;
+    nutexb.footer.mipmap_count = mipmap_count;
+    nutexb.footer.layer_count = layer_count;
+    nutexb.footer.data_size = data.len() as u32;
+    nutexb.footer.version = (1, 0);
+    Ok(nutexb)
+}
+
+fn open_nutexb_from_bytes(bytes: &[u8]) -> Result<NutexbFile, String> {
+    if bytes.len() >= 0x18 && bytes.starts_with(b"HBSS") {
+        if bytes.get(0x10..0x14) != Some(b" XET") {
+            return Err("Unsupported HBSS texture (not TEX)".to_string());
+        }
+        let major = u16::from_le_bytes(bytes[0x14..0x16].try_into().unwrap());
+        let minor = u16::from_le_bytes(bytes[0x16..0x18].try_into().unwrap());
+        if (major, minor) != (1, 0) {
+            return Err(format!("Unsupported legacy TEX version: {major}.{minor}"));
+        }
+        return read_legacy_tex_v10_as_nutexb(bytes);
+    }
+    let mut cursor = Cursor::new(bytes);
+    NutexbFile::read(&mut cursor).map_err(|e| e.to_string())
+}
+
+fn open_nutexb_from_path(path: impl AsRef<Path>) -> Result<NutexbFile, String> {
+    let path = path.as_ref();
+    let bytes =
+        fs::read(path).map_err(|e| format!("Failed to read nutexb {}: {e}", path.display()))?;
+    open_nutexb_from_bytes(&bytes)
 }
 
 /// The internal texture name, read without touching the image data.
@@ -182,7 +320,7 @@ pub fn nutexb_preview_file_identity(path: &str) -> Result<NutexbPreviewFileIdent
 }
 
 pub fn read_nutexb_info(input_path: &str) -> Result<NutexbInfo, String> {
-    let nutexb = NutexbFile::read_from_file(input_path).map_err(|e| e.to_string())?;
+    let nutexb = open_nutexb_from_path(input_path).map_err(|e| e.to_string())?;
     Ok(NutexbInfo {
         name: nutexb.footer.string.to_string(),
         width: nutexb.footer.width,
@@ -197,7 +335,7 @@ pub fn read_nutexb_info(input_path: &str) -> Result<NutexbInfo, String> {
 }
 
 pub fn export_nutexb_to_dds(input_path: &str, output_path: &str) -> Result<(), String> {
-    let nutexb = NutexbFile::read_from_file(input_path).map_err(|e| e.to_string())?;
+    let nutexb = open_nutexb_from_path(input_path).map_err(|e| e.to_string())?;
     let dds = nutexb.to_dds().map_err(|e| e.to_string())?;
 
     let out = File::create(output_path).map_err(|e| e.to_string())?;
@@ -208,7 +346,7 @@ pub fn export_nutexb_to_dds(input_path: &str, output_path: &str) -> Result<(), S
 }
 
 pub fn export_nutexb_to_png(input_path: &str, output_path: &str) -> Result<(), String> {
-    let nutexb = NutexbFile::read_from_file(input_path).map_err(|e| e.to_string())?;
+    let nutexb = open_nutexb_from_path(input_path).map_err(|e| e.to_string())?;
 
     // ultimate_tex approach: DDS as an intermediate handles swizzling and compressed formats (BC1/BC7/etc).
     let dds = nutexb.to_dds().map_err(|e| e.to_string())?;
@@ -237,8 +375,7 @@ pub fn nutexb_to_rgba_from_bytes(
     nutexb_bytes: &[u8],
     max_dimension: Option<u32>,
 ) -> Result<(u32, u32, Vec<u8>), String> {
-    let mut cursor = Cursor::new(nutexb_bytes.to_vec());
-    let nutexb = NutexbFile::read(&mut cursor).map_err(|e| e.to_string())?;
+    let nutexb = open_nutexb_from_bytes(nutexb_bytes)?;
     let dds = nutexb.to_dds().map_err(|e| e.to_string())?;
 
     let base_w = nutexb.footer.width;
@@ -294,8 +431,7 @@ pub fn pack_rgba_response(width: u32, height: u32, rgba: Vec<u8>) -> Vec<u8> {
 
 /// Encodes nutexb bytes to PNG (same pipeline as path-based decode; avoids a second disk read when bytes are already in memory).
 pub fn nutexb_to_png_bytes_from_bytes(nutexb_bytes: &[u8]) -> Result<Vec<u8>, String> {
-    let mut cursor = Cursor::new(nutexb_bytes.to_vec());
-    let nutexb = NutexbFile::read(&mut cursor).map_err(|e| e.to_string())?;
+    let nutexb = open_nutexb_from_bytes(nutexb_bytes)?;
     let dds = nutexb.to_dds().map_err(|e| e.to_string())?;
     let image: RgbaImage = image_dds::image_from_dds(&dds, 0).map_err(|e| e.to_string())?;
     let mut buf = Vec::new();
@@ -613,7 +749,7 @@ fn make_root_convert_output_path(root: &Path, nutexb_path: &Path) -> Result<Path
     let rel_dir = parent.strip_prefix(root).unwrap_or(parent);
     let convert_dir = root.join("__convert").join(rel_dir);
 
-    let nutexb = NutexbFile::read_from_file(nutexb_path).map_err(|e| e.to_string())?;
+    let nutexb = open_nutexb_from_path(nutexb_path).map_err(|e| e.to_string())?;
     let name = sanitize_file_name(nutexb.footer.string.to_string().as_str());
     Ok(convert_dir.join(format!("{name}.png")))
 }
@@ -624,7 +760,7 @@ fn make_per_file_convert_output_path(nutexb_path: &Path) -> Result<PathBuf, Stri
         .ok_or_else(|| "Invalid nutexb path".to_string())?;
     let convert_dir = parent.join("__convert");
 
-    let nutexb = NutexbFile::read_from_file(nutexb_path).map_err(|e| e.to_string())?;
+    let nutexb = open_nutexb_from_path(nutexb_path).map_err(|e| e.to_string())?;
     let name = sanitize_file_name(nutexb.footer.string.to_string().as_str());
     Ok(convert_dir.join(format!("{name}.png")))
 }
@@ -678,8 +814,7 @@ pub fn nutexb_identity_and_compressed_from_path(
 pub fn nutexb_compressed_data_from_bytes(
     nutexb_bytes: &[u8],
 ) -> Result<(u32, u32, u8, Vec<u8>), String> {
-    let mut cursor = Cursor::new(nutexb_bytes.to_vec());
-    let nutexb = NutexbFile::read(&mut cursor).map_err(|e| e.to_string())?;
+    let nutexb = open_nutexb_from_bytes(nutexb_bytes)?;
     let w = nutexb.footer.width;
     let h = nutexb.footer.height;
     let fmt = nutexb.footer.image_format;
@@ -803,7 +938,7 @@ pub fn series_image_replace_from_png(
     }
 
     let (nutexb_name, dds_format, mipmaps) = if out_nutexb_path.exists() {
-        let existing = NutexbFile::read_from_file(&out_nutexb_path).map_err(|e| e.to_string())?;
+        let existing = open_nutexb_from_path(&out_nutexb_path).map_err(|e| e.to_string())?;
         let name = existing.footer.string.to_string();
         let format = nutexb_format_to_dds_image_format(existing.footer.image_format);
         // Use the source PNG dimensions as the new target size.
@@ -868,7 +1003,7 @@ pub fn card_icon_replace_from_png(
     }
 
     let (nutexb_name, dds_format, mipmaps) = if out_nutexb_path.exists() {
-        let existing = NutexbFile::read_from_file(&out_nutexb_path).map_err(|e| e.to_string())?;
+        let existing = open_nutexb_from_path(&out_nutexb_path).map_err(|e| e.to_string())?;
         let name = existing.footer.string.to_string();
         let format = nutexb_format_to_dds_image_format(existing.footer.image_format);
         let max_mips = max_mipmap_count_for_size(rgba.width().max(1), rgba.height().max(1));
@@ -943,7 +1078,7 @@ pub fn card_icon_replace_from_png_with_dds_format(
     }
 
     let (nutexb_name, mipmaps) = if out_nutexb_path.exists() {
-        let existing = NutexbFile::read_from_file(&out_nutexb_path).map_err(|e| e.to_string())?;
+        let existing = open_nutexb_from_path(&out_nutexb_path).map_err(|e| e.to_string())?;
         let name = existing.footer.string.to_string();
         let max_mips = max_mipmap_count_for_size(rgba.width().max(1), rgba.height().max(1));
         let requested_mips = existing.footer.mipmap_count.min(max_mips);
@@ -1082,7 +1217,7 @@ pub fn card_icon_detect_dds_format(nutexb_path: &str) -> Result<String, String> 
     if !path.exists() {
         return Err(format!("Target nutexb does not exist: {}", path.display()));
     }
-    let existing = NutexbFile::read_from_file(&path).map_err(|e| e.to_string())?;
+    let existing = open_nutexb_from_path(&path).map_err(|e| e.to_string())?;
     let dds_format = nutexb_format_to_dds_image_format(existing.footer.image_format);
     Ok(format!("{dds_format:?}"))
 }
@@ -1138,7 +1273,7 @@ pub fn card_icon_batch_replace_with_dds_format(
                     continue;
                 }
 
-                let nutexb = match NutexbFile::read_from_file(&nutexb_path) {
+                let nutexb = match open_nutexb_from_path(&nutexb_path) {
                     Ok(n) => n,
                     Err(_) => {
                         failed += 1;
@@ -1217,7 +1352,7 @@ pub fn card_icon_batch_replace_with_dds_format(
                     continue;
                 }
 
-                let nutexb = match NutexbFile::read_from_file(&nutexb_path) {
+                let nutexb = match open_nutexb_from_path(&nutexb_path) {
                     Ok(n) => n,
                     Err(_) => {
                         failed += 1;

@@ -193,7 +193,9 @@ impl Drop for ActiveJobGuard {
 
 fn append_log(buffer: &Arc<Mutex<String>>, bytes: &[u8]) {
     let text = String::from_utf8_lossy(bytes);
-    let mut guard = buffer.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut guard = buffer
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     guard.push_str(&text);
     if guard.len() > COMPOSE_LOG_CAP {
         let excess = guard.len() - COMPOSE_LOG_CAP;
@@ -217,7 +219,10 @@ fn tail_log(buffer: &Arc<Mutex<String>>, max_chars: usize) -> String {
     text.chars().skip(count - max_chars).collect()
 }
 
-fn spawn_log_reader(pipe: impl Read + Send + 'static, buffer: Arc<Mutex<String>>) -> thread::JoinHandle<()> {
+fn spawn_log_reader(
+    pipe: impl Read + Send + 'static,
+    buffer: Arc<Mutex<String>>,
+) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         let mut reader = pipe;
         let mut chunk = [0u8; 4096];

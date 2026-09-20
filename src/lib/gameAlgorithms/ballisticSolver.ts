@@ -109,16 +109,16 @@ export function ballisticTrajectoryMidpoint(
  *
  * @param spawnOffsetForward - horizontal angular offset (degrees, converted to radians)
  * @param horizontalAimAngle - horizontal aim angle (degrees, converted to radians)
- * @param verticalLaunchAngle - vertical launch position offset
- * @param offsetAngleHorizontal - horizontal positional offset
+ * @param spawnHorizontalOffset - spawn left/right positional offset
+ * @param spawnForwardOffset - spawn front/back positional offset
  * @param offsetAngleVertical - vertical angular offset (degrees, converted to radians)
  * @param unitForward - unit's facing direction
  */
 export function computeSpawnOffset(
   spawnOffsetForward: number,
   horizontalAimAngle: number,
-  verticalLaunchAngle: number,
-  offsetAngleHorizontal: number,
+  spawnHorizontalOffset: number,
+  spawnForwardOffset: number,
   offsetAngleVertical: number,
 ): { angleRadH: number; angleRadV: number; offsets: Vec3 } {
   const angleRadH = degToRad(spawnOffsetForward);
@@ -127,6 +127,6 @@ export function computeSpawnOffset(
   return {
     angleRadH,
     angleRadV,
-    offsets: [offsetAngleHorizontal, verticalLaunchAngle, horizontalAimAngle],
+    offsets: [spawnForwardOffset, spawnHorizontalOffset, horizontalAimAngle],
   };
 }
