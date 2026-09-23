@@ -24,10 +24,11 @@ describe("sys_0(0x400) slot arguments", () => {
     const withDeploy = insertAction(graph, graph.nodes[1].id, "deploy").graph;
     const deploy = withDeploy.nodes.find((node) => node.data.kind === "deploy");
     if (deploy?.data.kind !== "deploy") throw new Error("missing deploy");
-    const next = applySlotParam(withDeploy, deploy.data.slot, 0, 8);
+    const previousSlot = deploy.data.slot;
+    const next = applySlotParam(withDeploy, previousSlot, 0, 8);
     const moved = next.nodes.find((node) => node.data.kind === "deploy");
     expect(next.slots.some((slot) => slot.params[0] === 8)).toBe(true);
-    expect(next.slots.some((slot) => slot.params[0] === deploy.data.slot)).toBe(false);
+    expect(next.slots.some((slot) => slot.params[0] === previousSlot)).toBe(false);
     expect(moved?.data.kind === "deploy" && moved.data.slot).toBe(8);
     expect(applySlotParam(next, 8, 0, 1)).toBe(next);
   });

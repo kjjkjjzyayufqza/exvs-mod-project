@@ -54,9 +54,9 @@ describe("deriveSceneLightingFromGraphicParams", () => {
 describe("defaultAppliedSunKeys", () => {
   test("selects the sun and leaves unrelated rows unchecked", () => {
     const keys = defaultAppliedSunKeys([
-      { key: "directional_lighting_intensity", value: "5.5" },
-      { key: "ibl_lighting_intensity", value: "1" },
-      { key: "pfx_bloom_enable", value: "1" },
+      { key: "directional_lighting_intensity" },
+      { key: "ibl_lighting_intensity" },
+      { key: "pfx_bloom_enable" },
     ]);
     expect([...keys]).toEqual([
       "directional_lighting_intensity",
