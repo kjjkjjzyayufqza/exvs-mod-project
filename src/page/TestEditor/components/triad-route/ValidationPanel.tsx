@@ -23,6 +23,8 @@ import type {
   ReferenceList,
   ValidationIssue,
 } from "@/services/triadRoute/types";
+import { LoadedPathsPanel } from "./LoadedPathsPanel";
+import type { WorkspacePathRow } from "./workspacePathRows";
 import { SEVERITY_STYLE } from "./severity";
 
 type ValidationPanelProps = {
@@ -34,6 +36,14 @@ type ValidationPanelProps = {
   isChecking: boolean;
   onRecheck: () => void;
   onFocusIssue: (location: string) => void;
+  /**
+   * Every path the editor resolved. Shown whether or not a route is open,
+   * because "nothing has been checked yet" is exactly when a modder needs to
+   * see which workspace, dplcache and mod folder the editor is actually on.
+   */
+  pathRows: WorkspacePathRow[];
+  /** Probe result per row id, merged in by {@link LoadedPathsPanel}. */
+  pathPresence: Record<string, boolean>;
 };
 
 /**
@@ -51,6 +61,8 @@ export function ValidationPanel({
   isChecking,
   onRecheck,
   onFocusIssue,
+  pathRows,
+  pathPresence,
 }: ValidationPanelProps) {
   const { t } = useTranslation("test-triad-route");
   const [open, setOpen] = useState(false);
@@ -106,20 +118,24 @@ export function ValidationPanel({
               <p
                 className={cn(
                   "min-w-0 truncate text-xs",
-                  status === "blocked"
-                    ? "text-destructive"
-                    : status === "warnings"
-                      ? "text-amber-700 dark:text-amber-400"
-                      : "text-muted-foreground",
+                  isChecking
+                    ? "text-muted-foreground"
+                    : status === "blocked"
+                      ? "text-destructive"
+                      : status === "warnings"
+                        ? "text-amber-700 dark:text-amber-400"
+                        : "text-muted-foreground",
                 )}
               >
-                {!hasRoute
-                  ? t("validation.idleSubtitle")
-                  : status === "blocked"
-                    ? t("validation.blocked", { count: summary.error })
-                    : status === "warnings"
-                      ? t("validation.warningStatus", { count: summary.warning })
-                      : t("validation.ready")}
+                {isChecking
+                  ? t("validation.checking")
+                  : !hasRoute
+                    ? t("validation.idleSubtitle")
+                    : status === "blocked"
+                      ? t("validation.blocked", { count: summary.error })
+                      : status === "warnings"
+                        ? t("validation.warningStatus", { count: summary.warning })
+                        : t("validation.ready")}
               </p>
             </button>
           </CollapsibleTrigger>
@@ -253,6 +269,8 @@ export function ValidationPanel({
                 </div>
               </footer>
             ) : null}
+
+            <LoadedPathsPanel rows={pathRows} presence={pathPresence} />
           </div>
         </CollapsibleContent>
       </section>

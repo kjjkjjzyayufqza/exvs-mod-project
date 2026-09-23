@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ExternalLink, FileCode, FileSearch, FolderOpen, Info, Layers, PackageOpen } from "lucide-react";
+import { ExternalLink, FileCode, FileSearch, FolderOpen, Info, Layers, Loader2, PackageOpen, Plus } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +28,7 @@ import {
   type ValidationIssue,
 } from "@/services/triadRoute/types";
 import { BriefingEditor } from "./BriefingEditor";
+import { SlotTableSkeleton } from "./EditorLoading";
 import { SectionHeader } from "./SectionHeader";
 import { SlotTableEditor } from "./SlotTableEditor";
 import { SquadBuilder } from "./SquadBuilder";
@@ -59,10 +60,13 @@ type StageInspectorProps = {
   isReadingScript?: boolean;
   onReadScript?: () => void;
   onExtractScript?: () => void;
+  canAddStage?: boolean;
+  isAddingStage?: boolean;
+  onAddStage?: () => void;
 };
 
 /** One stage: its identity, the fight it runs and the briefing it shows. */
-export function StageInspector({
+export const StageInspector = memo(function StageInspector({
   stage,
   stages,
   units,
@@ -83,6 +87,9 @@ export function StageInspector({
   isReadingScript,
   onReadScript,
   onExtractScript,
+  canAddStage,
+  isAddingStage,
+  onAddStage,
 }: StageInspectorProps) {
   const { t } = useTranslation("test-triad-route");
   const { ref, isFlashing } = useIssueFocus("stage", focus, stage.index);
@@ -139,6 +146,22 @@ export function StageInspector({
             </button>
           );
         })}
+        {canAddStage && onAddStage ? (
+          <button
+            type="button"
+            onClick={onAddStage}
+            disabled={disabled || isAddingStage}
+            className={cn(
+              "inline-flex min-h-9 items-center gap-1.5 rounded-full border border-dashed px-3.5 text-xs font-medium",
+              "transition-[background-color,border-color,color,transform] duration-150 ease-out",
+              "hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "active:translate-y-px disabled:opacity-50",
+            )}
+          >
+            {isAddingStage ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
+            {t("extend.add")}
+          </button>
+        ) : null}
         {layoutIssues.length > 0 ? (
           <span
             className={cn(
@@ -328,6 +351,8 @@ export function StageInspector({
             })
           }
         />
+      ) : isReadingScript ? (
+        <SlotTableSkeleton label={t("stages.scriptLoading")} />
       ) : (
         <ScriptNotice
           isReadingScript={isReadingScript}
@@ -363,7 +388,7 @@ export function StageInspector({
       </AlertDialog>
     </section>
   );
-}
+});
 
 /**
  * Why the slot table is not here yet, and the two ways forward.

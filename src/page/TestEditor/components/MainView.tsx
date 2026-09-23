@@ -58,6 +58,8 @@ interface MainViewProps {
   workspaceRouteRoots: Record<string, string>;
   modFolderPath?: string;
   onPackMutated?: (pack: WorkspacePackIdentity) => void;
+  /** Clears a pack's "changed" marker once it has been repacked. */
+  onPackRepacked?: (packKey: string) => void;
   onRequestFhm2dRepack?: (pack: WorkspacePackIdentity) => void;
   onOpenAsEffectProject?: (filePath: string) => void;
 }
@@ -258,8 +260,10 @@ const tabs: StageTab[] = [
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}
         onPackMutated={props.onPackMutated}
+        onPackRepacked={props.onPackRepacked}
         onRevealTreeFolder={props.onRevealTreeFolder}
         onOpenMscFolder={props.onActivateMscWorkspace}
+        modFolderPath={props.modFolderPath}
       />
     ),
   },

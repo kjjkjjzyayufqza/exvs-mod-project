@@ -33,6 +33,8 @@ import {
   type GeneratedSceneIdentity,
   type SceneRow,
 } from "@/services/triadRoute/types";
+import { CATEGORY_F } from "./extendStages";
+import { officialSceneName } from "./sceneNames";
 
 /** Custom routes start above the shipped course ids to avoid the used range. */
 const FIRST_CUSTOM_COURSE_ID = 250;
@@ -83,8 +85,6 @@ export interface RouteWizardValues {
 
 /** Categories the briefing can draw: `NumA`..`NumF` and nothing else. */
 const CATEGORIES = [1, 2, 3, 4, 5, 6];
-/** Category 6 is F, the single-stage class. */
-const CATEGORY_F = 6;
 
 type RouteWizardDialogProps = {
   request: RouteWizardRequest | null;
@@ -94,6 +94,10 @@ type RouteWizardDialogProps = {
   /** Ids a new scene must not hash onto. */
   existingSceneKeys: number[];
   existingPackageHashes: number[];
+  /** Where the create will look, so the name check sees the same files. */
+  outmissionDir: string;
+  workspaceRoot: string;
+  scriptPrefix: string;
   isCreating?: boolean;
   onCancel: () => void;
   onCreate: (values: RouteWizardValues) => void;
@@ -105,17 +109,7 @@ function categoryFromLetter(letter: string | null): number {
   return index >= 1 && index <= 6 ? index : 1;
 }
 
-/** The shipped naming rule: `000triad_battle_<cat><NNN>_<MMM>`. */
-export function officialSceneName(
-  category: number,
-  numberInCategory: number,
-  stageNumber: number,
-): string {
-  const letter = (categoryLetter(category) ?? "A").toLowerCase();
-  const course = String(Math.max(1, numberInCategory)).padStart(3, "0");
-  const stage = String(stageNumber).padStart(3, "0");
-  return `000triad_battle_${letter}${course}_${stage}`;
-}
+
 
 /**
  * Creating a route, either way round.
@@ -133,6 +127,9 @@ export function RouteWizardDialog({
   template,
   existingSceneKeys,
   existingPackageHashes,
+  outmissionDir,
+  workspaceRoot,
+  scriptPrefix,
   isCreating,
   onCancel,
   onCreate,
@@ -240,8 +237,16 @@ export function RouteWizardDialog({
    * re-hash on every unrelated parent render. They only change when the
    * workspace is reloaded, which closes the dialog anyway.
    */
-  const takenIds = useRef({ scenes: existingSceneKeys, packages: existingPackageHashes });
-  takenIds.current = { scenes: existingSceneKeys, packages: existingPackageHashes };
+  const takenIds = useRef({
+    scenes: existingSceneKeys,
+    packages: existingPackageHashes,
+    workspace: { outmissionDir, workspaceRoot, scriptPrefix },
+  });
+  takenIds.current = {
+    scenes: existingSceneKeys,
+    packages: existingPackageHashes,
+    workspace: { outmissionDir, workspaceRoot, scriptPrefix },
+  };
 
   useEffect(() => {
     if (namesKey.length === 0) {
@@ -255,7 +260,12 @@ export function RouteWizardDialog({
     const token = (hashToken.current += 1);
     setIsHashing(true);
     const timer = setTimeout(() => {
-      void hashTriadSceneNames(names, takenIds.current.scenes, takenIds.current.packages)
+      void hashTriadSceneNames(
+        names,
+        takenIds.current.scenes,
+        takenIds.current.packages,
+        takenIds.current.workspace,
+      )
         .then((result) => {
           if (token !== hashToken.current) return;
           setIdentities(result);

@@ -6,10 +6,11 @@ import { TopNavBar } from "@/components/TopNavBar"
 import { Outlet, useLocation } from "react-router"
 import { cn } from "@/lib/utils"
 import { readSidebarOpenMirror, useConfigStore } from "@/store/configStore"
+import { NavigationGuardProvider } from "@/layout/NavigationGuardContext"
 
 export default function SidebarLayout() {
   const location = useLocation()
-  const fullBleedEditor = location.pathname === "/SceneEdit" || location.pathname === "/UnitModelEdit"
+  const fullBleedEditor = location.pathname === "/SceneEdit" || location.pathname === "/UnitModelEdit" || location.pathname === "/MissionNodeEditor"
 
   const storeSidebarOpen = useConfigStore((s) => s.sidebarOpen)
   const setSidebarOpen = useConfigStore((s) => s.setSidebarOpen)
@@ -31,6 +32,7 @@ export default function SidebarLayout() {
   )
 
   return (
+    <NavigationGuardProvider>
     <SidebarProvider open={open} onOpenChange={handleOpenChange}>
       <div className="flex h-svh w-full flex-col pt-[var(--layout-topbar-height)]">
         <TopNavBar />
@@ -48,5 +50,6 @@ export default function SidebarLayout() {
       </div>
       <Toaster />
     </SidebarProvider>
+    </NavigationGuardProvider>
   )
 }

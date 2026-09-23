@@ -138,6 +138,7 @@ describe("useSceneTextureLoader", () => {
         null,
         textureSlotLoadEnabled,
         objectTextureLoadState,
+        true,
       ),
     );
 

@@ -99,7 +99,8 @@
   },
   "renderStyle": {
     "standard": "标准",
-    "anime": "动漫（辉光 + 暖光）"
+    "anime": "动漫（辉光 + 暖光）",
+    "exvs2": "EXVS2 延迟渲染（还原管线）"
   },
   "export": {
     "loadModelFirst": "请先在视口中加载模型以启用导出。",

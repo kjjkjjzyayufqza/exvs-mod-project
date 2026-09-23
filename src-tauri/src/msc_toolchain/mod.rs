@@ -19,6 +19,7 @@ pub mod cfg;
 pub mod compile;
 pub mod decompile;
 pub mod ir;
+pub mod mission_authoring;
 pub mod opcode;
 pub mod postprocess;
 pub mod profile;

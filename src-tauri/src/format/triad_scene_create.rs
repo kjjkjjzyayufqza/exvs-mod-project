@@ -43,22 +43,46 @@ const BRIEFING_SUFFIX: &str = "_out.dat";
 /// Every shipped briefing is stored under this coarse container tag.
 const BRIEFING_FILE_TYPE: &str = ".bin";
 
+/// Where the donor mission script is read from.
+///
+/// A homemade stage's latest bytes live in the unpacked workspace folder.
+/// Cloning the packed `.fhm2d` from dplcache would silently copy an older
+/// fight. The request names the source so that cannot happen by accident.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum SceneDonorKind {
+    #[default]
+    DplcachePackage,
+    WorkspaceFolder,
+}
+
 /// What to clone, and what the copy is called.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NewSceneRequest {
-    /// Folder holding `0x????????.fhm2d`, used as the donor script package.
+    /// Folder holding `0x????????.fhm2d`, used when cloning a packed donor.
+    #[serde(default)]
     pub dpl_cache_dir: String,
     pub workspace_root: String,
     /// Route prefix the mission scripts are unpacked under, e.g. `051mission`.
     pub script_prefix: String,
     /// Unpacked `0xF7B91DE7` folder the briefing is added to.
     pub outmission_dir: String,
-    /// Scene whose script package and briefing are copied.
+    /// Scene whose briefing is copied, and whose ids the new name must not hash to.
     pub donor_scene_key: u32,
     pub donor_package_hash: u32,
     /// Official-style name of the new scene, without any extension.
     pub scene_name: String,
+    #[serde(default)]
+    pub donor_kind: SceneDonorKind,
+    /// Unpacked donor script folder when `donor_kind` is `workspace-folder`.
+    #[serde(default)]
+    pub donor_script_folder: Option<String>,
+    /// Overwrite this workspace's own earlier copy of the same scene instead
+    /// of refusing. Only files that provably belong to `scene_name` are
+    /// touched; ids held by anything else stay a hard error.
+    #[serde(default)]
+    pub replace_existing: bool,
 }
 
 /// Everything the new scene now owns on disk.
@@ -107,10 +131,97 @@ fn check_scene_name(name: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// What this workspace already holds under a scene's own name.
+///
+/// A create that fails partway, or a stage that was built and then dropped
+/// from the draft, leaves the script folder and the briefing behind. Those
+/// keep the name's two hashes occupied, so the next attempt at the same
+/// scene collides with nothing but itself. Telling that apart from a real
+/// clash is what makes replacing safe: only files this proves are the
+/// scene's own are ever overwritten.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SceneNameOwnership {
+    /// `<name>_out.dat`, registered in the outmission package under the very
+    /// scene key the name hashes to.
+    pub briefing: Option<String>,
+    /// `<script_root>/<name>/`, whose structure JSON already carries the
+    /// package hash the name hashes to.
+    pub script_folder: Option<String>,
+}
+
+impl SceneNameOwnership {
+    pub fn is_empty(&self) -> bool {
+        self.briefing.is_none() && self.script_folder.is_none()
+    }
+}
+
+/// Name what a refusal found, so the message says which files replace covers.
+fn describe_owned(owned: &SceneNameOwnership) -> String {
+    let mut parts = Vec::with_capacity(2);
+    if let Some(folder) = &owned.script_folder {
+        parts.push(format!("script folder {folder}"));
+    }
+    if let Some(briefing) = &owned.briefing {
+        parts.push(format!("briefing {briefing}"));
+    }
+    parts.join(", ")
+}
+
+/// Work out which of a scene name's own files this workspace already has.
+///
+/// `script_root` is the folder mission-script packages are unpacked under,
+/// e.g. `<workspace>/051mission`.
+pub fn scene_name_ownership(
+    outmission_dir: &Path,
+    script_root: &Path,
+    name: &str,
+    scene_key: u32,
+    package_hash: u32,
+) -> Result<SceneNameOwnership, String> {
+    let expected_briefing = format!("{name}{BRIEFING_SUFFIX}");
+    let briefing = index_briefings(outmission_dir)?
+        .path_for(scene_key)
+        .filter(|path| path.file_name().and_then(|value| value.to_str()) == Some(&expected_briefing))
+        .map(|path| path.display().to_string());
+
+    let folder = script_root.join(name);
+    let script_folder = if folder.is_dir() && folder_declares_hash(&folder, package_hash) {
+        Some(folder.display().to_string())
+    } else {
+        None
+    };
+
+    Ok(SceneNameOwnership {
+        briefing,
+        script_folder,
+    })
+}
+
+/// Whether an unpacked package folder's structure already names this hash.
+///
+/// A folder whose `HashName` says something else is not this scene's, even
+/// when the directory name matches, so it is never replaced.
+fn folder_declares_hash(folder: &Path, package_hash: u32) -> bool {
+    let Ok(structure_path) = sibling_structure_path(folder) else {
+        return false;
+    };
+    let Ok(structure) = read_structure(&structure_path) else {
+        return false;
+    };
+    structure
+        .get("HashName")
+        .and_then(Value::as_str)
+        .map(|value| value.eq_ignore_ascii_case(&format!("0x{package_hash:08X}")))
+        .unwrap_or(false)
+}
+
 /// Create one new scene by cloning a donor's script package and briefing.
 ///
-/// Nothing is written until both hashes are known to be free, so a clash
-/// leaves the workspace exactly as it was rather than half-populated.
+/// Nothing is written until both hashes are known to be free — or known to
+/// be held by nothing but this scene's own leftovers, with
+/// `replace_existing` set — so a clash leaves the workspace exactly as it
+/// was rather than half-populated.
 pub fn create_triad_scene(
     request: &NewSceneRequest,
     taken_scene_keys: &BTreeSet<u32>,
@@ -121,21 +232,41 @@ pub fn create_triad_scene(
 
     let scene_key = family_hash(SCENE_KEY_STATE, name)?;
     let package_hash = family_hash(SCRIPT_PACKAGE_STATE, name)?;
-    if taken_scene_keys.contains(&scene_key) {
-        return Err(format!(
-            "{name} hashes to scene key 0x{scene_key:08X}, which is already in use"
-        ));
-    }
-    if taken_package_hashes.contains(&package_hash) {
-        return Err(format!(
-            "{name} hashes to package 0x{package_hash:08X}, which is already in use"
-        ));
-    }
     if scene_key == request.donor_scene_key || package_hash == request.donor_package_hash {
         return Err(format!("{name} hashes to the donor scene's own ids"));
     }
 
     let outmission_dir = PathBuf::from(strip_trailing_sep(&request.outmission_dir));
+    let script_root = PathBuf::from(strip_trailing_sep(&request.workspace_root))
+        .join(strip_trailing_sep(&request.script_prefix));
+    let owned = scene_name_ownership(
+        &outmission_dir,
+        &script_root,
+        name,
+        scene_key,
+        package_hash,
+    )?;
+
+    // A taken id is only this scene's to reclaim when the thing holding it
+    // is the scene's own file. Anything else is a real clash and stays a
+    // refusal however the request is flagged.
+    if taken_scene_keys.contains(&scene_key) && owned.briefing.is_none() {
+        return Err(format!(
+            "{name} hashes to scene key 0x{scene_key:08X}, which is already in use"
+        ));
+    }
+    if taken_package_hashes.contains(&package_hash) && owned.script_folder.is_none() {
+        return Err(format!(
+            "{name} hashes to package 0x{package_hash:08X}, which is already in use"
+        ));
+    }
+    if !owned.is_empty() && !request.replace_existing {
+        return Err(format!(
+            "{name} already exists in this workspace ({}); turn on replace to overwrite it",
+            describe_owned(&owned)
+        ));
+    }
+
     let donor_briefing = index_briefings(&outmission_dir)?
         .path_for(request.donor_scene_key)
         .map(Path::to_path_buf)
@@ -146,43 +277,78 @@ pub fn create_triad_scene(
             )
         })?;
 
-    let donor_package = PathBuf::from(strip_trailing_sep(&request.dpl_cache_dir))
-        .join(format!("0x{:08X}.fhm2d", request.donor_package_hash));
-    if !donor_package.is_file() {
-        return Err(format!(
-            "donor script package not found: {}",
-            donor_package.display()
-        ));
-    }
-
-    let script_folder = PathBuf::from(strip_trailing_sep(&request.workspace_root))
-        .join(strip_trailing_sep(&request.script_prefix))
-        .join(name);
+    let script_folder = script_root.join(name);
     if script_folder.exists() {
-        return Err(format!(
-            "script folder already exists: {}",
-            script_folder.display()
-        ));
+        // Replacing clears the scene's own folder so the clone below writes a
+        // fresh copy. A folder whose structure names a different package is
+        // not this scene's and is left where it is.
+        if !(request.replace_existing && owned.script_folder.is_some()) {
+            return Err(format!(
+                "script folder already exists: {}",
+                script_folder.display()
+            ));
+        }
+        fs::remove_dir_all(&script_folder).map_err(|e| {
+            format!("failed to clear {}: {e}", script_folder.display())
+        })?;
     }
 
-    // The clone extractor writes the folder and its `_structure.json` with the
-    // new HashName, which is the same path the GUI pack clone takes.
-    extract_fhm2d_gui_clone(
-        donor_package
-            .to_str()
-            .ok_or("donor package path is not valid UTF-8")?,
-        script_folder
-            .to_str()
-            .ok_or("script folder path is not valid UTF-8")?,
-        &format!("0x{package_hash:08X}"),
-        Some(name),
-    )?;
+    match request.donor_kind {
+        SceneDonorKind::DplcachePackage => {
+            let donor_package = PathBuf::from(strip_trailing_sep(&request.dpl_cache_dir))
+                .join(format!("0x{:08X}.fhm2d", request.donor_package_hash));
+            if !donor_package.is_file() {
+                return Err(format!(
+                    "donor script package not found: {}",
+                    donor_package.display()
+                ));
+            }
+            // The clone extractor writes the folder and its `_structure.json`
+            // with the new HashName, which is the same path the GUI pack clone takes.
+            extract_fhm2d_gui_clone(
+                donor_package
+                    .to_str()
+                    .ok_or("donor package path is not valid UTF-8")?,
+                script_folder
+                    .to_str()
+                    .ok_or("script folder path is not valid UTF-8")?,
+                &format!("0x{package_hash:08X}"),
+                Some(name),
+            )?;
+        }
+        SceneDonorKind::WorkspaceFolder => {
+            let donor_folder = request
+                .donor_script_folder
+                .as_deref()
+                .map(str::trim)
+                .filter(|path| !path.is_empty())
+                .ok_or("a workspace donor needs donorScriptFolder")?;
+            if let Err(error) = clone_workspace_script_folder(
+                Path::new(donor_folder),
+                &script_folder,
+                name,
+                package_hash,
+            ) {
+                let _ = fs::remove_dir_all(&script_folder);
+                if let Ok(structure_path) = sibling_structure_path(&script_folder) {
+                    let _ = fs::remove_file(structure_path);
+                }
+                return Err(error);
+            }
+        }
+    }
 
     // From here on the folder exists, so any failure takes it back out: a
     // half-extracted package that the next attempt then refuses as "already
     // exists" is the worst of both outcomes.
     let created = normalise_script_payload(&script_folder, name).and_then(|script_file| {
-        let briefing_file = add_briefing(&outmission_dir, &donor_briefing, name, scene_key)?;
+        let briefing_file = add_briefing(
+            &outmission_dir,
+            &donor_briefing,
+            name,
+            scene_key,
+            owned.briefing.is_some() && request.replace_existing,
+        )?;
         Ok((script_file, briefing_file))
     });
     let (script_file, briefing_file) = match created {
@@ -206,6 +372,66 @@ pub fn create_triad_scene(
     })
 }
 
+/// Copy an unpacked mission-script folder and retarget its sibling structure.
+///
+/// Homemade stages are edited in the workspace, not in dplcache. The copy
+/// keeps the donor's `.mismsexc` bytes and only rewrites Name / HashName so
+/// the packer looks the new package up under the name-derived hash.
+fn clone_workspace_script_folder(
+    donor_folder: &Path,
+    target_folder: &Path,
+    name: &str,
+    package_hash: u32,
+) -> Result<(), String> {
+    if !donor_folder.is_dir() {
+        return Err(format!(
+            "donor script folder not found: {}",
+            donor_folder.display()
+        ));
+    }
+    let donor_structure = sibling_structure_path(donor_folder)?;
+    fs::create_dir_all(target_folder).map_err(|e| {
+        format!(
+            "failed to create {}: {e}",
+            target_folder.display()
+        )
+    })?;
+    copy_script_payloads(donor_folder, target_folder)?;
+
+    let mut structure = read_structure(&donor_structure)?;
+    if let Some(object) = structure.as_object_mut() {
+        object.insert("Name".to_string(), json!(name));
+        object.insert(
+            "HashName".to_string(),
+            json!(format!("0x{package_hash:08X}")),
+        );
+    }
+    let target_structure = target_folder.with_file_name(format!(
+        "{}_structure.json",
+        target_folder
+            .file_name()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| format!("{} has no folder name", target_folder.display()))?
+    ));
+    write_structure(&target_structure, &structure)
+}
+
+fn copy_script_payloads(from: &Path, to: &Path) -> Result<(), String> {
+    let donor = select_script_payload(from)?;
+    let file_name = donor
+        .file_name()
+        .ok_or_else(|| format!("donor script has no file name: {}", donor.display()))?;
+    let dest = to.join(file_name);
+    fs::copy(&donor, &dest).map_err(|e| {
+        format!(
+            "failed to copy {} to {}: {e}",
+            donor.display(),
+            dest.display()
+        )
+    })?;
+    Ok(())
+}
+
 /// Reshape the cloned package into a mission-script package.
 ///
 /// The clone extractor mirrors the package's own tree, so the payload lands
@@ -214,31 +440,62 @@ pub fn create_triad_scene(
 /// packer reads back, so the file is moved and the structure JSON is pointed
 /// at its new name and type.
 fn normalise_script_payload(folder: &Path, name: &str) -> Result<PathBuf, String> {
-    let payloads = collect_payloads(folder)?;
-    let [donor] = payloads.as_slice() else {
-        return Err(format!(
-            "expected exactly one payload in {}, found {}",
-            folder.display(),
-            payloads.len()
-        ));
-    };
+    let donor = select_script_payload(folder)?;
 
     let target = folder.join(format!("{name}{SCRIPT_EXTENSION}"));
-    if donor != &target {
-        fs::rename(donor, &target).map_err(|e| {
+    if donor != target {
+        fs::rename(&donor, &target).map_err(|e| {
             format!(
                 "failed to move {} to {}: {e}",
                 donor.display(),
                 target.display()
             )
         })?;
-        remove_empty_parents(donor, folder);
+        remove_empty_parents(&donor, folder);
     }
     point_structure_at_payload(folder, name)?;
     Ok(target)
 }
 
-/// Every extracted file under the package folder, structure JSON aside.
+fn is_sidecar_file(file_name: &str) -> bool {
+    file_name.ends_with("_structure.json")
+        || file_name == "meta.bin"
+        || file_name.ends_with(".bak")
+        || file_name.ends_with(".c")
+        || file_name.ends_with(".txt")
+}
+
+fn is_mission_script(path: &Path) -> bool {
+    path.extension().and_then(|ext| ext.to_str()) == Some("mismsexc")
+}
+
+/// The one file the mission loader / packer actually reads.
+///
+/// A workspace folder next to a homemade stage also holds a decompiled `.c`,
+/// a `.txt` dump and a `.mismsexc.bak` from the last save. Those are not the
+/// package. An extract from dplcache still lands as a single `0/0.bin`.
+fn select_script_payload(folder: &Path) -> Result<PathBuf, String> {
+    let payloads = collect_payloads(folder)?;
+    let scripts: Vec<&PathBuf> = payloads.iter().filter(|path| is_mission_script(path)).collect();
+    match scripts.as_slice() {
+        [one] => Ok((*one).clone()),
+        [] => match payloads.as_slice() {
+            [one] => Ok(one.clone()),
+            _ => Err(format!(
+                "expected one mission script in {}, found {} files",
+                folder.display(),
+                payloads.len()
+            )),
+        },
+        _ => Err(format!(
+            "expected one .mismsexc in {}, found {}",
+            folder.display(),
+            scripts.len()
+        )),
+    }
+}
+
+/// Package files under the folder, ignoring editor sidecars.
 fn collect_payloads(folder: &Path) -> Result<Vec<PathBuf>, String> {
     fn walk(dir: &Path, found: &mut Vec<PathBuf>) -> Result<(), String> {
         for entry in fs::read_dir(dir)
@@ -254,7 +511,7 @@ fn collect_payloads(folder: &Path) -> Result<Vec<PathBuf>, String> {
                 .file_name()
                 .and_then(|value| value.to_str())
                 .unwrap_or("");
-            if file_name.ends_with("_structure.json") || file_name == "meta.bin" {
+            if is_sidecar_file(file_name) {
                 continue;
             }
             found.push(path);
@@ -331,11 +588,20 @@ fn add_briefing(
     donor_briefing: &Path,
     name: &str,
     scene_key: u32,
+    replace: bool,
 ) -> Result<PathBuf, String> {
     let file_name = format!("{name}{BRIEFING_SUFFIX}");
     let target = outmission_dir.join(&file_name);
     if target.exists() {
-        return Err(format!("briefing already exists: {}", target.display()));
+        if !replace {
+            return Err(format!("briefing already exists: {}", target.display()));
+        }
+        // The caller proved this file is the one the package already
+        // registers under `scene_key`, so only its bytes are replaced and
+        // the structure JSON keeps the entry it has.
+        fs::copy(donor_briefing, &target)
+            .map_err(|e| format!("failed to replace the briefing: {e}"))?;
+        return Ok(target);
     }
     let structure_path = sibling_structure_path(outmission_dir)?;
     let mut structure = read_structure(&structure_path)?;

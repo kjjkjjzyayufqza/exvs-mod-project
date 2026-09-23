@@ -4,7 +4,8 @@
     "openImportStage": "打开/导入场景",
     "openStageFolder": "打开场景文件夹",
     "importFhm2d": "导入 .fhm2d",
-    "extractFhm2d": "将 .fhm2d 解包到文件夹"
+    "extractFhm2d": "将 .fhm2d 解包到文件夹",
+    "openMapLibrary": "从地图库打开……"
   },
   "save": {
     "folderAria": "保存为文件夹",
@@ -47,7 +48,10 @@
     "hideStats": "隐藏统计",
     "animeRender": "动画渲染",
     "enableAnime": "启用动画渲染",
-    "disableAnime": "禁用动画渲染"
+    "disableAnime": "禁用动画渲染",
+    "exvs2Render": "EXVS2 延迟渲染器",
+    "enableExvs2": "启用 EXVS2 延迟渲染器",
+    "disableExvs2": "关闭 EXVS2 延迟渲染器"
   },
   "more": {
     "actions": "更多操作",
@@ -59,7 +63,10 @@
     "loading": "加载中",
     "loaded": "已加载",
     "idle": "空闲",
-    "noLoaded": "当前没有已加载的 nutexb 纹理"
+    "noLoaded": "当前没有已加载的 nutexb 纹理",
+    "masterSwitch": "贴图",
+    "enableTooltip": "立即解码并应用贴图",
+    "disableTooltip": "卸载贴图，只保留模型"
   },
   "placement": {
     "noData": "没有放置数据",
@@ -83,5 +90,9 @@
     "matchCount_one": "{{count}} 个匹配项",
     "matchCount_other": "{{count}} 个匹配项",
     "objectNumber": "对象"
+  },
+  "mission": {
+    "label": "任务",
+    "tooltip": "在这张地图上预览任务脚本"
   }
 }

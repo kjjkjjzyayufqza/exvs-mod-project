@@ -37,6 +37,17 @@ export const TRIAD_CONTENT_IDS = [
 
 export type TriadContentId = (typeof TRIAD_CONTENT_IDS)[number];
 
+/**
+ * Content the editor cannot open a route without. `pilot-name-list` is absent
+ * on purpose: without it the slot editor falls back to raw pilot hashes, which
+ * is a stated limitation rather than a broken editor.
+ */
+export const REQUIRED_TRIAD_CONTENT_IDS: readonly TriadContentId[] = [
+  "triad-battle-list",
+  "scene-id-table",
+  "outmission",
+];
+
 export interface ResolvedTriadPacks {
   locations: Record<TriadContentId, ResolvedWorkspaceContentLocation>;
   paths: TriadWorkspacePaths;
@@ -156,9 +167,8 @@ export async function resolveTriadPacks(
     ResolvedWorkspaceContentLocation
   >;
 
-  const required: TriadContentId[] = ["triad-battle-list", "scene-id-table", "outmission"];
   const notUnpacked = TRIAD_CONTENT_IDS.filter((id) => folderOf(locations[id]) === null);
-  const missing = required.filter((id) => notUnpacked.includes(id));
+  const missing = REQUIRED_TRIAD_CONTENT_IDS.filter((id) => notUnpacked.includes(id));
 
   return {
     locations,
@@ -189,6 +199,31 @@ export function mutatedTriadPacks(
     identities.push(workspacePackIdentityFromResolved(pack, location.sourceLayout));
   }
   return identities;
+}
+
+/**
+ * Repack-plan entry id -> catalog content id.
+ *
+ * The plan names packages by what they carry (`route-tables`), the workspace
+ * names them by catalog id (`triad-battle-list`); stage scripts are in neither
+ * catalog, so they map to nothing and simply never had a dirty marker.
+ */
+const REPACK_ENTRY_CONTENT_IDS: Record<string, TriadContentId> = {
+  "route-tables": "triad-battle-list",
+  "scene-id-table": "scene-id-table",
+  briefings: "outmission",
+  "pilot-names": "pilot-name-list",
+};
+
+/** The workspace pack key a repacked plan entry corresponds to, if any. */
+export function triadPackKeyForRepackEntry(
+  packs: ResolvedTriadPacks,
+  entryId: string,
+): string | null {
+  const contentId = REPACK_ENTRY_CONTENT_IDS[entryId];
+  if (!contentId) return null;
+  const location = packs.locations[contentId];
+  return (location.existing ?? location.configured).packKey;
 }
 
 /** Which packages a write touched, derived from the files that changed. */

@@ -11,4 +11,5 @@ export const SIDEBAR_ROUTE_URLS: readonly string[] = [
   "/MiscTools",
   "/Config",
   "/About",
+  "/MissionNodeEditor",
 ];

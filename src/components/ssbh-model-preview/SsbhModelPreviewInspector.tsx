@@ -462,6 +462,9 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
                 <SelectItem value="anime" className="text-[11px]">
                   {t("renderStyle.anime")}
                 </SelectItem>
+                <SelectItem value="exvs2" className="text-[11px]">
+                  {t("renderStyle.exvs2")}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -10,6 +10,9 @@ interface SceneKeyboardOptions {
   onSelectAll?: (ids: string[]) => void;
   onClearSelection?: () => void;
   allNodeIds?: string[];
+  /** Return true when a mission-graph edit consumed this shortcut. */
+  onUndo?: () => boolean;
+  onRedo?: () => boolean;
 }
 
 export function useSceneKeyboard({
@@ -20,6 +23,8 @@ export function useSceneKeyboard({
   onSelectAll,
   onClearSelection,
   allNodeIds = [],
+  onUndo,
+  onRedo,
 }: SceneKeyboardOptions) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -27,15 +32,18 @@ export function useSceneKeyboard({
 
       const ctrl = e.ctrlKey || e.metaKey;
       const shift = e.shiftKey;
+      const key = e.key.toLowerCase();
 
-      if (ctrl && e.key === "z" && !shift) {
+      if (ctrl && key === "z" && !shift) {
         e.preventDefault();
+        if (onUndo?.()) return;
         useSceneEditorStore.getState().undo();
         return;
       }
 
-      if ((ctrl && e.key === "z" && shift) || (ctrl && e.key === "y")) {
+      if ((ctrl && key === "z" && shift) || (ctrl && key === "y")) {
         e.preventDefault();
+        if (onRedo?.()) return;
         useSceneEditorStore.getState().redo();
         return;
       }
@@ -119,5 +127,5 @@ export function useSceneKeyboard({
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onDelete, onDuplicate, onPaste, onFocus, onSelectAll, onClearSelection, allNodeIds]);
+  }, [onDelete, onDuplicate, onPaste, onFocus, onSelectAll, onClearSelection, allNodeIds, onUndo, onRedo]);
 }

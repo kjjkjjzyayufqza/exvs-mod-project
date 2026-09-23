@@ -1,3 +1,5 @@
+import type { PreviewRenderStyle } from "./SsbhModelPreviewContext";
+
 import type { SsbhModelPreviewInstance } from "./types";
 
 export const TEST_EDITOR_SCENE_CONFIG_VERSION = 1;
@@ -47,7 +49,7 @@ export type TestEditorSceneConfig = {
     uvFlipU: boolean;
     uvFlipV: boolean;
     textureSlotLoadEnabled: Record<string, boolean>;
-    previewRenderStyle: "standard" | "anime";
+    previewRenderStyle: PreviewRenderStyle;
   };
   motion: {
     applyCamera: boolean;

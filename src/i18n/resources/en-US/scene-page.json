@@ -34,7 +34,8 @@
     "noSceneSession": "No scene session — open a stage first",
     "hktFailed": "HKT failed for {{name}}: {{message}}",
     "replaceHktFailed": "Replace HKT failed: {{message}}",
-    "batchTextureValidation": "Batch texture validation failed: {{message}}"
+    "batchTextureValidation": "Batch texture validation failed: {{message}}",
+    "missionMapFailed": "Could not open the map this mission script names"
   },
   "progress": {
     "preparing": "Preparing {{fileName}}...",

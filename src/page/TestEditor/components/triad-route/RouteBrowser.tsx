@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, PackageOpen, Search, Sparkles, Star } from "lucide-react";
+import { Copy, ListOrdered, Loader2, PackageOpen, Search, Sparkles, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,8 +24,15 @@ type RouteBrowserProps = {
   onClaimDormantGroup: (group: DormantSceneGroup) => void;
   /** Mint a new course from this one, with brand-new scene folders. */
   onCloneCourse: (course: CourseRow) => void;
+  /** Open the reorder dialog for a category. Hidden while a search is active. */
+  onReorderCategory?: (category: number) => void;
   /** An open draft whose course row is not in the table yet, if any. */
   unsavedCourse?: { name: string; courseId: number; category: number; stages: number } | null;
+  onSelectUnsaved?: () => void;
+  /** Course rows with unsaved in-memory edits (including the one on screen). */
+  dirtyRowIds?: number[];
+  /** Row currently being read from disk. */
+  loadingRowId?: number | null;
 };
 
 function matches(course: CourseRow, needle: string): boolean {
@@ -49,8 +56,13 @@ export function RouteBrowser({
   onSelectCourse,
   onClaimDormantGroup,
   onCloneCourse,
+  onReorderCategory,
   unsavedCourse,
+  onSelectUnsaved,
+  dirtyRowIds,
+  loadingRowId,
 }: RouteBrowserProps) {
+  const dirtyRows = useMemo(() => new Set(dirtyRowIds ?? []), [dirtyRowIds]);
   const { t } = useTranslation("test-triad-route");
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<BrowserTab>("courses");
@@ -69,7 +81,16 @@ export function RouteBrowser({
       .sort(([a], [b]) => a - b)
       .map(([category, rows]) => ({
         category,
-        rows: rows.sort((a, b) => a.courseId - b.courseId || a.variant - b.variant),
+        // The select screen orders a category by `numberInCategory`, not by
+        // course id: the shipped A-19..A-21 are ids 250..252 and A-99 sits at
+        // number 50. Sorting by id here would show an order the game never
+        // draws, and reordering a category would look like it did nothing.
+        rows: rows.sort(
+          (a, b) =>
+            a.numberInCategory - b.numberInCategory ||
+            a.courseId - b.courseId ||
+            a.variant - b.variant,
+        ),
       }));
   }, [courses, needle]);
 
@@ -127,7 +148,16 @@ export function RouteBrowser({
               is and what is still missing.
             */}
             {unsavedCourse ? (
-              <div className="flex min-h-11 items-center gap-2 rounded-md border border-amber-500/50 bg-amber-500/5 px-2.5 py-1.5">
+              <button
+                type="button"
+                onClick={onSelectUnsaved}
+                className={cn(
+                  "flex min-h-11 w-full items-center gap-2 rounded-md border border-amber-500/50 bg-amber-500/5 px-2.5 py-1.5 text-left",
+                  "transition-[background-color,border-color] duration-150 ease-out",
+                  "hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  selectedCourseRowId == null && "ring-1 ring-amber-500/40",
+                )}
+              >
                 <span className="flex size-6 shrink-0 items-center justify-center rounded bg-amber-500/15 text-[10px] font-semibold tabular-nums">
                   {categoryLetter(unsavedCourse.category) ?? unsavedCourse.category}
                 </span>
@@ -141,13 +171,32 @@ export function RouteBrowser({
                 <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
                   {t("browser.unsavedCourse")}
                 </span>
-              </div>
+              </button>
             ) : null}
             {categories.map(({ category, rows }) => (
               <section key={category} className="flex flex-col gap-1">
-                <h4 className="sticky top-0 z-[1] bg-background/95 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground backdrop-blur">
-                  {t("browser.categoryLabel", { letter: categoryLetter(category) ?? category })}
-                </h4>
+                <div className="sticky top-0 z-[1] flex items-center gap-1 bg-background/95 py-1 backdrop-blur">
+                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {t("browser.categoryLabel", { letter: categoryLetter(category) ?? category })}
+                  </h4>
+                  {onReorderCategory && !needle ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="ml-auto size-6 text-muted-foreground"
+                      title={t("browser.reorderCategory", {
+                        letter: categoryLetter(category) ?? category,
+                      })}
+                      aria-label={t("browser.reorderCategory", {
+                        letter: categoryLetter(category) ?? category,
+                      })}
+                      onClick={() => onReorderCategory(category)}
+                    >
+                      <ListOrdered className="size-3.5" />
+                    </Button>
+                  ) : null}
+                </div>
                 {rows.map((course) => (
                   <div
                     key={course.rowId}
@@ -156,11 +205,13 @@ export function RouteBrowser({
                       "transition-[background-color,border-color] duration-150 ease-out",
                       "hover:bg-accent focus-within:ring-2 focus-within:ring-ring",
                       course.rowId === selectedCourseRowId && "border-primary bg-accent",
+                      course.rowId === loadingRowId && "border-primary/50",
                     )}
                   >
                     <button
                       type="button"
                       aria-current={course.rowId === selectedCourseRowId ? "true" : undefined}
+                      aria-busy={course.rowId === loadingRowId}
                       onClick={() => onSelectCourse(course)}
                       className={cn(
                         "flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2.5 text-left",
@@ -168,8 +219,14 @@ export function RouteBrowser({
                         "focus-visible:outline-none",
                       )}
                     >
-                      <span className="flex size-6 shrink-0 items-center justify-center rounded bg-muted text-[10px] font-semibold tabular-nums">
+                      <span className="relative flex size-6 shrink-0 items-center justify-center rounded bg-muted text-[10px] font-semibold tabular-nums">
                         {categoryLetter(course.category) ?? course.category}
+                        {dirtyRows.has(course.rowId) ? (
+                          <span
+                            className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-amber-500"
+                            title={t("browser.unsavedEdits")}
+                          />
+                        ) : null}
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="flex items-center gap-1.5 truncate text-xs font-medium">
@@ -191,10 +248,14 @@ export function RouteBrowser({
                           {course.initiallyOpen === 1 ? ` · ${t("browser.initiallyOpen")}` : ""}
                         </p>
                       </div>
-                      <span className="flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums text-muted-foreground">
-                        <Star className="size-3" />
-                        {course.starRating}
-                      </span>
+                      {course.rowId === loadingRowId ? (
+                        <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+                      ) : (
+                        <span className="flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums text-muted-foreground">
+                          <Star className="size-3" />
+                          {course.starRating}
+                        </span>
+                      )}
                     </button>
                     {/*
                       Cloning is a per-course action, so it lives on the row

@@ -15,12 +15,14 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use app_lib::format::bsfo::{Bsfo, SCENE_CLASS_STANDARD};
 use app_lib::format::param_entry_schema::{KIND_I32, KIND_U32};
 use app_lib::format::triad_course::{columns as tc, CourseTable, SceneTable};
 use app_lib::format::triad_route_document::{
-    BriefingDraft, CourseDraft, RouteBuildMode, StageDraft, TriadRouteDocument, TRIAD_ROUTE_SCHEMA,
+    BriefingDraft, CourseDraft, RouteBuildMode, StageDraft, StageOrigin, TriadRouteDocument,
+    TRIAD_ROUTE_SCHEMA,
 };
 use app_lib::format::triad_route_workspace::{
     apply_route, discover_single_table, discover_triad_tables, format_structure_file_id,
@@ -477,6 +479,7 @@ fn route_with(
             script_package_hash: package_hash,
             briefing,
             script: None,
+            origin: StageOrigin::Existing,
         }],
         ribbons: Vec::new(),
     }
@@ -518,6 +521,65 @@ fn activating_a_dormant_scene_writes_the_course_and_scene_rows() {
 
     let briefing = load_briefing(&workspace.dir("0xF7B91DE7"), A22_SCENE).unwrap();
     assert_eq!(briefing.time_limit_seconds, 300);
+}
+
+fn modified_at(path: &str) -> SystemTime {
+    fs::metadata(path).unwrap().modified().unwrap()
+}
+
+/// A save rebuilds the briefing and the script of every stage whether or not
+/// the modder touched them. The repack plan reads mtimes, so rewriting one
+/// with the bytes it already holds is enough to flag `outmission` and a stage
+/// script the route never changed.
+#[test]
+fn re_saving_an_unchanged_route_writes_nothing_and_keeps_the_mtimes() {
+    let workspace = Workspace::build();
+    let paths = workspace.paths();
+    let first = apply_route(&dormant_route(&workspace), &paths).unwrap();
+    assert!(!first.written.is_empty(), "the first save has work to do");
+
+    let stamps: Vec<(String, SystemTime)> = first
+        .written
+        .iter()
+        .map(|file| (file.path.clone(), modified_at(&file.path)))
+        .collect();
+
+    // The draft the editor holds after a save carries the row it created, so
+    // saving again lands on that row instead of adding a second one.
+    let files = discover_triad_tables(&workspace.dir("0xE952325A")).unwrap();
+    let row_id = CourseTable::parse(&read(Path::new(&files.course)))
+        .unwrap()
+        .rows()
+        .unwrap()
+        .iter()
+        .find(|row| row.course_id == 253)
+        .unwrap()
+        .row_id;
+    let mut document = dormant_route(&workspace);
+    document.course.row_id = Some(row_id);
+
+    let second = apply_route(&document, &paths).unwrap();
+
+    assert!(
+        second.written.is_empty(),
+        "a save that changes nothing must not write: {:?}",
+        second.written
+    );
+    assert!(
+        second
+            .unchanged
+            .iter()
+            .any(|path| path.contains("0xF7B91DE7")),
+        "the briefing is rebuilt on every save and must be reported as unchanged: {:?}",
+        second.unchanged
+    );
+    for (path, before) in stamps {
+        assert_eq!(
+            modified_at(&path),
+            before,
+            "{path} was touched, which would flag its package for a repack"
+        );
+    }
 }
 
 #[test]
@@ -674,6 +736,78 @@ fn a_route_whose_scene_has_no_script_row_is_refused() {
     document.stages[0].scene_key = NEW_SCENE;
     let error = apply_route(&document, &paths).unwrap_err();
     assert!(error.contains("no sceneidtable row"), "{error}");
+}
+
+#[test]
+fn rewriting_a_course_inserts_a_sceneidtable_row_for_a_cloned_stage() {
+    let workspace = Workspace::build();
+    let paths = workspace.paths();
+    let outmission = workspace.dir("0xF7B91DE7");
+    fs::write(outmission.join("2.dat"), briefing_bytes(MAP_HILLS)).unwrap();
+    let structure_path = outmission.join("0xF7B91DE7_structure.json");
+    let mut structure: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&structure_path).unwrap()).unwrap();
+    structure["SubFileData"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({
+            "index": 2,
+            "fileType": ".dat",
+            "fileIndex": 2,
+            "fileUrl": ".\\0xF7B91DE7\\2.dat"
+        }));
+    let entries = structure["SubFileStructure"].as_array_mut().unwrap();
+    let end = entries
+        .iter()
+        .position(|entry| entry.get("type").and_then(serde_json::Value::as_str) == Some("EndMark"))
+        .unwrap();
+    entries.insert(
+        end,
+        serde_json::json!({
+            "type": "Item",
+            "unk1": format_structure_file_id(NEW_SCENE),
+            "fileIndex": 2,
+            "Name": "a030_002_out"
+        }),
+    );
+    fs::write(
+        &structure_path,
+        serde_json::to_string_pretty(&structure).unwrap(),
+    )
+    .unwrap();
+
+    let briefing = load_briefing(&outmission, NEW_SCENE).unwrap();
+    let mut document = route_with(
+        briefing.clone(),
+        RouteBuildMode::RewriteExisting,
+        A1_SCENE,
+        A1_PACKAGE,
+    );
+    document.course.row_id = Some(A1_ROW);
+    document.course.course_id = 1;
+    document.course.name = "A-1".to_string();
+    document.stages[0].briefing = load_briefing(&outmission, A1_SCENE).unwrap();
+    document.stages.push(StageDraft {
+        index: 2,
+        scene_key: NEW_SCENE,
+        scene_name: Some("000triad_battle_a030_002".to_string()),
+        scene_no: 254,
+        script_package_hash: NEW_PACKAGE,
+        briefing,
+        script: None,
+        origin: StageOrigin::Cloned,
+    });
+
+    apply_route(&document, &paths).unwrap();
+
+    let table = app_lib::format::scene_id_table::SceneIdTable::parse(&read(
+        &workspace.dir("0xA073DA71").join("0.bin"),
+    ))
+    .unwrap();
+    assert_eq!(
+        table.package_for_scene(NEW_SCENE).unwrap(),
+        Some(NEW_PACKAGE)
+    );
 }
 
 #[test]

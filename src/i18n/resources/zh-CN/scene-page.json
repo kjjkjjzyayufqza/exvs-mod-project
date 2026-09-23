@@ -34,7 +34,8 @@
     "noSceneSession": "没有场景会话——请先打开场景",
     "hktFailed": "为 {{name}} 生成 HKT 失败：{{message}}",
     "replaceHktFailed": "替换 HKT 失败：{{message}}",
-    "batchTextureValidation": "批量纹理校验失败：{{message}}"
+    "batchTextureValidation": "批量纹理校验失败：{{message}}",
+    "missionMapFailed": "无法打开任务脚本指定的地图"
   },
   "progress": {
     "preparing": "正在准备 {{fileName}}……",

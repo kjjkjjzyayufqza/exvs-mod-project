@@ -1,0 +1,39 @@
+{
+  "title": "地图库",
+  "searchPlaceholder": "搜索地图名称、资源包或哈希……",
+  "columns": {
+    "stage": "地图",
+    "mapHash": "地图哈希",
+    "pack": "模型资源包",
+    "status": "状态",
+    "actions": "操作"
+  },
+  "actions": {
+    "refresh": "刷新",
+    "extractAndOpen": "解包并打开",
+    "reExtract": "重新解包",
+    "open": "打开",
+    "clearSearch": "清除筛选"
+  },
+  "status": {
+    "loading": "正在读取地图列表……",
+    "extracted": "已解包",
+    "notExtracted": "未解包",
+    "packMissing": "缺少资源包",
+    "noMatches": "没有匹配的地图",
+    "summary": "显示 {{shown}} / 共 {{total}} 张地图",
+    "extractedCount": "已解包 {{count}}"
+  },
+  "success": {
+    "extracted": "已解包 {{name}}",
+    "extractedDetail": "{{files}} 个文件，{{size}} MB"
+  },
+  "warnings": {
+    "extract": "解包过程产生了 {{count}} 条警告"
+  },
+  "errors": {
+    "loadFailed": "无法读取地图列表",
+    "loadHint": "请先在 EXVS2 Workspace 打开工作区文件夹（含 012list 的那个），在其中解包 stage_list，并在「配置」里设置 OB dplcache 路径。",
+    "extractFailed": "解包失败"
+  }
+}

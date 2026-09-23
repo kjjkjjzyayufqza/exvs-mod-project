@@ -19,6 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use crate::format::bsfo::NO_CAST as BSFO_NO_CAST;
+use crate::format::mission_hash::identify_triad_scene;
 use crate::format::triad_course::{
     UNLOCK_TYPE_CLEAR_COUNT, UNLOCK_TYPE_CLEAR_COURSE, UNLOCK_TYPE_SERVER_ONLY,
 };
@@ -31,6 +32,22 @@ use crate::format::triad_route_document::{
 const CATEGORY_F: i32 = 6;
 /// Briefing scene class that pairs with a "wipe them out" win condition.
 const SCENE_CLASS_STANDARD: i32 = 0;
+/// Briefing scene class every shipped F-class stage uses: a timed target hunt
+/// (14/14 in OBHK — see docs/mission-research/triad-course-category-rules.md).
+const SCENE_CLASS_TARGET: i32 = 2;
+/// Seconds every shipped F-class briefing runs; A-E all run 180.
+const F_CLASS_TIME_LIMIT_SECONDS: i32 = 420;
+/// Course category letters, indexed by the 1..=6 category value.
+const CATEGORY_LETTERS: [char; 6] = ['a', 'b', 'c', 'd', 'e', 'f'];
+
+/// The category letter a course value stands for, or `None` when the value is
+/// outside 1..=6 — which `course-category-invalid` already reports.
+fn category_letter(category: i32) -> Option<char> {
+    usize::try_from(category)
+        .ok()
+        .and_then(|value| value.checked_sub(1))
+        .and_then(|index| CATEGORY_LETTERS.get(index).copied())
+}
 /// Loading-screen capacity, which is the BSFO sec0 layout, not a battle limit:
 /// two player-side portraits, three boss frames, three further enemies.
 const MAX_PLAYER_SIDE_DRAWN: usize = 2;
@@ -396,16 +413,48 @@ fn validate_stage_layout(document: &TriadRouteDocument, issues: &mut Vec<Validat
             ),
         ));
     }
+    // Proven in game: an A-class course with one stage clears stage 1, advances
+    // to a stage-2 scene key of 0, finds no row, and dies on the empty optional.
+    // Reported as a warning so a work-in-progress route can still be written;
+    // the game will still crash if the missing stages are left empty.
     if !is_f_class && document.stages.len() != MAX_STAGES_PER_COURSE {
         issues.push(ValidationIssue::new(
-            "stage-count-unusual",
+            "stage-count-invalid",
             Severity::Warning,
             "stages".to_string(),
             format!(
-                "every shipped A-E course plays {MAX_STAGES_PER_COURSE} stages; this route defines {}",
+                "every shipped A-E course plays {MAX_STAGES_PER_COURSE} stages; this route defines {}, and the game crashes when it advances past the last one",
                 document.stages.len()
             ),
         ));
+    }
+
+    // Every shipped course draws its stages from one scene course number
+    // (117/117), though six of them mix an `_r` variant in with plain scenes,
+    // so the variant suffix is deliberately not part of this check.
+    let scene_course_numbers: BTreeSet<u16> = document
+        .stages
+        .iter()
+        .filter_map(|stage| identify_triad_scene(stage.scene_key))
+        .map(|identity| identity.course_number)
+        .collect();
+    if scene_course_numbers.len() > 1 {
+        let listed = scene_course_numbers
+            .iter()
+            .map(u16::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
+        issues.push(
+            ValidationIssue::new(
+                "scene-course-number-mixed",
+                Severity::Warning,
+                "stages".to_string(),
+                format!(
+                    "the stages come from scene course numbers {listed}; every shipped course draws all of its stages from one number"
+                ),
+            )
+            .arg("courseNumbers", listed),
+        );
     }
 
     let mut seen_keys = BTreeSet::new();
@@ -441,6 +490,77 @@ fn validate_stage_layout(document: &TriadRouteDocument, issues: &mut Vec<Validat
     }
 }
 
+/// The scene key has to agree with the course row that points at it.
+///
+/// A scene name is not a label: the category letter and the stage number are
+/// hashed into the key the game looks everything else up by, and the course row
+/// declares the same two facts independently. The shipped data never disagrees
+/// — 116/117 courses match on the letter and 117/117 on the stage number, the
+/// single exception being a route this editor wrote — and a disagreement is not
+/// cosmetic: the course category picks the battle ruleset, so an F-class course
+/// pointing at an `a…` scene runs a timed target hunt over an annihilation
+/// stage, with kills that register and a strength gauge nothing drains.
+fn validate_scene_identity(
+    document: &TriadRouteDocument,
+    stage: &StageDraft,
+    issues: &mut Vec<ValidationIssue>,
+    at: &str,
+) {
+    let Some(identity) = identify_triad_scene(stage.scene_key) else {
+        issues.push(
+            ValidationIssue::new(
+                "scene-name-unresolved",
+                Severity::Warning,
+                at.to_string(),
+                format!(
+                    "scene key 0x{:08X} does not hash back to an official-style name, so its category and stage number cannot be checked",
+                    stage.scene_key
+                ),
+            )
+            .arg("sceneKey", hex_u32(stage.scene_key)),
+        );
+        return;
+    };
+
+    if let Some(expected) = category_letter(document.course.category) {
+        if identity.category != expected {
+            issues.push(
+                ValidationIssue::new(
+                    "scene-category-mismatch",
+                    Severity::Error,
+                    at.to_string(),
+                    format!(
+                        "the course is category {} but plays scene {}, which belongs to category {}; the category chooses the battle rules, so the two must agree",
+                        expected.to_ascii_uppercase(),
+                        identity.name,
+                        identity.category.to_ascii_uppercase()
+                    ),
+                )
+                .arg("sceneName", &identity.name)
+                .arg("courseCategory", expected.to_ascii_uppercase())
+                .arg("sceneCategory", identity.category.to_ascii_uppercase()),
+            );
+        }
+    }
+
+    if identity.stage_number != u16::from(stage.index) {
+        issues.push(
+            ValidationIssue::new(
+                "scene-stage-number-mismatch",
+                Severity::Error,
+                at.to_string(),
+                format!(
+                    "stage {} plays scene {}, whose name says stage {}",
+                    stage.index, identity.name, identity.stage_number
+                ),
+            )
+            .arg("sceneName", &identity.name)
+            .arg("stageIndex", stage.index)
+            .arg("sceneStageNumber", identity.stage_number),
+        );
+    }
+}
+
 fn validate_stage(
     document: &TriadRouteDocument,
     stage: &StageDraft,
@@ -467,6 +587,7 @@ fn validate_stage(
             format!("scene number must be positive, got {}", stage.scene_no),
         ));
     }
+    validate_scene_identity(document, stage, issues, &at);
     // This route rewrites the scene-list rows for its own scenes, so neither
     // this stage's existing row nor a sibling stage's is a clash with it.
     let own_keys: BTreeSet<u32> = document.stages.iter().map(|s| s.scene_key).collect();
@@ -519,7 +640,7 @@ fn validate_stage(
             .arg("mapped", hex_u32(mapped))
             .arg("used", hex_u32(stage.script_package_hash)),
         ),
-        None if document.mode == RouteBuildMode::NewScenes => {
+        None if stage.may_create_scene_id_row(document.mode) => {
             issues.push(ValidationIssue::new(
                 "scene-package-row-to-create",
                 Severity::Info,
@@ -543,7 +664,7 @@ fn validate_stage(
 
     match context.check_membership(&context.available_package_hashes, stage.script_package_hash) {
         Membership::Present => {}
-        Membership::Missing if document.mode == RouteBuildMode::NewScenes => {
+        Membership::Missing if stage.may_create_scene_id_row(document.mode) => {
             issues.push(ValidationIssue::new(
                 "script-package-to-create",
                 Severity::Warning,
@@ -597,6 +718,7 @@ fn validate_stage(
     }
 
     validate_briefing(stage, context, issues, &briefing_at);
+    validate_f_class_briefing(document, stage, issues, &briefing_at);
     match &stage.script {
         Some(script) => validate_script(stage, script, context, issues, &at),
         None => {
@@ -604,6 +726,65 @@ fn validate_stage(
             // shows. Emitting a finding for each of them filled the checks
             // list the moment a route opened.
         }
+    }
+}
+
+/// An F-class stage has to be shaped like the fourteen shipped ones.
+///
+/// All 14 are the same: scene class 2 (a target hunt), the target flag set, and
+/// a seven-minute clock. A-E never look like that — 306/306 of their briefings
+/// run three minutes. The class is the part that matters, because the win
+/// condition follows it through `scene-class-mismatch`: an F course whose
+/// briefing still says "wipe them out" is the configuration that produced a
+/// battle where kills counted but nothing drained the strength gauge.
+fn validate_f_class_briefing(
+    document: &TriadRouteDocument,
+    stage: &StageDraft,
+    issues: &mut Vec<ValidationIssue>,
+    at: &str,
+) {
+    if document.course.category != CATEGORY_F {
+        return;
+    }
+    let briefing = &stage.briefing;
+
+    if briefing.scene_class != SCENE_CLASS_TARGET {
+        issues.push(
+            ValidationIssue::new(
+                "f-class-briefing-class",
+                Severity::Error,
+                at.to_string(),
+                format!(
+                    "every shipped F-class stage is a target hunt (scene class {SCENE_CLASS_TARGET}); this briefing is class {}",
+                    briefing.scene_class
+                ),
+            )
+            .arg("sceneClass", briefing.scene_class),
+        );
+    }
+    if !briefing.has_target {
+        issues.push(ValidationIssue::new(
+            "f-class-target-flag-missing",
+            Severity::Error,
+            at.to_string(),
+            "every shipped F-class briefing sets the target flag; this one does not".to_string(),
+        ));
+    }
+    if briefing.time_limit_seconds > 0
+        && briefing.time_limit_seconds != F_CLASS_TIME_LIMIT_SECONDS
+    {
+        issues.push(
+            ValidationIssue::new(
+                "f-class-time-limit-unusual",
+                Severity::Warning,
+                at.to_string(),
+                format!(
+                    "every shipped F-class stage runs {F_CLASS_TIME_LIMIT_SECONDS} seconds; this one runs {}",
+                    briefing.time_limit_seconds
+                ),
+            )
+            .arg("seconds", briefing.time_limit_seconds),
+        );
     }
 }
 

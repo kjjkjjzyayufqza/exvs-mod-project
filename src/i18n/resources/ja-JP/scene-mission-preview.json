@@ -1,0 +1,87 @@
+{
+  "title": "ミッションプレビュー",
+  "actions": {
+    "openScript": "スクリプトを開く",
+    "editNodes": "ノードを編集",
+    "editNodesHint": "この .c をミッションノードエディタで開きます。出現座標はマップのマーカーと共有します。",
+    "minimize": "最小化",
+    "closeEditor": "閉じる",
+    "restoreEditor": "ミッションノード",
+    "reload": "再読み込み",
+    "clear": "クリア",
+    "hotReload": "ホットリロード",
+    "loadMap": "マップを読み込む"
+  },
+  "status": {
+    "noScript": "ミッションの .c または .mismsexc を開くと戦闘構成をプレビューできます。",
+    "slots": "{{count}} スロット",
+    "unsaved": "未保存"
+  },
+  "source": {
+    "c": "逆コンパイル .c",
+    "compiled": "コンパイル済み .mismsexc",
+    "configFunction": "設定関数: {{name}}",
+    "wavesUnreadable": "ウェーブを解析できません",
+    "section": "スクリプト",
+    "kind": "ソース",
+    "waves": "ウェーブ",
+    "wavesReadable": "解析可"
+  },
+  "rules": {
+    "title": "戦闘ルール",
+    "win": "勝利条件",
+    "lose": "敗北条件",
+    "targetCount": "目標数",
+    "allowedLosses": "損失可能数",
+    "teamCosts": "チームコスト",
+    "bgm": "BGM",
+    "none": "なし",
+    "flag": {
+      "wipeOut": "全機撃破",
+      "targetCount": "目標撃破",
+      "survive": "時間まで生存"
+    },
+    "map": "マップ"
+  },
+  "display": {
+    "title": "表示",
+    "markerScale": "マーカーサイズ",
+    "showLabels": "ラベルを表示"
+  },
+  "phases": {
+    "title": "出撃フェーズ",
+    "count": "{{count}} スロット",
+    "empty": "このスクリプトにスロットはありません。"
+  },
+  "phase": {
+    "initial": "開始時から配置",
+    "opening": "開幕関数で投入",
+    "wave": "ウェーブ {{index}}",
+    "waveRule": "残り敵 {{enemies}} 機以下で {{seconds}} 秒後"
+  },
+  "slot": {
+    "line": "x {{x}}  y {{y}}  z {{z}}  ·  向き {{facing}}°",
+    "position": "座標",
+    "facing": "向き",
+    "intro": "登場",
+    "ai": "AI"
+  },
+  "team": {
+    "player": "味方",
+    "enemy": "敵"
+  },
+  "warnings": {
+    "unitNames": "機体名を取得できないため ID を表示します: {{reason}}"
+  },
+  "errors": {
+    "parseFailed": "ミッションスクリプトを解析できません"
+  },
+  "spawn": {
+    "externalLocked": "外部座標が有効なため、この機体はマップ上でドラッグできません。",
+    "needEditorTitle": "出現位置はまだ閲覧のみです",
+    "needEditorBody": "ミッションスクリプトは読み込まれていますが、ノードエディタが開いていないため、マップ上の機体は移動できません。ノードエディタを開くと、ドラッグした座標がこのスクリプトに書き戻されます。",
+    "needEditorAction": "ノードエディタを開く",
+    "compiledTitle": "このスクリプトはプレビューのみです",
+    "compiledBody": "コンパイル済みの .mismsexc はここでは座標を変更できません。機体を動かすには逆コンパイルした .c を開いてください。"
+  }
+}

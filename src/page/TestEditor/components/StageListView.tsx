@@ -7,7 +7,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Buffer } from "buffer";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
-import { RefreshCw, Save, FolderOpen, Info, Upload, Download, Image, Bug } from "lucide-react";
+import { RefreshCw, Save, FolderOpen, Info, Upload, Download, Image, Bug, Map as MapIcon } from "lucide-react";
 
 import { AppRndModalShell } from "@/components/AppRndModalShell";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,11 @@ import {
 import { promptAndMigrateWorkspaceContentIfNeeded } from "@/services/testEditorWorkspace/contentMigration";
 import { resolveWorkspaceRouteRoot } from "@/services/testEditorWorkspace/paths";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
+import {
+  buildMapLibraryRows,
+  extractMapPack,
+  resolveMapWorkspace,
+} from "@/services/mapLibrary/mapLibraryService";
 import { LegacyWorkspaceMoveNotice } from "./workspace-layout/LegacyWorkspaceMoveNotice";
 import { CatalogPackToolbarButtons } from "./workspace-layout/CatalogPackToolbarButtons";
 
@@ -175,6 +180,7 @@ export default function StageListView({
   const [isInfoDialogOpen, setIsInfoDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importPreview, setImportPreview] = useState<StageJsonImportPreview | null>(null);
+  const [isExtractingMap, setIsExtractingMap] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
@@ -282,6 +288,42 @@ export default function StageListView({
       });
     }
   }, [folderPath, resolveContentPackPaths, t]);
+
+  /**
+   * Unpack the geometry pack of the selected stage into the map library.
+   *
+   * `fileName` is the stage's geometry pack hash; the pack lives in the OB
+   * dplcache as `0x<fileName>.fhm2d`. The map editor opens the folder this
+   * writes, so a stage reaches the viewport from the list it is configured in
+   * instead of from a manual hunt through 19k hash-named packs.
+   */
+  const handleExtractSelectedMap = useCallback(async () => {
+    if (loadState.status !== "ready") return;
+    const entry = loadState.list.entries[selectedIndex];
+    if (!entry) return;
+    setIsExtractingMap(true);
+    try {
+      const workspace = await resolveMapWorkspace(folderPath);
+      const rows = await buildMapLibraryRows({
+        entries: [entry],
+        dplCacheDir: obDplCachePath,
+        libraryRoot: workspace.libraryRoot,
+      });
+      const result = await extractMapPack(rows[0]);
+      toast.success(t("mapExtract.success", { name: rows[0].packFolderName }), {
+        description: result.outputDir,
+      });
+      if (result.warnings.length > 0) {
+        toast.warning(t("mapExtract.warnings", { count: result.warnings.length }), {
+          description: result.warnings.slice(0, 3).join("\n"),
+        });
+      }
+    } catch (error) {
+      toast.error(t("mapExtract.failed"), { description: String(error) });
+    } finally {
+      setIsExtractingMap(false);
+    }
+  }, [folderPath, loadState, obDplCachePath, selectedIndex, t]);
 
   const resetEditorState = useCallback(() => {
     setHasChanges(false);
@@ -962,6 +1004,22 @@ export default function StageListView({
                 >
                   <Info className="w-4 h-4" />
                   {t("actions.info")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleExtractSelectedMap()}
+                  disabled={
+                    isExtractingMap ||
+                    isGvsActive ||
+                    loadState.status !== "ready" ||
+                    selectedIndex < 0
+                  }
+                  className="inline-flex items-center gap-2"
+                  title={t("mapExtract.title")}
+                >
+                  <MapIcon className="w-4 h-4" />
+                  {t("mapExtract.action")}
                 </Button>
                 <Button
                   size="sm"

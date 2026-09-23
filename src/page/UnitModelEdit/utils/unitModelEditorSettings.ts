@@ -37,6 +37,7 @@ export const UNIT_MODEL_EXPORT_DAE_FOLDER_DIALOG_PATH_KEY = "unitModelEdit.expor
 
 /** Config setting for the preferred unit-model extract/output root (not a dialog-only key). */
 export const UNIT_MODEL_OUTPUT_PATH_SETTING_KEY = "unitModelOutputPath";
+export const UNIT_MODEL_PREVIEW_RENDER_STYLE_SETTING_KEY = "unitModelPreviewRenderStyle";
 
 export type UnitModelEditRndSizeStorageKey =
   (typeof UNIT_MODEL_EDIT_RND_SIZE_KEYS)[keyof typeof UNIT_MODEL_EDIT_RND_SIZE_KEYS];

@@ -16,8 +16,8 @@ use app_lib::format::mission_pilot_names::PilotNameList;
 use app_lib::format::param_entry_schema::{KIND_I32, KIND_U32};
 use app_lib::format::scene_id_table::SceneIdTable;
 use app_lib::format::triad_course::{
-    columns as tc, identify_table, validate_course_row, CourseRow, CourseTable, RibbonTable,
-    SceneTable, TriadTableKind, UNLOCK_TYPE_CLEAR_COURSE, UNLOCK_TYPE_SERVER_ONLY,
+    columns as tc, identify_table, renumber_category, validate_course_row, CourseRow, CourseTable,
+    RibbonTable, SceneTable, TriadTableKind, UNLOCK_TYPE_CLEAR_COURSE, UNLOCK_TYPE_SERVER_ONLY,
 };
 use app_lib::format::triad_table::{build_table_bytes, ColumnValue, TriadTable, KIND_STRING};
 
@@ -235,6 +235,116 @@ fn applying_an_edited_course_row_survives_a_roundtrip() {
     assert_eq!(stored.star_rating, 5);
     assert_eq!(stored.gold_score, 250_000);
     assert_eq!(reparsed.row(0).unwrap().name, "A-1");
+}
+
+/// Positions inside `course_values`, which mirrors `course_columns`.
+const CATEGORY_AT: usize = 2;
+const VARIANT_AT: usize = 12;
+
+fn course_in_category(
+    course_id: i32,
+    name: &str,
+    number: i32,
+    category: i32,
+    variant: i32,
+) -> Vec<ColumnValue> {
+    let mut values = course_values(course_id, name, number, A1_SCENES, 0);
+    values[CATEGORY_AT] = ColumnValue::Word(category as u32);
+    values[VARIANT_AT] = ColumnValue::Word(variant as u32);
+    values
+}
+
+/// Category 1 holds A-1, A-2 with a variant row, and a custom A-30 parked at
+/// the end. Category 2 is there to prove a renumber stays inside its own
+/// category.
+fn ordering_table_bytes() -> Vec<u8> {
+    build_table_bytes(
+        &course_columns(),
+        &[
+            (0x0100_0001, course_in_category(1, "A-1", 1, 1, 0)),
+            (0x0100_0002, course_in_category(2, "A-2", 2, 1, 0)),
+            (0x0100_0003, course_in_category(2, "A-2", 2, 1, 1)),
+            (0x0100_0004, course_in_category(253, "A-30", 22, 1, 0)),
+            (0x0100_0005, course_in_category(16, "B-1", 1, 2, 0)),
+        ],
+    )
+    .unwrap()
+}
+
+fn numbers_by_row_id(table: &CourseTable) -> Vec<(u32, i32)> {
+    table
+        .rows()
+        .unwrap()
+        .iter()
+        .map(|row| (row.row_id, row.number_in_category))
+        .collect()
+}
+
+#[test]
+fn renumbering_a_category_lists_it_in_the_given_order() {
+    let mut table = CourseTable::parse(&ordering_table_bytes()).unwrap();
+    let entries = renumber_category(&mut table, 1, &[253, 1, 2]).unwrap();
+
+    assert_eq!(
+        entries
+            .iter()
+            .map(|entry| (entry.name.as_str(), entry.previous_number, entry.number))
+            .collect::<Vec<_>>(),
+        vec![("A-30", 22, 1), ("A-1", 1, 2), ("A-2", 2, 3)]
+    );
+    assert_eq!(
+        numbers_by_row_id(&table),
+        vec![
+            (0x0100_0001, 2),
+            (0x0100_0002, 3),
+            (0x0100_0003, 3),
+            (0x0100_0004, 1),
+            (0x0100_0005, 1),
+        ],
+        "both A-2 variant rows move together and category 2 is left alone"
+    );
+}
+
+#[test]
+fn renumbering_survives_a_roundtrip_through_the_table_bytes() {
+    let mut table = CourseTable::parse(&ordering_table_bytes()).unwrap();
+    renumber_category(&mut table, 1, &[253, 1, 2]).unwrap();
+
+    let reparsed = CourseTable::parse(&table.build().unwrap()).unwrap();
+    let stored = reparsed.rows().unwrap();
+    let renumbered = stored.iter().find(|row| row.course_id == 253).unwrap();
+    assert_eq!(renumbered.number_in_category, 1);
+    assert_eq!(renumbered.name, "A-30");
+    assert_eq!(
+        renumbered.sort_order, 253,
+        "the sort column belongs to the course id and is not touched here"
+    );
+}
+
+#[test]
+fn renumbering_refuses_an_order_that_leaves_a_course_out() {
+    let mut table = CourseTable::parse(&ordering_table_bytes()).unwrap();
+    let error = renumber_category(&mut table, 1, &[253, 1]).unwrap_err();
+    assert!(error.contains('2'), "{error}");
+    assert_eq!(
+        numbers_by_row_id(&table),
+        numbers_by_row_id(&CourseTable::parse(&ordering_table_bytes()).unwrap()),
+        "a refused order must not half-apply"
+    );
+}
+
+#[test]
+fn renumbering_refuses_a_course_from_another_category() {
+    let mut table = CourseTable::parse(&ordering_table_bytes()).unwrap();
+    let error = renumber_category(&mut table, 1, &[253, 1, 2, 16]).unwrap_err();
+    assert!(error.contains("16"), "{error}");
+}
+
+#[test]
+fn renumbering_refuses_a_course_placed_twice() {
+    let mut table = CourseTable::parse(&ordering_table_bytes()).unwrap();
+    let error = renumber_category(&mut table, 1, &[253, 1, 1]).unwrap_err();
+    assert!(error.contains("twice"), "{error}");
 }
 
 #[test]

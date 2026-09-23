@@ -309,6 +309,9 @@ export interface StageScriptConfig {
   waves: ScriptWave[];
 }
 
+/** How a stage's files were obtained. Cloned stages may insert sceneidtable rows on save. */
+export type StageOrigin = "existing" | "cloned";
+
 export interface StageDraft {
   index: number;
   sceneKey: number;
@@ -317,6 +320,7 @@ export interface StageDraft {
   scriptPackageHash: number;
   briefing: BriefingDraft;
   script: StageScriptConfig | null;
+  origin?: StageOrigin;
 }
 
 export interface CourseDraft {
@@ -413,7 +417,93 @@ export interface WrittenFile {
 
 export interface AppliedRoute {
   written: WrittenFile[];
+  /** Paths the save skipped because their bytes already matched. */
+  unchanged: string[];
   stagePackageHashes: number[];
+}
+
+/** One course the category renumber placed, before and after. */
+export interface CourseOrderEntry {
+  courseId: number;
+  name: string;
+  previousNumber: number;
+  number: number;
+  /** Every row carrying this course id, variants included. */
+  rowIds: number[];
+}
+
+export interface AppliedCategoryOrder {
+  category: number;
+  /** Every course in the category, in its new order. */
+  courses: CourseOrderEntry[];
+  written: WrittenFile[];
+  unchanged: string[];
+}
+
+/** Which part of the route a mission package carries. */
+export type TriadRepackKind =
+  | "route-tables"
+  | "scene-id-table"
+  | "briefings"
+  | "pilot-names"
+  | "script";
+
+/**
+ * Where a package stands relative to the `.fhm2d` the game loads.
+ *
+ * `not-packed` and `stale` are the two states that make a saved route
+ * invisible in game; the three `missing-*` states say the package cannot be
+ * packed at all yet.
+ */
+export type TriadRepackStatus =
+  | "missing-folder"
+  | "missing-structure"
+  | "missing-payload"
+  | "not-packed"
+  | "stale"
+  | "current";
+
+/** Statuses a repack would actually change something for. */
+export const TRIAD_REPACK_OUTSTANDING: readonly TriadRepackStatus[] = [
+  "not-packed",
+  "stale",
+];
+
+export function needsRepack(status: TriadRepackStatus): boolean {
+  return TRIAD_REPACK_OUTSTANDING.includes(status);
+}
+
+export function canRepack(status: TriadRepackStatus): boolean {
+  return needsRepack(status) || status === "current";
+}
+
+/** One mission package, described against the mod folder it would be written to. */
+export interface TriadRepackEntry {
+  id: string;
+  kind: TriadRepackKind;
+  label: string;
+  packHash: string | null;
+  folderPath: string;
+  structurePath: string;
+  outputPath: string | null;
+  status: TriadRepackStatus;
+  /** False for packages the route works without, today only the pilot names. */
+  required: boolean;
+  /** True when the open route plays this stage's script. */
+  inRoute: boolean;
+  payloadCount: number;
+  missingPayloads: string[];
+  /** Payloads whose bytes differ from the `.bak` a save left beside them. */
+  editedPayloads: string[];
+  newestSourceMs: number | null;
+  outputMs: number | null;
+  outputSize: number | null;
+}
+
+/** Every mission package, whether or not it still needs repacking. */
+export interface TriadRepackPlan {
+  modFolder: string;
+  entries: TriadRepackEntry[];
 }
 
 export interface GeneratedSceneIdentity {
@@ -424,14 +514,26 @@ export interface GeneratedSceneIdentity {
   packageHashCollision: string | null;
 }
 
+/** A hashed scene name, plus whether this workspace already owns its files. */
+export interface HashedSceneName extends GeneratedSceneIdentity {
+  /**
+   * True when the only thing holding these ids is this workspace's own copy
+   * of the same scene — a folder and briefing an earlier run left behind —
+   * so creating it again with `replaceExisting` will work.
+   */
+  replaceable: boolean;
+}
+
 /**
  * One scene to materialise by cloning a donor.
  *
  * Only the name travels: the backend recomputes both hashes from it, so a
  * folder can never end up carrying a `HashName` its own name does not produce.
  */
+export type SceneDonorKind = "dplcache-package" | "workspace-folder";
+
 export interface NewSceneRequest {
-  dplCacheDir: string;
+  dplCacheDir?: string;
   workspaceRoot: string;
   /** Route prefix the mission scripts unpack under, e.g. `051mission`. */
   scriptPrefix: string;
@@ -439,6 +541,13 @@ export interface NewSceneRequest {
   donorSceneKey: number;
   donorPackageHash: number;
   sceneName: string;
+  donorKind?: SceneDonorKind;
+  donorScriptFolder?: string;
+  /**
+   * Overwrite this workspace's own earlier copy of the same scene instead of
+   * refusing. Ids held by anything else are still a hard error.
+   */
+  replaceExisting?: boolean;
 }
 
 /** What one created scene now owns on disk. */

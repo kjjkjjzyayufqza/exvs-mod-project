@@ -1,5 +1,5 @@
 import { lazy } from "react"
-import { Box, Database, FileArchive, FolderTree, Info, Map, Settings, Wrench } from "lucide-react"
+import { Box, Database, FileArchive, FolderTree, GitBranch, Info, Map, Settings, Wrench } from "lucide-react"
 import { SIDEBAR_ROUTE_URLS } from "./sidebarRouteUrls"
 
 // Pages are code-split via React.lazy so the initial app shell loads without
@@ -13,6 +13,7 @@ const SceneEdit = lazy(() => import("../page/SceneEdit/page"))
 const UnitModelEdit = lazy(() => import("../page/UnitModelEdit/page"))
 const MiscToolsPage = lazy(() => import("../page/MiscTools/page"))
 const ResourceRegistryPage = lazy(() => import("../page/ResourceRegistry/page"))
+const MissionNodeEditorPage = lazy(() => import("../page/MissionNodeEditor/page"))
 
 // Menu items.
 export const RouterItems = [
@@ -63,6 +64,13 @@ export const RouterItems = [
         url: "/About",
         icon: Info,
         element: <AboutPage />
+    },
+    {
+        title: "Mission Node Editor",
+        url: "/MissionNodeEditor",
+        icon: GitBranch,
+        element: <MissionNodeEditorPage />,
+        sidebarFooter: true,
     }
 ]
 

@@ -32,6 +32,19 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import { MapToolbar } from "./components/MapToolbar";
+import { MapLibraryDialog } from "./components/map-library/MapLibraryDialog";
+import { MissionPreviewPanel } from "./components/mission-preview/MissionPreviewPanel";
+import { MissionSpawnAuthoringHint } from "./components/mission-preview/MissionSpawnAuthoringHint";
+import { MissionNodeEditorOverlay } from "./components/mission-preview/MissionNodeEditorOverlay";
+import { useMissionAuthoringSession } from "./components/mission-preview/useMissionAuthoringSession";
+import { useMissionPreview } from "./components/mission-preview/useMissionPreview";
+import { MissionDiscardDialog } from "@/page/MissionNodeEditor/components/MissionDiscardDialog";
+import type { StageListData } from "@/models/stageListEntry";
+import {
+  buildMapLibraryRows,
+  findRowByMapHash,
+  resolveMapWorkspace,
+} from "@/services/mapLibrary/mapLibraryService";
 import type { StageTreeNode } from "./components/StageHierarchyTree";
 import { SceneOutliner } from "./components/SceneOutliner";
 import { GlobalLoadedTexturePanel, ModelTextureSlotPanel } from "./components/ModelTextureSlotPanel";
@@ -134,6 +147,7 @@ import {
   updateGraphicParamKey,
   updateGraphicParamValue,
 } from "./utils/sceneCsvEditors";
+import { defaultAppliedSunKeys } from "./utils/graphicParamSceneLighting";
 import {
   collectBundleTextureInventory,
   setTexturePathEnabledForObject,
@@ -145,7 +159,7 @@ import {
   listStageTextureFilePaths,
   type StageTextureFilePathInventory,
 } from "./utils/sceneTextureManagerEntries";
-import { useConfigStore } from "@/store/configStore";
+import { trimmedConfigPath, useConfigStore } from "@/store/configStore";
 import {
   DEFAULT_SCENE_GIZMO_SIZE,
   normalizeSceneGizmoSize,
@@ -886,12 +900,22 @@ export default function SceneEdit() {
   const [wireframe, setWireframe] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [textureQuality, setTextureQuality] = useState("original");
+  const sceneEditTexturesEnabled = useConfigStore((state) => state.sceneEditTexturesEnabled);
+  const setSceneEditTexturesEnabled = useConfigStore((state) => state.setSceneEditTexturesEnabled);
+  const sceneEditPreviewRenderStyle = useConfigStore((state) => state.sceneEditPreviewRenderStyle);
+  const setSceneEditPreviewRenderStyle = useConfigStore(
+    (state) => state.setSceneEditPreviewRenderStyle,
+  );
+  const [mapLibraryOpen, setMapLibraryOpen] = useState(false);
+  const [mapLibraryFocusHash, setMapLibraryFocusHash] = useState<number | null>(null);
+  const [missionPreviewOpen, setMissionPreviewOpen] = useState(false);
   const [textureSlotLoadEnabled, setTextureSlotLoadEnabled] = useState<
     Record<TexturePreviewSlotKey, boolean>
   >(() => createDefaultTextureSlotLoadEnabled());
   const [objectTextureLoadState, setObjectTextureLoadState] = useState<ObjectTextureLoadState>({});
-  const [sceneAnimeRenderEnabled, setSceneAnimeRenderEnabled] = useState(false);
   const [placementGizmoMode, setPlacementGizmoMode] = useState<PlacementGizmoMode>("translate");
+  const workspaceRoot = useConfigStore((state) => trimmedConfigPath(state.testEditorFolder));
+  const obDplCachePath = useConfigStore((state) => trimmedConfigPath(state.obDplCachePath));
   const sceneEditGizmoSize = useConfigStore((state) => state.sceneEditGizmoSize ?? DEFAULT_SCENE_GIZMO_SIZE);
   const setSceneEditGizmoSize = useConfigStore((state) => state.setSceneEditGizmoSize);
   const [drawStats, setDrawStats] = useState<SceneDrawStats | null>(null);
@@ -901,9 +925,11 @@ export default function SceneEdit() {
   const objectLocks = useSceneEditorStore((state) => state.objectLocks);
 
   const textureMaxDimension = getMaxDimensionForQuality(textureQuality);
-  const scenePreviewRenderStyle: PreviewRenderStyle = sceneAnimeRenderEnabled
-    ? "anime"
-    : "standard";
+  // The two styles are mutually exclusive; the reconstructed pipeline wins because
+  // it replaces the shading the anime style tints rather than layering on it.
+  const scenePreviewRenderStyle: PreviewRenderStyle = sceneEditPreviewRenderStyle;
+  const sceneAnimeRenderEnabled = scenePreviewRenderStyle === "anime";
+  const sceneExvs2RenderEnabled = scenePreviewRenderStyle === "exvs2";
   const appliedGraphicParams = useMemo(
     () => applyGraphicParamSelection(graphicParams, appliedGraphicParamKeys),
     [graphicParams, appliedGraphicParamKeys],
@@ -933,6 +959,7 @@ export default function SceneEdit() {
     textureMaxDimension,
     textureSlotLoadEnabled,
     objectTextureLoadState,
+    sceneEditTexturesEnabled,
   );
 
   useEffect(() => {
@@ -1281,7 +1308,7 @@ export default function SceneEdit() {
         setGraphicParams(
           bundle.graphicParams.map((p) => ({ key: p.key, value: p.value }))
         );
-        setAppliedGraphicParamKeys(new Set());
+        setAppliedGraphicParamKeys(defaultAppliedSunKeys(bundle.graphicParams));
         setPlacementHeader(bundle.placementHeader);
         const colMap: Record<string, number> = {};
         bundle.placementHeader.forEach((h, i) => {
@@ -1353,7 +1380,7 @@ export default function SceneEdit() {
         setGraphicParams(
           skeleton.graphicParams.map((p) => ({ key: p.key, value: p.value }))
         );
-        setAppliedGraphicParamKeys(new Set());
+        setAppliedGraphicParamKeys(defaultAppliedSunKeys(skeleton.graphicParams));
         setPlacementHeader(skeleton.placementHeader);
         const colMap: Record<string, number> = {};
         skeleton.placementHeader.forEach((h, i) => {
@@ -1474,16 +1501,16 @@ export default function SceneEdit() {
     toast.success(t("success.cacheCleared"));
   }, [resetState]);
 
-  const handleOpenFolder = useCallback(async () => {
+  /**
+   * Load one extracted stage pack folder.
+   *
+   * Shared by the folder picker and by the map library, so a stage opened from
+   * the workspace stage list goes through exactly the same path as one picked
+   * by hand.
+   */
+  const loadStagePackRoot = useCallback(async (selected: string) => {
     let loadTimer: SceneOpTimer | null = null;
     try {
-      const selected = await open({
-        directory: true,
-        defaultPath: await getStoredDialogDefaultPath(SCENE_OPEN_FOLDER_DIALOG_PATH_KEY),
-      });
-      if (!selected || typeof selected !== "string") return;
-      await rememberStoredDialogSelection(SCENE_OPEN_FOLDER_DIALOG_PATH_KEY, selected, "directory");
-
       const packRoot = await promptStagePackMetadataMigration(selected, t("actions.migrateStructure"));
       const stageRoot = `${packRoot}\\0\\0`;
 
@@ -1655,6 +1682,86 @@ export default function SceneEdit() {
       stageLoadInFlightRef.current = null;
     }
   }, [applySkeleton, resetState]);
+
+  const handleOpenFolder = useCallback(async () => {
+    const selected = await open({
+      directory: true,
+      defaultPath: await getStoredDialogDefaultPath(SCENE_OPEN_FOLDER_DIALOG_PATH_KEY),
+    });
+    if (!selected || typeof selected !== "string") return;
+    await rememberStoredDialogSelection(SCENE_OPEN_FOLDER_DIALOG_PATH_KEY, selected, "directory");
+    await loadStagePackRoot(selected);
+  }, [loadStagePackRoot]);
+
+  const missionPreview = useMissionPreview();
+  const missionAuthoring = useMissionAuthoringSession(missionPreview);
+  const missionMarkers = missionAuthoring.markers ?? missionPreview.markers;
+  const missionSpawnEdit = missionAuthoring.file
+    ? "ready"
+    : missionPreview.preview?.sourceKind === "decompiledC"
+      ? "needEditor"
+      : missionPreview.preview
+        ? "compiled"
+        : "ready";
+  const selectMissionSlot = useCallback((slot: number | null) => {
+    if (slot !== null) handleSelectNode(null);
+    if (missionAuthoring.file) missionAuthoring.selectSlot(slot);
+    else missionPreview.setSelectedSlot(slot);
+  }, [
+    handleSelectNode,
+    missionAuthoring.file,
+    missionAuthoring.selectSlot,
+    missionPreview.setSelectedSlot,
+  ]);
+  const missionVisiblePhaseKeys = useMemo(() => {
+    if (missionPreview.hiddenPhaseKeys.size === 0) return null;
+    const keys = new Set<string>();
+    for (const marker of missionMarkers) {
+      const key = marker.phase.kind === "wave" ? `wave-${marker.phase.waveIndex}` : marker.phase.kind;
+      if (!missionPreview.hiddenPhaseKeys.has(key)) keys.add(key);
+    }
+    return keys;
+  }, [missionMarkers, missionPreview.hiddenPhaseKeys]);
+
+  /**
+   * Open the map a mission script names.
+   *
+   * The script's `sys_0(0x40e, ...)` hash is the stage list row's lookup id,
+   * and that row's `fileName` is the geometry pack. An extracted pack loads
+   * straight away; one that has never been unpacked opens the map library on
+   * that row so the extraction is one click, not a hunt through the dplcache.
+   */
+  const handleOpenMissionMap = useCallback(
+    async (mapHash: number) => {
+      try {
+        const workspace = await resolveMapWorkspace(workspaceRoot);
+        const list = await invoke<StageListData>("parse_typed_param_file", {
+          path: workspace.stageListPath,
+          paramType: "stagelist",
+        });
+        const rows = await buildMapLibraryRows({
+          entries: list.entries,
+          dplCacheDir: obDplCachePath,
+          libraryRoot: workspace.libraryRoot,
+        });
+        const row = findRowByMapHash(rows, mapHash);
+        if (!row) {
+          throw new Error(
+            `No stage list row has map hash 0x${(mapHash >>> 0).toString(16).toUpperCase()}`,
+          );
+        }
+        if (!row.extracted) {
+          setMapLibraryFocusHash(mapHash);
+          setMapLibraryOpen(true);
+          return;
+        }
+        await loadStagePackRoot(row.extractedPath);
+      } catch (error) {
+        toast.error(t("errors.missionMapFailed"), { description: String(error) });
+      }
+    },
+    [loadStagePackRoot, obDplCachePath, t, workspaceRoot],
+  );
 
   const handleImportFhm2d = useCallback(async () => {
     try {
@@ -2164,7 +2271,7 @@ export default function SceneEdit() {
       "This will revert all graphic param and placement edits back to the originally loaded state. Undo history will be cleared.",
       () => {
         setGraphicParams(snap.graphicParams.map((p) => ({ ...p })));
-        setAppliedGraphicParamKeys(new Set());
+        setAppliedGraphicParamKeys(defaultAppliedSunKeys(snap.graphicParams));
         setPlacementEntries(snap.placementEntries.map((e) => ({ ...e, rawFields: [...e.rawFields] })));
         setBaseTransform({ ...DEFAULT_TRANSFORM });
         setStandaloneTransforms(new Map());
@@ -2184,7 +2291,7 @@ export default function SceneEdit() {
       "This will revert all graphic_param edits back to the originally loaded values.",
       () => {
         setGraphicParams(snap.graphicParams.map((p) => ({ ...p })));
-        setAppliedGraphicParamKeys(new Set());
+        setAppliedGraphicParamKeys(defaultAppliedSunKeys(snap.graphicParams));
         useSceneDirtyStore.getState().markGlobalDirty("graphicParams");
       toast.success(t("success.graphicParamsReverted"));
       },
@@ -4275,6 +4382,16 @@ export default function SceneEdit() {
   }, []);
 
   useSceneKeyboard({
+    onUndo: () => {
+      if (!missionAuthoring.file || !missionAuthoring.canUndo) return false;
+      missionAuthoring.undo();
+      return true;
+    },
+    onRedo: () => {
+      if (!missionAuthoring.file || !missionAuthoring.canRedo) return false;
+      missionAuthoring.redo();
+      return true;
+    },
     onDelete: handleDeleteSelected,
     onDuplicate: () => handleDuplicateSelected(),
     onPaste: handlePasteAsNew,
@@ -4425,6 +4542,16 @@ export default function SceneEdit() {
       <div className="flex h-full min-h-0 min-w-0 flex-col bg-background">
         <MapToolbar
           onOpenFolder={handleOpenFolder}
+          onOpenMapLibrary={() => {
+            setMapLibraryFocusHash(null);
+            setMapLibraryOpen(true);
+          }}
+          onOpenMissionPreview={() => setMissionPreviewOpen(true)}
+          missionPreviewActive={missionMarkers.length > 0}
+          texturesEnabled={sceneEditTexturesEnabled}
+          onToggleTextures={(next) => {
+            void setSceneEditTexturesEnabled(next);
+          }}
           onImportFhm2d={handleImportFhm2d}
           onExtractFhm2d={handleExtractFhm2d}
           onSaveFolder={handleSaveFolder}
@@ -4454,7 +4581,17 @@ export default function SceneEdit() {
           gizmoSize={sceneEditGizmoSize}
           onGizmoSizeChange={handleGizmoSizeChange}
           animeRenderEnabled={sceneAnimeRenderEnabled}
-          onToggleAnimeRender={setSceneAnimeRenderEnabled}
+          onToggleAnimeRender={(next) => {
+            void setSceneEditPreviewRenderStyle(
+              next ? "anime" : scenePreviewRenderStyle === "anime" ? "standard" : scenePreviewRenderStyle,
+            );
+          }}
+          exvs2RenderEnabled={sceneExvs2RenderEnabled}
+          onToggleExvs2Render={(next) => {
+            void setSceneEditPreviewRenderStyle(
+              next ? "exvs2" : scenePreviewRenderStyle === "exvs2" ? "standard" : scenePreviewRenderStyle,
+            );
+          }}
           viewMode={viewMode}
           onViewModeChange={setViewMode}
           hasCollisionData={havokMeshDataMap.size > 0}
@@ -4463,6 +4600,33 @@ export default function SceneEdit() {
           showCollisionMesh={showCollisionMesh}
           onToggleCollisionMesh={setShowCollisionMesh}
         />
+
+        {mapLibraryOpen && (
+          <MapLibraryDialog
+            onClose={() => setMapLibraryOpen(false)}
+            onOpenPackRoot={(packRoot) => void loadStagePackRoot(packRoot)}
+            focusMapHash={mapLibraryFocusHash}
+          />
+        )}
+
+        {missionPreviewOpen && (
+          <MissionPreviewPanel
+            controller={missionPreview}
+            markers={missionAuthoring.markers ?? undefined}
+            onClose={() => setMissionPreviewOpen(false)}
+            onLoadMissionMap={(mapHash) => void handleOpenMissionMap(mapHash)}
+            onEditNodes={() => void missionAuthoring.openFromPreview()}
+            onOpenScript={() => void missionAuthoring.requestPickScript()}
+            onClearScript={missionAuthoring.requestClear}
+            spawnEdit={missionSpawnEdit}
+            selectedSlotDraggable={
+              missionAuthoring.file && missionPreview.selectedSlot != null
+                ? missionAuthoring.canDragSlot(missionPreview.selectedSlot)
+                : null
+            }
+            onSelectSlot={selectMissionSlot}
+          />
+        )}
 
         <AlertDialog open={clearCacheDialogOpen} onOpenChange={setClearCacheDialogOpen}>
           <AlertDialogContent showCloseButton>
@@ -4650,8 +4814,32 @@ export default function SceneEdit() {
                 showCollisionMesh={showCollisionMesh}
                 collisionVisibility={collisionVisibility}
                 selectedCollisionSourceId={selectedCollisionSourceId}
+                missionOverlay={
+                  missionMarkers.length > 0
+                    ? {
+                        markers: missionMarkers,
+                        markerScale: missionPreview.markerScale,
+                        visiblePhaseKeys: missionVisiblePhaseKeys,
+                        selectedSlot: missionPreview.selectedSlot,
+                        onSelectSlot: selectMissionSlot,
+                        showLabels: missionPreview.showLabels,
+                        labelOf: missionPreview.markerLabelOf,
+                        gizmoMode: placementGizmoMode,
+                        gizmoSize: sceneEditGizmoSize,
+                        canDragSlot: missionAuthoring.file ? missionAuthoring.canDragSlot : undefined,
+                        onSpawnCommit: missionAuthoring.file ? missionAuthoring.commitSpawn : undefined,
+                      }
+                    : null
+                }
               />
               <SceneViewportOverlay isLoading={isLoading} modelLoadProgress={modelLoadProgress} textureProgress={textureProgress} hktLoadProgress={hktLoadProgress} />
+              {missionMarkers.length > 0 && missionSpawnEdit !== "ready" && (
+                <MissionSpawnAuthoringHint
+                  mode={missionSpawnEdit}
+                  onEditNodes={() => void missionAuthoring.openFromPreview()}
+                  className="absolute left-1/2 top-3 z-40 w-[min(28rem,calc(100%-1.5rem))] -translate-x-1/2"
+                />
+              )}
             </div>
             </ViewportContextMenu>
           </ResizablePanel>
@@ -5060,6 +5248,22 @@ export default function SceneEdit() {
           onNumatbSave={saveDetailViewNumatb}
           onNuhlpbDraftChange={setDetailViewNuhlpbDraft}
           onNuhlpbSave={saveDetailViewNuhlpb}
+        />
+        {missionAuthoring.host && (
+          <MissionNodeEditorOverlay
+            surface={missionAuthoring.surface}
+            host={missionAuthoring.host}
+            dirty={missionAuthoring.dirty}
+            onMinimize={missionAuthoring.minimize}
+            onRestore={missionAuthoring.restore}
+            onClose={missionAuthoring.close}
+          />
+        )}
+        <MissionDiscardDialog
+          open={missionAuthoring.discardOpen}
+          onOpenChange={(open) => { if (!open) missionAuthoring.cancelDiscard(); }}
+          onCancel={missionAuthoring.cancelDiscard}
+          onDiscard={missionAuthoring.confirmDiscard}
         />
       </div>
     </TooltipProvider>

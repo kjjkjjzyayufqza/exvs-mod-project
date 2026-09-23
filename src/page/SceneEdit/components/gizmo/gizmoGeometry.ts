@@ -278,6 +278,7 @@ function setPickerLayer(obj: THREE.Object3D): void {
 const PICKER_MAT = new THREE.MeshBasicMaterial({
   depthTest: false,
   depthWrite: false,
+  depthFunc: THREE.AlwaysDepth,
   transparent: true,
   opacity: 0,
   side: THREE.DoubleSide,
@@ -303,9 +304,12 @@ export function buildRotateGeometry(materials: GizmoMaterials): ModeGeometry {
     color: 0xb8b8b8,
     depthTest: false,
     depthWrite: false,
+    depthFunc: THREE.AlwaysDepth,
     transparent: true,
     opacity: 0.55,
     side: THREE.DoubleSide,
+    toneMapped: false,
+    fog: false,
   });
   return {
     elements: [
@@ -360,7 +364,10 @@ export function createRotationArcMesh(
     opacity: 0.25,
     depthTest: false,
     depthWrite: false,
+    depthFunc: THREE.AlwaysDepth,
     side: THREE.DoubleSide,
+    toneMapped: false,
+    fog: false,
   });
 
   const mesh = new THREE.Mesh(geo, mat);

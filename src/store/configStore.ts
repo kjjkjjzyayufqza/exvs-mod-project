@@ -4,8 +4,15 @@ import { ConfigState } from "../models/conifgStoreModel";
 import {
   DEFAULT_SCENE_GIZMO_SIZE,
   SCENE_GIZMO_SIZE_SETTING_KEY,
+  SCENE_PREVIEW_RENDER_STYLE_SETTING_KEY,
+  SCENE_TEXTURES_ENABLED_SETTING_KEY,
+  normalizePreviewRenderStyle,
   normalizeSceneGizmoSize,
+  normalizeSceneTexturesEnabled,
 } from "@/page/SceneEdit/utils/sceneEditorSettings";
+import { UNIT_MODEL_PREVIEW_RENDER_STYLE_SETTING_KEY } from "@/page/UnitModelEdit/utils/unitModelEditorSettings";
+import { DEFAULT_EDITOR_PREVIEW_RENDER_STYLE } from "@/components/ssbh-model-preview/SsbhModelPreviewContext";
+import type { PreviewRenderStyle } from "@/components/ssbh-model-preview/SsbhModelPreviewContext";
 import {
   CAMERA_PREVIEW_VIEW_ZOOM_SETTING_KEY,
   normalizeCameraPreviewViewZoom,
@@ -63,6 +70,9 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   imgToNutexbOutputPath: "",
   repackInputPath: "",
   sceneEditGizmoSize: DEFAULT_SCENE_GIZMO_SIZE,
+  sceneEditTexturesEnabled: true,
+  sceneEditPreviewRenderStyle: DEFAULT_EDITOR_PREVIEW_RENDER_STYLE,
+  unitModelPreviewRenderStyle: DEFAULT_EDITOR_PREVIEW_RENDER_STYLE,
   cameraPreviewViewZoom: readCameraPreviewViewZoomMirror(),
   sidebarOpen: readSidebarOpenMirror(),
   locale: readAppLocaleMirror(),
@@ -84,6 +94,15 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     const repackInputPath = await _store.get("repackInputPath") || "";
     const sceneEditGizmoSize = normalizeSceneGizmoSize(
       await _store.get(SCENE_GIZMO_SIZE_SETTING_KEY),
+    );
+    const sceneEditTexturesEnabled = normalizeSceneTexturesEnabled(
+      await _store.get(SCENE_TEXTURES_ENABLED_SETTING_KEY),
+    );
+    const sceneEditPreviewRenderStyle = normalizePreviewRenderStyle(
+      await _store.get(SCENE_PREVIEW_RENDER_STYLE_SETTING_KEY),
+    );
+    const unitModelPreviewRenderStyle = normalizePreviewRenderStyle(
+      await _store.get(UNIT_MODEL_PREVIEW_RENDER_STYLE_SETTING_KEY),
     );
     const cameraPreviewViewZoom = normalizeCameraPreviewViewZoom(
       await _store.get(CAMERA_PREVIEW_VIEW_ZOOM_SETTING_KEY),
@@ -109,6 +128,9 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       imgToNutexbOutputPath: imgToNutexbOutputPath as string,
       repackInputPath: repackInputPath as string,
       sceneEditGizmoSize,
+      sceneEditTexturesEnabled,
+      sceneEditPreviewRenderStyle,
+      unitModelPreviewRenderStyle,
       cameraPreviewViewZoom,
       sidebarOpen,
       locale,
@@ -153,6 +175,15 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     if (key === "imgToNutexbOutputPath") set({ imgToNutexbOutputPath: String(value ?? "") });
     if (key === "repackInputPath") set({ repackInputPath: String(value ?? "") });
     if (key === SCENE_GIZMO_SIZE_SETTING_KEY) set({ sceneEditGizmoSize: normalizeSceneGizmoSize(value) });
+    if (key === SCENE_TEXTURES_ENABLED_SETTING_KEY) {
+      set({ sceneEditTexturesEnabled: normalizeSceneTexturesEnabled(value) });
+    }
+    if (key === SCENE_PREVIEW_RENDER_STYLE_SETTING_KEY) {
+      set({ sceneEditPreviewRenderStyle: normalizePreviewRenderStyle(value) });
+    }
+    if (key === UNIT_MODEL_PREVIEW_RENDER_STYLE_SETTING_KEY) {
+      set({ unitModelPreviewRenderStyle: normalizePreviewRenderStyle(value) });
+    }
     if (key === CAMERA_PREVIEW_VIEW_ZOOM_SETTING_KEY) {
       const cameraPreviewViewZoom = normalizeCameraPreviewViewZoom(value);
       writeCameraPreviewViewZoomMirror(cameraPreviewViewZoom);
@@ -177,6 +208,36 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       await store.save();
     }
     set({ sceneEditGizmoSize: normalized });
+  },
+
+  setSceneEditTexturesEnabled: async (enabled: boolean) => {
+    const normalized = normalizeSceneTexturesEnabled(enabled);
+    const { store } = get();
+    if (store) {
+      await store.set(SCENE_TEXTURES_ENABLED_SETTING_KEY, normalized);
+      await store.save();
+    }
+    set({ sceneEditTexturesEnabled: normalized });
+  },
+
+  setSceneEditPreviewRenderStyle: async (style: PreviewRenderStyle) => {
+    const normalized = normalizePreviewRenderStyle(style);
+    const { store } = get();
+    if (store) {
+      await store.set(SCENE_PREVIEW_RENDER_STYLE_SETTING_KEY, normalized);
+      await store.save();
+    }
+    set({ sceneEditPreviewRenderStyle: normalized });
+  },
+
+  setUnitModelPreviewRenderStyle: async (style: PreviewRenderStyle) => {
+    const normalized = normalizePreviewRenderStyle(style);
+    const { store } = get();
+    if (store) {
+      await store.set(UNIT_MODEL_PREVIEW_RENDER_STYLE_SETTING_KEY, normalized);
+      await store.save();
+    }
+    set({ unitModelPreviewRenderStyle: normalized });
   },
 
   setCameraPreviewViewZoom: async (zoom: number) => {

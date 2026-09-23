@@ -8,15 +8,18 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AppliedCategoryOrder,
   AppliedRoute,
   BriefingDraft,
   CreatedScene,
   NewSceneRequest,
   StageScriptConfig,
   GeneratedSceneIdentity,
+  HashedSceneName,
   RoutePlan,
   RouteValidationContext,
   RouteValidationResult,
+  TriadRepackPlan,
   TriadRouteDocument,
   TriadWorkspacePaths,
   TriadWorkspaceSnapshot,
@@ -108,6 +111,27 @@ export async function applyTriadRoute(
   });
 }
 
+/**
+ * Reorder one category on the course select screen.
+ *
+ * The screen groups by category and orders by the course's number within it,
+ * so moving one course means renumbering the whole category. `courseIdOrder`
+ * is every course id in the category, in the order they should appear; the
+ * first becomes number 1. This writes the course table directly, so open
+ * edits to the category have to be saved or dropped first.
+ */
+export async function renumberTriadCategory(
+  paths: TriadWorkspacePaths,
+  category: number,
+  courseIdOrder: number[],
+): Promise<AppliedCategoryOrder> {
+  return await invoke<AppliedCategoryOrder>("renumber_triad_category", {
+    pathsJson: paths,
+    category,
+    courseIdOrder,
+  });
+}
+
 /** Generate official-style scene names and hashes, with a clash check. */
 export async function generateTriadSceneIdentity(params: {
   category: string;
@@ -144,16 +168,28 @@ export async function createTriadScenes(
   });
 }
 
-/** Hash scene names the modder typed, with the same clash check. */
+/**
+ * Hash scene names the modder typed, with the same clash check.
+ *
+ * `workspace` lets the check see everything `createTriadScenes` sees — the
+ * briefings the outmission package already holds, and the files a scene of
+ * that name already has here — so a name cannot read as free and then fail
+ * on create. Each result says whether its ids are only held by this
+ * workspace's own copy, which is the case `replaceExisting` covers.
+ */
 export async function hashTriadSceneNames(
   names: string[],
   existingSceneKeys: number[],
   existingPackageHashes: number[],
-): Promise<GeneratedSceneIdentity[]> {
-  return await invoke<GeneratedSceneIdentity[]>("hash_triad_scene_names", {
+  workspace: { outmissionDir: string; workspaceRoot: string; scriptPrefix: string },
+): Promise<HashedSceneName[]> {
+  return await invoke<HashedSceneName[]>("hash_triad_scene_names", {
     names,
     existingSceneKeys,
     existingPackageHashes,
+    outmissionDir: workspace.outmissionDir,
+    workspaceRoot: workspace.workspaceRoot,
+    scriptPrefix: workspace.scriptPrefix,
   });
 }
 
@@ -170,5 +206,25 @@ export async function previewTriadRoute(
   return await invoke<RoutePlan>("preview_triad_route", {
     documentJson: document,
     pathsJson: paths,
+  });
+}
+
+/**
+ * List every mission package and say which ones the game is still missing.
+ *
+ * Saving writes workspace folders; the game reads `.fhm2d`. A route whose
+ * tables were never repacked simply does not appear on the select screen, so
+ * the answer has to come from comparing the workspace against the mod folder
+ * rather than from what the modder remembers packing. Reads only.
+ */
+export async function planTriadRepack(
+  paths: TriadWorkspacePaths,
+  modFolder: string,
+  routeSceneNames: string[],
+): Promise<TriadRepackPlan> {
+  return await invoke<TriadRepackPlan>("plan_triad_repack_packages", {
+    pathsJson: paths,
+    modFolder,
+    routeSceneNames,
   });
 }

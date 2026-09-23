@@ -34,8 +34,8 @@ use crate::format::mission_pilot_names::{PilotNameEntry, PilotNameList};
 use crate::format::mission_script_config::MissionScript;
 use crate::format::scene_id_table::{SceneIdRow, SceneIdTable};
 use crate::format::triad_course::{
-    identify_table, CourseRow, CourseTable, RibbonRow, RibbonTable, SceneRow, SceneTable,
-    TriadTableKind,
+    identify_table, renumber_category, CourseOrderEntry, CourseRow, CourseTable, RibbonRow,
+    RibbonTable, SceneRow, SceneTable, TriadTableKind,
 };
 use crate::format::triad_route_document::{
     BriefingDraft, RouteBuildMode, StageScriptConfig, TriadRouteDocument,
@@ -819,15 +819,31 @@ pub struct WrittenFile {
 #[serde(rename_all = "camelCase")]
 pub struct AppliedRoute {
     pub written: Vec<WrittenFile>,
+    /// Files the save left on disk untouched because their bytes already
+    /// matched, reported so the UI can say so instead of counting them as
+    /// writes.
+    pub unchanged: Vec<String>,
     /// Script packages the stages use, so the UI can mark them dirty too.
     pub stage_package_hashes: Vec<u32>,
 }
 
-fn write_with_backup(
+/// Replace a file, keeping a one-time `.bak` of its pre-edit bytes.
+///
+/// A write whose bytes already match the file is skipped rather than
+/// performed. A save rebuilds every briefing and script of the open route
+/// whether or not the modder touched them, and the repack plan decides which
+/// packages are stale by comparing mtimes, so an identical rewrite is enough
+/// to flag `outmission` and a stage script the route never changed.
+pub(crate) fn write_with_backup(
     path: &Path,
     bytes: &[u8],
     written: &mut Vec<WrittenFile>,
+    unchanged: &mut Vec<String>,
 ) -> Result<(), String> {
+    if fs::read(path).is_ok_and(|current| current == bytes) {
+        unchanged.push(path.to_string_lossy().into_owned());
+        return Ok(());
+    }
     let backup = path.with_extension(match path.extension().and_then(|e| e.to_str()) {
         Some(extension) => format!("{extension}.bak"),
         None => "bak".to_string(),
@@ -920,13 +936,54 @@ pub fn apply_route(
 ) -> Result<AppliedRoute, String> {
     let planned = build_route_writes(document, paths)?;
     let mut written = Vec::with_capacity(planned.len());
+    let mut unchanged = Vec::new();
     for (path, bytes, _, _) in &planned {
-        write_with_backup(path, bytes, &mut written)?;
+        write_with_backup(path, bytes, &mut written, &mut unchanged)?;
     }
 
     Ok(AppliedRoute {
         written,
+        unchanged,
         stage_package_hashes: document.stage_package_hashes(),
+    })
+}
+
+/// What renumbering one category changed.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppliedCategoryOrder {
+    pub category: i32,
+    /// Every course in the category, in its new order.
+    pub courses: Vec<CourseOrderEntry>,
+    pub written: Vec<WrittenFile>,
+    pub unchanged: Vec<String>,
+}
+
+/// Put one category's courses in the given order and write the course table.
+///
+/// This writes the table directly rather than going through a route document:
+/// the numbers of a whole category move together, while a route save only
+/// ever owns the single course row it has open. Nothing else about the rows
+/// is touched, so a category can be reordered without opening its routes.
+pub fn renumber_course_category(
+    paths: &TriadWorkspacePaths,
+    category: i32,
+    order: &[i32],
+) -> Result<AppliedCategoryOrder, String> {
+    let files = discover_triad_tables(Path::new(&paths.triad_list_dir))?;
+    let course_path = PathBuf::from(&files.course);
+    let mut table = CourseTable::parse(&read_file(&course_path)?)?;
+    let courses = renumber_category(&mut table, category, order)?;
+
+    let mut written = Vec::new();
+    let mut unchanged = Vec::new();
+    write_with_backup(&course_path, &table.build()?, &mut written, &mut unchanged)?;
+
+    Ok(AppliedCategoryOrder {
+        category,
+        courses,
+        written,
+        unchanged,
     })
 }
 
@@ -985,7 +1042,7 @@ fn build_route_writes(
                     stage.scene_key, stage.script_package_hash
                 ))
             }
-            None if document.mode == RouteBuildMode::NewScenes => {
+            None if stage.may_create_scene_id_row(document.mode) => {
                 scene_id_table.insert(stage.scene_key, stage.script_package_hash)?;
                 scene_id_changed = true;
             }

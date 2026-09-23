@@ -1,0 +1,87 @@
+{
+  "title": "任务预览",
+  "actions": {
+    "openScript": "打开脚本",
+    "editNodes": "编辑节点",
+    "editNodesHint": "用这份 .c 打开任务节点编辑器。出生点坐标和地图上的标记是同一份数据。",
+    "minimize": "最小化",
+    "closeEditor": "关闭",
+    "restoreEditor": "任务节点",
+    "reload": "重新加载",
+    "clear": "清除",
+    "hotReload": "热重载",
+    "loadMap": "加载地图"
+  },
+  "status": {
+    "noScript": "打开任务的 .c 或 .mismsexc 文件以预览这一关的战斗配置。",
+    "slots": "{{count}} 个槽位",
+    "unsaved": "未保存"
+  },
+  "source": {
+    "c": "反编译 .c",
+    "compiled": "已编译 .mismsexc",
+    "configFunction": "配置函数：{{name}}",
+    "wavesUnreadable": "波次无法解析",
+    "section": "脚本",
+    "kind": "来源",
+    "waves": "波次",
+    "wavesReadable": "可解析"
+  },
+  "rules": {
+    "title": "战斗规则",
+    "win": "胜利条件",
+    "lose": "失败条件",
+    "targetCount": "目标数",
+    "allowedLosses": "可损失数",
+    "teamCosts": "各队 cost",
+    "bgm": "BGM",
+    "none": "无",
+    "flag": {
+      "wipeOut": "击破全部",
+      "targetCount": "击破指定目标",
+      "survive": "存活到时间结束"
+    },
+    "map": "地图"
+  },
+  "display": {
+    "title": "显示",
+    "markerScale": "标记大小",
+    "showLabels": "显示名称"
+  },
+  "phases": {
+    "title": "出击阶段",
+    "count": "{{count}} 个槽位",
+    "empty": "该脚本没有声明任何槽位。"
+  },
+  "phase": {
+    "initial": "开局即在场",
+    "opening": "开场函数投放",
+    "wave": "第 {{index}} 波",
+    "waveRule": "剩余敌人 ≤ {{enemies}} 时，延迟 {{seconds}} 秒"
+  },
+  "slot": {
+    "line": "x {{x}}  y {{y}}  z {{z}}  ·  朝向 {{facing}}°",
+    "position": "坐标",
+    "facing": "朝向",
+    "intro": "登场",
+    "ai": "AI"
+  },
+  "team": {
+    "player": "我方",
+    "enemy": "敌方"
+  },
+  "warnings": {
+    "unitNames": "无法读取机体名称，改用原始 ID：{{reason}}"
+  },
+  "errors": {
+    "parseFailed": "无法解析任务脚本"
+  },
+  "spawn": {
+    "externalLocked": "已启用外部坐标，不能在地图上拖动这个单位。",
+    "needEditorTitle": "出生点目前只能查看",
+    "needEditorBody": "任务脚本已经加载，但节点编辑器还没打开，所以不能在地图上拖动机体。打开节点编辑器后，拖动会写回这份脚本的出生坐标。",
+    "needEditorAction": "打开节点编辑器",
+    "compiledTitle": "这份脚本只能预览",
+    "compiledBody": "已编译的 .mismsexc 不能在这里改坐标。要拖动机体，请打开对应的反编译 .c。"
+  }
+}

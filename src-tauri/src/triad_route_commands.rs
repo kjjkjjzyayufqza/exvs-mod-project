@@ -6,7 +6,7 @@
 //! — so no chunked transfer is needed.
 
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use serde_json::Value;
@@ -15,15 +15,18 @@ use crate::format::mission_hash::{
     check_collisions, family_hash, triad_scene_identity, SceneIdentity, SCENE_KEY_STATE,
     SCRIPT_PACKAGE_STATE,
 };
+use crate::format::triad_repack_plan::plan_triad_repack;
 use crate::format::triad_route_document::TriadRouteDocument;
 use crate::format::triad_route_validate::{
     has_blocking_issue, validate_route, RouteValidationContext,
 };
 use crate::format::triad_route_workspace::{
     apply_route, load_briefing, load_stage_script, load_workspace, plan_route,
-    rename_briefings_to_scene_names, TriadWorkspacePaths,
+    rename_briefings_to_scene_names, renumber_course_category, TriadWorkspacePaths,
 };
-use crate::format::triad_scene_create::{create_triad_scene, taken_ids, NewSceneRequest};
+use crate::format::triad_scene_create::{
+    create_triad_scene, scene_name_ownership, taken_ids, NewSceneRequest,
+};
 
 fn paths_from_json(value: Value) -> Result<TriadWorkspacePaths, String> {
     serde_json::from_value(value).map_err(|e| format!("Invalid workspace paths: {e}"))
@@ -63,6 +66,24 @@ pub fn load_triad_stage_script(
         scene_key,
         scene_name.as_deref(),
     )?)
+}
+
+/// Read one mission script file into the map editor's preview shape.
+///
+/// Takes the file directly — a decompiled `.c` or a compiled `.mismsexc` —
+/// so a modder can preview the script they are editing without it having to
+/// be indexed by a route workspace first.
+#[tauri::command]
+pub fn load_mission_script_preview(script_path: &str) -> Result<Value, String> {
+    to_value(&crate::format::mission_preview::load_mission_script_preview(
+        script_path,
+    )?)
+}
+
+/// Modification time of a mission script, for the preview's hot-reload poll.
+#[tauri::command]
+pub fn mission_script_modified_ms(script_path: &str) -> Result<u64, String> {
+    crate::format::mission_preview::mission_script_modified_ms(script_path)
 }
 
 /// Give every briefing in the outmission folder the name of its scene.
@@ -120,6 +141,39 @@ pub fn apply_triad_route(document_json: Value, paths_json: Value) -> Result<Valu
     to_value(&apply_route(&document, &paths)?)
 }
 
+/// Reorder one category on the course select screen.
+///
+/// The screen groups by `CATEGORY` and orders by `NUMBER_IN_CATEGORY`, so the
+/// only way to move a course is to renumber the whole category. `course_id_order`
+/// is the category's course ids in the order they should appear; the first
+/// one becomes number 1. This writes the course table, so the caller has to
+/// have saved or dropped any open edits to the category first.
+#[tauri::command]
+pub fn renumber_triad_category(
+    paths_json: Value,
+    category: i32,
+    course_id_order: Vec<i32>,
+) -> Result<Value, String> {
+    let paths = paths_from_json(paths_json)?;
+    to_value(&renumber_course_category(&paths, category, &course_id_order)?)
+}
+
+/// List every mission package and say which ones the game is still missing.
+///
+/// Saving writes workspace folders; the game reads `.fhm2d`. This is the step
+/// between them, and getting it wrong is silent: a route whose tables were
+/// never repacked simply does not appear on the select screen. Nothing is
+/// written here — the plan only reads.
+#[tauri::command]
+pub fn plan_triad_repack_packages(
+    paths_json: Value,
+    mod_folder: String,
+    route_scene_names: Vec<String>,
+) -> Result<Value, String> {
+    let paths = paths_from_json(paths_json)?;
+    to_value(&plan_triad_repack(&paths, &mod_folder, &route_scene_names)?)
+}
+
 /// A generated scene identity plus whether either hash is already taken.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -165,23 +219,49 @@ pub fn generate_triad_scene_identity(
     to_value(&generated)
 }
 
+/// A hashed scene name, what holds its ids, and whether it can be replaced.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HashedSceneName {
+    #[serde(flatten)]
+    identity: SceneIdentity,
+    scene_key_collision: Option<String>,
+    package_hash_collision: Option<String>,
+    /// True when the only thing holding these ids is this workspace's own
+    /// copy of the same scene, so creating it with `replaceExisting` works.
+    replaceable: bool,
+}
+
 /// Hash scene names the modder typed, with the same clash check.
 ///
 /// `generate_triad_scene_identity` builds official-style names from a category
 /// and a number; this is its sibling for a name the modder edited, so the
 /// dialog can show what a folder will be called and what it hashes to while
 /// they are still typing, instead of after the files exist.
+///
+/// The taken set is built exactly the way `create_triad_scenes` builds it —
+/// the ids the caller passes *plus* every scene key the outmission package
+/// already has a briefing for. Checking a narrower set here is what let a
+/// name read as free in the dialog and then fail on create.
 #[tauri::command]
 pub fn hash_triad_scene_names(
     names: Vec<String>,
     existing_scene_keys: Vec<u32>,
     existing_package_hashes: Vec<u32>,
+    outmission_dir: String,
+    workspace_root: String,
+    script_prefix: String,
 ) -> Result<Value, String> {
     if names.is_empty() {
         return Err("at least one scene name is required".to_string());
     }
-    let scene_keys: HashSet<u32> = existing_scene_keys.into_iter().collect();
-    let package_hashes: HashSet<u32> = existing_package_hashes.into_iter().collect();
+    let outmission = PathBuf::from(outmission_dir.trim().trim_end_matches(['/', '\\']));
+    let script_root = PathBuf::from(workspace_root.trim().trim_end_matches(['/', '\\']))
+        .join(script_prefix.trim().trim_end_matches(['/', '\\']));
+    let (scene_key_set, package_hash_set) =
+        taken_ids(&outmission, &existing_scene_keys, &existing_package_hashes)?;
+    let scene_keys: HashSet<u32> = scene_key_set.into_iter().collect();
+    let package_hashes: HashSet<u32> = package_hash_set.into_iter().collect();
 
     let hashed = names
         .iter()
@@ -192,10 +272,25 @@ pub fn hash_triad_scene_names(
                 package_hash: family_hash(SCRIPT_PACKAGE_STATE, trimmed)?,
                 name: trimmed.to_string(),
             };
-            Ok(GeneratedSceneIdentity {
+            let owned = scene_name_ownership(
+                &outmission,
+                &script_root,
+                trimmed,
+                identity.scene_key,
+                identity.package_hash,
+            )?;
+            let scene_key_taken = scene_keys.contains(&identity.scene_key);
+            let package_taken = package_hashes.contains(&identity.package_hash);
+            // Only ids held by this scene's own files can be reclaimed, and
+            // a leftover folder counts even when its hash is not in the set.
+            let replaceable = !owned.is_empty()
+                && (!scene_key_taken || owned.briefing.is_some())
+                && (!package_taken || owned.script_folder.is_some());
+            Ok(HashedSceneName {
                 scene_key_collision: check_collisions(identity.scene_key, &scene_keys).err(),
                 package_hash_collision: check_collisions(identity.package_hash, &package_hashes)
                     .err(),
+                replaceable,
                 identity,
             })
         })

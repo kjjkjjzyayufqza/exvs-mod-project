@@ -140,6 +140,12 @@ export function useSceneTextureLoader(
   maxDimension: number | null,
   textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>,
   objectTextureLoadState: ObjectTextureLoadState,
+  /**
+   * Master switch for the whole decode stage. `false` loads the scene as
+   * geometry only; flipping it back to `true` re-runs this effect and decodes
+   * the textures the already-loaded models reference.
+   */
+  texturesEnabled: boolean,
 ): {
   textureDataMap: NutexbTextureDataMap;
   progress: TextureDecodeProgress | null;
@@ -170,6 +176,13 @@ export function useSceneTextureLoader(
   }
 
   useEffect(() => {
+    if (!texturesEnabled) {
+      setTextureDataMap(new Map());
+      setProgress(null);
+      setWarnings([]);
+      return;
+    }
+
     const uniquePaths = collectUniqueNutexbPaths(
       baseModel,
       subModels,
@@ -393,7 +406,7 @@ export function useSceneTextureLoader(
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- stablePlacementIdentity replaces placementEntries to avoid re-decode on coordinate-only changes
-  }, [baseModel, subModels, importedSsbhBundles, stablePlacementIdentity, sessionId, sourceKind, maxDimension, textureSlotLoadEnabled, objectTextureLoadState]);
+  }, [baseModel, subModels, importedSsbhBundles, stablePlacementIdentity, sessionId, sourceKind, maxDimension, textureSlotLoadEnabled, objectTextureLoadState, texturesEnabled]);
 
   return { textureDataMap, progress, warnings };
 }

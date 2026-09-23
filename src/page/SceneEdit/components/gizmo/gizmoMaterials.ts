@@ -15,32 +15,29 @@ export interface GizmoMaterialSet {
   active: THREE.MeshBasicMaterial;
 }
 
+function createGizmoMaterial(color: THREE.Color, opacity: number): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
+    color,
+    // AlwaysDepth keeps the axis visible when the viewport uses a logarithmic
+    // depth buffer: that path writes gl_FragDepth, and a plain depthTest:false
+    // still loses to scene shaders at some camera angles.
+    depthTest: false,
+    depthWrite: false,
+    depthFunc: THREE.AlwaysDepth,
+    transparent: true,
+    opacity,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+    fog: false,
+  });
+}
+
 function createMaterialTriple(baseColor: THREE.Color, transparent: boolean): GizmoMaterialSet {
+  const opacity = transparent ? PLANE_HANDLE_OPACITY : 1;
   return {
-    normal: new THREE.MeshBasicMaterial({
-      color: baseColor.clone(),
-      depthTest: false,
-      depthWrite: false,
-      transparent,
-      opacity: transparent ? PLANE_HANDLE_OPACITY : 1,
-      side: THREE.DoubleSide,
-    }),
-    hover: new THREE.MeshBasicMaterial({
-      color: HOVER_COLOR.clone(),
-      depthTest: false,
-      depthWrite: false,
-      transparent,
-      opacity: transparent ? 0.5 : 1,
-      side: THREE.DoubleSide,
-    }),
-    active: new THREE.MeshBasicMaterial({
-      color: ACTIVE_COLOR.clone(),
-      depthTest: false,
-      depthWrite: false,
-      transparent,
-      opacity: transparent ? 0.6 : 1,
-      side: THREE.DoubleSide,
-    }),
+    normal: createGizmoMaterial(baseColor.clone(), opacity),
+    hover: createGizmoMaterial(HOVER_COLOR.clone(), transparent ? 0.5 : 1),
+    active: createGizmoMaterial(ACTIVE_COLOR.clone(), transparent ? 0.6 : 1),
   };
 }
 

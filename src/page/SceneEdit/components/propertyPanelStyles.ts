@@ -42,3 +42,33 @@ export const INSPECTOR_SECTION =
   "min-w-0 overflow-hidden rounded-sm border border-border/45 bg-muted/10";
 export const INSPECTOR_SECTION_HEADER =
   "flex w-full items-center gap-1.5 border-b border-border/35 bg-muted/25 px-2 py-1 text-left text-[10px] font-semibold tracking-wide text-muted-foreground hover:bg-muted/40";
+
+/** Engine-style floating tool window: dense toolbar strip above the body. */
+export const TOOL_WINDOW_BODY =
+  "flex h-full min-h-0 flex-col bg-background text-[11px] [font-variant-numeric:tabular-nums]";
+export const TOOL_WINDOW_BAR =
+  "flex shrink-0 flex-wrap items-center gap-1 border-b border-border/45 bg-muted/25 px-2 py-1";
+export const TOOL_WINDOW_SCROLL =
+  "custom-scrollbar-thin min-h-0 flex-1 overflow-y-auto overflow-x-hidden";
+export const TOOL_WINDOW_STATUS =
+  "flex shrink-0 items-center gap-2 border-t border-border/45 bg-muted/20 px-2 py-1 text-[10px] text-muted-foreground";
+
+/** Compact toolbar button matching the Scene Editor toolbar rhythm. */
+export const TOOL_BTN =
+  "h-6 gap-1.5 rounded-sm px-2 text-[10px] font-medium transition-[background-color,color,box-shadow,transform] duration-150 ease-out active:translate-y-px";
+export const TOOL_BTN_ICON =
+  "h-6 w-6 rounded-sm p-0 transition-[background-color,color,box-shadow,transform] duration-150 ease-out active:translate-y-px";
+
+/** Asset-browser data table: sticky header, zebra-free dense rows. */
+export const DATA_TABLE = "w-full border-separate border-spacing-0 text-[11px]";
+export const DATA_TABLE_HEAD =
+  "sticky top-0 z-10 border-b border-border/50 bg-muted/60 px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground backdrop-blur-sm";
+export const DATA_TABLE_ROW =
+  "cursor-default border-b border-border/25 transition-colors duration-100 hover:bg-accent/30 data-[selected=true]:bg-primary/12 data-[selected=true]:hover:bg-primary/16";
+export const DATA_TABLE_CELL = "px-2 py-[5px] align-middle";
+export const DATA_TABLE_MONO =
+  "px-2 py-[5px] align-middle font-mono text-[10px] tabular-nums text-muted-foreground";
+
+/** Outliner row: visibility toggle + colour swatch + label. */
+export const OUTLINER_ROW =
+  "group flex w-full min-w-0 items-center gap-1.5 rounded-sm px-1.5 py-[3px] text-left transition-colors duration-100 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/60 data-[selected=true]:bg-primary/12";

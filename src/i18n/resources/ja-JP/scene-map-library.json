@@ -1,0 +1,39 @@
+{
+  "title": "マップライブラリ",
+  "searchPlaceholder": "ステージ名・パッケージ・ハッシュで検索…",
+  "columns": {
+    "stage": "ステージ",
+    "mapHash": "マップハッシュ",
+    "pack": "モデルパッケージ",
+    "status": "状態",
+    "actions": "操作"
+  },
+  "actions": {
+    "refresh": "再読み込み",
+    "extractAndOpen": "展開して開く",
+    "reExtract": "再展開",
+    "open": "開く",
+    "clearSearch": "フィルタをクリア"
+  },
+  "status": {
+    "loading": "ステージリストを読み込み中…",
+    "extracted": "展開済み",
+    "notExtracted": "未展開",
+    "packMissing": "パッケージなし",
+    "noMatches": "該当するステージがありません",
+    "summary": "{{shown}} / {{total}} ステージ",
+    "extractedCount": "展開済み {{count}}"
+  },
+  "success": {
+    "extracted": "{{name}} を展開しました",
+    "extractedDetail": "{{files}} ファイル、{{size}} MB"
+  },
+  "warnings": {
+    "extract": "展開時に {{count}} 件の警告が出ました"
+  },
+  "errors": {
+    "loadFailed": "ステージリストを読み込めません",
+    "loadHint": "EXVS2 Workspace でワークスペースフォルダ（012list を含むもの）を開き、そこで stage_list を展開し、設定で OB dplcache パスを指定してください。",
+    "extractFailed": "展開に失敗しました"
+  }
+}

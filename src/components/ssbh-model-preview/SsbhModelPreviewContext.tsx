@@ -110,7 +110,14 @@ export type PreviewInstanceViewMode = "all" | "single";
 export type PreviewControlScope = "all" | "single";
 
 /** Physical PBR preview vs stylized look inspired by cortiz2894/stylized-components (bloom + warm lights). */
-export type PreviewRenderStyle = "standard" | "anime";
+/**
+ * "anime" is the hand-tuned cel shading that predates the renderer port.
+ * "exvs2" is the reconstructed Over Boost deferred pipeline.
+ */
+export type PreviewRenderStyle = "standard" | "anime" | "exvs2";
+
+/** Deferred EXVS2 pipeline — default for Unit Model Editor and Scene Editor viewports. */
+export const DEFAULT_EDITOR_PREVIEW_RENDER_STYLE: PreviewRenderStyle = "exvs2";
 
 /** Blender Dark theme 3D Viewport grid background high (0.22, 0.22, 0.22). */
 export const DEFAULT_PREVIEW_3D_BACKGROUND = "#383838";
@@ -499,6 +506,8 @@ type ProviderProps = {
    * mecha facets are less exaggerated than the default studio key light.
    */
   defaultLightingPreset?: PreviewLightingPreset;
+  /** Initial shading pipeline (`exvs2` mounts the deferred EXVS2 renderer in the canvas). */
+  defaultPreviewRenderStyle?: PreviewRenderStyle;
   children: ReactNode;
 };
 
@@ -544,6 +553,7 @@ export function SsbhModelPreviewProvider({
   workspaceRoot,
   previewSuspended = false,
   defaultLightingPreset = "studio",
+  defaultPreviewRenderStyle = "standard",
   children,
 }: ProviderProps) {
   const { t } = useTranslation("ssbh-root-c");
@@ -650,7 +660,8 @@ export function SsbhModelPreviewProvider({
     applyNonce: number;
     applyData: Float32Array | null;
   }>({ undoStack: [], redoStack: [], applyNonce: 0, applyData: null });
-  const [previewRenderStyle, setPreviewRenderStyle] = useState<PreviewRenderStyle>("standard");
+  const [previewRenderStyle, setPreviewRenderStyle] =
+    useState<PreviewRenderStyle>(defaultPreviewRenderStyle);
   const [recentModelPaths, setRecentModelPaths] = useState<string[]>(() =>
     readRecentModelPathsFromStorage(),
   );
@@ -2497,14 +2508,14 @@ export function SsbhModelPreviewProvider({
     setTextureFlipY(false);
     setUvFlipU(false);
     setUvFlipV(false);
-    setPreviewRenderStyle("standard");
+    setPreviewRenderStyle(defaultPreviewRenderStyle);
     setTextureSlotLoadEnabledState(createDefaultTextureSlotLoadEnabled());
     setSelectedBoneIndex(null);
     setBoneTransformMode("translate");
     setBonePoseHistory({ undoStack: [], redoStack: [], applyNonce: 0, applyData: null });
     setFitRequestId((r) => r + 1);
     clearAllMotion();
-  }, [applyLightingPreset, clearAllMotion, defaultLightingPreset]);
+  }, [applyLightingPreset, clearAllMotion, defaultLightingPreset, defaultPreviewRenderStyle]);
 
   const clearRecentModelPaths = useCallback(() => {
     writeRecentModelPathsToStorage([]);

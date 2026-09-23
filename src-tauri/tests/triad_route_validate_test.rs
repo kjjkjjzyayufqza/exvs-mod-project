@@ -18,7 +18,7 @@ use app_lib::format::bsfo::{
     BsfoBriefingUnit, BsfoSlotEntry, NO_CAST, SCENE_CLASS_BOSS, SCENE_CLASS_STANDARD,
 };
 use app_lib::format::triad_route_document::{
-    BriefingDraft, CourseDraft, RouteBuildMode, ScriptSlot, ScriptWave, StageDraft,
+    BriefingDraft, CourseDraft, RouteBuildMode, ScriptSlot, ScriptWave, StageDraft, StageOrigin,
     StageScriptConfig, TriadRouteDocument, TRIAD_ROUTE_SCHEMA, WIN_FLAG_TARGET_COUNT,
     WIN_FLAG_WIPE_OUT,
 };
@@ -194,6 +194,7 @@ fn one_versus_ten_document() -> TriadRouteDocument {
             script_package_hash: A22_PACKAGE,
             briefing,
             script: Some(script),
+            origin: StageOrigin::Existing,
         }],
         ribbons: Vec::new(),
     }
@@ -540,6 +541,39 @@ fn a_briefing_that_disagrees_with_the_spawn_list_is_a_warning() {
         "a cosmetic mismatch must not block the save: {:?}",
         errors(&issues)
     );
+}
+
+/// A-E courses with fewer than three stages crash after the last fight, but
+/// Save stays enabled: the finding is a warning so a work-in-progress route
+/// can still be written.
+#[test]
+fn a_cloned_stage_on_an_existing_course_is_allowed_to_create_its_sceneidtable_row() {
+    let mut document = one_versus_ten_document();
+    document.course.category = 1;
+    document.mode = RouteBuildMode::RewriteExisting;
+    let mut second = document.stages[0].clone();
+    second.index = 2;
+    second.scene_key = 0xC07D_5F35;
+    second.scene_name = Some("000triad_battle_a022_002".to_string());
+    second.origin = StageOrigin::Cloned;
+    document.stages.push(second);
+
+    let issues = validate_route(&document, &context());
+    assert!(codes(&issues).contains(&"scene-package-row-to-create".to_string()));
+    assert!(!errors(&issues).contains(&"scene-package-row-missing".to_string()));
+}
+
+#[test]
+fn an_a_class_course_with_fewer_than_three_stages_does_not_block_the_save() {
+    let mut document = one_versus_ten_document();
+    document.course.category = 1;
+    let issues = validate_route(&document, &context());
+    let issue = issues
+        .iter()
+        .find(|issue| issue.code == "stage-count-invalid")
+        .expect("A-E stage count should still be reported");
+    assert_eq!(issue.severity, Severity::Warning);
+    assert!(!errors(&issues).contains(&"stage-count-invalid".to_string()));
 }
 
 #[test]

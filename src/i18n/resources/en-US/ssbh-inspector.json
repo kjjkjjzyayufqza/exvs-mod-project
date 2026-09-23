@@ -99,7 +99,8 @@
   },
   "renderStyle": {
     "standard": "Standard",
-    "anime": "Anime (bloom + warm lights)"
+    "anime": "Anime (bloom + warm lights)",
+    "exvs2": "EXVS2 deferred (reconstructed)"
   },
   "export": {
     "loadModelFirst": "Load a model in the viewport to enable export.",

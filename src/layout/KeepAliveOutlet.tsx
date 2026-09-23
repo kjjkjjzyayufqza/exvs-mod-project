@@ -47,7 +47,7 @@ export function KeepAliveOutlet() {
         if (!visited.has(item.url)) return null;
         const active = matchedUrl !== null && pathMatchesRoute(pathname, item.url);
         const activeOverflow =
-          item.url === "/SceneEdit" ? "overflow-hidden" : "overflow-auto";
+          item.url === "/SceneEdit" || item.url === "/MissionNodeEditor" ? "overflow-hidden" : "overflow-auto";
         return (
           <div
             key={item.url}

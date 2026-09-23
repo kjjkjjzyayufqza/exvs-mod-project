@@ -299,5 +299,12 @@
     "indexing": "Search Directory indexing",
     "exists": "Indexed file exists at {{path}}. Click to open.",
     "missing": "Indexed file does not exist at {{path}}"
+  },
+  "mapExtract": {
+    "action": "Extract map",
+    "title": "Unpack this stage's geometry pack into the map library",
+    "success": "Extracted {{name}}",
+    "warnings": "Extraction reported {{count}} warnings",
+    "failed": "Map extraction failed"
   }
 }

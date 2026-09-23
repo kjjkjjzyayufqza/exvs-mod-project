@@ -1,6 +1,10 @@
 import {
   FolderOpen,
   FileArchive,
+  FileCode2,
+  Image as ImageIcon,
+  ImageOff,
+  Library,
   PackageOpen,
   Save,
   HardDriveDownload,
@@ -16,6 +20,7 @@ import {
   RotateCw,
   Maximize,
   Sparkles,
+  Aperture,
   SlidersHorizontal,
   MoreHorizontal,
   Boxes,
@@ -45,6 +50,13 @@ import type { PlacementGizmoMode } from "./MapViewport";
 import { MAX_SCENE_GIZMO_SIZE, MIN_SCENE_GIZMO_SIZE } from "../utils/sceneEditorSettings";
 import { HavokViewModeToggle } from "./havok/HavokViewModeToggle";
 
+/**
+ * Toolbar toggle: same 24px square as every other toolbar control, with an
+ * explicit transition list and a tactile press so the state change is felt.
+ */
+const TOOLBAR_TOGGLE =
+  "h-6 w-6 rounded-sm transition-[background-color,color,box-shadow,transform] duration-150 ease-out active:translate-y-px";
+
 const GIZMO_MODES = [
   { key: "W", mode: "translate" as const, icon: Move3D },
   { key: "E", mode: "rotate" as const, icon: RotateCw },
@@ -53,6 +65,13 @@ const GIZMO_MODES = [
 
 interface MapToolbarProps {
   onOpenFolder: () => void;
+  /** Pick a stage from the workspace stage list and unpack it on the spot. */
+  onOpenMapLibrary: () => void;
+  onOpenMissionPreview: () => void;
+  missionPreviewActive: boolean;
+  /** Master texture switch; off loads a stage as geometry only. */
+  texturesEnabled: boolean;
+  onToggleTextures: (enabled: boolean) => void;
   onImportFhm2d: () => void;
   onExtractFhm2d: () => void;
   onSaveFolder: () => void;
@@ -82,6 +101,9 @@ interface MapToolbarProps {
   gizmoSize: number;
   onGizmoSizeChange: (size: number) => void;
   animeRenderEnabled: boolean;
+  /** The reconstructed Over Boost deferred pipeline. Mutually exclusive with anime. */
+  exvs2RenderEnabled: boolean;
+  onToggleExvs2Render: (next: boolean) => void;
   onToggleAnimeRender: (enabled: boolean) => void;
   viewMode: "normal" | "collision" | "both";
   onViewModeChange: (mode: "normal" | "collision" | "both") => void;
@@ -94,6 +116,11 @@ interface MapToolbarProps {
 
 export function MapToolbar({
   onOpenFolder,
+  onOpenMapLibrary,
+  onOpenMissionPreview,
+  missionPreviewActive,
+  texturesEnabled,
+  onToggleTextures,
   onImportFhm2d,
   onExtractFhm2d,
   onSaveFolder,
@@ -123,6 +150,8 @@ export function MapToolbar({
   gizmoSize,
   onGizmoSizeChange,
   animeRenderEnabled,
+  exvs2RenderEnabled,
+  onToggleExvs2Render,
   onToggleAnimeRender,
   viewMode,
   onViewModeChange,
@@ -154,6 +183,10 @@ export function MapToolbar({
           <TooltipContent side="bottom">{t("file.openImportStage")}</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="start" className="text-xs">
+          <DropdownMenuItem onClick={onOpenMapLibrary}>
+            <Library className="mr-2 h-3.5 w-3.5" />
+            {t("file.openMapLibrary")}
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={onOpenFolder}>
             <FolderOpen className="mr-2 h-3.5 w-3.5" />
             {t("file.openStageFolder")}
@@ -170,7 +203,49 @@ export function MapToolbar({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Save button — always visible with unsaved indicator */}
+      <Separator orientation="vertical" className="h-4 mx-0.5" />
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant={texturesEnabled ? "secondary" : "ghost"}
+            size="icon"
+            className={TOOLBAR_TOGGLE}
+            onClick={() => onToggleTextures(!texturesEnabled)}
+            aria-pressed={texturesEnabled}
+            aria-label={t("textures.masterSwitch")}
+          >
+            {texturesEnabled ? (
+              <ImageIcon className="h-3.5 w-3.5" />
+            ) : (
+              <ImageOff className="h-3.5 w-3.5 opacity-60" />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          {texturesEnabled ? t("textures.disableTooltip") : t("textures.enableTooltip")}
+        </TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant={missionPreviewActive ? "secondary" : "ghost"}
+            size="icon"
+            className={cn(TOOLBAR_TOGGLE, "relative")}
+            onClick={onOpenMissionPreview}
+            aria-label={t("mission.label")}
+          >
+            <FileCode2 className="h-3.5 w-3.5" />
+            {missionPreviewActive && (
+              <span className="absolute bottom-0.5 left-1/2 h-px w-3 -translate-x-1/2 rounded-full bg-primary" />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{t("mission.tooltip")}</TooltipContent>
+      </Tooltip>
+
+            {/* Save button — always visible with unsaved indicator */}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -423,6 +498,21 @@ export function MapToolbar({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">{t("display.animeRender")}</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={exvs2RenderEnabled ? "secondary" : "ghost"}
+              size="icon"
+              className={cn("h-6 w-6", exvs2RenderEnabled && "text-sky-400")}
+              onClick={() => onToggleExvs2Render(!exvs2RenderEnabled)}
+              aria-label={t(exvs2RenderEnabled ? "display.disableExvs2" : "display.enableExvs2")}
+            >
+              <Aperture className="h-3 w-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{t("display.exvs2Render")}</TooltipContent>
         </Tooltip>
       </div>
 

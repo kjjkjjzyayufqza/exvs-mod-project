@@ -1,7 +1,9 @@
-import { Link, useLocation } from "react-router-dom"
+import { useLocation } from "react-router-dom"
+import { GuardedNavLink } from "@/components/GuardedNavLink"
 
 import {
     SidebarContent,
+    SidebarFooter,
     SidebarGroup,
     SidebarGroupContent,
     SidebarMenu,
@@ -50,17 +52,17 @@ export function AppSidebar() {
                 <SidebarGroup>
                     <SidebarGroupContent>
                         <SidebarMenu>
-                            {RouterItems.map((item) => (
+                            {RouterItems.filter((item) => !item.sidebarFooter).map((item) => (
                                 <SidebarMenuItem key={item.title}>
                                     <SidebarMenuButton
                                         asChild
                                         isActive={isRouteActive(pathname, item.url)}
                                         tooltip={item.title}
                                     >
-                                        <Link to={{ pathname: item.url }}>
+                                        <GuardedNavLink to={{ pathname: item.url }}>
                                             <item.icon />
                                             <span>{item.title}</span>
-                                        </Link>
+                                        </GuardedNavLink>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>
                             ))}
@@ -68,6 +70,17 @@ export function AppSidebar() {
                     </SidebarGroupContent>
                 </SidebarGroup>
             </SidebarContent>
+            <SidebarFooter className="border-t border-sidebar-border">
+                <SidebarMenu>
+                    {RouterItems.filter((item) => item.sidebarFooter).map((item) => (
+                        <SidebarMenuItem key={item.url}>
+                            <SidebarMenuButton asChild isActive={isRouteActive(pathname, item.url)} tooltip={item.title}>
+                                <GuardedNavLink to={item.url}><item.icon /><span>{item.title}</span></GuardedNavLink>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    ))}
+                </SidebarMenu>
+            </SidebarFooter>
             <SidebarRail />
         </div>
     )

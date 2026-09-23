@@ -19,7 +19,7 @@
 //! research has not named are carried through untouched and surfaced in
 //! `extra`, so nothing is lost by a round trip through the editor.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -466,6 +466,99 @@ impl CourseTable {
         }
         Ok(candidate)
     }
+}
+
+/// One course the renumber places, before and after.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CourseOrderEntry {
+    pub course_id: i32,
+    pub name: String,
+    pub previous_number: i32,
+    pub number: i32,
+    /// Every row carrying this course id, variants included.
+    pub row_ids: Vec<u32>,
+}
+
+/// Renumber one category so its courses run `1..=N` in the order given.
+///
+/// `NUMBER_IN_CATEGORY` is what the select screen orders a category by, and
+/// it is not the number in the name: the shipped `A-99` sits at 50, past
+/// `A-21`, which is how it lands at the end of the A list.
+///
+/// Variant rows share a course id, and in every shipped case they share the
+/// number too — numbering them apart would split one course into several
+/// entries on the screen — so a course is placed as a whole, not row by row.
+///
+/// `order` must hold exactly the category's course ids, each once. A caller
+/// working from a stale list would otherwise leave a course behind at its old
+/// number, which reads in game as a duplicate or a gap rather than an error.
+pub fn renumber_category(
+    table: &mut CourseTable,
+    category: i32,
+    order: &[i32],
+) -> Result<Vec<CourseOrderEntry>, String> {
+    if !(1..=6).contains(&category) {
+        return Err(format!("course category must be 1..=6 (A..F), got {category}"));
+    }
+
+    let rows = table.rows()?;
+    let mut indices: BTreeMap<i32, Vec<usize>> = BTreeMap::new();
+    for (index, row) in rows.iter().enumerate() {
+        if row.category == category {
+            indices.entry(row.course_id).or_default().push(index);
+        }
+    }
+    if indices.is_empty() {
+        return Err(format!("category {category} has no course rows to renumber"));
+    }
+
+    let mut placed: BTreeSet<i32> = BTreeSet::new();
+    for course_id in order {
+        if !indices.contains_key(course_id) {
+            return Err(format!(
+                "course id {course_id} is not in category {category}"
+            ));
+        }
+        if !placed.insert(*course_id) {
+            return Err(format!("course id {course_id} is placed twice"));
+        }
+    }
+    let missing: Vec<String> = indices
+        .keys()
+        .filter(|course_id| !placed.contains(course_id))
+        .map(i32::to_string)
+        .collect();
+    if !missing.is_empty() {
+        return Err(format!(
+            "the order leaves out course id(s) {}; every course in the category has to be placed",
+            missing.join(", ")
+        ));
+    }
+
+    let mut entries = Vec::with_capacity(order.len());
+    for (position, course_id) in order.iter().enumerate() {
+        let number = i32::try_from(position + 1)
+            .map_err(|_| format!("category {category} has too many courses to number"))?;
+        let course_rows = &indices[course_id];
+        for &index in course_rows {
+            let mut row = rows[index].clone();
+            if row.number_in_category == number {
+                continue;
+            }
+            row.number_in_category = number;
+            table.apply(index, &row)?;
+        }
+        let first = &rows[course_rows[0]];
+        entries.push(CourseOrderEntry {
+            course_id: *course_id,
+            name: first.name.clone(),
+            previous_number: first.number_in_category,
+            number,
+            row_ids: course_rows.iter().map(|&index| rows[index].row_id).collect(),
+        });
+    }
+    Ok(entries)
 }
 
 /// Reject course values the engine cannot represent, before anything is written.

@@ -1583,6 +1583,7 @@ const TestEditorPage = () => {
           obModPath={obModPath}
           onRequestFhm2dRepack={requestFhm2dRepack}
           onPackMutated={handlePackMutated}
+          onPackRepacked={handleRepackSuccess}
           starredPathSet={starredPathSet}
           onToggleStar={toggleStar}
           viewOptions={viewOptions}

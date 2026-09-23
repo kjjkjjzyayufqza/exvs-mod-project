@@ -107,7 +107,9 @@ export class UnrealTransformGizmo extends THREE.Object3D {
     this._onPointerUp = this._onPointerUp.bind(this);
 
     domElement.addEventListener("pointermove", this._onPointerMove);
-    domElement.addEventListener("pointerdown", this._onPointerDown);
+    // Capture runs before the viewport's bubble listeners, so an axis hit can
+    // swallow the event before the map mesh behind the gizmo is selected.
+    domElement.addEventListener("pointerdown", this._onPointerDown, true);
     domElement.addEventListener("pointerup", this._onPointerUp);
   }
 
@@ -238,8 +240,14 @@ export class UnrealTransformGizmo extends THREE.Object3D {
       if (child instanceof THREE.Mesh) {
         const mat = child.material;
         if (mat instanceof THREE.MeshBasicMaterial) {
-          mat.transparent = opacity < 1;
+          // Stay in the forward transparent pass. Flipping this off sends the
+          // ring through the deferred G-buffer, which depth-tests it and hides
+          // the axis behind stage meshes at facing angles.
+          mat.transparent = true;
           mat.opacity = opacity;
+          mat.depthTest = false;
+          mat.depthWrite = false;
+          mat.depthFunc = THREE.AlwaysDepth;
         }
       }
     });
@@ -266,7 +274,7 @@ export class UnrealTransformGizmo extends THREE.Object3D {
 
   dispose(): void {
     this._domElement.removeEventListener("pointermove", this._onPointerMove);
-    this._domElement.removeEventListener("pointerdown", this._onPointerDown);
+    this._domElement.removeEventListener("pointerdown", this._onPointerDown, true);
     this._domElement.removeEventListener("pointerup", this._onPointerUp);
 
     if (this._currentGeometry) {
@@ -398,6 +406,7 @@ export class UnrealTransformGizmo extends THREE.Object3D {
     if (!axis) return;
 
     event.stopPropagation();
+    event.stopImmediatePropagation();
     (this._domElement as HTMLElement).setPointerCapture(event.pointerId);
 
     this._activeAxis = axis;

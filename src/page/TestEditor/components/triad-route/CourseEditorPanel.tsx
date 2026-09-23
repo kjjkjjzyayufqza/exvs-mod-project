@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { ScrollText } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -72,7 +72,7 @@ function stagesUsingUnit(stages: StageDraft[], unitId: number): number[] {
  * rows per course id. Unlock type 0 is explained on the field, because
  * listing it as a finding made every vanilla route look broken.
  */
-export function CourseEditorPanel({
+export const CourseEditorPanel = memo(function CourseEditorPanel({
   course,
   stages,
   units,
@@ -313,4 +313,4 @@ export function CourseEditorPanel({
       </div>
     </section>
   );
-}
+});

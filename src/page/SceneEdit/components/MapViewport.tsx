@@ -21,6 +21,9 @@ import {
   type RefObject,
 } from "react";
 import * as THREE from "three";
+import { MissionSpawnMarkers } from "./mission-preview/MissionSpawnMarkers";
+import { frontMissionSpawnSlot } from "./mission-preview/missionSpawnPick";
+import type { MissionSpawnMarker } from "@/services/missionPreview/missionPreviewService";
 import { StageOrbitControls } from "./StageOrbitControls";
 import { StageViewportGizmo } from "./StageViewportGizmo";
 import { ViewportFrameLoopGate } from "./ViewportFrameLoopGate";
@@ -54,11 +57,16 @@ import type { NutexbTextureDataMap, NutexbTextureData } from "../hooks/useSceneT
 import { COMPRESSED_FORMAT_MAP, type NutexbCompressedData } from "@/components/ssbh-model-preview/nutexbPreviewCache";
 import type { PlacementRow } from "../types/placement";
 import type { GraphicParam } from "./GraphicParamPanel";
-import { deriveSceneLightingFromGraphicParams } from "../utils/graphicParamSceneLighting";
-import { formatPlacementViewportNodeId } from "../utils/placementNodeId";
+import {
+  deriveSceneLightingFromGraphicParams,
+  isSceneSunGraphicParamKey,
+} from "../utils/graphicParamSceneLighting";
+import { formatPlacementViewportNodeId, parsePlacementViewportNodeId } from "../utils/placementNodeId";
 import type { SceneDrawStats } from "./SceneViewportOverlay";
 import type { TransformData } from "./StagePropertyEditor";
 import type { PreviewRenderStyle } from "@/components/ssbh-model-preview/SsbhModelPreviewContext";
+import { ExvsRenderer, createDefaultExvsRenderSettings } from "@/components/exvs-renderer";
+import { exvsObjectParamsFromBinding } from "@/components/exvs-renderer/exvsObjectParamsFromBinding";
 import { DEFAULT_PREVIEW_3D_BACKGROUND } from "@/components/ssbh-model-preview/SsbhModelPreviewContext";
 import {
   getSsbhAdaptivePerformanceOptions,
@@ -120,6 +128,18 @@ function useRegisterSelectableNode(
   }, [nodeId, object, registryRef]);
 }
 
+type ViewportPointerEvent = {
+  stopPropagation: () => void;
+  nativeEvent: MouseEvent;
+  intersections?: ReadonlyArray<{ object: THREE.Object3D; distance: number }>;
+  instanceId?: number;
+};
+
+/** True when a mission spawn should keep this click and the map behind it should not. */
+function missionSpawnClaimsPointer(event: ViewportPointerEvent): boolean {
+  return frontMissionSpawnSlot(event.intersections ?? []) !== null;
+}
+
 function runViewportObjectPick(
   nativeEvent: MouseEvent,
   nodeId: string,
@@ -157,6 +177,28 @@ const BLENDER_GRID_SECTION_COLOR = "#545454";
  */
 const SCENE_EDIT_TEXTURE_MIPS = false;
 const GENERIC_STAGE_EMISSIVE_INTENSITY = 0.12;
+/**
+ * `UpdatePerObject.EmissiveScale`'s shipped default.
+ *
+ * The two values above are tuning for the forward render styles, which fold
+ * emissive into their own lighting and blow out without being held down. The
+ * deferred pipeline adds emissive in the composite exactly as the engine does, so
+ * it uses the engine's own default instead.
+ */
+const EXVS2_EMISSIVE_SCALE_DEFAULT = 1;
+
+/** Stage folder `sky` is a dome seen from the inside, so the sun never faces it. */
+function isSceneSkySurface(
+  nodeId: string,
+  binding: { shaderLabel: string; materialLabel: string },
+): boolean {
+  const parsed = parsePlacementViewportNodeId(nodeId);
+  const folder = (parsed?.folderName ?? nodeId).trim().toLowerCase();
+  if (folder === "sky") return true;
+  const label = `${binding.shaderLabel} ${binding.materialLabel}`.toLowerCase();
+  return label.includes("sky");
+}
+
 const GENERIC_STAGE_ANIME_EMISSIVE_INTENSITY = 0.18;
 
 const NORMAL_SCALE_DEFAULT = new THREE.Vector2(1, 1);
@@ -294,7 +336,14 @@ function SceneAnimePostFxGate({ previewRenderStyle }: { previewRenderStyle: Prev
   const current = useThree((s) => s.performance.current);
   if (previewRenderStyle !== "anime") return null;
   if (shouldDisableSsbhAnimePostFx("anime", current)) return null;
-  return <AnimePreviewPostFx />;
+  return (
+    <AnimePreviewPostFx
+      intensity={0.42}
+      luminanceThreshold={0.62}
+      luminanceSmoothing={0.2}
+      radius={0.28}
+    />
+  );
 }
 
 export interface MapViewportProps {
@@ -342,6 +391,23 @@ export interface MapViewportProps {
   showCollisionMesh?: boolean;
   collisionVisibility?: Record<string, boolean>;
   selectedCollisionSourceId?: string | null;
+  /** Mission script preview overlay; omitted when no script is loaded. */
+  missionOverlay?: MissionOverlayProps | null;
+}
+
+/** Everything the mission-script preview draws on top of the loaded map. */
+export interface MissionOverlayProps {
+  markers: readonly MissionSpawnMarker[];
+  markerScale: number;
+  visiblePhaseKeys: ReadonlySet<string> | null;
+  selectedSlot: number | null;
+  onSelectSlot: (slot: number | null) => void;
+  showLabels: boolean;
+  labelOf: (marker: MissionSpawnMarker) => string;
+  gizmoMode?: PlacementGizmoMode;
+  gizmoSize?: number;
+  canDragSlot?: (slot: number) => boolean;
+  onSpawnCommit?: (slot: number, transform: { x: number; y: number; z: number; facing: number }) => void;
 }
 
 export interface MapViewportHandle {
@@ -393,6 +459,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       showCollisionMesh = true,
       collisionVisibility,
       selectedCollisionSourceId,
+      missionOverlay = null,
     },
     ref
   ) {
@@ -400,6 +467,16 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
     const cameraRef = useRef<THREE.Camera | null>(null);
     const texturePool = useMemo(() => new SceneTexturePool(), []);
     useEffect(() => () => texturePool.disposeAll(), [texturePool]);
+
+    const selectMapNode = useCallback<ViewportSelectHandler>((id, opts) => {
+      if (id && missionOverlay) missionOverlay.onSelectSlot(null);
+      onSelectNode(id, opts);
+    }, [missionOverlay, onSelectNode]);
+
+    const selectMapNodes = useCallback<ViewportMultiSelectHandler>((ids, opts) => {
+      if (ids.length > 0 && missionOverlay) missionOverlay.onSelectSlot(null);
+      onSelectNodes(ids, opts);
+    }, [missionOverlay, onSelectNodes]);
 
     const importedDaeObjectTransforms = useMemo(() => {
       const map = new Map<string, ObjectTransform>();
@@ -568,6 +645,20 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       };
     }, [previewRenderStyle, sceneLighting]);
 
+    const exvsViewportSettings = useMemo(() => {
+      const defaults = createDefaultExvsRenderSettings();
+      return {
+        bloom: {
+          ...defaults.bloom,
+          enabled: true,
+          bloomThreshold: 0.9,
+          blendValue: 0.45,
+          brightScale: 0.32,
+          iterations: 2,
+        },
+      };
+    }, []);
+
     const animeKeyLightDir = useMemo(() => {
       const [x, y, z] = sceneLighting.primaryPosition;
       const v = new THREE.Vector3(x, y, z);
@@ -582,10 +673,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
     const graphicLightingInvalidateKey = useMemo(() => {
       const relevant = graphicParams.filter((p) => {
         const k = p.key.trim().toLowerCase();
-        return (
-          k.startsWith("directional_lighting_") ||
-          k === "ibl_lighting_intensity"
-        );
+        return isSceneSunGraphicParamKey(k);
       });
       return relevant.map((p) => `${p.key}=${p.value}`).join("|");
     }, [graphicParams]);
@@ -678,8 +766,8 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             selectableNodesRef={selectableNodesRef}
             orbitActiveRef={orbitActiveRef}
             gizmoDraggingRef={gizmoDraggingRef}
-            onSelectNode={onSelectNode}
-            onSelectNodes={onSelectNodes}
+            onSelectNode={selectMapNode}
+            onSelectNodes={selectMapNodes}
             onMarqueeRectChange={setMarqueeRect}
             clickGestureRef={clickGestureRef}
             marqueeActiveRef={marqueeActiveRef}
@@ -689,6 +777,9 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
         <ViewportFrameLoopGate />
         <InvalidateGraphicLightingSync canvasSyncKey={canvasSyncKey} />
         <SceneAnimePostFxGate previewRenderStyle={previewRenderStyle} />
+        {previewRenderStyle === "exvs2" ? (
+          <ExvsRenderer settings={exvsViewportSettings} />
+        ) : null}
 
         <color attach="background" args={[DEFAULT_PREVIEW_3D_BACKGROUND]} />
         <ambientLight intensity={viewportLights.ambientIntensity} />
@@ -704,7 +795,18 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           intensity={viewportLights.fillIntensity}
         />
 
-        <Environment resolution={64} frames={1} background={false}>
+        <Environment key={canvasSyncKey} resolution={64} frames={1} background={false}>
+          <Lightformer
+            form="rect"
+            intensity={2.2 * sceneLighting.environmentScale}
+            position={[
+              sceneLighting.primaryPosition[0] / 20,
+              sceneLighting.primaryPosition[1] / 20,
+              sceneLighting.primaryPosition[2] / 20,
+            ]}
+            scale={[10, 10, 1]}
+            color={sceneLighting.directionalColor}
+          />
           <Lightformer
             form="rect"
             intensity={1.4 * sceneLighting.environmentScale}
@@ -742,7 +844,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             wireframe={wireframe}
             isSelected={isNodeSelected("base")}
             isLocked={!isNodeEditable("base")}
-            onClick={onSelectNode}
+            onClick={selectMapNode}
             clickPickSelectionEnabled={clickPickSelectionEnabled}
             textureDataMap={textureDataMap}
             textureSlotLoadEnabled={textureSlotLoadEnabled}
@@ -791,7 +893,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                 wireframe={wireframe}
                 isSelected={isStandaloneSel || selectedNodeIds?.has(sub.folderName) === true}
                 isLocked={!isNodeEditable(sub.folderName)}
-                onClick={onSelectNode}
+                onClick={selectMapNode}
                 clickPickSelectionEnabled={clickPickSelectionEnabled}
                 textureDataMap={textureDataMap}
                 textureSlotLoadEnabled={textureSlotLoadEnabled}
@@ -835,7 +937,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                   selectedNodeIds?.has(nodeId) === true
                 }
                 isLocked={!isNodeEditable(nodeId)}
-                onClick={onSelectNode}
+                onClick={selectMapNode}
                 clickPickSelectionEnabled={clickPickSelectionEnabled}
                 textureDataMap={textureDataMap}
                 textureSlotLoadEnabled={textureSlotLoadEnabled}
@@ -882,7 +984,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
               selectedNodeIds={selectedNodeIds}
               nodeVisibility={nodeVisibility}
               objectLocks={objectLocks}
-              onSelectNode={onSelectNode}
+              onSelectNode={selectMapNode}
               clickPickSelectionEnabled={clickPickSelectionEnabled}
               textureDataMap={textureDataMap}
               textureSlotLoadEnabled={textureSlotLoadEnabled}
@@ -917,7 +1019,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
               selectedNodeIds?.has(nodeId) === true
             }
             isLocked={!isNodeEditable(nodeId)}
-            onClick={onSelectNode}
+            onClick={selectMapNode}
             clickPickSelectionEnabled={clickPickSelectionEnabled}
             showGizmo={
               selectedPlacementIdx !== null &&
@@ -948,7 +1050,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                 wireframe={wireframe}
                 isSelected={isNodeSelected(obj.id)}
                 isLocked={!isNodeEditable(obj.id)}
-                onClick={onSelectNode}
+                onClick={selectMapNode}
                 clickPickSelectionEnabled={clickPickSelectionEnabled}
                 textureDataMap={textureDataMap}
                 textureSlotLoadEnabled={textureSlotLoadEnabled}
@@ -982,7 +1084,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             object={obj}
             isSelected={isNodeSelected(obj.id)}
             isLocked={!isNodeEditable(obj.id)}
-            onClick={onSelectNode}
+            onClick={selectMapNode}
             clickPickSelectionEnabled={clickPickSelectionEnabled}
             showGizmo={selectedNodeId === obj.id && isNodeEditable(obj.id)}
             placementGizmoMode={placementGizmoMode}
@@ -1025,6 +1127,24 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             cellColor={BLENDER_GRID_CELL_COLOR}
             sectionThickness={1}
             cellThickness={0.6}
+          />
+        )}
+
+        {missionOverlay && (
+          <MissionSpawnMarkers
+            markers={missionOverlay.markers}
+            markerScale={missionOverlay.markerScale}
+            visiblePhaseKeys={missionOverlay.visiblePhaseKeys}
+            selectedSlot={missionOverlay.selectedSlot}
+            onSelectSlot={missionOverlay.onSelectSlot}
+            showLabels={missionOverlay.showLabels}
+            labelOf={missionOverlay.labelOf}
+            gizmoMode={missionOverlay.gizmoMode ?? placementGizmoMode}
+            gizmoSize={missionOverlay.gizmoSize ?? transformGizmoSize}
+            canDragSlot={missionOverlay.canDragSlot}
+            onSpawnCommit={missionOverlay.onSpawnCommit}
+            gizmoDraggingRef={gizmoDraggingRef}
+            onClaimSceneSelection={() => onSelectNode(null)}
           />
         )}
 
@@ -1139,7 +1259,8 @@ const ImportedDaeGroup = memo(function ImportedDaeGroup({
   useRegisterSelectableNode(object.id, gizmoTarget, selectableNodesRef);
 
   const handleClick = useCallback(
-    (e: { stopPropagation: () => void; nativeEvent: MouseEvent }) => {
+    (e: ViewportPointerEvent) => {
+      if (missionSpawnClaimsPointer(e)) return;
       e.stopPropagation();
       runViewportObjectPick(e.nativeEvent, object.id, onClick, {
         clickPickSelectionEnabled,
@@ -1498,7 +1619,11 @@ const TexturedMesh = memo(function TexturedMesh({
   const hasRough = !!textures.roughnessMap || typeof binding.uniforms.roughnessScalar === "number";
   const hasMetal = !!textures.metalnessMap || typeof binding.uniforms.metalnessScalar === "number";
   const hasEmit = !!textures.emissiveMap;
-  const canUseEmissiveMap = hasEmit && shaderFamily !== "generic";
+  // Stage materials resolve as "generic", and the forward styles refuse the map on
+  // them. The deferred pipeline wants it: it is the engine's own EmissiveMap slot.
+  const skyUnlit = previewRenderStyle === "exvs2" && isSceneSkySurface(objectId, binding);
+  const canUseEmissiveMap =
+    skyUnlit || (hasEmit && (previewRenderStyle === "exvs2" || shaderFamily !== "generic"));
   const hasAo = !!textures.aoMap;
   const hasCube = !!textures.cubeMap;
   const hasAnyTexture = hasMap || hasRough || hasMetal || hasEmit || hasAo || hasCube || !!textures.normalMap;
@@ -1523,20 +1648,39 @@ const TexturedMesh = memo(function TexturedMesh({
 
   const roughnessForStyle = exvsActive ? Math.min(1, roughnessValue * 0.84) : roughnessValue;
 
-  const emissiveIntensity = exvsActive
-    ? shaderFamily === "vsngCharaSparkle"
-      ? 2.15
-      : canUseEmissiveMap
-        ? GENERIC_STAGE_ANIME_EMISSIVE_INTENSITY
+  const emissiveIntensity = skyUnlit
+    ? EXVS2_EMISSIVE_SCALE_DEFAULT
+    : previewRenderStyle === "exvs2"
+      ? canUseEmissiveMap
+        ? EXVS2_EMISSIVE_SCALE_DEFAULT
         : 0
-    : shaderFamily === "vsngCharaSparkle"
-      ? 1.8
-      : canUseEmissiveMap
-        ? GENERIC_STAGE_EMISSIVE_INTENSITY
-        : 0;
+      : exvsActive
+        ? shaderFamily === "vsngCharaSparkle"
+          ? 2.15
+          : canUseEmissiveMap
+            ? GENERIC_STAGE_ANIME_EMISSIVE_INTENSITY
+            : 0
+        : shaderFamily === "vsngCharaSparkle"
+          ? 1.8
+          : canUseEmissiveMap
+            ? GENERIC_STAGE_EMISSIVE_INTENSITY
+            : 0;
 
   const transparent = binding.renderHints.isTransparent === true;
   const materialSide = transparent ? THREE.DoubleSide : THREE.FrontSide;
+  // Stage geometry is background, and each draw carries its own binding: sharing
+  // one parameter object across every mesh loses whatever each material declared.
+  const stageExvsUserData = useMemo(() => {
+    const exvs = exvsObjectParamsFromBinding(binding, {
+      materialClass: "background",
+      ...(skyUnlit ? { isShadowCaster: false, isShadowReceiver: false } : {}),
+    });
+    if (skyUnlit) {
+      exvs.skipLighting = true;
+      exvs.emissiveScale = EXVS2_EMISSIVE_SCALE_DEFAULT;
+    }
+    return { exvs };
+  }, [binding, skyUnlit]);
   const envIntensity = exvsActive
     ? shaderFamily === "vsngCharaSparkle"
       ? 1.38
@@ -1567,7 +1711,7 @@ const TexturedMesh = memo(function TexturedMesh({
 
   return (
     <Fragment>
-      <mesh geometry={draw.geometry}>
+      <mesh geometry={draw.geometry} userData={stageExvsUserData}>
         <meshStandardMaterial
           key={exvsActive ? "exvs" : "std"}
           color={baseColor}
@@ -1578,7 +1722,13 @@ const TexturedMesh = memo(function TexturedMesh({
           normalScale={textures.normalMap ? NORMAL_SCALE_DEFAULT : undefined}
           roughnessMap={textures.roughnessMap ?? null}
           metalnessMap={effectiveMetalnessMap}
-          emissiveMap={canUseEmissiveMap ? textures.emissiveMap ?? null : null}
+          emissiveMap={
+            skyUnlit
+              ? textures.map ?? textures.emissiveMap ?? null
+              : canUseEmissiveMap
+                ? textures.emissiveMap ?? null
+                : null
+          }
           emissive={canUseEmissiveMap ? new THREE.Color(0xffffff) : new THREE.Color(0)}
           emissiveIntensity={emissiveIntensity}
           aoMap={textures.aoMap ?? null}
@@ -1903,12 +2053,29 @@ const InstancedTexturedMesh = memo(function InstancedTexturedMesh({
   const hasRough = !!textures.roughnessMap || typeof binding.uniforms.roughnessScalar === "number";
   const hasMetal = !!textures.metalnessMap || typeof binding.uniforms.metalnessScalar === "number";
   const hasEmit = !!textures.emissiveMap;
-  const canUseEmissiveMap = hasEmit && shaderFamily !== "generic";
+  // Stage materials resolve as "generic", and the forward styles refuse the map on
+  // them. The deferred pipeline wants it: it is the engine's own EmissiveMap slot.
+  const skyUnlit =
+    previewRenderStyle === "exvs2" &&
+    isSceneSkySurface(instances[0]?.nodeId ?? "", binding);
+  const canUseEmissiveMap =
+    skyUnlit || (hasEmit && (previewRenderStyle === "exvs2" || shaderFamily !== "generic"));
   const hasAo = !!textures.aoMap;
   const hasCube = !!textures.cubeMap;
   const hasAnyTexture = hasMap || hasRough || hasMetal || hasEmit || hasAo || hasCube || !!textures.normalMap;
   const transparent = binding.renderHints.isTransparent === true;
   const materialSide = transparent ? THREE.DoubleSide : THREE.FrontSide;
+  const stageExvsUserData = useMemo(() => {
+    const exvs = exvsObjectParamsFromBinding(binding, {
+      materialClass: "background",
+      ...(skyUnlit ? { isShadowCaster: false, isShadowReceiver: false } : {}),
+    });
+    if (skyUnlit) {
+      exvs.skipLighting = true;
+      exvs.emissiveScale = EXVS2_EMISSIVE_SCALE_DEFAULT;
+    }
+    return { exvs };
+  }, [binding, skyUnlit]);
 
   const roughnessValue = typeof binding.uniforms.roughnessScalar === "number"
     ? binding.uniforms.roughnessScalar
@@ -1917,9 +2084,13 @@ const InstancedTexturedMesh = memo(function InstancedTexturedMesh({
     ? binding.uniforms.metalnessScalar
     : hasMetal ? 1 : shaderFamily === "vsngCharaSparkle" ? 0.35 : 0.12;
   const roughnessForStyle = exvsActive ? Math.min(1, roughnessValue * 0.84) : roughnessValue;
-  const emissiveIntensity = exvsActive
-    ? shaderFamily === "vsngCharaSparkle" ? 2.15 : canUseEmissiveMap ? GENERIC_STAGE_ANIME_EMISSIVE_INTENSITY : 0
-    : shaderFamily === "vsngCharaSparkle" ? 1.8 : canUseEmissiveMap ? GENERIC_STAGE_EMISSIVE_INTENSITY : 0;
+  const emissiveIntensity = skyUnlit
+    ? EXVS2_EMISSIVE_SCALE_DEFAULT
+    : previewRenderStyle === "exvs2"
+      ? canUseEmissiveMap ? EXVS2_EMISSIVE_SCALE_DEFAULT : 0
+      : exvsActive
+        ? shaderFamily === "vsngCharaSparkle" ? 2.15 : canUseEmissiveMap ? GENERIC_STAGE_ANIME_EMISSIVE_INTENSITY : 0
+        : shaderFamily === "vsngCharaSparkle" ? 1.8 : canUseEmissiveMap ? GENERIC_STAGE_EMISSIVE_INTENSITY : 0;
   const envIntensity = exvsActive
     ? shaderFamily === "vsngCharaSparkle" ? 1.38 : hasCube ? 1.05 : 0
     : shaderFamily === "vsngCharaSparkle" ? 1.55 : hasCube ? 1.15 : 0.9;
@@ -1932,7 +2103,8 @@ const InstancedTexturedMesh = memo(function InstancedTexturedMesh({
     : metalnessValue;
   const baseColor = hasAnyTexture ? "#ffffff" : "#cccccc";
 
-  const handleClick = useCallback((e: { stopPropagation: () => void; nativeEvent: MouseEvent; instanceId?: number }) => {
+  const handleClick = useCallback((e: ViewportPointerEvent) => {
+    if (missionSpawnClaimsPointer(e)) return;
     e.stopPropagation();
     const instanceId = e.instanceId;
     if (instanceId == null || instanceId >= instances.length) return;
@@ -1950,6 +2122,7 @@ const InstancedTexturedMesh = memo(function InstancedTexturedMesh({
       args={[draw.geometry, undefined, instanceCount]}
       frustumCulled={false}
       onClick={handleClick}
+      userData={stageExvsUserData}
     >
       <meshStandardMaterial
         color={baseColor}
@@ -1960,7 +2133,13 @@ const InstancedTexturedMesh = memo(function InstancedTexturedMesh({
         normalScale={textures.normalMap ? NORMAL_SCALE_DEFAULT : undefined}
         roughnessMap={textures.roughnessMap ?? null}
         metalnessMap={effectiveMetalnessMap}
-        emissiveMap={canUseEmissiveMap ? textures.emissiveMap ?? null : null}
+        emissiveMap={
+          skyUnlit
+            ? textures.map ?? textures.emissiveMap ?? null
+            : canUseEmissiveMap
+              ? textures.emissiveMap ?? null
+              : null
+        }
         emissive={canUseEmissiveMap ? new THREE.Color(0xffffff) : new THREE.Color(0)}
         emissiveIntensity={emissiveIntensity}
         aoMap={textures.aoMap ?? null}
@@ -2089,7 +2268,8 @@ const StageModelGroup = memo(function StageModelGroup({
   }, [draws, matlLookup, refToPathMap]);
 
   const handleClick = useCallback(
-    (e: { stopPropagation: () => void; nativeEvent: MouseEvent }) => {
+    (e: ViewportPointerEvent) => {
+      if (missionSpawnClaimsPointer(e)) return;
       e.stopPropagation();
       runViewportObjectPick(e.nativeEvent, nodeId, onClick, {
         clickPickSelectionEnabled,
@@ -2262,7 +2442,8 @@ const EffectMarker = memo(function EffectMarker({
   }, []);
 
   const handleClick = useCallback(
-    (e: { stopPropagation: () => void; nativeEvent: MouseEvent }) => {
+    (e: ViewportPointerEvent) => {
+      if (missionSpawnClaimsPointer(e)) return;
       e.stopPropagation();
       runViewportObjectPick(e.nativeEvent, nodeId, onClick, {
         clickPickSelectionEnabled,

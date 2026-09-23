@@ -1,4 +1,9 @@
+import type { PreviewRenderStyle } from "@/components/ssbh-model-preview/SsbhModelPreviewContext";
+import { DEFAULT_EDITOR_PREVIEW_RENDER_STYLE } from "@/components/ssbh-model-preview/SsbhModelPreviewContext";
+
 export const SCENE_GIZMO_SIZE_SETTING_KEY = "sceneEditGizmoSize";
+export const SCENE_TEXTURES_ENABLED_SETTING_KEY = "sceneEditTexturesEnabled";
+export const SCENE_PREVIEW_RENDER_STYLE_SETTING_KEY = "sceneEditPreviewRenderStyle";
 
 /** Tauri store keys under `dialogDefaultPath` — one per Scene Editor file/folder dialog. */
 export const SCENE_OPEN_FOLDER_DIALOG_PATH_KEY = "sceneEdit.openFolder";
@@ -24,4 +29,21 @@ export function normalizeSceneGizmoSize(value: unknown): number {
     return DEFAULT_SCENE_GIZMO_SIZE;
   }
   return Math.min(MAX_SCENE_GIZMO_SIZE, Math.max(MIN_SCENE_GIZMO_SIZE, numeric));
+}
+
+export function normalizeSceneTexturesEnabled(value: unknown): boolean {
+  if (value === undefined || value === null) {
+    return true;
+  }
+  return Boolean(value);
+}
+
+export function normalizePreviewRenderStyle(
+  value: unknown,
+  fallback: PreviewRenderStyle = DEFAULT_EDITOR_PREVIEW_RENDER_STYLE,
+): PreviewRenderStyle {
+  if (value === "standard" || value === "anime" || value === "exvs2") {
+    return value;
+  }
+  return fallback;
 }

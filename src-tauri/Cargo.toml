@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.1.11"
+version = "0.1.12"
 description = "EXVS Mod Project"
 authors = ["kjjkjjzyayufqza"]
 license = "LicenseRef-PolyForm-Shield-1.0.0"
@@ -218,12 +218,28 @@ name = "triad_route_workspace_test"
 path = "tests/triad_route_workspace_test.rs"
 
 [[test]]
+name = "triad_repack_plan_test"
+path = "tests/triad_repack_plan_test.rs"
+
+[[test]]
+name = "triad_scene_create_test"
+path = "tests/triad_scene_create_test.rs"
+
+[[test]]
 name = "msc_mission_profile_test"
 path = "tests/msc_mission_profile_test.rs"
 
 [[test]]
+name = "mission_authoring_test"
+path = "tests/mission_authoring_test.rs"
+
+[[test]]
 name = "mission_script_config_test"
 path = "tests/mission_script_config_test.rs"
+
+[[test]]
+name = "mission_preview_test"
+path = "tests/mission_preview_test.rs"
 
 [[test]]
 name = "camera_table_format_test"
@@ -469,7 +485,6 @@ required-features = ["nuanmb-examples"]
 name = "nuanmb_dump_rot_hdr"
 path = "examples/nuanmb_dump_rot_hdr.rs"
 required-features = ["nuanmb-examples"]
-
 
 
 

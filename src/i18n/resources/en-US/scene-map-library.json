@@ -1,0 +1,39 @@
+{
+  "title": "Map Library",
+  "searchPlaceholder": "Search stage name, pack or hash…",
+  "columns": {
+    "stage": "Stage",
+    "mapHash": "Map hash",
+    "pack": "Geometry pack",
+    "status": "Status",
+    "actions": "Actions"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "extractAndOpen": "Extract & open",
+    "reExtract": "Re-extract",
+    "open": "Open",
+    "clearSearch": "Clear filter"
+  },
+  "status": {
+    "loading": "Loading stage list…",
+    "extracted": "Extracted",
+    "notExtracted": "Not extracted",
+    "packMissing": "Pack missing",
+    "noMatches": "No stage matches the filter",
+    "summary": "{{shown}} of {{total}} stages",
+    "extractedCount": "{{count}} extracted"
+  },
+  "success": {
+    "extracted": "Extracted {{name}}",
+    "extractedDetail": "{{files}} files, {{size}} MB"
+  },
+  "warnings": {
+    "extract": "Extraction reported {{count}} warnings"
+  },
+  "errors": {
+    "loadFailed": "Could not read the stage list",
+    "loadHint": "Open the EXVS2 Workspace folder (the one holding 012list), extract stage_list there, and set the OB dplcache path in Config.",
+    "extractFailed": "Extraction failed"
+  }
+}

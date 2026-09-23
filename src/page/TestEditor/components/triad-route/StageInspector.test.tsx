@@ -79,6 +79,44 @@ describe("StageInspector script extract", () => {
     expect(onExtractScript).toHaveBeenCalledTimes(1);
   });
 
+  it("shows add-stage only when the parent says the course can grow", async () => {
+    const onAddStage = vi.fn();
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <StageInspector
+        stage={loadedStage}
+        stages={[loadedStage]}
+        units={emptyUnitCatalog()}
+        pilots={[]}
+        issues={[]}
+        focus={null}
+        onSelectStage={() => {}}
+        onChangeStage={() => {}}
+        onGenerateLineup={() => {}}
+        canAddStage
+        onAddStage={onAddStage}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /add stage/i }));
+    expect(onAddStage).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <StageInspector
+        stage={loadedStage}
+        stages={[loadedStage]}
+        units={emptyUnitCatalog()}
+        pilots={[]}
+        issues={[]}
+        focus={null}
+        onSelectStage={() => {}}
+        onChangeStage={() => {}}
+        onGenerateLineup={() => {}}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /add stage/i })).not.toBeInTheDocument();
+  });
+
   it("unpacks a missing stage script without asking first", async () => {
     const user = userEvent.setup();
     const onExtractScript = vi.fn();

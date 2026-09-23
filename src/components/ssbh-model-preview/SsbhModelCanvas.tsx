@@ -70,6 +70,12 @@ import type {
   ViewportSelectHandler,
 } from "@/components/viewport/viewportInteraction";
 import { animeExvsOnBeforeCompile, createAnimeExvsUniforms } from "./animeExvsMeshStandard";
+import { ExvsRenderer, type ExvsObjectParams } from "@/components/exvs-renderer";
+import {
+  EXVS_UNIT_SUN_INTENSITY_SCALE,
+  exvsEngineSunPosition,
+} from "@/components/exvs-renderer/exvsSunLight";
+import { exvsObjectParamsFromBinding } from "@/components/exvs-renderer/exvsObjectParamsFromBinding";
 import { AnimePreviewPostFx } from "./AnimePreviewPostFx";
 import { BonePreviewRig } from "./BonePreviewRig";
 import {
@@ -701,6 +707,18 @@ type DrawMeshProps = {
 };
 
 const noopMeshRaycast: Mesh["raycast"] = () => {};
+
+/**
+ * Parameters for a draw with no resolved numatb binding.
+ *
+ * It is still character geometry, so the composite picks the character tone curve
+ * rows for it, but with no shader label there is nothing to say it takes the
+ * additive rim pass.
+ */
+const untexturedExvsParams: ExvsObjectParams = exvsObjectParamsFromBinding(null, {
+  materialClass: "chara",
+});
+
 const _interpQa = new Quaternion();
 const _interpQb = new Quaternion();
 const _cameraQFrom = new Quaternion();
@@ -750,22 +768,34 @@ function DrawMeshContainer({
   draw,
   ignoreRaycast,
   skeleton,
+  exvsParams,
   children,
 }: {
   draw: BuiltMeshDraw;
   ignoreRaycast: boolean;
   skeleton: Skeleton | null;
+  /** Read off userData by the EXVS2 pipeline; ignored by the other render styles. */
+  exvsParams?: ExvsObjectParams;
   children: ReactNode;
 }) {
   if (skeleton && draw.skin) {
     return (
-      <SsbhSkinnedMesh draw={draw} skeleton={skeleton} ignoreRaycast={ignoreRaycast}>
+      <SsbhSkinnedMesh
+        draw={draw}
+        skeleton={skeleton}
+        ignoreRaycast={ignoreRaycast}
+        exvsParams={exvsParams}
+      >
         {children}
       </SsbhSkinnedMesh>
     );
   }
   return (
-    <mesh geometry={draw.geometry} raycast={ignoreRaycast ? noopMeshRaycast : undefined}>
+    <mesh
+      geometry={draw.geometry}
+      raycast={ignoreRaycast ? noopMeshRaycast : undefined}
+      userData={exvsParams ? { exvs: exvsParams } : undefined}
+    >
       {children}
     </mesh>
   );
@@ -783,7 +813,12 @@ function DrawMeshUntextured({ draw, visible, wireframe, ignoreRaycast, skeleton,
   });
   if (!visible) return null;
   return (
-    <DrawMeshContainer draw={draw} ignoreRaycast={ignoreRaycast} skeleton={skeleton}>
+    <DrawMeshContainer
+      draw={draw}
+      ignoreRaycast={ignoreRaycast}
+      skeleton={skeleton}
+      exvsParams={untexturedExvsParams}
+    >
       <meshStandardMaterial
         color={new Color("#b8bec7")}
         roughness={0.88}
@@ -921,9 +956,17 @@ function DrawMeshUnifiedPbr({
     .map((s) => `${s.kind}:${s.path}:${s.data.width}x${s.data.height}:v${textureDataIdentity(s.data)}`)
     .sort()
     .join("|");
+  // A unit model is character geometry: the shader label decides whether it also
+  // takes the additive rim pass.
+  const exvsParams = exvsObjectParamsFromBinding(binding ?? null, { materialClass: "chara" });
   if (materialDebugViewMode === "baseColor") {
     return (
-      <DrawMeshContainer draw={draw} ignoreRaycast={ignoreRaycast} skeleton={skeleton}>
+      <DrawMeshContainer
+        draw={draw}
+        ignoreRaycast={ignoreRaycast}
+        skeleton={skeleton}
+        exvsParams={exvsParams}
+      >
         <meshBasicMaterial
           key={`basic|${materialTextureKey}`}
           map={byKind.map}
@@ -934,7 +977,12 @@ function DrawMeshUnifiedPbr({
     );
   }
   return (
-    <DrawMeshContainer draw={draw} ignoreRaycast={ignoreRaycast} skeleton={skeleton}>
+    <DrawMeshContainer
+      draw={draw}
+      ignoreRaycast={ignoreRaycast}
+      skeleton={skeleton}
+      exvsParams={exvsParams}
+    >
       <meshStandardMaterial
         key={`${exvsActive ? "exvs" : "std"}|${materialTextureKey}`}
         map={byKind.map}
@@ -2071,13 +2119,43 @@ const Scene = memo(function Scene({
     return v;
   }, [directionalX, directionalY, directionalZ]);
 
+  const exvsSunLighting = previewRenderStyle === "exvs2";
   const primaryDirectionalPosition = useMemo(() => {
     if (motionApplyLighting && activeMotionSample?.lighting?.lightChr) {
       const d = activeMotionSample.lighting.lightChr.direction;
       return new Vector3(d[0]!, d[1]!, d[2]!).normalize().multiplyScalar(120);
     }
+    if (exvsSunLighting) {
+      return exvsEngineSunPosition();
+    }
     return new Vector3(directionalX, directionalY, directionalZ);
-  }, [motionApplyLighting, activeMotionSample, directionalX, directionalY, directionalZ]);
+  }, [
+    motionApplyLighting,
+    activeMotionSample,
+    directionalX,
+    directionalY,
+    directionalZ,
+    exvsSunLighting,
+  ]);
+  const keyLightIntensity =
+    previewRenderStyle === "anime"
+      ? directionalIntensity * 1.1
+      : exvsSunLighting
+        ? directionalIntensity * EXVS_UNIT_SUN_INTENSITY_SCALE
+        : directionalIntensity;
+  const fillLightPosition: [number, number, number] = exvsSunLighting
+    ? [
+        -primaryDirectionalPosition.x * 0.35,
+        Math.max(primaryDirectionalPosition.y * 0.15, 8),
+        -primaryDirectionalPosition.z * 0.35,
+      ]
+    : [-directionalX * 0.7, directionalY * 0.45, -directionalZ * 0.7];
+  const fillLightIntensity =
+    previewRenderStyle === "anime"
+      ? directionalIntensity * 0.22
+      : exvsSunLighting
+        ? directionalIntensity * 0.34
+        : directionalIntensity * 0.28;
 
   return (
     <>
@@ -2091,16 +2169,20 @@ const Scene = memo(function Scene({
         }
       />
       <directionalLight
-        color={previewRenderStyle === "anime" ? "#fff4ea" : "#ffffff"}
+        color={
+          previewRenderStyle === "anime"
+            ? "#fff4ea"
+            : previewRenderStyle === "exvs2"
+              ? "#eef4ff"
+              : "#ffffff"
+        }
         position={[primaryDirectionalPosition.x, primaryDirectionalPosition.y, primaryDirectionalPosition.z]}
-        intensity={previewRenderStyle === "anime" ? directionalIntensity * 1.1 : directionalIntensity}
+        intensity={keyLightIntensity}
       />
       <directionalLight
         color={previewRenderStyle === "anime" ? "#9eb6d4" : "#ffffff"}
-        position={[-directionalX * 0.7, directionalY * 0.45, -directionalZ * 0.7]}
-        intensity={
-          previewRenderStyle === "anime" ? directionalIntensity * 0.22 : directionalIntensity * 0.28
-        }
+        position={fillLightPosition}
+        intensity={fillLightIntensity}
       />
 
       <group ref={modelRootRef}>
@@ -2574,6 +2656,7 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
           previewRenderStyle={restSceneProps.previewRenderStyle}
           showStats={restSceneProps.showStats}
         />
+        {restSceneProps.previewRenderStyle === "exvs2" ? <ExvsRenderer /> : null}
         <CanvasContentInvalidator
           textureDataMap={restSceneProps.textureDataMap}
           drawMaterialBindingsByDrawKey={restSceneProps.drawMaterialBindingsByDrawKey}

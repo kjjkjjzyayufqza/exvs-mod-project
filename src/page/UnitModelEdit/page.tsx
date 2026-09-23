@@ -15,6 +15,8 @@ import {
   SsbhModelPreviewViewport,
   useSsbhModelPreview,
 } from "@/components/ssbh-model-preview/SsbhModelPreviewPanel";
+import { usePersistUnitModelPreviewRenderStyle } from "@/components/ssbh-model-preview/usePersistUnitModelPreviewRenderStyle";
+import { useConfigStore } from "@/store/configStore";
 import {
   DaeExportDialog,
   type DaeExportConfig,
@@ -101,6 +103,7 @@ function UnitModelEditWorkspace({
   });
   const isExvsCommon = isExvsCommonStructure(structureJson);
   const preview = useSsbhModelPreview();
+  usePersistUnitModelPreviewRenderStyle();
   const [daeExportDialog, setDaeExportDialog] = useState<{
     open: boolean;
     targets: DaeExportTarget[];
@@ -819,12 +822,14 @@ export default function UnitModelEdit() {
   }, [unitRoot, reloadTick]);
 
   const previewSuspended = !isPageActive || modelImportViewportSuspend;
+  const unitModelPreviewRenderStyle = useConfigStore((state) => state.unitModelPreviewRenderStyle);
 
   return (
     <SsbhModelPreviewProvider
       workspaceRoot={unitRoot}
       previewSuspended={previewSuspended}
       defaultLightingPreset="softCharacter"
+      defaultPreviewRenderStyle={unitModelPreviewRenderStyle}
     >
       <TooltipProvider>
         <div className="flex h-full min-h-0 min-w-0 flex-col bg-background">

@@ -11,6 +11,7 @@
     "fs:allow-mkdir",
     "fs:allow-write-file",
     "fs:allow-read-text-file",
+    "fs:allow-stat",
     "fs:allow-resource-read-recursive",
     "fs:allow-write-text-file",
     {

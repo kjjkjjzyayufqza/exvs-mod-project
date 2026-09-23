@@ -1,0 +1,87 @@
+{
+  "title": "Mission Preview",
+  "actions": {
+    "openScript": "Open script",
+    "editNodes": "Edit nodes",
+    "editNodesHint": "Open the mission node editor for this .c. Spawn coordinates stay linked to the map.",
+    "minimize": "Minimize",
+    "closeEditor": "Close",
+    "restoreEditor": "Mission nodes",
+    "reload": "Reload",
+    "clear": "Clear",
+    "hotReload": "Hot reload",
+    "loadMap": "Load map"
+  },
+  "status": {
+    "noScript": "Open a mission .c or .mismsexc to preview its battle.",
+    "slots": "{{count}} slots",
+    "unsaved": "Unsaved"
+  },
+  "source": {
+    "c": "Decompiled .c",
+    "compiled": "Compiled .mismsexc",
+    "configFunction": "Config: {{name}}",
+    "wavesUnreadable": "Waves not readable",
+    "section": "Script",
+    "kind": "Source",
+    "waves": "Waves",
+    "wavesReadable": "Readable"
+  },
+  "rules": {
+    "title": "Battle rules",
+    "win": "Win",
+    "lose": "Lose",
+    "targetCount": "Targets",
+    "allowedLosses": "Allowed losses",
+    "teamCosts": "Team costs",
+    "bgm": "BGM",
+    "none": "none",
+    "flag": {
+      "wipeOut": "Wipe out",
+      "targetCount": "Destroy targets",
+      "survive": "Survive"
+    },
+    "map": "Map"
+  },
+  "display": {
+    "title": "Display",
+    "markerScale": "Marker size",
+    "showLabels": "Show labels"
+  },
+  "phases": {
+    "title": "Deployment phases",
+    "count": "{{count}} slots",
+    "empty": "This script declares no slots."
+  },
+  "phase": {
+    "initial": "On field at start",
+    "opening": "Deployed by the opening",
+    "wave": "Wave {{index}}",
+    "waveRule": "when at most {{enemies}} enemies remain, after {{seconds}}s"
+  },
+  "slot": {
+    "line": "x {{x}}  y {{y}}  z {{z}}  ·  facing {{facing}}°",
+    "position": "Position",
+    "facing": "Facing",
+    "intro": "Intro",
+    "ai": "AI"
+  },
+  "team": {
+    "player": "Ally",
+    "enemy": "Enemy"
+  },
+  "warnings": {
+    "unitNames": "Unit names unavailable, showing raw ids: {{reason}}"
+  },
+  "errors": {
+    "parseFailed": "Could not read the mission script"
+  },
+  "spawn": {
+    "externalLocked": "External coordinates are on, so this unit cannot be dragged.",
+    "needEditorTitle": "Spawn positions are view-only",
+    "needEditorBody": "The mission script is loaded, but the node editor is closed, so units on the map cannot be moved. Open the node editor and drags write back into this script.",
+    "needEditorAction": "Open node editor",
+    "compiledTitle": "This script is view-only",
+    "compiledBody": "A compiled .mismsexc can be previewed here. Open the decompiled .c to move spawn positions."
+  }
+}

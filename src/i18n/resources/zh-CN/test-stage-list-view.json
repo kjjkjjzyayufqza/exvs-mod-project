@@ -299,5 +299,12 @@
     "indexing": "正在索引搜索目录",
     "exists": "索引文件存在于 {{path}}。单击打开。",
     "missing": "索引文件不存在于 {{path}}"
+  },
+  "mapExtract": {
+    "action": "解包地图",
+    "title": "将该地图的模型资源包解包到地图库",
+    "success": "已解包 {{name}}",
+    "warnings": "解包过程产生了 {{count}} 条警告",
+    "failed": "地图解包失败"
   }
 }

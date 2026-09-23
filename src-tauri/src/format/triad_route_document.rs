@@ -242,6 +242,19 @@ impl StageScriptConfig {
     }
 }
 
+/// How this stage got its files.
+///
+/// Existing stages already have sceneidtable rows. Cloned stages were
+/// materialised in this session, so saving is allowed to insert those rows
+/// even when the course itself is a rewrite of an existing row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum StageOrigin {
+    #[default]
+    Existing,
+    Cloned,
+}
+
 /// One stage of the route.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -255,6 +268,15 @@ pub struct StageDraft {
     pub script_package_hash: u32,
     pub briefing: BriefingDraft,
     pub script: Option<StageScriptConfig>,
+    #[serde(default)]
+    pub origin: StageOrigin,
+}
+
+impl StageDraft {
+    /// True when saving may invent a sceneidtable row for this stage.
+    pub fn may_create_scene_id_row(&self, mode: RouteBuildMode) -> bool {
+        mode == RouteBuildMode::NewScenes || self.origin == StageOrigin::Cloned
+    }
 }
 
 /// A badge attached to the course.
