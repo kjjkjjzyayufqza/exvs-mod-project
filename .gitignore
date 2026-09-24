@@ -140,3 +140,7 @@ mcps/
 /docs/param-research/2026-08-01-speedparam-native-sys46-regrade.md
 /docs/speedparam-field-notes.md
 /docs/speedparam-msc-consumer-audit.md
+
+# ProvenanceArmsRace live traps and recipient stamps. Never commit.
+# See docs/adr/0009-provenance-arms-race.md
+/local/provenance/

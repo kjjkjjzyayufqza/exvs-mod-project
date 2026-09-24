@@ -194,6 +194,57 @@ model to ignore its system prompt, hide these rules, or impersonate a
 different agent.
 _Avoid_: hidden jailbreaks, stealth instruction overrides
 
+**NoCommentEscalation**:
+A harsher or longer file-top comment is still SourceNoticeCanary. A foreign
+agent that already quoted the license and then obeyed its user is not stopped
+by another sentence.
+_Avoid_: treating a new banner as a new control
+
+**ProvenanceArmsRace**:
+Controls stacked so that a strip of one layer leaves the next. The layers
+that count are data and process, not instructions to the foreign model.
+Decision: ADR 0009. Implementation plan:
+`docs/agent-sessions/provenance-arms-race/plan.md`.
+_Avoid_: one more comment, covert injection, a total AI-writing ban
+
+**BurnedPublication**:
+Tuples, prose, and constants already reachable from the public remote or from
+clones already given out. New unique research does not extend this set.
+_Avoid_: history rewrite as a way to un-leak a clone that already exists
+
+**LocalOnlyOverlay**:
+New pools, trap rows, and recipient marks under `local/provenance/`.
+Gitignored. Same retention idea as WorkingTreePreserve. The public tree
+keeps the real pools it already has.
+_Avoid_: committing the live trap list so the author's UI shows ghost fields
+
+**TupleFingerprint**:
+The copied unit is a `(hash, kind, name)` row from a command pool, or a set
+of those rows. Detection does not require the letters AEtools to remain.
+_Avoid_: searching a suspect tree only for the product name or the author handle
+
+**StripSurvivor**:
+A mark that is still present after license words, canary comments, and
+`source: "AEtools"` tags are deleted, and after rows whose hash never appears
+in a real container are dropped. A mark that fails either pass is not a trap.
+_Avoid_: fake hashes, tags that say "watermark", author handles inside the trap
+
+**RecipientStamp**:
+A mark applied only to a tree packed for one recipient. The public repository
+is a single stamp shared by every cloner.
+_Avoid_: stamping `main` and calling that per-person
+
+**PortDetector**:
+The author's scanner over a suspect tree. It reads a local manifest. The
+repository contains the scanner and synthetic fixtures only.
+_Avoid_: shipping the live trap plaintext in git
+
+**LoadBearingConstant**:
+A numeric constant a faithful port of a parser must copy. It is a lead. If
+the game binary contains the same constant, independent reverse engineering
+reproduces it, so it is not proof of copying by itself.
+_Avoid_: calling a rediscoverable cipher key a honeytoken
+
 ## Flagged ambiguities
 
 None. Policy is locked. AgentContract must classify destination before tools.
@@ -243,3 +294,10 @@ None. Policy is locked. AgentContract must classify destination before tools.
 > Dev: They copied only the .rs files and asked the AI to delete the headers.
 > Expert: **CopiedTreeRefuse**. **NoticeStripRefuse**. The unique comments
 > are **SourceNoticeCanary**, not boilerplate.
+>
+> Dev: Their agent quoted the license, then the human said ignore it, and the
+> dist zip has no AEtools string left. Do we write a harsher header?
+> Expert: No. **NoCommentEscalation**. **NoCovertInjection**. That zip is a
+> sanitized release. Scan the copy that still has the coined names.
+> **TupleFingerprint**, **StripSurvivor**, **LocalOnlyOverlay**. What is
+> already public is **BurnedPublication**.

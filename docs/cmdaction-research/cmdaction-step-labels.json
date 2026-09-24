@@ -1,0 +1,770 @@
+[
+ {
+  "rva": "0x0134C960",
+  "text": "☆ドッキング回収アクション・浮き上がり（DockingAction_FinishBase）",
+  "description": "☆ドッキング回収アクション・浮き上がり",
+  "helper": "DockingAction_FinishBase"
+ },
+ {
+  "rva": "0x0134C9C0",
+  "text": "☆ドッキング回収アクション・本体接合（DockingAction_FinishBase）",
+  "description": "☆ドッキング回収アクション・本体接合",
+  "helper": "DockingAction_FinishBase"
+ },
+ {
+  "rva": "0x0134CA18",
+  "text": "☆ノックバック継続時間（KnockBack）",
+  "description": "☆ノックバック継続時間",
+  "helper": "KnockBack"
+ },
+ {
+  "rva": "0x0134CAF0",
+  "text": "☆ノックバック移動（KnockBack）",
+  "description": "☆ノックバック移動",
+  "helper": "KnockBack"
+ },
+ {
+  "rva": "0x0134CB20",
+  "text": "☆待機後実行命令（Utility_WaitAction）",
+  "description": "☆待機後実行命令",
+  "helper": "Utility_WaitAction"
+ },
+ {
+  "rva": "0x0134CB58",
+  "text": "☆ＩＦ射撃発射成功（Utility_IfShotSuccess）",
+  "description": "☆ＩＦ射撃発射成功",
+  "helper": "Utility_IfShotSuccess"
+ },
+ {
+  "rva": "0x0134CB90",
+  "text": "☆分岐命令（Utility_Jump）",
+  "description": "☆分岐命令",
+  "helper": "Utility_Jump"
+ },
+ {
+  "rva": "0x0134CBB8",
+  "text": "射出シーケンス（RegisterCommandAction_LaunchScrew）",
+  "description": "射出シーケンス",
+  "helper": "RegisterCommandAction_LaunchScrew"
+ },
+ {
+  "rva": "0x0134CC20",
+  "text": "☆瞬間的に射撃ポーズをとらせる（RegisterMotionPauseImmediate）",
+  "description": "☆瞬間的に射撃ポーズをとらせる",
+  "helper": "RegisterMotionPauseImmediate"
+ },
+ {
+  "rva": "0x0134CC70",
+  "text": "☆１フレだけ待つ（RegisterMotionPauseImmediate）",
+  "description": "☆１フレだけ待つ",
+  "helper": "RegisterMotionPauseImmediate"
+ },
+ {
+  "rva": "0x0134CCB0",
+  "text": "☆ＩＦ実行（Utility_IfAction）",
+  "description": "☆ＩＦ実行",
+  "helper": "Utility_IfAction"
+ },
+ {
+  "rva": "0x0134CCE0",
+  "text": "☆ＩＦ実行（ジャンプ実行時は非終了）（Utility_IfAction）",
+  "description": "☆ＩＦ実行（ジャンプ実行時は非終了）",
+  "helper": "Utility_IfAction"
+ },
+ {
+  "rva": "0x0134CD30",
+  "text": "■モーションに合わせた攻撃切り替え（RegisterCommandUtility_GrapOnMotionFrame）",
+  "description": "■モーションに合わせた攻撃切り替え",
+  "helper": "RegisterCommandUtility_GrapOnMotionFrame"
+ },
+ {
+  "rva": "0x0134CEC8",
+  "text": "☆射撃前待機（RegisterMotionShotLazer）",
+  "description": "☆射撃前待機",
+  "helper": "RegisterMotionShotLazer"
+ },
+ {
+  "rva": "0x0134CEF8",
+  "text": "☆照射開始モーション（RegisterMotionShotLazer）",
+  "description": "☆照射開始モーション",
+  "helper": "RegisterMotionShotLazer"
+ },
+ {
+  "rva": "0x0134CF40",
+  "text": "☆開始モーションの再生速度を変更（RegisterMotionShotLazer）",
+  "description": "☆開始モーションの再生速度を変更",
+  "helper": "RegisterMotionShotLazer"
+ },
+ {
+  "rva": "0x0134CF90",
+  "text": "☆弾丸発射のモーションフレームまで待機（RegisterMotionShotLazer）",
+  "description": "☆弾丸発射のモーションフレームまで待機",
+  "helper": "RegisterMotionShotLazer"
+ },
+ {
+  "rva": "0x0134CFE8",
+  "text": "☆照射中モーション（RegisterMotionShotLazer）",
+  "description": "☆照射中モーション",
+  "helper": "RegisterMotionShotLazer"
+ },
+ {
+  "rva": "0x0134D028",
+  "text": "☆消滅処理（BackScaleOut）",
+  "description": "☆消滅処理",
+  "helper": "BackScaleOut"
+ },
+ {
+  "rva": "0x0134D050",
+  "text": "☆レーザー照射中待機（射撃する弾丸のパラメータを参照する）（RegisterMotionShotLazer）",
+  "description": "☆レーザー照射中待機（射撃する弾丸のパラメータを参照する）",
+  "helper": "RegisterMotionShotLazer"
+ },
+ {
+  "rva": "0x0134D0D0",
+  "text": "☆終了モーションを途中で停止させる（RegisterMotionShotLazer）",
+  "description": "☆終了モーションを途中で停止させる",
+  "helper": "RegisterMotionShotLazer"
+ },
+ {
+  "rva": "0x0134D128",
+  "text": "スケールアウト開始前時間（BackScaleOut）",
+  "description": "スケールアウト開始前時間",
+  "helper": "BackScaleOut"
+ },
+ {
+  "rva": "0x0134D160",
+  "text": "ターゲットの近くへと強制的に移動する（RegisterCommandAction_Micchaku）",
+  "description": "ターゲットの近くへと強制的に移動する",
+  "helper": "RegisterCommandAction_Micchaku"
+ },
+ {
+  "rva": "0x0134D1C0",
+  "text": "コンボ中前進処理（RegisterCommandAction_Micchaku）",
+  "description": "コンボ中前進処理",
+  "helper": "RegisterCommandAction_Micchaku"
+ },
+ {
+  "rva": "0x0134D200",
+  "text": "ターゲットと密着するまで実行継続（RegisterCommandAction_Micchaku）",
+  "description": "ターゲットと密着するまで実行継続",
+  "helper": "RegisterCommandAction_Micchaku"
+ },
+ {
+  "rva": "0x0134D260",
+  "text": "密着状態の前身処理（RegisterCommandAction_Micchaku）",
+  "description": "密着状態の前身処理",
+  "helper": "RegisterCommandAction_Micchaku"
+ },
+ {
+  "rva": "0x0134D2A0",
+  "text": "コンボ中極微速前進処理（RegisterCommandAction_Micchaku）",
+  "description": "コンボ中極微速前進処理",
+  "helper": "RegisterCommandAction_Micchaku"
+ },
+ {
+  "rva": "0x0134D2F0",
+  "text": "追い抜くほど密着したら微速前進も終了させる（RegisterCommandAction_Micchaku）",
+  "description": "追い抜くほど密着したら微速前進も終了させる",
+  "helper": "RegisterCommandAction_Micchaku"
+ },
+ {
+  "rva": "0x0134D360",
+  "text": "ターゲットから離れるまで待つ（RegisterCommandAction_Micchaku）",
+  "description": "ターゲットから離れるまで待つ",
+  "helper": "RegisterCommandAction_Micchaku"
+ },
+ {
+  "rva": "0x0134D3B0",
+  "text": "☆インタラクション有効化（HitEnableMode）",
+  "description": "☆インタラクション有効化",
+  "helper": "HitEnableMode"
+ },
+ {
+  "rva": "0x0134D3F0",
+  "text": "モーションエイミング用の弾丸ＩＤに切り替える（RegisterMotionAimingShot）",
+  "description": "モーションエイミング用の弾丸ＩＤに切り替える",
+  "helper": "RegisterMotionAimingShot"
+ },
+ {
+  "rva": "0x0134D458",
+  "text": "☆インタラクション無効化（HitEnableMode）",
+  "description": "☆インタラクション無効化",
+  "helper": "HitEnableMode"
+ },
+ {
+  "rva": "0x0134D490",
+  "text": "ターゲット更新座標へと回頭する（RegisterCommandAction_Micchaku）",
+  "description": "ターゲット更新座標へと回頭する",
+  "helper": "RegisterCommandAction_Micchaku"
+ },
+ {
+  "rva": "0x0134D4E8",
+  "text": "☆射撃モーション登録（RegisterMotionAimingShot）",
+  "description": "☆射撃モーション登録",
+  "helper": "RegisterMotionAimingShot"
+ },
+ {
+  "rva": "0x0134D530",
+  "text": "☆ターゲット座標更新処理復活（RegisterMotionAimingShot）",
+  "description": "☆ターゲット座標更新処理復活",
+  "helper": "RegisterMotionAimingShot"
+ },
+ {
+  "rva": "0x0134D580",
+  "text": "射撃フレームまで回頭（RegisterMotionAimingShot）",
+  "description": "射撃フレームまで回頭",
+  "helper": "RegisterMotionAimingShot"
+ },
+ {
+  "rva": "0x0134D5C0",
+  "text": "☆滑り移動先座標を登録する（MoveMagnetSuberi）",
+  "description": "☆滑り移動先座標を登録する",
+  "helper": "MoveMagnetSuberi"
+ },
+ {
+  "rva": "0x0134D600",
+  "text": "☆滑り吸着移動（MoveMagnetSuberi）",
+  "description": "☆滑り吸着移動",
+  "helper": "MoveMagnetSuberi"
+ },
+ {
+  "rva": "0x0134D630",
+  "text": "移動先座標に現在の座標を保存する（ResolveStageInside）",
+  "description": "移動先座標に現在の座標を保存する",
+  "helper": "ResolveStageInside"
+ },
+ {
+  "rva": "0x0134D680",
+  "text": "親機体(topowner)座標へとワープ移動する（ResolveStageInside）",
+  "description": "親機体(topowner)座標へとワープ移動する",
+  "helper": "ResolveStageInside"
+ },
+ {
+  "rva": "0x0134D6D0",
+  "text": "元の座標へとワープ移動で戻る（ResolveStageInside）",
+  "description": "元の座標へとワープ移動で戻る",
+  "helper": "ResolveStageInside"
+ },
+ {
+  "rva": "0x0134D870",
+  "text": "☆コマンド実行時間に制限をかける（ProcFrameLimit）",
+  "description": "☆コマンド実行時間に制限をかける",
+  "helper": "ProcFrameLimit"
+ },
+ {
+  "rva": "0x0134D8B8",
+  "text": "☆↑の最大実行時間（ProcFrameLimit）",
+  "description": "☆↑の最大実行時間",
+  "helper": "ProcFrameLimit"
+ },
+ {
+  "rva": "0x0134D8F0",
+  "text": "☆一定時間後にコマンドアクション実行スキップを有効化（WaitAndProcStepEnable）",
+  "description": "☆一定時間後にコマンドアクション実行スキップを有効化",
+  "helper": "WaitAndProcStepEnable"
+ },
+ {
+  "rva": "0x0134D960",
+  "text": "☆回収アクション開始（BoneTargetReturnAction）",
+  "description": "☆回収アクション開始",
+  "helper": "BoneTargetReturnAction"
+ },
+ {
+  "rva": "0x0134D9A0",
+  "text": "☆地形引っかかり防止措置（WaitAndDisableCollisionForStage）",
+  "description": "☆地形引っかかり防止措置",
+  "helper": "WaitAndDisableCollisionForStage"
+ },
+ {
+  "rva": "0x0134DA18",
+  "text": "キャラ基準の方向へと向き直る（AimingLaunch）",
+  "description": "キャラ基準の方向へと向き直る",
+  "helper": "AimingLaunch"
+ },
+ {
+  "rva": "0x0134DA60",
+  "text": "自キャラへと追従移動する（RegisterSummonTukimatoi）",
+  "description": "自キャラへと追従移動する",
+  "helper": "RegisterSummonTukimatoi"
+ },
+ {
+  "rva": "0x0134DAA8",
+  "text": "一定時間待つ（PurgeLaunch）",
+  "description": "一定時間待つ",
+  "helper": "PurgeLaunch"
+ },
+ {
+  "rva": "0x0134DAD0",
+  "text": "ターゲットへと追従移動する（RegisterSummonTukimatoi）",
+  "description": "ターゲットへと追従移動する",
+  "helper": "RegisterSummonTukimatoi"
+ },
+ {
+  "rva": "0x0134DB20",
+  "text": "アタックターゲットと同期（RegisterSummonTukimatoi）",
+  "description": "アタックターゲットと同期",
+  "helper": "RegisterSummonTukimatoi"
+ },
+ {
+  "rva": "0x0134DB68",
+  "text": "キャラ基準の方向へと向き直る（PurgeLaunch）",
+  "description": "キャラ基準の方向へと向き直る",
+  "helper": "PurgeLaunch"
+ },
+ {
+  "rva": "0x0134DBB0",
+  "text": "ロックオンターゲットと同期（RegisterSummonTukimatoi）",
+  "description": "ロックオンターゲットと同期",
+  "helper": "RegisterSummonTukimatoi"
+ },
+ {
+  "rva": "0x0134DC00",
+  "text": "目標座標まで射出時間をかけて移動（AimingLaunch）",
+  "description": "目標座標まで射出時間をかけて移動",
+  "helper": "AimingLaunch"
+ },
+ {
+  "rva": "0x0134DC48",
+  "text": "☆シェルを上向かせる処理（PurgeLaunch）",
+  "description": "☆シェルを上向かせる処理",
+  "helper": "PurgeLaunch"
+ },
+ {
+  "rva": "0x0134DC80",
+  "text": "目標座標まで射出時間をかけて移動（PurgeLaunch）",
+  "description": "目標座標まで射出時間をかけて移動",
+  "helper": "PurgeLaunch"
+ },
+ {
+  "rva": "0x0134DCC8",
+  "text": "出現時間（PurgeLaunch）",
+  "description": "出現時間",
+  "helper": "PurgeLaunch"
+ },
+ {
+  "rva": "0x0134DCF0",
+  "text": "☆ドッキング追従アクション（DockingAction_Chase）",
+  "description": "☆ドッキング追従アクション",
+  "helper": "DockingAction_Chase"
+ },
+ {
+  "rva": "0x0134DD38",
+  "text": "ターゲット方向に回頭（RegisterSummonTukimatoi）",
+  "description": "ターゲット方向に回頭",
+  "helper": "RegisterSummonTukimatoi"
+ },
+ {
+  "rva": "0x0134DD80",
+  "text": "☆地形コリジョン無効化（DockingAction_FinishBase）",
+  "description": "☆地形コリジョン無効化",
+  "helper": "DockingAction_FinishBase"
+ },
+ {
+  "rva": "0x015D89E0",
+  "text": "エイミングしつつ射撃フレームまでモーションを進める（RegisterCommandUtility_ShotContinuousOnAimingBody）",
+  "description": "エイミングしつつ射撃フレームまでモーションを進める",
+  "helper": "RegisterCommandUtility_ShotContinuousOnAimingBody"
+ },
+ {
+  "rva": "0x015D8A70",
+  "text": "エイミング兼射撃前待機時間（RegisterCommandUtility_ShotContinuousOnAimingBody）",
+  "description": "エイミング兼射撃前待機時間",
+  "helper": "RegisterCommandUtility_ShotContinuousOnAimingBody"
+ },
+ {
+  "rva": "0x015D8AD0",
+  "text": "★エイミング＆繰り返し射撃シーケンス（RegisterCommandUtility_ShotContinuousOnAimingBody）",
+  "description": "★エイミング＆繰り返し射撃シーケンス",
+  "helper": "RegisterCommandUtility_ShotContinuousOnAimingBody"
+ },
+ {
+  "rva": "0x015D8B40",
+  "text": "射撃用モーションステートを設定（RegisterCommandUtility_ShotContinuousOnAimingBody）",
+  "description": "射撃用モーションステートを設定",
+  "helper": "RegisterCommandUtility_ShotContinuousOnAimingBody"
+ },
+ {
+  "rva": "0x015D8BB0",
+  "text": "エイミング兼射撃前待機時間（RegisterCommandUtility_ShotContinuousOnAimingBody）",
+  "description": "エイミング兼射撃前待機時間",
+  "helper": "RegisterCommandUtility_ShotContinuousOnAimingBody"
+ },
+ {
+  "rva": "0x015D8C10",
+  "text": "射撃間隔待機時間（RegisterCommandUtility_ShotContinuousOnAimingBody）",
+  "description": "射撃間隔待機時間",
+  "helper": "RegisterCommandUtility_ShotContinuousOnAimingBody"
+ },
+ {
+  "rva": "0x015D8C60",
+  "text": "射撃開始モーションを設定（RegisterCommandUtility_ShotMachinegunOnAimingBody）",
+  "description": "射撃開始モーションを設定",
+  "helper": "RegisterCommandUtility_ShotMachinegunOnAimingBody"
+ },
+ {
+  "rva": "0x015D8CC0",
+  "text": "終了モーションを設定（RegisterCommandUtility_ShotMachinegunOnAimingBody）",
+  "description": "終了モーションを設定",
+  "helper": "RegisterCommandUtility_ShotMachinegunOnAimingBody"
+ },
+ {
+  "rva": "0x015D8D20",
+  "text": "エイミング兼射撃前待機時間（RegisterCommandUtility_ShotSimpleOnAimingBody）",
+  "description": "エイミング兼射撃前待機時間",
+  "helper": "RegisterCommandUtility_ShotSimpleOnAimingBody"
+ },
+ {
+  "rva": "0x015D8D80",
+  "text": "射撃後待機時間（RegisterCommandUtility_ShotSimpleOnAimingBody）",
+  "description": "射撃後待機時間",
+  "helper": "RegisterCommandUtility_ShotSimpleOnAimingBody"
+ },
+ {
+  "rva": "0x015D9578",
+  "text": "立ち去り演出（RC_Utility）",
+  "description": "立ち去り演出",
+  "helper": "RC_Utility"
+ },
+ {
+  "rva": "0x015DC468",
+  "text": "横滑り移動する（FeintSlide）",
+  "description": "横滑り移動する",
+  "helper": "FeintSlide"
+ },
+ {
+  "rva": "0x015DC490",
+  "text": "スラインドフェイントアクション先頭に戻る（FeintSlide）",
+  "description": "スラインドフェイントアクション先頭に戻る",
+  "helper": "FeintSlide"
+ },
+ {
+  "rva": "0x01604B20",
+  "text": "☆射撃モーション登録（RegisterMotionAimingShot）",
+  "description": "☆射撃モーション登録",
+  "helper": "RegisterMotionAimingShot"
+ },
+ {
+  "rva": "0x01604B90",
+  "text": "☆ターゲット座標更新処理復活（RegisterMotionAimingShot）",
+  "description": "☆ターゲット座標更新処理復活",
+  "helper": "RegisterMotionAimingShot"
+ },
+ {
+  "rva": "0x01604BE0",
+  "text": "射撃フレームまで回頭（RegisterMotionAimingShot）",
+  "description": "射撃フレームまで回頭",
+  "helper": "RegisterMotionAimingShot"
+ },
+ {
+  "rva": "0x01604F20",
+  "text": "移動目標座標へと吸着移動（HomingMagnetAbstract）",
+  "description": "移動目標座標へと吸着移動",
+  "helper": "HomingMagnetAbstract"
+ },
+ {
+  "rva": "0x0160C008",
+  "text": "コンボ中前進処理（RegisterCommandAction_Micchaku）",
+  "description": "コンボ中前進処理",
+  "helper": "RegisterCommandAction_Micchaku"
+ },
+ {
+  "rva": "0x0160C050",
+  "text": "■指定のフレーム数に合わせた攻撃切り替え（RegisterCommandUtility_GrapOnMotionFrame）",
+  "description": "■指定のフレーム数に合わせた攻撃切り替え",
+  "helper": "RegisterCommandUtility_GrapOnMotionFrame"
+ },
+ {
+  "rva": "0x01615EB0",
+  "text": "☆地形コリジョン無効化（DockingAction_FinishBase）",
+  "description": "☆地形コリジョン無効化",
+  "helper": "DockingAction_FinishBase"
+ },
+ {
+  "rva": "0x01615EF0",
+  "text": "☆ドッキング回収アクション・浮き上がり（DockingAction_FinishBase）",
+  "description": "☆ドッキング回収アクション・浮き上がり",
+  "helper": "DockingAction_FinishBase"
+ },
+ {
+  "rva": "0x01615F50",
+  "text": "☆ドッキング回収アクション・本体接合（DockingAction_FinishBase）",
+  "description": "☆ドッキング回収アクション・本体接合",
+  "helper": "DockingAction_FinishBase"
+ },
+ {
+  "rva": "0x01620990",
+  "text": "☆地形コリジョン無効化（DockingAction_FinishBase）",
+  "description": "☆地形コリジョン無効化",
+  "helper": "DockingAction_FinishBase"
+ },
+ {
+  "rva": "0x016209D0",
+  "text": "☆地形コリジョン無効化（DockingAction_FinishBase）",
+  "description": "☆地形コリジョン無効化",
+  "helper": "DockingAction_FinishBase"
+ },
+ {
+  "rva": "0x01620A10",
+  "text": "☆ドッキング回収アクション・本体接合（DockingAction_FinishBase）",
+  "description": "☆ドッキング回収アクション・本体接合",
+  "helper": "DockingAction_FinishBase"
+ },
+ {
+  "rva": "0x01621BA0",
+  "text": "☆地形コリジョン無効化（DockingAction_FinishBase）",
+  "description": "☆地形コリジョン無効化",
+  "helper": "DockingAction_FinishBase"
+ },
+ {
+  "rva": "0x01621BE0",
+  "text": "☆地形コリジョン無効化（DockingAction_FinishBase）",
+  "description": "☆地形コリジョン無効化",
+  "helper": "DockingAction_FinishBase"
+ },
+ {
+  "rva": "0x01621C20",
+  "text": "☆ドッキング回収アクション・本体接合（DockingAction_FinishBase）",
+  "description": "☆ドッキング回収アクション・本体接合",
+  "helper": "DockingAction_FinishBase"
+ },
+ {
+  "rva": "0x01631860",
+  "text": "立ち去り演出（RC_Utility）",
+  "description": "立ち去り演出",
+  "helper": "RC_Utility"
+ },
+ {
+  "rva": "0x01638E20",
+  "text": "ドッキング回収アクション・本体接合（DockingAction_FinishBase）",
+  "description": "ドッキング回収アクション・本体接合",
+  "helper": "DockingAction_FinishBase"
+ },
+ {
+  "rva": "0x01639528",
+  "text": "移動目標座標を設定する（HomingMagnetAbstract）",
+  "description": "移動目標座標を設定する",
+  "helper": "HomingMagnetAbstract"
+ },
+ {
+  "rva": "0x016395A8",
+  "text": "移動目標座標へと吸着移動（HomingMagnetAbstract）",
+  "description": "移動目標座標へと吸着移動",
+  "helper": "HomingMagnetAbstract"
+ },
+ {
+  "rva": "0x016395E8",
+  "text": "相対移動（HomingMagnetAbstract）",
+  "description": "相対移動",
+  "helper": "HomingMagnetAbstract"
+ },
+ {
+  "rva": "0x01639770",
+  "text": "移動目標座標を設定する（HomingMagnetAbstract）",
+  "description": "移動目標座標を設定する",
+  "helper": "HomingMagnetAbstract"
+ },
+ {
+  "rva": "0x016397F0",
+  "text": "移動目標座標へと吸着移動（HomingMagnetAbstract）",
+  "description": "移動目標座標へと吸着移動",
+  "helper": "HomingMagnetAbstract"
+ },
+ {
+  "rva": "0x01639830",
+  "text": "相対移動（HomingMagnetAbstract）",
+  "description": "相対移動",
+  "helper": "HomingMagnetAbstract"
+ },
+ {
+  "rva": "0x01678D40",
+  "text": "エイミング兼射撃前待機時間（RegisterCommandAction_ShotContinuousOnAimingBody）",
+  "description": "エイミング兼射撃前待機時間",
+  "helper": "RegisterCommandAction_ShotContinuousOnAimingBody"
+ },
+ {
+  "rva": "0x01678DA0",
+  "text": "射撃間隔待機時間（RegisterCommandAction_ShotContinuousOnAimingBody）",
+  "description": "射撃間隔待機時間",
+  "helper": "RegisterCommandAction_ShotContinuousOnAimingBody"
+ },
+ {
+  "rva": "0x0167A4A0",
+  "text": "☆ノックバック継続時間（KnockBack）",
+  "description": "☆ノックバック継続時間",
+  "helper": "KnockBack"
+ },
+ {
+  "rva": "0x0167A5D8",
+  "text": "☆ノックバック移動（KnockBack）",
+  "description": "☆ノックバック移動",
+  "helper": "KnockBack"
+ },
+ {
+  "rva": "0x0167B368",
+  "text": "☆ノックバック継続時間（KnockBack）",
+  "description": "☆ノックバック継続時間",
+  "helper": "KnockBack"
+ },
+ {
+  "rva": "0x0167B4A0",
+  "text": "☆ノックバック移動（KnockBack）",
+  "description": "☆ノックバック移動",
+  "helper": "KnockBack"
+ },
+ {
+  "rva": "0x0167BE70",
+  "text": "移動目標座標へと吸着移動（HomingMagnetAbstract）",
+  "description": "移動目標座標へと吸着移動",
+  "helper": "HomingMagnetAbstract"
+ },
+ {
+  "rva": "0x01698430",
+  "text": "★エイミング＆繰り返し射撃シーケンス（RegisterCommandUtility_ShotContinuousOnAimingBody）",
+  "description": "★エイミング＆繰り返し射撃シーケンス",
+  "helper": "RegisterCommandUtility_ShotContinuousOnAimingBody"
+ },
+ {
+  "rva": "0x016984A0",
+  "text": "射撃用モーションステートを設定（RegisterCommandUtility_ShotContinuousOnAimingBody）",
+  "description": "射撃用モーションステートを設定",
+  "helper": "RegisterCommandUtility_ShotContinuousOnAimingBody"
+ },
+ {
+  "rva": "0x01698510",
+  "text": "エイミング兼射撃前待機時間（RegisterCommandUtility_ShotContinuousOnAimingBody）",
+  "description": "エイミング兼射撃前待機時間",
+  "helper": "RegisterCommandUtility_ShotContinuousOnAimingBody"
+ },
+ {
+  "rva": "0x01698570",
+  "text": "射撃間隔待機時間（RegisterCommandUtility_ShotContinuousOnAimingBody）",
+  "description": "射撃間隔待機時間",
+  "helper": "RegisterCommandUtility_ShotContinuousOnAimingBody"
+ },
+ {
+  "rva": "0x01698718",
+  "text": "☆照射開始モーション（RegisterMotionShotLazer）",
+  "description": "☆照射開始モーション",
+  "helper": "RegisterMotionShotLazer"
+ },
+ {
+  "rva": "0x01698760",
+  "text": "☆開始モーションの再生速度を変更（RegisterMotionShotLazer）",
+  "description": "☆開始モーションの再生速度を変更",
+  "helper": "RegisterMotionShotLazer"
+ },
+ {
+  "rva": "0x016987B0",
+  "text": "☆弾丸発射のモーションフレームまで待機（RegisterMotionShotLazer）",
+  "description": "☆弾丸発射のモーションフレームまで待機",
+  "helper": "RegisterMotionShotLazer"
+ },
+ {
+  "rva": "0x01698808",
+  "text": "☆照射中モーション（RegisterMotionShotLazer）",
+  "description": "☆照射中モーション",
+  "helper": "RegisterMotionShotLazer"
+ },
+ {
+  "rva": "0x01698870",
+  "text": "終了モーションを設定（RegisterCommandUtility_ShotMachinegunOnAimingBody）",
+  "description": "終了モーションを設定",
+  "helper": "RegisterCommandUtility_ShotMachinegunOnAimingBody"
+ },
+ {
+  "rva": "0x0169DC30",
+  "text": "射撃開始モーションを設定（RegisterCommandUtility_ShotMachinegunOnAimingBody）",
+  "description": "射撃開始モーションを設定",
+  "helper": "RegisterCommandUtility_ShotMachinegunOnAimingBody"
+ },
+ {
+  "rva": "0x0169DC90",
+  "text": "終了モーションを設定（RegisterCommandUtility_ShotMachinegunOnAimingBody）",
+  "description": "終了モーションを設定",
+  "helper": "RegisterCommandUtility_ShotMachinegunOnAimingBody"
+ },
+ {
+  "rva": "0x0169E750",
+  "text": "エイミング兼射撃前待機時間（RegisterCommandUtility_ShotContinuousOnAimingBody）",
+  "description": "エイミング兼射撃前待機時間",
+  "helper": "RegisterCommandUtility_ShotContinuousOnAimingBody"
+ },
+ {
+  "rva": "0x0169E7B0",
+  "text": "★エイミング＆繰り返し射撃シーケンス（RegisterCommandUtility_ShotContinuousOnAimingBody）",
+  "description": "★エイミング＆繰り返し射撃シーケンス",
+  "helper": "RegisterCommandUtility_ShotContinuousOnAimingBody"
+ },
+ {
+  "rva": "0x0169E820",
+  "text": "射撃用モーションステートを設定（RegisterCommandUtility_ShotContinuousOnAimingBody）",
+  "description": "射撃用モーションステートを設定",
+  "helper": "RegisterCommandUtility_ShotContinuousOnAimingBody"
+ },
+ {
+  "rva": "0x0169E890",
+  "text": "エイミング兼射撃前待機時間（RegisterCommandUtility_ShotContinuousOnAimingBody）",
+  "description": "エイミング兼射撃前待機時間",
+  "helper": "RegisterCommandUtility_ShotContinuousOnAimingBody"
+ },
+ {
+  "rva": "0x0169E8F0",
+  "text": "射撃間隔待機時間（RegisterCommandUtility_ShotContinuousOnAimingBody）",
+  "description": "射撃間隔待機時間",
+  "helper": "RegisterCommandUtility_ShotContinuousOnAimingBody"
+ },
+ {
+  "rva": "0x016A0040",
+  "text": "ドッキング追従アクション（DockingAction_Chase）",
+  "description": "ドッキング追従アクション",
+  "helper": "DockingAction_Chase"
+ },
+ {
+  "rva": "0x016A0110",
+  "text": "ドッキング回収アクション・浮き上がり（DockingAction_FinishBase）",
+  "description": "ドッキング回収アクション・浮き上がり",
+  "helper": "DockingAction_FinishBase"
+ },
+ {
+  "rva": "0x016A0170",
+  "text": "ドッキング回収アクション・本体接合（DockingAction_FinishBase）",
+  "description": "ドッキング回収アクション・本体接合",
+  "helper": "DockingAction_FinishBase"
+ },
+ {
+  "rva": "0x016A01D0",
+  "text": "射撃用モーションステートを設定（RegisterCommandUtility_ShotContinuousOnAimingBody）",
+  "description": "射撃用モーションステートを設定",
+  "helper": "RegisterCommandUtility_ShotContinuousOnAimingBody"
+ },
+ {
+  "rva": "0x016A4200",
+  "text": "☆ドッキング追従アクション（DockingAction_Chase）",
+  "description": "☆ドッキング追従アクション",
+  "helper": "DockingAction_Chase"
+ },
+ {
+  "rva": "0x016A9678",
+  "text": "移動目標座標へと吸着移動（HomingMagnetAbstract）",
+  "description": "移動目標座標へと吸着移動",
+  "helper": "HomingMagnetAbstract"
+ },
+ {
+  "rva": "0x016A96B8",
+  "text": "相対移動（HomingMagnetAbstract）",
+  "description": "相対移動",
+  "helper": "HomingMagnetAbstract"
+ },
+ {
+  "rva": "0x016AA188",
+  "text": "移動目標座標へと吸着移動（HomingMagnetAbstract）",
+  "description": "移動目標座標へと吸着移動",
+  "helper": "HomingMagnetAbstract"
+ },
+ {
+  "rva": "0x016AA1C8",
+  "text": "相対移動（HomingMagnetAbstract）",
+  "description": "相対移動",
+  "helper": "HomingMagnetAbstract"
+ }
+]
