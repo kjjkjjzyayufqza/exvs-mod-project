@@ -69,6 +69,11 @@
   "field": {
     "emptyString": "(empty string)"
   },
+  "classRole": {
+    "classChip": "{{className}} ({{classId}}) · {{count}} class roles",
+    "classTitle": "This projectile class reads some bulletparam columns with its own meaning. Their labels show the proven role; the JSON key is unchanged.",
+    "fieldTitle": "JSON key {{fieldKey}} ({{hash}}) is read as {{role}} [{{unit}}] by {{source}} for {{className}} ({{classId}})"
+  },
   "empty": {
     "entriesSearch": "No entries match the search.",
     "noEntrySelected": "No entry selected",

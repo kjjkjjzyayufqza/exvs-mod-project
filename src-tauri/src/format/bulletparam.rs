@@ -24,9 +24,14 @@ use crate::format::param_entry_schema::{
 // Please keep comments for analysis.
 //
 // Data-verified against 432 bullet_param files (10681 entries, cmd_count=80 or 73).
-// No hashes appear as hardcoded immediates in the exe.
+// Field hashes DO appear as code immediates in OB v27 (search the little-endian hash
+// bytes with find_bytes); every UnitTask class reads the columns it needs by hash.
 // Tags: [D:range] = data range, HASH = u32 hash reference (many unique values, max near u32::MAX)
 //       PHANTOM = hash not present in any of the 432 files
+//       [C:id=role] = role proven for projectile class id `id` (value of projectile_id).
+//                     The key keeps its generic name because other classes read the same
+//                     hash differently. UI table: src/lib/gameAlgorithms/bulletClassFieldRoles.ts,
+//                     evidence: docs/unit-task-automata-fauc-shield-funnel.md
 //
 // Naming corrections applied:
 //   is_beam           -> beam_type_hash       (19 unique, max ~4B, not boolean)
@@ -36,14 +41,15 @@ use crate::format::param_entry_schema::{
 //   bullet_effect_hash -> on_expire_bullet_hash (Storm ID / on-expire Bullet)
 //   vertical_launch_angle -> spawn_horizontal_offset (spawn left/right offset)
 //   offset_angle_horizontal -> spawn_forward_offset (spawn front/back offset)
-//   on_expire_hash    -> projectile_id_hash   (Projectile ID)
+//   hit_effect_hash   -> projectile_id            (Projectile ID)
+//   on_expire_hash    -> projectile_id_hash -> projectile_depiction_id
 //   bullet_resource_hash -> hit_id            (Hit ID; indexes interactionid.bin)
 //   bullet_action_hash -> sound_name_crc32    (SE ID: CRC32 of the sound name)
 pub const BULLETPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x0594D6D4, 5, "initial_angle"), // [V:sub_1405C4400] angular offset, 143 unique
     (0x05D5D30D, 5, "max_range"),     // [D:0~10000] distance, 112 unique
     (0x06E90346, 1, "move_type"),     // [D:0~255] enum, 9 unique
-    (0x0D6A5CD5, 1, "hit_effect_hash"), // [V:sub_140606BB0] 815 unique hash refs
+    (0x0D6A5CD5, 1, "projectile_id"), // Projectile ID. [V:sub_140606BB0] 815 unique hash refs. was "hit_effect_hash"
     (0x130D4C0B, 5, "spread_angle"),  // [D:-320~320] degrees, 151 unique
     (0x13662C98, 5, "hitbox_width"),  // [D:0~25]
     (0x138B3675, 5, "hitbox_height"), // [D:0~360]
@@ -57,17 +63,17 @@ pub const BULLETPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x32ACABFB, 2, "lifetime"),             // [D:0~100000] frames
     (0x36FCE2D7, 1, "child_bullet_hash"),    // [D:HASH] 204 unique
     (0x397CE80D, 1, "collision_type"),       // [D:0~2] enum, 3 types
-    (0x3B52DAAB, 5, "rotation_angle"),       // [D:-180~360] degrees
-    (0x3C3F1EB2, 5, "elevation_angle"),      // [D:-135~1200] degrees
+    (0x3B52DAAB, 5, "rotation_angle"),       // [D:-180~360] degrees [C:150080102=deploy_offset_x]
+    (0x3C3F1EB2, 5, "elevation_angle"),      // [D:-135~1200] degrees [C:150080102=standby_yaw_deg]
     (0x3CDF1516, 1, "homing_type"),          // [D:0~3] enum, 4 types
     (0x3F8653B3, 5, "reserved_050"),         // PHANTOM — not in any file
-    (0x41435BE6, 1, "on_expire_bullet_hash"), // Storm ID: on-expire Bullet hash. [D:HASH] 832 unique. was "bullet_effect_hash"
+    (0x41435BE6, 1, "on_expire_bullet_hash"), // Storm ID: on-expire Bullet hash. [D:HASH] 832 unique. was "bullet_effect_hash" [C:150080102=deploy_shot_bullet, 150080107=shot_bullet]
     (0x41FBD241, 1, "trail_effect_hash"),     // [D:HASH] 260 unique
     (0x46961658, 1, "muzzle_flash_hash"),     // [D:HASH] 59 unique
     (0x48816325, 5, "reserved_060"),          // PHANTOM — not in any file
-    (0x4B382E24, 5, "target_height_offset"),  // [D:-300~1000]
+    (0x4B382E24, 5, "target_height_offset"),  // [D:-300~1000] [C:150080102=standby_pitch_deg]
     (0x4B492895, 2, "pierce_count"),          // [D:0~30] 27 unique
-    (0x4C55EA3D, 5, "acceleration_value"),    // [D:-360~3000]
+    (0x4C55EA3D, 5, "acceleration_value"),    // [D:-360~3000] [C:150080102=deploy_offset_y]
     (0x4D6BF281, 1, "sound_name_crc32"), // SE ID: CRC32 of the sound name. [D:HASH] 1474 unique. was "bullet_action_hash"
     (0x52CA3B01, 5, "homing_start_distance"), // [D:0~5000]
     (0x55C77696, 5, "spawn_horizontal_offset"), // Spawn left/right offset (local right axis). Not an angle. [V:sub_1405C4400]
@@ -78,7 +84,7 @@ pub const BULLETPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x6481E0F7, 2, "speed_internal"), // [D:0~2147483646] 18 unique — possibly hash/special encoding
     (0x64C1F4FF, 5, "collision_height"), // [D:-10~90]
     (0x67921CDD, 2, "homing_duration"), // [D:0~10000] frames
-    (0x68CD7942, 1, "projectile_id_hash"), // Projectile ID hash. [D:HASH] 985 unique. was "on_expire_hash"
+    (0x68CD7942, 1, "projectile_depiction_id"), // Projectile Depiction ID. [D:HASH] 985 unique. was "projectile_id_hash", earlier "on_expire_hash"
     (0x6A62D65E, 2, "delay_frame"),        // [D:0~1000] frames, 9 unique
     (0x74F469FA, 5, "gravity_rate"), // [V:sub_140606BB0,sub_1405B5040] ballistic trajectory param. [D:0~0.5]
     (0x7696F452, 5, "speed_scale"),  // [D:0~2.0] multiplier
@@ -88,31 +94,31 @@ pub const BULLETPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0x846DDC39, 5, "max_distance"), // [D:0~9000]
     (0x89BE0F56, 1, "hit_id"), // Hit ID: indexes interactionid.bin. [D:HASH] 3547 unique. was "bullet_resource_hash"
     (0x8ACF95D3, 5, "blast_radius"), // [D:-110~150]
-    (0x8DA251CA, 5, "offset_angle_vertical"), // [D:-150~300]
+    (0x8DA251CA, 5, "offset_angle_vertical"), // [D:-150~300] [C:150080102=bone_spin_deg, 150080105/106=swarm_first_radius]
     (0x8DBD5433, 5, "homing_strength"), // [D:0~1.0] multiplier
     (0x90423264, 5, "turn_rate"), // [V:sub_140606BB0,sub_1405B5040] projectile turning speed. [D:0~1000]
     (0x9375A247, 5, "homing_angle"), // [D:0~180] degrees
     (0x9C9D876E, 5, "spawn_forward_offset"), // Spawn front/back offset (local forward axis). Not an angle. [V:sub_1405C4400]. Distinct from spawn_offset_forward (yaw)
     (0xA12E3B5F, 1, "beam_type_hash"),       // [D:HASH] 19 unique, max ~4B. was "is_beam"
     (0xA1E2C610, 5, "reserved_0d8"),         // PHANTOM — not in any file
-    (0xA25B8B11, 5, "target_distance"),      // [D:-180~1200]
+    (0xA25B8B11, 5, "target_distance"),      // [D:-180~1200] [C:150080102=deploy_shot_delay_frames]
     (0xA36593AD, 1, "behavior_type"), // [D:HASH-like] 69 unique, max ~4B — behavior definition ref
-    (0xA5364F08, 5, "aim_correction_angle"), // [D:-300~440]
+    (0xA5364F08, 5, "aim_correction_angle"), // [D:-300~440] [C:150080102=standby_distance]
     (0xA68F0209, 5, "reserved_0e8"),  // PHANTOM — not in any file
     (0xA8987774, 1, "ammo_type_hash"), // [D:HASH] 153 unique
     (0xAB606D9E, 5, "bullet_size"),   // [D:0~640] was "initial_speed"
-    (0xABEDC73A, 5, "launch_angle_horizontal"), // [D:-140~500]
+    (0xABEDC73A, 5, "launch_angle_horizontal"), // [D:-140~500] [C:150080102=deploy_yaw_offset_deg, 150080105/106=swarm_turn_deg, 150080107=shot_interval_frames]
     (0xAF2B7098, 5, "tracking_angle"), // [D:0~180] degrees
     (0xB306BEE8, 5, "min_homing_distance"), // [D:0~360]
     (0xBA9B8F5D, 5, "turn_acceleration"), // [D:0~15]
     (0xD188329F, 5, "reserved_f4"),   // [D:0~500] 5 unique, mostly 0
     (0xD32D39ED, 1, "hitgroup_hash"), // [D:HASH] 2371 unique
     (0xD462A33B, 1, "spawn_pattern_hash"), // [D:HASH] 107 unique
-    (0xD55CBB87, 5, "aim_limit_angle"), // [D:-160~240]
+    (0xD55CBB87, 5, "aim_limit_angle"), // [D:-160~240] [C:150080102=deploy_frames]
     (0xD6290BC9, 1, "penetrate_type_hash"), // [D:HASH] 17 unique. was "is_penetrating"
     (0xD6E5F686, 5, "reserved_118"),  // PHANTOM — not in any file
-    (0xD8F283FB, 1, "secondary_effect_hash"), // [D:HASH] 1091 unique
-    (0xDCEAF7AC, 5, "homing_effective_distance"), // [D:-360~820]
+    (0xD8F283FB, 1, "secondary_effect_hash"), // [D:HASH] 1091 unique [C:150080102=shell_model_id]
+    (0xDCEAF7AC, 5, "homing_effective_distance"), // [D:-360~820] [C:150080102=deploy_offset_z, 150080105/106=swarm_speed, 150080107=shot_count]
     (0xDE6C0636, 1, "reserved_flag_110"), // [D:0~0xFFFFFFF6] 3 unique, 10652 zeros
     (0xDF9F47E2, 1, "explosion_effect_hash"), // [D:HASH] 106 unique
     (0xEDD1C108, 1, "interaction_hash"), // [D:HASH] 1670 unique
@@ -120,7 +126,7 @@ pub const BULLETPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0xF33F8630, 2, "duration_frame"), // [D:0~1000] frames
     (0xF47EE96E, 5, "reserved_124"),  // [D:-5~1200] 13 unique, mostly 0
     (0xF647567F, 1, "sound_effect_hash"), // [D:HASH] 341 unique
-    (0xFAA5615C, 5, "muzzle_offset_horizontal"), // [D:-360~87011]
+    (0xFAA5615C, 5, "muzzle_offset_horizontal"), // [D:-360~87011] [C:150080102=deploy_pitch_deg, 150080105/106=swarm_retarget_distance]
     (0xFD032D27, 5, "muzzle_offset_vertical"), // [D:-100~300]
     (0xFD855759, 5, "induction_angle"), // [D:0~360]
     (0xFDC8A545, 5, "spread_distance"), // [D:-140~250]
@@ -136,6 +142,8 @@ const BULLETPARAM_LEGACY_KEY_ALIASES: &[(&str, u32)] = &[
     ("onExpireHash", 0x68CD7942),
     ("bulletResourceHash", 0x89BE0F56),
     ("bulletActionHash", 0x4D6BF281),
+    ("hitEffectHash", 0x0D6A5CD5),
+    ("projectileIdHash", 0x68CD7942),
 ];
 
 fn apply_bulletparam_legacy_aliases(v: &Value) -> Value {
@@ -516,7 +524,7 @@ mod tests {
         assert!((f32::from_bits(*entry.commands.get(&0x55C77696).unwrap()) - 2.0).abs() < 1e-5);
         assert!((f32::from_bits(*entry.commands.get(&0x9C9D876E).unwrap()) - 3.0).abs() < 1e-5);
         assert_eq!(
-            *entry.commands.get(&0x68CD7942).expect("projectile id"),
+            *entry.commands.get(&0x68CD7942).expect("projectile depiction id"),
             0x22
         );
         assert_eq!(*entry.commands.get(&0x89BE0F56).expect("hit id"), 0x33);
@@ -538,13 +546,61 @@ mod tests {
             Some(0x11)
         );
         assert_eq!(
-            canonical.get("projectileIdHash").and_then(|v| v.as_u64()),
+            canonical.get("projectileDepictionId").and_then(|v| v.as_u64()),
             Some(0x22)
         );
         assert_eq!(canonical.get("hitId").and_then(|v| v.as_u64()), Some(0x33));
         assert_eq!(
             canonical.get("soundNameCrc32").and_then(|v| v.as_u64()),
             Some(0x44)
+        );
+    }
+
+    #[test]
+    fn bulletparam_projectile_id_fields_emit_new_keys_and_accept_old_ones() {
+        let legacy = serde_json::json!({
+            "entryId": 1,
+            "hitEffectHash": 0x11u32,
+            "projectileIdHash": 0x22u32
+        });
+        let entry = bulletparam_entry_from_json_value(&legacy).expect("parse previous keys");
+        assert_eq!(*entry.commands.get(&0x0D6A5CD5).expect("projectile id"), 0x11);
+        assert_eq!(
+            *entry.commands.get(&0x68CD7942).expect("projectile depiction id"),
+            0x22
+        );
+
+        let canonical = bulletparam_entry_to_json_value(&entry);
+        assert!(canonical.get("hitEffectHash").is_none());
+        assert!(canonical.get("projectileIdHash").is_none());
+        assert_eq!(
+            canonical.get("projectileId").and_then(|v| v.as_u64()),
+            Some(0x11)
+        );
+        assert_eq!(
+            canonical.get("projectileDepictionId").and_then(|v| v.as_u64()),
+            Some(0x22)
+        );
+
+        let both = serde_json::json!({
+            "entryId": 1,
+            "hitEffectHash": 1,
+            "projectileId": 7,
+            "projectileIdHash": 2,
+            "projectileDepictionId": 9
+        });
+        let prefer_canonical =
+            bulletparam_entry_from_json_value(&both).expect("canonical key wins over alias");
+        assert_eq!(
+            *prefer_canonical.commands.get(&0x0D6A5CD5).expect("projectile id"),
+            7
+        );
+        assert_eq!(
+            *prefer_canonical
+                .commands
+                .get(&0x68CD7942)
+                .expect("projectile depiction id"),
+            9
         );
     }
 

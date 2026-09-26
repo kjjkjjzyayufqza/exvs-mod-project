@@ -69,6 +69,11 @@
   "field": {
     "emptyString": "（空の文字列）"
   },
+  "classRole": {
+    "classChip": "{{className}} ({{classId}}) · クラス固有の役割 {{count}} 件",
+    "classTitle": "この弾クラスは一部の bulletparam 列を独自の意味で読み取ります。ラベルは確認済みの実際の用途を示し、JSON キーは変わりません。",
+    "fieldTitle": "JSON キー {{fieldKey}}（{{hash}}）は {{className}}（{{classId}}）で {{source}} により {{role}} [{{unit}}] として読み取られます"
+  },
   "empty": {
     "entriesSearch": "検索に一致するエントリーはありません。",
     "noEntrySelected": "エントリーが選択されていません",

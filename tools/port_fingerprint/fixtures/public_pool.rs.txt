@@ -1,0 +1,6 @@
+// AEtools tagged comment line for strip_sim tests only.
+pub const PAPER_LANTERN_COMMAND_POOL: ParamCommandPool = &[
+    (0xA11CE001, 5, "paper_lantern_bias"),
+    (0xA11CE002, 1, "paper_lantern_gate"),
+    (0xA11CE003, 5, "paper_lantern_span"),
+];

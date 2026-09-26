@@ -11,6 +11,8 @@ import {
   getMoveTypeCategory,
   MOVE_TYPE_CATEGORIES,
 } from "@/lib/gameAlgorithms/moveTypes";
+import { getBulletEntryFieldRoles } from "@/lib/gameAlgorithms/bulletClassFieldRoles";
+import { formatHash } from "@/models/commandTable";
 
 interface BulletPropertyPanelProps {
   entry: TypedParamEntry;
@@ -125,7 +127,7 @@ export const BULLET_GROUPS: PropertyGroupDef[] = [
     id: "references",
     label: "Hash References",
     fields: [
-      { key: "hitEffectHash", label: "Hit Effect", type: "hash" },
+      { key: "projectileId", label: "Projectile ID", type: "hash" },
       { key: "onExpireBulletHash", label: "Storm ID", type: "hash", tooltip: "On-expire Bullet hash" },
       { key: "trailEffectHash", label: "Trail Effect", type: "hash" },
       { key: "muzzleFlashHash", label: "Muzzle Flash", type: "hash" },
@@ -135,7 +137,7 @@ export const BULLET_GROUPS: PropertyGroupDef[] = [
       { key: "spawnPatternHash", label: "Spawn Pattern", type: "hash" },
       { key: "hitgroupHash", label: "Hit Group", type: "hash" },
       { key: "secondaryEffectHash", label: "Secondary Effect", type: "hash" },
-      { key: "projectileIdHash", label: "Projectile ID", type: "hash" },
+      { key: "projectileDepictionId", label: "Projectile Depiction ID", type: "hash" },
       { key: "ammoTypeHash", label: "Ammo Type", type: "hash" },
       { key: "behaviorType", label: "Behavior Type", type: "hash" },
       { key: "beamTypeHash", label: "Beam Type", type: "hash" },
@@ -160,6 +162,35 @@ export const BULLET_GROUPS: PropertyGroupDef[] = [
     ],
   },
 ];
+
+/**
+ * Groups for one bulletparam row. When the row's projectile class reads some
+ * columns with a class-specific role, those columns move into a leading group
+ * labelled with their real role; the canonical keys are unchanged.
+ */
+export function buildBulletGroups(entry: TypedParamEntry): PropertyGroupDef[] {
+  const classRoles = getBulletEntryFieldRoles(entry);
+  if (!classRoles) {
+    return BULLET_GROUPS;
+  }
+  const { classId, roleSet, byField } = classRoles;
+  const roleGroup: PropertyGroupDef = {
+    id: "classRoles",
+    label: `Class Roles · ${roleSet.className} (${classId})`,
+    fields: roleSet.roles.map((role) => ({
+      key: role.fieldKey,
+      label: role.label,
+      type: role.type,
+      unit: role.unit,
+      tooltip: `${role.fieldKey} (${formatHash(role.hash)}) is read as ${role.role} by ${role.source} for class ${classId}`,
+    })),
+  };
+  const remainingGroups = BULLET_GROUPS.map((group) => ({
+    ...group,
+    fields: group.fields.filter((field) => !byField.has(field.key)),
+  })).filter((group) => group.fields.length > 0);
+  return [roleGroup, ...remainingGroups];
+}
 
 export function buildBulletComputedSections(entry: TypedParamEntry): ComputedSection[] {
   const moveType = Math.trunc(num(entry, "moveType"));
@@ -219,6 +250,7 @@ export function BulletPropertyPanel({
   onFieldChange,
 }: BulletPropertyPanelProps) {
   const computedSections = useMemo(() => buildBulletComputedSections(entry), [entry]);
+  const groups = useMemo(() => buildBulletGroups(entry), [entry]);
 
   return (
     <GameAccuratePropertyPanel
@@ -230,7 +262,7 @@ export function BulletPropertyPanel({
         }
         onFieldChange(key, value);
       }}
-      groups={BULLET_GROUPS}
+      groups={groups}
       computedSections={computedSections}
     />
   );

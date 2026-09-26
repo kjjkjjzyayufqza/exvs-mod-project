@@ -7,7 +7,8 @@
  *   bulletparam.hitgroup_hash     → hitgroupiddef entry
  *   bulletparam.hit_id            → interactionid.bin (Hit ID)
  *   bulletparam.on_expire_bullet_hash → another bulletparam entry (Storm ID)
- *   bulletparam.projectile_id_hash → projectile_depiction_table (Projectile ID)
+ *   bulletparam.projectile_id → interactionid
+ *   bulletparam.projectile_depiction_id → projectile_depiction_table
  *   bulletparam.child_bullet_hash → another bulletparam entry
  *
  * The game resolves these at runtime via sub_1405B2870 (FNV-1a hash lookup).
@@ -42,12 +43,12 @@ export interface CrossReferenceMap {
 }
 
 export const BULLET_CROSS_REFERENCES: CrossReferenceMap[] = [
-  { sourceField: "hitEffectHash", targetKind: "interactionid" },
+  { sourceField: "projectileId", targetKind: "interactionid" },
   { sourceField: "hitgroupHash", targetKind: "hitgroupiddef" },
   { sourceField: "hitId", targetKind: "interactionid" },
   { sourceField: "childBulletHash", targetKind: "bulletparam" },
   { sourceField: "onExpireBulletHash", targetKind: "bulletparam" },
-  { sourceField: "projectileIdHash", targetKind: "projectileDepictionTable" },
+  { sourceField: "projectileDepictionId", targetKind: "projectileDepictionTable" },
   { sourceField: "secondaryEffectHash", targetKind: "interactionid" },
   { sourceField: "spawnPatternHash", targetKind: "bulletparam" },
   { sourceField: "trailEffectHash", targetKind: "projectileDepictionTable" },

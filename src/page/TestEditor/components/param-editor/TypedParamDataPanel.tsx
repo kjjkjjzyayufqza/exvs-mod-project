@@ -45,6 +45,9 @@ import {
   isHitboxParamFileType,
 } from "./HitboxParamAnalysisPanel"
 import { readObfLabelAtOffset } from "../../utils/mscParamLabelResolver"
+import { getBulletEntryFieldRoles, type BulletFieldRole } from "@/lib/gameAlgorithms/bulletClassFieldRoles"
+
+const BULLETPARAM_FILE_TYPE = "bulletparam"
 
 /** Baseline estimate; measureElement adjusts when action/resource labels are present. */
 const ENTRY_ROW_HEIGHT = 72
@@ -79,22 +82,46 @@ function formatFieldOffset(offset: number): string {
   return `0x${offset.toString(16).toUpperCase().padStart(2, "0")}`
 }
 
+type ParamFieldClassRole = {
+  role: BulletFieldRole
+  className: string
+  classId: number
+}
+
 function ParamFieldCell({
   fieldKey,
   value,
   kind,
   offset,
+  classRole,
   onCommit,
 }: {
   fieldKey: string
   value: number | string
   kind: number
   offset: number
+  classRole?: ParamFieldClassRole
   onCommit: (nextValue: number | string) => void
 }) {
   const { t } = useTranslation("test-typed-param")
   const isFloat = kind === 5
   const isString = kind === 7 || typeof value === "string"
+  const poolKeyBadge = classRole ? (
+    <span
+      className="shrink-0 rounded bg-amber-500/15 px-1 py-0.5 font-mono text-[9px] tracking-wide text-amber-800 dark:text-amber-300"
+      title={t("classRole.fieldTitle", {
+        fieldKey,
+        hash: formatHash(classRole.role.hash),
+        role: classRole.role.role,
+        unit: classRole.role.unit ?? "-",
+        source: classRole.role.source,
+        className: classRole.className,
+        classId: classRole.classId,
+      })}
+    >
+      {fieldKey}
+    </span>
+  ) : null
   const offsetBadge =
     offset !== -1 && !isString ? (
       <span className="shrink-0 rounded border border-border/50 bg-muted/50 px-1 py-0.5 font-mono text-[9px] tabular-nums tracking-wide text-muted-foreground">
@@ -146,9 +173,10 @@ function ParamFieldCell({
 
   return (
     <DualValueProperty
-      label={fieldKey}
+      label={classRole ? classRole.role.label : fieldKey}
       labelExtra={
         <div className="flex items-center gap-1">
+          {poolKeyBadge}
           {kindBadge}
           {offsetBadge}
         </div>
@@ -232,13 +260,22 @@ export function TypedParamDataPanel({
     [sourceFilePath],
   )
 
+  const classFieldRoles = useMemo(
+    () => (entry && fileType === BULLETPARAM_FILE_TYPE ? getBulletEntryFieldRoles(entry) : null),
+    [entry, fileType],
+  )
+
   const filteredKeys = useMemo(() => {
     if (!entry) return []
     const all = Object.keys(entry)
     if (!fieldSearch.trim()) return all
     const q = fieldSearch.trim().toLowerCase()
-    return all.filter((k) => k.toLowerCase().includes(q))
-  }, [entry, fieldSearch])
+    return all.filter((k) => {
+      if (k.toLowerCase().includes(q)) return true
+      const role = classFieldRoles?.byField.get(k)
+      return role ? role.role.toLowerCase().includes(q) || role.label.toLowerCase().includes(q) : false
+    })
+  }, [classFieldRoles, entry, fieldSearch])
 
   const filteredEntryRows = useMemo(
     () => filterTypedParamEntryRows(data.entries, entrySearch),
@@ -595,6 +632,18 @@ export function TypedParamDataPanel({
                   {formatHash(readTypedEntryId(entry, selectedEntryIndex))} · {t("list.fields", { count: Object.keys(entry).length })}
                 </span>
                 <ParamEntryListBadges meta={entryEditorMeta[selectedEntryIndex]} />
+                {classFieldRoles ? (
+                  <span
+                    className="rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] text-amber-800 dark:text-amber-300"
+                    title={t("classRole.classTitle")}
+                  >
+                    {t("classRole.classChip", {
+                      className: classFieldRoles.roleSet.className,
+                      classId: classFieldRoles.classId,
+                      count: classFieldRoles.roleSet.roles.length,
+                    })}
+                  </span>
+                ) : null}
               </span>
             ) : null}
           </div>
@@ -762,6 +811,11 @@ export function TypedParamDataPanel({
                         const kind = info?.kind || 1
                         const offset = info?.offset ?? -1
                         const cellValue = resolveCellDisplayValue(key, value, kind)
+                        const role = classFieldRoles?.byField.get(key)
+                        const classRole =
+                          classFieldRoles && role
+                            ? { role, className: classFieldRoles.roleSet.className, classId: classFieldRoles.classId }
+                            : undefined
 
                         return (
                           <ParamFieldCell
@@ -770,6 +824,7 @@ export function TypedParamDataPanel({
                             value={cellValue}
                             kind={kind}
                             offset={offset}
+                            classRole={classRole}
                             onCommit={(nextValue) => commitEntryFieldChange(key, nextValue)}
                           />
                         )

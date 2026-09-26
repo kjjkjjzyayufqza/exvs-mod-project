@@ -183,9 +183,8 @@ uniform vec2 uSourceSize;
 uniform float uWeights[8];
 uniform bool uIsFinalPass;
 
-// The occlusion buffer is half resolution while the final pass writes at full
-// resolution, so the tap centre comes from the normalised coordinate rather than
-// from this pass's own pixel index.
+// Occlusion and blur run at full resolution; centre taps use the normalised UV
+// scaled to the source attachment size, not a separate half-res grid.
 vec2 exvsBlurTap( vec2 centrePixel, int offset ) {
 	vec2 texel = centrePixel + vec2( offset ) * uTexelStep;
 	texel = clamp( texel, vec2( 0.0 ), uSourceSize - 1.0 );

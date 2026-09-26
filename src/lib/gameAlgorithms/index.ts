@@ -126,6 +126,17 @@ export {
 } from "./crossParamResolver";
 
 export {
+  type BulletFieldRole,
+  type BulletClassRoleSet,
+  type BulletEntryFieldRoles,
+  BULLET_CLASS_FIELD_ROLES,
+  BULLET_PROJECTILE_ID_KEY,
+  getBulletClassRoleSet,
+  readBulletProjectileId,
+  getBulletEntryFieldRoles,
+} from "./bulletClassFieldRoles";
+
+export {
   type ShootingEndReason,
   type ShootingTrajectorySummary,
   classifyShootingEndReason,

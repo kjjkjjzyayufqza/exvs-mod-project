@@ -10,7 +10,7 @@ import { NutexbPreview } from "./NutexbPreview";
 import { JnttblFileEditorPanel } from "@/components/ssbh-model-preview/JnttblFileEditorPanel";
 import { NumdlbFileEditorPanel } from "@/components/ssbh-model-preview/NumdlbFileEditorPanel";
 import { useBulletEditorStore } from "./param-editors/bullet-editor/BulletEditorStore";
-import { BULLET_GROUPS, buildBulletComputedSections } from "./param-editors/bullet-editor/BulletPropertyPanel";
+import { buildBulletComputedSections, buildBulletGroups } from "./param-editors/bullet-editor/BulletPropertyPanel";
 import { ScenarioPanel } from "./param-editors/bullet-editor/ScenarioPanel";
 import { ShootingLoopPanel } from "./param-editors/bullet-editor/ShootingLoopPanel";
 import { BulletDpsPanel } from "./param-editors/bullet-editor/BulletDpsPanel";
@@ -72,7 +72,7 @@ function BulletInfoTabContent() {
   const computedSections = buildBulletComputedSections(entry);
   const onFieldChange = (key: string, value: number) =>
     useBulletEditorStore.getState().updateField(key, value);
-  const visibleGroups = BULLET_GROUPS.filter((g) => !g.visible || g.visible(entry));
+  const visibleGroups = buildBulletGroups(entry).filter((g) => !g.visible || g.visible(entry));
 
   return (
     <div className="-mx-4 flex min-w-0 flex-col border-t bg-background/50">

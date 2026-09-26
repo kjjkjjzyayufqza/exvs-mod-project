@@ -6,7 +6,7 @@
  *   1  shadow atlas        four partitions, depth only
  *   2  G-buffer            four targets plus depth
  *   3  depth reduction     next frame's partition bounds
- *   4  ambient occlusion   half resolution, then a separable blur into target 3's alpha
+ *   4  ambient occlusion   full resolution; sample taps read half-resolution depth
  *   5  shadow resolve      into target 1's alpha
  *   6  analytic lighting   into the two accumulation buffers
  *   7  ambient lighting    added into the same two
@@ -15,6 +15,7 @@
  *  10  forward             transparent materials and editor helpers, depth tested
  *  11  bloom               bright pass, halving chain, separable blur, combine
  *  12  depth of field
+ *  12b effect blend         four effect layers plus the effect tone curve rows
  *  13  post filter         screen effects, gamma, colour grading
  *  14  antialiasing        FXAA, straight to the canvas
  *
@@ -568,7 +569,6 @@ export class ExvsRenderPipeline {
       this.renderComposite(camera);
       this.renderCharaBasic(scene, camera, classification);
       this.renderForward(scene, camera, classification);
-      this.renderEffectBlend();
       this.renderPostChain(camera);
     } finally {
       scene.background = previousBackground;
@@ -1096,8 +1096,10 @@ export class ExvsRenderPipeline {
    * Nothing in an editor scene fills those layers today, so the pass is skipped
    * unless a caller supplies all four, exactly as the stage-authored inputs the
    * composite reads are gated.
+   *
+   * @returns true when the pass ran and wrote into sceneColor.
    */
-  private renderEffectBlend(): void {
+  private renderEffectBlend(source: WebGLRenderTarget): boolean {
     const textures = this.sceneTextures;
     const layers = [
       textures.effectBlendHalfBack,
@@ -1105,7 +1107,24 @@ export class ExvsRenderPipeline {
       textures.effectBlendHalfFront,
       textures.effectBlendFullFront,
     ];
-    if (layers.some((layer) => layer === null) || textures.toneCurveLut === null) return;
+    if (layers.some((layer) => layer === null) || textures.toneCurveLut === null) {
+      return false;
+    }
+
+    // Bloom and depth of field land in a ping-pong target. The effect layer is
+    // premultiplied over whatever is already in sceneColor, so that image has to
+    // be copied back first. When neither pass ran, sceneColor already holds the
+    // composite and copying it onto itself would sample the attachment being written.
+    if (source !== this.targets.sceneColor) {
+      const combine = this.bloomCombineMaterial.uniforms;
+      const savedBrightScale = combine.uBrightScale.value as number;
+      combine.uSource.value = source.texture;
+      combine.uLightBuffer.value = source.texture;
+      combine.uBrightScale.value = 0;
+      this.bloomCombineMaterial.blending = NoBlending;
+      this.blit(this.bloomCombineMaterial, this.targets.sceneColor);
+      combine.uBrightScale.value = savedBrightScale;
+    }
 
     const uniforms = this.effectBlendMaterial.uniforms;
     uniforms.uToneCurveLUTMap.value = textures.toneCurveLut;
@@ -1115,6 +1134,7 @@ export class ExvsRenderPipeline {
     uniforms.uEffectBlendFullFront.value = layers[3];
 
     this.blit(this.effectBlendMaterial, this.targets.sceneColor);
+    return true;
   }
 
   private renderPostChain(camera: PerspectiveCamera): void {
@@ -1131,6 +1151,10 @@ export class ExvsRenderPipeline {
 
     if (dof.enabled) {
       source = this.renderDepthOfField(source, camera);
+    }
+
+    if (this.renderEffectBlend(source)) {
+      source = this.targets.sceneColor;
     }
 
     const filter = this.postFilterMaterial.uniforms;

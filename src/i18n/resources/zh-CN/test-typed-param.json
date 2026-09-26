@@ -69,6 +69,11 @@
   "field": {
     "emptyString": "（空字符串）"
   },
+  "classRole": {
+    "classChip": "{{className}} ({{classId}}) · {{count}} 个类专属含义",
+    "classTitle": "这个投射物类用自己的含义读取部分 bulletparam 列。标签显示已证实的真实用途；JSON 键名不变。",
+    "fieldTitle": "JSON 键 {{fieldKey}}（{{hash}}）在 {{className}}（{{classId}}）里由 {{source}} 读取为 {{role}} [{{unit}}]"
+  },
   "empty": {
     "entriesSearch": "没有匹配搜索条件的条目。",
     "noEntrySelected": "未选择条目",

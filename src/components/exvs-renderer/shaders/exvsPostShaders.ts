@@ -6,6 +6,7 @@
  *   gaussian blur       `ps-9F0C489CD27F7102` / `ps-ABDA4280201B04B7`
  *   bloom combine       `ps-4BD2FA2CCAC97EBD`
  *   depth of field      `ps-FF3A4EAB5AB00EF3`
+ *   effect blend        `ps-092DD88CBCD380C9`
  *   post filter         `ps-9417D9CEC02D40F9`
  *   antialiasing        `ps-3E6DFF52EB37B249`
  *

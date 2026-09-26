@@ -24,7 +24,7 @@ describe("CrossReferencePanel", () => {
   it("distinguishes not-loaded kinds from missing entries in loaded kinds", () => {
     const references = [
       makeReference({
-        sourceField: "hitEffectHash",
+        sourceField: "projectileId",
         targetKind: "interactionid",
         targetHash: 0x10,
       }),
@@ -59,7 +59,7 @@ describe("CrossReferencePanel", () => {
         targetEntry: { entryId: 0x30 },
       }),
       makeReference({
-        sourceField: "hitEffectHash",
+        sourceField: "projectileId",
         targetKind: "interactionid",
         targetHash: 0x40,
         targetEntry: { entryId: 0x40 },
