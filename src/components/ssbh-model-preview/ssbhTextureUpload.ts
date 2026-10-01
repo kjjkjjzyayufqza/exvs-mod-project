@@ -197,6 +197,68 @@ export function lookupTextureData(
   return textureDataMap.get(path) ?? textureDataMap.get(path.toLowerCase()) ?? null;
 }
 
+/**
+ * `barispecular00_cubemap.nutexb` is a six-layer cube. The RGBA decode stacks
+ * those layers top to bottom, in DDS order (+X, -X, +Y, -Y, +Z, -Z), which is
+ * also the order `CubeTexture` expects. A flat image is not that strip.
+ */
+export function isVerticalCubeFaceStrip(width: number, height: number, byteLength: number): boolean {
+  if (!Number.isInteger(width) || width < 1 || height !== width * 6) return false;
+  return byteLength >= width * width * 4 * 6;
+}
+
+/** Copies each face out of a vertical cube strip. Returns null when the image is not one. */
+export function copyVerticalCubeFaces(
+  rgba: Uint8Array,
+  width: number,
+  height: number,
+): Uint8Array[] | null {
+  if (!isVerticalCubeFaceStrip(width, height, rgba.byteLength)) return null;
+  const faceBytes = width * width * 4;
+  const faces: Uint8Array[] = [];
+  for (let face = 0; face < 6; face += 1) {
+    const start = face * faceBytes;
+    faces.push(rgba.slice(start, start + faceBytes));
+  }
+  return faces;
+}
+
+function createReflectionCubeTexture(
+  faces: Uint8Array[],
+  faceSize: number,
+  sourcePath: string,
+): THREE.CubeTexture {
+  const images = faces.map((face) => {
+    const faceTexture = new THREE.DataTexture(
+      face,
+      faceSize,
+      faceSize,
+      THREE.RGBAFormat,
+      THREE.UnsignedByteType,
+    );
+    faceTexture.colorSpace = THREE.LinearSRGBColorSpace;
+    faceTexture.flipY = false;
+    faceTexture.needsUpdate = true;
+    return faceTexture;
+  });
+  const cube = new THREE.CubeTexture(
+    images,
+    THREE.CubeReflectionMapping,
+    THREE.ClampToEdgeWrapping,
+    THREE.ClampToEdgeWrapping,
+    THREE.LinearFilter,
+    THREE.LinearMipmapLinearFilter,
+    THREE.RGBAFormat,
+    THREE.UnsignedByteType,
+    1,
+    THREE.LinearSRGBColorSpace,
+  );
+  cube.generateMipmaps = true;
+  cube.needsUpdate = true;
+  cube.userData.sceneTexturePath = sourcePath;
+  return cube;
+}
+
 function applySamplingToTexture(
   tex: THREE.Texture,
   slot: PbrSlotKind,
@@ -223,6 +285,13 @@ export function createDataTexture(
 ): THREE.Texture {
   if (data.kind === "compressed") {
     return createCompressedTexture(data, slot, binding, sourcePath);
+  }
+
+  if (slot === "cubeMap") {
+    const faces = copyVerticalCubeFaces(data.rgba, data.width, data.height);
+    if (faces) {
+      return createReflectionCubeTexture(faces, data.width, sourcePath);
+    }
   }
 
   const tex = new THREE.DataTexture(

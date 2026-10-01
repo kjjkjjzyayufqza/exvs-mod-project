@@ -1403,11 +1403,24 @@ export class ExvsRenderPipeline {
   }
 }
 
+function imageEdge(image: unknown): { width: number; height: number } {
+  if (Array.isArray(image)) return imageEdge(image[0]);
+  if (image !== null && typeof image === "object") {
+    const record = image as { width?: number; height?: number; image?: unknown };
+    if (record.image !== undefined && record.image !== image) {
+      const nested = imageEdge(record.image);
+      if (nested.width > 1 || nested.height > 1) return nested;
+    }
+    if (typeof record.width === "number" && typeof record.height === "number") {
+      return { width: record.width, height: record.height };
+    }
+  }
+  return { width: 1, height: 1 };
+}
+
 function mipCountOf(texture: Texture): number {
-  const image = texture.image as { width?: number; height?: number } | undefined;
   const mipmaps = (texture as unknown as { mipmaps?: unknown[] }).mipmaps;
   if (Array.isArray(mipmaps) && mipmaps.length > 0) return mipmaps.length;
-  const width = image?.width ?? 1;
-  const height = image?.height ?? 1;
+  const { width, height } = imageEdge(texture.image);
   return Math.floor(Math.log2(Math.max(width, height))) + 1;
 }

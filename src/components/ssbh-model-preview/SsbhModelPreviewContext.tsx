@@ -662,6 +662,14 @@ export function SsbhModelPreviewProvider({
   }>({ undoStack: [], redoStack: [], applyNonce: 0, applyData: null });
   const [previewRenderStyle, setPreviewRenderStyle] =
     useState<PreviewRenderStyle>(defaultPreviewRenderStyle);
+  // The prop is the editor preset (settings.json for Unit Model Editor). useState
+  // ignores it after the first mount, so a kept-alive viewport would keep drawing
+  // the "standard" pipeline while the dropdown already shows the preset.
+  useEffect(() => {
+    setPreviewRenderStyle((current) =>
+      current === defaultPreviewRenderStyle ? current : defaultPreviewRenderStyle,
+    );
+  }, [defaultPreviewRenderStyle]);
   const [recentModelPaths, setRecentModelPaths] = useState<string[]>(() =>
     readRecentModelPathsFromStorage(),
   );

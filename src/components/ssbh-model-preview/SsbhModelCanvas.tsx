@@ -642,11 +642,18 @@ function CanvasContentInvalidator({
   textureDataMap,
   drawMaterialBindingsByDrawKey,
   drawListSignature,
+  previewRenderStyle,
 }: {
   textureDataMap: ReadonlyMap<string, NutexbTextureData>;
   drawMaterialBindingsByDrawKey: ReadonlyMap<string, ResolvedMaterialBinding>;
   /** Mesh draw identity; demand frameloop does not repaint when only draws change. */
   drawListSignature: string;
+  /**
+   * EXVS2 mounts a priority-1 renderer that returns null, so a style change does
+   * not by itself invalidate a demand frameloop. Without this the preset can sit
+   * on the dropdown while the canvas keeps the previous pipeline's frame.
+   */
+  previewRenderStyle: PreviewRenderStyle;
 }) {
   const invalidate = useThree((s) => s.invalidate);
 
@@ -654,7 +661,13 @@ function CanvasContentInvalidator({
     invalidate();
     const raf = requestAnimationFrame(() => invalidate());
     return () => cancelAnimationFrame(raf);
-  }, [textureDataMap, drawMaterialBindingsByDrawKey, drawListSignature, invalidate]);
+  }, [
+    textureDataMap,
+    drawMaterialBindingsByDrawKey,
+    drawListSignature,
+    previewRenderStyle,
+    invalidate,
+  ]);
 
   return null;
 }
@@ -940,7 +953,10 @@ function DrawMeshUnifiedPbr({
         : hasEmit
         ? 1
         : 0;
-  const transparent = binding?.renderHints.isTransparent ?? hasMap;
+  // A color map is not a blend. The deferred classifier sends `transparent`
+  // materials down the forward MeshStandardMaterial path, so treating every
+  // textured draw as blended leaves EXVS2 deferred selected but unshaded.
+  const transparent = binding?.renderHints.isTransparent === true;
   const envIntensity =
     exvsActive
       ? (shaderFamily === "vsngCharaSparkle" ? 1.38 : hasCube ? 1.05 : 0)
@@ -2661,6 +2677,7 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
           textureDataMap={restSceneProps.textureDataMap}
           drawMaterialBindingsByDrawKey={restSceneProps.drawMaterialBindingsByDrawKey}
           drawListSignature={drawListSignature}
+          previewRenderStyle={restSceneProps.previewRenderStyle}
         />
         <FrameLoopResumeInvalidator suspended={previewSuspended} />
         <Scene
