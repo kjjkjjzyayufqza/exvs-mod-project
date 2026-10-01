@@ -19,7 +19,7 @@ use clap::{Parser, Subcommand};
 use exvs_gvs::inspect::inspect_path;
 use exvs_gvs::nutexb::Nutexb;
 use exvs_gvs::package;
-use exvs_gvs::ssbh_view::viewer_meshes;
+use exvs_gvs::ssbh_view::{meshes_to_obj, viewer_meshes, OBJ_HEADER};
 use exvs_ps4_common::provenance;
 use exvs_ps4_common::texture::PixelLayout;
 use serde_json::json;
@@ -179,23 +179,7 @@ fn run(cli: Cli) -> Result<serde_json::Value, String> {
             let model = numdlb.as_ref().map(read).transpose()?;
             let material = numatb.as_ref().map(read).transpose()?;
             let meshes = viewer_meshes(&mesh, model.as_deref(), material.as_deref()).map_err(String::from)?;
-            let mut obj = String::from("# Exported by EXVS Mod Project (kjjkjjzyayufqza), GVS workspace\n");
-            let mut base = 1usize;
-            for mesh in &meshes {
-                obj.push_str(&format!("o {}\n", mesh.name));
-                for vertex in mesh.positions.chunks_exact(3) {
-                    obj.push_str(&format!("v {} {} {}\n", vertex[0], vertex[1], vertex[2]));
-                }
-                for face in mesh.indices.chunks_exact(3) {
-                    obj.push_str(&format!(
-                        "f {} {} {}\n",
-                        base + face[0] as usize,
-                        base + face[1] as usize,
-                        base + face[2] as usize
-                    ));
-                }
-                base += mesh.positions.len() / 3;
-            }
+            let obj = meshes_to_obj(&meshes, OBJ_HEADER);
             std::fs::write(&output, obj).map_err(|error| error.to_string())?;
             Ok(json!({ "output": output, "objects": meshes.len() }))
         }

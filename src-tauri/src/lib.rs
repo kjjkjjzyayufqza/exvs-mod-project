@@ -376,6 +376,7 @@ pub fn run() {
             gvs::commands::gvs_texture_import,
             gvs::commands::gvs_ssbh_summary,
             gvs::commands::gvs_model_mesh,
+            gvs::commands::gvs_mesh_export_obj,
             gvs::commands::gvs_find_textures,
             gvs::commands::gvs_read_bytes,
             gvs::commands::gvs_credits

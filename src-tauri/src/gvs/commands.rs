@@ -24,7 +24,7 @@ use exvs_gvs::inspect::{inspect_path, Inspection, TextureInfo};
 use exvs_gvs::kinds::{classify, GvsKind};
 use exvs_gvs::nutexb::Nutexb;
 use exvs_gvs::package::{self, ExtractReport, GvsManifest, GvsNode, RepackReport, MANIFEST_NAME};
-use exvs_gvs::ssbh_view::{summarize, viewer_meshes, SsbhSummary};
+use exvs_gvs::ssbh_view::{meshes_to_obj, summarize, viewer_meshes, SsbhSummary, ViewerMesh, OBJ_HEADER};
 use exvs_ps4_common::cache::{file_key, ByteCache};
 use exvs_ps4_common::mesh_pack::{self, MeshInput};
 use exvs_ps4_common::provenance::{self, Provenance};
@@ -437,18 +437,22 @@ fn siblings(mesh: &Path) -> (Option<PathBuf>, Option<PathBuf>) {
     (model, material)
 }
 
+/// Viewer meshes of a numshb; the numdlb / numatb next to it bind materials.
+fn bound_meshes(mesh_path: &Path) -> Result<Vec<ViewerMesh>, String> {
+    let mesh = read(mesh_path)?;
+    let (model_path, material_path) = siblings(mesh_path);
+    let model = model_path.as_deref().map(read).transpose()?;
+    let material = material_path.as_deref().map(read).transpose()?;
+    viewer_meshes(&mesh, model.as_deref(), material.as_deref())
+        .or_else(|_| viewer_meshes(&mesh, None, None))
+        .map_err(String::from)
+}
+
 /// Viewer meshes of a numshb (siblings bind materials) as a `PSM1` payload.
 #[tauri::command]
 pub async fn gvs_model_mesh(path: String) -> Result<Response, String> {
     let bytes = blocking(move || {
-        let mesh_path = PathBuf::from(path);
-        let mesh = read(&mesh_path)?;
-        let (model_path, material_path) = siblings(&mesh_path);
-        let model = model_path.as_deref().map(read).transpose()?;
-        let material = material_path.as_deref().map(read).transpose()?;
-        let meshes = viewer_meshes(&mesh, model.as_deref(), material.as_deref())
-            .or_else(|_| viewer_meshes(&mesh, None, None))
-            .map_err(String::from)?;
+        let meshes = bound_meshes(Path::new(&path))?;
         let inputs: Vec<MeshInput<'_>> = meshes
             .iter()
             .map(|mesh| MeshInput {
@@ -465,6 +469,17 @@ pub async fn gvs_model_mesh(path: String) -> Result<Response, String> {
     })
     .await?;
     Ok(Response::new(InvokeBody::Raw(bytes)))
+}
+
+/// Export a numshb (with sibling material groups) as Wavefront OBJ.
+#[tauri::command]
+pub async fn gvs_mesh_export_obj(path: String, output: String) -> Result<String, String> {
+    blocking(move || {
+        let meshes = bound_meshes(Path::new(&path))?;
+        std::fs::write(&output, meshes_to_obj(&meshes, OBJ_HEADER)).map_err(|error| format!("{output}: {error}"))?;
+        Ok(output)
+    })
+    .await
 }
 
 /// Map texture footer names to nutexb files inside a package.

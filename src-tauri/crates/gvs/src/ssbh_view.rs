@@ -286,14 +286,102 @@ pub fn viewer_meshes(mesh: &[u8], model: Option<&[u8]>, material: Option<&[u8]>)
         .collect())
 }
 
+/// Header line written into exported OBJ files.
+pub const OBJ_HEADER: &str = "Exported by EXVS Mod Project (kjjkjjzyayufqza), GVS workspace";
+
+/// Wavefront OBJ text for viewer meshes: one object per mesh, with UVs
+/// (flipped to OBJ's bottom-left origin), normals and material groups.
+pub fn meshes_to_obj(meshes: &[ViewerMesh], header: &str) -> String {
+    use std::fmt::Write;
+
+    let mut obj = String::new();
+    let _ = writeln!(obj, "# {header}");
+    let (mut base_v, mut base_vt, mut base_vn) = (1usize, 1usize, 1usize);
+    for mesh in meshes {
+        let count = mesh.positions.len() / 3;
+        let has_uv = count > 0 && mesh.uvs.len() == count * 2;
+        let has_normal = count > 0 && mesh.normals.len() == count * 3;
+        let _ = writeln!(obj, "o {}", mesh.name);
+        if let Some(material) = &mesh.material {
+            let _ = writeln!(obj, "usemtl {material}");
+        }
+        for vertex in mesh.positions.chunks_exact(3) {
+            let _ = writeln!(obj, "v {} {} {}", vertex[0], vertex[1], vertex[2]);
+        }
+        if has_uv {
+            for uv in mesh.uvs.chunks_exact(2) {
+                let _ = writeln!(obj, "vt {} {}", uv[0], 1.0 - uv[1]);
+            }
+        }
+        if has_normal {
+            for normal in mesh.normals.chunks_exact(3) {
+                let _ = writeln!(obj, "vn {} {} {}", normal[0], normal[1], normal[2]);
+            }
+        }
+        let corner = |index: u32| {
+            let v = base_v + index as usize;
+            let vt = base_vt + index as usize;
+            let vn = base_vn + index as usize;
+            match (has_uv, has_normal) {
+                (true, true) => format!("{v}/{vt}/{vn}"),
+                (true, false) => format!("{v}/{vt}"),
+                (false, true) => format!("{v}//{vn}"),
+                (false, false) => v.to_string(),
+            }
+        };
+        for face in mesh.indices.chunks_exact(3) {
+            if face.iter().any(|index| *index as usize >= count) {
+                continue;
+            }
+            let _ = writeln!(obj, "f {} {} {}", corner(face[0]), corner(face[1]), corner(face[2]));
+        }
+        base_v += count;
+        if has_uv {
+            base_vt += count;
+        }
+        if has_normal {
+            base_vn += count;
+        }
+    }
+    obj
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn non_ssbh_bytes_report_their_kind() {
+        let empty = meshes_to_obj(&[], "header");
+        assert_eq!(empty, "# header\n");
+
         let summary = summarize(b"EFXB\0\0\0\0").unwrap();
         assert!(matches!(summary, SsbhSummary::Other { kind: GvsKind::Effect, .. }));
         assert!(viewer_meshes(b"not a mesh", None, None).is_err());
+    }
+
+    #[test]
+    fn obj_indices_track_each_attribute_stream() {
+        let with_uv = ViewerMesh {
+            name: "a".into(),
+            positions: vec![0.0; 9],
+            uvs: vec![0.0, 0.25, 1.0, 0.0, 0.0, 1.0],
+            indices: vec![0, 1, 2],
+            material: Some("mat".into()),
+            ..ViewerMesh::default()
+        };
+        let plain = ViewerMesh {
+            name: "b".into(),
+            positions: vec![0.0; 9],
+            normals: vec![0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0],
+            indices: vec![0, 1, 2, 0, 1, 7],
+            ..ViewerMesh::default()
+        };
+        let obj = meshes_to_obj(&[with_uv, plain], "test");
+        assert!(obj.contains("usemtl mat\n"));
+        assert!(obj.contains("vt 0 0.75\n"), "v is flipped for OBJ");
+        assert!(obj.contains("f 1/1 2/2 3/3\n"));
+        assert!(obj.contains("f 4//1 5//2 6//3\n"), "normals restart at 1, positions continue");
+        assert_eq!(obj.matches("\nf ").count(), 2, "out-of-range faces are skipped");
     }
 }
