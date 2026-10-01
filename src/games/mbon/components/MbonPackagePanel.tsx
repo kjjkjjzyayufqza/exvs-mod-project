@@ -19,7 +19,7 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { FilePlus, FolderOpen, Hammer, PackageOpen, ShieldCheck } from "lucide-react";
+import { FilePlus, FolderOpen, Hammer, PackageOpen, Save, ShieldCheck } from "lucide-react";
 import {
   EmptyState,
   ErrorNote,
@@ -152,6 +152,12 @@ export function MbonPackagePanel({
           >
             {tc("package.repack")}
           </HudButton>
+          <HudButton
+            icon={<Save />}
+            label={tc("package.repackAs")}
+            disabled={!data || busy !== null}
+            onClick={() => void repackAs()}
+          />
         </>
       }
       tools={
@@ -183,13 +189,6 @@ export function MbonPackagePanel({
             label={tc("package.reveal")}
             onClick={() => void openPath(packageDir)}
           />
-          <HudButton
-            variant="ghost"
-            disabled={!data || busy !== null}
-            onClick={() => void repackAs()}
-          >
-            {tc("package.repackAs")}
-          </HudButton>
         </>
       }
       footer={

@@ -158,8 +158,10 @@ export function MbonTexturePanel({ path, revision }: { path: string; revision: n
     textures.error ?? preview.error ?? (current && !current.decodable ? t("texture.notDecodable") : null);
 
   return (
-    <div className="ps4-fill flex min-h-0 flex-col">
-      <div className="min-h-0 flex-1" style={{ minHeight: 260 }}>
+    <div className="ps4-fill ps4-texture">
+      <div className="ps4-texture__grid">
+      <div className="ps4-texture__view">
+      <div className="min-h-0 flex-1">
         <ImageStage
           src={preview.data}
           alt={current ? t("texture.alt", { index: current.index }) : ""}
@@ -187,8 +189,9 @@ export function MbonTexturePanel({ path, revision }: { path: string; revision: n
           ))}
         </div>
       ) : null}
+      </div>
       {current ? (
-        <>
+        <div className="ps4-texture__side">
           <Section title={t("texture.details", { index: current.index, count: list.length })}>
             <KeyValues
               rows={[
@@ -266,8 +269,9 @@ export function MbonTexturePanel({ path, revision }: { path: string; revision: n
             </div>
             <p className="ps4-field__hint mt-1">{t("texture.importHint")}</p>
           </Section>
-        </>
+        </div>
       ) : null}
+      </div>
     </div>
   );
 }

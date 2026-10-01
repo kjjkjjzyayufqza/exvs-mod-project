@@ -24,7 +24,7 @@ import { useTranslation } from "react-i18next";
 import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
-import { Crosshair, Eye, EyeOff, FlipVertical2, Image as ImageIcon, Shapes } from "lucide-react";
+import { Crosshair, Eye, EyeOff, FlipVertical2, Image as ImageIcon, Layers, Shapes } from "lucide-react";
 import { HudButton } from "./Hud";
 import { meshStats, type Psm1Mesh } from "../psm1";
 
@@ -148,6 +148,7 @@ export default function MeshViewport({ meshes, resolveTexture }: MeshViewportPro
   const [flipV, setFlipV] = useState(false);
   const [hidden, setHidden] = useState<Set<string>>(() => new Set());
   const [fitKey, setFitKey] = useState(0);
+  const [listOpen, setListOpen] = useState(false);
 
   const built = useMemo<Built[]>(
     () => meshes.map((mesh, index) => ({ key: `${index}:${mesh.name}`, mesh, geometry: buildGeometry(mesh) })),
@@ -245,8 +246,13 @@ export default function MeshViewport({ meshes, resolveTexture }: MeshViewportPro
         >
           {t("viewer.flip")}
         </HudButton>
+        {built.length > 1 ? (
+          <HudButton icon={<Layers />} aria-pressed={listOpen} onClick={() => setListOpen((value) => !value)}>
+            {t("viewer.meshCount", { count: built.length })}
+          </HudButton>
+        ) : null}
       </div>
-      {built.length > 1 ? (
+      {built.length > 1 && listOpen ? (
         <div className="ps4-viewport__meshes" aria-label={t("viewer.meshes")}>
           <div className="flex gap-1 border-b p-1" style={{ borderColor: "var(--ps4-line)" }}>
             <HudButton variant="ghost" icon={<Eye />} onClick={() => setHidden(new Set())}>

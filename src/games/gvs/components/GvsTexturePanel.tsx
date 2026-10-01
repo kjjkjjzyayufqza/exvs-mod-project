@@ -84,8 +84,9 @@ export function GvsTexturePanel({ path, revision }: { path: string; revision: nu
   const notDecodable = texture && !texture.decodable ? t("texture.notDecodable", { swizzle: texture.swizzle }) : null;
 
   return (
-    <div className="ps4-fill flex min-h-0 flex-col">
-      <div className="min-h-0 flex-1" style={{ minHeight: 260 }}>
+    <div className="ps4-fill ps4-texture">
+      <div className="ps4-texture__grid">
+      <div className="ps4-texture__view">
         <ImageStage
           src={preview.data}
           alt={texture?.name ?? stem}
@@ -96,7 +97,7 @@ export function GvsTexturePanel({ path, revision }: { path: string; revision: nu
       </div>
       {info.error && !texture ? <ErrorNote>{info.error}</ErrorNote> : null}
       {texture ? (
-        <>
+        <div className="ps4-texture__side">
           <Section title={t("texture.details")}>
             <KeyValues
               rows={[
@@ -144,8 +145,9 @@ export function GvsTexturePanel({ path, revision }: { path: string; revision: nu
             </div>
             <p className="ps4-field__hint mt-1">{t("texture.importHint")}</p>
           </Section>
-        </>
+        </div>
       ) : null}
+      </div>
     </div>
   );
 }

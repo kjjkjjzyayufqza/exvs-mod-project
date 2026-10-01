@@ -320,7 +320,10 @@
 }
 .ps4-panel__title strong {
   color: var(--ps4-ink);
+  font-family: var(--ps4-font-mono);
   font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 .ps4-panel__count {
   padding: 0 6px;
@@ -789,7 +792,14 @@
   display: block;
   max-width: none;
 }
+.ps4-image-stage[data-fit="true"] {
+  overflow: hidden;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+}
 .ps4-image-stage[data-fit="true"] img {
+  width: auto;
+  height: auto;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
@@ -872,9 +882,9 @@
 }
 .ps4-viewport__meshes {
   position: absolute;
-  top: 8px;
+  top: 44px;
   right: 8px;
-  bottom: 34px;
+  max-height: calc(100% - 84px);
   width: 210px;
   overflow: auto;
   border: 1px solid var(--ps4-line);
@@ -902,6 +912,42 @@
   font-family: var(--ps4-font-mono);
   font-size: 11px;
   pointer-events: none;
+}
+
+/* Texture editors: stacked when narrow, preview + side column when wide. */
+.ps4-texture {
+  container-type: inline-size;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+.ps4-texture__grid {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.ps4-texture__view {
+  display: flex;
+  min-height: 260px;
+  flex: 1;
+  flex-direction: column;
+}
+.ps4-texture__side {
+  min-width: 0;
+}
+@container (min-width: 760px) {
+  .ps4-texture__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+  .ps4-texture__view {
+    min-height: 0;
+  }
+  .ps4-texture__side {
+    overflow: auto;
+    border-left: 1px solid var(--ps4-line);
+  }
 }
 
 /* ---------- data views ---------- */
@@ -987,8 +1033,10 @@
   text-align: right;
 }
 .ps4-cell-input {
-  width: 100%;
-  min-width: 7ch;
+  width: 11ch;
+  min-width: 6ch;
+  max-width: 42ch;
+  field-sizing: content;
   height: 22px;
   padding: 0 4px;
   border: 1px solid transparent;

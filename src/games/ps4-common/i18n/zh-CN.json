@@ -119,6 +119,7 @@
     "flip": "翻转 V",
     "flipHint": "贴图上下颠倒时翻转 V 坐标",
     "meshes": "网格",
+    "meshCount": "网格 {{count}}",
     "showAll": "全部",
     "hideAll": "隐藏",
     "stats": "{{meshes}} 个网格  {{vertices}} 顶点  {{triangles}} 三角形  {{textures}} 张贴图"

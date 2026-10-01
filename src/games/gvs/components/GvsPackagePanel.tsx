@@ -13,7 +13,7 @@
 import { useDeferredValue, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { ChevronRight, FilePlus, FolderOpen, FolderPlus, Hammer, PackageOpen, ShieldCheck } from "lucide-react";
+import { ChevronRight, FilePlus, FolderOpen, FolderPlus, Hammer, PackageOpen, Save, ShieldCheck } from "lucide-react";
 import { EmptyState, ErrorNote, FilterField, HudButton, HudPanel, KindChip } from "../../ps4-common/components/Hud";
 import { VirtualList } from "../../ps4-common/components/VirtualList";
 import { baseName, formatBytes, shortDigest } from "../../ps4-common/format";
@@ -142,6 +142,12 @@ export function GvsPackagePanel({
           >
             {tc("package.repack")}
           </HudButton>
+          <HudButton
+            icon={<Save />}
+            label={tc("package.repackAs")}
+            disabled={!data || busy !== null}
+            onClick={() => void repackAs()}
+          />
         </>
       }
       tools={
@@ -167,9 +173,6 @@ export function GvsPackagePanel({
             {t("package.addFolder")}
           </HudButton>
           <HudButton icon={<FolderOpen />} label={tc("package.reveal")} onClick={() => void openPath(packageDir)} />
-          <HudButton variant="ghost" disabled={!data || busy !== null} onClick={() => void repackAs()}>
-            {tc("package.repackAs")}
-          </HudButton>
         </>
       }
       footer={

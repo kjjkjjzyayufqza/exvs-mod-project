@@ -119,6 +119,7 @@
     "flip": "Flip V",
     "flipHint": "Flip texture V coordinates if textures look upside down",
     "meshes": "Meshes",
+    "meshCount": "Meshes {{count}}",
     "showAll": "All",
     "hideAll": "None",
     "stats": "{{meshes}} meshes  {{vertices}} verts  {{triangles}} tris  {{textures}} textures"
