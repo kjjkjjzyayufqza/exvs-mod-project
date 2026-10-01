@@ -52,10 +52,13 @@ export function createWorkspaceStore<S>(game: GameId) {
     sourceRoot: `${game}.sourceRoot`,
     packageDir: `${game}.packageDir`,
   };
-  return create<WorkspaceStore<S>>((set) => ({
+  const initial = {
     workspace: readSettingMirror(keys.workspace),
     sourceRoot: readSettingMirror(keys.sourceRoot),
     packageDir: readSettingMirror(keys.packageDir) || null,
+  };
+  return create<WorkspaceStore<S>>((set) => ({
+    ...initial,
     selection: null,
     packageRevision: 0,
     fileRevisions: {},
@@ -66,7 +69,12 @@ export function createWorkspaceStore<S>(game: GameId) {
         readSetting(keys.sourceRoot),
         readSetting(keys.packageDir),
       ]);
-      set({ workspace, sourceRoot, packageDir: packageDir || null });
+      // Only fill values the user has not changed while the store was loading.
+      set((state) => ({
+        workspace: state.workspace === initial.workspace ? workspace : state.workspace,
+        sourceRoot: state.sourceRoot === initial.sourceRoot ? sourceRoot : state.sourceRoot,
+        packageDir: state.packageDir === initial.packageDir ? packageDir || null : state.packageDir,
+      }));
     },
     setWorkspace: (workspace) => {
       set({ workspace, packageDir: null, selection: null, verify: null });

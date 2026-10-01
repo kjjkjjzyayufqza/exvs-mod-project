@@ -11,7 +11,7 @@
 // Pesquisa MBON: toda vinda do BoostStudio de descatal
 //   (https://github.com/descatal/BoostStudio).
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { FilePlus, FolderSearch } from "lucide-react";
@@ -48,6 +48,7 @@ export function MbonAddEntryDialog({
   const [file, setFile] = useState("");
   const [loadType, setLoadType] = useState("auto");
   const [busy, setBusy] = useState(false);
+  const fieldId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -106,9 +107,17 @@ export function MbonAddEntryDialog({
               </HudButton>
             </div>
           </div>
-          <label className="ps4-field">
-            <span className="ps4-field__label">{t("add.loadType")}</span>
-            <select className="ps4-select" value={loadType} onChange={(event) => setLoadType(event.target.value)}>
+          <div className="ps4-field">
+            <label className="ps4-field__label" htmlFor={`${fieldId}-load`}>
+              {t("add.loadType")}
+            </label>
+            <select
+              id={`${fieldId}-load`}
+              className="ps4-select"
+              value={loadType}
+              aria-describedby={`${fieldId}-load-hint`}
+              onChange={(event) => setLoadType(event.target.value)}
+            >
               <option value="auto">{t("add.loadTypeAuto")}</option>
               {LOAD_TYPES.filter((type) => type.value !== 3).map((type) => (
                 <option key={type.value} value={String(type.value)}>
@@ -116,8 +125,10 @@ export function MbonAddEntryDialog({
                 </option>
               ))}
             </select>
-            <span className="ps4-field__hint">{t("add.loadTypeHint")}</span>
-          </label>
+            <span className="ps4-field__hint" id={`${fieldId}-load-hint`}>
+              {t("add.loadTypeHint")}
+            </span>
+          </div>
         </div>
         <DialogFooter>
           <HudButton onClick={() => onOpenChange(false)}>{tc("cancel")}</HudButton>

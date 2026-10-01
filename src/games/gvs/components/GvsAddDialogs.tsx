@@ -13,7 +13,7 @@
  * ................................................
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { FilePlus, FolderPlus, FolderSearch } from "lucide-react";
@@ -78,6 +78,7 @@ export function GvsAddFileDialog({
   const [file, setFile] = useState("");
   const [typeId, setTypeId] = useState("auto");
   const [busy, setBusy] = useState(false);
+  const fieldId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -127,9 +128,17 @@ export function GvsAddFileDialog({
               </HudButton>
             </div>
           </div>
-          <label className="ps4-field">
-            <span className="ps4-field__label">{t("add.typeId")}</span>
-            <select className="ps4-select" value={typeId} onChange={(event) => setTypeId(event.target.value)}>
+          <div className="ps4-field">
+            <label className="ps4-field__label" htmlFor={`${fieldId}-type`}>
+              {t("add.typeId")}
+            </label>
+            <select
+              id={`${fieldId}-type`}
+              className="ps4-select"
+              value={typeId}
+              aria-describedby={`${fieldId}-type-hint`}
+              onChange={(event) => setTypeId(event.target.value)}
+            >
               <option value="auto">{t("add.typeAuto")}</option>
               {typeOrder.map((type) => (
                 <option key={type} value={String(type)}>
@@ -137,8 +146,10 @@ export function GvsAddFileDialog({
                 </option>
               ))}
             </select>
-            <span className="ps4-field__hint">{t("add.typeHint")}</span>
-          </label>
+            <span className="ps4-field__hint" id={`${fieldId}-type-hint`}>
+              {t("add.typeHint")}
+            </span>
+          </div>
         </div>
         <DialogFooter>
           <HudButton onClick={() => onOpenChange(false)}>{tc("cancel")}</HudButton>
@@ -174,6 +185,7 @@ export function GvsAddFolderDialog({
   const [parent, setParent] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const fieldId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -204,20 +216,26 @@ export function GvsAddFolderDialog({
         </DialogHeader>
         <div className="ps4-dialog__body">
           <FolderSelect folders={folders} value={parent} onChange={setParent} label={t("folder.parent")} />
-          <label className="ps4-field">
-            <span className="ps4-field__label">{t("folder.name")}</span>
+          <div className="ps4-field">
+            <label className="ps4-field__label" htmlFor={`${fieldId}-name`}>
+              {t("folder.name")}
+            </label>
             <input
+              id={`${fieldId}-name`}
               className="ps4-input"
               value={name}
               aria-invalid={!!name && !valid}
+              aria-describedby={`${fieldId}-hint`}
               spellCheck={false}
               onChange={(event) => setName(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && valid) void submit();
               }}
             />
-            <span className="ps4-field__hint">{t("folder.nameHint")}</span>
-          </label>
+            <span className="ps4-field__hint" id={`${fieldId}-hint`}>
+              {t("folder.nameHint")}
+            </span>
+          </div>
         </div>
         <DialogFooter>
           <HudButton onClick={() => onOpenChange(false)}>{tc("cancel")}</HudButton>
