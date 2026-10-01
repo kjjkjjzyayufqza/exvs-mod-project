@@ -116,7 +116,7 @@ export function MbonPackagePanel({
 
   if (!packageDir) {
     return (
-      <HudPanel title={tc("package.title")} enterIndex={2}>
+      <HudPanel title={tc("package.title")}>
         <EmptyState icon={<PackageOpen />} title={tc("package.none")} body={tc("package.noneBody")} />
       </HudPanel>
     );
@@ -135,7 +135,6 @@ export function MbonPackagePanel({
       }
       count={data ? entries.length : undefined}
       busy={view.loading || busy !== null}
-      enterIndex={2}
       actions={
         <>
           <HudButton

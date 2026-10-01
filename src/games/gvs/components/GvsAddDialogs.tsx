@@ -112,7 +112,7 @@ export function GvsAddFileDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="ps4-ws ps4-dialog" data-game="gvs">
         <DialogHeader>
-          <DialogTitle className="ps4-display uppercase tracking-wider">{t("add.title")}</DialogTitle>
+          <DialogTitle className="ps4-dialog__title">{t("add.title")}</DialogTitle>
           <DialogDescription>{t("add.description")}</DialogDescription>
         </DialogHeader>
         <div className="ps4-dialog__body">
@@ -211,7 +211,7 @@ export function GvsAddFolderDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="ps4-ws ps4-dialog" data-game="gvs">
         <DialogHeader>
-          <DialogTitle className="ps4-display uppercase tracking-wider">{t("folder.title")}</DialogTitle>
+          <DialogTitle className="ps4-dialog__title">{t("folder.title")}</DialogTitle>
           <DialogDescription>{t("folder.description")}</DialogDescription>
         </DialogHeader>
         <div className="ps4-dialog__body">

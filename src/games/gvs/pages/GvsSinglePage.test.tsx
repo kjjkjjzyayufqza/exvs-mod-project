@@ -127,7 +127,8 @@ describe("GVS Single FHM2D page", () => {
     await renderPage();
     expect(await screen.findByText("Single FHM2D")).toBeInTheDocument();
     expect(await screen.findByDisplayValue("002chara/701gundam_007acguy0_001")).toBeInTheDocument();
-    expect(await screen.findByText(/model\.numdlb · type 0F/)).toBeInTheDocument();
+    expect(await screen.findByText("model.numdlb")).toBeInTheDocument();
+    expect(screen.getByText("type 0F")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Unpack" }));
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith("gvs_extract", {

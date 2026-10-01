@@ -48,7 +48,7 @@ export function ConfirmDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="ps4-ws ps4-dialog" data-game={game}>
         <AlertDialogHeader>
-          <AlertDialogTitle className="ps4-display uppercase tracking-wider">{title}</AlertDialogTitle>
+          <AlertDialogTitle className="ps4-dialog__title">{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

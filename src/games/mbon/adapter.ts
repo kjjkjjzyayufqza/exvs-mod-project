@@ -40,7 +40,7 @@ function previewOf(inspection: MbonInspection, t: TFunction): ArchivePreview {
         members: (inspection.files ?? []).map((file) => ({
           index: file.index,
           label: mbonShort(file.kind),
-          detail: `type ${hex(file.typeId, 2)} · ${formatBytes(file.size)} · ${file.magic}`,
+          cells: [`type ${hex(file.typeId, 2)}`, formatBytes(file.size), file.magic],
           tone: mbonTone(file.kind),
         })),
       };
@@ -56,7 +56,7 @@ function previewOf(inspection: MbonInspection, t: TFunction): ArchivePreview {
         members: inspection.entries.map((entry, index) => ({
           index,
           label: entry.nested ? "FHM" : `L${entry.loadType}`,
-          detail: `${entry.path.map((part) => part + 1).join(".")} · ${entry.nested ? "" : `${entry.magic} · ${formatBytes(entry.size)}`}`,
+          cells: [entry.path.map((part) => part + 1).join("."), entry.nested ? "" : entry.magic, entry.nested ? "" : formatBytes(entry.size)],
           tone: entry.nested ? "archive" : entry.loadType === 1 ? "texture" : entry.loadType === 2 ? "model" : "data",
         })),
       };
@@ -69,7 +69,7 @@ function previewOf(inspection: MbonInspection, t: TFunction): ArchivePreview {
         members: inspection.textures.map((texture) => ({
           index: texture.index,
           label: texture.formatLabel,
-          detail: `${texture.width}x${texture.height} · GIDX ${hex(texture.textureId)}`,
+          cells: [`${texture.width}x${texture.height}`, `GIDX ${hex(texture.textureId)}`],
           tone: "texture",
         })),
       };

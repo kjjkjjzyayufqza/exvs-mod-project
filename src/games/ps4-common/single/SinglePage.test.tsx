@@ -48,7 +48,7 @@ function renderPage(overrides = {}) {
       container: true,
       fileCount: 1,
       facts: [["Archive kind", "7"]] as const,
-      members: [{ index: 0, label: "FHM", detail: "type 00 · 289.8 KiB · FHM ", tone: "archive" as const }],
+      members: [{ index: 0, label: "FHM", cells: ["type 00", "289.8 KiB", "FHM"], tone: "archive" as const }],
     })),
     repackTargets: vi.fn(async () => ({
       hashName: "EB3A9691",
@@ -95,7 +95,8 @@ describe("single unpack / repack page", () => {
     const { adapter, openInWorkspace } = renderPage();
     expect(await screen.findByDisplayValue("common/list_info")).toBeInTheDocument();
     expect(screen.getByText("Named archive: List Info -> common/list_info")).toBeInTheDocument();
-    expect(await screen.findByText("type 00 · 289.8 KiB · FHM")).toBeInTheDocument();
+    expect(await screen.findByText("289.8 KiB")).toBeInTheDocument();
+    expect(screen.getByText("type 00")).toBeInTheDocument();
     expect(screen.getByText(`${WORKSPACE}/common/list_info`)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Unpack" }));

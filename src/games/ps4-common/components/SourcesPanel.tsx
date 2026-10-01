@@ -211,7 +211,6 @@ export function SourcesPanel({
         title={tc("sources.title")}
         count={packages.data ? visiblePackages.length : undefined}
         busy={packages.loading}
-        enterIndex={1}
         tabs={tabs}
         actions={
           <>
@@ -276,43 +275,42 @@ export function SourcesPanel({
                   title={tc("sources.noPackages")}
                   body={tc("sources.noPackagesBody")}
                   action={
-                    <div className="flex flex-wrap justify-center gap-2">
+                    <>
                       <HudButton variant="primary" icon={<Database />} onClick={onOpenInit}>
                         {tc("init.open")}
                       </HudButton>
                       <HudButton icon={<ScanSearch />} onClick={() => setTab("files")}>
                         {tc("tabs.gameFiles")}
                       </HudButton>
-                    </div>
+                    </>
                   }
                 />
               )
             }
             renderRow={(item) => {
               const state = status.get(item.dir);
+              const note = state?.error
+                ? state.error
+                : state?.dirty
+                  ? tc("sources.changed", { count: state.changeCount })
+                  : state?.hasBaseline
+                    ? tc("sources.clean")
+                    : tc("sources.untracked");
+              // Only states that need attention get a mark: pending edits and errors.
               return (
                 <>
                   <span
-                    className="ps4-lamp"
-                    data-state={state?.dirty ? "warn" : state?.hasBaseline ? "ok" : undefined}
-                    title={
-                      state?.dirty
-                        ? tc("sources.changed", { count: state.changeCount })
-                        : state?.hasBaseline
-                          ? tc("sources.clean")
-                          : tc("sources.untracked")
-                    }
-                    aria-hidden="true"
-                  />
-                  <span
                     className="ps4-row__name ps4-mono"
-                    title={[item.title, item.relative, item.sourceName, item.detail].filter(Boolean).join("\n")}
+                    title={[item.title, item.relative, item.sourceName, item.detail, note].filter(Boolean).join("\n")}
                   >
                     {item.relative}
                   </span>
-                  <KindChip tone={item.tone} title={item.detail}>
-                    {item.chip}
-                  </KindChip>
+                  {state?.error ? <span className="ps4-lamp" data-state="bad" title={note} /> : null}
+                  {state?.dirty ? (
+                    <KindChip tone="warn" title={note}>
+                      {state.changeCount}
+                    </KindChip>
+                  ) : null}
                 </>
               );
             }}
@@ -328,7 +326,6 @@ export function SourcesPanel({
       title={tc("sources.gameTitle")}
       count={scan ? visibleFiles.length : undefined}
       busy={scanning || extracting}
-      enterIndex={1}
       tabs={tabs}
       actions={<HudButton icon={<Database />} label={tc("init.open")} onClick={onOpenInit} />}
       tools={
@@ -428,17 +425,14 @@ export function SourcesPanel({
           renderRow={(entry) => (
             <>
               <span
-                className="ps4-lamp"
-                data-state={extractedHashes.has(entry.stem.toUpperCase()) ? "ok" : undefined}
-                title={extractedHashes.has(entry.stem.toUpperCase()) ? tc("sources.alreadyExtracted") : undefined}
-                aria-hidden="true"
-              />
-              <span
                 className="ps4-row__name ps4-mono"
                 title={entry.error ?? [entry.title, entry.relativePath, entry.label].filter(Boolean).join("\n")}
               >
                 {entry.named ?? entry.relativePath}
               </span>
+              {extractedHashes.has(entry.stem.toUpperCase()) ? (
+                <span className="ps4-lamp" data-state="ok" title={tc("sources.alreadyExtracted")} />
+              ) : null}
               <KindChip tone={entry.tone} title={entry.label}>
                 {entry.short}
               </KindChip>

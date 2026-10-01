@@ -31,7 +31,8 @@ function clock(at: number): string {
 export function StatusBar({ game, children }: { game: GameId; children?: ReactNode }) {
   const { t } = useTranslation("ps4-workspace");
   const last = useActivityStore(latestActivity(game));
-  const state = last ? (last.state === "busy" ? "busy" : last.state === "ok" ? "ok" : "bad") : undefined;
+  // A finished, successful operation needs no mark; running and failed ones do.
+  const state = last?.state === "busy" ? "busy" : last && last.state !== "ok" ? "bad" : undefined;
   return (
     <>
       <div className="ps4-status__seg" data-grow="true" role="status" aria-live="polite">

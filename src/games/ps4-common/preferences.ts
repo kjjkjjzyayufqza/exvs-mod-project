@@ -30,7 +30,7 @@ export const SIDEBAR_MODES = ["grouped", "switcher", "flat", "obOnly"] as const;
 export const WORKSPACE_LAYOUTS = ["three", "focus", "stacked"] as const;
 export const INSPECTOR_LAYOUTS = ["auto", "stacked", "split"] as const;
 export const DENSITIES = ["compact", "comfortable"] as const;
-export const VISUAL_STYLES = ["hud", "clean", "contrast"] as const;
+export const VISUAL_STYLES = ["standard", "contrast"] as const;
 export const SIDEBAR_GAMES = ["ob", "mbon", "gvs"] as const;
 
 export type SidebarMode = (typeof SIDEBAR_MODES)[number];
@@ -58,7 +58,7 @@ export const DEFAULT_PREFERENCES: Ps4Preferences = {
   workspaceLayout: "three",
   inspectorLayout: "auto",
   density: "compact",
-  visualStyle: "hud",
+  visualStyle: "standard",
   sidebarGame: "ob",
 };
 

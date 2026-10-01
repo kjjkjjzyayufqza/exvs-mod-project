@@ -191,13 +191,9 @@
       }
     },
     "visualStyle": {
-      "hud": {
-        "title": "Hangar HUD",
-        "description": "Corner brackets, grid backdrop, condensed labels."
-      },
-      "clean": {
-        "title": "Clean",
-        "description": "Rounded panels without decoration."
+      "standard": {
+        "title": "Standard",
+        "description": "Rounded cards, soft depth, one accent color per game."
       },
       "contrast": {
         "title": "High contrast",
@@ -251,7 +247,6 @@
     "sourceRootPlaceholder": "Choose the game root (with archives) or its archives folder",
     "sourceRootDialog": "Choose the game folder",
     "workspace": "Workspace folder",
-    "layoutNote": "Packages are written to <workspace>/<route>/<name>. Archives are looked up as archives/XX/HASH.bin.",
     "available": "{{available}} / {{total}} available",
     "extractedCount": "Extracted: {{count}}",
     "state": {

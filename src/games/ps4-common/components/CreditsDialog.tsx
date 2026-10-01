@@ -63,7 +63,7 @@ export function CreditsDialog({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="ps4-ws ps4-dialog max-w-xl" data-game={game}>
           <DialogHeader>
-            <DialogTitle className="ps4-display uppercase tracking-wider">{t("credits.title")}</DialogTitle>
+            <DialogTitle className="ps4-dialog__title">{t("credits.title")}</DialogTitle>
             <DialogDescription>{t("credits.description")}</DialogDescription>
           </DialogHeader>
           <div className="ps4-dialog__body">

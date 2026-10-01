@@ -15,7 +15,7 @@
 // ================================================
 //
 
-import { ArrowRight } from "lucide-react";
+import { CornerDownRight } from "lucide-react";
 
 /** Source → destination strip, so the effect of the action is visible up front. */
 export function FlowStrip({ from, to, empty }: { from: string | null; to: string | null; empty: string }) {
@@ -24,7 +24,7 @@ export function FlowStrip({ from, to, empty }: { from: string | null; to: string
       <bdi className="ps4-flow__end" data-empty={!from}>
         {from ?? empty}
       </bdi>
-      <ArrowRight aria-hidden="true" />
+      <CornerDownRight aria-hidden="true" />
       <bdi className="ps4-flow__end" data-empty={!to}>
         {to ?? empty}
       </bdi>

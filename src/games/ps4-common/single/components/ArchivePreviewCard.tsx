@@ -42,15 +42,23 @@ export function ArchivePreviewCard({ preview }: { preview: AsyncState<ArchivePre
       {data.facts.length ? <KeyValues rows={data.facts} /> : null}
       {data.members.length ? (
         <Section title={t("single.previewMembers")}>
-          <ol className="ps4-members">
-            {data.members.slice(0, MEMBER_LIMIT).map((member) => (
-              <li key={member.index}>
-                <span className="ps4-row__index">{member.index}</span>
-                <KindChip tone={member.tone}>{member.label}</KindChip>
-                <span className="ps4-mono ps4-dim ps4-truncate">{member.detail}</span>
-              </li>
-            ))}
-          </ol>
+          <table className="ps4-members">
+            <tbody>
+              {data.members.slice(0, MEMBER_LIMIT).map((member) => (
+                <tr key={member.index}>
+                  <td className="ps4-members__index">{member.index}</td>
+                  <td>
+                    <KindChip tone={member.tone}>{member.label}</KindChip>
+                  </td>
+                  {member.cells.map((cell, column) => (
+                    <td key={column} className={column === 0 ? "ps4-members__cell ps4-members__lead" : "ps4-members__cell"}>
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
           {hidden ? <span className="ps4-field__hint">{t("single.previewMore", { count: hidden })}</span> : null}
         </Section>
       ) : null}

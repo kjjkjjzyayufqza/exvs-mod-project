@@ -102,7 +102,8 @@ describe("MBON Single FHM page", () => {
     expect(await screen.findByText("Single FHM")).toBeInTheDocument();
     expect(await screen.findByDisplayValue("common/list_info")).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledWith("mbon_suggest_name", { source: SOURCE });
-    expect(await screen.findByText(/type 00 · 290 KiB · FHM/)).toBeInTheDocument();
+    expect(await screen.findByText("290 KiB")).toBeInTheDocument();
+    expect(screen.getByText("type 00")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Unpack" }));
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith("mbon_extract", {

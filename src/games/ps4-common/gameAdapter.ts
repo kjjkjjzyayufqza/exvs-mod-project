@@ -58,7 +58,8 @@ export interface ArchivePreview {
   container: boolean;
   fileCount: number;
   facts: ReadonlyArray<readonly [string, string]>;
-  members: ReadonlyArray<{ index: number; label: string; detail: string; tone: KindTone }>;
+  /** One row per member: kind chip, then columns such as name, type and size. */
+  members: ReadonlyArray<{ index: number; label: string; cells: readonly string[]; tone: KindTone }>;
 }
 
 export interface PackageSummary {

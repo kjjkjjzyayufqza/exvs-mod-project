@@ -99,6 +99,22 @@ CLI smoke test on a sample tree under `tmp/mbon_gvs/cli-smoke`. `cargo check
 59 tests green. Harness screenshots (`tmp/ui-harness/shots`) checked in zh-CN
 dark and en-US light.
 
+## Session 3: hardening and modern UI (done)
+
+* Release builds never embed a GitHub token (`read_updater_github_token` is
+  runtime only; the CI fallback passes none). The app crate is
+  `publish = false`.
+* PS4 archive index rejects counts that do not fit the metadata, overflowing
+  body ranges, folder nesting deeper than 64 and reads past the file end
+  (tests in `exvs_ps4_common::archive`). Repack targets sanitize the manifest
+  name; baselines ignore manifest paths that leave the package.
+* Name tables carry a credit header compiled into the app; the two MBON / GVS
+  Python tools are stamped too (136 files).
+* UI: one `standard` visual style (cards on a canvas, 10/7/5px radius scale,
+  segmented tabs, filled fields, soft state badges, sticky group headers,
+  radio cards, member tables) plus `contrast`. Kind chips are neutral; colour
+  and dots only mark state. No staggered entrance. Masthead credits unchanged.
+
 ## Settled findings (do not rediscover)
 
 - MBON PS4 and GVS reuse the VS2-era path hashes for shared global tables

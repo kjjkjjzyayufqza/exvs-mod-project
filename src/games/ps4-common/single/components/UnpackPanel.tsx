@@ -129,7 +129,6 @@ export function UnpackPanel({ adapter, workspace, onOpenInWorkspace }: UnpackPan
       <HudPanel
         title={t("single.tabs.unpack")}
         busy={busy}
-        enterIndex={1}
         actions={
           <HudButton variant="primary" icon={<PackageOpen />} busy={busy} disabled={!!blocked} onClick={() => void unpack()}>
             {t("single.unpack")}
@@ -211,7 +210,7 @@ export function UnpackPanel({ adapter, workspace, onOpenInWorkspace }: UnpackPan
           ) : null}
         </div>
       </HudPanel>
-      <HudPanel title={t("single.preview")} enterIndex={2} busy={preview.loading}>
+      <HudPanel title={t("single.preview")} busy={preview.loading}>
         <div className="ps4-single__form">
           {suggestion ? (
             <Section title={t("single.naming")}>

@@ -54,15 +54,16 @@ export function Ps4Shell({ game, code, platform, title, credit, tools, status, c
     >
       <header className="ps4-masthead">
         <div className="ps4-masthead__mark" aria-hidden="true">
-          <span className="ps4-masthead__code">{code}</span>
-          <span className="ps4-masthead__platform">{platform}</span>
+          {code}
         </div>
         <div className="ps4-masthead__text">
-          <h1 className="ps4-masthead__title">{title}</h1>
+          <div className="ps4-masthead__line">
+            <h1 className="ps4-masthead__title">{title}</h1>
+            <span className="ps4-masthead__platform">{platform}</span>
+          </div>
           <p className="ps4-masthead__credit">{credit}</p>
         </div>
         <div className="ps4-masthead__tools">{tools}</div>
-        <div className="ps4-masthead__stripe" aria-hidden="true" />
       </header>
       <div className="ps4-stage">{children}</div>
       <footer className="ps4-status">{status}</footer>

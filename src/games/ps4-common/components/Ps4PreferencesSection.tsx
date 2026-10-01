@@ -102,14 +102,8 @@ const LAYOUT_PREVIEWS: Record<(typeof WORKSPACE_LAYOUTS)[number], ReactNode> = {
 };
 
 const STYLE_PREVIEWS: Record<(typeof VISUAL_STYLES)[number], ReactNode> = {
-  hud: (
-    <div className="relative m-1 h-[calc(100%-8px)] w-[calc(100%-8px)] border border-current/40">
-      <span className="absolute -left-px -top-px h-2 w-2 border-l-2 border-t-2 border-primary" />
-      <span className="absolute -bottom-px -right-px h-2 w-2 border-b-2 border-r-2 border-primary" />
-    </div>
-  ),
-  clean: <div className="m-1 h-[calc(100%-8px)] w-[calc(100%-8px)] rounded-md border border-current/30 shadow-sm" />,
-  contrast: <div className="m-1 h-[calc(100%-8px)] w-[calc(100%-8px)] border-2 border-current" />,
+  standard: <div className="m-1 h-[calc(100%-8px)] w-[calc(100%-8px)] rounded-md border border-current/30 shadow-sm" />,
+  contrast: <div className="m-1 h-[calc(100%-8px)] w-[calc(100%-8px)] rounded-md border-2 border-current" />,
 };
 
 function OptionCards<T extends string>({

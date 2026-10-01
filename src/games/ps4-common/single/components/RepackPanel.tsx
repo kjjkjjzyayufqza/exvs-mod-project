@@ -144,7 +144,6 @@ export function RepackPanel({ adapter, workspace, modRoot, setModRoot }: RepackP
       <HudPanel
         title={t("single.tabs.repack")}
         busy={busy !== null}
-        enterIndex={1}
         actions={
           <>
             <HudButton
@@ -235,7 +234,7 @@ export function RepackPanel({ adapter, workspace, modRoot, setModRoot }: RepackP
           ) : null}
         </div>
       </HudPanel>
-      <HudPanel title={t("single.packageInfo")} enterIndex={2} busy={summary.loading || status.loading}>
+      <HudPanel title={t("single.packageInfo")} busy={summary.loading || status.loading}>
         <div className="ps4-single__form">
           {summary.data ? (
             <KeyValues

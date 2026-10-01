@@ -38,7 +38,7 @@ function previewOf(inspection: GvsInspection, t: TFunction): ArchivePreview {
         members: inspection.members.map((member) => ({
           index: member.index,
           label: gvsShort(member.kind),
-          detail: `${member.name ?? `${member.index}.${member.extension}`} · type ${hex(member.typeId, 2)} · ${formatBytes(member.size)}`,
+          cells: [member.name ?? `${member.index}.${member.extension}`, `type ${hex(member.typeId, 2)}`, formatBytes(member.size)],
           tone: gvsTone(member.kind),
         })),
       };

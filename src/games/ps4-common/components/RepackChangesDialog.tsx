@@ -147,7 +147,6 @@ export function RepackChangesDialog({
         disabled={busy}
         onChange={() => toggle(entry.dir)}
       />
-      <span className="ps4-lamp" data-state={tracked ? "warn" : undefined} aria-hidden="true" />
       <div className="ps4-catalog__text">
         <div className="ps4-catalog__title">
           <span className="ps4-truncate ps4-mono">{entry.relative}</span>
@@ -164,7 +163,7 @@ export function RepackChangesDialog({
     <Dialog open={open} onOpenChange={(value) => !busy && onOpenChange(value)}>
       <DialogContent className="ps4-ws ps4-dialog ps4-init max-w-3xl" data-game={game}>
         <DialogHeader>
-          <DialogTitle className="ps4-display uppercase tracking-wider">{t("changes.title")}</DialogTitle>
+          <DialogTitle className="ps4-dialog__title">{t("changes.title")}</DialogTitle>
           <DialogDescription>{t("changes.description")}</DialogDescription>
         </DialogHeader>
         <div className="ps4-dialog__body">
@@ -184,19 +183,25 @@ export function RepackChangesDialog({
               {t("changes.unreadable", { count: failed.length })}
             </div>
           ) : null}
-          <div className="ps4-catalog" role="list" aria-label={t("changes.listLabel")}>
+          <div className="ps4-catalog" role="group" aria-label={t("changes.listLabel")}>
             {status.loading && !status.data ? (
               <EmptyState icon={<PackageCheck />} title={t("loading")} />
             ) : !dirty.length && !untracked.length ? (
               <EmptyState icon={<PackageCheck />} title={t("changes.empty")} body={t("changes.emptyBody")} />
             ) : (
               <>
-                {dirty.length ? <div className="ps4-catalog__group">{t("changes.changed", { count: dirty.length })}</div> : null}
-                {dirty.map((entry) => row(entry, true))}
-                {untracked.length ? (
-                  <div className="ps4-catalog__group">{t("changes.untracked", { count: untracked.length })}</div>
+                {dirty.length ? (
+                  <section aria-label={t("changes.changed", { count: dirty.length })}>
+                    <h3 className="ps4-catalog__group">{t("changes.changed", { count: dirty.length })}</h3>
+                    {dirty.map((entry) => row(entry, true))}
+                  </section>
                 ) : null}
-                {untracked.map((entry) => row(entry, false))}
+                {untracked.length ? (
+                  <section aria-label={t("changes.untracked", { count: untracked.length })}>
+                    <h3 className="ps4-catalog__group">{t("changes.untracked", { count: untracked.length })}</h3>
+                    {untracked.map((entry) => row(entry, false))}
+                  </section>
+                ) : null}
               </>
             )}
           </div>

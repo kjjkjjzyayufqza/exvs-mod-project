@@ -15,7 +15,7 @@
 //   https://github.com/kjjkjjzyayufqza/exvs-mod-project
 // ------------------------------------------------
 
-import { forwardRef, useId, type ButtonHTMLAttributes, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { forwardRef, useId, type ButtonHTMLAttributes, type KeyboardEvent, type ReactNode } from "react";
 import { LoaderCircle, Search } from "lucide-react";
 import type { KindTone } from "../types";
 
@@ -63,17 +63,12 @@ export interface HudPanelProps {
   footer?: ReactNode;
   busy?: boolean;
   children: ReactNode;
-  enterIndex?: number;
 }
 
-export function enterDelay(index: number): CSSProperties {
-  return { ["--i" as string]: index } as CSSProperties;
-}
-
-export function HudPanel({ title, count, actions, tabs, tools, footer, busy, children, enterIndex = 0 }: HudPanelProps) {
+export function HudPanel({ title, count, actions, tabs, tools, footer, busy, children }: HudPanelProps) {
   const titleId = useId();
   return (
-    <section className="ps4-panel ps4-enter" style={enterDelay(enterIndex)} aria-labelledby={titleId}>
+    <section className="ps4-panel" aria-labelledby={titleId}>
       {busy ? <div className="ps4-busy-bar" aria-hidden="true" /> : null}
       <header className="ps4-panel__head">
         <h2 className="ps4-panel__title" id={titleId}>
@@ -195,12 +190,12 @@ export function EmptyState({
 }) {
   return (
     <div className="ps4-empty">
-      <div className="ps4-empty__glyph" aria-hidden="true">
+      <div className="ps4-empty__icon" aria-hidden="true">
         {icon}
       </div>
       <div className="ps4-empty__title">{title}</div>
       {body ? <div className="ps4-empty__body">{body}</div> : null}
-      {action}
+      {action ? <div className="ps4-empty__action">{action}</div> : null}
     </div>
   );
 }

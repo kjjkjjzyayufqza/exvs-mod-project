@@ -190,13 +190,119 @@ export function InitDialog({
     });
 
   const allSelected = selectable.length > 0 && selectable.every((item) => selected.has(item.hash));
+  // Sorted by group with every group shown: one section per group under a sticky header.
+  const grouped = sort === "group" && group === "all";
+  const sections = useMemo(() => {
+    if (!grouped) return [{ id: "", items: visible }];
+    const out: { id: string; items: InitItem[] }[] = [];
+    for (const item of visible) {
+      const last = out[out.length - 1];
+      if (last && last.id === item.group) last.items.push(item);
+      else out.push({ id: item.group, items: [item] });
+    }
+    return out;
+  }, [visible, grouped]);
+
+  const renderItem = (item: InitItem) => {
+    const missing = !item.sourcePath;
+    const extracted = item.packages.length > 0;
+    const isOpen = expanded === item.hash;
+    const ago = agoLabel(item.hash);
+    const outputPath = workspace ? joinPath(workspace, item.relativeDir) : item.relativeDir;
+    return (
+      <div
+        key={item.hash}
+        className="ps4-catalog__item"
+        role="listitem"
+        data-missing={missing ? "true" : undefined}
+        data-active={running?.hash === item.hash ? "true" : undefined}
+      >
+        <div className="ps4-catalog__row">
+          {batch ? (
+            <input
+              type="checkbox"
+              className="ps4-catalog__check"
+              aria-label={t("init.select", { name: item.title })}
+              checked={selected.has(item.hash)}
+              disabled={missing || busy}
+              onChange={() => toggle(item.hash)}
+            />
+          ) : null}
+          <div className="ps4-catalog__text">
+            <div className="ps4-catalog__title">
+              <span className="ps4-truncate">{item.title}</span>
+              {!grouped ? <KindChip tone="data">{groupLabel(item.group)}</KindChip> : null}
+              {missing ? <KindChip tone="bad">{t("init.missing")}</KindChip> : null}
+              {extracted ? <KindChip tone="ok">{t("init.extracted")}</KindChip> : null}
+            </div>
+            <div className="ps4-catalog__sub ps4-mono" title={outputPath}>
+              <span>{item.hash}</span>
+              <span aria-hidden="true">→</span>
+              <span className="ps4-truncate">{item.relativeDir}</span>
+              {item.size !== null ? <span className="ps4-faint">{formatBytes(item.size)}</span> : null}
+              {ago ? <span className="ps4-faint">{ago}</span> : null}
+            </div>
+          </div>
+          <div className="ps4-catalog__buttons">
+            {extracted ? (
+              <HudButton icon={<FolderInput />} onClick={() => onOpenPackage(item.packages[0])} title={item.packages[0]}>
+                {t("init.openPackage")}
+              </HudButton>
+            ) : null}
+            {!batch ? (
+              <HudButton
+                icon={extracted ? <RotateCcw /> : <PackageOpen />}
+                disabled={missing || busy || !workspace}
+                onClick={() => (extracted ? setAgain(item) : void extractItems([item], overwrite))}
+              >
+                {extracted ? t("init.again") : t("init.extract")}
+              </HudButton>
+            ) : null}
+            <HudButton
+              variant="ghost"
+              icon={<ChevronDown style={{ transform: isOpen ? "rotate(180deg)" : undefined }} />}
+              label={t("init.details")}
+              aria-expanded={isOpen}
+              onClick={() => setExpanded(isOpen ? null : item.hash)}
+            />
+          </div>
+        </div>
+        {isOpen ? (
+          <div className="ps4-catalog__details">
+            <KeyValues
+              rows={[
+                [t("init.detail.hash"), <span key="hash" className="ps4-mono">{item.hash}</span>],
+                [t("init.detail.source"), item.sourcePath ?? t("init.detail.notFound")],
+                [t("init.detail.output"), outputPath],
+                [
+                  t("init.detail.packages"),
+                  item.packages.length ? (
+                    <span key="packages" className="flex flex-col">
+                      {item.packages.map((dir) => (
+                        <span key={dir} className="ps4-mono">
+                          {dir}
+                        </span>
+                      ))}
+                    </span>
+                  ) : (
+                    t("init.detail.none")
+                  ),
+                ],
+                [t("init.detail.nameSource"), item.nameSource],
+              ]}
+            />
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   return (
     <>
       <Dialog open={open} onOpenChange={(value) => !busy && onOpenChange(value)}>
         <DialogContent className="ps4-ws ps4-dialog ps4-init max-w-4xl" data-game={game}>
           <DialogHeader>
-            <DialogTitle className="ps4-display uppercase tracking-wider">
+            <DialogTitle className="ps4-dialog__title">
               {t("init.title", { code: adapter.code })}
             </DialogTitle>
             <DialogDescription>{t("init.description")}</DialogDescription>
@@ -222,16 +328,15 @@ export function InitDialog({
                 />
               </div>
             </div>
-            <p className="ps4-field__hint" style={{ margin: 0 }}>
-              {t("init.layoutNote")}
-            </p>
             <div className="ps4-init__stats">
               <KindChip tone="accent">
                 {t("init.available", { available: catalog.data?.available ?? 0, total: items.length })}
               </KindChip>
               <KindChip tone="ok">{t("init.extractedCount", { count: catalog.data?.extracted ?? 0 })}</KindChip>
-              <span className="ps4-lamp" data-state={catalog.loading ? "busy" : ready ? "ok" : "warn"} aria-hidden="true" />
-              <span className="ps4-dim" style={{ fontSize: 12 }}>
+              {catalog.loading || !ready ? (
+                <span className="ps4-lamp" data-state={catalog.loading ? "busy" : "warn"} aria-hidden="true" />
+              ) : null}
+              <span>
                 {catalog.loading ? t("init.state.scanning") : ready ? t("init.state.ready") : t("init.state.configure")}
               </span>
               {catalog.data?.archivesRoot ? (
@@ -336,114 +441,26 @@ export function InitDialog({
               {!ready ? <span className="ps4-field__hint">{t("init.needFolders")}</span> : null}
             </div>
             {catalog.error ? <ErrorNote>{catalog.error}</ErrorNote> : null}
-            <div className="ps4-catalog" role="list" aria-label={t("init.listLabel")}>
+            <div className="ps4-catalog">
               {!sourceRoot && !workspace ? (
                 <EmptyState icon={<Database />} title={t("init.state.configure")} body={t("init.needFolders")} />
               ) : visible.length === 0 && !catalog.loading ? (
                 <EmptyState icon={<Database />} title={t("init.empty")} />
               ) : (
-                visible.map((item) => {
-                  const missing = !item.sourcePath;
-                  const extracted = item.packages.length > 0;
-                  const isOpen = expanded === item.hash;
-                  const ago = agoLabel(item.hash);
-                  const outputPath = workspace ? joinPath(workspace, item.relativeDir) : item.relativeDir;
-                  return (
-                    <div
-                      key={item.hash}
-                      className="ps4-catalog__item"
-                      role="listitem"
-                      data-missing={missing ? "true" : undefined}
-                      data-active={running?.hash === item.hash ? "true" : undefined}
-                    >
-                      <div className="ps4-catalog__row">
-                        {batch ? (
-                          <input
-                            type="checkbox"
-                            className="ps4-catalog__check"
-                            aria-label={t("init.select", { name: item.title })}
-                            checked={selected.has(item.hash)}
-                            disabled={missing || busy}
-                            onChange={() => toggle(item.hash)}
-                          />
-                        ) : null}
-                        <span
-                          className="ps4-lamp"
-                          data-state={running?.hash === item.hash ? "busy" : missing ? "bad" : extracted ? "ok" : undefined}
-                          aria-hidden="true"
-                        />
-                        <div className="ps4-catalog__text">
-                          <div className="ps4-catalog__title">
-                            <span className="ps4-truncate">{item.title}</span>
-                            <KindChip tone="data">{groupLabel(item.group)}</KindChip>
-                            {missing ? <KindChip tone="bad">{t("init.missing")}</KindChip> : null}
-                            {extracted ? <KindChip tone="ok">{t("init.extracted")}</KindChip> : null}
-                          </div>
-                          <div className="ps4-catalog__sub ps4-mono" title={outputPath}>
-                            <span>{item.hash}</span>
-                            <span aria-hidden="true">→</span>
-                            <span className="ps4-truncate">{item.relativeDir}</span>
-                            {item.size !== null ? <span className="ps4-faint">{formatBytes(item.size)}</span> : null}
-                            {ago ? <span className="ps4-faint">{ago}</span> : null}
-                          </div>
-                        </div>
-                        <div className="ps4-catalog__buttons">
-                          {extracted ? (
-                            <HudButton
-                              icon={<FolderInput />}
-                              onClick={() => onOpenPackage(item.packages[0])}
-                              title={item.packages[0]}
-                            >
-                              {t("init.openPackage")}
-                            </HudButton>
-                          ) : null}
-                          {!batch ? (
-                            <HudButton
-                              variant={extracted ? "default" : "primary"}
-                              icon={extracted ? <RotateCcw /> : <PackageOpen />}
-                              disabled={missing || busy || !workspace}
-                              onClick={() => (extracted ? setAgain(item) : void extractItems([item], overwrite))}
-                            >
-                              {extracted ? t("init.again") : t("init.extract")}
-                            </HudButton>
-                          ) : null}
-                          <HudButton
-                            icon={<ChevronDown style={{ transform: isOpen ? "rotate(180deg)" : undefined }} />}
-                            label={t("init.details")}
-                            aria-expanded={isOpen}
-                            onClick={() => setExpanded(isOpen ? null : item.hash)}
-                          />
-                        </div>
+                sections.map((section) =>
+                  section.id ? (
+                    <section key={section.id} aria-label={groupLabel(section.id)}>
+                      <h3 className="ps4-catalog__group">{groupLabel(section.id)}</h3>
+                      <div role="list" aria-label={groupLabel(section.id)}>
+                        {section.items.map(renderItem)}
                       </div>
-                      {isOpen ? (
-                        <div className="ps4-catalog__details">
-                          <KeyValues
-                            rows={[
-                              [t("init.detail.hash"), <span key="hash" className="ps4-mono">{item.hash}</span>],
-                              [t("init.detail.source"), item.sourcePath ?? t("init.detail.notFound")],
-                              [t("init.detail.output"), outputPath],
-                              [
-                                t("init.detail.packages"),
-                                item.packages.length ? (
-                                  <span key="packages" className="flex flex-col">
-                                    {item.packages.map((dir) => (
-                                      <span key={dir} className="ps4-mono">
-                                        {dir}
-                                      </span>
-                                    ))}
-                                  </span>
-                                ) : (
-                                  t("init.detail.none")
-                                ),
-                              ],
-                              [t("init.detail.nameSource"), item.nameSource],
-                            ]}
-                          />
-                        </div>
-                      ) : null}
+                    </section>
+                  ) : (
+                    <div key="all" role="list" aria-label={t("init.listLabel")}>
+                      {section.items.map(renderItem)}
                     </div>
-                  );
-                })
+                  ),
+                )
               )}
             </div>
           </div>
