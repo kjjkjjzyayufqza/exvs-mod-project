@@ -174,6 +174,12 @@ Format and editing rules: `docs/msc-research/chrsysparam-action-table-native-con
 
 - Default `numshb` output omits vertex buffers; use `--raw-fields` only when you
   explicitly need full geometry JSON.
+- Default `numshb` output lists `boneInfluences` per mesh object: for each
+  skinned bone, `weightCount`, `dominantVertexCount` (vertices whose weight for
+  that bone is at least 0.5) and `dominantBounds` (their rest pose min / max in
+  model space). Use it to find which bone carries a weapon or armor piece before
+  hiding it in MSC with `sys_47(0x12, model, jnttbl id, 0, 0, 0, 0)`; read the
+  jnttbl id for the bone name from the sibling `.jnttbl` and `.nusktb`.
 - `nusktb` full output includes bone transforms; `--summary` keeps names and
   parent indices only.
 - `numdlb` links sibling `.nusktb`, `.numshb`, and `.numatb` filenames.

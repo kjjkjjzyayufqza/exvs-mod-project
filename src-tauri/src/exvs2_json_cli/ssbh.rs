@@ -12,6 +12,8 @@ const SSBH_SKEL_TAG: &[u8; 4] = b"LEKS";
 const SSBH_MESH_TAG: &[u8; 4] = b"HSEM";
 const SSBH_MODL_TAG: &[u8; 4] = b"LDOM";
 const NUMSHB_LARGE_FILE_WARNING_BYTES: usize = 1_048_576;
+/// A vertex counts as a bone's geometry when that bone carries at least this share of its weight.
+const DOMINANT_BONE_WEIGHT: f32 = 0.5;
 
 pub(crate) fn inspect_nusktb(
     bytes: &[u8],
@@ -68,20 +70,28 @@ pub(crate) fn inspect_numshb(
     let mut data = if options.raw_fields {
         serde_json::to_value(&mesh).map_err(|e| format!("Serialize numshb failed: {e}"))?
     } else {
+        let objects = mesh
+            .objects
+            .iter()
+            .map(|object| {
+                Ok(json!({
+                    "name": object.name,
+                    "subindex": object.subindex,
+                    "parentBoneName": object.parent_bone_name,
+                    "vertexCount": mesh_object_vertex_count(object),
+                    "indexCount": object.vertex_indices.len(),
+                    "attributeNames": mesh_object_attribute_names(object),
+                    "riggingBoneCount": object.bone_influences.len(),
+                    "boneInfluences": mesh_object_bone_influences(object)?
+                }))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
         json!({
             "majorVersion": mesh.major_version,
             "minorVersion": mesh.minor_version,
             "isVs2": mesh.is_vs2,
             "objectCount": mesh.objects.len(),
-            "objects": mesh.objects.iter().map(|object| json!({
-                "name": object.name,
-                "subindex": object.subindex,
-                "parentBoneName": object.parent_bone_name,
-                "vertexCount": mesh_object_vertex_count(object),
-                "indexCount": object.vertex_indices.len(),
-                "attributeNames": mesh_object_attribute_names(object),
-                "riggingBoneCount": object.bone_influences.len()
-            })).collect::<Vec<_>>()
+            "objects": objects
         })
     };
 
@@ -90,7 +100,8 @@ pub(crate) fn inspect_numshb(
         "fieldNotes",
         json!({
             "format": "SSBH Mesh (.numshb). Full vertex buffers are omitted unless --raw-fields is set.",
-            "roundtrip": "Bounding volumes and buffer encodings may differ after rewrite even when geometry is equivalent."
+            "roundtrip": "Bounding volumes and buffer encodings may differ after rewrite even when geometry is equivalent.",
+            "boneInfluences": "Per skinned bone of each object: weightCount is every vertex weight the bone has; dominantVertexCount and dominantBounds (rest pose, model space) cover the vertices whose weight for the bone is at least 0.5, i.e. the geometry that bone moves. Scaling that bone to 0 (MSC sys_47(0x12, model, jnttbl id, 0, 0, 0, 0)) hides that geometry together with everything skinned to its child bones."
         }),
     )?;
 
@@ -191,6 +202,72 @@ fn mesh_object_vertex_count(object: &ssbh_data::mesh_data::MeshObjectData) -> us
             VectorData::Vector4(values) => values.len(),
         })
         .unwrap_or(0)
+}
+
+/// Per bone influence of one mesh object: how many weights it has, and how many vertices (with their rest pose
+/// bounding box) it dominates, which is the geometry that moves or disappears with the bone.
+fn mesh_object_bone_influences(object: &ssbh_data::mesh_data::MeshObjectData) -> Result<Vec<Value>, String> {
+    if object.bone_influences.is_empty() {
+        return Ok(Vec::new());
+    }
+    let positions = mesh_object_positions(object)?;
+    object
+        .bone_influences
+        .iter()
+        .map(|influence| {
+            let mut dominant = 0usize;
+            let mut min = [f32::INFINITY; 3];
+            let mut max = [f32::NEG_INFINITY; 3];
+            for weight in &influence.vertex_weights {
+                if weight.vertex_weight < DOMINANT_BONE_WEIGHT {
+                    continue;
+                }
+                let position = positions.get(weight.vertex_index as usize).ok_or_else(|| {
+                    format!(
+                        "{}/{}: bone {} weights vertex {} of {}",
+                        object.name,
+                        object.subindex,
+                        influence.bone_name,
+                        weight.vertex_index,
+                        positions.len()
+                    )
+                })?;
+                dominant += 1;
+                for axis in 0..3 {
+                    min[axis] = min[axis].min(position[axis]);
+                    max[axis] = max[axis].max(position[axis]);
+                }
+            }
+            Ok(json!({
+                "boneName": influence.bone_name,
+                "weightCount": influence.vertex_weights.len(),
+                "dominantVertexCount": dominant,
+                "dominantBounds": if dominant == 0 {
+                    Value::Null
+                } else {
+                    json!({ "min": min, "max": max })
+                }
+            }))
+        })
+        .collect()
+}
+
+/// The first position attribute as xyz points; a skinned object without one cannot be measured.
+fn mesh_object_positions(object: &ssbh_data::mesh_data::MeshObjectData) -> Result<Vec<[f32; 3]>, String> {
+    let attribute = object.positions.first().ok_or_else(|| {
+        format!(
+            "{}/{}: skinned mesh object has no position attribute",
+            object.name, object.subindex
+        )
+    })?;
+    match &attribute.data {
+        VectorData::Vector3(values) => Ok(values.iter().map(|v| [v.x, v.y, v.z]).collect()),
+        VectorData::Vector4(values) => Ok(values.iter().map(|v| [v.x, v.y, v.z]).collect()),
+        VectorData::Vector2(_) => Err(format!(
+            "{}/{}: position attribute {} has 2 components",
+            object.name, object.subindex, attribute.name
+        )),
+    }
 }
 
 fn mesh_object_attribute_names(object: &ssbh_data::mesh_data::MeshObjectData) -> Vec<&str> {

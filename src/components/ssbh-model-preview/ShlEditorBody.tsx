@@ -24,9 +24,9 @@ const U32_INPUT_CLASS =
   "h-8 min-w-0 px-1.5 font-mono text-[11px] tabular-nums " +
   "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
-/** # | Model | Type | Model id | unk1 | Slot | del — unk1/Slot need ≥5.5rem for two-digit values. */
+/** # | Model | Type | Model id | unk1 | del — unk1 needs ≥5.5rem for two-digit values. */
 const ROW_GRID_COLS =
-  "grid-cols-[2.5rem_minmax(0,2fr)_7.5rem_7rem_5.5rem_5.5rem_2.5rem]";
+  "grid-cols-[2.5rem_minmax(0,2fr)_7.5rem_7rem_5.5rem_2.5rem]";
 
 function formIdPart(reactId: string): string {
   return reactId.replace(/:/g, "");
@@ -119,7 +119,7 @@ export function ShlEditorBody({
       modelType: 3,
       folderIndex: nextFolder,
       unk1: 1,
-      slotIndex: records.length,
+      slotIndex: nextFolder,
     };
     onChange({ ...data, records: appendShlRecord(data.records, next) });
   }, [data, onChange, records.length]);
@@ -197,7 +197,7 @@ export function ShlEditorBody({
         role="group"
         aria-labelledby={`${fid}-slots-heading`}
       >
-        <div className="min-w-[720px] text-[11px]">
+        <div className="min-w-[640px] text-[11px]">
           <div
             className={cn("grid border-b bg-muted/40 text-left", ROW_GRID_COLS)}
             role="row"
@@ -207,7 +207,6 @@ export function ShlEditorBody({
             <div className="px-2 py-2 font-medium" role="columnheader">Type</div>
             <div className="px-2 py-2 font-medium" role="columnheader">Model id (LE)</div>
             <div className="px-2 py-2 font-medium" role="columnheader">unk1</div>
-            <div className="px-2 py-2 font-medium" role="columnheader">Slot</div>
             <div className="w-10 px-1 py-2" role="columnheader" />
           </div>
 
@@ -244,6 +243,7 @@ export function ShlEditorBody({
                         updateRecord(rowIndex, {
                           ...row,
                           folderIndex: nextFolder,
+                          slotIndex: nextFolder,
                         });
                       }}
                     >
@@ -314,22 +314,6 @@ export function ShlEditorBody({
                         const n = Number.parseInt(e.target.value, 10);
                         if (!Number.isFinite(n) || n < 0) return;
                         updateRecord(rowIndex, { ...row, unk1: Math.min(0xffffffff, n) >>> 0 });
-                      }}
-                    />
-                  </div>
-                  <div className="min-w-0 px-1 py-1" role="cell">
-                    <Input
-                      type="number"
-                      min={0}
-                      className={U32_INPUT_CLASS}
-                      disabled={disabled}
-                      autoComplete="off"
-                      aria-label={`Slot index row ${rowIndex + 1}`}
-                      value={row.slotIndex}
-                      onChange={(e) => {
-                        const n = Number.parseInt(e.target.value, 10);
-                        if (!Number.isFinite(n) || n < 0) return;
-                        updateRecord(rowIndex, { ...row, slotIndex: Math.min(0xffffffff, n) >>> 0 });
                       }}
                     />
                   </div>

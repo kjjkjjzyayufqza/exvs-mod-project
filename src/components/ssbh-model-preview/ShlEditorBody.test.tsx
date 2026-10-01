@@ -54,8 +54,10 @@ describe("ShlEditorBody", () => {
     const next = onChange.mock.calls[0]![0] as ShlFileData;
     expect(next.records[0]).toMatchObject({
       folderIndex: 1,
+      slotIndex: 1,
       modelId: 0x11111111,
     });
+    expect(screen.queryByRole("columnheader", { name: "Slot" })).not.toBeInTheDocument();
   });
 
   it("adds new slots with unk1 defaulting to 1", () => {
@@ -82,15 +84,13 @@ describe("ShlEditorBody", () => {
     });
   });
 
-  it("renders two-digit slot indices fully (not clipped as a single digit)", () => {
-    // Real shell: from F5179C68 onward folder/slot are 10+; narrow columns + number spinners
-    // previously made "10" look like "1" in the UI.
+  it("keeps two-digit unk1 fully visible and does not show a Slot column", () => {
     const data = file([
       record({
         modelId: 0x689c17f5,
         modelType: 3,
         folderIndex: 10,
-        unk1: 2,
+        unk1: 12,
         slotIndex: 10,
       }),
     ]);
@@ -103,7 +103,8 @@ describe("ShlEditorBody", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Slot index row 1")).toHaveValue(10);
-    expect(screen.getByLabelText("unk1 row 1")).toHaveValue(2);
+    expect(screen.queryByRole("columnheader", { name: "Slot" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Slot index row 1")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("unk1 row 1")).toHaveValue(12);
   });
 });

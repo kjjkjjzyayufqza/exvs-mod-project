@@ -9,6 +9,7 @@ export type ShlRecord = {
   /** Index into the structure-JSON model folder order. */
   folderIndex: number;
   unk1: number;
+  /** Kept equal to `folderIndex`. The shell editor writes this on add and folder change. */
   slotIndex: number;
 };
 
