@@ -29,7 +29,7 @@ use serde::Serialize;
 use crate::error::{Error, Result};
 use crate::names::{hash_name, parse_hash, NameBook};
 use crate::workspace::{
-    archives_root, capture_baseline, diff_baseline, discover_packages, load_baseline, locate_archive,
+    archives_root, capture_baseline, diff_baseline, discover_packages, join_relative, load_baseline, locate_archive,
     mod_output_path, relative_to, save_baseline, Baseline, PackageChanges, PACKAGE_SEARCH_DEPTH,
 };
 
@@ -148,13 +148,13 @@ pub fn choose_package_dir(
     hash: Option<u32>,
     explicit: bool,
 ) -> PathBuf {
-    let dir = workspace.join(relative);
+    let dir = join_relative(workspace, relative);
     if explicit || !dir.join(format.manifest_name()).is_file() {
         return dir;
     }
     let owner = format.source_name(&dir).ok().and_then(|name| parse_hash(&name));
     match (owner, hash) {
-        (Some(owner), Some(hash)) if owner != hash => workspace.join(format!("{relative}_{}", hash_name(hash))),
+        (Some(owner), Some(hash)) if owner != hash => join_relative(workspace, &format!("{relative}_{}", hash_name(hash))),
         _ => dir,
     }
 }

@@ -357,6 +357,12 @@ Use `docs/` as the first source of project truth:
   Param Editor labels, Extract→Workspace).
 - `docs/param-editor-typed-labels-notes.md` — typed Param Editor list labels
   (kind-7 string/offset) and Extract-to-Workspace behavior.
+- `docs/mbon-gvs/README.md` — isolated PS4 MBON / GVS workspaces: data init,
+  single unpack / repack, repack changes into `archives/XX/HASH.bin` mod
+  folders, name tables, `mbon_tool` / `gvs_tool` CLI. Decision record
+  `docs/adr/0010-mbon-gvs-isolated-workspaces.md`; handoff
+  `docs/agent-sessions/2026-10-01-mbon-gvs-workspaces.md`. Provenance notices:
+  `python tools/stamp_mbon_gvs_notices.py --check`.
 
 When adding new research findings, write them under `docs/` as standalone
 specifications or research notes.

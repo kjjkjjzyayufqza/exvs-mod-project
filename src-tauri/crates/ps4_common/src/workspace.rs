@@ -50,7 +50,16 @@ pub fn archive_relative_path(hash: u32) -> String {
 
 /// Where a repacked archive goes inside a mod folder that mirrors the game root.
 pub fn mod_output_path(mod_root: &Path, hash: u32) -> PathBuf {
-    mod_root.join(archive_relative_path(hash))
+    join_relative(mod_root, &archive_relative_path(hash))
+}
+
+/// Join a `/`-separated relative path one segment at a time, so the result
+/// uses the platform separator throughout (no `a\b/c` paths on Windows).
+pub fn join_relative(base: &Path, relative: &str) -> PathBuf {
+    relative
+        .split(['/', '\\'])
+        .filter(|segment| !segment.is_empty())
+        .fold(base.to_path_buf(), |path, segment| path.join(segment))
 }
 
 /// The folder holding the `XX` buckets: `<root>/archives` when it exists, the
@@ -289,7 +298,11 @@ mod tests {
     fn mod_paths_mirror_the_game_tree() {
         assert_eq!(archive_relative_path(0xEB3A9691), "archives/EB/EB3A9691.bin");
         assert_eq!(archive_relative_path(0x0012ABCD), "archives/00/0012ABCD.bin");
-        assert!(mod_output_path(Path::new("/mods/x"), 0xEB3A9691).ends_with("archives/EB/EB3A9691.bin"));
+        let path = mod_output_path(Path::new("/mods/x"), 0xEB3A9691);
+        assert!(path.ends_with("archives/EB/EB3A9691.bin"));
+        let parts: Vec<_> = path.components().map(|part| part.as_os_str().to_string_lossy().into_owned()).collect();
+        assert_eq!(parts[parts.len() - 3..], ["archives", "EB", "EB3A9691.bin"]);
+        assert_eq!(join_relative(Path::new("/w"), "a//b\\c"), Path::new("/w").join("a").join("b").join("c"));
     }
 
     #[test]

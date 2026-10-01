@@ -304,12 +304,15 @@ export function SourcesPanel({
                     }
                     aria-hidden="true"
                   />
-                  <span className="ps4-row__name ps4-mono" title={item.dir}>
+                  <span
+                    className="ps4-row__name ps4-mono"
+                    title={[item.title, item.relative, item.sourceName, item.detail].filter(Boolean).join("\n")}
+                  >
                     {item.relative}
                   </span>
-                  {item.title ? <span className="ps4-row__meta ps4-truncate">{item.title}</span> : null}
-                  <KindChip tone={item.tone}>{item.chip}</KindChip>
-                  <span className="ps4-row__meta">{item.detail}</span>
+                  <KindChip tone={item.tone} title={item.detail}>
+                    {item.chip}
+                  </KindChip>
                 </>
               );
             }}
@@ -352,13 +355,13 @@ export function SourcesPanel({
               </HudButton>
             </div>
           </div>
-          <div className="flex gap-2">
-            <FilterField
-              value={fileQuery}
-              onChange={setFileQuery}
-              placeholder={tc("sources.filterFiles")}
-              label={tc("sources.filterFiles")}
-            />
+          <FilterField
+            value={fileQuery}
+            onChange={setFileQuery}
+            placeholder={tc("sources.filterFiles")}
+            label={tc("sources.filterFiles")}
+          />
+          <div className="ps4-select-row">
             <select
               className="ps4-select"
               value={kindFilter}
@@ -430,14 +433,12 @@ export function SourcesPanel({
                 title={extractedHashes.has(entry.stem.toUpperCase()) ? tc("sources.alreadyExtracted") : undefined}
                 aria-hidden="true"
               />
-              <span className="ps4-row__name ps4-mono" title={entry.error ?? entry.relativePath}>
+              <span
+                className="ps4-row__name ps4-mono"
+                title={entry.error ?? [entry.title, entry.relativePath, entry.label].filter(Boolean).join("\n")}
+              >
                 {entry.named ?? entry.relativePath}
               </span>
-              {entry.named ? (
-                <span className="ps4-row__meta ps4-faint" title={entry.relativePath}>
-                  {entry.stem}
-                </span>
-              ) : null}
               <KindChip tone={entry.tone} title={entry.label}>
                 {entry.short}
               </KindChip>

@@ -1436,6 +1436,15 @@ label.ps4-catalog__row:hover {
 .ps4-catalog__details .ps4-kv dd {
   overflow-wrap: anywhere;
 }
+.ps4-select-row {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+}
+.ps4-select-row .ps4-select {
+  min-width: 0;
+  flex: 1;
+}
 .ps4-badge {
   display: inline-grid;
   min-width: 16px;
