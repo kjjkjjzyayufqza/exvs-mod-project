@@ -46,18 +46,15 @@ mod triad_route_commands;
 
 pub use ssbh_motion::smoke_decode_and_sample_nuanmb;
 
+// Runtime only. A token read at compile time would be baked into the shipped
+// exe, where anyone holding the release can extract it and read the repos it
+// unlocks.
 #[tauri::command]
 fn read_updater_github_token() -> Option<String> {
     std::env::var("EXVS_UPDATER_GITHUB_TOKEN")
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .or_else(|| {
-            option_env!("EXVS_UPDATER_GITHUB_TOKEN")
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(str::to_string)
-        })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

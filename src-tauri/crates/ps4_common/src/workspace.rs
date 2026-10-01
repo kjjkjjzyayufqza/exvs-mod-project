@@ -26,7 +26,7 @@
 //!   after every repack, so pending edits are found without reading data.
 
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 use serde::{Deserialize, Serialize};
@@ -178,6 +178,13 @@ impl PackageChanges {
 }
 
 fn stamp(package_dir: &Path, relative: &str) -> Option<FileStamp> {
+    // Manifest paths are data: never look outside the package for them.
+    let inside = Path::new(relative)
+        .components()
+        .all(|component| matches!(component, Component::Normal(_)));
+    if relative.is_empty() || !inside {
+        return None;
+    }
     let meta = std::fs::metadata(package_dir.join(relative)).ok()?;
     if !meta.is_file() {
         return None;

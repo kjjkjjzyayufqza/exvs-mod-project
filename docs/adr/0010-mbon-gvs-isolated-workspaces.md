@@ -42,6 +42,10 @@ later-than-OB revision.
    SourceNoticeCanary (ADR 0008) to these trees. Notices always name
    kjjkjjzyayufqza; MBON notices always credit descatal / BoostStudio.
    Rust tests and a vitest test fail when a notice loses its credits.
+   The two MBON / GVS Python tools (`tools/build_ps4_name_tables.py`,
+   `tools/stamp_mbon_gvs_notices.py`) carry `#` notices from the same
+   generator. The generated name tables start with a credit header that is
+   compiled into the app with the table; the crates' provenance tests check it.
 
 4. **Game files stay local.** Samples used for TDD are UnlicensedGameMaterial.
    They live under the gitignored `tmp/` tree (or wherever

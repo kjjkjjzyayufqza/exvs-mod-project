@@ -36,3 +36,17 @@ fn reports_credit_the_vs2_research() {
     assert!(credit.contains("kjjkjjzyayufqza"), "{credit}");
     assert!(credit.contains("VS2"), "{credit}");
 }
+
+#[test]
+fn the_name_table_keeps_its_credit_header() {
+    // The header is compiled into the app with the table; it must keep the credits.
+    let table = include_str!("../data/gvs_names.tsv");
+    let header = table
+        .lines()
+        .take_while(|line| line.starts_with('#'))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for token in GVS_NOTICE_TOKENS.iter().chain(&["PolyForm Shield", "AGENTS.md"]) {
+        assert!(header.contains(token), "gvs_names.tsv header lacks {token}:\n{header}");
+    }
+}

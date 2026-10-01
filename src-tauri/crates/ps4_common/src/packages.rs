@@ -27,7 +27,7 @@ use rayon::prelude::*;
 use serde::Serialize;
 
 use crate::error::{Error, Result};
-use crate::names::{hash_name, parse_hash, NameBook};
+use crate::names::{hash_name, parse_hash, sanitize_segment, NameBook};
 use crate::workspace::{
     archives_root, capture_baseline, diff_baseline, discover_packages, join_relative, load_baseline, locate_archive,
     mod_output_path, relative_to, save_baseline, Baseline, PackageChanges, PACKAGE_SEARCH_DEPTH,
@@ -345,9 +345,13 @@ pub fn repack_targets(
 ) -> RepackTargets {
     let hash = parse_hash(source_name);
     let parent = package_dir.parent().unwrap_or(package_dir);
+    // The manifest may come from someone else's package: its name must not
+    // steer the output out of the package's parent folder.
     let stem = match hash {
         Some(hash) if container => hash_name(hash),
-        _ => source_name.to_string(),
+        _ => Some(sanitize_segment(source_name))
+            .filter(|stem| !stem.is_empty())
+            .unwrap_or_else(|| "package".to_string()),
     };
     RepackTargets {
         hash_name: hash.map(hash_name),
@@ -481,5 +485,27 @@ mod tests {
         let raw = repack_targets(Path::new("/ws/sample"), "sample", "fhm", false, Some(Path::new("/mod")));
         assert!(raw.mod_path.is_none());
         assert!(raw.beside.ends_with("ws/sample.fhm"));
+    }
+
+    #[test]
+    fn hostile_manifest_names_stay_beside_the_package() {
+        for name in ["../../../escape", "..\\..\\escape", "/etc/escape", "C:\\escape", ".."] {
+            let targets = repack_targets(Path::new("/ws/pkg"), name, "fhm", false, None);
+            let beside = Path::new(&targets.beside);
+            assert_eq!(beside.parent(), Some(Path::new("/ws")), "{name} -> {}", targets.beside);
+            assert!(beside.components().all(|part| !matches!(part, std::path::Component::ParentDir)));
+        }
+    }
+
+    #[test]
+    fn baselines_ignore_manifest_paths_outside_the_package() {
+        let dir = tempfile::tempdir().unwrap();
+        let pkg = dir.path().join("pkg");
+        package(&pkg, "AAAAAAAA");
+        std::fs::write(dir.path().join("outside.bin"), b"secret").unwrap();
+        let files = ["0000.bin".to_string(), "../outside.bin".to_string()];
+        let baseline = capture_baseline(&pkg, "fake.json", &files, "test").unwrap();
+        let paths: Vec<&str> = baseline.files.iter().map(|stamp| stamp.path.as_str()).collect();
+        assert_eq!(paths, ["0000.bin"]);
     }
 }

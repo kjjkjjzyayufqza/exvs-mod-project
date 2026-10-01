@@ -27,11 +27,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Public releases must never embed a GitHub access token in the EXE
+      # (same rule as .github/scripts/publish-windows-release.ps1): anyone
+      # holding the release could extract it. No token reaches the build step.
       - name: Require release secrets
         env:
           CARGO_GIT_TOKEN: ${{ secrets.CARGO_GIT_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          EXVS_UPDATER_GITHUB_TOKEN: ${{ secrets.EXVS_UPDATER_GITHUB_TOKEN }}
         shell: pwsh
         run: |
           if (-not $env:CARGO_GIT_TOKEN) {
@@ -40,23 +42,6 @@ jobs:
           if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
             throw "Missing TAURI_SIGNING_PRIVATE_KEY. The Windows x64 zip cannot be signed without it."
           }
-          if (-not $env:EXVS_UPDATER_GITHUB_TOKEN) {
-            Write-Host "EXVS_UPDATER_GITHUB_TOKEN is unset; the app will bake CARGO_GIT_TOKEN so private GitHub Releases stay readable."
-          }
-
-      - name: Prove updater token can read this repository
-        env:
-          GH_TOKEN: ${{ secrets.EXVS_UPDATER_GITHUB_TOKEN || secrets.CARGO_GIT_TOKEN }}
-        shell: pwsh
-        run: |
-          if (-not $env:GH_TOKEN) {
-            throw "No token available to bake into the updater. Set EXVS_UPDATER_GITHUB_TOKEN (Contents: Read on this repo) or a CARGO_GIT_TOKEN that can read this private repository."
-          }
-          $name = gh api repos/kjjkjjzyayufqza/exvs-mod-project --jq ".full_name"
-          if ($name -ne "kjjkjjzyayufqza/exvs-mod-project") {
-            throw "Updater token cannot read kjjkjjzyayufqza/exvs-mod-project"
-          }
-          Write-Host "Updater token can read $name"
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -93,9 +78,6 @@ jobs:
           workspaces: src-tauri
           prefix-key: release-windows
           cache-on-failure: true
-          env-vars: EXVS_UPDATER_GITHUB_TOKEN
-        env:
-          EXVS_UPDATER_GITHUB_TOKEN: ${{ secrets.EXVS_UPDATER_GITHUB_TOKEN || secrets.CARGO_GIT_TOKEN }}
 
       - name: Stamp release version
         run: node .github/scripts/stamp-release-version.mjs "0.1.${{ github.run_number }}"
@@ -154,7 +136,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          EXVS_UPDATER_GITHUB_TOKEN: ${{ secrets.EXVS_UPDATER_GITHUB_TOKEN || secrets.CARGO_GIT_TOKEN }}
         with:
           tagName: v__VERSION__
           releaseName: EXVS Mod Project v__VERSION__

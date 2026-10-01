@@ -68,6 +68,10 @@ pub const TAG_FOLDER: u8 = 0x0A;
 pub const TAG_END: u8 = 0x0B;
 pub const DEFAULT_GROUP_ALIGN: u32 = 0x10;
 pub const BODY_ENTRY_FLAG: u32 = 1;
+/// Folder nesting accepted from a structure stream. Game archives stay in
+/// single digits; the cap keeps a crafted file from exhausting the stack in
+/// the recursive tree walks.
+pub const MAX_TREE_DEPTH: usize = 64;
 
 /// Fixed header words. Values observed so far: version 1, flags 0x20000.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -370,6 +374,18 @@ impl ArchiveIndex {
                 "file count words disagree ({file_count} vs {file_count_again})"
             )));
         }
+        // Check the counts against the metadata before allocating for them.
+        let available = meta.len() - (HEADER_LEN + META_COUNTS_LEN);
+        let fits = type_count
+            .checked_mul(TYPE_ENTRY_LEN)
+            .zip(file_count.checked_mul(FILE_ENTRY_LEN + BODY_ENTRY_LEN))
+            .and_then(|(types, files)| types.checked_add(files))
+            .is_some_and(|tables| tables <= available);
+        if !fits {
+            return Err(Error::format(format!(
+                "{type_count} type(s) and {file_count} file(s) do not fit in 0x{available:X} metadata bytes"
+            )));
+        }
 
         let mut cursor = HEADER_LEN + META_COUNTS_LEN;
         let mut groups = Vec::with_capacity(type_count);
@@ -437,6 +453,9 @@ impl ArchiveIndex {
                 return Err(Error::unsupported(format!(
                     "body entry {position} uses reserved=0x{reserved:X} flag=0x{flag:X}"
                 )));
+            }
+            if offset.checked_add(size).and_then(|end| end.checked_add(body_offset)).is_none() {
+                return Err(Error::format(format!("body entry {position} range overflows")));
             }
             let file = files.get_mut(index).ok_or_else(|| {
                 Error::format(format!("body entry {position} points at file {index} of {file_count}"))
@@ -609,6 +628,17 @@ impl ArchiveIndex {
 /// Read `len` bytes at `offset` from a file.
 pub fn read_range(path: &Path, offset: u64, len: u64) -> Result<Vec<u8>> {
     let mut file = File::open(path).map_err(|error| Error::io(path.display(), error))?;
+    let file_len = file
+        .metadata()
+        .map_err(|error| Error::io(path.display(), error))?
+        .len();
+    // Never size a buffer from a range the file cannot hold.
+    if offset.checked_add(len).map_or(true, |end| end > file_len) {
+        return Err(Error::format(format!(
+            "range 0x{offset:X}+0x{len:X} is past the 0x{file_len:X}-byte file {}",
+            path.display()
+        )));
+    }
     file.seek(SeekFrom::Start(offset))
         .map_err(|error| Error::io(path.display(), error))?;
     let len = usize::try_from(len).map_err(|_| Error::invalid("file range does not fit in memory"))?;
@@ -675,6 +705,11 @@ fn parse_tree(bytes: &[u8]) -> Result<(TreeNode, u32)> {
                     reserved_b: words[5],
                 };
                 if tag == TAG_FOLDER {
+                    if stack.len() >= MAX_TREE_DEPTH {
+                        return Err(Error::unsupported(format!(
+                            "structure nests folders deeper than {MAX_TREE_DEPTH} levels at +0x{cursor:X}"
+                        )));
+                    }
                     stack.push(Open {
                         fields,
                         declared: words[1],
@@ -762,5 +797,69 @@ mod tests {
         bytes.push(TAG_END);
         bytes.push(TAG_END);
         assert!(parse_tree(&bytes).is_err());
+    }
+
+    /// Fixed header and count words of a crafted archive, `tables` after them.
+    fn crafted_head(type_count: u32, file_count: u32, tables: &[u8]) -> Vec<u8> {
+        let meta_end = (HEADER_LEN + META_COUNTS_LEN + tables.len()) as u64;
+        let mut bytes = MAGIC.to_vec();
+        for word in [1u32, 0x20000, 0] {
+            bytes.extend_from_slice(&word.to_le_bytes());
+        }
+        for word in [PAGE_SIZE, meta_end, 0, 0] {
+            bytes.extend_from_slice(&word.to_le_bytes());
+        }
+        for word in [type_count, file_count, 1, file_count] {
+            bytes.extend_from_slice(&word.to_le_bytes());
+        }
+        bytes.extend_from_slice(tables);
+        bytes
+    }
+
+    #[test]
+    fn crafted_counts_fail_before_allocating() {
+        // Trusting u32::MAX entries would ask for hundreds of GiB up front.
+        assert!(ArchiveIndex::parse(&crafted_head(u32::MAX, u32::MAX, &[])).is_err());
+        assert!(ArchiveIndex::parse(&crafted_head(1, 0, &[0u8; TYPE_ENTRY_LEN - 1])).is_err());
+    }
+
+    #[test]
+    fn body_ranges_that_overflow_are_rejected() {
+        let mut tables = 0x11u32.to_le_bytes().to_vec();
+        tables.extend_from_slice(&[0u8; 12]);
+        tables.extend_from_slice(&16u64.to_le_bytes());
+        tables.extend_from_slice(&DEFAULT_GROUP_ALIGN.to_le_bytes());
+        tables.extend_from_slice(&1u32.to_le_bytes());
+        tables.extend_from_slice(&[0u8; FILE_ENTRY_LEN]);
+        for word in [u64::MAX - 8, 16, 0] {
+            tables.extend_from_slice(&word.to_le_bytes());
+        }
+        tables.extend_from_slice(&BODY_ENTRY_FLAG.to_le_bytes());
+        tables.extend_from_slice(&0u32.to_le_bytes());
+        let error = ArchiveIndex::parse(&crafted_head(1, 1, &tables)).unwrap_err().to_string();
+        assert!(error.contains("overflows"), "{error}");
+    }
+
+    #[test]
+    fn deep_structure_streams_are_rejected() {
+        let mut bytes = Vec::new();
+        for _ in 0..=MAX_TREE_DEPTH {
+            bytes.push(TAG_FOLDER);
+            bytes.extend_from_slice(&[0u8; NODE_LEN - 1]);
+        }
+        bytes.extend(std::iter::repeat(TAG_END).take(MAX_TREE_DEPTH + 1));
+        let error = parse_tree(&bytes).unwrap_err().to_string();
+        assert!(error.contains("deeper"), "{error}");
+    }
+
+    #[test]
+    fn ranges_past_the_end_of_the_file_are_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("short.bin");
+        std::fs::write(&path, [1u8; 16]).unwrap();
+        assert_eq!(read_range(&path, 4, 8).unwrap(), vec![1u8; 8]);
+        assert!(read_range(&path, 8, 16).is_err());
+        assert!(read_range(&path, u64::MAX, 2).is_err());
+        assert!(read_range(&path, 0, 1 << 40).is_err());
     }
 }

@@ -52,7 +52,9 @@ Archives carry hashes only. Each game crate embeds a generated name table:
 Rows with a group are the data-init list. Regenerate both tables with
 `python tools/build_ps4_name_tables.py` (needs the OB name map and the local
 archive catalogs of the game dumps under `tmp/`; only hashes and names are
-written). Unknown archives extract into a folder named by their hash.
+written). Each table starts with `#` credit lines (author, product, license);
+they are compiled into the app with the table and the provenance tests fail
+without them. Unknown archives extract into a folder named by their hash.
 
 ## CLI (agent / batch use)
 
