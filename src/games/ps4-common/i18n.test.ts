@@ -88,5 +88,17 @@ describe("MBON / GVS workspace translations", () => {
       expect(gvs.has(`ssbh.type.${type}`)).toBe(true);
     }
     expect(gvs.has("inspector.removeListingBody")).toBe(true);
+    for (const mode of ["grouped", "switcher", "flat", "obOnly"]) {
+      expect(ps4.has(`settings.sidebarMode.${mode}.title`)).toBe(true);
+      expect(ps4.has(`settings.sidebarMode.${mode}.description`)).toBe(true);
+    }
+    for (const layout of ["three", "focus", "stacked"]) expect(ps4.has(`settings.workspaceLayout.${layout}.title`)).toBe(true);
+    for (const style of ["hud", "clean", "contrast"]) expect(ps4.has(`settings.visualStyle.${style}.title`)).toBe(true);
+    for (const inspector of ["auto", "stacked", "split"]) expect(ps4.has(`settings.inspectorLayout.${inspector}`)).toBe(true);
+    for (const density of ["compact", "comfortable"]) expect(ps4.has(`settings.densityOption.${density}`)).toBe(true);
+    for (const game of ["ob", "mbon", "gvs"]) {
+      expect(ps4.has(`sidebar.group.${game}`)).toBe(true);
+      expect(ps4.has(`sidebar.short.${game}`)).toBe(true);
+    }
   });
 });

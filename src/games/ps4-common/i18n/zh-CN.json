@@ -137,6 +137,87 @@
     "licenseValue": "代码：PolyForm Shield 1.0.0。文档：CC BY-NC-SA 4.0。另见 ACCEPTABLE_USE.md。",
     "keepNames": "作者与研究来源署名是本工具的一部分。复制或衍生作品中不得删除或替换。"
   },
+  "layout": {
+    "sources": "来源"
+  },
+  "settings": {
+    "title": "MBON / GVS（PS4）工具",
+    "description": "设置 PS4 工作区的外观，以及工具在侧边栏中的显示方式。",
+    "reset": "重置",
+    "sidebar": "侧边栏",
+    "layout": "工作区布局",
+    "style": "视觉风格",
+    "inspector": "预览与详情",
+    "density": "密度",
+    "sidebarMode": {
+      "grouped": {
+        "title": "按游戏分组",
+        "description": "先显示 OB 工具，再分别显示 MBON 与 GVS 分组。"
+      },
+      "switcher": {
+        "title": "游戏切换",
+        "description": "在顶部选择 OB、MBON 或 GVS，只列出所选游戏的工具。"
+      },
+      "flat": {
+        "title": "单一列表",
+        "description": "所有工具显示在同一个列表中。"
+      },
+      "obOnly": {
+        "title": "仅 OB",
+        "description": "在侧边栏中隐藏 MBON 与 GVS 工具。"
+      }
+    },
+    "workspaceLayout": {
+      "three": {
+        "title": "三栏",
+        "description": "来源、工作包与检查器并排显示。"
+      },
+      "focus": {
+        "title": "专注",
+        "description": "来源以抽屉形式滑出，留出更多编辑空间。"
+      },
+      "stacked": {
+        "title": "上下分栏",
+        "description": "工作包在上、检查器在下，适合较高的屏幕。"
+      }
+    },
+    "visualStyle": {
+      "hud": {
+        "title": "机库 HUD",
+        "description": "角标、网格背景与紧凑标题。"
+      },
+      "clean": {
+        "title": "简洁",
+        "description": "圆角面板，无装饰。"
+      },
+      "contrast": {
+        "title": "高对比度",
+        "description": "更醒目的线条与更大的文字。"
+      }
+    },
+    "inspectorLayout": {
+      "auto": "自动",
+      "stacked": "上下",
+      "split": "左右"
+    },
+    "densityOption": {
+      "compact": "紧凑",
+      "comfortable": "宽松"
+    }
+  },
+  "sidebar": {
+    "switcher": "游戏",
+    "group": {
+      "ob": "Over Boost",
+      "mbon": "MBON · PS4",
+      "gvs": "GVS · PS4"
+    },
+    "short": {
+      "ob": "OB",
+      "mbon": "MBON",
+      "gvs": "GVS"
+    }
+  },
   "status": {
     "idle": "就绪",
     "running": "进行中",

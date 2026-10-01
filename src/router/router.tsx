@@ -57,28 +57,32 @@ export const RouterItems = [
         element: <MiscToolsPage />
     },
     {
-        title: "MBON Workspace (PS4)",
+        title: "MBON Workspace",
         url: "/MbonWorkspace",
         icon: Rocket,
-        element: <MbonWorkspacePage />
+        element: <MbonWorkspacePage />,
+        game: "mbon" as const,
     },
     {
-        title: "GVS Workspace (PS4)",
+        title: "GVS Workspace",
         url: "/GvsWorkspace",
         icon: Swords,
-        element: <GvsWorkspacePage />
+        element: <GvsWorkspacePage />,
+        game: "gvs" as const,
     },
     {
         title: "Config",
         url: "/Config",
         icon: Settings,
-        element: <ConfigPage />
+        element: <ConfigPage />,
+        app: true,
     },
     {
         title: "About",
         url: "/About",
         icon: Info,
-        element: <AboutPage />
+        element: <AboutPage />,
+        app: true,
     },
     {
         title: "Mission Node Editor",

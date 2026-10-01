@@ -14,10 +14,14 @@
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
-import type { ReactNode } from "react";
-import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
+import { useEffect, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import { PanelLeftOpen } from "lucide-react";
+import { usePs4Preferences } from "../preferences";
 import type { GameId } from "../types";
-import "../ps4-workspace.css";
+import { HudButton } from "./Hud";
+import { PaneLayout } from "./PaneLayout";
+import { Ps4Shell } from "./Ps4Shell";
 
 export interface WorkspaceFrameProps {
   game: GameId;
@@ -30,52 +34,105 @@ export interface WorkspaceFrameProps {
   center: ReactNode;
   right: ReactNode;
   status: ReactNode;
+  /** Changing this closes the sources drawer of the focus layout (e.g. the open package). */
+  sourcesKey?: string | null;
 }
 
-function layoutStorage(): Storage | undefined {
-  try {
-    return window.localStorage;
-  } catch {
-    return undefined;
-  }
-}
+/**
+ * Workspace page frame. The pane arrangement follows the user's layout
+ * preference: three columns, a focus view with a sources drawer, or a
+ * stacked package-over-inspector column.
+ */
+export function WorkspaceFrame({
+  game,
+  code,
+  platform,
+  title,
+  credit,
+  tools,
+  left,
+  center,
+  right,
+  status,
+  sourcesKey,
+}: WorkspaceFrameProps) {
+  const { t } = useTranslation("ps4-workspace");
+  const layout = usePs4Preferences((state) => state.workspaceLayout);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  useEffect(() => setDrawerOpen(false), [sourcesKey, layout]);
 
-/** Masthead, three resizable panes and a status bar, scoped under `.ps4-ws`. */
-export function WorkspaceFrame({ game, code, platform, title, credit, tools, left, center, right, status }: WorkspaceFrameProps) {
-  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
-    id: `ps4-${game}-workspace`,
-    storage: layoutStorage(),
-  });
+  const shellTools =
+    layout === "focus" ? (
+      <>
+        <HudButton icon={<PanelLeftOpen />} aria-pressed={drawerOpen} onClick={() => setDrawerOpen((open) => !open)}>
+          {t("layout.sources")}
+        </HudButton>
+        {tools}
+      </>
+    ) : (
+      tools
+    );
+
   return (
-    <div className="ps4-ws flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden" data-game={game}>
-      <header className="ps4-masthead">
-        <div className="ps4-masthead__mark" aria-hidden="true">
-          <span className="ps4-masthead__code">{code}</span>
-          <span className="ps4-masthead__platform">{platform}</span>
-        </div>
-        <div className="ps4-masthead__text">
-          <h1 className="ps4-masthead__title">{title}</h1>
-          <p className="ps4-masthead__credit">{credit}</p>
-        </div>
-        <div className="ps4-masthead__tools">{tools}</div>
-        <div className="ps4-masthead__stripe" aria-hidden="true" />
-      </header>
-      <div className="ps4-stage">
-        <Group orientation="horizontal" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged}>
-          <Panel id="sources" defaultSize="23%" minSize="210px">
+    <Ps4Shell game={game} code={code} platform={platform} title={title} credit={credit} tools={shellTools} status={status}>
+      {layout === "three" ? (
+        <PaneLayout
+          storageId={`ps4-${game}-three`}
+          panes={[
+            { id: "sources", content: left, defaultSize: "23%", minSize: "210px" },
+            { id: "package", content: center, defaultSize: "37%", minSize: "280px" },
+            { id: "inspector", content: right, defaultSize: "40%", minSize: "320px" },
+          ]}
+        />
+      ) : layout === "stacked" ? (
+        <PaneLayout
+          storageId={`ps4-${game}-stacked`}
+          panes={[
+            { id: "sources", content: left, defaultSize: "24%", minSize: "210px" },
+            {
+              id: "work",
+              defaultSize: "76%",
+              minSize: "360px",
+              content: (
+                <PaneLayout
+                  orientation="vertical"
+                  storageId={`ps4-${game}-stacked-work`}
+                  panes={[
+                    { id: "package", content: center, defaultSize: "42%", minSize: "160px" },
+                    { id: "inspector", content: right, defaultSize: "58%", minSize: "220px" },
+                  ]}
+                />
+              ),
+            },
+          ]}
+        />
+      ) : (
+        <>
+          <div
+            className="ps4-drawer-backdrop"
+            data-open={drawerOpen}
+            aria-hidden="true"
+            onClick={() => setDrawerOpen(false)}
+          />
+          <div
+            className="ps4-drawer"
+            data-open={drawerOpen}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setDrawerOpen(false);
+            }}
+            {...(!drawerOpen ? { inert: true } : {})}
+          >
             {left}
-          </Panel>
-          <Separator className="ps4-gutter" />
-          <Panel id="package" defaultSize="37%" minSize="280px">
-            {center}
-          </Panel>
-          <Separator className="ps4-gutter" />
-          <Panel id="inspector" defaultSize="40%" minSize="320px">
-            {right}
-          </Panel>
-        </Group>
-      </div>
-      <footer className="ps4-status">{status}</footer>
-    </div>
+          </div>
+          <PaneLayout
+            storageId={`ps4-${game}-focus`}
+            panes={[
+              { id: "package", content: center, defaultSize: "36%", minSize: "280px" },
+              { id: "inspector", content: right, defaultSize: "64%", minSize: "360px" },
+            ]}
+          />
+        </>
+      )}
+    </Ps4Shell>
   );
 }

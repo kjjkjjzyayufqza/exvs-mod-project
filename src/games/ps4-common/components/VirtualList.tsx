@@ -17,6 +17,7 @@
 
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { rowHeightFor, usePs4Preferences } from "../preferences";
 
 export interface VirtualListProps<T> {
   items: readonly T[];
@@ -27,6 +28,7 @@ export interface VirtualListProps<T> {
   onActivate?: (index: number) => void;
   renderRow: (item: T, index: number, selected: boolean) => ReactNode;
   getKey: (item: T, index: number) => string | number;
+  /** Fixed row height; defaults to the user's density preference. */
   rowHeight?: number;
   empty?: ReactNode;
   rowProps?: (item: T, index: number) => Record<string, string | undefined>;
@@ -41,10 +43,12 @@ export function VirtualList<T>({
   onActivate,
   renderRow,
   getKey,
-  rowHeight = 28,
+  rowHeight: fixedRowHeight,
   empty,
   rowProps,
 }: VirtualListProps<T>) {
+  const density = usePs4Preferences((state) => state.density);
+  const rowHeight = fixedRowHeight ?? rowHeightFor(density);
   const scrollRef = useRef<HTMLDivElement>(null);
   const listId = useId();
   const virtualizer = useVirtualizer({
@@ -54,6 +58,9 @@ export function VirtualList<T>({
     overscan: 14,
     getItemKey: (index) => getKey(items[index], index),
   });
+  useEffect(() => {
+    virtualizer.measure();
+  }, [rowHeight, virtualizer]);
 
   useEffect(() => {
     if (selectedIndex >= 0 && selectedIndex < items.length) {

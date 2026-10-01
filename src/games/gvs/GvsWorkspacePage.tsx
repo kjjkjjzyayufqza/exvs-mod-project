@@ -90,6 +90,7 @@ export default function GvsWorkspacePage() {
           research={{ label: t("credits.researchLabel"), url: REPOSITORY_URL, note: t("credits.researchNote") }}
         />
       }
+      sourcesKey={packageDir}
       left={<GvsSourcesPanel />}
       center={<GvsPackagePanel view={view} onCreated={setPending} />}
       right={<GvsInspector view={current} />}

@@ -937,17 +937,159 @@
   min-width: 0;
 }
 @container (min-width: 760px) {
-  .ps4-texture__grid {
+  .ps4-ws:not([data-inspector="stacked"]) .ps4-texture__grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 320px;
   }
-  .ps4-texture__view {
+  .ps4-ws:not([data-inspector="stacked"]) .ps4-texture__view {
     min-height: 0;
   }
-  .ps4-texture__side {
+  .ps4-ws:not([data-inspector="stacked"]) .ps4-texture__side {
     overflow: auto;
     border-left: 1px solid var(--ps4-line);
   }
+}
+.ps4-ws[data-inspector="split"] .ps4-texture__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+}
+.ps4-ws[data-inspector="split"] .ps4-texture__view {
+  min-height: 0;
+}
+.ps4-ws[data-inspector="split"] .ps4-texture__side {
+  overflow: auto;
+  border-left: 1px solid var(--ps4-line);
+}
+
+/* ---------- layouts ---------- */
+
+.ps4-stage {
+  position: relative;
+}
+.ps4-gutter-h {
+  position: relative;
+  height: 8px;
+  flex-shrink: 0;
+}
+.ps4-gutter-h::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  width: 28px;
+  height: 2px;
+  margin-left: -14px;
+  border-radius: 1px;
+  background: var(--ps4-line-strong);
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.ps4-gutter-h:hover::after,
+.ps4-gutter-h[data-separator="hover"]::after,
+.ps4-gutter-h[data-separator="focus"]::after,
+.ps4-gutter-h[data-separator="active"]::after {
+  opacity: 1;
+  background: var(--ps4-accent);
+}
+.ps4-drawer {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 8px;
+  z-index: 6;
+  width: min(400px, 72%);
+  transform: translateX(calc(-100% - 16px));
+  transition: transform 240ms var(--ps4-ease);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 0.35);
+}
+.ps4-drawer[data-open="true"] {
+  transform: none;
+}
+.ps4-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: rgb(0 0 0 / 0.28);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+.ps4-drawer-backdrop[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ---------- density ---------- */
+
+.ps4-ws[data-density="comfortable"] {
+  font-size: 13.5px;
+}
+.ps4-ws[data-density="comfortable"] .ps4-btn,
+.ps4-ws[data-density="comfortable"] .ps4-input,
+.ps4-ws[data-density="comfortable"] .ps4-select {
+  height: 32px;
+}
+.ps4-ws[data-density="comfortable"] .ps4-btn[data-icon="true"] {
+  width: 32px;
+}
+.ps4-ws[data-density="comfortable"] .ps4-panel__head {
+  min-height: 42px;
+}
+.ps4-ws[data-density="comfortable"] .ps4-table td {
+  height: 32px;
+}
+.ps4-ws[data-density="comfortable"] .ps4-section {
+  padding: 14px 16px;
+}
+
+/* ---------- visual styles ---------- */
+
+.ps4-ws[data-style="clean"] {
+  --ps4-radius: 7px;
+}
+.ps4-ws[data-style="clean"] .ps4-panel::before,
+.ps4-ws[data-style="clean"] .ps4-panel::after,
+.ps4-ws[data-style="clean"] .ps4-masthead__stripe {
+  display: none;
+}
+.ps4-ws[data-style="clean"] .ps4-stage {
+  background-image: none;
+}
+.ps4-ws[data-style="clean"] .ps4-panel {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+}
+.ps4-ws[data-style="clean"] .ps4-masthead__mark {
+  margin: 8px 0 8px 10px;
+  padding-right: 16px;
+  border-radius: var(--ps4-radius);
+  clip-path: none;
+}
+.ps4-ws[data-style="clean"] .ps4-btn,
+.ps4-ws[data-style="clean"] .ps4-tab,
+.ps4-ws[data-style="clean"] .ps4-panel__title,
+.ps4-ws[data-style="clean"] .ps4-section__title,
+.ps4-ws[data-style="clean"] .ps4-field__label,
+.ps4-ws[data-style="clean"] .ps4-kv dt {
+  font-family: inherit;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+.ps4-ws[data-style="contrast"] {
+  --ps4-line: var(--ps4-line-strong);
+  --ps4-line-faint: var(--ps4-line-strong);
+  --ps4-ink-dim: var(--ps4-ink);
+  font-size: 14px;
+}
+.ps4-ws[data-style="contrast"] .ps4-stage {
+  background-image: none;
+}
+.ps4-ws[data-style="contrast"] .ps4-row[aria-selected="true"] {
+  outline: 2px solid var(--ps4-accent);
+  outline-offset: -2px;
+}
+.ps4-ws[data-style="contrast"] .ps4-chip {
+  border-width: 1.5px;
+  font-weight: 600;
 }
 
 /* ---------- data views ---------- */
@@ -1222,7 +1364,9 @@
   }
   .ps4-btn,
   .ps4-thumb,
-  .ps4-row__twist svg {
+  .ps4-row__twist svg,
+  .ps4-drawer,
+  .ps4-drawer-backdrop {
     transition: none;
   }
 }

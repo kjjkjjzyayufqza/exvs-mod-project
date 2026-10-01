@@ -137,6 +137,87 @@
     "licenseValue": "Code: PolyForm Shield 1.0.0. Docs: CC BY-NC-SA 4.0. See ACCEPTABLE_USE.md.",
     "keepNames": "Author and research credits are part of this tool. Do not remove or replace them in copies or derived work."
   },
+  "layout": {
+    "sources": "Sources"
+  },
+  "settings": {
+    "title": "MBON / GVS (PS4) tools",
+    "description": "How the PS4 workspaces look and where their tools appear.",
+    "reset": "Reset",
+    "sidebar": "Sidebar",
+    "layout": "Workspace layout",
+    "style": "Visual style",
+    "inspector": "Preview and details",
+    "density": "Density",
+    "sidebarMode": {
+      "grouped": {
+        "title": "Grouped by game",
+        "description": "OB tools first, then MBON and GVS sections."
+      },
+      "switcher": {
+        "title": "Game switcher",
+        "description": "Pick OB, MBON or GVS at the top; only its tools are listed."
+      },
+      "flat": {
+        "title": "One list",
+        "description": "Every tool in a single list."
+      },
+      "obOnly": {
+        "title": "OB only",
+        "description": "Hide the MBON and GVS tools from the sidebar."
+      }
+    },
+    "workspaceLayout": {
+      "three": {
+        "title": "Three columns",
+        "description": "Sources, package and inspector side by side."
+      },
+      "focus": {
+        "title": "Focus",
+        "description": "Sources slide in from a drawer, leaving more room to edit."
+      },
+      "stacked": {
+        "title": "Stacked",
+        "description": "Package above the inspector, good for tall screens."
+      }
+    },
+    "visualStyle": {
+      "hud": {
+        "title": "Hangar HUD",
+        "description": "Corner brackets, grid backdrop, condensed labels."
+      },
+      "clean": {
+        "title": "Clean",
+        "description": "Rounded panels without decoration."
+      },
+      "contrast": {
+        "title": "High contrast",
+        "description": "Stronger lines and larger text."
+      }
+    },
+    "inspectorLayout": {
+      "auto": "Auto",
+      "stacked": "Stacked",
+      "split": "Side by side"
+    },
+    "densityOption": {
+      "compact": "Compact",
+      "comfortable": "Comfortable"
+    }
+  },
+  "sidebar": {
+    "switcher": "Game",
+    "group": {
+      "ob": "Over Boost",
+      "mbon": "MBON · PS4",
+      "gvs": "GVS · PS4"
+    },
+    "short": {
+      "ob": "OB",
+      "mbon": "MBON",
+      "gvs": "GVS"
+    }
+  },
   "status": {
     "idle": "Ready",
     "running": "running",

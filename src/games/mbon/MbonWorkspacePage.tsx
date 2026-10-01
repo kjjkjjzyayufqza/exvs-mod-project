@@ -81,6 +81,7 @@ export default function MbonWorkspacePage() {
           research={{ label: t("credits.researchLabel"), url: BOOST_STUDIO_URL, note: t("credits.researchNote") }}
         />
       }
+      sourcesKey={packageDir}
       left={<MbonSourcesPanel />}
       center={<MbonPackagePanel view={view} onAdded={setPendingPath} />}
       right={<MbonInspector view={current} />}
