@@ -14,10 +14,19 @@ pub mod fhm;
 pub mod inspect;
 pub mod kinds;
 pub mod list_info;
+pub mod names;
 pub mod ntp3;
 pub mod nud;
 pub mod package;
 pub mod vbn;
+
+/// Data-init list of MBON with each item's source file and packages.
+pub fn init_catalog(
+    source_root: Option<&std::path::Path>,
+    workspace: Option<&std::path::Path>,
+) -> exvs_ps4_common::packages::InitCatalog {
+    exvs_ps4_common::packages::build_init_catalog(names::book(), &package::MbonFormat, source_root, workspace)
+}
 
 pub use exvs_ps4_common::error::{Error, Result};
 

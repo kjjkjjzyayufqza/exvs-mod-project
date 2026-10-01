@@ -13,10 +13,19 @@
 
 pub mod inspect;
 pub mod kinds;
+pub mod names;
 pub mod naming;
 pub mod nutexb;
 pub mod package;
 pub mod ssbh_view;
+
+/// Data-init list of GVS with each item's source file and packages.
+pub fn init_catalog(
+    source_root: Option<&std::path::Path>,
+    workspace: Option<&std::path::Path>,
+) -> exvs_ps4_common::packages::InitCatalog {
+    exvs_ps4_common::packages::build_init_catalog(names::book(), &package::GvsFormat, source_root, workspace)
+}
 
 pub use exvs_ps4_common::error::{Error, Result};
 

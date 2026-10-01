@@ -29,7 +29,10 @@ use exvs_ps4_common::archive::{ArchiveHeader, ArchiveIndex, NodeFields, TreeNode
 use exvs_ps4_common::archive_write::{logical_insert_position, ArchiveDraft, DataSource, DraftFile, WriteReport};
 use exvs_ps4_common::digest::{sha256_file, sha256_hex};
 use exvs_ps4_common::error::{Error, Result};
+use exvs_ps4_common::names::{parse_hash, safe_relative_dir};
+use exvs_ps4_common::packages::{self as kit, PackageFormat, PackageStatus, RepackTargets};
 use exvs_ps4_common::provenance;
+use exvs_ps4_common::workspace::PackageChanges;
 use serde::{Deserialize, Serialize};
 
 use crate::kinds::{classify, extension_for, type_for_extension, GvsKind};
@@ -38,6 +41,35 @@ use crate::naming::{name_archive, sanitize};
 pub const MANIFEST_NAME: &str = "gvs_package.json";
 pub const MANIFEST_FORMAT: &str = "exvs-gvs-package";
 pub const MANIFEST_VERSION: u32 = 1;
+/// Change baseline beside the manifest (see `exvs_ps4_common::workspace`).
+pub const STATE_NAME: &str = "gvs_package.state.json";
+
+/// GVS package folders for the shared bookkeeping.
+pub struct GvsFormat;
+
+impl PackageFormat for GvsFormat {
+    fn manifest_name(&self) -> &'static str {
+        MANIFEST_NAME
+    }
+
+    fn state_name(&self) -> &'static str {
+        STATE_NAME
+    }
+
+    fn source_name(&self, package_dir: &Path) -> Result<String> {
+        Ok(load_manifest(package_dir)?.source_name)
+    }
+
+    fn tracked_files(&self, package_dir: &Path) -> Result<Vec<String>> {
+        let mut seen = std::collections::HashSet::new();
+        Ok(load_manifest(package_dir)?
+            .files
+            .into_iter()
+            .map(|file| file.path)
+            .filter(|path| seen.insert(path.clone()))
+            .collect())
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -206,6 +238,7 @@ pub fn extract_package(source: &Path, package_dir: &Path, overwrite: bool) -> Re
             package_dir.display()
         )));
     }
+    kit::ensure_replaceable(&GvsFormat, package_dir)?;
     let index = ArchiveIndex::read_path(source)?;
     if overwrite && package_dir.exists() {
         std::fs::remove_dir_all(package_dir).map_err(|error| Error::io(package_dir.display(), error))?;
@@ -264,12 +297,57 @@ pub fn extract_package(source: &Path, package_dir: &Path, overwrite: bool) -> Re
         root,
     };
     save_manifest(package_dir, &manifest)?;
+    kit::refresh_baseline(&GvsFormat, package_dir, "extract")?;
     Ok(ExtractReport {
         package_dir: package_dir.to_string_lossy().into_owned(),
         file_count: manifest.files.len(),
         folder_count: names.folder_names.len(),
         bytes_written,
     })
+}
+
+/// Extract `source` into the workspace. `relative` overrides the folder
+/// (`012list/character_list`); by default the archive's name from the GVS
+/// name table is used, or its hash when the archive is not named.
+pub fn extract_into_workspace(
+    source: &Path,
+    workspace: &Path,
+    relative: Option<&str>,
+    overwrite: bool,
+) -> Result<ExtractReport> {
+    let stem = source
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .ok_or_else(|| Error::invalid(format!("{} has no file name", source.display())))?;
+    let explicit = relative.is_some();
+    let relative = match relative {
+        Some(text) => safe_relative_dir(text)?,
+        None => crate::names::book().default_relative_dir(&stem),
+    };
+    let package_dir = kit::choose_package_dir(&GvsFormat, workspace, &relative, parse_hash(&stem), explicit);
+    extract_package(source, &package_dir, overwrite)
+}
+
+/// Pending edits since the last extraction or repack.
+pub fn package_changes(package_dir: &Path) -> Result<PackageChanges> {
+    kit::package_changes(&GvsFormat, package_dir)
+}
+
+/// Change state of every package of a workspace.
+pub fn workspace_status(workspace: &Path) -> Vec<PackageStatus> {
+    kit::workspace_status(&GvsFormat, workspace)
+}
+
+/// Accept the current files as the new baseline without repacking.
+pub fn mark_clean(package_dir: &Path) -> Result<()> {
+    kit::refresh_baseline(&GvsFormat, package_dir, "clean").map(|_| ())
+}
+
+/// Output choices for a repack: beside the package folder, or inside a mod
+/// folder that mirrors the game root (`archives/XX/HASH.bin`).
+pub fn repack_targets(package_dir: &Path, mod_root: Option<&Path>) -> Result<RepackTargets> {
+    let manifest = load_manifest(package_dir)?;
+    Ok(kit::repack_targets(package_dir, &manifest.source_name, "bin", true, mod_root))
 }
 
 pub fn load_manifest(package_dir: &Path) -> Result<GvsManifest> {
@@ -321,6 +399,7 @@ pub fn build_package_bytes(package_dir: &Path) -> Result<Vec<u8>> {
 pub fn repack_package(package_dir: &Path, output: &Path) -> Result<RepackReport> {
     let manifest = load_manifest(package_dir)?;
     let archive = package_draft(package_dir)?.write_path(output)?;
+    kit::refresh_baseline(&GvsFormat, package_dir, "repack")?;
     let digest = sha256_file(output)?;
     Ok(RepackReport {
         output_path: output.to_string_lossy().into_owned(),
@@ -329,14 +408,6 @@ pub fn repack_package(package_dir: &Path, output: &Path) -> Result<RepackReport>
         output_sha256: digest,
         archive,
     })
-}
-
-/// Default repack location: `<workspace>/_out/archives/<XX>/<NAME>.bin`.
-pub fn default_output_path(workspace: &Path, source_name: &str) -> PathBuf {
-    let hash: String = source_name.chars().take_while(|ch| ch.is_ascii_hexdigit()).collect();
-    let bucket = if hash.len() >= 2 { hash[..2].to_ascii_uppercase() } else { "XX".to_string() };
-    let name = if hash.len() == 8 { hash.to_ascii_uppercase() } else { source_name.to_string() };
-    workspace.join("_out").join("archives").join(bucket).join(format!("{name}.bin"))
 }
 
 /// Overwrite a member with the contents of `source_file`.
@@ -488,20 +559,16 @@ pub fn remove_node(package_dir: &Path, node_path: &[usize]) -> Result<()> {
     save_manifest(package_dir, &manifest)
 }
 
-/// Package folders directly under `workspace`.
+/// Package folders below `workspace`, at any route depth (`11223344`,
+/// `012list/character_list`, `002chara/...`).
 pub fn list_packages(workspace: &Path) -> Result<Vec<(PathBuf, GvsManifest)>> {
-    let mut out = Vec::new();
-    let entries = std::fs::read_dir(workspace).map_err(|error| Error::io(workspace.display(), error))?;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.join(MANIFEST_NAME).is_file() {
-            if let Ok(manifest) = load_manifest(&path) {
-                out.push((path, manifest));
-            }
-        }
+    if !workspace.is_dir() {
+        return Err(Error::invalid(format!("{} is not a folder", workspace.display())));
     }
-    out.sort_by(|a, b| a.0.cmp(&b.0));
-    Ok(out)
+    Ok(kit::find_packages(&GvsFormat, workspace)
+        .into_iter()
+        .filter_map(|path| load_manifest(&path).ok().map(|manifest| (path, manifest)))
+        .collect())
 }
 
 /// Classify a member on disk.
@@ -559,7 +626,7 @@ mod tests {
         let folder = add_folder(&package, &[], "extra").unwrap();
         assert_eq!(folder, 2);
 
-        let output = default_output_path(&dir.path().join("ws"), "11223344");
+        let output = exvs_ps4_common::workspace::mod_output_path(&dir.path().join("ws/_out"), 0x11223344);
         let repacked = repack_package(&package, &output).unwrap();
         assert_eq!(repacked.identical_to_source, Some(false));
         let bytes = std::fs::read(&output).unwrap();
@@ -576,5 +643,45 @@ mod tests {
         assert!(!package.join("00/0000.efxbn").exists());
         let rebuilt = build_package_bytes(&package).unwrap();
         assert!(ArchiveIndex::parse(&rebuilt).unwrap().canonical_issues().is_empty());
+    }
+
+    #[test]
+    fn named_extraction_tracks_changes_until_the_next_repack() {
+        let dir = tempfile::tempdir().unwrap();
+        let game = dir.path().join("game");
+        std::fs::create_dir_all(game.join("archives/DF")).unwrap();
+        let built = sample_archive(dir.path());
+        let source = game.join("archives/DF/DFD38C70.bin");
+        std::fs::rename(&built, &source).unwrap();
+
+        let ws = dir.path().join("ws");
+        let report = extract_into_workspace(&source, &ws, None, false).unwrap();
+        let package = ws.join("012list/character_list");
+        assert_eq!(PathBuf::from(&report.package_dir), package);
+        assert!(!package_changes(&package).unwrap().is_dirty());
+        assert!(extract_into_workspace(&source, &ws, None, false).is_err(), "already extracted");
+
+        let catalog = crate::init_catalog(Some(&game), Some(&ws));
+        let item = catalog.items.iter().find(|item| item.hash == "DFD38C70").unwrap();
+        assert_eq!(item.packages.len(), 1);
+        assert!(item.source_path.is_some());
+
+        let replacement = dir.path().join("swap.bin");
+        std::fs::write(&replacement, vec![1u8; 99]).unwrap();
+        replace_file(&package, 1, &replacement).unwrap();
+        let status = workspace_status(&ws);
+        assert_eq!(status.len(), 1);
+        assert!(status[0].dirty && !status[0].manifest_changed);
+
+        let targets = repack_targets(&package, Some(&dir.path().join("mod"))).unwrap();
+        let output = PathBuf::from(targets.mod_path.unwrap());
+        assert!(output.ends_with("mod/archives/DF/DFD38C70.bin"));
+        repack_package(&package, &output).unwrap();
+        assert!(!package_changes(&package).unwrap().is_dirty());
+
+        add_folder(&package, &[], "extra").unwrap();
+        assert!(package_changes(&package).unwrap().manifest_changed);
+        mark_clean(&package).unwrap();
+        assert!(!package_changes(&package).unwrap().is_dirty());
     }
 }

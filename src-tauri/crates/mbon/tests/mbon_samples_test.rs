@@ -233,3 +233,48 @@ fn every_fhm_sample_extracts_and_repacks_through_a_package() {
         assert_eq!(std::fs::read(&output).unwrap(), bytes);
     }
 }
+
+#[test]
+fn data_init_names_the_list_pack_and_the_vs2_tables() {
+    let Some(root) = samples() else {
+        eprintln!("SKIP: MBON samples are not available");
+        return;
+    };
+    let book = exvs_mbon::names::book();
+    let work = tempfile::tempdir().unwrap();
+    let game = work.path().join("CUSA15006");
+    let workspace = work.path().join("workspace");
+    let mut placed = Vec::new();
+    for path in files(&root) {
+        let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+        let Some(hash) = exvs_ps4_common::names::parse_hash(&stem) else { continue };
+        if book.get(hash).and_then(|name| name.group.as_ref()).is_none() || placed.contains(&hash) {
+            continue;
+        }
+        let target = game.join(exvs_ps4_common::workspace::archive_relative_path(hash));
+        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+        std::fs::copy(&path, &target).unwrap();
+        placed.push(hash);
+    }
+    assert!(placed.contains(&0xEB3A9691), "the BoostStudio list pack sample is named");
+    assert!(placed.len() >= 10, "placed {}", placed.len());
+
+    let catalog = exvs_mbon::init_catalog(Some(&game), Some(&workspace));
+    assert_eq!(catalog.available, placed.len());
+    for item in catalog.items.iter().filter(|item| item.source_path.is_some()) {
+        let source = PathBuf::from(item.source_path.as_ref().unwrap());
+        let report = package::extract_into_workspace(&source, &workspace, None, &ExtractOptions::default())
+            .unwrap_or_else(|error| panic!("{}: {error}", item.hash));
+        let package_dir = PathBuf::from(&report.package_dir);
+        assert!(package_dir.ends_with(&item.relative_dir), "{} -> {}", item.hash, report.package_dir);
+        let targets = package::repack_targets(&package_dir, Some(&work.path().join("mod"))).unwrap();
+        // Samples are payloads without the PS4 container, so they repack beside the package.
+        assert!(targets.mod_path.is_none());
+        let repacked = package::repack_package(&package_dir, Path::new(&targets.beside)).unwrap();
+        assert_eq!(repacked.identical_to_source, Some(true), "{}", item.hash);
+    }
+    assert!(workspace.join("common/list_info/0000.fhm").is_dir());
+    let again = exvs_mbon::init_catalog(Some(&game), Some(&workspace));
+    assert_eq!(again.extracted, placed.len());
+    assert!(package::workspace_status(&workspace).iter().all(|entry| !entry.dirty));
+}
