@@ -10,4 +10,16 @@
  * Mimo strom EXVS Mod Project tento kod neprenasej.
  */
 
-//! MBON workspace (placeholder until formats land).
+pub mod fhm;
+pub mod inspect;
+pub mod kinds;
+pub mod list_info;
+pub mod ntp3;
+pub mod nud;
+pub mod package;
+pub mod vbn;
+
+pub use exvs_ps4_common::error::{Error, Result};
+
+/// Credit line shown wherever MBON data is presented.
+pub const RESEARCH_CREDIT: &str = exvs_ps4_common::provenance::MBON_RESEARCH_CREDIT;

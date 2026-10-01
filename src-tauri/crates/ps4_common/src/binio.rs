@@ -186,6 +186,10 @@ impl ByteWriter {
         self.buffer[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
     }
 
+    pub fn patch(&mut self, offset: usize, bytes: &[u8]) {
+        self.buffer[offset..offset + bytes.len()].copy_from_slice(bytes);
+    }
+
     pub fn as_slice(&self) -> &[u8] {
         &self.buffer
     }

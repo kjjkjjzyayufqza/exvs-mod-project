@@ -18,6 +18,7 @@ serde_json = { version = "1.0", features = ["preserve_order"] }
 rayon = "1.10"
 image = { version = "0.25.9", default-features = false, features = ["png"] }
 image_dds = { version = "0.7.2", features = ["ddsfile", "image"] }
+sha2 = "0.10"
 
 [dev-dependencies]
 tempfile = "3"

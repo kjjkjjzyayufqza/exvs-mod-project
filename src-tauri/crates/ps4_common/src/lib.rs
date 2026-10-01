@@ -28,6 +28,7 @@
 pub mod archive;
 pub mod archive_write;
 pub mod binio;
+pub mod digest;
 pub mod error;
 pub mod provenance;
 pub mod scan;
