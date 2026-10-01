@@ -24,6 +24,7 @@
 
 use exvs_ps4_common::binio::{c_string, f32_be, slice, u16_be, u32_be, ByteWriter};
 use exvs_ps4_common::error::{Error, Result};
+use exvs_ps4_common::skeleton::PoseBone;
 use serde::{Deserialize, Serialize};
 
 pub const MAGIC: [u8; 4] = *b"VBN ";
@@ -52,7 +53,13 @@ pub struct VbnBone {
     pub translation: [f32; 3],
     pub rotation: [f32; 3],
     pub scale: [f32; 3],
+    /// First matrix block, named `inverse_bind_matrices` in BoostStudio. Across
+    /// the MBON sample rigs it holds the bone's world bind-pose transform in
+    /// row-vector form (translation in the last row), equal to the local
+    /// translation / rotation / scale chain with rotations applied X, Y, Z.
     pub inverse_bind: [[f32; 4]; 4],
+    /// Second matrix block (`bind_matrices` in BoostStudio): the inverse of
+    /// the first block, i.e. world to bone space.
     pub bind: [[f32; 4]; 4],
 }
 
@@ -89,6 +96,38 @@ fn read_matrix(bytes: &[u8], at: usize) -> Result<[[f32; 4]; 4]> {
         *values = read_vec::<4>(bytes, at + row * 16)?;
     }
     Ok(out)
+}
+
+/// Column-vector local matrix: translation * Rz * Ry * Rx * scale.
+fn local_matrix(bone: &VbnBone) -> [[f32; 4]; 4] {
+    let [rx, ry, rz] = bone.rotation;
+    let (sx, cx) = rx.sin_cos();
+    let (sy, cy) = ry.sin_cos();
+    let (sz, cz) = rz.sin_cos();
+    let rotation = [
+        [cy * cz, sx * sy * cz - cx * sz, cx * sy * cz + sx * sz],
+        [cy * sz, sx * sy * sz + cx * cz, cx * sy * sz - sx * cz],
+        [-sy, sx * cy, cx * cy],
+    ];
+    let mut out = [[0f32; 4]; 4];
+    for (row, values) in rotation.iter().enumerate() {
+        for (column, value) in values.iter().enumerate() {
+            out[row][column] = value * bone.scale[column];
+        }
+        out[row][3] = bone.translation[row];
+    }
+    out[3][3] = 1.0;
+    out
+}
+
+fn multiply(a: &[[f32; 4]; 4], b: &[[f32; 4]; 4]) -> [[f32; 4]; 4] {
+    let mut out = [[0f32; 4]; 4];
+    for row in 0..4 {
+        for column in 0..4 {
+            out[row][column] = (0..4).map(|k| a[row][k] * b[k][column]).sum();
+        }
+    }
+    out
 }
 
 impl Vbn {
@@ -178,6 +217,35 @@ impl Vbn {
     }
 
     /// Children indices per bone, for tree views.
+    /// World bind-pose positions, read from the first matrix block.
+    pub fn pose(&self) -> Vec<PoseBone> {
+        let count = self.bones.len();
+        self.bones
+            .iter()
+            .map(|bone| PoseBone {
+                name: bone.name.clone(),
+                parent: bone.parent_index(count),
+                position: [bone.inverse_bind[3][0], bone.inverse_bind[3][1], bone.inverse_bind[3][2]],
+            })
+            .collect()
+    }
+
+    /// World positions rebuilt from the local transforms (rotation X, then Y,
+    /// then Z, column-vector form). Matches [`Vbn::pose`] on well-formed rigs.
+    pub fn pose_from_locals(&self) -> Vec<[f32; 3]> {
+        let count = self.bones.len();
+        let mut worlds: Vec<[[f32; 4]; 4]> = Vec::with_capacity(count);
+        for bone in &self.bones {
+            let local = local_matrix(bone);
+            let world = match bone.parent_index(count).filter(|parent| *parent < worlds.len()) {
+                Some(parent) => multiply(&worlds[parent], &local),
+                None => local,
+            };
+            worlds.push(world);
+        }
+        worlds.iter().map(|world| [world[0][3], world[1][3], world[2][3]]).collect()
+    }
+
     pub fn children(&self) -> Vec<Vec<usize>> {
         let mut out = vec![Vec::new(); self.bones.len()];
         for (index, bone) in self.bones.iter().enumerate() {
@@ -195,6 +263,47 @@ mod tests {
 
     fn identity() -> [[f32; 4]; 4] {
         [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]
+    }
+
+    #[test]
+    fn local_chain_matches_a_hand_built_world_matrix() {
+        let mut vbn = Vbn {
+            version: 2,
+            unk_6: 0,
+            flags: 1,
+            animation_bone_count: 2,
+            attachment_bone_count: 0,
+            bones: Vec::new(),
+            header_padding: [0; 8],
+            matrix_padding: Vec::new(),
+        };
+        let bone = |name: &str, parent: i32, translation: [f32; 3], rotation: [f32; 3], world: [f32; 3]| {
+            let mut matrix = identity();
+            matrix[3][0] = world[0];
+            matrix[3][1] = world[1];
+            matrix[3][2] = world[2];
+            VbnBone {
+                name: name.into(),
+                bone_type: 0,
+                parent,
+                translation,
+                rotation,
+                scale: [1.0; 3],
+                inverse_bind: matrix,
+                bind: identity(),
+            }
+        };
+        // A quarter turn about Z maps the child's local +X onto world +Y.
+        let quarter = std::f32::consts::FRAC_PI_2;
+        vbn.bones.push(bone("root", NO_PARENT, [0.0, 10.0, 0.0], [0.0, 0.0, quarter], [0.0, 10.0, 0.0]));
+        vbn.bones.push(bone("tip", 0, [2.0, 0.0, 0.0], [0.0; 3], [0.0, 12.0, 0.0]));
+        let rebuilt = vbn.pose_from_locals();
+        for (posed, local) in vbn.pose().iter().zip(&rebuilt) {
+            for axis in 0..3 {
+                assert!((posed.position[axis] - local[axis]).abs() < 1e-5, "{posed:?} vs {local:?}");
+            }
+        }
+        assert_eq!(vbn.pose()[1].parent, Some(0));
     }
 
     #[test]

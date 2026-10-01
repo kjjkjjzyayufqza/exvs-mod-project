@@ -27,6 +27,7 @@
 
 pub mod archive;
 pub mod archive_write;
+pub mod batch;
 pub mod binio;
 pub mod cache;
 pub mod digest;
@@ -34,6 +35,7 @@ pub mod error;
 pub mod mesh_pack;
 pub mod provenance;
 pub mod scan;
+pub mod skeleton;
 pub mod texture;
 
 pub use archive::{ArchiveHeader, ArchiveIndex, NodeFields, TreeNode};
