@@ -207,14 +207,9 @@ impl ArchiveDraft {
             Some(TreeNode::Folder { .. }) => {}
             _ => return Err(Error::invalid(format!("{folder_path:?} is not a folder"))),
         }
-        let position = match self.files.iter().rposition(|file| file.type_id == type_id) {
-            Some(last) => last + 1,
-            None => {
-                self.type_order.push(type_id);
-                self.files.len()
-            }
-        };
-        let inserted = position as u32;
+        let types: Vec<u32> = self.files.iter().map(|file| file.type_id).collect();
+        let inserted = logical_insert_position(&mut self.type_order, &types, type_id);
+        let position = inserted as usize;
         self.root
             .remap_files(&|file| if file >= inserted { file + 1 } else { file });
         self.files.insert(position, DraftFile { type_id, source });
@@ -450,6 +445,29 @@ impl ArchiveDraft {
     }
 }
 
+/// Logical index for a new file of `type_id`: right after the last file of
+/// that type, or at the end with the type appended to `type_order`. Callers
+/// that keep their own tree must shift item indices `>=` the result by one.
+pub fn logical_insert_position(type_order: &mut Vec<u32>, type_ids: &[u32], type_id: u32) -> u32 {
+    if let Some(last) = type_ids.iter().rposition(|candidate| *candidate == type_id) {
+        return (last + 1) as u32;
+    }
+    match type_order.iter().position(|candidate| *candidate == type_id) {
+        Some(order) => {
+            let preceding = &type_order[..order];
+            type_ids
+                .iter()
+                .rposition(|candidate| preceding.contains(candidate))
+                .map(|last| last + 1)
+                .unwrap_or(0) as u32
+        }
+        None => {
+            type_order.push(type_id);
+            type_ids.len() as u32
+        }
+    }
+}
+
 fn write_zeros(out: &mut dyn Write, mut count: u64) -> Result<()> {
     const ZEROS: [u8; 4096] = [0u8; 4096];
     while count > 0 {
@@ -563,6 +581,16 @@ mod tests {
         draft.remove_node(&[0]).unwrap();
         assert_eq!(draft.files.len(), 2, "file 0 is still listed by the new item");
         assert_eq!(draft.root.count_items_for_file(0), 1);
+    }
+
+    #[test]
+    fn insert_position_respects_declared_but_empty_types() {
+        let mut order = vec![0x0B, 0x11, 0x00];
+        let types = [0x0B, 0x0B, 0x00];
+        assert_eq!(logical_insert_position(&mut order, &types, 0x11), 2);
+        assert_eq!(logical_insert_position(&mut order, &types, 0x0B), 2);
+        assert_eq!(logical_insert_position(&mut order, &types, 0x0F), 3);
+        assert_eq!(order, vec![0x0B, 0x11, 0x00, 0x0F]);
     }
 
     #[test]

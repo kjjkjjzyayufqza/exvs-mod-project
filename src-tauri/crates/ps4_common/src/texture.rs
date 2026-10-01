@@ -157,6 +157,26 @@ pub fn decode_base_rgba(layout: PixelLayout, width: u32, height: u32, data: &[u8
     }
 }
 
+/// Like [`decode_base_rgba`], but zero-pads data that stops short of the last
+/// block row (some GVS BC7 textures round the block-row count down).
+pub fn decode_base_rgba_lenient(layout: PixelLayout, width: u32, height: u32, data: &[u8]) -> Result<Vec<u8>> {
+    let needed = mip_byte_len(layout, width, height, 0);
+    if data.len() >= needed {
+        return decode_base_rgba(layout, width, height, data);
+    }
+    let row_bytes = if layout.is_block_compressed() {
+        width.div_ceil(4) as usize * layout.block_bytes()
+    } else {
+        width as usize * layout.block_bytes()
+    };
+    if needed - data.len() > row_bytes {
+        return decode_base_rgba(layout, width, height, data);
+    }
+    let mut padded = data.to_vec();
+    padded.resize(needed, 0);
+    decode_base_rgba(layout, width, height, &padded)
+}
+
 /// Encode RGBA8 pixels into `layout`, generating `mip_count` levels.
 pub fn encode_rgba(layout: PixelLayout, width: u32, height: u32, rgba: &[u8], mip_count: u32) -> Result<Vec<u8>> {
     let expected = width as usize * height as usize * 4;
@@ -377,6 +397,16 @@ mod tests {
         assert_eq!(decode_png(&png).unwrap(), (8, 4, rgba.clone()));
         let (w, h, small) = downscale_rgba(8, 4, &rgba, 4);
         assert_eq!((w, h, small.len()), (4, 2, 32));
+    }
+
+    #[test]
+    fn lenient_decode_pads_one_missing_block_row_only() {
+        let rgba = gradient(8, 8);
+        let data = encode_rgba(PixelLayout::Bc1, 8, 8, &rgba, 1).unwrap();
+        let short = &data[..data.len() - 16];
+        assert!(decode_base_rgba(PixelLayout::Bc1, 8, 8, short).is_err());
+        assert_eq!(decode_base_rgba_lenient(PixelLayout::Bc1, 8, 8, short).unwrap().len(), 8 * 8 * 4);
+        assert!(decode_base_rgba_lenient(PixelLayout::Bc1, 8, 8, &data[..8]).is_err());
     }
 
     #[test]

@@ -11,4 +11,14 @@
     Ausserhalb des EXVS-Mod-Project-Baums: nicht portieren, nicht weiterbauen.
 */
 
-//! GVS workspace (placeholder until formats land).
+pub mod inspect;
+pub mod kinds;
+pub mod naming;
+pub mod nutexb;
+pub mod package;
+pub mod ssbh_view;
+
+pub use exvs_ps4_common::error::{Error, Result};
+
+/// Credit line shown wherever GVS data is presented.
+pub const RESEARCH_CREDIT: &str = exvs_ps4_common::provenance::GVS_RESEARCH_CREDIT;
