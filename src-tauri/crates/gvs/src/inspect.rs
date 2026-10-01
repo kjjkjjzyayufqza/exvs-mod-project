@@ -79,7 +79,10 @@ pub enum Inspection {
         members: Vec<ArchiveMember>,
     },
     Texture(TextureInfo),
-    Ssbh(SsbhSummary),
+    /// Struct variant: `SsbhSummary` carries its own `type` tag.
+    Ssbh {
+        summary: SsbhSummary,
+    },
     Other {
         kind: GvsKind,
         label: String,
@@ -97,7 +100,9 @@ pub fn inspect_bytes(bytes: &[u8]) -> Result<Inspection> {
     let kind = classify(bytes);
     Ok(match kind {
         GvsKind::Nutexb => Inspection::Texture(TextureInfo::from(&Nutexb::parse(bytes)?)),
-        kind if kind.is_ssbh() => Inspection::Ssbh(summarize(bytes)?),
+        kind if kind.is_ssbh() => Inspection::Ssbh {
+            summary: summarize(bytes)?,
+        },
         kind => Inspection::Other {
             kind,
             label: kind.label().to_string(),

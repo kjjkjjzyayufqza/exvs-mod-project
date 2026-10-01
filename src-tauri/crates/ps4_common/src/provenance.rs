@@ -60,9 +60,81 @@ pub fn gvs() -> Provenance {
     }
 }
 
+/// Tokens every MBON source notice must keep.
+pub const MBON_NOTICE_TOKENS: &[&str] =
+    &[AUTHOR, PRODUCT, REPOSITORY, BOOSTSTUDIO_AUTHOR, "BoostStudio", BOOSTSTUDIO_URL];
+/// Tokens every GVS source notice must keep.
+pub const GVS_NOTICE_TOKENS: &[&str] = &[AUTHOR, PRODUCT, REPOSITORY, "VS2"];
+/// Tokens every shared PS4 source notice must keep (it serves both games).
+pub const PS4_NOTICE_TOKENS: &[&str] =
+    &[AUTHOR, PRODUCT, REPOSITORY, BOOSTSTUDIO_AUTHOR, "BoostStudio", BOOSTSTUDIO_URL, "VS2"];
+
+/// The file-top comment block: a leading `/* ... */` or a run of `//` lines.
+pub fn leading_notice(text: &str) -> &str {
+    let text = text.trim_start_matches('\u{feff}');
+    if text.starts_with("/*") {
+        return match text.find("*/") {
+            Some(end) => &text[..end + 2],
+            None => text,
+        };
+    }
+    let mut end = 0;
+    for line in text.split_inclusive('\n') {
+        if !line.starts_with("//") {
+            break;
+        }
+        end += line.len();
+    }
+    &text[..end]
+}
+
+/// Walk `roots` for files with one of `extensions` and report every file whose
+/// leading notice lost one of `tokens`. An empty result means all notices hold.
+pub fn audit_source_notices(
+    roots: &[std::path::PathBuf],
+    extensions: &[&str],
+    tokens: &[&str],
+) -> std::io::Result<Vec<String>> {
+    let mut problems = Vec::new();
+    let mut pending: Vec<std::path::PathBuf> = roots.to_vec();
+    while let Some(path) = pending.pop() {
+        if path.is_dir() {
+            if path.file_name().is_some_and(|name| name == "target" || name == "node_modules") {
+                continue;
+            }
+            for entry in std::fs::read_dir(&path)? {
+                pending.push(entry?.path());
+            }
+            continue;
+        }
+        let matches = path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extensions.contains(&extension));
+        if !matches {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path)?;
+        let notice = leading_notice(&text);
+        let missing: Vec<&str> = tokens.iter().copied().filter(|token| !notice.contains(token)).collect();
+        if !missing.is_empty() {
+            problems.push(format!("{}: notice lacks {}", path.display(), missing.join(", ")));
+        }
+    }
+    problems.sort();
+    Ok(problems)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn leading_notice_stops_at_the_first_code_line() {
+        assert_eq!(leading_notice("// a\n// b\nfn main() {}\n"), "// a\n// b\n");
+        assert_eq!(leading_notice("/* a\n * b\n */\nfn main() {}\n"), "/* a\n * b\n */");
+        assert_eq!(leading_notice("fn main() {}\n"), "");
+    }
 
     #[test]
     fn credits_name_every_author() {

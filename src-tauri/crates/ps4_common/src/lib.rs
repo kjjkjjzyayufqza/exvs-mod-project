@@ -28,8 +28,10 @@
 pub mod archive;
 pub mod archive_write;
 pub mod binio;
+pub mod cache;
 pub mod digest;
 pub mod error;
+pub mod mesh_pack;
 pub mod provenance;
 pub mod scan;
 pub mod texture;

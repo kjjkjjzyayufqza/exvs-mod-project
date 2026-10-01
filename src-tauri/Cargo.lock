@@ -1547,10 +1547,13 @@ dependencies = [
 name = "exvs_gvs"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "exvs_ps4_common",
  "rayon",
  "serde",
  "serde_json",
+ "ssbh_data",
+ "ssbh_lib",
  "tempfile",
 ]
 
@@ -1558,6 +1561,7 @@ dependencies = [
 name = "exvs_mbon"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "exvs_ps4_common",
  "rayon",
  "serde",
@@ -1574,6 +1578,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
 ]
 
