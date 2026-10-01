@@ -11,6 +11,7 @@
 // ================================================
 
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { installBrowserStubs, TEST_PROVENANCE } from "../ps4-common/testHarness";
 import type { ListView, MbonPackageView, TextureSummary } from "./types";
@@ -92,10 +93,56 @@ beforeEach(() => {
   invokeMock.mockReset();
   invokeMock.mockImplementation(async (command: string) => {
     switch (command) {
+      case "mbon_workspace_status":
+        return [
+          {
+            dir: PACKAGE,
+            relative: "SYNTH001",
+            sourceName: "SYNTH001",
+            hasBaseline: true,
+            dirty: true,
+            manifestChanged: false,
+            changeCount: 1,
+            sample: ["0000.fhm/001.nut"],
+            error: null,
+          },
+        ];
+      case "mbon_init_catalog":
+        return {
+          archivesRoot: "C:/games/CUSA15006/archives",
+          available: 1,
+          extracted: 0,
+          items: [
+            {
+              hash: "EB3A9691",
+              title: "List Info",
+              group: "boost_studio",
+              route: "common",
+              name: "list_info",
+              relativeDir: "common/list_info",
+              nameSource: "boost-studio",
+              sourcePath: "C:/games/CUSA15006/archives/EB/EB3A9691.bin",
+              size: 362292,
+              modifiedMs: 0,
+              packages: [],
+            },
+          ],
+        };
       case "mbon_credits":
         return provenance;
       case "mbon_list_packages":
-        return [{ dir: PACKAGE, name: "SYNTH001", sourceName: "SYNTH001", sourcePath: null, payloadCount: 1, container: true }];
+        return [
+          {
+            dir: PACKAGE,
+            name: "SYNTH001",
+            relative: "SYNTH001",
+            sourceName: "SYNTH001",
+            sourcePath: null,
+            payloadCount: 1,
+            container: true,
+            title: null,
+          },
+        ];
       case "mbon_package_view":
         return view;
       case "mbon_nut_textures":
@@ -120,7 +167,11 @@ async function renderPage() {
   const { default: MbonWorkspacePage } = await import("./MbonWorkspacePage");
   const { useMbonStore } = await import("./store");
   useMbonStore.setState({ workspace: WORKSPACE, packageDir: PACKAGE, selection: null, verify: null });
-  render(<MbonWorkspacePage />);
+  render(
+    <MemoryRouter>
+      <MbonWorkspacePage />
+    </MemoryRouter>,
+  );
   await screen.findByText("001.nut");
 }
 
@@ -163,6 +214,21 @@ describe("MBON workspace page", () => {
         value: "Alpha Prime",
       }),
     );
+  });
+
+  it("shows pending changes and opens data init with the MBON catalog", async () => {
+    await renderPage();
+    expect(await screen.findByText("1 pending change")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Repack changes" })).toHaveTextContent("1");
+    const { useMbonStore } = await import("./store");
+    useMbonStore.setState({ sourceRoot: "C:/games/CUSA15006" });
+    fireEvent.click(screen.getAllByRole("button", { name: "Data init" })[0]);
+    expect(await screen.findByText("List Info")).toBeInTheDocument();
+    expect(invokeMock).toHaveBeenCalledWith("mbon_init_catalog", {
+      sourceRoot: "C:/games/CUSA15006",
+      workspace: WORKSPACE,
+    });
+    expect(screen.getByText("common/list_info")).toBeInTheDocument();
   });
 
   it("verifies the rebuild and reports it in the status bar", async () => {

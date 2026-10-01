@@ -93,7 +93,8 @@ pub struct PackageStatus {
     pub error: Option<String>,
 }
 
-fn status_of(format: &dyn PackageFormat, workspace: &Path, dir: &Path) -> PackageStatus {
+/// Change state of one package; `relative` is computed against `workspace`.
+pub fn package_status(format: &dyn PackageFormat, workspace: &Path, dir: &Path) -> PackageStatus {
     let relative = relative_to(workspace, dir);
     let source_name = format.source_name(dir).unwrap_or_default();
     match package_changes(format, dir) {
@@ -133,7 +134,7 @@ fn status_of(format: &dyn PackageFormat, workspace: &Path, dir: &Path) -> Packag
 pub fn workspace_status(format: &dyn PackageFormat, workspace: &Path) -> Vec<PackageStatus> {
     find_packages(format, workspace)
         .par_iter()
-        .map(|dir| status_of(format, workspace, dir))
+        .map(|dir| package_status(format, workspace, dir))
         .collect()
 }
 

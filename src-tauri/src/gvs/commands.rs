@@ -174,6 +174,21 @@ pub async fn gvs_workspace_status(workspace: String) -> Result<Vec<PackageStatus
     .await
 }
 
+/// Pending edits of one package; `relative` is computed against `workspace`
+/// (or the package's parent folder).
+#[tauri::command]
+pub async fn gvs_package_status(package: String, workspace: Option<String>) -> Result<PackageStatus, String> {
+    blocking(move || {
+        let dir = PathBuf::from(package);
+        let base = workspace
+            .filter(|path| !path.trim().is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| dir.parent().map(Path::to_path_buf).unwrap_or_else(|| dir.clone()));
+        Ok(package::package_status(&base, &dir))
+    })
+    .await
+}
+
 /// Accept the package's current files as its baseline (no pending edits).
 #[tauri::command]
 pub async fn gvs_mark_clean(package: String) -> Result<(), String> {

@@ -10,7 +10,13 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { invokeBytes } from "../ps4-common/ipc";
-import type { ProvenanceRecord } from "../ps4-common/types";
+import type {
+  InitCatalog,
+  NameSuggestion,
+  PackageStatus,
+  ProvenanceRecord,
+  RepackTargets,
+} from "../ps4-common/types";
 import type {
   GvsExtractReport,
   GvsInspection,
@@ -27,13 +33,25 @@ import type {
 export const gvsApi = {
   scanFolder: (root: string) => invoke<GvsScanEntry[]>("gvs_scan_folder", { root }),
   inspect: (path: string) => invoke<GvsInspection>("gvs_inspect", { path }),
-  extract: (source: string, workspace: string, overwrite: boolean) =>
-    invoke<GvsExtractReport>("gvs_extract", { source, workspace, overwrite }),
+  /** Extract into `<workspace>/<name>`; without `name` the GVS name table picks the folder. */
+  extract: (source: string, workspace: string, overwrite: boolean, name?: string) =>
+    invoke<GvsExtractReport>("gvs_extract", { source, workspace, overwrite, name: name ?? null }),
+  initCatalog: (sourceRoot: string, workspace: string) =>
+    invoke<InitCatalog>("gvs_init_catalog", { sourceRoot: sourceRoot || null, workspace: workspace || null }),
+  suggestName: (source: string) => invoke<NameSuggestion>("gvs_suggest_name", { source }),
+  workspaceStatus: (workspace: string) => invoke<PackageStatus[]>("gvs_workspace_status", { workspace }),
+  packageStatus: (packageDir: string, workspace?: string) =>
+    invoke<PackageStatus>("gvs_package_status", { package: packageDir, workspace: workspace ?? null }),
+  markClean: (packageDir: string) => invoke<void>("gvs_mark_clean", { package: packageDir }),
+  repackTargets: (packageDir: string, modRoot?: string) =>
+    invoke<RepackTargets>("gvs_repack_targets", { package: packageDir, modRoot: modRoot ?? null }),
   listPackages: (workspace: string) => invoke<GvsPackageItem[]>("gvs_list_packages", { workspace }),
   packageView: (packageDir: string) => invoke<GvsPackageView>("gvs_package_view", { package: packageDir }),
-  repack: (packageDir: string, output?: string) =>
-    invoke<GvsRepackReport>("gvs_repack", { package: packageDir, output: output ?? null }),
-  verify: (packageDir: string) => invoke<GvsVerifyReport>("gvs_verify", { package: packageDir }),
+  /** Without `output` the archive goes to `<modRoot>/archives/XX/HASH.bin` (or beside the package). */
+  repack: (packageDir: string, output?: string, modRoot?: string) =>
+    invoke<GvsRepackReport>("gvs_repack", { package: packageDir, output: output ?? null, modRoot: modRoot ?? null }),
+  verify: (packageDir: string, modRoot?: string) =>
+    invoke<GvsVerifyReport>("gvs_verify", { package: packageDir, modRoot: modRoot ?? null }),
   addFile: (packageDir: string, folderPath: number[], file: string, typeId?: number) =>
     invoke<number>("gvs_add_file", { package: packageDir, folderPath, file, typeId: typeId ?? null }),
   addFolder: (packageDir: string, parentPath: number[], name: string) =>

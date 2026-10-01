@@ -455,6 +455,11 @@ pub fn package_changes(package_dir: &Path) -> Result<PackageChanges> {
     kit::package_changes(&MbonFormat, package_dir)
 }
 
+/// Change state of one package (`relative` against `workspace`).
+pub fn package_status(workspace: &Path, package_dir: &Path) -> PackageStatus {
+    kit::package_status(&MbonFormat, workspace, package_dir)
+}
+
 /// Change state of every package of a workspace.
 pub fn workspace_status(workspace: &Path) -> Vec<PackageStatus> {
     kit::workspace_status(&MbonFormat, workspace)

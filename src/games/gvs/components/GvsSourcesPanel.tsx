@@ -12,68 +12,50 @@
  * ................................................
  */
 
-import { useMemo } from "react";
-import { useTranslation } from "react-i18next";
-import { SourcesPanel, type SourcesAdapter } from "../../ps4-common/components/SourcesPanel";
-import { hex } from "../../ps4-common/format";
-import { gvsApi } from "../api";
-import { GVS_KINDS, gvsShort, gvsTone } from "../kinds";
+import { SourcesPanel } from "../../ps4-common/components/SourcesPanel";
+import type { Ps4GameAdapter } from "../../ps4-common/gameAdapter";
+import type { PackageStatus } from "../../ps4-common/types";
 import { useGvsStore } from "../store";
 
 /** GVS binding of the shared sources pane (packages + game file scanner). */
-export function GvsSourcesPanel() {
-  const { t: tc } = useTranslation("ps4-workspace");
+export function GvsSourcesPanel({
+  adapter,
+  status,
+  onOpenInit,
+  onOpenChanges,
+}: {
+  adapter: Ps4GameAdapter;
+  status: ReadonlyMap<string, PackageStatus>;
+  onOpenInit: () => void;
+  onOpenChanges: () => void;
+}) {
   const workspace = useGvsStore((state) => state.workspace);
   const sourceRoot = useGvsStore((state) => state.sourceRoot);
+  const modRoot = useGvsStore((state) => state.modRoot);
   const packageDir = useGvsStore((state) => state.packageDir);
+  const revision = useGvsStore((state) => state.workspaceRevision);
   const setWorkspace = useGvsStore((state) => state.setWorkspace);
   const setSourceRoot = useGvsStore((state) => state.setSourceRoot);
+  const setModRoot = useGvsStore((state) => state.setModRoot);
   const openPackage = useGvsStore((state) => state.openPackage);
-
-  const adapter = useMemo<SourcesAdapter>(
-    () => ({
-      game: "gvs",
-      kinds: [{ id: "container", short: "PS4 ARC" }, ...GVS_KINDS.map((kind) => ({ id: kind, short: gvsShort(kind) }))],
-      listPackages: async (root) =>
-        (await gvsApi.listPackages(root)).map((item) => ({
-          dir: item.dir,
-          name: item.name,
-          chip: `KIND ${hex(item.archiveKind, 2)}`,
-          tone: "archive",
-          detail: tc("sources.files", { count: item.fileCount }),
-        })),
-      scanFolder: async (root) =>
-        (await gvsApi.scanFolder(root)).map((entry) => {
-          const kind = entry.container ? "container" : entry.payloadKind;
-          return {
-            path: entry.path,
-            stem: entry.stem,
-            relativePath: entry.relativePath,
-            size: entry.size,
-            kind,
-            short: entry.container ? "PS4 ARC" : gvsShort(entry.payloadKind),
-            label: entry.container ? tc("sources.archiveFiles", { count: entry.fileCount }) : entry.payloadLabel,
-            tone: entry.container ? "archive" : gvsTone(entry.payloadKind),
-            error: entry.error,
-          };
-        }),
-      extract: async (source, root, overwrite) => {
-        const report = await gvsApi.extract(source, root, overwrite);
-        return { packageDir: report.packageDir, files: report.fileCount, bytes: report.bytesWritten };
-      },
-    }),
-    [tc],
-  );
+  const workspaceChanged = useGvsStore((state) => state.workspaceChanged);
 
   return (
     <SourcesPanel
       adapter={adapter}
       workspace={workspace}
       sourceRoot={sourceRoot}
+      modRoot={modRoot}
       packageDir={packageDir}
+      revision={revision}
+      status={status}
       setWorkspace={setWorkspace}
       setSourceRoot={setSourceRoot}
+      setModRoot={setModRoot}
       openPackage={openPackage}
+      onExtracted={workspaceChanged}
+      onOpenInit={onOpenInit}
+      onOpenChanges={onOpenChanges}
     />
   );
 }

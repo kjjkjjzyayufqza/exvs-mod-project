@@ -135,5 +135,8 @@
     "dimensions": "Dimensions",
     "textureName": "Texture name",
     "magic": "Magic"
+  },
+  "single": {
+    "title": "单独 FHM2D"
   }
 }

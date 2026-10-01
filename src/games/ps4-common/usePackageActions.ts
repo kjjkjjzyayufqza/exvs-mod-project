@@ -33,6 +33,8 @@ export interface PackageActionsOptions {
     output?: string,
   ) => Promise<{ outputPath: string; outputLen: number; identical: boolean | null; digest: string }>;
   onVerified: (state: VerifyState) => void;
+  /** A repack finished (the package baseline was refreshed). */
+  onRepacked?: () => void;
 }
 
 /** Verify / repack / repack-as with activity logging, shared by both games. */
@@ -61,6 +63,7 @@ export function usePackageActions(options: PackageActionsOptions) {
     if (report && report.identical !== null) {
       options.onVerified({ dir: packageDir, identical: report.identical, digest: report.digest });
     }
+    if (report) options.onRepacked?.();
     setBusy(null);
   };
 

@@ -20,90 +20,92 @@
 
 import { useDeferredValue, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Boxes, HardDriveDownload, PackageOpen, RefreshCw, ScanSearch } from "lucide-react";
+import { Boxes, Database, Hammer, HardDriveDownload, PackageOpen, RefreshCw, ScanSearch } from "lucide-react";
 import { runOperation } from "../activity";
 import { formatBytes, matchesQuery } from "../format";
+import type { Ps4GameAdapter, SourceScanRow } from "../gameAdapter";
 import { errorText } from "../ipc";
-import type { GameId, KindTone } from "../types";
+import type { PackageStatus } from "../types";
 import { useAsync } from "../useAsync";
+import { effectiveModRoot } from "../workspaceStore";
 import { EmptyState, ErrorNote, FilterField, HudButton, HudPanel, HudTabs, KindChip } from "./Hud";
 import { PathPicker } from "./PathPicker";
 import { VirtualList } from "./VirtualList";
 
-/** A package already extracted into the workspace. */
-export interface SourcePackageRow {
-  dir: string;
-  name: string;
-  chip: string;
-  tone: KindTone;
-  detail: string;
-}
-
-/** One original game file found by the scanner. */
-export interface SourceScanRow {
-  path: string;
-  stem: string;
-  relativePath: string;
-  size: number;
-  kind: string;
-  short: string;
-  label: string;
-  tone: KindTone;
-  error: string | null;
-}
-
-/** Per-game behaviour: MBON and GVS each pass their own commands. */
-export interface SourcesAdapter {
-  game: GameId;
-  listPackages: (workspace: string) => Promise<SourcePackageRow[]>;
-  scanFolder: (root: string) => Promise<SourceScanRow[]>;
-  extract: (source: string, workspace: string, overwrite: boolean) => Promise<{ packageDir: string; files: number; bytes: number }>;
-  /** Kind ids in display order with their chip text. */
-  kinds: readonly { id: string; short: string }[];
-}
+export type { SourcePackageRow, SourceScanRow } from "../gameAdapter";
 
 export interface SourcesPanelProps {
-  adapter: SourcesAdapter;
+  adapter: Ps4GameAdapter;
   workspace: string;
   sourceRoot: string;
+  modRoot: string;
   packageDir: string | null;
+  /** Bumped when packages are extracted or repacked elsewhere. */
+  revision: number;
+  /** Change state of the workspace packages, keyed by folder. */
+  status: ReadonlyMap<string, PackageStatus>;
   setWorkspace: (path: string) => void;
   setSourceRoot: (path: string) => void;
+  setModRoot: (path: string) => void;
   openPackage: (dir: string | null) => void;
+  onExtracted: () => void;
+  onOpenInit: () => void;
+  onOpenChanges: () => void;
 }
 
 type SourceTab = "packages" | "files";
+type NameFilter = "all" | "named" | "unnamed";
 
 /** Left pane: extracted packages of the workspace, and the scanner for original game files. */
 export function SourcesPanel({
   adapter,
   workspace,
   sourceRoot,
+  modRoot,
   packageDir,
+  revision,
+  status,
   setWorkspace,
   setSourceRoot,
+  setModRoot,
   openPackage,
+  onExtracted,
+  onOpenInit,
+  onOpenChanges,
 }: SourcesPanelProps) {
   const { t: tc } = useTranslation("ps4-workspace");
   const game = adapter.game;
 
   const [tab, setTab] = useState<SourceTab>("packages");
   const [listRevision, setListRevision] = useState(0);
-  const packages = useAsync(workspace ? () => adapter.listPackages(workspace) : null, [workspace, listRevision, adapter]);
+  const packages = useAsync(workspace ? () => adapter.listPackages(workspace) : null, [
+    workspace,
+    listRevision,
+    revision,
+    adapter,
+  ]);
   const [packageQuery, setPackageQuery] = useState("");
   const deferredPackageQuery = useDeferredValue(packageQuery);
   const visiblePackages = useMemo(
     () =>
-      (packages.data ?? []).filter((item) => matchesQuery(`${item.name} ${item.detail}`, deferredPackageQuery)),
+      (packages.data ?? []).filter((item) =>
+        matchesQuery(`${item.relative} ${item.title ?? ""} ${item.sourceName} ${item.detail}`, deferredPackageQuery),
+      ),
     [packages.data, deferredPackageQuery],
   );
   const selectedPackage = visiblePackages.findIndex((item) => item.dir === packageDir);
+  const dirtyCount = useMemo(() => [...status.values()].filter((entry) => entry.dirty).length, [status]);
+  const extractedHashes = useMemo(
+    () => new Set((packages.data ?? []).map((item) => item.sourceName.toUpperCase())),
+    [packages.data],
+  );
 
   const [scan, setScan] = useState<SourceScanRow[] | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [fileQuery, setFileQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<string>("all");
+  const [nameFilter, setNameFilter] = useState<NameFilter>("all");
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [overwrite, setOverwrite] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -114,14 +116,16 @@ export function SourcesPanel({
     for (const entry of scan ?? []) counts.set(entry.kind, (counts.get(entry.kind) ?? 0) + 1);
     return counts;
   }, [scan]);
+  const namedCount = useMemo(() => (scan ?? []).filter((entry) => entry.named).length, [scan]);
   const visibleFiles = useMemo(
     () =>
       (scan ?? []).filter(
         (entry) =>
           (kindFilter === "all" || entry.kind === kindFilter) &&
-          matchesQuery(`${entry.relativePath} ${entry.label}`, deferredFileQuery),
+          (nameFilter === "all" || (nameFilter === "named") === Boolean(entry.named)) &&
+          matchesQuery(`${entry.relativePath} ${entry.label} ${entry.named ?? ""} ${entry.title ?? ""}`, deferredFileQuery),
       ),
-    [scan, kindFilter, deferredFileQuery],
+    [scan, kindFilter, nameFilter, deferredFileQuery],
   );
   const selectedFile = visibleFiles.findIndex((entry) => entry.path === selectedPath);
 
@@ -138,6 +142,11 @@ export function SourcesPanel({
     setScanning(false);
   };
 
+  const refreshPackages = () => {
+    setListRevision((value) => value + 1);
+    onExtracted();
+  };
+
   const extract = async (entries: SourceScanRow[]) => {
     if (!workspace || !entries.length) return;
     setExtracting(true);
@@ -145,14 +154,14 @@ export function SourcesPanel({
       const [entry] = entries;
       const report = await runOperation(
         game,
-        tc("sources.extracting", { name: entry.stem }),
+        tc("sources.extracting", { name: entry.named ?? entry.stem }),
         () => adapter.extract(entry.path, workspace, overwrite),
         {
           describe: (value) => tc("sources.extractSummary", { files: value.files, bytes: formatBytes(value.bytes) }),
         },
       );
       if (report) {
-        setListRevision((value) => value + 1);
+        refreshPackages();
         openPackage(report.packageDir);
         setTab("packages");
       }
@@ -179,7 +188,7 @@ export function SourcesPanel({
               : tc("sources.batchDone", { done: value.done }),
         },
       );
-      if (outcome) setListRevision((value) => value + 1);
+      if (outcome) refreshPackages();
     }
     setExtracting(false);
   };
@@ -205,12 +214,19 @@ export function SourcesPanel({
         enterIndex={1}
         tabs={tabs}
         actions={
-          <HudButton
-            icon={<RefreshCw />}
-            label={tc("refresh")}
-            disabled={!workspace}
-            onClick={() => setListRevision((value) => value + 1)}
-          />
+          <>
+            <HudButton icon={<Database />} label={tc("init.open")} onClick={onOpenInit} />
+            <HudButton
+              icon={<Hammer />}
+              disabled={!workspace}
+              onClick={onOpenChanges}
+              title={tc("changes.open")}
+              aria-label={tc("changes.open")}
+            >
+              {dirtyCount ? <span className="ps4-badge">{dirtyCount}</span> : null}
+            </HudButton>
+            <HudButton icon={<RefreshCw />} label={tc("refresh")} disabled={!workspace} onClick={refreshPackages} />
+          </>
         }
         tools={
           <div className="flex w-full flex-col gap-2">
@@ -221,6 +237,15 @@ export function SourcesPanel({
                 onChange={setWorkspace}
                 placeholder={tc("sources.workspacePlaceholder")}
                 dialogTitle={tc("sources.workspaceDialog")}
+              />
+            </div>
+            <div className="ps4-field">
+              <span className="ps4-field__label">{tc("modRoot.label")}</span>
+              <PathPicker
+                value={modRoot}
+                onChange={setModRoot}
+                placeholder={tc("modRoot.placeholder", { path: effectiveModRoot(workspace, "") || "_out" })}
+                dialogTitle={tc("modRoot.dialog")}
               />
             </div>
             <FilterField
@@ -251,22 +276,43 @@ export function SourcesPanel({
                   title={tc("sources.noPackages")}
                   body={tc("sources.noPackagesBody")}
                   action={
-                    <HudButton icon={<ScanSearch />} onClick={() => setTab("files")}>
-                      {tc("tabs.gameFiles")}
-                    </HudButton>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <HudButton variant="primary" icon={<Database />} onClick={onOpenInit}>
+                        {tc("init.open")}
+                      </HudButton>
+                      <HudButton icon={<ScanSearch />} onClick={() => setTab("files")}>
+                        {tc("tabs.gameFiles")}
+                      </HudButton>
+                    </div>
                   }
                 />
               )
             }
-            renderRow={(item) => (
-              <>
-                <span className="ps4-row__name ps4-mono" title={item.dir}>
-                  {item.name}
-                </span>
-                <KindChip tone={item.tone}>{item.chip}</KindChip>
-                <span className="ps4-row__meta">{item.detail}</span>
-              </>
-            )}
+            renderRow={(item) => {
+              const state = status.get(item.dir);
+              return (
+                <>
+                  <span
+                    className="ps4-lamp"
+                    data-state={state?.dirty ? "warn" : state?.hasBaseline ? "ok" : undefined}
+                    title={
+                      state?.dirty
+                        ? tc("sources.changed", { count: state.changeCount })
+                        : state?.hasBaseline
+                          ? tc("sources.clean")
+                          : tc("sources.untracked")
+                    }
+                    aria-hidden="true"
+                  />
+                  <span className="ps4-row__name ps4-mono" title={item.dir}>
+                    {item.relative}
+                  </span>
+                  {item.title ? <span className="ps4-row__meta ps4-truncate">{item.title}</span> : null}
+                  <KindChip tone={item.tone}>{item.chip}</KindChip>
+                  <span className="ps4-row__meta">{item.detail}</span>
+                </>
+              );
+            }}
           />
         )}
       </HudPanel>
@@ -281,6 +327,7 @@ export function SourcesPanel({
       busy={scanning || extracting}
       enterIndex={1}
       tabs={tabs}
+      actions={<HudButton icon={<Database />} label={tc("init.open")} onClick={onOpenInit} />}
       tools={
         <div className="flex w-full flex-col gap-2">
           <div className="ps4-field">
@@ -327,6 +374,16 @@ export function SourcesPanel({
                   </option>
                 ))}
             </select>
+            <select
+              className="ps4-select"
+              value={nameFilter}
+              aria-label={tc("sources.nameFilter")}
+              onChange={(event) => setNameFilter(event.target.value as NameFilter)}
+            >
+              <option value="all">{tc("sources.allNames")}</option>
+              <option value="named">{tc("sources.namedOnly", { count: namedCount })}</option>
+              <option value="unnamed">{tc("sources.unnamedOnly")}</option>
+            </select>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <HudButton
@@ -367,9 +424,20 @@ export function SourcesPanel({
           rowProps={(entry) => ({ "data-missing": entry.error ? "true" : undefined })}
           renderRow={(entry) => (
             <>
+              <span
+                className="ps4-lamp"
+                data-state={extractedHashes.has(entry.stem.toUpperCase()) ? "ok" : undefined}
+                title={extractedHashes.has(entry.stem.toUpperCase()) ? tc("sources.alreadyExtracted") : undefined}
+                aria-hidden="true"
+              />
               <span className="ps4-row__name ps4-mono" title={entry.error ?? entry.relativePath}>
-                {entry.relativePath}
+                {entry.named ?? entry.relativePath}
               </span>
+              {entry.named ? (
+                <span className="ps4-row__meta ps4-faint" title={entry.relativePath}>
+                  {entry.stem}
+                </span>
+              ) : null}
               <KindChip tone={entry.tone} title={entry.label}>
                 {entry.short}
               </KindChip>

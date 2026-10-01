@@ -39,15 +39,21 @@ export interface MbonScanEntry {
   payloadLabel: string;
   payloadSize: number;
   error: string | null;
+  /** Default package folder from the MBON name table (`common/list_info`). */
+  named: string | null;
+  title: string | null;
 }
 
 export interface MbonPackageItem {
   dir: string;
   name: string;
+  /** Folder relative to the workspace (`common/list_info`). */
+  relative: string;
   sourceName: string;
   sourcePath: string | null;
   payloadCount: number;
   container: boolean;
+  title: string | null;
 }
 
 export interface FhmManifestNode {
@@ -198,6 +204,7 @@ export type MbonInspection =
       bodyOffset: number;
       canonical: boolean;
       issues: string[];
+      files?: { index: number; typeId: number; size: number; offset: number; magic: string; kind: MbonKind }[];
     }
   | { type: "fhm"; entries: FhmListing[]; blobCount: number; dataBytes: number }
   | { type: "ntp3"; textures: TextureSummary[]; trailingBytes: number }

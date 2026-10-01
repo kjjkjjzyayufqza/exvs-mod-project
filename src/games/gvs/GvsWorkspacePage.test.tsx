@@ -12,6 +12,7 @@
  */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { installBrowserStubs, TEST_PROVENANCE } from "../ps4-common/testHarness";
 import type { GvsMemberView, GvsNode, GvsPackageView } from "./types";
@@ -93,10 +94,23 @@ beforeEach(() => {
   invokeMock.mockReset();
   invokeMock.mockImplementation(async (command: string) => {
     switch (command) {
+      case "gvs_workspace_status":
+        return [];
       case "gvs_credits":
         return provenance;
       case "gvs_list_packages":
-        return [{ dir: PACKAGE, name: "SYNTH002", sourceName: "SYNTH002", sourcePath: null, fileCount: 3, archiveKind: 0x13 }];
+        return [
+          {
+            dir: PACKAGE,
+            name: "SYNTH002",
+            relative: "SYNTH002",
+            sourceName: "SYNTH002",
+            sourcePath: null,
+            fileCount: 3,
+            archiveKind: 0x13,
+            title: null,
+          },
+        ];
       case "gvs_package_view":
         return view;
       case "gvs_texture_info":
@@ -117,7 +131,11 @@ async function renderPage() {
   const { default: GvsWorkspacePage } = await import("./GvsWorkspacePage");
   const { useGvsStore } = await import("./store");
   useGvsStore.setState({ workspace: WORKSPACE, packageDir: PACKAGE, selection: null, verify: null });
-  render(<GvsWorkspacePage />);
+  render(
+    <MemoryRouter>
+      <GvsWorkspacePage />
+    </MemoryRouter>,
+  );
   await screen.findByText("body_col.nutexb");
 }
 

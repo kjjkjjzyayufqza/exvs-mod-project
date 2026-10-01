@@ -31,6 +31,7 @@ import {
 import { VirtualList } from "../../ps4-common/components/VirtualList";
 import { baseName, formatBytes, matchesQuery, shortDigest } from "../../ps4-common/format";
 import { usePackageActions } from "../../ps4-common/usePackageActions";
+import { effectiveModRoot } from "../../ps4-common/workspaceStore";
 import type { AsyncState } from "../../ps4-common/useAsync";
 import { mbonApi } from "../api";
 import { MBON_KINDS, mbonShort, mbonTone } from "../kinds";
@@ -67,6 +68,9 @@ export function MbonPackagePanel({
   const select = useMbonStore((state) => state.select);
   const verify = useMbonStore((state) => state.verify);
   const setVerify = useMbonStore((state) => state.setVerify);
+  const workspace = useMbonStore((state) => state.workspace);
+  const modRoot = useMbonStore((state) => state.modRoot);
+  const workspaceChanged = useMbonStore((state) => state.workspaceChanged);
 
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<MbonKind | "all">("all");
@@ -98,7 +102,7 @@ export function MbonPackagePanel({
       return { identical: report.identical, digest: report.rebuiltSha256 };
     },
     repack: async (dir, output) => {
-      const report = await mbonApi.repack(dir, output);
+      const report = await mbonApi.repack(dir, output, output ? undefined : effectiveModRoot(workspace, modRoot));
       return {
         outputPath: report.outputPath,
         outputLen: report.outputLen,
@@ -107,6 +111,7 @@ export function MbonPackagePanel({
       };
     },
     onVerified: setVerify,
+    onRepacked: workspaceChanged,
   });
 
   if (!packageDir) {

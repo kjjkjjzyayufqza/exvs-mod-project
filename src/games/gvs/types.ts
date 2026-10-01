@@ -51,15 +51,21 @@ export interface GvsScanEntry {
   payloadKind: GvsKind;
   payloadLabel: string;
   error: string | null;
+  /** Default package folder from the GVS name table (`012list/character_list`). */
+  named: string | null;
+  title: string | null;
 }
 
 export interface GvsPackageItem {
   dir: string;
   name: string;
+  /** Folder relative to the workspace (`012list/character_list`). */
+  relative: string;
   sourceName: string;
   sourcePath: string | null;
   fileCount: number;
   archiveKind: number;
+  title: string | null;
 }
 
 export type GvsNode =

@@ -19,6 +19,7 @@ import { VirtualList } from "../../ps4-common/components/VirtualList";
 import { baseName, formatBytes, shortDigest } from "../../ps4-common/format";
 import type { AsyncState } from "../../ps4-common/useAsync";
 import { usePackageActions } from "../../ps4-common/usePackageActions";
+import { effectiveModRoot } from "../../ps4-common/workspaceStore";
 import { gvsApi } from "../api";
 import { GVS_KINDS, gvsShort, gvsTone } from "../kinds";
 import { useGvsStore, type GvsSelection } from "../store";
@@ -41,6 +42,9 @@ export function GvsPackagePanel({
   const select = useGvsStore((state) => state.select);
   const verify = useGvsStore((state) => state.verify);
   const setVerify = useGvsStore((state) => state.setVerify);
+  const workspace = useGvsStore((state) => state.workspace);
+  const modRoot = useGvsStore((state) => state.modRoot);
+  const workspaceChanged = useGvsStore((state) => state.workspaceChanged);
 
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<GvsKind | "all">("all");
@@ -80,7 +84,7 @@ export function GvsPackagePanel({
       return { identical: report.identical, digest: report.rebuiltSha256 };
     },
     repack: async (dir, output) => {
-      const report = await gvsApi.repack(dir, output);
+      const report = await gvsApi.repack(dir, output, output ? undefined : effectiveModRoot(workspace, modRoot));
       return {
         outputPath: report.outputPath,
         outputLen: report.outputLen,
@@ -89,6 +93,7 @@ export function GvsPackagePanel({
       };
     },
     onVerified: setVerify,
+    onRepacked: workspaceChanged,
   });
 
   if (!packageDir) {

@@ -13,64 +13,50 @@
  *   ACCEPTABLE_USE.md.
  */
 
-import { useMemo } from "react";
-import { useTranslation } from "react-i18next";
-import { SourcesPanel, type SourcesAdapter } from "../../ps4-common/components/SourcesPanel";
-import { mbonApi } from "../api";
-import { MBON_KINDS, mbonShort, mbonTone } from "../kinds";
+import { SourcesPanel } from "../../ps4-common/components/SourcesPanel";
+import type { Ps4GameAdapter } from "../../ps4-common/gameAdapter";
+import type { PackageStatus } from "../../ps4-common/types";
 import { useMbonStore } from "../store";
 
 /** MBON binding of the shared sources pane (packages + game file scanner). */
-export function MbonSourcesPanel() {
-  const { t: tc } = useTranslation("ps4-workspace");
+export function MbonSourcesPanel({
+  adapter,
+  status,
+  onOpenInit,
+  onOpenChanges,
+}: {
+  adapter: Ps4GameAdapter;
+  status: ReadonlyMap<string, PackageStatus>;
+  onOpenInit: () => void;
+  onOpenChanges: () => void;
+}) {
   const workspace = useMbonStore((state) => state.workspace);
   const sourceRoot = useMbonStore((state) => state.sourceRoot);
+  const modRoot = useMbonStore((state) => state.modRoot);
   const packageDir = useMbonStore((state) => state.packageDir);
+  const revision = useMbonStore((state) => state.workspaceRevision);
   const setWorkspace = useMbonStore((state) => state.setWorkspace);
   const setSourceRoot = useMbonStore((state) => state.setSourceRoot);
+  const setModRoot = useMbonStore((state) => state.setModRoot);
   const openPackage = useMbonStore((state) => state.openPackage);
-
-  const adapter = useMemo<SourcesAdapter>(
-    () => ({
-      game: "mbon",
-      kinds: MBON_KINDS.map((kind) => ({ id: kind, short: mbonShort(kind) })),
-      listPackages: async (root) =>
-        (await mbonApi.listPackages(root)).map((item) => ({
-          dir: item.dir,
-          name: item.name,
-          chip: item.container ? "PS4 ARC" : "RAW",
-          tone: item.container ? "archive" : "other",
-          detail: tc("sources.payloads", { count: item.payloadCount }),
-        })),
-      scanFolder: async (root) =>
-        (await mbonApi.scanFolder(root)).map((entry) => ({
-          path: entry.path,
-          stem: entry.stem,
-          relativePath: entry.relativePath,
-          size: entry.size,
-          kind: entry.payloadKind,
-          short: mbonShort(entry.payloadKind),
-          label: entry.payloadLabel,
-          tone: mbonTone(entry.payloadKind),
-          error: entry.error,
-        })),
-      extract: async (source, root, overwrite) => {
-        const report = await mbonApi.extract(source, root, overwrite);
-        return { packageDir: report.packageDir, files: report.filesWritten, bytes: report.bytesWritten };
-      },
-    }),
-    [tc],
-  );
+  const workspaceChanged = useMbonStore((state) => state.workspaceChanged);
 
   return (
     <SourcesPanel
       adapter={adapter}
       workspace={workspace}
       sourceRoot={sourceRoot}
+      modRoot={modRoot}
       packageDir={packageDir}
+      revision={revision}
+      status={status}
       setWorkspace={setWorkspace}
       setSourceRoot={setSourceRoot}
+      setModRoot={setModRoot}
       openPackage={openPackage}
+      onExtracted={workspaceChanged}
+      onOpenInit={onOpenInit}
+      onOpenChanges={onOpenChanges}
     />
   );
 }
