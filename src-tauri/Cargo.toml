@@ -338,6 +338,15 @@ chull = "0.2.4"
 sha1 = "0.10"
 sha2 = "0.10"
 
+# Isolated PS4 workspaces (MBON / GVS). They never import OB modules and OB
+# modules never import them; see docs/adr/0010-mbon-gvs-isolated-workspaces.md.
+exvs_ps4_common = { path = "crates/ps4_common" }
+exvs_mbon = { path = "crates/mbon" }
+exvs_gvs = { path = "crates/gvs" }
+
+[workspace]
+members = ["crates/ps4_common", "crates/mbon", "crates/gvs"]
+
 # --- Build profiles -------------------------------------------------------
 
 # Dev memory profile: line-tables-only keeps breakpoints usable while
