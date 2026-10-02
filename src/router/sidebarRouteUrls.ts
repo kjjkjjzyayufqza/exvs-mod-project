@@ -9,6 +9,8 @@ export const SIDEBAR_ROUTE_URLS: readonly string[] = [
   "/UnitModelEdit",
   "/ResourceRegistry",
   "/MiscTools",
+  "/MbonWorkspace",
+  "/GvsWorkspace",
   "/Config",
   "/About",
   "/MissionNodeEditor",

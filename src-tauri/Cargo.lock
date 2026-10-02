@@ -145,6 +145,9 @@ dependencies = [
  "clap",
  "crc32fast",
  "encoding_rs",
+ "exvs_gvs",
+ "exvs_mbon",
+ "exvs_ps4_common",
  "fbxcel",
  "flate2",
  "glam",
@@ -1538,6 +1541,45 @@ dependencies = [
  "rayon-core",
  "smallvec",
  "zune-inflate",
+]
+
+[[package]]
+name = "exvs_gvs"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "exvs_ps4_common",
+ "rayon",
+ "serde",
+ "serde_json",
+ "ssbh_data",
+ "ssbh_lib",
+ "tempfile",
+]
+
+[[package]]
+name = "exvs_mbon"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "exvs_ps4_common",
+ "rayon",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "exvs_ps4_common"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "image_dds",
+ "rayon",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
 ]
 
 [[package]]

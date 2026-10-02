@@ -1,5 +1,5 @@
 import { lazy } from "react"
-import { Box, Database, FileArchive, FolderTree, GitBranch, Info, Map, Settings, Wrench } from "lucide-react"
+import { Box, Database, FileArchive, FolderTree, GitBranch, Info, Map, Rocket, Settings, Swords, Wrench } from "lucide-react"
 import { SIDEBAR_ROUTE_URLS } from "./sidebarRouteUrls"
 
 // Pages are code-split via React.lazy so the initial app shell loads without
@@ -14,6 +14,9 @@ const UnitModelEdit = lazy(() => import("../page/UnitModelEdit/page"))
 const MiscToolsPage = lazy(() => import("../page/MiscTools/page"))
 const ResourceRegistryPage = lazy(() => import("../page/ResourceRegistry/page"))
 const MissionNodeEditorPage = lazy(() => import("../page/MissionNodeEditor/page"))
+// PS4 workspaces live in src/games and never import Over Boost pages.
+const MbonWorkspacePage = lazy(() => import("../games/mbon/MbonWorkspacePage"))
+const GvsWorkspacePage = lazy(() => import("../games/gvs/GvsWorkspacePage"))
 
 // Menu items.
 export const RouterItems = [
@@ -54,16 +57,32 @@ export const RouterItems = [
         element: <MiscToolsPage />
     },
     {
+        title: "MBON Workspace",
+        url: "/MbonWorkspace",
+        icon: Rocket,
+        element: <MbonWorkspacePage />,
+        game: "mbon" as const,
+    },
+    {
+        title: "GVS Workspace",
+        url: "/GvsWorkspace",
+        icon: Swords,
+        element: <GvsWorkspacePage />,
+        game: "gvs" as const,
+    },
+    {
         title: "Config",
         url: "/Config",
         icon: Settings,
-        element: <ConfigPage />
+        element: <ConfigPage />,
+        app: true,
     },
     {
         title: "About",
         url: "/About",
         icon: Info,
-        element: <AboutPage />
+        element: <AboutPage />,
+        app: true,
     },
     {
         title: "Mission Node Editor",

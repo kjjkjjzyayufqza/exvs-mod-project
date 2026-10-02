@@ -1,0 +1,30 @@
+[package]
+name = "exvs_gvs"
+version = "0.1.0"
+description = "Isolated GVS (PS4 Gundam Versus) workspace for EXVS Mod Project by kjjkjjzyayufqza, built on the project's own VS2 research."
+authors = ["kjjkjjzyayufqza"]
+license = "LicenseRef-PolyForm-Shield-1.0.0"
+repository = "https://github.com/kjjkjjzyayufqza/exvs-mod-project"
+edition = "2021"
+rust-version = "1.77.2"
+publish = false
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "gvs_tool"
+path = "src/bin/gvs_tool.rs"
+test = false
+
+[dependencies]
+exvs_ps4_common = { path = "../ps4_common" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+rayon = "1.10"
+clap = { version = "4", features = ["derive"] }
+ssbh_lib = { git = "https://github.com/kjjkjjzyayufqza/ssbh_lib", branch = "wmmt2-merge", package = "ssbh_lib" }
+ssbh_data = { git = "https://github.com/kjjkjjzyayufqza/ssbh_lib", branch = "wmmt2-merge", package = "ssbh_data" }
+
+[dev-dependencies]
+tempfile = "3"

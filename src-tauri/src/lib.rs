@@ -19,12 +19,14 @@ pub mod fhm2d_extract_cli;
 mod fhm2d_memory_preview;
 pub mod format;
 mod github_release;
+mod gvs;
 pub mod havok_cli;
 pub mod havok_collision_encode;
 pub mod havok_mesh_encode;
 pub mod havok_mesh_export;
 mod jnttbl_cmd;
 mod jnttbl_format;
+mod mbon;
 pub mod msc_roundtrip;
 pub mod msc_toolchain;
 pub mod numshb_collision;
@@ -331,7 +333,53 @@ pub fn run() {
             havok_cli::convert_hkt_to_xml,
             havok_cli::convert_xml_to_hkt,
             havok_cli::scene_generate_hkt_from_dae_path,
-            havok_mesh_export::convert_hkt_to_obj
+            havok_mesh_export::convert_hkt_to_obj,
+            mbon::commands::mbon_scan_folder,
+            mbon::commands::mbon_inspect,
+            mbon::commands::mbon_extract,
+            mbon::commands::mbon_list_packages,
+            mbon::commands::mbon_package_view,
+            mbon::commands::mbon_repack,
+            mbon::commands::mbon_verify,
+            mbon::commands::mbon_add_entry,
+            mbon::commands::mbon_remove_entry,
+            mbon::commands::mbon_replace_entry,
+            mbon::commands::mbon_nut_textures,
+            mbon::commands::mbon_nut_preview,
+            mbon::commands::mbon_nut_export,
+            mbon::commands::mbon_nut_import,
+            mbon::commands::mbon_nut_set_texture_id,
+            mbon::commands::mbon_nud_mesh,
+            mbon::commands::mbon_nud_export_obj,
+            mbon::commands::mbon_find_textures,
+            mbon::commands::mbon_list_view,
+            mbon::commands::mbon_list_set,
+            mbon::commands::mbon_list_add_row,
+            mbon::commands::mbon_list_remove_row,
+            mbon::commands::mbon_read_bytes,
+            mbon::commands::mbon_fhm_listing,
+            mbon::commands::mbon_credits,
+            gvs::commands::gvs_scan_folder,
+            gvs::commands::gvs_inspect,
+            gvs::commands::gvs_extract,
+            gvs::commands::gvs_list_packages,
+            gvs::commands::gvs_package_view,
+            gvs::commands::gvs_repack,
+            gvs::commands::gvs_verify,
+            gvs::commands::gvs_add_file,
+            gvs::commands::gvs_add_folder,
+            gvs::commands::gvs_remove_node,
+            gvs::commands::gvs_replace_file,
+            gvs::commands::gvs_texture_info,
+            gvs::commands::gvs_texture_preview,
+            gvs::commands::gvs_texture_export,
+            gvs::commands::gvs_texture_import,
+            gvs::commands::gvs_ssbh_summary,
+            gvs::commands::gvs_model_mesh,
+            gvs::commands::gvs_mesh_export_obj,
+            gvs::commands::gvs_find_textures,
+            gvs::commands::gvs_read_bytes,
+            gvs::commands::gvs_credits
         ]);
 
     // Debug-only MCP bridge for AI tooling. Prefer 127.0.0.1 and a base port outside

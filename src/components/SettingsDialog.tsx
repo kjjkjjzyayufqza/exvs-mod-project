@@ -18,10 +18,12 @@ import {
   SUPPORTED_APP_LOCALES,
   normalizeAppLocale,
 } from "@/i18n/locale";
+import { Separator } from "@/components/ui/separator";
+import { Ps4PreferencesSection } from "@/games/ps4-common/components/Ps4PreferencesSection";
 
 const SETTINGS_DIMENSIONS = {
-  width: 500,
-  height: 420,
+  width: 560,
+  height: 640,
   minWidth: 420,
   minHeight: 300,
 };
@@ -143,6 +145,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               {t("loadingAppearance")}
             </p>
           )}
+          <Separator />
+          <Ps4PreferencesSection />
       </div>
     </AppRndModalShell>
   );
