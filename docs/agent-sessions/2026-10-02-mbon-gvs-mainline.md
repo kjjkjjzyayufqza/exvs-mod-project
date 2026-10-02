@@ -178,43 +178,91 @@ They are not implemented by importing OB modules.
 | Full MSC compile and decompile through `msc_toolchain` | Deferred so OB toolchain output cannot change. Inspect reads the shared header. | Same. GVS payloads may carry the same 8-byte magic. |
 | ja-JP catalogs, release builds | Deferred. | Deferred. |
 
-What is implemented instead:
+What shipped (the crate functions the tests call):
 
-- Model: MBON reads a NUD and returns an OBJ plus the first vertex shifted
-  by +1 on X. GVS reads an SSBH summary and returns an OBJ from viewer
-  meshes when bytes are a mesh, otherwise the summary counts.
-- Scene: both backends apply one placement (`name`, `x`, `y`, `z`) onto a
-  backend JSON document. Names cannot contain path separators.
-- Detail: MBON `ListInfo::set` then `to_bytes`. GVS sets `Nutexb.name`
-  then `to_bytes`.
-- MSC: both backends parse the 0x30 header (magic, version word, entry
-  count, string count) and reject a short buffer.
+- Model, MBON `exvs_mbon::edit_model`: parse a NUD, add `1.0` to
+  `bounding_sphere[0]`, write those four bytes back in the file's endian,
+  reparse, and return the vertex count, the new X, and an OBJ from
+  `Nud::to_obj`. A zero-polyset NUD is enough for the sphere edit.
+- Model, GVS `exvs_gvs::edit_model`: `MeshData::read`, add `1.0` to the
+  first `Vector3` position's X, `MeshData::write` the bytes back, and
+  return the vertex count, the new X, those bytes, and an OBJ from
+  `meshes_to_obj`. `triangle_mesh_bytes` builds the synthetic mesh with
+  the same writer.
+- Scene: `exvs_ps4_common::scene::apply_scene_edit`, re-exported as
+  `edit_scene` on both crates. It upserts one `{name, x, y, z}` into a
+  JSON document. A name containing `/`, `\`, `:`, NUL, or `..` is
+  rejected. Non-finite coordinates are rejected. This is not an FHM2D
+  stage pack.
+- Detail, MBON `edit_detail`: `ListInfo::parse`, `ListInfo::set`,
+  `ListInfo::to_bytes`, then read the cell back. GVS `edit_detail`:
+  `Nutexb::parse`, replace `name`, `to_bytes`, then parse the name back.
+- MSC: `exvs_ps4_common::msc_header::inspect_msc`, re-exported on both
+  crates. It requires 0x30 bytes and magic `B2 AC BC BA E6 90 32 01`,
+  then reads little-endian `entry_count` at 0x18 and `string_count` at
+  0x24. A shorter buffer is an error. It does not call `msc_toolchain`.
 
 ## Security review
 
-High findings to close in this change:
+High findings and how they are closed:
 
-1. Index membership must not follow `..` or a symlink out of the root.
-2. A truncated `init` must not return a partial member list.
-3. Real PKG bytes must not be copied into the repository.
+1. Path escape. `check_relative` rejects `..`, absolute paths, drive
+   prefixes, backslashes, and NUL before any join. `ensure_inside`
+   canonicalizes a member that already exists and rejects it when the
+   canonical path is not under the canonical root, which covers a symlink
+   that leaves the folder. Tests: `path_outside_the_root_is_rejected`
+   (`../outside.bin` and `C:/outside.bin`) and
+   `escape_and_truncated_init_fail_closed` on both game crates. All return
+   `Err` and do not yield a member list.
+2. Truncated or hostile `init`. An empty file, a missing trailing newline,
+   or a header other than `EXVS-PS4-INIT 1` is `Err`. The parser does not
+   return the lines it already saw. Tests: `truncated_init_fails_closed`
+   and the truncated half of `escape_and_truncated_init_fail_closed`.
+   Non-UTF-8 is rejected. Files larger than 1 MiB are rejected.
+3. No committed dumps or secrets. `open_index` on the real archives roots
+   only `is_file`-checks the three startup paths and returns those relative
+   paths. It does not copy payload bytes. The repository diff from
+   pre-merge `2d17a73` contains no PKG, `eboot`, or sample blob.
 
-No other high finding is open once the tests for those three cases pass.
-Medium: the startup-archive index is three packs, not every asset. That is
-intentional; a full-tree scan is the forbidden fallback. Operators open a
-single pack through the existing extract commands by path. The open index
-does not grant that by walking the disk.
+Medium, accepted: a real archives root with no `init` file indexes the
+three startup packs (both trees returned `startup-archives` with count 3),
+not every asset. A full-tree scan is the forbidden fallback. Opening one
+pack still goes through the existing extract command, which the caller
+names by path. The open index does not walk the disk to invent that list.
 
 ## Self-audit
 
-- Isolation: new behavior lives under the PS4 crates, adapters, and
-  `src/games`. OB domain files are not on the edit list.
-- Backend owns membership, model, scene, detail, and MSC inspect. The new
-  pages render command results.
-- Visible strings in `en-US` and `zh-CN` for MBON, GVS, and the shared PS4
-  catalog do not include the research names.
-- Comment notices still do, and `stamp_mbon_gvs_notices.py --check` must
-  pass.
-- Evidence grade for the startup archive ids is E2 (both executables
-  contain the immediates and both trees contain the files). It is not an
-  in-game behavior claim.
-- MSC inspect is a header read, not a claim that a script plays in game.
+- Isolation holds. `git diff --name-only 2d17a73..HEAD` has no path outside
+  the PS4 crates, `src/games/{mbon,gvs,ps4-common}`, the notice stamper,
+  ADR 0010, the two session notes, and the composition-root files
+  (`Cargo.toml`, `Cargo.lock`, `lib.rs`, router, sidebar, settings,
+  full-bleed layout). `exvs_mbon`, `exvs_gvs`, and `exvs_ps4_common` are
+  imported only from `src-tauri/src/mbon` and `src-tauri/src/gvs`.
+  `lib.rs` registers those adapters and does not call them.
+- OB non-impact holds for the same diff. No file under `src/page`,
+  `src-tauri/src/format`, `src-tauri/src/msc_toolchain`, or the OB command
+  modules changed. GVS-map-to-VS2 was not edited. MSC inspect does not call
+  `compile_in_process` or `decompile_in_process`.
+- Backend owns the index. `MbonSourcesPanel` and `GvsSourcesPanel` call
+  `openIndex` and render `members`. They do not hash paths or filter the
+  list. `/MbonModding` and `/GvsModding` render `MbonModdingReport` /
+  `GvsModdingReport` from command results. Buttons call `editModel`,
+  `editScene`, `editDetail`, and `inspectMsc` and store the returned
+  fields.
+- Visible catalogs. `src/games/mbon/i18n/{en-US,zh-CN}.json`,
+  `src/games/gvs/i18n/{en-US,zh-CN}.json`, and
+  `src/games/ps4-common/i18n/{en-US,zh-CN}.json` contain no `descatal`,
+  `BoostStudio`, or `github.com/descatal`. `CreditsDialog` shows the
+  author and this product's repository only. File-top notices still name
+  kjjkjjzyayufqza and, on MBON sources, descatal / BoostStudio.
+  `python tools/stamp_mbon_gvs_notices.py --check` exited 0
+  (`ok: 122 file(s)`).
+- Startup-archive ids are E2: both executables contain the immediates
+  `1212B83E`, `2FBC5CED`, and `C9D206AA`, and both archive trees contain
+  those three files. This is not an in-game behaviour claim. The kind-50
+  payloads unwrap to `NTXL` and are not a plaintext list of every pack.
+- MSC inspect is a header read. It does not say a script runs in game.
+- `cargo check --lib --bins` reports no rustc warning on this crate. Cargo
+  also prints a future-incompat note for third-party `binrw` and
+  `proc-macro-error2`, pulled in by the existing `ssbh_data` dependency.
+  That note is not a warning in our sources.

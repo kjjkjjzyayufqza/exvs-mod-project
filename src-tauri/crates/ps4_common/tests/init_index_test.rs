@@ -95,3 +95,16 @@ fn scene_edit_and_msc_header_round_trip() {
     assert_eq!(parsed.string_count, 2);
     assert!(inspect_msc(&header[..0x10]).is_err());
 }
+
+#[test]
+fn symlink_outside_the_root_is_rejected() {
+    let dir = tempfile::tempdir().unwrap();
+    let outside = tempfile::NamedTempFile::new().unwrap();
+    let link = dir.path().join("escape.bin");
+    #[cfg(windows)]
+    std::os::windows::fs::symlink_file(outside.path(), &link).unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(outside.path(), &link).unwrap();
+    write_init(dir.path(), &format!("{INIT_HEADER}\nescape.bin\n"));
+    assert!(open_index(dir.path()).is_err());
+}
