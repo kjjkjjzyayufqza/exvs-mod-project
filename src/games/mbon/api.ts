@@ -63,4 +63,11 @@ export const mbonApi = {
     invokeBytes("mbon_read_bytes", { path, offset, length }),
   fhmListing: (path: string) => invoke<FhmListing[]>("mbon_fhm_listing", { path }),
   credits: () => invoke<ProvenanceRecord>("mbon_credits"),
+  openIndex: (root: string) => invoke<{ seed: string; members: { relativePath: string }[] }>("mbon_open_index", { root }),
+  editModel: (path: string) => invoke<{ vertices: number; boundingX: number; obj: string }>("mbon_edit_model", { path }),
+  editScene: (document: string, name: string, x: number, y: number, z: number) =>
+    invoke<string>("mbon_edit_scene", { document, name, x, y, z }),
+  editDetail: (path: string, row: number, column: number, kind: CellKind, value: string) =>
+    invoke<{ name: string; value: string }>("mbon_edit_detail", { path, row, column, kind, value }),
+  inspectMsc: (path: string) => invoke<{ entryCount: number; stringCount: number; byteLen: number }>("mbon_inspect_msc", { path }),
 };

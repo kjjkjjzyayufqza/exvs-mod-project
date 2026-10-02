@@ -323,7 +323,7 @@ impl Nud {
     /// Wavefront OBJ (positions, normals, first UV set) for quick DCC inspection.
     pub fn to_obj(&self, bytes: &[u8]) -> Result<String> {
         use std::fmt::Write;
-        let mut obj = String::from("# Exported by EXVS Mod Project (kjjkjjzyayufqza)\n# MBON NUD layout research: descatal / BoostStudio\n");
+        let mut obj = String::from("# Exported by EXVS Mod Project (kjjkjjzyayufqza)\n");
         let mut base = 1usize;
         for mesh in self.mesh_buffers(bytes)? {
             let count = mesh.positions.len() / 3;

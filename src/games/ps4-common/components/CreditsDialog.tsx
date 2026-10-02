@@ -16,40 +16,19 @@
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, ExternalLink, ScrollText } from "lucide-react";
+import { ExternalLink, ScrollText } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { HudButton, KeyValues } from "./Hud";
 import type { GameId, ProvenanceRecord } from "../types";
 
-function CopyButton({ value }: { value: string }) {
-  const { t } = useTranslation("ps4-workspace");
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await writeText(value);
-    } catch {
-      await navigator.clipboard?.writeText(value);
-    }
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1400);
-  };
-  return <HudButton icon={copied ? <Check /> : <Copy />} label={t("credits.copy")} onClick={() => void copy()} />;
-}
-
-/**
- * Attribution sheet. Author and research credits are part of the product:
- * they come from the backend provenance record and are always shown together.
- */
+/** Author and product repository. Research names stay in source comments. */
 export function CreditsDialog({
   game,
   provenance,
-  research,
 }: {
   game: GameId;
   provenance: ProvenanceRecord | undefined;
-  research: { label: string; url: string; note: string };
 }) {
   const { t } = useTranslation("ps4-workspace");
   const [open, setOpen] = useState(false);
@@ -78,19 +57,9 @@ export function CreditsDialog({
                     <HudButton icon={<ExternalLink />} label={t("credits.visit")} onClick={() => void openUrl(repository)} />
                   </span>,
                 ],
-                [
-                  research.label,
-                  <span key="research" className="inline-flex items-center gap-2">
-                    <span className="ps4-truncate">{research.url}</span>
-                    <CopyButton value={research.url} />
-                  </span>,
-                ],
                 [t("credits.license"), t("credits.licenseValue")],
               ]}
             />
-            <p className="ps4-note" style={{ margin: 0 }}>
-              {provenance?.researchCredit ?? research.note}
-            </p>
             <p className="ps4-dim" style={{ fontSize: 12 }}>
               {t("credits.keepNames")}
             </p>

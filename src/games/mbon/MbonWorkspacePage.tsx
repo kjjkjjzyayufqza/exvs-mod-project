@@ -23,8 +23,6 @@ import { MbonPackagePanel } from "./components/MbonPackagePanel";
 import { MbonSourcesPanel } from "./components/MbonSourcesPanel";
 import { useMbonStore } from "./store";
 
-const BOOST_STUDIO_URL = "https://github.com/descatal/BoostStudio";
-
 /**
  * MBON (PS4) workspace: scan game archives, extract them into editable
  * packages, edit FHM entries, textures, models and tables, then repack.
@@ -75,11 +73,7 @@ export default function MbonWorkspacePage() {
       title={t("title")}
       credit={t("credit")}
       tools={
-        <CreditsDialog
-          game="mbon"
-          provenance={credits.data}
-          research={{ label: t("credits.researchLabel"), url: BOOST_STUDIO_URL, note: t("credits.researchNote") }}
-        />
+        <CreditsDialog game="mbon" provenance={credits.data} />
       }
       sourcesKey={packageDir}
       left={<MbonSourcesPanel />}

@@ -16,7 +16,9 @@ const ResourceRegistryPage = lazy(() => import("../page/ResourceRegistry/page"))
 const MissionNodeEditorPage = lazy(() => import("../page/MissionNodeEditor/page"))
 // PS4 workspaces live in src/games and never import Over Boost pages.
 const MbonWorkspacePage = lazy(() => import("../games/mbon/MbonWorkspacePage"))
+const MbonModdingPage = lazy(() => import("../games/mbon/MbonModdingPage"))
 const GvsWorkspacePage = lazy(() => import("../games/gvs/GvsWorkspacePage"))
+const GvsModdingPage = lazy(() => import("../games/gvs/GvsModdingPage"))
 
 // Menu items.
 export const RouterItems = [
@@ -64,10 +66,24 @@ export const RouterItems = [
         game: "mbon" as const,
     },
     {
+        title: "MBON Modding",
+        url: "/MbonModding",
+        icon: Box,
+        element: <MbonModdingPage />,
+        game: "mbon" as const,
+    },
+    {
         title: "GVS Workspace",
         url: "/GvsWorkspace",
         icon: Swords,
         element: <GvsWorkspacePage />,
+        game: "gvs" as const,
+    },
+    {
+        title: "GVS Modding",
+        url: "/GvsModding",
+        icon: Map,
+        element: <GvsModdingPage />,
         game: "gvs" as const,
     },
     {

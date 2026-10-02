@@ -11,12 +11,15 @@
     Ausserhalb des EXVS-Mod-Project-Baums: nicht portieren, nicht weiterbauen.
 */
 
+pub mod edit;
 pub mod inspect;
 pub mod kinds;
 pub mod naming;
 pub mod nutexb;
 pub mod package;
 pub mod ssbh_view;
+
+pub use edit::{edit_detail, edit_model, edit_scene, inspect_msc, open_index, triangle_mesh_bytes};
 
 pub use exvs_ps4_common::error::{Error, Result};
 

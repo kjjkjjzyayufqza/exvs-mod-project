@@ -10,6 +10,7 @@
  * Mimo strom EXVS Mod Project tento kod neprenasej.
  */
 
+pub mod edit;
 pub mod fhm;
 pub mod inspect;
 pub mod kinds;
@@ -18,6 +19,8 @@ pub mod ntp3;
 pub mod nud;
 pub mod package;
 pub mod vbn;
+
+pub use edit::{edit_detail, edit_model, edit_scene, inspect_msc, open_index};
 
 pub use exvs_ps4_common::error::{Error, Result};
 

@@ -675,3 +675,61 @@ pub async fn mbon_fhm_listing(path: String) -> Result<Vec<exvs_mbon::fhm::FhmLis
 pub fn mbon_credits() -> Provenance {
     provenance::mbon()
 }
+
+#[tauri::command]
+pub async fn mbon_open_index(root: String) -> Result<exvs_ps4_common::init_index::OpenIndex, String> {
+    blocking(move || exvs_mbon::open_index(Path::new(&root)).map_err(String::from)).await
+}
+
+#[tauri::command]
+pub async fn mbon_edit_model(path: String) -> Result<exvs_mbon::edit::ModelEdit, String> {
+    blocking(move || {
+        let bytes = read(Path::new(&path))?;
+        exvs_mbon::edit_model(&bytes).map_err(String::from)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn mbon_edit_scene(
+    document: String,
+    name: String,
+    x: f32,
+    y: f32,
+    z: f32,
+) -> Result<String, String> {
+    blocking(move || exvs_mbon::edit_scene(&document, &name, x, y, z).map_err(String::from)).await
+}
+
+#[tauri::command]
+pub async fn mbon_edit_detail(
+    path: String,
+    row: usize,
+    column: usize,
+    kind: String,
+    value: String,
+) -> Result<exvs_mbon::edit::DetailEdit, String> {
+    blocking(move || {
+        let cell = match kind.as_str() {
+            "u8" => exvs_mbon::list_info::CellKind::U8,
+            "u16" => exvs_mbon::list_info::CellKind::U16,
+            "u32" => exvs_mbon::list_info::CellKind::U32,
+            "i32" => exvs_mbon::list_info::CellKind::I32,
+            "f32" => exvs_mbon::list_info::CellKind::F32,
+            "string" => exvs_mbon::list_info::CellKind::String,
+            other => return Err(format!("unknown cell kind {other}")),
+        };
+        let bytes = read(Path::new(&path))?;
+        exvs_mbon::edit_detail(&bytes, row, column, cell, &value).map_err(String::from)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn mbon_inspect_msc(path: String) -> Result<exvs_ps4_common::msc_header::MscHeader, String> {
+    blocking(move || {
+        let bytes = read(Path::new(&path))?;
+        exvs_mbon::inspect_msc(&bytes).map_err(String::from)
+    })
+    .await
+}

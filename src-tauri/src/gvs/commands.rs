@@ -523,3 +523,46 @@ pub async fn gvs_read_bytes(path: String, offset: u64, length: u32) -> Result<Re
 pub fn gvs_credits() -> Provenance {
     provenance::gvs()
 }
+
+#[tauri::command]
+pub async fn gvs_open_index(root: String) -> Result<exvs_ps4_common::init_index::OpenIndex, String> {
+    blocking(move || exvs_gvs::open_index(Path::new(&root)).map_err(String::from)).await
+}
+
+#[tauri::command]
+pub async fn gvs_edit_model(path: String) -> Result<exvs_gvs::edit::ModelEdit, String> {
+    blocking(move || {
+        let bytes = read(Path::new(&path))?;
+        exvs_gvs::edit_model(&bytes).map_err(String::from)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn gvs_edit_scene(
+    document: String,
+    name: String,
+    x: f32,
+    y: f32,
+    z: f32,
+) -> Result<String, String> {
+    blocking(move || exvs_gvs::edit_scene(&document, &name, x, y, z).map_err(String::from)).await
+}
+
+#[tauri::command]
+pub async fn gvs_edit_detail(path: String, name: String) -> Result<exvs_gvs::edit::DetailEdit, String> {
+    blocking(move || {
+        let bytes = read(Path::new(&path))?;
+        exvs_gvs::edit_detail(&bytes, &name).map_err(String::from)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn gvs_inspect_msc(path: String) -> Result<exvs_ps4_common::msc_header::MscHeader, String> {
+    blocking(move || {
+        let bytes = read(Path::new(&path))?;
+        exvs_gvs::inspect_msc(&bytes).map_err(String::from)
+    })
+    .await
+}

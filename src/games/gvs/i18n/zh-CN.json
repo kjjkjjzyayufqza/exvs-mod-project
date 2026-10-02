@@ -1,5 +1,16 @@
 {
   "title": "Gundam Versus 工作区",
+  "modding": {
+    "title": "GVS 修改",
+    "seed": "索引来源",
+    "members": "索引成员",
+    "empty": "空索引",
+    "model": "模型",
+    "scene": "场景",
+    "detail": "明细",
+    "msc": "MSC",
+    "open": "打开文件夹"
+  },
   "credit": "格式研究：kjjkjjzyayufqza，基于本项目的 VS2 / Over Boost 研究成果。",
   "credits": {
     "researchLabel": "GVS 研究",

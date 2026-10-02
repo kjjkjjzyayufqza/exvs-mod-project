@@ -31,7 +31,8 @@ later-than-OB revision.
      (<https://github.com/descatal/BoostStudio>). BoostStudio ships no
      license file, so this project does not copy its code; the Rust readers
      are independent implementations of the documented layouts, credited in
-     every MBON source file, manifest and UI panel.
+     every MBON source comment and in markdown. Pages, dialogs, and the
+     en-US / zh-CN catalogs do not show that name or repository.
    * GVS: support is the author's own result, derived from this project's
      VS2 / Over Boost research (FHM2D, nutexb, SSBH families).
 

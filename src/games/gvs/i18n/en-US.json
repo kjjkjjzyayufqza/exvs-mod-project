@@ -1,5 +1,16 @@
 {
   "title": "Gundam Versus workspace",
+  "modding": {
+    "title": "GVS modding",
+    "seed": "Index seed",
+    "members": "Index members",
+    "empty": "Empty index",
+    "model": "Model",
+    "scene": "Scene",
+    "detail": "Detail",
+    "msc": "MSC",
+    "open": "Open folder"
+  },
   "credit": "Format research: kjjkjjzyayufqza, built on this project's VS2 / Over Boost findings.",
   "credits": {
     "researchLabel": "GVS research",

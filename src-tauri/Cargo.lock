@@ -1549,6 +1549,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "exvs_ps4_common",
+ "glam",
  "rayon",
  "serde",
  "serde_json",

@@ -1,9 +1,20 @@
 {
   "title": "Maxi Boost ON workspace",
-  "credit": "Format research: descatal / BoostStudio. Tooling: kjjkjjzyayufqza.",
+  "modding": {
+    "title": "MBON modding",
+    "seed": "Index seed",
+    "members": "Index members",
+    "empty": "Empty index",
+    "model": "Model",
+    "scene": "Scene",
+    "detail": "Detail",
+    "msc": "MSC",
+    "open": "Open folder"
+  },
+  "credit": "Tooling: kjjkjjzyayufqza.",
   "credits": {
-    "researchLabel": "MBON research",
-    "researchNote": "All MBON format research comes from descatal's BoostStudio (https://github.com/descatal/BoostStudio)."
+    "researchLabel": "Author",
+    "researchNote": "Format notes stay in the source comments and the project documents."
   },
   "package": {
     "sourceDigest": "source {{digest}}"

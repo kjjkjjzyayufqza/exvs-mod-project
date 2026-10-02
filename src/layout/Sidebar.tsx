@@ -10,7 +10,7 @@ import { NavigationGuardProvider } from "@/layout/NavigationGuardContext"
 
 export default function SidebarLayout() {
   const location = useLocation()
-  const fullBleedEditor = location.pathname === "/SceneEdit" || location.pathname === "/UnitModelEdit" || location.pathname === "/MissionNodeEditor" || location.pathname === "/MbonWorkspace" || location.pathname === "/GvsWorkspace"
+  const fullBleedEditor = location.pathname === "/SceneEdit" || location.pathname === "/UnitModelEdit" || location.pathname === "/MissionNodeEditor" || location.pathname === "/MbonWorkspace" || location.pathname === "/MbonModding" || location.pathname === "/GvsWorkspace" || location.pathname === "/GvsModding"
 
   const storeSidebarOpen = useConfigStore((s) => s.sidebarOpen)
   const setSidebarOpen = useConfigStore((s) => s.setSidebarOpen)

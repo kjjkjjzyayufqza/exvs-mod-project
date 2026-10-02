@@ -29,8 +29,6 @@ import { GvsSourcesPanel } from "./components/GvsSourcesPanel";
 import { useGvsStore, type GvsSelection } from "./store";
 import { nodeAt, pathKey } from "./tree";
 
-const REPOSITORY_URL = "https://github.com/kjjkjjzyayufqza/exvs-mod-project";
-
 /**
  * GVS (PS4) workspace: uncompressed FHM2D-style archives extracted into named
  * packages; textures, SSBH models and structure edits, then a canonical repack.
@@ -84,11 +82,7 @@ export default function GvsWorkspacePage() {
       title={t("title")}
       credit={t("credit")}
       tools={
-        <CreditsDialog
-          game="gvs"
-          provenance={credits.data}
-          research={{ label: t("credits.researchLabel"), url: REPOSITORY_URL, note: t("credits.researchNote") }}
-        />
+        <CreditsDialog game="gvs" provenance={credits.data} />
       }
       sourcesKey={packageDir}
       left={<GvsSourcesPanel />}

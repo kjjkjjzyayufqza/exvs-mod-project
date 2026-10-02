@@ -1,9 +1,20 @@
 {
   "title": "Maxi Boost ON 工作区",
-  "credit": "格式研究：descatal / BoostStudio。工具实现：kjjkjjzyayufqza。",
+  "modding": {
+    "title": "MBON 修改",
+    "seed": "索引来源",
+    "members": "索引成员",
+    "empty": "空索引",
+    "model": "模型",
+    "scene": "场景",
+    "detail": "明细",
+    "msc": "MSC",
+    "open": "打开文件夹"
+  },
+  "credit": "工具实现：kjjkjjzyayufqza。",
   "credits": {
-    "researchLabel": "MBON 研究",
-    "researchNote": "全部 MBON 格式研究均来自 descatal 的 BoostStudio（https://github.com/descatal/BoostStudio）。"
+    "researchLabel": "作者",
+    "researchNote": "格式说明写在源码注释和项目文档里。"
   },
   "package": {
     "sourceDigest": "原始 {{digest}}"

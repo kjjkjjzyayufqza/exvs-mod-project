@@ -17,7 +17,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { SourcesPanel, type SourcesAdapter } from "../../ps4-common/components/SourcesPanel";
 import { mbonApi } from "../api";
-import { MBON_KINDS, mbonShort, mbonTone } from "../kinds";
+import { MBON_KINDS, mbonShort } from "../kinds";
 import { useMbonStore } from "../store";
 
 /** MBON binding of the shared sources pane (packages + game file scanner). */
@@ -42,18 +42,20 @@ export function MbonSourcesPanel() {
           tone: item.container ? "archive" : "other",
           detail: tc("sources.payloads", { count: item.payloadCount }),
         })),
-      scanFolder: async (root) =>
-        (await mbonApi.scanFolder(root)).map((entry) => ({
-          path: entry.path,
-          stem: entry.stem,
-          relativePath: entry.relativePath,
-          size: entry.size,
-          kind: entry.payloadKind,
-          short: mbonShort(entry.payloadKind),
-          label: entry.payloadLabel,
-          tone: mbonTone(entry.payloadKind),
-          error: entry.error,
-        })),
+      scanFolder: async (root) => {
+        const index = await mbonApi.openIndex(root);
+        return index.members.map((member) => ({
+          path: `${root.replace(/[\\/]+$/, "")}/${member.relativePath}`,
+          stem: member.relativePath.split("/").pop() ?? member.relativePath,
+          relativePath: member.relativePath,
+          size: 0,
+          kind: "container" as const,
+          short: "PS4 ARC",
+          label: member.relativePath,
+          tone: "archive" as const,
+          error: null,
+        }));
+      },
       extract: async (source, root, overwrite) => {
         const report = await mbonApi.extract(source, root, overwrite);
         return { packageDir: report.packageDir, files: report.filesWritten, bytes: report.bytesWritten };

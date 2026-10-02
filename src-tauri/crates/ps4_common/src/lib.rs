@@ -32,9 +32,12 @@ pub mod binio;
 pub mod cache;
 pub mod digest;
 pub mod error;
+pub mod init_index;
 pub mod mesh_pack;
+pub mod msc_header;
 pub mod provenance;
 pub mod scan;
+pub mod scene;
 pub mod skeleton;
 pub mod texture;
 

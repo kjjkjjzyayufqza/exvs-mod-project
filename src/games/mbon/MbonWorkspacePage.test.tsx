@@ -128,7 +128,8 @@ describe("MBON workspace page", () => {
   it("shows credits, packages and the FHM entries of the open package", async () => {
     await renderPage();
     expect(screen.getByText("MBON")).toBeInTheDocument();
-    expect(screen.getByText(/descatal \/ BoostStudio/)).toBeInTheDocument();
+    expect(screen.getByText(/kjjkjjzyayufqza/)).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toMatch(/descatal|BoostStudio|github\.com\/descatal/);
     expect(screen.getAllByText("SYNTH001").length).toBeGreaterThan(0);
     expect(screen.getByText("002.list")).toBeInTheDocument();
   });

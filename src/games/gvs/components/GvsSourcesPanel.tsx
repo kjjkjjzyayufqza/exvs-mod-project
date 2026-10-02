@@ -17,7 +17,7 @@ import { useTranslation } from "react-i18next";
 import { SourcesPanel, type SourcesAdapter } from "../../ps4-common/components/SourcesPanel";
 import { hex } from "../../ps4-common/format";
 import { gvsApi } from "../api";
-import { GVS_KINDS, gvsShort, gvsTone } from "../kinds";
+import { GVS_KINDS, gvsShort } from "../kinds";
 import { useGvsStore } from "../store";
 
 /** GVS binding of the shared sources pane (packages + game file scanner). */
@@ -42,21 +42,20 @@ export function GvsSourcesPanel() {
           tone: "archive",
           detail: tc("sources.files", { count: item.fileCount }),
         })),
-      scanFolder: async (root) =>
-        (await gvsApi.scanFolder(root)).map((entry) => {
-          const kind = entry.container ? "container" : entry.payloadKind;
-          return {
-            path: entry.path,
-            stem: entry.stem,
-            relativePath: entry.relativePath,
-            size: entry.size,
-            kind,
-            short: entry.container ? "PS4 ARC" : gvsShort(entry.payloadKind),
-            label: entry.container ? tc("sources.archiveFiles", { count: entry.fileCount }) : entry.payloadLabel,
-            tone: entry.container ? "archive" : gvsTone(entry.payloadKind),
-            error: entry.error,
-          };
-        }),
+      scanFolder: async (root) => {
+        const index = await gvsApi.openIndex(root);
+        return index.members.map((member) => ({
+          path: `${root.replace(/[\\/]+$/, "")}/${member.relativePath}`,
+          stem: member.relativePath.split("/").pop() ?? member.relativePath,
+          relativePath: member.relativePath,
+          size: 0,
+          kind: "container",
+          short: "PS4 ARC",
+          label: member.relativePath,
+          tone: "archive" as const,
+          error: null,
+        }));
+      },
       extract: async (source, root, overwrite) => {
         const report = await gvsApi.extract(source, root, overwrite);
         return { packageDir: report.packageDir, files: report.fileCount, bytes: report.bytesWritten };

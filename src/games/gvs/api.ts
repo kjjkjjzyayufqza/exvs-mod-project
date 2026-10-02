@@ -54,4 +54,11 @@ export const gvsApi = {
   findTextures: (packageDir: string) => invoke<Record<string, string>>("gvs_find_textures", { package: packageDir }),
   readBytes: (path: string, offset: number, length: number) => invokeBytes("gvs_read_bytes", { path, offset, length }),
   credits: () => invoke<ProvenanceRecord>("gvs_credits"),
+  openIndex: (root: string) => invoke<{ seed: string; members: { relativePath: string }[] }>("gvs_open_index", { root }),
+  editModel: (path: string) =>
+    invoke<{ vertices: number; firstX: number; obj: string }>("gvs_edit_model", { path }),
+  editScene: (document: string, name: string, x: number, y: number, z: number) =>
+    invoke<string>("gvs_edit_scene", { document, name, x, y, z }),
+  editDetail: (path: string, name: string) => invoke<{ name: string }>("gvs_edit_detail", { path, name }),
+  inspectMsc: (path: string) => invoke<{ entryCount: number; stringCount: number; byteLen: number }>("gvs_inspect_msc", { path }),
 };

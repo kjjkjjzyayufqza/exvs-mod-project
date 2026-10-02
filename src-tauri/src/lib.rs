@@ -359,6 +359,11 @@ pub fn run() {
             mbon::commands::mbon_read_bytes,
             mbon::commands::mbon_fhm_listing,
             mbon::commands::mbon_credits,
+            mbon::commands::mbon_open_index,
+            mbon::commands::mbon_edit_model,
+            mbon::commands::mbon_edit_scene,
+            mbon::commands::mbon_edit_detail,
+            mbon::commands::mbon_inspect_msc,
             gvs::commands::gvs_scan_folder,
             gvs::commands::gvs_inspect,
             gvs::commands::gvs_extract,
@@ -379,7 +384,12 @@ pub fn run() {
             gvs::commands::gvs_mesh_export_obj,
             gvs::commands::gvs_find_textures,
             gvs::commands::gvs_read_bytes,
-            gvs::commands::gvs_credits
+            gvs::commands::gvs_credits,
+            gvs::commands::gvs_open_index,
+            gvs::commands::gvs_edit_model,
+            gvs::commands::gvs_edit_scene,
+            gvs::commands::gvs_edit_detail,
+            gvs::commands::gvs_inspect_msc
         ]);
 
     // Debug-only MCP bridge for AI tooling. Prefer 127.0.0.1 and a base port outside
