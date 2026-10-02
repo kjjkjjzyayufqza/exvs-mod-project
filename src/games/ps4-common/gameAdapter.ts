@@ -31,25 +31,8 @@ export interface SourcePackageRow {
   sourceName: string;
   /** Title of a named archive (`Character List`). */
   title: string | null;
-  chip: string;
-  tone: KindTone;
+  /** Short content summary, e.g. `12 payloads`. */
   detail: string;
-}
-
-/** One original game file found by the scanner. */
-export interface SourceScanRow {
-  path: string;
-  stem: string;
-  relativePath: string;
-  size: number;
-  kind: string;
-  short: string;
-  label: string;
-  tone: KindTone;
-  error: string | null;
-  /** Default package folder from the game's name table. */
-  named: string | null;
-  title: string | null;
 }
 
 /** Summary of one source file for the single-unpack preview. */
@@ -97,13 +80,17 @@ export interface Ps4GameAdapter {
   workspaceRoute: string;
   /** Extensions offered by the single-unpack file dialog. */
   sourceExtensions: readonly string[];
-  /** Kind ids in display order with their chip text. */
-  kinds: readonly { id: string; short: string }[];
   listPackages: (workspace: string) => Promise<SourcePackageRow[]>;
-  scanFolder: (root: string) => Promise<SourceScanRow[]>;
   /** Extract into `<workspace>/<name>`; without `name` the game's name table decides. */
   extract: (source: string, workspace: string, overwrite: boolean, name?: string) => Promise<ExtractOutcome>;
+  /** The curated data-init list, each archive located by its hash. */
   initCatalog: (sourceRoot: string, workspace: string) => Promise<InitCatalog>;
+  /**
+   * Every archive the game's lists name (name table, and for MBON the units of
+   * the extracted `SCharacterList`), each located by its hash. The game folder
+   * is never listed.
+   */
+  contentIndex: (sourceRoot: string, workspace: string) => Promise<InitCatalog>;
   suggestName: (source: string) => Promise<NameSuggestion>;
   preview: (path: string) => Promise<ArchivePreview>;
   packageSummary: (packageDir: string) => Promise<PackageSummary>;

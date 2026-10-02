@@ -23,6 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { buttonVariants } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
 import type { GameId } from "../types";
 
@@ -46,14 +47,14 @@ export function ConfirmDialog({
   const { t } = useTranslation("ps4-workspace");
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="ps4-ws ps4-dialog" data-game={game}>
+      <AlertDialogContent className="sm:max-w-md" data-game={game}>
         <AlertDialogHeader>
-          <AlertDialogTitle className="ps4-dialog__title">{title}</AlertDialogTitle>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel className="ps4-btn">{t("cancel")}</AlertDialogCancel>
-          <AlertDialogAction className="ps4-btn" data-variant="danger" onClick={onConfirm}>
+          <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+          <AlertDialogAction className={buttonVariants({ variant: "destructive" })} onClick={onConfirm}>
             {confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>

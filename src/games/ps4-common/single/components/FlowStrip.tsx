@@ -15,19 +15,19 @@
 // ================================================
 //
 
-import { CornerDownRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 /** Source → destination strip, so the effect of the action is visible up front. */
 export function FlowStrip({ from, to, empty }: { from: string | null; to: string | null; empty: string }) {
   return (
-    <div className="ps4-flow" aria-live="polite">
-      <bdi className="ps4-flow__end" data-empty={!from}>
-        {from ?? empty}
-      </bdi>
-      <CornerDownRight aria-hidden="true" />
-      <bdi className="ps4-flow__end" data-empty={!to}>
-        {to ?? empty}
-      </bdi>
+    <div
+      className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 font-mono text-[11px]"
+      aria-live="polite"
+    >
+      <bdi className={cn("min-w-0 break-all", from ? "text-foreground" : "text-muted-foreground")}>{from ?? empty}</bdi>
+      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      <bdi className={cn("min-w-0 break-all", to ? "text-foreground" : "text-muted-foreground")}>{to ?? empty}</bdi>
     </div>
   );
 }

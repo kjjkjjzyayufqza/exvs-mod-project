@@ -23,7 +23,6 @@ import type {
   GvsPackageItem,
   GvsPackageView,
   GvsRepackReport,
-  GvsScanEntry,
   GvsTextureInfo,
   GvsVerifyReport,
   SsbhSummary,
@@ -31,13 +30,15 @@ import type {
 
 /** Typed bindings of the `gvs_*` Tauri commands (src-tauri/src/gvs/commands.rs). */
 export const gvsApi = {
-  scanFolder: (root: string) => invoke<GvsScanEntry[]>("gvs_scan_folder", { root }),
   inspect: (path: string) => invoke<GvsInspection>("gvs_inspect", { path }),
   /** Extract into `<workspace>/<name>`; without `name` the GVS name table picks the folder. */
   extract: (source: string, workspace: string, overwrite: boolean, name?: string) =>
     invoke<GvsExtractReport>("gvs_extract", { source, workspace, overwrite, name: name ?? null }),
   initCatalog: (sourceRoot: string, workspace: string) =>
     invoke<InitCatalog>("gvs_init_catalog", { sourceRoot: sourceRoot || null, workspace: workspace || null }),
+  /** Every archive of the GVS name table, each located by hash. */
+  contentIndex: (sourceRoot: string, workspace: string) =>
+    invoke<InitCatalog>("gvs_content_index", { sourceRoot: sourceRoot || null, workspace: workspace || null }),
   suggestName: (source: string) => invoke<NameSuggestion>("gvs_suggest_name", { source }),
   workspaceStatus: (workspace: string) => invoke<PackageStatus[]>("gvs_workspace_status", { workspace }),
   packageStatus: (packageDir: string, workspace?: string) =>

@@ -29,13 +29,13 @@ use exvs_mbon::package::{
     self, ExtractOptions, ExtractReport, FhmManifestNode, PackageManifest, RepackReport, MANIFEST_NAME, STATE_NAME,
 };
 use exvs_ps4_common::cache::{file_key, ByteCache};
+use exvs_ps4_common::files;
 use exvs_ps4_common::mesh_pack::{self, MeshInput};
 use exvs_ps4_common::names::parse_hash;
 use exvs_ps4_common::packages::{suggest_name, InitCatalog, NameSuggestion, PackageStatus, RepackTargets};
 use exvs_ps4_common::provenance::{self, Provenance};
-use exvs_ps4_common::workspace::relative_to;
-use exvs_ps4_common::scan;
 use exvs_ps4_common::texture::{self, PixelLayout};
+use exvs_ps4_common::workspace::relative_to;
 use serde::Serialize;
 use tauri::ipc::{InvokeBody, Response};
 
@@ -58,67 +58,6 @@ where
 
 fn read(path: &Path) -> Result<Vec<u8>, String> {
     std::fs::read(path).map_err(|error| format!("{}: {error}", path.display()))
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MbonScanEntry {
-    pub relative_path: String,
-    pub path: String,
-    pub stem: String,
-    pub size: u64,
-    pub container: bool,
-    pub archive_kind: Option<u64>,
-    pub file_count: u32,
-    pub payload_magic: String,
-    pub payload_kind: MbonKind,
-    pub payload_label: &'static str,
-    pub payload_size: u64,
-    pub error: Option<String>,
-    /// Default package folder from the MBON name table (`common/list_info`).
-    pub named: Option<String>,
-    pub title: Option<String>,
-}
-
-/// Classify every file below `root` (a PS4 `archives/` tree or a sample folder).
-#[tauri::command]
-pub async fn mbon_scan_folder(root: String) -> Result<Vec<MbonScanEntry>, String> {
-    blocking(move || {
-        let root_path = PathBuf::from(&root);
-        let entries = scan::scan_folder(&root_path, &[]).map_err(String::from)?;
-        let book = exvs_mbon::names::book();
-        Ok(entries
-            .into_iter()
-            .map(|entry| {
-                let head = hex_to_bytes(&entry.payload_head);
-                let kind = classify(&head);
-                let name = parse_hash(&entry.stem).and_then(|hash| book.get(hash));
-                MbonScanEntry {
-                    named: name.map(|name| name.relative_dir()),
-                    title: name.and_then(|name| name.title.clone()),
-                    path: root_path.join(&entry.relative_path).to_string_lossy().into_owned(),
-                    relative_path: entry.relative_path,
-                    stem: entry.stem,
-                    size: entry.size,
-                    container: entry.container,
-                    archive_kind: entry.archive_kind,
-                    file_count: entry.file_count,
-                    payload_magic: entry.payload_magic,
-                    payload_kind: kind,
-                    payload_label: kind.label(),
-                    payload_size: entry.payload_size,
-                    error: entry.error,
-                }
-            })
-            .collect())
-    })
-    .await
-}
-
-fn hex_to_bytes(text: &str) -> Vec<u8> {
-    (0..text.len() / 2)
-        .filter_map(|index| u8::from_str_radix(&text[index * 2..index * 2 + 2], 16).ok())
-        .collect()
 }
 
 #[tauri::command]
@@ -156,6 +95,19 @@ pub async fn mbon_init_catalog(source_root: Option<String>, workspace: Option<St
         let source_root = source_root.filter(|path| !path.trim().is_empty()).map(PathBuf::from);
         let workspace = workspace.filter(|path| !path.trim().is_empty()).map(PathBuf::from);
         Ok(exvs_mbon::init_catalog(source_root.as_deref(), workspace.as_deref()))
+    })
+    .await
+}
+
+/// Every known archive, indexed from lists (the name table, and for MBON the
+/// units of the extracted `SCharacterList`), with its file in the game folder
+/// found by hash and its packages in the workspace. Nothing is scanned.
+#[tauri::command]
+pub async fn mbon_content_index(source_root: Option<String>, workspace: Option<String>) -> Result<InitCatalog, String> {
+    blocking(move || {
+        let source_root = source_root.filter(|path| !path.trim().is_empty()).map(PathBuf::from);
+        let workspace = workspace.filter(|path| !path.trim().is_empty()).map(PathBuf::from);
+        Ok(exvs_mbon::content::content_index(source_root.as_deref(), workspace.as_deref()))
     })
     .await
 }
@@ -340,7 +292,7 @@ fn collect_entries(
 }
 
 fn untracked_files(package_dir: &Path, listed: &std::collections::HashSet<String>) -> Vec<String> {
-    let Ok(files) = scan::list_files(package_dir, &[]) else {
+    let Ok(files) = files::list_files(package_dir, &[]) else {
         return Vec::new();
     };
     files
@@ -662,7 +614,7 @@ pub async fn mbon_find_textures(package: String) -> Result<std::collections::Has
     blocking(move || {
         let dir = PathBuf::from(package);
         let mut out = std::collections::HashMap::new();
-        for path in scan::list_files(&dir, &["nut"]).map_err(String::from)? {
+        for path in files::list_files(&dir, &["nut"]).map_err(String::from)? {
             let Ok(bytes) = std::fs::read(&path) else { continue };
             let Ok(ntp3) = Ntp3::parse(&bytes) else { continue };
             for (index, texture) in ntp3.textures.iter().enumerate() {

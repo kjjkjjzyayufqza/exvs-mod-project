@@ -147,7 +147,6 @@ export function MbonPackagePanel({
             {tc("package.verify")}
           </HudButton>
           <HudButton
-            variant="primary"
             icon={<Hammer />}
             busy={busy === "repack"}
             disabled={!data || busy !== null}
@@ -175,10 +174,10 @@ export function MbonPackagePanel({
           <select
             className="ps4-select"
             value={kind}
-            aria-label={tc("sources.kindFilter")}
+            aria-label={tc("package.kindFilter")}
             onChange={(event) => setKind(event.target.value as MbonKind | "all")}
           >
-            <option value="all">{tc("sources.allKinds")}</option>
+            <option value="all">{tc("package.allKinds")}</option>
             {MBON_KINDS.filter((item) => presentKinds.has(item)).map((item) => (
               <option key={item} value={item}>
                 {mbonShort(item)}
@@ -230,7 +229,7 @@ export function MbonPackagePanel({
             select({ folder: entry.folder, index: entry.index, path: entry.path });
           }}
           getKey={(entry) => `${entry.folder}#${entry.index}`}
-          empty={<EmptyState icon={<PackageOpen />} title={tc("sources.noMatches")} />}
+          empty={<EmptyState icon={<PackageOpen />} title={tc("package.noMatches")} />}
           rowProps={(entry) => ({ "data-missing": entry.exists ? undefined : "true" })}
           renderRow={(entry) => <EntryRow entry={entry} flat={flat} />}
         />

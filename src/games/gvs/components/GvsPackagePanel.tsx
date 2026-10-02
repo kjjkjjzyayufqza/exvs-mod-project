@@ -137,7 +137,6 @@ export function GvsPackagePanel({
             {tc("package.verify")}
           </HudButton>
           <HudButton
-            variant="primary"
             icon={<Hammer />}
             busy={busy === "repack"}
             disabled={!data || busy !== null}
@@ -160,10 +159,10 @@ export function GvsPackagePanel({
           <select
             className="ps4-select"
             value={kind}
-            aria-label={tc("sources.kindFilter")}
+            aria-label={tc("package.kindFilter")}
             onChange={(event) => setKind(event.target.value as GvsKind | "all")}
           >
-            <option value="all">{tc("sources.allKinds")}</option>
+            <option value="all">{tc("package.allKinds")}</option>
             {GVS_KINDS.filter((item) => presentKinds.has(item)).map((item) => (
               <option key={item} value={item}>
                 {gvsShort(item)}
@@ -214,7 +213,7 @@ export function GvsPackagePanel({
             if (rows[index].folder && !flat) toggle(rows[index].key);
           }}
           getKey={(row) => row.key}
-          empty={<EmptyState icon={<PackageOpen />} title={tc("sources.noMatches")} />}
+          empty={<EmptyState icon={<PackageOpen />} title={tc("package.noMatches")} />}
           rowProps={(row) => ({ "data-missing": row.member && !row.member.exists ? "true" : undefined })}
           renderRow={(row) => (
             <TreeRowView

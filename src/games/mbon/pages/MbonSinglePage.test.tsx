@@ -117,7 +117,7 @@ describe("MBON Single FHM page", () => {
 
   it("repacks into the workspace mod folder through mbon_repack", async () => {
     await renderPage();
-    fireEvent.click(screen.getByRole("tab", { name: "Repack" }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Repack" }));
     expect(await screen.findByText("1 change since the last repack")).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledWith("mbon_repack_targets", { package: PACKAGE, modRoot: `${WORKSPACE}/_out` });
     expect(invokeMock).toHaveBeenCalledWith("mbon_package_status", { package: PACKAGE, workspace: WORKSPACE });

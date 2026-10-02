@@ -33,6 +33,22 @@ const bundles: Record<string, { en: Tree; zh: Tree }> = {
 };
 
 const sources = import.meta.glob<string>("../**/*.{ts,tsx}", { query: "?raw", import: "default", eager: true });
+const nameTables = import.meta.glob<string>("../../../src-tauri/crates/{mbon,gvs}/data/*_names.tsv", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+});
+
+/** Distinct values of one column of the embedded name tables. */
+function tableColumn(column: string): Set<string> {
+  const values = new Set<string>();
+  for (const text of Object.values(nameTables)) {
+    const rows = text.split(/\r?\n/).filter((line) => line && !line.startsWith("#"));
+    const index = rows[0].split("\t").indexOf(column);
+    for (const row of rows.slice(1)) values.add(row.split("\t")[index]);
+  }
+  return values;
+}
 
 function leafKeys(tree: Tree, prefix = ""): string[] {
   return Object.entries(tree).flatMap(([key, value]) =>
@@ -92,13 +108,26 @@ describe("MBON / GVS workspace translations", () => {
       expect(ps4.has(`settings.sidebarMode.${mode}.title`)).toBe(true);
       expect(ps4.has(`settings.sidebarMode.${mode}.description`)).toBe(true);
     }
-    for (const layout of ["three", "focus", "stacked"]) expect(ps4.has(`settings.workspaceLayout.${layout}.title`)).toBe(true);
-    for (const style of ["standard", "contrast"]) expect(ps4.has(`settings.visualStyle.${style}.title`)).toBe(true);
     for (const inspector of ["auto", "stacked", "split"]) expect(ps4.has(`settings.inspectorLayout.${inspector}`)).toBe(true);
     for (const density of ["compact", "comfortable"]) expect(ps4.has(`settings.densityOption.${density}`)).toBe(true);
     for (const game of ["ob", "mbon", "gvs"]) {
       expect(ps4.has(`sidebar.group.${game}`)).toBe(true);
       expect(ps4.has(`sidebar.short.${game}`)).toBe(true);
     }
+  });
+
+  it("labels every route and name source of the known-content index", () => {
+    const routes = tableColumn("route");
+    const nameSources = tableColumn("source");
+    expect(routes.size).toBeGreaterThan(10);
+    // MBON adds the units of its SCharacterList under their own route and source.
+    routes.add("unit");
+    nameSources.add("scharacterlist");
+    const ps4 = new Set(leafKeys(ps4En));
+    const missing = [
+      ...[...routes].filter((route) => !ps4.has(`content.routes.${route}`)),
+      ...[...nameSources].filter((source) => !ps4.has(`content.sources.${source}`)),
+    ];
+    expect(missing).toEqual([]);
   });
 });

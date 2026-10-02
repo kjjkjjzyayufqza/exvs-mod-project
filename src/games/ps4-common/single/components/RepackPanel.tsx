@@ -17,19 +17,23 @@
  * No elimines ni sustituyas los nombres de autor de este aviso.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { save } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { FileOutput, FolderOpen, Hammer, ShieldCheck } from "lucide-react";
+import { FileOutput, FolderArchive, FolderOpen, Loader2, ShieldCheck } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import { runOperation } from "../../activity";
 import { formatBytes, parentDir, shortDigest } from "../../format";
 import type { Ps4GameAdapter, RepackOutcome } from "../../gameAdapter";
 import { useAsync } from "../../useAsync";
 import { usePersistentPath } from "../../usePersistentPath";
 import { effectiveModRoot } from "../../workspaceStore";
-import { ErrorNote, HudButton, HudPanel, KeyValues, KindChip, Section } from "../../components/Hud";
-import { PathPicker } from "../../components/PathPicker";
+import { PathField } from "../../components/PathField";
+import { FactList, SectionBlock, SectionNote, SectionPanel } from "../../components/SectionPanel";
 import { FlowStrip } from "./FlowStrip";
 
 type Target = "mod" | "beside" | "custom";
@@ -39,6 +43,49 @@ export interface RepackPanelProps {
   workspace: string;
   modRoot: string;
   setModRoot: (path: string) => void;
+}
+
+/** One output choice: a radio with its resolved path underneath. */
+function TargetChoice({
+  name,
+  checked,
+  disabled,
+  onSelect,
+  label,
+  path,
+  action,
+}: {
+  name: string;
+  checked: boolean;
+  disabled?: boolean;
+  onSelect: () => void;
+  label: string;
+  path: string;
+  action?: ReactNode;
+}) {
+  return (
+    <label
+      className={cn(
+        "flex items-start gap-2 rounded-md border px-3 py-2 text-xs transition-colors",
+        checked ? "border-primary/40 bg-muted/50" : "hover:bg-muted/40",
+        disabled && "cursor-not-allowed opacity-60",
+      )}
+    >
+      <input
+        type="radio"
+        name={name}
+        checked={checked}
+        disabled={disabled}
+        onChange={onSelect}
+        className="mt-0.5 h-3.5 w-3.5 accent-primary"
+      />
+      <span className="min-w-0 flex-1">
+        <span className="font-medium">{label}</span>
+        <span className="block break-all font-mono text-[11px] text-muted-foreground">{path}</span>
+      </span>
+      {action}
+    </label>
+  );
 }
 
 /**
@@ -88,6 +135,7 @@ export function RepackPanel({ adapter, workspace, modRoot, setModRoot }: RepackP
       : !outputPath
         ? t("single.blocked.target")
         : null;
+  const choicesDisabled = !packageDir || !!summary.error;
 
   const chooseCustom = async () => {
     const picked = await save({
@@ -104,8 +152,10 @@ export function RepackPanel({ adapter, workspace, modRoot, setModRoot }: RepackP
   const repack = async () => {
     if (blocked || !outputPath) return;
     setBusy("repack");
-    const report = await runOperation(game, t("single.repacking", { name: summary.data?.sourceName ?? "" }), () =>
-      adapter.repack(packageDir, outputPath),
+    const report = await runOperation(
+      game,
+      t("single.repacking", { name: summary.data?.sourceName ?? "" }),
+      () => adapter.repack(packageDir, outputPath),
       {
         describe: (value) => t("package.repackDone", { path: value.outputPath, size: formatBytes(value.outputLen) }),
         action: (value) => ({ label: t("package.showOutput"), onClick: () => void openPath(parentDir(value.outputPath)) }),
@@ -140,140 +190,173 @@ export function RepackPanel({ adapter, workspace, modRoot, setModRoot }: RepackP
           : t("single.clean");
 
   return (
-    <div className="ps4-single">
-      <HudPanel
-        title={t("single.tabs.repack")}
-        busy={busy !== null}
-        actions={
-          <>
-            <HudButton
-              icon={<ShieldCheck />}
-              busy={busy === "verify"}
-              disabled={!packageDir || !!summary.error || busy !== null}
-              onClick={() => void verify()}
-              title={t("package.verifyHint")}
-            >
-              {t("package.verify")}
-            </HudButton>
-            <HudButton
-              variant="primary"
-              icon={<Hammer />}
-              busy={busy === "repack"}
-              disabled={!!blocked || busy !== null}
-              onClick={() => void repack()}
-            >
-              {t("single.repack")}
-            </HudButton>
-          </>
-        }
-        footer={blocked ? <span className="ps4-truncate">{blocked}</span> : undefined}
-      >
-        <div className="ps4-single__form">
-          <FlowStrip from={packageDir || null} to={outputPath} empty={t("single.flowEmpty")} />
-          <div className="ps4-field">
-            <span className="ps4-field__label">{t("single.package")}</span>
-            <PathPicker
-              value={packageDir}
-              onChange={setPackageDir}
-              placeholder={t("single.packagePlaceholder")}
-              dialogTitle={t("single.packageDialog")}
-            />
-          </div>
-          {summary.error ? <ErrorNote>{summary.error}</ErrorNote> : null}
-          <fieldset className="ps4-choices" disabled={!packageDir || !!summary.error}>
-            <legend className="ps4-field__label">{t("single.target")}</legend>
-            <label className="ps4-check">
-              <input type="radio" name={`${game}-target`} checked={effectiveMode === "mod"} disabled={!modPath} onChange={() => setMode("mod")} />
-              <span>
-                {t("single.targetMod")}
-                <span className="ps4-choices__path ps4-mono">{modPath ?? t("single.targetModMissing")}</span>
-              </span>
-            </label>
-            <label className="ps4-check">
-              <input type="radio" name={`${game}-target`} checked={effectiveMode === "beside"} onChange={() => setMode("beside")} />
-              <span>
-                {t("single.targetBeside")}
-                <span className="ps4-choices__path ps4-mono">{targets.data?.beside ?? "-"}</span>
-              </span>
-            </label>
-            <label className="ps4-check">
-              <input
-                type="radio"
+    <div className="space-y-4">
+      <FlowStrip from={packageDir || null} to={outputPath} empty={t("single.flowEmpty")} />
+
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)]">
+        <SectionPanel>
+          <SectionBlock title={t("single.packageTitle")} description={t("single.packageDescription")}>
+            <div className="space-y-1.5">
+              <Label htmlFor={`${game}-single-package`} className="text-xs">
+                {t("single.package")}
+              </Label>
+              <PathField
+                id={`${game}-single-package`}
+                kind="folder"
+                dialogTitle={t("single.packageDialog")}
+                value={packageDir}
+                defaultPath={packageDir || workspace || undefined}
+                onPick={setPackageDir}
+                placeholder={t("single.packagePlaceholder")}
+              />
+            </div>
+            {summary.error ? <SectionNote tone="error">{summary.error}</SectionNote> : null}
+          </SectionBlock>
+
+          <SectionBlock title={t("single.target")} description={t("single.targetDescription")}>
+            <fieldset className="space-y-2" disabled={choicesDisabled}>
+              <legend className="sr-only">{t("single.target")}</legend>
+              <TargetChoice
+                name={`${game}-target`}
+                checked={effectiveMode === "mod"}
+                disabled={choicesDisabled || !modPath}
+                onSelect={() => setMode("mod")}
+                label={t("single.targetMod")}
+                path={modPath ?? t("single.targetModMissing")}
+              />
+              <TargetChoice
+                name={`${game}-target`}
+                checked={effectiveMode === "beside"}
+                disabled={choicesDisabled}
+                onSelect={() => setMode("beside")}
+                label={t("single.targetBeside")}
+                path={targets.data?.beside ?? "-"}
+              />
+              <TargetChoice
                 name={`${game}-target`}
                 checked={effectiveMode === "custom"}
-                onChange={() => (custom ? setMode("custom") : void chooseCustom())}
+                disabled={choicesDisabled}
+                onSelect={() => (custom ? setMode("custom") : void chooseCustom())}
+                label={t("single.targetCustom")}
+                path={custom || t("single.targetCustomEmpty")}
+                action={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-7 w-7 shrink-0"
+                    disabled={choicesDisabled}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      void chooseCustom();
+                    }}
+                    title={t("single.customDialog")}
+                    aria-label={t("single.customDialog")}
+                  >
+                    <FileOutput className="h-3.5 w-3.5" />
+                  </Button>
+                }
               />
-              <span>
-                {t("single.targetCustom")}
-                <span className="ps4-choices__path ps4-mono">{custom || t("single.targetCustomEmpty")}</span>
-              </span>
-              <HudButton icon={<FileOutput />} label={t("single.customDialog")} onClick={() => void chooseCustom()} />
-            </label>
-          </fieldset>
-          <div className="ps4-field">
-            <span className="ps4-field__label">{t("modRoot.label")}</span>
-            <PathPicker
-              value={modRoot}
-              onChange={setModRoot}
-              placeholder={t("modRoot.placeholder", { path: modTarget || "_out" })}
-              dialogTitle={t("modRoot.dialog")}
-            />
-            <span className="ps4-field__hint">{t("modRoot.hint", { path: modTarget || "-" })}</span>
+            </fieldset>
+            <div className="space-y-1.5">
+              <Label htmlFor={`${game}-single-mod`} className="text-xs">
+                {t("modRoot.label")}
+              </Label>
+              <PathField
+                id={`${game}-single-mod`}
+                kind="folder"
+                dialogTitle={t("modRoot.dialog")}
+                value={modRoot}
+                defaultPath={modTarget || undefined}
+                onPick={setModRoot}
+                placeholder={t("modRoot.placeholder", { path: modTarget || "_out" })}
+              />
+              <p className="text-xs text-muted-foreground">{t("modRoot.hint", { path: modTarget || "-" })}</p>
+            </div>
+          </SectionBlock>
+
+          <div className="flex flex-wrap items-center gap-3 p-4">
+            <Button onClick={() => void repack()} disabled={!!blocked || busy !== null}>
+              {busy === "repack" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderArchive className="h-4 w-4" />}
+              {t("single.repack")}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void verify()}
+              disabled={!packageDir || !!summary.error || busy !== null}
+              title={t("package.verifyHint")}
+            >
+              {busy === "verify" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+              {t("package.verify")}
+            </Button>
+            {blocked ? <p className="text-xs text-muted-foreground">{blocked}</p> : null}
           </div>
+
           {result ? (
-            <div className="ps4-note ps4-single__result">
-              <KindChip tone={result.identical ? "ok" : "accent"}>
+            <div
+              role="status"
+              aria-label={result.identical ? t("single.repackedIdentical") : t("single.repackedModified")}
+              className="flex flex-wrap items-center gap-2 p-4 text-xs"
+            >
+              <Badge variant={result.identical ? "secondary" : "default"}>
                 {result.identical ? t("single.repackedIdentical") : t("single.repackedModified")}
-              </KindChip>
-              <span className="ps4-mono ps4-truncate" title={result.outputPath}>
+              </Badge>
+              <span className="min-w-0 flex-1 truncate font-mono" title={result.outputPath}>
                 {result.outputPath}
               </span>
-              <span className="ps4-panel__spacer" />
-              <HudButton icon={<FolderOpen />} label={t("path.reveal")} onClick={() => void openPath(parentDir(result.outputPath))} />
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => void openPath(parentDir(result.outputPath))}
+              >
+                <FolderOpen className="h-3.5 w-3.5" />
+                {t("path.reveal")}
+              </Button>
             </div>
           ) : null}
-        </div>
-      </HudPanel>
-      <HudPanel title={t("single.packageInfo")} busy={summary.loading || status.loading}>
-        <div className="ps4-single__form">
-          {summary.data ? (
-            <KeyValues
-              rows={[
-                [t("single.info.source"), <span key="source" className="ps4-mono">{summary.data.sourceName}</span>],
-                [t("single.info.hash"), targets.data?.hashName ?? "-"],
-                [t("single.info.original"), summary.data.sourcePath ?? "-"],
-                [
-                  t("single.info.layout"),
-                  summary.data.container
-                    ? t("single.info.container", { count: summary.data.count })
-                    : t("single.info.payload", { count: summary.data.count }),
-                ],
-                [
-                  t("single.info.changes"),
-                  <span key="changes" className="inline-flex items-center gap-2">
-                    <span
-                      className="ps4-lamp"
-                      data-state={pending ? (pending.dirty ? "warn" : pending.hasBaseline ? "ok" : undefined) : undefined}
-                      aria-hidden="true"
-                    />
-                    {pendingText}
-                  </span>,
-                ],
-                [
-                  t("single.info.verify"),
-                  verified
-                    ? `${verified.identical ? t("package.verifyIdentical") : t("package.verifyModified")} (${shortDigest(verified.digest)})`
-                    : t("package.unverified"),
-                ],
-              ]}
-            />
-          ) : (
-            <Section title={t("single.packageInfo")}>
-              <span className="ps4-field__hint">{t("single.packageHint")}</span>
-            </Section>
-          )}
-        </div>
-      </HudPanel>
+        </SectionPanel>
+
+        <SectionPanel>
+          <SectionBlock title={t("single.packageInfo")} description={t("single.packageInfoDescription")}>
+            {!packageDir ? (
+              <SectionNote>{t("single.packageHint")}</SectionNote>
+            ) : summary.loading && !summary.data ? (
+              <SectionNote>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {t("loading")}
+              </SectionNote>
+            ) : summary.data ? (
+              <FactList
+                rows={[
+                  [t("single.info.source"), summary.data.sourceName],
+                  [t("single.info.hash"), targets.data?.hashName ?? "-"],
+                  [t("single.info.original"), summary.data.sourcePath ?? "-"],
+                  [
+                    t("single.info.layout"),
+                    summary.data.container
+                      ? t("single.info.container", { count: summary.data.count })
+                      : t("single.info.payload", { count: summary.data.count }),
+                  ],
+                  [
+                    t("single.info.changes"),
+                    <span key="changes" className="inline-flex items-center gap-1.5">
+                      {pending?.dirty ? <span className="h-2 w-2 rounded-full bg-yellow-400" aria-hidden /> : null}
+                      {pendingText}
+                    </span>,
+                  ],
+                  [
+                    t("single.info.verify"),
+                    verified
+                      ? `${verified.identical ? t("package.verifyIdentical") : t("package.verifyModified")} (${shortDigest(verified.digest)})`
+                      : t("package.unverified"),
+                  ],
+                ]}
+              />
+            ) : null}
+          </SectionBlock>
+        </SectionPanel>
+      </div>
     </div>
   );
 }

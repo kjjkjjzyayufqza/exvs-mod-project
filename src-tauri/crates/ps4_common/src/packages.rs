@@ -27,7 +27,7 @@ use rayon::prelude::*;
 use serde::Serialize;
 
 use crate::error::{Error, Result};
-use crate::names::{hash_name, parse_hash, sanitize_segment, NameBook};
+use crate::names::{hash_name, parse_hash, sanitize_segment, ArchiveName, NameBook};
 use crate::workspace::{
     archives_root, capture_baseline, diff_baseline, discover_packages, join_relative, load_baseline, locate_archive,
     mod_output_path, relative_to, save_baseline, Baseline, PackageChanges, PACKAGE_SEARCH_DEPTH,
@@ -216,12 +216,24 @@ pub fn build_init_catalog(
     source_root: Option<&Path>,
     workspace: Option<&Path>,
 ) -> InitCatalog {
+    build_catalog(book.init_items(), format, source_root, workspace)
+}
+
+/// Catalog of known archives (`names`): each one's file in the game folder,
+/// found by its hash (`archives/XX/HASH.bin`, never by listing the folder),
+/// and its packages in the workspace. Data init and the content index share it.
+pub fn build_catalog<'a>(
+    names: impl IntoIterator<Item = &'a ArchiveName>,
+    format: &dyn PackageFormat,
+    source_root: Option<&Path>,
+    workspace: Option<&Path>,
+) -> InitCatalog {
     let existing = workspace
         .filter(|path| path.is_dir())
         .map(|path| packages_by_hash(format, path))
         .unwrap_or_default();
-    let items: Vec<InitItem> = book
-        .init_items()
+    let items: Vec<InitItem> = names
+        .into_iter()
         .collect::<Vec<_>>()
         .par_iter()
         .map(|name| {

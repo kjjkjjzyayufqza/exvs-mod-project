@@ -37,8 +37,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Classify every archive below a folder (PS4 `archives/` tree or samples).
-    Scan { root: PathBuf },
+    /// List every known archive (indexed from the name table and the game's
+    /// lists) with its file in the game folder and its packages.
+    Index {
+        /// Game root or its `archives` folder; archives are looked up by hash.
+        source_root: PathBuf,
+        #[arg(long)]
+        workspace: Option<PathBuf>,
+    },
     /// Summarize one file (archive, nutexb, SSBH, ...).
     Inspect { path: PathBuf },
     /// Extract an archive into a named package folder.
@@ -143,9 +149,8 @@ fn read(path: &PathBuf) -> Result<Vec<u8>, String> {
 
 fn run(cli: Cli) -> Result<serde_json::Value, String> {
     match cli.command {
-        Command::Scan { root } => {
-            let entries = exvs_ps4_common::scan::scan_folder(&root, &[]).map_err(String::from)?;
-            Ok(json!({ "root": root, "count": entries.len(), "entries": entries }))
+        Command::Index { source_root, workspace } => {
+            serde_json::to_value(exvs_gvs::content_index(Some(&source_root), workspace.as_deref())).map_err(|error| error.to_string())
         }
         Command::Inspect { path } => {
             serde_json::to_value(inspect_path(&path).map_err(String::from)?).map_err(|error| error.to_string())

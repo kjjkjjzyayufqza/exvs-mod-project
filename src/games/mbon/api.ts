@@ -21,7 +21,6 @@ import type {
   MbonPackageItem,
   MbonPackageView,
   MbonRepackReport,
-  MbonScanEntry,
   MbonTextureRef,
   MbonVerifyReport,
   TextureSummary,
@@ -31,13 +30,15 @@ export type CellKind = "u8" | "u16" | "u32" | "i32" | "f32" | "string";
 
 /** Typed bindings of the `mbon_*` Tauri commands (src-tauri/src/mbon/commands.rs). */
 export const mbonApi = {
-  scanFolder: (root: string) => invoke<MbonScanEntry[]>("mbon_scan_folder", { root }),
   inspect: (path: string) => invoke<MbonInspection>("mbon_inspect", { path }),
   /** Extract into `<workspace>/<name>`; without `name` the MBON name table picks the folder. */
   extract: (source: string, workspace: string, overwrite: boolean, name?: string) =>
     invoke<MbonExtractReport>("mbon_extract", { source, workspace, overwrite, name: name ?? null }),
   initCatalog: (sourceRoot: string, workspace: string) =>
     invoke<InitCatalog>("mbon_init_catalog", { sourceRoot: sourceRoot || null, workspace: workspace || null }),
+  /** Name table plus the units of the extracted `SCharacterList`, each located by hash. */
+  contentIndex: (sourceRoot: string, workspace: string) =>
+    invoke<InitCatalog>("mbon_content_index", { sourceRoot: sourceRoot || null, workspace: workspace || null }),
   suggestName: (source: string) => invoke<NameSuggestion>("mbon_suggest_name", { source }),
   workspaceStatus: (workspace: string) => invoke<PackageStatus[]>("mbon_workspace_status", { workspace }),
   packageStatus: (packageDir: string, workspace?: string) =>

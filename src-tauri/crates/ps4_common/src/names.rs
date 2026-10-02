@@ -126,6 +126,11 @@ impl NameBook {
         self.names.is_empty()
     }
 
+    /// Every name in table order.
+    pub fn iter(&self) -> impl Iterator<Item = &ArchiveName> {
+        self.names.iter()
+    }
+
     /// Curated data-init items in table order.
     pub fn init_items(&self) -> impl Iterator<Item = &ArchiveName> {
         self.names.iter().filter(|name| name.group.is_some())

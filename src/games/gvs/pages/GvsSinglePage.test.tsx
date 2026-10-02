@@ -142,7 +142,7 @@ describe("GVS Single FHM2D page", () => {
 
   it("repacks into the configured mod folder through gvs_repack", async () => {
     await renderPage();
-    fireEvent.click(screen.getByRole("tab", { name: "Repack" }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Repack" }));
     expect(await screen.findByText("Not tracked yet")).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledWith("gvs_repack_targets", { package: PACKAGE, modRoot: MOD_ROOT });
     fireEvent.click(screen.getByRole("button", { name: "Repack" }));

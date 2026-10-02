@@ -26,13 +26,13 @@ use exvs_gvs::nutexb::Nutexb;
 use exvs_gvs::package::{self, ExtractReport, GvsManifest, GvsNode, RepackReport, MANIFEST_NAME, STATE_NAME};
 use exvs_gvs::ssbh_view::{meshes_to_obj, summarize, viewer_meshes, SsbhSummary, ViewerMesh, OBJ_HEADER};
 use exvs_ps4_common::cache::{file_key, ByteCache};
+use exvs_ps4_common::files;
 use exvs_ps4_common::mesh_pack::{self, MeshInput};
 use exvs_ps4_common::names::parse_hash;
 use exvs_ps4_common::packages::{suggest_name, InitCatalog, NameSuggestion, PackageStatus, RepackTargets};
 use exvs_ps4_common::provenance::{self, Provenance};
-use exvs_ps4_common::workspace::relative_to;
-use exvs_ps4_common::scan;
 use exvs_ps4_common::texture::{self, PixelLayout};
+use exvs_ps4_common::workspace::relative_to;
 use serde::Serialize;
 use tauri::ipc::{InvokeBody, Response};
 
@@ -55,65 +55,6 @@ where
 
 fn read(path: &Path) -> Result<Vec<u8>, String> {
     std::fs::read(path).map_err(|error| format!("{}: {error}", path.display()))
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GvsScanEntry {
-    pub relative_path: String,
-    pub path: String,
-    pub stem: String,
-    pub size: u64,
-    pub container: bool,
-    pub archive_kind: Option<u64>,
-    pub file_count: u32,
-    pub type_ids: Vec<u32>,
-    pub payload_magic: String,
-    pub payload_kind: GvsKind,
-    pub payload_label: &'static str,
-    pub error: Option<String>,
-    /// Default package folder from the GVS name table (`012list/character_list`).
-    pub named: Option<String>,
-    pub title: Option<String>,
-}
-
-fn hex_to_bytes(text: &str) -> Vec<u8> {
-    (0..text.len() / 2)
-        .filter_map(|index| u8::from_str_radix(&text[index * 2..index * 2 + 2], 16).ok())
-        .collect()
-}
-
-#[tauri::command]
-pub async fn gvs_scan_folder(root: String) -> Result<Vec<GvsScanEntry>, String> {
-    blocking(move || {
-        let root_path = PathBuf::from(&root);
-        let entries = scan::scan_folder(&root_path, &[]).map_err(String::from)?;
-        let book = exvs_gvs::names::book();
-        Ok(entries
-            .into_iter()
-            .map(|entry| {
-                let kind = classify(&hex_to_bytes(&entry.payload_head));
-                let name = parse_hash(&entry.stem).and_then(|hash| book.get(hash));
-                GvsScanEntry {
-                    named: name.map(|name| name.relative_dir()),
-                    title: name.and_then(|name| name.title.clone()),
-                    path: root_path.join(&entry.relative_path).to_string_lossy().into_owned(),
-                    relative_path: entry.relative_path,
-                    stem: entry.stem,
-                    size: entry.size,
-                    container: entry.container,
-                    archive_kind: entry.archive_kind,
-                    file_count: entry.file_count,
-                    type_ids: entry.type_ids,
-                    payload_magic: entry.payload_magic,
-                    payload_kind: kind,
-                    payload_label: kind.label(),
-                    error: entry.error,
-                }
-            })
-            .collect())
-    })
-    .await
 }
 
 #[tauri::command]
@@ -151,6 +92,19 @@ pub async fn gvs_init_catalog(source_root: Option<String>, workspace: Option<Str
         let source_root = source_root.filter(|path| !path.trim().is_empty()).map(PathBuf::from);
         let workspace = workspace.filter(|path| !path.trim().is_empty()).map(PathBuf::from);
         Ok(exvs_gvs::init_catalog(source_root.as_deref(), workspace.as_deref()))
+    })
+    .await
+}
+
+/// Every known archive, indexed from lists (the name table, and for MBON the
+/// units of the extracted `SCharacterList`), with its file in the game folder
+/// found by hash and its packages in the workspace. Nothing is scanned.
+#[tauri::command]
+pub async fn gvs_content_index(source_root: Option<String>, workspace: Option<String>) -> Result<InitCatalog, String> {
+    blocking(move || {
+        let source_root = source_root.filter(|path| !path.trim().is_empty()).map(PathBuf::from);
+        let workspace = workspace.filter(|path| !path.trim().is_empty()).map(PathBuf::from);
+        Ok(exvs_gvs::content_index(source_root.as_deref(), workspace.as_deref()))
     })
     .await
 }
@@ -331,7 +285,7 @@ pub async fn gvs_package_view(package: String) -> Result<GvsPackageView, String>
             })
             .collect();
         let listed: std::collections::HashSet<String> = manifest.files.iter().map(|file| file.path.clone()).collect();
-        let untracked = scan::list_files(&dir, &[])
+        let untracked = files::list_files(&dir, &[])
             .unwrap_or_default()
             .into_iter()
             .filter_map(|path| {
@@ -586,7 +540,7 @@ pub async fn gvs_find_textures(package: String) -> Result<std::collections::Hash
     blocking(move || {
         let dir = PathBuf::from(package);
         let mut out = std::collections::HashMap::new();
-        for path in scan::list_files(&dir, &["nutexb"]).map_err(String::from)? {
+        for path in files::list_files(&dir, &["nutexb"]).map_err(String::from)? {
             let size = std::fs::metadata(&path).map(|meta| meta.len()).unwrap_or(0);
             let tail = head_of(&path, size);
             let name = Nutexb::footer_name(&tail)

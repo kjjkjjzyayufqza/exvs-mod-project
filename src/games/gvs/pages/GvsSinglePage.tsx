@@ -42,6 +42,7 @@ export default function GvsSinglePage() {
     <SinglePage
       adapter={adapter}
       title={t("single.title")}
+      intro={t("single.intro")}
       credit={t("credit")}
       tools={
         <CreditsDialog

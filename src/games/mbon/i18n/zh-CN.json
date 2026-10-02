@@ -1,6 +1,8 @@
 {
   "title": "Maxi Boost ON 工作区",
   "credit": "格式研究：descatal / BoostStudio。工具实现：kjjkjjzyayufqza。",
+  "contents_one": "{{count}} 个条目",
+  "contents_other": "{{count}} 个条目",
   "credits": {
     "researchLabel": "MBON 研究",
     "researchNote": "全部 MBON 格式研究均来自 descatal 的 BoostStudio（https://github.com/descatal/BoostStudio）。"
@@ -129,6 +131,7 @@
     "magic": "Magic"
   },
   "single": {
-    "title": "单独 FHM"
+    "title": "单独 FHM",
+    "intro": "将单个 MBON 档案解包到命名的包文件夹，或将包文件夹重打包到 Mod 文件夹。"
   }
 }

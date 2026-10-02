@@ -15,17 +15,21 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { open } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { FileSearch, FolderInput, FolderOpen, PackageOpen } from "lucide-react";
+import { FolderInput, FolderOpen, Loader2, PackageOpen, RefreshCw } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { runOperation } from "../../activity";
 import { baseName, formatBytes, joinPath, parentDir } from "../../format";
 import type { ExtractOutcome, Ps4GameAdapter } from "../../gameAdapter";
 import type { NameSuggestion } from "../../types";
 import { useAsync } from "../../useAsync";
 import { usePersistentPath } from "../../usePersistentPath";
-import { HudButton, HudPanel, KindChip, Section } from "../../components/Hud";
-import { PathPicker } from "../../components/PathPicker";
+import { PathField } from "../../components/PathField";
+import { FactList, SectionBlock, SectionPanel } from "../../components/SectionPanel";
 import { ArchivePreviewCard } from "./ArchivePreviewCard";
 import { FlowStrip } from "./FlowStrip";
 
@@ -50,10 +54,11 @@ export function UnpackPanel({ adapter, workspace, onOpenInWorkspace }: UnpackPan
   const [subfolder, setSubfolder] = useState(true);
   const [overwrite, setOverwrite] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [previewNonce, setPreviewNonce] = useState(0);
   const [result, setResult] = useState<(ExtractOutcome & { workspace: string }) | null>(null);
   const suggested = useRef("");
 
-  const preview = useAsync(source ? () => adapter.preview(source) : null, [source, adapter]);
+  const preview = useAsync(source ? () => adapter.preview(source) : null, [source, adapter, previewNonce]);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,23 +95,6 @@ export function UnpackPanel({ adapter, workspace, onOpenInWorkspace }: UnpackPan
         ? t("single.blocked.name")
         : null;
 
-  const browse = async () => {
-    const picked = await open({
-      multiple: false,
-      directory: false,
-      title: t("single.sourceDialog"),
-      defaultPath: source ? parentDir(source) : undefined,
-      filters: [
-        { name: t("single.sourceFilter", { code: adapter.code }), extensions: [...adapter.sourceExtensions] },
-        { name: t("single.allFiles"), extensions: ["*"] },
-      ],
-    });
-    if (typeof picked === "string" && picked) {
-      setSource(picked);
-      setResult(null);
-    }
-  };
-
   const unpack = async () => {
     if (blocked || busy) return;
     setBusy(true);
@@ -125,107 +113,172 @@ export function UnpackPanel({ adapter, workspace, onOpenInWorkspace }: UnpackPan
   };
 
   return (
-    <div className="ps4-single">
-      <HudPanel
-        title={t("single.tabs.unpack")}
-        busy={busy}
-        actions={
-          <HudButton variant="primary" icon={<PackageOpen />} busy={busy} disabled={!!blocked} onClick={() => void unpack()}>
-            {t("single.unpack")}
-          </HudButton>
-        }
-        footer={blocked ? <span className="ps4-truncate">{blocked}</span> : undefined}
-      >
-        <div className="ps4-single__form">
-          <FlowStrip from={source || null} to={target} empty={t("single.flowEmpty")} />
-          <div className="ps4-field">
-            <span className="ps4-field__label">{t("single.source")}</span>
-            <div className="ps4-path">
-              <span className="ps4-path__value" data-empty={!source} title={source || undefined}>
-                {source ? <bdi>{source}</bdi> : t("single.sourcePlaceholder")}
-              </span>
-              <HudButton icon={<FileSearch />} onClick={() => void browse()} label={t("single.sourceDialog")} />
-              <HudButton
-                icon={<FolderOpen />}
-                disabled={!source}
-                onClick={() => void openPath(parentDir(source))}
-                label={t("path.reveal")}
+    <div className="space-y-4">
+      <FlowStrip from={source || null} to={target} empty={t("single.flowEmpty")} />
+
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)]">
+        <SectionPanel>
+          <SectionBlock title={t("single.sourceTitle")} description={t("single.sourceDescription")}>
+            <div className="space-y-1.5">
+              <Label htmlFor={`${game}-single-source`} className="text-xs">
+                {t("single.source")}
+              </Label>
+              <PathField
+                id={`${game}-single-source`}
+                kind="file"
+                dialogTitle={t("single.sourceDialog")}
+                value={source}
+                defaultPath={source ? parentDir(source) : undefined}
+                filters={[
+                  { name: t("single.sourceFilter", { code: adapter.code }), extensions: [...adapter.sourceExtensions] },
+                  { name: t("single.allFiles"), extensions: ["*"] },
+                ]}
+                onPick={(picked) => {
+                  setSource(picked);
+                  setResult(null);
+                }}
+                placeholder={t("single.sourcePlaceholder")}
               />
             </div>
-          </div>
-          <div className="ps4-field">
-            <span className="ps4-field__label">{t("single.output")}</span>
-            <PathPicker
-              value={output}
-              onChange={setOutput}
-              placeholder={workspace ? t("single.outputDefault", { path: workspace }) : t("single.outputPlaceholder")}
-              dialogTitle={t("single.outputDialog")}
-            />
-            {output && workspace && output !== workspace ? (
-              <button type="button" className="ps4-link" onClick={() => setOutput("")}>
-                {t("single.useWorkspace")}
-              </button>
+          </SectionBlock>
+
+          <SectionBlock title={t("single.destination")} description={t("single.destinationDescription")}>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor={`${game}-single-output`} className="text-xs">
+                  {t("single.output")}
+                </Label>
+                {output && workspace && output !== workspace ? (
+                  <button
+                    type="button"
+                    className="text-[11px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                    onClick={() => setOutput("")}
+                  >
+                    {t("single.useWorkspace")}
+                  </button>
+                ) : null}
+              </div>
+              <PathField
+                id={`${game}-single-output`}
+                kind="folder"
+                dialogTitle={t("single.outputDialog")}
+                value={output}
+                defaultPath={base || undefined}
+                onPick={setOutput}
+                placeholder={workspace ? t("single.outputDefault", { path: workspace }) : t("single.outputPlaceholder")}
+              />
+            </div>
+
+            {subfolder ? (
+              <div className="space-y-1.5">
+                <Label htmlFor={`${game}-single-name`} className="text-xs">
+                  {t("single.name")}
+                </Label>
+                <Input
+                  id={`${game}-single-name`}
+                  value={name}
+                  spellCheck={false}
+                  placeholder={suggestion?.relativeDir ?? "012list/character_list"}
+                  onChange={(event) => setName(event.target.value)}
+                  className="font-mono text-xs"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {suggestion?.known
+                    ? t("single.known", { title: suggestion.title ?? suggestion.name, folder: suggestion.relativeDir })
+                    : suggestion
+                      ? t("single.unknown", { hash: suggestion.hash ?? suggestion.stem })
+                      : t("single.nameHint")}
+                </p>
+              </div>
             ) : null}
-          </div>
-          <label className="ps4-check">
-            <input type="checkbox" checked={subfolder} onChange={(event) => setSubfolder(event.target.checked)} />
-            {t("single.subfolder")}
-          </label>
-          {subfolder ? (
-            <div className="ps4-field">
-              <span className="ps4-field__label">{t("single.name")}</span>
-              <input
-                className="ps4-input"
-                value={name}
-                spellCheck={false}
-                aria-label={t("single.name")}
-                placeholder={suggestion?.relativeDir ?? "012list/character_list"}
-                onChange={(event) => setName(event.target.value)}
-              />
-              <span className="ps4-field__hint">
-                {suggestion?.known
-                  ? t("single.known", { title: suggestion.title ?? suggestion.name, folder: suggestion.relativeDir })
-                  : suggestion
-                    ? t("single.unknown", { hash: suggestion.hash ?? suggestion.stem })
-                    : t("single.nameHint")}
+
+            <label className="flex items-start gap-2 text-xs">
+              <Checkbox checked={subfolder} onCheckedChange={(value) => setSubfolder(value === true)} className="mt-0.5" />
+              <span>
+                <span className="font-medium">{t("single.subfolder")}</span>
+                <span className="block text-muted-foreground">{t("single.subfolderHelp")}</span>
               </span>
-            </div>
-          ) : null}
-          <label className="ps4-check">
-            <input type="checkbox" checked={overwrite} onChange={(event) => setOverwrite(event.target.checked)} />
-            {t("single.overwrite")}
-          </label>
+            </label>
+            <label className="flex items-start gap-2 text-xs">
+              <Checkbox checked={overwrite} onCheckedChange={(value) => setOverwrite(value === true)} className="mt-0.5" />
+              <span>
+                <span className="font-medium">{t("single.overwrite")}</span>
+                <span className="block text-muted-foreground">{t("single.overwriteHelp")}</span>
+              </span>
+            </label>
+          </SectionBlock>
+
+          <div className="flex flex-wrap items-center gap-3 p-4">
+            <Button onClick={() => void unpack()} disabled={busy || blocked !== null}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageOpen className="h-4 w-4" />}
+              {t("single.unpack")}
+            </Button>
+            {blocked ? <p className="text-xs text-muted-foreground">{blocked}</p> : null}
+          </div>
+
           {result ? (
-            <div className="ps4-note ps4-single__result">
-              <KindChip tone="ok">{t("single.unpacked")}</KindChip>
-              <span className="ps4-mono ps4-truncate" title={result.packageDir}>
+            <div role="status" aria-label={t("single.unpacked")} className="flex flex-wrap items-center gap-2 p-4 text-xs">
+              <Badge variant="secondary">{t("single.unpacked")}</Badge>
+              <span className="min-w-0 flex-1 truncate font-mono" title={result.packageDir}>
                 {result.packageDir}
               </span>
-              <span className="ps4-panel__spacer" />
-              <HudButton icon={<FolderOpen />} label={t("path.reveal")} onClick={() => void openPath(result.packageDir)} />
-              <HudButton icon={<FolderInput />} onClick={() => onOpenInWorkspace(result.workspace, result.packageDir)}>
+              <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => void openPath(result.packageDir)}>
+                <FolderOpen className="h-3.5 w-3.5" />
+                {t("path.reveal")}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => onOpenInWorkspace(result.workspace, result.packageDir)}
+              >
+                <FolderInput className="h-3.5 w-3.5" />
                 {t("single.openInWorkspace")}
-              </HudButton>
+              </Button>
             </div>
           ) : null}
+        </SectionPanel>
+
+        <div className="space-y-4">
+          <SectionPanel>
+            <SectionBlock title={t("single.naming")} description={t("single.namingDescription")}>
+              {suggestion ? (
+                <FactList
+                  rows={[
+                    [t("single.nameState"), suggestion.known ? t("single.namedChip") : t("single.unnamedChip")],
+                    [t("single.info.hash"), suggestion.hash ?? suggestion.stem],
+                    [t("single.name"), suggestion.relativeDir],
+                    ...(suggestion.title ? ([[t("single.nameTitle"), suggestion.title]] as const) : []),
+                  ]}
+                />
+              ) : (
+                <p className="rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground">{t("single.previewEmpty")}</p>
+              )}
+            </SectionBlock>
+          </SectionPanel>
+          <SectionPanel>
+            <SectionBlock
+              title={t("single.preview")}
+              description={t("single.previewDescription")}
+              action={
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 shrink-0 px-2 text-xs"
+                  disabled={!source || preview.loading}
+                  onClick={() => setPreviewNonce((value) => value + 1)}
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  {t("single.reload")}
+                </Button>
+              }
+            >
+              <ArchivePreviewCard preview={source ? preview : null} />
+            </SectionBlock>
+          </SectionPanel>
         </div>
-      </HudPanel>
-      <HudPanel title={t("single.preview")} busy={preview.loading}>
-        <div className="ps4-single__form">
-          {suggestion ? (
-            <Section title={t("single.naming")}>
-              <div className="flex flex-wrap items-center gap-2">
-                <KindChip tone={suggestion.known ? "ok" : "warn"}>
-                  {suggestion.known ? t("single.namedChip") : t("single.unnamedChip")}
-                </KindChip>
-                <span className="ps4-mono">{suggestion.relativeDir}</span>
-                {suggestion.hash ? <span className="ps4-faint ps4-mono">{suggestion.hash}</span> : null}
-              </div>
-            </Section>
-          ) : null}
-          <ArchivePreviewCard preview={source ? preview : null} />
-        </div>
-      </HudPanel>
+      </div>
     </div>
   );
 }

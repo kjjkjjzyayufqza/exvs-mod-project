@@ -15,21 +15,43 @@ VS2 / Over Boost research. Tooling: kjjkjjzyayufqza.
 
 | Folder | What it is | Set in |
 | --- | --- | --- |
-| Game folder | The dumped game root (`CUSA15006`, `GundamV`) or its `archives` folder. Only read. | Data init, Game files tab |
-| Workspace | Extracted packages in route folders, e.g. `012list/character_list`. | Sources pane, Data init |
-| Mod output folder | Mirrors the game root: repacks land at `archives/XX/HASH.bin`. Default `<workspace>/_out`. | Sources pane, Repack changes, Single page |
+| Game folder | The dumped game root (`CUSA15006`, `GundamV`) or its `archives` folder. Only read, and never listed: every archive is opened by its hash (`archives/XX/HASH.bin`). | Data init, Known content tab |
+| Workspace | Extracted packages in route folders, e.g. `012list/character_list`. | Workspace toolbar, Data init |
+| Mod output folder | Mirrors the game root: repacks land at `archives/XX/HASH.bin`. Default `<workspace>/_out`. | Repack changes, Single page |
 
 Copy the `archives` folder of the mod output over the game root (or point an
 emulator / file-redirect tool at it) to play the edited files.
 
 ## Workflow (mirrors OB)
 
+The MBON and GVS workspace pages use the EXVS2 Workspace layout: a toolbar led
+by the game title (`MBON Maxi Boost ON workspace`, `GVS Gundam Versus
+workspace`), the package tree on the left, grouped editor tabs in the middle
+and a collapsible info panel on the right.
+
 | OB | MBON / GVS | Where |
 | --- | --- | --- |
-| FHM2D Init | **Data init**: curated global tables and shared packs, per-item availability, one-click "extract all new items", batch selection, re-extract, history | Workspace masthead and sources pane |
-| Single FHM2D | **MBON Single FHM** (`/MbonSingleFhm`), **GVS Single FHM2D** (`/GvsSingleFhm2d`): Unpack tab (source, preview, named folder, output, subfolder, overwrite, open in workspace) and Repack tab (package, pending changes, mod folder / beside / another file, verify) | Sidebar, masthead "Single file" |
-| Workspace + dirty packs | Workspace page; every package keeps a change baseline (size, modification time, manifest digest) taken at extract and after each repack | Sources pane lamps, status bar |
-| Repack changes dialog | **Repack changes**: packages edited since their last extract / repack, written into the mod folder; untracked (older) packages listed separately; mark clean | Sources pane hammer button |
+| FHM2D Init | **Data init**: curated global tables and shared packs, per-item availability, one-click "extract all new items", batch selection, re-extract, history | Workspace toolbar |
+| Workspace file tree | **Package tree**: the packages already in the workspace, by route folder; a yellow dot marks pending edits | Left pane |
+| Structure editor | **Structure** tab: the open package's entries beside the entry inspector (textures, models, lists, hex) | Editor tabs, PACKAGE group |
+| (list-driven init) | **Known content** tab: every archive the game's lists name, each found by its hash, with extract / open per row | Editor tabs, INDEX group |
+| Single FHM2D | **MBON Single FHM** (`/MbonSingleFhm`), **GVS Single FHM2D** (`/GvsSingleFhm2d`): Unpack tab (source, preview, named folder, output, subfolder, overwrite, open in workspace) and Repack tab (package, pending changes, mod folder / beside / another file, verify) | Sidebar, toolbar "Single file" |
+| Dirty packs | Every package keeps a change baseline (size, modification time, manifest digest) taken at extract and after each repack | Tree dots, info panel |
+| Repack changes dialog | **Repack changes**: packages edited since their last extract / repack, written into the mod folder; untracked (older) packages listed separately; mark clean | Toolbar "Repack changes" |
+
+## No scanning
+
+Nothing enumerates the game folder. Everything known comes from lists:
+
+* **Data init** extracts the curated rows of the name table (the init list).
+* **Known content** indexes every row of the name table and, for MBON, the
+  units of the extracted `SCharacterList` (list pack `EB3A9691`, the
+  BoostStudio list info): each record holds the unit code (`0x08`) and the
+  unit archive hash (`0x7C`). Run Data init for List Info first; the units then
+  appear under `unit/`.
+* Each listed archive is resolved by hash to `archives/XX/HASH.bin`, so a
+  missing file is reported as missing instead of being searched for.
+* The single page opens one file the user picks.
 
 Package folders hold their manifest (`mbon_package.json` / `gvs_package.json`)
 and change baseline (`*.state.json`). The manifest, not the file names, drives
@@ -66,6 +88,7 @@ cargo build -p exvs_mbon -p exvs_gvs --bins
 T=target/debug/gvs_tool        # or target/debug/mbon_tool
 $T init-list <game folder> --workspace <workspace>
 $T init <game folder> <workspace> --group lists 0x036B9E67   # or --all
+$T index <game folder> --workspace <workspace>               # known content from the lists
 $T unpack <archives/XX/HASH.bin> <workspace> [--name 012list/character_list] [--overwrite]
 $T status <workspace>                                       # pending edits
 $T repack <package folder> --mod-root <mod folder>          # archives/XX/HASH.bin
@@ -75,8 +98,9 @@ $T mark-clean <package folder>
 
 ## Not covered yet
 
-* Naming MBON unit / stage FHM packs. The PS4 port ships VS2-era lists that
-  reference thousands of archive hashes (`012list/character_list` DFD38C70,
-  951 KB; `pilot_list` E6902738); parsing them needs the full files.
+* What the MBON unit archives listed by `SCharacterList` hold, and naming the
+  stage FHM packs. The PS4 port also ships VS2-era lists that reference
+  thousands of archive hashes (`012list/character_list` DFD38C70, 951 KB;
+  `pilot_list` E6902738); indexing them needs their record layouts.
 * Research-gated items from the session note (stage placement, havok, GVS
   MSC, skinning, new NUT textures, model import).

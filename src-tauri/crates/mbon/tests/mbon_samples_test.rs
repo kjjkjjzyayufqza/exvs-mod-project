@@ -40,7 +40,7 @@ fn samples() -> Option<PathBuf> {
 }
 
 fn files(root: &Path) -> Vec<PathBuf> {
-    exvs_ps4_common::scan::list_files(root, &[]).expect("list samples")
+    exvs_ps4_common::files::list_files(root, &[]).expect("list samples")
 }
 
 fn fhm_files(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {

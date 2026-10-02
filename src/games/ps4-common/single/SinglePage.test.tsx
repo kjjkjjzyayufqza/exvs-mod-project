@@ -67,6 +67,7 @@ function renderPage(overrides = {}) {
             <SinglePage
               adapter={adapter}
               title="Single FHM"
+              intro="intro"
               credit="credit"
               workspace={WORKSPACE}
               modRoot="D:/mods/mbon"
@@ -101,7 +102,7 @@ describe("single unpack / repack page", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Unpack" }));
     await waitFor(() => expect(adapter.extract).toHaveBeenCalledWith(SOURCE, WORKSPACE, false, "common/list_info"));
-    const result = (await screen.findByText("Unpacked")).closest(".ps4-single__result") as HTMLElement;
+    const result = await screen.findByRole("status", { name: "Unpacked" });
     fireEvent.click(within(result).getByRole("button", { name: "Open in workspace" }));
     expect(openInWorkspace).toHaveBeenCalledWith(WORKSPACE, `${WORKSPACE}/common/list_info`);
     expect(await screen.findByText("workspace page")).toBeInTheDocument();
@@ -110,14 +111,14 @@ describe("single unpack / repack page", () => {
   it("unpacks straight into the chosen folder when no subfolder is created", async () => {
     const { adapter } = renderPage();
     await screen.findByDisplayValue("common/list_info");
-    fireEvent.click(screen.getByRole("checkbox", { name: "Create the package folder inside the output folder" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Create the package folder inside the output folder/ }));
     fireEvent.click(screen.getByRole("button", { name: "Unpack" }));
     await waitFor(() => expect(adapter.extract).toHaveBeenCalledWith(SOURCE, "C:/mods", false, "ws"));
   });
 
   it("repacks a package into the mod folder by default", async () => {
     const { adapter } = renderPage();
-    fireEvent.click(screen.getByRole("tab", { name: "Repack" }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Repack" }));
     expect(await screen.findAllByText("D:/mods/mbon/archives/EB/EB3A9691.bin")).not.toHaveLength(0);
     expect(adapter.repackTargets).toHaveBeenCalledWith(PACKAGE, "D:/mods/mbon");
     expect(await screen.findByText("No pending changes")).toBeInTheDocument();
@@ -133,7 +134,7 @@ describe("single unpack / repack page", () => {
 
   it("explains why a folder that is not a package cannot be repacked", async () => {
     renderPage({ packageSummary: vi.fn(async () => Promise.reject("no mbon_package.json")) });
-    fireEvent.click(screen.getByRole("tab", { name: "Repack" }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Repack" }));
     expect(await screen.findByText("no mbon_package.json")).toBeInTheDocument();
     expect(screen.getByText("The folder is not a package of this game.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Repack" })).toBeDisabled();

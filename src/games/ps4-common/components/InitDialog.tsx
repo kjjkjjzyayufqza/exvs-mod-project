@@ -17,6 +17,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, Database, FolderInput, PackageOpen, PlayCircle, RefreshCw, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { runOperation } from "../activity";
 import { formatBytes, joinPath, matchesQuery, relativeTo } from "../format";
 import type { Ps4GameAdapter } from "../gameAdapter";
@@ -26,7 +27,7 @@ import type { InitItem } from "../types";
 import { useAsync } from "../useAsync";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EmptyState, ErrorNote, FilterField, HudButton, KeyValues, KindChip } from "./Hud";
-import { PathPicker } from "./PathPicker";
+import { PathField } from "./PathField";
 
 /** Display order of the init groups; unknown groups follow alphabetically. */
 const GROUP_ORDER = ["boost_studio", "lists", "tables", "mission", "text", "common"];
@@ -300,31 +301,49 @@ export function InitDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={(value) => !busy && onOpenChange(value)}>
-        <DialogContent className="ps4-ws ps4-dialog ps4-init max-w-4xl" data-game={game}>
+        <DialogContent
+          className="ps4-ws ps4-dialog ps4-init max-w-4xl"
+          data-game={game}
+          onOpenAutoFocus={(event) => {
+            // Focus the dialog itself; focusing the first path box would select its text.
+            event.preventDefault();
+            (event.currentTarget as HTMLElement | null)?.focus();
+          }}
+        >
           <DialogHeader>
-            <DialogTitle className="ps4-dialog__title">
+            <DialogTitle>
               {t("init.title", { code: adapter.code })}
             </DialogTitle>
             <DialogDescription>{t("init.description")}</DialogDescription>
           </DialogHeader>
           <div className="ps4-dialog__body">
             <div className="ps4-init__folders">
-              <div className="ps4-field">
-                <span className="ps4-field__label">{t("init.sourceRoot")}</span>
-                <PathPicker
-                  value={sourceRoot}
-                  onChange={setSourceRoot}
-                  placeholder={t("init.sourceRootPlaceholder")}
+              <div className="space-y-1.5">
+                <Label htmlFor={`${game}-init-source`} className="text-xs">
+                  {t("init.sourceRoot")}
+                </Label>
+                <PathField
+                  id={`${game}-init-source`}
+                  kind="folder"
                   dialogTitle={t("init.sourceRootDialog")}
+                  value={sourceRoot}
+                  onPick={setSourceRoot}
+                  placeholder={t("init.sourceRootPlaceholder")}
+                  className="h-8 text-xs"
                 />
               </div>
-              <div className="ps4-field">
-                <span className="ps4-field__label">{t("init.workspace")}</span>
-                <PathPicker
+              <div className="space-y-1.5">
+                <Label htmlFor={`${game}-init-workspace`} className="text-xs">
+                  {t("init.workspace")}
+                </Label>
+                <PathField
+                  id={`${game}-init-workspace`}
+                  kind="folder"
+                  dialogTitle={t("toolbar.workspaceDialog")}
                   value={workspace}
-                  onChange={setWorkspace}
-                  placeholder={t("sources.workspacePlaceholder")}
-                  dialogTitle={t("sources.workspaceDialog")}
+                  onPick={setWorkspace}
+                  placeholder={t("toolbar.workspacePlaceholder")}
+                  className="h-8 text-xs"
                 />
               </div>
             </div>
@@ -337,7 +356,7 @@ export function InitDialog({
                 <span className="ps4-lamp" data-state={catalog.loading ? "busy" : "warn"} aria-hidden="true" />
               ) : null}
               <span>
-                {catalog.loading ? t("init.state.scanning") : ready ? t("init.state.ready") : t("init.state.configure")}
+                {catalog.loading ? t("init.state.checking") : ready ? t("init.state.ready") : t("init.state.configure")}
               </span>
               {catalog.data?.archivesRoot ? (
                 <span className="ps4-faint ps4-mono ps4-truncate" style={{ fontSize: 11 }} title={catalog.data.archivesRoot}>

@@ -10,35 +10,27 @@
 
 import "../ps4-common/i18n";
 import "./i18n";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
-import { Database, FileArchive } from "lucide-react";
 import { CreditsDialog } from "../ps4-common/components/CreditsDialog";
-import { HudButton } from "../ps4-common/components/Hud";
-import { InitDialog } from "../ps4-common/components/InitDialog";
-import { RepackChangesDialog } from "../ps4-common/components/RepackChangesDialog";
-import { StatusBar, StatusSegment } from "../ps4-common/components/StatusBar";
-import { WorkspaceFrame } from "../ps4-common/components/WorkspaceFrame";
-import { baseName } from "../ps4-common/format";
 import { useAsync } from "../ps4-common/useAsync";
+import { Ps4Workspace } from "../ps4-common/workspace/Ps4Workspace";
+import { StructureSplit } from "../ps4-common/workspace/StructureSplit";
 import { MBON_SINGLE_ROUTE, useMbonAdapter } from "./adapter";
 import { mbonApi } from "./api";
 import { MbonInspector } from "./components/MbonInspector";
 import { MbonPackagePanel } from "./components/MbonPackagePanel";
-import { MbonSourcesPanel } from "./components/MbonSourcesPanel";
 import { useMbonStore } from "./store";
 
 const BOOST_STUDIO_URL = "https://github.com/descatal/BoostStudio";
 
 /**
- * MBON (PS4) workspace: scan game archives, extract them into editable
- * packages, edit FHM entries, textures, models and tables, then repack.
+ * MBON (PS4) workspace in the EXVS2 Workspace layout: data init and the
+ * list-based content index bring packages in, the structure editor edits FHM
+ * entries, textures, models and tables, and repack writes the mod folder.
  */
 export default function MbonWorkspacePage() {
   const { t } = useTranslation("mbon-workspace");
-  const { t: tc } = useTranslation("ps4-workspace");
-  const navigate = useNavigate();
   const adapter = useMbonAdapter();
   const hydrate = useMbonStore((state) => state.hydrate);
   const workspace = useMbonStore((state) => state.workspace);
@@ -56,8 +48,6 @@ export default function MbonWorkspacePage() {
   const openPackage = useMbonStore((state) => state.openPackage);
   const workspaceChanged = useMbonStore((state) => state.workspaceChanged);
   const [pendingPath, setPendingPath] = useState<string | null>(null);
-  const [initOpen, setInitOpen] = useState(false);
-  const [changesOpen, setChangesOpen] = useState(false);
 
   useEffect(() => {
     void hydrate();
@@ -67,14 +57,6 @@ export default function MbonWorkspacePage() {
   const current = loaded.data && loaded.data.dir === packageDir ? loaded.data : undefined;
   const view = { ...loaded, data: current };
   const credits = useAsync(() => mbonApi.credits(), []);
-  const status = useAsync(workspace ? () => adapter.workspaceStatus(workspace) : null, [
-    workspace,
-    workspaceRevision,
-    packageRevision,
-    adapter,
-  ]);
-  const statusByDir = useMemo(() => new Map((status.data ?? []).map((entry) => [entry.dir, entry])), [status.data]);
-  const dirtyCount = (status.data ?? []).filter((entry) => entry.dirty).length;
 
   useEffect(() => {
     if (!current) return;
@@ -91,91 +73,46 @@ export default function MbonWorkspacePage() {
     }
   }, [current, pendingPath, selection, select]);
 
-  const verifyState = verify && verify.dir === packageDir ? verify : null;
-
   return (
-    <WorkspaceFrame
-      game="mbon"
-      code="MBON"
-      platform={tc("platform")}
+    <Ps4Workspace
+      adapter={adapter}
       title={t("title")}
       credit={t("credit")}
-      tools={
-        <>
-          <HudButton variant="primary" icon={<Database />} onClick={() => setInitOpen(true)}>
-            {tc("init.open")}
-          </HudButton>
-          <HudButton icon={<FileArchive />} onClick={() => navigate(MBON_SINGLE_ROUTE)}>
-            {tc("single.open")}
-          </HudButton>
-          <CreditsDialog
-            game="mbon"
-            provenance={credits.data}
-            research={{ label: t("credits.researchLabel"), url: BOOST_STUDIO_URL, note: t("credits.researchNote") }}
-          />
-          <InitDialog
-            adapter={adapter}
-            open={initOpen}
-            onOpenChange={setInitOpen}
-            workspace={workspace}
-            sourceRoot={sourceRoot}
-            setWorkspace={setWorkspace}
-            setSourceRoot={setSourceRoot}
-            onExtracted={workspaceChanged}
-            onOpenPackage={(dir) => {
-              openPackage(dir);
-              setInitOpen(false);
-            }}
-          />
-          <RepackChangesDialog
-            adapter={adapter}
-            open={changesOpen}
-            onOpenChange={setChangesOpen}
-            workspace={workspace}
-            modRoot={modRoot}
-            setModRoot={setModRoot}
-            onChanged={workspaceChanged}
-          />
-        </>
-      }
-      sourcesKey={packageDir}
-      left={
-        <MbonSourcesPanel
-          adapter={adapter}
-          status={statusByDir}
-          onOpenInit={() => setInitOpen(true)}
-          onOpenChanges={() => setChangesOpen(true)}
+      singleRoute={MBON_SINGLE_ROUTE}
+      workspace={workspace}
+      setWorkspace={setWorkspace}
+      sourceRoot={sourceRoot}
+      setSourceRoot={setSourceRoot}
+      modRoot={modRoot}
+      setModRoot={setModRoot}
+      packageDir={packageDir}
+      openPackage={openPackage}
+      workspaceRevision={workspaceRevision}
+      packageRevision={packageRevision}
+      workspaceChanged={workspaceChanged}
+      credits={
+        <CreditsDialog
+          game="mbon"
+          provenance={credits.data}
+          research={{ label: t("credits.researchLabel"), url: BOOST_STUDIO_URL, note: t("credits.researchNote") }}
         />
       }
-      center={<MbonPackagePanel view={view} onAdded={setPendingPath} />}
-      right={<MbonInspector view={current} />}
-      status={
-        <StatusBar game="mbon">
-          <StatusSegment title={workspace || undefined}>
-            {tc("status.workspace")}: {workspace ? baseName(workspace) : "-"}
-          </StatusSegment>
-          <StatusSegment title={packageDir ?? undefined}>
-            {tc("status.package")}: {current ? current.manifest.sourceName : "-"}
-          </StatusSegment>
-          <StatusSegment>{tc("status.entries", { count: current?.entries.length ?? 0 })}</StatusSegment>
-          <StatusSegment>
-            <span className="ps4-lamp" data-state={dirtyCount ? "warn" : status.data ? "ok" : undefined} aria-hidden="true" />
-            {tc("status.pending", { count: dirtyCount })}
-          </StatusSegment>
-          <StatusSegment>
-            <span
-              className="ps4-lamp"
-              data-state={verifyState ? (verifyState.identical ? "ok" : "warn") : undefined}
-              aria-hidden="true"
-            />
-            {verifyState
-              ? verifyState.identical
-                ? tc("status.identical")
-                : tc("status.modified")
-              : tc("status.unverified")}
-          </StatusSegment>
-        </StatusBar>
+      structure={
+        <StructureSplit
+          tree={<MbonPackagePanel view={view} onAdded={setPendingPath} />}
+          inspector={<MbonInspector view={current} />}
+        />
       }
+      packageFacts={
+        current
+          ? {
+              sourceName: current.manifest.sourceName,
+              sourcePath: current.manifest.sourcePath,
+              contents: t("contents", { count: current.entries.length }),
+            }
+          : null
+      }
+      verify={verify}
     />
   );
 }

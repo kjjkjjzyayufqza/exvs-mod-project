@@ -21,16 +21,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { openPath } from "@tauri-apps/plugin-opener";
-import { CheckCheck, Hammer, PackageCheck } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CheckCheck, Loader2, PackageCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { runOperation } from "../activity";
 import type { Ps4GameAdapter } from "../gameAdapter";
 import { errorText } from "../ipc";
 import type { PackageStatus } from "../types";
 import { useAsync } from "../useAsync";
 import { effectiveModRoot } from "../workspaceStore";
-import { EmptyState, ErrorNote, HudButton, KindChip } from "./Hud";
-import { PathPicker } from "./PathPicker";
+import { EmptyState, ErrorNote, KindChip } from "./Hud";
+import { PathField } from "./PathField";
 
 export interface RepackChangesDialogProps {
   adapter: Ps4GameAdapter;
@@ -161,21 +163,35 @@ export function RepackChangesDialog({
 
   return (
     <Dialog open={open} onOpenChange={(value) => !busy && onOpenChange(value)}>
-      <DialogContent className="ps4-ws ps4-dialog ps4-init max-w-3xl" data-game={game}>
+      <DialogContent
+        className="ps4-ws ps4-dialog ps4-init max-w-3xl"
+        data-game={game}
+        onOpenAutoFocus={(event) => {
+          // Focus the dialog itself; focusing the first path box would select its text.
+          event.preventDefault();
+          (event.currentTarget as HTMLElement | null)?.focus();
+        }}
+      >
         <DialogHeader>
-          <DialogTitle className="ps4-dialog__title">{t("changes.title")}</DialogTitle>
+          <DialogTitle>{t("changes.title")}</DialogTitle>
           <DialogDescription>{t("changes.description")}</DialogDescription>
         </DialogHeader>
         <div className="ps4-dialog__body">
-          <div className="ps4-field">
-            <span className="ps4-field__label">{t("modRoot.label")}</span>
-            <PathPicker
-              value={modRoot}
-              onChange={setModRoot}
-              placeholder={t("modRoot.placeholder", { path: target || "_out" })}
+          <div className="space-y-1.5">
+            <Label htmlFor={`${game}-changes-mod`} className="text-xs">
+              {t("modRoot.label")}
+            </Label>
+            <PathField
+              id={`${game}-changes-mod`}
+              kind="folder"
               dialogTitle={t("modRoot.dialog")}
+              value={modRoot}
+              defaultPath={target || undefined}
+              onPick={setModRoot}
+              placeholder={t("modRoot.placeholder", { path: target || "_out" })}
+              className="h-8 text-xs"
             />
-            <span className="ps4-field__hint">{t("modRoot.hint", { path: target || "-" })}</span>
+            <p className="text-xs text-muted-foreground">{t("modRoot.hint", { path: target || "-" })}</p>
           </div>
           {status.error ? <ErrorNote>{status.error}</ErrorNote> : null}
           {failed.length ? (
@@ -205,25 +221,32 @@ export function RepackChangesDialog({
               </>
             )}
           </div>
-          <div className="ps4-init__actions">
-            <HudButton
-              variant="primary"
-              icon={<Hammer />}
-              busy={busy}
-              disabled={!chosen.length || !target}
-              onClick={() => void repackChosen()}
-            >
-              {running ? t("init.progress", { done: running.done, total: running.total }) : t("changes.repack", { count: chosen.length })}
-            </HudButton>
-            <HudButton icon={<CheckCheck />} disabled={!chosen.length || busy} onClick={() => void markClean()} title={t("changes.markCleanHint")}>
-              {t("changes.markClean")}
-            </HudButton>
-            <span className="ps4-panel__spacer" />
-            <HudButton disabled={busy} onClick={() => onOpenChange(false)}>
-              {t("close")}
-            </HudButton>
-          </div>
         </div>
+        <DialogFooter>
+          {running ? (
+            <span className="mr-auto flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" />
+              {t("init.progress", { done: running.done, total: running.total })}
+            </span>
+          ) : null}
+          <Button type="button" variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
+            {t("close")}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!chosen.length || busy}
+            onClick={() => void markClean()}
+            title={t("changes.markCleanHint")}
+          >
+            <CheckCheck className="size-4" />
+            {t("changes.markClean")}
+          </Button>
+          <Button type="button" disabled={!chosen.length || !target || busy} onClick={() => void repackChosen()}>
+            <PackageCheck className={busy ? "size-4 animate-pulse" : "size-4"} />
+            {t("changes.repack", { count: chosen.length })}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

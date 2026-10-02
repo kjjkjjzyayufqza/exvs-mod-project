@@ -19,8 +19,9 @@ import { useTranslation } from "react-i18next";
 import { Check, Copy, ExternalLink, ScrollText } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { HudButton, KeyValues } from "./Hud";
+import { FactList } from "./SectionPanel";
 import type { GameId, ProvenanceRecord } from "../types";
 
 function CopyButton({ value }: { value: string }) {
@@ -35,7 +36,18 @@ function CopyButton({ value }: { value: string }) {
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1400);
   };
-  return <HudButton icon={copied ? <Check /> : <Copy />} label={t("credits.copy")} onClick={() => void copy()} />;
+  return (
+    <Button
+      variant="outline"
+      size="icon"
+      className="h-7 w-7 shrink-0"
+      title={t("credits.copy")}
+      aria-label={t("credits.copy")}
+      onClick={() => void copy()}
+    >
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+    </Button>
+  );
 }
 
 /**
@@ -57,43 +69,57 @@ export function CreditsDialog({
   const repository = provenance?.repository ?? "https://github.com/kjjkjjzyayufqza/exvs-mod-project";
   return (
     <>
-      <HudButton icon={<ScrollText />} onClick={() => setOpen(true)}>
-        {t("credits.open")}
-      </HudButton>
+      <Button
+        variant="outline"
+        size="icon"
+        className="h-9 w-9 shrink-0"
+        onClick={() => setOpen(true)}
+        title={t("credits.open")}
+        aria-label={t("credits.open")}
+      >
+        <ScrollText className="h-4 w-4" />
+      </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="ps4-ws ps4-dialog max-w-xl" data-game={game}>
+        <DialogContent className="max-w-xl" data-game={game}>
           <DialogHeader>
-            <DialogTitle className="ps4-dialog__title">{t("credits.title")}</DialogTitle>
+            <DialogTitle>{t("credits.title")}</DialogTitle>
             <DialogDescription>{t("credits.description")}</DialogDescription>
           </DialogHeader>
-          <div className="ps4-dialog__body">
-            <KeyValues
+          <div className="space-y-4">
+            <FactList
               rows={[
                 [t("credits.product"), provenance?.generator ?? "EXVS Mod Project"],
                 [t("credits.author"), author],
                 [
                   t("credits.repository"),
-                  <span key="repo" className="inline-flex items-center gap-2">
-                    <span className="ps4-truncate">{repository}</span>
-                    <HudButton icon={<ExternalLink />} label={t("credits.visit")} onClick={() => void openUrl(repository)} />
+                  <span key="repo" className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 break-all">{repository}</span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      title={t("credits.visit")}
+                      aria-label={t("credits.visit")}
+                      onClick={() => void openUrl(repository)}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </Button>
                   </span>,
                 ],
                 [
                   research.label,
-                  <span key="research" className="inline-flex items-center gap-2">
-                    <span className="ps4-truncate">{research.url}</span>
+                  <span key="research" className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 break-all">{research.url}</span>
                     <CopyButton value={research.url} />
                   </span>,
                 ],
                 [t("credits.license"), t("credits.licenseValue")],
               ]}
             />
-            <p className="ps4-note" style={{ margin: 0 }}>
+            <p className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
               {provenance?.researchCredit ?? research.note}
             </p>
-            <p className="ps4-dim" style={{ fontSize: 12 }}>
-              {t("credits.keepNames")}
-            </p>
+            <p className="text-xs text-muted-foreground">{t("credits.keepNames")}</p>
           </div>
         </DialogContent>
       </Dialog>

@@ -73,9 +73,25 @@ later-than-OB revision.
      listed without reading data. Extraction never clears a folder that is
      neither empty nor a package.
    * Routes `/MbonSingleFhm` and `/GvsSingleFhm2d` join the composition-root
-     touch points (router, sidebar URL list, full-bleed list).
+     touch points (router, sidebar URL list).
 
    User guide: `docs/mbon-gvs/README.md`.
+
+6. **Lists, not scans; the EXVS2 Workspace look (2026-10-02).**
+
+   * The game folder is never enumerated. Data init extracts the init rows of
+     the name table; the "known content" index (`*_content_index`, CLI
+     `index`) lists every name-table row and, for MBON, the units of the
+     extracted `SCharacterList`. Every archive is resolved by its hash to
+     `archives/XX/HASH.bin`; a missing one is reported, never searched for.
+     The former folder scan (`*_scan_folder`, the "Game files" tab) is gone.
+   * The MBON and GVS pages reproduce the EXVS2 Workspace layout and the
+     Single FHM2D page with the shared `src/components/ui` primitives, led by
+     a game title so the pages are never mistaken for OB or for each other.
+     They stay isolated: no OB module is imported, and the PS4 path fields do
+     not use the OB-coupled `FilePathInput` (its config store imports
+     `src/page/**`). The pages use the app layout's normal padding, so the
+     full-bleed list no longer names them.
 
 ## Consequences
 

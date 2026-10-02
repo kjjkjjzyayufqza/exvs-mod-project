@@ -27,38 +27,29 @@ import type { GameId } from "./types";
  */
 
 export const SIDEBAR_MODES = ["grouped", "switcher", "flat", "obOnly"] as const;
-export const WORKSPACE_LAYOUTS = ["three", "focus", "stacked"] as const;
 export const INSPECTOR_LAYOUTS = ["auto", "stacked", "split"] as const;
 export const DENSITIES = ["compact", "comfortable"] as const;
-export const VISUAL_STYLES = ["standard", "contrast"] as const;
 export const SIDEBAR_GAMES = ["ob", "mbon", "gvs"] as const;
 
 export type SidebarMode = (typeof SIDEBAR_MODES)[number];
-export type WorkspaceLayout = (typeof WORKSPACE_LAYOUTS)[number];
 export type InspectorLayout = (typeof INSPECTOR_LAYOUTS)[number];
 export type Density = (typeof DENSITIES)[number];
-export type VisualStyle = (typeof VISUAL_STYLES)[number];
 export type SidebarGame = "ob" | GameId;
 
 export interface Ps4Preferences {
   /** How MBON / GVS tools appear in the app sidebar. */
   sidebarMode: SidebarMode;
-  /** Pane arrangement of the MBON / GVS workspace pages. */
-  workspaceLayout: WorkspaceLayout;
   /** Preview and details side by side, stacked, or chosen by width. */
   inspectorLayout: InspectorLayout;
   density: Density;
-  visualStyle: VisualStyle;
   /** Game shown by the sidebar switcher. */
   sidebarGame: SidebarGame;
 }
 
 export const DEFAULT_PREFERENCES: Ps4Preferences = {
   sidebarMode: "grouped",
-  workspaceLayout: "three",
   inspectorLayout: "auto",
   density: "compact",
-  visualStyle: "standard",
   sidebarGame: "ob",
 };
 
@@ -73,10 +64,8 @@ export function sanitizePreferences(value: unknown): Ps4Preferences {
   const source = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
   return {
     sidebarMode: pick(SIDEBAR_MODES, source.sidebarMode, DEFAULT_PREFERENCES.sidebarMode),
-    workspaceLayout: pick(WORKSPACE_LAYOUTS, source.workspaceLayout, DEFAULT_PREFERENCES.workspaceLayout),
     inspectorLayout: pick(INSPECTOR_LAYOUTS, source.inspectorLayout, DEFAULT_PREFERENCES.inspectorLayout),
     density: pick(DENSITIES, source.density, DEFAULT_PREFERENCES.density),
-    visualStyle: pick(VISUAL_STYLES, source.visualStyle, DEFAULT_PREFERENCES.visualStyle),
     sidebarGame: pick(SIDEBAR_GAMES, source.sidebarGame, DEFAULT_PREFERENCES.sidebarGame),
   };
 }

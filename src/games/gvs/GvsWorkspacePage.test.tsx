@@ -121,6 +121,27 @@ beforeEach(() => {
         return { type: "other", kind: "msc", label: "MSC script", magic: "B2ACBCBA", size: 128, headHex: "B2ACBCBA" };
       case "gvs_add_folder":
         return 2;
+      case "gvs_content_index":
+        return {
+          archivesRoot: "C:/games/CUSA08379/archives",
+          available: 1,
+          extracted: 0,
+          items: [
+            {
+              hash: "DFD38C70",
+              title: "Character List",
+              group: "lists",
+              route: "012list",
+              name: "character_list",
+              relativeDir: "012list/character_list",
+              nameSource: "vs2-meta",
+              sourcePath: "C:/games/CUSA08379/archives/DF/DFD38C70.bin",
+              size: 4096,
+              modifiedMs: 0,
+              packages: [],
+            },
+          ],
+        };
       default:
         throw new Error(`unexpected command ${command}`);
     }
@@ -163,6 +184,20 @@ describe("GVS workspace page", () => {
     fireEvent.click(screen.getByText("0.bscex"));
     expect(await screen.findByText("MSC script")).toBeInTheDocument();
     expect(screen.getByText("0x00000030")).toBeInTheDocument();
+  });
+
+  it("titles the page as the GVS workspace and indexes known content without scanning", async () => {
+    await renderPage();
+    expect(screen.getByRole("heading", { level: 1, name: "Gundam Versus workspace" })).toBeInTheDocument();
+    expect(screen.queryByText("Game files")).not.toBeInTheDocument();
+    const { useGvsStore } = await import("./store");
+    useGvsStore.setState({ sourceRoot: "C:/games/CUSA08379" });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Known content" }));
+    expect(await screen.findByText("Character List")).toBeInTheDocument();
+    expect(invokeMock).toHaveBeenCalledWith("gvs_content_index", { sourceRoot: "C:/games/CUSA08379", workspace: WORKSPACE });
+    expect(screen.getByText("Lists")).toBeInTheDocument();
+    const commands = invokeMock.mock.calls.map((call) => call[0] as string);
+    expect(commands.some((command) => command.includes("scan"))).toBe(false);
   });
 
   it("adds a folder under the selected folder", async () => {

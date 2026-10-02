@@ -36,7 +36,7 @@ fn samples() -> Option<PathBuf> {
 }
 
 fn archives(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
-    exvs_ps4_common::scan::list_files(root, &[])
+    exvs_ps4_common::files::list_files(root, &[])
         .unwrap()
         .into_iter()
         .filter_map(|path| {
@@ -170,7 +170,7 @@ fn ssbh_members_summarize_and_models_build_viewer_meshes() {
 fn init_game_tree(root: &Path, game: &Path) -> Vec<u32> {
     let book = exvs_gvs::names::book();
     let mut placed = Vec::new();
-    for path in exvs_ps4_common::scan::list_files(root, &[]).unwrap() {
+    for path in exvs_ps4_common::files::list_files(root, &[]).unwrap() {
         let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
         let Some(hash) = exvs_ps4_common::names::parse_hash(&stem) else { continue };
         if book.get(hash).and_then(|name| name.group.as_ref()).is_none() || placed.contains(&hash) {
@@ -227,7 +227,7 @@ fn unit_shell_packs_extract_under_their_vs2_names() {
         return;
     };
     let book = exvs_gvs::names::book();
-    let shells: Vec<PathBuf> = exvs_ps4_common::scan::list_files(&root.join("model_shell"), &[]).unwrap();
+    let shells: Vec<PathBuf> = exvs_ps4_common::files::list_files(&root.join("model_shell"), &[]).unwrap();
     let named: Vec<&PathBuf> = shells
         .iter()
         .filter(|path| {

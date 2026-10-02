@@ -38,7 +38,7 @@ open one only if the owner asks. Decision record:
   stay under gitignored `tmp/`.
 - OB stays untouched. Allowed shell touch points (already used): `src/router/*`,
   `src/components/app-sidebar.tsx`, `src/components/SettingsDialog.tsx`,
-  `src/layout/Sidebar.tsx` (full-bleed paths), `src-tauri/src/lib.rs` (mod +
+  `src/layout/Sidebar.tsx` (full-bleed paths; the PS4 pages no longer use it), `src-tauri/src/lib.rs` (mod +
   handler registration), `src-tauri/Cargo.toml` (workspace members).
 - Rust: zero warnings on debug `cargo check --lib --bins` (from `src-tauri/`),
   debug builds only, delete unused code instead of `#[allow]`.
@@ -55,11 +55,11 @@ open one only if the owner asks. Decision record:
 
 | Layer | Path | Notes |
 |---|---|---|
-| Shared PS4 crate | `src-tauri/crates/ps4_common` | `99 92 CD 90` archive read/write (canonical writer, 747/747 GVS samples byte-identical), texture codecs (`image_dds`), PNG/DDS, scan, `mesh_pack` (PSM1), `cache` (preview LRU), `provenance` (+ notice audit), `skeleton::PoseBone`, `batch::BatchReport` |
-| MBON crate | `src-tauri/crates/mbon` | `fhm`, `ntp3`, `nud`, `vbn`, `list_info`, `kinds`, `package`, `inspect`, CLI `mbon_tool` |
+| Shared PS4 crate | `src-tauri/crates/ps4_common` | `99 92 CD 90` archive read/write (canonical writer, 747/747 GVS samples byte-identical), texture codecs (`image_dds`), PNG/DDS, `files` (lists a package or sample folder; never a game folder), `packages::build_catalog` (hash-resolved catalog of named archives), `mesh_pack` (PSM1), `cache` (preview LRU), `provenance` (+ notice audit), `skeleton::PoseBone`, `batch::BatchReport` |
+| MBON crate | `src-tauri/crates/mbon` | `fhm`, `ntp3`, `nud`, `vbn`, `list_info`, `kinds`, `package`, `inspect`, `content` (known content: name table + `SCharacterList` units), CLI `mbon_tool` |
 | GVS crate | `src-tauri/crates/gvs` | `package` (named folders, manifest `gvs_package.json`), `naming`, `nutexb` (v1.1 + v1.2), `ssbh_view` (summaries, viewer meshes, `meshes_to_obj`), CLI `gvs_tool` |
 | Tauri adapters | `src-tauri/src/mbon/commands.rs`, `src-tauri/src/gvs/commands.rs` | 25 `mbon_*` + 21 `gvs_*` commands, registered in `src-tauri/src/lib.rs`. Bulk data = raw `tauri::ipc::Response` |
-| Shared UI kit | `src/games/ps4-common` | `ps4-workspace.css` (scoped `.ps4-ws`), `Ps4Shell`, `PaneLayout`, `WorkspaceFrame`, `Hud` primitives, `VirtualList`, `HexView`, `ImageStage`, lazy `MeshViewport`, `SourcesPanel`, `CreditsDialog`, `preferences.ts`, `workspaceStore.ts`, `usePackageActions`, `previewUrls`, `psm1.ts`, `i18n` |
+| Shared UI kit | `src/games/ps4-common` | `workspace/` (EXVS2 Workspace layout: `Ps4Workspace`, `WorkspaceToolbar`, `WorkspacePanels`, `PackageTreePane`, `EditorTabNav`, `ContentIndexView`, `InfoPanel`, `StructureSplit`), `ps4-workspace.css` (scoped `.ps4-ws`, app theme tokens), `Hud` primitives, `SectionPanel`, `PathField`, `VirtualList`, `HexView`, `ImageStage`, lazy `MeshViewport`, `CreditsDialog`, `preferences.ts`, `workspaceStore.ts`, `usePackageActions`, `previewUrls`, `psm1.ts`, `i18n` |
 | MBON UI | `src/games/mbon` | `MbonWorkspacePage` (+ components), namespace `mbon-workspace` |
 | GVS UI | `src/games/gvs` | `GvsWorkspacePage` (+ components, `tree.ts`), namespace `gvs-workspace` |
 | Notices | `tools/stamp_mbon_gvs_notices.py`, `tools/mbon_gvs_notice_pool.json` | Scopes: `src-tauri/crates/{mbon,gvs,ps4_common}`, `src-tauri/src/{mbon,gvs}`, `src/games/{mbon,gvs,ps4-common}` |
@@ -69,9 +69,9 @@ Routes today: `/MbonWorkspace`, `/GvsWorkspace` (`RouterItems` entries carry
 `SIDEBAR_ROUTE_URLS` must stay identical in order or the router throws.
 
 Preferences (`src/games/ps4-common/preferences.ts`): sidebar mode
-(grouped / switcher / flat / obOnly), workspace layout (three / focus / stacked),
-inspector layout (auto / stacked / split), density, visual style
-(hud / clean / contrast). Stored in `ps4-workspaces.json` key `preferences` with a
+(grouped / switcher / flat / obOnly), inspector layout (auto / stacked /
+split), density. The workspace layout and visual style choices are gone: the
+pages follow the EXVS2 Workspace. Stored in `ps4-workspaces.json` key `preferences` with a
 `localStorage` mirror `ps4-workspaces:preferences`; per-game paths use
 `ps4-workspaces:<game>.{workspace,sourceRoot,packageDir}`.
 
@@ -114,6 +114,32 @@ dark and en-US light.
   segmented tabs, filled fields, soft state badges, sticky group headers,
   radio cards, member tables) plus `contrast`. Kind chips are neutral; colour
   and dots only mark state. No staggered entrance. Masthead credits unchanged.
+
+## Session 4: EXVS2 Workspace parity, lists instead of scans (done)
+
+Owner request: MBON / GVS must look and work like the OB EXVS2 Workspace, with
+the game title clearly shown; no "Game files" tab and no scanning of any kind;
+everything comes from the init list and the lists the game ships.
+
+* Rust: `exvs_ps4_common::scan` and `*_scan_folder` removed; `files::list_files`
+  only walks package or sample folders. `packages::build_catalog` resolves any
+  set of named archives by hash. `exvs_mbon::content` reads the extracted
+  `SCharacterList` (list pack `EB3A9691`; unit code at `0x08`, unit archive
+  hash at `0x7C`) and adds the units to the name table (`unit/<code>`, source
+  `scharacterlist`). Commands `mbon_content_index` / `gvs_content_index`; CLI
+  `index`. Real data: 63 names + 183 units for MBON.
+* UI: `src/games/ps4-common/workspace/` reproduces the EXVS2 Workspace
+  (toolbar with the game code and title, package tree, grouped editor tabs
+  PACKAGE / INDEX, collapsible info panel). Tabs: Structure (package editor +
+  inspector) and Known content (list-based index with extract / open). Single
+  pages follow the Single FHM2D layout (`SectionPanel` blocks, flow strip).
+  Dialogs use the stock shadcn frame. The `.ps4-*` tokens map onto the app
+  theme; only "Repack changes" is a primary button on the page.
+* Removed: `SourcesPanel`, `WorkspaceFrame`, `PaneLayout`, `Ps4Shell`,
+  `StatusBar`, `PathPicker`, the activity log (toasts show progress), the
+  workspace-layout / visual-style preferences.
+* `FilePathInput` is not used by PS4 code: its config store imports OB pages.
+  `PathField` gives the same look without that dependency.
 
 ## Settled findings (do not rediscover)
 
@@ -303,9 +329,10 @@ adding new NUT textures with GIDX allocation, DAE/FBX model import.
   -> local mock files, `@` -> `<repo>/src`.
 - `harness.css`: `@import "../../src/App.css"; @import "../../src/styles.css";
   @source "../../src/games"; @source "../../src/components/ui";`.
-- `main.tsx`: read `?game=&theme=dark&lang=zh-CN`, seed the
-  `ps4-workspaces:*` localStorage keys, dynamic-import the page, render inside
-  `I18nextProvider` with `appI18n`.
+- `main.tsx`: read `?page=mbon|gvs|mbonSingle|gvsSingle|ob&open=1&theme=dark&lang=zh-CN`,
+  seed the `ps4-workspaces:*` localStorage keys, dynamic-import the page, render
+  inside `I18nextProvider` with `appI18n` and a `p-4` main like the app layout
+  (`ob` = the EXVS2 Workspace reference; needs `KeepAliveProvider`).
 - `fixtures.ts`: synthetic data only (PNG via `OffscreenCanvas`, PSM1 built
   from three.js geometry).
 - Build: `node_modules/.bin/vite build --config tmp/ui-harness/vite.config.ts`.
@@ -323,7 +350,10 @@ adding new NUT textures with GIDX allocation, DAE/FBX model import.
 - react-resizable-panels v4: numeric sizes are pixels; use percentage strings.
 - Opener: `openUrl` is allowed only for `github.com/kjjkjjzyayufqza/*`
   (BoostStudio links get a copy button); `openPath` works for any path.
-- Portaled dialogs need `className="ps4-ws ..."` and `data-game` to get the
-  scoped styles.
+- Portaled dialogs that use `.ps4-*` parts need `className="ps4-ws ..."` to
+  get the scoped styles; dialogs built from shadcn parts only do not.
+- Radix tabs switch on mouse down: tests use `fireEvent.mouseDown` on a tab.
+- Radix dialogs focus and select the first input; the init and repack dialogs
+  focus the dialog itself instead (`onOpenAutoFocus`).
 - The OB `MiscTools/gvs-map-to-vs2` tool ports GVS maps to VS2; it is OB code,
   leave it alone and do not duplicate it.

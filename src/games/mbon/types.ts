@@ -26,24 +26,6 @@ export type MbonKind =
   | "container"
   | "unknown";
 
-export interface MbonScanEntry {
-  relativePath: string;
-  path: string;
-  stem: string;
-  size: number;
-  container: boolean;
-  archiveKind: number | null;
-  fileCount: number;
-  payloadMagic: string;
-  payloadKind: MbonKind;
-  payloadLabel: string;
-  payloadSize: number;
-  error: string | null;
-  /** Default package folder from the MBON name table (`common/list_info`). */
-  named: string | null;
-  title: string | null;
-}
-
 export interface MbonPackageItem {
   dir: string;
   name: string;

@@ -297,7 +297,7 @@ function GvsReplaceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="ps4-ws ps4-dialog" data-game="gvs">
         <DialogHeader>
-          <DialogTitle className="ps4-dialog__title">{t("replace.title")}</DialogTitle>
+          <DialogTitle>{t("replace.title")}</DialogTitle>
           <DialogDescription>{t("replace.description", { path: member.path })}</DialogDescription>
         </DialogHeader>
         <div className="ps4-dialog__body">

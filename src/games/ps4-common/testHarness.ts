@@ -64,15 +64,14 @@ export function createFakeAdapter(overrides: Partial<Ps4GameAdapter> = {}): Ps4G
     code: "MBON",
     workspaceRoute: "/MbonWorkspace",
     sourceExtensions: ["bin"],
-    kinds: [],
     listPackages: vi.fn(async () => []),
-    scanFolder: vi.fn(async () => []),
     extract: vi.fn(async (_source: string, workspace: string, _overwrite: boolean, name?: string) => ({
       packageDir: `${workspace}/${name ?? "PKG"}`,
       files: 2,
       bytes: 128,
     })),
     initCatalog: vi.fn(async () => ({ archivesRoot: null, available: 0, extracted: 0, items: [] })),
+    contentIndex: vi.fn(async () => ({ archivesRoot: null, available: 0, extracted: 0, items: [] })),
     suggestName: vi.fn(async (source: string) => ({
       hash: null,
       stem: source,

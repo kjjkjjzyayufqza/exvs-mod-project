@@ -1,6 +1,8 @@
 {
   "title": "Maxi Boost ON workspace",
   "credit": "Format research: descatal / BoostStudio. Tooling: kjjkjjzyayufqza.",
+  "contents_one": "{{count}} entry",
+  "contents_other": "{{count}} entries",
   "credits": {
     "researchLabel": "MBON research",
     "researchNote": "All MBON format research comes from descatal's BoostStudio (https://github.com/descatal/BoostStudio)."
@@ -129,6 +131,7 @@
     "magic": "Magic"
   },
   "single": {
-    "title": "Single FHM"
+    "title": "Single FHM",
+    "intro": "Unpack one MBON archive into a named package folder, or repack a package folder into the mod folder."
   }
 }

@@ -18,7 +18,7 @@ import type { TFunction } from "i18next";
 import { formatBytes, hex } from "../ps4-common/format";
 import type { ArchivePreview, Ps4GameAdapter } from "../ps4-common/gameAdapter";
 import { mbonApi } from "./api";
-import { MBON_KINDS, mbonShort, mbonTone } from "./kinds";
+import { mbonShort, mbonTone } from "./kinds";
 import type { MbonInspection } from "./types";
 
 export const MBON_WORKSPACE_ROUTE = "/MbonWorkspace";
@@ -114,7 +114,7 @@ function previewOf(inspection: MbonInspection, t: TFunction): ArchivePreview {
   }
 }
 
-/** MBON binding of the shared PS4 pages (sources, data init, single unpack / repack, repack changes). */
+/** MBON binding of the shared PS4 pages (workspace, data init, content index, single unpack / repack, repack changes). */
 export function useMbonAdapter(): Ps4GameAdapter {
   const { t } = useTranslation("ps4-workspace");
   return useMemo<Ps4GameAdapter>(
@@ -123,36 +123,20 @@ export function useMbonAdapter(): Ps4GameAdapter {
       code: "MBON",
       workspaceRoute: MBON_WORKSPACE_ROUTE,
       sourceExtensions: ["bin", "fhm"],
-      kinds: MBON_KINDS.map((kind) => ({ id: kind, short: mbonShort(kind) })),
       listPackages: async (root) =>
         (await mbonApi.listPackages(root)).map((item) => ({
           dir: item.dir,
           relative: item.relative,
           sourceName: item.sourceName,
           title: item.title,
-          chip: item.container ? "PS4 ARC" : "RAW",
-          tone: item.container ? "archive" : "other",
-          detail: t("sources.payloads", { count: item.payloadCount }),
-        })),
-      scanFolder: async (root) =>
-        (await mbonApi.scanFolder(root)).map((entry) => ({
-          path: entry.path,
-          stem: entry.stem,
-          relativePath: entry.relativePath,
-          size: entry.size,
-          kind: entry.payloadKind,
-          short: mbonShort(entry.payloadKind),
-          label: entry.payloadLabel,
-          tone: mbonTone(entry.payloadKind),
-          error: entry.error,
-          named: entry.named,
-          title: entry.title,
+          detail: t("tree.payloads", { count: item.payloadCount }),
         })),
       extract: async (source, root, overwrite, name) => {
         const report = await mbonApi.extract(source, root, overwrite, name);
         return { packageDir: report.packageDir, files: report.filesWritten, bytes: report.bytesWritten };
       },
       initCatalog: (sourceRoot, workspace) => mbonApi.initCatalog(sourceRoot, workspace),
+      contentIndex: (sourceRoot, workspace) => mbonApi.contentIndex(sourceRoot, workspace),
       suggestName: (source) => mbonApi.suggestName(source),
       preview: async (path) => previewOf(await mbonApi.inspect(path), t),
       packageSummary: async (packageDir) => {

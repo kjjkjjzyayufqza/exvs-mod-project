@@ -17,15 +17,7 @@ import { useEffect, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  DENSITIES,
-  INSPECTOR_LAYOUTS,
-  SIDEBAR_MODES,
-  VISUAL_STYLES,
-  WORKSPACE_LAYOUTS,
-  usePs4Preferences,
-  type Ps4Preferences,
-} from "../preferences";
+import { DENSITIES, INSPECTOR_LAYOUTS, SIDEBAR_MODES, usePs4Preferences, type Ps4Preferences } from "../preferences";
 
 interface CardOption<T extends string> {
   id: T;
@@ -73,37 +65,6 @@ const SIDEBAR_PREVIEWS: Record<(typeof SIDEBAR_MODES)[number], ReactNode> = {
       <span className="h-1 rounded-[2px] border border-dashed border-current opacity-50" />
     </div>
   ),
-};
-
-const LAYOUT_PREVIEWS: Record<(typeof WORKSPACE_LAYOUTS)[number], ReactNode> = {
-  three: (
-    <div className="flex h-full w-full gap-[3px] p-1 opacity-70">
-      <span className={cn(box, "w-1/5")} />
-      <span className={cn(box, "w-2/5")} />
-      <span className="w-2/5 rounded-[2px] bg-primary" />
-    </div>
-  ),
-  focus: (
-    <div className="flex h-full w-full gap-[3px] p-1 opacity-70">
-      <span className="w-[3px] rounded-[2px] border border-dashed border-current" />
-      <span className={cn(box, "w-1/3")} />
-      <span className="flex-1 rounded-[2px] bg-primary" />
-    </div>
-  ),
-  stacked: (
-    <div className="flex h-full w-full gap-[3px] p-1 opacity-70">
-      <span className={cn(box, "w-1/4")} />
-      <span className="flex flex-1 flex-col gap-[3px]">
-        <span className={cn(box, "h-2/5")} />
-        <span className="flex-1 rounded-[2px] bg-primary" />
-      </span>
-    </div>
-  ),
-};
-
-const STYLE_PREVIEWS: Record<(typeof VISUAL_STYLES)[number], ReactNode> = {
-  standard: <div className="m-1 h-[calc(100%-8px)] w-[calc(100%-8px)] rounded-md border border-current/30 shadow-sm" />,
-  contrast: <div className="m-1 h-[calc(100%-8px)] w-[calc(100%-8px)] rounded-md border-2 border-current" />,
 };
 
 function OptionCards<T extends string>({
@@ -228,24 +189,6 @@ export function Ps4PreferencesSection() {
         onChange={(sidebarMode) => update({ sidebarMode })}
         title={(id) => t(`settings.sidebarMode.${id}.title`)}
         description={(id) => t(`settings.sidebarMode.${id}.description`)}
-      />
-      <OptionCards
-        name="ps4-workspace-layout"
-        legend={t("settings.layout")}
-        value={preferences.workspaceLayout}
-        options={WORKSPACE_LAYOUTS.map((id) => ({ id, preview: LAYOUT_PREVIEWS[id] }))}
-        onChange={(workspaceLayout) => update({ workspaceLayout })}
-        title={(id) => t(`settings.workspaceLayout.${id}.title`)}
-        description={(id) => t(`settings.workspaceLayout.${id}.description`)}
-      />
-      <OptionCards
-        name="ps4-visual-style"
-        legend={t("settings.style")}
-        value={preferences.visualStyle}
-        options={VISUAL_STYLES.map((id) => ({ id, preview: STYLE_PREVIEWS[id] }))}
-        onChange={(visualStyle) => update({ visualStyle })}
-        title={(id) => t(`settings.visualStyle.${id}.title`)}
-        description={(id) => t(`settings.visualStyle.${id}.description`)}
       />
       <Segmented
         legend={t("settings.inspector")}

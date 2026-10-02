@@ -16,7 +16,7 @@ import type { TFunction } from "i18next";
 import { formatBytes, hex } from "../ps4-common/format";
 import type { ArchivePreview, Ps4GameAdapter } from "../ps4-common/gameAdapter";
 import { gvsApi } from "./api";
-import { GVS_KINDS, gvsShort, gvsTone } from "./kinds";
+import { gvsShort, gvsTone } from "./kinds";
 import type { GvsInspection } from "./types";
 
 export const GVS_WORKSPACE_ROUTE = "/GvsWorkspace";
@@ -72,7 +72,7 @@ function previewOf(inspection: GvsInspection, t: TFunction): ArchivePreview {
   }
 }
 
-/** GVS binding of the shared PS4 pages (sources, data init, single unpack / repack, repack changes). */
+/** GVS binding of the shared PS4 pages (workspace, data init, content index, single unpack / repack, repack changes). */
 export function useGvsAdapter(): Ps4GameAdapter {
   const { t } = useTranslation("ps4-workspace");
   return useMemo<Ps4GameAdapter>(
@@ -81,39 +81,20 @@ export function useGvsAdapter(): Ps4GameAdapter {
       code: "GVS",
       workspaceRoute: GVS_WORKSPACE_ROUTE,
       sourceExtensions: ["bin"],
-      kinds: [{ id: "container", short: "PS4 ARC" }, ...GVS_KINDS.map((kind) => ({ id: kind, short: gvsShort(kind) }))],
       listPackages: async (root) =>
         (await gvsApi.listPackages(root)).map((item) => ({
           dir: item.dir,
           relative: item.relative,
           sourceName: item.sourceName,
           title: item.title,
-          chip: `KIND ${hex(item.archiveKind, 2)}`,
-          tone: "archive",
-          detail: t("sources.files", { count: item.fileCount }),
+          detail: t("tree.files", { count: item.fileCount }),
         })),
-      scanFolder: async (root) =>
-        (await gvsApi.scanFolder(root)).map((entry) => {
-          const kind = entry.container ? "container" : entry.payloadKind;
-          return {
-            path: entry.path,
-            stem: entry.stem,
-            relativePath: entry.relativePath,
-            size: entry.size,
-            kind,
-            short: entry.container ? "PS4 ARC" : gvsShort(entry.payloadKind),
-            label: entry.container ? t("sources.archiveFiles", { count: entry.fileCount }) : entry.payloadLabel,
-            tone: entry.container ? "archive" : gvsTone(entry.payloadKind),
-            error: entry.error,
-            named: entry.named,
-            title: entry.title,
-          };
-        }),
       extract: async (source, root, overwrite, name) => {
         const report = await gvsApi.extract(source, root, overwrite, name);
         return { packageDir: report.packageDir, files: report.fileCount, bytes: report.bytesWritten };
       },
       initCatalog: (sourceRoot, workspace) => gvsApi.initCatalog(sourceRoot, workspace),
+      contentIndex: (sourceRoot, workspace) => gvsApi.contentIndex(sourceRoot, workspace),
       suggestName: (source) => gvsApi.suggestName(source),
       preview: async (path) => previewOf(await gvsApi.inspect(path), t),
       packageSummary: async (packageDir) => {

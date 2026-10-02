@@ -1,6 +1,8 @@
 {
   "title": "Gundam Versus workspace",
   "credit": "Format research: kjjkjjzyayufqza, built on this project's VS2 / Over Boost findings.",
+  "contents_one": "{{count}} file",
+  "contents_other": "{{count}} files",
   "credits": {
     "researchLabel": "GVS research",
     "researchNote": "GVS support is kjjkjjzyayufqza's own result, derived from EXVS Mod Project's VS2 / Over Boost research."
@@ -137,6 +139,7 @@
     "magic": "Magic"
   },
   "single": {
-    "title": "Single FHM2D"
+    "title": "Single FHM2D",
+    "intro": "Unpack one GVS archive into a named package folder, or repack a package folder into the mod folder."
   }
 }

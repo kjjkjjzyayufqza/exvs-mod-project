@@ -14,53 +14,69 @@
 //
 
 import { useTranslation } from "react-i18next";
-import { FileSearch } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import type { ArchivePreview } from "../../gameAdapter";
 import type { AsyncState } from "../../useAsync";
-import { EmptyState, ErrorNote, KeyValues, KindChip, Section } from "../../components/Hud";
+import { FactList, SectionNote } from "../../components/SectionPanel";
 
-const MEMBER_LIMIT = 24;
+const MEMBER_LIMIT = 48;
 
 /** What the chosen source file holds (container members or payload kind). */
 export function ArchivePreviewCard({ preview }: { preview: AsyncState<ArchivePreview> | null }) {
   const { t } = useTranslation("ps4-workspace");
-  if (!preview) {
-    return <EmptyState icon={<FileSearch />} title={t("single.previewEmpty")} />;
-  }
-  if (preview.error) return <ErrorNote>{preview.error}</ErrorNote>;
+  if (!preview) return <SectionNote>{t("single.previewEmpty")}</SectionNote>;
+  if (preview.error) return <SectionNote tone="error">{preview.error}</SectionNote>;
   const data = preview.data;
-  if (!data) return <EmptyState icon={<FileSearch />} title={t("loading")} />;
+  if (!data) {
+    return (
+      <SectionNote>
+        <Loader2 className="h-4 w-4 animate-spin" />
+        {t("loading")}
+      </SectionNote>
+    );
+  }
   const hidden = Math.max(0, data.members.length - MEMBER_LIMIT);
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <KindChip tone={data.container ? "archive" : "data"}>{data.kindLabel}</KindChip>
-        <span className="ps4-dim" style={{ fontSize: 12 }}>
-          {t("single.previewFiles", { count: data.fileCount })}
-        </span>
-      </div>
-      {data.facts.length ? <KeyValues rows={data.facts} /> : null}
+    <div className="space-y-3">
+      <p className="font-mono text-[11px] text-muted-foreground">
+        {data.kindLabel} · {t("single.previewFiles", { count: data.fileCount })}
+      </p>
+      {data.facts.length ? <FactList rows={data.facts} /> : null}
       {data.members.length ? (
-        <Section title={t("single.previewMembers")}>
-          <table className="ps4-members">
-            <tbody>
-              {data.members.slice(0, MEMBER_LIMIT).map((member) => (
-                <tr key={member.index}>
-                  <td className="ps4-members__index">{member.index}</td>
-                  <td>
-                    <KindChip tone={member.tone}>{member.label}</KindChip>
-                  </td>
-                  {member.cells.map((cell, column) => (
-                    <td key={column} className={column === 0 ? "ps4-members__cell ps4-members__lead" : "ps4-members__cell"}>
-                      {cell}
+        <div className="space-y-1.5">
+          <div className="text-[11px] font-medium text-foreground">{t("single.previewMembers")}</div>
+          <div className="max-h-[min(420px,45vh)] overflow-auto rounded-md border bg-muted/20">
+            <table className="w-full border-collapse text-[11px]">
+              <tbody>
+                {data.members.slice(0, MEMBER_LIMIT).map((member) => (
+                  <tr key={member.index} className="border-b border-border/50 last:border-b-0">
+                    <td className="w-8 px-2 py-1 text-right font-mono text-muted-foreground">{member.index}</td>
+                    <td className="w-px whitespace-nowrap px-1 py-1">
+                      <Badge variant="outline" className="px-1.5 py-0 font-mono text-[10px] font-medium">
+                        {member.label}
+                      </Badge>
                     </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {hidden ? <span className="ps4-field__hint">{t("single.previewMore", { count: hidden })}</span> : null}
-        </Section>
+                    {member.cells.map((cell, column) => (
+                      <td
+                        key={column}
+                        className={
+                          column === 0
+                            ? "w-full max-w-0 truncate px-2 py-1 font-mono text-foreground"
+                            : "whitespace-nowrap px-2 py-1 text-right font-mono text-muted-foreground"
+                        }
+                        title={column === 0 ? cell : undefined}
+                      >
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {hidden ? <p className="text-[11px] text-muted-foreground">{t("single.previewMore", { count: hidden })}</p> : null}
+        </div>
       ) : null}
     </div>
   );
