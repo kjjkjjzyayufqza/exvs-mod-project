@@ -1,64 +1,16 @@
 {
-  "platform": "PlayStation 4",
   "loading": "加载中",
   "cancel": "取消",
   "refresh": "刷新",
   "save": "保存",
   "path": {
-    "browse": "选择文件夹",
     "reveal": "在文件管理器中打开",
     "choose": "选择"
   },
   "tabs": {
-    "packages": "工作包",
-    "gameFiles": "游戏文件",
     "preview": "预览",
     "hex": "十六进制",
     "info": "信息"
-  },
-  "sources": {
-    "title": "工作区",
-    "gameTitle": "游戏文件",
-    "tabsLabel": "来源",
-    "workspace": "工作区文件夹",
-    "workspacePlaceholder": "选择解包后工作包的存放位置",
-    "workspaceDialog": "选择工作区文件夹",
-    "gameRoot": "游戏文件文件夹",
-    "gameRootPlaceholder": "选择已导出的 PS4 archives 文件夹",
-    "gameRootDialog": "选择游戏文件文件夹",
-    "scan": "扫描",
-    "scanning": "扫描游戏文件",
-    "scanFailed": "扫描失败，请确认文件夹存在且可读取。",
-    "filterPackages": "筛选工作包",
-    "filterFiles": "筛选游戏文件",
-    "kindFilter": "按格式筛选",
-    "allKinds": "全部格式",
-    "extract": "解包",
-    "extractFiltered_one": "解包 {{count}} 个文件",
-    "extractFiltered_other": "解包 {{count}} 个文件",
-    "extracting": "解包 {{name}}",
-    "extractingBatch_one": "解包 {{count}} 个文件",
-    "extractingBatch_other": "解包 {{count}} 个文件",
-    "extractSummary": "{{files}} 个文件，{{bytes}}",
-    "batchDone": "已解包 {{done}} 个工作包",
-    "batchPartial": "成功 {{done}} 个，失败 {{failed}} 个。首个错误：{{first}}",
-    "overwrite": "覆盖已有工作包",
-    "needWorkspace": "请先在“工作包”标签页选择工作区文件夹。",
-    "noWorkspace": "尚未设置工作区",
-    "noWorkspaceBody": "选择一个文件夹存放解包后的工作包，重新打包的文件会写入其中的 _out 文件夹。",
-    "noPackages": "没有工作包",
-    "noPackagesBody": "在“游戏文件”标签页解包一个游戏文件即可开始修改。",
-    "noScan": "尚未扫描",
-    "noScanBody": "选择游戏文件文件夹后点击“扫描”。",
-    "noMatches": "没有符合筛选条件的项目",
-    "packagesLabel": "已解包的工作包",
-    "filesLabel": "游戏文件",
-    "files_one": "{{count}} 个文件",
-    "files_other": "{{count}} 个文件",
-    "payloads_one": "{{count}} 个载荷",
-    "payloads_other": "{{count}} 个载荷",
-    "archiveFiles_one": "PS4 封包，含 {{count}} 个文件",
-    "archiveFiles_other": "PS4 封包，含 {{count}} 个文件"
   },
   "package": {
     "title": "工作包",
@@ -77,7 +29,7 @@
     "verifyModified": "重建结果与原始文件不同（已修改）",
     "unverified": "自上次修改后尚未校验",
     "repack": "重新打包",
-    "repackHint": "将封包写入工作区的 _out 文件夹",
+    "repackHint": "以 archives/XX/HASH.bin 写入 Mod 输出文件夹",
     "repackAs": "另存为封包",
     "repacking": "重新打包工作包",
     "repackDone": "{{path}}（{{size}}）",
@@ -85,7 +37,10 @@
     "untracked_one": "工作包文件夹中有 {{count}} 个文件未列入清单",
     "untracked_other": "工作包文件夹中有 {{count}} 个文件未列入清单",
     "shared": "共享 x{{count}}",
-    "sharedHint": "此数据被多个条目共享"
+    "sharedHint": "此数据被多个条目共享",
+    "kindFilter": "按格式筛选",
+    "allKinds": "全部格式",
+    "noMatches": "没有符合筛选条件的项目"
   },
   "inspector": {
     "title": "检查器",
@@ -137,16 +92,11 @@
     "licenseValue": "代码：PolyForm Shield 1.0.0。文档：CC BY-NC-SA 4.0。另见 ACCEPTABLE_USE.md。",
     "keepNames": "作者与研究来源署名是本工具的一部分。复制或衍生作品中不得删除或替换。"
   },
-  "layout": {
-    "sources": "来源"
-  },
   "settings": {
     "title": "MBON / GVS（PS4）工具",
     "description": "设置 PS4 工作区的外观，以及工具在侧边栏中的显示方式。",
     "reset": "重置",
     "sidebar": "侧边栏",
-    "layout": "工作区布局",
-    "style": "视觉风格",
     "inspector": "预览与详情",
     "density": "密度",
     "sidebarMode": {
@@ -165,34 +115,6 @@
       "obOnly": {
         "title": "仅 OB",
         "description": "在侧边栏中隐藏 MBON 与 GVS 工具。"
-      }
-    },
-    "workspaceLayout": {
-      "three": {
-        "title": "三栏",
-        "description": "来源、工作包与检查器并排显示。"
-      },
-      "focus": {
-        "title": "专注",
-        "description": "来源以抽屉形式滑出，留出更多编辑空间。"
-      },
-      "stacked": {
-        "title": "上下分栏",
-        "description": "工作包在上、检查器在下，适合较高的屏幕。"
-      }
-    },
-    "visualStyle": {
-      "hud": {
-        "title": "机库 HUD",
-        "description": "角标、网格背景与紧凑标题。"
-      },
-      "clean": {
-        "title": "简洁",
-        "description": "圆角面板，无装饰。"
-      },
-      "contrast": {
-        "title": "高对比度",
-        "description": "更醒目的线条与更大的文字。"
       }
     },
     "inspectorLayout": {
@@ -218,17 +140,371 @@
       "gvs": "GVS"
     }
   },
-  "status": {
-    "idle": "就绪",
-    "running": "进行中",
-    "workspace": "工作区",
-    "package": "工作包",
-    "entries_one": "{{count}} 个条目",
-    "entries_other": "{{count}} 个条目",
-    "members_one": "{{count}} 个文件",
-    "members_other": "{{count}} 个文件",
-    "identical": "重建一致",
+  "close": "关闭",
+  "init": {
+    "open": "数据初始化",
+    "title": "{{code}} 数据初始化",
+    "description": "把游戏的全局表格与共享数据包解包到工作区，按 012list/character_list 这样的路由文件夹命名。游戏文件夹只读，不会被修改。",
+    "sourceRoot": "游戏文件夹",
+    "sourceRootPlaceholder": "选择游戏根目录（含 archives）或其 archives 文件夹",
+    "sourceRootDialog": "选择游戏文件夹",
+    "workspace": "工作区文件夹",
+    "available": "可用 {{available}} / {{total}}",
+    "extractedCount": "已解包：{{count}}",
+    "state": {
+      "ready": "就绪",
+      "checking": "正在检查文件",
+      "configure": "请选择游戏文件夹和工作区文件夹"
+    },
+    "filter": "按名称、哈希或文件夹搜索",
+    "showLabel": "显示",
+    "show": {
+      "all": "全部项目",
+      "available": "可用",
+      "pending": "尚未解包",
+      "extracted": "已解包",
+      "missing": "游戏文件夹中缺失"
+    },
+    "groupLabel": "分组",
+    "allGroups": "全部分组",
+    "sortLabel": "排序",
+    "sort": {
+      "group": "按分组",
+      "name": "按名称",
+      "status": "按状态",
+      "lastUsed": "最近使用"
+    },
+    "batch": "批量",
+    "selectAll_one": "全选（{{count}}）",
+    "selectAll_other": "全选（{{count}}）",
+    "progress": "{{done}} / {{total}}",
+    "extractSelected_one": "解包 {{count}} 项",
+    "extractSelected_other": "解包 {{count}} 项",
+    "extractPending_one": "解包 {{count}} 个新项目",
+    "extractPending_other": "解包全部 {{count}} 个新项目",
+    "extractPendingHint": "解包工作区中尚无工作包的所有可用项目",
+    "overwrite": "覆盖已有工作包",
+    "needFolders": "请先选择游戏文件夹和工作区文件夹。",
+    "listLabel": "数据初始化项目",
+    "empty": "没有符合筛选条件的项目",
+    "select": "选择 {{name}}",
+    "missing": "缺失",
+    "extracted": "已解包",
+    "openPackage": "打开",
+    "again": "重新解包",
+    "extract": "解包",
+    "details": "详情",
+    "detail": {
+      "hash": "哈希",
+      "source": "游戏文件",
+      "notFound": "游戏文件夹中未找到",
+      "output": "工作包文件夹",
+      "packages": "已有工作包",
+      "none": "无",
+      "nameSource": "名称来源"
+    },
+    "againTitle": "重新解包 {{name}}？",
+    "againBody": "{{folder}} 中的工作包将被游戏文件的新副本替换，该文件夹内的修改会丢失。",
+    "extracting": "解包 {{name}}",
+    "extractingBatch_one": "解包 {{count}} 项",
+    "extractingBatch_other": "解包 {{count}} 项",
+    "batchDone_one": "已解包 {{count}} 个工作包",
+    "batchDone_other": "已解包 {{count}} 个工作包",
+    "batchPartial": "成功 {{done}} 个，失败 {{failed}} 个。首个错误：{{first}}",
+    "groups": {
+      "boost_studio": "BoostStudio 公共资源",
+      "lists": "列表",
+      "tables": "表格",
+      "mission": "任务",
+      "text": "文本",
+      "common": "共享数据包"
+    },
+    "ago": {
+      "justNow": "刚刚",
+      "minutes_one": "{{count}} 分钟前",
+      "minutes_other": "{{count}} 分钟前",
+      "hours_one": "{{count}} 小时前",
+      "hours_other": "{{count}} 小时前",
+      "days_one": "{{count}} 天前",
+      "days_other": "{{count}} 天前"
+    }
+  },
+  "modRoot": {
+    "label": "Mod 输出文件夹",
+    "placeholder": "默认：{{path}}",
+    "dialog": "选择 Mod 输出文件夹",
+    "hint": "重新打包的档案以 archives/XX/HASH.bin 写入 {{path}}；将其中的 archives 文件夹覆盖到游戏根目录即可。"
+  },
+  "changes": {
+    "title": "重新打包有改动的工作包",
+    "description": "自上次解包或重新打包后被修改过的工作包。每个都会以 archives/XX/HASH.bin 写入 Mod 输出文件夹。",
+    "listLabel": "有改动的工作包",
+    "empty": "没有待打包的改动",
+    "emptyBody": "所有工作包都与上次解包或重新打包时一致。",
+    "changed_one": "有改动（{{count}}）",
+    "changed_other": "有改动（{{count}}）",
+    "untracked_one": "尚未跟踪（{{count}}）",
+    "untracked_other": "尚未跟踪（{{count}}）",
+    "untrackedHint": "由旧版本解包；重新打包或标记为无改动后开始跟踪改动。",
+    "unreadable_one": "{{count}} 个工作包无法读取",
+    "unreadable_other": "{{count}} 个工作包无法读取",
+    "files_one": "{{count}} 个文件有改动",
+    "files_other": "{{count}} 个文件有改动",
+    "structure": "有文件被添加或删除",
+    "repack_one": "重新打包 {{count}} 个工作包",
+    "repack_other": "重新打包 {{count}} 个工作包",
+    "repacking_one": "重新打包 {{count}} 个工作包",
+    "repacking_other": "重新打包 {{count}} 个工作包",
+    "done_one": "已将 {{count}} 个工作包写入 {{path}}",
+    "done_other": "已将 {{count}} 个工作包写入 {{path}}",
+    "partial": "成功 {{done}} 个，失败 {{failed}} 个。首个错误：{{first}}",
+    "markClean": "标记为无改动",
+    "markCleanHint": "不重新打包，直接把当前文件作为新的基准",
+    "markingClean_one": "将 {{count}} 个工作包标记为无改动",
+    "markingClean_other": "将 {{count}} 个工作包标记为无改动",
+    "markedClean_one": "已将 {{count}} 个工作包标记为无改动",
+    "markedClean_other": "已将 {{count}} 个工作包标记为无改动"
+  },
+  "single": {
+    "open": "单文件",
+    "toWorkspace": "工作区",
+    "tabsLabel": "单文件操作",
+    "tabs": {
+      "unpack": "解包",
+      "repack": "重新打包"
+    },
+    "flowEmpty": "未选择",
+    "source": "源文件",
+    "sourcePlaceholder": "选择一个游戏档案（archives/XX/HASH.bin）",
+    "sourceDialog": "选择要解包的文件",
+    "sourceFilter": "{{code}} 档案",
+    "allFiles": "所有文件",
+    "output": "输出文件夹",
+    "outputDefault": "工作区：{{path}}",
+    "outputPlaceholder": "选择工作包文件夹的创建位置",
+    "outputDialog": "选择输出文件夹",
+    "useWorkspace": "使用工作区文件夹",
+    "subfolder": "在输出文件夹内创建工作包文件夹",
+    "name": "工作包文件夹",
+    "nameHint": "相对于输出文件夹；已命名的档案会建议其路由文件夹。",
+    "known": "已命名档案：{{title}} -> {{folder}}",
+    "unknown": "{{hash}} 不在名称表中，将使用哈希作为文件夹名。",
+    "overwrite": "覆盖该文件夹中已有的工作包",
+    "unpack": "解包",
+    "unpacking": "解包 {{name}}",
+    "unpackDone": "{{folder}}（{{files}} 个文件，{{bytes}}）",
+    "unpacked": "已解包",
+    "openInWorkspace": "在工作区中打开",
+    "preview": "档案",
+    "previewEmpty": "选择源文件后显示其内容",
+    "previewFiles_one": "{{count}} 个文件",
+    "previewFiles_other": "{{count}} 个文件",
+    "previewMembers": "成员",
+    "previewMore_one": "另有 {{count}} 个",
+    "previewMore_other": "另有 {{count}} 个",
+    "naming": "名称",
+    "namedChip": "已命名",
+    "unnamedChip": "仅哈希",
+    "blocked": {
+      "source": "请选择源文件。",
+      "output": "请选择输出文件夹或设置工作区。",
+      "name": "请输入工作包文件夹名称。",
+      "package": "请选择工作包文件夹。",
+      "notPackage": "该文件夹不是本游戏的工作包。",
+      "target": "请选择档案的写入位置。"
+    },
+    "package": "工作包文件夹",
+    "packagePlaceholder": "选择已解包的工作包文件夹",
+    "packageDialog": "选择工作包文件夹",
+    "packageInfo": "工作包",
+    "packageHint": "选择工作包文件夹后显示其来源、结构和待打包改动。",
+    "target": "写入到",
+    "targetMod": "Mod 文件夹",
+    "targetModMissing": "此工作包不可用",
+    "targetBeside": "工作包文件夹旁",
+    "targetCustom": "其他文件",
+    "targetCustomEmpty": "未选择",
+    "customDialog": "选择输出文件",
+    "repack": "重新打包",
+    "repacking": "重新打包 {{name}}",
+    "repackedIdentical": "与游戏文件完全一致",
+    "repackedModified": "已写入修改后的档案",
+    "untracked": "尚未跟踪",
+    "pending_one": "自上次重新打包后有 {{count}} 处改动",
+    "pending_other": "自上次重新打包后有 {{count}} 处改动",
+    "clean": "没有待打包的改动",
+    "info": {
+      "source": "来源",
+      "hash": "哈希",
+      "original": "游戏文件",
+      "layout": "结构",
+      "container_one": "PS4 档案，{{count}} 个文件",
+      "container_other": "PS4 档案，{{count}} 个文件",
+      "payload_one": "裸载荷，{{count}} 部分",
+      "payload_other": "裸载荷，{{count}} 部分",
+      "changes": "待打包改动",
+      "verify": "重建校验"
+    },
+    "facts": {
+      "archiveKind": "档案类型",
+      "depth": "文件夹层级",
+      "layout": "布局",
+      "canonical": "标准布局",
+      "blobs": "数据块",
+      "data": "数据大小",
+      "listName": "列表",
+      "recordSize": "记录大小",
+      "geometry": "顶点 / 三角形",
+      "magic": "Magic",
+      "size": "大小"
+    },
+    "sourceTitle": "来源",
+    "sourceDescription": "一个游戏档案（archives/XX/HASH.bin）。",
+    "destination": "目标",
+    "destinationDescription": "包文件夹的创建位置。",
+    "subfolderHelp": "关闭时，输出文件夹本身就是包。",
+    "overwriteHelp": "覆盖该文件夹中已有包的文件。",
+    "namingDescription": "来自游戏的名称表。",
+    "nameState": "状态",
+    "nameTitle": "标题",
+    "previewDescription": "所选文件包含的内容。",
+    "reload": "重新加载",
+    "packageTitle": "包文件夹",
+    "packageDescription": "本游戏已解包的包。",
+    "targetDescription": "重建档案的写入位置。",
+    "packageInfoDescription": "来源、结构与待处理的改动。"
+  },
+  "toolbar": {
+    "workspace": "工作区文件夹",
+    "workspaceDialog": "选择工作区文件夹",
+    "workspacePlaceholder": "选择解包存放的位置",
+    "refresh": "刷新工作区",
+    "repackChanges": "重打包改动",
+    "pending_one": "{{count}} 个包有待重打包的改动",
+    "pending_other": "{{count}} 个包有待重打包的改动"
+  },
+  "panels": {
+    "info": "信息",
+    "expandInfo": "展开信息面板",
+    "collapseInfo": "收起信息面板"
+  },
+  "editors": {
+    "label": "编辑器",
+    "expand": "展开编辑器标签",
+    "collapse": "收起编辑器标签",
+    "groups": {
+      "pack": "包",
+      "index": "索引"
+    },
+    "structure": {
+      "short": "结构",
+      "name": "包结构与条目"
+    },
+    "content": {
+      "short": "已知内容",
+      "name": "来自游戏列表的已知内容"
+    },
+    "noPackage": "从左侧的树中打开一个包，或在“已知内容”中解包。"
+  },
+  "tree": {
+    "label": "工作区中的包",
+    "search": "搜索包",
+    "clearSearch": "清除搜索",
+    "noWorkspace": "请先在工具栏中选择工作区文件夹。",
+    "noPackages": "还没有包。运行数据初始化，或在“已知内容”中解包。",
+    "noMatches": "没有匹配的包。",
+    "changed_one": "上次重打包后有 {{count}} 处改动",
+    "changed_other": "上次重打包后有 {{count}} 处改动",
+    "payloads_one": "{{count}} 个数据块",
+    "payloads_other": "{{count}} 个数据块",
+    "files_one": "{{count}} 个文件",
+    "files_other": "{{count}} 个文件"
+  },
+  "content": {
+    "title": "已知内容",
+    "description": "游戏列表中命名的全部档案：名称表，以及 MBON 已解包的 SCharacterList 中的机体。每个档案都按哈希直接定位，从不扫描游戏文件夹。",
+    "gameRoot": "游戏文件夹",
+    "gameRootDialog": "选择游戏文件夹",
+    "gameRootPlaceholder": "游戏根目录（含 archives）或其 archives 文件夹",
+    "search": "按名称、哈希或文件夹搜索",
+    "showLabel": "显示",
+    "show": {
+      "all": "全部已知内容",
+      "available": "游戏文件夹中存在",
+      "extracted": "已解包",
+      "missing": "游戏文件夹中缺失"
+    },
+    "known_one": "已知档案 {{count}} 个",
+    "known_other": "已知档案 {{count}} 个",
+    "available_one": "游戏文件夹中有 {{count}} 个",
+    "available_other": "游戏文件夹中有 {{count}} 个",
+    "extractedCount_one": "已解包 {{count}} 个",
+    "extractedCount_other": "已解包 {{count}} 个",
+    "needGameRoot": "选择游戏文件夹以定位档案。",
+    "listHint": {
+      "mbon": "用数据初始化解包角色列表（SCharacterList），即可索引全部机体。"
+    },
+    "empty": {
+      "noFolders": "选择游戏文件夹或工作区以查看已知内容。",
+      "noMatches": "没有匹配的结果。"
+    },
+    "extract": "解包",
+    "open": "打开",
+    "extracted": "已解包",
+    "missing": "缺失",
+    "notFound": "游戏文件夹中未找到",
+    "extracting": "解包 {{name}}",
+    "extractSummary": "{{files}} 个文件，{{bytes}}",
+    "routes": {
+      "002chara": "机体",
+      "005renderinfo": "渲染信息",
+      "006effect": "特效",
+      "009gui": "界面",
+      "010localizedtext": "文本",
+      "011camera": "镜头",
+      "012list": "列表",
+      "020common": "通用",
+      "041cpm": "CPM",
+      "051mission": "任务",
+      "060navi": "领航员",
+      "090sound": "音效",
+      "091waveform": "波形",
+      "800etcetera": "其他",
+      "common": "BoostStudio 通用资源",
+      "unit": "SCharacterList 中的机体"
+    },
+    "sources": {
+      "vs2-meta": "VS2 元数据",
+      "ob-unit-list": "Over Boost 机体列表",
+      "ob-internal": "Over Boost 内部名称",
+      "research-note": "研究笔记",
+      "boost-studio": "BoostStudio",
+      "scharacterlist": "SCharacterList"
+    }
+  },
+  "info": {
+    "packageTitle": "包",
+    "packageDescription": "编辑器中打开的包。",
+    "entryTitle": "档案",
+    "entryDescription": "选中的已知内容条目。",
+    "noPackage": "未打开包。",
+    "source": "来源",
+    "contents": "内容",
+    "changes": "改动",
+    "pending_one": "{{count}} 处待重打包改动",
+    "pending_other": "{{count}} 处待重打包改动",
+    "clean": "没有待处理的改动",
+    "untracked": "尚未跟踪",
+    "verify": "重建校验",
+    "identical": "一致",
     "modified": "已修改",
-    "unverified": "未校验"
+    "unverified": "未校验",
+    "gameFile": "游戏文件",
+    "folder": "文件夹",
+    "hash": "哈希",
+    "nameSource": "名称来源",
+    "size": "大小",
+    "packages": "包",
+    "none": "无"
   }
 }

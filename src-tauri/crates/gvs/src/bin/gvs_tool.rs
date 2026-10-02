@@ -20,6 +20,7 @@ use exvs_gvs::inspect::inspect_path;
 use exvs_gvs::nutexb::Nutexb;
 use exvs_gvs::package;
 use exvs_gvs::ssbh_view::{meshes_to_obj, viewer_meshes, OBJ_HEADER};
+use exvs_ps4_common::packages::select_init_items;
 use exvs_ps4_common::provenance;
 use exvs_ps4_common::texture::PixelLayout;
 use serde_json::json;
@@ -36,8 +37,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Classify every archive below a folder (PS4 `archives/` tree or samples).
-    Scan { root: PathBuf },
+    /// List every known archive (indexed from the name table and the game's
+    /// lists) with its file in the game folder and its packages.
+    Index {
+        /// Game root or its `archives` folder; archives are looked up by hash.
+        source_root: PathBuf,
+        #[arg(long)]
+        workspace: Option<PathBuf>,
+    },
     /// Summarize one file (archive, nutexb, SSBH, ...).
     Inspect { path: PathBuf },
     /// Extract an archive into a named package folder.
@@ -47,8 +54,48 @@ enum Command {
         #[arg(long)]
         overwrite: bool,
     },
-    /// Rebuild a package folder into an archive.
-    Repack { package: PathBuf, output: PathBuf },
+    /// Single unpack into a workspace, named `route/name` from the GVS name table.
+    Unpack {
+        source: PathBuf,
+        workspace: PathBuf,
+        /// Package folder relative to the workspace (default: the archive's name).
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        overwrite: bool,
+    },
+    /// List the data-init items (global tables and shared packs) and their state.
+    InitList {
+        /// Game root (`CUSA08379`) or its `archives` folder.
+        source_root: PathBuf,
+        #[arg(long)]
+        workspace: Option<PathBuf>,
+    },
+    /// Extract data-init items into a workspace (`--all`, `--group lists`, or hashes / names).
+    Init {
+        source_root: PathBuf,
+        workspace: PathBuf,
+        #[arg(long)]
+        all: bool,
+        #[arg(long = "group")]
+        groups: Vec<String>,
+        items: Vec<String>,
+        #[arg(long)]
+        overwrite: bool,
+    },
+    /// Rebuild a package folder into an archive. Without an output,
+    /// `--mod-root` writes `archives/XX/HASH.bin` under that folder and
+    /// otherwise the archive lands beside the package folder.
+    Repack {
+        package: PathBuf,
+        output: Option<PathBuf>,
+        #[arg(long)]
+        mod_root: Option<PathBuf>,
+    },
+    /// Packages of a workspace with pending edits since their last extract / repack.
+    Status { workspace: PathBuf },
+    /// Accept a package's current files as its new baseline.
+    MarkClean { package: PathBuf },
     /// Rebuild in memory and compare with the extracted source.
     Verify { package: PathBuf },
     /// Export a nutexb as PNG (and DDS with --dds).
@@ -102,9 +149,8 @@ fn read(path: &PathBuf) -> Result<Vec<u8>, String> {
 
 fn run(cli: Cli) -> Result<serde_json::Value, String> {
     match cli.command {
-        Command::Scan { root } => {
-            let entries = exvs_ps4_common::scan::scan_folder(&root, &[]).map_err(String::from)?;
-            Ok(json!({ "root": root, "count": entries.len(), "entries": entries }))
+        Command::Index { source_root, workspace } => {
+            serde_json::to_value(exvs_gvs::content_index(Some(&source_root), workspace.as_deref())).map_err(|error| error.to_string())
         }
         Command::Inspect { path } => {
             serde_json::to_value(inspect_path(&path).map_err(String::from)?).map_err(|error| error.to_string())
@@ -115,9 +161,70 @@ fn run(cli: Cli) -> Result<serde_json::Value, String> {
             overwrite,
         } => serde_json::to_value(package::extract_package(&source, &dir, overwrite).map_err(String::from)?)
             .map_err(|error| error.to_string()),
-        Command::Repack { package: dir, output } => {
+        Command::Unpack {
+            source,
+            workspace,
+            name,
+            overwrite,
+        } => serde_json::to_value(
+            package::extract_into_workspace(&source, &workspace, name.as_deref(), overwrite).map_err(String::from)?,
+        )
+        .map_err(|error| error.to_string()),
+        Command::InitList { source_root, workspace } => {
+            serde_json::to_value(exvs_gvs::init_catalog(Some(&source_root), workspace.as_deref()))
+                .map_err(|error| error.to_string())
+        }
+        Command::Init {
+            source_root,
+            workspace,
+            all,
+            groups,
+            items,
+            overwrite,
+        } => {
+            let catalog = exvs_gvs::init_catalog(Some(&source_root), Some(&workspace));
+            let selected = select_init_items(&catalog, all, &groups, &items);
+            if selected.is_empty() {
+                return Err("no available init item matches; use --all, --group or item hashes / names".to_string());
+            }
+            let results: Vec<serde_json::Value> = selected
+                .iter()
+                .map(|item| {
+                    let source = PathBuf::from(item.source_path.as_deref().unwrap_or_default());
+                    match package::extract_into_workspace(&source, &workspace, None, overwrite) {
+                        Ok(report) => json!({ "hash": item.hash, "title": item.title, "packageDir": report.package_dir }),
+                        Err(error) => json!({ "hash": item.hash, "title": item.title, "error": error.to_string() }),
+                    }
+                })
+                .collect();
+            Ok(json!({ "workspace": workspace, "items": results }))
+        }
+        Command::Repack {
+            package: dir,
+            output,
+            mod_root,
+        } => {
+            let output = match output {
+                Some(output) => output,
+                None => {
+                    let targets = package::repack_targets(&dir, mod_root.as_deref()).map_err(String::from)?;
+                    PathBuf::from(targets.mod_path.unwrap_or(targets.beside))
+                }
+            };
             serde_json::to_value(package::repack_package(&dir, &output).map_err(String::from)?)
                 .map_err(|error| error.to_string())
+        }
+        Command::Status { workspace } => {
+            let status = package::workspace_status(&workspace);
+            Ok(json!({
+                "workspace": workspace,
+                "dirty": status.iter().filter(|entry| entry.dirty).count(),
+                "packages": status,
+            }))
+        }
+        Command::MarkClean { package: dir } => {
+            package::mark_clean(&dir).map_err(String::from)?;
+            Ok(json!({ "package": dir, "clean": true }))
         }
         Command::Verify { package: dir } => {
             let manifest = package::load_manifest(&dir).map_err(String::from)?;

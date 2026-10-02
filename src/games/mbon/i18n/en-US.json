@@ -12,6 +12,8 @@
     "open": "Open folder"
   },
   "credit": "Tooling: kjjkjjzyayufqza.",
+  "contents_one": "{{count}} entry",
+  "contents_other": "{{count}} entries",
   "credits": {
     "researchLabel": "Author",
     "researchNote": "Format notes stay in the source comments and the project documents."
@@ -138,5 +140,9 @@
     "stringColumns": "String columns",
     "format": "Format",
     "magic": "Magic"
+  },
+  "single": {
+    "title": "Single FHM",
+    "intro": "Unpack one MBON archive into a named package folder, or repack a package folder into the mod folder."
   }
 }

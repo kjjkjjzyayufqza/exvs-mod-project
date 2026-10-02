@@ -26,13 +26,16 @@ use exvs_mbon::list_info::{CellKind, ListInfo, ListView};
 use exvs_mbon::ntp3::Ntp3;
 use exvs_mbon::nud::Nud;
 use exvs_mbon::package::{
-    self, ExtractOptions, ExtractReport, FhmManifestNode, PackageManifest, RepackReport, MANIFEST_NAME,
+    self, ExtractOptions, ExtractReport, FhmManifestNode, PackageManifest, RepackReport, MANIFEST_NAME, STATE_NAME,
 };
 use exvs_ps4_common::cache::{file_key, ByteCache};
+use exvs_ps4_common::files;
 use exvs_ps4_common::mesh_pack::{self, MeshInput};
+use exvs_ps4_common::names::parse_hash;
+use exvs_ps4_common::packages::{suggest_name, InitCatalog, NameSuggestion, PackageStatus, RepackTargets};
 use exvs_ps4_common::provenance::{self, Provenance};
-use exvs_ps4_common::scan;
 use exvs_ps4_common::texture::{self, PixelLayout};
+use exvs_ps4_common::workspace::relative_to;
 use serde::Serialize;
 use tauri::ipc::{InvokeBody, Response};
 
@@ -57,76 +60,104 @@ fn read(path: &Path) -> Result<Vec<u8>, String> {
     std::fs::read(path).map_err(|error| format!("{}: {error}", path.display()))
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MbonScanEntry {
-    pub relative_path: String,
-    pub path: String,
-    pub stem: String,
-    pub size: u64,
-    pub container: bool,
-    pub archive_kind: Option<u64>,
-    pub file_count: u32,
-    pub payload_magic: String,
-    pub payload_kind: MbonKind,
-    pub payload_label: &'static str,
-    pub payload_size: u64,
-    pub error: Option<String>,
-}
-
-/// Classify every file below `root` (a PS4 `archives/` tree or a sample folder).
-#[tauri::command]
-pub async fn mbon_scan_folder(root: String) -> Result<Vec<MbonScanEntry>, String> {
-    blocking(move || {
-        let root_path = PathBuf::from(&root);
-        let entries = scan::scan_folder(&root_path, &[]).map_err(String::from)?;
-        Ok(entries
-            .into_iter()
-            .map(|entry| {
-                let head = hex_to_bytes(&entry.payload_head);
-                let kind = classify(&head);
-                MbonScanEntry {
-                    path: root_path.join(&entry.relative_path).to_string_lossy().into_owned(),
-                    relative_path: entry.relative_path,
-                    stem: entry.stem,
-                    size: entry.size,
-                    container: entry.container,
-                    archive_kind: entry.archive_kind,
-                    file_count: entry.file_count,
-                    payload_magic: entry.payload_magic,
-                    payload_kind: kind,
-                    payload_label: kind.label(),
-                    payload_size: entry.payload_size,
-                    error: entry.error,
-                }
-            })
-            .collect())
-    })
-    .await
-}
-
-fn hex_to_bytes(text: &str) -> Vec<u8> {
-    (0..text.len() / 2)
-        .filter_map(|index| u8::from_str_radix(&text[index * 2..index * 2 + 2], 16).ok())
-        .collect()
-}
-
 #[tauri::command]
 pub async fn mbon_inspect(path: String) -> Result<Inspection, String> {
     blocking(move || inspect_path(Path::new(&path)).map_err(String::from)).await
 }
 
-/// Extract `source` into `<workspace>/<stem>`.
+/// Extract `source` into the workspace: into `name` (a workspace-relative
+/// folder) when given, else into the archive's `route/name` from the MBON
+/// name table, or its hash when the archive is not named.
 #[tauri::command]
-pub async fn mbon_extract(source: String, workspace: String, overwrite: bool) -> Result<ExtractReport, String> {
+pub async fn mbon_extract(
+    source: String,
+    workspace: String,
+    overwrite: bool,
+    name: Option<String>,
+) -> Result<ExtractReport, String> {
     blocking(move || {
-        let source = PathBuf::from(source);
-        let stem = source
-            .file_stem()
-            .map(|stem| stem.to_string_lossy().into_owned())
-            .ok_or_else(|| "source has no file name".to_string())?;
-        let package_dir = PathBuf::from(workspace).join(stem);
-        package::extract_package(&source, &package_dir, &ExtractOptions { overwrite }).map_err(String::from)
+        package::extract_into_workspace(
+            Path::new(&source),
+            Path::new(&workspace),
+            name.as_deref().filter(|name| !name.trim().is_empty()),
+            &ExtractOptions { overwrite },
+        )
+        .map_err(String::from)
+    })
+    .await
+}
+
+/// Data-init list: BoostStudio common assets and the VS2-era global tables,
+/// with their file in the game tree and their packages in the workspace.
+#[tauri::command]
+pub async fn mbon_init_catalog(source_root: Option<String>, workspace: Option<String>) -> Result<InitCatalog, String> {
+    blocking(move || {
+        let source_root = source_root.filter(|path| !path.trim().is_empty()).map(PathBuf::from);
+        let workspace = workspace.filter(|path| !path.trim().is_empty()).map(PathBuf::from);
+        Ok(exvs_mbon::init_catalog(source_root.as_deref(), workspace.as_deref()))
+    })
+    .await
+}
+
+/// Every known archive, indexed from lists (the name table, and for MBON the
+/// units of the extracted `SCharacterList`), with its file in the game folder
+/// found by hash and its packages in the workspace. Nothing is scanned.
+#[tauri::command]
+pub async fn mbon_content_index(source_root: Option<String>, workspace: Option<String>) -> Result<InitCatalog, String> {
+    blocking(move || {
+        let source_root = source_root.filter(|path| !path.trim().is_empty()).map(PathBuf::from);
+        let workspace = workspace.filter(|path| !path.trim().is_empty()).map(PathBuf::from);
+        Ok(exvs_mbon::content::content_index(source_root.as_deref(), workspace.as_deref()))
+    })
+    .await
+}
+
+/// Suggested package folder for a source file (single unpack).
+#[tauri::command]
+pub fn mbon_suggest_name(source: String) -> NameSuggestion {
+    suggest_name(exvs_mbon::names::book(), Path::new(&source))
+}
+
+/// Pending edits of every package of a workspace.
+#[tauri::command]
+pub async fn mbon_workspace_status(workspace: String) -> Result<Vec<PackageStatus>, String> {
+    blocking(move || {
+        let workspace = PathBuf::from(workspace);
+        if !workspace.is_dir() {
+            return Ok(Vec::new());
+        }
+        Ok(package::workspace_status(&workspace))
+    })
+    .await
+}
+
+/// Pending edits of one package; `relative` is computed against `workspace`
+/// (or the package's parent folder).
+#[tauri::command]
+pub async fn mbon_package_status(package: String, workspace: Option<String>) -> Result<PackageStatus, String> {
+    blocking(move || {
+        let dir = PathBuf::from(package);
+        let base = workspace
+            .filter(|path| !path.trim().is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| dir.parent().map(Path::to_path_buf).unwrap_or_else(|| dir.clone()));
+        Ok(package::package_status(&base, &dir))
+    })
+    .await
+}
+
+/// Accept the package's current files as its baseline (no pending edits).
+#[tauri::command]
+pub async fn mbon_mark_clean(package: String) -> Result<(), String> {
+    blocking(move || package::mark_clean(Path::new(&package)).map_err(String::from)).await
+}
+
+/// Repack outputs: beside the package folder and inside the mod folder.
+#[tauri::command]
+pub async fn mbon_repack_targets(package: String, mod_root: Option<String>) -> Result<RepackTargets, String> {
+    blocking(move || {
+        let mod_root = mod_root.filter(|path| !path.trim().is_empty()).map(PathBuf::from);
+        package::repack_targets(Path::new(&package), mod_root.as_deref()).map_err(String::from)
     })
     .await
 }
@@ -136,10 +167,14 @@ pub async fn mbon_extract(source: String, workspace: String, overwrite: bool) ->
 pub struct MbonPackageItem {
     pub dir: String,
     pub name: String,
+    /// Folder relative to the workspace (`common/list_info`).
+    pub relative: String,
     pub source_name: String,
     pub source_path: Option<String>,
     pub payload_count: usize,
     pub container: bool,
+    /// Title of a named archive (`List Info`).
+    pub title: Option<String>,
 }
 
 #[tauri::command]
@@ -149,6 +184,7 @@ pub async fn mbon_list_packages(workspace: String) -> Result<Vec<MbonPackageItem
         if !workspace.is_dir() {
             return Ok(Vec::new());
         }
+        let book = exvs_mbon::names::book();
         Ok(package::list_packages(&workspace)
             .map_err(String::from)?
             .into_iter()
@@ -157,7 +193,11 @@ pub async fn mbon_list_packages(workspace: String) -> Result<Vec<MbonPackageItem
                     .file_name()
                     .map(|name| name.to_string_lossy().into_owned())
                     .unwrap_or_default(),
+                relative: relative_to(&workspace, &dir),
                 dir: dir.to_string_lossy().into_owned(),
+                title: parse_hash(&manifest.source_name)
+                    .and_then(|hash| book.get(hash))
+                    .map(|name| name.title.clone().unwrap_or_else(|| name.name.clone())),
                 source_name: manifest.source_name,
                 source_path: manifest.source_path,
                 payload_count: manifest.payloads.len(),
@@ -252,14 +292,15 @@ fn collect_entries(
 }
 
 fn untracked_files(package_dir: &Path, listed: &std::collections::HashSet<String>) -> Vec<String> {
-    let Ok(files) = scan::list_files(package_dir, &[]) else {
+    let Ok(files) = files::list_files(package_dir, &[]) else {
         return Vec::new();
     };
     files
         .into_iter()
         .filter_map(|path| {
             let relative = path.strip_prefix(package_dir).ok()?.to_string_lossy().replace('\\', "/");
-            (relative != MANIFEST_NAME && !relative.ends_with(".tmp") && !listed.contains(&relative)).then_some(relative)
+            (relative != MANIFEST_NAME && relative != STATE_NAME && !relative.ends_with(".tmp") && !listed.contains(&relative))
+                .then_some(relative)
         })
         .collect()
 }
@@ -314,29 +355,22 @@ pub async fn mbon_package_view(package: String) -> Result<MbonPackageView, Strin
     .await
 }
 
-fn default_output(package_dir: &Path, manifest: &PackageManifest) -> PathBuf {
-    let workspace = package_dir.parent().unwrap_or(package_dir);
-    if manifest.container.is_some() {
-        package::default_output_path(workspace, &manifest.source_name)
-    } else {
-        let extension = manifest
-            .payloads
-            .first()
-            .map(|payload| if payload.fhm.is_some() { "fhm" } else { "bin" })
-            .unwrap_or("bin");
-        workspace
-            .join("_out")
-            .join("payloads")
-            .join(format!("{}.{extension}", manifest.source_name))
-    }
+/// Where a repack goes without an explicit output: the mod folder
+/// (`archives/XX/HASH.bin`) for game archives, beside the package otherwise.
+fn default_output(package_dir: &Path, mod_root: Option<&str>) -> Result<PathBuf, String> {
+    let mod_root = mod_root.filter(|path| !path.trim().is_empty()).map(Path::new);
+    let targets = package::repack_targets(package_dir, mod_root).map_err(String::from)?;
+    Ok(PathBuf::from(targets.mod_path.unwrap_or(targets.beside)))
 }
 
 #[tauri::command]
-pub async fn mbon_repack(package: String, output: Option<String>) -> Result<RepackReport, String> {
+pub async fn mbon_repack(package: String, output: Option<String>, mod_root: Option<String>) -> Result<RepackReport, String> {
     blocking(move || {
         let dir = PathBuf::from(package);
-        let manifest = package::load_manifest(&dir).map_err(String::from)?;
-        let output = output.map(PathBuf::from).unwrap_or_else(|| default_output(&dir, &manifest));
+        let output = match output.filter(|path| !path.trim().is_empty()) {
+            Some(output) => PathBuf::from(output),
+            None => default_output(&dir, mod_root.as_deref())?,
+        };
         package::repack_package(&dir, &output).map_err(String::from)
     })
     .await
@@ -353,7 +387,7 @@ pub struct MbonVerifyReport {
 }
 
 #[tauri::command]
-pub async fn mbon_verify(package: String) -> Result<MbonVerifyReport, String> {
+pub async fn mbon_verify(package: String, mod_root: Option<String>) -> Result<MbonVerifyReport, String> {
     blocking(move || {
         let dir = PathBuf::from(package);
         let manifest = package::load_manifest(&dir).map_err(String::from)?;
@@ -364,7 +398,7 @@ pub async fn mbon_verify(package: String) -> Result<MbonVerifyReport, String> {
             identical: manifest.source_sha256.as_deref() == Some(digest.as_str()),
             rebuilt_sha256: digest,
             source_sha256: manifest.source_sha256.clone(),
-            default_output: default_output(&dir, &manifest).to_string_lossy().into_owned(),
+            default_output: default_output(&dir, mod_root.as_deref())?.to_string_lossy().into_owned(),
         })
     })
     .await
@@ -580,7 +614,7 @@ pub async fn mbon_find_textures(package: String) -> Result<std::collections::Has
     blocking(move || {
         let dir = PathBuf::from(package);
         let mut out = std::collections::HashMap::new();
-        for path in scan::list_files(&dir, &["nut"]).map_err(String::from)? {
+        for path in files::list_files(&dir, &["nut"]).map_err(String::from)? {
             let Ok(bytes) = std::fs::read(&path) else { continue };
             let Ok(ntp3) = Ntp3::parse(&bytes) else { continue };
             for (index, texture) in ntp3.textures.iter().enumerate() {

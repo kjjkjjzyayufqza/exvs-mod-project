@@ -38,28 +38,16 @@ export type GvsKind =
   | "empty"
   | "binary";
 
-export interface GvsScanEntry {
-  relativePath: string;
-  path: string;
-  stem: string;
-  size: number;
-  container: boolean;
-  archiveKind: number | null;
-  fileCount: number;
-  typeIds: number[];
-  payloadMagic: string;
-  payloadKind: GvsKind;
-  payloadLabel: string;
-  error: string | null;
-}
-
 export interface GvsPackageItem {
   dir: string;
   name: string;
+  /** Folder relative to the workspace (`012list/character_list`). */
+  relative: string;
   sourceName: string;
   sourcePath: string | null;
   fileCount: number;
   archiveKind: number;
+  title: string | null;
 }
 
 export type GvsNode =

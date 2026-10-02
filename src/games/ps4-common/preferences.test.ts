@@ -27,20 +27,23 @@ describe("PS4 preferences", () => {
   it("keeps valid choices", () => {
     const chosen = sanitizePreferences({
       sidebarMode: "switcher",
-      workspaceLayout: "focus",
       inspectorLayout: "split",
       density: "comfortable",
-      visualStyle: "contrast",
       sidebarGame: "gvs",
     });
     expect(chosen).toEqual({
       sidebarMode: "switcher",
-      workspaceLayout: "focus",
       inspectorLayout: "split",
       density: "comfortable",
-      visualStyle: "contrast",
       sidebarGame: "gvs",
     });
+  });
+
+  it("drops settings of the retired layout and style choices", () => {
+    const chosen = sanitizePreferences({ workspaceLayout: "focus", visualStyle: "contrast", density: "comfortable" });
+    expect(chosen).toEqual({ ...DEFAULT_PREFERENCES, density: "comfortable" });
+    expect(Object.keys(chosen)).not.toContain("workspaceLayout");
+    expect(Object.keys(chosen)).not.toContain("visualStyle");
     expect(rowHeightFor(chosen.density)).toBeGreaterThan(rowHeightFor("compact"));
   });
 });

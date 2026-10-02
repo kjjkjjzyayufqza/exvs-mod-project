@@ -42,7 +42,7 @@ fn sample_root(game: &str) -> Option<PathBuf> {
 }
 
 fn containers(root: &Path) -> Vec<PathBuf> {
-    exvs_ps4_common::scan::list_files(root, &[])
+    exvs_ps4_common::files::list_files(root, &[])
         .expect("list samples")
         .into_iter()
         .filter(|path| {

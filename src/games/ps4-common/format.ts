@@ -44,6 +44,20 @@ export function joinPath(base: string, relative: string): string {
   return tail ? `${head}${separator}${tail}` : head;
 }
 
+/**
+ * `path` relative to `base` with `/` separators, or undefined when `path`
+ * is not inside `base` (comparison ignores separator style and case).
+ */
+export function relativeTo(base: string, path: string | undefined): string | undefined {
+  if (!path || !base.trim()) return undefined;
+  const norm = (value: string) => value.replace(/\\/g, "/").replace(/\/+$/, "");
+  const head = norm(base);
+  const full = norm(path);
+  if (full.length <= head.length || full.slice(0, head.length).toLowerCase() !== head.toLowerCase()) return undefined;
+  if (full[head.length] !== "/") return undefined;
+  return full.slice(head.length + 1) || undefined;
+}
+
 export function baseName(path: string): string {
   const parts = path.split(/[\\/]/).filter(Boolean);
   return parts.length ? parts[parts.length - 1] : path;

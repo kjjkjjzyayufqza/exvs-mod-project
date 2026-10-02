@@ -1,5 +1,5 @@
 import { lazy } from "react"
-import { Box, Database, FileArchive, FolderTree, GitBranch, Info, Map, Rocket, Settings, Swords, Wrench } from "lucide-react"
+import { Box, Database, FileArchive, FileBox, FolderTree, GitBranch, Info, Map, PackageOpen, Rocket, Settings, Swords, Wrench } from "lucide-react"
 import { SIDEBAR_ROUTE_URLS } from "./sidebarRouteUrls"
 
 // Pages are code-split via React.lazy so the initial app shell loads without
@@ -16,8 +16,10 @@ const ResourceRegistryPage = lazy(() => import("../page/ResourceRegistry/page"))
 const MissionNodeEditorPage = lazy(() => import("../page/MissionNodeEditor/page"))
 // PS4 workspaces live in src/games and never import Over Boost pages.
 const MbonWorkspacePage = lazy(() => import("../games/mbon/MbonWorkspacePage"))
+const MbonSinglePage = lazy(() => import("../games/mbon/pages/MbonSinglePage"))
 const MbonModdingPage = lazy(() => import("../games/mbon/MbonModdingPage"))
 const GvsWorkspacePage = lazy(() => import("../games/gvs/GvsWorkspacePage"))
+const GvsSinglePage = lazy(() => import("../games/gvs/pages/GvsSinglePage"))
 const GvsModdingPage = lazy(() => import("../games/gvs/GvsModdingPage"))
 
 // Menu items.
@@ -66,6 +68,13 @@ export const RouterItems = [
         game: "mbon" as const,
     },
     {
+        title: "MBON Single FHM",
+        url: "/MbonSingleFhm",
+        icon: PackageOpen,
+        element: <MbonSinglePage />,
+        game: "mbon" as const,
+    },
+    {
         title: "MBON Modding",
         url: "/MbonModding",
         icon: Box,
@@ -77,6 +86,13 @@ export const RouterItems = [
         url: "/GvsWorkspace",
         icon: Swords,
         element: <GvsWorkspacePage />,
+        game: "gvs" as const,
+    },
+    {
+        title: "GVS Single FHM2D",
+        url: "/GvsSingleFhm2d",
+        icon: FileBox,
+        element: <GvsSinglePage />,
         game: "gvs" as const,
     },
     {

@@ -64,7 +64,7 @@ export function MbonInspector({ view }: { view: MbonPackageView | undefined }) {
   );
   if (!packageDir || !view || !entry) {
     return (
-      <HudPanel title={tc("inspector.title")} enterIndex={3}>
+      <HudPanel title={tc("inspector.title")}>
         <EmptyState icon={<Crosshair />} title={tc("inspector.none")} body={tc("inspector.noneBody")} />
       </HudPanel>
     );
@@ -122,7 +122,6 @@ function EntryInspector({ entry, view, packageDir }: { entry: MbonEntryView; vie
           {tc("inspector.title")} <strong>{baseName(entry.path)}</strong>
         </>
       }
-      enterIndex={3}
       actions={
         <>
           <KindChip tone={mbonTone(entry.kind)} title={entry.label}>
@@ -248,7 +247,7 @@ function MbonReplaceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="ps4-ws ps4-dialog" data-game="mbon">
         <DialogHeader>
-          <DialogTitle className="ps4-display uppercase tracking-wider">{t("replace.title")}</DialogTitle>
+          <DialogTitle>{t("replace.title")}</DialogTitle>
           <DialogDescription>{t("replace.description", { path: entry.path })}</DialogDescription>
         </DialogHeader>
         <div className="ps4-dialog__body">

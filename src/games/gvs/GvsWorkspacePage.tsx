@@ -18,31 +18,42 @@ import "./i18n";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CreditsDialog } from "../ps4-common/components/CreditsDialog";
-import { StatusBar, StatusSegment } from "../ps4-common/components/StatusBar";
-import { WorkspaceFrame } from "../ps4-common/components/WorkspaceFrame";
-import { baseName } from "../ps4-common/format";
 import { useAsync } from "../ps4-common/useAsync";
+import { Ps4Workspace } from "../ps4-common/workspace/Ps4Workspace";
+import { StructureSplit } from "../ps4-common/workspace/StructureSplit";
+import { GVS_SINGLE_ROUTE, useGvsAdapter } from "./adapter";
 import { gvsApi } from "./api";
 import { GvsInspector } from "./components/GvsInspector";
 import { GvsPackagePanel } from "./components/GvsPackagePanel";
-import { GvsSourcesPanel } from "./components/GvsSourcesPanel";
 import { useGvsStore, type GvsSelection } from "./store";
-import { nodeAt, pathKey } from "./tree";
+import { nodeAt } from "./tree";
+
+const REPOSITORY_URL = "https://github.com/kjjkjjzyayufqza/exvs-mod-project";
 
 /**
- * GVS (PS4) workspace: uncompressed FHM2D-style archives extracted into named
- * packages; textures, SSBH models and structure edits, then a canonical repack.
+ * GVS (PS4) workspace in the EXVS2 Workspace layout: data init and the
+ * list-based content index bring packages in, the structure editor edits the
+ * uncompressed archive tree, textures and SSBH models, and repack writes the
+ * mod folder.
  */
 export default function GvsWorkspacePage() {
   const { t } = useTranslation("gvs-workspace");
-  const { t: tc } = useTranslation("ps4-workspace");
+  const adapter = useGvsAdapter();
   const hydrate = useGvsStore((state) => state.hydrate);
   const workspace = useGvsStore((state) => state.workspace);
+  const sourceRoot = useGvsStore((state) => state.sourceRoot);
+  const modRoot = useGvsStore((state) => state.modRoot);
   const packageDir = useGvsStore((state) => state.packageDir);
   const packageRevision = useGvsStore((state) => state.packageRevision);
+  const workspaceRevision = useGvsStore((state) => state.workspaceRevision);
   const selection = useGvsStore((state) => state.selection);
   const select = useGvsStore((state) => state.select);
   const verify = useGvsStore((state) => state.verify);
+  const setWorkspace = useGvsStore((state) => state.setWorkspace);
+  const setSourceRoot = useGvsStore((state) => state.setSourceRoot);
+  const setModRoot = useGvsStore((state) => state.setModRoot);
+  const openPackage = useGvsStore((state) => state.openPackage);
+  const workspaceChanged = useGvsStore((state) => state.workspaceChanged);
   const [pending, setPending] = useState<GvsSelection | null>(null);
 
   useEffect(() => {
@@ -72,45 +83,46 @@ export default function GvsWorkspacePage() {
     }
   }, [current, pending, selection, select]);
 
-  const verifyState = verify && verify.dir === packageDir ? verify : null;
-
   return (
-    <WorkspaceFrame
-      game="gvs"
-      code="GVS"
-      platform={tc("platform")}
+    <Ps4Workspace
+      adapter={adapter}
       title={t("title")}
       credit={t("credit")}
-      tools={
-        <CreditsDialog game="gvs" provenance={credits.data} />
+      singleRoute={GVS_SINGLE_ROUTE}
+      workspace={workspace}
+      setWorkspace={setWorkspace}
+      sourceRoot={sourceRoot}
+      setSourceRoot={setSourceRoot}
+      modRoot={modRoot}
+      setModRoot={setModRoot}
+      packageDir={packageDir}
+      openPackage={openPackage}
+      workspaceRevision={workspaceRevision}
+      packageRevision={packageRevision}
+      workspaceChanged={workspaceChanged}
+      credits={
+        <CreditsDialog
+          game="gvs"
+          provenance={credits.data}
+          research={{ label: t("credits.researchLabel"), url: REPOSITORY_URL, note: t("credits.researchNote") }}
+        />
       }
-      sourcesKey={packageDir}
-      left={<GvsSourcesPanel />}
-      center={<GvsPackagePanel view={view} onCreated={setPending} />}
-      right={<GvsInspector view={current} />}
-      status={
-        <StatusBar game="gvs">
-          <StatusSegment title={workspace || undefined}>
-            {tc("status.workspace")}: {workspace ? baseName(workspace) : "-"}
-          </StatusSegment>
-          <StatusSegment title={packageDir ?? undefined}>
-            {tc("status.package")}: {current ? current.manifest.sourceName : "-"}
-          </StatusSegment>
-          <StatusSegment>{tc("status.members", { count: current?.members.length ?? 0 })}</StatusSegment>
-          <StatusSegment title={selection ? pathKey(selection.nodePath) : undefined}>
-            <span
-              className="ps4-lamp"
-              data-state={verifyState ? (verifyState.identical ? "ok" : "warn") : undefined}
-              aria-hidden="true"
-            />
-            {verifyState
-              ? verifyState.identical
-                ? tc("status.identical")
-                : tc("status.modified")
-              : tc("status.unverified")}
-          </StatusSegment>
-        </StatusBar>
+      structure={
+        <StructureSplit
+          tree={<GvsPackagePanel view={view} onCreated={setPending} />}
+          inspector={<GvsInspector view={current} />}
+        />
       }
+      packageFacts={
+        current
+          ? {
+              sourceName: current.manifest.sourceName,
+              sourcePath: current.manifest.sourcePath,
+              contents: t("contents", { count: current.members.length }),
+            }
+          : null
+      }
+      verify={verify}
     />
   );
 }

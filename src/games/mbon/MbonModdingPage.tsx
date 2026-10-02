@@ -15,8 +15,7 @@ import "../ps4-common/i18n";
 import "./i18n";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { PathPicker } from "../ps4-common/components/PathPicker";
-import { Ps4Shell } from "../ps4-common/components/Ps4Shell";
+import { PathField } from "../ps4-common/components/PathField";
 import { mbonApi } from "./api";
 
 export interface MbonModdingPayload {
@@ -58,7 +57,6 @@ export function MbonModdingReport({ payload }: { payload: MbonModdingPayload }) 
 
 export default function MbonModdingPage() {
   const { t } = useTranslation("mbon-workspace");
-  const { t: tc } = useTranslation("ps4-workspace");
   const [root, setRoot] = useState("");
   const [file, setFile] = useState("");
   const [payload, setPayload] = useState<MbonModdingPayload | null>(null);
@@ -86,8 +84,12 @@ export default function MbonModdingPage() {
   };
 
   return (
-    <Ps4Shell game="mbon" code="MBON" platform={tc("platform")} title={t("modding.title")} credit={t("credit")}>
-      <PathPicker value={root} onChange={(path) => void open(path)} placeholder={t("modding.open")} dialogTitle={t("modding.open")} />
+    <main className="flex flex-col gap-4 p-4">
+      <header>
+        <h1 className="text-sm font-semibold">{t("modding.title")}</h1>
+        <p className="text-xs text-muted-foreground">{t("credit")}</p>
+      </header>
+      <PathField kind="folder" value={root} onPick={(path) => void open(path)} placeholder={t("modding.open")} dialogTitle={t("modding.open")} aria-label={t("modding.open")} />
       <label>
         {t("modding.model")}
         <input value={file} onChange={(event) => setFile(event.target.value)} />
@@ -146,6 +148,6 @@ export default function MbonModdingPage() {
       </button>
       {error ? <p role="alert">{error}</p> : null}
       {payload ? <MbonModdingReport payload={payload} /> : null}
-    </Ps4Shell>
+    </main>
   );
 }

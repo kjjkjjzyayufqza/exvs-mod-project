@@ -37,7 +37,10 @@ use exvs_ps4_common::archive::{ArchiveHeader, ArchiveIndex, TreeNode};
 use exvs_ps4_common::archive_write::{ArchiveDraft, DataSource, DraftFile, WriteReport};
 use exvs_ps4_common::digest::{sha256_file, sha256_hex};
 use exvs_ps4_common::error::{Error, Result};
+use exvs_ps4_common::names::{parse_hash, safe_relative_dir};
+use exvs_ps4_common::packages::{self as kit, PackageFormat, PackageStatus, RepackTargets};
 use exvs_ps4_common::provenance::{self, Provenance};
+use exvs_ps4_common::workspace::PackageChanges;
 use serde::{Deserialize, Serialize};
 
 use crate::fhm::{FhmContent, FhmDocument, FhmEntry, FhmNode, LOAD_CONTAINER};
@@ -46,6 +49,58 @@ use crate::kinds::{classify, entry_extension, MbonKind};
 pub const MANIFEST_NAME: &str = "mbon_package.json";
 pub const MANIFEST_FORMAT: &str = "exvs-mbon-package";
 pub const MANIFEST_VERSION: u32 = 1;
+/// Change baseline beside the manifest (see `exvs_ps4_common::workspace`).
+pub const STATE_NAME: &str = "mbon_package.state.json";
+
+/// MBON package folders for the shared bookkeeping.
+pub struct MbonFormat;
+
+impl PackageFormat for MbonFormat {
+    fn manifest_name(&self) -> &'static str {
+        MANIFEST_NAME
+    }
+
+    fn state_name(&self) -> &'static str {
+        STATE_NAME
+    }
+
+    fn source_name(&self, package_dir: &Path) -> Result<String> {
+        Ok(load_manifest(package_dir)?.source_name)
+    }
+
+    fn tracked_files(&self, package_dir: &Path) -> Result<Vec<String>> {
+        Ok(tracked_files(&load_manifest(package_dir)?))
+    }
+}
+
+/// Every file the rebuild reads, in manifest order (aliases listed once).
+pub fn tracked_files(manifest: &PackageManifest) -> Vec<String> {
+    fn walk(node: &FhmManifestNode, seen: &mut std::collections::HashSet<String>, out: &mut Vec<String>) {
+        for entry in &node.entries {
+            match &entry.nested {
+                Some(nested) => walk(&nested.node, seen, out),
+                None => {
+                    if seen.insert(entry.path.clone()) {
+                        out.push(entry.path.clone());
+                    }
+                }
+            }
+        }
+    }
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for payload in &manifest.payloads {
+        match &payload.fhm {
+            Some(node) => walk(node, &mut seen, &mut out),
+            None => {
+                if seen.insert(payload.path.clone()) {
+                    out.push(payload.path.clone());
+                }
+            }
+        }
+    }
+    out
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -301,6 +356,10 @@ pub fn extract_package(source: &Path, package_dir: &Path, options: &ExtractOptio
             package_dir.display()
         )));
     }
+    kit::ensure_replaceable(&MbonFormat, package_dir)?;
+    if !source.is_file() {
+        return Err(Error::invalid(format!("{} is not a file", source.display())));
+    }
     if options.overwrite && package_dir.exists() {
         std::fs::remove_dir_all(package_dir).map_err(|error| Error::io(package_dir.display(), error))?;
     }
@@ -359,6 +418,7 @@ pub fn extract_package(source: &Path, package_dir: &Path, options: &ExtractOptio
         payloads,
     };
     save_manifest(package_dir, &manifest)?;
+    kit::refresh_baseline(&MbonFormat, package_dir, "extract")?;
     Ok(ExtractReport {
         package_dir: package_dir.to_string_lossy().into_owned(),
         payload_count: manifest.payloads.len(),
@@ -366,6 +426,70 @@ pub fn extract_package(source: &Path, package_dir: &Path, options: &ExtractOptio
         files_written: written.0,
         bytes_written: written.1,
     })
+}
+
+/// Extract `source` into the workspace. `relative` overrides the folder
+/// (`012list/character_list`); by default the archive's name from the MBON
+/// name table is used, or its hash when the archive is not named.
+pub fn extract_into_workspace(
+    source: &Path,
+    workspace: &Path,
+    relative: Option<&str>,
+    options: &ExtractOptions,
+) -> Result<ExtractReport> {
+    let stem = source
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .ok_or_else(|| Error::invalid(format!("{} has no file name", source.display())))?;
+    let explicit = relative.is_some();
+    let relative = match relative {
+        Some(text) => safe_relative_dir(text)?,
+        None => crate::names::book().default_relative_dir(&stem),
+    };
+    let package_dir = kit::choose_package_dir(&MbonFormat, workspace, &relative, parse_hash(&stem), explicit);
+    extract_package(source, &package_dir, options)
+}
+
+/// Pending edits since the last extraction or repack.
+pub fn package_changes(package_dir: &Path) -> Result<PackageChanges> {
+    kit::package_changes(&MbonFormat, package_dir)
+}
+
+/// Change state of one package (`relative` against `workspace`).
+pub fn package_status(workspace: &Path, package_dir: &Path) -> PackageStatus {
+    kit::package_status(&MbonFormat, workspace, package_dir)
+}
+
+/// Change state of every package of a workspace.
+pub fn workspace_status(workspace: &Path) -> Vec<PackageStatus> {
+    kit::workspace_status(&MbonFormat, workspace)
+}
+
+/// Accept the current files as the new baseline without repacking.
+pub fn mark_clean(package_dir: &Path) -> Result<()> {
+    kit::refresh_baseline(&MbonFormat, package_dir, "clean").map(|_| ())
+}
+
+/// Output choices for a repack: beside the package folder, or inside a mod
+/// folder that mirrors the game root (`archives/XX/HASH.bin`).
+pub fn repack_targets(package_dir: &Path, mod_root: Option<&Path>) -> Result<RepackTargets> {
+    let manifest = load_manifest(package_dir)?;
+    Ok(kit::repack_targets(
+        package_dir,
+        &manifest.source_name,
+        output_extension(&manifest),
+        manifest.container.is_some(),
+        mod_root,
+    ))
+}
+
+/// File extension of a rebuilt package: `bin` for containers, `fhm` for a
+/// bare FHM payload.
+pub fn output_extension(manifest: &PackageManifest) -> &'static str {
+    match (&manifest.container, manifest.payloads.first()) {
+        (None, Some(payload)) if payload.fhm.is_some() => "fhm",
+        _ => "bin",
+    }
 }
 
 pub fn load_manifest(package_dir: &Path) -> Result<PackageManifest> {
@@ -498,6 +622,7 @@ pub fn repack_package(package_dir: &Path, output: &Path) -> Result<RepackReport>
     let temp = output.with_extension("mbontmp");
     std::fs::write(&temp, &bytes).map_err(|error| Error::io(temp.display(), error))?;
     std::fs::rename(&temp, output).map_err(|error| Error::io(output.display(), error))?;
+    kit::refresh_baseline(&MbonFormat, package_dir, "repack")?;
     let digest = sha256_hex(&bytes);
     Ok(RepackReport {
         output_path: output.to_string_lossy().into_owned(),
@@ -506,14 +631,6 @@ pub fn repack_package(package_dir: &Path, output: &Path) -> Result<RepackReport>
         output_sha256: digest,
         container,
     })
-}
-
-/// Default repack location: `<workspace>/_out/archives/<XX>/<NAME>.bin`.
-pub fn default_output_path(workspace: &Path, source_name: &str) -> PathBuf {
-    let hash: String = source_name.chars().take_while(|ch| ch.is_ascii_hexdigit()).collect();
-    let bucket = if hash.len() >= 2 { hash[..2].to_ascii_uppercase() } else { "XX".to_string() };
-    let name = if hash.len() == 8 { hash.to_ascii_uppercase() } else { source_name.to_string() };
-    workspace.join("_out").join("archives").join(bucket).join(format!("{name}.bin"))
 }
 
 /// Where an FHM manifest node lives, addressed by folder path.
@@ -664,20 +781,16 @@ fn count_path_users(manifest: &PackageManifest, path: &str) -> usize {
         .sum()
 }
 
-/// Package folders (with a manifest) directly under `workspace`.
+/// Package folders (with a manifest) below `workspace`, at any route depth
+/// (`EB3A9691`, `common/list_info`, `012list/character_list`).
 pub fn list_packages(workspace: &Path) -> Result<Vec<(PathBuf, PackageManifest)>> {
-    let mut out = Vec::new();
-    let entries = std::fs::read_dir(workspace).map_err(|error| Error::io(workspace.display(), error))?;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.join(MANIFEST_NAME).is_file() {
-            if let Ok(manifest) = load_manifest(&path) {
-                out.push((path, manifest));
-            }
-        }
+    if !workspace.is_dir() {
+        return Err(Error::invalid(format!("{} is not a folder", workspace.display())));
     }
-    out.sort_by(|a, b| a.0.cmp(&b.0));
-    Ok(out)
+    Ok(kit::find_packages(&MbonFormat, workspace)
+        .into_iter()
+        .filter_map(|path| load_manifest(&path).ok().map(|manifest| (path, manifest)))
+        .collect())
 }
 
 #[cfg(test)]
@@ -757,7 +870,7 @@ mod tests {
         let added = add_entry(&package, "0000.fhm", &added_file, None).unwrap();
         assert_eq!(added, "0000.fhm/004.bin");
 
-        let output = default_output_path(&dir.path().join("ws"), "EB3A9691");
+        let output = exvs_ps4_common::workspace::mod_output_path(&dir.path().join("ws/_out"), 0xEB3A9691);
         assert!(output.ends_with("_out/archives/EB/EB3A9691.bin"));
         let report = repack_package(&package, &output).unwrap();
         assert_eq!(report.identical_to_source, Some(false));
@@ -790,6 +903,72 @@ mod tests {
         let document = FhmDocument::parse(&build_package_bytes(&package).unwrap().0).unwrap();
         assert_eq!(document.blob_of(&[0]).unwrap(), &[0x1A; 0x30][..]);
         assert_eq!(document.blob_of(&[2]).unwrap(), b"only the alias");
+    }
+
+    #[test]
+    fn named_extraction_tracks_changes_until_the_next_repack() {
+        let dir = tempfile::tempdir().unwrap();
+        let bucket = dir.path().join("game/archives/EB");
+        std::fs::create_dir_all(&bucket).unwrap();
+        let source = bucket.join("EB3A9691.bin");
+        ArchiveDraft::single(
+            ArchiveHeader {
+                kind: 7,
+                ..ArchiveHeader::default()
+            },
+            0,
+            DataSource::bytes(sample_fhm()),
+        )
+        .write_path(&source)
+        .unwrap();
+
+        let ws = dir.path().join("ws");
+        let report = extract_into_workspace(&source, &ws, None, &ExtractOptions::default()).unwrap();
+        let package = ws.join("common/list_info");
+        assert_eq!(PathBuf::from(&report.package_dir), package);
+        assert!(package.join(STATE_NAME).is_file());
+        assert!(!package_changes(&package).unwrap().is_dirty());
+        assert_eq!(list_packages(&ws).unwrap().len(), 1);
+
+        let replacement = dir.path().join("model.nud");
+        std::fs::write(&replacement, b"NDP3changed").unwrap();
+        replace_entry(&package, "0000.fhm/002", 0, &replacement, false).unwrap();
+        let changes = package_changes(&package).unwrap();
+        assert_eq!(changes.changed, ["0000.fhm/002/001.nud"]);
+        assert!(!changes.manifest_changed);
+        let status = workspace_status(&ws);
+        assert_eq!((status[0].relative.as_str(), status[0].dirty), ("common/list_info", true));
+
+        let targets = repack_targets(&package, Some(&dir.path().join("mod"))).unwrap();
+        assert!(targets.beside.ends_with("common/EB3A9691.bin"));
+        let output = PathBuf::from(targets.mod_path.unwrap());
+        assert!(output.ends_with("mod/archives/EB/EB3A9691.bin"));
+        repack_package(&package, &output).unwrap();
+        assert!(!package_changes(&package).unwrap().is_dirty());
+
+        let custom = extract_into_workspace(&source, &ws, Some("custom\\list"), &ExtractOptions::default()).unwrap();
+        assert!(PathBuf::from(custom.package_dir).ends_with("custom/list"));
+        assert!(extract_into_workspace(&source, &ws, Some("../escape"), &ExtractOptions::default()).is_err());
+        assert_eq!(list_packages(&ws).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn overwrite_never_clears_a_folder_that_is_not_a_package() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("AAAA0000.fhm");
+        std::fs::write(&source, sample_fhm()).unwrap();
+        let folder = dir.path().join("documents");
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("keep.txt"), b"mine").unwrap();
+        assert!(extract_package(&source, &folder, &ExtractOptions { overwrite: true }).is_err());
+        assert!(folder.join("keep.txt").is_file());
+        let targets = {
+            let package = dir.path().join("pkg");
+            extract_package(&source, &package, &ExtractOptions::default()).unwrap();
+            repack_targets(&package, Some(dir.path())).unwrap()
+        };
+        assert!(targets.mod_path.is_none(), "a bare FHM payload has no game path");
+        assert!(targets.beside.ends_with("AAAA0000.fhm"));
     }
 
     #[test]

@@ -33,3 +33,17 @@ fn reports_credit_boost_studio() {
     assert!(credit.contains("descatal"), "{credit}");
     assert!(credit.contains("https://github.com/descatal/BoostStudio"), "{credit}");
 }
+
+#[test]
+fn the_name_table_keeps_its_credit_header() {
+    // The header is compiled into the app with the table; it must keep the credits.
+    let table = include_str!("../data/mbon_names.tsv");
+    let header = table
+        .lines()
+        .take_while(|line| line.starts_with('#'))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for token in MBON_NOTICE_TOKENS.iter().chain(&["PolyForm Shield", "AGENTS.md"]) {
+        assert!(header.contains(token), "mbon_names.tsv header lacks {token}:\n{header}");
+    }
+}

@@ -46,18 +46,15 @@ mod triad_route_commands;
 
 pub use ssbh_motion::smoke_decode_and_sample_nuanmb;
 
+// Runtime only. A token read at compile time would be baked into the shipped
+// exe, where anyone holding the release can extract it and read the repos it
+// unlocks.
 #[tauri::command]
 fn read_updater_github_token() -> Option<String> {
     std::env::var("EXVS_UPDATER_GITHUB_TOKEN")
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .or_else(|| {
-            option_env!("EXVS_UPDATER_GITHUB_TOKEN")
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(str::to_string)
-        })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -334,9 +331,15 @@ pub fn run() {
             havok_cli::convert_xml_to_hkt,
             havok_cli::scene_generate_hkt_from_dae_path,
             havok_mesh_export::convert_hkt_to_obj,
-            mbon::commands::mbon_scan_folder,
             mbon::commands::mbon_inspect,
             mbon::commands::mbon_extract,
+            mbon::commands::mbon_init_catalog,
+            mbon::commands::mbon_content_index,
+            mbon::commands::mbon_suggest_name,
+            mbon::commands::mbon_workspace_status,
+            mbon::commands::mbon_package_status,
+            mbon::commands::mbon_mark_clean,
+            mbon::commands::mbon_repack_targets,
             mbon::commands::mbon_list_packages,
             mbon::commands::mbon_package_view,
             mbon::commands::mbon_repack,
@@ -364,9 +367,15 @@ pub fn run() {
             mbon::commands::mbon_edit_scene,
             mbon::commands::mbon_edit_detail,
             mbon::commands::mbon_inspect_msc,
-            gvs::commands::gvs_scan_folder,
             gvs::commands::gvs_inspect,
             gvs::commands::gvs_extract,
+            gvs::commands::gvs_init_catalog,
+            gvs::commands::gvs_content_index,
+            gvs::commands::gvs_suggest_name,
+            gvs::commands::gvs_workspace_status,
+            gvs::commands::gvs_package_status,
+            gvs::commands::gvs_mark_clean,
+            gvs::commands::gvs_repack_targets,
             gvs::commands::gvs_list_packages,
             gvs::commands::gvs_package_view,
             gvs::commands::gvs_repack,

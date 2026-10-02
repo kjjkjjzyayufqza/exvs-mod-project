@@ -6,7 +6,13 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { invokeBytes } from "../ps4-common/ipc";
-import type { ProvenanceRecord } from "../ps4-common/types";
+import type {
+  InitCatalog,
+  NameSuggestion,
+  PackageStatus,
+  ProvenanceRecord,
+  RepackTargets,
+} from "../ps4-common/types";
 import type {
   FhmListing,
   ListView,
@@ -15,7 +21,6 @@ import type {
   MbonPackageItem,
   MbonPackageView,
   MbonRepackReport,
-  MbonScanEntry,
   MbonTextureRef,
   MbonVerifyReport,
   TextureSummary,
@@ -25,15 +30,29 @@ export type CellKind = "u8" | "u16" | "u32" | "i32" | "f32" | "string";
 
 /** Typed bindings of the `mbon_*` Tauri commands (src-tauri/src/mbon/commands.rs). */
 export const mbonApi = {
-  scanFolder: (root: string) => invoke<MbonScanEntry[]>("mbon_scan_folder", { root }),
   inspect: (path: string) => invoke<MbonInspection>("mbon_inspect", { path }),
-  extract: (source: string, workspace: string, overwrite: boolean) =>
-    invoke<MbonExtractReport>("mbon_extract", { source, workspace, overwrite }),
+  /** Extract into `<workspace>/<name>`; without `name` the MBON name table picks the folder. */
+  extract: (source: string, workspace: string, overwrite: boolean, name?: string) =>
+    invoke<MbonExtractReport>("mbon_extract", { source, workspace, overwrite, name: name ?? null }),
+  initCatalog: (sourceRoot: string, workspace: string) =>
+    invoke<InitCatalog>("mbon_init_catalog", { sourceRoot: sourceRoot || null, workspace: workspace || null }),
+  /** Name table plus the units of the extracted `SCharacterList`, each located by hash. */
+  contentIndex: (sourceRoot: string, workspace: string) =>
+    invoke<InitCatalog>("mbon_content_index", { sourceRoot: sourceRoot || null, workspace: workspace || null }),
+  suggestName: (source: string) => invoke<NameSuggestion>("mbon_suggest_name", { source }),
+  workspaceStatus: (workspace: string) => invoke<PackageStatus[]>("mbon_workspace_status", { workspace }),
+  packageStatus: (packageDir: string, workspace?: string) =>
+    invoke<PackageStatus>("mbon_package_status", { package: packageDir, workspace: workspace ?? null }),
+  markClean: (packageDir: string) => invoke<void>("mbon_mark_clean", { package: packageDir }),
+  repackTargets: (packageDir: string, modRoot?: string) =>
+    invoke<RepackTargets>("mbon_repack_targets", { package: packageDir, modRoot: modRoot ?? null }),
   listPackages: (workspace: string) => invoke<MbonPackageItem[]>("mbon_list_packages", { workspace }),
   packageView: (packageDir: string) => invoke<MbonPackageView>("mbon_package_view", { package: packageDir }),
-  repack: (packageDir: string, output?: string) =>
-    invoke<MbonRepackReport>("mbon_repack", { package: packageDir, output: output ?? null }),
-  verify: (packageDir: string) => invoke<MbonVerifyReport>("mbon_verify", { package: packageDir }),
+  /** Without `output` the archive goes to `<modRoot>/archives/XX/HASH.bin` (or beside the package). */
+  repack: (packageDir: string, output?: string, modRoot?: string) =>
+    invoke<MbonRepackReport>("mbon_repack", { package: packageDir, output: output ?? null, modRoot: modRoot ?? null }),
+  verify: (packageDir: string, modRoot?: string) =>
+    invoke<MbonVerifyReport>("mbon_verify", { package: packageDir, modRoot: modRoot ?? null }),
   addEntry: (packageDir: string, folder: string, file: string, loadType?: number) =>
     invoke<string>("mbon_add_entry", { package: packageDir, folder, file, loadType: loadType ?? null }),
   removeEntry: (packageDir: string, folder: string, index: number) =>

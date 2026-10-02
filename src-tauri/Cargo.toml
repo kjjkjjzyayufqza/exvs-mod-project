@@ -7,6 +7,8 @@ license = "LicenseRef-PolyForm-Shield-1.0.0"
 repository = "https://github.com/kjjkjjzyayufqza/exvs-mod-project"
 edition = "2021"
 rust-version = "1.77.2"
+# Never upload this source to a registry.
+publish = false
 default-run = "app"
 autobins = false
 autoexamples = false

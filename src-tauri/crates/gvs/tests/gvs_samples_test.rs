@@ -36,7 +36,7 @@ fn samples() -> Option<PathBuf> {
 }
 
 fn archives(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
-    exvs_ps4_common::scan::list_files(root, &[])
+    exvs_ps4_common::files::list_files(root, &[])
         .unwrap()
         .into_iter()
         .filter_map(|path| {
@@ -163,4 +163,87 @@ fn ssbh_members_summarize_and_models_build_viewer_meshes() {
     }
     assert!(summarized > 1000, "expected many SSBH members, saw {summarized}");
     assert!(meshes > 400, "expected viewer meshes for every numshb, saw {meshes}");
+}
+
+/// Copy every sample whose hash is a data-init item into a PS4-style game
+/// tree (`archives/XX/HASH.bin`), returning the hashes placed.
+fn init_game_tree(root: &Path, game: &Path) -> Vec<u32> {
+    let book = exvs_gvs::names::book();
+    let mut placed = Vec::new();
+    for path in exvs_ps4_common::files::list_files(root, &[]).unwrap() {
+        let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+        let Some(hash) = exvs_ps4_common::names::parse_hash(&stem) else { continue };
+        if book.get(hash).and_then(|name| name.group.as_ref()).is_none() || placed.contains(&hash) {
+            continue;
+        }
+        let target = game.join(exvs_ps4_common::workspace::archive_relative_path(hash));
+        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+        std::fs::copy(&path, &target).unwrap();
+        placed.push(hash);
+    }
+    placed
+}
+
+#[test]
+fn data_init_extracts_named_tables_and_repacks_them_into_a_mod_folder() {
+    let Some(root) = samples() else {
+        eprintln!("SKIP: GVS samples are not available");
+        return;
+    };
+    let work = tempfile::tempdir().unwrap();
+    let game = work.path().join("CUSA08379");
+    let workspace = work.path().join("workspace");
+    let mod_root = work.path().join("mod");
+    let placed = init_game_tree(&root, &game);
+    assert!(placed.len() >= 20, "expected the sample init tables, placed {}", placed.len());
+
+    let catalog = exvs_gvs::init_catalog(Some(&game), Some(&workspace));
+    assert_eq!(catalog.available, placed.len());
+    assert_eq!(catalog.extracted, 0);
+    for item in catalog.items.iter().filter(|item| item.source_path.is_some()) {
+        let source = PathBuf::from(item.source_path.as_ref().unwrap());
+        let report = package::extract_into_workspace(&source, &workspace, None, false)
+            .unwrap_or_else(|error| panic!("{}: {error}", item.hash));
+        let package_dir = PathBuf::from(&report.package_dir);
+        assert!(package_dir.ends_with(&item.relative_dir), "{} -> {}", item.hash, report.package_dir);
+        let targets = package::repack_targets(&package_dir, Some(&mod_root)).unwrap();
+        let output = PathBuf::from(targets.mod_path.unwrap());
+        let repacked = package::repack_package(&package_dir, &output).unwrap();
+        assert_eq!(repacked.identical_to_source, Some(true), "{}", item.hash);
+        assert_eq!(std::fs::read(&output).unwrap(), std::fs::read(&source).unwrap());
+        assert!(output.starts_with(&mod_root) && output.ends_with(format!("{}.bin", item.hash)));
+    }
+    let again = exvs_gvs::init_catalog(Some(&game), Some(&workspace));
+    assert_eq!(again.extracted, placed.len());
+    let status = package::workspace_status(&workspace);
+    assert_eq!(status.len(), placed.len());
+    assert!(status.iter().all(|entry| entry.has_baseline && !entry.dirty && entry.error.is_none()));
+}
+
+#[test]
+fn unit_shell_packs_extract_under_their_vs2_names() {
+    let Some(root) = samples() else {
+        eprintln!("SKIP: GVS samples are not available");
+        return;
+    };
+    let book = exvs_gvs::names::book();
+    let shells: Vec<PathBuf> = exvs_ps4_common::files::list_files(&root.join("model_shell"), &[]).unwrap();
+    let named: Vec<&PathBuf> = shells
+        .iter()
+        .filter(|path| {
+            exvs_ps4_common::names::parse_hash(&path.file_stem().unwrap().to_string_lossy())
+                .and_then(|hash| book.get(hash))
+                .is_some()
+        })
+        .collect();
+    assert_eq!(named.len(), shells.len(), "every sample shell pack has a VS2 name");
+    let work = tempfile::tempdir().unwrap();
+    let smallest = named
+        .iter()
+        .min_by_key(|path| std::fs::metadata(path).map(|meta| meta.len()).unwrap_or(u64::MAX))
+        .unwrap();
+    let report = package::extract_into_workspace(smallest, work.path(), None, false).unwrap();
+    let relative = exvs_ps4_common::workspace::relative_to(work.path(), Path::new(&report.package_dir));
+    assert!(relative.starts_with("002chara/"), "{relative}");
+    assert_eq!(package::rebuilt_digest(Path::new(&report.package_dir)).unwrap(), exvs_ps4_common::digest::sha256_file(smallest).unwrap());
 }

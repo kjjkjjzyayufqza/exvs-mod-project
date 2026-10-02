@@ -15,6 +15,7 @@
  */
 
 import { vi } from "vitest";
+import type { Ps4GameAdapter } from "./gameAdapter";
 
 /** jsdom lacks these browser APIs; the workspaces only need inert stand-ins. */
 export function installBrowserStubs(): void {
@@ -55,3 +56,55 @@ export const TEST_PROVENANCE = {
   author: "kjjkjjzyayufqza",
   repository: "https://github.com/kjjkjjzyayufqza/exvs-mod-project",
 };
+
+/** A Ps4GameAdapter whose every method is a vitest mock (override what a test needs). */
+export function createFakeAdapter(overrides: Partial<Ps4GameAdapter> = {}): Ps4GameAdapter {
+  const adapter: Ps4GameAdapter = {
+    game: "mbon",
+    code: "MBON",
+    workspaceRoute: "/MbonWorkspace",
+    sourceExtensions: ["bin"],
+    listPackages: vi.fn(async () => []),
+    extract: vi.fn(async (_source: string, workspace: string, _overwrite: boolean, name?: string) => ({
+      packageDir: `${workspace}/${name ?? "PKG"}`,
+      files: 2,
+      bytes: 128,
+    })),
+    initCatalog: vi.fn(async () => ({ archivesRoot: null, available: 0, extracted: 0, items: [] })),
+    contentIndex: vi.fn(async () => ({ archivesRoot: null, available: 0, extracted: 0, items: [] })),
+    suggestName: vi.fn(async (source: string) => ({
+      hash: null,
+      stem: source,
+      route: "",
+      name: source,
+      relativeDir: source,
+      title: null,
+      known: false,
+    })),
+    preview: vi.fn(async () => ({ kindLabel: "PS4 ARC", container: true, fileCount: 1, facts: [], members: [] })),
+    packageSummary: vi.fn(async (dir: string) => ({ dir, sourceName: "AAAAAAAA", sourcePath: null, container: true, count: 1 })),
+    packageStatus: vi.fn(async (dir: string) => ({
+      dir,
+      relative: dir,
+      sourceName: "AAAAAAAA",
+      hasBaseline: true,
+      dirty: false,
+      manifestChanged: false,
+      changeCount: 0,
+      sample: [],
+      error: null,
+    })),
+    workspaceStatus: vi.fn(async () => []),
+    markClean: vi.fn(async () => undefined),
+    repackTargets: vi.fn(async (dir: string) => ({ hashName: "AAAAAAAA", beside: `${dir}.bin`, modPath: null })),
+    repack: vi.fn(async (_dir: string, output?: string) => ({
+      outputPath: output ?? "out.bin",
+      outputLen: 64,
+      identical: true,
+      digest: "ab".repeat(32),
+    })),
+    verify: vi.fn(async () => ({ identical: true, digest: "ab".repeat(32) })),
+    ...overrides,
+  };
+  return adapter;
+}

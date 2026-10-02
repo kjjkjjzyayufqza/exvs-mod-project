@@ -19,9 +19,15 @@
 //!
 //! * [`archive`] / [`archive_write`]: the `99 92 CD 90` container that wraps
 //!   every file under a PS4 `archives/` tree (lossless index + canonical writer).
-//! * [`scan`]: fast classification of whole `archives/` folders.
+//! * [`files`]: file listing inside package folders (game folders are never
+//!   listed; archives are reached by hash).
 //! * [`texture`]: block-compressed / ARGB pixel helpers and PNG / DDS output.
 //! * [`provenance`]: author and research credits embedded in every report.
+//! * [`names`]: hash-to-name tables (`route/name` package folders).
+//! * [`workspace`]: game-tree lookup, mod output paths, nested package
+//!   discovery and change baselines.
+//! * [`packages`]: format-independent package bookkeeping (status, data-init
+//!   catalog, folder choice, repack targets).
 //!
 //! Nothing in this crate knows about Over Boost; OB code does not depend on it.
 
@@ -32,14 +38,17 @@ pub mod binio;
 pub mod cache;
 pub mod digest;
 pub mod error;
+pub mod files;
 pub mod init_index;
 pub mod mesh_pack;
 pub mod msc_header;
+pub mod names;
+pub mod packages;
 pub mod provenance;
-pub mod scan;
 pub mod scene;
 pub mod skeleton;
 pub mod texture;
+pub mod workspace;
 
 pub use archive::{ArchiveHeader, ArchiveIndex, NodeFields, TreeNode};
 pub use archive_write::{ArchiveDraft, DataSource, DraftFile, WriteReport};

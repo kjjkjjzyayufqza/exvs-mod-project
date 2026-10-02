@@ -12,6 +12,8 @@
     "open": "打开文件夹"
   },
   "credit": "格式研究：kjjkjjzyayufqza，基于本项目的 VS2 / Over Boost 研究成果。",
+  "contents_one": "{{count}} 个文件",
+  "contents_other": "{{count}} 个文件",
   "credits": {
     "researchLabel": "GVS 研究",
     "researchNote": "GVS 支持是 kjjkjjzyayufqza 基于 EXVS Mod Project 的 VS2 / Over Boost 研究得出的成果。"
@@ -146,5 +148,9 @@
     "dimensions": "Dimensions",
     "textureName": "Texture name",
     "magic": "Magic"
+  },
+  "single": {
+    "title": "单独 FHM2D",
+    "intro": "将单个 GVS 档案解包到命名的包文件夹，或将包文件夹重打包到 Mod 文件夹。"
   }
 }

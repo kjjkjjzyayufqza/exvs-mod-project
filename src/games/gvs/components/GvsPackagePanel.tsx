@@ -19,6 +19,7 @@ import { VirtualList } from "../../ps4-common/components/VirtualList";
 import { baseName, formatBytes, shortDigest } from "../../ps4-common/format";
 import type { AsyncState } from "../../ps4-common/useAsync";
 import { usePackageActions } from "../../ps4-common/usePackageActions";
+import { effectiveModRoot } from "../../ps4-common/workspaceStore";
 import { gvsApi } from "../api";
 import { GVS_KINDS, gvsShort, gvsTone } from "../kinds";
 import { useGvsStore, type GvsSelection } from "../store";
@@ -41,6 +42,9 @@ export function GvsPackagePanel({
   const select = useGvsStore((state) => state.select);
   const verify = useGvsStore((state) => state.verify);
   const setVerify = useGvsStore((state) => state.setVerify);
+  const workspace = useGvsStore((state) => state.workspace);
+  const modRoot = useGvsStore((state) => state.modRoot);
+  const workspaceChanged = useGvsStore((state) => state.workspaceChanged);
 
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<GvsKind | "all">("all");
@@ -80,7 +84,7 @@ export function GvsPackagePanel({
       return { identical: report.identical, digest: report.rebuiltSha256 };
     },
     repack: async (dir, output) => {
-      const report = await gvsApi.repack(dir, output);
+      const report = await gvsApi.repack(dir, output, output ? undefined : effectiveModRoot(workspace, modRoot));
       return {
         outputPath: report.outputPath,
         outputLen: report.outputLen,
@@ -89,11 +93,12 @@ export function GvsPackagePanel({
       };
     },
     onVerified: setVerify,
+    onRepacked: workspaceChanged,
   });
 
   if (!packageDir) {
     return (
-      <HudPanel title={tc("package.title")} enterIndex={2}>
+      <HudPanel title={tc("package.title")}>
         <EmptyState icon={<PackageOpen />} title={tc("package.none")} body={tc("package.noneBody")} />
       </HudPanel>
     );
@@ -120,7 +125,6 @@ export function GvsPackagePanel({
       }
       count={data ? data.members.length : undefined}
       busy={view.loading || busy !== null}
-      enterIndex={2}
       actions={
         <>
           <HudButton
@@ -133,7 +137,6 @@ export function GvsPackagePanel({
             {tc("package.verify")}
           </HudButton>
           <HudButton
-            variant="primary"
             icon={<Hammer />}
             busy={busy === "repack"}
             disabled={!data || busy !== null}
@@ -156,10 +159,10 @@ export function GvsPackagePanel({
           <select
             className="ps4-select"
             value={kind}
-            aria-label={tc("sources.kindFilter")}
+            aria-label={tc("package.kindFilter")}
             onChange={(event) => setKind(event.target.value as GvsKind | "all")}
           >
-            <option value="all">{tc("sources.allKinds")}</option>
+            <option value="all">{tc("package.allKinds")}</option>
             {GVS_KINDS.filter((item) => presentKinds.has(item)).map((item) => (
               <option key={item} value={item}>
                 {gvsShort(item)}
@@ -210,7 +213,7 @@ export function GvsPackagePanel({
             if (rows[index].folder && !flat) toggle(rows[index].key);
           }}
           getKey={(row) => row.key}
-          empty={<EmptyState icon={<PackageOpen />} title={tc("sources.noMatches")} />}
+          empty={<EmptyState icon={<PackageOpen />} title={tc("package.noMatches")} />}
           rowProps={(row) => ({ "data-missing": row.member && !row.member.exists ? "true" : undefined })}
           renderRow={(row) => (
             <TreeRowView

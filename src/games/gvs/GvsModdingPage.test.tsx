@@ -16,8 +16,6 @@ vi.mock("@tauri-apps/plugin-opener", () => ({ openPath: vi.fn(async () => undefi
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 import en from "./i18n/en-US.json";
 import zh from "./i18n/zh-CN.json";
-import ps4En from "../ps4-common/i18n/en-US.json";
-import ps4Zh from "../ps4-common/i18n/zh-CN.json";
 import { GvsModdingReport } from "./GvsModdingPage";
 
 const forbidden = /descatal|BoostStudio|github\.com\/descatal/i;
@@ -43,7 +41,7 @@ describe("GVS modding page", () => {
     expect(screen.getByText(/plaza/)).toBeInTheDocument();
     expect(screen.getByText("renamed")).toBeInTheDocument();
     expect(screen.getByText("Scripts 1")).toBeInTheDocument();
-    const catalogs = JSON.stringify({ en, zh, ps4En, ps4Zh });
+    const catalogs = JSON.stringify({ en, zh });
     expect(catalogs).not.toMatch(forbidden);
     expect(document.body.textContent ?? "").not.toMatch(forbidden);
   });

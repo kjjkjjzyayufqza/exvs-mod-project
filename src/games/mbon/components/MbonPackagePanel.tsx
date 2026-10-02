@@ -31,6 +31,7 @@ import {
 import { VirtualList } from "../../ps4-common/components/VirtualList";
 import { baseName, formatBytes, matchesQuery, shortDigest } from "../../ps4-common/format";
 import { usePackageActions } from "../../ps4-common/usePackageActions";
+import { effectiveModRoot } from "../../ps4-common/workspaceStore";
 import type { AsyncState } from "../../ps4-common/useAsync";
 import { mbonApi } from "../api";
 import { MBON_KINDS, mbonShort, mbonTone } from "../kinds";
@@ -67,6 +68,9 @@ export function MbonPackagePanel({
   const select = useMbonStore((state) => state.select);
   const verify = useMbonStore((state) => state.verify);
   const setVerify = useMbonStore((state) => state.setVerify);
+  const workspace = useMbonStore((state) => state.workspace);
+  const modRoot = useMbonStore((state) => state.modRoot);
+  const workspaceChanged = useMbonStore((state) => state.workspaceChanged);
 
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<MbonKind | "all">("all");
@@ -98,7 +102,7 @@ export function MbonPackagePanel({
       return { identical: report.identical, digest: report.rebuiltSha256 };
     },
     repack: async (dir, output) => {
-      const report = await mbonApi.repack(dir, output);
+      const report = await mbonApi.repack(dir, output, output ? undefined : effectiveModRoot(workspace, modRoot));
       return {
         outputPath: report.outputPath,
         outputLen: report.outputLen,
@@ -107,11 +111,12 @@ export function MbonPackagePanel({
       };
     },
     onVerified: setVerify,
+    onRepacked: workspaceChanged,
   });
 
   if (!packageDir) {
     return (
-      <HudPanel title={tc("package.title")} enterIndex={2}>
+      <HudPanel title={tc("package.title")}>
         <EmptyState icon={<PackageOpen />} title={tc("package.none")} body={tc("package.noneBody")} />
       </HudPanel>
     );
@@ -130,7 +135,6 @@ export function MbonPackagePanel({
       }
       count={data ? entries.length : undefined}
       busy={view.loading || busy !== null}
-      enterIndex={2}
       actions={
         <>
           <HudButton
@@ -143,7 +147,6 @@ export function MbonPackagePanel({
             {tc("package.verify")}
           </HudButton>
           <HudButton
-            variant="primary"
             icon={<Hammer />}
             busy={busy === "repack"}
             disabled={!data || busy !== null}
@@ -171,10 +174,10 @@ export function MbonPackagePanel({
           <select
             className="ps4-select"
             value={kind}
-            aria-label={tc("sources.kindFilter")}
+            aria-label={tc("package.kindFilter")}
             onChange={(event) => setKind(event.target.value as MbonKind | "all")}
           >
-            <option value="all">{tc("sources.allKinds")}</option>
+            <option value="all">{tc("package.allKinds")}</option>
             {MBON_KINDS.filter((item) => presentKinds.has(item)).map((item) => (
               <option key={item} value={item}>
                 {mbonShort(item)}
@@ -226,7 +229,7 @@ export function MbonPackagePanel({
             select({ folder: entry.folder, index: entry.index, path: entry.path });
           }}
           getKey={(entry) => `${entry.folder}#${entry.index}`}
-          empty={<EmptyState icon={<PackageOpen />} title={tc("sources.noMatches")} />}
+          empty={<EmptyState icon={<PackageOpen />} title={tc("package.noMatches")} />}
           rowProps={(entry) => ({ "data-missing": entry.exists ? undefined : "true" })}
           renderRow={(entry) => <EntryRow entry={entry} flat={flat} />}
         />

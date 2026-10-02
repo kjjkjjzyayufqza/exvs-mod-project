@@ -1,64 +1,16 @@
 {
-  "platform": "PlayStation 4",
   "loading": "Loading",
   "cancel": "Cancel",
   "refresh": "Refresh",
   "save": "Save",
   "path": {
-    "browse": "Browse for a folder",
     "reveal": "Open in file manager",
     "choose": "Choose"
   },
   "tabs": {
-    "packages": "Packages",
-    "gameFiles": "Game files",
     "preview": "Preview",
     "hex": "Hex",
     "info": "Info"
-  },
-  "sources": {
-    "title": "Workspace",
-    "gameTitle": "Game files",
-    "tabsLabel": "Sources",
-    "workspace": "Workspace folder",
-    "workspacePlaceholder": "Choose where packages are extracted",
-    "workspaceDialog": "Choose the workspace folder",
-    "gameRoot": "Game files folder",
-    "gameRootPlaceholder": "Choose an extracted PS4 archives folder",
-    "gameRootDialog": "Choose the game files folder",
-    "scan": "Scan",
-    "scanning": "Scan game files",
-    "scanFailed": "Scan failed. Check that the folder exists and is readable.",
-    "filterPackages": "Filter packages",
-    "filterFiles": "Filter game files",
-    "kindFilter": "Filter by format",
-    "allKinds": "All formats",
-    "extract": "Extract",
-    "extractFiltered_one": "Extract {{count}} file",
-    "extractFiltered_other": "Extract {{count}} files",
-    "extracting": "Extract {{name}}",
-    "extractingBatch_one": "Extract {{count}} file",
-    "extractingBatch_other": "Extract {{count}} files",
-    "extractSummary": "{{files}} files, {{bytes}}",
-    "batchDone": "{{done}} packages extracted",
-    "batchPartial": "{{done}} extracted, {{failed}} failed. First error: {{first}}",
-    "overwrite": "Overwrite existing packages",
-    "needWorkspace": "Choose a workspace folder on the Packages tab first.",
-    "noWorkspace": "No workspace yet",
-    "noWorkspaceBody": "Pick a folder for extracted packages. Repacked archives are written to its _out folder.",
-    "noPackages": "No packages",
-    "noPackagesBody": "Extract a game file from the Game files tab to start modding.",
-    "noScan": "Nothing scanned",
-    "noScanBody": "Choose the game files folder and press Scan.",
-    "noMatches": "Nothing matches the filter",
-    "packagesLabel": "Extracted packages",
-    "filesLabel": "Game files",
-    "files_one": "{{count}} file",
-    "files_other": "{{count}} files",
-    "payloads_one": "{{count}} payload",
-    "payloads_other": "{{count}} payloads",
-    "archiveFiles_one": "PS4 archive with {{count}} file",
-    "archiveFiles_other": "PS4 archive with {{count}} files"
   },
   "package": {
     "title": "Package",
@@ -77,7 +29,7 @@
     "verifyModified": "Rebuild differs from the original (modified)",
     "unverified": "Not verified since the last change",
     "repack": "Repack",
-    "repackHint": "Write the archive to the workspace _out folder",
+    "repackHint": "Write the archive into the mod output folder as archives/XX/HASH.bin",
     "repackAs": "Repack as",
     "repacking": "Repack package",
     "repackDone": "{{path}} ({{size}})",
@@ -85,7 +37,10 @@
     "untracked_one": "{{count}} file in the package folder is not listed in the manifest",
     "untracked_other": "{{count}} files in the package folder are not listed in the manifest",
     "shared": "x{{count}}",
-    "sharedHint": "This data is shared by several entries"
+    "sharedHint": "This data is shared by several entries",
+    "kindFilter": "Filter by format",
+    "allKinds": "All formats",
+    "noMatches": "Nothing matches the filter"
   },
   "inspector": {
     "title": "Inspector",
@@ -137,16 +92,11 @@
     "licenseValue": "Code: PolyForm Shield 1.0.0. Docs: CC BY-NC-SA 4.0. See ACCEPTABLE_USE.md.",
     "keepNames": "Author and research credits are part of this tool. Do not remove or replace them in copies or derived work."
   },
-  "layout": {
-    "sources": "Sources"
-  },
   "settings": {
     "title": "MBON / GVS (PS4) tools",
     "description": "How the PS4 workspaces look and where their tools appear.",
     "reset": "Reset",
     "sidebar": "Sidebar",
-    "layout": "Workspace layout",
-    "style": "Visual style",
     "inspector": "Preview and details",
     "density": "Density",
     "sidebarMode": {
@@ -165,34 +115,6 @@
       "obOnly": {
         "title": "OB only",
         "description": "Hide the MBON and GVS tools from the sidebar."
-      }
-    },
-    "workspaceLayout": {
-      "three": {
-        "title": "Three columns",
-        "description": "Sources, package and inspector side by side."
-      },
-      "focus": {
-        "title": "Focus",
-        "description": "Sources slide in from a drawer, leaving more room to edit."
-      },
-      "stacked": {
-        "title": "Stacked",
-        "description": "Package above the inspector, good for tall screens."
-      }
-    },
-    "visualStyle": {
-      "hud": {
-        "title": "Hangar HUD",
-        "description": "Corner brackets, grid backdrop, condensed labels."
-      },
-      "clean": {
-        "title": "Clean",
-        "description": "Rounded panels without decoration."
-      },
-      "contrast": {
-        "title": "High contrast",
-        "description": "Stronger lines and larger text."
       }
     },
     "inspectorLayout": {
@@ -218,17 +140,371 @@
       "gvs": "GVS"
     }
   },
-  "status": {
-    "idle": "Ready",
-    "running": "running",
-    "workspace": "Workspace",
-    "package": "Package",
-    "entries_one": "{{count}} entry",
-    "entries_other": "{{count}} entries",
-    "members_one": "{{count}} file",
-    "members_other": "{{count}} files",
-    "identical": "Identical rebuild",
+  "close": "Close",
+  "init": {
+    "open": "Data init",
+    "title": "{{code}} data init",
+    "description": "Extract the global tables and shared packs of the game into the workspace, under readable route folders such as 012list/character_list. The game folder is only read.",
+    "sourceRoot": "Game folder",
+    "sourceRootPlaceholder": "Choose the game root (with archives) or its archives folder",
+    "sourceRootDialog": "Choose the game folder",
+    "workspace": "Workspace folder",
+    "available": "{{available}} / {{total}} available",
+    "extractedCount": "Extracted: {{count}}",
+    "state": {
+      "ready": "Ready",
+      "checking": "Checking files",
+      "configure": "Choose the game and workspace folders"
+    },
+    "filter": "Search by name, hash or folder",
+    "showLabel": "Show",
+    "show": {
+      "all": "All items",
+      "available": "Available",
+      "pending": "Not extracted yet",
+      "extracted": "Extracted",
+      "missing": "Missing from the game folder"
+    },
+    "groupLabel": "Group",
+    "allGroups": "All groups",
+    "sortLabel": "Sort",
+    "sort": {
+      "group": "By group",
+      "name": "By name",
+      "status": "By status",
+      "lastUsed": "Last used"
+    },
+    "batch": "Batch",
+    "selectAll_one": "Select all ({{count}})",
+    "selectAll_other": "Select all ({{count}})",
+    "progress": "{{done}} / {{total}}",
+    "extractSelected_one": "Extract {{count}} item",
+    "extractSelected_other": "Extract {{count}} items",
+    "extractPending_one": "Extract {{count}} new item",
+    "extractPending_other": "Extract all {{count}} new items",
+    "extractPendingHint": "Extract every available item that has no package in the workspace yet",
+    "overwrite": "Overwrite existing packages",
+    "needFolders": "Choose the game folder and the workspace folder first.",
+    "listLabel": "Data init items",
+    "empty": "Nothing matches the filter",
+    "select": "Select {{name}}",
+    "missing": "Missing",
+    "extracted": "Extracted",
+    "openPackage": "Open",
+    "again": "Extract again",
+    "extract": "Extract",
+    "details": "Details",
+    "detail": {
+      "hash": "Hash",
+      "source": "Game file",
+      "notFound": "Not found in the game folder",
+      "output": "Package folder",
+      "packages": "Existing packages",
+      "none": "None",
+      "nameSource": "Name source"
+    },
+    "againTitle": "Extract {{name}} again?",
+    "againBody": "The package in {{folder}} is replaced by a fresh copy of the game file. Edits in that folder are lost.",
+    "extracting": "Extract {{name}}",
+    "extractingBatch_one": "Extract {{count}} item",
+    "extractingBatch_other": "Extract {{count}} items",
+    "batchDone_one": "{{count}} package extracted",
+    "batchDone_other": "{{count}} packages extracted",
+    "batchPartial": "{{done}} extracted, {{failed}} failed. First error: {{first}}",
+    "groups": {
+      "boost_studio": "BoostStudio common assets",
+      "lists": "Lists",
+      "tables": "Tables",
+      "mission": "Missions",
+      "text": "Text",
+      "common": "Shared packs"
+    },
+    "ago": {
+      "justNow": "just now",
+      "minutes_one": "{{count}} minute ago",
+      "minutes_other": "{{count}} minutes ago",
+      "hours_one": "{{count}} hour ago",
+      "hours_other": "{{count}} hours ago",
+      "days_one": "{{count}} day ago",
+      "days_other": "{{count}} days ago"
+    }
+  },
+  "modRoot": {
+    "label": "Mod output folder",
+    "placeholder": "Default: {{path}}",
+    "dialog": "Choose the mod output folder",
+    "hint": "Repacked archives are written as archives/XX/HASH.bin under {{path}}; copy its archives folder over the game root."
+  },
+  "changes": {
+    "title": "Repack changed packages",
+    "description": "Packages edited since their last extract or repack. Each one is written into the mod folder as archives/XX/HASH.bin.",
+    "listLabel": "Changed packages",
+    "empty": "No pending changes",
+    "emptyBody": "Every package matches its last extract or repack.",
+    "changed_one": "Changed ({{count}})",
+    "changed_other": "Changed ({{count}})",
+    "untracked_one": "Not tracked yet ({{count}})",
+    "untracked_other": "Not tracked yet ({{count}})",
+    "untrackedHint": "Extracted by an older version; repack or mark clean to start tracking changes.",
+    "unreadable_one": "{{count}} package could not be read",
+    "unreadable_other": "{{count}} packages could not be read",
+    "files_one": "{{count}} changed file",
+    "files_other": "{{count}} changed files",
+    "structure": "files added or removed",
+    "repack_one": "Repack {{count}} package",
+    "repack_other": "Repack {{count}} packages",
+    "repacking_one": "Repack {{count}} package",
+    "repacking_other": "Repack {{count}} packages",
+    "done_one": "{{count}} package written to {{path}}",
+    "done_other": "{{count}} packages written to {{path}}",
+    "partial": "{{done}} repacked, {{failed}} failed. First error: {{first}}",
+    "markClean": "Mark clean",
+    "markCleanHint": "Accept the current files as the new baseline without repacking",
+    "markingClean_one": "Mark {{count}} package clean",
+    "markingClean_other": "Mark {{count}} packages clean",
+    "markedClean_one": "{{count}} package marked clean",
+    "markedClean_other": "{{count}} packages marked clean"
+  },
+  "single": {
+    "open": "Single file",
+    "toWorkspace": "Workspace",
+    "tabsLabel": "Single file actions",
+    "tabs": {
+      "unpack": "Unpack",
+      "repack": "Repack"
+    },
+    "flowEmpty": "not chosen",
+    "source": "Source file",
+    "sourcePlaceholder": "Choose a game archive (archives/XX/HASH.bin)",
+    "sourceDialog": "Choose the file to unpack",
+    "sourceFilter": "{{code}} archives",
+    "allFiles": "All files",
+    "output": "Output folder",
+    "outputDefault": "Workspace: {{path}}",
+    "outputPlaceholder": "Choose where the package folder is created",
+    "outputDialog": "Choose the output folder",
+    "useWorkspace": "Use the workspace folder",
+    "subfolder": "Create the package folder inside the output folder",
+    "name": "Package folder",
+    "nameHint": "Relative to the output folder; named archives suggest their route folder.",
+    "known": "Named archive: {{title}} -> {{folder}}",
+    "unknown": "{{hash}} is not in the name table; the hash is used as the folder name.",
+    "overwrite": "Overwrite an existing package in that folder",
+    "unpack": "Unpack",
+    "unpacking": "Unpack {{name}}",
+    "unpackDone": "{{folder}} ({{files}} files, {{bytes}})",
+    "unpacked": "Unpacked",
+    "openInWorkspace": "Open in workspace",
+    "preview": "Archive",
+    "previewEmpty": "Choose a source file to see what it holds",
+    "previewFiles_one": "{{count}} file",
+    "previewFiles_other": "{{count}} files",
+    "previewMembers": "Members",
+    "previewMore_one": "and {{count}} more",
+    "previewMore_other": "and {{count}} more",
+    "naming": "Name",
+    "namedChip": "Named",
+    "unnamedChip": "Hash only",
+    "blocked": {
+      "source": "Choose a source file.",
+      "output": "Choose an output folder or set the workspace.",
+      "name": "Enter a package folder name.",
+      "package": "Choose a package folder.",
+      "notPackage": "The folder is not a package of this game.",
+      "target": "Choose where the archive is written."
+    },
+    "package": "Package folder",
+    "packagePlaceholder": "Choose an extracted package folder",
+    "packageDialog": "Choose the package folder",
+    "packageInfo": "Package",
+    "packageHint": "Choose a package folder to see its source, layout and pending changes.",
+    "target": "Write to",
+    "targetMod": "Mod folder",
+    "targetModMissing": "not available for this package",
+    "targetBeside": "Beside the package folder",
+    "targetCustom": "Another file",
+    "targetCustomEmpty": "not chosen",
+    "customDialog": "Choose the output file",
+    "repack": "Repack",
+    "repacking": "Repack {{name}}",
+    "repackedIdentical": "Identical to the game file",
+    "repackedModified": "Modified archive written",
+    "untracked": "Not tracked yet",
+    "pending_one": "{{count}} change since the last repack",
+    "pending_other": "{{count}} changes since the last repack",
+    "clean": "No pending changes",
+    "info": {
+      "source": "Source",
+      "hash": "Hash",
+      "original": "Game file",
+      "layout": "Layout",
+      "container_one": "PS4 archive, {{count}} file",
+      "container_other": "PS4 archive, {{count}} files",
+      "payload_one": "Bare payload, {{count}} part",
+      "payload_other": "Bare payload, {{count}} parts",
+      "changes": "Pending changes",
+      "verify": "Rebuild check"
+    },
+    "facts": {
+      "archiveKind": "Archive kind",
+      "depth": "Folder depth",
+      "layout": "Layout",
+      "canonical": "Canonical",
+      "blobs": "Data blocks",
+      "data": "Data size",
+      "listName": "List",
+      "recordSize": "Record size",
+      "geometry": "Vertices / triangles",
+      "magic": "Magic",
+      "size": "Size"
+    },
+    "sourceTitle": "Source",
+    "sourceDescription": "One game archive (archives/XX/HASH.bin).",
+    "destination": "Destination",
+    "destinationDescription": "Where the package folder is created.",
+    "subfolderHelp": "When off, the output folder itself becomes the package.",
+    "overwriteHelp": "Replace the files of a package already in that folder.",
+    "namingDescription": "From the game's name table.",
+    "nameState": "State",
+    "nameTitle": "Title",
+    "previewDescription": "What the chosen file holds.",
+    "reload": "Reload",
+    "packageTitle": "Package folder",
+    "packageDescription": "An extracted package of this game.",
+    "targetDescription": "Where the rebuilt archive is written.",
+    "packageInfoDescription": "Source, layout and pending changes."
+  },
+  "toolbar": {
+    "workspace": "Workspace folder",
+    "workspaceDialog": "Choose the workspace folder",
+    "workspacePlaceholder": "Choose where packages are extracted",
+    "refresh": "Reload the workspace",
+    "repackChanges": "Repack changes",
+    "pending_one": "{{count}} package with pending changes",
+    "pending_other": "{{count}} packages with pending changes"
+  },
+  "panels": {
+    "info": "Info",
+    "expandInfo": "Show the info panel",
+    "collapseInfo": "Hide the info panel"
+  },
+  "editors": {
+    "label": "Editors",
+    "expand": "Show the editor tabs",
+    "collapse": "Hide the editor tabs",
+    "groups": {
+      "pack": "Package",
+      "index": "Index"
+    },
+    "structure": {
+      "short": "Structure",
+      "name": "Package structure and entries"
+    },
+    "content": {
+      "short": "Known content",
+      "name": "Known content from the game lists"
+    },
+    "noPackage": "Open a package from the tree, or extract one from Known content."
+  },
+  "tree": {
+    "label": "Workspace packages",
+    "search": "Search packages",
+    "clearSearch": "Clear search",
+    "noWorkspace": "Choose a workspace folder in the toolbar.",
+    "noPackages": "No packages yet. Run Data init, or extract one from Known content.",
+    "noMatches": "Nothing matches the search.",
+    "changed_one": "{{count}} change since the last repack",
+    "changed_other": "{{count}} changes since the last repack",
+    "payloads_one": "{{count}} payload",
+    "payloads_other": "{{count}} payloads",
+    "files_one": "{{count}} file",
+    "files_other": "{{count}} files"
+  },
+  "content": {
+    "title": "Known content",
+    "description": "Every archive the game's lists name: the name table and, for MBON, the units of the extracted SCharacterList. Each archive is looked up by its hash; the game folder is never scanned.",
+    "gameRoot": "Game folder",
+    "gameRootDialog": "Choose the game folder",
+    "gameRootPlaceholder": "Game root (with archives) or its archives folder",
+    "search": "Search by name, hash or folder",
+    "showLabel": "Show",
+    "show": {
+      "all": "All known content",
+      "available": "In the game folder",
+      "extracted": "Extracted",
+      "missing": "Missing from the game folder"
+    },
+    "known_one": "{{count}} known archive",
+    "known_other": "{{count}} known archives",
+    "available_one": "{{count}} in the game folder",
+    "available_other": "{{count}} in the game folder",
+    "extractedCount_one": "{{count}} extracted",
+    "extractedCount_other": "{{count}} extracted",
+    "needGameRoot": "Choose the game folder to locate the archives.",
+    "listHint": {
+      "mbon": "Extract the Character List (SCharacterList) with Data init to index every unit."
+    },
+    "empty": {
+      "noFolders": "Choose the game folder or a workspace to see the known content.",
+      "noMatches": "Nothing matches the filter."
+    },
+    "extract": "Extract",
+    "open": "Open",
+    "extracted": "Extracted",
+    "missing": "Missing",
+    "notFound": "Not found in the game folder",
+    "extracting": "Extract {{name}}",
+    "extractSummary": "{{files}} files, {{bytes}}",
+    "routes": {
+      "002chara": "Units",
+      "005renderinfo": "Render info",
+      "006effect": "Effects",
+      "009gui": "GUI",
+      "010localizedtext": "Text",
+      "011camera": "Cameras",
+      "012list": "Lists",
+      "020common": "Common",
+      "041cpm": "CPM",
+      "051mission": "Missions",
+      "060navi": "Navigators",
+      "090sound": "Sound",
+      "091waveform": "Waveforms",
+      "800etcetera": "Etcetera",
+      "common": "BoostStudio common assets",
+      "unit": "Units from SCharacterList"
+    },
+    "sources": {
+      "vs2-meta": "VS2 metadata",
+      "ob-unit-list": "Over Boost unit list",
+      "ob-internal": "Over Boost internal names",
+      "research-note": "Research notes",
+      "boost-studio": "BoostStudio",
+      "scharacterlist": "SCharacterList"
+    }
+  },
+  "info": {
+    "packageTitle": "Package",
+    "packageDescription": "The package open in the editor.",
+    "entryTitle": "Archive",
+    "entryDescription": "The selected known-content entry.",
+    "noPackage": "No package open.",
+    "source": "Source",
+    "contents": "Contents",
+    "changes": "Changes",
+    "pending_one": "{{count}} pending change",
+    "pending_other": "{{count}} pending changes",
+    "clean": "No pending changes",
+    "untracked": "Not tracked yet",
+    "verify": "Rebuild check",
+    "identical": "Identical",
     "modified": "Modified",
-    "unverified": "Not verified"
+    "unverified": "Not verified",
+    "gameFile": "Game file",
+    "folder": "Folder",
+    "hash": "Hash",
+    "nameSource": "Name source",
+    "size": "Size",
+    "packages": "Packages",
+    "none": "None"
   }
 }

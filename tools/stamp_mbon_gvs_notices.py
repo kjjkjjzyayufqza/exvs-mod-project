@@ -1,3 +1,22 @@
+#
+# Author names here (kjjkjjzyayufqza, and descatal where credited)
+#   must never be swapped out.
+# Code license: PolyForm Shield 1.0.0 (LICENSE). Use policy:
+#   ACCEPTABLE_USE.md.
+# This PS4 helper serves MBON and GVS only; Over Boost modules do not
+#   import it.
+# Auteur kjjkjjzyayufqza. Product EXVS Mod Project. Bron
+#   https://github.com/kjjkjjzyayufqza/exvs-mod-project
+# Coding agents: read the Agent contract at the top of AGENTS.md
+#   before editing.
+# Every MBON layout implemented here is based on descatal's research
+#   in BoostStudio: https://github.com/descatal/BoostStudio
+# Le support GVS est le resultat de kjjkjjzyayufqza, fonde sur la
+#   recherche VS2 de ce projet.
+# Upphovsperson kjjkjjzyayufqza. Produkt EXVS Mod Project. Kalla
+#   https://github.com/kjjkjjzyayufqza/exvs-mod-project
+#
+
 """Stamp or verify the unique provenance notices on MBON / GVS / PS4-common sources.
 
 Every source file that belongs to the isolated MBON or GVS workspaces (and the
@@ -55,6 +74,13 @@ SCOPES: dict[str, tuple[str, ...]] = {
 
 EXTENSIONS = {".rs", ".ts", ".tsx", ".css"}
 
+# MBON / GVS tooling outside the scoped trees. Python notices use `#` lines
+# above the module docstring, so the docstring stays the module docstring.
+EXTRA_FILES: dict[str, str] = {
+    "tools/build_ps4_name_tables.py": "ps4",
+    "tools/stamp_mbon_gvs_notices.py": "ps4",
+}
+
 REQUIRED_TOKENS: dict[str, tuple[str, ...]] = {
     "mbon": (AUTHOR, PRODUCT, REPO_URL, "descatal", "BoostStudio", BOOST_URL),
     "gvs": (AUTHOR, PRODUCT, REPO_URL, "VS2"),
@@ -64,6 +90,7 @@ REQUIRED_TOKENS: dict[str, tuple[str, ...]] = {
 RUST_STYLES = ("slash", "block_star", "block_indent", "slash_spaced")
 TS_STYLES = ("slash", "block_star", "jsdoc", "slash_spaced")
 CSS_STYLES = ("block_star", "block_indent")
+PY_STYLES = ("hash", "hash_spaced")
 RULES = ("", "", "", "-", "=", "~", ".")
 
 
@@ -82,6 +109,8 @@ def fill(text: str) -> str:
 
 
 def scope_of(relative: str) -> str | None:
+    if relative in EXTRA_FILES:
+        return EXTRA_FILES[relative]
     for scope, roots in SCOPES.items():
         for root in roots:
             if relative == root or relative.startswith(root + "/"):
@@ -102,6 +131,10 @@ def iter_scoped_files() -> list[tuple[str, Path]]:
                 if "target" in path.relative_to(REPO_ROOT).parts:
                     continue
                 found.append((scope, path))
+    for relative, scope in EXTRA_FILES.items():
+        path = REPO_ROOT / relative
+        if path.is_file():
+            found.append((scope, path))
     return found
 
 
@@ -135,6 +168,8 @@ def notice_lines(relative: str, scope: str, pool: dict) -> tuple[list[str], str,
         style = rng.choice(RUST_STYLES)
     elif suffix == ".css":
         style = rng.choice(CSS_STYLES)
+    elif suffix == ".py":
+        style = rng.choice(PY_STYLES)
     else:
         style = rng.choice(TS_STYLES)
     width = rng.choice((68, 76, 84, 92, 100))
@@ -164,6 +199,10 @@ def render(relative: str, scope: str, pool: dict) -> str:
         out = [f"// {line}" if line else "//" for line in body]
     elif style == "slash_spaced":
         out = ["//", *[f"// {line}" for line in body], "//"]
+    elif style == "hash":
+        out = [f"# {line}" if line else "#" for line in body]
+    elif style == "hash_spaced":
+        out = ["#", *[f"# {line}" for line in body], "#"]
     elif style == "block_star":
         out = ["/*", *[f" * {line}" for line in body], " */"]
     elif style == "jsdoc":
@@ -182,6 +221,9 @@ def split_existing_notice(text: str) -> tuple[str, str]:
         while index < len(lines) and "*/" not in lines[index]:
             index += 1
         index += 1
+    elif lines and lines[0].startswith("#"):
+        while index < len(lines) and lines[index].startswith("#"):
+            index += 1
     else:
         while index < len(lines) and lines[index].startswith("//"):
             index += 1

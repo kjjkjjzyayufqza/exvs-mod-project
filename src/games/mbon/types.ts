@@ -26,28 +26,16 @@ export type MbonKind =
   | "container"
   | "unknown";
 
-export interface MbonScanEntry {
-  relativePath: string;
-  path: string;
-  stem: string;
-  size: number;
-  container: boolean;
-  archiveKind: number | null;
-  fileCount: number;
-  payloadMagic: string;
-  payloadKind: MbonKind;
-  payloadLabel: string;
-  payloadSize: number;
-  error: string | null;
-}
-
 export interface MbonPackageItem {
   dir: string;
   name: string;
+  /** Folder relative to the workspace (`common/list_info`). */
+  relative: string;
   sourceName: string;
   sourcePath: string | null;
   payloadCount: number;
   container: boolean;
+  title: string | null;
 }
 
 export interface FhmManifestNode {
@@ -198,6 +186,7 @@ export type MbonInspection =
       bodyOffset: number;
       canonical: boolean;
       issues: string[];
+      files?: { index: number; typeId: number; size: number; offset: number; magic: string; kind: MbonKind }[];
     }
   | { type: "fhm"; entries: FhmListing[]; blobCount: number; dataBytes: number }
   | { type: "ntp3"; textures: TextureSummary[]; trailingBytes: number }

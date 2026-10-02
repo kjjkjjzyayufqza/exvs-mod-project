@@ -56,7 +56,7 @@ export function GvsInspector({ view }: { view: GvsPackageView | undefined }) {
   );
   if (!packageDir || !view || !selection || !node) {
     return (
-      <HudPanel title={tc("inspector.title")} enterIndex={3}>
+      <HudPanel title={tc("inspector.title")}>
         <EmptyState icon={<Crosshair />} title={tc("inspector.none")} body={tc("inspector.noneBody")} />
       </HudPanel>
     );
@@ -68,7 +68,7 @@ export function GvsInspector({ view }: { view: GvsPackageView | undefined }) {
   const member = view.members[node.file];
   if (!member) {
     return (
-      <HudPanel title={tc("inspector.title")} enterIndex={3}>
+      <HudPanel title={tc("inspector.title")}>
         <ErrorNote>{tc("inspector.missing")}</ErrorNote>
       </HudPanel>
     );
@@ -121,7 +121,6 @@ function FolderInspector({
           {tc("inspector.title")} <strong>{label}</strong>
         </>
       }
-      enterIndex={3}
       actions={<KindChip tone="archive">DIR</KindChip>}
       tools={
         <>
@@ -189,7 +188,6 @@ function ItemInspector({ member, nodePath, packageDir }: { member: GvsMemberView
           {tc("inspector.title")} <strong>{baseName(member.path)}</strong>
         </>
       }
-      enterIndex={3}
       actions={
         <>
           <KindChip tone={gvsTone(member.kind)} title={member.label}>
@@ -299,7 +297,7 @@ function GvsReplaceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="ps4-ws ps4-dialog" data-game="gvs">
         <DialogHeader>
-          <DialogTitle className="ps4-display uppercase tracking-wider">{t("replace.title")}</DialogTitle>
+          <DialogTitle>{t("replace.title")}</DialogTitle>
           <DialogDescription>{t("replace.description", { path: member.path })}</DialogDescription>
         </DialogHeader>
         <div className="ps4-dialog__body">
