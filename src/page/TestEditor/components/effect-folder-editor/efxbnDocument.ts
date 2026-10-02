@@ -3,6 +3,7 @@ import type {
   EfxbnControlLookupEntry,
   EfxbnControlReferenceSummary,
   EfxbnEffectSummary,
+  EfxbnModelControlSummary,
   EfxbnSummary,
 } from "@/services/effectFolder/effectFolderService";
 import {
@@ -331,25 +332,40 @@ export function setEfxbnField(
   field: EfxbnFieldDescriptor,
   value: number,
 ): EfxbnDocument {
-  if (!Number.isFinite(value)) {
-    throw new Error(`EFXBN field ${efxbnFieldId(field)} rejects a non-finite value: ${value}`);
-  }
-  if (field.kind !== "float" && !Number.isInteger(value)) {
-    throw new Error(`EFXBN field ${efxbnFieldId(field)} is integral, received ${value}`);
+  return setEfxbnFields(document, blockIndex, [{ field, value }], `${field.label} = ${value}`);
+}
+
+/** Writes several schema fields of one block as a single undo step, e.g. the RGB of a colour. */
+export function setEfxbnFields(
+  document: EfxbnDocument,
+  blockIndex: number,
+  writes: readonly { field: EfxbnFieldDescriptor; value: number }[],
+  label: string,
+): EfxbnDocument {
+  if (writes.length === 0) throw new Error("EFXBN field write needs at least one field");
+  for (const { field, value } of writes) {
+    if (!Number.isFinite(value)) {
+      throw new Error(`EFXBN field ${efxbnFieldId(field)} rejects a non-finite value: ${value}`);
+    }
+    if (field.kind !== "float" && !Number.isInteger(value)) {
+      throw new Error(`EFXBN field ${efxbnFieldId(field)} is integral, received ${value}`);
+    }
   }
   requireBlock(document.summary, blockIndex);
-  const next = replaceBlock(document.summary, blockIndex, (block) => {
-    if (field.component === undefined) {
-      return { ...block, [field.key]: value } as EfxbnEffectSummary;
-    }
-    const vector = block[field.key];
-    if (!Array.isArray(vector)) {
-      throw new Error(`EFXBN field ${field.key} is not a vector`);
-    }
-    const updated = vector.map((entry, index) => (index === field.component ? value : entry));
-    return { ...block, [field.key]: updated } as EfxbnEffectSummary;
-  });
-  return commit(document, next, `${field.label} = ${value}`);
+  const next = replaceBlock(document.summary, blockIndex, (block) =>
+    writes.reduce((current, { field, value }) => {
+      if (field.component === undefined) {
+        return { ...current, [field.key]: value } as EfxbnEffectSummary;
+      }
+      const vector = current[field.key];
+      if (!Array.isArray(vector)) {
+        throw new Error(`EFXBN field ${field.key} is not a vector`);
+      }
+      const updated = vector.map((entry, index) => (index === field.component ? value : entry));
+      return { ...current, [field.key]: updated } as EfxbnEffectSummary;
+    }, block),
+  );
+  return commit(document, next, label);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -424,6 +440,71 @@ export function setEfxbnBlockTextureSlot(
   });
   const label = slot.field === "colorTextureParameterIndex" ? "Colour map" : "UV offset map";
   return commit(document, next, `${label}${slot.component === 1 ? " (pass 2)" : ""} = ${parameterIndex}`);
+}
+
+/** Blocks whose colour or UV slots read this texture parameter. */
+export function efxbnTextureParameterUsers(summary: EfxbnSummary, parameterIndex: number): number[] {
+  return summary.effects
+    .filter(
+      (block) =>
+        block.colorTextureParameterIndex.includes(parameterIndex) ||
+        block.uvTextureParameterIndex.includes(parameterIndex),
+    )
+    .map((block) => block.index);
+}
+
+/**
+ * Points a texture parameter at a different nutexb, for every block that binds the parameter.
+ *
+ * `colorMapId` and `colorMapHash` are two views of one value. The writer serializes
+ * `modelControls` while the editor reads `textureParameters` (the backend's copy of the same
+ * table), and `modelControlTextureIds` lists the distinct ids for dependency resolution, so all
+ * three change together. `textureWidth` / `textureHeight` are the colour map's pixel size — they
+ * equal the nutexb footer in 1,731 of the 1,833 shipped parameters whose texture resolves in
+ * `E:/XB/mod/006effect` — so they follow the new texture.
+ */
+export function setEfxbnTextureParameterColorMap(
+  document: EfxbnDocument,
+  parameterIndex: number,
+  colorMapSigned: number,
+  size: { width: number; height: number },
+): EfxbnDocument {
+  if (!Number.isInteger(colorMapSigned)) {
+    throw new Error(`EFXBN colour map hash must be an integer, received ${colorMapSigned}`);
+  }
+  if (!Number.isInteger(size.width) || !Number.isInteger(size.height) || size.width < 1 || size.height < 1) {
+    throw new Error(`EFXBN texture size must be positive integers, received ${size.width}x${size.height}`);
+  }
+  const summary = document.summary;
+  if (!summary.modelControls[parameterIndex] || !summary.textureParameters[parameterIndex]) {
+    throw new Error(
+      `EFXBN texture parameter ${parameterIndex} is out of range (${summary.modelControls.length} parameters)`,
+    );
+  }
+  const hash = hashFromSigned(colorMapSigned);
+  const retarget = (controls: readonly EfxbnModelControlSummary[]) =>
+    controls.map((control) =>
+      control.index === parameterIndex
+        ? {
+            ...control,
+            colorMapId: hash.signed,
+            colorMapHash: hash,
+            textureWidth: size.width,
+            textureHeight: size.height,
+          }
+        : control,
+    );
+  const modelControls = retarget(summary.modelControls);
+  const modelControlTextureIds = [...new Set(modelControls.map((control) => control.colorMapId))]
+    .sort((left, right) => left - right)
+    .map(hashFromSigned);
+  const next: EfxbnSummary = {
+    ...summary,
+    modelControls,
+    textureParameters: retarget(summary.textureParameters),
+    modelControlTextureIds,
+  };
+  return commit(document, next, `Texture parameter ${parameterIndex} = ${hash.hex}`);
 }
 
 // ---------------------------------------------------------------------------------------------

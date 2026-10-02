@@ -1,5 +1,5 @@
 import type { EfxbnEffectSummary } from "@/services/effectFolder/effectFolderService";
-import { efxbnRuntime } from "./efxbnSimulation";
+import { DRAW_SCHEME_VIEW_ANGLE_RAMP, efxbnRuntime } from "./efxbnSimulation";
 
 /**
  * The billboard-only per-particle colour paths from `efxConstructDrawBufferBillboard3rd`.
@@ -7,7 +7,8 @@ import { efxbnRuntime } from "./efxbnSimulation";
  * That compute shader folds two view-dependent terms into the vertex colour before the pixel
  * shader ever runs, so neither is visible in the `efxDrawFace*` decompilations. The strip and
  * model draw-buffer shaders read neither element field, which is why these live in a
- * billboard-specific module instead of the shared simulation.
+ * billboard-specific module instead of the shared simulation. Models get the view-angle ramp from
+ * their vertex shader instead (`resolveEfxbnModelViewAngleRamp`).
  */
 
 /** `blendState` values, named from the D3D11 blend descriptors the engine builds. */
@@ -19,7 +20,7 @@ export const EFXBN_BLEND_STATE = {
 } as const;
 
 /** `actionFlags` bit that enables the view-angle colour ramp (`_248 & 0x02000000`). */
-const ACTION_FLAG_VIEW_ANGLE_COLOR = 0x0200_0000;
+export const ACTION_FLAG_VIEW_ANGLE_COLOR = 0x0200_0000;
 /** `actionFlags` bit that arms the camera-proximity fade (`_248 & 0x00400000`). */
 const ACTION_FLAG_CAMERA_FADE = 0x0040_0000;
 /** `extraFlags` bit that enables the camera-proximity fade (`_261 & 0x1000`). */
@@ -52,6 +53,25 @@ export type EfxbnViewAngleRamp = {
 
 export function resolveEfxbnViewAngleRamp(block: EfxbnEffectSummary): EfxbnViewAngleRamp | null {
   if ((efxbnRuntime(block).actionFlags & ACTION_FLAG_VIEW_ANGLE_COLOR) === 0) return null;
+  return authoredViewAngleRamp(block);
+}
+
+/**
+ * The same ramp on a model element, which `efxDrawModelVS` evaluates per vertex.
+ *
+ * The model shader reads the four fields from `SEfxModelConstantBuffer` (`blurEnableRange` +28,
+ * `blurFadePower` +32, `blurStartColor` +64, `blurEndColor` +80) and gates on the draw-scheme bit
+ * rather than the action flag. Its rim term uses the mesh normal and a view direction whose eye is
+ * pushed back to 20 units when the camera is closer; that part lives in the model material.
+ */
+export function resolveEfxbnModelViewAngleRamp(
+  block: EfxbnEffectSummary,
+): EfxbnViewAngleRamp | null {
+  if ((efxbnRuntime(block).drawScheme.flag & DRAW_SCHEME_VIEW_ANGLE_RAMP) === 0) return null;
+  return authoredViewAngleRamp(block);
+}
+
+function authoredViewAngleRamp(block: EfxbnEffectSummary): EfxbnViewAngleRamp {
   return {
     startColor: block.blurStartColor,
     endColor: block.blurEndColor,

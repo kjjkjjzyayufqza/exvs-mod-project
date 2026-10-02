@@ -125,6 +125,8 @@ const ACTION_FLAG_BITS = [
   { mask: 0x1, label: "loop", note: "wraps the particle's curve phase instead of expiring it" },
   { mask: 0x10, label: "uniform size", note: "copies the randomised X size into Y and Z" },
   { mask: 0x0080_0000, label: "clears loop", note: "normalizer drops bit 0 and deleteSettings bit 1" },
+  { mask: 0x0200_0000, label: "view-angle ramp",
+    note: "billboard and model shaders lerp the colour between the two ramp colours by view angle" },
   { mask: 0x0800_0000, label: "forces loop", note: "normalizer sets bit 0" },
 ] as const;
 

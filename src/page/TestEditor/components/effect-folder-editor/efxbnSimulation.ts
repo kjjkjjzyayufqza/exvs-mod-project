@@ -124,7 +124,10 @@ const EFXBN_ACTION_FLAG_LOOP = 0x1;
 const EFXBN_ACTION_FLAG_FORCE_LOOP = 0x0800_0000;
 /** `actionFlags & 0x200` — suppresses the emitter's delay restart on a loop cycle. */
 const EFXBN_ACTION_FLAG_KEEP_DELAY = 0x200;
-/** `actionFlags & 0x10` — the spawn size's Y and Z take the X result, making the shape uniform. */
+/**
+ * `actionFlags & 0x10` — the spawn size's Y and Z take the X result, and so do the `scaleBase`
+ * curves every frame, making the shape uniform.
+ */
 const EFXBN_ACTION_FLAG_UNIFORM_SIZE = 0x10;
 
 /**
@@ -622,9 +625,7 @@ function simulateParticle(
   }
 
   const progress = curveProgress(age);
-  const scaleX = controlValue(target, plan, "scaleBaseX", progress);
-  const scaleY = controlValue(target, plan, "scaleBaseY", progress);
-  const scaleZ = controlValue(target, plan, "scaleBaseZ", progress);
+  const isUniformSize = (target.actionFlags & EFXBN_ACTION_FLAG_UNIFORM_SIZE) !== 0;
   // `efxSpawnParticleCommon3rd` stores the randomised spawn size at instance `+44` and, under
   // `actionFlags & 0x10`, writes the **X result** into Y and Z as well (lines 1443-1445):
   //
@@ -635,14 +636,22 @@ function simulateParticle(
   // Equalising only the random factor, as this did before, still let a non-uniform `sizeBase`
   // through — which stretched 31.3% of all shipped drawable blocks (501 models, 456 billboards,
   // 219 strips). `33.efxbn` block 0 is the reference case: `sizeBase (2.5, 1, 1)` with the flag
-  // set is a 2.5x sphere in game, and was an ellipsoid here. The `scaleBase*` curves multiply
-  // per axis afterwards, so they stay outside the copy.
+  // set is a 2.5x sphere in game, and was an ellipsoid here.
+  //
+  // The kinetic shaders apply the same copy to the evaluated `scaleBase*` curves every frame
+  // (`efxKineticParticleModel3rd` lines 568-572 write X into instance `+48 + 1` and `+48 + 2`;
+  // the billboard and strip variants copy X into Y). FAUC `94.efxbn` block 1 authors only a
+  // `scaleBaseX` curve with Y and Z held at 0: a full expanding sphere in game, and a zero-thickness
+  // disc here until the curves were copied too.
   const spawnSize: [number, number, number] = [
     target.sizeBase[0] * sizeRandom[0],
     target.sizeBase[1] * sizeRandom[1],
     target.sizeBase[2] * sizeRandom[2],
   ];
-  if ((target.actionFlags & EFXBN_ACTION_FLAG_UNIFORM_SIZE) !== 0) {
+  const scaleX = controlValue(target, plan, "scaleBaseX", progress);
+  const scaleY = isUniformSize ? scaleX : controlValue(target, plan, "scaleBaseY", progress);
+  const scaleZ = isUniformSize ? scaleX : controlValue(target, plan, "scaleBaseZ", progress);
+  if (isUniformSize) {
     spawnSize[1] = spawnSize[0];
     spawnSize[2] = spawnSize[0];
   }
@@ -784,6 +793,13 @@ export type EfxbnShaderVariant = (typeof EFXBN_SHADER_VARIANT_MASKS)[number][0];
  * apply. Set on 104 of the 21,408 shipped drawable blocks, so the halving is the common case.
  */
 export const DRAW_SCHEME_FULL_BRIGHTNESS = 0x40000;
+
+/**
+ * Draw-scheme bit that gates the view-angle colour ramp on model elements:
+ * `efxDrawModelVS` tests `and r3.xy, drawSchemeFlag, l(1024, 256)`. The runtime derivation sets it
+ * from `actionFlags & 0x02000000`, the bit the billboard draw-buffer shader tests directly.
+ */
+export const DRAW_SCHEME_VIEW_ANGLE_RAMP = 0x400;
 
 /** Draw-scheme bit set when the block binds a UV-offset map, i.e. the ColorEx distortion path. */
 export const DRAW_SCHEME_UV_OFFSET_MAP = 0x80;

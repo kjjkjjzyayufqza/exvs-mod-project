@@ -838,6 +838,43 @@ describe("EFXBN uniform scale (actionFlags & 0x10)", () => {
     expect(particle.scale[1]).toBeCloseTo(particle.scale[0], 9);
     expect(particle.scale[2]).toBeCloseTo(particle.scale[0], 9);
   });
+
+  it("copies the X scale curve into Y and Z — the FAUC 94.efxbn sphere case", () => {
+    // Block 1 of fapt_gndmuc_008faunig_001_effect/0/0/94.efxbn authors only a scaleBaseX curve
+    // and holds scaleBaseY / scaleBaseZ at 0 under actionFlags 0x060E0010. The kinetic shaders copy
+    // the evaluated X curve into Y and Z, so the game draws a full sphere, not a flat disc.
+    const controls = directControls({
+      speedBaseX: 0,
+      speedBaseY: 0,
+      speedBaseZ: 0,
+      scaleBaseX: 3,
+      scaleBaseY: 0,
+      scaleBaseZ: 0,
+      colorR: 1,
+      colorG: 1,
+      colorB: 1,
+      colorA: 1,
+    });
+    const sphere = block({
+      index: 0,
+      effectType: 3,
+      lifeTimeBase: 100,
+      numEmit: 1,
+      sizeBase: [0.5, 1, 1, 0],
+      actionFlags: 0x10,
+      controlReferences: controls.references,
+    });
+    const sourcePlan = plan([sphere], controls.entries);
+    const particle = simulateEfxbnEmitterPair(
+      resolveEfxbnEmitterPairs(sourcePlan)[0],
+      sourcePlan,
+      0,
+    )[0];
+
+    expect(particle.scale[0]).toBeCloseTo(1.5, 6);
+    expect(particle.scale[1]).toBeCloseTo(1.5, 6);
+    expect(particle.scale[2]).toBeCloseTo(1.5, 6);
+  });
 });
 
 describe("EFXBN emitter orientation", () => {

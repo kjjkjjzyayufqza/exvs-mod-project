@@ -3664,15 +3664,60 @@ fn make_folder(unk3: i32, unk5: i32) -> SubFileStructureEntry {
     }
 }
 
+/// The order a pack's entries must be registered in.
+///
+/// The pack loader (`sub_1408EF9E0`) registers entries in tree order, and an efxbn binds its
+/// colour maps as it is registered: `sub_140174B30` looks each one up with `sub_14016BE10` and
+/// takes the default white texture when the hash is not registered yet. A texture listed after an
+/// efxbn that samples it therefore draws white. Shipped packs list textures, then model folders,
+/// then efxbns.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum RegistrationRank {
+    Texture,
+    Model,
+    Effect,
+    Other,
+}
+
+fn registration_rank(node: &Node, data_by_index: &HashMap<i32, FileRecord>) -> RegistrationRank {
+    match node {
+        Node::Item {
+            entry: SubFileStructureEntry::Item { unk2, .. },
+            ..
+        } => match unk2.as_str() {
+            "01000000" => RegistrationRank::Texture,
+            "00000000" => RegistrationRank::Effect,
+            _ => RegistrationRank::Other,
+        },
+        Node::Folder { .. } if is_model_group(node, data_by_index) => RegistrationRank::Model,
+        _ => RegistrationRank::Other,
+    }
+}
+
+/// Inserts after the last sibling of the same or an earlier rank, so a new texture is registered
+/// before every efxbn and a new efxbn after every texture and model.
+fn insert_in_registration_order(
+    siblings: &mut Vec<Node>,
+    data_by_index: &HashMap<i32, FileRecord>,
+    node: Node,
+) {
+    let rank = registration_rank(&node, data_by_index);
+    let at = siblings
+        .iter()
+        .position(|sibling| registration_rank(sibling, data_by_index) > rank)
+        .unwrap_or(siblings.len());
+    siblings.insert(at, node);
+}
+
 fn append_to_primary_container(
     forest: &mut Vec<Node>,
     data_by_index: &HashMap<i32, FileRecord>,
     node: Node,
 ) {
     if let Some(container) = find_primary_container_mut(forest, data_by_index) {
-        container.push(node);
+        insert_in_registration_order(container, data_by_index, node);
     } else {
-        forest.push(node);
+        insert_in_registration_order(forest, data_by_index, node);
     }
 }
 

@@ -168,6 +168,22 @@
       "uv0": "UV 偏移贴图",
       "uv1": "第二遍 UV 偏移"
     },
+    "parameterTexture": "参数 {{index}} 贴图（{{width}}x{{height}}）",
+    "unresolvedTexture": "{{hex}}（本包与共享包都没有）",
+    "parameterShared": "区块 {{blocks}} 也用这个参数，会一起改变。",
+    "viewRamp": {
+      "enabled": "启用",
+      "help": "乘到颜色上：表面正对镜头时取起始色，侧对镜头时取结束色。",
+      "ignored": "这种区块类型不读取视角渐变，只有 billboard 和模型会用。",
+      "faceOn": "正对",
+      "edgeOn": "侧对",
+      "start": "起始（正对）",
+      "end": "结束（侧对）",
+      "threshold": "阈值",
+      "power": "幂次",
+      "pick": "选择{{stop}}颜色",
+      "channel": "{{stop}} {{letter}}"
+    },
     "modelUnresolved": "Model {{hex}} resolves in neither this pack nor {{pack}}; the game would draw nothing for it."
   },
   "preview3d": {

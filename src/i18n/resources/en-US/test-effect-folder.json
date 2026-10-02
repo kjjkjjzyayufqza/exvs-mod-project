@@ -168,6 +168,22 @@
       "uv0": "UV offset map",
       "uv1": "Pass-2 UV offset"
     },
+    "parameterTexture": "Parameter {{index}} texture ({{width}}x{{height}})",
+    "unresolvedTexture": "{{hex}} (not in this pack or the shared pack)",
+    "parameterShared": "Blocks {{blocks}} use this parameter too; they change with it.",
+    "viewRamp": {
+      "enabled": "Enabled",
+      "help": "Multiplies the colour: the start colour where the surface faces the camera, the end colour where it is seen edge-on.",
+      "ignored": "This block type does not read the ramp; only billboards and models do.",
+      "faceOn": "Face-on",
+      "edgeOn": "Edge-on",
+      "start": "Start (face-on)",
+      "end": "End (edge-on)",
+      "threshold": "Threshold",
+      "power": "Power",
+      "pick": "Pick the {{stop}} colour",
+      "channel": "{{stop}} {{letter}}"
+    },
     "modelUnresolved": "Model {{hex}} resolves in neither this pack nor {{pack}}; the game would draw nothing for it."
   },
   "preview3d": {

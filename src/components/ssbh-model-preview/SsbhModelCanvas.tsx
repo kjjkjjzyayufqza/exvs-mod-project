@@ -270,6 +270,18 @@ export type PreviewInstanceHostTransform = {
   effectSoftParticleRange?: number;
   /** Linear view depth of the opaque scene, produced by the effect preview's depth pre-pass. */
   effectSceneDepthTexture?: Texture | null;
+  /**
+   * View-angle colour ramp of an EFX model element (`efxDrawModelVS`, draw-scheme bit `0x400`).
+   * Each vertex colour is multiplied by `mix(startColor, endColor, t)`, where `t` grows from 0
+   * past `threshold` to 1 as the surface turns edge-on, shaped by `power`. Absent or null leaves
+   * the colour alone.
+   */
+  effectViewAngleRamp?: {
+    startColor: readonly [number, number, number, number];
+    endColor: readonly [number, number, number, number];
+    threshold: number;
+    power: number;
+  } | null;
   /** Host-owned motion frame, used for per-particle animation phase. */
   motionFrame?: number;
 };
@@ -287,6 +299,12 @@ type EfxColorExUniforms = {
   efxSceneDepth: { value: Texture | null };
   efxHasSceneDepth: { value: number };
   efxSoftParticleRange: { value: number };
+  efxViewAngleRamp: { value: number };
+  efxViewAngleStartColor: { value: [number, number, number, number] };
+  efxViewAngleEndColor: { value: [number, number, number, number] };
+  efxViewAngleThreshold: { value: number };
+  efxViewAnglePower: { value: number };
+  efxInstanceOrigin: { value: [number, number, number] };
 };
 
 /**
@@ -306,6 +324,12 @@ function attachEfxColorExUniforms(material: MeshBasicMaterial): EfxColorExUnifor
     efxSceneDepth: { value: null },
     efxHasSceneDepth: { value: 0 },
     efxSoftParticleRange: { value: 0 },
+    efxViewAngleRamp: { value: 0 },
+    efxViewAngleStartColor: { value: [1, 1, 1, 1] },
+    efxViewAngleEndColor: { value: [1, 1, 1, 1] },
+    efxViewAngleThreshold: { value: 0 },
+    efxViewAnglePower: { value: 1 },
+    efxInstanceOrigin: { value: [0, 0, 0] },
   };
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
@@ -315,8 +339,15 @@ function attachEfxColorExUniforms(material: MeshBasicMaterial): EfxColorExUnifor
         `#include <common>
 uniform vec2 efxOffsetUvScale;
 uniform vec2 efxOffsetUvOffset;
+uniform float efxViewAngleRamp;
+uniform vec4 efxViewAngleStartColor;
+uniform vec4 efxViewAngleEndColor;
+uniform float efxViewAngleThreshold;
+uniform float efxViewAnglePower;
+uniform vec3 efxInstanceOrigin;
 varying vec2 vEfxOffsetUv;
-varying vec4 vEfxClipPosition;`,
+varying vec4 vEfxClipPosition;
+varying vec4 vEfxViewAngleColor;`,
       )
       .replace(
         "#include <uv_vertex>",
@@ -326,7 +357,37 @@ vEfxOffsetUv = uv * efxOffsetUvScale + efxOffsetUvOffset;`,
       .replace(
         "#include <fog_vertex>",
         `#include <fog_vertex>
-vEfxClipPosition = gl_Position;`,
+vEfxClipPosition = gl_Position;
+// efxDrawModelVS, draw-scheme bit 0x400: the vertex colour is scaled by a ramp between two
+// authored colours by how edge-on the surface is. Evaluated in view space, where the camera is
+// the origin; the view matrix is rigid, so lengths and angles match the engine's world space.
+vEfxViewAngleColor = vec4( 1.0 );
+if ( efxViewAngleRamp > 0.5 ) {
+  // MeshBasicMaterial computes the normal only for env maps and skinning; otherwise run the same
+  // chunks here so morphs, instancing and batching transform it exactly as three would.
+  #if ! defined ( USE_ENVMAP ) && ! defined ( USE_SKINNING )
+    #include <beginnormal_vertex>
+    #include <morphnormal_vertex>
+    #include <defaultnormal_vertex>
+  #endif
+  vec3 efxNormal = normalize( transformedNormal );
+  vec3 efxVertex = mvPosition.xyz;
+  // Within 20 units the engine moves the eye back along origin -> camera until it is 20 units
+  // from the vertex, so a camera inside the effect does not flip the rim term.
+  vec3 efxEye = vec3( 0.0 );
+  float efxDistance = length( efxVertex );
+  vec3 efxOriginView = ( viewMatrix * vec4( efxInstanceOrigin, 1.0 ) ).xyz;
+  if ( efxDistance < 20.0 && length( efxOriginView ) > 1e-5 ) {
+    efxEye = normalize( -efxOriginView ) * ( 20.0 - efxDistance );
+  }
+  vec3 efxView = normalize( efxVertex - efxEye );
+  float efxRim = 1.0 - abs( dot( efxView, efxNormal ) );
+  float efxRampSpan = max( 1.0 - efxViewAngleThreshold, 1e-5 );
+  float efxRamp = efxRim > efxViewAngleThreshold
+    ? pow( ( efxRim - efxViewAngleThreshold ) / efxRampSpan, efxViewAnglePower )
+    : 0.0;
+  vEfxViewAngleColor = mix( efxViewAngleStartColor, efxViewAngleEndColor, efxRamp );
+}`,
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
@@ -343,6 +404,7 @@ uniform float efxHasSceneDepth;
 uniform float efxSoftParticleRange;
 varying vec2 vEfxOffsetUv;
 varying vec4 vEfxClipPosition;
+varying vec4 vEfxViewAngleColor;
 float efxBorderAlpha( vec2 uvValue, float enabled ) {
   if ( enabled < 0.5 ) return 1.0;
   vec2 inside = step( vec2( 0.0 ), uvValue ) * step( uvValue, vec2( 1.0 ) );
@@ -371,7 +433,10 @@ float efxBorderAlpha( vec2 uvValue, float enabled ) {
       )
       .replace(
         "#include <alphatest_fragment>",
-        `// efxDrawModelSoftPS.yyadorigi.hlsl:66 — fade alpha out as the surface approaches
+        `// The view-angle ramp is part of the engine's vertex colour, which efxDrawModelPS multiplies
+// into the texel before its alpha cutoff.
+diffuseColor *= vEfxViewAngleColor;
+// efxDrawModelSoftPS.yyadorigi.hlsl:66 — fade alpha out as the surface approaches
 // whatever wrote scene depth behind it. Placed after <color_fragment> so it scales the
 // composed alpha, and before the alpha test, which the engine also runs on the faded value.
 if ( efxHasSceneDepth > 0.5 && efxSoftParticleRange > 0.0 ) {
@@ -1484,6 +1549,7 @@ const Scene = memo(function Scene({
     side: Side;
   }>());
   const hostTintScratchRef = useRef(new Color());
+  const hostOriginScratchRef = useRef(new Vector3());
   const hostEffectMaterialOverridesRef = useRef(new Map<Mesh, {
     original: Material | Material[];
     overrides: MeshBasicMaterial[];
@@ -1978,6 +2044,7 @@ const Scene = memo(function Scene({
       const effectSoftParticle =
         hostTransform?.effectSoftParticle && effectSceneDepthTexture ? 1 : 0;
       const effectSoftParticleRange = hostTransform?.effectSoftParticleRange ?? 0;
+      const effectViewAngleRamp = hostTransform?.effectViewAngleRamp ?? null;
       group.visible = hostTransform?.visible ?? true;
       if (hostTransform) {
         group.matrixAutoUpdate = true;
@@ -2044,6 +2111,16 @@ const Scene = memo(function Scene({
               uniforms.efxSceneDepth.value = effectSceneDepthTexture;
               uniforms.efxHasSceneDepth.value = effectSoftParticle;
               uniforms.efxSoftParticleRange.value = effectSoftParticleRange;
+              uniforms.efxViewAngleRamp.value = effectViewAngleRamp ? 1 : 0;
+              if (effectViewAngleRamp) {
+                uniforms.efxViewAngleStartColor.value = [...effectViewAngleRamp.startColor];
+                uniforms.efxViewAngleEndColor.value = [...effectViewAngleRamp.endColor];
+                uniforms.efxViewAngleThreshold.value = effectViewAngleRamp.threshold;
+                uniforms.efxViewAnglePower.value = effectViewAngleRamp.power;
+                // The instance's own translation, the engine's `origin` for the near-eye rule.
+                const origin = group.getWorldPosition(hostOriginScratchRef.current);
+                uniforms.efxInstanceOrigin.value = [origin.x, origin.y, origin.z];
+              }
             }
           }
           materials = override.overrides;

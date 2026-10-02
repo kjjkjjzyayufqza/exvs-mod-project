@@ -138,6 +138,7 @@ the editing track.
 | AddMix | `efxDrawFaceAddMixPS` |
 | `0x40000` full-brightness bypass of the `rgb * 0.5` | base Face/Model PS |
 | View-angle alpha ramp (`actionFlags & 0x02000000`), billboard only | `efxConstructDrawBufferBillboard3rd` |
+| View-angle ramp on model elements (draw-scheme `0x400`, per vertex, 20-unit near eye), added 2026-10-02: `2026-10-02-efxbn-model-view-angle-ramp.md` | `efxDrawModelVS` |
 | Camera-proximity fade | same |
 | Texture addressing `hkImageAddressMode` 0–3, BORDER emulated | name table `0x1415CB9B0` |
 | UV pattern 1/2/3 transforms | `efxKineticParticle*3rd` |

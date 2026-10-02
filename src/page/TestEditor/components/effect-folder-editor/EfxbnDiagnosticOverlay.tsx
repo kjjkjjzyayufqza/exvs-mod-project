@@ -33,6 +33,7 @@ import {
 } from "./efxbnSimulation";
 import { extractEfxbnMeshEmitterPoints, type EfxbnMeshEmitterPoint } from "./efxbnMeshEmitter";
 import { EffectSceneDepthPass } from "./EffectSceneDepthPass";
+import { resolveEfxbnModelViewAngleRamp } from "./efxbnBillboardShading";
 import { efxbnUsesSoftParticle, resolveEfxbnSoftParticleRange } from "./efxbnSoftParticle";
 
 type EfxbnDiagnosticOverlayProps = {
@@ -294,6 +295,7 @@ export function EfxbnDiagnosticOverlay({
         ? resolveEfxbnSoftParticleRange(target)
         : 0;
       const effectSceneDepthTexture = sceneDepthTextureRef.current;
+      const effectViewAngleRamp = resolveEfxbnModelViewAngleRamp(target);
       const effectColorBorder = usesEfxbnBorderAddressing(textureBinding?.parameter.addressingMode);
       const effectOffsetBorder = usesEfxbnBorderAddressing(offsetBinding?.parameter.addressingMode);
       const particles = simulateEfxbnPreviewFrame(
@@ -342,6 +344,7 @@ export function EfxbnDiagnosticOverlay({
           effectSoftParticle,
           effectSoftParticleRange,
           effectSceneDepthTexture,
+          effectViewAngleRamp,
           motionFrame: particle.age,
           visible: true,
           depthWrite: efxbnRuntime(target).zWriteEnable !== 0,
@@ -367,6 +370,7 @@ export function EfxbnDiagnosticOverlay({
           effectSoftParticle,
           effectSoftParticleRange,
           effectSceneDepthTexture,
+          effectViewAngleRamp,
           motionFrame: 0,
           visible: false,
         });

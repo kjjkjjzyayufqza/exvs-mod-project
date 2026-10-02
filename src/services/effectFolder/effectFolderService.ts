@@ -458,6 +458,14 @@ export async function parseEffectEfxbnFile(path: string): Promise<EfxbnSummary> 
   });
 }
 
+/** A nutexb's pixel size, read from its footer; a texture parameter's textureWidth / textureHeight mirror it. */
+export async function readEffectFolderTextureSize(path: string): Promise<{ width: number; height: number }> {
+  const info = await invoke<{ width: number; height: number }>("nutexb_read_info", {
+    inputPath: toWindowsPath(path),
+  });
+  return { width: info.width, height: info.height };
+}
+
 export interface EfxbnFileWriteResult {
   path: string;
   byteLen: number;

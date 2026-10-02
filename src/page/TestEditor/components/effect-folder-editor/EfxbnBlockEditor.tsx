@@ -44,6 +44,9 @@ import {
   insertSampledEfxbnKey,
   progressToEfxbnFrame,
 } from "./efxbnCurveMath";
+import { EfxbnTextureParameterPicker, type EfxbnTextureOption } from "./EfxbnTextureParameterPicker";
+import { EfxbnNumberInput } from "./EfxbnNumberInput";
+import { EfxbnViewAngleRampEditor } from "./EfxbnViewAngleRampEditor";
 
 /**
  * The property editor for one block.
@@ -67,11 +70,6 @@ type EfxbnBlockEditorProps = {
   onChange: (next: EfxbnDocument) => void;
   onError: (message: string) => void;
 };
-
-function formatNumber(value: number): string {
-  if (Number.isInteger(value)) return String(value);
-  return String(Number(value.toFixed(6)));
-}
 
 function hexOf(value: number): string {
   return `0x${(value >>> 0).toString(16).toUpperCase().padStart(8, "0")}`;
@@ -103,52 +101,6 @@ function EditorRow({
       <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">{label}</span>
       <div className="flex w-[7.5rem] shrink-0 items-center justify-end gap-1">{children}</div>
     </div>
-  );
-}
-
-/** Commits on blur or Enter, so a half-typed "-" or "0." never reaches the document. */
-function NumberInput({
-  value,
-  integral,
-  disabled,
-  onCommit,
-  className,
-}: {
-  value: number;
-  integral: boolean;
-  disabled?: boolean;
-  onCommit: (next: number) => void;
-  className?: string;
-}) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const text = draft ?? formatNumber(value);
-
-  const commit = () => {
-    if (draft === null) return;
-    setDraft(null);
-    const parsed = Number(draft);
-    if (!Number.isFinite(parsed)) return;
-    const next = integral ? Math.round(parsed) : parsed;
-    if (next !== value) onCommit(next);
-  };
-
-  return (
-    <Input
-      value={text}
-      disabled={disabled}
-      inputMode={integral ? "numeric" : "decimal"}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={commit}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") {
-          event.currentTarget.blur();
-        } else if (event.key === "Escape") {
-          setDraft(null);
-          event.currentTarget.blur();
-        }
-      }}
-      className={cn("h-6 px-1.5 text-right font-mono text-[10px]", className)}
-    />
   );
 }
 
@@ -222,7 +174,7 @@ function FieldWidget({
   }
 
   return (
-    <NumberInput
+    <EfxbnNumberInput
       value={value}
       integral={field.kind !== "float"}
       disabled={disabled}
@@ -378,7 +330,7 @@ function CurveRow({
       </span>
       <div className="w-[6rem] shrink-0">
         {constant ? (
-          <NumberInput
+          <EfxbnNumberInput
             value={curve.keys[0]?.value ?? 0}
             integral={false}
             disabled={disabled}
@@ -451,18 +403,29 @@ function ResourceBinder({
     return [...seen.values()].sort((left, right) => left.text.localeCompare(right.text));
   }, [inventory]);
 
-  const textureLabelByHash = useMemo(() => {
-    const labels = new Map<number, string>();
+  const textureOptions = useMemo(() => {
+    const seen = new Map<number, EfxbnTextureOption>();
     for (const file of inventory.textures) {
-      if (file.hash && !file.missing) labels.set(file.hash.signed, file.name);
-    }
-    for (const file of inventory.commonPack?.textures ?? []) {
-      if (file.hash && !labels.has(file.hash.signed)) {
-        labels.set(file.hash.signed, `${file.name} (${EFFECT_FOLDER_COMMON_PACK_NAME})`);
+      if (file.hash && !file.missing) {
+        seen.set(file.hash.signed, { value: file.hash.signed, text: file.name, path: file.path });
       }
     }
-    return labels;
+    for (const file of inventory.commonPack?.textures ?? []) {
+      if (file.hash && !file.missing && !seen.has(file.hash.signed)) {
+        seen.set(file.hash.signed, {
+          value: file.hash.signed,
+          text: `${file.name} (${EFFECT_FOLDER_COMMON_PACK_NAME})`,
+          path: file.path,
+        });
+      }
+    }
+    return [...seen.values()].sort((left, right) => left.text.localeCompare(right.text));
   }, [inventory]);
+
+  const textureLabelByHash = useMemo(
+    () => new Map(textureOptions.map((option) => [option.value, option.text])),
+    [textureOptions],
+  );
 
   const parameterOptions = useMemo(
     () =>
@@ -585,6 +548,17 @@ function ResourceBinder({
               ))}
             </SelectContent>
           </Select>
+          {slot.current >= 0 ? (
+            <EfxbnTextureParameterPicker
+              document={doc}
+              blockIndex={blockIndex}
+              parameterIndex={slot.current}
+              textureOptions={textureOptions}
+              disabled={disabled}
+              onChange={onChange}
+              onError={onError}
+            />
+          ) : null}
         </div>
       ))}
     </div>
@@ -614,7 +588,8 @@ function Group({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const fields = useMemo(() => efxbnFieldsInGroup(group), [group]);
-  if (fields.length === 0) return null;
+  const block = doc.summary.effects[blockIndex];
+  if (fields.length === 0 || !block) return null;
   const dirtyCount = fields.filter((entry) => dirtyFields.has(efxbnFieldId(entry))).length;
 
   return (
@@ -638,7 +613,18 @@ function Group({
           </span>
         ) : null}
       </button>
-      {open
+      {open && group === "viewRamp" ? (
+        <EfxbnViewAngleRampEditor
+          document={doc}
+          blockIndex={blockIndex}
+          block={block}
+          dirtyFields={dirtyFields}
+          disabled={disabled}
+          onChange={onChange}
+          onError={onError}
+        />
+      ) : null}
+      {open && group !== "viewRamp"
         ? fields.map((entry) =>
             entry.kind === "flags" ? (
               <div key={efxbnFieldId(entry)} className="py-1">
