@@ -35,7 +35,11 @@
     "hktFailed": "HKT failed for {{name}}: {{message}}",
     "replaceHktFailed": "Replace HKT failed: {{message}}",
     "batchTextureValidation": "Batch texture validation failed: {{message}}",
-    "missionMapFailed": "Could not open the map this mission script names"
+    "missionMapFailed": "Could not open the map this mission script names",
+    "fhm2dSaveFailed": "Repack failed",
+    "fhm2dModPathMissing": "OB mod folder is not configured. Set it in Config before repacking.",
+    "fhm2dRemoveVgsht2Failed": "Repacked to {{path}}, but failed to remove .vgsht2: {{message}}",
+    "infoCsvReloadFailed": "Could not reload {{files}} from disk: {{message}}"
   },
   "progress": {
     "preparing": "Preparing {{fileName}}...",
@@ -90,6 +94,7 @@
     "extractedFolderName": "Name for extracted FHM2D folder",
     "extractFhm2d": "Extract FHM2D",
     "saveAsFolder": "Save as Folder",
+    "saveAsFhm2d": "Repack stage .fhm2d",
     "resetPlacementRow": "Reset placement row #{{index}}",
     "resetPlacementField": "Reset placement field",
     "resetBaseTransform": "Reset base transform",
@@ -141,7 +146,10 @@
     "deletedSubModels": "Deleted {{count}} sub-model(s)",
     "baseMarkedDelete": "Base model marked for deletion",
     "hktReplaced": "HKT replaced",
-    "importedDae": "Imported {{count}} DAE object(s) to scene"
+    "importedDae": "Imported {{count}} DAE object(s) to scene",
+    "fhm2dSaved": "Repacked to {{path}} ({{size}} MB)",
+    "fhm2dRemovedVgsht2": "Removed the matching .vgsht2 so the game loads the new pack",
+    "infoCsvReloaded": "Reloaded {{files}} from disk"
   },
   "info": {
     "noHktFiles": "No HKT collision files found"

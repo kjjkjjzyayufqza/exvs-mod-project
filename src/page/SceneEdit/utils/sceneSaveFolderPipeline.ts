@@ -395,12 +395,25 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
   // Phase 6: Write HKT files (session-based HKT is handled by sceneSaveAsFolder IPC)
   emitStep(onProgress, "hkt", "Writing HKT files...", "done", "Via session");
 
-  // Phase 7: Write CSV files
+  // Phase 7: Write CSV files.
+  // A clean graphic-param or placement flag means the editor has not edited that
+  // file, so an external edit on disk must be packed as-is. Rewriting from the
+  // in-memory copy loaded at open would wipe it. Structural placement changes
+  // (new DAE or deletes) still rewrite placement.csv.
   emitStep(onProgress, "csv", "Writing CSV files...", "running");
   try {
     const infoFolder = await resolveOrCreateInfoFolder(stageRoot);
-    const gpCsv = graphicParams.map((p) => p.key === "" && p.value === "" ? "" : `${p.key},${p.value}`).join("\r\n") + "\r\n";
-    await writeTextFile(`${infoFolder}/graphic_param.csv`, gpCsv);
+    const persistGraphicCsv = dirtyStore.global.graphicParams;
+    const persistPlacementCsv =
+      dirtyStore.global.placementOrder || convertedCount > 0 || deletedCount > 0;
+    const csvDetails: string[] = [];
+    if (persistGraphicCsv) {
+      const gpCsv = graphicParams.map((p) => p.key === "" && p.value === "" ? "" : `${p.key},${p.value}`).join("\r\n") + "\r\n";
+      await writeTextFile(`${infoFolder}/graphic_param.csv`, gpCsv);
+      csvDetails.push("graphic_param.csv");
+    } else {
+      csvDetails.push("graphic_param.csv kept");
+    }
 
     let placementRowsToSave: readonly PlacementRow[] = placementEntries;
     let effectiveSubModels: ReadonlyArray<{ folderName: string; objectIndex: number }> = subModels;
@@ -441,14 +454,18 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
       modelFolderCount,
     );
 
-    if (placementHeader.length > 0 && placementRowsToSave.length > 0) {
+    if (persistPlacementCsv && placementHeader.length > 0 && placementRowsToSave.length > 0) {
       const headerLine = placementHeader.join(",");
       const dataLines = placementRowsToSave.map((e) => e.rawFields.join(","));
       const placementCsv = [headerLine, ...dataLines].join("\r\n") + "\r\n";
       await writeTextFile(`${infoFolder}/placement.csv`, placementCsv);
-    } else if (placementRowsToSave.length > 0) {
+      csvDetails.push("placement.csv");
+    } else if (persistPlacementCsv && placementRowsToSave.length > 0) {
       const placementCsv = placementRowsToSave.map((e) => e.rawFields.join(",")).join("\r\n") + "\r\n";
       await writeTextFile(`${infoFolder}/placement.csv`, placementCsv);
+      csvDetails.push("placement.csv");
+    } else if (!persistPlacementCsv) {
+      csvDetails.push("placement.csv kept");
     }
 
     if (sceneSessionId) {
@@ -466,7 +483,7 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
       }
     }
 
-    emitStep(onProgress, "csv", "Writing CSV files...", "done");
+    emitStep(onProgress, "csv", "Writing CSV files...", "done", csvDetails.join(", "));
   } catch (err) {
     emitStep(onProgress, "csv", "Writing CSV files...", "error", undefined, err instanceof Error ? err.message : String(err));
   }

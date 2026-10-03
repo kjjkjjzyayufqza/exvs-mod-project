@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useTransition, useEffect, useMemo } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import { invoke } from "@tauri-apps/api/core";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { open } from "@tauri-apps/plugin-dialog";
+import { watch } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -168,12 +169,22 @@ import {
   SCENE_IMPORT_DAE_CONFIG_DIALOG_PATH_KEY,
   SCENE_IMPORT_FHM2D_DIALOG_PATH_KEY,
   SCENE_OPEN_FOLDER_DIALOG_PATH_KEY,
-  SCENE_SAVE_FHM2D_DIALOG_PATH_KEY,
 } from "./utils/sceneEditorSettings";
 import { useSceneDirtyStore } from "./store/sceneDirtyStore";
 import { useSceneTextureManagerStore } from "./store/sceneTextureManagerStore";
 import { executeSaveFolderPipeline } from "./utils/sceneSaveFolderPipeline";
 import { executeSaveFhm2dPipeline } from "./utils/sceneSaveFhm2dPipeline";
+import { resolveInfoFolderPath } from "./utils/sceneInfoFolder";
+import {
+  buildInfoCsvDiskPatch,
+  infoCsvReloadPlan,
+  type InfoCsvDiskPatch,
+} from "./utils/sceneInfoDiskHotReload";
+import {
+  buildStageModFhm2dOutputPath,
+  readStagePackHashName,
+} from "./utils/sceneStageStructure";
+import { removeMatchingModVgsht2 } from "@/page/TestEditor/utils/modVgsht2";
 import {
   resolveModelReplaceTarget,
   type ModelReplaceTargetInfo,
@@ -662,6 +673,14 @@ export default function SceneEdit() {
     graphicParams: GraphicParam[];
     placementEntries: PlacementRow[];
   } | null>(null);
+  const graphicParamsRef = useRef(graphicParams);
+  graphicParamsRef.current = graphicParams;
+  const placementHeaderRef = useRef(placementHeader);
+  placementHeaderRef.current = placementHeader;
+  const placementEntriesRef = useRef(placementEntries);
+  placementEntriesRef.current = placementEntries;
+  const appliedGraphicParamKeysRef = useRef(appliedGraphicParamKeys);
+  appliedGraphicParamKeysRef.current = appliedGraphicParamKeys;
   const subModelManifestRef = useRef<SubModelManifestEntry[]>([]);
 
   // Merge disk-loaded subModels with imported DAE objects so the placement panel
@@ -916,6 +935,7 @@ export default function SceneEdit() {
   const [placementGizmoMode, setPlacementGizmoMode] = useState<PlacementGizmoMode>("translate");
   const workspaceRoot = useConfigStore((state) => trimmedConfigPath(state.testEditorFolder));
   const obDplCachePath = useConfigStore((state) => trimmedConfigPath(state.obDplCachePath));
+  const obModPath = useConfigStore((state) => trimmedConfigPath(state.obModPath));
   const sceneEditGizmoSize = useConfigStore((state) => state.sceneEditGizmoSize ?? DEFAULT_SCENE_GIZMO_SIZE);
   const setSceneEditGizmoSize = useConfigStore((state) => state.setSceneEditGizmoSize);
   const [drawStats, setDrawStats] = useState<SceneDrawStats | null>(null);
@@ -2046,6 +2066,101 @@ export default function SceneEdit() {
     [surfaceValidationErrors],
   );
 
+  const applyInfoCsvDiskPatch = useCallback((patch: InfoCsvDiskPatch) => {
+    if (patch.graphicParams) {
+      graphicParamsRef.current = patch.graphicParams;
+      setGraphicParams(patch.graphicParams);
+      if (patch.appliedSunKeys) {
+        appliedGraphicParamKeysRef.current = patch.appliedSunKeys;
+        setAppliedGraphicParamKeys(patch.appliedSunKeys);
+      }
+    }
+    if (patch.placementEntries && patch.placementHeader && patch.placementColMap) {
+      placementHeaderRef.current = patch.placementHeader;
+      placementEntriesRef.current = patch.placementEntries;
+      setPlacementHeader(patch.placementHeader);
+      setPlacementColMap(patch.placementColMap);
+      setPlacementEntries(patch.placementEntries);
+    }
+    if (initialSnapshotRef.current && patch.changedFiles.length > 0) {
+      initialSnapshotRef.current = {
+        graphicParams: patch.graphicParams ?? initialSnapshotRef.current.graphicParams,
+        placementEntries: patch.placementEntries ?? initialSnapshotRef.current.placementEntries,
+      };
+    }
+  }, []);
+
+  const refreshCleanInfoCsv = useCallback(async (
+    which: { graphic: boolean; placement: boolean },
+  ): Promise<InfoCsvDiskPatch | null> => {
+    if (!stageRoot || (!which.graphic && !which.placement)) return null;
+    const skeleton = await stageLoadSkeleton(stageRoot);
+    const dirty = useSceneDirtyStore.getState().global;
+    const patch = buildInfoCsvDiskPatch(
+      skeleton,
+      {
+        graphicParams: graphicParamsRef.current,
+        placementHeader: placementHeaderRef.current,
+        placementEntries: placementEntriesRef.current,
+        appliedGraphicParamKeys: appliedGraphicParamKeysRef.current,
+      },
+      {
+        reloadGraphic: which.graphic && !dirty.graphicParams,
+        reloadPlacement: which.placement && !dirty.placementOrder,
+      },
+    );
+    if (patch.changedFiles.length > 0) applyInfoCsvDiskPatch(patch);
+    return patch;
+  }, [stageRoot, applyInfoCsvDiskPatch]);
+
+  useEffect(() => {
+    if (!stageRoot) return;
+    let cancelled = false;
+    let unwatch: (() => void) | undefined;
+    let reloadSerial = 0;
+
+    const onDiskEvent = (paths: readonly string[]) => {
+      const plan = infoCsvReloadPlan(paths, useSceneDirtyStore.getState().global);
+      if (!plan.reloadGraphic && !plan.reloadPlacement) return;
+      const serial = ++reloadSerial;
+      const files = [
+        plan.reloadGraphic ? "graphic_param.csv" : null,
+        plan.reloadPlacement ? "placement.csv" : null,
+      ].filter((name): name is string => name !== null);
+      void refreshCleanInfoCsv({
+        graphic: plan.reloadGraphic,
+        placement: plan.reloadPlacement,
+      }).then((patch) => {
+        if (cancelled || serial !== reloadSerial) return;
+        if (patch && patch.changedFiles.length > 0) {
+          toast.success(t("success.infoCsvReloaded", { files: patch.changedFiles.join(", ") }));
+        }
+      }).catch((err: unknown) => {
+        if (cancelled || serial !== reloadSerial) return;
+        const message = err instanceof Error ? err.message : String(err);
+        toast.error(t("errors.infoCsvReloadFailed", { files: files.join(", "), message }));
+      });
+    };
+
+    void resolveInfoFolderPath(stageRoot).then(async (infoFolder) => {
+      if (cancelled) return;
+      try {
+        unwatch = await watch(infoFolder, (event) => {
+          onDiskEvent(event.paths);
+        }, { recursive: false, delayMs: 250 });
+      } catch (err) {
+        console.warn("[SceneEdit] Failed to watch info CSV files:", err);
+      }
+    }).catch((err: unknown) => {
+      console.warn("[SceneEdit] Failed to resolve info folder for CSV watch:", err);
+    });
+
+    return () => {
+      cancelled = true;
+      unwatch?.();
+    };
+  }, [stageRoot, refreshCleanInfoCsv, t]);
+
   const handleSaveFolder = useCallback(async () => {
     if (!stageRoot) return;
 
@@ -2057,6 +2172,19 @@ export default function SceneEdit() {
     }
 
     if (!(await runNumatbPreflight(stageRoot))) return;
+
+    try {
+      await refreshCleanInfoCsv({
+        graphic: !dirtyStore.global.graphicParams,
+        placement: !dirtyStore.global.placementOrder,
+      });
+    } catch (err) {
+      toast.error(t("errors.infoCsvReloadFailed", {
+        files: "graphic_param.csv, placement.csv",
+        message: err instanceof Error ? err.message : String(err),
+      }));
+      return;
+    }
 
     setSaveProgressState({
       open: true,
@@ -2071,9 +2199,9 @@ export default function SceneEdit() {
       const result = await executeSaveFolderPipeline({
         stageRoot,
         dirtyStore,
-        graphicParams,
-        placementHeader,
-        placementEntries,
+        graphicParams: graphicParamsRef.current,
+        placementHeader: placementHeaderRef.current,
+        placementEntries: placementEntriesRef.current,
         subModels,
         importedDaeObjects,
         sceneSessionId,
@@ -2090,10 +2218,9 @@ export default function SceneEdit() {
       if (result.hasStructuralChanges && result.reloadedBundle) {
         await applyBundle(stageRoot, result.reloadedBundle as any, { showToast: false });
       } else if (!result.hasStructuralChanges) {
-        // Non-structural save: in-memory state is already correct, just update baseline snapshot
         initialSnapshotRef.current = {
-          graphicParams: graphicParams.map((p) => ({ ...p })),
-          placementEntries: placementEntries.map((e) => ({ ...e, rawFields: [...e.rawFields] })),
+          graphicParams: graphicParamsRef.current.map((p) => ({ ...p })),
+          placementEntries: placementEntriesRef.current.map((e) => ({ ...e, rawFields: [...e.rawFields] })),
         };
       }
 
@@ -2130,10 +2257,15 @@ export default function SceneEdit() {
     } finally {
       saveTimer.end();
     }
-  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, modelReplacements, applyBundle, updateSaveProgress, autoApproveSaveDelete, promptSaveConfirm, runNumatbPreflight, surfaceValidationErrors]);
+  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, modelReplacements, applyBundle, updateSaveProgress, autoApproveSaveDelete, promptSaveConfirm, runNumatbPreflight, surfaceValidationErrors, refreshCleanInfoCsv, t]);
 
   const handleSaveFhm2d = useCallback(async () => {
     if (!stageRoot) return;
+
+    if (!obModPath) {
+      toast.error(t("errors.fhm2dModPathMissing"));
+      return;
+    }
 
     const dirtyStore = useSceneDirtyStore.getState();
     const changePreview = buildSaveChangePreview(dirtyStore);
@@ -2144,12 +2276,27 @@ export default function SceneEdit() {
 
     if (!(await runNumatbPreflight(stageRoot))) return;
 
-    const outputPath = await save({
-      filters: [{ name: "FHM2D File", extensions: ["fhm2d"] }],
-      defaultPath: await getStoredDialogDefaultPath(SCENE_SAVE_FHM2D_DIALOG_PATH_KEY),
-    });
-    if (!outputPath) return;
-    await rememberStoredDialogSelection(SCENE_SAVE_FHM2D_DIALOG_PATH_KEY, outputPath, "file");
+    try {
+      await refreshCleanInfoCsv({
+        graphic: !dirtyStore.global.graphicParams,
+        placement: !dirtyStore.global.placementOrder,
+      });
+    } catch (err) {
+      toast.error(t("errors.infoCsvReloadFailed", {
+        files: "graphic_param.csv, placement.csv",
+        message: err instanceof Error ? err.message : String(err),
+      }));
+      return;
+    }
+
+    let outputPath: string;
+    try {
+      const hashName = await readStagePackHashName(stageRoot);
+      outputPath = buildStageModFhm2dOutputPath(obModPath, hashName);
+    } catch (err) {
+      toast.error(t("errors.fhm2dSaveFailed"), { description: String(err) });
+      return;
+    }
 
     setSaveProgressState({
       open: true,
@@ -2164,9 +2311,9 @@ export default function SceneEdit() {
       const result = await executeSaveFhm2dPipeline({
         stageRoot,
         dirtyStore,
-        graphicParams,
-        placementHeader,
-        placementEntries,
+        graphicParams: graphicParamsRef.current,
+        placementHeader: placementHeaderRef.current,
+        placementEntries: placementEntriesRef.current,
         subModels,
         importedDaeObjects,
         sceneSessionId,
@@ -2180,6 +2327,8 @@ export default function SceneEdit() {
         setSaveProgressState((prev) => ({ ...prev, canClose: true }));
         if (result.validationErrors && result.validationErrors.length > 0) {
           surfaceValidationErrors(result.validationErrors, "Missing textures block packing");
+        } else {
+          toast.error(t("errors.fhm2dSaveFailed"));
         }
         return;
       }
@@ -2188,8 +2337,8 @@ export default function SceneEdit() {
         await applyBundle(stageRoot, result.reloadedBundle as any, { showToast: false });
       } else if (!result.hasStructuralChanges) {
         initialSnapshotRef.current = {
-          graphicParams: graphicParams.map((p) => ({ ...p })),
-          placementEntries: placementEntries.map((e) => ({ ...e, rawFields: [...e.rawFields] })),
+          graphicParams: graphicParamsRef.current.map((p) => ({ ...p })),
+          placementEntries: placementEntriesRef.current.map((e) => ({ ...e, rawFields: [...e.rawFields] })),
         };
       }
 
@@ -2201,13 +2350,28 @@ export default function SceneEdit() {
       useSceneDirtyStore.getState().reset();
       useSceneTextureManagerStore.getState().markTexturesSaved();
       setModelReplacements([]);
+      const packedPath = result.fhm2dPath || outputPath;
+      const sizeMb = (result.fhm2dSizeBytes / (1024 * 1024)).toFixed(1);
       const completionSummary = [
         ...buildSaveResultSummary(changePreview, result),
-        `Packed FHM2D (${(result.fhm2dSizeBytes / (1024 * 1024)).toFixed(1)} MB)`,
+        `Packed FHM2D (${sizeMb} MB)`,
+        packedPath,
       ];
       setSaveProgressState((prev) => ({ ...prev, canClose: true, completionSummary }));
 
-      toast.success(t("success.fhm2dSaved", { size: (result.fhm2dSizeBytes / (1024 * 1024)).toFixed(1) }));
+      try {
+        const removedVgsht2 = await removeMatchingModVgsht2(obModPath, packedPath);
+        toast.success(t("success.fhm2dSaved", { path: packedPath, size: sizeMb }), {
+          description: removedVgsht2 ? t("success.fhm2dRemovedVgsht2") : undefined,
+        });
+      } catch (removeErr) {
+        toast.error(
+          t("errors.fhm2dRemoveVgsht2Failed", {
+            path: packedPath,
+            message: removeErr instanceof Error ? removeErr.message : String(removeErr),
+          }),
+        );
+      }
     } catch (err: any) {
       setSaveProgressState((prev) => ({ ...prev, canClose: true }));
       repackTimer.fail(err);
@@ -2215,7 +2379,7 @@ export default function SceneEdit() {
     } finally {
       repackTimer.end();
     }
-  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, modelReplacements, applyBundle, updateSaveProgress, autoApproveSaveDelete, promptSaveConfirm, runNumatbPreflight, surfaceValidationErrors]);
+  }, [stageRoot, obModPath, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, modelReplacements, applyBundle, updateSaveProgress, autoApproveSaveDelete, promptSaveConfirm, runNumatbPreflight, surfaceValidationErrors, refreshCleanInfoCsv, t]);
 
   const handleGraphicParamValueChange = useCallback(
     (index: number, value: string) => {

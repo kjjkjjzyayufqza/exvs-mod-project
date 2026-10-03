@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildStageModFhm2dOutputPath,
   buildStageStructureJsonFromFiles,
   resolveStagePackStructureTarget,
   type StagePackFileEntry,
@@ -35,6 +36,15 @@ describe("sceneStageStructure", () => {
     ]);
     expect(target.packFolderName).toBe("0x16F73C97_Minecraft_world_1");
     expect(target.hashHex).toBe("0x16F73C97");
+  });
+
+  it("names the game pack from HashName inside the OB mod folder", () => {
+    expect(buildStageModFhm2dOutputPath("E:/OB/data/x64/mod", "0x4d1f5138")).toBe(
+      "E:/OB/data/x64/mod\\0x4D1F5138.fhm2d",
+    );
+    expect(buildStageModFhm2dOutputPath("E:\\OB\\data\\x64\\mod\\", "16F73C97")).toBe(
+      "E:\\OB\\data\\x64\\mod\\0x16F73C97.fhm2d",
+    );
   });
 
   it("throws when the stage root is not inside a stage pack folder", () => {

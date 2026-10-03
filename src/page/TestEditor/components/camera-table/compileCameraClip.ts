@@ -16,18 +16,29 @@ export type CompiledChannel = {
   nanV0: number;
 };
 
+/** Game axes: X the unit's right, Y up, Z the unit's front. */
+export type CameraVec3 = { x: number; y: number; z: number };
+
 export type CompiledShot = {
   entryIndex: number;
   duration: number;
   firstShot: number;
   nuanmb: number;
-  offset: number;
-  offsetNan: boolean;
+  positionTarget: number;
+  orientationTarget: number;
+  frameMode: number;
+  distanceScale: number;
+  offsetStart: CameraVec3;
+  offsetEnd: CameraVec3;
+  offsetEase: number;
   pitch: CompiledChannel;
   yaw: CompiledChannel;
-  fov: CompiledChannel;
-  ch3: CompiledChannel;
-  ch4: CompiledChannel;
+  /** Eye distance from the look-at point (`player+472`). */
+  distance: CompiledChannel;
+  /** Roll in degrees on disk (`player+476`). */
+  roll: CompiledChannel;
+  /** Field of view in degrees (`player+480`). */
+  fieldOfView: CompiledChannel;
 };
 
 function specOffset(specs: CameraFieldSpec[], hash: number): number | null {
@@ -91,20 +102,40 @@ function compileChannel(
   };
 }
 
+/** sub_1405DBF70: a NaN start compiles to 0 and a NaN end to the start. */
+function compileOffsetAxis(
+  raw: number[] | undefined,
+  specs: CameraFieldSpec[],
+  startHash: number,
+  endHash: number,
+): { start: number; end: number } {
+  const startRaw = readFloat(raw, specs, startHash);
+  const endRaw = readFloat(raw, specs, endHash);
+  const start = isNan32(startRaw) ? 0 : startRaw;
+  return { start, end: isNan32(endRaw) ? start : endRaw };
+}
+
 export function compileShot(
   raw: number[] | undefined,
   specs: CameraFieldSpec[],
   entry: CameraTableEntry,
 ): CompiledShot {
   const durationRaw = readFloat(raw, specs, CAM_CMD.duration);
-  const offsetRaw = readFloat(raw, specs, CAM_CMD.offset);
+  const x = compileOffsetAxis(raw, specs, CAM_CMD.offsetX, CAM_CMD.offsetXEnd);
+  const y = compileOffsetAxis(raw, specs, CAM_CMD.offset, CAM_CMD.offsetYEnd);
+  const z = compileOffsetAxis(raw, specs, CAM_CMD.offsetZ, CAM_CMD.offsetZEnd);
   return {
     entryIndex: entry.entryIndex,
     duration: isNan32(durationRaw) ? 0 : durationRaw,
     firstShot: entry.firstShot,
     nuanmb: readUint(raw, specs, CAM_CMD.nuanmb),
-    offset: isNan32(offsetRaw) ? 0 : offsetRaw,
-    offsetNan: isNan32(offsetRaw),
+    positionTarget: readUint(raw, specs, CAM_CMD.positionTarget),
+    orientationTarget: readUint(raw, specs, CAM_CMD.orientationTarget),
+    frameMode: readUint(raw, specs, CAM_CMD.frameMode),
+    distanceScale: readUint(raw, specs, CAM_CMD.distanceScale),
+    offsetStart: { x: x.start, y: y.start, z: z.start },
+    offsetEnd: { x: x.end, y: y.end, z: z.end },
+    offsetEase: remapEase(readUint(raw, specs, CAM_CMD.offsetEase)),
     pitch: compileChannel(raw, specs, {
       mode: CAM_CMD.pitchMode,
       v0: CAM_CMD.pitchV0,
@@ -119,21 +150,21 @@ export function compileShot(
       v2: CAM_CMD.yawV2,
       v3: CAM_CMD.yawV3,
     }, true),
-    fov: compileChannel(raw, specs, {
+    distance: compileChannel(raw, specs, {
       mode: CAM_CMD.fovMode,
       v0: CAM_CMD.fovV0,
       v1: CAM_CMD.fovV1,
       v2: CAM_CMD.fovV2,
       v3: CAM_CMD.fovV3,
     }, false),
-    ch3: compileChannel(raw, specs, {
+    roll: compileChannel(raw, specs, {
       mode: CAM_CMD.ch3Mode,
       v0: CAM_CMD.ch3V0,
       v1: CAM_CMD.ch3V1,
       v2: CAM_CMD.ch3V2,
       v3: CAM_CMD.ch3V3,
     }, true),
-    ch4: compileChannel(raw, specs, {
+    fieldOfView: compileChannel(raw, specs, {
       mode: CAM_CMD.ch4Mode,
       v0: CAM_CMD.ch4V0,
       v1: CAM_CMD.ch4V1,

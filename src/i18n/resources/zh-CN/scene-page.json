@@ -35,7 +35,11 @@
     "hktFailed": "为 {{name}} 生成 HKT 失败：{{message}}",
     "replaceHktFailed": "替换 HKT 失败：{{message}}",
     "batchTextureValidation": "批量纹理校验失败：{{message}}",
-    "missionMapFailed": "无法打开任务脚本指定的地图"
+    "missionMapFailed": "无法打开任务脚本指定的地图",
+    "fhm2dSaveFailed": "重新打包失败",
+    "fhm2dModPathMissing": "还没设置 OB mod 目录。请先在配置里填写，再重新打包。",
+    "fhm2dRemoveVgsht2Failed": "已打包到 {{path}}，但无法删除同名 .vgsht2：{{message}}",
+    "infoCsvReloadFailed": "无法从磁盘重新加载 {{files}}：{{message}}"
   },
   "progress": {
     "preparing": "正在准备 {{fileName}}……",
@@ -90,6 +94,7 @@
     "extractedFolderName": "提取的 FHM2D 文件夹名称",
     "extractFhm2d": "提取 FHM2D",
     "saveAsFolder": "保存为文件夹",
+    "saveAsFhm2d": "重新打包场景 .fhm2d",
     "resetPlacementRow": "重置放置行 #{{index}}",
     "resetPlacementField": "重置放置字段",
     "resetBaseTransform": "重置基础变换",
@@ -141,7 +146,10 @@
     "deletedSubModels": "已删除 {{count}} 个子模型",
     "baseMarkedDelete": "基础模型已标记为删除",
     "hktReplaced": "HKT 已替换",
-    "importedDae": "已将 {{count}} 个 DAE 对象导入场景"
+    "importedDae": "已将 {{count}} 个 DAE 对象导入场景",
+    "fhm2dSaved": "已打包到 {{path}}（{{size}} MB）",
+    "fhm2dRemovedVgsht2": "已删除同名 .vgsht2，游戏会读取新的包",
+    "infoCsvReloaded": "已从磁盘重新加载 {{files}}"
   },
   "info": {
     "noHktFiles": "未找到 HKT 碰撞文件"

@@ -113,9 +113,11 @@ So: one BST node per clip hash, one segment pointer per compiled shot, max **20*
 | +64 | `0x577FE40F` | int; outer radius² test in `644D70` |
 | +68 | `0xF7CB1B33` | `== 1` → distance / scale in `646C20` reconstruct |
 | +72 | five `5DC150` | dest `+0x48 / +0x64 / +0x80 / +0x9C / +0xB8` (see §4.1) |
-| +216 | `0xA50831E5` | `5DBF70`; inherit `0xE62932A7`; packed into `a1[28]` |
-| +244 | `0xD20F0173` | offset; inherit `0x912E0231`; packed into `a1[28]` |
-| +272 | `0x4B0650C9` | `5DBF70`; inherit `0x0827538B`; packed into `a1[28]` |
+| +216 | `0xA50831E5` | look-at offset **X (right)** start; end `0xE62932A7` (+220) |
+| +244 | `0xD20F0173` | look-at offset **Y (up)** start; end `0x912E0231` (+248) |
+| +272 | `0x4B0650C9` | look-at offset **Z (front)** start; end `0x0827538B` (+276) |
+
+The three "inherit" words are the **end** values: `5DBF70` turns a NaN start into 0 and a NaN end into the start, and `647590` eases start -> end with the remapped `0x37FC285F` (+296). `646C20` packs `unpacklo(unpacklo(+216, +272), unpacklo(+244, 0))` = **(+216, +244, +272)**, so X / Y / Z follow the shot offsets, not the argument order. A clip that wrote its forward offset into `0xD20F0173` put the look-at 300 under the unit in game (2026-10-02).
 | +300 | `0x41436715` | |
 | +304 | `0x99533970` | `647290`: nonzero gates a flip path |
 
@@ -220,22 +222,41 @@ For each 28-byte block, `*(block+0)` (v1-authored flag):
 
 ### 4.5 `644D70` / `30B900`
 
-`30B900` is the shared easing kernel also used by `sys_53` 0x1/0x2/0x3. Case 0 is `t = clock/duration`.
+`30B900` is the shared easing kernel also used by `sys_53` 0x1/0x2/0x3. With `u = clock/duration` (IDA asm and constants, 2026-10-02):
+
+| Kernel | Authored | Weight | Function |
+|---|---|---|---|
+| 0 | 0, 1 | `u` | inline |
+| 1 | 2 | `1 - cos(u pi/2)`: slow start, fastest at the end | `30BDB0` |
+| 2 | 3 | `sin(u pi/2)`: fastest at the start, slow end | inline |
+| 3 | - | `1 - u` | inline |
+| 4 | - | `cos(u pi/2)` | `30BD60` |
+| 5 | - | `1 - sin(u pi/2)` | `30BD10` |
+| 6 | 4 | `cosEase(Bezier(0, 0, 1, 1))`: cosine of smoothstep | `30BC60` |
+| 7 | 5 | `cosEase(Bezier(0, 0, 0.2, 1))`: holds, then rushes late | `30BBA0` |
+| 8 | 6 | `cosEase(Bezier(0, 0.8, 1, 1))`: 90% at half the span, 99% at 70% | `30BAF0` |
+
+`cosEase(b) = 0.5 + 0.5 sin(pi b - pi/2)`; the Bezier control values are `dword_141B4E94C` (0.8) and `dword_141B4E8A4` (0.2). Kernels 3-5 run backwards and are not reachable from the remap. Kernel 8 is why an authored-6 shot sits still for its last third in game: a 460-frame shot moved for about 300 frames, then held for about 2.5 s before the next shot (user 2026-10-02).
 
 `644D70` is an optional radius/exit test on compiled `+60/+64`, not a FOV consumer.
 
 ---
 
-## 5. Load timing (reuse POC §5; do not re-litigate)
+## 5. Load timing
 
-| Family | When the compiled rows are expected in the clip map |
-|---|---|
-| `00system` | process lifetime |
-| `02winlose` | per match |
-| `01waza` | per loaded unit |
-| `03cpubattle` | CPU mode only |
+All four families compile **once per process** into one clip map (IDA 2026-10-02): the common pack handler `sub_1405B83C0` hands camera children 0 / 1 / 2 / 5 to `sub_1405DC4C0`, which refuses a table once its count at singleton+0x268CD8 reaches 4. Only the `qword_1421155D0` singleton's constructor and destructor reset that count, and the pack `0xCB665375` loads once at boot. The family is organisational only: a clip works the same in any of the four, and every edit needs a game restart.
 
-A miss still null-derefs `entryBase[20]`. Stay inside a family that is loaded. Victory work stays in `02winlose` word25. Family ↔ child index is §3 (`GetEntry(v7, 0/1/2/5)`), not fileIndex.
+A miss still null-derefs `entryBase[20]`. Family ↔ child index is §3 (`GetEntry(v7, 0/1/2/5)`), not fileIndex.
+
+### 5.1 Pose (IDA 2026-10-02, confirmed in game)
+
+- Look-at = origin (`0x9C5FA5E6`, `sub_140643640`: 1 unit / target midpoint, 2 unit, 3 target) + the offset turned by the frame (`0x796CB7B3`, `sub_1406441B0`: 1 / 2 toward the target, 3 / 4 the unit's facing yaw).
+- Eye = look-at + (sin yaw cos pitch, −sin pitch, cos yaw cos pitch) × `player+472` × scale (`sub_140645240`). Yaw 0 puts the eye in front of the look-at, a negative pitch above it, a positive yaw on the unit's **right**.
+- `player+472` (the `0x749B8F0E` block, the old editor "FOV") is the eye **distance**. The field of view is the fifth block (`0x00836396`, `player+480`). The fourth block (`0x5B9E4CE5`) is a roll.
+- Scale is 1, or `sub_140643D60`'s framing distance when `0xF7CB1B33 == 1`: (4/3 × 7 × characterparam `0xFEADD5BE`) / tan(FOV / 2) for the unit alone.
+- A NaN pitch / yaw / distance start is measured from the eye (`player+16`; on the first shot the hand-over eye `player+256`) against the new shot's starting look-at, so the camera does not jump at the cut.
+- Clip kind (`0x4AF79689`, first nonzero, `sub_140646AD0`): kinds 1 / 2 set `player+600 = 0x18`, which turns on the stage ray checks `6434F0` / `643370` (a hit ends the clip), and leave `player+608` set, which runs the stage resolver. Kind 3 (every winlose clip) does neither.
+- Durations are game frames.
 
 POC default hook hash `0x7EB6FE0E` is an `00system` clip (3 shots), not a winlose pack.
 
@@ -244,8 +265,8 @@ POC default hook hash `0x7EB6FE0E` is an `00system` clip (3 shots), not a winlos
 ## 6. What is still unproven
 
 1. Who **writes** `player+540` (dt). Duration and both clocks share that addend; the unit is therefore one value, but “frame vs second” is L2 without that store. No hook in this pass.
-2. Semantic names for pitch/yaw/third-radian/block4 beyond: pitch is the clamped ±85° slot; FOV overlay is dest `+128` v0; block4 v0 is a linear channel (Rebellion first shot = 30) whose gameplay name is not pinned.
-3. Exact `644930` basis vs homemade `CENTER_RT` Y≈10 (why FOV 11 still frames a ground-height unit).
+2. Resolved in §5.1: dest `+128` (the "FOV" overlay) is the eye distance, the third-radian block is a roll, block4 is the field of view.
+3. Resolved in §5.1: the look-at is origin + offset (Y up is `0xD20F0173`); "FOV 11" was a distance of 11.
 4. L3: in-match `entryBase[20]` for `0xFD5FD16A` should be **5**; `player+5960` should stay 0.
 5. Whether a **modded** nonzero `0xC488848F` can attach a real `CCameraMotion` / nuanmb. Shipped OB rows never do.
 
@@ -253,14 +274,14 @@ POC default hook hash `0x7EB6FE0E` is an `00system` clip (3 shots), not a winlos
 
 ## 7. Three.js / editor implication
 
-Do **not** treat authored FOV+offset as a complete native pose. `644930` is still unproven (§6.3).
+The table editor's viewport follows §5.1 (`evalCameraClip.ts`):
 
-The table editor’s viewport is a stand-in orbit (`evalCameraClip.ts` `cameraWorldPosition`):
-
-- Word40 is a **signed extra** on `PREVIEW_LOOKAT_RADIUS` (36), not the look-at radius. Rebellion `0xFD5FD16A` shot 0 is **−5.5** with FOV 11; ENTER `0x8CA6CC45` is **0**. Using those as the sphere radius puts the camera inside the dummy (blue fill). FOV stays authored so 11 still zooms versus 65.
-- Three.js preview **negates pitch Y** (`y = lookAt.y - distance * sin(pitch)`). HUD still shows the compiled radian. `0x9AC77769` shot 0 stays authored **+30.6° / yaw −146°**; the invert is an editor match, not a `644930` proof.
-- Editor **view zoom** (`cameraTablePreviewViewZoom`) scales the stand-in orbit only. It is not authored FOV/offset.
-- This is preview convention, not a `644930` proof. Do not copy it into a native reconstruct. `0xE4DE8A17` / ch3 on that pack are still unapplied.
+- Game units and axes: the unit stands at the origin facing +Z, its target 150 ahead. Every supported frame (1-4) is then yaw 0 / pitch 0. The canvas flips X into three.js, because the game's +X is the unit's right.
+- Unsupported origins (other than 1-3), frames (other than 1-4) and `0xDC16B398 != 0` show an error banner instead of a guessed pose.
+- First-shot NaN starts begin from the constructor hand-over pose (eye (50, 20, 50), FOV 45) with a notice; in game that is the battle camera.
+- Roll is evaluated, not applied. The characterparam position query offset of a real unit is not applied.
+- Editor **view zoom** (`cameraTablePreviewViewZoom`) narrows the rendered field of view only; it never changes authored data.
+- The legacy key names `fov*` / `ch3*` / `ch4*` / `offset` in `CAM_CMD` stay because they are exported JSON field names; their meaning is distance / roll / field of view / offset Y start.
 
 Shipped OB battle clips are compiled 0x134 parameter playback. `646C20` does not start `CCameraMotion` when `0xC488848F == 0`, and every OB row is 0. Channel eval (`646C20` copies + `647590`) is E2 from asm; dt units are still L2. Keep the table editor as the shipped surface until an in-game H/P/F on framing.
 

@@ -10,8 +10,8 @@
   "save": {
     "folderAria": "保存为文件夹",
     "folderTooltip": "将更改保存到文件夹",
-    "fhm2dAria": "保存为 FHM2D",
-    "fhm2dTooltip": "重新打包并保存为 .fhm2d"
+    "fhm2dAria": "重新打包到 OB mod 目录",
+    "fhm2dTooltip": "重新打包到 OB mod 目录，保存为 HashName.fhm2d"
   },
   "import": {
     "importMeshAria": "导入静态网格",

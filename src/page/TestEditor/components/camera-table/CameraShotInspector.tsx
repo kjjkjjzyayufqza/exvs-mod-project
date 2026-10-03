@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CAM_CMD } from "./cameraCommandHashes";
 import { CameraShotChannelEditors } from "./CameraShotChannelEditors";
+import { CameraShotLookAtEditor } from "./CameraShotLookAtEditor";
 import {
   cameraFieldFloat,
   cameraFieldHex,
@@ -32,7 +33,7 @@ type CameraShotInspectorProps = {
   writable: boolean;
   rawFieldsOpen: boolean;
   onRawFieldsOpenChange: (open: boolean) => void;
-  onWriteFloat: (hash: number, value: number, overlay?: Partial<CameraTableEntry>) => void;
+  onWriteFloat: (hash: number, value: number) => void;
   onWriteUint: (hash: number, value: number) => void;
   onUpdateShot: (overlay: Partial<CameraTableEntry>) => void;
   onRenameEntryId: (entryId: number) => void;
@@ -256,35 +257,6 @@ export function CameraShotInspector({
               className={fieldClass}
             />
           </Field>
-          <Field label={t("cameraTable.fov")}>
-            <Input
-              value={shot.fov == null ? "" : String(shot.fov)}
-              placeholder={t("cameraTable.fovInherit")}
-              disabled={!writable}
-              onChange={(event) => {
-                const text = event.target.value.trim();
-                if (!text) {
-                  onUpdateShot({ fov: null });
-                  return;
-                }
-                const next = Number(text);
-                if (Number.isFinite(next)) onUpdateShot({ fov: next });
-              }}
-              className={fieldClass}
-            />
-          </Field>
-          <Field label={t("cameraTable.offset")}>
-            <Input
-              type="number"
-              value={typeof shot.offset === "number" && Number.isFinite(shot.offset) ? shot.offset : 0}
-              disabled={!writable}
-              onChange={(event) => {
-                const next = Number(event.target.value);
-                if (Number.isFinite(next)) onUpdateShot({ offset: next });
-              }}
-              className={fieldClass}
-            />
-          </Field>
           <Field label={t("cameraTable.firstShot")}>
             <Input
               type="number"
@@ -303,6 +275,14 @@ export function CameraShotInspector({
         <p className="font-mono text-[10px] tabular-nums text-muted-foreground">
           {t("cameraTable.shotN", { n: shotIndex + 1, sort: shot.sortKey })}
         </p>
+
+        <CameraShotLookAtEditor
+          raw={raw}
+          specs={specs}
+          disabled={!writable}
+          onWriteFloat={onWriteFloat}
+          onWriteUint={onWriteUint}
+        />
 
         <CameraShotChannelEditors
           raw={raw}

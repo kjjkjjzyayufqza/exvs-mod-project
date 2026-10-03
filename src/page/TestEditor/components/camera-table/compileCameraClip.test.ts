@@ -73,7 +73,40 @@ describe("compileShot", () => {
     expect(shot.pitch.v1).toBeCloseTo(shot.pitch.v0, 5);
     expect(shot.pitch.v2).toBe(0);
     expect(shot.pitch.ease).toBe(2);
-    expect(shot.fov.v0).toBe(40);
-    expect(shot.fov.v1).toBe(40);
+    expect(shot.distance.v0).toBe(40);
+    expect(shot.distance.v1).toBe(40);
+  });
+
+  it("packs the look-at offset as X (0xA50831E5), Y (0xD20F0173), Z (0x4B0650C9)", () => {
+    const specs: CameraFieldSpec[] = [
+      spec(CAM_CMD.offsetX, 0x78, 5),
+      spec(CAM_CMD.offsetXEnd, 0xb0, 5),
+      spec(CAM_CMD.offset, 0xa0, 5),
+      spec(CAM_CMD.offsetYEnd, 0x5c, 5),
+      spec(CAM_CMD.offsetZ, 0x30, 5),
+      spec(CAM_CMD.offsetZEnd, 0x08, 5),
+      spec(CAM_CMD.offsetEase, 0x1c, 1),
+    ];
+    let raw = new Array(220).fill(0);
+    raw = writeCameraFieldFloat(raw, 0x78, Number.NaN);
+    raw = writeCameraFieldFloat(raw, 0xb0, Number.NaN);
+    raw = writeCameraFieldFloat(raw, 0xa0, 10);
+    raw = writeCameraFieldFloat(raw, 0x5c, Number.NaN);
+    raw = writeCameraFieldFloat(raw, 0x30, -300);
+    raw = writeCameraFieldFloat(raw, 0x08, 325);
+    raw = writeCameraFieldUint(raw, 0x1c, 6);
+    const entry: CameraTableEntry = {
+      entryId: 1,
+      entryIndex: 0,
+      clipHash: 0x03de1253,
+      sortKey: 0xfd3,
+      fov: null,
+      offset: 10,
+      firstShot: 3,
+    };
+    const shot = compileShot(raw, specs, entry);
+    expect(shot.offsetStart).toEqual({ x: 0, y: 10, z: -300 });
+    expect(shot.offsetEnd).toEqual({ x: 0, y: 10, z: 325 });
+    expect(shot.offsetEase).toBe(8);
   });
 });

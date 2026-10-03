@@ -56,6 +56,14 @@
       ]
     },
     {
+      "identifier": "fs:allow-watch",
+      "allow": [
+        {
+          "path": "*/**"
+        }
+      ]
+    },
+    {
       "identifier": "shell:allow-execute",
       "allow": [
         {

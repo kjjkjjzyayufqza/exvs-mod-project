@@ -3499,3 +3499,55 @@ fn stage_has_numbered_nutexb_subdirs(content_root: &Path) -> bool {
             })
     })
 }
+
+#[test]
+fn info_light_cubemaps_follow_structure_rank_not_filename() {
+    let root = Path::new(r"E:\stage\0\0");
+    let specular = root
+        .join("info")
+        .join("light")
+        .join("900default_ibl_specular.nutexb");
+    let irradiance = root
+        .join("info")
+        .join("light")
+        .join("900default_ibl_irradiance.nutexb");
+    let mut ranks = HashMap::new();
+    ranks.insert(
+        "info/light/900default_ibl_specular.nutexb".to_string(),
+        0,
+    );
+    ranks.insert(
+        "info/light/900default_ibl_irradiance.nutexb".to_string(),
+        1,
+    );
+
+    assert!(
+        info_pack_file_order(&specular, root, &ranks)
+            < info_pack_file_order(&irradiance, root, &ranks)
+    );
+
+    let alphabetical = HashMap::new();
+    assert!(
+        info_pack_file_order(&irradiance, root, &alphabetical)
+            < info_pack_file_order(&specular, root, &alphabetical)
+    );
+    assert_eq!(
+        info_path_key_from_url(
+            r".\0x16F73C97\0\0\info\light\900default_ibl_specular.nutexb",
+        )
+        .as_deref(),
+        Some("info/light/900default_ibl_specular.nutexb"),
+    );
+
+    let pack_root = Path::new(r"E:\stage\0x16F73C97");
+    let nested = pack_root
+        .join("0")
+        .join("0")
+        .join("info")
+        .join("light")
+        .join("900default_ibl_specular.nutexb");
+    assert_eq!(
+        info_relative_key(&nested, pack_root),
+        "info/light/900default_ibl_specular.nutexb",
+    );
+}

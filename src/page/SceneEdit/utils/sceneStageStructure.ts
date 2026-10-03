@@ -1,3 +1,5 @@
+import { readTextFile } from "@tauri-apps/plugin-fs";
+
 import {
   buildStagePackStructureJsonCandidates,
   parseStagePackFolderName,
@@ -111,6 +113,47 @@ export function resolveStagePackStructureTarget(stageRoot: string): StagePackStr
     packFolderName,
     hashHex,
   };
+}
+
+/** `<modFolder>/<HashName>.fhm2d` — the pack the game loads from the OB mod directory. */
+export function buildStageModFhm2dOutputPath(modFolder: string, hashName: string): string {
+  const dir = modFolder.trim().replace(/[/\\]+$/, "");
+  if (!dir) {
+    throw new Error("OB mod folder is not configured");
+  }
+  const hash = normalizeFhm2dHashName(hashName);
+  if (!hash) {
+    throw new Error(`Invalid stage HashName '${hashName}'`);
+  }
+  return `${dir}\\${hash}.fhm2d`;
+}
+
+/**
+ * HashName the game uses as the pack file name.
+ * Named folders such as `201stage201` do not contain the hash, so the structure
+ * JSON wins over the folder name.
+ */
+export async function readStagePackHashName(stageRoot: string): Promise<string> {
+  const target = resolveStagePackStructureTarget(stageRoot);
+  let hashName = target.hashHex;
+
+  for (const structurePath of target.structurePathCandidates) {
+    try {
+      const raw = await readTextFile(structurePath);
+      const parsed = JSON.parse(raw) as { HashName?: unknown };
+      if (typeof parsed.HashName === "string") {
+        hashName = normalizeFhm2dHashName(parsed.HashName) ?? hashName;
+      }
+      break;
+    } catch {
+      // Try the next legacy structure path.
+    }
+  }
+
+  if (!hashName) {
+    throw new Error(`Stage pack '${target.packFolderName}' has no HashName`);
+  }
+  return hashName;
 }
 
 function isGameReadyStageFile(fileType: string): boolean {

@@ -335,11 +335,16 @@ export default function CameraTableView({
   );
 
   const writeSelectedFloat = useCallback(
-    (hash: number, value: number, overlay?: Partial<CameraTableEntry>) => {
+    (hash: number, value: number) => {
       if (loadState.status !== "ready" || !loadState.writable || !selectedShot) return;
       const specs = loadState.table.fieldSpecs;
+      // The save path rewrites these two fields from the entry summary (camera_table.rs
+      // apply_named_overlay), so the summary must follow every raw write.
+      const summary = Number.isFinite(value) ? value : null;
+      const overlay: Partial<CameraTableEntry> =
+        hash === CAM_CMD.fovV0 ? { fov: summary } : hash === CAM_CMD.offset ? { offset: summary } : {};
       markChanged(
-        patchCameraEntry(loadState.table, selectedShot.entryIndex, overlay ?? {}, (raw) =>
+        patchCameraEntry(loadState.table, selectedShot.entryIndex, overlay, (raw) =>
           writeCameraFloatHash(raw, specs, hash, value),
         ),
       );

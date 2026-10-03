@@ -213,13 +213,67 @@ describe("sceneSaveFolderPipeline", () => {
     });
   });
 
-  it("writes graphic_param.csv even with no dirty objects", async () => {
+  it("leaves graphic_param.csv on disk when graphic params are clean", async () => {
+    const params = makeParams();
+    const result = await executeSaveFolderPipeline(params);
+    expect(result.success).toBe(true);
+    expect(mockWriteTextFile).not.toHaveBeenCalled();
+  });
+
+  it("writes graphic_param.csv when graphic params are dirty", async () => {
+    useSceneDirtyStore.getState().markGlobalDirty("graphicParams");
     const params = makeParams();
     const result = await executeSaveFolderPipeline(params);
     expect(result.success).toBe(true);
     expect(mockWriteTextFile).toHaveBeenCalledWith(
       "E:/stage/16F73C97/0/0/info/graphic_param.csv",
       "fog_density,0.5\r\n",
+    );
+  });
+
+  it("leaves placement.csv on disk when placement order is clean", async () => {
+    const params = makeParams({
+      placementEntries: [{
+        vdkType: "OBJECT",
+        objectNumber: 0,
+        posX: 0,
+        posY: 0,
+        posZ: 0,
+        rotX: 0,
+        rotY: 0,
+        rotZ: 0,
+        scaleX: 1,
+        scaleY: 1,
+        scaleZ: 1,
+        rawFields: ["OBJECT", "0", "0"],
+      }],
+    });
+    await executeSaveFolderPipeline(params);
+    expect(mockWriteTextFile).not.toHaveBeenCalled();
+  });
+
+  it("writes placement.csv when placement order is dirty", async () => {
+    useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
+    const params = makeParams({
+      placementEntries: [{
+        vdkType: "OBJECT",
+        objectNumber: 0,
+        posX: 0,
+        posY: 0,
+        posZ: 0,
+        rotX: 0,
+        rotY: 0,
+        rotZ: 0,
+        scaleX: 1,
+        scaleY: 1,
+        scaleZ: 1,
+        rawFields: ["OBJECT", "0", "0"],
+      }],
+    });
+    await executeSaveFolderPipeline(params);
+    expect(mockWriteTextFile).toHaveBeenCalledWith(
+      "E:/stage/16F73C97/0/0/info/placement.csv",
+      expect.stringContaining("OBJECT,0,0"),
     );
   });
 

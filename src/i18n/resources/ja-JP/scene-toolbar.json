@@ -10,8 +10,8 @@
   "save": {
     "folderAria": "フォルダーとして保存",
     "folderTooltip": "変更をフォルダーに保存",
-    "fhm2dAria": "FHM2D として保存",
-    "fhm2dTooltip": "再パックして .fhm2d として保存"
+    "fhm2dAria": "OB mod フォルダーへ再パック",
+    "fhm2dTooltip": "OB mod フォルダーへ <HashName>.fhm2d として再パック"
   },
   "import": {
     "importMeshAria": "静的メッシュをインポート",

@@ -229,9 +229,11 @@ export function CameraClipListPanel({
                       </span>
                     </div>
                     <div className="min-w-0 truncate font-mono text-[10px] tabular-nums text-muted-foreground">
-                      {row.entry.firstShot === 3 ? <span>{t("cameraTable.list.start")} </span> : null}
+                      {row.shotIndex === 0 ? <span>{t("cameraTable.list.start")} </span> : null}
                       {t("cameraTable.list.sortValue", { sort: row.entry.sortKey })}
-                      {row.entry.fov != null ? t("cameraTable.list.fovValue", { fov: row.entry.fov }) : null}
+                      {row.entry.fov != null
+                        ? t("cameraTable.list.distanceValue", { distance: row.entry.fov })
+                        : null}
                       {selected && nextShot
                         ? t("cameraTable.list.nextShot", { id: formatCameraHash(nextShot.entryId) })
                         : null}

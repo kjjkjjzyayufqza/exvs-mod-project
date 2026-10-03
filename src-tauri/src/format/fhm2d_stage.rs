@@ -3620,6 +3620,84 @@ fn collect_sorted_entries(dir: &Path) -> (Vec<PathBuf>, Vec<PathBuf>) {
 /// Recursively walk a directory and emit SubFileStructure entries.
 /// Texture container dirs (all-digit name, only nutexb children) get unk3=32.
 /// All other dirs get unk3=0.
+/// `info/light/...` key from a structure `fileUrl`, lowercase with `/` separators.
+fn info_path_key_from_url(file_url: &str) -> Option<String> {
+    let normalized = file_url.replace('\\', "/").to_ascii_lowercase();
+    let marker = "/info/";
+    let idx = normalized.find(marker)?;
+    Some(normalized[idx + 1..].to_string())
+}
+
+/// Original pack order of files under `info/`, keyed by `info/<sub>/<file>`.
+fn load_info_file_ranks(stage_root: &Path) -> HashMap<String, usize> {
+    let Some(path) = find_structure_json_path(stage_root) else {
+        return HashMap::new();
+    };
+    let Ok(raw) = fs::read_to_string(&path) else {
+        return HashMap::new();
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return HashMap::new();
+    };
+    let Some(entries) = value.get("SubFileData").and_then(|v| v.as_array()) else {
+        return HashMap::new();
+    };
+    let mut ranked: Vec<(i64, String)> = Vec::new();
+    for entry in entries {
+        let Some(url) = entry.get("fileUrl").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let Some(key) = info_path_key_from_url(url) else {
+            continue;
+        };
+        let index = entry
+            .get("fileIndex")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(i64::MAX);
+        ranked.push((index, key));
+    }
+    ranked.sort_by_key(|(index, key)| (*index, key.clone()));
+    ranked
+        .into_iter()
+        .enumerate()
+        .map(|(ord, (_, key))| (key, ord))
+        .collect()
+}
+
+fn info_relative_key(path: &Path, root: &Path) -> String {
+    let rel = path
+        .strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+        .to_ascii_lowercase();
+    // Stage content lives at `<pack>/0/0/info/...`; structure URLs key from `info/`.
+    match rel.find("info/") {
+        Some(idx) => rel[idx..].to_string(),
+        None => rel,
+    }
+}
+
+/// Known loose info files keep their fixed order. Every other info file,
+/// including `info/light` cubemaps, follows the original structure rank so a
+/// repack does not swap specular and irradiance.
+fn info_pack_file_order(
+    path: &Path,
+    root: &Path,
+    ranks: &HashMap<String, usize>,
+) -> (u8, usize, String) {
+    let key = info_relative_key(path, root);
+    if let Some(rank) = ranks.get(&key) {
+        return (0, *rank, String::new());
+    }
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let (bucket, rest) = info_file_order(&name);
+    (1, bucket as usize, rest)
+}
+
 /// Returns a sort key for loose files inside info/ directory.
 /// EXVS fixed order: border_hit.hkt(0), placement.csv(1), graphic_param.csv(2), plan_param.spbin(3).
 /// Files not in the known list sort alphabetically after the known ones.
@@ -3662,6 +3740,9 @@ fn stage_content_dir_order(name: &str) -> (u8, String) {
 
 struct ExvsBuildOpts {
     include_shared_textures: bool,
+    /// Lowercase `info/...` paths in original structure `fileIndex` order.
+    /// Keeps `info/light` specular-before-irradiance instead of sorting by filename.
+    info_file_ranks: HashMap<String, usize>,
 }
 
 fn unk2_for_file(file: &Path, ext: &str) -> &'static str {
@@ -4080,7 +4161,10 @@ fn build_exvs_directory(
         // graphic_param.csv, plan_param.spbin (NOT alphabetical).
         let sorted_files: Vec<&PathBuf> = if is_info_dir {
             let mut f: Vec<&PathBuf> = files.iter().collect();
-            f.sort_by_key(|p| info_file_order(&p.file_name().unwrap().to_string_lossy()));
+            f.sort_by(|a, b| {
+                info_pack_file_order(a, root, &opts.info_file_ranks)
+                    .cmp(&info_pack_file_order(b, root, &opts.info_file_ranks))
+            });
             f
         } else {
             files.iter().collect()
@@ -4177,6 +4261,7 @@ fn rebuild_structure_from_scratch(
         folder_name,
         &ExvsBuildOpts {
             include_shared_textures: false,
+            info_file_ranks: load_info_file_ranks(root),
         },
     );
 
@@ -4263,6 +4348,7 @@ fn rebuild_structure_from_scratch_with_shared_textures(
         folder_name,
         &ExvsBuildOpts {
             include_shared_textures: true,
+            info_file_ranks: load_info_file_ranks(root),
         },
     );
 

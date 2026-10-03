@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,10 +8,11 @@ import {
   readCameraFloatHash,
   readCameraUintHash,
   type CameraFieldSpec,
-  type CameraTableEntry,
 } from "./cameraTableDocument";
 
-type ChannelId = "pitch" | "yaw" | "fov" | "ch3" | "ch4";
+type ChannelId = "pitch" | "yaw" | "distance" | "roll" | "fieldOfView";
+
+const DEGREE_CHANNELS = new Set<ChannelId>(["pitch", "yaw", "roll", "fieldOfView"]);
 
 type ChannelDef = {
   id: ChannelId;
@@ -39,7 +41,7 @@ const CHANNELS: ChannelDef[] = [
     },
   },
   {
-    id: "fov",
+    id: "distance",
     hashes: {
       mode: CAM_CMD.fovMode,
       v0: CAM_CMD.fovV0,
@@ -49,7 +51,7 @@ const CHANNELS: ChannelDef[] = [
     },
   },
   {
-    id: "ch3",
+    id: "roll",
     hashes: {
       mode: CAM_CMD.ch3Mode,
       v0: CAM_CMD.ch3V0,
@@ -59,7 +61,7 @@ const CHANNELS: ChannelDef[] = [
     },
   },
   {
-    id: "ch4",
+    id: "fieldOfView",
     hashes: {
       mode: CAM_CMD.ch4Mode,
       v0: CAM_CMD.ch4V0,
@@ -74,11 +76,15 @@ type CameraShotChannelEditorsProps = {
   raw: number[] | undefined;
   specs: CameraFieldSpec[];
   disabled: boolean;
-  onWriteFloat: (hash: number, value: number, overlay?: Partial<CameraTableEntry>) => void;
+  onWriteFloat: (hash: number, value: number) => void;
   onWriteUint: (hash: number, value: number) => void;
 };
 
-function OptionalFloatInput({
+/**
+ * Commits on Enter or blur, so partial text such as "-" or "1." can be typed. Empty text writes
+ * NaN (the authored inherit / hold marker); text that is not a number reverts.
+ */
+export function OptionalFloatInput({
   value,
   disabled,
   placeholder,
@@ -89,19 +95,40 @@ function OptionalFloatInput({
   placeholder: string;
   onCommit: (next: number) => void;
 }) {
+  const formatted = Number.isFinite(value) ? String(value) : "";
+  const [text, setText] = useState(formatted);
+  useEffect(() => {
+    setText(formatted);
+  }, [formatted]);
+
+  const commit = () => {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      if (Number.isFinite(value)) onCommit(Number.NaN);
+      return;
+    }
+    const next = Number(trimmed);
+    if (!Number.isFinite(next)) {
+      setText(formatted);
+      return;
+    }
+    if (next !== value) onCommit(next);
+  };
+
   return (
     <Input
-      value={Number.isFinite(value) ? String(value) : ""}
+      value={text}
       placeholder={placeholder}
       disabled={disabled}
-      onChange={(event) => {
-        const text = event.target.value.trim();
-        if (!text) {
-          onCommit(Number.NaN);
-          return;
+      spellCheck={false}
+      onChange={(event) => setText(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commit();
         }
-        const next = Number(text);
-        if (Number.isFinite(next)) onCommit(next);
+        if (event.key === "Escape") setText(formatted);
       }}
       className="h-8 px-2 font-mono text-[11px] tabular-nums"
     />
@@ -116,7 +143,7 @@ export function CameraShotChannelEditors({
   onWriteUint,
 }: CameraShotChannelEditorsProps) {
   const { t } = useTranslation("test-lists");
-  const nanLabel = t("cameraTable.fovInherit");
+  const nanLabel = t("cameraTable.inheritNan");
 
   return (
     <div className="space-y-1.5">
@@ -125,7 +152,7 @@ export function CameraShotChannelEditors({
         {CHANNELS.map((channel) => {
           const missing = cameraSpecOffset(specs, channel.hashes.v0) == null;
           const rowDisabled = disabled || missing;
-          const unit = channel.id === "pitch" || channel.id === "yaw" || channel.id === "ch3" ? " deg" : "";
+          const unit = DEGREE_CHANNELS.has(channel.id) ? " deg" : "";
           return (
             <div key={channel.id} className="rounded-md border border-border/60 bg-muted/15 p-1.5">
               <div className="mb-1.5 flex items-center gap-2">
@@ -155,13 +182,7 @@ export function CameraShotChannelEditors({
                       value={readCameraFloatHash(raw, specs, channel.hashes[key])}
                       disabled={rowDisabled}
                       placeholder={nanLabel}
-                      onCommit={(next) => {
-                        const overlay =
-                          channel.id === "fov" && key === "v0"
-                            ? { fov: Number.isFinite(next) ? next : null }
-                            : undefined;
-                        onWriteFloat(channel.hashes[key], next, overlay);
-                      }}
+                      onCommit={(next) => onWriteFloat(channel.hashes[key], next)}
                     />
                   </div>
                 ))}

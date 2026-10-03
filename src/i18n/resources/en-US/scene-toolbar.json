@@ -10,8 +10,8 @@
   "save": {
     "folderAria": "Save as Folder",
     "folderTooltip": "Save changes to folder",
-    "fhm2dAria": "Save as FHM2D",
-    "fhm2dTooltip": "Repack and save as .fhm2d"
+    "fhm2dAria": "Repack to the OB mod folder",
+    "fhm2dTooltip": "Repack to the OB mod folder as <HashName>.fhm2d"
   },
   "import": {
     "importMeshAria": "Import static mesh",
