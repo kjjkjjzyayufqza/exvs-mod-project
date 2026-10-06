@@ -1149,8 +1149,8 @@ export function TriadRouteView({ folderPath, workspaceDocument, onUnsavedChanges
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 p-3">
-      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <div className="flex min-w-0 items-center gap-3">
+      <header className="workspace-pane-header">
+        <div className="workspace-pane-identity flex flex-wrap items-center gap-3">
           <div className="min-w-0">
             <h2 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
               <RouteIcon className="size-4 shrink-0 text-muted-foreground" />
@@ -1170,7 +1170,7 @@ export function TriadRouteView({ folderPath, workspaceDocument, onUnsavedChanges
           ) : null}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="workspace-pane-actions">
           {hasChanges ? <span className="px-1.5 text-[11px] font-medium tabular-nums text-amber-600 dark:text-amber-400">{t("common.unsaved")}</span> : null}
           {draft ? (
             <Button type="button" variant="ghost" size="sm" onClick={discard}>

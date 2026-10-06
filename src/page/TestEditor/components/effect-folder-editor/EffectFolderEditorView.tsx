@@ -233,11 +233,11 @@ export default function EffectFolderEditorView({
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
       <Card className="flex h-full min-h-0 flex-col overflow-hidden rounded-none border-none bg-transparent shadow-none">
         <CardHeader className="shrink-0 space-y-3 p-0 pb-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
+          <div className="workspace-pane-header">
+            <div className="workspace-pane-identity">
               <CardTitle>{t("editor.title")}</CardTitle>
               {headerPath ? (
-                <div className="mt-1 flex items-center gap-1 break-all text-xs text-muted-foreground" data-i18n-ignore="">
+                <div className="workspace-path-line" data-i18n-ignore="">
                   <span>{headerPath}</span>
                   {activePack ? (
                     <button
@@ -285,7 +285,7 @@ export default function EffectFolderEditorView({
             </div>
 
             {activePack ? (
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <div className="workspace-pane-actions">
                 <Button
                   type="button"
                   size="sm"

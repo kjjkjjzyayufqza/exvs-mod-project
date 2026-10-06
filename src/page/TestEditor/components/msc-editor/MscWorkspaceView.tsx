@@ -940,16 +940,16 @@ export default function MscWorkspaceView({
           {unitPanelTabs}
         </div>
         <div className="flex shrink-0 flex-col gap-3 border-b pb-4">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0 flex-1 space-y-1">
+          <div className="workspace-pane-header">
+            <div className="workspace-pane-identity space-y-1">
               <h2 className="text-lg font-semibold tracking-tight">
                 {t(workspaceTitleKey(workspaceMode))}
               </h2>
-              <p className="break-all font-mono text-[11px] text-muted-foreground" title={activeFolderPath} data-i18n-ignore="">
+              <p className="max-w-full font-mono text-[11px] text-muted-foreground [overflow-wrap:anywhere]" title={activeFolderPath} data-i18n-ignore="">
                 {activeFolderPath}
               </p>
             </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <div className="workspace-pane-actions">
               <Button type="button" variant="outline" size="sm" onClick={() => void handlePickFolder()} disabled={isPickingFolder || isBusy}>
                 {isPickingFolder ? <Loader2 className="mr-2 animate-spin" /> : <FolderOpen className="mr-2" />}
                 {t("buttons.pickFolder")}

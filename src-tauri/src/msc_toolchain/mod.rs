@@ -57,9 +57,10 @@ pub fn compile_c_with_profile(
     let unit = parse_unit(src)?;
     let names: Vec<String> = unit.functions.iter().map(|f| f.name.clone()).collect();
     let global_count = unit.globals.len() as u32;
-    // Only mission scripts carry a table order that differs from the layout
-    // order. `msclang.py -i`, which the unit path is byte-compared against,
-    // always writes the table in source order, so the unit profile keeps that.
+    // Shipped unit tables can be unsorted too, but unit sources are named by
+    // layout index and `msclang.py -i`, which the unit path is byte-compared
+    // against, always writes the table in source order, so the unit profile
+    // keeps that. Only mission sources name functions after their table slot.
     let table_order = match profile {
         ScriptProfile::Mission => table_order_from_names(&names),
         ScriptProfile::Unit => (0..names.len()).collect(),

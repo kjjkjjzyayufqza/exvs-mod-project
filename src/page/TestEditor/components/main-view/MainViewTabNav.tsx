@@ -3,7 +3,12 @@ import { useTranslation } from "react-i18next";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { groupMainViewTabs, MAIN_VIEW_TAB_META, type MainViewTabMeta } from "./mainViewTabGroups";
+import {
+  filterMainViewTabsForNav,
+  groupMainViewTabs,
+  MAIN_VIEW_TAB_META,
+  type MainViewTabMeta,
+} from "./mainViewTabGroups";
 import { findMainViewTabLabel } from "./mainViewTabNavSettings";
 import { useMainViewTabNavCollapsed } from "./useMainViewTabNavCollapsed";
 
@@ -29,7 +34,8 @@ const tabTriggerClassName = cn(
 
 export function MainViewTabNav({ activeTab, unsavedTabMap, tabs = MAIN_VIEW_TAB_META }: MainViewTabNavProps) {
   const { t } = useTranslation("test-workspace");
-  const groups = groupMainViewTabs(tabs);
+  const navTabs = filterMainViewTabsForNav(tabs);
+  const groups = groupMainViewTabs(navTabs);
   const { collapsed, setCollapsed, toggleCollapsed } = useMainViewTabNavCollapsed();
   const activeTabLabel = findMainViewTabLabel(activeTab, tabs);
   const hasUnsaved = Boolean(unsavedTabMap[activeTab]);
@@ -68,7 +74,7 @@ export function MainViewTabNav({ activeTab, unsavedTabMap, tabs = MAIN_VIEW_TAB_
 
           {collapsed ? (
             <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span className="whitespace-nowrap text-foreground">{activeTabLabel ?? t("tabs.editorFallback")}</span>
+              <span className="min-w-0 truncate text-foreground">{activeTabLabel ?? t("tabs.editorFallback")}</span>
               {hasUnsaved ? (
                 <span
                   className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"

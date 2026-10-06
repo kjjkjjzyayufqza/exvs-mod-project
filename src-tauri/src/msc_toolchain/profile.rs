@@ -13,13 +13,15 @@
 //! | field  | unit        | mission                                   |
 //! |--------|-------------|-------------------------------------------|
 //! | `0x08` | `0x16AF210A`| `0x000002FD`                              |
-//! | `0x1C` | heuristic   | number of file-scope global declarations  |
+//! | `0x1C` | global count | number of file-scope global declarations |
 //! | body   | —           | opcode `0x01` closes the first function   |
 //!
 //! The `0x1C` and `0x01` rules were measured over the 343 shipped OBHK mission
 //! scripts: `0x1C` equals the count of `int globalN;` declarations in every
 //! one of them, and each file carries exactly one `0x01`, immediately before
-//! the `END` of its first function.
+//! the `END` of its first function. Stock unit files store the same count
+//! (`0.bscex` / `2.dscex` match `global0..globalN`). The compiler writes
+//! that count for unit scripts too.
 
 /// Script version word at header offset `0x08`.
 pub const UNIT_VERSION_WORD: u32 = 0x16AF_210A;

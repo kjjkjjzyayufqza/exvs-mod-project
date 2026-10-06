@@ -68,7 +68,7 @@ See `docs/msc-research/msc-ai-edit-block-rule.md`.
 | 0x10 | 4 | LE uint32 | `entriesOffset` | Byte offset from 0x30 base to the script offset table |
 | 0x14 | 4 | LE uint32 | `entryPoint` | Byte offset of the entry-point script (relative to 0x30 base) |
 | 0x18 | 4 | LE uint32 | `entryCount` | Number of entries in the script offset table |
-| 0x1C | 4 | LE uint32 | `unk` | Unknown (observed: `0x16`, `0x00`) |
+| 0x1C | 4 | LE uint32 | `globalCount` | Number of file-scope globals (`global0` .. `globalN`, max index + 1). Stock Justice: `0.bscex` = 110, `2.dscex` = 969. `0` when the file declares none. |
 | 0x20 | 4 | LE uint32 | `stringSize` | Max byte length per string slot (`0` if no strings) |
 | 0x24 | 4 | LE uint32 | `stringCount` | Number of string slots (`0` if no strings) |
 | 0x28 | 8 | bytes | `reserved` | Reserved, always zero |

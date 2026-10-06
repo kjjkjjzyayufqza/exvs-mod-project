@@ -100,6 +100,7 @@ export default function MbonWorkspacePage() {
       editors={[
         {
           meta: STRUCTURE_TAB,
+          navHidden: true,
           render: ({ openContentIndex }) =>
             packageDir ? (
               <StructureSplit

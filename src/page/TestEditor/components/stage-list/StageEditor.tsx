@@ -239,9 +239,9 @@ export function StageEditor({
   }
 
   return (
-    <div className="flex h-full gap-4 min-h-0">
-      <div className="w-1/3 border rounded-lg p-3 overflow-hidden flex flex-col min-h-0">
-        <div className="flex items-center justify-between mb-3">
+    <div className="workspace-split">
+      <div className="workspace-split-list border rounded-lg p-3">
+        <div className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-2">
           <div className="font-semibold text-sm">{t("editor.countLabel", { count: stageListData.entries.length })}</div>
           <Button size="sm" onClick={handleAdd} disabled={!editable} className="inline-flex items-center gap-2">
             <Plus className="w-4 h-4" />
@@ -269,7 +269,7 @@ export function StageEditor({
         />
       </div>
 
-      <div className="flex-1 border rounded-lg p-4 overflow-auto flex flex-col min-h-0">
+      <div className="workspace-split-detail overflow-auto border rounded-lg p-4">
         {selectedStage ? (
           <StageForm
             stage={selectedStage}

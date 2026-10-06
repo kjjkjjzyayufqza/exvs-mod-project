@@ -1,4 +1,5 @@
 import { readDir } from "@tauri-apps/plugin-fs";
+import { MAIN_VIEW_INITIAL_TAB } from "../components/main-view/mainViewTabGroups";
 import type { TestTreeNode } from "../types";
 
 const MSC_FOLDER_MARKERS = [".bscex", ".cscex", ".dscex"] as const;
@@ -227,7 +228,7 @@ export function shouldAutoActivateMscWorkspaceTab({
   lastAutoActivatedFolderPath: string | null;
 }): boolean {
   return (
-    activeTab === "folder-structure" &&
+    activeTab === MAIN_VIEW_INITIAL_TAB &&
     Boolean(mscWorkspaceFolderPath) &&
     mscWorkspaceFolderPath !== lastAutoActivatedFolderPath
   );

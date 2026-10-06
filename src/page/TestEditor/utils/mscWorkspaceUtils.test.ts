@@ -145,10 +145,10 @@ describe("resolveMscWorkspaceFolderPathForSelection", () => {
 });
 
 describe("shouldAutoActivateMscWorkspaceTab", () => {
-  it("activates the MSC tab when a new MSC folder is found from the default structure tab", () => {
+  it("activates the MSC tab when a new MSC folder is found from the default workspace tab", () => {
     expect(
       shouldAutoActivateMscWorkspaceTab({
-        activeTab: "folder-structure",
+        activeTab: "character-id-table",
         mscWorkspaceFolderPath: "E:/workspace/040msc/0xFEEA714A",
         lastAutoActivatedFolderPath: null,
       }),

@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { useLocation } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { FolderTree, Rocket, Swords } from "lucide-react"
 import { GuardedNavLink } from "@/components/GuardedNavLink"
@@ -21,13 +21,17 @@ import {
     useSidebar,
 } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
+import { useNavigationGuard } from "@/layout/NavigationGuardContext"
+import { normalizeSidebarPathname } from "@/router/pathMatch"
+import { SIDEBAR_GAME_HOME_ROUTES } from "@/router/sidebarRouteUrls"
 import { RouterItems } from "../router/router"
 
 type RouterItem = (typeof RouterItems)[number]
 
 function isRouteActive(pathname: string, url: string): boolean {
-    if (url === "/") return pathname === "/"
-    return pathname === url || pathname.startsWith(`${url}/`)
+    const current = normalizeSidebarPathname(pathname)
+    if (url === "/") return current === "/"
+    return current === url || current.startsWith(`${url}/`)
 }
 
 function gameOf(item: RouterItem): SidebarGame {
@@ -76,7 +80,9 @@ function MenuItems({ items, pathname }: { items: readonly RouterItem[]; pathname
  */
 export function AppSidebar() {
     const { state } = useSidebar()
+    const navigate = useNavigate()
     const { pathname } = useLocation()
+    const { requestNavigation } = useNavigationGuard()
     const { t } = useTranslation("ps4-workspace")
     const collapsed = state === "collapsed"
     const mode = usePs4Preferences((preferences) => preferences.sidebarMode)
@@ -136,7 +142,13 @@ export function AppSidebar() {
                                         ? "bg-sidebar-primary text-sidebar-primary-foreground"
                                         : "text-sidebar-foreground/70 hover:bg-sidebar-accent",
                                 )}
-                                onClick={() => update({ sidebarGame: game })}
+                                onClick={() => {
+                                    update({ sidebarGame: game })
+                                    const home = SIDEBAR_GAME_HOME_ROUTES[game]
+                                    if (normalizeSidebarPathname(pathname) !== home) {
+                                        requestNavigation(() => navigate(home))
+                                    }
+                                }}
                             >
                                 <Icon className="h-3.5 w-3.5 shrink-0" />
                                 <span className="group-data-[collapsible=icon]:hidden">{t(`sidebar.short.${game}`)}</span>

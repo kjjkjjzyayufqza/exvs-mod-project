@@ -976,10 +976,10 @@ export default function CharacterListView({
     <div className="h-full w-full">
       <Card className="h-full flex flex-col border-none shadow-none rounded-none bg-transparent">
         <CardHeader className="p-0 pb-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
+          <div className="workspace-pane-header">
+            <div className="workspace-pane-identity">
               <CardTitle>{t("title")}</CardTitle>
-              <div className="text-xs text-muted-foreground break-all mt-1 flex items-center gap-1">
+              <div className="workspace-path-line">
                 {loadState.filePath}
                 <button
                   type="button"
@@ -1006,7 +1006,7 @@ export default function CharacterListView({
                 className="mt-2"
               />
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="workspace-pane-actions">
               <Button size="sm" variant="outline" onClick={handleReloadAll} className="inline-flex items-center gap-2">
                 <RefreshCw className="w-4 h-4" />
                 {t("reload")}

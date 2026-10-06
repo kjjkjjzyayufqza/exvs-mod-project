@@ -71,7 +71,7 @@ export function gvsEditorTabs(t: TFunction, structure: (context: Ps4EditorContex
   const table = (value: string, sources: string[]) =>
     tab(value, (context) => <GvsTableTab title={title(value)} sources={sources} context={context} />);
   return [
-    tab(GVS_STRUCTURE_TAB, structure),
+    tab(GVS_STRUCTURE_TAB, structure, { navHidden: true }),
     tab("effect-folder", (context) => <GvsMembersTab title={title("effect-folder")} kind="effect" kinds={EFFECT_KINDS} context={context} />),
     tab("motion-folder", (context) => <GvsMembersTab title={title("motion-folder")} kind="chara" kinds={MOTION_KINDS} context={context} />),
     table("camera-table", ["camera_table"]),

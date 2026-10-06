@@ -135,9 +135,10 @@ python tools/tests/test_full_roundtrip.py
 
 ## Practical Notes
 
-- **`unk` header field:** legacy `msclang.py` still writes `0x16` for large
-  scripts instead of preserving the original `unk` value. This predates the crash
-  regression and was tolerated in-game when only `2.dscex` was repacked.
+- **`unk` header field (`0x1C`):** the global-slot count. Stock files store
+  it (`Justice` `2.dscex` = 969). `msclang.py` and the in-app compiler write
+  that count. A repack from an older app build still emits `0x16` and
+  overwrites a hand-patched header.
 - **`1.cscex`:** legacy repack keeps header flags clean; byte identity is not guaranteed
   on all samples, but compile succeeds on the reference corpus.
 - **`0.bscex`:** avoid repacking unless you edited `0.c`; it was never part of

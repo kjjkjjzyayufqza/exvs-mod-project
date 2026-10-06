@@ -38,8 +38,8 @@ type SoundTableWorkbenchProps = {
 function MetaLine({ label, value, onOpen }: SoundTableMetaLine) {
   const { t } = useTranslation("test-lists");
   return (
-    <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-      <span className="min-w-0 break-all">
+    <div className="workspace-path-line">
+      <span>
         {label}: <span data-i18n-ignore="">{value || "-"}</span>
       </span>
       {value && onOpen ? (
@@ -88,8 +88,8 @@ export function SoundTableWorkbench({
     <div className="h-full w-full">
       <Card className="flex h-full flex-col rounded-none border-none bg-transparent shadow-none">
         <CardHeader className="p-0 pb-4">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
+          <div className="workspace-pane-header">
+            <div className="workspace-pane-identity">
               <CardTitle className="text-balance">{title}</CardTitle>
               {purpose ? (
                 <p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground text-pretty">{purpose}</p>
@@ -102,7 +102,7 @@ export function SoundTableWorkbench({
               ) : null}
               {notice}
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="workspace-pane-actions">
               {toolbarExtra}
               <Button
                 size="sm"
@@ -127,7 +127,7 @@ export function SoundTableWorkbench({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+        <CardContent className="workspace-sound-shell min-h-0 flex-1 p-0">
           {status === "loading" ? (
             <div className="text-sm text-muted-foreground">{t("common.loadingEllipsis")}</div>
           ) : null}
@@ -151,7 +151,7 @@ export function SoundTableWorkbench({
           ) : null}
 
           {status === "ready" ? (
-            <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(16rem,0.95fr)_minmax(0,1.05fr)]">
+            <div className="workspace-sound-grid">
               <aside className="flex min-h-0 flex-col gap-3">
                 {addPanel}
                 <div className="min-h-0 flex-1">{listPanel}</div>

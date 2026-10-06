@@ -98,7 +98,7 @@ export function CameraEditorWorkbench({
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-background">
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b px-2.5">
+      <header className="flex min-h-11 shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-2.5 py-1.5">
         <Button
           type="button"
           size="icon"
@@ -112,7 +112,7 @@ export function CameraEditorWorkbench({
         >
           {railCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </Button>
-        <div className="min-w-0 shrink-0">
+        <div className="max-w-full min-w-[min(100%,8rem)] flex-1">
           <h2 className="truncate text-sm font-semibold leading-none text-balance" title={purpose}>
             {title}
           </h2>
@@ -123,7 +123,7 @@ export function CameraEditorWorkbench({
             {loadedLabel}
           </span>
         ) : null}
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <div className="ml-auto flex max-w-full flex-wrap items-center gap-1.5">
           {ready && (metaLines?.length ?? 0) > 0 ? (
             <Popover>
               <PopoverTrigger asChild>

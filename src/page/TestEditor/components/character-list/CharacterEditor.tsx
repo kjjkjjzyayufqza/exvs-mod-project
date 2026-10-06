@@ -369,11 +369,11 @@ export function CharacterEditor({
   }
 
   return (
-    <div className="flex h-full gap-4 min-h-0">
-      <div className="w-1/3 border rounded-lg p-3 overflow-hidden flex flex-col min-h-0">
-        <div className="flex items-center justify-between mb-3">
+    <div className="workspace-split">
+      <div className="workspace-split-list border rounded-lg p-3">
+        <div className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-2">
           <div className="font-semibold text-sm">Characters ({entries.length})</div>
-          <div className="flex items-center gap-2">
+          <div className="flex max-w-full flex-wrap items-center gap-2">
             <Button
               size="sm"
               variant="outline"
@@ -403,7 +403,7 @@ export function CharacterEditor({
         />
       </div>
 
-      <div className="flex-1 border rounded-lg p-4 overflow-hidden flex flex-col min-h-0">
+      <div className="workspace-split-detail border rounded-lg p-4 overflow-hidden">
         {selectedCharacter ? (
           <CharacterForm
             key={formSyncKey}

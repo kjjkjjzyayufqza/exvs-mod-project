@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { MainViewTabNav } from "./main-view/MainViewTabNav";
-import RepackFolderStructureView from "./RepackFolderStructureView";
 import CharacterIdTableView from "./CharacterIdTableView";
 import CharacterCostView from "./CharacterCostView";
 import StrikerTableView from "./StrikerTableView";
@@ -35,7 +34,7 @@ import BgmBankView from "./bgm-bank/BgmBankView";
 import CameraTableView from "./camera-table/CameraTableView";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import { shouldAutoActivateMscWorkspaceTab } from "../utils/mscWorkspaceUtils";
-import { shouldKeepMainViewTabMounted } from "./main-view/mainViewTabGroups";
+import { MAIN_VIEW_INITIAL_TAB, shouldKeepMainViewTabMounted } from "./main-view/mainViewTabGroups";
 
 type StageTab = {
   name: string;
@@ -65,16 +64,6 @@ interface MainViewProps {
 }
 
 const tabs: StageTab[] = [
-  {
-    name: "Folder structure",
-    value: "folder-structure",
-    render: (props: MainViewProps) => (
-      <RepackFolderStructureView
-        jsonFilePath={props.jsonFilePath}
-        onUnsavedChanges={props.onUnsavedChanges}
-      />
-    ),
-  },
   {
     name: "Character ID Table",
     value: "character-id-table",
@@ -431,7 +420,7 @@ const MainView = ({
   onRequestFhm2dRepack,
   onOpenAsEffectProject,
 }: MainViewProps) => {
-  const initialTab = tabs[0]?.value ?? "folder-structure";
+  const initialTab = tabs[0]?.value ?? MAIN_VIEW_INITIAL_TAB;
   const [activeTab, setActiveTab] = useState<string>(initialTab);
   const effectPackForSelection = useMemo(
     () =>
@@ -453,7 +442,6 @@ const MainView = ({
   );
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set([initialTab]));
   const [pendingCharacterIdTableSelection, setPendingCharacterIdTableSelection] = useState<number | null>(null);
-  const [folderStructureHasUnsaved, setFolderStructureHasUnsaved] = useState(false);
   const [characterIdTableHasUnsaved, setCharacterIdTableHasUnsaved] = useState(false);
   const [characterCostHasUnsaved, setCharacterCostHasUnsaved] = useState(false);
   const [strikerTableHasUnsaved, setStrikerTableHasUnsaved] = useState(false);
@@ -519,11 +507,6 @@ const MainView = ({
     });
   }, [activeTab, mscWorkspaceFolderPath]);
 
-  const handleUnsavedChanges = useCallback((hasChanges: boolean) => {
-    setFolderStructureHasUnsaved(hasChanges);
-    onUnsavedChanges?.(hasChanges);
-  }, [onUnsavedChanges]);
-
   const handleCharacterIdTableUnsaved = useCallback((hasChanges: boolean) => {
     setCharacterIdTableHasUnsaved(hasChanges);
   }, []);
@@ -588,7 +571,6 @@ const MainView = ({
   }, []);
   const unsavedTabMap = useMemo<Record<string, boolean>>(
     () => ({
-      "folder-structure": folderStructureHasUnsaved,
       "character-id-table": characterIdTableHasUnsaved,
       "character-cost": characterCostHasUnsaved,
       "striker-table": strikerTableHasUnsaved,
@@ -608,7 +590,6 @@ const MainView = ({
       "param-editor": paramEditorHasUnsaved,
     }),
     [
-      folderStructureHasUnsaved,
       characterIdTableHasUnsaved,
       characterCostHasUnsaved,
       strikerTableHasUnsaved,
@@ -660,18 +641,6 @@ const MainView = ({
 
   const resolvedTabs = useMemo<StageTab[]>(() => {
     return tabs.map((tab) => {
-      if (tab.value === "folder-structure") {
-        return {
-          ...tab,
-          render: (props: MainViewProps) => (
-            <RepackFolderStructureView
-              jsonFilePath={props.jsonFilePath}
-              onUnsavedChanges={handleUnsavedChanges}
-            />
-          ),
-        };
-      }
-
       if (tab.value === "character-id-table") {
         return {
           ...tab,
@@ -986,7 +955,6 @@ const MainView = ({
     handleMotionFolderUnsaved,
     handleCameraTableUnsaved,
     handleParamEditorUnsaved,
-    handleUnsavedChanges,
     mscWorkspaceFolderPath,
     onMscWorkspaceFolderChange,
     pendingCharacterIdTableSelection,
@@ -1035,10 +1003,10 @@ const MainView = ({
   };
 
   return (
-    <div className="flex h-full w-full min-h-0 bg-background">
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="flex h-full w-full min-h-0 flex-col rounded-none p-0 m-0">
+    <div className="flex h-full w-full min-h-0 min-w-0 bg-background">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="flex h-full w-full min-h-0 min-w-0 flex-col rounded-none p-0 m-0">
         <MainViewTabNav activeTab={activeTab} unsavedTabMap={unsavedTabMap} />
-        <div className="relative flex min-h-0 flex-1 flex-col">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           {resolvedTabs.map((tab) => {
             if (!visitedTabs.has(tab.value)) return null;
             const isActive = activeTab === tab.value;
@@ -1057,7 +1025,7 @@ const MainView = ({
                 id={`mainview-panel-${tab.value}`}
                 aria-labelledby={`mainview-tab-${tab.value}`}
                 className={cn(
-                  "flex min-h-0 flex-col",
+                  "flex min-h-0 min-w-0 flex-col",
                   isActive
                     ? "relative z-10 flex-1"
                     : "pointer-events-none invisible absolute inset-0 z-0 overflow-hidden",

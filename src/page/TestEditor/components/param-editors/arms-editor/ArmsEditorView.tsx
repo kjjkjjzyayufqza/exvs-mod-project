@@ -319,7 +319,7 @@ export function ArmsEditorView({
   }, [data]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
+    <div className="workspace-param-shell flex h-full min-h-0 min-w-0 flex-col bg-background">
       <header className="shrink-0 border-b border-border/60 bg-muted/10 px-3 py-2.5">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <h2 className="text-sm font-semibold tracking-tight">{t("title")}</h2>
@@ -333,7 +333,7 @@ export function ArmsEditorView({
 
         <div className="flex flex-wrap items-center gap-2">
           <FilePathInput
-            className="h-8 min-w-[16rem] flex-1 font-mono text-[11px]"
+            className="workspace-flex-field h-8 font-mono text-[11px]"
             storeKey={STORE_KEY}
             value={filePath}
             onChange={(e) => setFilePath(e.target.value)}
@@ -413,7 +413,7 @@ export function ArmsEditorView({
         )}
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_340px]">
+      <div className="workspace-param-grid">
         <aside className="min-h-0 border-r border-border/50 p-2">
           <EntryListPanel
             entries={data?.entries ?? []}

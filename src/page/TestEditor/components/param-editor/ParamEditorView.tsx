@@ -260,14 +260,14 @@ export default function ParamEditorView({ onUnsavedChanges, workspaceDefaultPath
   return (
     <div className="flex h-full min-h-0 w-full max-w-full flex-col gap-4 pb-4">
       <div className="flex shrink-0 flex-col gap-3 border-b pb-4">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0 flex-1 space-y-1">
+        <div className="workspace-pane-header">
+          <div className="workspace-pane-identity space-y-1">
             <h2 className="text-lg font-semibold tracking-tight">Param Editor</h2>
             <p className="break-all text-[11px] text-muted-foreground" title={currentPath}>
               Pick a file path (stored per type), load from disk via Rust, edit entry data, save.
             </p>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="workspace-pane-actions">
             <Button
               type="button"
               size="sm"

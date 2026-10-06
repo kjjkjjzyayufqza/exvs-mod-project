@@ -11,9 +11,11 @@ fn cmd_size(op: u8) -> usize {
 
 /// Emit a compiled script.
 ///
-/// `global_count` is the number of file-scope global declarations. The mission
-/// header records it at `0x1C`; unit scripts keep the historical heuristic
-/// that predates this parameter.
+/// `global_count` is the number of file-scope global declarations.
+/// Both script kinds store that count at header `0x1C`. Stock unit files
+/// do the same. The old unit heuristic wrote `0x16` whenever a file had
+/// strings or more than 10 scripts, so an app repack put 22 back even after
+/// the bytes on disk had been corrected.
 pub fn emit_file(
     scripts: &[Vec<Item>],
     function_names: &[String],
@@ -38,16 +40,7 @@ pub fn emit_file(
     }
     let entries_offset = current;
     let entry_point = name_to_pos.get("main").copied().unwrap_or(0x10);
-    let unk: u32 = match profile {
-        ScriptProfile::Mission => global_count,
-        ScriptProfile::Unit => {
-            if !strings.is_empty() || scripts.len() > 10 {
-                0x16
-            } else {
-                0
-            }
-        }
-    };
+    let unk = global_count;
     let mut max_str = strings.iter().map(|s| s.len()).max().unwrap_or(0);
     if max_str % 0x10 != 0 {
         max_str += 0x10 - (max_str % 0x10);

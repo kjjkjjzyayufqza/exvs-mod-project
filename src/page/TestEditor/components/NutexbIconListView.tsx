@@ -674,7 +674,7 @@ export function NutexbIconListView({
   const renderGroupActions = (group: "first" | "second") => {
     if (group === "first") {
       return (
-        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+        <div className="workspace-pane-actions">
           <Button size="sm" variant="outline" onClick={() => void load()} className="inline-flex items-center gap-2" title={t("nutexb.reloadGroup", { group: 1 })}>
             <RefreshCw className="w-4 h-4" />
             {t("common.reload")}
@@ -720,7 +720,7 @@ export function NutexbIconListView({
       );
     }
     return (
-      <div className="flex items-center gap-2 shrink-0 flex-wrap">
+      <div className="workspace-pane-actions">
         <Button size="sm" variant="outline" onClick={() => void loadSecondary()} className="inline-flex items-center gap-2" title={t("nutexb.reloadGroup", { group: 2 })}>
           <RefreshCw className="w-4 h-4" />
           {t("common.reload")}
@@ -775,23 +775,23 @@ export function NutexbIconListView({
   };
 
   return (
-    <div className="h-full w-full">
-      <Card className="h-full flex flex-col border-none shadow-none rounded-none bg-transparent">
+    <div className="h-full w-full min-w-0">
+      <Card className="workspace-dual-shell flex h-full min-w-0 flex-col rounded-none border-none bg-transparent shadow-none">
         <CardHeader className={cn("p-0", isDual ? "py-1.5 pb-1.5" : "pb-4")}>
           {isDual ? (
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-1.5">
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                 <CardTitle className="text-sm">{title}</CardTitle>
                 <span className="text-xs text-muted-foreground">{t("nutexb.twoGroups")}</span>
               </div>
-              <div className="flex gap-2 min-h-0">
-              <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-sm font-medium shrink-0">{t("nutexb.group1")}</span>
+              <div className="workspace-dual">
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <div className="workspace-pane-header">
+                  <span className="min-w-0 text-sm font-medium">{t("nutexb.group1")}</span>
                   {renderGroupActions("first")}
                 </div>
-                <div className="text-xs text-muted-foreground flex items-center gap-1">
-                  <span className="break-all truncate">{t("nutexb.structure", { path: meta?.structurePath ?? "-" })}</span>
+                <div className="workspace-path-line">
+                  <span>{t("nutexb.structure", { path: meta?.structurePath ?? "-" })}</span>
                   {meta?.structurePath && (
                     <button
                       type="button"
@@ -813,13 +813,13 @@ export function NutexbIconListView({
                   onMoved={() => load({ preserveSelection: true })}
                 />
               </div>
-              <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-sm font-medium shrink-0">{t("nutexb.group2")}</span>
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <div className="workspace-pane-header">
+                  <span className="min-w-0 text-sm font-medium">{t("nutexb.group2")}</span>
                   {renderGroupActions("second")}
                 </div>
-                <div className="text-xs text-muted-foreground flex items-center gap-1">
-                  <span className="break-all truncate">{t("nutexb.structure", { path: secondaryMeta?.structurePath ?? "-" })}</span>
+                <div className="workspace-path-line">
+                  <span>{t("nutexb.structure", { path: secondaryMeta?.structurePath ?? "-" })}</span>
                   {secondaryMeta?.structurePath && (
                     <button
                       type="button"
@@ -846,11 +846,11 @@ export function NutexbIconListView({
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="min-w-0 flex-1">
+            <div className="workspace-pane-header">
+              <div className="workspace-pane-identity">
                 <CardTitle>{title}</CardTitle>
-                <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                  <span className="break-all">{t("nutexb.structure", { path: meta?.structurePath ?? "-" })}</span>
+                <div className="workspace-path-line">
+                  <span>{t("nutexb.structure", { path: meta?.structurePath ?? "-" })}</span>
                   {meta?.structurePath && (
                     <button
                       type="button"
@@ -872,7 +872,7 @@ export function NutexbIconListView({
                   onMoved={() => load({ preserveSelection: true })}
                   className="mt-2"
                 />
-                <div className="text-xs text-muted-foreground break-all flex items-center gap-1 mt-2">
+                <div className="workspace-path-line mt-2">
                   {t("nutexb.convertDir", { path: meta?.convertDirPath ?? "-" })}
                   {meta?.convertDirPath && (
                     <button
@@ -893,7 +893,7 @@ export function NutexbIconListView({
 
         <CardContent className={cn("flex-1 min-h-0 flex flex-col overflow-hidden p-0", isDual && "pt-0")}>
           {isDual ? (
-            <div className="flex h-full gap-2 px-2 pb-2 min-h-0">
+            <div className="workspace-dual h-full min-h-0 px-2 pb-2">
               <div className="flex-1 min-w-0 flex flex-col min-h-0">
                 <CardIconList
                   items={loadState.items}

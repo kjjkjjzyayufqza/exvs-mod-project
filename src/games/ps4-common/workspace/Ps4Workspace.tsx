@@ -19,7 +19,10 @@ import { toast } from "sonner";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { MainViewTabNav } from "@/page/TestEditor/components/main-view/MainViewTabNav";
-import type { MainViewTabMeta } from "@/page/TestEditor/components/main-view/mainViewTabGroups";
+import {
+  filterMainViewTabsForNav,
+  type MainViewTabMeta,
+} from "@/page/TestEditor/components/main-view/mainViewTabGroups";
 import { TestEditorWorkspacePanels } from "@/page/TestEditor/components/TestEditorWorkspacePanels";
 import type { Ps4GameAdapter } from "../gameAdapter";
 import { usePs4Preferences } from "../preferences";
@@ -45,6 +48,8 @@ export interface Ps4EditorContext {
 
 export interface Ps4EditorTab {
   meta: MainViewTabMeta;
+  /** Keeps the tab out of the grouped nav bar while the panel remains activatable. */
+  navHidden?: boolean;
   /** Keeps the editor mounted after its first visit instead of only while active. */
   keepMounted?: boolean;
   /** Fills the tab panel edge to edge instead of the EXVS2 panel padding. */
@@ -101,7 +106,9 @@ export function Ps4Workspace({
   const density = usePs4Preferences((state) => state.density);
   const inspectorLayout = usePs4Preferences((state) => state.inspectorLayout);
   const hydratePreferences = usePs4Preferences((state) => state.hydrate);
-  const [tab, setTab] = useState<string>(editors[0]?.meta.value ?? packageTab);
+  const [tab, setTab] = useState<string>(
+    () => editors.find((editor) => !editor.navHidden)?.meta.value ?? editors[0]?.meta.value ?? packageTab,
+  );
   const [visited, setVisited] = useState<ReadonlySet<string>>(() => new Set([tab]));
   const [unsaved, setUnsaved] = useState<Record<string, boolean>>({});
   const [initOpen, setInitOpen] = useState(false);
@@ -140,7 +147,16 @@ export function Ps4Workspace({
   );
   const statusByDir = useMemo(() => new Map((status.data ?? []).map((item) => [item.dir, item])), [status.data]);
   const pendingCount = (status.data ?? []).filter((item) => item.dirty).length;
-  const tabs = useMemo(() => editors.map((editor) => editor.meta), [editors]);
+  const navTabs = useMemo(
+    () =>
+      filterMainViewTabsForNav(
+        editors.map((editor) => ({
+          ...editor.meta,
+          navHidden: Boolean(editor.navHidden || editor.meta.navHidden),
+        })),
+      ),
+    [editors],
+  );
 
   const selectTab = useCallback((value: string) => {
     setTab(value);
@@ -215,7 +231,7 @@ export function Ps4Workspace({
           center={
             <div className="flex h-full min-h-0 w-full bg-background">
               <Tabs value={tab} onValueChange={selectTab} className="m-0 flex h-full min-h-0 w-full flex-col rounded-none p-0">
-                <MainViewTabNav activeTab={tab} unsavedTabMap={unsaved} tabs={tabs} />
+                {navTabs.length > 0 ? <MainViewTabNav activeTab={tab} unsavedTabMap={unsaved} tabs={navTabs} /> : null}
                 {editors.map((editor) => {
                   const value = editor.meta.value;
                   const isActive = value === tab;

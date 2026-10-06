@@ -293,11 +293,11 @@ export function BulletEditorView({ onUnsavedChanges, workspaceDefaultPath }: Bul
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="workspace-bullet-shell flex h-full min-h-0 min-w-0 flex-col">
       {/* Top toolbar */}
-      <div className="flex items-center gap-2 border-b bg-muted/20 px-3 py-2">
+      <div className="workspace-toolbar border-b bg-muted/20 px-3 py-2">
         <FilePathInput
-          className="h-7 w-72 font-mono text-[11px]"
+          className="workspace-flex-field h-7 font-mono text-[11px]"
           storeKey={STORE_KEY}
           value={filePath}
           onChange={(e) => setFilePath(e.target.value)}
@@ -316,7 +316,7 @@ export function BulletEditorView({ onUnsavedChanges, workspaceDefaultPath }: Bul
           }}
         />
         <FilePathInput
-          className="h-7 w-64 font-mono text-[11px]"
+          className="workspace-flex-field h-7 font-mono text-[11px]"
           storeKey={ARMS_STORE_KEY}
           value={armsFilePath}
           onChange={(e) => setArmsFilePath(e.target.value)}
@@ -353,9 +353,9 @@ export function BulletEditorView({ onUnsavedChanges, workspaceDefaultPath }: Bul
       </div>
 
       {/* Main content area */}
-      <div className="flex min-h-0 flex-1">
+      <div className="workspace-bullet-body">
         {/* Left entry list */}
-        <div className="flex w-[200px] min-w-[200px] flex-col gap-2 border-r p-2">
+        <div className="workspace-bullet-rail">
           <div className="min-h-0 flex-1">
             <EntryListPanel
               entries={data?.entries ?? []}
@@ -386,7 +386,7 @@ export function BulletEditorView({ onUnsavedChanges, workspaceDefaultPath }: Bul
         </div>
 
         {/* Center: 3D viewport takes remaining space */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="workspace-bullet-main">
           <div className="min-h-0 flex-1">
             {data ? (
               <BulletTrajectoryCanvas />
@@ -401,7 +401,7 @@ export function BulletEditorView({ onUnsavedChanges, workspaceDefaultPath }: Bul
 
         {/* Right: bullet info and cross-reference sidebar */}
         {data && (
-          <div className="flex w-[300px] min-w-[300px] flex-col gap-2 overflow-y-auto border-l p-2">
+          <div className="workspace-bullet-side">
             <BulletInfoPanel />
             <BulletCrossRefPanel workspaceDefaultPath={workspaceDefaultPath} />
           </div>

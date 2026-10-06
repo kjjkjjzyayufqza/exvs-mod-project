@@ -665,10 +665,10 @@ export default function CharacterCostView({
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
           <Card className="h-full flex flex-col border-none shadow-none rounded-none bg-transparent min-h-0">
             <CardHeader className="p-0 pb-4 shrink-0">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
+              <div className="workspace-pane-header">
+                <div className="workspace-pane-identity">
                   <CardTitle>{t("title")}</CardTitle>
-                  <div className="text-xs text-muted-foreground break-all mt-1 flex items-center gap-1">
+                  <div className="workspace-path-line">
                     {loadState.filePath}
                     <button
                       type="button"
@@ -694,7 +694,7 @@ export default function CharacterCostView({
                     className="mt-2"
                   />
                 </div>
-                <div className="flex flex-wrap items-center gap-2 shrink-0 justify-end">
+                <div className="workspace-pane-actions">
                   <Button size="sm" variant="outline" onClick={() => void loadPanel(subTab)} className="inline-flex items-center gap-2">
                     <RefreshCw className="w-4 h-4" />
                     {t("reload")}
@@ -741,9 +741,9 @@ export default function CharacterCostView({
             </CardHeader>
 
             <CardContent className="flex-1 min-h-0 p-0 flex flex-col">
-              <div className="flex h-full min-h-0 gap-4 flex-1">
-                <div className="w-1/3 border rounded-lg p-3 overflow-hidden flex flex-col min-h-0">
-                  <div className="flex items-center justify-between mb-3 shrink-0">
+              <div className="workspace-split">
+                <div className="workspace-split-list border rounded-lg p-3">
+                  <div className="mb-3 flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-2">
                     <div className="font-semibold text-sm">{t("rows", { count: tableData.length })}</div>
                     <Button size="sm" onClick={handleAdd} disabled={!loadState.writable} className="inline-flex items-center gap-2">
                       <Plus className="w-4 h-4" />
@@ -845,7 +845,7 @@ export default function CharacterCostView({
                   </div>
                 </div>
 
-                <div className="flex-1 border rounded-lg p-4 overflow-hidden flex flex-col min-h-0">
+                <div className="workspace-split-detail border rounded-lg p-4 overflow-hidden">
                   {selectedRow ? (
                     <>
                       <div className="flex items-center justify-between mb-4 shrink-0">

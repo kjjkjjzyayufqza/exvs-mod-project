@@ -165,8 +165,8 @@ export function Ps4PreferencesSection() {
 
   return (
     <section className="space-y-4" aria-labelledby="ps4-preferences-title">
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-0.5">
+      <div className="workspace-pane-header">
+        <div className="workspace-pane-identity space-y-0.5">
           <h3 id="ps4-preferences-title" className="text-sm font-semibold">
             {t("settings.title")}
           </h3>

@@ -8,6 +8,7 @@
 //! MSC binary reader matching `tools/mscdec_msc.py`.
 
 use crate::msc_toolchain::opcode::{format_of, size_of};
+use crate::msc_toolchain::profile::ScriptProfile;
 
 #[derive(Clone, Debug)]
 pub enum Param {
@@ -107,9 +108,25 @@ pub fn parse_msc(data: &[u8]) -> Result<MscFile, String> {
         first_index.entry(*p).or_insert(i);
     }
 
+    // No shipped mission script has an address-sorted offset table, and the
+    // mission compiler rebuilds that order from `func_<slot>` names. Unit
+    // tables are often unsorted too (OB Justice `2.dscex`: 627 of 1196), but
+    // a unit compile always writes the table in source order, and every
+    // unit-side name (`postprocess` pointers, `func_241`, research notes) is
+    // the layout index. Bodies are read in layout order either way.
+    let name_by_slot = matches!(ScriptProfile::detect(data), Ok(ScriptProfile::Mission));
+    let mut slot_of_offset: std::collections::HashMap<u32, usize> =
+        std::collections::HashMap::with_capacity(script_offsets.len());
+    for (slot, offset) in script_offsets.iter().enumerate() {
+        slot_of_offset.entry(*offset).or_insert(slot);
+    }
+
+    // `postprocess` and `chrsysparam_msc_links` turn raw pointers back into
+    // function names through this table, so it must use the script names.
     let mut log = String::new();
     for (count, ptr) in sorted.iter().enumerate() {
-        log.push_str(&format!("[func_name: func_{count}, pointer: {ptr}]\n"));
+        let name = if name_by_slot { slot_of_offset[ptr] } else { count };
+        log.push_str(&format!("[func_name: func_{name}, pointer: {ptr}]\n"));
     }
 
     if off % 0x10 != 0 {
@@ -130,20 +147,14 @@ pub fn parse_msc(data: &[u8]) -> Result<MscFile, String> {
         off += string_size;
     }
 
-    // The offset table is not always in layout order: no shipped mission
-    // script has an address-sorted table, while unit scripts do. Bodies are
-    // still read in layout order, but each one is named after the table slot
-    // that points at it, so a recompile can put the table back the way it was.
-    let mut slot_of_offset: std::collections::HashMap<u32, usize> =
-        std::collections::HashMap::with_capacity(script_offsets.len());
-    for (slot, offset) in script_offsets.iter().enumerate() {
-        slot_of_offset.entry(*offset).or_insert(slot);
-    }
-
     let mut scripts = Vec::with_capacity(entry_count);
     for abs in &sorted {
         let i = first_index[abs];
-        let slot = slot_of_offset.get(abs).copied().unwrap_or(i);
+        let slot = if name_by_slot {
+            slot_of_offset.get(abs).copied().unwrap_or(i)
+        } else {
+            i
+        };
         let start = sorted[i];
         let end = if i + 1 < sorted.len() {
             sorted[i + 1]
@@ -219,4 +230,59 @@ fn disassemble(body: &[u8], start_pos: u32) -> Result<Vec<Item>, String> {
         pos += size;
     }
     Ok(items)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::msc_toolchain::{compile_c_with_profile, compile_in_process};
+
+    fn table_at(data: &[u8]) -> usize {
+        let code_end = 0x30 + u32::from_le_bytes(data[0x10..0x14].try_into().unwrap()) as usize;
+        code_end.div_ceil(0x10) * 0x10
+    }
+
+    fn assert_log_names_match_scripts(file: &MscFile) {
+        let mut lines = 0;
+        for line in file.log.lines() {
+            let rest = line.strip_prefix("[func_name: ").unwrap();
+            let (name, ptr) = rest.split_once(", pointer: ").unwrap();
+            let ptr: u32 = ptr.trim_end_matches(']').parse().unwrap();
+            let script = file
+                .scripts
+                .iter()
+                .find(|s| s.start.wrapping_add(0x30) == ptr)
+                .unwrap();
+            assert_eq!(name, script.name, "log pointer {ptr} names a different body");
+            lines += 1;
+        }
+        assert_eq!(lines, file.scripts.len());
+    }
+
+    #[test]
+    fn unsorted_unit_table_keeps_layout_names_and_matching_log() {
+        let src = "void func_0()\n{\n}\nvoid func_1()\n{\n}\nvoid func_2()\n{\n}\n";
+        let mut packed = compile_in_process(src).unwrap();
+        let table = table_at(&packed);
+        let first = packed[table..table + 4].to_vec();
+        let third = packed[table + 8..table + 12].to_vec();
+        packed[table..table + 4].copy_from_slice(&third);
+        packed[table + 8..table + 12].copy_from_slice(&first);
+
+        let file = parse_msc(&packed).unwrap();
+        let names: Vec<&str> = file.scripts.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["func_0", "func_1", "func_2"]);
+        assert_log_names_match_scripts(&file);
+    }
+
+    #[test]
+    fn mission_table_names_slots_and_log_follows() {
+        let src = "void func_2()\n{\n}\nvoid func_0()\n{\n}\nvoid func_1()\n{\n}\n";
+        let packed = compile_c_with_profile(src, false, ScriptProfile::Mission).unwrap();
+
+        let file = parse_msc(&packed).unwrap();
+        let names: Vec<&str> = file.scripts.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["func_2", "func_0", "func_1"]);
+        assert_log_names_match_scripts(&file);
+    }
 }

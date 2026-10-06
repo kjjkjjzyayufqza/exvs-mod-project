@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  filterMainViewTabsForNav,
   groupMainViewTabs,
   MAIN_VIEW_TAB_GROUP_LABELS,
   MAIN_VIEW_TAB_GROUP_ORDER,
@@ -23,8 +24,16 @@ describe("mainViewTabGroups", () => {
   it("places Camera under Pack after Motion Folder", () => {
     const tab = MAIN_VIEW_TAB_META.find((entry) => entry.value === "camera-table");
     expect(tab).toMatchObject({ group: "pack", name: "Camera" });
-    const packTabs = MAIN_VIEW_TAB_META.filter((entry) => entry.group === "pack").map((entry) => entry.value);
-    expect(packTabs).toEqual(["folder-structure", "effect-folder", "motion-folder", "camera-table"]);
+    const packTabs = filterMainViewTabsForNav(MAIN_VIEW_TAB_META)
+      .filter((entry) => entry.group === "pack")
+      .map((entry) => entry.value);
+    expect(packTabs).toEqual(["effect-folder", "motion-folder", "camera-table"]);
+  });
+
+  it("keeps folder structure out of the nav bar", () => {
+    const navValues = filterMainViewTabsForNav(MAIN_VIEW_TAB_META).map((entry) => entry.value);
+    expect(navValues).not.toContain("folder-structure");
+    expect(MAIN_VIEW_TAB_META.find((entry) => entry.value === "folder-structure")?.navHidden).toBe(true);
   });
 
   it("places Navi List under Character after Series List", () => {

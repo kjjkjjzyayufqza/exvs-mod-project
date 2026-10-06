@@ -32,10 +32,21 @@ export type MainViewTabMeta = {
   name: string;
   shortName: string;
   group: MainViewTabGroupId;
+  /** Omit from the grouped tab bar (editor may still exist for PS4 package open). */
+  navHidden?: boolean;
 };
 
+/** Default EXVS2 Workspace tab when no editor has been chosen yet. */
+export const MAIN_VIEW_INITIAL_TAB = "character-id-table";
+
 export const MAIN_VIEW_TAB_META: MainViewTabMeta[] = [
-  { value: "folder-structure", name: "Folder structure", shortName: "Structure", group: "pack" },
+  {
+    value: "folder-structure",
+    name: "Folder structure",
+    shortName: "Structure",
+    group: "pack",
+    navHidden: true,
+  },
   { value: "effect-folder", name: "Effect Folder", shortName: "Effect", group: "pack" },
   { value: "motion-folder", name: "Motion Folder", shortName: "Motion", group: "pack" },
   { value: "camera-table", name: "Camera", shortName: "Camera", group: "pack" },
@@ -78,6 +89,10 @@ export function shouldKeepMainViewTabMounted(
   hasUnsaved: boolean,
 ): boolean {
   return isActive || KEEP_MOUNTED_MAIN_VIEW_TABS.has(tabValue) || hasUnsaved;
+}
+
+export function filterMainViewTabsForNav(tabs: MainViewTabMeta[]): MainViewTabMeta[] {
+  return tabs.filter((tab) => tab.navHidden !== true);
 }
 
 export function groupMainViewTabs(tabs: MainViewTabMeta[]): Array<{ id: MainViewTabGroupId; label: string; tabs: MainViewTabMeta[] }> {

@@ -91,6 +91,16 @@ fn a_mission_header_records_the_global_count_at_0x1c() {
 }
 
 #[test]
+fn a_unit_header_records_the_global_count_at_0x1c() {
+    let unit = compile_in_process(SAMPLE).expect("unit compile");
+    assert_eq!(word(&unit, 0x1C), 2, "unit scripts store the global count");
+
+    let three = format!("int global2;\n{SAMPLE}");
+    let unit = compile_in_process(&three).expect("unit compile");
+    assert_eq!(word(&unit, 0x1C), 3);
+}
+
+#[test]
 fn the_mission_body_is_the_unit_body_plus_one_tail_opcode() {
     let mission = compile_mission_in_process(SAMPLE).expect("mission compile");
     let unit = compile_in_process(SAMPLE).expect("unit compile");

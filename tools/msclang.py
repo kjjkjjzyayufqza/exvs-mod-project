@@ -1069,7 +1069,10 @@ def writeToFile(msc):
 
     scriptTable = refs.scriptPositions
     entryPoint = 0x10 if not 'main' in refs.functions else refs.scriptPositions[refs.functions.index('main')]
-    unk = 0x16 if len(msc.strings) > 0 or len(msc.scripts) > 10 else 0x00
+    # Header 0x1C is the global-slot count. Stock unit scripts store
+    # len(global0..globalN). The old 0x16 placeholder is what an app
+    # repack kept writing back over a corrected file.
+    unk = len(refs.globalVariables)
 
     # Write file header
     fileBytes = MSC_MAGIC

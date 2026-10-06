@@ -85,10 +85,10 @@ export function InteractionEditorView({
   const entry = data?.entries[selectedIndex] ?? null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-2 border-b bg-muted/20 px-3 py-2">
+    <div className="workspace-param-shell flex h-full min-h-0 min-w-0 flex-col">
+      <div className="workspace-toolbar border-b bg-muted/20 px-3 py-2">
         <FilePathInput
-          className="h-7 w-80 font-mono text-[11px]"
+          className="workspace-flex-field h-7 font-mono text-[11px]"
           storeKey={STORE_KEY}
           value={filePath}
           onChange={(e) => setFilePath(e.target.value)}
@@ -118,7 +118,7 @@ export function InteractionEditorView({
         </Button>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)_320px]">
+      <div className="workspace-param-grid">
         <EntryListPanel
           entries={data?.entries ?? []}
           selectedIndex={selectedIndex}

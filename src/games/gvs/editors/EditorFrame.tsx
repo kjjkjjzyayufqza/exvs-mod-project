@@ -37,7 +37,7 @@ export async function revealPath(path: string): Promise<void> {
 export function PathLine({ label, path, folder }: { label: string; path: string; folder: string }) {
   const { t } = useTranslation("gvs-workspace");
   return (
-    <div className="mt-1 flex items-center gap-1 break-all text-xs text-muted-foreground">
+    <div className="workspace-path-line">
       {label}: {path}
       <button
         type="button"
@@ -66,12 +66,12 @@ export function EditorFrame({ title, meta, actions, children }: EditorFrameProps
     <div className="h-full w-full">
       <Card className="flex h-full flex-col rounded-none border-none bg-transparent shadow-none">
         <CardHeader className="p-0 pb-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
+          <div className="workspace-pane-header">
+            <div className="workspace-pane-identity">
               <CardTitle>{title}</CardTitle>
               {meta}
             </div>
-            {actions ? <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div> : null}
+            {actions ? <div className="workspace-pane-actions">{actions}</div> : null}
           </div>
         </CardHeader>
         <CardContent className="min-h-0 flex-1 p-0 pb-4">{children}</CardContent>

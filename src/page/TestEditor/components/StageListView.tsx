@@ -924,13 +924,13 @@ export default function StageListView({
     <div className="h-full w-full">
       <Card className="h-full flex flex-col border-none shadow-none rounded-none bg-transparent">
         <CardHeader className="p-0 pb-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
+          <div className="workspace-pane-header">
+            <div className="workspace-pane-identity">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <CardTitle>{t("title")}</CardTitle>
                 {isGvsActive ? <Badge variant="secondary">{t("gvsVariant")}</Badge> : null}
               </div>
-              <div className="text-xs text-muted-foreground break-all mt-1 flex items-center gap-1">
+              <div className="workspace-path-line">
                 {isGvsActive ? t("stageListGvs") : t("title")}: {activeFilePath}
                 <button
                   type="button"
@@ -960,8 +960,8 @@ export default function StageListView({
                 />
               ) : null}
             </div>
-            <div className="flex flex-col items-end gap-2 shrink-0">
-              <div className="flex items-center gap-2">
+            <div className="workspace-pane-actions flex-col items-stretch">
+              <div className="flex max-w-full flex-wrap items-center gap-2">
                 <Button size="sm" variant="outline" onClick={() => void handleReloadActive()} className="inline-flex items-center gap-2">
                   <RefreshCw className="w-4 h-4" />
                   {t("actions.reload")}
@@ -1048,7 +1048,7 @@ export default function StageListView({
                 </Button>
               </div>
 
-              <div className="flex items-center gap-2 rounded-md border px-2 py-1.5">
+              <div className="flex max-w-full flex-wrap items-center gap-2 rounded-md border px-2 py-1.5">
                 <span className="text-[11px] font-medium text-muted-foreground">GVS</span>
                 <Button
                   size="sm"
