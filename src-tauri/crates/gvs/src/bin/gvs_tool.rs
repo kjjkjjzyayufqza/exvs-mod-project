@@ -16,10 +16,13 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
+use exvs_gvs::content;
 use exvs_gvs::inspect::inspect_path;
 use exvs_gvs::nutexb::Nutexb;
 use exvs_gvs::package;
+use exvs_gvs::schema;
 use exvs_gvs::ssbh_view::{meshes_to_obj, viewer_meshes, OBJ_HEADER};
+use exvs_gvs::table;
 use exvs_ps4_common::packages::select_init_items;
 use exvs_ps4_common::provenance;
 use exvs_ps4_common::texture::PixelLayout;
@@ -126,6 +129,27 @@ enum Command {
         #[arg(long)]
         numatb: Option<PathBuf>,
     },
+    /// Read and rewrite every table file (A9 B8 AB CD / CE) under the given
+    /// package folders and report any that does not come back byte-identical.
+    TableCheck { roots: Vec<PathBuf> },
+    /// Open every editor schema in a workspace: locate its archive, read each
+    /// member with the schema layout, rebuild it unchanged and with an edit,
+    /// and report what does not come back as expected.
+    SchemaCheck { workspace: PathBuf },
+    /// Check that a folder may be the workspace (a folder of its own for mod
+    /// files, never the game folder or part of a game dump).
+    CheckWorkspace {
+        workspace: PathBuf,
+        #[arg(long)]
+        source_root: Option<PathBuf>,
+    },
+    /// Units of the Character ID table with their 002chara / 006effect /
+    /// 090sound archives.
+    Units {
+        workspace: PathBuf,
+        #[arg(long)]
+        source_root: Option<PathBuf>,
+    },
     /// Print the research credits.
     Credits,
 }
@@ -147,8 +171,115 @@ fn read(path: &PathBuf) -> Result<Vec<u8>, String> {
     std::fs::read(path).map_err(|error| format!("{}: {error}", path.display()))
 }
 
+fn table_check(roots: &[PathBuf]) -> Result<serde_json::Value, String> {
+    let mut checked = 0usize;
+    let mut failures = Vec::new();
+    for root in roots {
+        for path in exvs_ps4_common::files::list_files(root, &[]).map_err(String::from)? {
+            let bytes = read(&path)?;
+            if !table::is_table(&bytes) {
+                continue;
+            }
+            checked += 1;
+            let outcome = table::read_table(&bytes, &[]).and_then(|document| table::write_table(&bytes, &document, &[]));
+            match outcome {
+                Ok(rebuilt) if rebuilt == bytes => {}
+                Ok(rebuilt) => failures.push(json!({ "path": path, "error": format!("rebuilt {} bytes differ from {} source bytes", rebuilt.len(), bytes.len()) })),
+                Err(error) => failures.push(json!({ "path": path, "error": error.to_string() })),
+            }
+            if let Err(error) = mutation_probe(&bytes) {
+                failures.push(json!({ "path": path, "error": format!("mutation probe: {error}") }));
+            }
+        }
+    }
+    Ok(json!({ "checked": checked, "failed": failures.len(), "failures": failures }))
+}
+
+fn schema_check(workspace: &std::path::Path) -> Result<serde_json::Value, String> {
+    let index = content::WorkspaceIndex::new(Some(workspace), None);
+    let mut report = Vec::new();
+    let mut failed = 0usize;
+    for schema in schema::schemas() {
+        let Some(package) = index.package(schema.archive) else {
+            report.push(json!({ "schema": schema.id, "state": "not extracted" }));
+            continue;
+        };
+        for file in content::table_files(package, schema).map_err(String::from)? {
+            let bytes = read(&PathBuf::from(&file.path))?;
+            let outcome = table::read_table(&bytes, schema.layout).and_then(|document| {
+                let rebuilt = table::write_table(&bytes, &document, schema.layout)?;
+                Ok((document.rows.len(), rebuilt == bytes))
+            });
+            let probe = probe_edit(&bytes, schema.layout);
+            let entry = match (outcome, probe) {
+                (Ok((rows, true)), Ok(())) => json!({ "schema": schema.id, "member": file.member, "rows": rows, "state": "ok" }),
+                (Ok((_, false)), _) => json!({ "schema": schema.id, "member": file.member, "state": "rebuild differs" }),
+                (Err(error), _) | (Ok(_), Err(error)) => {
+                    json!({ "schema": schema.id, "member": file.member, "state": error.to_string() })
+                }
+            };
+            if entry["state"] != "ok" {
+                failed += 1;
+            }
+            report.push(entry);
+        }
+    }
+    Ok(json!({ "failed": failed, "tables": report }))
+}
+
+/// Edit a field table the way the editors do (rename one text cell, clone the
+/// first row under a free id, drop the last row) and confirm that the rebuilt
+/// file reads back with exactly those changes.
+fn mutation_probe(bytes: &[u8]) -> Result<(), String> {
+    let original = table::read_table(bytes, &[]).map_err(String::from)?;
+    if original.family != table::TableFamily::Field {
+        return Ok(());
+    }
+    probe_edit(bytes, &[]).map_err(String::from)
+}
+
+/// The edit probe on a table read with `layout`.
+fn probe_edit(bytes: &[u8], layout: &[table::RecordColumn]) -> exvs_gvs::Result<()> {
+    let original = table::read_table(bytes, layout)?;
+    if original.rows.len() < 2 {
+        return Ok(());
+    }
+    let mut edited = original.clone();
+    let text_column = edited.columns.iter().position(|column| column.kind == table::ValueKind::Text);
+    if let Some(column) = text_column {
+        edited.rows[0].cells[column] = serde_json::Value::String("PROBE_TEXT".to_string());
+    }
+    let free_id = (0..u32::MAX)
+        .rev()
+        .find(|id| !edited.rows.iter().any(|row| row.id == *id))
+        .ok_or_else(|| exvs_gvs::Error::invalid("no free row id"))?;
+    let mut clone = edited.rows[0].clone();
+    clone.id = free_id;
+    edited.rows.pop();
+    edited.rows.push(clone);
+    let rebuilt = table::write_table(bytes, &edited, layout)?;
+    let reread = table::read_table(&rebuilt, layout)?;
+    let mut expected: Vec<_> = edited.rows.iter().map(|row| (row.id, row.cells.clone())).collect();
+    expected.sort_by_key(|(id, _)| *id);
+    let actual: Vec<_> = reread.rows.iter().map(|row| (row.id, row.cells.clone())).collect();
+    if actual != expected {
+        return Err(exvs_gvs::Error::invalid("re-read rows differ from the edited rows"));
+    }
+    Ok(())
+}
+
 fn run(cli: Cli) -> Result<serde_json::Value, String> {
     match cli.command {
+        Command::TableCheck { roots } => table_check(&roots),
+        Command::SchemaCheck { workspace } => schema_check(&workspace),
+        Command::CheckWorkspace { workspace, source_root } => {
+            exvs_ps4_common::workspace::validate_workspace(&workspace, source_root.as_deref()).map_err(String::from)?;
+            Ok(json!({ "workspace": workspace, "valid": true }))
+        }
+        Command::Units { workspace, source_root } => {
+            serde_json::to_value(content::units(&workspace, source_root.as_deref()).map_err(String::from)?)
+                .map_err(|error| error.to_string())
+        }
         Command::Index { source_root, workspace } => {
             serde_json::to_value(exvs_gvs::content_index(Some(&source_root), workspace.as_deref())).map_err(|error| error.to_string())
         }

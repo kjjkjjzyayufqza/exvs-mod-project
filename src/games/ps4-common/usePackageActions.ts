@@ -14,8 +14,8 @@
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { save } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
+import { pickPath } from "@/lib/dialogPathMemory";
 import { runOperation } from "./activity";
 import { formatBytes, parentDir } from "./format";
 import type { GameId } from "./types";
@@ -69,9 +69,11 @@ export function usePackageActions(options: PackageActionsOptions) {
 
   const repackAs = async () => {
     if (!packageDir) return;
-    const target = await save({
+    const target = await pickPath({
+      key: `${game}.repackAs`,
+      kind: "save",
       title: tc("package.repackAs"),
-      defaultPath: `${options.defaultName}.${options.extension}`,
+      defaultFileName: `${options.defaultName}.${options.extension}`,
       filters: [{ name: options.extension.toUpperCase(), extensions: [options.extension] }],
     });
     if (target) await repack(target);

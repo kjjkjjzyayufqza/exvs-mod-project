@@ -3,13 +3,15 @@ import { useTranslation } from "react-i18next";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { groupMainViewTabs, MAIN_VIEW_TAB_META } from "./mainViewTabGroups";
+import { groupMainViewTabs, MAIN_VIEW_TAB_META, type MainViewTabMeta } from "./mainViewTabGroups";
 import { findMainViewTabLabel } from "./mainViewTabNavSettings";
 import { useMainViewTabNavCollapsed } from "./useMainViewTabNavCollapsed";
 
 type MainViewTabNavProps = {
   activeTab: string;
   unsavedTabMap: Record<string, boolean>;
+  /** Editor tabs to show; the EXVS2 Workspace set when omitted. */
+  tabs?: MainViewTabMeta[];
 };
 
 const tabTriggerClassName = cn(
@@ -25,11 +27,11 @@ const tabTriggerClassName = cn(
   "active:translate-y-px",
 );
 
-export function MainViewTabNav({ activeTab, unsavedTabMap }: MainViewTabNavProps) {
+export function MainViewTabNav({ activeTab, unsavedTabMap, tabs = MAIN_VIEW_TAB_META }: MainViewTabNavProps) {
   const { t } = useTranslation("test-workspace");
-  const groups = groupMainViewTabs(MAIN_VIEW_TAB_META);
+  const groups = groupMainViewTabs(tabs);
   const { collapsed, setCollapsed, toggleCollapsed } = useMainViewTabNavCollapsed();
-  const activeTabLabel = findMainViewTabLabel(activeTab, MAIN_VIEW_TAB_META);
+  const activeTabLabel = findMainViewTabLabel(activeTab, tabs);
   const hasUnsaved = Boolean(unsavedTabMap[activeTab]);
 
   return (

@@ -336,6 +336,7 @@ pub fn run() {
             mbon::commands::mbon_init_catalog,
             mbon::commands::mbon_content_index,
             mbon::commands::mbon_suggest_name,
+            mbon::commands::mbon_validate_workspace,
             mbon::commands::mbon_workspace_status,
             mbon::commands::mbon_package_status,
             mbon::commands::mbon_mark_clean,
@@ -372,6 +373,7 @@ pub fn run() {
             gvs::commands::gvs_init_catalog,
             gvs::commands::gvs_content_index,
             gvs::commands::gvs_suggest_name,
+            gvs::commands::gvs_validate_workspace,
             gvs::commands::gvs_workspace_status,
             gvs::commands::gvs_package_status,
             gvs::commands::gvs_mark_clean,
@@ -398,7 +400,16 @@ pub fn run() {
             gvs::commands::gvs_edit_model,
             gvs::commands::gvs_edit_scene,
             gvs::commands::gvs_edit_detail,
-            gvs::commands::gvs_inspect_msc
+            gvs::commands::gvs_inspect_msc,
+            gvs::tables::gvs_table_source,
+            gvs::tables::gvs_table_read,
+            gvs::tables::gvs_table_write,
+            gvs::tables::gvs_table_schemas,
+            gvs::tables::gvs_locate,
+            gvs::tables::gvs_units,
+            gvs::tables::gvs_param_tables,
+            gvs::tables::gvs_bsfo_read,
+            gvs::tables::gvs_bsfo_write
         ]);
 
     // Debug-only MCP bridge for AI tooling. Prefer 127.0.0.1 and a base port outside

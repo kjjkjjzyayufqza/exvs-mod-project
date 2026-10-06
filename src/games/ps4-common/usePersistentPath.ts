@@ -15,9 +15,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { readSetting, readSettingMirror, writeSetting } from "./settings";
 
 /**
- * A path remembered in the PS4 settings store (`ps4-workspaces.json`) with a
- * localStorage mirror for the first paint. The stored value only replaces the
- * mirror when the user has not changed the field in the meantime.
+ * A path remembered in the Tauri config store (`settings.json`, see
+ * `./settings`) with a localStorage mirror for the first paint. The stored
+ * value only replaces the mirror when the user has not changed the field in
+ * the meantime.
  */
 export function usePersistentPath(key: string): [string, (value: string) => void] {
   const [value, setValue] = useState(() => readSettingMirror(key));

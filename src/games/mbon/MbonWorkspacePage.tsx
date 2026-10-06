@@ -16,6 +16,7 @@ import { CreditsDialog } from "../ps4-common/components/CreditsDialog";
 import { useAsync } from "../ps4-common/useAsync";
 import { Ps4Workspace } from "../ps4-common/workspace/Ps4Workspace";
 import { StructureSplit } from "../ps4-common/workspace/StructureSplit";
+import { exvs2TabMeta, NoPackageState } from "../ps4-common/workspace/editorTabs";
 import { MBON_SINGLE_ROUTE, useMbonAdapter } from "./adapter";
 import { mbonApi } from "./api";
 import { MbonInspector } from "./components/MbonInspector";
@@ -23,6 +24,7 @@ import { MbonPackagePanel } from "./components/MbonPackagePanel";
 import { useMbonStore } from "./store";
 
 const BOOST_STUDIO_URL = "https://github.com/descatal/BoostStudio";
+const STRUCTURE_TAB = exvs2TabMeta("folder-structure");
 
 /**
  * MBON (PS4) workspace in the EXVS2 Workspace layout: data init and the
@@ -41,7 +43,6 @@ export default function MbonWorkspacePage() {
   const workspaceRevision = useMbonStore((state) => state.workspaceRevision);
   const selection = useMbonStore((state) => state.selection);
   const select = useMbonStore((state) => state.select);
-  const verify = useMbonStore((state) => state.verify);
   const setWorkspace = useMbonStore((state) => state.setWorkspace);
   const setSourceRoot = useMbonStore((state) => state.setSourceRoot);
   const setModRoot = useMbonStore((state) => state.setModRoot);
@@ -76,8 +77,6 @@ export default function MbonWorkspacePage() {
   return (
     <Ps4Workspace
       adapter={adapter}
-      title={t("title")}
-      credit={t("credit")}
       singleRoute={MBON_SINGLE_ROUTE}
       workspace={workspace}
       setWorkspace={setWorkspace}
@@ -97,22 +96,21 @@ export default function MbonWorkspacePage() {
           research={{ label: t("credits.researchLabel"), url: BOOST_STUDIO_URL, note: t("credits.researchNote") }}
         />
       }
-      structure={
-        <StructureSplit
-          tree={<MbonPackagePanel view={view} onAdded={setPendingPath} />}
-          inspector={<MbonInspector view={current} />}
-        />
-      }
-      packageFacts={
-        current
-          ? {
-              sourceName: current.manifest.sourceName,
-              sourcePath: current.manifest.sourcePath,
-              contents: t("contents", { count: current.entries.length }),
-            }
-          : null
-      }
-      verify={verify}
+      packageTab={STRUCTURE_TAB.value}
+      editors={[
+        {
+          meta: STRUCTURE_TAB,
+          render: ({ openContentIndex }) =>
+            packageDir ? (
+              <StructureSplit
+                tree={<MbonPackagePanel view={view} onAdded={setPendingPath} />}
+                inspector={<MbonInspector view={current} />}
+              />
+            ) : (
+              <NoPackageState onOpenContentIndex={openContentIndex} />
+            ),
+        },
+      ]}
     />
   );
 }

@@ -13,3 +13,4 @@
 //! GVS workspace adapter: Tauri commands over the isolated `exvs_gvs` crate.
 
 pub mod commands;
+pub mod tables;

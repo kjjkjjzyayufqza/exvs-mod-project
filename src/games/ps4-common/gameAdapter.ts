@@ -92,6 +92,11 @@ export interface Ps4GameAdapter {
    */
   contentIndex: (sourceRoot: string, workspace: string) => Promise<InitCatalog>;
   suggestName: (source: string) => Promise<NameSuggestion>;
+  /**
+   * Rejects a workspace that is, holds or lies inside the game folder (the
+   * workspace is a separate folder for mod files).
+   */
+  validateWorkspace: (workspace: string, sourceRoot: string) => Promise<void>;
   preview: (path: string) => Promise<ArchivePreview>;
   packageSummary: (packageDir: string) => Promise<PackageSummary>;
   packageStatus: (packageDir: string, workspace?: string) => Promise<PackageStatus>;

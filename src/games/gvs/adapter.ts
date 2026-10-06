@@ -96,6 +96,7 @@ export function useGvsAdapter(): Ps4GameAdapter {
       initCatalog: (sourceRoot, workspace) => gvsApi.initCatalog(sourceRoot, workspace),
       contentIndex: (sourceRoot, workspace) => gvsApi.contentIndex(sourceRoot, workspace),
       suggestName: (source) => gvsApi.suggestName(source),
+      validateWorkspace: (workspace, sourceRoot) => gvsApi.validateWorkspace(workspace, sourceRoot),
       preview: async (path) => previewOf(await gvsApi.inspect(path), t),
       packageSummary: async (packageDir) => {
         const view = await gvsApi.packageView(packageDir);

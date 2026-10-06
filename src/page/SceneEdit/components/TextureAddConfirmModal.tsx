@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { TextureFormatSelect, type DdsFormat } from "./TextureFormatSelect";
 import { DEFAULT_DDS_FORMAT } from "../utils/sceneTextureDdsFormat";
-import { isImageFile } from "@/page/TestEditor/components/ImagePreview";
+import { isImageFile } from "@/page/TestEditor/utils/imageFiles";
 import { SCENE_EDIT_RND_SIZE_KEYS } from "./sceneEditRndSizePersistence";
 import {
   describeDuplicate,

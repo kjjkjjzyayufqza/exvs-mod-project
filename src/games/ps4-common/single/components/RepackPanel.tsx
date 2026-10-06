@@ -19,15 +19,15 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { save } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
+import { pickPath } from "@/lib/dialogPathMemory";
 import { FileOutput, FolderArchive, FolderOpen, Loader2, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { runOperation } from "../../activity";
-import { formatBytes, parentDir, shortDigest } from "../../format";
+import { baseName, formatBytes, parentDir, shortDigest } from "../../format";
 import type { Ps4GameAdapter, RepackOutcome } from "../../gameAdapter";
 import { useAsync } from "../../useAsync";
 import { usePersistentPath } from "../../usePersistentPath";
@@ -99,7 +99,7 @@ export function RepackPanel({ adapter, workspace, modRoot, setModRoot }: RepackP
   const [packageDir, setPackageDir] = usePersistentPath(`${game}.single.package`);
   const [revision, setRevision] = useState(0);
   const [mode, setMode] = useState<Target>("mod");
-  const [custom, setCustom] = useState("");
+  const [custom, setCustom] = usePersistentPath(`${game}.single.custom`);
   const [busy, setBusy] = useState<"repack" | "verify" | null>(null);
   const [result, setResult] = useState<RepackOutcome | null>(null);
   const [verified, setVerified] = useState<{ identical: boolean; digest: string } | null>(null);
@@ -138,9 +138,12 @@ export function RepackPanel({ adapter, workspace, modRoot, setModRoot }: RepackP
   const choicesDisabled = !packageDir || !!summary.error;
 
   const chooseCustom = async () => {
-    const picked = await save({
+    const suggested = custom || targets.data?.beside;
+    const picked = await pickPath({
+      key: `${game}.single.custom`,
+      kind: "save",
       title: t("single.customDialog"),
-      defaultPath: custom || targets.data?.beside,
+      defaultFileName: suggested ? baseName(suggested) : undefined,
       filters: [{ name: t("single.sourceFilter", { code: adapter.code }), extensions: ["bin", "fhm"] }],
     });
     if (picked) {
@@ -204,6 +207,7 @@ export function RepackPanel({ adapter, workspace, modRoot, setModRoot }: RepackP
                 id={`${game}-single-package`}
                 kind="folder"
                 dialogTitle={t("single.packageDialog")}
+                memoryKey={`${game}.single.package`}
                 value={packageDir}
                 defaultPath={packageDir || workspace || undefined}
                 onPick={setPackageDir}
@@ -266,6 +270,7 @@ export function RepackPanel({ adapter, workspace, modRoot, setModRoot }: RepackP
                 id={`${game}-single-mod`}
                 kind="folder"
                 dialogTitle={t("modRoot.dialog")}
+                memoryKey={`${game}.single.modRoot`}
                 value={modRoot}
                 defaultPath={modTarget || undefined}
                 onPick={setModRoot}

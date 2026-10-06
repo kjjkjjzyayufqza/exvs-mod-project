@@ -153,6 +153,142 @@ export type SsbhSummary =
   | { type: "animation"; version: string; name: string | null; frameCount: number; groups: [string, number][] }
   | { type: "other"; kind: GvsKind; version: string };
 
+/** A column of a GVS table: a field hash, or the byte offset of a record word. */
+export type GvsColumnKey = { by: "field"; value: number } | { by: "offset"; value: number };
+
+export type GvsMembers =
+  | { kind: "one"; index: number }
+  | { kind: "range"; first: number; last: number; versions: boolean };
+
+export interface GvsSchemaInfo {
+  id: string;
+  title: string;
+  archive: number;
+  archiveName: string;
+  members: GvsMembers;
+  label: GvsColumnKey[];
+  rowId: string;
+}
+
+export interface GvsArchiveLocation {
+  hash: number;
+  hashName: string;
+  relativeDir: string | null;
+  title: string | null;
+  packages: string[];
+  source: string | null;
+}
+
+export interface GvsTableFile {
+  index: number;
+  member: string;
+  path: string;
+}
+
+export interface GvsTableSource {
+  schema: GvsSchemaInfo;
+  archive: GvsArchiveLocation;
+  files: GvsTableFile[];
+}
+
+export type GvsValueKind = "u32" | "i32" | "f32" | "text";
+/** u32 / i32 / f32 numbers, `"NaN"` / `"0xXXXXXXXX"` for non-finite f32 bits, strings for text. */
+export type GvsCell = number | string;
+
+export interface GvsTableColumn {
+  hash: number | null;
+  offset: number;
+  kind: GvsValueKind;
+}
+
+export interface GvsTableRow {
+  id: number;
+  /** Row of the file this row starts from; null for a new row. */
+  source: number | null;
+  cells: GvsCell[];
+}
+
+export interface GvsTableDocument {
+  family: "field" | "record";
+  rowSize: number;
+  columns: GvsTableColumn[];
+  rows: GvsTableRow[];
+}
+
+export interface GvsColumnInfo {
+  key: GvsColumnKey;
+  name: string | null;
+  note: string | null;
+  /** `gvs` (GVS schema) or `vs2:<pool>` (shared VS2 / Over Boost field name). */
+  source: string | null;
+}
+
+export interface GvsArchiveRef {
+  hash: number;
+  relativeDir: string | null;
+  inGame: boolean;
+}
+
+export interface GvsTableView {
+  path: string;
+  document: GvsTableDocument;
+  columns: GvsColumnInfo[];
+  archives: GvsArchiveRef[];
+}
+
+export interface GvsUnitEntry {
+  unitId: number;
+  modelNumber: string | null;
+  chara: GvsArchiveLocation;
+  effect: GvsArchiveLocation;
+  sound: GvsArchiveLocation;
+}
+
+export interface GvsParamTable {
+  index: number;
+  member: string;
+  path: string;
+  rows: number;
+  fields: number;
+  /** Typed param editor of the EXVS2 workspace that reads it. */
+  kind: string;
+  knownFields: number;
+}
+
+export interface GvsBsfoUnit {
+  word0: number;
+  unitId: number;
+  pilotId: number;
+  word3: number;
+}
+
+export interface GvsBsfoSlot {
+  unitId: number;
+  flags: number;
+  /** Index into `units`; -1 marks a slot the script does not define. */
+  castIndex: number;
+  word3: number;
+}
+
+/** Mission briefing (VS2 BSFO layout) as edited and written back. */
+export interface GvsBsfoEdit {
+  sceneClass: number;
+  mapHash: number;
+  timeLimitSeconds: number;
+  hasTarget: boolean;
+  playerCast: number[];
+  bossCast: number[];
+  enemyCast: number[];
+  units: GvsBsfoUnit[];
+  slots: GvsBsfoSlot[];
+}
+
+export interface GvsBsfoView {
+  path: string;
+  roundTrip: boolean;
+  edit: GvsBsfoEdit;
+}
+
 export type GvsInspection =
   | {
       type: "archive";

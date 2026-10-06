@@ -2,13 +2,10 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 import { open, save, type DialogFilter } from "@tauri-apps/plugin-dialog"
-import { dirname } from "@tauri-apps/api/path"
 import { useConfigStore } from "@/store/configStore"
+import { rememberDialogPath, rememberedDialogPath, type PathPickerKind } from "@/lib/dialogPathMemory"
 
-type PickerKind = "file" | "folder" | "save"
-const DIALOG_DEFAULT_PATH_STORE_KEY = "dialogDefaultPath"
-
-type DialogDefaultPathMap = Record<string, string | undefined>
+type PickerKind = PathPickerKind
 
 export interface FilePathInputPickerOptions {
   kind: PickerKind
@@ -157,49 +154,19 @@ const FilePathInput = React.forwardRef<HTMLInputElement, FilePathInputProps>(
     const resolveDialogDefaultPath = React.useCallback(async (): Promise<string | undefined> => {
       const explicit = picker?.defaultPath
       if (explicit) return explicit
-
-      const mapKey = picker?.defaultPathKey ?? storeKey
-      if (mapKey) {
-        const map = (await getSetting<DialogDefaultPathMap>(DIALOG_DEFAULT_PATH_STORE_KEY)) ?? {}
-        const fromMap = map[mapKey]
-        if (typeof fromMap === "string" && fromMap) return fromMap
-      }
-
-      if (storeKey) {
-        const fromValueKey = await getSetting<unknown>(storeKey)
-        if (typeof fromValueKey === "string" && fromValueKey) {
-          if (picker?.kind === "folder") return fromValueKey
-          if (picker?.kind === "file") return await dirname(fromValueKey)
-        }
-      }
-
-      return undefined
-    }, [getSetting, picker, storeKey])
+      if (!picker) return undefined
+      return await rememberedDialogPath(picker.defaultPathKey ?? storeKey, storeKey, picker.kind)
+    }, [picker, storeKey])
 
     const persistDialogDefaultPath = React.useCallback(
       async (picked: string | string[]) => {
         if (!picker) return
-        const persist = picker.persistDefaultPath !== false
-        if (!persist) return
-
+        if (picker.persistDefaultPath === false) return
         const mapKey = picker.defaultPathKey ?? storeKey
         if (!mapKey) return
-
-        let nextDefaultPath: string | undefined
-        if (picker.kind === "folder") {
-          nextDefaultPath = Array.isArray(picked) ? picked[0] : picked
-        } else {
-          const first = Array.isArray(picked) ? picked[0] : picked
-          if (first) nextDefaultPath = await dirname(first)
-        }
-
-        if (!nextDefaultPath) return
-
-        const map = (await getSetting<DialogDefaultPathMap>(DIALOG_DEFAULT_PATH_STORE_KEY)) ?? {}
-        const nextMap: DialogDefaultPathMap = { ...map, [mapKey]: nextDefaultPath }
-        await setSetting(DIALOG_DEFAULT_PATH_STORE_KEY, nextMap)
+        await rememberDialogPath(mapKey, picked, picker.kind)
       },
-      [getSetting, picker, setSetting, storeKey]
+      [picker, storeKey]
     )
 
     const handlePick = React.useCallback(async () => {

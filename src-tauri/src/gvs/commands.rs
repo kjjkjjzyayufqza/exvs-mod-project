@@ -109,6 +109,14 @@ pub async fn gvs_content_index(source_root: Option<String>, workspace: Option<St
     .await
 }
 
+/// Reject a workspace that is, holds or lies inside the game folder: the
+/// workspace stores mod files and must be a folder of its own.
+#[tauri::command]
+pub fn gvs_validate_workspace(workspace: String, source_root: Option<String>) -> Result<(), String> {
+    let source_root = source_root.filter(|path| !path.trim().is_empty()).map(PathBuf::from);
+    exvs_ps4_common::workspace::validate_workspace(Path::new(&workspace), source_root.as_deref()).map_err(String::from)
+}
+
 /// Suggested package folder for a source file (single unpack).
 #[tauri::command]
 pub fn gvs_suggest_name(source: String) -> NameSuggestion {

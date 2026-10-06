@@ -127,6 +127,7 @@ export function UnpackPanel({ adapter, workspace, onOpenInWorkspace }: UnpackPan
                 id={`${game}-single-source`}
                 kind="file"
                 dialogTitle={t("single.sourceDialog")}
+                memoryKey={`${game}.single.source`}
                 value={source}
                 defaultPath={source ? parentDir(source) : undefined}
                 filters={[
@@ -162,6 +163,7 @@ export function UnpackPanel({ adapter, workspace, onOpenInWorkspace }: UnpackPan
                 id={`${game}-single-output`}
                 kind="folder"
                 dialogTitle={t("single.outputDialog")}
+                memoryKey={`${game}.single.output`}
                 value={output}
                 defaultPath={base || undefined}
                 onPick={setOutput}

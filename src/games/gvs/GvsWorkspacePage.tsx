@@ -15,26 +15,29 @@
 
 import "../ps4-common/i18n";
 import "./i18n";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CreditsDialog } from "../ps4-common/components/CreditsDialog";
 import { useAsync } from "../ps4-common/useAsync";
-import { Ps4Workspace } from "../ps4-common/workspace/Ps4Workspace";
+import { Ps4Workspace, type Ps4EditorContext } from "../ps4-common/workspace/Ps4Workspace";
 import { StructureSplit } from "../ps4-common/workspace/StructureSplit";
+import { NoPackageState } from "../ps4-common/workspace/editorTabs";
 import { GVS_SINGLE_ROUTE, useGvsAdapter } from "./adapter";
 import { gvsApi } from "./api";
 import { GvsInspector } from "./components/GvsInspector";
 import { GvsPackagePanel } from "./components/GvsPackagePanel";
+import { GVS_STRUCTURE_TAB, gvsEditorTabs } from "./editors/gvsEditorTabs";
 import { useGvsStore, type GvsSelection } from "./store";
 import { nodeAt } from "./tree";
 
 const REPOSITORY_URL = "https://github.com/kjjkjjzyayufqza/exvs-mod-project";
 
 /**
- * GVS (PS4) workspace in the EXVS2 Workspace layout: data init and the
- * list-based content index bring packages in, the structure editor edits the
- * uncompressed archive tree, textures and SSBH models, and repack writes the
- * mod folder.
+ * GVS (PS4) workspace on the EXVS2 Workspace parts: the same toolbar, split
+ * and grouped editor tabs (Pack / Character / Sound / Stage / Mission / MSC /
+ * Param). Data init and the content index bring archives into the mod
+ * workspace folder; every editor saves into its package and "Repack changes"
+ * writes the mod folder.
  */
 export default function GvsWorkspacePage() {
   const { t } = useTranslation("gvs-workspace");
@@ -48,7 +51,6 @@ export default function GvsWorkspacePage() {
   const workspaceRevision = useGvsStore((state) => state.workspaceRevision);
   const selection = useGvsStore((state) => state.selection);
   const select = useGvsStore((state) => state.select);
-  const verify = useGvsStore((state) => state.verify);
   const setWorkspace = useGvsStore((state) => state.setWorkspace);
   const setSourceRoot = useGvsStore((state) => state.setSourceRoot);
   const setModRoot = useGvsStore((state) => state.setModRoot);
@@ -62,7 +64,6 @@ export default function GvsWorkspacePage() {
 
   const loaded = useAsync(packageDir ? () => gvsApi.packageView(packageDir) : null, [packageDir, packageRevision]);
   const current = loaded.data && loaded.data.dir === packageDir ? loaded.data : undefined;
-  const view = { ...loaded, data: current };
   const credits = useAsync(() => gvsApi.credits(), []);
 
   useEffect(() => {
@@ -83,11 +84,23 @@ export default function GvsWorkspacePage() {
     }
   }, [current, pending, selection, select]);
 
+  const structure = useCallback(
+    ({ openContentIndex }: Ps4EditorContext) =>
+      packageDir ? (
+        <StructureSplit
+          tree={<GvsPackagePanel view={{ ...loaded, data: current }} onCreated={setPending} />}
+          inspector={<GvsInspector view={current} />}
+        />
+      ) : (
+        <NoPackageState onOpenContentIndex={openContentIndex} />
+      ),
+    [current, loaded, packageDir],
+  );
+  const editors = useMemo(() => gvsEditorTabs(t, structure), [structure, t]);
+
   return (
     <Ps4Workspace
       adapter={adapter}
-      title={t("title")}
-      credit={t("credit")}
       singleRoute={GVS_SINGLE_ROUTE}
       workspace={workspace}
       setWorkspace={setWorkspace}
@@ -107,22 +120,8 @@ export default function GvsWorkspacePage() {
           research={{ label: t("credits.researchLabel"), url: REPOSITORY_URL, note: t("credits.researchNote") }}
         />
       }
-      structure={
-        <StructureSplit
-          tree={<GvsPackagePanel view={view} onCreated={setPending} />}
-          inspector={<GvsInspector view={current} />}
-        />
-      }
-      packageFacts={
-        current
-          ? {
-              sourceName: current.manifest.sourceName,
-              sourcePath: current.manifest.sourcePath,
-              contents: t("contents", { count: current.members.length }),
-            }
-          : null
-      }
-      verify={verify}
+      packageTab={GVS_STRUCTURE_TAB}
+      editors={editors}
     />
   );
 }

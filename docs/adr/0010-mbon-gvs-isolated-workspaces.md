@@ -92,12 +92,49 @@ later-than-OB revision.
      They stay isolated: no OB module is imported, and the PS4 path fields do
      not use the OB-coupled `FilePathInput` (its config store imports
      `src/page/**`). The pages use the app layout's normal padding, so the
-     full-bleed list no longer names them.
+     full-bleed list no longer names them. (Superseded for the frontend by
+     section 7: one UI system, badge-only toolbar, shared path memory.)
+
+7. **One UI system and the full GVS editor set (2026-10-04).** The owner
+   asked for one UI system shared with the EXVS2 Workspace, every EXVS2 editor
+   tab on GVS data, no right info panel (EXVS2, MBON, GVS), only the game
+   badge in the toolbar, a workspace that is a folder of its own for mod
+   files, and EXVS2-style path memory for every path input. This amends
+   decisions 1 and 6 for the frontend and the Tauri adapter:
+
+   * The PS4 workspace page is built from EXVS2 parts: `MainViewTabNav`
+     (now takes a tab list), the two-pane `TestEditorWorkspacePanels` and the
+     EXVS2 tab ids, groups and order. The right info panel is gone from all
+     three workspaces; bullet facts moved into the bullet editor.
+   * The GVS editors reuse EXVS2 components where the bytes are the same:
+     `TypedParamDataPanel` with `parse_typed_param_file` /
+     `build_typed_param_file` (GVS unit param tables rebuild byte for byte),
+     `MscWorkspaceView` (new optional `packageRepack` hook replaces the FHM2D
+     folder repack), and the VS2 BSFO codec for mission briefings. The GVS
+     Tauri adapter (`src-tauri/src/gvs/tables.rs`) imports the VS2 field
+     pools for shared field hashes. The `exvs_gvs` crate still imports
+     nothing from OB.
+   * `exvs_gvs::table` reads and writes both GVS table families
+     (`CDABB8A9` field tables, `CEABB8A9` record tables) losslessly;
+     `exvs_gvs::schema` names their archives, members, text columns and
+     columns (CRC-32 field names, IDA, data); `exvs_gvs::content` finds
+     archives by hash and units through the Character ID table.
+   * PS4 paths live in the EXVS2 config store (`settings.json`, `gvs.*` /
+     `mbon.*`, copied once from `ps4-workspaces.json`). Every dialog opens at
+     the folder its input last used through `src/lib/dialogPathMemory.ts`,
+     which `FilePathInput` now shares (behaviour unchanged).
+   * `exvs_ps4_common::workspace::validate_workspace` rejects a workspace that
+     is, holds or lies inside the game folder or a game dump; the page shows
+     a "choose a workspace folder" gate until the folder is valid.
+
+   Session note: `docs/agent-sessions/2026-10-04-gvs-workspace-complete.md`.
 
 ## Consequences
 
 * OB behaviour cannot regress through MBON/GVS work: the crates compile
-  independently and the OB modules have no new imports.
+  independently. Since section 7 the OB components the PS4 pages reuse take
+  optional props (`tabs`, `packageRepack`) whose absence keeps the OB
+  behaviour, and `FilePathInput` keeps its storage layout.
 * `cargo test -p exvs_ps4_common -p exvs_mbon -p exvs_gvs` runs the PS4 suites
   without building the Tauri shell.
 * Removing a credit or an author handle breaks `stamp_mbon_gvs_notices.py

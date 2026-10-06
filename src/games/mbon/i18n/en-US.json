@@ -1,5 +1,4 @@
 {
-  "title": "Maxi Boost ON workspace",
   "modding": {
     "title": "MBON modding",
     "seed": "Index seed",
@@ -12,8 +11,6 @@
     "open": "Open folder"
   },
   "credit": "Tooling: kjjkjjzyayufqza.",
-  "contents_one": "{{count}} entry",
-  "contents_other": "{{count}} entries",
   "credits": {
     "researchLabel": "Author",
     "researchNote": "Format notes stay in the source comments and the project documents."

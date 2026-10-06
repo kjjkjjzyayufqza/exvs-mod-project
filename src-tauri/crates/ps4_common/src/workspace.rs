@@ -88,6 +88,92 @@ pub fn locate_archive(source_root: &Path, hash: u32) -> Option<PathBuf> {
     candidates.into_iter().find(|path| path.is_file())
 }
 
+fn is_hex(text: &str, len: usize) -> bool {
+    text.len() == len && text.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+/// A `XX` bucket folder: a two-hex-digit name holding `XXXXXXXX.bin` archives.
+fn is_bucket(dir: &Path) -> bool {
+    let named = dir.file_name().and_then(|name| name.to_str()).is_some_and(|name| is_hex(name, 2));
+    named
+        && std::fs::read_dir(dir).is_ok_and(|entries| {
+            entries.flatten().any(|entry| {
+                let path = entry.path();
+                path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("bin"))
+                    && path.file_stem().and_then(|stem| stem.to_str()).is_some_and(|stem| is_hex(stem, 8))
+            })
+        })
+}
+
+/// What makes `dir` part of a game dump, if anything: a game root, an
+/// `archives` folder of buckets, or a bucket.
+fn game_dump_marker(dir: &Path) -> Option<&'static str> {
+    if dir.join("eboot.bin").is_file() || dir.join("sce_sys").is_dir() {
+        return Some("a game root (eboot.bin / sce_sys)");
+    }
+    if is_bucket(dir) {
+        return Some("an archive bucket (XX/XXXXXXXX.bin)");
+    }
+    let has_buckets = std::fs::read_dir(dir)
+        .is_ok_and(|entries| entries.flatten().any(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()) && is_bucket(&entry.path())));
+    has_buckets.then_some("an archives folder of XX buckets")
+}
+
+/// `path` with its nearest existing ancestor canonicalized, so a folder that
+/// does not exist yet compares like an existing one.
+fn normalized(path: &Path) -> PathBuf {
+    let mut missing = Vec::new();
+    let mut existing = path;
+    loop {
+        if let Ok(canonical) = std::fs::canonicalize(existing) {
+            return missing.iter().rev().fold(canonical, |acc, part| acc.join(part));
+        }
+        match (existing.parent(), existing.file_name()) {
+            (Some(parent), Some(name)) => {
+                missing.push(name.to_os_string());
+                existing = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
+    }
+}
+
+/// Check that `workspace` may hold extracted packages: it is a folder of its
+/// own for mod files, never the game folder, a folder inside it, a folder
+/// that contains it, or anything that looks like a game dump.
+pub fn validate_workspace(workspace: &Path, source_root: Option<&Path>) -> Result<()> {
+    let folder = normalized(workspace);
+    if let Some(root) = source_root.filter(|root| !root.as_os_str().is_empty()) {
+        let normalized_root = normalized(root);
+        if folder.starts_with(&normalized_root) {
+            return Err(Error::invalid(format!(
+                "{} is inside the game folder {}; pick a separate folder for mod files",
+                workspace.display(),
+                root.display()
+            )));
+        }
+        if normalized_root.starts_with(&folder) {
+            return Err(Error::invalid(format!(
+                "{} contains the game folder {}; pick a separate folder for mod files",
+                workspace.display(),
+                root.display()
+            )));
+        }
+    }
+    for (depth, dir) in folder.ancestors().enumerate() {
+        if let Some(marker) = game_dump_marker(dir) {
+            let place = if depth == 0 {
+                format!("{} is {marker}", workspace.display())
+            } else {
+                let shown = workspace.ancestors().nth(depth).unwrap_or(dir);
+                format!("{} lies inside {}, {marker}", workspace.display(), shown.display())
+            };
+            return Err(Error::invalid(format!("{place}; pick a separate folder for mod files")));
+        }
+    }
+    Ok(())
+}
+
 /// Package folders below `workspace` (folders holding `manifest_name`), in
 /// path order. Hidden folders and the `_out` mod folder are skipped, and a
 /// package folder is never searched for nested packages.

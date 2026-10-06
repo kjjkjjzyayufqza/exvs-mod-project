@@ -2,7 +2,6 @@ import { memo } from "react";
 import type { TestTreeNode } from "../types";
 import type { FileTreeViewOptions } from "../utils/fileTreeViewSort";
 import MainView from "./MainView";
-import InfoPanel from "./InfoPanel";
 import { FileTreePane } from "./FileTreePane";
 import { TestEditorWorkspacePanels } from "./TestEditorWorkspacePanels";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
@@ -34,7 +33,6 @@ type Props = {
   onMscWorkspaceFolderChange: (path: string | null) => void;
   onUnsavedChanges: (hasChanges: boolean) => void;
   onRevealTreeFolder: (path: string) => void;
-  selectedNode: TestTreeNode | null;
   onOpenAsEffectProject?: (filePath: string) => void;
   workspaceDocument: TestEditorWorkspaceDocument;
   workspaceRouteRoots: Record<string, string>;
@@ -67,7 +65,6 @@ export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
   onMscWorkspaceFolderChange,
   onUnsavedChanges,
   onRevealTreeFolder,
-  selectedNode,
   onOpenAsEffectProject,
   workspaceDocument,
   workspaceRouteRoots,
@@ -116,7 +113,6 @@ export const TestEditorWorkspaceArea = memo(function TestEditorWorkspaceArea({
           onOpenAsEffectProject={onOpenAsEffectProject}
         />
       }
-      right={<InfoPanel selected={selectedNode} />}
     />
   );
 });

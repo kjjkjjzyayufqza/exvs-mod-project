@@ -81,27 +81,7 @@
     "entryId": "Entry ID",
     "targetScenario": "Target Scenario",
     "shootingLoop": "Shooting Loop",
-    "combatStats": "Combat Stats",
-    "selectNode": "在树中选择一个节点以查看文件详情。",
-    "name": "名称",
-    "type": "类型",
-    "path": "路径",
-    "folder": "文件夹",
-    "file": "文件",
-    "scrollLeft": "向左滚动标签",
-    "scrollRight": "向右滚动标签",
-    "tabInfo": "信息",
-    "tabBulletInfo": "子弹信息",
-    "tabNumdlbMapping": "NUMDLB Mapping",
-    "tabJnttTable": "JNTT Table",
-    "titleFileInfo": "文件信息",
-    "titleNumdlbMapping": "NUMDLB mapping",
-    "titleBulletInfo": "子弹信息",
-    "titleJnttTable": "JNTT joint table",
-    "descFileInfo": "所选内容、路径与纹理预览",
-    "descNumdlbMapping": "编辑所选 .numdlb 的 mesh object 到 material label 映射",
-    "descBulletInfo": "子弹属性、scenario、shooting loop 与 DPS",
-    "descJnttTable": "编辑所选 .jnttbl 的 hash 到 bone index 配对"
+    "combatStats": "Combat Stats"
   },
   "tabs": {
     "sectionsAria": "编辑器分区",
@@ -111,14 +91,6 @@
     "collapseTabs": "折叠编辑器标签",
     "unsaved": "未保存的更改",
     "unsavedInGroup": "分组中有未保存的更改"
-  },
-  "panels": {
-    "info": "信息",
-    "expandInfo": "展开信息面板",
-    "collapseInfo": "折叠信息面板"
-  },
-  "preview": {
-    "loadFailed": "无法加载图片"
   },
   "repackDialog": {
     "migrateTitle": "迁移监听重新打包结构",

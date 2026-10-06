@@ -326,6 +326,7 @@ export function InitDialog({
                   id={`${game}-init-source`}
                   kind="folder"
                   dialogTitle={t("init.sourceRootDialog")}
+                  memoryKey={`${game}.sourceRoot`}
                   value={sourceRoot}
                   onPick={setSourceRoot}
                   placeholder={t("init.sourceRootPlaceholder")}
@@ -340,6 +341,7 @@ export function InitDialog({
                   id={`${game}-init-workspace`}
                   kind="folder"
                   dialogTitle={t("toolbar.workspaceDialog")}
+                  memoryKey={`${game}.workspace`}
                   value={workspace}
                   onPick={setWorkspace}
                   placeholder={t("toolbar.workspacePlaceholder")}

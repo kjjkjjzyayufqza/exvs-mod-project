@@ -18,12 +18,21 @@ import type {
   RepackTargets,
 } from "../ps4-common/types";
 import type {
+  GvsArchiveLocation,
+  GvsBsfoEdit,
+  GvsBsfoView,
   GvsExtractReport,
   GvsInspection,
   GvsPackageItem,
   GvsPackageView,
+  GvsParamTable,
   GvsRepackReport,
+  GvsSchemaInfo,
+  GvsTableDocument,
+  GvsTableSource,
+  GvsTableView,
   GvsTextureInfo,
+  GvsUnitEntry,
   GvsVerifyReport,
   SsbhSummary,
 } from "./types";
@@ -40,6 +49,8 @@ export const gvsApi = {
   contentIndex: (sourceRoot: string, workspace: string) =>
     invoke<InitCatalog>("gvs_content_index", { sourceRoot: sourceRoot || null, workspace: workspace || null }),
   suggestName: (source: string) => invoke<NameSuggestion>("gvs_suggest_name", { source }),
+  validateWorkspace: (workspace: string, sourceRoot: string) =>
+    invoke<void>("gvs_validate_workspace", { workspace, sourceRoot: sourceRoot || null }),
   workspaceStatus: (workspace: string) => invoke<PackageStatus[]>("gvs_workspace_status", { workspace }),
   packageStatus: (packageDir: string, workspace?: string) =>
     invoke<PackageStatus>("gvs_package_status", { package: packageDir, workspace: workspace ?? null }),
@@ -80,4 +91,20 @@ export const gvsApi = {
     invoke<string>("gvs_edit_scene", { document, name, x, y, z }),
   editDetail: (path: string, name: string) => invoke<{ name: string }>("gvs_edit_detail", { path, name }),
   inspectMsc: (path: string) => invoke<{ entryCount: number; stringCount: number; byteLen: number }>("gvs_inspect_msc", { path }),
+  /** Table commands (src-tauri/src/gvs/tables.rs). */
+  tableSchemas: () => invoke<GvsSchemaInfo[]>("gvs_table_schemas"),
+  tableSource: (workspace: string, sourceRoot: string, schema: string) =>
+    invoke<GvsTableSource>("gvs_table_source", { workspace: workspace || null, sourceRoot: sourceRoot || null, schema }),
+  /** `schema` may be null for a field table read without names. */
+  tableRead: (path: string, schema: string | null, sourceRoot: string) =>
+    invoke<GvsTableView>("gvs_table_read", { path, schema, sourceRoot: sourceRoot || null }),
+  tableWrite: (path: string, schema: string | null, document: GvsTableDocument, sourceRoot: string) =>
+    invoke<GvsTableView>("gvs_table_write", { path, schema, document, sourceRoot: sourceRoot || null }),
+  locate: (workspace: string, sourceRoot: string, hashes: number[]) =>
+    invoke<GvsArchiveLocation[]>("gvs_locate", { workspace: workspace || null, sourceRoot: sourceRoot || null, hashes }),
+  units: (workspace: string, sourceRoot: string) =>
+    invoke<GvsUnitEntry[]>("gvs_units", { workspace, sourceRoot: sourceRoot || null }),
+  paramTables: (packageDir: string) => invoke<GvsParamTable[]>("gvs_param_tables", { package: packageDir }),
+  bsfoRead: (path: string) => invoke<GvsBsfoView>("gvs_bsfo_read", { path }),
+  bsfoWrite: (path: string, edit: GvsBsfoEdit) => invoke<GvsBsfoView>("gvs_bsfo_write", { path, edit }),
 };

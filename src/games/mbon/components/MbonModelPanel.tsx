@@ -12,7 +12,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { save } from "@tauri-apps/plugin-dialog";
+import { pickPath } from "@/lib/dialogPathMemory";
 import { FileDown } from "lucide-react";
 import { runOperation } from "../../ps4-common/activity";
 import { ErrorNote, HudButton } from "../../ps4-common/components/Hud";
@@ -53,9 +53,11 @@ export function MbonModelPanel({ path, revision, packageDir }: { path: string; r
   }, [meshes.data, refs]);
 
   const exportObj = async () => {
-    const output = await save({
+    const output = await pickPath({
+      key: "mbon.model.exportObj",
+      kind: "save",
       title: t("model.exportTitle"),
-      defaultPath: `${baseName(path).replace(/\.[^.]+$/, "")}.obj`,
+      defaultFileName: `${baseName(path).replace(/\.[^.]+$/, "")}.obj`,
       filters: [{ name: "Wavefront OBJ", extensions: ["obj"] }],
     });
     if (!output) return;

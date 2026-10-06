@@ -165,6 +165,7 @@ export function ContentIndexView({
           <PathField
             kind="folder"
             dialogTitle={t("content.gameRootDialog")}
+            memoryKey={`${adapter.game}.sourceRoot`}
             value={sourceRoot}
             onPick={setSourceRoot}
             placeholder={t("content.gameRootPlaceholder")}

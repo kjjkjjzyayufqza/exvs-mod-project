@@ -13,7 +13,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { pickPath } from "@/lib/dialogPathMemory";
 import { FilePlus, FolderSearch } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { runOperation } from "../../ps4-common/activity";
@@ -59,8 +59,8 @@ export function MbonAddEntryDialog({
   }, [open, folders, initialFolder]);
 
   const pick = async () => {
-    const picked = await openDialog({ multiple: false, directory: false, title: t("add.pickTitle") });
-    if (typeof picked === "string") setFile(picked);
+    const picked = await pickPath({ key: "mbon.structure.addFile", kind: "file", title: t("add.pickTitle") });
+    if (picked) setFile(picked);
   };
 
   const submit = async () => {

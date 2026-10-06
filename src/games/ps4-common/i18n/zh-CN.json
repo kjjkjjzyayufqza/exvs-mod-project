@@ -374,37 +374,20 @@
     "targetDescription": "重建档案的写入位置。",
     "packageInfoDescription": "来源、结构与待处理的改动。"
   },
+  "workspaceGate": {
+    "title": "选择工作区文件夹",
+    "body": "工作区是单独的文件夹，用来存放你的 mod 文件：解包出的包和所有编辑。它不能是游戏目录、游戏的 archives 目录或某个 archives\\XX 分桶。重打包的档案写到 mod 输出文件夹。",
+    "checking": "正在检查文件夹..."
+  },
   "toolbar": {
     "workspace": "工作区文件夹",
-    "workspaceDialog": "选择工作区文件夹",
-    "workspacePlaceholder": "选择解包存放的位置",
+    "workspaceDialog": "选择存放 mod 文件的工作区文件夹",
+    "workspacePlaceholder": "选择存放 mod 文件的文件夹（不是游戏目录）",
     "refresh": "刷新工作区",
     "repackChanges": "重打包改动",
+    "content": "已知内容",
     "pending_one": "{{count}} 个包有待重打包的改动",
     "pending_other": "{{count}} 个包有待重打包的改动"
-  },
-  "panels": {
-    "info": "信息",
-    "expandInfo": "展开信息面板",
-    "collapseInfo": "收起信息面板"
-  },
-  "editors": {
-    "label": "编辑器",
-    "expand": "展开编辑器标签",
-    "collapse": "收起编辑器标签",
-    "groups": {
-      "pack": "包",
-      "index": "索引"
-    },
-    "structure": {
-      "short": "结构",
-      "name": "包结构与条目"
-    },
-    "content": {
-      "short": "已知内容",
-      "name": "来自游戏列表的已知内容"
-    },
-    "noPackage": "从左侧的树中打开一个包，或在“已知内容”中解包。"
   },
   "tree": {
     "label": "工作区中的包",
@@ -481,30 +464,5 @@
       "boost-studio": "BoostStudio",
       "scharacterlist": "SCharacterList"
     }
-  },
-  "info": {
-    "packageTitle": "包",
-    "packageDescription": "编辑器中打开的包。",
-    "entryTitle": "档案",
-    "entryDescription": "选中的已知内容条目。",
-    "noPackage": "未打开包。",
-    "source": "来源",
-    "contents": "内容",
-    "changes": "改动",
-    "pending_one": "{{count}} 处待重打包改动",
-    "pending_other": "{{count}} 处待重打包改动",
-    "clean": "没有待处理的改动",
-    "untracked": "尚未跟踪",
-    "verify": "重建校验",
-    "identical": "一致",
-    "modified": "已修改",
-    "unverified": "未校验",
-    "gameFile": "游戏文件",
-    "folder": "文件夹",
-    "hash": "哈希",
-    "nameSource": "名称来源",
-    "size": "大小",
-    "packages": "包",
-    "none": "无"
   }
 }

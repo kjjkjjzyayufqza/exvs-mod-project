@@ -13,7 +13,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { pickPath } from "@/lib/dialogPathMemory";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { Crosshair, FolderOpen, FolderSearch, Replace, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -224,8 +224,8 @@ function MbonReplaceDialog({
   }, [open]);
 
   const pick = async () => {
-    const picked = await openDialog({ multiple: false, directory: false, title: t("replace.pickTitle") });
-    if (typeof picked === "string") setFile(picked);
+    const picked = await pickPath({ key: "mbon.structure.replaceFile", kind: "file", title: t("replace.pickTitle") });
+    if (picked) setFile(picked);
   };
 
   const submit = async () => {

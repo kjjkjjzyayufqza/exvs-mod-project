@@ -1,5 +1,181 @@
 {
-  "title": "Gundam Versus 工作区",
+  "editors": {
+    "titles": {
+      "folder-structure": "文件夹结构",
+      "effect-folder": "特效包",
+      "motion-folder": "动作",
+      "camera-table": "镜头表",
+      "character-id-table": "角色 ID 表",
+      "character-cost": "角色 Cost",
+      "striker-table": "援护表",
+      "character-list": "角色列表",
+      "series-list": "作品列表",
+      "navi-list": "领航员列表",
+      "raw-path-id": "文件路径表",
+      "pilot-voice-resource": "驾驶员语音表",
+      "bgm-table": "BGM 表",
+      "bgm-list": "声音表",
+      "bgm-bank": "声音库",
+      "card-icon-list": "卡片图标列表",
+      "stage-icon-list": "关卡图标列表",
+      "stage-list": "关卡列表",
+      "triad-route": "任务",
+      "param-editor": "参数编辑器"
+    },
+    "loading": "加载中...",
+    "reload": "重新加载",
+    "save": "保存文件",
+    "file": "文件",
+    "package": "包",
+    "openFolder": "打开文件夹",
+    "openStructure": "在结构中打开",
+    "rowId": {
+      "unit_id": "单位 ID",
+      "hash": "行 ID",
+      "number": "行号"
+    },
+    "gate": {
+      "title": "{{name}} 还不在工作区中",
+      "extract": "从游戏中解包",
+      "extracting": "解包 {{name}}",
+      "contentIndex": "已知内容",
+      "noWorkspace": "请先选择工作区文件夹。",
+      "noSource": "设置游戏目录（数据初始化或已知内容）后即可解包。",
+      "notFound": "{{name}} 既不在工作区也不在游戏目录中。"
+    },
+    "field": {
+      "openArchive": "在结构编辑器中打开这个档案（需要时先解包）",
+      "archive": "档案 {{hash}}",
+      "vs2Name": "来自 {{pool}} 字段池的 VS2 / Over Boost 名称（相同字段哈希）"
+    },
+    "table": {
+      "rowCount_one": "{{count}} 行",
+      "rowCount_other": "{{count}} 行",
+      "add": "添加",
+      "copy": "复制为新行",
+      "delete": "删除",
+      "cancel": "取消",
+      "search": "搜索名称或 ID",
+      "searchFields": "搜索字段",
+      "sortFile": "文件顺序",
+      "sortId": "按 ID",
+      "sortLabel": "按名称",
+      "found": "{{found}} / {{total}}",
+      "noMatch": "没有匹配“{{term}}”的行。",
+      "empty": "表中没有行。",
+      "unnamed": "（无名称）",
+      "selectRow": "选择一行进行编辑。",
+      "deleteTitle": "删除行",
+      "deleteBody": "删除 {{name}}？保存时移除该行。",
+      "idTaken": "ID {{id}} 已被使用。",
+      "fieldCount_one": "{{count}} 个字段",
+      "fieldCount_other": "{{count}} 个字段",
+      "summary": "{{rows}} 行 · {{fields}} 列 · {{family}}",
+      "fieldTable": "字段表",
+      "recordTable": "记录表",
+      "version": "版本 {{index}}（{{member}}）",
+      "mirror": "把编辑同步到全部 {{count}} 个版本",
+      "saving": "保存 {{name}}",
+      "savedVersions": "已写入 {{count}} 个版本"
+    },
+    "unit": {
+      "pick": "选择单位",
+      "search": "搜索型号或单位 ID",
+      "none": "没有匹配的单位。",
+      "extracted": "已解包",
+      "noUnits": "选择工作区文件夹后才能列出单位。",
+      "needsIdTable": "单位来自角色 ID 表，请先解包它。"
+    },
+    "members": {
+      "count_one": "{{count}} 个文件",
+      "count_other": "{{count}} 个文件",
+      "onlyKinds": "仅 {{kinds}}",
+      "search": "搜索文件",
+      "empty": "没有匹配的文件。",
+      "select": "选择一个文件。",
+      "unitArchive": "所选单位的档案"
+    },
+    "member": {
+      "kind": "类型",
+      "size": "大小",
+      "typeId": "类型 ID",
+      "index": "成员",
+      "replace": "替换",
+      "export": "导出",
+      "exportTitle": "导出文件",
+      "exporting": "导出 {{name}}",
+      "animName": "名称",
+      "frames": "帧数",
+      "version": "版本",
+      "bones": "骨骼",
+      "objects": "网格对象",
+      "vertices": "顶点",
+      "modelName": "模型",
+      "materials": "材质"
+    },
+    "images": {
+      "summary": "{{rows}} 行 · 已解包 {{extracted}} / {{total}} 个图片档案",
+      "extractMissing": "解包缺失的 {{count}} 个",
+      "extracting": "解包 {{count}} 个图片档案",
+      "none": "无档案",
+      "noTextures": "这个档案中没有贴图。"
+    },
+    "cost": {
+      "units": "单位 Cost",
+      "battle": "战斗系统",
+      "unit": "单位",
+      "cost": "Cost (7D1A0ACF)",
+      "durability": "耐久 (B7D5327E)",
+      "note": "Cost 和基础耐久保存在各单位的 character param 中；这里列出已解包 002chara 包的单位。",
+      "noUnits": "还没有解包任何单位包。可在动作或参数标签页、或已知内容中解包。",
+      "saving": "保存 {{count}} 个 character param"
+    },
+    "param": {
+      "rows_one": "{{count}} 行",
+      "rows_other": "{{count}} 行",
+      "known": "EXVS2 编辑器已命名 {{known}} / {{total}} 个字段",
+      "none": "这个单位包中没有找到参数表。",
+      "saving": "保存 {{name}}"
+    },
+    "msc": {
+      "repack": "重打包单位档案",
+      "repacking": "把单位档案重打包到 Mod 文件夹"
+    },
+    "bank": {
+      "system": "系统声音库 {{hash}}"
+    },
+    "triad": {
+      "tables": "任务表",
+      "briefings": "任务简报"
+    },
+    "briefing": {
+      "count_one": "{{count}} 个简报",
+      "count_other": "{{count}} 个简报",
+      "none": "选择一个简报。",
+      "roundTrip": "可逐字节重建，编辑可安全保存。",
+      "noRoundTrip": "这个文件无法逐字节重建，只读。",
+      "saving": "保存简报",
+      "sceneClass": "场景类型",
+      "class0": "标准",
+      "class1": "随机",
+      "class2": "目标",
+      "class3": "Boss",
+      "mapHash": "地图哈希",
+      "timeLimit": "时间限制（秒）",
+      "hasTarget": "有目标",
+      "playerCast": "我方（阵容索引）",
+      "bossCast": "Boss（阵容索引）",
+      "enemyCast": "敌方（阵容索引）",
+      "units_one": "阵容：{{count}} 个单位",
+      "units_other": "阵容：{{count}} 个单位",
+      "slots_one": "战斗槽位：{{count}}",
+      "slots_other": "战斗槽位：{{count}}",
+      "slot": "槽位",
+      "unitId": "单位 ID",
+      "pilotId": "驾驶员 ID",
+      "castIndex": "阵容索引"
+    }
+  },
   "modding": {
     "title": "GVS 修改",
     "seed": "索引来源",
@@ -12,8 +188,6 @@
     "open": "打开文件夹"
   },
   "credit": "格式研究：kjjkjjzyayufqza，基于本项目的 VS2 / Over Boost 研究成果。",
-  "contents_one": "{{count}} 个文件",
-  "contents_other": "{{count}} 个文件",
   "credits": {
     "researchLabel": "GVS 研究",
     "researchNote": "GVS 支持是 kjjkjjzyayufqza 基于 EXVS Mod Project 的 VS2 / Over Boost 研究得出的成果。"

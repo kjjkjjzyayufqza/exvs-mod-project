@@ -16,6 +16,7 @@ import "./i18n";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PathField } from "../ps4-common/components/PathField";
+import { usePersistentPath } from "../ps4-common/usePersistentPath";
 import { mbonApi } from "./api";
 
 export interface MbonModdingPayload {
@@ -57,8 +58,8 @@ export function MbonModdingReport({ payload }: { payload: MbonModdingPayload }) 
 
 export default function MbonModdingPage() {
   const { t } = useTranslation("mbon-workspace");
-  const [root, setRoot] = useState("");
-  const [file, setFile] = useState("");
+  const [root, setRoot] = usePersistentPath("mbon.modding.root");
+  const [file, setFile] = usePersistentPath("mbon.modding.file");
   const [payload, setPayload] = useState<MbonModdingPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,7 +90,7 @@ export default function MbonModdingPage() {
         <h1 className="text-sm font-semibold">{t("modding.title")}</h1>
         <p className="text-xs text-muted-foreground">{t("credit")}</p>
       </header>
-      <PathField kind="folder" value={root} onPick={(path) => void open(path)} placeholder={t("modding.open")} dialogTitle={t("modding.open")} aria-label={t("modding.open")} />
+      <PathField kind="folder" memoryKey="mbon.modding.root" value={root} onPick={(path) => void open(path)} placeholder={t("modding.open")} dialogTitle={t("modding.open")} aria-label={t("modding.open")} />
       <label>
         {t("modding.model")}
         <input value={file} onChange={(event) => setFile(event.target.value)} />

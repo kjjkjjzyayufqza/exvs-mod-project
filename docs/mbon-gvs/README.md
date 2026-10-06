@@ -15,29 +15,68 @@ VS2 / Over Boost research. Tooling: kjjkjjzyayufqza.
 
 | Folder | What it is | Set in |
 | --- | --- | --- |
-| Game folder | The dumped game root (`CUSA15006`, `GundamV`) or its `archives` folder. Only read, and never listed: every archive is opened by its hash (`archives/XX/HASH.bin`). | Data init, Known content tab |
-| Workspace | Extracted packages in route folders, e.g. `012list/character_list`. | Workspace toolbar, Data init |
+| Game folder | The dumped game root (`CUSA15006`, `GundamV`) or its `archives` folder. Only read, and never listed: every archive is opened by its hash (`archives/XX/HASH.bin`). | Data init, Known content |
+| Workspace | A folder of its own that stores the mod files: extracted packages in route folders (e.g. `012list/character_list`) and every edit. It may not be the game folder, its `archives` folder, an `archives\XX` bucket, or a folder inside or around the game root; the page asks for a valid folder until one is set. | Workspace toolbar, Data init |
 | Mod output folder | Mirrors the game root: repacks land at `archives/XX/HASH.bin`. Default `<workspace>/_out`. | Repack changes, Single page |
+
+Every path input and dialog remembers its last choice in the app config
+(`settings.json`, the same store and `dialogDefaultPath` map the EXVS2
+Workspace uses), one entry per input, so it reopens where you left it.
 
 Copy the `archives` folder of the mod output over the game root (or point an
 emulator / file-redirect tool at it) to play the edited files.
 
 ## Workflow (mirrors OB)
 
-The MBON and GVS workspace pages use the EXVS2 Workspace layout: a toolbar led
-by the game title (`MBON Maxi Boost ON workspace`, `GVS Gundam Versus
-workspace`), the package tree on the left, grouped editor tabs in the middle
-and a collapsible info panel on the right.
+The MBON and GVS workspace pages are built from the EXVS2 Workspace parts: the
+toolbar shows only the game badge, the package tree sits on the left and the
+grouped EXVS2 editor tabs fill the rest (no right info panel).
 
 | OB | MBON / GVS | Where |
 | --- | --- | --- |
 | FHM2D Init | **Data init**: curated global tables and shared packs, per-item availability, one-click "extract all new items", batch selection, re-extract, history | Workspace toolbar |
 | Workspace file tree | **Package tree**: the packages already in the workspace, by route folder; a yellow dot marks pending edits | Left pane |
-| Structure editor | **Structure** tab: the open package's entries beside the entry inspector (textures, models, lists, hex) | Editor tabs, PACKAGE group |
-| (list-driven init) | **Known content** tab: every archive the game's lists name, each found by its hash, with extract / open per row | Editor tabs, INDEX group |
+| Structure editor | **Structure** tab: the open package's entries beside the entry inspector (textures, models, lists, hex) | Pack group |
+| (list-driven init) | **Known content**: every archive the game's lists name, each found by its hash, with extract / open per row | Toolbar "Known content" |
 | Single FHM2D | **MBON Single FHM** (`/MbonSingleFhm`), **GVS Single FHM2D** (`/GvsSingleFhm2d`): Unpack tab (source, preview, named folder, output, subfolder, overwrite, open in workspace) and Repack tab (package, pending changes, mod folder / beside / another file, verify) | Sidebar, toolbar "Single file" |
-| Dirty packs | Every package keeps a change baseline (size, modification time, manifest digest) taken at extract and after each repack | Tree dots, info panel |
+| Dirty packs | Every package keeps a change baseline (size, modification time, manifest digest) taken at extract and after each repack | Tree dots, Repack changes |
 | Repack changes dialog | **Repack changes**: packages edited since their last extract / repack, written into the mod folder; untracked (older) packages listed separately; mark clean | Toolbar "Repack changes" |
+
+## GVS editors
+
+GVS has every EXVS2 Workspace tab (the outdated param editors excepted). Each
+editor names its data by archive hash; when the archive is not in the
+workspace yet, the editor offers to extract it from the game folder. Saving
+writes into the package folder, and **Repack changes** writes the mod archive.
+
+| Group | Tab | GVS data |
+| --- | --- | --- |
+| Pack | Structure | Any package |
+| Pack | Effect | `006effect` pack of the selected unit: effects, textures, models (preview, replace, export) |
+| Pack | Motion | `nuanmb` files of the selected unit's `002chara` pack |
+| Pack | Camera | Common camera tables (`002chara/000common_000common_001`, members 27-30) |
+| Character | ID table | `800etcetera/characteridtable`: unit id -> `002chara` / `006effect` / `090sound` archives |
+| Character | Cost | Cost and base durability from each unit's character param; battle system tables (COST, TOTAL_COST, ...) |
+| Character | Striker | `041cpm/foroutgamearmsparam_striker` |
+| Character | List | `012list/character_list` (13 release-schedule versions the game picks by date; edits can go to all of them), unit detail list, pilot / boss / zako lists, GP unlock tables, title plates, command list |
+| Character | Series, Navi | `012list/series_list`, `012list/navi_list` |
+| Sound | Path | `800etcetera/raw_path_id` (voice banks, movies and images in the game root) and the intro movie table |
+| Sound | Slot | `090sound` pilot voice table |
+| Sound | BGM | `090sound` BGM table |
+| Sound | HUD | The other `090sound` tables (cue mix, mix states) |
+| Sound | Bank | `nus3bank` / `nus3audio` of the unit's `090sound` pack and the system sound banks |
+| Stage | Card icons | `ms_ms_s`, `ms_ms_l`, `ms_vs_*` image packs of each character row |
+| Stage | Stage icons | `stg_grd`, `stg_full`, `stg_vs_2` image packs of each stage row |
+| Stage | Stages | `012list/stage_list` |
+| Mission | Triad | `051mission` tables, rank / emblem tables, and the `outmission` briefings (VS2 BSFO layout) |
+| MSC | MSC | EXVS2 MSC workspace on the unit pack (`0.bscex`, `1.cscex`, `2.dscex`) |
+| Param | Param | EXVS2 typed param editor on the unit pack's param tables |
+
+Unit tabs follow the unit picker (search by model number or unit id); opening
+a unit package in the tree selects its unit. Table columns show the game's own
+field name when its CRC-32 is known (upper case), the VS2 / Over Boost name of
+the same field hash, or the hash / byte offset; archive hashes in a row link
+to their package.
 
 ## No scanning
 
@@ -94,13 +133,19 @@ $T status <workspace>                                       # pending edits
 $T repack <package folder> --mod-root <mod folder>          # archives/XX/HASH.bin
 $T repack <package folder>                                  # beside the package folder
 $T mark-clean <package folder>
+gvs_tool check-workspace <folder> --source-root <game folder>   # is it a valid mod workspace?
+gvs_tool table-check <package folders...>                      # every GVS table rebuilds byte for byte
+gvs_tool schema-check <workspace>                              # every editor table: rebuild + edit probe
+gvs_tool units <workspace> --source-root <game folder>         # Character ID table units and their archives
 ```
 
 ## Not covered yet
 
 * What the MBON unit archives listed by `SCharacterList` hold, and naming the
-  stage FHM packs. The PS4 port also ships VS2-era lists that reference
-  thousands of archive hashes (`012list/character_list` DFD38C70, 951 KB;
-  `pilot_list` E6902738); indexing them needs their record layouts.
-* Research-gated items from the session note (stage placement, havok, GVS
-  MSC, skinning, new NUT textures, model import).
+  stage FHM packs.
+* GVS: names of the record-table words that no IDA reader or data pattern
+  explains yet (stage list flags, title plate kinds, trial set columns, raw
+  path ID floats, the `090sound` mix tables) and the version-2 `090sound`
+  members 4-7.
+* Research-gated items from the session note (stage placement, havok,
+  skinning, new NUT textures, model import).

@@ -81,6 +81,7 @@ export function createFakeAdapter(overrides: Partial<Ps4GameAdapter> = {}): Ps4G
       title: null,
       known: false,
     })),
+    validateWorkspace: vi.fn(async () => undefined),
     preview: vi.fn(async () => ({ kindLabel: "PS4 ARC", container: true, fileCount: 1, facts: [], members: [] })),
     packageSummary: vi.fn(async (dir: string) => ({ dir, sourceName: "AAAAAAAA", sourcePath: null, container: true, count: 1 })),
     packageStatus: vi.fn(async (dir: string) => ({

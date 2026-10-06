@@ -374,37 +374,20 @@
     "targetDescription": "Where the rebuilt archive is written.",
     "packageInfoDescription": "Source, layout and pending changes."
   },
+  "workspaceGate": {
+    "title": "Choose a workspace folder",
+    "body": "The workspace is a folder of its own that stores your mod files: extracted packages and every edit. It must not be the game folder, its archives folder or an archives\\XX bucket. Repacked archives go to the mod output folder.",
+    "checking": "Checking the folder..."
+  },
   "toolbar": {
     "workspace": "Workspace folder",
-    "workspaceDialog": "Choose the workspace folder",
-    "workspacePlaceholder": "Choose where packages are extracted",
+    "workspaceDialog": "Choose the workspace folder for mod files",
+    "workspacePlaceholder": "Choose a folder for mod files (not the game folder)",
     "refresh": "Reload the workspace",
     "repackChanges": "Repack changes",
+    "content": "Known content",
     "pending_one": "{{count}} package with pending changes",
     "pending_other": "{{count}} packages with pending changes"
-  },
-  "panels": {
-    "info": "Info",
-    "expandInfo": "Show the info panel",
-    "collapseInfo": "Hide the info panel"
-  },
-  "editors": {
-    "label": "Editors",
-    "expand": "Show the editor tabs",
-    "collapse": "Hide the editor tabs",
-    "groups": {
-      "pack": "Package",
-      "index": "Index"
-    },
-    "structure": {
-      "short": "Structure",
-      "name": "Package structure and entries"
-    },
-    "content": {
-      "short": "Known content",
-      "name": "Known content from the game lists"
-    },
-    "noPackage": "Open a package from the tree, or extract one from Known content."
   },
   "tree": {
     "label": "Workspace packages",
@@ -481,30 +464,5 @@
       "boost-studio": "BoostStudio",
       "scharacterlist": "SCharacterList"
     }
-  },
-  "info": {
-    "packageTitle": "Package",
-    "packageDescription": "The package open in the editor.",
-    "entryTitle": "Archive",
-    "entryDescription": "The selected known-content entry.",
-    "noPackage": "No package open.",
-    "source": "Source",
-    "contents": "Contents",
-    "changes": "Changes",
-    "pending_one": "{{count}} pending change",
-    "pending_other": "{{count}} pending changes",
-    "clean": "No pending changes",
-    "untracked": "Not tracked yet",
-    "verify": "Rebuild check",
-    "identical": "Identical",
-    "modified": "Modified",
-    "unverified": "Not verified",
-    "gameFile": "Game file",
-    "folder": "Folder",
-    "hash": "Hash",
-    "nameSource": "Name source",
-    "size": "Size",
-    "packages": "Packages",
-    "none": "None"
   }
 }

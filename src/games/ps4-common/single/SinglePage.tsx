@@ -33,8 +33,6 @@ export interface SinglePageProps {
   title: string;
   /** One-line description under the title. */
   intro: string;
-  /** Research and tooling credit. */
-  credit: ReactNode;
   /** Extra header actions (the credits dialog). */
   tools?: ReactNode;
   workspace: string;
@@ -54,7 +52,6 @@ export function SinglePage({
   adapter,
   title,
   intro,
-  credit,
   tools,
   workspace,
   modRoot,
@@ -87,7 +84,6 @@ export function SinglePage({
               <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
             </div>
             <p className="max-w-3xl text-sm text-muted-foreground">{intro}</p>
-            <p className="text-xs text-muted-foreground">{credit}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => navigate(adapter.workspaceRoute)}>

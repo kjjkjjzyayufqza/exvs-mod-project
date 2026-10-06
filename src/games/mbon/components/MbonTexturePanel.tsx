@@ -12,7 +12,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { open as openDialog, save } from "@tauri-apps/plugin-dialog";
+import { pickPath } from "@/lib/dialogPathMemory";
 import { ImageDown, ImageUp, Save } from "lucide-react";
 import { runOperation } from "../../ps4-common/activity";
 import { HudButton, KeyValues, Section } from "../../ps4-common/components/Hud";
@@ -98,9 +98,11 @@ export function MbonTexturePanel({ path, revision }: { path: string; revision: n
 
   const exportAs = async (kind: "png" | "dds") => {
     if (!current) return;
-    const output = await save({
+    const output = await pickPath({
+      key: `mbon.texture.export.${kind}`,
+      kind: "save",
       title: t("texture.exportTitle"),
-      defaultPath: `${stem}_${current.index}_${hex(current.textureId)}.${kind}`,
+      defaultFileName: `${stem}_${current.index}_${hex(current.textureId)}.${kind}`,
       filters: [{ name: kind.toUpperCase(), extensions: [kind] }],
     });
     if (!output) return;
@@ -114,13 +116,13 @@ export function MbonTexturePanel({ path, revision }: { path: string; revision: n
 
   const importImage = async () => {
     if (!current) return;
-    const image = await openDialog({
+    const image = await pickPath({
+      key: "mbon.texture.import",
+      kind: "file",
       title: t("texture.importTitle"),
-      multiple: false,
-      directory: false,
       filters: [{ name: "PNG / DDS", extensions: ["png", "dds"] }],
     });
-    if (typeof image !== "string") return;
+    if (!image) return;
     setBusy("import");
     const mipCount = mips.trim() ? Number(mips) : undefined;
     const result = await runOperation(

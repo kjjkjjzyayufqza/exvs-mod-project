@@ -1,5 +1,181 @@
 {
-  "title": "Gundam Versus workspace",
+  "editors": {
+    "titles": {
+      "folder-structure": "Folder structure",
+      "effect-folder": "Effect pack",
+      "motion-folder": "Motion",
+      "camera-table": "Camera table",
+      "character-id-table": "Character ID table",
+      "character-cost": "Character cost",
+      "striker-table": "Striker table",
+      "character-list": "Character list",
+      "series-list": "Series list",
+      "navi-list": "Navi list",
+      "raw-path-id": "File path table",
+      "pilot-voice-resource": "Pilot voice table",
+      "bgm-table": "BGM table",
+      "bgm-list": "Sound tables",
+      "bgm-bank": "Sound banks",
+      "card-icon-list": "Card icon list",
+      "stage-icon-list": "Stage icon list",
+      "stage-list": "Stage list",
+      "triad-route": "Missions",
+      "param-editor": "Param Editor"
+    },
+    "loading": "Loading...",
+    "reload": "Reload",
+    "save": "Save file",
+    "file": "File",
+    "package": "Package",
+    "openFolder": "Open folder",
+    "openStructure": "Open in structure",
+    "rowId": {
+      "unit_id": "Unit id",
+      "hash": "Row id",
+      "number": "Row number"
+    },
+    "gate": {
+      "title": "{{name}} is not in the workspace yet",
+      "extract": "Extract from the game",
+      "extracting": "Extract {{name}}",
+      "contentIndex": "Known content",
+      "noWorkspace": "Choose the workspace folder first.",
+      "noSource": "Set the game folder (Data init or Known content) to extract it.",
+      "notFound": "{{name}} is neither in the workspace nor in the game folder."
+    },
+    "field": {
+      "openArchive": "Open this archive in the structure editor (extracts it first when needed)",
+      "archive": "archive {{hash}}",
+      "vs2Name": "VS2 / Over Boost name from the {{pool}} pool (same field hash)"
+    },
+    "table": {
+      "rowCount_one": "{{count}} row",
+      "rowCount_other": "{{count}} rows",
+      "add": "Add",
+      "copy": "Copy as new row",
+      "delete": "Delete",
+      "cancel": "Cancel",
+      "search": "Search name or id",
+      "searchFields": "Search fields",
+      "sortFile": "File order",
+      "sortId": "By id",
+      "sortLabel": "By name",
+      "found": "{{found}} of {{total}}",
+      "noMatch": "Nothing matches \"{{term}}\".",
+      "empty": "The table has no rows.",
+      "unnamed": "(no name)",
+      "selectRow": "Select a row to edit it.",
+      "deleteTitle": "Delete row",
+      "deleteBody": "Delete {{name}}? The row is removed when you save.",
+      "idTaken": "Id {{id}} is already used.",
+      "fieldCount_one": "{{count}} field",
+      "fieldCount_other": "{{count}} fields",
+      "summary": "{{rows}} rows · {{fields}} columns · {{family}}",
+      "fieldTable": "field table",
+      "recordTable": "record table",
+      "version": "Version {{index}} ({{member}})",
+      "mirror": "Apply edits to all {{count}} versions",
+      "saving": "Save {{name}}",
+      "savedVersions": "{{count}} versions written"
+    },
+    "unit": {
+      "pick": "Choose a unit",
+      "search": "Search model number or unit id",
+      "none": "No unit matches.",
+      "extracted": "extracted",
+      "noUnits": "Choose the workspace folder to list units.",
+      "needsIdTable": "Units come from the Character ID table; extract it first."
+    },
+    "members": {
+      "count_one": "{{count}} file",
+      "count_other": "{{count}} files",
+      "onlyKinds": "Only {{kinds}}",
+      "search": "Search files",
+      "empty": "No file matches.",
+      "select": "Select a file.",
+      "unitArchive": "Archive of the selected unit"
+    },
+    "member": {
+      "kind": "Kind",
+      "size": "Size",
+      "typeId": "Type id",
+      "index": "Member",
+      "replace": "Replace",
+      "export": "Export",
+      "exportTitle": "Export the file",
+      "exporting": "Export {{name}}",
+      "animName": "Name",
+      "frames": "Frames",
+      "version": "Version",
+      "bones": "Bones",
+      "objects": "Mesh objects",
+      "vertices": "Vertices",
+      "modelName": "Model",
+      "materials": "Materials"
+    },
+    "images": {
+      "summary": "{{rows}} rows · {{extracted}} of {{total}} image archives extracted",
+      "extractMissing": "Extract {{count}} missing",
+      "extracting": "Extract {{count}} image archives",
+      "none": "no archive",
+      "noTextures": "This archive holds no texture."
+    },
+    "cost": {
+      "units": "Unit cost",
+      "battle": "Battle system",
+      "unit": "Unit",
+      "cost": "Cost (7D1A0ACF)",
+      "durability": "Durability (B7D5327E)",
+      "note": "Cost and base durability live in each unit's character param; units whose 002chara pack is extracted are listed.",
+      "noUnits": "No unit pack is extracted yet. Extract one from the Motion or Param tab, or from Known content.",
+      "saving": "Save {{count}} character params"
+    },
+    "param": {
+      "rows_one": "{{count}} row",
+      "rows_other": "{{count}} rows",
+      "known": "{{known}} of {{total}} fields named by the EXVS2 editor",
+      "none": "No param table was found in this unit pack.",
+      "saving": "Save {{name}}"
+    },
+    "msc": {
+      "repack": "Repack unit archive",
+      "repacking": "Repack the unit archive into the mod folder"
+    },
+    "bank": {
+      "system": "System sound bank {{hash}}"
+    },
+    "triad": {
+      "tables": "Mission tables",
+      "briefings": "Briefings"
+    },
+    "briefing": {
+      "count_one": "{{count}} briefing",
+      "count_other": "{{count}} briefings",
+      "none": "Select a briefing.",
+      "roundTrip": "Rebuilds byte for byte; edits are safe to save.",
+      "noRoundTrip": "This file does not rebuild byte for byte, so it is read only.",
+      "saving": "Save the briefing",
+      "sceneClass": "Scene class",
+      "class0": "Standard",
+      "class1": "Random",
+      "class2": "Target",
+      "class3": "Boss",
+      "mapHash": "Map hash",
+      "timeLimit": "Time limit (seconds)",
+      "hasTarget": "Has a target",
+      "playerCast": "Player side (cast index)",
+      "bossCast": "Bosses (cast index)",
+      "enemyCast": "Enemy side (cast index)",
+      "units_one": "Cast: {{count}} unit",
+      "units_other": "Cast: {{count}} units",
+      "slots_one": "Battle slots: {{count}}",
+      "slots_other": "Battle slots: {{count}}",
+      "slot": "Slot",
+      "unitId": "Unit id",
+      "pilotId": "Pilot id",
+      "castIndex": "Cast index"
+    }
+  },
   "modding": {
     "title": "GVS modding",
     "seed": "Index seed",
@@ -12,8 +188,6 @@
     "open": "Open folder"
   },
   "credit": "Format research: kjjkjjzyayufqza, built on this project's VS2 / Over Boost findings.",
-  "contents_one": "{{count}} file",
-  "contents_other": "{{count}} files",
   "credits": {
     "researchLabel": "GVS research",
     "researchNote": "GVS support is kjjkjjzyayufqza's own result, derived from EXVS Mod Project's VS2 / Over Boost research."

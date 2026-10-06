@@ -15,32 +15,29 @@
 //
 
 import type { ReactNode } from "react";
-import { Database, FileArchive, Loader2, Package, RefreshCw } from "lucide-react";
+import { Database, FileArchive, ListTree, Loader2, Package, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { PathField } from "../components/PathField";
 
 /**
- * Workspace toolbar in the EXVS2 Workspace layout, led by the game title so
+ * Workspace toolbar in the EXVS2 Workspace layout, led by the game badge so
  * MBON and GVS pages are never mistaken for each other or for Over Boost.
  */
 export function WorkspaceToolbar({
   code,
-  title,
-  credit,
   workspace,
   loading,
   pendingCount,
   onPickWorkspace,
   onRefresh,
   onOpenInit,
+  onOpenContent,
   onOpenSingle,
   onOpenChanges,
   credits,
 }: {
   code: string;
-  title: string;
-  credit: ReactNode;
   workspace: string;
   loading: boolean;
   /** Packages with edits since their last extract or repack. */
@@ -48,6 +45,7 @@ export function WorkspaceToolbar({
   onPickWorkspace: (path: string) => void;
   onRefresh: () => void;
   onOpenInit: () => void;
+  onOpenContent: () => void;
   onOpenSingle: () => void;
   onOpenChanges: () => void;
   credits: ReactNode;
@@ -56,17 +54,9 @@ export function WorkspaceToolbar({
   return (
     <div className="flex items-center justify-between gap-4 bg-background px-4 pb-1">
       <div className="flex min-w-0 flex-1 items-center gap-4">
-        <div className="flex min-w-0 shrink-0 flex-col gap-0.5">
-          <div className="flex items-center gap-2">
-            <span className="rounded-md bg-primary px-1.5 py-0.5 text-[11px] font-bold tracking-wide text-primary-foreground">
-              {code}
-            </span>
-            <h1 className="text-sm font-semibold leading-none">{title}</h1>
-          </div>
-          <p className="max-w-[26rem] truncate text-[11px] text-muted-foreground" title={typeof credit === "string" ? credit : undefined}>
-            {credit}
-          </p>
-        </div>
+        <span className="shrink-0 rounded-md bg-primary px-1.5 py-0.5 text-[11px] font-bold tracking-wide text-primary-foreground">
+          {code}
+        </span>
 
         <div className="flex max-w-xl flex-1 items-center gap-2">
           <div className="relative flex-1">
@@ -78,6 +68,7 @@ export function WorkspaceToolbar({
             <PathField
               kind="folder"
               dialogTitle={t("toolbar.workspaceDialog")}
+              memoryKey={`${code.toLowerCase()}.workspace`}
               value={workspace}
               onPick={onPickWorkspace}
               disabled={loading}
@@ -103,6 +94,10 @@ export function WorkspaceToolbar({
           <Button variant="outline" className="h-9 gap-1.5 px-3" onClick={onOpenInit}>
             <Database className="h-4 w-4" />
             {t("init.open")}
+          </Button>
+          <Button variant="outline" className="h-9 gap-1.5 px-3" onClick={onOpenContent} disabled={!workspace}>
+            <ListTree className="h-4 w-4" />
+            {t("toolbar.content")}
           </Button>
           <Button variant="outline" className="h-9 gap-1.5 px-3" onClick={onOpenSingle}>
             <FileArchive className="h-4 w-4" />

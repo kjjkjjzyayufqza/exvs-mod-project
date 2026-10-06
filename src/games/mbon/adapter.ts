@@ -138,6 +138,7 @@ export function useMbonAdapter(): Ps4GameAdapter {
       initCatalog: (sourceRoot, workspace) => mbonApi.initCatalog(sourceRoot, workspace),
       contentIndex: (sourceRoot, workspace) => mbonApi.contentIndex(sourceRoot, workspace),
       suggestName: (source) => mbonApi.suggestName(source),
+      validateWorkspace: (workspace, sourceRoot) => mbonApi.validateWorkspace(workspace, sourceRoot),
       preview: async (path) => previewOf(await mbonApi.inspect(path), t),
       packageSummary: async (packageDir) => {
         const view = await mbonApi.packageView(packageDir);

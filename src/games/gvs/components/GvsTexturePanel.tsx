@@ -14,7 +14,7 @@
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { open as openDialog, save } from "@tauri-apps/plugin-dialog";
+import { pickPath } from "@/lib/dialogPathMemory";
 import { ImageDown, ImageUp } from "lucide-react";
 import { runOperation } from "../../ps4-common/activity";
 import { ErrorNote, HudButton, KeyValues, Section } from "../../ps4-common/components/Hud";
@@ -47,9 +47,11 @@ export function GvsTexturePanel({ path, revision }: { path: string; revision: nu
   const stem = baseName(path).replace(/\.[^.]+$/, "");
 
   const exportAs = async (kind: "png" | "dds") => {
-    const output = await save({
+    const output = await pickPath({
+      key: `gvs.texture.export.${kind}`,
+      kind: "save",
       title: t("texture.exportTitle"),
-      defaultPath: `${stem}.${kind}`,
+      defaultFileName: `${stem}.${kind}`,
       filters: [{ name: kind.toUpperCase(), extensions: [kind] }],
     });
     if (!output) return;
@@ -62,13 +64,13 @@ export function GvsTexturePanel({ path, revision }: { path: string; revision: nu
   };
 
   const importImage = async () => {
-    const image = await openDialog({
+    const image = await pickPath({
+      key: "gvs.texture.import",
+      kind: "file",
       title: t("texture.importTitle"),
-      multiple: false,
-      directory: false,
       filters: [{ name: "PNG / DDS", extensions: ["png", "dds"] }],
     });
-    if (typeof image !== "string") return;
+    if (!image) return;
     setBusy("import");
     const mipCount = mips.trim() ? Number(mips) : undefined;
     const result = await runOperation(

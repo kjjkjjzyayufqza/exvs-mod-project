@@ -19,6 +19,7 @@
 
 import { forwardRef, type ComponentProps, type KeyboardEvent } from "react";
 import { open, save, type DialogFilter } from "@tauri-apps/plugin-dialog";
+import { rememberDialogPath, rememberedDialogPath } from "@/lib/dialogPathMemory";
 import { cn } from "@/lib/utils";
 
 export interface PathFieldProps extends Omit<ComponentProps<"input">, "value" | "onChange" | "type" | "readOnly"> {
@@ -27,28 +28,32 @@ export interface PathFieldProps extends Omit<ComponentProps<"input">, "value" | 
   onPick: (path: string) => void;
   kind: "file" | "folder" | "save";
   dialogTitle: string;
+  /** Key of this input's last dialog folder in the Tauri config (one per input). */
+  memoryKey: string;
   filters?: DialogFilter[];
-  /** Where the dialog opens; defaults to the current value. */
+  /** Where the dialog opens, ahead of the remembered folder and the current value. */
   defaultPath?: string;
 }
 
 /**
  * Read-only path box that opens the system dialog when clicked, styled like
- * the app's file path inputs. PS4 paths are remembered by the MBON / GVS
- * stores, never in the Over Boost settings, so this does not touch them.
+ * the app's file path inputs. Like `FilePathInput`, the dialog reopens at the
+ * folder this input last used (`dialogDefaultPath[memoryKey]`).
  */
 export const PathField = forwardRef<HTMLInputElement, PathFieldProps>(function PathField(
-  { value, onPick, kind, dialogTitle, filters, defaultPath, className, disabled, onKeyDown, ...props },
+  { value, onPick, kind, dialogTitle, memoryKey, filters, defaultPath, className, disabled, onKeyDown, ...props },
   ref,
 ) {
   const pick = async () => {
     if (disabled) return;
-    const start = defaultPath || value || undefined;
+    const start = defaultPath || (await rememberedDialogPath(memoryKey, undefined, kind)) || value || undefined;
     const picked =
       kind === "save"
         ? await save({ title: dialogTitle, filters, defaultPath: start })
         : await open({ multiple: false, directory: kind === "folder", title: dialogTitle, filters, defaultPath: start });
-    if (typeof picked === "string" && picked.trim()) onPick(picked.trim());
+    if (typeof picked !== "string" || !picked.trim()) return;
+    await rememberDialogPath(memoryKey, picked.trim(), kind);
+    onPick(picked.trim());
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {

@@ -40,6 +40,8 @@ export const mbonApi = {
   contentIndex: (sourceRoot: string, workspace: string) =>
     invoke<InitCatalog>("mbon_content_index", { sourceRoot: sourceRoot || null, workspace: workspace || null }),
   suggestName: (source: string) => invoke<NameSuggestion>("mbon_suggest_name", { source }),
+  validateWorkspace: (workspace: string, sourceRoot: string) =>
+    invoke<void>("mbon_validate_workspace", { workspace, sourceRoot: sourceRoot || null }),
   workspaceStatus: (workspace: string) => invoke<PackageStatus[]>("mbon_workspace_status", { workspace }),
   packageStatus: (packageDir: string, workspace?: string) =>
     invoke<PackageStatus>("mbon_package_status", { package: packageDir, workspace: workspace ?? null }),

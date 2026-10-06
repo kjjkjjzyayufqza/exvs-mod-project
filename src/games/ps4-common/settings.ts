@@ -16,22 +16,18 @@
 //
 
 import { Store } from "@tauri-apps/plugin-store";
+import { useConfigStore } from "@/store/configStore";
 
 /**
- * Paths remembered by the MBON / GVS workspaces. They live in their own store
- * file so the Over Boost settings are never touched; a localStorage mirror
- * gives the first paint a value before the async store answers.
+ * Paths remembered by the MBON / GVS workspaces, kept in the same Tauri
+ * config store as the EXVS2 Workspace (`settings.json`) under `gvs.*` /
+ * `mbon.*` keys. A localStorage mirror gives the first paint a value before
+ * the async store answers.
  */
 
-const STORE_FILE = "ps4-workspaces.json";
 const MIRROR_PREFIX = "ps4-workspaces:";
-
-let storePromise: Promise<Store> | null = null;
-
-function openStore(): Promise<Store> {
-  storePromise ??= Store.load(STORE_FILE, { defaults: {}, autoSave: 200 });
-  return storePromise;
-}
+/** Store file of earlier builds; each key is copied over once when first read. */
+const LEGACY_STORE_FILE = "ps4-workspaces.json";
 
 export function readSettingMirror(key: string): string {
   try {
@@ -41,26 +37,35 @@ export function readSettingMirror(key: string): string {
   }
 }
 
-export async function readSetting(key: string): Promise<string> {
-  try {
-    const store = await openStore();
-    const value = await store.get<string>(key);
-    return typeof value === "string" ? value : readSettingMirror(key);
-  } catch {
-    return readSettingMirror(key);
-  }
-}
-
-export async function writeSetting(key: string, value: string): Promise<void> {
+function writeMirror(key: string, value: string): void {
   try {
     window.localStorage.setItem(MIRROR_PREFIX + key, value);
   } catch {
-    // The Tauri store below stays authoritative.
+    // The Tauri config store stays authoritative.
   }
-  try {
-    const store = await openStore();
-    await store.set(key, value);
-  } catch {
-    // Outside the desktop shell (tests, previews) only the mirror is kept.
-  }
+}
+
+let legacyStore: Promise<Store> | null = null;
+
+async function migrateLegacy(key: string): Promise<string | undefined> {
+  legacyStore ??= Store.load(LEGACY_STORE_FILE, { defaults: {}, autoSave: false });
+  const legacy = await legacyStore;
+  const value = await legacy.get<string>(key);
+  if (typeof value !== "string") return undefined;
+  await useConfigStore.getState().setSetting(key, value);
+  await legacy.delete(key);
+  await legacy.save();
+  return value;
+}
+
+export async function readSetting(key: string): Promise<string> {
+  const value = await useConfigStore.getState().getSetting<unknown>(key);
+  const resolved = typeof value === "string" ? value : ((await migrateLegacy(key)) ?? "");
+  writeMirror(key, resolved);
+  return resolved;
+}
+
+export async function writeSetting(key: string, value: string): Promise<void> {
+  writeMirror(key, value);
+  await useConfigStore.getState().setSetting(key, value);
 }

@@ -185,6 +185,7 @@ export function RepackChangesDialog({
               id={`${game}-changes-mod`}
               kind="folder"
               dialogTitle={t("modRoot.dialog")}
+              memoryKey={`${game}.modRoot`}
               value={modRoot}
               defaultPath={target || undefined}
               onPick={setModRoot}

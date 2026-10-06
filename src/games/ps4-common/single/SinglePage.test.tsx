@@ -68,7 +68,6 @@ function renderPage(overrides = {}) {
               adapter={adapter}
               title="Single FHM"
               intro="intro"
-              credit="credit"
               workspace={WORKSPACE}
               modRoot="D:/mods/mbon"
               hydrate={async () => {}}

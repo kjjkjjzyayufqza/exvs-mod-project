@@ -1,5 +1,4 @@
 {
-  "title": "Maxi Boost ON 工作区",
   "modding": {
     "title": "MBON 修改",
     "seed": "索引来源",
@@ -12,8 +11,6 @@
     "open": "打开文件夹"
   },
   "credit": "工具实现：kjjkjjzyayufqza。",
-  "contents_one": "{{count}} 个条目",
-  "contents_other": "{{count}} 个条目",
   "credits": {
     "researchLabel": "作者",
     "researchNote": "格式说明写在源码注释和项目文档里。"

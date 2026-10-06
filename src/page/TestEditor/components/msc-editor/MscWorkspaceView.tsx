@@ -101,6 +101,12 @@ interface MscWorkspaceViewProps {
   modFolderPath?: string;
   /** Root of the paired unit param route (041cpm); used to locate chrsysparam.csyspm. */
   paramRouteRoot?: string;
+  /**
+   * Repack of the script folder's archive for a workspace whose packages are
+   * not FHM2D (the GVS workspace); replaces the FHM2D folder repack, also
+   * when it runs automatically after a script repack.
+   */
+  packageRepack?: { label: string; run: () => Promise<void> };
 }
 
 type UnitPanel = "scripts" | "actionTable";
@@ -205,6 +211,7 @@ export default function MscWorkspaceView({
   workspaceDefaultPath,
   modFolderPath,
   paramRouteRoot,
+  packageRepack,
 }: MscWorkspaceViewProps) {
   const { t } = useTranslation("test-msc-workspace-ui");
   const [workspaceMode, setWorkspaceMode] = useState<MscWorkspaceMode>("unit");
@@ -399,6 +406,15 @@ export default function MscWorkspaceView({
 
   const handleRepackFolder = useCallback(async () => {
     if (!activeFolderPath) return;
+    if (packageRepack) {
+      try {
+        setIsFolderRepacking(true);
+        await packageRepack.run();
+      } finally {
+        setIsFolderRepacking(false);
+      }
+      return;
+    }
     const resolvedModFolderPath = modFolderPath?.trim();
     if (!resolvedModFolderPath) {
       toast.error(t("toast.configureModPath"));
@@ -459,7 +475,7 @@ export default function MscWorkspaceView({
     } finally {
       setIsFolderRepacking(false);
     }
-  }, [activeFolderPath, modFolderPath, setActiveFolderPath, t]);
+  }, [activeFolderPath, modFolderPath, packageRepack, setActiveFolderPath, t]);
 
   /** Decompile one script to raw C/log outputs. Throws on tool failure. */
   const convertScriptCore = useCallback(
@@ -948,7 +964,7 @@ export default function MscWorkspaceView({
               </Button>
               <Button type="button" variant="secondary" size="sm" onClick={() => void handleRepackFolder()} disabled={isBusy}>
                 {isFolderRepacking ? <Loader2 className="mr-2 animate-spin" /> : <Package className="mr-2" />}
-                {t("buttons.repackFhm2d")}
+                {packageRepack?.label ?? t("buttons.repackFhm2d")}
               </Button>
             </div>
           </div>
