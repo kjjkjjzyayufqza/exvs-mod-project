@@ -565,6 +565,9 @@ Project skills (domain):
   notes, and `pnpm release:publish -NotesFile` content must not contain CJK.
   Chat may stay Chinese; translate before publishing. Rule:
   `.cursor/rules/release-notes-english.mdc`. The publisher rejects CJK notes.
+  **Before publishing, ask the owner what changed**; keep notes to one line
+  (`chore: …`) unless they request a longer changelog. Do not auto-expand
+  `git log` into Highlights.
 - **SourceNoticeCanary exception:** file-top AI-gate comments on selected
   `.rs` files are generated multilingual legal notices. Do not delete them,
   translate them into one English banner, or bulk-replace them. Verify with

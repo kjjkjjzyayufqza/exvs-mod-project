@@ -25,11 +25,15 @@ Review and commit the version change and the code intended for release, then:
 
 ```powershell
 pnpm release:publish
-# Optional custom release notes:
+# Short custom release notes (preferred — ask the owner what changed first):
 pnpm release:publish -NotesFile tmp/release-notes.md
 # Build and sign locally without uploading:
 pnpm release:publish -SkipUpload
 ```
+
+Agents: do not auto-write long release bodies from `git log`. Ask the owner
+what changed; default to a one-line `chore:` note unless they want more.
+Rule: `.cursor/rules/release-notes-english.mdc`.
 
 `pnpm release:windows` remains an alias. The publisher uses the synchronized
 version already present in the files; it never bumps or reverts them. Tracked

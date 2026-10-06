@@ -14,7 +14,13 @@ English.
 - Write the release title, body, and updater notes in English.
 - Translate user-facing change lists before publishing. Do not paste Chinese
   chat summaries into `-NotesFile` or `gh release`.
-- Prefer short product bullets: what shipped, who it helps, how to run the ZIP.
+- **Owner preference — keep notes short.** Do not invent long Highlights lists
+  from `git log` or agent summaries unless the user asked for that style.
+- **Before `pnpm release:publish`**, ask the user what changed (one line is
+  enough). If they decline or say "chore", use a minimal body such as
+  `chore: routine Windows x64 release.` plus the standard ZIP/updater line.
+- Only expand bullets when the user supplies the wording or explicitly requests
+  a detailed changelog.
 - Keep identifiers as-is (`25002001`, `HBSS`, `_m001`, `pnpm version:bump`).
 
 ## Forbidden

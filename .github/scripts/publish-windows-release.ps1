@@ -59,14 +59,8 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 if ($NotesFile) {
     $notes = Get-Content -LiteralPath $NotesFile -Raw
 } else {
-    $previousTag = git describe --tags --abbrev=0 HEAD 2>$null
-    $range = if ($LASTEXITCODE -eq 0 -and $previousTag) { "$previousTag..HEAD" } else { "HEAD" }
-    $log = @(git log $range -20 --pretty=format:"- %s")
-    Assert-NativeSuccess "Collect release notes"
     $notes = @(
-        "Windows x64 release of EXVS Mod Project.",
-        "",
-        ($log -join "`n"),
+        "chore: routine Windows x64 release.",
         "",
         "Portable Windows x64 ZIP with a signed automatic-update manifest."
     ) -join "`n"
