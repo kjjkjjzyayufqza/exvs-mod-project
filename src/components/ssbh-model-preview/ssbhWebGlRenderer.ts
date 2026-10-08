@@ -46,12 +46,14 @@ export function applySafeWebGlDrawingBufferSize(
 export function buildSsbhWebGlRendererAttempts(
   defaults: SsbhWebGlRendererParameters,
 ): SsbhWebGlRendererParameters[] {
+  // Attempt 0 refuses a software rasterizer. A caller that passes
+  // failIfMajorPerformanceCaveat: false must not weaken this attempt.
   const preferred: SsbhWebGlRendererParameters = {
     ...defaults,
     alpha: false,
-    failIfMajorPerformanceCaveat: false,
+    failIfMajorPerformanceCaveat: true,
     logarithmicDepthBuffer: defaults.logarithmicDepthBuffer ?? true,
-    powerPreference: defaults.powerPreference ?? "high-performance",
+    powerPreference: "high-performance",
   };
   const compatible: SsbhWebGlRendererParameters = {
     ...defaults,

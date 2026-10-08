@@ -278,8 +278,8 @@ export function TypedParamDataPanel({
   }, [classFieldRoles, entry, fieldSearch])
 
   const filteredEntryRows = useMemo(
-    () => filterTypedParamEntryRows(data.entries, entrySearch),
-    [data.entries, entrySearch]
+    () => filterTypedParamEntryRows(data.entries, entrySearch, highlightedEntryIds),
+    [data.entries, entrySearch, highlightedEntryIds],
   )
   const filteredFieldRows = useMemo(
     () => chunkFieldKeys(filteredKeys, FIELDS_PER_ROW),

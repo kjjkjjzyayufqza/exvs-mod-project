@@ -2725,7 +2725,6 @@ export const SsbhModelCanvas = memo(function SsbhModelCanvas(props: SsbhModelCan
             antialias: canvasPerformanceProfile.antialias,
             alpha: false,
             powerPreference: "high-performance",
-            failIfMajorPerformanceCaveat: false,
             logarithmicDepthBuffer: true,
           })
         }

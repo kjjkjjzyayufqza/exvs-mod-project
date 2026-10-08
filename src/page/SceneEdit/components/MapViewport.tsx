@@ -21,6 +21,7 @@ import {
   type RefObject,
 } from "react";
 import * as THREE from "three";
+import { createSsbhWebGlRenderer } from "@/components/ssbh-model-preview/ssbhWebGlRenderer";
 import { MissionSpawnMarkers } from "./mission-preview/MissionSpawnMarkers";
 import { frontMissionSpawnSlot } from "./mission-preview/missionSpawnPick";
 import type { MissionSpawnMarker } from "@/services/missionPreview/missionPreviewService";
@@ -747,13 +748,15 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           near: 0.1,
           far: SCENE_EDIT_CAMERA_FAR,
         }}
-        gl={{
-          antialias: sceneRasterProfile.antialias,
-          alpha: false,
-          powerPreference: "high-performance",
-          failIfMajorPerformanceCaveat: false,
-          logarithmicDepthBuffer: true,
-        }}
+        gl={(defaults) =>
+          createSsbhWebGlRenderer({
+            ...defaults,
+            antialias: sceneRasterProfile.antialias,
+            alpha: false,
+            powerPreference: "high-performance",
+            logarithmicDepthBuffer: true,
+          })
+        }
         performance={adaptivePerformanceOptions}
         dpr={sceneRasterProfile.dpr}
         style={{ touchAction: "none", background: DEFAULT_PREVIEW_3D_BACKGROUND }}

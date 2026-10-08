@@ -230,17 +230,24 @@ export function applyPayloadQueue(current: TestTreeNode[], queued: FolderChangeP
   return queued.reduce((acc, payload) => applyPayload(acc, payload), current);
 }
 
-export function filterTree(nodes: TestTreeNode[], term: string): TestTreeNode[] {
+export function filterTree(
+  nodes: TestTreeNode[],
+  term: string,
+  isStarred?: (node: TestTreeNode) => boolean,
+): TestTreeNode[] {
   if (!term) return nodes;
   const lower = term.toLowerCase();
+  const starred = isStarred ?? (() => false);
 
   const walk = (items: TestTreeNode[], includeAll: boolean): TestTreeNode[] => {
     const next: TestTreeNode[] = [];
     for (const item of items) {
       const nameHit = item.name.toLowerCase().includes(lower);
+      // A starred sibling stays in this folder even when its name misses the query.
+      const keepStar = starred(item);
       const childHits = item.children ? walk(item.children, includeAll || nameHit) : [];
       const hasChildHits = childHits.length > 0;
-      if (nameHit || hasChildHits) {
+      if (nameHit || hasChildHits || keepStar) {
         const children = nameHit ? item.children ?? [] : childHits;
         next.push({ ...item, children, isLeaf: !item.isDir });
       }

@@ -236,36 +236,62 @@ function valueSearchCandidates(value: TypedFieldValue): string[] {
   return [value];
 }
 
-export function filterTypedParamEntryRows(entries: TypedParamEntry[], query: string): TypedParamEntryRow[] {
-  const trimmed = query.trim();
+const EMPTY_HIGHLIGHTED_ENTRY_IDS: ReadonlySet<number> = new Set();
+
+function typedParamRowMatchesQuery(row: TypedParamEntryRow, trimmed: string): boolean {
+  if (!trimmed) return true;
+  if (trimmed.startsWith("#")) {
+    const indexQuery = trimmed.slice(1).trim();
+    return String(row.index).includes(indexQuery);
+  }
+  const normalizedQuery = normalizeSearchText(trimmed);
+  const baseCandidates = [
+    `#${row.index}`,
+    String(row.index),
+    String(row.entryId),
+    formatHash(row.entryId),
+  ];
+  if (baseCandidates.some((candidate) => normalizeSearchText(candidate).includes(normalizedQuery))) {
+    return true;
+  }
+  return Object.entries(row.entry).some(([key, value]) => {
+    const candidates = [key, readableKey(key), ...valueSearchCandidates(value)];
+    return candidates.some((candidate) => normalizeSearchText(candidate).includes(normalizedQuery));
+  });
+}
+
+/**
+ * Highlighted rows stay visible and form a prefix, including when the query
+ * does not match them. Non-highlighted rows keep their relative order.
+ */
+export function filterTypedParamEntryRows(
+  entries: TypedParamEntry[],
+  query: string,
+  highlightedEntryIds?: ReadonlySet<number>,
+): TypedParamEntryRow[] {
   const rows = entries.map((entry, index) => ({
     entry,
     index,
     entryId: readTypedEntryId(entry, index),
   }));
-  if (!trimmed) return rows;
+  const highlighted = highlightedEntryIds ?? EMPTY_HIGHLIGHTED_ENTRY_IDS;
+  const trimmed = query.trim();
+  const visible =
+    highlighted.size === 0
+      ? trimmed
+        ? rows.filter((row) => typedParamRowMatchesQuery(row, trimmed))
+        : rows
+      : rows.filter((row) => highlighted.has(row.entryId) || typedParamRowMatchesQuery(row, trimmed));
 
-  if (trimmed.startsWith("#")) {
-    const indexQuery = trimmed.slice(1).trim();
-    return rows.filter((row) => String(row.index).includes(indexQuery));
+  if (highlighted.size === 0) return visible;
+
+  const starred: TypedParamEntryRow[] = [];
+  const rest: TypedParamEntryRow[] = [];
+  for (const row of visible) {
+    if (highlighted.has(row.entryId)) starred.push(row);
+    else rest.push(row);
   }
-
-  const normalizedQuery = normalizeSearchText(trimmed);
-  return rows.filter((row) => {
-    const baseCandidates = [
-      `#${row.index}`,
-      String(row.index),
-      String(row.entryId),
-      formatHash(row.entryId),
-    ];
-    if (baseCandidates.some((candidate) => normalizeSearchText(candidate).includes(normalizedQuery))) {
-      return true;
-    }
-    return Object.entries(row.entry).some(([key, value]) => {
-      const candidates = [key, readableKey(key), ...valueSearchCandidates(value)];
-      return candidates.some((candidate) => normalizeSearchText(candidate).includes(normalizedQuery));
-    });
-  });
+  return starred.length === 0 ? visible : [...starred, ...rest];
 }
 
 function fieldSpecOffset(spec: Record<string, number> | undefined, fallback: number): number {

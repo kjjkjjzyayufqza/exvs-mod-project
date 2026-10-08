@@ -17,7 +17,6 @@ import {
 import { FolderChangePayload, TestTreeNode } from "./types";
 import {
   applyPayloadQueue,
-  filterTree,
   findNode,
   buildFileTreeRevealSearchValue,
   getDirtyPackFromPath,
@@ -33,8 +32,8 @@ import { TEST_EDITOR_FOLDER_STORE_KEY, trimmedConfigPath, useConfigStore } from 
 import { TestEditorToolbar } from "./components/TestEditorToolbar";
 import ListeningRepackDialog from "./components/ListeningRepackDialog";
 import { resolveMscWorkspaceFolderPathForSelection } from "./utils/mscWorkspaceUtils";
-import { applyFileTreeViewSort } from "./utils/fileTreeViewSort";
-import { sortTreeByStarOrder, useFileTreeStarOrder } from "./utils/fileTreeStars";
+import { useFileTreeStarOrder } from "./utils/fileTreeStars";
+import { visibleFileTreeNodes } from "./utils/visibleFileTree";
 import { useFileTreeViewOptions } from "./hooks/useFileTreeViewOptions";
 import { useFileTreeSearchTerm } from "./hooks/useFileTreeSearchTerm";
 import { useTestEditorWorkspace } from "@/hooks/useTestEditorWorkspace";
@@ -292,11 +291,7 @@ const TestEditorPage = () => {
   );
   const { viewOptions, setViewOptions } = useFileTreeViewOptions(currentDir || undefined);
   const fileTreeData = useMemo(
-    () =>
-      sortTreeByStarOrder(
-        applyFileTreeViewSort(filterTree(treeData, deferredSearchTerm), viewOptions),
-        starOrder
-      ),
+    () => visibleFileTreeNodes(treeData, deferredSearchTerm, viewOptions, starOrder),
     [treeData, deferredSearchTerm, starOrder, viewOptions],
   );
   const selectedNode = useMemo(() => findNode(treeData, selectedId), [treeData, selectedId]);

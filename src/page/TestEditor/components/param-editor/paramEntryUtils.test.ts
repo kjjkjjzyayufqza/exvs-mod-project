@@ -128,6 +128,25 @@ describe("paramEntryUtils", () => {
     expect(filterTypedParamEntryRows(data.entries, "89 ab cd ef").map((row) => row.index)).toEqual([1]);
   });
 
+  it("pins highlighted entries once at the top, including a query that misses them", () => {
+    const entries = [
+      { entryId: 11, label: "alpha" },
+      { entryId: 22, label: "beta" },
+      { entryId: 33, label: "gamma" },
+    ];
+    const highlighted = new Set([33]);
+
+    const all = filterTypedParamEntryRows(entries, "", highlighted);
+    expect(all.map((row) => row.entryId)).toEqual([33, 11, 22]);
+    expect(all[0]?.index).toBe(2);
+    expect(all.filter((row) => row.entryId === 33)).toHaveLength(1);
+
+    const searched = filterTypedParamEntryRows(entries, "alpha", highlighted);
+    expect(searched.map((row) => row.entryId)).toEqual([33, 11]);
+    expect(searched.filter((row) => row.entryId === 33)).toHaveLength(1);
+    expect(searched[searched.length - 1]?.entryId).toBe(11);
+  });
+
   it("copies an entry as a new row with the next entry id", () => {
     const entries = [
       { entryId: 10, ammoCount: 12, damage: 80 },

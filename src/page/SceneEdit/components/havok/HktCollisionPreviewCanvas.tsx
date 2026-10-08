@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
+import { createSsbhWebGlRenderer } from "@/components/ssbh-model-preview/ssbhWebGlRenderer";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
 export interface CollisionPreviewGeometry {
@@ -142,7 +143,15 @@ export function HktCollisionPreviewCanvas({
       <Canvas
         className="h-full w-full touch-none"
         frameloop="demand"
-        gl={{ antialias: true, alpha: false, powerPreference: "high-performance", logarithmicDepthBuffer: true }}
+        gl={(defaults) =>
+          createSsbhWebGlRenderer({
+            ...defaults,
+            antialias: true,
+            alpha: false,
+            powerPreference: "high-performance",
+            logarithmicDepthBuffer: true,
+          })
+        }
         dpr={[1, 2]}
         camera={{ position: [4, 3, 4], fov: 45, near: 0.05, far: 5e6 }}
         style={{ background: PREVIEW_BACKGROUND, touchAction: "none" }}
