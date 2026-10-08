@@ -1191,7 +1191,7 @@ CLUSTERS: tuple[Cluster, ...] = (
             "Do not call rebellion_dash_land_keep_move from func_41 on leave-dash hashes (C6). Do not skip func_882 for form-0 analog or for dash hash while dash_active (C7/H7). Do not write global143=0x2 to reuse the official analog skip (C1). Hit-time bird TRS on guns/sabers is a separate later knife; do not BindSlot to fix it. See wing-zero-rebellion-special-n-bird-dash.md.",
             "Do not bind Zero System loading row 0xD7FCDE2 after use or at spawn — that entry is the reload HUD on slot 4. Spawn 0x9398CED9; spent sys_4F(0xb,4,0). Do not func_1034(0) on bird in/out, func_1034(1) mid-life, group B, or sys_4F(0x16) on slot 4. See wing-zero-rebellion-zero-system-once-per-life.md.",
         ),
-        notes="AGENTS.md still inlines this bootstrap. Sibling Rebellion MSC edits: alt2-gerobi, sub-shot-custom, bird-melee-n-followup, special-n-bird-dash, 2026-08-26 subshot-split-and-flight-weapons plan.",
+        notes="docs/agent-index.md holds the Wing Zero bootstrap formerly inlined in AGENTS.md. Sibling Rebellion MSC edits: alt2-gerobi, sub-shot-custom, bird-melee-n-followup, special-n-bird-dash, 2026-08-26 subshot-split-and-flight-weapons plan.",
     ),
     Cluster(
         id=CLUSTER_WING_ZERO_TV,

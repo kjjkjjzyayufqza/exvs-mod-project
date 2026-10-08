@@ -283,35 +283,68 @@ input::selection {
   max-width: 100%;
 }
 
+/*
+ * Master/detail editors stay inside the tab pane.
+ * Wrapping the two columns let each one grow to its content, so the tab
+ * scrolled as a page and the form top left the screen after a selection.
+ * Narrow panes stack the list and the detail; each region scrolls alone.
+ * Wide panes sit side by side. The breakpoint is this pane, not the window.
+ */
 .workspace-split {
-  display: flex;
-  flex-wrap: wrap;
-  align-content: stretch;
+  container: workspace-split / inline-size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
+  grid-auto-columns: minmax(0, 2fr);
+  grid-auto-flow: row;
   gap: 1rem;
+  flex: 1 1 0;
+  width: 100%;
   height: 100%;
+  max-height: 100%;
   min-height: 0;
   min-width: 0;
+  overflow: hidden;
+}
+
+.workspace-split-list,
+.workspace-split-detail {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .workspace-split-list {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 16rem;
-  min-width: min(100%, 16rem);
-  max-width: 100%;
-  min-height: 0;
-  overflow: hidden;
+  grid-column: 1;
+  grid-row: 1;
 }
 
 .workspace-split-detail {
   container-type: inline-size;
   container-name: workspace-detail;
-  display: flex;
-  flex-direction: column;
-  flex: 2 1 24rem;
-  min-width: min(100%, 24rem);
-  max-width: 100%;
-  min-height: 12rem;
+  grid-column: 1;
+  grid-row: 2;
+  overflow: auto;
+}
+
+.workspace-split-list :where(.overflow-auto, .overflow-y-auto),
+.workspace-split-detail :where(.overflow-auto, .overflow-y-auto) {
+  overscroll-behavior: contain;
+}
+
+@container workspace-split (min-width: 44rem) {
+  .workspace-split-list {
+    grid-row: 1 / -1;
+  }
+
+  .workspace-split-detail {
+    grid-column: 2;
+    grid-row: 1 / -1;
+  }
 }
 
 .workspace-split-detail :where(input, select, textarea) {
@@ -335,15 +368,18 @@ input::selection {
 .workspace-param-shell {
   container-type: inline-size;
   container-name: workspace-param;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .workspace-param-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(8rem, 26%) minmax(0, 1fr) minmax(8rem, 32%);
+  grid-template-rows: minmax(0, 26%) minmax(0, 1fr) minmax(0, 32%);
   min-height: 0;
   min-width: 0;
   flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .workspace-param-grid :where(input, select, textarea),
@@ -367,26 +403,32 @@ input::selection {
   min-height: 0;
   min-width: 0;
   flex: 1 1 auto;
+  overflow: auto;
 }
 
 .workspace-sound-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
   gap: 1rem;
   min-height: 0;
   min-width: 0;
   flex: 1 1 auto;
+  overflow: hidden;
 }
 
 @container workspace-sound (min-width: 52rem) {
   .workspace-sound-grid {
     grid-template-columns: minmax(16rem, 0.95fr) minmax(0, 1.05fr);
+    grid-template-rows: minmax(0, 1fr);
   }
 }
 
 .workspace-bullet-shell {
   container-type: inline-size;
   container-name: workspace-bullet;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .workspace-bullet-body {
@@ -395,6 +437,7 @@ input::selection {
   min-height: 0;
   min-width: 0;
   flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .workspace-bullet-rail,
@@ -424,8 +467,38 @@ input::selection {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  min-height: 12rem;
+  min-height: 0;
   flex: 1 1 auto;
+  overflow: hidden;
+}
+
+/*
+ * The tab pane is a fixed frame. Editors scroll inside their own regions.
+ */
+.workspace-tab-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.workspace-tab-body > * {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.workspace-tab-body > * > .flex.flex-col {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .workspace-dual-shell {

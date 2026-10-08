@@ -1025,22 +1025,16 @@ const MainView = ({
                 id={`mainview-panel-${tab.value}`}
                 aria-labelledby={`mainview-tab-${tab.value}`}
                 className={cn(
-                  "flex min-h-0 min-w-0 flex-col",
+                  "flex min-h-0 min-w-0 flex-col overflow-hidden",
                   isActive
-                    ? "relative z-10 flex-1"
-                    : "pointer-events-none invisible absolute inset-0 z-0 overflow-hidden",
-                  tab.value === "camera-table"
-                    ? isActive
-                      ? "h-full w-full flex-1 overflow-hidden p-0"
-                      : "p-0"
-                    : isActive
-                      ? "h-full w-full flex-1 overflow-auto px-4 pt-4"
-                      : "px-4 pt-4",
+                    ? "relative z-10 h-full w-full flex-1"
+                    : "pointer-events-none invisible absolute inset-0 z-0",
+                  tab.value === "camera-table" ? "p-0" : "px-4 py-4",
                 )}
                 aria-hidden={!isActive}
                 {...(!isActive ? { inert: true } : {})}
               >
-                {renderTabPanel(tab)}
+                <div className="workspace-tab-body">{renderTabPanel(tab)}</div>
               </div>
             );
           })}

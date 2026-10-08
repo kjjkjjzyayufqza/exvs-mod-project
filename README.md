@@ -161,8 +161,11 @@ Do not start a bare `pnpm dev` server; use `pnpm start` so the Tauri shell is pr
 
 | File | Role |
 | --- | --- |
-| `AGENTS.md` | Operating guidance for coding agents |
-| `CLAUDE.md` | Pointer at `AGENTS.md` for Claude-family tools |
+| `AGENTS.md` | Short agent contract, loaded by filename |
+| `CLAUDE.md` | Same contract for Claude Code (not a pointer) |
+| `GEMINI.md` | Same contract for Gemini CLI |
+| `.github/copilot-instructions.md` | Same contract for Copilot |
+| `docs/agent-index.md` | In-repository operating manual; not auto-loaded |
 | `ACCEPTABLE_USE.md` | Use policy (long legal notice) |
 | `CONTRIBUTING.md` | How (and how not) to work in this tree |
 | `CONTEXT.md` / `CONTEXT-MAP.md` | Domain terminology |

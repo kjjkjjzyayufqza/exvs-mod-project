@@ -1376,7 +1376,7 @@ export default function CharacterIdTableView({
                     </div>
                 </CardHeader>
 
-                <CardContent className="flex-1 min-h-0 p-0">
+                <CardContent className="flex min-h-0 flex-1 flex-col p-0">
                     <div className="workspace-split">
                         <div className="workspace-split-list border rounded-lg p-3">
                             <div className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-2">
