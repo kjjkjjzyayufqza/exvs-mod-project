@@ -185,6 +185,11 @@ export type UvTransformJson = {
   translate_v: number;
 };
 
+export type TextureArrayParamJson = {
+  param_id: unknown;
+  data: string[];
+};
+
 export type MatlEntryJson = {
   material_label: string;
   shader_label: string;
@@ -198,6 +203,8 @@ export type MatlEntryJson = {
   samplers?: ParamDataJson<SamplerDataJson>[];
   textures: TextureParamJson[];
   textures2?: TextureParamJson[];
+  /** MATL 1.6 data_type 12: several texture paths for one parameter. */
+  texture_arrays?: TextureArrayParamJson[];
   type4_v16?: ParamDataJson<number[]>[];
   type4_v15?: ParamDataJson<unknown>[];
   uv_transforms?: ParamDataJson<UvTransformJson>[];

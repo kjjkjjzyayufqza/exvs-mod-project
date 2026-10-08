@@ -104,6 +104,12 @@ function stripNutexbFromMatl(matl: MatlDataJson | null | undefined): MatlDataJso
           data: tex.data.replace(/\.nutexb$/i, ""),
         })),
       } : {}),
+      ...(entry.texture_arrays ? {
+        texture_arrays: entry.texture_arrays.map((row) => ({
+          ...row,
+          data: row.data.map((path) => path.replace(/\.nutexb$/i, "")),
+        })),
+      } : {}),
     })),
   };
 }

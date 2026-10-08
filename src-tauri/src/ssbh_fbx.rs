@@ -371,8 +371,8 @@ fn load_ssbh_model(root_path: &str) -> Result<LoadedSsbhModel> {
         let data = MatlData::from_file(&path)
             .map_err(|error| anyhow!("Failed to read NUMATB {}: {error}", path.display()))?;
         for entry in &data.entries {
-            for texture in entry.textures.iter().chain(entry.textures2.iter()) {
-                let texture_reference = texture.data.trim();
+            for texture_reference in crate::format::numatb_format::entry_texture_paths(entry) {
+                let texture_reference = texture_reference.trim();
                 if !texture_reference.is_empty()
                     && seen_texture_references
                         .insert(normalize_texture_reference(texture_reference))
@@ -394,6 +394,9 @@ fn load_ssbh_model(root_path: &str) -> Result<LoadedSsbhModel> {
                         }
                         if existing_entry.textures2.is_empty() {
                             existing_entry.textures2 = entry.textures2;
+                        }
+                        if existing_entry.texture_arrays.is_empty() {
+                            existing_entry.texture_arrays = entry.texture_arrays;
                         }
                     } else {
                         existing.entries.push(entry);
@@ -777,8 +780,8 @@ fn export_all_material_textures(
 }
 
 fn pick_base_color_texture_ref(entry: &MatlEntryData) -> Option<&str> {
-    for texture in entry.textures.iter().chain(entry.textures2.iter()) {
-        let value = texture.data.trim();
+    for value in crate::format::numatb_format::entry_texture_paths(entry) {
+        let value = value.trim();
         let lower = value.to_ascii_lowercase();
         if !value.is_empty()
             && (lower.contains("pbr1_basecolor")

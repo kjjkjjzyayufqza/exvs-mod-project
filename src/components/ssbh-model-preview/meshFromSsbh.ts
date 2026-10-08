@@ -141,23 +141,35 @@ function isLikelyAlbedoTextureRef(ref: string): boolean {
   return tokens.some((t) => b.includes(t));
 }
 
+function textureArrayRefs(entry: MatlEntryJson | undefined): { paramId: string; ref: string }[] {
+  const out: { paramId: string; ref: string }[] = [];
+  for (const row of entry?.texture_arrays ?? []) {
+    const paramId = normalizeParamId(row.param_id);
+    for (const path of row.data ?? []) {
+      const ref = path.trim();
+      if (ref) out.push({ paramId, ref });
+    }
+  }
+  return out;
+}
+
 function textureRefForParam(entry: MatlEntryJson | undefined, paramId: string): string | null {
   if (!entry) return null;
   const tex = [...(entry.textures ?? []), ...(entry.textures2 ?? [])]
     .find((t) => normalizeParamId(t.param_id) === paramId);
   const data = tex?.data?.trim();
-  return data || null;
+  if (data) return data;
+  return textureArrayRefs(entry).find((row) => row.paramId === paramId)?.ref ?? null;
 }
 
 function iterTextureRefs(entry: MatlEntryJson | undefined): { paramId: string; ref: string }[] {
-  const textures = [...(entry?.textures ?? []), ...(entry?.textures2 ?? [])];
-  if (!textures.length) return [];
-  return textures
+  const textures = [...(entry?.textures ?? []), ...(entry?.textures2 ?? [])]
     .map((t) => ({
       paramId: normalizeParamId(t.param_id),
       ref: (t.data ?? "").trim(),
     }))
     .filter((x) => x.ref.length > 0);
+  return [...textures, ...textureArrayRefs(entry)];
 }
 
 /**
@@ -906,6 +918,7 @@ function mergeMatlEntries(a: MatlEntryJson, b: MatlEntryJson): MatlEntryJson {
     samplers: mergeByParamId(a.samplers, b.samplers),
     textures: [...mergedTextures.values()],
     textures2: mergeByParamId(a.textures2, b.textures2),
+    texture_arrays: mergeByParamId(a.texture_arrays, b.texture_arrays),
     type4_v16: mergeByParamId(a.type4_v16, b.type4_v16),
     type4_v15: mergeByParamId(a.type4_v15, b.type4_v15),
     uv_transforms: mergeByParamId(a.uv_transforms, b.uv_transforms),

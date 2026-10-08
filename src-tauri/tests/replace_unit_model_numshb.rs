@@ -220,6 +220,7 @@ fn replace_numshb_overwrites_mesh_materials_and_leaves_skeleton_untouched() {
                 samplers: Vec::new(),
                 textures: Vec::new(),
                 textures2: Vec::new(),
+                texture_arrays: Vec::new(),
                 type4_v16: Vec::new(),
                 type4_v15: Vec::new(),
                 uv_transforms: Vec::new(),

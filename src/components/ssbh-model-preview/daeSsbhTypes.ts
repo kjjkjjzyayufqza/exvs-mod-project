@@ -318,6 +318,7 @@ export function ensureMatlEntrySerdeFields(entry: MatlEntryJson): MatlEntryJson 
     samplers,
     textures: entry.textures ?? [],
     textures2: entry.textures2 ?? [],
+    texture_arrays: entry.texture_arrays ?? [],
     type4_v16: entry.type4_v16 ?? [],
     type4_v15: entry.type4_v15 ?? [],
     uv_transforms: entry.uv_transforms ?? [],

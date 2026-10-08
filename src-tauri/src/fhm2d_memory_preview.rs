@@ -272,14 +272,8 @@ pub(crate) fn collect_texture_refs(matl: &MatlData) -> Vec<String> {
     let mut out = Vec::new();
     let mut seen = BTreeSet::new();
     for entry in &matl.entries {
-        for tex in &entry.textures {
-            let value = tex.data.trim();
-            if !value.is_empty() && seen.insert(value.to_string()) {
-                out.push(value.to_string());
-            }
-        }
-        for tex in &entry.textures2 {
-            let value = tex.data.trim();
+        for path in crate::format::numatb_format::entry_texture_paths(entry) {
+            let value = path.trim();
             if !value.is_empty() && seen.insert(value.to_string()) {
                 out.push(value.to_string());
             }

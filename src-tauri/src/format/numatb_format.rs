@@ -84,9 +84,26 @@ pub fn read_entry_boolean(entry: &MatlEntryData, param_id: ParamId) -> Option<bo
         .map(|row| row.data)
 }
 
+pub fn entry_texture_paths(entry: &MatlEntryData) -> impl Iterator<Item = &str> {
+    entry
+        .textures
+        .iter()
+        .map(|row| row.data.as_str())
+        .chain(entry.textures2.iter().map(|row| row.data.as_str()))
+        .chain(
+            entry
+                .texture_arrays
+                .iter()
+                .flat_map(|row| row.data.iter().map(String::as_str)),
+        )
+}
+
 pub fn entry_has_texture_param(entry: &MatlEntryData, param_id: ParamId) -> bool {
     entry.textures.iter().any(|row| row.param_id == param_id)
         || entry.textures2.iter().any(|row| row.param_id == param_id)
+        || entry.texture_arrays.iter().any(|row| {
+            row.param_id == param_id && row.data.iter().any(|path| !path.trim().is_empty())
+        })
 }
 
 pub fn is_base_color_map_path_required(entry: &MatlEntryData) -> bool {
@@ -262,6 +279,21 @@ fn lookup_texture_path_slot(
                     is_textures2_bucket: true,
                 })
         })
+        .or_else(|| {
+            entry
+                .texture_arrays
+                .iter()
+                .find(|row| row.param_id == param_id)
+                .and_then(|row| {
+                    row.data
+                        .iter()
+                        .find(|path| !path.trim().is_empty())
+                        .map(|path| TexturePathSlot {
+                            path: path.as_str(),
+                            is_textures2_bucket: false,
+                        })
+                })
+        })
 }
 
 fn default_texture_param_uses_textures2_bucket(param_id: ParamId) -> bool {
@@ -330,6 +362,7 @@ mod tests {
             samplers: Vec::new(),
             textures: Vec::new(),
             textures2: Vec::new(),
+            texture_arrays: Vec::new(),
             type4_v16: Vec::new(),
             type4_v15: Vec::new(),
             uv_transforms: Vec::new(),

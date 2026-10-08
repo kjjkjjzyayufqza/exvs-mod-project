@@ -1476,12 +1476,7 @@ fn numatb_texture_refs(path: &Path) -> Result<Vec<String>, String> {
     let mut refs = Vec::new();
     let mut seen = HashSet::new();
     for entry in &matl.entries {
-        for tex in entry
-            .textures
-            .iter()
-            .map(|t| t.data.as_str())
-            .chain(entry.textures2.iter().map(|t| t.data.as_str()))
-        {
+        for tex in crate::format::numatb_format::entry_texture_paths(entry) {
             let name = normalize_texture_filename(tex);
             if name.is_empty() || name == ".nutexb" {
                 continue;
@@ -3943,6 +3938,7 @@ mod tests {
                         texture_name.to_string(),
                     )],
                     textures2: Vec::new(),
+                    texture_arrays: Vec::new(),
                     type4_v16: Vec::new(),
                     type4_v15: Vec::new(),
                     uv_transforms: Vec::new(),

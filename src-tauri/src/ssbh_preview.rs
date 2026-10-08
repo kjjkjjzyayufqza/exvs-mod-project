@@ -654,14 +654,8 @@ fn load_and_merge_matl_paths(
 fn collect_texture_refs(matl: &MatlData) -> Vec<String> {
     let mut set: HashSet<String> = HashSet::new();
     for entry in &matl.entries {
-        for tex in &entry.textures {
-            let s = tex.data.trim();
-            if !s.is_empty() {
-                set.insert(s.to_string());
-            }
-        }
-        for tex in &entry.textures2 {
-            let s = tex.data.trim();
+        for path in crate::format::numatb_format::entry_texture_paths(entry) {
+            let s = path.trim();
             if !s.is_empty() {
                 set.insert(s.to_string());
             }

@@ -533,8 +533,8 @@ pub(crate) fn read_numatb_texture_names(path: &Path) -> Result<Vec<String>, Stri
     let mut names = Vec::new();
     let mut seen = HashSet::new();
     for entry in &matl.entries {
-        for texture in entry.textures.iter().chain(entry.textures2.iter()) {
-            let normalized = normalize_texture_filename(&texture.data);
+        for texture_path in crate::format::numatb_format::entry_texture_paths(entry) {
+            let normalized = normalize_texture_filename(texture_path);
             if !normalized.is_empty() && normalized != ".nutexb" && seen.insert(normalized.clone())
             {
                 names.push(normalized);

@@ -1608,14 +1608,8 @@ fn collect_numatb_texture_refs_from_tree(
         match ssbh_data::prelude::MatlData::read(&mut cursor) {
             Ok(matl) => {
                 for entry in &matl.entries {
-                    for tex in &entry.textures {
-                        let stem = extract_texture_stem(&tex.data);
-                        if !stem.is_empty() {
-                            refs.insert(stem.to_ascii_lowercase());
-                        }
-                    }
-                    for tex in &entry.textures2 {
-                        let stem = extract_texture_stem(&tex.data);
+                    for path in crate::format::numatb_format::entry_texture_paths(entry) {
+                        let stem = extract_texture_stem(path);
                         if !stem.is_empty() {
                             refs.insert(stem.to_ascii_lowercase());
                         }
@@ -5207,28 +5201,8 @@ fn extract_nutexb_names_from_matl(matl: &ssbh_data::prelude::MatlData) -> Vec<St
     let mut seen = HashSet::new();
     let mut out = Vec::new();
     for entry in &matl.entries {
-        for tex in &entry.textures {
-            let raw = tex.data.trim();
-            if raw.is_empty() {
-                continue;
-            }
-            let base = raw
-                .replace('\\', "/")
-                .split('/')
-                .last()
-                .unwrap_or(raw)
-                .to_string();
-            let nutexb = if base.to_ascii_lowercase().ends_with(".nutexb") {
-                base
-            } else {
-                format!("{base}.nutexb")
-            };
-            if seen.insert(nutexb.to_ascii_lowercase()) {
-                out.push(nutexb);
-            }
-        }
-        for tex in &entry.textures2 {
-            let raw = tex.data.trim();
+        for path in crate::format::numatb_format::entry_texture_paths(entry) {
+            let raw = path.trim();
             if raw.is_empty() {
                 continue;
             }
