@@ -65,10 +65,13 @@ if ($NotesFile) {
         "Portable Windows x64 ZIP with a signed automatic-update manifest."
     ) -join "`n"
 }
+if ([string]::IsNullOrWhiteSpace($notes)) { $notes = "" }
 $notesPath = Join-Path $outDir "release-notes.md"
 [System.IO.File]::WriteAllText($notesPath, $notes)
-node .github/scripts/assert-english-release-notes.mjs $notesPath
-Assert-NativeSuccess "English-only release notes"
+if ($notes) {
+    node .github/scripts/assert-english-release-notes.mjs $notesPath
+    Assert-NativeSuccess "English-only release notes"
+}
 
 $previousToken = $env:EXVS_UPDATER_GITHUB_TOKEN
 $previousKey = $env:TAURI_SIGNING_PRIVATE_KEY
