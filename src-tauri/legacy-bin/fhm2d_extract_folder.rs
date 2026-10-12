@@ -19,14 +19,25 @@ fn parse_format(value: &str) -> Result<Option<Fhm2dFormat>, String> {
     }
 }
 
+const USAGE: &str = "Usage: fhm2d_extract_folder <source.fhm2d> <out_dir> [format]";
+
 fn main() -> Result<(), String> {
     let mut args = std::env::args().skip(1);
-    let source_path = args.next().ok_or_else(|| {
-        "Usage: fhm2d_extract_folder <source.fhm2d> <out_dir> [format]".to_string()
-    })?;
-    let out_dir = args.next().ok_or_else(|| {
-        "Usage: fhm2d_extract_folder <source.fhm2d> <out_dir> [format]".to_string()
-    })?;
+    let source_path = match args.next() {
+        Some(value) if matches!(value.as_str(), "-h" | "--help" | "help") => {
+            println!("{}", app_lib::cli_attribution::with_banner(USAGE));
+            return Ok(());
+        }
+        Some(value) => value,
+        None => {
+            println!("{}", app_lib::cli_attribution::with_banner(USAGE));
+            return Ok(());
+        }
+    };
+    let Some(out_dir) = args.next() else {
+        println!("{}", app_lib::cli_attribution::with_banner(USAGE));
+        return Ok(());
+    };
     let format = parse_format(args.next().as_deref().unwrap_or("fhm2d_msc"))?;
 
     let result = extract_fhm2d_to_folder_impl(&source_path, &out_dir, format, None, false)?;

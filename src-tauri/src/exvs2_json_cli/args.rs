@@ -9,7 +9,9 @@ use clap::{Args, Parser, Subcommand};
 #[command(
     name = "exvs2-json",
     disable_version_flag = true,
-    about = "AI-facing EXVS2 binary/resource JSON tool"
+    about = "AI-facing EXVS2 binary/resource JSON tool",
+    before_help = crate::cli_attribution::BANNER,
+    arg_required_else_help = true
 )]
 struct Cli {
     #[command(subcommand)]
@@ -109,7 +111,9 @@ pub(crate) fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
                 ErrorKind::DisplayHelp | ErrorKind::DisplayVersion
             ) =>
         {
-            return Ok(ParseOutcome::Help(error.to_string()));
+            return Ok(ParseOutcome::Help(crate::cli_attribution::with_banner(
+                &error.to_string(),
+            )));
         }
         Err(error) => return Err(error.to_string()),
     };

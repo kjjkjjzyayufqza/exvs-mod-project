@@ -18,7 +18,9 @@ use super::util::usage;
 #[command(
     name = "fhm2d-extract",
     disable_version_flag = true,
-    about = "Extract OB .fhm2d archives with explicit type naming and folder/flat layout"
+    about = "Extract OB .fhm2d archives with explicit type naming and folder/flat layout",
+    before_help = crate::cli_attribution::BANNER,
+    arg_required_else_help = true
 )]
 struct Cli {
     /// Path to the source .fhm2d file
@@ -82,11 +84,7 @@ pub fn parse_args(args: &[String]) -> Result<ParseOutcome, String> {
                 ErrorKind::DisplayHelp | ErrorKind::DisplayVersion
             ) =>
         {
-            // Prefer the project-style usage string when help is requested via clap.
-            let clap_help = error.to_string();
-            if clap_help.contains("Usage:") {
-                return Ok(ParseOutcome::Help(format!("{}\n{}", usage(), clap_help)));
-            }
+            // Project usage already carries the attribution banner.
             return Ok(ParseOutcome::Help(usage()));
         }
         Err(error) => return Err(error.to_string()),

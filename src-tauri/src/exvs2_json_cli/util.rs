@@ -30,7 +30,8 @@ pub(crate) fn format_json(value: &Value, pretty: bool) -> Result<String, String>
 }
 
 pub(crate) fn usage() -> String {
-    [
+    crate::cli_attribution::with_banner(
+        &[
         "Usage:",
         r#"  exvs2-json inspect "<known-exvs2-file-path>" [--type <type>] [--pretty] [--summary] [--raw-fields] [--roundtrip-check] [--msc-dir <msc-script-dir>]"#,
         r#"  exvs2-json edit "<known-exvs2-file-path>" --request <edit.json> --output <new-file> [--type <type>] [--pretty] [--dry-run]"#,
@@ -45,7 +46,8 @@ pub(crate) fn usage() -> String {
         "  jnttbl, character-id-table, vernier-table, armsparam, bulletparam, speedparam, characterparam, projectile-depiction-table,",
         "  hitgroupiddef, interactionid, grapparam, navi-list, pilot-list, chrsysparam",
     ]
-    .join("\n")
+    .join("\n"),
+    )
 }
 
 pub(crate) fn insert_roundtrip(

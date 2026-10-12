@@ -21,6 +21,12 @@ use app_lib::format::fhm2d_stage::{
 };
 
 fn main() {
+    let preview: Vec<String> = std::env::args().skip(1).collect();
+    if app_lib::cli_attribution::is_help_request(&preview) {
+        app_lib::cli_attribution::print_help(
+            "Usage: stage_texture_roundtrip_check <input.fhm2d> [workdir]",
+        );
+    }
     let input = std::env::args()
         .nth(1)
         .unwrap_or_else(|| r"e:\XB\解包\com\test\0x16F73C97.fhm2d".to_string());

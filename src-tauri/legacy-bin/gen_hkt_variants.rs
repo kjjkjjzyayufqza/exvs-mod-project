@@ -174,6 +174,10 @@ fn gen(fm: &str, label: &str, mesh: &CollisionTriMesh, out_dir: &Path, name_fix:
 }
 
 fn main() {
+    let preview: Vec<String> = std::env::args().skip(1).collect();
+    if app_lib::cli_attribution::is_help_request(&preview) {
+        app_lib::cli_attribution::print_help("Usage: gen_hkt_variants <numshb> [out_dir]");
+    }
     let numshb = std::env::args().nth(1).unwrap_or_else(|| {
         r"e:\XB\解包\com\test\0x16F73C97\0\0\sssssccccc\0\sssssccccc.numshb".to_string()
     });

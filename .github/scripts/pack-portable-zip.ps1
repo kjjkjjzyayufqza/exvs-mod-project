@@ -29,20 +29,22 @@ if (Test-Path -LiteralPath $stageRoot) {
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 Copy-Item -LiteralPath $exe -Destination (Join-Path $stage "EXVS Mod Project.exe")
 
-# Motion FBX export runs Blender with this sidecar. Keep it next to the exe so
-# a portable ZIP / copied folder works without the source tree. Do not ship
-# the rest of repo tools/ (MSC checkers, research catalogs).
-$composeScript = Join-Path $RepoRoot "tools\motion_fbx_compose.py"
-if (-not (Test-Path -LiteralPath $composeScript)) {
-    throw "Missing $composeScript"
+# Standalone CLIs ship beside the app. Motion FBX compose stays embedded in the
+# executable (include_str of tools/motion_fbx_compose.py) and is not copied here.
+$cliDir = Join-Path $RepoRoot "src-tauri"
+Push-Location -LiteralPath $cliDir
+try {
+    cargo build --release --bin exvs2_json --bin fhm2d_extract
+    if ($LASTEXITCODE -ne 0) { throw "failed to build exvs2_json and fhm2d_extract" }
 }
+finally {
+    Pop-Location
+}
+
 $stageTools = Join-Path $stage "tools"
 New-Item -ItemType Directory -Force -Path $stageTools | Out-Null
-Copy-Item -LiteralPath $composeScript -Destination (Join-Path $stageTools "motion_fbx_compose.py")
-$composeReadme = Join-Path $RepoRoot "tools\README_motion_fbx_compose.md"
-if (Test-Path -LiteralPath $composeReadme) {
-    Copy-Item -LiteralPath $composeReadme -Destination (Join-Path $stageTools "README_motion_fbx_compose.md")
-}
+Copy-Item -LiteralPath (Join-Path $releaseDir "exvs2_json.exe") -Destination (Join-Path $stageTools "exvs2-json.exe")
+Copy-Item -LiteralPath (Join-Path $releaseDir "fhm2d_extract.exe") -Destination (Join-Path $stageTools "fhm2d_extract.exe")
 
 $zipPath = if ([System.IO.Path]::IsPathRooted($OutputZip)) {
     [System.IO.Path]::GetFullPath($OutputZip)
@@ -67,10 +69,26 @@ try {
     )
     foreach ($required in @(
             "EXVS Mod Project.exe",
-            "tools/motion_fbx_compose.py"
+            "tools/exvs2-json.exe",
+            "tools/fhm2d_extract.exe"
         )) {
         if ($entryNames -notcontains $required) {
             throw "Portable ZIP is missing $required. Entries: $($entryNames -join ', ')"
+        }
+    }
+    foreach ($forbidden in @(
+            "tools/README_motion_fbx_compose.md",
+            "tools/motion_fbx_compose.py"
+        )) {
+        if ($entryNames -contains $forbidden) {
+            throw "Portable ZIP must not contain $forbidden"
+        }
+    }
+    $toolEntries = @($entryNames | Where-Object { $_ -like "tools/*" -and $_ -ne "tools/" })
+    $allowedTools = @("tools/exvs2-json.exe", "tools/fhm2d_extract.exe")
+    foreach ($entry in $toolEntries) {
+        if ($allowedTools -notcontains $entry) {
+            throw "Portable ZIP tools folder has unexpected entry $entry"
         }
     }
 }

@@ -188,6 +188,12 @@ fn count_ext(dir: &Path, ext: &str) -> usize {
 }
 
 fn main() {
+    let preview: Vec<String> = std::env::args().skip(1).collect();
+    if app_lib::cli_attribution::is_help_request(&preview) {
+        app_lib::cli_attribution::print_help(
+            "Usage: unit_model_repack_roundtrip <input.fhm2d> [workdir]",
+        );
+    }
     let input = std::env::args()
         .nth(1)
         .unwrap_or_else(|| r"e:\OBHK0.3_v27\data\x64\0xEE39E2DD.fhm2d".to_string());

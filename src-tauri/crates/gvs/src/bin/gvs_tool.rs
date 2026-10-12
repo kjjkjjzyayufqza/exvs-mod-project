@@ -31,7 +31,9 @@ use serde_json::json;
 #[derive(Parser)]
 #[command(
     name = "gvs_tool",
-    about = "EXVS Mod Project (kjjkjjzyayufqza) GVS PS4 workspace CLI, built on the project's VS2 research."
+    about = "EXVS Mod Project (kjjkjjzyayufqza) GVS PS4 workspace CLI, built on the project's VS2 research.",
+    before_help = "EXVS Mod Project\nBy kjjkjjzyayufqza\nhttps://github.com/kjjkjjzyayufqza/exvs-mod-project\nLicense: PolyForm Shield 1.0.0",
+    arg_required_else_help = true
 )]
 struct Cli {
     #[command(subcommand)]

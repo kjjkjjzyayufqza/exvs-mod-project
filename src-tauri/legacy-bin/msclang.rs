@@ -8,7 +8,11 @@ use std::env;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    let mut args = env::args().skip(1);
+    let raw: Vec<String> = env::args().skip(1).collect();
+    if app_lib::cli_attribution::is_help_request(&raw) {
+        app_lib::cli_attribution::print_help("usage: msclang <file.c> -o <out> [-i]");
+    }
+    let mut args = raw.into_iter();
     let mut input = None;
     let mut output = None;
     let mut push_short = true;
@@ -22,7 +26,10 @@ fn main() -> ExitCode {
         }
     }
     let Some(input) = input else {
-        eprintln!("usage: msclang <file.c> -o <out> [-i]");
+        eprintln!(
+            "{}",
+            app_lib::cli_attribution::with_banner("usage: msclang <file.c> -o <out> [-i]")
+        );
         return ExitCode::from(2);
     };
     let output = output.unwrap_or_else(|| "output.mscsb".into());

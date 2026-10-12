@@ -34,13 +34,19 @@ struct MatchRecord {
 }
 
 fn print_usage() {
-    eprintln!("Usage: crc32_brute_seed [OPTIONS]");
-    eprintln!();
-    eprintln!("Options:");
-    eprintln!("  --base <prefix>       Seed prefix (default: {DEFAULT_BASE})");
-    eprintln!("  --target <u32>        Target CRC32 value (default: {DEFAULT_TARGET})");
-    eprintln!("  --length <n>          Fixed suffix length (default: {DEFAULT_SUFFIX_LENGTH})");
-    eprintln!("  --timeout <secs>      Wall-clock timeout; 0 = unlimited (default: {DEFAULT_TIMEOUT_SECS})");
+    println!(
+        "{}",
+        app_lib::cli_attribution::with_banner(&format!(
+            "\
+Usage: crc32_brute_seed [OPTIONS]
+
+Options:
+  --base <prefix>       Seed prefix (default: {DEFAULT_BASE})
+  --target <u32>        Target CRC32 value (default: {DEFAULT_TARGET})
+  --length <n>          Fixed suffix length (default: {DEFAULT_SUFFIX_LENGTH})
+  --timeout <secs>      Wall-clock timeout; 0 = unlimited (default: {DEFAULT_TIMEOUT_SECS})"
+        ))
+    );
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -230,6 +236,11 @@ fn main() {
 }
 
 fn run() -> i32 {
+    let preview: Vec<String> = std::env::args().skip(1).collect();
+    if app_lib::cli_attribution::is_help_request(&preview) {
+        print_usage();
+        std::process::exit(0);
+    }
     let args = match parse_args() {
         Ok(value) => value,
         Err(err) => {

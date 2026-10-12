@@ -9,7 +9,8 @@
 use crate::format::fhm2d::Fhm2dFormat;
 
 pub(crate) fn usage() -> String {
-    [
+    crate::cli_attribution::with_banner(
+        &[
         "Usage:",
         r#"  fhm2d-extract "<source.fhm2d>" --output <out_dir> --type <type> --layout <folder|flat>"#,
         r#"  fhm2d-extract "<source.fhm2d>" -o <out_dir> -t <type> -l <folder|flat> [--write-meta-bin]"#,
@@ -39,5 +40,6 @@ pub(crate) fn usage() -> String {
         "  Agent policy: put --output under repo tmp/fhm2d-extract/<task>/ (see AGENTS.md,",
         "  docs/fhm2d-extract-cli.md, .cursor/rules/fhm2d-extract-artifacts.mdc).",
     ]
-    .join("\n")
+    .join("\n"),
+    )
 }

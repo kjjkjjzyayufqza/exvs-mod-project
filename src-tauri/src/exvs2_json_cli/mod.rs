@@ -116,5 +116,6 @@ mod tests {
         let output = run_cli_with_args(["--help"]).expect("usage");
         assert!(output.contains("exvs2-json edit"));
         assert!(output.contains("--request"));
+        assert!(output.contains("By kjjkjjzyayufqza"));
     }
 }

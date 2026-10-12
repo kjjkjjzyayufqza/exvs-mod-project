@@ -27,6 +27,12 @@ use app_lib::havok_mesh_encode::build_mesh_collision_xml;
 const DEFAULT_DIR: &str = r"D:\output\bigzam";
 
 fn main() {
+    let preview: Vec<String> = std::env::args().skip(1).collect();
+    if app_lib::cli_attribution::is_help_request(&preview) {
+        app_lib::cli_attribution::print_help(
+            "Usage: debug_hkt_to_obj [<path-to-dae-or-fbx> ...]",
+        );
+    }
     let args: Vec<String> = std::env::args().skip(1).collect();
 
     let files: Vec<PathBuf> = if args.is_empty() {

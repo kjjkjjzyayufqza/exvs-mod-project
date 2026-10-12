@@ -18,6 +18,12 @@ use app_lib::collision_mesh::CollisionMeshOptions;
 use app_lib::havok_cli::{convert_hkt_bytes_to_xml, generate_hkt_from_import_path, HavokCliConfig};
 
 fn main() {
+    let preview: Vec<String> = std::env::args().skip(1).collect();
+    if app_lib::cli_attribution::is_help_request(&preview) {
+        app_lib::cli_attribution::print_help(
+            "Usage: gen_hkt_from_import <input.fbx|input.dae> <output.hkt>",
+        );
+    }
     let mut args = std::env::args().skip(1);
     let input = args
         .next()

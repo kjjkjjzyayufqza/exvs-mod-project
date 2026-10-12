@@ -22,6 +22,10 @@ use app_lib::collision_mesh::{
 };
 
 fn main() {
+    let preview: Vec<String> = std::env::args().skip(1).collect();
+    if app_lib::cli_attribution::is_help_request(&preview) {
+        app_lib::cli_attribution::print_help("Usage: perf_preview_hkt <model.fbx> [hull_faces]");
+    }
     let mut args = std::env::args().skip(1);
     let path = args
         .next()

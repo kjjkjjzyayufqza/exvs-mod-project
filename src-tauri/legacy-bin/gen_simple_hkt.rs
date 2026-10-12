@@ -36,6 +36,12 @@ const DEFAULT_OUT_DIR: &str = r"e:\TAURI_PROJECT\test\sssssccccc_simple_replace"
 const OUTPUT_STEM: &str = "map_hit_sssssccccc";
 
 fn main() {
+    let preview: Vec<String> = std::env::args().skip(1).collect();
+    if app_lib::cli_attribution::is_help_request(&preview) {
+        app_lib::cli_attribution::print_help(
+            "Usage: gen_simple_hkt [numshb] [template_xml] [out_dir]",
+        );
+    }
     let numshb = std::env::args()
         .nth(1)
         .unwrap_or_else(|| DEFAULT_NUMSHB.to_string());

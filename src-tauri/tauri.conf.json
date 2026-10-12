@@ -1,6 +1,6 @@
 {
   "productName": "EXVS Mod Project",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "identifier": "com.kjjkjjzyayufqza.exvsmod",
   "build": {
     "frontendDist": "../dist",
@@ -44,11 +44,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "createUpdaterArtifacts": false,
-    "resources": {
-      "../tools/motion_fbx_compose.py": "tools/motion_fbx_compose.py",
-      "../tools/README_motion_fbx_compose.md": "tools/README_motion_fbx_compose.md"
-    }
+    "createUpdaterArtifacts": false
   },
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
   "plugins": {

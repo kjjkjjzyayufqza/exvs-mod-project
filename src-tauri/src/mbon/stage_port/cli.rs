@@ -12,6 +12,7 @@
 
 use std::path::PathBuf;
 
+use clap::error::ErrorKind;
 use clap::{Parser, Subcommand};
 
 use super::model::VertexColorMode;
@@ -21,7 +22,9 @@ use super::{material, port_stage, registry, stage_list, survey, PortOptions};
 #[derive(Parser)]
 #[command(
     name = "mbon_stage_port",
-    about = "EXVS Mod Project (kjjkjjzyayufqza): port an MBON stage package to an Over Boost stage folder."
+    about = "EXVS Mod Project (kjjkjjzyayufqza): port an MBON stage package to an Over Boost stage folder.",
+    before_help = crate::cli_attribution::BANNER,
+    arg_required_else_help = true
 )]
 struct Cli {
     #[command(subcommand)]
@@ -203,8 +206,21 @@ fn to_json<T: serde::Serialize>(value: &T) -> Result<String, String> {
 }
 
 pub fn run(args: impl Iterator<Item = String>) -> Result<String, String> {
-    let cli = Cli::try_parse_from(std::iter::once("mbon_stage_port".to_string()).chain(args))
-        .map_err(|error| error.to_string())?;
+    let cli = match Cli::try_parse_from(std::iter::once("mbon_stage_port".to_string()).chain(args))
+    {
+        Ok(cli) => cli,
+        Err(error)
+            if matches!(
+                error.kind(),
+                ErrorKind::DisplayHelp
+                    | ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+                    | ErrorKind::DisplayVersion
+            ) =>
+        {
+            return Ok(crate::cli_attribution::with_banner(&error.to_string()));
+        }
+        Err(error) => return Err(error.to_string()),
+    };
     match cli.command {
         Command::Inspect { source } => to_json(&survey::summarize(&source)?),
         Command::Port {

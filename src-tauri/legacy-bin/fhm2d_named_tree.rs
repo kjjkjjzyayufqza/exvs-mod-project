@@ -10,6 +10,10 @@ use app_lib::format::fhm2d_stage::{stage_rename_in_memory_numatb_based, StageVir
 use std::fs;
 
 fn main() {
+    let preview: Vec<String> = std::env::args().skip(1).collect();
+    if app_lib::cli_attribution::is_help_request(&preview) {
+        app_lib::cli_attribution::print_help("Usage: fhm2d_named_tree <source.fhm2d>");
+    }
     let path = std::env::args()
         .nth(1)
         .unwrap_or_else(|| r"E:\XB\解包\com\test\test.fhm2d".to_string());

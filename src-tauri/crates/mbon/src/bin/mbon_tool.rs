@@ -34,7 +34,9 @@ use serde_json::json;
 #[derive(Parser)]
 #[command(
     name = "mbon_tool",
-    about = "EXVS Mod Project (kjjkjjzyayufqza) MBON PS4 workspace CLI. MBON research: descatal / BoostStudio."
+    about = "EXVS Mod Project (kjjkjjzyayufqza) MBON PS4 workspace CLI. MBON research: descatal / BoostStudio.",
+    before_help = "EXVS Mod Project\nBy kjjkjjzyayufqza\nhttps://github.com/kjjkjjzyayufqza/exvs-mod-project\nLicense: PolyForm Shield 1.0.0",
+    arg_required_else_help = true
 )]
 struct Cli {
     #[command(subcommand)]

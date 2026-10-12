@@ -191,6 +191,9 @@ fn help_mentions_required_type_and_layout() {
     assert!(help.contains("character"));
     assert!(help.contains("motion"));
     assert!(help.contains("striker_table"));
+    assert!(help.contains("By kjjkjjzyayufqza"));
+    let no_args = run_cli_with_args(Vec::<&str>::new()).expect("no-args help");
+    assert!(no_args.contains("By kjjkjjzyayufqza"));
 }
 
 #[test]
