@@ -512,6 +512,52 @@ export function buildTextureRefToPathMap(bundle: SsbhModelPreviewBundle): Map<st
   return m;
 }
 
+export function applyMatlPreviewProfileToBundle(
+  bundle: SsbhModelPreviewBundle,
+  profileId: string,
+): SsbhModelPreviewBundle | null {
+  const catalog = bundle.matlProfileCatalog;
+  if (!catalog) {
+    return null;
+  }
+  const profile = catalog.profiles.find((entry) => entry.id === profileId);
+  if (!profile) {
+    return null;
+  }
+  return {
+    ...bundle,
+    matl: profile.matl,
+    textureRefs: profile.textureRefs,
+    textureResolve: profile.textureResolve,
+    resolvedNutexbPaths: profile.resolvedNutexbPaths,
+  };
+}
+
+export function customColor1RedChannel(matl: MatlDataJson | null | undefined, materialLabel: string): number | null {
+  const entry = buildMatlLookup(matl).get(materialLabel);
+  const row = entry?.colors?.find((color) => {
+    const id = color.param_id;
+    if (typeof id === "string") {
+      return id === "CustomColor1";
+    }
+    if (id && typeof id === "object" && "CustomColor1" in (id as Record<string, unknown>)) {
+      return true;
+    }
+    return false;
+  });
+  if (!row?.data) {
+    return null;
+  }
+  const data = row.data;
+  if (Array.isArray(data)) {
+    return data[0] ?? null;
+  }
+  if (typeof data === "object" && data !== null && "r" in data) {
+    return (data as { r: number }).r;
+  }
+  return null;
+}
+
 export function bundleForPreviewDraw(
   draw: BuiltMeshDraw,
   instances: readonly SsbhModelPreviewInstance[],

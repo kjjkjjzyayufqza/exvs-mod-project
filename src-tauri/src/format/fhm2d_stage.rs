@@ -3091,6 +3091,7 @@ fn build_model_bundle_from_virtual_folder(
         skel: skel_json,
         matl: matl_json,
         matl_profiles: None,
+        matl_profile_catalog: None,
         texture_refs,
         resolved_nutexb_paths,
         texture_resolve,

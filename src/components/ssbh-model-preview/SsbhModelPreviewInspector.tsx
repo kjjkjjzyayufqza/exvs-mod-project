@@ -34,6 +34,7 @@ import {
   matchPreviewLightingPreset,
 } from "./SsbhModelPreviewContext";
 import { TEXTURE_PREVIEW_SLOT_META, TEXTURE_SLOT_TO_PATH_FIELD, buildMatlLookup } from "./meshFromSsbh";
+import { formatNumatbPreviewProfileLabel } from "./numatbEditorUtils";
 import { lookupTextureData } from "./ssbhTextureUpload";
 import { ssbhExportFolderToDae, type SsbhDaeUpAxis } from "./ssbhDaeIoService";
 import { hasAnyPreviewSkeleton } from "./ssbhPreviewSkeletonVisibility";
@@ -468,6 +469,38 @@ export function SsbhModelPreviewInspector({ layout = "padded" }: SsbhModelPrevie
               </SelectContent>
             </Select>
           </div>
+          {p.previewInstances
+            .filter((inst) => (inst.bundle.matlProfileCatalog?.profiles.length ?? 0) > 0)
+            .map((inst) => {
+              const catalog = inst.bundle.matlProfileCatalog!;
+              const selectedProfileId =
+                p.materialProfileIdByInstanceId[inst.id] ?? catalog.defaultProfileId;
+              return (
+                <div
+                  key={`matl-profile-${inst.id}`}
+                  className={cn("flex flex-col gap-1.5", !isFlush && "sm:col-span-2")}
+                >
+                  <Label className="text-[11px] text-muted-foreground">
+                    {t("labels.materialProfile", { model: inst.displayLabel })}
+                  </Label>
+                  <Select
+                    value={selectedProfileId}
+                    onValueChange={(value) => p.setPreviewMaterialProfile(inst.id, value)}
+                  >
+                    <SelectTrigger className="h-8 text-[11px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {catalog.profiles.map((profile) => (
+                        <SelectItem key={profile.id} value={profile.id} className="text-[11px]">
+                          {formatNumatbPreviewProfileLabel(profile.id)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              );
+            })}
           <div className="flex items-center justify-between gap-2">
             <Label className="text-[11px] text-muted-foreground">{t("labels.wireframe")}</Label>
             <Switch checked={p.wireframe} onCheckedChange={p.setWireframe} />

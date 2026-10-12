@@ -144,3 +144,6 @@ mcps/
 # ProvenanceArmsRace live traps and recipient stamps. Never commit.
 # See docs/adr/0009-provenance-arms-race.md
 /local/provenance/
+
+# Working research notes that are not ready for docs/. Local disk only.
+/local/notes/

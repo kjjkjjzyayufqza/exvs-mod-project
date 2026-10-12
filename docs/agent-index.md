@@ -262,6 +262,20 @@ Use `docs/` as the first source of project truth:
 - `docs/exvs-stage-numatb-simple-color.md` — stage map props with only a color
   texture: use `FeRendererMovableVertexColor` → `vstgStandard_VertexColor`, strip
   unused PBR slots (avoids in-game overexposure).
+- `docs/numatb-character-material-params.md` — Maya / Nust / `_m00N` material
+  sets, and the OB map from `CustomColor*` / `CustomFloat*` / `CustomVector*`
+  onto `GBuffer*` and character uniforms.
+- `docs/numatb-preview-profile-plan.md` — unit-model Three.js preview
+  material profiles: default base Nust, per-instance Maya / Nust / `_mNNN`
+  select in the inspector (session state only).
+- `docs/msc-research/units/15008001-full-armor-unicorn/ntd-bd-flight-trail.md`
+  — NT-D BD-hold trail is `destroy_002` `0x3C04416B`. `boost_001`
+  `0x70C05068` is the jet. Air-boost / empty flight slots do not spawn
+  `destroy_002`. Cluster `unit-full-armor-unicorn`.
+- `local/notes/2026-10-12-faunig-psychoframe-skeleton-glow.md` — gitignored
+  working note for Full Armor Unicorn `spark1` / `vsngCharaSparkle`, the
+  NUMATB parameter map, and why a continuous RGB cycle is not in the
+  skeleton material. The `94.efxbn` view-angle ring is a different system.
 - `docs/gvs-numatb-step2-migration-changes.md` — GVS→EXVS2 numatb migration rules.
 - `docs/exvs2-json-cli.md` — `exvs2-json` CLI for EXVS2 binary resource
   inspection, scoped JSON-driven editing, and correlation JSON (implementation

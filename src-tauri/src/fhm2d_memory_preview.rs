@@ -995,6 +995,7 @@ fn build_preview_bundle_from_snapshot(
             })
             .transpose()?,
         matl_profiles: None,
+        matl_profile_catalog: None,
         texture_refs,
         resolved_nutexb_paths,
         texture_resolve,

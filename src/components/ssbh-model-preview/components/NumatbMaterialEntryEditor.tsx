@@ -22,6 +22,8 @@ import {
   useSsbhEditorTheme,
 } from "./ssbhEditorTheme";
 import { MaterialLabelCombobox } from "./MaterialLabelCombobox";
+import { NumatbColor4Field } from "./NumatbColor4Field";
+import { numatbParamSemantic } from "../numatbParamSemantics";
 import { numatbShaderLabelOptions } from "../numatbShaderLabelPresets";
 
 const ATTRIBUTE_ROW_ESTIMATE_SIZE = 72;
@@ -185,18 +187,28 @@ function AttributeValueEditor({
           className="h-8 font-mono text-[11px]"
         />
       );
-    case "Vector4":
+    case "Vector4": {
+      const vector = data.Vector4 ?? createDefaultAttributeData("Vector4").Vector4 ?? { x: 0, y: 0, z: 0, w: 0 };
+      if (numatbParamSemantic(paramId)?.editor === "color") {
+        return (
+          <NumatbColor4Field
+            value={vector}
+            onChange={(next) => onChange({ Vector4: { x: next.r, y: next.g, z: next.b, w: next.a } })}
+          />
+        );
+      }
       return (
         <JsonAttributeEditor
-          value={data.Vector4 ?? createDefaultAttributeData("Vector4").Vector4}
+          value={vector}
           onChange={(nextValue) => onChange({ Vector4: nextValue as NonNullable<NumatbAttributeData["Vector4"]> })}
         />
       );
+    }
     case "Unk7":
       return (
-        <JsonAttributeEditor
-          value={data.Unk7 ?? createDefaultAttributeData("Unk7").Unk7}
-          onChange={(nextValue) => onChange({ Unk7: nextValue as NonNullable<NumatbAttributeData["Unk7"]> })}
+        <NumatbColor4Field
+          value={data.Unk7 ?? createDefaultAttributeData("Unk7").Unk7 ?? { r: 0, g: 0, b: 0, a: 0 }}
+          onChange={(next) => onChange({ Unk7: next })}
         />
       );
     case "Sampler":
@@ -363,6 +375,7 @@ export function NumatbMaterialEntryEditor({
                 if (!attribute) return null;
                 const attributeIndex = virtualRow.index;
                 const kind = getNumatbAttributeKind(attribute.param.data);
+                const semantic = numatbParamSemantic(attribute.param_id);
                 return (
                   <div
                     key={`${attribute.param_id}:${attributeIndex}`}
@@ -375,6 +388,14 @@ export function NumatbMaterialEntryEditor({
                       <div className="wrap-break-word font-mono text-[11px]" title={attribute.param_id}>
                         {attribute.param_id}
                       </div>
+                      {semantic ? (
+                        <div
+                          className="wrap-break-word text-[10px] leading-tight text-muted-foreground"
+                          title={semantic.summary}
+                        >
+                          {semantic.uniform}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="min-w-0 wrap-break-word text-[11px] text-muted-foreground">{kind}</div>
                     <div className="min-w-0">

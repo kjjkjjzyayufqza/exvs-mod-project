@@ -7,6 +7,21 @@ export type TextureRefResolve = {
 
 export type SsbhModelPreviewBundleSourceKind = "disk" | "memory";
 
+export type MatlPreviewProfileEntry = {
+  id: string;
+  fileName: string;
+  filePath: string;
+  matl: unknown;
+  textureRefs: string[];
+  resolvedNutexbPaths: string[];
+  textureResolve: TextureRefResolve[];
+};
+
+export type MatlPreviewProfileCatalog = {
+  defaultProfileId: string;
+  profiles: MatlPreviewProfileEntry[];
+};
+
 export type SsbhModelPreviewBundle = {
   rootFolder: string;
   modlPath: string;
@@ -21,6 +36,7 @@ export type SsbhModelPreviewBundle = {
     maya?: unknown | null;
     nust?: unknown | null;
   } | null;
+  matlProfileCatalog?: MatlPreviewProfileCatalog | null;
   textureRefs: string[];
   resolvedNutexbPaths: string[];
   textureResolve: TextureRefResolve[];

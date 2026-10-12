@@ -1012,6 +1012,7 @@ fn build_scene_import_preview_bundle_from_artifacts(
                 .transpose()
                 .map_err(|e| format!("Failed to serialize in-memory Nust Matl: {e}"))?,
         }),
+        matl_profile_catalog: None,
         texture_refs,
         resolved_nutexb_paths,
         texture_resolve,

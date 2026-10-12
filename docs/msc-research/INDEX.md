@@ -462,7 +462,7 @@ Existing research notes are not rewritten by this index.
 
 - **kind:** unit
 - **aliases:** `Wing Gundam Zero Rebellion`, `wing_gundam_zero_rebellion`, `900000004`, `kamaesht2neo`, `Neo Bird`, `bird form`, `鸟形态`, `飞翼零式叛乱`, `零式叛乱`, `Rebellion`, `FORCED_RECOVERY`, `0x77b100ff`, `alt2 gerobi`, `N特射`, `SUB_SHOT_CUSTOM`, `SUB_SHOT_TYPE1`, `SUB_SHOT_TYPE2`, `SUB_SHOT_ASSIST`, `SUB_SHOT_FLIGHT`, `SPECIAL_SHOT_FLIGHT`, `flight sub shot`, `flight special gerobi`, `0x53554243`, `0x7e08fcc9`, `0xd94d608f`, `ltngfb`, `闪电高达`, `rebellion_hiv_lock_aim`, `0x7cd11119`, `0x928ca34f`, `func_937`, `bird melee`, `鸟近战`, `特格接N`, `bird dash`, `rebellion_enter_normal_special_n_bird_dash`, `cut_in_loop`, `rebellion_transform_cut_in_loop`, `dash global143`, `dash inertia`, `无杆惯性`, `rebellion_dash_untransform_keep_move`, `tks11a`, `0xa0cd8d56`, `homemade motion clock`, `0x16ed34c0`, `0x2194f05d`, `0x476fac14`, `ACTION_A_SHOT_BIRD_CS1`, `ACTION_A_SHOT_BIRD_CS2`, `rebellion_bird_cs_stage`, `bird CS`, `鸟CS`, `鸟照射`, `slot 3`, `slot3`, `FLYING`, `FLYING_EX`, `0xfa64e4d0`, `0x8d5b747a`, `飛翔`, `着地リロード`, `reloadGroupBEnabled`, `0xB686E88C`, `unused form reload`, `another mode reload`, `自动reload`, `另一形态`, `group B`, `sys_4F(0xb, 0x3, 0)`, `sys_4F(0x16, 0x1)`, `bird slot 1 red`, `assist lock`, `飞行第二槽`, `副射红锁`, `trans_mode_sub red`, `前派生`, `func_990`, `func_991`, `突然冲到天上`, `flight special hit drop`, `transform start hit drop`, `bird special melee cancel`, `optional landing`, `victory pose`, `win pose`, `胜利pose`, `胜利 pose`, `winbgn`, `winbgn01`, `37winbgn03`, `0xf32aa1ba`, `func_480`, `result pose`, `02winlose`, `0xfd5fd16a`, `0x8ca6cc45`, `victory camera`, `winlose camera`, `weapon icon`, `hud icon`, `weapon_icon`, `fieldBb93d195`, `0xBB93D195`, `wep_3_h_n_b_g`, `imcWeaponArt`, `ms stance`, `global170 latch`, `飞行特格枪刀`, `empty front back sub SE`, `0x76b41e21`, `前后副射音效`, `落地不回槽`, `rebellion_flying_reload_on_land`, `TWINBUSTERRIFLE_EX`, `0x54424558`, `normal special shot EX`, `twinbuster lightning`, `特射闪电`, `0x43221BFF`, `saber beam`, `0x2BE700A2`, `0xdc4314cd`, `0x5fefab7`, `left saber`, `光剑`, `Zero System`, `零式系统`, `once per life`, `一命一次`, `global774`, `0xd7fcde2`, `0x9398ced9`, `flight burst weapon bar`, `觉醒武装栏`, `awakening flight HUD`, `func_879 bird latch`, `rebellion_bird_weapon_bar_installed`
-- **notes:** AGENTS.md still inlines this bootstrap. Sibling Rebellion MSC edits: alt2-gerobi, sub-shot-custom, bird-melee-n-followup, special-n-bird-dash, 2026-08-26 subshot-split-and-flight-weapons plan.
+- **notes:** docs/agent-index.md holds the Wing Zero bootstrap formerly inlined in AGENTS.md. Sibling Rebellion MSC edits: alt2-gerobi, sub-shot-custom, bird-melee-n-followup, special-n-bird-dash, 2026-08-26 subshot-split-and-flight-weapons plan.
 - **settled:**
   - Bird arsenal is gated in 0.c func_143 only, not 2.c ACTION_*.
   - Rebellion main-shot bit is 0x1 (not TV 0x100); bird form id is 0x2 (TV 0x1).
@@ -713,7 +713,7 @@ Existing research notes are not rewritten by this index.
 ### `unit-full-armor-unicorn` — 15008001 Full Armor Unicorn MSC: special melee map and start-form research
 
 - **kind:** unit
-- **aliases:** `Full Armor Unicorn`, `15008001`, `015gndmuc_008faunig_001`, `全装備独角兽`, `特格`, `special melee`, `func_1293`, `func_1313`, `func_1314`, `func_1315`, `func_1308`, `func_1311`, `func_418`, `start form`, `init form`, `NT-D start`
+- **aliases:** `Full Armor Unicorn`, `15008001`, `015gndmuc_008faunig_001`, `全装備独角兽`, `特格`, `special melee`, `func_1293`, `func_1313`, `func_1314`, `func_1315`, `func_1308`, `func_1311`, `func_418`, `start form`, `init form`, `NT-D start`, `BD trail`, `拖尾`, `destroy_002`, `0x3C04416B`, `boost_001`, `0x70C05068`, `pvernier`, `func_1281`
 - **settled:**
   - Forms: global143 0 = full armor, 1 = armor purge, 2 = NT-D; func_1313/1314/1315 switch character/speed param, arms slots and model visibility.
   - Init path is func_1 -> func_1293 -> func_285 (action table registration) + func_1313 (form 0).
@@ -722,13 +722,17 @@ Existing research notes are not rewritten by this index.
   - Rows 9/10/24/25 summon an assist through sys_51(0x20000, 0, 0x2, field 0x1E, field 0x1F); field 0x1F is 8 for neutral and 9 for the lever variant.
   - Group 0x26 (rows 49-52) resolves field 0x1C as a FUNCTION KEY (func_437) rather than a motion hash: 0xBF4422AE -> func_1308 -> SHOOT func_1311.
   - Direction is implemented three different ways on this unit: separate rows (9 vs 10), a hook latch (func_1032 global963), and an in-phase branch (func_1311 global172 & 0x10).
+  - BD hold on form 2 spawns eff_015gndmuc_008faunig_001_destroy_002 (0x3C04416B) every tick from func_1281; forms 0/1 spawn destroy_001 (0xA50D10D1). BD end func_1282 clears group 0xb. boost_001 (0x70C05068) is the separate jet spawned at BD start.
 - **read_first:**
   - `docs/msc-research/units/15008001-full-armor-unicorn/README.md`
+- **docs:**
+  - `docs/msc-research/units/15008001-full-armor-unicorn/ntd-bd-flight-trail.md`
 - **related:**
   - `docs/msc-research/chrsysparam-action-table-native-contract.md`
 - **do_not:**
   - Do not assume field 0x1C means the same thing across groups: it is a motion hash for group 0x35 and a function key for group 0x26.
   - Do not expect func_1315 alone to give the NT-D silhouette: the armor part visibility is driven by the sys_47(0x12, 0x82d7298d, ...) calls inside the transform action func_1066.
+  - Do not treat boost_001 0x70C05068 or vlight_001 0x3AA86061 as the NT-D body trail. The BD-hold spawn is destroy_002. Air-boost sustain and the empty 0x77b100ff flight slots do not spawn it.
 
 ### `unit-kshatriya` — 15002001 Kshatriya MSC
 

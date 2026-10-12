@@ -3,6 +3,7 @@ import {
   buildDrawListFromBundle,
   buildMatlLookup,
   cloneBuiltMeshDrawsForInstance,
+  customColor1RedChannel,
   decodeExportedMeshObjectIdentity,
   resolveMaterialBinding,
   resolveMaterialTexturePaths,
@@ -10,6 +11,44 @@ import {
   createUniformTextureSlotLoadEnabled,
 } from "./meshFromSsbh";
 import type { MatlDataJson, MeshDataJson, ModlDataJson } from "./types";
+
+describe("preview material profiles", () => {
+  it("keeps profile colors separate and defaults to base nust", () => {
+    const nustMatl: MatlDataJson = {
+      major_version: 1,
+      minor_version: 6,
+      entries: [
+        {
+          material_label: "bodyMtl",
+          shader_label: "vsngCharaBasic",
+          textures: [],
+          colors: [{ param_id: "CustomColor1", data: { r: 0.2, g: 0, b: 0, a: 1 } }],
+        },
+      ],
+    };
+    const variantMatl: MatlDataJson = {
+      major_version: 1,
+      minor_version: 6,
+      entries: [
+        {
+          material_label: "bodyMtl",
+          shader_label: "vsngCharaBasic",
+          textures: [],
+          colors: [{ param_id: "CustomColor1", data: { r: 0.9, g: 0, b: 0, a: 1 } }],
+        },
+      ],
+    };
+    expect(customColor1RedChannel(nustMatl, "bodyMtl")).toBe(0.2);
+    expect(customColor1RedChannel(variantMatl, "bodyMtl")).toBe(0.9);
+    const merged: MatlDataJson = {
+      major_version: 1,
+      minor_version: 6,
+      entries: [...nustMatl.entries, ...variantMatl.entries],
+    };
+    expect(customColor1RedChannel(merged, "bodyMtl")).toBe(0.2);
+    expect(customColor1RedChannel(variantMatl, "bodyMtl")).toBe(0.9);
+  });
+});
 
 describe("buildMatlLookup", () => {
   it("merges split EXVS material entries by material label", () => {

@@ -26,6 +26,7 @@ import { useTranslation } from "react-i18next";
 import type { BufferGeometry } from "three";
 import {
   buildDrawListFromBundle,
+  applyMatlPreviewProfileToBundle,
   buildMatlLookup,
   buildTextureRefToPathMap,
   cloneBuiltMeshDrawsForInstance,
@@ -316,6 +317,8 @@ export type SsbhModelPreviewContextValue = {
   previewBusy: boolean;
   previewRenderStyle: PreviewRenderStyle;
   setPreviewRenderStyle: (v: PreviewRenderStyle) => void;
+  materialProfileIdByInstanceId: Readonly<Record<string, string>>;
+  setPreviewMaterialProfile: (instanceId: string, profileId: string) => void;
   visibleKeys: ReadonlySet<string>;
   wireframe: boolean;
   setWireframe: (v: boolean) => void;
@@ -562,6 +565,27 @@ export function SsbhModelPreviewProvider({
     PREVIEW_LIGHTING_PRESETS[defaultLightingPreset] ?? PREVIEW_LIGHTING_PRESETS.studio;
 
   const [previewInstances, setPreviewInstances] = useState<SsbhModelPreviewInstance[]>([]);
+  const [materialProfileIdByInstanceId, setMaterialProfileIdByInstanceId] = useState<
+    Record<string, string>
+  >({});
+  useEffect(() => {
+    setMaterialProfileIdByInstanceId((prev) => {
+      const next: Record<string, string> = {};
+      for (const inst of previewInstances) {
+        const catalog = inst.bundle.matlProfileCatalog;
+        if (!catalog || catalog.profiles.length === 0) {
+          continue;
+        }
+        const existing = prev[inst.id];
+        if (existing && catalog.profiles.some((profile) => profile.id === existing)) {
+          next[inst.id] = existing;
+        } else {
+          next[inst.id] = catalog.defaultProfileId;
+        }
+      }
+      return next;
+    });
+  }, [previewInstances]);
   const [previewCollectionSnapshot, setPreviewCollectionSnapshot] = useState<PreviewCollectionSnapshot>(
     createEmptyPreviewCollectionSnapshot(),
   );
@@ -2435,6 +2459,22 @@ export function SsbhModelPreviewProvider({
     setFitRequestId((r) => r + 1);
   }, []);
 
+  const setPreviewMaterialProfile = useCallback((instanceId: string, profileId: string) => {
+    setMaterialProfileIdByInstanceId((prev) => ({ ...prev, [instanceId]: profileId }));
+    setPreviewInstances((prev) =>
+      prev.map((inst) => {
+        if (inst.id !== instanceId) {
+          return inst;
+        }
+        const nextBundle = applyMatlPreviewProfileToBundle(inst.bundle, profileId);
+        if (!nextBundle) {
+          return inst;
+        }
+        return { ...inst, bundle: nextBundle };
+      }),
+    );
+  }, []);
+
   const clearScene = useCallback(() => {
     if (loading) {
       throw new Error("Cannot clear the scene while loading or decoding textures.");
@@ -2453,6 +2493,7 @@ export function SsbhModelPreviewProvider({
       return [];
     });
     setPreviewInstances([]);
+    setMaterialProfileIdByInstanceId({});
     applyPreviewCollectionSnapshot(createEmptyPreviewCollectionSnapshot());
     setActivePreviewInstanceId(null);
     setSelectionOutlineEnabled(false);
@@ -2927,6 +2968,8 @@ export function SsbhModelPreviewProvider({
       previewBusy,
       previewRenderStyle,
       setPreviewRenderStyle,
+      materialProfileIdByInstanceId,
+      setPreviewMaterialProfile,
       visibleKeys,
       wireframe,
       setWireframe,
@@ -3083,6 +3126,9 @@ export function SsbhModelPreviewProvider({
       textureDecodeProgress,
       previewBusy,
       previewRenderStyle,
+      setPreviewRenderStyle,
+      materialProfileIdByInstanceId,
+      setPreviewMaterialProfile,
       visibleKeys,
       wireframe,
       showSkeleton,

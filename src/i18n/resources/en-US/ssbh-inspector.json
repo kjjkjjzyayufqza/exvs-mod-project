@@ -44,6 +44,7 @@
     "controlRange": "Control range",
     "collectionSearch": "Collection search",
     "previewRenderStyle": "Preview render style",
+    "materialProfile": "Material profile · {{model}}",
     "wireframe": "Wireframe",
     "skeleton": "Skeleton",
     "grid": "Grid",

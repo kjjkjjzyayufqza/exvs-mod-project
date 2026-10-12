@@ -30,6 +30,25 @@ pub struct MatlProfilePreviewValues {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MatlPreviewProfileEntry {
+    pub id: String,
+    pub file_name: String,
+    pub file_path: String,
+    pub matl: Value,
+    pub texture_refs: Vec<String>,
+    pub resolved_nutexb_paths: Vec<String>,
+    pub texture_resolve: Vec<TextureRefResolve>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatlPreviewProfileCatalog {
+    pub default_profile_id: String,
+    pub profiles: Vec<MatlPreviewProfileEntry>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SsbhModelPreviewBundle {
     pub root_folder: String,
     pub modl_path: String,
@@ -41,6 +60,7 @@ pub struct SsbhModelPreviewBundle {
     pub skel: Option<Value>,
     pub matl: Option<Value>,
     pub matl_profiles: Option<MatlProfilePreviewValues>,
+    pub matl_profile_catalog: Option<MatlPreviewProfileCatalog>,
     pub texture_refs: Vec<String>,
     pub resolved_nutexb_paths: Vec<String>,
     pub texture_resolve: Vec<TextureRefResolve>,
@@ -538,12 +558,17 @@ fn truncate_warn_detail(s: &str, max_chars: usize) -> String {
     t.chars().take(max_chars).collect::<String>() + "…"
 }
 
+struct LoadedMatlFile {
+    path: String,
+    data: MatlData,
+}
+
 /// Loads every `.numatb` in the model folder not already referenced by the modl.
 /// Files that fail to parse (unsupported Matl revision / game-specific layout) are skipped with a warning.
 fn merge_additional_numatb_in_model_folder(
     root_canon: &Path,
     matl_paths: &mut Vec<String>,
-    matl_combined: &mut Option<MatlData>,
+    loaded_matl_files: &mut Vec<LoadedMatlFile>,
     warnings: &mut Vec<String>,
 ) -> Result<(), String> {
     let mut seen: HashSet<PathBuf> = HashSet::new();
@@ -578,10 +603,10 @@ fn merge_additional_numatb_in_model_folder(
         };
         matl_paths.push(preview_path_to_frontend(&p));
         seen.insert(canon);
-        match matl_combined.as_mut() {
-            None => *matl_combined = Some(data),
-            Some(existing) => existing.entries.extend(data.entries),
-        }
+        loaded_matl_files.push(LoadedMatlFile {
+            path: preview_path_to_frontend(&p),
+            data,
+        });
     }
     Ok(())
 }
@@ -623,6 +648,233 @@ fn select_preferred_matl_paths(matl_paths: &[String]) -> (Vec<String>, Vec<Strin
     } else {
         (matl_paths.to_vec(), Vec::new())
     }
+}
+
+/// Preview profile id from a `.numatb` basename: `maya`, base `nust`, or `mNNN` for `_mNNN__nust__`.
+pub(crate) fn classify_numatb_preview_profile_id(path: &Path) -> Option<String> {
+    let file = match path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_ascii_lowercase())
+    {
+        Some(v) => v,
+        None => return None,
+    };
+    if file.contains("__maya__") {
+        return Some("maya".to_string());
+    }
+    if !file.ends_with("__nust__.numatb") {
+        return None;
+    }
+    let stem = file.strip_suffix(".numatb")?;
+    let base = stem.strip_suffix("__nust__")?;
+    if let Some(pos) = base.rfind("_m") {
+        let digits = &base[pos + 2..];
+        if digits.len() >= 3 && digits.bytes().all(|b| b.is_ascii_digit()) {
+            return Some(format!("m{digits}"));
+        }
+    }
+    Some("nust".to_string())
+}
+
+fn matl_profile_id_sort_key(id: &str) -> (u8, u32, String) {
+    if id == "maya" {
+        return (0, 0, id.to_string());
+    }
+    if id == "nust" {
+        return (1, 0, id.to_string());
+    }
+    if let Some(digits) = id.strip_prefix('m') {
+        if let Ok(n) = digits.parse::<u32>() {
+            return (2, n, id.to_string());
+        }
+    }
+    (3, 0, id.to_string())
+}
+
+fn default_matl_profile_id(profile_ids: &[String]) -> Option<String> {
+    if profile_ids.iter().any(|id| id == "nust") {
+        return Some("nust".to_string());
+    }
+    if profile_ids.iter().any(|id| id == "maya") {
+        return Some("maya".to_string());
+    }
+    profile_ids.first().cloned()
+}
+
+fn resolve_matl_textures_for_preview(
+    root_canon: &Path,
+    matl: &MatlData,
+    warnings: &mut Vec<String>,
+) -> Result<(Vec<String>, Vec<String>, Vec<TextureRefResolve>, Value), String> {
+    let refs = collect_texture_refs(matl);
+    let mut resolved: Vec<String> = Vec::new();
+    let mut resolve_rows: Vec<TextureRefResolve> = Vec::new();
+    for r in &refs {
+        let nutexb_path =
+            resolve_nutexb_path(root_canon, r)?.map(|x| preview_path_to_frontend(&x));
+        if let Some(ref s) = nutexb_path {
+            if !resolved.contains(s) {
+                resolved.push(s.clone());
+            }
+        } else {
+            warnings.push(format!(
+                "Texture reference could not be resolved to a .nutexb on disk: {r}"
+            ));
+        }
+        resolve_rows.push(TextureRefResolve {
+            reference: r.clone(),
+            nutexb_path,
+        });
+    }
+    let v = serde_json::to_value(matl).map_err(|e| format!("Failed to serialize Matl: {e}"))?;
+    Ok((refs, resolved, resolve_rows, v))
+}
+
+fn merge_legacy_matl_bundle(
+    matl_paths: &[String],
+    warnings: &mut Vec<String>,
+) -> Option<MatlData> {
+    let (preferred_matl_paths, ignored_non_nust_paths) = select_preferred_matl_paths(matl_paths);
+    if !ignored_non_nust_paths.is_empty() {
+        let nust_matl = load_and_merge_matl_paths(&preferred_matl_paths, warnings);
+        let nust_has_textures = nust_matl
+            .as_ref()
+            .map(|m| !collect_texture_refs(m).is_empty())
+            .unwrap_or(false);
+        if nust_has_textures {
+            let maya_matl = load_and_merge_matl_paths(&ignored_non_nust_paths, warnings);
+            return match (nust_matl, maya_matl) {
+                (Some(mut nust), Some(maya)) => {
+                    for entry in &mut nust.entries {
+                        if entry.textures.is_empty() {
+                            if let Some(maya_entry) = maya
+                                .entries
+                                .iter()
+                                .find(|e| e.material_label == entry.material_label)
+                            {
+                                entry.textures = maya_entry.textures.clone();
+                            }
+                        }
+                    }
+                    Some(nust)
+                }
+                (some, None) | (None, some) => some,
+            };
+        }
+    }
+    load_and_merge_matl_paths(matl_paths, warnings)
+}
+
+fn finalize_matl_for_unit_preview(
+    root_canon: &Path,
+    loaded_files: &[LoadedMatlFile],
+    matl_paths: &mut Vec<String>,
+    warnings: &mut Vec<String>,
+) -> Result<
+    (
+        Option<Value>,
+        Option<MatlPreviewProfileCatalog>,
+        Vec<String>,
+        Vec<String>,
+        Vec<TextureRefResolve>,
+    ),
+    String,
+> {
+    let mut by_id: std::collections::BTreeMap<String, &LoadedMatlFile> =
+        std::collections::BTreeMap::new();
+    for file in loaded_files {
+        let id = classify_numatb_preview_profile_id(Path::new(&file.path));
+        let id = match id {
+            Some(v) => v,
+            None => continue,
+        };
+        if by_id.contains_key(&id) {
+            warnings.push(format!(
+                "Duplicate material profile '{id}' in folder; keeping first file {}",
+                by_id.get(&id).map(|f| f.path.as_str()).unwrap_or("")
+            ));
+            continue;
+        }
+        by_id.insert(id, file);
+    }
+
+    if by_id.is_empty() {
+        let merged = merge_legacy_matl_bundle(matl_paths, warnings);
+        if let Some(ref m) = merged {
+            let (refs, resolved, resolve_rows, v) =
+                resolve_matl_textures_for_preview(root_canon, m, warnings)?;
+            return Ok((Some(v), None, refs, resolved, resolve_rows));
+        }
+        return Ok((None, None, Vec::new(), Vec::new(), Vec::new()));
+    }
+
+    let mut profile_ids: Vec<String> = by_id.keys().cloned().collect();
+    profile_ids.sort_by(|a, b| matl_profile_id_sort_key(a).cmp(&matl_profile_id_sort_key(b)));
+
+    let default_profile_id = default_matl_profile_id(&profile_ids).unwrap_or_else(|| {
+        profile_ids
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "nust".to_string())
+    });
+    if default_profile_id == "maya" && !profile_ids.iter().any(|id| id == "nust") {
+        warnings.push(
+            "Base Nust material file not found; preview uses Maya material.".to_string(),
+        );
+    }
+
+    let mut profiles: Vec<MatlPreviewProfileEntry> = Vec::new();
+    for id in &profile_ids {
+        let file = by_id.get(id).expect("profile id in map");
+        let file_name = Path::new(&file.path)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or(&file.path)
+            .to_string();
+        let (texture_refs, resolved_nutexb_paths, texture_resolve, matl) =
+            resolve_matl_textures_for_preview(root_canon, &file.data, warnings)?;
+        profiles.push(MatlPreviewProfileEntry {
+            id: id.clone(),
+            file_name,
+            file_path: file.path.clone(),
+            matl,
+            texture_refs,
+            resolved_nutexb_paths,
+            texture_resolve,
+        });
+    }
+
+    let selected_snapshot = profiles
+        .iter()
+        .find(|p| p.id == default_profile_id)
+        .or_else(|| profiles.first())
+        .map(|sel| {
+            (
+                sel.file_path.clone(),
+                sel.matl.clone(),
+                sel.texture_refs.clone(),
+                sel.resolved_nutexb_paths.clone(),
+                sel.texture_resolve.clone(),
+            )
+        });
+    let catalog = MatlPreviewProfileCatalog {
+        default_profile_id: default_profile_id.clone(),
+        profiles,
+    };
+    if let Some((file_path, matl, texture_refs, resolved_nutexb_paths, texture_resolve)) =
+        selected_snapshot
+    {
+        *matl_paths = vec![file_path];
+        return Ok((
+            Some(matl),
+            Some(catalog),
+            texture_refs,
+            resolved_nutexb_paths,
+            texture_resolve,
+        ));
+    }
+    Ok((None, Some(catalog), Vec::new(), Vec::new(), Vec::new()))
 }
 
 fn load_and_merge_matl_paths(
@@ -1040,7 +1292,7 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
     }
 
     let mut matl_paths: Vec<String> = Vec::new();
-    let mut matl_combined: Option<MatlData> = None;
+    let mut loaded_matl_files: Vec<LoadedMatlFile> = Vec::new();
     // Paths already claimed by earlier material slots (avoid double-bind on fallbacks).
     let mut claimed_matl_paths: HashSet<PathBuf> = HashSet::new();
 
@@ -1154,84 +1406,34 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
             claimed_matl_paths.insert(canon);
         }
         matl_paths.push(preview_path_to_frontend(&p));
-        match matl_combined.as_mut() {
-            None => matl_combined = Some(data),
-            Some(existing) => {
-                existing.entries.extend(data.entries);
-            }
-        }
+        loaded_matl_files.push(LoadedMatlFile {
+            path: preview_path_to_frontend(&p),
+            data,
+        });
     }
 
     merge_additional_numatb_in_model_folder(
         &root_canon,
         &mut matl_paths,
-        &mut matl_combined,
+        &mut loaded_matl_files,
         &mut warnings,
     )?;
 
-    // Prefer game runtime material files: when `__nust__.numatb` exists, ignore non-`__nust__` files.
-    // However, if `__nust__` yields 0 texture refs, fall back to all files (the `__maya__` variant
-    // often carries the development-time texture bindings that are missing from a minimal `__nust__`).
-    // When `__nust__` has some textures but individual entries are empty, fill from `__maya__`.
-    let (preferred_matl_paths, ignored_non_nust_paths) = select_preferred_matl_paths(&matl_paths);
-    if !ignored_non_nust_paths.is_empty() {
-        let nust_matl = load_and_merge_matl_paths(&preferred_matl_paths, &mut warnings);
-        let nust_has_textures = nust_matl
-            .as_ref()
-            .map(|m| !collect_texture_refs(m).is_empty())
-            .unwrap_or(false);
-        if nust_has_textures {
-            let maya_matl = load_and_merge_matl_paths(&ignored_non_nust_paths, &mut warnings);
-            matl_combined = match (nust_matl, maya_matl) {
-                (Some(mut nust), Some(maya)) => {
-                    for entry in &mut nust.entries {
-                        if entry.textures.is_empty() {
-                            if let Some(maya_entry) = maya
-                                .entries
-                                .iter()
-                                .find(|e| e.material_label == entry.material_label)
-                            {
-                                entry.textures = maya_entry.textures.clone();
-                            }
-                        }
-                    }
-                    Some(nust)
-                }
-                (some, None) | (None, some) => some,
-            };
-            matl_paths = preferred_matl_paths;
+    let (matl_value, matl_profile_catalog, texture_refs, resolved_nutexb_paths, texture_resolve) =
+        if loaded_matl_files.is_empty() {
+            (None, None, Vec::new(), Vec::new(), Vec::new())
         } else {
-            matl_combined = load_and_merge_matl_paths(&matl_paths, &mut warnings);
-        }
-    } else {
-        matl_combined = load_and_merge_matl_paths(&matl_paths, &mut warnings);
-    }
+            finalize_matl_for_unit_preview(
+                &root_canon,
+                &loaded_matl_files,
+                &mut matl_paths,
+                &mut warnings,
+            )?
+        };
 
-    let (texture_refs, resolved_nutexb_paths, texture_resolve, matl_value) = if let Some(ref m) =
-        matl_combined
+    let (texture_refs, resolved_nutexb_paths, texture_resolve, matl_value) = if matl_value.is_some()
     {
-        let refs = collect_texture_refs(m);
-        let mut resolved: Vec<String> = Vec::new();
-        let mut resolve_rows: Vec<TextureRefResolve> = Vec::new();
-        for r in &refs {
-            let nutexb_path =
-                resolve_nutexb_path(&root_canon, r)?.map(|x| preview_path_to_frontend(&x));
-            if let Some(ref s) = nutexb_path {
-                if !resolved.contains(s) {
-                    resolved.push(s.clone());
-                }
-            } else {
-                warnings.push(format!(
-                    "Texture reference could not be resolved to a .nutexb on disk: {r}"
-                ));
-            }
-            resolve_rows.push(TextureRefResolve {
-                reference: r.clone(),
-                nutexb_path,
-            });
-        }
-        let v = serde_json::to_value(m).map_err(|e| format!("Failed to serialize Matl: {e}"))?;
-        (refs, resolved, resolve_rows, Some(v))
+        (texture_refs, resolved_nutexb_paths, texture_resolve, matl_value)
     } else {
         // A model authored without a runtime material has nothing to report: the neutral
         // material is the expected result, not a degraded one.
@@ -1261,6 +1463,7 @@ pub fn load_model_preview_bundle(root_input: &str) -> Result<SsbhModelPreviewBun
         skel,
         matl: matl_value,
         matl_profiles: None,
+        matl_profile_catalog,
         texture_refs,
         resolved_nutexb_paths,
         texture_resolve,
@@ -1346,6 +1549,66 @@ pub fn ssbh_load_ssbh_file_as_json(path: String) -> Result<Value, String> {
         "format": ext_lc,
         "data": v,
     }))
+}
+
+#[cfg(test)]
+mod matl_profile_classifier_tests {
+    use super::{
+        classify_numatb_preview_profile_id, default_matl_profile_id, matl_profile_id_sort_key,
+    };
+    use std::path::Path;
+
+    #[test]
+    fn classifies_maya_base_nust_and_m_variants() {
+        assert_eq!(
+            classify_numatb_preview_profile_id(Path::new("body__maya__.numatb")),
+            Some("maya".to_string())
+        );
+        assert_eq!(
+            classify_numatb_preview_profile_id(Path::new("body__nust__.numatb")),
+            Some("nust".to_string())
+        );
+        assert_eq!(
+            classify_numatb_preview_profile_id(Path::new("body_m001__nust__.numatb")),
+            Some("m001".to_string())
+        );
+        assert_eq!(
+            classify_numatb_preview_profile_id(Path::new("body_m010__nust__.numatb")),
+            Some("m010".to_string())
+        );
+    }
+
+    #[test]
+    fn base_and_m_variants_yield_three_ids_with_nust_default() {
+        let paths = [
+            "foo__nust__.numatb",
+            "foo_m001__nust__.numatb",
+            "foo_m002__nust__.numatb",
+        ];
+        let mut ids: Vec<String> = paths
+            .iter()
+            .filter_map(|p| classify_numatb_preview_profile_id(Path::new(p)))
+            .collect();
+        ids.sort_by(|a, b| matl_profile_id_sort_key(a).cmp(&matl_profile_id_sort_key(b)));
+        assert_eq!(ids, vec!["nust", "m001", "m002"]);
+        assert_eq!(default_matl_profile_id(&ids), Some("nust".to_string()));
+    }
+
+    #[test]
+    fn folder_profile_ids_default_to_nust() {
+        let mut ids = vec![
+            "m010".to_string(),
+            "m001".to_string(),
+            "nust".to_string(),
+            "maya".to_string(),
+        ];
+        ids.sort_by(|a, b| matl_profile_id_sort_key(a).cmp(&matl_profile_id_sort_key(b)));
+        assert_eq!(ids, vec!["maya", "nust", "m001", "m010"]);
+        assert_eq!(
+            default_matl_profile_id(&ids),
+            Some("nust".to_string())
+        );
+    }
 }
 
 #[cfg(test)]

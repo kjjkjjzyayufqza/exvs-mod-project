@@ -154,6 +154,35 @@ function isVariantNustPath(filePath: string): boolean {
   return /_m\d+__nust__\.numatb$/i.test(base);
 }
 
+/**
+ * Unit-model preview profile id from a `.numatb` path: `maya`, base `nust`, or `mNNN`.
+ * `_m001__nust__` maps to `m001`, not `nust`.
+ */
+export function classifyNumatbPreviewProfileId(filePath: string): string | null {
+  const base = filePath.replace(/\\/g, "/").split("/").pop()?.toLowerCase() ?? "";
+  if (base.includes("__maya__")) {
+    return "maya";
+  }
+  const variant = /_m(\d{3,})__nust__\.numatb$/i.exec(base);
+  if (variant) {
+    return `m${variant[1]}`;
+  }
+  if (base.endsWith("__nust__.numatb")) {
+    return "nust";
+  }
+  return null;
+}
+
+export function formatNumatbPreviewProfileLabel(profileId: string): string {
+  if (profileId === "maya") {
+    return "Maya";
+  }
+  if (profileId === "nust") {
+    return "Nust";
+  }
+  return profileId;
+}
+
 export function resolveNumatbProfilePaths(matlPaths: string[]): NumatbProfilePaths {
   let maya: string | null = null;
   let nust: string | null = null;

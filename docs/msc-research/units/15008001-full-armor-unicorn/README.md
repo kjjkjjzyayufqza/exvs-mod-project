@@ -13,7 +13,8 @@ Param  E:\XB\mod\041cpm\015gndmuc_008faunig_001\chrsysparam.csyspm   (96 x 128, 
 
 **Related:** [chrsysparam 动作表 native 契约](../../chrsysparam-action-table-native-contract.md) ·
 [syscall 槽位表](../../../exvs-msc-syscall-handler-table.md) ·
-[证据分级协议](../../msc-evidence-grade-and-ingame-audit-protocol.md)
+[证据分级协议](../../msc-evidence-grade-and-ingame-audit-protocol.md) ·
+[NT-D 持续 BD 拖尾](./ntd-bd-flight-trail.md)
 
 ---
 

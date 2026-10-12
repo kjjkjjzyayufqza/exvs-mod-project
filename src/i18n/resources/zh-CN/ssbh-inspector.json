@@ -44,6 +44,7 @@
     "controlRange": "控制范围",
     "collectionSearch": "集合搜索",
     "previewRenderStyle": "预览渲染风格",
+    "materialProfile": "材质配置 · {{model}}",
     "wireframe": "线框",
     "skeleton": "骨架",
     "grid": "网格",

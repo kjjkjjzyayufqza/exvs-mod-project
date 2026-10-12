@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  classifyNumatbPreviewProfileId,
   detectNumatbProfileFromMatl,
   detectNumatbProfileFromPath,
 } from "./numatbEditorUtils";
@@ -53,5 +54,14 @@ describe("detectNumatbProfileFromPath", () => {
 
   it("defaults unmarked names to nust", () => {
     expect(detectNumatbProfileFromPath("D:/m/foo.numatb")).toBe("nust");
+  });
+});
+
+describe("classifyNumatbPreviewProfileId", () => {
+  it("classifies maya, base nust, and m variants", () => {
+    expect(classifyNumatbPreviewProfileId("D:/m/body__maya__.numatb")).toBe("maya");
+    expect(classifyNumatbPreviewProfileId("D:/m/body__nust__.numatb")).toBe("nust");
+    expect(classifyNumatbPreviewProfileId("D:/m/body_m001__nust__.numatb")).toBe("m001");
+    expect(classifyNumatbPreviewProfileId("D:/m/body_m010__nust__.numatb")).toBe("m010");
   });
 });

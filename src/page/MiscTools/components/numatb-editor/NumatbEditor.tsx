@@ -24,6 +24,8 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MaterialLabelCombobox } from "@/components/ssbh-model-preview/components/MaterialLabelCombobox";
+import { NumatbColor4Field } from "@/components/ssbh-model-preview/components/NumatbColor4Field";
+import { numatbParamSemantic } from "@/components/ssbh-model-preview/numatbParamSemantics";
 import { numatbShaderLabelOptions } from "@/components/ssbh-model-preview/numatbShaderLabelPresets";
 
 interface NumatbEditorProps {
@@ -107,6 +109,14 @@ function AttributeEditor({ attribute, materialIndex, attributeIndex, onUpdate, o
 
             case 'Vector4':
                 const vector = data.Vector4 || { x: 0, y: 0, z: 0, w: 0 };
+                if (numatbParamSemantic(attribute.param_id)?.editor === "color") {
+                    return (
+                        <NumatbColor4Field
+                            value={vector}
+                            onChange={(next) => handleUpdate({ x: next.r, y: next.g, z: next.b, w: next.a })}
+                        />
+                    );
+                }
                 return (
                     <div className="grid grid-cols-4 gap-1" data-i18n-ignore="">
                         <Input
@@ -145,42 +155,11 @@ function AttributeEditor({ attribute, materialIndex, attributeIndex, onUpdate, o
                 );
 
             case 'Unk7':
-                const color = data.Unk7 || { r: 0, g: 0, b: 0, a: 0 };
                 return (
-                    <div className="grid grid-cols-4 gap-1" data-i18n-ignore="">
-                        <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="R"
-                            value={color.r}
-                            onChange={(e) => handleUpdate({ ...color, r: parseFloat(e.target.value) || 0 })}
-                            className="text-xs"
-                        />
-                        <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="G"
-                            value={color.g}
-                            onChange={(e) => handleUpdate({ ...color, g: parseFloat(e.target.value) || 0 })}
-                            className="text-xs"
-                        />
-                        <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="B"
-                            value={color.b}
-                            onChange={(e) => handleUpdate({ ...color, b: parseFloat(e.target.value) || 0 })}
-                            className="text-xs"
-                        />
-                        <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="A"
-                            value={color.a}
-                            onChange={(e) => handleUpdate({ ...color, a: parseFloat(e.target.value) || 0 })}
-                            className="text-xs"
-                        />
-                    </div>
+                    <NumatbColor4Field
+                        value={data.Unk7 || { r: 0, g: 0, b: 0, a: 0 }}
+                        onChange={handleUpdate}
+                    />
                 );
 
             case 'Sampler':
