@@ -494,7 +494,12 @@ input::selection {
   overflow: hidden;
 }
 
-.workspace-tab-body > * > .flex.flex-col {
+/*
+ * Only full-height page shells (Card / root column), not nested toolbars such as
+ * `flex shrink-0 flex-col` headers inside MSC and similar editors.
+ */
+.workspace-tab-body > .flex.h-full.flex-col,
+.workspace-tab-body > * > .flex.h-full.flex-col {
   flex: 1 1 auto;
   min-height: 0;
   max-height: 100%;

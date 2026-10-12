@@ -19,6 +19,8 @@ interface SaveConfirmDialogProps {
   open: boolean;
   preview: SaveChangePreview | null;
   stageRoot: string | null;
+  /** Set when the save also repacks into the OB mod folder, overwriting this file. */
+  fhm2dOutputPath?: string | null;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -57,6 +59,7 @@ export function SaveConfirmDialog({
   open,
   preview,
   stageRoot,
+  fhm2dOutputPath = null,
   onConfirm,
   onCancel,
 }: SaveConfirmDialogProps) {
@@ -68,19 +71,33 @@ export function SaveConfirmDialog({
     (item) => `${item.folderName} (${item.fields.join(", ")})`,
   );
   const replacedItems = preview.replaced.map((folderName) => `${folderName} model`);
+  const stageLabel = stageRoot ?? t("save.stageFolder");
+  const isRepack = fhm2dOutputPath !== null;
 
   return (
     <AlertDialog open={open}>
       <AlertDialogContent className="max-w-lg" showCloseButton onCloseClick={onCancel}>
         <AlertDialogHeader>
-          <AlertDialogTitle>{t("save.title")}</AlertDialogTitle>
+          <AlertDialogTitle>{isRepack ? t("save.repackTitle") : t("save.title")}</AlertDialogTitle>
           <AlertDialogDescription>
-            {t("save.description", { stageRoot: stageRoot ?? t("save.stageFolder") })}
+            {isRepack
+              ? t("save.repackDescription", { stageRoot: stageLabel })
+              : t("save.description", { stageRoot: stageLabel })}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
+        {isRepack && (
+          <div className="space-y-1 rounded border border-destructive/40 bg-destructive/5 p-3">
+            <div className="text-sm font-medium text-destructive">{t("save.repackTarget")}</div>
+            <div className="break-all font-mono text-xs">{fhm2dOutputPath}</div>
+          </div>
+        )}
+
         <ScrollArea className="max-h-64 rounded border p-3">
           <div className="space-y-4 pr-2">
+            {isRepack && !preview.hasChanges && (
+              <p className="text-sm text-muted-foreground">{t("save.noPendingEdits")}</p>
+            )}
             <ChangeSection
               title={t("save.addObjects", { count: preview.added.length })}
               icon={<FolderPlus className="h-4 w-4 shrink-0" />}
@@ -130,7 +147,7 @@ export function SaveConfirmDialog({
             {t("common.cancel")}
           </AlertDialogCancel>
           <AlertDialogAction type="button" onClick={onConfirm}>
-            {t("save.saveToFolder")}
+            {isRepack ? t("save.repackAndOverwrite") : t("save.saveToFolder")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

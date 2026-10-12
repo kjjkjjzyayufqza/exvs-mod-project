@@ -28,6 +28,7 @@
 //!   +0x10 u8 0  +0x11 u8 mip count  +0x12 u8 0  +0x13 u8 pixel format
 //!   +0x14 u16 width  +0x16 u16 height  +0x18 u32 0  +0x1C u32 0  +0x20 16 zero bytes
 //!   +0x30 u32 mip sizes[mips] padded to 16 (only when mips > 1)
+//!   cube maps: +0x1C u32 caps2 0xFE00 and a 16-byte table (u32 face size twice, 8 zero bytes)
 //!   "eXt\0" 0x20 0x10 0 | "GIDX" 0x10 <u32 texture id> 0 | pixel data
 //! ```
 
@@ -39,6 +40,10 @@ use serde::{Deserialize, Serialize};
 pub const MAGIC: [u8; 4] = *b"NTP3";
 pub const VERSION: u16 = 0x0100;
 const FIXED_TEXTURE_HEADER: usize = 0x30;
+/// caps2 of an MBON cube map: the cube map bit plus all six faces.
+const CUBE_MAP_CAPS2: u32 = 0xFE00;
+const CUBE_TABLE_LEN: usize = 0x10;
+const CUBE_FACES: usize = 6;
 const EXT_CHUNK: [u8; 16] = [
     0x65, 0x58, 0x74, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00,
 ];
@@ -74,6 +79,9 @@ pub struct Ntp3Texture {
     pub mip_sizes: Vec<u32>,
     /// GIDX texture id. NUD materials reference textures by this value.
     pub texture_id: u32,
+    /// Six faces of one mip each (caps2 0xFE00); every MBON cube map has one mip.
+    #[serde(default)]
+    pub cube_map: bool,
     #[serde(skip)]
     pub data: Vec<u8>,
 }
@@ -100,7 +108,13 @@ impl Ntp3Texture {
         } else {
             0
         };
-        FIXED_TEXTURE_HEADER + table + 0x20
+        let cube = if self.cube_map { CUBE_TABLE_LEN } else { 0 };
+        FIXED_TEXTURE_HEADER + table + cube + 0x20
+    }
+
+    /// Byte size of one cube face (cube maps only).
+    pub fn cube_face_len(&self) -> Option<usize> {
+        self.cube_map.then(|| self.data.len() / CUBE_FACES)
     }
 
     /// Decode the base level to RGBA8.
@@ -229,6 +243,30 @@ impl Ntp3 {
             let format = u8_at(bytes, cursor + 0x13)?;
             let width = u16_be(bytes, cursor + 0x14)?;
             let height = u16_be(bytes, cursor + 0x16)?;
+            let caps2 = u32_be(bytes, cursor + 0x1C)?;
+            let cube_map = match caps2 {
+                0 => false,
+                CUBE_MAP_CAPS2 => true,
+                other => {
+                    return Err(Error::unsupported(format!("texture {index}: caps2 0x{other:X}")));
+                }
+            };
+            if cube_map {
+                let table_at = cursor + header_size - 0x20 - CUBE_TABLE_LEN;
+                let face = data_size / CUBE_FACES;
+                let expected = [face as u32, face as u32, 0, 0];
+                let table = [
+                    u32_be(bytes, table_at)?,
+                    u32_be(bytes, table_at + 4)?,
+                    u32_be(bytes, table_at + 8)?,
+                    u32_be(bytes, table_at + 12)?,
+                ];
+                if mip_count != 1 || data_size % CUBE_FACES != 0 || table != expected {
+                    return Err(Error::unsupported(format!(
+                        "texture {index}: cube map with {mip_count} mips and face table {table:?} is not an observed layout"
+                    )));
+                }
+            }
             if total != header_size + data_size {
                 return Err(Error::format(format!(
                     "texture {index}: total 0x{total:X} != header 0x{header_size:X} + data 0x{data_size:X}"
@@ -253,6 +291,7 @@ impl Ntp3 {
                 height,
                 mip_sizes,
                 texture_id,
+                cube_map,
                 data,
             };
             if texture.header_len() != header_size {
@@ -298,12 +337,24 @@ impl Ntp3 {
             out.u8(texture.format);
             out.u16_be(texture.width);
             out.u16_be(texture.height);
-            out.zeros(8 + 16);
+            out.u32_be(0);
+            out.u32_be(if texture.cube_map { CUBE_MAP_CAPS2 } else { 0 });
+            out.zeros(16);
             if texture.mip_count() > 1 {
                 for size in &texture.mip_sizes {
                     out.u32_be(*size);
                 }
                 out.pad_to(16);
+            }
+            if let Some(face) = texture.cube_face_len() {
+                if texture.mip_count() != 1 || texture.data.len() % CUBE_FACES != 0 {
+                    return Err(Error::invalid(format!(
+                        "texture {index}: a cube map needs one mip and six equal faces"
+                    )));
+                }
+                out.u32_be(face as u32);
+                out.u32_be(face as u32);
+                out.zeros(8);
             }
             out.bytes(&EXT_CHUNK);
             out.bytes(b"GIDX");
@@ -341,6 +392,7 @@ mod tests {
             height: 1,
             mip_sizes: vec![4],
             texture_id: 0x4000_0001,
+            cube_map: false,
             data: vec![255, 1, 2, 3],
         };
         texture
@@ -387,9 +439,35 @@ mod tests {
             height: 1,
             mip_sizes: vec![4],
             texture_id: 0,
+            cube_map: false,
             data: vec![0x80, 0x10, 0x20, 0x30],
         };
         assert_eq!(texture.decode_rgba().unwrap(), vec![0x10, 0x20, 0x30, 0x80]);
+    }
+
+    #[test]
+    fn cube_maps_keep_their_face_table() {
+        let texture = Ntp3Texture {
+            format: 2,
+            width: 4,
+            height: 4,
+            mip_sizes: vec![6 * 16],
+            texture_id: 0x0700_0000,
+            cube_map: true,
+            data: (0..96).map(|byte| byte as u8).collect(),
+        };
+        let ntp3 = Ntp3 {
+            version: VERSION,
+            textures: vec![texture],
+            trailing: Vec::new(),
+        };
+        let bytes = ntp3.to_bytes().unwrap();
+        assert_eq!(u16_be(&bytes, 0x1C).unwrap(), 0x60, "the cube table adds 0x10 header bytes");
+        assert_eq!(u32_be(&bytes, 0x10 + 0x1C).unwrap(), CUBE_MAP_CAPS2);
+        assert_eq!(u32_be(&bytes, 0x10 + 0x30).unwrap(), 16);
+        let parsed = Ntp3::parse(&bytes).unwrap();
+        assert_eq!(parsed, ntp3);
+        assert_eq!(parsed.textures[0].cube_face_len(), Some(16));
     }
 
     #[test]

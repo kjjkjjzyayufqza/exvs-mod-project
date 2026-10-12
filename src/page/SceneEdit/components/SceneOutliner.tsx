@@ -47,6 +47,11 @@ import { canOpenDetailView } from "./detail-view/sceneDetailViewTypes";
 import { getNodeTypeInfo } from "../utils/sceneNodeTypeInfo";
 import { canExportNodeRoleToDae } from "../utils/daeExportDialogState";
 import { canReplaceModelNode } from "../utils/sceneModelReplace";
+import {
+  findOutlinerAncestorIds,
+  isOutlinerNodeSelected,
+  resolveOutlinerRevealNodeId,
+} from "../utils/sceneEditorSelection";
 import { VirtualizedList } from "./VirtualizedList";
 import {
   flattenSceneOutliner,
@@ -90,7 +95,9 @@ interface SceneOutlinerProps {
   root: StageTreeNode | null;
   /** When true and no tree is ready yet, show a skeleton placeholder. */
   isLoading?: boolean;
-  onSelect: (id: string | null) => void;
+  /** Page-level primary selection (viewport / placement); kept in sync with the outliner store. */
+  primarySelectedNodeId?: string | null;
+  onSelect: (id: string | null, opts?: { ctrl?: boolean; shift?: boolean }) => void;
   onDuplicate?: (ids: string[]) => void;
   onDelete?: (ids: string[]) => void;
   onPaste?: () => void;
@@ -109,6 +116,7 @@ interface SceneOutlinerProps {
 export function SceneOutliner({
   root,
   isLoading = false,
+  primarySelectedNodeId = null,
   onSelect,
   onDuplicate,
   onDelete,
@@ -127,7 +135,6 @@ export function SceneOutliner({
   const { t } = useTranslation("scene-root-b");
   const {
     selectedIds,
-    select,
     selectAll,
     deselectAll,
     groups,
@@ -177,12 +184,41 @@ export function SceneOutliner({
     return flattenSceneOutliner({ root, groups, expandedById });
   }, [root, groups, expandedById]);
 
+  useEffect(() => {
+    if (!root || !primarySelectedNodeId) return;
+    const revealId = resolveOutlinerRevealNodeId(root, primarySelectedNodeId);
+    if (!revealId) return;
+    const ancestors = findOutlinerAncestorIds(root, revealId);
+    if (ancestors.length === 0) return;
+    setExpandedById((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const id of ancestors) {
+        if (next[id] !== true) {
+          next[id] = true;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [primarySelectedNodeId, root]);
+
+  const outlinerScrollToKey = useMemo(() => {
+    if (!root || !primarySelectedNodeId) return null;
+    const revealId = resolveOutlinerRevealNodeId(root, primarySelectedNodeId);
+    for (const row of flatRows) {
+      if (row.kind === "group-child" || row.kind === "node" || row.kind === "root") {
+        if (row.node.id === revealId) return row.key;
+      }
+    }
+    return null;
+  }, [flatRows, primarySelectedNodeId, root]);
+
   const handleNodeClick = useCallback(
     (id: string, e: React.MouseEvent) => {
-      select(id, { shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, allIds: allNodeIds });
-      onSelect(id);
+      onSelect(id, { shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey });
     },
-    [select, onSelect, allNodeIds],
+    [onSelect],
   );
 
   const handleSelectAll = useCallback(() => {
@@ -235,6 +271,7 @@ export function SceneOutliner({
                   node={row.node}
                   depth={row.depth}
                   selectedIds={selectedIds}
+                  primarySelectedNodeId={primarySelectedNodeId}
                   onNodeClick={handleNodeClick}
                   isVisible={isVisible}
                   toggleVisibility={toggleVisibility}
@@ -267,6 +304,7 @@ export function SceneOutliner({
                 node={row.node}
                 depth={row.depth}
                 selectedIds={selectedIds}
+                primarySelectedNodeId={primarySelectedNodeId}
                 onNodeClick={handleNodeClick}
                 isVisible={isVisible}
                 toggleVisibility={toggleVisibility}
@@ -296,6 +334,7 @@ export function SceneOutliner({
     [
       root,
       selectedIds,
+      primarySelectedNodeId,
       handleNodeClick,
       isVisible,
       toggleVisibility,
@@ -345,6 +384,7 @@ export function SceneOutliner({
             rowHeight={OUTLINER_ROW_HEIGHT}
             getItemKey={(row) => row.key}
             className="h-full min-h-0 overflow-auto p-1"
+            scrollToKey={outlinerScrollToKey}
             renderRow={renderFlatRow}
           />
         </div>
@@ -503,6 +543,7 @@ function OutlinerNodeRow({
   node,
   depth,
   selectedIds,
+  primarySelectedNodeId,
   onNodeClick,
   isVisible,
   toggleVisibility,
@@ -524,6 +565,7 @@ function OutlinerNodeRow({
   node: StageTreeNode;
   depth: number;
   selectedIds: Set<string>;
+  primarySelectedNodeId: string | null;
   onNodeClick: (id: string, e: React.MouseEvent) => void;
   isVisible: (id: string) => boolean;
   toggleVisibility: (id: string) => void;
@@ -542,7 +584,7 @@ function OutlinerNodeRow({
   expanded?: boolean;
   onToggle?: () => void;
 }) {
-  const isSelected = selectedIds.has(node.id);
+  const isSelected = isOutlinerNodeSelected(node.id, selectedIds, primarySelectedNodeId);
   const visible = isVisible(node.id);
   const locked = isLocked(node.id);
   const RoleIcon = getRoleIcon(node.role);

@@ -848,7 +848,7 @@ fn extract_boundary_loops(region_tris: &[TriInfo]) -> Vec<Vec<u32>> {
         }
     }
 
-    let boundary_edges: Vec<(u32, u32)> = edge_use
+    let mut boundary_edges: Vec<(u32, u32)> = edge_use
         .into_iter()
         .filter(|(_, count)| *count == 1)
         .map(|(e, _)| e)
@@ -857,6 +857,9 @@ fn extract_boundary_loops(region_tris: &[TriInfo]) -> Vec<Vec<u32>> {
     if boundary_edges.is_empty() {
         return Vec::new();
     }
+    // HashMap iteration order changes per process; sorting keeps the output
+    // collision identical between runs.
+    boundary_edges.sort_unstable();
 
     let mut adjacency: HashMap<u32, Vec<u32>> = HashMap::new();
     let boundary_len = boundary_edges.len();
@@ -978,7 +981,26 @@ fn retriangulate_region(vertices: &[[f64; 3]], region_tris: &[TriInfo]) -> Vec<[
     if tris.is_empty() || (input_tri_count > 2 && tris.len() * 2 < input_tri_count) {
         region_tris.iter().map(|t| t.indices).collect()
     } else {
-        tris
+        // The boundary loop is walked from canonical (unordered) edges, so its
+        // direction is arbitrary; keep every new triangle facing the region normal.
+        // Havok mesh collision is one-sided, so a flipped wall lets units through.
+        tris.into_iter()
+            .map(|tri| facing(vertices, tri, normal))
+            .collect()
+    }
+}
+
+/// `tri` with its winding flipped when its face normal opposes `normal`.
+fn facing(vertices: &[[f64; 3]], tri: [u32; 3], normal: [f64; 3]) -> [u32; 3] {
+    let [a, b, c] = tri;
+    let face = cross(
+        sub(vertices[b as usize], vertices[a as usize]),
+        sub(vertices[c as usize], vertices[a as usize]),
+    );
+    if dot(face, normal) < 0.0 {
+        [a, c, b]
+    } else {
+        tri
     }
 }
 

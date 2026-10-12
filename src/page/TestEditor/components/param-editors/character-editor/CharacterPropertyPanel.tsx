@@ -10,7 +10,7 @@ interface CharacterPropertyPanelProps {
 
 const CHARACTER_GROUPS: Record<string, string[]> = {
   "HP & Defense": [
-    "baseMaxDurability",
+    "hp",
     "runtimeDurabilityUpperClamp",
     "hpRegenValue",
     "hpRegenValueDefault",

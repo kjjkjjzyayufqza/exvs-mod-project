@@ -1,3 +1,4 @@
+import type { StageTreeNode } from "../components/StageHierarchyTree";
 import type { PlacementRow } from "../types/placement";
 import {
   formatPlacementViewportNodeId,
@@ -154,6 +155,67 @@ export function resolveNodeIdForPlacementIndex(
   if (entry.objectNumber === null) return null;
   const sub = subModels.find((item) => item.objectIndex === entry.objectNumber);
   return sub ? formatPlacementViewportNodeId(sub.folderName, placementIndex) : null;
+}
+
+/** Whether an outliner row should show as selected (store ids + page primary id, incl. placement children). */
+export function isOutlinerNodeSelected(
+  nodeId: string,
+  selectedIds: ReadonlySet<string>,
+  primaryNodeId: string | null,
+): boolean {
+  const matchesSelection = (id: string | null | undefined): boolean => {
+    if (!id) return false;
+    if (id === nodeId) return true;
+    const parsed = parsePlacementViewportNodeId(id);
+    return parsed?.folderName === nodeId;
+  };
+
+  if (selectedIds.has(nodeId) || matchesSelection(primaryNodeId)) {
+    return true;
+  }
+  for (const id of selectedIds) {
+    if (matchesSelection(id)) return true;
+  }
+  return false;
+}
+
+function findStageTreeNode(root: StageTreeNode, targetId: string): boolean {
+  if (root.id === targetId) return true;
+  for (const child of root.children ?? []) {
+    if (findStageTreeNode(child, targetId)) return true;
+  }
+  return false;
+}
+
+/** Ancestor node ids that must be expanded so `targetId` is visible in the outliner. */
+export function findOutlinerAncestorIds(root: StageTreeNode, targetId: string): string[] {
+  const ancestors: string[] = [];
+  const walk = (node: StageTreeNode, path: string[]): boolean => {
+    if (node.id === targetId) {
+      ancestors.push(...path);
+      return true;
+    }
+    for (const child of node.children ?? []) {
+      if (walk(child, [...path, node.id])) return true;
+    }
+    return false;
+  };
+  if (!walk(root, [])) return [];
+  return ancestors.filter((id) => id !== "root");
+}
+
+/** Prefer the exact placement/outliner id; fall back to parent folder when only the parent exists in the tree. */
+export function resolveOutlinerRevealNodeId(
+  root: StageTreeNode,
+  nodeId: string | null,
+): string | null {
+  if (!nodeId) return null;
+  if (findStageTreeNode(root, nodeId)) return nodeId;
+  const parsed = parsePlacementViewportNodeId(nodeId);
+  if (parsed && findStageTreeNode(root, parsed.folderName)) {
+    return parsed.folderName;
+  }
+  return nodeId;
 }
 
 export function getRequestedSceneNodeIds({

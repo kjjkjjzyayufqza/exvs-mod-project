@@ -3526,10 +3526,10 @@ fn info_light_cubemaps_follow_structure_rank_not_filename() {
             < info_pack_file_order(&irradiance, root, &ranks)
     );
 
-    let alphabetical = HashMap::new();
+    let missing_ranks = HashMap::new();
     assert!(
-        info_pack_file_order(&irradiance, root, &alphabetical)
-            < info_pack_file_order(&specular, root, &alphabetical)
+        info_pack_file_order(&specular, root, &missing_ranks)
+            < info_pack_file_order(&irradiance, root, &missing_ranks)
     );
     assert_eq!(
         info_path_key_from_url(
@@ -3550,4 +3550,150 @@ fn info_light_cubemaps_follow_structure_rank_not_filename() {
         info_relative_key(&nested, pack_root),
         "info/light/900default_ibl_specular.nutexb",
     );
+}
+
+#[test]
+fn ssbh_item_role_tags_match_native_model_loader() {
+    // ModelDataSet::SetupNewFormat throws on any SSBH folder child whose role tag is
+    // not one it knows; animations get theirs from StageAnimRole instead.
+    assert_eq!(unk2_for_ext(".nusktb"), "10000000");
+    assert_eq!(unk2_for_ext(".numatb"), "21000000");
+    assert_eq!(unk2_for_ext(".numshb"), "30000000");
+    assert_eq!(unk2_for_ext(".numdlb"), "40000000");
+    assert_eq!(unk2_for_ext(".jnttbl"), "50000000");
+    assert_eq!(StageAnimRole::UvOnly.unk2(), "60000000");
+    assert_eq!(StageAnimRole::UvOnly.unk3(), 0);
+    assert_eq!(StageAnimRole::Transform.unk2(), "61000000");
+    assert_eq!(StageAnimRole::Transform.unk3(), 1);
+}
+
+fn anim_v12_bytes(track_types: &[ssbh_lib::formats::anim::TrackTypeV1]) -> Vec<u8> {
+    use ssbh_lib::formats::anim::{Anim, TrackV1};
+    let tracks: Vec<TrackV1> = track_types
+        .iter()
+        .enumerate()
+        .map(|(i, track_type)| TrackV1 {
+            name: format!("node{i}").into(),
+            track_type: *track_type,
+            properties: Vec::new().into(),
+        })
+        .collect();
+    let anim = Anim::V12 {
+        name: "".into(),
+        unk1: 1.0,
+        final_frame_index: 60.0,
+        unk2: 59.0,
+        unk3: 0.0,
+        tracks: tracks.into(),
+        buffers: Vec::new().into(),
+    };
+    let mut cursor = Cursor::new(Vec::new());
+    anim.write(&mut cursor).expect("write anim");
+    cursor.into_inner()
+}
+
+#[test]
+fn stage_anim_role_follows_vanilla_track_rule() {
+    use ssbh_lib::formats::anim::TrackTypeV1;
+
+    let uv_only = anim_v12_bytes(&[TrackTypeV1::UvTransform, TrackTypeV1::UvTransform]);
+    assert!(is_ssbh_anim_header(&uv_only));
+    assert_eq!(
+        classify_stage_anim(&uv_only, "uv").unwrap(),
+        StageAnimRole::UvOnly
+    );
+
+    let with_transform = anim_v12_bytes(&[
+        TrackTypeV1::Transform,
+        TrackTypeV1::UvTransform,
+        TrackTypeV1::Visibility,
+    ]);
+    assert_eq!(
+        classify_stage_anim(&with_transform, "transform").unwrap(),
+        StageAnimRole::Transform
+    );
+
+    let visibility_only = anim_v12_bytes(&[TrackTypeV1::Visibility]);
+    assert!(classify_stage_anim(&visibility_only, "visibility").is_err());
+    assert!(classify_stage_anim(&anim_v12_bytes(&[]), "empty").is_err());
+}
+
+#[test]
+fn stage_rebuild_tags_model_animations_like_vanilla_packs() {
+    use ssbh_lib::formats::anim::TrackTypeV1;
+
+    let temp = tempfile::tempdir().unwrap();
+    let pack_root = temp.path().join("anim_stage");
+    let model = pack_root.join("0").join("0").join("base").join("model");
+    fs::create_dir_all(&model).unwrap();
+    for name in [
+        "model.nusktb",
+        "model__maya__.numatb",
+        "model__nust__.numatb",
+        "model.numshb",
+        "model.numdlb",
+        "model.jnttbl",
+    ] {
+        fs::write(model.join(name), b"stub").unwrap();
+    }
+    // Extracted names: the Transform clip sorts before the UV clip on disk.
+    fs::write(
+        model.join("101.bin"),
+        anim_v12_bytes(&[TrackTypeV1::Transform, TrackTypeV1::Visibility]),
+    )
+    .unwrap();
+    fs::write(
+        model.join("102.bin"),
+        anim_v12_bytes(&[TrackTypeV1::UvTransform]),
+    )
+    .unwrap();
+
+    let opts = ExvsBuildOpts {
+        include_shared_textures: true,
+        info_file_ranks: HashMap::new(),
+        anim_roles: collect_stage_anim_roles(&pack_root).unwrap(),
+    };
+    let mut collector = RebuildCollector::new();
+    build_exvs_structure_tree(&mut collector, &pack_root, "anim_stage", &opts);
+
+    let items: Vec<(String, String, i32)> = collector
+        .structure
+        .iter()
+        .filter_map(|entry| match entry {
+            SubFileStructureEntry::Item {
+                file_index,
+                unk2,
+                unk3,
+                ..
+            } => {
+                let (url, ext) = &collector.files[*file_index as usize];
+                let name = url.rsplit('\\').next().unwrap().to_string();
+                Some((name, format!("{}/{}", unk2, file_type_for_ext(ext)), *unk3))
+            }
+            _ => None,
+        })
+        .collect();
+    let tail: Vec<_> = items.iter().rev().take(3).rev().cloned().collect();
+    assert_eq!(
+        tail,
+        vec![
+            ("model.jnttbl".to_string(), "50000000/.bin".to_string(), 0),
+            ("102.bin".to_string(), "60000000/.nuanmb".to_string(), 0),
+            ("101.bin".to_string(), "61000000/.nuanmb".to_string(), 1),
+        ]
+    );
+}
+
+#[test]
+fn stage_anim_roles_reject_two_clips_with_one_role_in_a_model() {
+    use ssbh_lib::formats::anim::TrackTypeV1;
+
+    let temp = tempfile::tempdir().unwrap();
+    let model = temp.path().join("model");
+    fs::create_dir_all(&model).unwrap();
+    let uv = anim_v12_bytes(&[TrackTypeV1::UvTransform]);
+    fs::write(model.join("1.bin"), &uv).unwrap();
+    fs::write(model.join("2.nuanmb"), &uv).unwrap();
+    let err = collect_stage_anim_roles(temp.path()).unwrap_err();
+    assert!(err.contains("UvOnly"), "{err}");
 }

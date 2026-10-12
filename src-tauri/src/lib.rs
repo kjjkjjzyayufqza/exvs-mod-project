@@ -27,7 +27,7 @@ pub mod havok_mesh_encode;
 pub mod havok_mesh_export;
 mod jnttbl_cmd;
 mod jnttbl_format;
-mod mbon;
+pub mod mbon;
 pub mod msc_roundtrip;
 pub mod msc_toolchain;
 pub mod numshb_collision;

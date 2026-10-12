@@ -14,11 +14,11 @@ pub(crate) fn normalize_type_name(value: &str) -> String {
 }
 
 pub(crate) fn supported_type_list() -> &'static str {
-    "jnttbl, character-id-table, vernier-table, armsparam, bulletparam, speedparam, projectile-depiction-table, hitgroupiddef, interactionid, grapparam, navi-list, pilot-list, chrsysparam, nusktb, numshb, numdlb"
+    "jnttbl, character-id-table, vernier-table, armsparam, bulletparam, speedparam, characterparam, projectile-depiction-table, hitgroupiddef, interactionid, grapparam, navi-list, pilot-list, chrsysparam, nusktb, numshb, numdlb"
 }
 
 pub(crate) fn supported_edit_type_list() -> &'static str {
-    "jnttbl, character-id-table, vernier-table, armsparam, bulletparam, speedparam, projectile-depiction-table, hitgroupiddef, interactionid, grapparam, navi-list, pilot-list, chrsysparam"
+    "jnttbl, character-id-table, vernier-table, armsparam, bulletparam, speedparam, characterparam, projectile-depiction-table, hitgroupiddef, interactionid, grapparam, navi-list, pilot-list, chrsysparam"
 }
 
 pub(crate) fn format_json(value: &Value, pretty: bool) -> Result<String, String> {
@@ -38,11 +38,11 @@ pub(crate) fn usage() -> String {
         r#"  exvs2-json correlate --unit <bucket> --weapon <task-name> --id <dispatcher-id> [--pretty]"#,
         "",
         "Supported inspect types:",
-        "  jnttbl, character-id-table, vernier-table, armsparam, bulletparam, speedparam, projectile-depiction-table,",
+        "  jnttbl, character-id-table, vernier-table, armsparam, bulletparam, speedparam, characterparam, projectile-depiction-table,",
         "  hitgroupiddef, interactionid, grapparam, navi-list, pilot-list, chrsysparam, nusktb, numshb, numdlb",
         "",
         "Supported edit types:",
-        "  jnttbl, character-id-table, vernier-table, armsparam, bulletparam, speedparam, projectile-depiction-table,",
+        "  jnttbl, character-id-table, vernier-table, armsparam, bulletparam, speedparam, characterparam, projectile-depiction-table,",
         "  hitgroupiddef, interactionid, grapparam, navi-list, pilot-list, chrsysparam",
     ]
     .join("\n")

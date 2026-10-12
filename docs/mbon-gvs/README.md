@@ -139,10 +139,20 @@ gvs_tool schema-check <workspace>                              # every editor ta
 gvs_tool units <workspace> --source-root <game folder>         # Character ID table units and their archives
 ```
 
+## Stage port to Over Boost
+
+MBON stages (the `stage_list` archive `CE74091E` names one stage archive per
+row) convert into Over Boost stage folders with `mbon_stage_port`: NUD models
+to SSBH, NTP3 to nutexb, VCL collision to Havok `map_hit` / `border_hit`,
+objects and placements, the `STPP` spawn plan to `plan_param.spbin`, plus a
+`stage_list.bin` row. Formats, decisions, verification and the in-game test
+plan: [`stage-port.md`](stage-port.md). This is the only MBON code that
+imports Over Boost modules; it lives in the adapter (`src-tauri/src/mbon/`),
+the `exvs_mbon` crate stays independent.
+
 ## Not covered yet
 
-* What the MBON unit archives listed by `SCharacterList` hold, and naming the
-  stage FHM packs.
+* What the MBON unit archives listed by `SCharacterList` hold.
 * GVS: names of the record-table words that no IDA reader or data pattern
   explains yet (stage list flags, title plate kinds, trial set columns, raw
   path ID floats, the `090sound` mix tables) and the version-2 `090sound`

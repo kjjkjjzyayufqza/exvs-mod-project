@@ -9,6 +9,9 @@ use app_lib::format::bulletparam::{
     build_bulletparam, bulletparam_entry_from_json_value, bulletparam_entry_to_json_value,
     parse_bulletparam, BulletParamData, BulletParamEntry,
 };
+use app_lib::format::characterparam::{
+    build_characterparam, parse_characterparam, CharacterParamData, CharacterParamEntry,
+};
 use app_lib::format::grapparam::parse_grapparam;
 use app_lib::format::hitgroupiddef::parse_hitgroupiddef;
 use app_lib::format::interactionid::parse_interactionid;
@@ -262,6 +265,94 @@ fn edit_armsparam_upsert_inserts_entry_id_in_unsigned_order() {
         edited.entry_ids,
         vec![0x0d7f_cde2, 0x233c_4626, 0x55b0_3548, 0xfa64_e4d0]
     );
+}
+
+const UNIT_COST_VALUE_HASH: u32 = 0x7D1A_0ACF;
+
+fn characterparam_fixture_bytes() -> Vec<u8> {
+    let unknown_hash = 0x0BAD_F00D;
+    build_characterparam(&CharacterParamData {
+        header: ParamBinaryHeader {
+            magic: PARAM_BIN_MAGIC,
+            unk_04: 0,
+            file_size: 0,
+            unk_0c: 0,
+            entry_count: 1,
+            commands_count: 2,
+            entry_size: 8,
+            unk_1c: 0,
+        },
+        field_specs: vec![
+            ParamFieldSpec {
+                hash: UNIT_COST_VALUE_HASH,
+                entry_offset: 0,
+                flags: 0,
+                kind: 2,
+            },
+            ParamFieldSpec {
+                hash: unknown_hash,
+                entry_offset: 4,
+                flags: 0,
+                kind: 2,
+            },
+        ],
+        entry_ids: vec![0],
+        entries: vec![CharacterParamEntry {
+            entry_id: 0,
+            commands: HashMap::from([(UNIT_COST_VALUE_HASH, 300), (unknown_hash, 77)]),
+        }],
+        trailing_data: Vec::new(),
+        source_entries_raw: Vec::new(),
+    })
+    .expect("build characterparam fixture")
+}
+
+#[test]
+fn inspect_characterparam_requires_explicit_type_and_roundtrips() {
+    let bytes = characterparam_fixture_bytes();
+    let report = inspect_bytes(
+        r"E:\fixture\AMMO_HITBOX_INFO\480.bin",
+        &bytes,
+        InspectOptions {
+            inspect_type: Some(InspectType::CharacterParam),
+            roundtrip_check: true,
+            ..InspectOptions::default()
+        },
+    )
+    .expect("inspect characterparam");
+
+    assert_eq!(report["detectedType"], "characterparam");
+    assert_eq!(report["data"]["roundtripCheck"]["byteIdentical"], true);
+    assert_eq!(report["data"]["entries"][0]["unitCostValue"], 300);
+}
+
+#[test]
+fn edit_characterparam_sets_unit_cost_value_and_keeps_unknown_fields() {
+    let bytes = characterparam_fixture_bytes();
+    let outcome = edit_bytes(
+        r"E:\fixture\AMMO_HITBOX_INFO\480.bin",
+        &bytes,
+        &json!({
+            "type": "characterparam",
+            "operations": [{
+                "op": "setParamField",
+                "entryId": 0,
+                "field": "unitCostValue",
+                "value": 2000
+            }]
+        }),
+        EditBytesOptions {
+            inspect_type: Some(InspectType::CharacterParam),
+            output_path: None,
+            dry_run: true,
+        },
+    )
+    .expect("edit characterparam cost");
+    let edited = parse_characterparam(&outcome.bytes).expect("parse edited characterparam");
+
+    assert_eq!(edited.entries[0].commands[&UNIT_COST_VALUE_HASH], 2000);
+    assert_eq!(edited.entries[0].commands[&0x0BAD_F00D], 77);
+    assert_eq!(outcome.bytes.len(), bytes.len());
 }
 
 // Real hitbox-table samples (docs/hitbox-research). Mod build of custom Gyan and the

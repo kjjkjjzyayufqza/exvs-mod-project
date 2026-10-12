@@ -75,6 +75,11 @@ path = "src/bin/fhm2d_extract.rs"
 test = false
 
 [[bin]]
+name = "mbon_stage_port"
+path = "src/bin/mbon_stage_port.rs"
+test = false
+
+[[bin]]
 name = "fhm2d_extract_folder"
 path = "legacy-bin/fhm2d_extract_folder.rs"
 test = false
@@ -174,6 +179,18 @@ path = "tests/chrsysparam_format_test.rs"
 [[test]]
 name = "fhm2d_extract_cli_test"
 path = "tests/fhm2d_extract_cli_test.rs"
+
+[[test]]
+name = "mbon_stage_port_test"
+path = "tests/mbon_stage_port_test.rs"
+
+[[test]]
+name = "stage_deep_audit_test"
+path = "tests/stage_deep_audit_test.rs"
+
+[[test]]
+name = "stage_visual_compat_test"
+path = "tests/stage_visual_compat_test.rs"
 
 [[test]]
 name = "exvs_common_bundle_test"

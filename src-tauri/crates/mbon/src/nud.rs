@@ -472,13 +472,21 @@ fn decode_polygon(
     let count = usize::from(polygon.vertex_count);
     let geometry = geometry_len(polygon.geometry_type)?;
     let bones = bone_len(polygon.bone_type)?;
-    let vertex_base = if polygon.bone_type == 0 { sections[1] } else { sections[2] } + polygon.vertex_offset as usize;
+    // Polygon word +0x04 addresses the vertex clump (section 1) and word +0x08
+    // the vertex-add clump (section 2). Unskinned polygons interleave every
+    // attribute in the vertex clump; skinned polygons keep position, normal and
+    // weights in the vertex-add clump and color / UV in the vertex clump.
+    let vertex_base = if polygon.bone_type == 0 {
+        sections[1] + polygon.color_uv_offset as usize
+    } else {
+        sections[2] + polygon.vertex_offset as usize
+    };
     slice(bytes, vertex_base, count * polygon.stride)?;
     let color_uv_stride = color_uv_len(polygon.color_type, polygon.uv_count, polygon.uv_half)?;
     let color_uv_base = if polygon.bone_type == 0 {
         None
     } else {
-        let base = sections[0] + polygon.color_uv_offset as usize;
+        let base = sections[1] + polygon.color_uv_offset as usize;
         slice(bytes, base, count * color_uv_stride)?;
         Some(base)
     };
@@ -620,5 +628,69 @@ mod tests {
         let list = strip_to_list(&[0, 1, 2, 3, 0xFFFF, 4, 5, 6]);
         assert_eq!(list, vec![0, 1, 2, 2, 1, 3, 4, 5, 6]);
         assert!(strip_to_list(&[0, 0, 1, 2]).len() == 3, "degenerate triangles are skipped");
+    }
+
+    /// Two unskinned polygons (position + w, one half UV). The second polygon's
+    /// vertices start at vertex-clump offset 60, stored in polygon word +0x04;
+    /// word +0x08 stays 0 like in the MBON stage models.
+    fn two_polygon_nud() -> Vec<u8> {
+        const POLYSET_AT: usize = 0x30;
+        const POLYGONS_AT: usize = 0x60;
+        let clump0 = 0x30 + 2 * POLYGON_LEN;
+        let mut indices = Vec::new();
+        for _ in 0..2 {
+            for index in [0u16, 1, 2] {
+                indices.extend_from_slice(&index.to_be_bytes());
+            }
+        }
+        let mut vertices = Vec::new();
+        for polygon in 0..2u16 {
+            for vertex in 0..3u16 {
+                let base = f32::from(polygon * 10 + vertex);
+                for value in [base, 0.0, -base, 1.0] {
+                    vertices.extend_from_slice(&value.to_be_bytes());
+                }
+                vertices.extend_from_slice(&0x3C00u16.to_be_bytes());
+                vertices.extend_from_slice(&0x3800u16.to_be_bytes());
+            }
+        }
+        let names = b"p\0\0\0".to_vec();
+        let mut out = vec![0u8; 0x30 + clump0];
+        out[..4].copy_from_slice(&MAGIC_BE);
+        out[0x08..0x0A].copy_from_slice(&0x0200u16.to_be_bytes());
+        out[0x0A..0x0C].copy_from_slice(&1u16.to_be_bytes());
+        let sizes = [clump0 as u32, indices.len() as u32, vertices.len() as u32, 0];
+        for (slot, size) in sizes.iter().enumerate() {
+            out[0x10 + slot * 4..0x14 + slot * 4].copy_from_slice(&size.to_be_bytes());
+        }
+        out[POLYSET_AT + 0x28..POLYSET_AT + 0x2A].copy_from_slice(&(-1i16).to_be_bytes());
+        out[POLYSET_AT + 0x2A..POLYSET_AT + 0x2C].copy_from_slice(&2u16.to_be_bytes());
+        out[POLYSET_AT + 0x2C..POLYSET_AT + 0x30].copy_from_slice(&(POLYGONS_AT as u32).to_be_bytes());
+        for polygon in 0..2usize {
+            let at = POLYGONS_AT + polygon * POLYGON_LEN;
+            out[at..at + 4].copy_from_slice(&((polygon * 6) as u32).to_be_bytes());
+            out[at + 4..at + 8].copy_from_slice(&((polygon * 60) as u32).to_be_bytes());
+            out[at + 0x0C..at + 0x0E].copy_from_slice(&3u16.to_be_bytes());
+            out[at + 0x0E] = 0x00;
+            out[at + 0x0F] = 0x10;
+            out[at + 0x20..at + 0x22].copy_from_slice(&3u16.to_be_bytes());
+            out[at + 0x23] = 0x40;
+        }
+        out.extend_from_slice(&indices);
+        out.extend_from_slice(&vertices);
+        out.extend_from_slice(&names);
+        out
+    }
+
+    #[test]
+    fn unskinned_polygons_read_their_own_vertex_clump_offset() {
+        let bytes = two_polygon_nud();
+        let nud = Nud::parse(&bytes).unwrap();
+        let meshes = nud.mesh_buffers(&bytes).unwrap();
+        assert_eq!(meshes.len(), 2);
+        assert_eq!(&meshes[0].positions[3..6], &[1.0, 0.0, -1.0]);
+        assert_eq!(&meshes[1].positions[..3], &[10.0, 0.0, -10.0]);
+        assert_eq!(&meshes[1].uvs[..2], &[1.0, 0.5]);
+        assert_eq!(meshes[1].indices, vec![0, 1, 2]);
     }
 }

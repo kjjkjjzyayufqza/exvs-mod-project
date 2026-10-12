@@ -185,6 +185,7 @@ export function PlacementCsvEditorPanel({
           items={rows}
           rowHeight={PLACEMENT_ROW_HEIGHT}
           getItemKey={(row) => row.index}
+          scrollToKey={selectedIndex}
           className="max-h-36 overflow-y-auto overscroll-contain p-0.5"
           emptyState={
             <div className="py-2 text-center text-[10px] text-muted-foreground">

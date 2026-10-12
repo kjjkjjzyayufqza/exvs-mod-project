@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useRef, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +19,8 @@ interface VirtualizedListProps<T> {
   overscan?: number;
   /** Shown instead of the list when there are no items. */
   emptyState?: ReactNode;
+  /** When set, scrolls the list so the row with this key is visible (e.g. external selection sync). */
+  scrollToKey?: string | number | null;
 }
 
 const DEFAULT_THRESHOLD = 30;
@@ -37,6 +39,7 @@ function VirtualizedListInner<T>({
   virtualizeThreshold = DEFAULT_THRESHOLD,
   overscan = 8,
   emptyState,
+  scrollToKey = null,
 }: VirtualizedListProps<T>) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const getScrollElement = useCallback(() => scrollRef.current, []);
@@ -47,6 +50,13 @@ function VirtualizedListInner<T>({
     estimateSize: () => rowHeight,
     overscan,
   });
+
+  useEffect(() => {
+    if (scrollToKey === null || scrollToKey === undefined) return;
+    const index = items.findIndex((item, itemIndex) => getItemKey(item, itemIndex) === scrollToKey);
+    if (index < 0) return;
+    rowVirtualizer.scrollToIndex(index, { align: "auto" });
+  }, [scrollToKey, items, getItemKey, rowVirtualizer]);
 
   if (items.length === 0 && emptyState !== undefined) {
     return (

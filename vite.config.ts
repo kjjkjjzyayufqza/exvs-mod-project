@@ -20,8 +20,10 @@ export default defineConfig(async () => ({
     // churn and full reloads triggered by cargo writing into src-tauri/target.
     // Research Markdown under docs/ is not part of the frontend graph; watching
     // it makes `tauri dev` full-reload on every note edit.
+    // Local game assets and scratch work are also outside the frontend graph.
+    // Watching their directory trees can block asset moves on Windows.
     watch: {
-      ignored: ["**/src-tauri/**", "**/docs/**"],
+      ignored: ["**/src-tauri/**", "**/docs/**", "**/local-note/**", "**/tmp/**"],
     },
     // Pre-transform the always-loaded shell so first paint isn't blocked on a
     // cold request waterfall.

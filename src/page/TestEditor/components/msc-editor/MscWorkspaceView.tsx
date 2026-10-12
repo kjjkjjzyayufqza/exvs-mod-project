@@ -934,7 +934,7 @@ export default function MscWorkspaceView({
 
   return (
     <>
-      <div className="flex h-full flex-col gap-4 pb-4">
+      <div className="flex h-full min-h-0 flex-col gap-4 pb-4">
         <div className="flex flex-wrap items-center gap-2">
           {workspaceModeTabs}
           {unitPanelTabs}
@@ -1101,40 +1101,42 @@ export default function MscWorkspaceView({
         ) : null}
 
         {showScriptFiles ? (
-        <div className="flex-1 space-y-4 overflow-y-auto pr-2">
-          {isLoading && allFiles.length === 0 ? (
-            <div className="space-y-2">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <Skeleton key={index} className="h-11 w-full rounded-md" />
-              ))}
-            </div>
-          ) : groups.length === 0 ? (
-            <div className="flex h-32 flex-col items-center justify-center text-muted-foreground">
-              <FolderOpen className="mb-2 size-8 opacity-50" />
-              {t("empty.noFiles")}
-            </div>
-          ) : (
-            groups.map((group) => (
-              <section key={group.role} className="space-y-1.5">
-                <div className="flex items-center gap-2 px-1">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.label}</h3>
-                  <span className="font-mono text-[11px] text-muted-foreground/70">{group.files.length}</span>
-                </div>
-                <div className="divide-y rounded-md border">
-                  {group.files.map((file) => (
-                    <MscFileRow
-                      key={file.path}
-                      name={file.name}
-                      icon={getFileIcon(file.name, workspaceMode)}
-                      actions={createFileActions(file)}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))
-          )}
-        </div>
-) : null}
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-2">
+            {isLoading && allFiles.length === 0 ? (
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <Skeleton key={index} className="h-11 w-full rounded-md" />
+                ))}
+              </div>
+            ) : groups.length === 0 ? (
+              <div className="flex h-32 flex-col items-center justify-center text-muted-foreground">
+                <FolderOpen className="mb-2 size-8 opacity-50" />
+                {t("empty.noFiles")}
+              </div>
+            ) : (
+              groups.map((group) => (
+                <section key={group.role} className="space-y-1.5">
+                  <div className="flex items-center gap-2 px-1">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {group.label}
+                    </h3>
+                    <span className="font-mono text-[11px] text-muted-foreground/70">{group.files.length}</span>
+                  </div>
+                  <div className="divide-y rounded-md border">
+                    {group.files.map((file) => (
+                      <MscFileRow
+                        key={file.path}
+                        name={file.name}
+                        icon={getFileIcon(file.name, workspaceMode)}
+                        actions={createFileActions(file)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))
+            )}
+          </div>
+        ) : null}
         {workspaceMode === "unit" ? (
           <div
             className={cn("min-h-0 flex-1", showScriptFiles && "hidden")}

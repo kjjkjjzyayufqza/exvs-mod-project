@@ -22,6 +22,9 @@ use super::util::{
 use super::{SCHEMA_VERSION, TOOL_NAME};
 use crate::format::armsparam::{build_armsparam, parse_armsparam, ARMSPARAM_COMMAND_POOL};
 use crate::format::bulletparam::{build_bulletparam, parse_bulletparam, BULLETPARAM_COMMAND_POOL};
+use crate::format::characterparam::{
+    build_characterparam, parse_characterparam, CHARACTERPARAM_COMMAND_POOL,
+};
 use crate::format::grapparam::{build_grapparam, parse_grapparam, GRAPPARAM_COMMAND_POOL};
 use crate::format::hitgroupiddef::{
     build_hitgroupiddef, parse_hitgroupiddef, HITGROUPIDDEF_COMMAND_POOL,
@@ -69,6 +72,7 @@ pub fn inspect_bytes(
         InspectType::ArmsParam => inspect_armsparam(bytes, &options)?,
         InspectType::BulletParam => inspect_bulletparam(bytes, &options)?,
         InspectType::SpeedParam => inspect_speedparam(bytes, &options)?,
+        InspectType::CharacterParam => inspect_characterparam(bytes, &options)?,
         InspectType::ProjectileDepictionTable => {
             inspect_projectile_depiction_table(bytes, &options)?
         }
@@ -136,6 +140,9 @@ pub(crate) fn detect_type(
     }
     if lower.ends_with("speedparam.bin") || lower.contains("/speedparam") {
         return Ok(InspectType::SpeedParam);
+    }
+    if lower.ends_with("characterparam.bin") || lower.contains("/characterparam") {
+        return Ok(InspectType::CharacterParam);
     }
     if lower.contains("projectile_depiction_table") {
         return Ok(InspectType::ProjectileDepictionTable);
@@ -338,6 +345,36 @@ fn inspect_armsparam(bytes: &[u8], options: &InspectOptions) -> Result<Value, St
         &parsed.field_specs,
         ARMSPARAM_COMMAND_POOL,
         || build_armsparam(&parsed),
+    )
+}
+
+fn inspect_characterparam(bytes: &[u8], options: &InspectOptions) -> Result<Value, String> {
+    let parsed = parse_characterparam(bytes)?;
+    let mut data = typed_param_data(
+        "characterparam",
+        serde_json::to_value(&parsed)
+            .map_err(|e| format!("Serialize characterparam failed: {e}"))?,
+        options.summary,
+    );
+    insert_object_field(
+        &mut data,
+        "fieldNotes",
+        json!({
+            "unitCostValue": "field 0x7D1A0ACF; CharacterList cost filtering only accepts 1500/2000/2500/3000"
+        }),
+    )?;
+    insert_raw_fields_and_roundtrip(
+        &mut data,
+        bytes,
+        options,
+        &parsed
+            .entries
+            .iter()
+            .map(|entry| (entry.entry_id, &entry.commands))
+            .collect::<Vec<_>>(),
+        &parsed.field_specs,
+        CHARACTERPARAM_COMMAND_POOL,
+        || build_characterparam(&parsed),
     )
 }
 

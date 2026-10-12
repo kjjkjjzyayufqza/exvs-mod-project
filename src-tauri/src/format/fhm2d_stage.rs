@@ -35,8 +35,8 @@ pub(crate) const INFO_SUBFOLDER_NAMES: &[&str] = &["light", "fog", "post_effect"
 
 pub(crate) const INFO_FILE_NAMES: &[&str] = &[
     "border_hit.hkt",
-    "graphic_param.csv",
     "placement.csv",
+    "graphic_param.csv",
     "plan_param.spbin",
     "stage_boundary.csv",
 ];
@@ -3361,6 +3361,110 @@ fn unk2_for_ext(ext: &str) -> &'static str {
     }
 }
 
+// ── Stage model-folder animations ─────────────────────────────────────────
+
+/// Role of an SSBH animation inside a stage model folder.
+///
+/// All 45 animations in the 18 vanilla OB stage packs are fhm2d type 0x11, sit after
+/// the model's jnttbl, and take their role from their tracks: UV-only clips are 0x60
+/// with unk3 0, clips with a Transform track are 0x61 with unk3 1. A model holds at
+/// most one of each, 0x60 first. IDA: `ModelDataSet::SetupNewFormat` (sub_1402EE420)
+/// loads 0x60 into one NuAnimSource slot, keys 0x61 by unk3, and throws on any other
+/// role.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum StageAnimRole {
+    UvOnly,
+    Transform,
+}
+
+impl StageAnimRole {
+    fn unk2(self) -> &'static str {
+        match self {
+            Self::UvOnly => "60000000",
+            Self::Transform => "61000000",
+        }
+    }
+
+    fn unk3(self) -> i32 {
+        match self {
+            Self::UvOnly => 0,
+            Self::Transform => 1,
+        }
+    }
+}
+
+const SSBH_ANIM_HEADER_LEN: usize = 0x14;
+
+fn is_ssbh_anim_header(header: &[u8]) -> bool {
+    header.len() >= SSBH_ANIM_HEADER_LEN
+        && &header[0..4] == b"HBSS"
+        && &header[0x10..0x14] == b"MINA"
+}
+
+/// Animation files keep the extractor's `.bin` name, so detect them by content.
+fn file_has_ssbh_anim_header(path: &Path) -> Result<bool, String> {
+    use std::io::Read;
+    let mut header = [0u8; SSBH_ANIM_HEADER_LEN];
+    let mut file =
+        fs::File::open(path).map_err(|e| format!("Failed to open {}: {e}", path.display()))?;
+    match file.read_exact(&mut header) {
+        Ok(()) => Ok(is_ssbh_anim_header(&header)),
+        Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => Ok(false),
+        Err(e) => Err(format!("Failed to read {}: {e}", path.display())),
+    }
+}
+
+fn classify_stage_anim(data: &[u8], label: &str) -> Result<StageAnimRole, String> {
+    use ssbh_lib::formats::anim::{Anim, TrackTypeV1};
+    let anim = Anim::read(&mut Cursor::new(data))
+        .map_err(|e| format!("Failed to parse animation {label}: {e}"))?;
+    let Anim::V12 { tracks, .. } = anim else {
+        return Err(format!(
+            "Animation {label} is not SSBH ANIM v1.2; vanilla stage packs only use v1.2"
+        ));
+    };
+    let track_types: Vec<TrackTypeV1> = tracks.elements.iter().map(|t| t.track_type).collect();
+    if track_types.contains(&TrackTypeV1::Transform) {
+        return Ok(StageAnimRole::Transform);
+    }
+    if !track_types.is_empty() && track_types.iter().all(|t| *t == TrackTypeV1::UvTransform) {
+        return Ok(StageAnimRole::UvOnly);
+    }
+    Err(format!(
+        "Animation {label} has tracks {track_types:?}; vanilla stage packs only use UV-only \
+         clips (role 0x60) or clips with a Transform track (role 0x61)"
+    ))
+}
+
+/// Classify every animation under a stage root, keyed by its disk path.
+fn collect_stage_anim_roles(root: &Path) -> Result<HashMap<PathBuf, StageAnimRole>, String> {
+    let mut roles = HashMap::new();
+    let mut seen_in_folder: HashMap<(PathBuf, StageAnimRole), PathBuf> = HashMap::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        let (dirs, files) = collect_sorted_entries(&dir);
+        pending.extend(dirs);
+        for file in files {
+            if !file_has_ssbh_anim_header(&file)? {
+                continue;
+            }
+            let data =
+                fs::read(&file).map_err(|e| format!("Failed to read {}: {e}", file.display()))?;
+            let role = classify_stage_anim(&data, &file.display().to_string())?;
+            if let Some(other) = seen_in_folder.insert((dir.clone(), role), file.clone()) {
+                return Err(format!(
+                    "{} and {} are both {role:?} animations in one model folder; vanilla stage \
+                     models hold at most one of each",
+                    other.display(),
+                    file.display()
+                ));
+            }
+            roles.insert(file, role);
+        }
+    }
+    Ok(roles)
+}
+
 fn collect_packable_files_recursive(dir: &Path, out: &mut Vec<PathBuf>) {
     if let Ok(entries) = fs::read_dir(dir) {
         for e in entries.flatten() {
@@ -3636,7 +3740,8 @@ fn load_info_file_ranks(stage_root: &Path) -> HashMap<String, usize> {
     let Some(entries) = value.get("SubFileData").and_then(|v| v.as_array()) else {
         return HashMap::new();
     };
-    let mut ranked: Vec<(i64, String)> = Vec::new();
+    let mut by_index = HashMap::new();
+    let mut fallback = Vec::new();
     for entry in entries {
         let Some(url) = entry.get("fileUrl").and_then(|v| v.as_str()) else {
             continue;
@@ -3648,13 +3753,26 @@ fn load_info_file_ranks(stage_root: &Path) -> HashMap<String, usize> {
             .get("fileIndex")
             .and_then(|v| v.as_i64())
             .unwrap_or(i64::MAX);
-        ranked.push((index, key));
+        by_index.insert(index, key.clone());
+        fallback.push(key);
     }
-    ranked.sort_by_key(|(index, key)| (*index, key.clone()));
+    // A flat file pool can be in type/body order. Runtime texture slots follow
+    // Item references in the structure tree, not SubFileData.fileIndex order.
+    let mut ranked = Vec::new();
+    if let Some(tree) = value.get("SubFileStructure").and_then(|v| v.as_array()) {
+        for item in tree {
+            if item.get("type").and_then(|v| v.as_str()) == Some("Item") {
+                if let Some(key) = item.get("fileIndex").and_then(|v| v.as_i64()).and_then(|i| by_index.get(&i)) {
+                    if !ranked.contains(key) { ranked.push(key.clone()); }
+                }
+            }
+        }
+    }
+    for key in fallback { if !ranked.contains(&key) { ranked.push(key); } }
     ranked
         .into_iter()
         .enumerate()
-        .map(|(ord, (_, key))| (key, ord))
+        .map(|(ord, key)| (key, ord))
         .collect()
 }
 
@@ -3681,15 +3799,21 @@ fn info_pack_file_order(
     ranks: &HashMap<String, usize>,
 ) -> (u8, usize, String) {
     let key = info_relative_key(path, root);
-    if let Some(rank) = ranks.get(&key) {
-        return (0, *rank, String::new());
+    let name = path.file_name().map(|n|n.to_string_lossy().to_string()).unwrap_or_default();
+    // Named OB IBL files occupy native slots: specular first, irradiance
+    // second (confirmed in the original 203stage203 pack, not its flat pool).
+    if key.starts_with("info/light/") {
+        if name.to_ascii_lowercase().ends_with("_ibl_specular.nutexb") { return (0,0,String::new()); }
+        if name.to_ascii_lowercase().ends_with("_ibl_irradiance.nutexb") { return (0,1,String::new()); }
     }
-    let name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_default();
     let (bucket, rest) = info_file_order(&name);
-    (1, bucket as usize, rest)
+    if bucket < 4 {
+        return (0, bucket as usize, String::new());
+    }
+    if let Some(rank) = ranks.get(&key) {
+        return (1, *rank, String::new());
+    }
+    (2, bucket as usize, rest)
 }
 
 /// Returns a sort key for loose files inside info/ directory.
@@ -3734,9 +3858,11 @@ fn stage_content_dir_order(name: &str) -> (u8, String) {
 
 struct ExvsBuildOpts {
     include_shared_textures: bool,
-    /// Lowercase `info/...` paths in original structure `fileIndex` order.
+    /// Lowercase `info/...` paths in original serialized tree order.
     /// Keeps `info/light` specular-before-irradiance instead of sorting by filename.
     info_file_ranks: HashMap<String, usize>,
+    /// Animation role per disk path, from `collect_stage_anim_roles`.
+    anim_roles: HashMap<PathBuf, StageAnimRole>,
 }
 
 fn unk2_for_file(file: &Path, ext: &str) -> &'static str {
@@ -3794,19 +3920,35 @@ fn build_exvs_structure_tree(
     }
 }
 
-/// Push a single file as an Item node with the correct EXVS unk2 type tag.
-fn push_exvs_file_item(c: &mut RebuildCollector, file: &Path, root: &Path, folder_name: &str) {
-    let ext = ext_of(&file.file_name().unwrap().to_string_lossy());
+fn exvs_file_url(file: &Path, root: &Path, folder_name: &str) -> String {
     let rel = file
         .strip_prefix(root)
         .unwrap()
         .to_string_lossy()
-        .replace('\\', "/");
-    let idx = c.add_file(
-        format!(".\\{}\\{}", folder_name, rel.replace('/', "\\")),
-        ext.clone(),
-    );
+        .replace('/', "\\");
+    format!(".\\{folder_name}\\{rel}")
+}
+
+/// Push a single file as an Item node with the correct EXVS unk2 type tag.
+fn push_exvs_file_item(c: &mut RebuildCollector, file: &Path, root: &Path, folder_name: &str) {
+    let ext = ext_of(&file.file_name().unwrap().to_string_lossy());
+    let idx = c.add_file(exvs_file_url(file, root, folder_name), ext.clone());
     c.push_item(idx, unk2_for_file(file, &ext));
+}
+
+/// Push a model-folder animation as fhm2d type 0x11 whatever its disk extension.
+fn push_exvs_anim_item(
+    c: &mut RebuildCollector,
+    file: &Path,
+    role: StageAnimRole,
+    root: &Path,
+    folder_name: &str,
+) {
+    let idx = c.add_file(
+        exvs_file_url(file, root, folder_name),
+        ".nuanmb".to_string(),
+    );
+    c.push_item_ex(idx, role.unk2(), role.unk3());
 }
 
 /// Build a texture container folder (unk3=32, unk5=1) with deduplicated nutexb items.
@@ -3839,7 +3981,7 @@ fn build_exvs_texture_container(
 }
 
 /// Build an SSBH model folder with canonical EXVS item ordering:
-/// nusktb → (texture_container + numatb) pairs → numshb → numdlb → jnttbl
+/// nusktb → (texture_container + numatb) pairs → numshb → numdlb → jnttbl → animations
 fn build_exvs_model_folder(
     c: &mut RebuildCollector,
     files: &[PathBuf],
@@ -3855,9 +3997,14 @@ fn build_exvs_model_folder(
     let mut numshb_files: Vec<&PathBuf> = Vec::new();
     let mut numdlb_files: Vec<&PathBuf> = Vec::new();
     let mut jnttbl_files: Vec<&PathBuf> = Vec::new();
+    let mut anim_files: Vec<(&PathBuf, StageAnimRole)> = Vec::new();
     let mut other_files: Vec<&PathBuf> = Vec::new();
 
     for f in files {
+        if let Some(role) = opts.anim_roles.get(f) {
+            anim_files.push((f, *role));
+            continue;
+        }
         match ext_of(&f.file_name().unwrap().to_string_lossy()).as_str() {
             ".nusktb" => nusktb_files.push(f),
             ".numatb" => numatb_files.push(f),
@@ -3867,6 +4014,7 @@ fn build_exvs_model_folder(
             _ => other_files.push(f),
         }
     }
+    anim_files.sort_by_key(|(_, role)| role.unk3());
 
     // ① Skeleton — always first
     for f in &nusktb_files {
@@ -3974,6 +4122,11 @@ fn build_exvs_model_folder(
             }
         }
         push_exvs_file_item(c, &jnttbl_path, root, folder_name);
+    }
+
+    // ⑨ Animations: role 0x60 (UV-only) before 0x61 (Transform).
+    for (f, role) in &anim_files {
+        push_exvs_anim_item(c, f, *role, root, folder_name);
     }
 
     // Other files (e.g., .hkt at model dir level)
@@ -4256,6 +4409,7 @@ fn rebuild_structure_from_scratch(
         &ExvsBuildOpts {
             include_shared_textures: false,
             info_file_ranks: load_info_file_ranks(root),
+            anim_roles: collect_stage_anim_roles(root)?,
         },
     );
 
@@ -4343,6 +4497,7 @@ fn rebuild_structure_from_scratch_with_shared_textures(
         &ExvsBuildOpts {
             include_shared_textures: true,
             info_file_ranks: load_info_file_ranks(root),
+            anim_roles: collect_stage_anim_roles(root)?,
         },
     );
 
@@ -4462,13 +4617,25 @@ fn patch_nutexb_urls_in_structure(
 pub fn rebuild_structure_json_for_stage_with_shared_textures(
     stage_root: &str,
 ) -> Result<String, String> {
+    rebuild_structure_shared(stage_root, false)
+}
+
+/// Canonicalize all tree positions even when an old structure could be retained.
+pub fn rebuild_structure_json_for_stage_forced_with_shared_textures(
+    stage_root: &str,
+) -> Result<String, String> {
+    rebuild_structure_shared(stage_root, true)
+}
+
+fn rebuild_structure_shared(stage_root: &str, force: bool) -> Result<String, String> {
     let root = Path::new(stage_root);
     let content_root = resolve_content_root(root);
     let textures_dir = content_root.join(STAGE_TEXTURES_NAME);
     let folder_name = root.file_name().and_then(|n| n.to_str()).unwrap_or("stage");
 
     if !textures_dir.is_dir() {
-        return rebuild_structure_json_for_stage(stage_root);
+        return if force { rebuild_structure_json_for_stage_forced(stage_root) }
+            else { rebuild_structure_json_for_stage(stage_root) };
     }
 
     let textures_rel = if content_root != *root {
@@ -4499,7 +4666,7 @@ pub fn rebuild_structure_json_for_stage_with_shared_textures(
         .join(format!("{folder_name}_structure.json"));
 
     // Try to preserve the original structure first.
-    if let Some(original_path) = find_structure_json_path(root) {
+    if let Some(original_path) = find_structure_json_path(root).filter(|_| !force) {
         match try_preserve_original_structure(root, &original_path, &output_path) {
             Ok(result) => {
                 patch_nutexb_urls_in_structure(&output_path, &texture_url_map)?;

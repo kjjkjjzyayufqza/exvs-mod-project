@@ -214,7 +214,7 @@ characterparam	0xb3373bd9	burst_mobility_multiplier_slot_2	5	C	code_getter_inlin
 characterparam	0xb4f17b6f	target_position_offset_default_z	5	C	code_getter_probed	1	docs/characterparam-native-consumer-map-ob.md;inline-annotation
 characterparam	0xb58b705c	reserved_flag_228	2	U	absent	1	docs/characterparam-native-consumer-map-ob.md
 characterparam	0xb5fdc339	self_hp_reduction_amount_slot_5	2	C	data_table	4	docs/characterparam-native-consumer-map-ob.md;inline-annotation
-characterparam	0xb7d5327e	base_max_durability	2	C	code_getter_probed	7	docs/characterparam-native-consumer-map-ob.md
+characterparam	0xb7d5327e	hp	2	C	code_getter_probed	7	docs/characterparam-native-consumer-map-ob.md
 characterparam	0xb91793d4	damage_calculation_multiplier_slot_3	5	C	code_getter_inline	2	docs/characterparam-native-consumer-map-ob.md;inline-annotation
 characterparam	0xba900811	burst_melee_attack_multiplier_slot_2	5	C	code_getter_inline	2	docs/characterparam-native-consumer-map-ob.md
 characterparam	0xbae8c388	lock_distance_threshold_family_2_default	5	C	code_getter_inline	7	docs/characterparam-native-consumer-map-ob.md;inline-annotation

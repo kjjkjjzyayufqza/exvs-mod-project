@@ -12,6 +12,9 @@ use super::util::supported_edit_type_list;
 use super::{SCHEMA_VERSION, TOOL_NAME};
 use crate::format::armsparam::{build_armsparam, parse_armsparam, ARMSPARAM_COMMAND_POOL};
 use crate::format::bulletparam::{build_bulletparam, parse_bulletparam, BULLETPARAM_COMMAND_POOL};
+use crate::format::characterparam::{
+    build_characterparam, parse_characterparam, CHARACTERPARAM_COMMAND_POOL,
+};
 use crate::format::grapparam::{build_grapparam, parse_grapparam, GRAPPARAM_COMMAND_POOL};
 use crate::format::hitgroupiddef::{
     build_hitgroupiddef, parse_hitgroupiddef, HITGROUPIDDEF_COMMAND_POOL,
@@ -147,6 +150,13 @@ pub fn edit_bytes(
             SPEEDPARAM_COMMAND_POOL,
             parse_speedparam,
             build_speedparam,
+        )?,
+        InspectType::CharacterParam => param_table::edit_param_table(
+            bytes,
+            operations,
+            CHARACTERPARAM_COMMAND_POOL,
+            parse_characterparam,
+            build_characterparam,
         )?,
         InspectType::ProjectileDepictionTable => param_table::edit_param_table(
             bytes,

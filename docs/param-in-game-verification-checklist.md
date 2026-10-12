@@ -71,7 +71,7 @@ reader 的字段，不要求实机重复验证。
 静态已证明：
 
 - `0xD01D00DF`（`unresolved_280`）乘入一个事件桶，并先除以
-  `base_max_durability`；
+  `hp`；
 - `0xE3E5D41D`（`unresolved_2c4`）线性乘入另一个事件桶；
 - 两者都进入 Burst pending accumulator；静态代码无法命名 record
   `+0x10/+0x18` 哪一侧是攻击者或受击者。
@@ -88,7 +88,7 @@ reader 的字段，不要求实机重复验证。
 - [ ] 方向判定：只有“造成”一侧单调变化则标记 dealt bucket；只有“受到”一侧
   单调变化则标记 received bucket；两侧都变或都不变则标记未触发。
 - [ ] 归一化复核：再选一台基础耐久明显不同的机体，使用相同百分比伤害复测；
-  检查 `÷ base_max_durability` 的比例效应，而非只比较绝对伤害。
+  检查 `÷ hp` 的比例效应，而非只比较绝对伤害。
 
 ### B2. `0xE3E5D41D`
 

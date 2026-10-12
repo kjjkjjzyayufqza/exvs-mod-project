@@ -337,7 +337,7 @@ _Character gameplay parameter fields. RTTI: Character@GAM@VDK_
 | 0xB4F17B6F | 0x224 | float | melee_lunge_offset | melee lunge distance |
 | 0xB58B705C | 0x228 | int | reserved_flag_228 | reserved |
 | 0xB5FDC339 | 0x22C | int | step_cancel_count | step cancel limit |
-| 0xB7D5327E | 0x230 | int | base_max_durability | raw base maximum durability before runtime transform |
+| 0xB7D5327E | 0x230 | int | hp | raw Life/HP capacity before runtime transform |
 | 0xB91793D4 | 0x234 | float | damage_calculation_multiplier_slot_3 | selected by hit-record slot 3; enters final damage |
 | 0xBA900811 | 0x238 | float | air_dash_speed_base | base air dash speed |
 | 0xBAE8C388 | 0x23C | float | alert_range_distance | USER-VERIFIED 2026-07-11: red lock (红锁); also set lock_on_distance_max — docs/characterparam-field-notes.md |

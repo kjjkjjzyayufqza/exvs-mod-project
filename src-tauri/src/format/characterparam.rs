@@ -241,9 +241,9 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0xB4F17B6F, 5, "target_position_offset_default_z"), // [V:sub_1405FC010 -> sub_1405FB520] default local-space vector Z
     (0xB58B705C, 2, "reserved_flag_228"),
     (0xB5FDC339, 2, "self_hp_reduction_amount_slot_5"), // [V:data_14133F258 idx=5 -> sub_1405F9480]
-    // Raw base maximum durability before the runtime scale/offset transform.
+    // Raw Life/HP capacity before the runtime scale/offset transform.
     // Verified across native consumers and OB-matched Gyan/Hyaku corpus. See docs/characterparam-field-notes.md.
-    (0xB7D5327E, 2, "base_max_durability"),
+    (0xB7D5327E, 2, "hp"),
     (0xB91793D4, 5, "damage_calculation_multiplier_slot_3"), // [V:sub_140625060 <- sub_140622010] selected by hit-record slot 3 and multiplied into final damage
     (0xBA900811, 5, "burst_melee_attack_multiplier_slot_2"),
     // User in-game 2026-07-11: also 红锁距离 (with lock_on_distance_max). See docs/characterparam-field-notes.md.
@@ -276,7 +276,7 @@ pub const CHARACTERPARAM_COMMAND_POOL: ParamCommandPool = &[
     (0xC8B2F571, 5, "collision_sphere_1_center_z"), // [V:data_141342D80 r1c3 -> sub_140628FD0]
     (0xCAF44B28, 5, "collision_sphere_1_center_y"), // [V:data_141342D80 r1c2 -> sub_140628FD0]
     (0xCB36211F, 5, "collision_sphere_1_center_x"), // [V:data_141342D80 r1c1 -> sub_140628FD0]
-    (0xD01D00DF, 5, "unresolved_280"), // [V:sub_14060E340] divided by baseMaxDurability, multiplied by one type-0x29 event bucket, then accumulated into Burst state; dealt/received direction open
+    (0xD01D00DF, 5, "unresolved_280"), // [V:sub_14060E340] divided by hp, multiplied by one type-0x29 event bucket, then accumulated into Burst state; dealt/received direction open
     // ---- range/radar distance dispatcher: sub_1405F8720 switch(category) ----
     (0xD249350C, 5, "lock_distance_threshold_family_2_slot_0"), // [V:sub_1405F8720] selector 0
     (0xD24DC1FD, 5, "collision_sphere_1_radius"), // [V:data_141342D80 r1c0 -> sub_140628FD0]
@@ -507,7 +507,8 @@ const CHARACTERPARAM_LEGACY_KEY_ALIASES: &[(&str, &str)] = &[
     ("cameraDistanceFar", "lockDistanceThresholdFamily2Slot1"),
     ("cameraDistanceNear", "lockDistanceThresholdFamily2Slot2"),
     ("radarRangeDistance", "lockDistanceThresholdFamily2Slot4"),
-    ("boostGaugeInitial", "baseMaxDurability"),
+    ("boostGaugeInitial", "hp"),
+    ("baseMaxDurability", "hp"),
     ("maxHp", "damageDispatchValueSelector8"),
     ("hpMaxValue", "runtimeDurabilityUpperClamp"),
     ("cameraPitchUpAngle", "hpRatioFamilyABand45To50"),
@@ -995,13 +996,20 @@ mod tests {
     }
 
     #[test]
-    fn characterparam_uses_base_durability_key_and_accepts_legacy_alias() {
+    fn characterparam_uses_hp_key_and_accepts_legacy_aliases() {
         let canonical = characterparam_entry_from_json_value(&serde_json::json!({
+            "entryId": 1,
+            "hp": 600
+        }))
+        .expect("canonical hp key");
+        assert_eq!(canonical.commands.get(&0xB7D5327E), Some(&600));
+
+        let previous = characterparam_entry_from_json_value(&serde_json::json!({
             "entryId": 1,
             "baseMaxDurability": 600
         }))
-        .expect("canonical durability key");
-        assert_eq!(canonical.commands.get(&0xB7D5327E), Some(&600));
+        .expect("previous durability key");
+        assert_eq!(previous.commands.get(&0xB7D5327E), Some(&600));
 
         let legacy = characterparam_entry_from_json_value(&serde_json::json!({
             "entryId": 1,
@@ -1011,7 +1019,8 @@ mod tests {
         assert_eq!(legacy.commands.get(&0xB7D5327E), Some(&600));
 
         let output = characterparam_entry_to_json_value(&canonical);
-        assert_eq!(output["baseMaxDurability"], serde_json::json!(600));
+        assert_eq!(output["hp"], serde_json::json!(600));
+        assert!(output.get("baseMaxDurability").is_none());
         assert!(output.get("boostGaugeInitial").is_none());
     }
 

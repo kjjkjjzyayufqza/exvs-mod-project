@@ -20,7 +20,9 @@ pub mod names;
 pub mod ntp3;
 pub mod nud;
 pub mod package;
+pub mod stage;
 pub mod vbn;
+pub mod vcl;
 
 pub use edit::{edit_detail, edit_model, edit_scene, inspect_msc, open_index};
 

@@ -671,7 +671,21 @@ fn parse_ob_fhm2d(bytes: &[u8]) -> Result<(ParsedOb, Vec<u8>), String> {
     }
 
     let mut files = Vec::with_capacity(file_count);
+    let structure_start = read_u32_le(meta.as_slice(), 0x10)? as usize;
+    let mut structure_end = meta.len();
     for _ in 0..file_count {
+        // Original OB packs append a NUL-terminated authoring-path pool after
+        // the tree. SubEntryHeader +0x00 points into that pool (zero on repacks).
+        let name_offset = read_u32_le(meta.as_slice(), sub_cursor)? as usize;
+        if name_offset != 0 {
+            if name_offset < structure_start || name_offset >= meta.len() {
+                return Err("Sub entry name offset out of metadata range".into());
+            }
+            let name = &meta[name_offset..];
+            let end = name.iter().position(|byte| *byte == 0).ok_or("Unterminated sub entry authoring path")?;
+            std::str::from_utf8(&name[..end]).map_err(|error| format!("Invalid authoring path: {error}"))?;
+            structure_end = structure_end.min(name_offset);
+        }
         let (file, used_len) = parse_sub_entry(meta.as_slice(), body_comp, sub_cursor)?;
         files.push(file);
         sub_cursor = sub_cursor
@@ -679,8 +693,11 @@ fn parse_ob_fhm2d(bytes: &[u8]) -> Result<(ParsedOb, Vec<u8>), String> {
             .ok_or_else(|| "Sub cursor overflow while parsing".to_string())?;
     }
 
+    if sub_cursor != structure_start {
+        return Err("Sub entry table does not end at the structure offset".into());
+    }
     let structure_bytes = meta
-        .get(sub_cursor..)
+        .get(sub_cursor..structure_end)
         .ok_or_else(|| "SubFileStructure range out of bounds".to_string())?;
     let sub_file_structure = parse_sub_file_structure(structure_bytes)?;
     let sub_file_parse_structure = build_parse_tree(sub_file_structure.as_slice());

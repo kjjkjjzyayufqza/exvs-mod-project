@@ -869,7 +869,10 @@ export function resolveMaterialBinding(
     },
     texturePaths,
     renderHints: {
-      isTransparent: shaderLabel.includes("trans") || shaderLabel.includes("blend"),
+      // Over Boost blended shaders are Pascal case (`vsngTransparent_BeforeEffect`,
+      // `vsngSkyTransparent`); `Blend2VC` layer shaders are opaque, so only "trans"
+      // ignores case.
+      isTransparent: /trans/i.test(shaderLabel) || shaderLabel.includes("blend"),
       isSparkle: shaderFamily === "vsngCharaSparkle",
     },
     uniforms: {

@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { PlacementRow } from "../types/placement";
+import type { StageTreeNode } from "../components/StageHierarchyTree";
 import {
+  findOutlinerAncestorIds,
   getRequestedSceneNodeIds,
+  isOutlinerNodeSelected,
   normalizePlacementObjectNumber,
   resolveNodeIdForPlacementIndex,
+  resolveOutlinerRevealNodeId,
   resolveSelectionForSceneNode,
   resolveSubModelObjectIndex,
   resolveSubModelPlacementRef,
@@ -111,6 +115,40 @@ describe("scene editor selection helpers", () => {
       formatPlacementViewportNodeId("201stage201_obj_001", 0),
     );
     expect(resolveNodeIdForPlacementIndex(1, rows, subModels)).toBe("__effect__1");
+  });
+
+  it("highlights outliner parent folder when a placement viewport child is selected", () => {
+    const childId = formatPlacementViewportNodeId("201stage201_obj_000", 2);
+    const selected = new Set([childId]);
+
+    expect(isOutlinerNodeSelected("201stage201_obj_000", selected, childId)).toBe(true);
+    expect(isOutlinerNodeSelected(childId, selected, childId)).toBe(true);
+    expect(isOutlinerNodeSelected("201stage201_obj_001", selected, childId)).toBe(false);
+  });
+
+  it("collects ancestor ids for outliner expand-on-select", () => {
+    const root: StageTreeNode = {
+      id: "root",
+      label: "Scene",
+      role: "root",
+      children: [
+        {
+          id: "parent_obj",
+          label: "Parent",
+          role: "sub_model",
+          children: [
+            {
+              id: formatPlacementViewportNodeId("parent_obj", 1),
+              label: "(1)",
+              role: "placement",
+            },
+          ],
+        },
+      ],
+    };
+    const childId = formatPlacementViewportNodeId("parent_obj", 1);
+    expect(findOutlinerAncestorIds(root, childId)).toEqual(["root", "parent_obj"]);
+    expect(resolveOutlinerRevealNodeId(root, childId)).toBe(childId);
   });
 
   it("uses multi-selection from the outliner before the page primary selection for commands", () => {

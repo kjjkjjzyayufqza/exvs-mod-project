@@ -22,3 +22,4 @@
 //! MBON workspace adapter: Tauri commands over the isolated `exvs_mbon` crate.
 
 pub mod commands;
+pub mod stage_port;

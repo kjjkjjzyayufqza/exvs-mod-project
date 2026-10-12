@@ -235,6 +235,17 @@ pub fn build_authored_collision_set_xml_faithful_scaled(
     )
 }
 
+/// VCL imports retain their authored triangles and use global 21/21/22-bit
+/// shared vertices throughout, avoiding section-local 11/11/10-bit seam drift.
+pub fn build_authored_collision_set_xml_shared_vertices_scaled(
+    set: &AuthoredCollisionSet,
+    tolerance_scale: f64,
+) -> Result<String, String> {
+    build_authored_collision_set_xml_sample_template_with_precision(
+        set, COLLISION_SAMPLE_TEMPLATE_XML, tolerance_scale, true,
+    )
+}
+
 /// Replace only the shape/data chain of an exported sample template (e.g. the
 /// `map_hit.xml` style: `hknpCompressedMeshShape` + `hknpCompressedMeshShapeData`).
 ///
@@ -265,6 +276,15 @@ pub fn build_authored_collision_set_xml_sample_template(
     set: &AuthoredCollisionSet,
     template_xml: &str,
     tolerance_scale: f64,
+) -> Result<String, String> {
+    build_authored_collision_set_xml_sample_template_with_precision(set, template_xml, tolerance_scale, false)
+}
+
+fn build_authored_collision_set_xml_sample_template_with_precision(
+    set: &AuthoredCollisionSet,
+    template_xml: &str,
+    tolerance_scale: f64,
+    all_shared_vertices: bool,
 ) -> Result<String, String> {
     if set.shapes.is_empty() {
         return Err("Cannot build Havok collision XML with no authored shapes".into());
@@ -322,8 +342,14 @@ pub fn build_authored_collision_set_xml_sample_template(
     )?;
 
     for (shape, (shape_id, data_id)) in set.shapes.iter().zip(shape_data_ids.iter()) {
-        let (global_min, global_max) = padded_aabb(shape)?;
-        let build = split_and_encode_sections(shape, global_min, global_max)?;
+        let (mut global_min, mut global_max) = padded_aabb(shape)?;
+        if all_shared_vertices {
+            // The tagfile domain is hkReal (f32). Quantize against the exact
+            // domain the runtime receives, rather than an unrepresentable f64.
+            global_min = global_min.map(|v| f64::from(v as f32));
+            global_max = global_max.map(|v| f64::from(v as f32));
+        }
+        let build = split_and_encode_sections_with_precision(shape, global_min, global_max, all_shared_vertices)?;
         let max_key = section_indexed_max_key(&build.sections);
         let shape_key_bits = key_bits_for_max_key(max_key);
         let mesh_tree = format_mesh_tree_xml(&build, global_min, global_max)?;
@@ -878,6 +904,15 @@ fn split_and_encode_sections(
     global_min: [f64; 3],
     global_max: [f64; 3],
 ) -> Result<MeshBuild, String> {
+    split_and_encode_sections_with_precision(mesh, global_min, global_max, false)
+}
+
+fn split_and_encode_sections_with_precision(
+    mesh: &CollisionPrimitiveMesh,
+    global_min: [f64; 3],
+    global_max: [f64; 3],
+    all_shared_vertices: bool,
+) -> Result<MeshBuild, String> {
     let source_primitives = mesh.primitives.clone();
     if source_primitives.is_empty() {
         return Err("Cannot encode an empty Havok collision mesh".into());
@@ -885,7 +920,24 @@ fn split_and_encode_sections(
 
     let source_primitive_bounds: Vec<Aabb> = source_primitives
         .iter()
-        .map(|primitive| primitive_aabb(mesh, *primitive))
+        .map(|primitive| {
+            let mut bounds = primitive_aabb(mesh, *primitive);
+            if all_shared_vertices {
+                for index in primitive.indices4() {
+                    let quantized = encode_shared_vertex(mesh.vertices[index as usize], global_min, global_max);
+                    include_point(&mut bounds, decode_shared_vertex(quantized, global_min, global_max));
+                }
+                // Bounds themselves are serialized as f32 and traversed by
+                // f32 SIMD code. Include a conservative rounding margin.
+                for axis in 0..3 {
+                    let magnitude = bounds.min[axis].abs().max(bounds.max[axis].abs()).max(1.0);
+                    let margin = 0.001 + 8.0 * f64::from(f32::EPSILON) * magnitude;
+                    bounds.min[axis] -= margin;
+                    bounds.max[axis] += margin;
+                }
+            }
+            bounds
+        })
         .collect();
     let source_bvh = build_bvh(&source_primitive_bounds)
         .ok_or_else(|| "Failed to build Havok source BVH".to_string())?;
@@ -910,7 +962,7 @@ fn split_and_encode_sections(
     let shared_set: std::collections::BTreeSet<u32> = vertex_section_counts
         .iter()
         .enumerate()
-        .filter_map(|(idx, count)| (*count > 1).then_some(idx as u32))
+        .filter_map(|(idx, count)| (*count > 1 || (all_shared_vertices && *count > 0)).then_some(idx as u32))
         .collect();
     validate_havok_shared_vertex_count(shared_set.len())?;
     let mut shared_index_remap = std::collections::HashMap::new();
@@ -936,6 +988,7 @@ fn split_and_encode_sections(
     let mut global_shared_index_offset = 0u32;
     let mut global_prim_offset = 0u32;
     let mut global_data_run_offset = 0u32;
+    let mut bvh_bounds_by_section = Vec::new();
 
     for seed in seeds {
         let min = seed.bounds.min;
@@ -976,12 +1029,14 @@ fn split_and_encode_sections(
 
         let mut encoded_primitives = Vec::new();
         let mut section_primitive_bounds = Vec::new();
+        let mut section_bvh_bounds = Vec::new();
         for &primitive_idx in &seed.primitive_indices {
             let encoded = source_primitives[primitive_idx]
                 .indices4()
                 .map(|vertex_index| *global_to_local.get(&vertex_index).unwrap());
             encoded_primitives.push(encoded);
-            section_primitive_bounds.push(source_primitive_bounds[primitive_idx]);
+            section_primitive_bounds.push(primitive_aabb(mesh, source_primitives[primitive_idx]));
+            section_bvh_bounds.push(source_primitive_bounds[primitive_idx]);
         }
         let section_primitive_key_count: u32 = encoded_primitives
             .iter()
@@ -1002,6 +1057,7 @@ fn split_and_encode_sections(
             first_data_run_index: global_data_run_offset,
             primitive_key_count: section_primitive_key_count,
         });
+        bvh_bounds_by_section.push(section_bvh_bounds);
 
         global_packed_offset += num_packed_vertices as u32;
         global_shared_index_offset += sections
@@ -1018,12 +1074,17 @@ fn split_and_encode_sections(
             .unwrap_or(0);
     }
 
-    let build = MeshBuild {
+    let mut build = MeshBuild {
         sections,
         mesh_bvh,
         shared_vertices,
     };
     validate_encoded_mesh_geometry(&build, global_min, global_max)?;
+    // Geometry validation compares original and decoded coordinates. The BVH
+    // uses the separate conservative bounds that contain decoded coordinates.
+    for (section, bounds) in build.sections.iter_mut().zip(bvh_bounds_by_section) {
+        section.primitive_bounds = bounds;
+    }
     Ok(build)
 }
 
@@ -1281,7 +1342,7 @@ fn build_axis4_tree(root: &BvhNode) -> Result<Vec<Axis4Node>, String> {
     Ok(out)
 }
 
-fn build_axis5_tree(root: &BvhNode) -> Result<Vec<Axis5Node>, String> {
+fn build_axis5_tree(root: &BvhNode, domain: Aabb) -> Result<Vec<Axis5Node>, String> {
     fn emit(
         node: &BvhNode,
         parent: Aabb,
@@ -1327,7 +1388,9 @@ fn build_axis5_tree(root: &BvhNode) -> Result<Vec<Axis5Node>, String> {
     }
 
     let mut out = Vec::new();
-    emit(root, bvh_bounds(root), &mut out, true)?;
+    // Root xyz is zero, so the reader keeps the serialized mesh domain.
+    // Descendants must be encoded relative to that same domain.
+    emit(root, domain, &mut out, true)?;
     Ok(out)
 }
 
@@ -1453,7 +1516,7 @@ fn format_mesh_tree_xml(
         .map(|s| s.shared_vertices_index.len() as u32)
         .sum();
 
-    let mesh_nodes = build_axis5_tree(&build.mesh_bvh)?;
+    let mesh_nodes = build_axis5_tree(&build.mesh_bvh, Aabb { min: global_min, max: global_max })?;
     let mut section_leaf_indices = vec![0usize; sections.len()];
     for (node_index, node) in mesh_nodes.iter().enumerate() {
         if node.hi_data & 0x80 == 0 {

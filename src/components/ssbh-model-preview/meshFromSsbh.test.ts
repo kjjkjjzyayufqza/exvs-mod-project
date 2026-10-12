@@ -240,6 +240,27 @@ describe("resolveMaterialBinding", () => {
       translate_v: 0,
     });
   });
+
+  it("treats Over Boost transparent shaders as blended and layer-blend shaders as opaque", () => {
+    const labels: Record<string, boolean> = {
+      vsngTransparent_BeforeEffect: true,
+      vsngSkyTransparent: true,
+      vsngTransparentLighting_BeforeEffect: true,
+      vstgStandard_Blend2VC_MultiUV_VC: false,
+      vstgStandard_VertexColor: false,
+      vsngSkydomeFog: false,
+    };
+    const matl: MatlDataJson = {
+      major_version: 1,
+      minor_version: 6,
+      entries: Object.keys(labels).map((label) => ({ material_label: label, shader_label: label, textures: [] })),
+    };
+    const lookup = buildMatlLookup(matl);
+    for (const [label, transparent] of Object.entries(labels)) {
+      const binding = resolveMaterialBinding(label, lookup, new Map());
+      expect(binding.renderHints.isTransparent, label).toBe(transparent);
+    }
+  });
 });
 
 describe("buildDrawListFromBundle", () => {

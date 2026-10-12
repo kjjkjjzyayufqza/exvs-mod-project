@@ -1,0 +1,45 @@
+---
+description: Build and test Rust only in the shared src-tauri/target directory; never spawn a second target dir
+alwaysApply: true
+---
+
+# Single Cargo Target Directory (Disk First)
+
+**User preference (mandatory for all AI agents in this repo): every Rust build and
+test reuses the one shared `src-tauri/target/` directory. A second target
+directory recompiles the whole Tauri dependency graph and wastes many GB of disk.**
+
+## Forbidden
+
+- `CARGO_TARGET_DIR=<anything>` / `$env:CARGO_TARGET_DIR = ...`
+- `cargo build --target-dir <dir>`, `cargo test --target-dir <dir>`,
+  `cargo run --target-dir <dir>`, `cargo check --target-dir <dir>`
+- Copying `target/debug` (or any part of `target/`) to make an "isolated"
+  build or test sandbox
+- Building inside a git worktree or scratch clone just to dodge a locked file
+- Running a release build as a workaround for a locked debug binary (also
+  forbidden by `.cursor/rules/no-release-builds.mdc`)
+
+## When a build output is locked
+
+`cargo test` / `cargo build` fails with
+`failed to remove file ...\target\debug\app.exe` (or another `.exe`) when the
+user's app or a CLI is still running.
+
+1. Stop the build. Do not retry in another directory.
+2. Tell the user which binary is locked and ask them to close it.
+3. Re-run the same command in the shared `src-tauri/target/` after they confirm.
+
+Never kill the user's running app or CLI process yourself.
+
+## Allowed
+
+- `cargo test`, `cargo test --test <name> <filter>`, `cargo build --bin <name>`,
+  `cargo run --bin <name> -- ...` in `src-tauri/` with the default target dir
+- Directories that IDE tooling creates by itself (`target/rust-analyzer`,
+  `target/flycheck0`). Agents do not add new ones.
+
+## Related
+
+- `.cursor/rules/no-release-builds.mdc` (debug profile only)
+- Global always-on rules: `.cursor/rules/custom-rules.mdc` (item 7a1)

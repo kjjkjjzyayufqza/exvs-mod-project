@@ -312,6 +312,11 @@ Use `docs/` as the first source of project truth:
   `docs/adr/0010-mbon-gvs-isolated-workspaces.md`; handoff
   `docs/agent-sessions/2026-10-01-mbon-gvs-workspaces.md`. Provenance notices:
   `python tools/stamp_mbon_gvs_notices.py --check`.
+- `docs/mbon-gvs/stage-port.md` — MBON stage → Over Boost stage port
+  (`mbon_stage_port` CLI): stage list / package / manifest / VCL / STPP / STGP /
+  object layouts, NUD vertex-clump fix, material recipes, `plan_param.spbin`
+  mapping, in-game test plan. Handoff
+  `docs/agent-sessions/2026-10-10-mbon-stage-port.md`.
 
 When adding new research findings, write them under `docs/` as standalone
 specifications or research notes.
@@ -388,14 +393,15 @@ See `.cursor/rules/exvs2-json-artifacts.mdc`.
 **Commands**
 
 - `inspect` — parse `.jnttbl`, `character_id_table.bin`, `vernier_table`,
-  `armsparam`, `bulletparam`, `projectile_depiction_table`, `navi_list`,
-  `pilot_list`, and SSBH model files (`.nusktb`, `.numshb`, `.numdlb`;
-  auto-detect or `--type`). Prefer `--summary --pretty` for large files; for
+  `armsparam`, `bulletparam`, `characterparam`, `projectile_depiction_table`,
+  `navi_list`, `pilot_list`, and SSBH model files (`.nusktb`, `.numshb`,
+  `.numdlb`; auto-detect or `--type`). Packs with numeric file names (GVS
+  `480.bin`) need an explicit `--type characterparam`. Prefer `--summary --pretty` for large files; for
   `.numshb` use `--raw-fields` only when full vertex buffers are required.
 - `edit` — apply AI-facing JSON edit requests to lossless builder-backed file
   types (`jnttbl`, `character_id_table`, `vernier_table`, `armsparam`,
-  `bulletparam`, `speedparam`, `projectile_depiction_table`, `navi_list`,
-  `pilot_list`). Use `--dry-run` for preview-only output; SSBH files remain
+  `bulletparam`, `speedparam`, `characterparam`, `projectile_depiction_table`,
+  `navi_list`, `pilot_list`). Use `--dry-run` for preview-only output; SSBH files remain
   inspect-only because their rewrite is not byte-identical.
 - `correlate` — emit a JSON skeleton joining unit/weapon/dispatcher/IDA evidence
   (paste IDA symbols via optional flags; does not call IDA automatically).

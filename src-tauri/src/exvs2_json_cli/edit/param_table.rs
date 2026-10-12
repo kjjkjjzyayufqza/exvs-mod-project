@@ -17,6 +17,7 @@ use crate::exvs2_json_cli::util::{
 };
 use crate::format::armsparam::{ArmsParamData, ArmsParamEntry};
 use crate::format::bulletparam::{BulletParamData, BulletParamEntry};
+use crate::format::characterparam::{CharacterParamData, CharacterParamEntry};
 use crate::format::grapparam::{GrapParamData, GrapParamEntry};
 use crate::format::hitgroupiddef::{HitGroupIdDefData, HitGroupIdDefEntry};
 use crate::format::interactionid::{InteractionIdData, InteractionIdEntry};
@@ -98,6 +99,7 @@ macro_rules! impl_param_access {
 
 impl_param_access!(VernierTableData, VernierTableEntry);
 impl_param_access!(BulletParamData, BulletParamEntry);
+impl_param_access!(CharacterParamData, CharacterParamEntry);
 impl_param_access!(ProjectileDepictionTableData, ProjectileDepictionTableEntry);
 impl_param_access!(HitGroupIdDefData, HitGroupIdDefEntry);
 impl_param_access!(InteractionIdData, InteractionIdEntry);

@@ -621,8 +621,9 @@ export default function SceneEdit() {
   const [saveConfirmState, setSaveConfirmState] = useState<{
     open: boolean;
     preview: SaveChangePreview | null;
+    fhm2dOutputPath: string | null;
     resolve: ((confirmed: boolean) => void) | null;
-  }>({ open: false, preview: null, resolve: null });
+  }>({ open: false, preview: null, fhm2dOutputPath: null, resolve: null });
   const [deleteConfirmState, setDeleteConfirmState] = useState<{
     open: boolean;
     preview: DeleteConfirmation | null;
@@ -1102,13 +1103,6 @@ export default function SceneEdit() {
 
       store.selectAll(ids);
       applyPrimarySelectionState(primaryId);
-    },
-    [applyPrimarySelectionState],
-  );
-
-  const handleOutlinerSelectNode = useCallback(
-    (id: string | null) => {
-      applyPrimarySelectionState(id);
     },
     [applyPrimarySelectionState],
   );
@@ -2007,21 +2001,21 @@ export default function SceneEdit() {
   const autoApproveSaveDelete = useCallback(() => Promise.resolve(true), []);
 
   const promptSaveConfirm = useCallback(
-    (preview: SaveChangePreview) =>
+    (preview: SaveChangePreview, fhm2dOutputPath: string | null = null) =>
       new Promise<boolean>((resolve) => {
-        setSaveConfirmState({ open: true, preview, resolve });
+        setSaveConfirmState({ open: true, preview, fhm2dOutputPath, resolve });
       }),
     [],
   );
 
   const handleSaveConfirmAccept = useCallback(() => {
     saveConfirmState.resolve?.(true);
-    setSaveConfirmState({ open: false, preview: null, resolve: null });
+    setSaveConfirmState({ open: false, preview: null, fhm2dOutputPath: null, resolve: null });
   }, [saveConfirmState.resolve]);
 
   const handleSaveConfirmCancel = useCallback(() => {
     saveConfirmState.resolve?.(false);
-    setSaveConfirmState({ open: false, preview: null, resolve: null });
+    setSaveConfirmState({ open: false, preview: null, fhm2dOutputPath: null, resolve: null });
   }, [saveConfirmState.resolve]);
 
   const handleDeleteConfirmAccept = useCallback(() => {
@@ -2267,12 +2261,20 @@ export default function SceneEdit() {
       return;
     }
 
+    let outputPath: string;
+    try {
+      const hashName = await readStagePackHashName(stageRoot);
+      outputPath = buildStageModFhm2dOutputPath(obModPath, hashName);
+    } catch (err) {
+      toast.error(t("errors.fhm2dSaveFailed"), { description: String(err) });
+      return;
+    }
+
+    // Repacking overwrites <OB mod>\<HashName>.fhm2d, so it always needs an
+    // explicit confirm, even when there are no pending edits.
     const dirtyStore = useSceneDirtyStore.getState();
     const changePreview = buildSaveChangePreview(dirtyStore);
-    if (changePreview.hasChanges) {
-      const confirmed = await promptSaveConfirm(changePreview);
-      if (!confirmed) return;
-    }
+    if (!(await promptSaveConfirm(changePreview, outputPath))) return;
 
     if (!(await runNumatbPreflight(stageRoot))) return;
 
@@ -2286,15 +2288,6 @@ export default function SceneEdit() {
         files: "graphic_param.csv, placement.csv",
         message: err instanceof Error ? err.message : String(err),
       }));
-      return;
-    }
-
-    let outputPath: string;
-    try {
-      const hashName = await readStagePackHashName(stageRoot);
-      outputPath = buildStageModFhm2dOutputPath(obModPath, hashName);
-    } catch (err) {
-      toast.error(t("errors.fhm2dSaveFailed"), { description: String(err) });
       return;
     }
 
@@ -4863,14 +4856,15 @@ export default function SceneEdit() {
                   <SceneOutliner
                     root={outlinerRoot}
                     isLoading={isLoading}
-                    onSelect={handleOutlinerSelectNode}
+                    primarySelectedNodeId={selectedNodeId}
+                    onSelect={handleSelectNode}
                     onDuplicate={handleDuplicateSelected}
                     onDelete={handleDeleteSelected}
                     onPaste={handlePasteAsNew}
                     onFocusSelected={handleFocusSelected}
                     onClearSelection={handleClearSelection}
                     onSelectAll={(ids) => {
-                      if (ids.length > 0) applyPrimarySelectionState(ids[ids.length - 1]);
+                      handleSelectNodes(ids);
                     }}
                     onGenerateHkt={handleGenerateHkt}
                     onReplaceHkt={handleReplaceHkt}
@@ -5258,6 +5252,7 @@ export default function SceneEdit() {
           open={saveConfirmState.open}
           preview={saveConfirmState.preview}
           stageRoot={stageRoot}
+          fhm2dOutputPath={saveConfirmState.fhm2dOutputPath}
           onConfirm={handleSaveConfirmAccept}
           onCancel={handleSaveConfirmCancel}
         />

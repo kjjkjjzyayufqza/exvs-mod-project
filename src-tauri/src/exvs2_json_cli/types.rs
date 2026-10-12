@@ -8,6 +8,7 @@ pub enum InspectType {
     ArmsParam,
     BulletParam,
     SpeedParam,
+    CharacterParam,
     ProjectileDepictionTable,
     HitGroupIdDef,
     InteractionId,
@@ -29,6 +30,7 @@ impl InspectType {
             InspectType::ArmsParam => "armsparam",
             InspectType::BulletParam => "bulletparam",
             InspectType::SpeedParam => "speedparam",
+            InspectType::CharacterParam => "characterparam",
             InspectType::ProjectileDepictionTable => "projectile_depiction_table",
             InspectType::HitGroupIdDef => "hitgroupiddef",
             InspectType::InteractionId => "interactionid",
@@ -50,6 +52,7 @@ impl InspectType {
             "armsparam" => Ok(InspectType::ArmsParam),
             "bulletparam" => Ok(InspectType::BulletParam),
             "speedparam" => Ok(InspectType::SpeedParam),
+            "characterparam" | "character_param" => Ok(InspectType::CharacterParam),
             "projectile_depiction_table" => Ok(InspectType::ProjectileDepictionTable),
             "hitgroupiddef" | "hitgroup_id_def" | "hitgroup" => Ok(InspectType::HitGroupIdDef),
             "interactionid" | "interaction_id" | "interaction" => Ok(InspectType::InteractionId),
@@ -76,6 +79,7 @@ impl InspectType {
                 | InspectType::ArmsParam
                 | InspectType::BulletParam
                 | InspectType::SpeedParam
+                | InspectType::CharacterParam
                 | InspectType::ProjectileDepictionTable
                 | InspectType::HitGroupIdDef
                 | InspectType::InteractionId
