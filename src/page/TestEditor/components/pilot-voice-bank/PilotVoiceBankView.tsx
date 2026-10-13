@@ -222,14 +222,15 @@ export default function PilotVoiceBankView({
 
   const handleInit = useCallback(async () => {
     if (!selected?.voiceStem) return;
-    if (!obDplCachePath.trim()) {
+    const dplCacheDir = obDplCachePath?.trim() ?? "";
+    if (!dplCacheDir) {
       toast.error(t("common.setObDplcacheInit"));
       return;
     }
     setIsInitializing(true);
     try {
       await initPilotVoiceBank({
-        dplCacheDir: obDplCachePath,
+        dplCacheDir,
         workspaceRoot: folderPath,
         stem: selected.voiceStem,
         bankPackage: selected.bankPackage,
@@ -246,7 +247,7 @@ export default function PilotVoiceBankView({
 
   const handleGenerate = useCallback(async () => {
     if (!bankFilePath || !selected) return;
-    const defaultPath = pilotVoiceAudioFolder(obDplCachePath, audioRelative);
+    const defaultPath = pilotVoiceAudioFolder(obDplCachePath ?? "", audioRelative);
     const picked = await open({
       title: t("pilotVoiceBank.generate"),
       multiple: false,
@@ -320,7 +321,7 @@ export default function PilotVoiceBankView({
   const reportBlock = report ? (
     <div className="mt-2 space-y-1 text-xs">
       <p>
-        {t("pilotVoiceBank.updated")} ({report.updated.length}): {summarizeNames(report.updated.map((row) => `${row.name} ${row.oldNSamples} -> ${row.newNSamples}`))}
+        {t("pilotVoiceBank.updated")} ({report.updated.length}): {summarizeNames(report.updated.map((row) => `${row.name} ${row.oldNSamples} -> ${row.newNSamples}${row.note ? ` (${row.note})` : ""}`))}
       </p>
       <p>
         {t("pilotVoiceBank.unchanged")} ({report.unchanged.length}): {summarizeNames(report.unchanged)}

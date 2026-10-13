@@ -235,6 +235,15 @@ export type SceneMapSubModelEntry = {
   bundle: SsbhModelPreviewBundle;
 };
 
+type ViewportPlacementModel = {
+  nodeId: string;
+  folderName: string;
+  objectIndex: number;
+  bundle: SsbhModelPreviewBundle;
+  standaloneTransform: TransformData | undefined;
+  transformTarget: "disk" | "imported";
+};
+
 import type { HktSimplifyConfig } from "./dae-import/daeImportTypes";
 
 export type ImportedDaeObject = {
@@ -580,7 +589,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       [placementEntries],
     );
 
-    const viewportPlacementModels = useMemo(() => {
+    const viewportPlacementModels = useMemo((): ViewportPlacementModel[] => {
       const refs = buildPlacementModelRefs(
         subModels.map((model) => ({
           folderName: model.folderName,
@@ -594,7 +603,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       );
       const diskByFolder = new Map(subModels.map((model) => [model.folderName, model]));
       const importById = new Map(importedDaeObjects.map((obj) => [obj.id, obj]));
-      return refs.flatMap((ref) => {
+      return refs.flatMap((ref): ViewportPlacementModel[] => {
         const nodeId = ref.nodeId ?? ref.folderName;
         if (nodeId === ref.folderName) {
           const disk = diskByFolder.get(ref.folderName);
