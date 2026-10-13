@@ -1,7 +1,7 @@
 use app_lib::format::fhm2d::{extract_fhm2d_to_memory_impl, Fhm2dFormat};
 use app_lib::format::pilot_voice_bank::{
     apply_bank_file, parse_bank, read_audio_tracks, section_directory, set_n_samples, sync_bank,
-    sync_bank_files, wav_frame_count, SampleEdit,
+    sync_bank_files, track_length, SampleEdit,
 };
 use std::path::PathBuf;
 
@@ -223,19 +223,21 @@ fn round_trip_keeps_section_order_and_sizes() {
 }
 
 #[test]
-fn wav_frame_count_16bit_mono_48k() {
-    assert_eq!(wav_frame_count(&pcm_wav(48000, 48000)).unwrap(), 48000);
+fn track_length_16bit_mono_48k() {
+    let length = track_length(&pcm_wav(48000, 48000)).unwrap();
+    assert_eq!(length.clock_samples().unwrap(), 48000);
 }
 
 #[test]
-fn wav_frame_count_rejects_44100() {
-    let error = wav_frame_count(&pcm_wav(44100, 100)).unwrap_err();
-    assert!(error.contains("44100"), "{error}");
+fn track_length_converts_44100_to_48000_clock() {
+    let length = track_length(&pcm_wav(44100, 44100)).unwrap();
+    assert_eq!(length.sample_rate, 44100);
+    assert_eq!(length.clock_samples().unwrap(), 48000);
 }
 
 #[test]
-fn wav_frame_count_rejects_non_pcm() {
-    let error = wav_frame_count(b"BNSFrest").unwrap_err();
+fn track_length_rejects_bnsf_without_sfmt() {
+    let error = track_length(b"BNSFrest").unwrap_err();
     assert!(error.contains("BNSF"), "{error}");
 }
 
@@ -248,8 +250,8 @@ fn reads_two_named_wav_tracks() {
     assert_eq!(tracks.len(), 2);
     assert_eq!(tracks[0].name, "Alpha");
     assert_eq!(tracks[1].name, "Beta");
-    assert_eq!(wav_frame_count(&tracks[0].payload).unwrap(), 300);
-    assert_eq!(wav_frame_count(&tracks[1].payload).unwrap(), 400);
+    assert_eq!(track_length(&tracks[0].payload).unwrap().frames, 300);
+    assert_eq!(track_length(&tracks[1].payload).unwrap().frames, 400);
 }
 
 #[test]
@@ -276,15 +278,16 @@ fn sync_updates_matching_name_only() {
 }
 
 #[test]
-fn sync_skips_44100_track() {
+fn sync_converts_44100_track_length_and_notes_it() {
     let tone = tone_cue("Alpha", 100, [0, 0, 0], true);
     let bank = bank_with(&tone, b"RIFFPACKSTUB!!!!");
-    let wav = pcm_wav(44100, 300);
+    let wav = pcm_wav(44100, 44100);
     let audio = nus3_audio(&[("alpha", &wav)]);
     let (patched, report) = sync_bank(&bank, &audio).unwrap();
-    assert_eq!(parse_bank(&patched).unwrap().cues[0].n_samples, 100);
-    assert_eq!(patched, bank);
-    assert!(report.skipped.iter().any(|skip| skip.name == "Alpha" && skip.reason.contains("44100")));
+    assert_eq!(parse_bank(&patched).unwrap().cues[0].n_samples, 48000);
+    assert!(report.skipped.is_empty());
+    let note = report.updated[0].note.as_deref().unwrap();
+    assert!(note.contains("44100"), "{note}");
 }
 
 #[test]
@@ -390,12 +393,12 @@ fn assert_amuro_bank_round_trip(bank_before: &[u8], audio_before: &[u8]) {
         section_directory(bank_before).unwrap(),
         section_directory(&patched).unwrap()
     );
+    // Vanilla BNSF sfmt total samples equal the bank clock, so nothing changes.
     let (synced, report) = sync_bank(bank_before, audio_before).unwrap();
     assert_eq!(synced, bank_before);
     assert!(report.updated.is_empty());
-    assert!(report.skipped.iter().any(|skip| {
-        skip.name == "vo_01_p01_words_002_02" && skip.reason.contains("BNSF")
-    }));
+    assert!(report.skipped.is_empty(), "{:?}", report.skipped);
+    assert!(report.unchanged.iter().any(|name| name == "vo_01_p01_words_002_02"));
 }
 
 #[test]

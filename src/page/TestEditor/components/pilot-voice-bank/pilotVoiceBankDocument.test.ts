@@ -27,7 +27,7 @@ describe("pilotVoiceBankDocument", () => {
   it("applySyncReport replaces n_samples only for updated rows", () => {
     const cues = [cue("Alpha", 100), cue("Beta", 200)];
     const report: SyncReport = {
-      updated: [{ name: "Alpha", oldNSamples: 100, newNSamples: 300 }],
+      updated: [{ name: "Alpha", oldNSamples: 100, newNSamples: 300, note: null }],
       unchanged: [],
       bankOnly: ["Beta"],
       audioOnly: ["gamma"],

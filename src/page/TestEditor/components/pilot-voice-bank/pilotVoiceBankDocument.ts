@@ -19,7 +19,7 @@ export interface SyncUpdate {
   oldNSamples: number;
   newNSamples: number;
   /** Set when the track was not 48000 Hz mono and its length was converted. */
-  note?: string | null;
+  note: string | null;
 }
 
 export interface SyncSkip {

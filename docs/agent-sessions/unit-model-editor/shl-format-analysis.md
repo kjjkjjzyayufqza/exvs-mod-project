@@ -20,12 +20,13 @@ Header (0x10 bytes)
   0x0C  u32  record_count
 
 Record (0x20 bytes each, record_count of them, starting at 0x10)
-  0x00  u32  model_id      // proprietary name-hash of the model FOLDER name
-  0x04  u32  model_type    // 0 main body (required), 1 ?, 2 assist/援护, 3 part/部件
-  0x08  u32  folder_index  // index into the structure-JSON model folder order
-  0x0C  u32  unk1          // observed 0/1/2 — purpose unknown
-  0x10  u32  slot_index    // usually == folder_index, may diverge
-  0x14  u8[12] reserved    // always 0 in samples
+  0x00  u32  model_id      // free key into the shell maps (no hash check, see below)
+  0x04  u32  model_type    // 0/5 body, 1/3/6 part, 2 projectile descriptor, 4 other
+  0x08  u32  folder_index  // model folder 0/0/<n> in package order
+  0x0C  u32  unk1          // observed 0/1/2; the loader reads it only for type 0/5
+  0x10  u32  slot_index    // helper-bone index (0/3/<n>); bounds-checked for type 2/3/6
+  0x14  u32  res_index     // second resource index, 0 in every sample
+  0x18  u8[8] reserved     // always 0 in samples
 
 File size == 0x10 + record_count * 0x20  (exact, no trailing data in samples)
 ```
@@ -38,11 +39,15 @@ File size == 0x10 + record_count * 0x20  (exact, no trailing data in samples)
   is `0x90BDF6A5`. This is the same hash family the repo already documents as the
   "proprietary VDK hash" (`serieslist.rs`). The algorithm is **not** implemented in the
   repo. We do not need it for the editor — see "model_id without the algorithm" below.
-- **`model_type` (0x04)** — role of the model slot:
-  - `0` main body (主机体). At least one must exist or the game errors.
-  - `1` unknown (not yet observed in samples).
-  - `2` assist / support (援护) type.
-  - `3` part (部件) type; attaches onto a `0` body.
+- **`model_type` (0x04)** — role of the model slot (loader dispatch, see "Loader
+  semantics" below):
+  - `0` main body (主机体). At least one must exist or the game errors. `5` takes the
+    same path.
+  - `1` part without a spawn descriptor (gripping hands use it).
+  - `2` projectile / assist spawn descriptor (援护); no part shell is created.
+  - `3` part (部件) plus a spawn descriptor; attaches onto a `0` body.
+  - `6` like `3`; also used by the global common SHL.
+  - `4` a separate object type (not a part).
   - This field is not the runtime `sys_4B(0x2, model_id, bone_hash, ...)`
     attach bone. The `bone_hash` argument must come from the target model's
     own `.jnttbl`, or be `0` when no model-specific mount bone is proven.
@@ -51,11 +56,14 @@ File size == 0x10 + record_count * 0x20  (exact, no trailing data in samples)
   Critical: in `0xEE39E2DD` Windows lists `..._assist_flat00` first, but SHL record 0 is
   `..._body_normal` (the type-0 main body). Always resolve via structure order.
 - **`unk1` (0x0C)** — observed values 0, 1, 2. Independent of `folder_index` (e.g.
-  `003zzgndm` record 2 has `folder_index=2` but `unk1=1`). Kept as `unk1` until known.
-- **`slot_index` (0x10)** — a per-record index that usually equals `folder_index` in the
-  small samples but is documented by the operator as occasionally diverging; treat as its
-  own field, do not assume `== folder_index`.
-- **`reserved` (0x14..0x20)** — 12 bytes, always zero in every sampled record.
+  `003zzgndm` record 2 has `folder_index=2` but `unk1=1`). The loader passes it on only
+  for body records (type 0/5); part records ignore it. Kept as `unk1` until known.
+- **`slot_index` (0x10)** — index into the helper-bone list (`0/3/<n>`, one per model
+  folder in package order), so it usually equals `folder_index`. For type 2/3/6 the
+  loader bounds-checks it and crashes when it is out of range.
+- **`res_index` (0x14)** — a second resource index handed to the part shell; 0 in every
+  sampled record.
+- **`reserved` (0x18..0x20)** — 8 bytes, always zero in every sampled record.
 
 ## model_id without the algorithm (editor strategy)
 
@@ -72,8 +80,9 @@ realistic cases:
    folder/name -> model_id table can be harvested from the package itself when a record's
    model is changed/added, without the hash function.
 4. Adding a reference to a model that exists in `models/` but is referenced by no control
-   bin anywhere would require the hash — documented limitation, deferred until/if the VDK
-   hash is implemented.
+   bin does **not** need the hash: the loader treats `model_id` as a plain key (see
+   "Loader semantics"). Pick an id no other record or the common SHL uses. A motion
+   bundle channel (structure item `unk2`) with the same id will drive that part.
 
 ## Evidence
 
@@ -133,6 +142,25 @@ by a numeric type id stored in the package table, not by extension string or mag
 comparison. There is no symbol-named function to cite; the format contract is therefore
 established from the on-disk bytes (above) plus operator domain knowledge, which agree
 fully across all samples.
+
+### Loader semantics (IDA, 2026-10-14)
+
+Found from the record loop instead of the magic. Full trace and the striker case that
+prompted it: `docs/agent-sessions/2026-10-14-akatsuki-striker-per-action-backpack.md`.
+
+- `sub_1408EBBC0` builds the unit model resources: each child folder of `0/0` is one
+  `ModelDataSet`; `0/3/i` (`.nuhlpb`) and `0/4/i` (`.nudnbb`) bind to model folder `i`
+  **by position**. Extracted `.nuhlpb` file names are labels, not the binding.
+- `sub_140629DD0` walks the records; `sub_14062A3E0` handles one record:
+  - type 0/5 → main map (`sub_1405E9580`), first record becomes the active body;
+  - type 1/3/6 → part `CShell` from model folder `folder_index` (`sub_140629F00`),
+    part map insert keyed by `model_id` (`sub_1405E9500`, duplicates ignored);
+  - type 2/3/6 → spawn descriptor (`sub_1405E9400`) with helper `slot_index`; an
+    out-of-range `slot_index` / `folder_index` / `res_index` throws here.
+- `model_id` is only a map key. New ids work without the proprietary hash: the Jesta
+  follow-assist mod added nine CRC32 ids that rendered in game. Two records may share a
+  folder (player Akatsuki records 6 and 7 both use folder 6).
+- `sys_4B(0x2, id, …)` on an id missing from both maps is a null write (crash).
 
 ## Functions
 

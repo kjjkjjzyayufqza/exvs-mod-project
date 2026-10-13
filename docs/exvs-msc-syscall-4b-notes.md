@@ -62,6 +62,17 @@ sys_4B(0x2, model_id, bone_hash, action_hash, parent_model_id);
 | `action_hash` | attach action / resource | common weapon attach: `0x4094B0F4` (many official units) |
 | `parent_model_id` | optional parent shell | only when official code passes a 5th arg |
 
+#### Native behaviour (IDA, 2026-10-14)
+
+- `model_id` is looked up in the body map, then the part map
+  (`sub_14035D8D0`). A missing id returns null and the handler writes the visible
+  flag through it: an id that is not in the SHL crashes the game.
+- `action_hash` is looked up with `sub_14067AF10`, which throws on a miss. It must
+  exist in the unit's motion package (for strikers: the striker's own package,
+  not the player's).
+- The handler sets visible (`CShell +0x60 = 1`) and stores parent / bone / parent
+  id at `+0xC0` / `+0xC8` / `+0xCC` (`sub_1405E7EC0` → `sub_140614430`).
+
 #### Critical: `bone_hash` ≠ nusktb bone index
 
 **Wrong (common agent mistake):** use nusktb sequential index as the third arg
@@ -137,9 +148,28 @@ Current semantic label: `clear_shell_entry_or_all`.
 
 ### `sys_4B(4, entry_id)`
 
-Calls `sub_1405E8990` and returns whether the shell entry exists.
+Calls `sub_1405E8990`. It returns 1 only when the entry is registered **and**
+its visible flag (`CShell +0x60`) is set, so it reads "is attached and shown",
+not just "exists in the SHL".
 
 Current semantic label: `shell_entry_exists`.
+
+### `sys_4B(0x13, source_model_id, target_model_id)`
+
+Proven 2026-10-14 (`sub_14067F0C0`): writes an alias map at shell collection
+`+0x1D8`, `alias[source] = target`. Folder-format motion playback
+(`sub_1405E98C0`) uses it: a bundle clip whose channel model id (structure item
+`unk2`) matches no registered part is played on `alias[id]` instead. Native
+per-unit init registers the same kind of pairs (`sub_140610170`).
+
+Striker example: the Akatsuki striker motion package was authored with the
+player unit's model ids, so `func_995` calls
+`sys_4B(0x13, 0xfd575a6b, 0x106f8954)` to route the player-id Oowashi channels to
+the striker's own Oowashi. An alias target that is not attached gets mounted on
+the body but stays invisible. Details:
+`docs/agent-sessions/2026-10-14-akatsuki-striker-per-action-backpack.md`.
+
+Current semantic label: `alias_motion_channel_model`.
 
 ## Design Implication
 
@@ -162,5 +192,5 @@ many `sys_47` object and spatial operations correctly.
 ## Remaining Cases
 
 The handler also owns visual effect, material, camera-adjacent, and per-entry
-state branches through at least subcommand `0x17`. These require separate helper
-analysis before stable naming.
+state branches through subcommand `0x17` (`0x13` is documented above). These
+require separate helper analysis before stable naming.

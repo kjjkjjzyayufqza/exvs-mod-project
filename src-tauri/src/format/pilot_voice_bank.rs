@@ -2,7 +2,9 @@
 //!
 //! The waveform bytes stay in the sibling `.nus3audio`. This module never
 //! reserializes the bank: it patches the four little-endian bytes that belong
-//! to one cue's own `48000, channels = 1` clock.
+//! to one cue's own `48000, channels = 1` clock. A track in another rate or
+//! channel count still updates the clock: its duration is converted to 48000 Hz
+//! samples and the report says so.
 
 use crate::format::raw_path_id::backup_orig;
 use serde::{Deserialize, Serialize};
@@ -43,6 +45,46 @@ pub struct SyncUpdate {
     pub name: String,
     pub old_n_samples: i32,
     pub new_n_samples: i32,
+    /// Set when the track is not the bank clock's 48000 Hz mono, so the
+    /// length was converted to 48000 Hz samples.
+    pub note: Option<String>,
+}
+
+/// Playable length of one `.nus3audio` track payload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TrackLength {
+    pub codec: &'static str,
+    pub frames: u64,
+    pub sample_rate: u32,
+    pub channels: u32,
+}
+
+impl TrackLength {
+    /// Length in the bank clock's 48000 Hz samples, rounded down so the game
+    /// never reads past the end of the waveform.
+    pub fn clock_samples(&self) -> Result<i32, String> {
+        if self.sample_rate == 0 {
+            return Err(format!("{} sample rate is 0", self.codec));
+        }
+        let samples = self.frames * SAMPLE_RATE as u64 / u64::from(self.sample_rate);
+        if samples == 0 {
+            return Err(format!("{} track has no samples", self.codec));
+        }
+        i32::try_from(samples).map_err(|_| format!("length {samples} does not fit in i32"))
+    }
+
+    fn conversion_note(&self) -> Option<String> {
+        if self.sample_rate == SAMPLE_RATE as u32 && self.channels == 1 {
+            return None;
+        }
+        Some(format!(
+            "{} {} Hz {} ch, {:.3} s as 48000 Hz samples",
+            self.codec,
+            self.sample_rate,
+            self.channels,
+            self.frames as f64 / f64::from(self.sample_rate)
+        ))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -134,14 +176,22 @@ pub fn set_n_samples(bytes: &mut [u8], name: &str, n_samples: i32) -> Result<(),
     Ok(())
 }
 
-pub fn wav_frame_count(payload: &[u8]) -> Result<i32, String> {
+/// Length of a WAV (uncompressed PCM or float) or BNSF track payload.
+pub fn track_length(payload: &[u8]) -> Result<TrackLength, String> {
     if payload.starts_with(b"BNSF") {
-        return Err("payload is BNSF, not PCM WAV".to_string());
+        return bnsf_length(payload);
     }
-    if payload.len() < 12 || &payload[0..4] != b"RIFF" || &payload[8..12] != b"WAVE" {
-        return Err("payload is not PCM WAV".to_string());
+    if payload.len() >= 12 && &payload[0..4] == b"RIFF" && &payload[8..12] == b"WAVE" {
+        return wav_length(payload);
     }
-    let mut fmt: Option<(u16, u32, u16, u16)> = None;
+    Err("payload is neither WAV nor BNSF".to_string())
+}
+
+/// WAVE tags whose frame count is `data size / blockAlign`: PCM, IEEE float, extensible.
+const WAV_FRAME_TAGS: [u16; 3] = [0x0001, 0x0003, 0xFFFE];
+
+fn wav_length(payload: &[u8]) -> Result<TrackLength, String> {
+    let mut fmt: Option<(u16, u16, u32, u16)> = None;
     let mut data_size: Option<u32> = None;
     let mut pos = 12usize;
     while pos + 8 <= payload.len() {
@@ -149,36 +199,65 @@ pub fn wav_frame_count(payload: &[u8]) -> Result<i32, String> {
         let size = u32::from_le_bytes(payload[pos + 4..pos + 8].try_into().unwrap()) as usize;
         let body = pos + 8;
         if body + size > payload.len() {
-            return Err("payload is not PCM WAV".to_string());
+            return Err(format!(
+                "WAV chunk {} exceeds the track",
+                String::from_utf8_lossy(id)
+            ));
         }
         if id == b"fmt " && size >= 16 {
             let format = u16::from_le_bytes(payload[body..body + 2].try_into().unwrap());
+            let channels = u16::from_le_bytes(payload[body + 2..body + 4].try_into().unwrap());
             let rate = u32::from_le_bytes(payload[body + 4..body + 8].try_into().unwrap());
             let block_align = u16::from_le_bytes(payload[body + 12..body + 14].try_into().unwrap());
-            let bits = u16::from_le_bytes(payload[body + 14..body + 16].try_into().unwrap());
-            fmt = Some((format, rate, block_align, bits));
+            fmt = Some((format, channels, rate, block_align));
         } else if id == b"data" {
             data_size = Some(size as u32);
         }
+        pos = body + size + (size & 1);
+    }
+    let (format, channels, rate, block_align) =
+        fmt.ok_or_else(|| "WAV has no fmt chunk".to_string())?;
+    if !WAV_FRAME_TAGS.contains(&format) {
+        return Err(format!(
+            "WAV format tag 0x{format:04X} is compressed; its length cannot be read"
+        ));
+    }
+    let data_size = data_size.ok_or_else(|| "WAV has no data chunk".to_string())?;
+    if block_align == 0 {
+        return Err("WAV blockAlign is 0".to_string());
+    }
+    Ok(TrackLength {
+        codec: "WAV",
+        frames: u64::from(data_size / u32::from(block_align)),
+        sample_rate: rate,
+        channels: u32::from(channels),
+    })
+}
+
+/// BNSF: `BNSF`, u32 BE size, codec tag, then big-endian chunks; `sfmt` holds
+/// channels, sample rate and total samples. Vanilla pilot voice: IS14, mono,
+/// 48000 Hz, total samples equal to the bank's `n_samples`.
+fn bnsf_length(payload: &[u8]) -> Result<TrackLength, String> {
+    let mut pos = 12usize;
+    while pos + 8 <= payload.len() {
+        let id = &payload[pos..pos + 4];
+        let size = u32::from_be_bytes(payload[pos + 4..pos + 8].try_into().unwrap()) as usize;
+        let body = pos + 8;
+        if id == b"sfmt" {
+            if size < 12 || body + 12 > payload.len() {
+                return Err("BNSF sfmt chunk is truncated".to_string());
+            }
+            let read = |at: usize| u32::from_be_bytes(payload[at..at + 4].try_into().unwrap());
+            return Ok(TrackLength {
+                codec: "BNSF",
+                channels: read(body),
+                sample_rate: read(body + 4),
+                frames: u64::from(read(body + 8)),
+            });
+        }
         pos = body + size;
     }
-    let Some((format, rate, block_align, bits)) = fmt else {
-        return Err("payload is not PCM WAV".to_string());
-    };
-    if format != 1 || bits != 16 {
-        return Err("payload is not PCM WAV".to_string());
-    }
-    if rate != SAMPLE_RATE as u32 {
-        return Err(format!("sample rate {rate} is not 48000"));
-    }
-    let Some(data_size) = data_size else {
-        return Err("payload is not PCM WAV".to_string());
-    };
-    if block_align == 0 || data_size % u32::from(block_align) != 0 {
-        return Err("blockAlign is 0 or does not divide the data size".to_string());
-    }
-    let frames = data_size / u32::from(block_align);
-    i32::try_from(frames).map_err(|_| format!("frame count {frames} does not fit in i32"))
+    Err("BNSF has no sfmt chunk".to_string())
 }
 
 /// OB `.nus3audio` (`AUDIINDX`) track reader.
@@ -280,8 +359,10 @@ pub fn sync_bank(bank: &[u8], audio: &[u8]) -> Result<(Vec<u8>, SyncReport), Str
             });
             continue;
         }
-        let frames = match wav_frame_count(&tracks[track_index].payload) {
-            Ok(frames) => frames,
+        let measured = track_length(&tracks[track_index].payload)
+            .and_then(|length| Ok((length.clock_samples()?, length.conversion_note())));
+        let (samples, note) = match measured {
+            Ok(measured) => measured,
             Err(reason) => {
                 report.skipped.push(SyncSkip {
                     name: site.name.clone(),
@@ -290,15 +371,16 @@ pub fn sync_bank(bank: &[u8], audio: &[u8]) -> Result<(Vec<u8>, SyncReport), Str
                 continue;
             }
         };
-        if frames == site.n_samples {
+        if samples == site.n_samples {
             report.unchanged.push(site.name.clone());
             continue;
         }
-        set_n_samples(&mut out, &site.name, frames)?;
+        set_n_samples(&mut out, &site.name, samples)?;
         report.updated.push(SyncUpdate {
             name: site.name.clone(),
             old_n_samples: site.n_samples,
-            new_n_samples: frames,
+            new_n_samples: samples,
+            note,
         });
     }
     for (index, track) in tracks.iter().enumerate() {
