@@ -49,6 +49,8 @@
   "outliner.regenerateHkt": "Regenerate HKT",
   "outliner.replaceHkt": "Replace HKT...",
   "outliner.generateHktFromModel": "Generate HKT from Model...",
+  "outliner.expand": "Expand",
+  "outliner.collapse": "Collapse",
   "overlay.streamingModels": "Streaming models ({{loaded}}/{{total}})...",
   "overlay.loadingStage": "Loading stage...",
   "overlay.loadingCollision": "Loading collision ({{loaded}}/{{total}})",

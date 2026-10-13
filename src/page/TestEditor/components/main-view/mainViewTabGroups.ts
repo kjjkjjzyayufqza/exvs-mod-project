@@ -58,6 +58,7 @@ export const MAIN_VIEW_TAB_META: MainViewTabMeta[] = [
   { value: "navi-list", name: "Navi List", shortName: "Navi", group: "character" },
   { value: "raw-path-id", name: "Voice file path", shortName: "Path", group: "sound" },
   { value: "pilot-voice-resource", name: "Voice slot", shortName: "Slot", group: "sound" },
+  { value: "pilot-voice-bank", name: "Pilot Voice Bank", shortName: "Voice bank", group: "sound" },
   { value: "bgm-table", name: "BGM table", shortName: "BGM", group: "sound" },
   { value: "bgm-list", name: "BGM list", shortName: "HUD", group: "sound" },
   { value: "bgm-bank", name: "BGM bank", shortName: "Bank", group: "sound" },

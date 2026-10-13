@@ -117,13 +117,41 @@ export interface ExvsStageValidationResult {
 }
 
 /**
- * Pre-flight gate: detect numatb material texture parameters whose path is empty.
- * Layout-independent — safe to run before any save/repack mutation.
+ * Pre-flight gate: stage model folders the game cannot load (stray files,
+ * duplicate or non-empty joint tables, missing skeleton/mesh/model) and numatb
+ * material texture parameters whose path is empty. Layout-independent — safe to
+ * run on stage load and before any save/repack mutation.
  */
-export function validateNumatbEmptyParams(
+export function validateStagePreflight(
   stageRoot: string,
 ): Promise<ExvsStageValidationResult> {
-  return invoke<ExvsStageValidationResult>("scene_validate_numatb_empty_params", { stageRoot });
+  return invoke<ExvsStageValidationResult>("scene_validate_stage_preflight", { stageRoot });
+}
+
+export interface StageObjectOrderRestore {
+  structurePath: string;
+  /** Object folders whose number changed, as `name: old -> new`. */
+  moved: string[];
+  /** Folders the vanilla pack does not have; kept after the vanilla objects. */
+  added: string[];
+  /** Vanilla objects with no folder on disk. */
+  missing: string[];
+}
+
+/**
+ * Rewrite the stage's structure JSON in the object order of its vanilla pack in
+ * the OB dplcache, so placement object numbers point at the shipped models again.
+ */
+export function restoreStageObjectOrder(
+  stageRoot: string,
+  dplCacheDir: string,
+  hashName: string,
+): Promise<StageObjectOrderRestore> {
+  return invoke<StageObjectOrderRestore>("stage_restore_object_order", {
+    stageRoot,
+    dplCacheDir,
+    hashName,
+  });
 }
 
 /**

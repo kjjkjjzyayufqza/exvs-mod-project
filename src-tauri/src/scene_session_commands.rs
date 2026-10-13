@@ -3469,10 +3469,11 @@ pub async fn scene_repack_in_place(
             Ok((source_path, s.collect_save_artifacts()))
         })?;
 
-        // Pre-flight gate: numatb texture parameters with empty paths must be fixed
-        // before repacking (matches the Scene Editor save/repack validation gate).
+        // Pre-flight gate: unloadable model folders and numatb texture parameters
+        // with empty paths must be fixed before repacking (matches the Scene
+        // Editor save/repack validation gate).
         let validation =
-            crate::format::fhm2d_stage_validate::exvs_stage_validate_numatb_empty_params(&source);
+            crate::format::fhm2d_stage_validate::exvs_stage_validate_preflight(&source);
         if !validation.valid {
             let summary = validation
                 .errors
@@ -3482,7 +3483,7 @@ pub async fn scene_repack_in_place(
                 .collect::<Vec<_>>()
                 .join("; ");
             return Err(format!(
-                "Repack blocked: {} numatb texture parameter(s) have empty paths. {}",
+                "Repack blocked: {} stage problem(s) found. {}",
                 validation.errors.len(),
                 summary
             ));

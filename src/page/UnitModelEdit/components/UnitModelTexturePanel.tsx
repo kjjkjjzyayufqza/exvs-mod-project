@@ -34,6 +34,13 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
+  EditorContextMenuContent,
+  EditorContextMenuItem,
+  editorContextMenuIconClassName,
+  stopEditorContextMenuBubble,
+} from "@/components/editor/EditorContextMenu";
+import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
+import {
   getStoredDialogDefaultPath,
   rememberStoredDialogSelection,
 } from "@/utils/dialogDefaultPathStore";
@@ -905,7 +912,7 @@ function UnitTextureRow({
       : textureDims(texture);
   const referenced = texture.structureRefCount > 0 || texture.numatbReferenceCount > 0;
 
-  return (
+  const rowBody = (
     <div
       className={cn(
         "flex min-w-0 cursor-pointer items-center gap-2 px-2 py-1.5 transition-colors",
@@ -914,6 +921,7 @@ function UnitTextureRow({
         !texture.exists && "bg-destructive/5",
       )}
       onClick={onSelect}
+      onContextMenu={stopEditorContextMenuBubble}
     >
       <button
         type="button"
@@ -925,7 +933,11 @@ function UnitTextureRow({
         title={t("actions.preview")}
       >
         {thumbnailDataUrl ? (
-          <img src={thumbnailDataUrl} alt={texture.filename} className="h-full w-full object-cover" />
+          <img
+            src={thumbnailDataUrl}
+            alt={texture.filename}
+            className="h-full w-full object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
+          />
         ) : (
           <ImageIcon className="h-4 w-4 text-muted-foreground/60" />
         )}
@@ -999,6 +1011,38 @@ function UnitTextureRow({
         </div>
       </div>
     </div>
+  );
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{rowBody}</ContextMenuTrigger>
+      <EditorContextMenuContent>
+        <EditorContextMenuItem onSelect={onPreview} disabled={!texture.exists || busy}>
+          <Eye className={editorContextMenuIconClassName} />
+          <span>{t("actions.preview")}</span>
+        </EditorContextMenuItem>
+        <EditorContextMenuItem onSelect={onExport} disabled={!texture.exists || busy}>
+          <Download className={editorContextMenuIconClassName} />
+          <span>{t("actions.exportPng")}</span>
+        </EditorContextMenuItem>
+        <EditorContextMenuItem onSelect={onReplace} disabled={!texture.exists || busy}>
+          <Replace className={editorContextMenuIconClassName} />
+          <span>{t("actions.replace")}</span>
+        </EditorContextMenuItem>
+        <EditorContextMenuItem onSelect={onCopyPath} disabled={busy}>
+          <Copy className={editorContextMenuIconClassName} />
+          <span>{t("actions.copyPath")}</span>
+        </EditorContextMenuItem>
+        <EditorContextMenuItem
+          onSelect={onRemove}
+          disabled={!texture.canRemove || busy}
+          className={texture.canRemove ? "text-destructive focus:text-destructive" : undefined}
+        >
+          <Trash2 className={editorContextMenuIconClassName} />
+          <span>{t("actions.remove")}</span>
+        </EditorContextMenuItem>
+      </EditorContextMenuContent>
+    </ContextMenu>
   );
 }
 

@@ -59,7 +59,11 @@ import type { TextureManagerEntry } from "@/page/SceneEdit/store/sceneTextureMan
 import { NumatbTextureOptionsProvider } from "@/components/ssbh-model-preview/numatbTextureOptionsContext";
 import { getParentDir, inferUnitModelStructurePath } from "./utils/unitModelRepackService";
 import { rememberStoredDialogSelection } from "@/utils/dialogDefaultPathStore";
-import { normalizeComparePath, resolveUnitModelNodeAbsPath } from "./utils/unitModelNodePaths";
+import {
+  normalizeComparePath,
+  resolveUnitModelNodeAbsPath,
+  resolveUnitModelRevealAbsPath,
+} from "./utils/unitModelNodePaths";
 import { listUnitModelDiskModelNames } from "./utils/unitModelDiskModels";
 import {
   buildUnitModelStructureTree,
@@ -373,8 +377,12 @@ function UnitModelEditWorkspace({
 
   const handleRevealNode = useCallback(
     (node: UnitModelTreeNode) => {
-      if (!workspace.structurePath || !node.fileUrl) return;
-      const abs = resolveUnitModelNodeAbsPath(workspace.structurePath, node.fileUrl);
+      if (!workspace.structurePath) return;
+      const abs = resolveUnitModelRevealAbsPath(workspace.structurePath, node);
+      if (!abs) {
+        toast.error(t("errors.reveal"));
+        return;
+      }
       void revealItemInDir(abs).catch((error) => {
         toast.error(t("errors.reveal"), {
           description: t("errors.revealDetail", { path: abs, error: String(error) }),
@@ -386,8 +394,13 @@ function UnitModelEditWorkspace({
 
   const handleCopyNodePath = useCallback(
     (node: UnitModelTreeNode) => {
-      if (!workspace.structurePath || !node.fileUrl) return;
-      void writeText(resolveUnitModelNodeAbsPath(workspace.structurePath, node.fileUrl)).then(
+      if (!workspace.structurePath) return;
+      const abs = resolveUnitModelRevealAbsPath(workspace.structurePath, node);
+      if (!abs) {
+        toast.error(t("errors.copy"));
+        return;
+      }
+      void writeText(abs).then(
         () => toast.success(t("messages.copied")),
         (error) => toast.error(t("errors.copy"), { description: String(error) }),
       );

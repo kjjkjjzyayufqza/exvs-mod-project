@@ -731,6 +731,32 @@ fn resolve_matl_textures_for_preview(
     Ok((refs, resolved, resolve_rows, v))
 }
 
+/// Authoring `__maya__` materials often hold the only texture path. Runtime
+/// `__nust__` entries for the same label can be shader-only (this stage's sky
+/// is `vsngSkydome` with an empty texture list). Preview renders the nust
+/// profile, so copy those paths onto entries that have none.
+fn copy_missing_entry_textures(dest: &mut MatlData, source: &MatlData) -> Vec<String> {
+    let mut inherited = Vec::new();
+    for entry in &mut dest.entries {
+        if !entry.textures.is_empty() {
+            continue;
+        }
+        let Some(src) = source
+            .entries
+            .iter()
+            .find(|candidate| candidate.material_label == entry.material_label)
+        else {
+            continue;
+        };
+        if src.textures.is_empty() {
+            continue;
+        }
+        entry.textures = src.textures.clone();
+        inherited.push(entry.material_label.clone());
+    }
+    inherited
+}
+
 fn merge_legacy_matl_bundle(
     matl_paths: &[String],
     warnings: &mut Vec<String>,
@@ -832,8 +858,18 @@ fn finalize_matl_for_unit_preview(
             .and_then(|s| s.to_str())
             .unwrap_or(&file.path)
             .to_string();
+        let mut matl_data = file.data.clone();
+        if id == "nust" {
+            if let Some(maya_file) = by_id.get("maya") {
+                for label in copy_missing_entry_textures(&mut matl_data, &maya_file.data) {
+                    warnings.push(format!(
+                        "Material '{label}' has no runtime textures; preview uses the paired Maya texture reference."
+                    ));
+                }
+            }
+        }
         let (texture_refs, resolved_nutexb_paths, texture_resolve, matl) =
-            resolve_matl_textures_for_preview(root_canon, &file.data, warnings)?;
+            resolve_matl_textures_for_preview(root_canon, &matl_data, warnings)?;
         profiles.push(MatlPreviewProfileEntry {
             id: id.clone(),
             file_name,
@@ -1554,9 +1590,63 @@ pub fn ssbh_load_ssbh_file_as_json(path: String) -> Result<Value, String> {
 #[cfg(test)]
 mod matl_profile_classifier_tests {
     use super::{
-        classify_numatb_preview_profile_id, default_matl_profile_id, matl_profile_id_sort_key,
+        classify_numatb_preview_profile_id, copy_missing_entry_textures, default_matl_profile_id,
+        matl_profile_id_sort_key,
     };
+    use ssbh_data::matl_data::{MatlData, MatlEntryData, ParamId, TextureParam};
     use std::path::Path;
+
+    fn entry(label: &str, shader: &str, texture: Option<&str>) -> MatlEntryData {
+        MatlEntryData {
+            material_label: label.to_string(),
+            shader_label: shader.to_string(),
+            blend_states: Vec::new(),
+            floats: Vec::new(),
+            float1s: Vec::new(),
+            booleans: Vec::new(),
+            vectors: Vec::new(),
+            colors: Vec::new(),
+            rasterizer_states: Vec::new(),
+            samplers: Vec::new(),
+            textures: texture
+                .map(|path| vec![TextureParam::new(ParamId::DiffuseMap, path.to_string())])
+                .unwrap_or_default(),
+            textures2: Vec::new(),
+            texture_arrays: Vec::new(),
+            type4_v16: Vec::new(),
+            type4_v15: Vec::new(),
+            uv_transforms: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn shader_only_nust_entry_inherits_the_maya_texture_path() {
+        let mut nust = MatlData {
+            major_version: 1,
+            minor_version: 6,
+            entries: vec![
+                entry("m_sky", "vsngSkydome", None),
+                entry("m_panel_01", "FeRendererMovable", Some("panel_diffuse")),
+            ],
+        };
+        let maya = MatlData {
+            major_version: 1,
+            minor_version: 6,
+            entries: vec![
+                entry("m_sky", "", Some("../../textures/stage001_skydome_sky")),
+                entry("m_panel_01", "", Some("maya_should_not_replace")),
+            ],
+        };
+
+        let inherited = copy_missing_entry_textures(&mut nust, &maya);
+
+        assert_eq!(inherited, vec!["m_sky".to_string()]);
+        assert_eq!(
+            nust.entries[0].textures[0].data.as_str(),
+            "../../textures/stage001_skydome_sky"
+        );
+        assert_eq!(nust.entries[1].textures[0].data.as_str(), "panel_diffuse");
+    }
 
     #[test]
     fn classifies_maya_base_nust_and_m_variants() {

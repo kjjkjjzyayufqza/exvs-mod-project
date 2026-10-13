@@ -41,7 +41,11 @@ import {
 import { serializeDaeToBytes } from "./daeExportImport";
 import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
 import { resolveOrCreateInfoFolder } from "./sceneInfoFolder";
-import { ensureSkyPlacementObjectNumber } from "./ensureSkyPlacementObjectNumber";
+import {
+  ensureSkyPlacementObjectNumber,
+  reassignObjectPlacementsOffSky,
+  resolveSkyPlacementObjectNumber,
+} from "./ensureSkyPlacementObjectNumber";
 import {
   collectTextureSaveManifest,
   manifestHasTextureChanges,
@@ -399,10 +403,15 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
   // A clean graphic-param or placement flag means the editor has not edited that
   // file, so an external edit on disk must be packed as-is. Rewriting from the
   // in-memory copy loaded at open would wipe it. Structural placement changes
-  // (new DAE or deletes) still rewrite placement.csv.
+  // (new DAE or deletes) still rewrite placement.csv. An OBJECT/PROP row that
+  // shares the sky number is rewritten onto the import index even when the
+  // placement flag is clean.
   emitStep(onProgress, "csv", "Writing CSV files...", "running");
   try {
     const infoFolder = await resolveOrCreateInfoFolder(stageRoot);
+    if (sceneSessionId) {
+      await sceneSaveAsFolder(sceneSessionId, stageRoot);
+    }
     const persistGraphicCsv = dirtyStore.global.graphicParams;
     const persistPlacementCsv =
       dirtyStore.global.placementOrder || convertedCount > 0 || deletedCount > 0;
@@ -417,9 +426,10 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
 
     let placementRowsToSave: readonly PlacementRow[] = placementEntries;
     let effectiveSubModels: ReadonlyArray<{ folderName: string; objectIndex: number }> = subModels;
+    let bundleAfterChanges: StageBundleResponse | null = null;
 
     if (convertedCount > 0 || deletedCount > 0) {
-      const bundleAfterChanges = await invoke<StageBundleResponse>("load_stage_bundle", { stageRoot });
+      bundleAfterChanges = await invoke<StageBundleResponse>("load_stage_bundle", { stageRoot });
       effectiveSubModels = bundleAfterChanges.subModels;
 
       placementRowsToSave = remapPlacementObjectNumbers(
@@ -427,49 +437,67 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
         subModels,
         bundleAfterChanges.subModels,
       );
-
-      if (convertedCount > 0) {
-        const newPlacementRows = daeObjectsToConvert
-          .map((obj) => {
-            const subModel = bundleAfterChanges.subModels.find((sm) =>
-              sm.folderName.toLowerCase().includes(obj.name.replace(/\s+/g, "_").toLowerCase()),
-            );
-            if (!subModel) return null;
-            return createImportedDaePlacementRow({
-              objectIndex: subModel.objectIndex,
-              placementHeader: placementHeader.length > 0 ? placementHeader : undefined,
-              transform: obj.transform,
-            });
-          })
-          .filter((r): r is PlacementRow => r !== null);
-        placementRowsToSave = [...placementRowsToSave, ...newPlacementRows];
-      }
+    } else {
+      bundleAfterChanges = await invoke<StageBundleResponse>("load_stage_bundle", { stageRoot });
+      effectiveSubModels = bundleAfterChanges.subModels;
     }
 
-    const modelFolderCount = effectiveSubModels.filter(
-      (s) => s.folderName.toLowerCase() !== "sky",
-    ).length;
+    const placementNumbersBefore = placementRowsToSave
+      .map((entry) => entry.objectNumber)
+      .join(",");
+    placementRowsToSave = reassignObjectPlacementsOffSky(
+      [...placementRowsToSave],
+      effectiveSubModels,
+    );
+    const skyPlacementObjectNumber = resolveSkyPlacementObjectNumber(effectiveSubModels);
     placementRowsToSave = ensureSkyPlacementObjectNumber(
       [...placementRowsToSave],
-      modelFolderCount,
+      skyPlacementObjectNumber,
     );
 
-    if (persistPlacementCsv && placementHeader.length > 0 && placementRowsToSave.length > 0) {
+    if (convertedCount > 0 && bundleAfterChanges) {
+      const bundle = bundleAfterChanges;
+      const usedObjectNumbers = new Set(
+        placementRowsToSave
+          .filter((entry) => {
+            const type = entry.vdkType.toUpperCase();
+            return type === "OBJECT" || type === "PROP";
+          })
+          .map((entry) => entry.objectNumber),
+      );
+      const newPlacementRows = daeObjectsToConvert
+        .map((obj) => {
+          const subModel = bundle.subModels.find((sm) =>
+            sm.folderName.toLowerCase().includes(obj.name.replace(/\s+/g, "_").toLowerCase()),
+          );
+          if (!subModel || usedObjectNumbers.has(subModel.objectIndex)) return null;
+          return createImportedDaePlacementRow({
+            objectIndex: subModel.objectIndex,
+            placementHeader: placementHeader.length > 0 ? placementHeader : undefined,
+            transform: obj.transform,
+          });
+        })
+        .filter((r): r is PlacementRow => r !== null);
+      placementRowsToSave = [...placementRowsToSave, ...newPlacementRows];
+    }
+
+    const placementNumbersChanged =
+      placementNumbersBefore !== placementRowsToSave.map((entry) => entry.objectNumber).join(",");
+
+    const shouldWritePlacementCsv = persistPlacementCsv || placementNumbersChanged;
+
+    if (shouldWritePlacementCsv && placementHeader.length > 0 && placementRowsToSave.length > 0) {
       const headerLine = placementHeader.join(",");
       const dataLines = placementRowsToSave.map((e) => e.rawFields.join(","));
       const placementCsv = [headerLine, ...dataLines].join("\r\n") + "\r\n";
       await writeTextFile(`${infoFolder}/placement.csv`, placementCsv);
       csvDetails.push("placement.csv");
-    } else if (persistPlacementCsv && placementRowsToSave.length > 0) {
+    } else if (shouldWritePlacementCsv && placementRowsToSave.length > 0) {
       const placementCsv = placementRowsToSave.map((e) => e.rawFields.join(",")).join("\r\n") + "\r\n";
       await writeTextFile(`${infoFolder}/placement.csv`, placementCsv);
       csvDetails.push("placement.csv");
     } else if (!persistPlacementCsv) {
       csvDetails.push("placement.csv kept");
-    }
-
-    if (sceneSessionId) {
-      await sceneSaveAsFolder(sceneSessionId, stageRoot);
     }
 
     for (const replacement of replacements) {

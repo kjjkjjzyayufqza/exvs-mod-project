@@ -3652,9 +3652,10 @@ fn stage_rebuild_tags_model_animations_like_vanilla_packs() {
         include_shared_textures: true,
         info_file_ranks: HashMap::new(),
         anim_roles: collect_stage_anim_roles(&pack_root).unwrap(),
+        object_ranks: HashMap::new(),
     };
     let mut collector = RebuildCollector::new();
-    build_exvs_structure_tree(&mut collector, &pack_root, "anim_stage", &opts);
+    build_exvs_structure_tree(&mut collector, &pack_root, "anim_stage", &opts).unwrap();
 
     let items: Vec<(String, String, i32)> = collector
         .structure

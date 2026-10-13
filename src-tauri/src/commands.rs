@@ -2452,6 +2452,30 @@ pub fn build_pilot_voice_resource_pack(data_json: Value, file_path: &str) -> Res
 }
 
 #[tauri::command]
+pub fn parse_pilot_voice_bank(file_path: &str) -> Result<Value, String> {
+    let parsed = crate::format::pilot_voice_bank::parse_bank_file(std::path::Path::new(file_path))?;
+    serde_json::to_value(&parsed).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[tauri::command]
+pub fn apply_pilot_voice_bank_samples(
+    file_path: &str,
+    edits: Vec<crate::format::pilot_voice_bank::SampleEdit>,
+) -> Result<Value, String> {
+    let written = crate::format::pilot_voice_bank::apply_bank_file(std::path::Path::new(file_path), &edits)?;
+    serde_json::to_value(&written).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[tauri::command]
+pub fn sync_pilot_voice_bank_from_audio(bank_path: &str, audio_path: &str) -> Result<Value, String> {
+    let outcome = crate::format::pilot_voice_bank::sync_bank_files(
+        std::path::Path::new(bank_path),
+        std::path::Path::new(audio_path),
+    )?;
+    serde_json::to_value(&outcome).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[tauri::command]
 pub fn parse_bgm_table_pack(folder_path: &str) -> Result<Value, String> {
     crate::format::bgm_table::parse_pack(folder_path)
 }

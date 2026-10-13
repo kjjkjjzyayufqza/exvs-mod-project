@@ -193,6 +193,10 @@ name = "stage_visual_compat_test"
 path = "tests/stage_visual_compat_test.rs"
 
 [[test]]
+name = "stage_model_folder_test"
+path = "tests/stage_model_folder_test.rs"
+
+[[test]]
 name = "exvs_common_bundle_test"
 path = "tests/exvs_common_bundle_test.rs"
 
@@ -203,6 +207,10 @@ path = "tests/raw_path_id_format_test.rs"
 [[test]]
 name = "pilot_voice_resource_format_test"
 path = "tests/pilot_voice_resource_format_test.rs"
+
+[[test]]
+name = "pilot_voice_bank_format_test"
+path = "tests/pilot_voice_bank_format_test.rs"
 
 [[test]]
 name = "characterlist_json_signed_hash_test"

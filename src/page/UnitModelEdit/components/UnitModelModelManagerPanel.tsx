@@ -8,15 +8,10 @@ import { mkdir, remove } from "@tauri-apps/plugin-fs";
 import {
   Boxes,
   ChevronDown,
-  Download,
-  FileBox,
   FileUp,
   FolderPlus,
-  LayoutTemplate,
   Loader2,
   Plus,
-  Replace,
-  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -64,7 +59,10 @@ import {
 import type { StaticMeshImportProgress } from "@/page/SceneEdit/utils/sceneSessionService";
 import { useCallbackModalViewportSuspendInteraction } from "@/page/SceneEdit/hooks/useSceneModalViewportSuspendInteraction";
 
-import { buildUnitModelStructureTree, type UnitModelTreeNode } from "../utils/unitModelStructureTree";
+import {
+  buildUnitModelStructureTree,
+  type UnitModelTreeNode,
+} from "../utils/unitModelStructureTree";
 import {
   addUnitModelModel,
   importUnitModelStaticMesh,
@@ -81,7 +79,10 @@ import {
 } from "../utils/unitModelModelService";
 import { createNumatbTemplateFromUnitModel } from "../utils/unitModelNumatbTemplateService";
 import { listUnitModelTextures } from "../utils/unitModelTextureService";
+import { UnitModelModelListRow } from "./UnitModelModelListRow";
 import { ExvsCommonModelIdDialog } from "./ExvsCommonModelIdDialog";
+import { resolveUnitModelRevealAbsPath } from "../utils/unitModelNodePaths";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { UnitModelAddFolderModal } from "./UnitModelAddFolderModal";
 import { UnitModelRemoveModelModal } from "./UnitModelRemoveModelModal";
 import {
@@ -360,6 +361,21 @@ export function UnitModelModelManagerPanel({
   const canMutate = Boolean(modelRoot && structureJsonPath);
 
   const viewportSuspend = useCallbackModalViewportSuspendInteraction(onViewportSuspendChange);
+
+  const handleRevealModel = useCallback(
+    (node: UnitModelTreeNode) => {
+      if (!structureJsonPath) return;
+      const abs = resolveUnitModelRevealAbsPath(structureJsonPath, node);
+      if (!abs) {
+        toast.error(t("manager.errors.revealModel"));
+        return;
+      }
+      void revealItemInDir(abs).catch((error) => {
+        toast.error(t("manager.errors.revealModel"), { description: String(error) });
+      });
+    },
+    [structureJsonPath, t],
+  );
 
   const handleAddFolder = async () => {
     if (!modelRoot || !structureJsonPath) {
@@ -1420,110 +1436,21 @@ export function UnitModelModelManagerPanel({
             {parsed.models.map((model, modelIndex) => {
               const isSelected = selectedModelLabel != null && selectedModelLabel === model.label;
               return (
-                <li
+                <UnitModelModelListRow
                   key={model.node.id}
-                  className={cn(
-                    "group flex items-center gap-2 px-3 py-2 transition-colors hover:bg-muted/60",
-                    isSelected && "bg-primary/10",
-                  )}
-                >
-                  <button
-                    type="button"
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                    onClick={() => onSelectModel?.(model.node)}
-                  >
-                    <FileBox
-                      className={cn("h-4 w-4 shrink-0", isSelected ? "text-primary" : "text-muted-foreground")}
-                      aria-hidden
-                    />
-                    <div className="min-w-0">
-                      <p className="truncate text-[13px] font-medium leading-5">{model.label}</p>
-                      <p className="truncate font-mono text-[10px] text-muted-foreground">
-                        {model.fileTypes.join(" ") || t("manager.noDirectFiles")}
-                      </p>
-                    </div>
-                  </button>
-                  <CopyInfoToAiButton
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                    label={t("manager.copyModelInfoToAi", { name: model.label })}
-                    buildPayload={() => ({
-                      kind: "unit-model",
-                      scope: `model:${model.label}`,
-                      note: structureJsonPath ? `from ${structureJsonPath}` : undefined,
-                      data: model.node,
-                    })}
-                  />
-                  {onExportModel ? (
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6 text-muted-foreground opacity-0 transition-colors hover:text-primary group-hover:opacity-100 focus-visible:opacity-100"
-                      disabled={busy !== null}
-                      onClick={() => onExportModel(model.label)}
-                      title={t("manager.exportModel", { name: model.label })}
-                      aria-label={t("manager.exportModel", { name: model.label })}
-                    >
-                      <Download className="h-3.5 w-3.5" aria-hidden />
-                    </Button>
-                  ) : null}
-                  {structureJsonPath ? (
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6 text-muted-foreground opacity-0 transition-colors hover:text-primary group-hover:opacity-100 focus-visible:opacity-100"
-                      disabled={busy !== null}
-                      onClick={() => void handleCreateNumatbTemplate(model)}
-                      title={t("manager.createNumatbTitle", { name: model.label })}
-                      aria-label={t("manager.createNumatbAria", { name: model.label })}
-                    >
-                      {busy === `template:${model.label}` ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                      ) : (
-                        <LayoutTemplate className="h-3.5 w-3.5" aria-hidden />
-                      )}
-                    </Button>
-                  ) : null}
-                  {canMutate ? (
-                    <>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6 text-muted-foreground opacity-0 transition-colors hover:text-primary group-hover:opacity-100 focus-visible:opacity-100"
-                        disabled={busy !== null}
-                        onClick={() => handleOpenReplace(model.label, modelIndex)}
-                        title={t("manager.replaceModel", { name: model.label })}
-                        aria-label={t("manager.replaceModel", { name: model.label })}
-                      >
-                        {busy === `replace:${model.label}` ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                        ) : (
-                          <Replace className="h-3.5 w-3.5" aria-hidden />
-                        )}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6 text-muted-foreground opacity-0 transition-colors hover:text-red-600 group-hover:opacity-100 focus-visible:opacity-100 dark:hover:text-red-400"
-                        disabled={busy !== null}
-                        onClick={() => handleRequestRemove(model.label)}
-                        title={t("manager.removeModel", { name: model.label })}
-                        aria-label={t("manager.removeModel", { name: model.label })}
-                      >
-                        {busy === `remove:${model.label}` ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                        ) : (
-                          <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                        )}
-                      </Button>
-                    </>
-                  ) : null}
-                </li>
+                  model={model}
+                  modelIndex={modelIndex}
+                  isSelected={isSelected}
+                  busy={busy}
+                  canMutate={canMutate}
+                  structureJsonPath={structureJsonPath}
+                  onSelectModel={onSelectModel}
+                  onExportModel={onExportModel}
+                  onRevealModel={structureJsonPath ? handleRevealModel : undefined}
+                  onCreateNumatbTemplate={(entry) => void handleCreateNumatbTemplate(entry)}
+                  onOpenReplace={handleOpenReplace}
+                  onRequestRemove={handleRequestRemove}
+                />
               );
             })}
           </ul>

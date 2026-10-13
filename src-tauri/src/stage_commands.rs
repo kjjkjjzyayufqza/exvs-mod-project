@@ -20,6 +20,7 @@ use crate::format::effect_folder;
 use crate::format::exvs_common;
 use crate::format::fhm2d::{extract_fhm2d_to_memory_impl, InMemoryFhm2dExtraction};
 use crate::format::fhm2d_stage;
+use crate::format::fhm2d_stage_object_order;
 use crate::format::fhm2d_stage_validate;
 use crate::format::unit_model_extract;
 use crate::format::unit_model_migrate;
@@ -1147,14 +1148,44 @@ pub async fn exvs_stage_validate_for_repack(
     Ok(result)
 }
 
-/// Pre-flight gate: detect numatb material texture parameters with empty paths.
-/// Layout-independent, so it is safe to run before any save/repack mutation.
+/// Rewrite a stage's structure JSON in the object order of its vanilla pack in the
+/// OB dplcache, so placement `VDK_OBJECTNUMBER`s point at the models they did in
+/// the shipped pack again.
 #[tauri::command]
-pub async fn scene_validate_numatb_empty_params(
+pub async fn stage_restore_object_order(
+    stage_root: String,
+    dpl_cache_dir: String,
+    hash_name: String,
+) -> Result<fhm2d_stage_object_order::StageObjectOrderRestore, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let hex = hash_name
+            .trim()
+            .trim_start_matches("0x")
+            .trim_start_matches("0X");
+        let hash = u32::from_str_radix(hex, 16)
+            .map_err(|e| format!("Stage HashName '{hash_name}' is not a hex hash: {e}"))?;
+        let vanilla = crate::format::gui_pack_clone::resolve_dplcache_pack(
+            std::path::Path::new(&dpl_cache_dir),
+            hash,
+        )?;
+        fhm2d_stage_object_order::restore_stage_object_order(
+            &stage_root,
+            &vanilla.to_string_lossy(),
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+/// Pre-flight gate: stage model folders the game cannot load and numatb material
+/// texture parameters with empty paths. Layout-independent, so it is safe to run
+/// on stage load and before any save/repack mutation.
+#[tauri::command]
+pub async fn scene_validate_stage_preflight(
     stage_root: String,
 ) -> Result<fhm2d_stage_validate::ExvsStageValidationResult, String> {
     let result = tauri::async_runtime::spawn_blocking(move || {
-        fhm2d_stage_validate::exvs_stage_validate_numatb_empty_params(&stage_root)
+        fhm2d_stage_validate::exvs_stage_validate_preflight(&stage_root)
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))?;

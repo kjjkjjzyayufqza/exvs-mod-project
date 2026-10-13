@@ -30,10 +30,14 @@ import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSceneValidationStore } from "../store/sceneValidationStore";
 import {
+  EditorContextMenuContent,
+  EditorContextMenuItem,
+  editorContextMenuIconClassName,
+  stopEditorContextMenuBubble,
+} from "@/components/editor/EditorContextMenu";
+import {
   ContextMenu,
   ContextMenuTrigger,
-  ContextMenuContent,
-  ContextMenuItem,
   ContextMenuLabel,
   ContextMenuSeparator,
   ContextMenuShortcut,
@@ -389,65 +393,79 @@ export function SceneOutliner({
           />
         </div>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-56">
-        <ContextMenuItem onClick={handleSelectAll}>
-          {t("outliner.selectAll")}
+      <EditorContextMenuContent>
+        <EditorContextMenuItem onSelect={handleSelectAll}>
+          <span className="flex-1">{t("outliner.selectAll")}</span>
           <ContextMenuShortcut data-i18n-ignore="">Ctrl+A</ContextMenuShortcut>
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => {
-          deselectAll();
-          onClearSelection?.();
-        }}>
-          {t("outliner.deselectAll")}
+        </EditorContextMenuItem>
+        <EditorContextMenuItem
+          onSelect={() => {
+            deselectAll();
+            onClearSelection?.();
+          }}
+        >
+          <span className="flex-1">{t("outliner.deselectAll")}</span>
           <ContextMenuShortcut data-i18n-ignore="">Esc</ContextMenuShortcut>
-        </ContextMenuItem>
+        </EditorContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onClick={handleCopy} disabled={selectedIds.size === 0}>
-          <Copy className="mr-2 h-3.5 w-3.5" />
-          {t("outliner.copy")}
+        <EditorContextMenuItem onSelect={handleCopy} disabled={selectedIds.size === 0}>
+          <Copy className={editorContextMenuIconClassName} />
+          <span className="flex-1">{t("outliner.copy")}</span>
           <ContextMenuShortcut data-i18n-ignore="">Ctrl+C</ContextMenuShortcut>
-        </ContextMenuItem>
-        <ContextMenuItem onClick={handleDuplicate} disabled={selectedIds.size === 0}>
-          <Clipboard className="mr-2 h-3.5 w-3.5" />
-          {t("outliner.duplicate")}
+        </EditorContextMenuItem>
+        <EditorContextMenuItem onSelect={handleDuplicate} disabled={selectedIds.size === 0}>
+          <Clipboard className={editorContextMenuIconClassName} />
+          <span className="flex-1">{t("outliner.duplicate")}</span>
           <ContextMenuShortcut data-i18n-ignore="">Ctrl+D</ContextMenuShortcut>
-        </ContextMenuItem>
-        <ContextMenuItem onClick={onPaste} disabled={clipboard.length === 0}>
-          <Clipboard className="mr-2 h-3.5 w-3.5" />
-          {t("outliner.paste")}
+        </EditorContextMenuItem>
+        <EditorContextMenuItem onSelect={onPaste} disabled={clipboard.length === 0}>
+          <Clipboard className={editorContextMenuIconClassName} />
+          <span className="flex-1">{t("outliner.paste")}</span>
           <ContextMenuShortcut data-i18n-ignore="">Ctrl+V</ContextMenuShortcut>
-        </ContextMenuItem>
-        <ContextMenuItem onClick={handleDeleteSelected} disabled={selectedIds.size === 0} className="text-destructive">
-          <Trash2 className="mr-2 h-3.5 w-3.5" />
-          {t("outliner.delete")}
+        </EditorContextMenuItem>
+        <EditorContextMenuItem
+          onSelect={handleDeleteSelected}
+          disabled={selectedIds.size === 0}
+          className="text-destructive focus:text-destructive"
+        >
+          <Trash2 className={editorContextMenuIconClassName} />
+          <span className="flex-1">{t("outliner.delete")}</span>
           <ContextMenuShortcut data-i18n-ignore="">Del</ContextMenuShortcut>
-        </ContextMenuItem>
+        </EditorContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onClick={handleGroup} disabled={selectedIds.size < 2}>
-          <FolderPlus className="mr-2 h-3.5 w-3.5" />
-          {t("outliner.groupSelected")}
+        <EditorContextMenuItem onSelect={handleGroup} disabled={selectedIds.size < 2}>
+          <FolderPlus className={editorContextMenuIconClassName} />
+          <span className="flex-1">{t("outliner.groupSelected")}</span>
           <ContextMenuShortcut data-i18n-ignore="">Ctrl+G</ContextMenuShortcut>
-        </ContextMenuItem>
+        </EditorContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onClick={onFocusSelected} disabled={selectedIds.size === 0}>
-          {t("outliner.focusSelected")}
+        <EditorContextMenuItem onSelect={onFocusSelected} disabled={selectedIds.size === 0}>
+          <span className="flex-1">{t("outliner.focusSelected")}</span>
           <ContextMenuShortcut data-i18n-ignore="">F</ContextMenuShortcut>
-        </ContextMenuItem>
+        </EditorContextMenuItem>
         <ContextMenuSub>
-          <ContextMenuSubTrigger>
-            <Eye className="mr-2 h-3.5 w-3.5" />
-            {t("outliner.visibility")}
+          <ContextMenuSubTrigger className="flex items-center gap-2">
+            <Eye className={editorContextMenuIconClassName} />
+            <span>{t("outliner.visibility")}</span>
           </ContextMenuSubTrigger>
-          <ContextMenuSubContent>
-            <ContextMenuItem onClick={() => selectedIds.forEach((id) => useSceneEditorStore.getState().setVisibility(id, true))}>
+          <ContextMenuSubContent className="min-w-[11rem]">
+            <EditorContextMenuItem
+              onSelect={() =>
+                selectedIds.forEach((id) => useSceneEditorStore.getState().setVisibility(id, true))
+              }
+            >
               {t("outliner.showSelected")}
-            </ContextMenuItem>
-            <ContextMenuItem onClick={() => selectedIds.forEach((id) => useSceneEditorStore.getState().setVisibility(id, false))}>
+            </EditorContextMenuItem>
+            <EditorContextMenuItem
+              onSelect={() =>
+                selectedIds.forEach((id) => useSceneEditorStore.getState().setVisibility(id, false))
+              }
+            >
               {t("outliner.hideSelected")}
-            </ContextMenuItem>
+            </EditorContextMenuItem>
           </ContextMenuSubContent>
         </ContextMenuSub>
-      </ContextMenuContent>
+      </EditorContextMenuContent>
     </ContextMenu>
   );
 }
@@ -472,6 +490,7 @@ function GroupHeaderRow({
             "flex h-full items-center gap-1.5 px-1.5 rounded-sm cursor-pointer text-xs select-none transition-colors",
             "hover:bg-accent/60 bg-accent/20",
           )}
+          onContextMenu={stopEditorContextMenuBubble}
         >
           <button
             type="button"
@@ -491,17 +510,20 @@ function GroupHeaderRow({
           </span>
         </div>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-52">
-        <ContextMenuItem onClick={() => removeGroup(group.id)}>
-          <Ungroup className="mr-2 h-3.5 w-3.5" />
-          {t("outliner.ungroup")}
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem onClick={() => onDelete?.(group.children)}>
-          <Trash2 className="mr-2 h-3.5 w-3.5" />
-          {t("outliner.deleteAllInGroup")}
-        </ContextMenuItem>
-      </ContextMenuContent>
+    <EditorContextMenuContent>
+      <EditorContextMenuItem onSelect={() => removeGroup(group.id)}>
+        <Ungroup className={editorContextMenuIconClassName} />
+        <span>{t("outliner.ungroup")}</span>
+      </EditorContextMenuItem>
+      <ContextMenuSeparator />
+      <EditorContextMenuItem
+        onSelect={() => onDelete?.(group.children)}
+        className="text-destructive focus:text-destructive"
+      >
+        <Trash2 className={editorContextMenuIconClassName} />
+        <span>{t("outliner.deleteAllInGroup")}</span>
+      </EditorContextMenuItem>
+    </EditorContextMenuContent>
     </ContextMenu>
   );
 }
@@ -519,10 +541,12 @@ function RootOutlinerRow({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  return (
+  const { t } = useTranslation("scene-root-b");
+  const row = (
     <div
-      className="flex h-full items-center gap-1.5 px-1.5 text-xs select-none text-muted-foreground"
+      className="flex h-full items-center gap-1.5 px-1.5 text-xs select-none text-muted-foreground hover:bg-accent/40 rounded-sm"
       style={{ paddingLeft: `${depth * OUTLINER_INDENT_PX + 4}px` }}
+      onContextMenu={stopEditorContextMenuBubble}
     >
       {hasChildren && (
         <button
@@ -536,6 +560,26 @@ function RootOutlinerRow({
       <Layers className="h-3.5 w-3.5 shrink-0" />
       <span className="truncate font-semibold">{node.label}</span>
     </div>
+  );
+
+  if (!hasChildren) {
+    return row;
+  }
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      <EditorContextMenuContent>
+        <EditorContextMenuItem onSelect={onToggle}>
+          {expanded ? (
+            <ChevronDown className={editorContextMenuIconClassName} />
+          ) : (
+            <ChevronRight className={editorContextMenuIconClassName} />
+          )}
+          <span>{expanded ? t("outliner.collapse") : t("outliner.expand")}</span>
+        </EditorContextMenuItem>
+      </EditorContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -606,6 +650,7 @@ function OutlinerNodeRow({
             !visible && "opacity-40",
           )}
           style={{ paddingLeft: `${depth * OUTLINER_INDENT_PX + 4}px` }}
+          onContextMenu={stopEditorContextMenuBubble}
           onClick={(e) => onNodeClick(node.id, e)}
           draggable={canReorder}
           onDragStart={(event) => {
@@ -755,96 +800,125 @@ function NodeContextMenuContent({
   const { t } = useTranslation("scene-root-b");
 
   return (
-    <ContextMenuContent className="w-52">
+    <EditorContextMenuContent>
       {supportsProperties && (
         <>
-          <ContextMenuItem onClick={() => onOpenProperties?.(node.id)}>
-            <Settings className="mr-2 h-3.5 w-3.5" />
-            {t("outliner.properties")}
-          </ContextMenuItem>
+          <EditorContextMenuItem onSelect={() => onOpenProperties?.(node.id)}>
+            <Settings className={editorContextMenuIconClassName} />
+            <span>{t("outliner.properties")}</span>
+          </EditorContextMenuItem>
           <ContextMenuSeparator />
         </>
       )}
       {supportsExportDae && (
         <>
-          <ContextMenuItem onClick={() => onExportDae!(node.id)}>
-            <Download className="mr-2 h-3.5 w-3.5" />
-            {t("outliner.exportModel")}
-          </ContextMenuItem>
+          <EditorContextMenuItem onSelect={() => onExportDae!(node.id)}>
+            <Download className={editorContextMenuIconClassName} />
+            <span>{t("outliner.exportModel")}</span>
+          </EditorContextMenuItem>
           <ContextMenuSeparator />
         </>
       )}
       {supportsReplaceModel && (
         <>
-          <ContextMenuItem onClick={() => onReplaceModel!(node.id)}>
-            <FolderSync className="mr-2 h-3.5 w-3.5" />
-            {t("outliner.replaceModel")}
-          </ContextMenuItem>
+          <EditorContextMenuItem onSelect={() => onReplaceModel!(node.id)}>
+            <FolderSync className={editorContextMenuIconClassName} />
+            <span>{t("outliner.replaceModel")}</span>
+          </EditorContextMenuItem>
           <ContextMenuSeparator />
         </>
       )}
-      <ContextMenuItem onClick={() => {
-        const entries = [{ nodeId: node.id, placementIdx: null, transform: { posX: 0, posY: 0, posZ: 0, rotX: 0, rotY: 0, rotZ: 0, scaleX: 1, scaleY: 1, scaleZ: 1 } }];
-        useSceneEditorStore.getState().copyToClipboard(entries);
-      }}>
-        <Copy className="mr-2 h-3.5 w-3.5" />
-        {t("outliner.copy")}
+      <EditorContextMenuItem
+        onSelect={() => {
+          const entries = [
+            {
+              nodeId: node.id,
+              placementIdx: null,
+              transform: {
+                posX: 0,
+                posY: 0,
+                posZ: 0,
+                rotX: 0,
+                rotY: 0,
+                rotZ: 0,
+                scaleX: 1,
+                scaleY: 1,
+                scaleZ: 1,
+              },
+            },
+          ];
+          useSceneEditorStore.getState().copyToClipboard(entries);
+        }}
+      >
+        <Copy className={editorContextMenuIconClassName} />
+        <span className="flex-1">{t("outliner.copy")}</span>
         <ContextMenuShortcut data-i18n-ignore="">Ctrl+C</ContextMenuShortcut>
-      </ContextMenuItem>
-      <ContextMenuItem onClick={() => onDuplicate?.([node.id])}>
-        <Clipboard className="mr-2 h-3.5 w-3.5" />
-        {t("outliner.duplicateAsNew")}
+      </EditorContextMenuItem>
+      <EditorContextMenuItem onSelect={() => onDuplicate?.([node.id])}>
+        <Clipboard className={editorContextMenuIconClassName} />
+        <span className="flex-1">{t("outliner.duplicateAsNew")}</span>
         <ContextMenuShortcut data-i18n-ignore="">Ctrl+D</ContextMenuShortcut>
-      </ContextMenuItem>
+      </EditorContextMenuItem>
       <ContextMenuSeparator />
-      <ContextMenuItem onClick={() => toggleVisibility(node.id)}>
-        {visible ? <EyeOff className="mr-2 h-3.5 w-3.5" /> : <Eye className="mr-2 h-3.5 w-3.5" />}
-        {visible ? t("outliner.hide") : t("outliner.show")}
+      <EditorContextMenuItem onSelect={() => toggleVisibility(node.id)}>
+        {visible ? (
+          <EyeOff className={editorContextMenuIconClassName} />
+        ) : (
+          <Eye className={editorContextMenuIconClassName} />
+        )}
+        <span className="flex-1">{visible ? t("outliner.hide") : t("outliner.show")}</span>
         <ContextMenuShortcut data-i18n-ignore="">H</ContextMenuShortcut>
-      </ContextMenuItem>
-      <ContextMenuItem onClick={() => toggleLock(node.id)}>
-        {locked ? <Unlock className="mr-2 h-3.5 w-3.5" /> : <Lock className="mr-2 h-3.5 w-3.5" />}
-        {locked ? t("outliner.unlock") : t("outliner.lock")}
-      </ContextMenuItem>
+      </EditorContextMenuItem>
+      <EditorContextMenuItem onSelect={() => toggleLock(node.id)}>
+        {locked ? (
+          <Unlock className={editorContextMenuIconClassName} />
+        ) : (
+          <Lock className={editorContextMenuIconClassName} />
+        )}
+        <span>{locked ? t("outliner.unlock") : t("outliner.lock")}</span>
+      </EditorContextMenuItem>
       {supportsHkt && (
         <>
           <ContextMenuSeparator />
-          <ContextMenuItem onClick={() => onGenerateHkt!([hktTargetId])}>
-            <Shield className="mr-2 h-3.5 w-3.5" />
-            {isCollisionNode ? t("outliner.regenerateHkt") : t("outliner.generateHkt")}
-          </ContextMenuItem>
+          <EditorContextMenuItem onSelect={() => onGenerateHkt!([hktTargetId])}>
+            <Shield className={editorContextMenuIconClassName} />
+            <span>{isCollisionNode ? t("outliner.regenerateHkt") : t("outliner.generateHkt")}</span>
+          </EditorContextMenuItem>
         </>
       )}
       {supportsReplaceHkt && (
         <>
           {!supportsHkt && <ContextMenuSeparator />}
-          <ContextMenuItem onClick={() => onReplaceHkt!(hktTargetId)}>
-            <Shield className="mr-2 h-3.5 w-3.5" />
-            {t("outliner.replaceHkt")}
-          </ContextMenuItem>
+          <EditorContextMenuItem onSelect={() => onReplaceHkt!(hktTargetId)}>
+            <Shield className={editorContextMenuIconClassName} />
+            <span>{t("outliner.replaceHkt")}</span>
+          </EditorContextMenuItem>
         </>
       )}
       {supportsGenerateHktFromModel && (
         <>
           {!supportsHkt && !supportsReplaceHkt && <ContextMenuSeparator />}
-          <ContextMenuItem onClick={() => onGenerateHktFromModel!(hktTargetId)}>
-            <Sparkles className="mr-2 h-3.5 w-3.5" />
-            {t("outliner.generateHktFromModel")}
-          </ContextMenuItem>
+          <EditorContextMenuItem onSelect={() => onGenerateHktFromModel!(hktTargetId)}>
+            <Sparkles className={editorContextMenuIconClassName} />
+            <span>{t("outliner.generateHktFromModel")}</span>
+          </EditorContextMenuItem>
         </>
       )}
       <ContextMenuSeparator />
-      <ContextMenuItem onClick={() => onDelete?.([node.id])} className="text-destructive">
-        <Trash2 className="mr-2 h-3.5 w-3.5" />
-        {t("outliner.delete")}
+      <EditorContextMenuItem
+        onSelect={() => onDelete?.([node.id])}
+        className="text-destructive focus:text-destructive"
+      >
+        <Trash2 className={editorContextMenuIconClassName} />
+        <span className="flex-1">{t("outliner.delete")}</span>
         <ContextMenuShortcut data-i18n-ignore="">Del</ContextMenuShortcut>
-      </ContextMenuItem>
+      </EditorContextMenuItem>
       <ContextMenuSeparator />
-      <ContextMenuLabel className="flex items-center text-[11px] font-normal text-muted-foreground">
-        <TypeIcon className="mr-2 h-3.5 w-3.5" />
+      <ContextMenuLabel className="flex items-center gap-2 text-[11px] font-normal text-muted-foreground">
+        <TypeIcon className={editorContextMenuIconClassName} />
         <span data-i18n-ignore="">{typeLabel}</span>
       </ContextMenuLabel>
-    </ContextMenuContent>
+    </EditorContextMenuContent>
   );
 }
 

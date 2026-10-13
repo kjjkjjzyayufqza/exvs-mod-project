@@ -89,15 +89,18 @@ Existing research notes are not rewritten by this index.
 ### `syscall` — Native MSC syscall notes
 
 - **kind:** global
-- **aliases:** `sys_46`, `sys_4F`, `sys_4E`, `sys_4B`, `sys_47`, `sys_51`, `sys_53`, `sys_54`, `sys_55`, `syscall`, `sys_0`
-- **notes:** Syscall notes live under docs/, not docs/msc-research/.
+- **aliases:** `sys_46`, `sys_4F`, `sys_4E`, `sys_4B`, `sys_47`, `sys_51`, `sys_53`, `sys_54`, `sys_55`, `sys_58`, `syscall`, `sys_0`, `pilot voice`, `kpkp`, `lipsync`, `situationId`, `voicetable`
+- **notes:** Handler notes live under docs/. Pilot voice vs SE is docs/msc-research/sys58-pilot-voice-vs-se.md.
 - **settled:**
   - Homemade NUANMB folders may not honor sys_47(0xf) / sys_47(0x7) the way stock clips do. Phase length then uses global244 -= func_274(), not func_309. See homemade-motion-clock-vs-game-frame.md.
+  - sys_58(0x9, situationId) is pilot speech. sys_58(0/1/3/4/6, seHash) is character SE. situationId is the global .vot key (292 ids across 199 pilot vot files), not CRC32 of a cue name. See sys58-pilot-voice-vs-se.md.
+  - Pilot .kpkp is lipsync at about 20 visemes per second for the cues that have a row. Playback length is nus3audio offsets plus the TONE n_samples clock. The .vot cue entry does not store duration.
 - **read_first:**
   - `docs/exvs-msc-syscall-handler-table.md`
   - `docs/exvs-msc-syscall-4f-native-handler.md`
   - `docs/exvs-msc-syscall-4f-notes.md`
   - `docs/msc-research/sys46-script-parameter-atlas.md`
+  - `docs/msc-research/sys58-pilot-voice-vs-se.md`
 - **related:**
   - `docs/exvs-msc-syscall-47-notes.md`
   - `docs/exvs-msc-syscall-4b-notes.md`
@@ -112,6 +115,8 @@ Existing research notes are not rewritten by this index.
 - **do_not:**
   - Do not treat sys_47(0x5) (func_310) as a homemade clip duration or playback-speed knob. Do not wait homemade folders on sys_47(0x7).
   - Do not treat sys_51(0x20000, 0, 0x2, slot, type) as unit-task automata. Independent 5xxxxxxxx strikers spawn only through that call. See striker-sys51.
+  - Do not treat sys_58(0x9) as another SE channel, and do not pass a cue-name CRC to it. 0x9 takes a .vot situationId. See sys58-pilot-voice-vs-se.md.
+  - Do not change a pilot waveform's length without rewriting nus3audio offsets, the TONE n_samples clock, and the .kpkp viseme count when that cue has a lipsync row.
 
 ### `camera-clip-bst` — Battle camera clip BST / vgsht2 compile loader
 

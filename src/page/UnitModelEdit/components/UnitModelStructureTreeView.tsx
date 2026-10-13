@@ -23,12 +23,12 @@ import {
 
 import { CopyInfoToAiButton } from "@/components/CopyInfoToAiButton";
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+  EditorContextMenuContent,
+  EditorContextMenuItem,
+  editorContextMenuIconClassName,
+  stopEditorContextMenuBubble,
+} from "@/components/editor/EditorContextMenu";
+import { ContextMenu, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -137,8 +137,13 @@ function TreeRow({
   const compareKey = node.fileUrl ? node.fileUrl.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase() : null;
   const hasUnsaved = Boolean(compareKey && editingPaths?.has(compareKey));
   const wasModified = !hasUnsaved && Boolean(compareKey && modifiedPaths?.has(compareKey));
-  const hasMenu =
-    node.kind === "item" && Boolean(editableKind || isNutexb || onRevealNode || onCopyNodePath);
+  const hasMenu = Boolean(
+    onRevealNode ||
+      onCopyNodePath ||
+      editableKind ||
+      isNutexb ||
+      isFolder,
+  );
 
   const rowInner = (
     <div
@@ -148,6 +153,7 @@ function TreeRow({
         isSelected && "bg-primary/10 text-primary",
       )}
       style={{ paddingLeft: `${depth * 14 + 4}px` }}
+      onContextMenu={stopEditorContextMenuBubble}
     >
       <button
         type="button"
@@ -219,31 +225,50 @@ function TreeRow({
       {hasMenu ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>{rowInner}</ContextMenuTrigger>
-          <ContextMenuContent className="w-52">
+          <EditorContextMenuContent>
+            {isFolder ? (
+              <>
+                <EditorContextMenuItem onSelect={() => toggle(node.id)}>
+                  {isOpen ? (
+                    <ChevronDown className={editorContextMenuIconClassName} />
+                  ) : (
+                    <ChevronRight className={editorContextMenuIconClassName} />
+                  )}
+                  <span>{isOpen ? t("tree.collapse") : t("tree.expand")}</span>
+                </EditorContextMenuItem>
+                <ContextMenuSeparator />
+              </>
+            ) : null}
             {editableKind ? (
-              <ContextMenuItem onSelect={() => onOpenEditor?.(node)}>
-                <Pencil className="mr-2 h-3.5 w-3.5" />
-                {t("tree.edit", { kind: editableKind.toUpperCase() })}
-              </ContextMenuItem>
+              <EditorContextMenuItem onSelect={() => onOpenEditor?.(node)}>
+                <Pencil className={editorContextMenuIconClassName} />
+                <span>{t("tree.edit", { kind: editableKind.toUpperCase() })}</span>
+              </EditorContextMenuItem>
             ) : null}
             {isNutexb ? (
-              <ContextMenuItem onSelect={() => onShowTextureInPanel?.(node)}>
-                <ImageIcon className="mr-2 h-3.5 w-3.5" />
-                {isWeaponIconFileUrl(node.fileUrl) || node.role === "weapon-icon"
-                  ? t("tree.showIcons")
-                  : t("tree.showTextures")}
-              </ContextMenuItem>
+              <EditorContextMenuItem onSelect={() => onShowTextureInPanel?.(node)}>
+                <ImageIcon className={editorContextMenuIconClassName} />
+                <span>
+                  {isWeaponIconFileUrl(node.fileUrl) || node.role === "weapon-icon"
+                    ? t("tree.showIcons")
+                    : t("tree.showTextures")}
+                </span>
+              </EditorContextMenuItem>
             ) : null}
             {editableKind || isNutexb ? <ContextMenuSeparator /> : null}
-            <ContextMenuItem onSelect={() => onRevealNode?.(node)}>
-              <ExternalLink className="mr-2 h-3.5 w-3.5" />
-              {t("tree.reveal")}
-            </ContextMenuItem>
-            <ContextMenuItem onSelect={() => onCopyNodePath?.(node)}>
-              <ClipboardCopy className="mr-2 h-3.5 w-3.5" />
-              {t("tree.copyPath")}
-            </ContextMenuItem>
-          </ContextMenuContent>
+            {onRevealNode ? (
+              <EditorContextMenuItem onSelect={() => onRevealNode(node)}>
+                <ExternalLink className={editorContextMenuIconClassName} />
+                <span>{t("tree.reveal")}</span>
+              </EditorContextMenuItem>
+            ) : null}
+            {onCopyNodePath ? (
+              <EditorContextMenuItem onSelect={() => onCopyNodePath(node)}>
+                <ClipboardCopy className={editorContextMenuIconClassName} />
+                <span>{t("tree.copyPath")}</span>
+              </EditorContextMenuItem>
+            ) : null}
+          </EditorContextMenuContent>
         </ContextMenu>
       ) : (
         rowInner

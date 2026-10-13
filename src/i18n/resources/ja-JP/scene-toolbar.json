@@ -5,7 +5,8 @@
     "openStageFolder": "ステージフォルダーを開く",
     "importFhm2d": ".fhm2d をインポート",
     "extractFhm2d": ".fhm2d をフォルダーに展開",
-    "openMapLibrary": "マップライブラリから開く…"
+    "openMapLibrary": "マップライブラリから開く…",
+    "restoreObjectOrder": "オブジェクト順を元に戻す"
   },
   "save": {
     "folderAria": "フォルダーとして保存",

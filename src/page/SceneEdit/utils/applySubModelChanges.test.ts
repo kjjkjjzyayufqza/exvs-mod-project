@@ -58,8 +58,8 @@ describe("applySubModelChangesAndRemap", () => {
       ]);
       // boxA stays 0
       expect(result.entries[0].objectNumber).toBe(0);
-      // SKY gets totalModelCount = 3
-      expect(result.entries[1].objectNumber).toBe(3);
+      // SKY matches sky sub-model index (= non-sky model count)
+      expect(result.entries[1].objectNumber).toBe(2);
     });
 
     it("adds a model at index 0 — shifts all existing", () => {

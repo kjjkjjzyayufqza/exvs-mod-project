@@ -16,8 +16,14 @@
     "renamePreviewFailed": "FHM2D rename preview failed",
     "extractionFailed": "FHM2D extraction failed",
     "stageSceneLoadFailed": "Failed to load stage into scene",
-    "textureBlocked": "{{count}} texture issue(s) blocked packing",
-    "textureValidationFailed": "Texture validation failed",
+    "stageBlocked": "{{count}} stage problem(s) block saving and packing",
+    "objectOrderDplCacheMissing": "Set the OB DPLCache path in Settings first; the vanilla pack is read from there",
+    "objectOrderUnsavedChanges": "Save or discard the current changes first; restoring the object order reloads the stage",
+    "objectOrderRestoreFailed": "Failed to restore the vanilla object order",
+    "stageValidationFailed": "Stage validation failed",
+    "stagePreflightTitle": "Stage problems block saving",
+    "stageLoadProblemsTitle": "Stage problems found on load (saving is blocked until fixed)",
+    "repackValidationTitle": "Stage problems block packing",
     "editLocked": "Locked or hidden scene objects cannot be edited",
     "outlinerNodeMissing": "Cannot find outliner node",
     "clipboardSceneObjects": "Clipboard does not contain pasteable scene objects",
@@ -124,6 +130,9 @@
     "reset": "Reset"
   },
   "success": {
+    "objectOrderRestored": "Restored vanilla object order ({{count}} object number(s) changed)",
+    "objectOrderAdded": "{{name}}: not in the vanilla pack, kept after vanilla objects",
+    "objectOrderMissing": "{{name}}: vanilla object with no folder on disk",
     "stageWarnings": "Stage loaded with {{count}} warning(s)",
     "stageLoaded": "Stage loaded successfully",
     "skeletonWarnings": "Skeleton loaded with {{count}} warning(s)",
@@ -178,7 +187,9 @@
     "collisionCount": "Collision ({{count}})",
     "noCollisionSources": "No collision sources",
     "hideAll": "Hide all",
-    "showAll": "Show all"
+    "showAll": "Show all",
+    "showCollisionSource": "Show this source",
+    "hideCollisionSource": "Hide this source"
   },
   "detailView": {
     "propertiesTitle": "Properties — {{name}}",

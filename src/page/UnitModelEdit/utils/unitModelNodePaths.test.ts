@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 
-import { normalizeComparePath, resolveUnitModelNodeAbsPath } from "./unitModelNodePaths";
+import {
+  normalizeComparePath,
+  resolveUnitModelNodeAbsPath,
+  resolveUnitModelRevealAbsPath,
+} from "./unitModelNodePaths";
+import type { UnitModelTreeNode } from "./unitModelStructureTree";
 
 describe("normalizeComparePath", () => {
   it("lower-cases, forward-slashes, and trims a trailing slash", () => {
@@ -43,5 +48,19 @@ describe("resolveUnitModelNodeAbsPath", () => {
     expect(
       resolveUnitModelNodeAbsPath("E:\\out\\pkg_structure.json", "././pkg/model_a/m.numatb"),
     ).toBe("E:\\out\\pkg\\model_a\\m.numatb");
+  });
+});
+
+describe("resolveUnitModelRevealAbsPath", () => {
+  it("resolves model-group folders under models/", () => {
+    const node: UnitModelTreeNode = {
+      id: "m1",
+      kind: "folder",
+      label: "body",
+      role: "model-group",
+    };
+    expect(
+      resolveUnitModelRevealAbsPath("E:\\out\\pkg_structure.json", node),
+    ).toBe("E:\\out\\models\\body");
   });
 });

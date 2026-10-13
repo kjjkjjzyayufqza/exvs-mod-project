@@ -1,4 +1,16 @@
+import type { UnitModelTreeNode } from "./unitModelStructureTree";
 import { getParentDir, toWindowsPath } from "./unitModelRepackService";
+
+function findFirstDescendantFileUrl(node: UnitModelTreeNode): string | undefined {
+  if (node.kind === "item" && node.fileUrl?.trim()) {
+    return node.fileUrl;
+  }
+  for (const child of node.children ?? []) {
+    const found = findFirstDescendantFileUrl(child);
+    if (found) return found;
+  }
+  return undefined;
+}
 
 /** Canonical key for path equality checks (lower-case, forward slash, no trailing slash). */
 export function normalizeComparePath(path: string): string {
@@ -23,4 +35,26 @@ export function resolveUnitModelNodeAbsPath(structureJsonPath: string, fileUrl: 
   }
   rel = rel.replace(/^\/+/, "");
   return toWindowsPath(`${parent}/${rel}`);
+}
+
+/**
+ * Absolute path to reveal in Explorer for a structure tree node (file or folder).
+ * Folder nodes use the first descendant file, or models/<label> for model groups.
+ */
+export function resolveUnitModelRevealAbsPath(
+  structureJsonPath: string,
+  node: UnitModelTreeNode,
+): string | null {
+  if (node.kind === "item" && node.fileUrl?.trim()) {
+    return resolveUnitModelNodeAbsPath(structureJsonPath, node.fileUrl);
+  }
+  const descendantUrl = findFirstDescendantFileUrl(node);
+  if (descendantUrl) {
+    return resolveUnitModelNodeAbsPath(structureJsonPath, descendantUrl);
+  }
+  if (node.role === "model-group" && node.label.trim()) {
+    const parent = getParentDir(structureJsonPath);
+    return toWindowsPath(`${parent}/models/${node.label}`);
+  }
+  return null;
 }

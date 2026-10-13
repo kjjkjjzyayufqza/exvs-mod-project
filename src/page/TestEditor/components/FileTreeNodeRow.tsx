@@ -15,12 +15,12 @@ import {
 import { cn } from "@/lib/utils";
 import type { TestEditorWorkspaceDocument } from "@/services/testEditorWorkspace/types";
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+  EditorContextMenuContent,
+  EditorContextMenuItem,
+  editorContextMenuIconClassName,
+  stopEditorContextMenuBubble,
+} from "@/components/editor/EditorContextMenu";
+import { ContextMenu, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import type { TestTreeNode } from "../types";
 import { normalizePathForStar } from "../utils/fileTreeStars";
 import {
@@ -142,6 +142,7 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
           )}
           onClick={handleRowClick}
           onDoubleClick={() => isDir && node.toggle()}
+          onContextMenu={stopEditorContextMenuBubble}
           title={node.data.name}
         >
           {isPackDirty && (
@@ -246,41 +247,38 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
           )}
         </div>
       </ContextMenuTrigger>
-      <ContextMenuContent className="min-w-[11rem] max-w-[20rem]">
-        <ContextMenuItem onClick={() => onToggleStar(node.data.path)} className="flex items-center gap-2">
-          <Star className={cn("h-4 w-4", isStarred && "fill-amber-400 text-amber-500")} />
+      <EditorContextMenuContent>
+        <EditorContextMenuItem onSelect={() => onToggleStar(node.data.path)}>
+          <Star
+            className={cn(editorContextMenuIconClassName, isStarred && "fill-amber-400 text-amber-500")}
+          />
           <span>{isStarred ? t("fileTree.unstar") : t("fileTree.star")}</span>
-        </ContextMenuItem>
-        {!isDir && (
-          <ContextMenuItem onClick={() => void handleOpenNodePath(node.data)} className="flex items-center gap-2">
-            <ExternalLink className="h-4 w-4" />
+        </EditorContextMenuItem>
+        {!isDir ? (
+          <EditorContextMenuItem onSelect={() => void handleOpenNodePath(node.data)}>
+            <ExternalLink className={editorContextMenuIconClassName} />
             <span>{t("fileTree.openFile")}</span>
-          </ContextMenuItem>
-        )}
-        <ContextMenuItem onClick={() => void handleOpenNodeFolder(node.data)} className="flex items-center gap-2">
-          <ExternalLink className="h-4 w-4" />
-            <span>{t("fileTree.openFolder")}</span>
-        </ContextMenuItem>
+          </EditorContextMenuItem>
+        ) : null}
+        <EditorContextMenuItem onSelect={() => void handleOpenNodeFolder(node.data)}>
+          <ExternalLink className={editorContextMenuIconClassName} />
+          <span>{t("fileTree.openFolder")}</span>
+        </EditorContextMenuItem>
         {canOpenEffectProject ? (
-          <ContextMenuItem
-            onClick={() => {
-              onOpenAsEffectProject?.(node.data.path);
-            }}
-            className="flex items-center gap-2"
-          >
-            <Sparkles className="h-4 w-4" />
+          <EditorContextMenuItem onSelect={() => onOpenAsEffectProject?.(node.data.path)}>
+            <Sparkles className={editorContextMenuIconClassName} />
             <span>{t("fileTree.openAsEffectProject")}</span>
-          </ContextMenuItem>
+          </EditorContextMenuItem>
         ) : null}
         {hasRepackItems ? <ContextMenuSeparator /> : null}
-        {packTarget && (
-          <ContextMenuItem
+        {packTarget ? (
+          <EditorContextMenuItem
             disabled={folderRepackDisabled}
-            onClick={() => void openRepackDialogForNode(node.data)}
-            className={cn("flex flex-col items-stretch gap-0.5 py-2", folderRepackDisabled && "cursor-not-allowed")}
+            onSelect={() => void openRepackDialogForNode(node.data)}
+            className={cn("flex-col items-stretch gap-0.5 py-2", folderRepackDisabled && "cursor-not-allowed")}
           >
             <span className="flex items-center gap-2">
-              <Package className="h-4 w-4 shrink-0" />
+              <Package className={editorContextMenuIconClassName} />
               <span>{t("fileTree.repack")}</span>
             </span>
             {folderRepackDisabled ? (
@@ -292,9 +290,9 @@ function FileTreeNodeRowImpl({ node, style, dragHandle, ctx }: Props) {
                   : t("fileTree.checkingStructure")}
               </span>
             ) : null}
-          </ContextMenuItem>
-        )}
-      </ContextMenuContent>
+          </EditorContextMenuItem>
+        ) : null}
+      </EditorContextMenuContent>
     </ContextMenu>
   );
 }

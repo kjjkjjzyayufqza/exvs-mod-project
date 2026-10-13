@@ -1,5 +1,8 @@
 import type { PlacementRow } from "../types/placement";
-import { updateObjectNumberInRawFields } from "./ensureSkyPlacementObjectNumber";
+import {
+  resolveSkyPlacementObjectNumber,
+  updateObjectNumberInRawFields,
+} from "./ensureSkyPlacementObjectNumber";
 
 /**
  * SubModel reference used for mapping folder names to objectIndex values.
@@ -79,7 +82,7 @@ export function applySubModelChangesAndRemap(
     oldIndexToFolder.set(sm.objectIndex, sm.folderName);
   }
 
-  const totalModelCount = models.length;
+  const skyPlacementObjectNumber = resolveSkyPlacementObjectNumber(models);
   const result: PlacementRow[] = [];
 
   for (const entry of entries) {
@@ -87,7 +90,7 @@ export function applySubModelChangesAndRemap(
 
     // SKY always gets objectNumber = totalModelCount
     if (upperType === "SKY") {
-      const newNum = totalModelCount;
+      const newNum = skyPlacementObjectNumber;
       if (entry.objectNumber === newNum) {
         result.push(entry);
       } else {

@@ -154,9 +154,12 @@ count * (recordStride + 4) + 32  <=  stringOffset  <  fileSize
 `0xCA143FC8 == CRC32("VO_01_P01_CHARA_SELECT_01")`。
 注意 bank 里存的是小写 `vo_01_p01_chara_select_01`，哈希前要转大写。
 
-`situationId` 是全局枚举（199 个 pilot `.vot` 合计仅 292 个 distinct），
-名字尚未反解。**编辑器不要让用户自造 situationId**，
+`situationId` 是全局枚举（199 个 pilot `.vot` 合计 292 个 distinct）。
+MSC 用 `sys_58(0x9, situationId)` 请求它，不传 cue 名 CRC。
+源码里的英文名字仍然没有。**编辑器不要让用户自造 situationId**，
 只允许从 donor `.vot` 继承。
+播放时长不在 `.vot` 里。口型是同 stem 的 `.kpkp`（约 20 口型/秒）。
+完整记录：`docs/msc-research/sys58-pilot-voice-vs-se.md`。
 
 ### `voicecategorytable_*.vctbl`
 

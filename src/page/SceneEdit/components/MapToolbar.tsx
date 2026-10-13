@@ -5,6 +5,7 @@ import {
   Image as ImageIcon,
   ImageOff,
   Library,
+  ListOrdered,
   PackageOpen,
   Save,
   HardDriveDownload,
@@ -65,6 +66,9 @@ const GIZMO_MODES = [
 
 interface MapToolbarProps {
   onOpenFolder: () => void;
+  /** Put object folders back in the vanilla pack's order (fixes shifted placements). */
+  onRestoreObjectOrder: () => void;
+  restoreObjectOrderDisabled: boolean;
   /** Pick a stage from the workspace stage list and unpack it on the spot. */
   onOpenMapLibrary: () => void;
   onOpenMissionPreview: () => void;
@@ -116,6 +120,8 @@ interface MapToolbarProps {
 
 export function MapToolbar({
   onOpenFolder,
+  onRestoreObjectOrder,
+  restoreObjectOrderDisabled,
   onOpenMapLibrary,
   onOpenMissionPreview,
   missionPreviewActive,
@@ -199,6 +205,11 @@ export function MapToolbar({
           <DropdownMenuItem onClick={onExtractFhm2d}>
             <PackageOpen className="mr-2 h-3.5 w-3.5" />
             {t("file.extractFhm2d")}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onRestoreObjectOrder} disabled={restoreObjectOrderDisabled}>
+            <ListOrdered className="mr-2 h-3.5 w-3.5" />
+            {t("file.restoreObjectOrder")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

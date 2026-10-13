@@ -368,12 +368,14 @@ describe("sceneSaveFolderPipeline", () => {
     );
   });
 
-  it("skips bundle reload when no structural changes", async () => {
+  it("reloads bundle for sky placement sync even without structural changes", async () => {
     const params = makeParams();
     const result = await executeSaveFolderPipeline(params);
     expect(result.reloadedBundle).toBeNull();
     expect(result.hasStructuralChanges).toBe(false);
-    expect(mockInvoke).not.toHaveBeenCalledWith("load_stage_bundle", expect.anything());
+    expect(mockInvoke).toHaveBeenCalledWith("load_stage_bundle", {
+      stageRoot: "E:/stage/16F73C97/0/0",
+    });
   });
 
   it("reloads bundle after structural changes", async () => {

@@ -63,7 +63,7 @@ use serde::Serialize;
 use serde_json::json;
 
 use crate::format::fhm2d_stage::rebuild_structure_json_for_stage_with_shared_textures;
-use crate::format::fhm2d_stage_validate::exvs_stage_validate_numatb_empty_params;
+use crate::format::fhm2d_stage_validate::exvs_stage_validate_preflight;
 
 use self::collision::{havok_filter_manager, mesh_to_hkt, vcl_mesh, CollisionReport};
 use self::info::{copy_template_info, placement_csv, plan_param_bytes, ObjectRow, TemplateStage};
@@ -395,10 +395,10 @@ pub fn port_stage(options: &PortOptions) -> Result<PortReport, String> {
     )?;
     let stage_dir_text = stage_dir.to_string_lossy().to_string();
     rebuild_structure_json_for_stage_with_shared_textures(&stage_dir_text)?;
-    let preflight = exvs_stage_validate_numatb_empty_params(&stage_dir_text);
+    let preflight = exvs_stage_validate_preflight(&stage_dir_text);
     if !preflight.valid {
         let messages: Vec<String> = preflight.errors.iter().map(|error| error.message.clone()).collect();
-        return Err(format!("numatb pre-flight failed: {}", messages.join("; ")));
+        return Err(format!("stage pre-flight failed: {}", messages.join("; ")));
     }
     Ok(report)
 }

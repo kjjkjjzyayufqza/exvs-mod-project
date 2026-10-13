@@ -63,6 +63,7 @@ import {
   isSceneSunGraphicParamKey,
 } from "../utils/graphicParamSceneLighting";
 import { formatPlacementViewportNodeId, parsePlacementViewportNodeId } from "../utils/placementNodeId";
+import { buildPlacementModelRefs } from "../utils/sceneEditorSelection";
 import type { SceneDrawStats } from "./SceneViewportOverlay";
 import type { TransformData } from "./StagePropertyEditor";
 import type { PreviewRenderStyle } from "@/components/ssbh-model-preview/SsbhModelPreviewContext";
@@ -579,6 +580,55 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       [placementEntries],
     );
 
+    const viewportPlacementModels = useMemo(() => {
+      const refs = buildPlacementModelRefs(
+        subModels.map((model) => ({
+          folderName: model.folderName,
+          objectIndex: model.objectIndex,
+        })),
+        importedDaeObjects.map((obj) => ({
+          id: obj.id,
+          name: obj.name,
+          hasBundle: Boolean(obj.ssbhBundle),
+        })),
+      );
+      const diskByFolder = new Map(subModels.map((model) => [model.folderName, model]));
+      const importById = new Map(importedDaeObjects.map((obj) => [obj.id, obj]));
+      return refs.flatMap((ref) => {
+        const nodeId = ref.nodeId ?? ref.folderName;
+        if (nodeId === ref.folderName) {
+          const disk = diskByFolder.get(ref.folderName);
+          if (!disk) return [];
+          return [{
+            nodeId,
+            folderName: ref.folderName,
+            objectIndex: ref.objectIndex,
+            bundle: disk.bundle,
+            standaloneTransform: standaloneTransforms?.get(ref.folderName),
+            transformTarget: "disk" as const,
+          }];
+        }
+        const imported = importById.get(nodeId);
+        if (!imported?.ssbhBundle) return [];
+        return [{
+          nodeId,
+          folderName: ref.folderName,
+          objectIndex: ref.objectIndex,
+          bundle: imported.ssbhBundle,
+          standaloneTransform: imported.transform,
+          transformTarget: "imported" as const,
+        }];
+      });
+    }, [importedDaeObjects, standaloneTransforms, subModels]);
+
+    const placedImportNodeIds = useMemo(() => {
+      const ids = new Set<string>();
+      for (const model of viewportPlacementModels) {
+        if (model.transformTarget === "imported") ids.add(model.nodeId);
+      }
+      return ids;
+    }, [viewportPlacementModels]);
+
     const drawsForComplexity = useMemo(
       () => collectSceneDrawsForComplexity(baseModel, subModels),
       [baseModel, subModels],
@@ -875,7 +925,12 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           />
         )}
 
-        {viewMode !== "collision" && subModels.flatMap((sub) => {
+        {viewMode !== "collision" && viewportPlacementModels.flatMap((model) => {
+          const sub = {
+            folderName: model.nodeId,
+            objectIndex: model.objectIndex,
+            bundle: model.bundle,
+          };
           const objectRows = placementEntries
             .map((entry, globalIdx) => ({ entry, globalIdx }))
             .filter(
@@ -885,7 +940,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
             );
 
           if (objectRows.length === 0) {
-            const st = standaloneTransforms?.get(sub.folderName);
+            const st = model.standaloneTransform;
             const isStandaloneSel = selectedNodeId === sub.folderName && selectedPlacementIdx === null;
             if (!isNodeVisible(sub.folderName)) return [];
             return [
@@ -916,9 +971,13 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
                 placementGizmoMode={placementGizmoMode}
                 transformGizmoSize={transformGizmoSize}
                 onPlacementGizmoCommit={
-                  onStandaloneTransformChange
-                    ? (_idx: number, t: TransformData) => onStandaloneTransformChange(sub.folderName, t)
-                    : undefined
+                  model.transformTarget === "imported"
+                    ? onImportedDaeTransformChange
+                      ? (_idx: number, t: TransformData) => onImportedDaeTransformChange(model.nodeId, t)
+                      : undefined
+                    : onStandaloneTransformChange
+                      ? (_idx: number, t: TransformData) => onStandaloneTransformChange(model.folderName, t)
+                      : undefined
                 }
                 selectedGroupsRef={selectedGroupsRef}
               />,
@@ -1043,6 +1102,7 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
         })}
 
         {viewMode !== "collision" && importedDaeObjects.flatMap((obj) => {
+          if (placedImportNodeIds.has(obj.id)) return [];
           if (!isNodeVisible(obj.id)) return [];
           if (obj.ssbhBundle) {
             return [(

@@ -87,6 +87,8 @@ RTTI 类型描述符字符串 `0x14201F880`，外层函数签名整段被编进�
 全库用 `find_regex "fnc_"` 搜字符串**只有这 1 条**；`MotionScript|Bscr|Dscr|Cscr` 也只有 5 条 RTTI
 字符串（`CMotionScriptDepot` / `CMotionScriptAbstract` / `CLineWork` / 上面那条 / `CMotionScript@MSC`）。
 所以 `sys_58` 等没有名字可捡，只能靠子命令行为 + 脚本调用点反推语义。
+`sys_58` 的子命令分裂（`0x9` 是飞行员 `.vot` situation，其余带 hash 的子命令是机体 SE）
+记在 `docs/msc-research/sys58-pilot-voice-vs-se.md`。本表不重复那份证据。
 
 **可复用的检查清单**：给定一个二进制，先 `find_regex "fnc_|Bscr|Dscr"` 捞名字泄露（局部类 vftable、
 局部 static guard、`__func__` 字符串都可能漏），再回退到槽位表 + 子命令分析。

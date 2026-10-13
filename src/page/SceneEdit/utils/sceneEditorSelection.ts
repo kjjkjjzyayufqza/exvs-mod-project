@@ -8,6 +8,57 @@ import {
 export interface SceneSelectionSubModel {
   folderName: string;
   objectIndex: number;
+  /** Outliner and viewport id. Disk models use `folderName`; unsaved imports use their session id. */
+  nodeId?: string;
+}
+
+export interface ImportedPlacementModelSource {
+  id: string;
+  name: string;
+  hasBundle: boolean;
+}
+
+export function placementModelNodeId(model: {
+  nodeId?: string | null;
+  folderName: string;
+}): string {
+  const nodeId = model.nodeId?.trim();
+  return nodeId && nodeId.length > 0 ? nodeId : model.folderName;
+}
+
+/**
+ * Disk object indices stay put. A `zzzz_import_*` folder sorts after `sky` and
+ * takes the next non-sky index (the index sky holds before the folder exists).
+ * Sky's placement number moves up by one per new import so it does not share
+ * that index.
+ */
+export function buildPlacementModelRefs(
+  subModels: readonly SceneSelectionSubModel[],
+  imported: readonly ImportedPlacementModelSource[],
+): SceneSelectionSubModel[] {
+  const names = new Set(subModels.map((model) => model.folderName));
+  const importedRefs: SceneSelectionSubModel[] = [];
+  let nextIndex = subModels.filter((model) => model.folderName.toLowerCase() !== "sky").length;
+  for (const obj of imported) {
+    if (!obj.hasBundle || names.has(obj.name)) continue;
+    names.add(obj.name);
+    importedRefs.push({
+      nodeId: obj.id,
+      folderName: obj.name,
+      objectIndex: nextIndex,
+    });
+    nextIndex += 1;
+  }
+  const added = importedRefs.length;
+  const refs = subModels.map((model) => ({
+    folderName: model.folderName,
+    objectIndex:
+      model.folderName.toLowerCase() === "sky"
+        ? model.objectIndex + added
+        : model.objectIndex,
+    nodeId: placementModelNodeId(model),
+  }));
+  return [...refs, ...importedRefs];
 }
 
 type ObjectIndexSource = {
@@ -127,7 +178,7 @@ export function resolveSelectionForSceneNode(
     };
   }
 
-  const sub = subModels.find((entry) => entry.folderName === id);
+  const sub = subModels.find((entry) => placementModelNodeId(entry) === id);
   if (!sub) {
     return { selectedNodeId: id, selectedPlacementIdx: null };
   }
@@ -154,7 +205,7 @@ export function resolveNodeIdForPlacementIndex(
   if (entry.vdkType.toUpperCase() !== "OBJECT") return `__effect__${placementIndex}`;
   if (entry.objectNumber === null) return null;
   const sub = subModels.find((item) => item.objectIndex === entry.objectNumber);
-  return sub ? formatPlacementViewportNodeId(sub.folderName, placementIndex) : null;
+  return sub ? formatPlacementViewportNodeId(placementModelNodeId(sub), placementIndex) : null;
 }
 
 /** Whether an outliner row should show as selected (store ids + page primary id, incl. placement children). */

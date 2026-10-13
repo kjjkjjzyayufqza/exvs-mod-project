@@ -16,8 +16,14 @@
     "renamePreviewFailed": "FHM2D 重命名预览失败",
     "extractionFailed": "FHM2D 提取失败",
     "stageSceneLoadFailed": "无法将场景加载到场景视图",
-    "textureBlocked": "{{count}} 个纹理问题{{objectCount}}导致打包被阻止",
-    "textureValidationFailed": "纹理校验失败",
+    "stageBlocked": "{{count}} 个场景问题，已阻止保存和打包",
+    "objectOrderDplCacheMissing": "请先在设置里填写 OB DPLCache 路径，原版包从那里读取",
+    "objectOrderUnsavedChanges": "请先保存或放弃当前修改；恢复对象顺序会重新加载场景",
+    "objectOrderRestoreFailed": "恢复原版对象顺序失败",
+    "stageValidationFailed": "场景校验失败",
+    "stagePreflightTitle": "场景存在问题，已阻止保存",
+    "stageLoadProblemsTitle": "加载时发现场景问题（修复前无法保存）",
+    "repackValidationTitle": "场景存在问题，已阻止打包",
     "editLocked": "无法编辑锁定或隐藏的场景对象",
     "outlinerNodeMissing": "找不到大纲节点",
     "clipboardSceneObjects": "剪贴板不包含可粘贴的场景对象",
@@ -124,6 +130,9 @@
     "reset": "重置"
   },
   "success": {
+    "objectOrderRestored": "已恢复原版对象顺序（{{count}} 个对象序号发生变化）",
+    "objectOrderAdded": "{{name}}：原版没有此对象，已排在原版对象之后",
+    "objectOrderMissing": "{{name}}：原版对象在磁盘上没有对应文件夹",
     "stageWarnings": "场景加载完成，但有 {{count}} 个警告",
     "stageLoaded": "场景加载成功",
     "skeletonWarnings": "骨架加载完成，但有 {{count}} 个警告",
@@ -178,7 +187,9 @@
     "collisionCount": "碰撞（{{count}}）",
     "noCollisionSources": "没有碰撞源",
     "hideAll": "全部隐藏",
-    "showAll": "全部显示"
+    "showAll": "全部显示",
+    "showCollisionSource": "显示此项",
+    "hideCollisionSource": "隐藏此项"
   },
   "detailView": {
     "propertiesTitle": "属性 — {{name}}",

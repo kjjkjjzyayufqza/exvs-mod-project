@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { PlacementRow } from "../types/placement";
-import { ensureSkyPlacementObjectNumber } from "./ensureSkyPlacementObjectNumber";
+import {
+  ensureSkyPlacementObjectNumber,
+  reassignObjectPlacementsOffSky,
+  resolveSkyPlacementObjectNumber,
+} from "./ensureSkyPlacementObjectNumber";
 
 function placement(
   type: string,
@@ -22,6 +26,60 @@ function placement(
     rawFields: rawFields ?? ["VDK_TYPE", type],
   };
 }
+
+describe("resolveSkyPlacementObjectNumber", () => {
+  it("uses the sky sub-model objectIndex when present", () => {
+    const subModels = [
+      { folderName: "obj_a", objectIndex: 0 },
+      { folderName: "obj_b", objectIndex: 1 },
+      { folderName: "sky", objectIndex: 2 },
+    ];
+    expect(resolveSkyPlacementObjectNumber(subModels)).toBe(2);
+  });
+
+  it("falls back to non-sky count when sky folder is missing from bundle", () => {
+    const subModels = [
+      { folderName: "obj_a", objectIndex: 0 },
+      { folderName: "obj_b", objectIndex: 1 },
+    ];
+    expect(resolveSkyPlacementObjectNumber(subModels)).toBe(2);
+  });
+});
+
+describe("reassignObjectPlacementsOffSky", () => {
+  it("moves an OBJECT that shares the sky number onto the unused import index", () => {
+    const subModels = [
+      { folderName: "ground", objectIndex: 0 },
+      { folderName: "zzzz_import_gundam", objectIndex: 63 },
+      { folderName: "sky", objectIndex: 64 },
+    ];
+    const entries = [
+      placement("OBJECT", 0, ["VDK_TYPE", "OBJECT", "VDK_OBJECTNUMBER", "0"]),
+      placement("SKY", 64, ["VDK_TYPE", "SKY", "VDK_OBJECTNUMBER", "64"]),
+      placement("OBJECT", 64, ["VDK_TYPE", "OBJECT", "VDK_OBJECTNUMBER", "64"]),
+    ];
+    const result = reassignObjectPlacementsOffSky(entries, subModels);
+    expect(result[0].objectNumber).toBe(0);
+    expect(result[1].objectNumber).toBe(64);
+    expect(result[2].objectNumber).toBe(63);
+    const idx = result[2].rawFields.indexOf("VDK_OBJECTNUMBER");
+    expect(result[2].rawFields[idx + 1]).toBe("63");
+  });
+
+  it("moves a sky-numbered OBJECT onto an import that already has an instance", () => {
+    const subModels = [
+      { folderName: "zzzz_import_gundam", objectIndex: 63 },
+      { folderName: "sky", objectIndex: 64 },
+    ];
+    const entries = [
+      placement("SKY", 64, ["VDK_TYPE", "SKY", "VDK_OBJECTNUMBER", "64"]),
+      placement("OBJECT", 63, ["VDK_TYPE", "OBJECT", "VDK_OBJECTNUMBER", "63"]),
+      placement("OBJECT", 64, ["VDK_TYPE", "OBJECT", "VDK_OBJECTNUMBER", "64"]),
+    ];
+    const result = reassignObjectPlacementsOffSky(entries, subModels);
+    expect(result.map((entry) => entry.objectNumber)).toEqual([64, 63, 63]);
+  });
+});
 
 describe("ensureSkyPlacementObjectNumber", () => {
   it("returns entries unchanged when no SKY type is present", () => {

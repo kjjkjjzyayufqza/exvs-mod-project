@@ -1,6 +1,13 @@
 import { Eye, EyeOff } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import {
+  EditorContextMenuContent,
+  EditorContextMenuItem,
+  editorContextMenuIconClassName,
+  stopEditorContextMenuBubble,
+} from "@/components/editor/EditorContextMenu";
+import { ContextMenu, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 import type { HavokMeshData } from "@/utils/havokXmlParser";
 import { useSceneEditorStore } from "../../store/sceneEditorStore";
@@ -76,7 +83,8 @@ export function CollisionListPanel({ sourceIds, meshDataMap, metaMap }: Collisio
           const visible = collisionVisibility[folder] !== false;
           const meshData = meshDataMap?.get(sourceId);
           const triCount = meshData ? countHavokCollisionTriangles(meshData) : null;
-          return (
+          const displayLabel = labelForSource(sourceId, metaMap?.get(sourceId));
+          const rowButton = (
             <button
               type="button"
               className={cn(
@@ -84,19 +92,44 @@ export function CollisionListPanel({ sourceIds, meshDataMap, metaMap }: Collisio
                 !visible && "opacity-40",
               )}
               onClick={() => toggleCollisionVisibility(folder)}
+              onContextMenu={stopEditorContextMenuBubble}
             >
               {visible ? (
                 <Eye className="h-3 w-3 shrink-0 text-green-400" />
               ) : (
                 <EyeOff className="h-3 w-3 shrink-0 text-muted-foreground" />
               )}
-              <span className="min-w-0 flex-1 truncate">{labelForSource(sourceId, metaMap?.get(sourceId))}</span>
+              <span className="min-w-0 flex-1 truncate">{displayLabel}</span>
               {triCount != null ? (
                 <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
                   {formatTriangleCount(triCount)}
                 </span>
               ) : null}
             </button>
+          );
+          return (
+            <ContextMenu>
+              <ContextMenuTrigger asChild>{rowButton}</ContextMenuTrigger>
+              <EditorContextMenuContent>
+                <EditorContextMenuItem onSelect={() => toggleCollisionVisibility(folder)}>
+                  {visible ? (
+                    <EyeOff className={editorContextMenuIconClassName} />
+                  ) : (
+                    <Eye className={editorContextMenuIconClassName} />
+                  )}
+                  <span>{visible ? t("labels.hideCollisionSource") : t("labels.showCollisionSource")}</span>
+                </EditorContextMenuItem>
+                <ContextMenuSeparator />
+                <EditorContextMenuItem onSelect={() => setAllCollisionVisibility(true)}>
+                  <Eye className={editorContextMenuIconClassName} />
+                  <span>{t("labels.showAll")}</span>
+                </EditorContextMenuItem>
+                <EditorContextMenuItem onSelect={() => setAllCollisionVisibility(false)}>
+                  <EyeOff className={editorContextMenuIconClassName} />
+                  <span>{t("labels.hideAll")}</span>
+                </EditorContextMenuItem>
+              </EditorContextMenuContent>
+            </ContextMenu>
           );
         }}
       />

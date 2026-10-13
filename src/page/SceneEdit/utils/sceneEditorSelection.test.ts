@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PlacementRow } from "../types/placement";
 import type { StageTreeNode } from "../components/StageHierarchyTree";
 import {
+  buildPlacementModelRefs,
   findOutlinerAncestorIds,
   getRequestedSceneNodeIds,
   isOutlinerNodeSelected,
@@ -108,6 +109,30 @@ describe("scene editor selection helpers", () => {
     });
   });
 
+  it("gives a converted import the non-sky index and moves sky up", () => {
+    const disk = [
+      { folderName: "ground", objectIndex: 0 },
+      { folderName: "sky", objectIndex: 1 },
+    ];
+    const refs = buildPlacementModelRefs(disk, [
+      { id: "dae_prop", name: "prop_ssbh", hasBundle: true },
+      { id: "dae_raw", name: "raw_fbx", hasBundle: false },
+    ]);
+
+    expect(refs.map((model) => [model.nodeId, model.objectIndex])).toEqual([
+      ["ground", 0],
+      ["sky", 2],
+      ["dae_prop", 1],
+    ]);
+    expect(resolveNodeIdForPlacementIndex(0, [placement("OBJECT", 1)], refs)).toBe(
+      formatPlacementViewportNodeId("dae_prop", 0),
+    );
+    expect(resolveSelectionForSceneNode("dae_prop", refs, [placement("OBJECT", 1)])).toEqual({
+      selectedNodeId: "dae_prop",
+      selectedPlacementIdx: 0,
+    });
+  });
+
   it("maps placement row selection back to the exact outliner node id", () => {
     const rows = [placement("OBJECT", 1), placement("PROP", null)];
 
@@ -147,7 +172,7 @@ describe("scene editor selection helpers", () => {
       ],
     };
     const childId = formatPlacementViewportNodeId("parent_obj", 1);
-    expect(findOutlinerAncestorIds(root, childId)).toEqual(["root", "parent_obj"]);
+    expect(findOutlinerAncestorIds(root, childId)).toEqual(["parent_obj"]);
     expect(resolveOutlinerRevealNodeId(root, childId)).toBe(childId);
   });
 

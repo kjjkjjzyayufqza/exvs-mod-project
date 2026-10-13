@@ -138,6 +138,21 @@ describe("remapPlacementObjectNumbers", () => {
     expect(result[0].objectNumber).toBeNull();
   });
 
+  it("keeps an OBJECT row that only matches the sky folder", () => {
+    const models: SubModelRef[] = [
+      { folderName: "zzzz_import_gundam", objectIndex: 63 },
+      { folderName: "sky", objectIndex: 64 },
+    ];
+    const entries = [
+      placement("OBJECT", 64, ["VDK_TYPE", "OBJECT", "VDK_OBJECTNUMBER", "64"]),
+      placement("SKY", 64, ["VDK_TYPE", "SKY", "VDK_OBJECTNUMBER", "64"]),
+    ];
+    const result = remapPlacementObjectNumbers(entries, models, models);
+    expect(result).toHaveLength(2);
+    expect(result[0].objectNumber).toBe(64);
+    expect(result[1].objectNumber).toBe(64);
+  });
+
   it("preserves OBJECT rows with unknown objectNumber defensively", () => {
     const oldModels: SubModelRef[] = [{ folderName: "aaa", objectIndex: 0 }];
     const newModels: SubModelRef[] = [{ folderName: "aaa", objectIndex: 0 }];

@@ -78,12 +78,15 @@ import {
   parsePlacementViewportNodeId,
 } from "./utils/placementNodeId";
 import {
+  buildPlacementModelRefs,
   getRequestedSceneNodeIds,
   normalizePlacementObjectNumber,
+  placementModelNodeId,
   resolveNodeIdForPlacementIndex,
   resolveSelectionForSceneNode,
   resolveSubModelPlacementRef,
 } from "./utils/sceneEditorSelection";
+import { updateObjectNumberInRawFields } from "./utils/ensureSkyPlacementObjectNumber";
 import {
   patchPlacementRawFieldsForNumericField,
   patchPlacementRowTransform,
@@ -183,6 +186,7 @@ import {
 import {
   buildStageModFhm2dOutputPath,
   readStagePackHashName,
+  resolveStagePackStructureTarget,
 } from "./utils/sceneStageStructure";
 import { removeMatchingModVgsht2 } from "@/page/TestEditor/utils/modVgsht2";
 import {
@@ -253,7 +257,8 @@ import {
   stageLoadSkeleton,
   stageLoadModelSlotBundle,
   stageStreamBundles,
-  validateNumatbEmptyParams,
+  validateStagePreflight,
+  restoreStageObjectOrder,
   type SubModelManifestEntry,
   type StageSkeleton,
   type StageStreamChunk,
@@ -688,29 +693,17 @@ export default function SceneEdit() {
   // can reference newly imported models before saving to disk.
   const effectiveSubModels = useMemo(() => {
     const manifest = subModelManifestRef.current;
-    const normalize = (
-      models: Array<{
-        folderName: string;
-        objectIndex: number;
-        bundle?: SsbhModelPreviewBundle;
-      }>,
-    ): Array<{ folderName: string; objectIndex: number }> =>
-      models.map((model, index) =>
-        resolveSubModelPlacementRef(model, manifest, index),
-      );
-
-    if (importedDaeObjects.length === 0) return normalize(subModels);
-    const existing = new Set(subModels.map((s) => s.folderName));
-    const nextIndex = subModels.length;
-    const extras = importedDaeObjects
-      .filter((obj) => !existing.has(obj.name))
-      .map((obj, i) => ({
-        folderName: obj.name,
-        objectIndex: nextIndex + i,
-      }));
-    return extras.length > 0
-      ? normalize([...subModels, ...extras])
-      : normalize(subModels);
+    const disk = subModels.map((model, index) =>
+      resolveSubModelPlacementRef(model, manifest, index),
+    );
+    return buildPlacementModelRefs(
+      disk,
+      importedDaeObjects.map((obj) => ({
+        id: obj.id,
+        name: obj.name,
+        hasBundle: Boolean(obj.ssbhBundle),
+      })),
+    );
   }, [subModels, importedDaeObjects]);
 
   const [resetDialogState, setResetDialogState] = useState<{
@@ -1041,11 +1034,11 @@ export default function SceneEdit() {
 
   const applyPrimarySelectionState = useCallback(
     (id: string | null) => {
-      const next = resolveSelectionForSceneNode(id, subModels, placementEntries);
+      const next = resolveSelectionForSceneNode(id, effectiveSubModels, placementEntries);
       setSelectedNodeIdRaw(next.selectedNodeId);
       setSelectedPlacementIdxRaw(next.selectedPlacementIdx);
     },
-    [placementEntries, subModels],
+    [placementEntries, effectiveSubModels],
   );
 
   const handleClearSelection = useCallback(() => {
@@ -1110,13 +1103,13 @@ export default function SceneEdit() {
   const handleSelectPlacement = useCallback(
     (idx: number) => {
       setSelectedPlacementIdxRaw(idx);
-      const nodeId = resolveNodeIdForPlacementIndex(idx, placementEntries, subModels);
+      const nodeId = resolveNodeIdForPlacementIndex(idx, placementEntries, effectiveSubModels);
       setSelectedNodeIdRaw(nodeId);
       const store = useSceneEditorStore.getState();
       if (nodeId) store.select(nodeId);
       else store.deselectAll();
     },
-    [subModels, placementEntries]
+    [effectiveSubModels, placementEntries]
   );
 
   const placementIndexForNodeId = useCallback(
@@ -1125,7 +1118,7 @@ export default function SceneEdit() {
       if (parsed) return parsed.placementEntryIndex;
       const effectMatch = id.match(/^__effect__(\d+)$/);
       if (effectMatch) return Number(effectMatch[1]);
-      const sub = subModels.find((s) => s.folderName === id);
+      const sub = effectiveSubModels.find((model) => placementModelNodeId(model) === id);
       if (!sub) return null;
       const idx = placementEntries.findIndex(
         (entry) =>
@@ -1134,14 +1127,14 @@ export default function SceneEdit() {
       );
       return idx >= 0 ? idx : null;
     },
-    [placementEntries, subModels],
+    [placementEntries, effectiveSubModels],
   );
 
   const nodeIdForPlacementIndex = useCallback(
     (idx: number): string | null => {
-      return resolveNodeIdForPlacementIndex(idx, placementEntries, subModels);
+      return resolveNodeIdForPlacementIndex(idx, placementEntries, effectiveSubModels);
     },
-    [placementEntries, subModels],
+    [placementEntries, effectiveSubModels],
   );
 
   const canEditNode = useCallback(
@@ -1227,13 +1220,11 @@ export default function SceneEdit() {
         setPlacementEntries(result.entries);
         setSelectedPlacementIdxRaw(result.insertedIndex);
         useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
-        const inserted = result.insertedRow;
-        const sub = inserted.objectNumber !== null
-          ? subModels.find((s) => s.objectIndex === inserted.objectNumber)
-          : null;
-        const insertedNodeId = sub
-          ? formatPlacementViewportNodeId(sub.folderName, result.insertedIndex)
-          : null;
+        const insertedNodeId = resolveNodeIdForPlacementIndex(
+          result.insertedIndex,
+          result.entries,
+          effectiveSubModels,
+        );
         if (insertedNodeId) {
           setSelectedNodeIdRaw(insertedNodeId);
           useSceneEditorStore.getState().select(insertedNodeId);
@@ -1280,7 +1271,7 @@ export default function SceneEdit() {
       placementIndexForNodeId,
       selectedNodeId,
       selectedPlacementIdx,
-      subModels,
+      effectiveSubModels,
     ],
   );
 
@@ -1515,6 +1506,17 @@ export default function SceneEdit() {
     toast.success(t("success.cacheCleared"));
   }, [resetState]);
 
+  /** Open the validation dialog and mark the offending outliner objects. */
+  const showValidationErrors = useCallback(
+    (errors: ExvsStageValidationError[], title: string, knownFolders: readonly string[]) => {
+      const errorFolders = buildErrorFolderCounts(errors, knownFolders);
+      useSceneValidationStore.getState().setErrors(errors, errorFolders);
+      setValidationDialog({ open: true, title, errors });
+      toast.error(t("errors.stageBlocked", { count: errors.length }));
+    },
+    [],
+  );
+
   /**
    * Load one extracted stage pack folder.
    *
@@ -1686,6 +1688,23 @@ export default function SceneEdit() {
           );
         });
       });
+
+      // Same gate as save/repack, so a stage the game cannot load is flagged
+      // as soon as it opens instead of at the first save.
+      try {
+        const preflight = await validateStagePreflight(stageRoot);
+        if (preflight.valid) {
+          useSceneValidationStore.getState().clear();
+        } else {
+          showValidationErrors(
+            preflight.errors,
+            t("errors.stageLoadProblemsTitle"),
+            [...streamedSubModels.map((s) => s.folderName), "base"],
+          );
+        }
+      } catch (err) {
+        toast.error(t("errors.stageValidationFailed"), { description: String(err) });
+      }
     } catch (err: unknown) {
       loadTimer?.fail(err);
       toast.error(t("errors.stageLoadFailed"), { description: String(err) });
@@ -1695,7 +1714,7 @@ export default function SceneEdit() {
       setIsLoading(false);
       stageLoadInFlightRef.current = null;
     }
-  }, [applySkeleton, resetState]);
+  }, [applySkeleton, resetState, showValidationErrors]);
 
   const handleOpenFolder = useCallback(async () => {
     const selected = await open({
@@ -1706,6 +1725,37 @@ export default function SceneEdit() {
     await rememberStoredDialogSelection(SCENE_OPEN_FOLDER_DIALOG_PATH_KEY, selected, "directory");
     await loadStagePackRoot(selected);
   }, [loadStagePackRoot]);
+
+  /**
+   * Put the loaded stage's object folders back in its vanilla pack's order and
+   * reload, so every placement points at the model it did in the shipped pack.
+   */
+  const handleRestoreObjectOrder = useCallback(async () => {
+    if (!stageRoot) return;
+    if (!obDplCachePath) {
+      toast.error(t("errors.objectOrderDplCacheMissing"));
+      return;
+    }
+    if (buildSaveChangePreview(useSceneDirtyStore.getState()).hasChanges) {
+      toast.error(t("errors.objectOrderUnsavedChanges"));
+      return;
+    }
+    try {
+      const hashName = await readStagePackHashName(stageRoot);
+      const result = await restoreStageObjectOrder(stageRoot, obDplCachePath, hashName);
+      const details = [
+        ...result.moved,
+        ...result.added.map((name) => t("success.objectOrderAdded", { name })),
+        ...result.missing.map((name) => t("success.objectOrderMissing", { name })),
+      ];
+      toast.success(t("success.objectOrderRestored", { count: result.moved.length }), {
+        description: details.slice(0, 8).join("\n"),
+      });
+      await loadStagePackRoot(resolveStagePackStructureTarget(stageRoot).packRoot);
+    } catch (err) {
+      toast.error(t("errors.objectOrderRestoreFailed"), { description: String(err) });
+    }
+  }, [loadStagePackRoot, obDplCachePath, stageRoot]);
 
   const missionPreview = useMissionPreview();
   const missionAuthoring = useMissionAuthoringSession(missionPreview);
@@ -2029,31 +2079,23 @@ export default function SceneEdit() {
   }, [deleteConfirmState.resolve]);
 
   const surfaceValidationErrors = useCallback(
-    (errors: ExvsStageValidationError[], title: string) => {
-      const knownFolders = [...subModels.map((s) => s.folderName), "base"];
-      const errorFolders = buildErrorFolderCounts(errors, knownFolders);
-      useSceneValidationStore.getState().setErrors(errors, errorFolders);
-      setValidationDialog({ open: true, title, errors });
-      const objectCount = Object.keys(errorFolders).length;
-      toast.error(
-        t("errors.textureBlocked", { count: errors.length, objectCount }),
-      );
-    },
-    [subModels],
+    (errors: ExvsStageValidationError[], title: string) =>
+      showValidationErrors(errors, title, [...subModels.map((s) => s.folderName), "base"]),
+    [showValidationErrors, subModels],
   );
 
-  const runNumatbPreflight = useCallback(
+  const runStagePreflight = useCallback(
     async (root: string): Promise<boolean> => {
       try {
-        const result = await validateNumatbEmptyParams(root);
+        const result = await validateStagePreflight(root);
         if (result.valid) {
           useSceneValidationStore.getState().clear();
           return true;
         }
-        surfaceValidationErrors(result.errors, "Empty texture paths block packing");
+        surfaceValidationErrors(result.errors, t("errors.stagePreflightTitle"));
         return false;
       } catch (err) {
-        toast.error(t("errors.textureValidationFailed"), { description: String(err) });
+        toast.error(t("errors.stageValidationFailed"), { description: String(err) });
         return false;
       }
     },
@@ -2165,7 +2207,7 @@ export default function SceneEdit() {
       if (!confirmed) return;
     }
 
-    if (!(await runNumatbPreflight(stageRoot))) return;
+    if (!(await runStagePreflight(stageRoot))) return;
 
     try {
       await refreshCleanInfoCsv({
@@ -2251,7 +2293,7 @@ export default function SceneEdit() {
     } finally {
       saveTimer.end();
     }
-  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, modelReplacements, applyBundle, updateSaveProgress, autoApproveSaveDelete, promptSaveConfirm, runNumatbPreflight, surfaceValidationErrors, refreshCleanInfoCsv, t]);
+  }, [stageRoot, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, modelReplacements, applyBundle, updateSaveProgress, autoApproveSaveDelete, promptSaveConfirm, runStagePreflight, surfaceValidationErrors, refreshCleanInfoCsv, t]);
 
   const handleSaveFhm2d = useCallback(async () => {
     if (!stageRoot) return;
@@ -2276,7 +2318,7 @@ export default function SceneEdit() {
     const changePreview = buildSaveChangePreview(dirtyStore);
     if (!(await promptSaveConfirm(changePreview, outputPath))) return;
 
-    if (!(await runNumatbPreflight(stageRoot))) return;
+    if (!(await runStagePreflight(stageRoot))) return;
 
     try {
       await refreshCleanInfoCsv({
@@ -2319,7 +2361,7 @@ export default function SceneEdit() {
       if (!result.success) {
         setSaveProgressState((prev) => ({ ...prev, canClose: true }));
         if (result.validationErrors && result.validationErrors.length > 0) {
-          surfaceValidationErrors(result.validationErrors, "Missing textures block packing");
+          surfaceValidationErrors(result.validationErrors, t("errors.repackValidationTitle"));
         } else {
           toast.error(t("errors.fhm2dSaveFailed"));
         }
@@ -2372,7 +2414,7 @@ export default function SceneEdit() {
     } finally {
       repackTimer.end();
     }
-  }, [stageRoot, obModPath, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, modelReplacements, applyBundle, updateSaveProgress, autoApproveSaveDelete, promptSaveConfirm, runNumatbPreflight, surfaceValidationErrors, refreshCleanInfoCsv, t]);
+  }, [stageRoot, obModPath, graphicParams, placementHeader, placementEntries, subModels, importedDaeObjects, sceneSessionId, modelReplacements, applyBundle, updateSaveProgress, autoApproveSaveDelete, promptSaveConfirm, runStagePreflight, surfaceValidationErrors, refreshCleanInfoCsv, t]);
 
   const handleGraphicParamValueChange = useCallback(
     (index: number, value: string) => {
@@ -3062,7 +3104,21 @@ export default function SceneEdit() {
 
   const handleAddTypedPlacement = useCallback(
     (vdkType: string) => {
-      const newRow = createPlacementRowForType(vdkType);
+      let newRow = createPlacementRowForType(vdkType);
+      if (vdkType.toUpperCase() === "OBJECT" && selectedNodeId) {
+        const parsed = parsePlacementViewportNodeId(selectedNodeId);
+        const selectedRef = effectiveSubModels.find((model) => {
+          const nodeId = placementModelNodeId(model);
+          return nodeId === selectedNodeId || nodeId === parsed?.folderName;
+        });
+        if (selectedRef) {
+          newRow = {
+            ...newRow,
+            objectNumber: selectedRef.objectIndex,
+            rawFields: updateObjectNumberInRawFields([...newRow.rawFields], selectedRef.objectIndex),
+          };
+        }
+      }
       const insertAt = selectedPlacementIdx !== null ? selectedPlacementIdx + 1 : placementEntries.length;
       setPlacementEntries((prev) => {
         const next = [...prev];
@@ -3071,7 +3127,7 @@ export default function SceneEdit() {
       });
       setSelectedPlacementIdxRaw(insertAt);
       const nextEntries = [...placementEntries.slice(0, insertAt), newRow, ...placementEntries.slice(insertAt)];
-      const insertedNodeId = resolveNodeIdForPlacementIndex(insertAt, nextEntries, subModels);
+      const insertedNodeId = resolveNodeIdForPlacementIndex(insertAt, nextEntries, effectiveSubModels);
       setSelectedNodeIdRaw(insertedNodeId);
       if (insertedNodeId) useSceneEditorStore.getState().select(insertedNodeId);
       useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
@@ -3094,16 +3150,21 @@ export default function SceneEdit() {
         },
       });
     },
-    [handleClearSelection, placementEntries, selectedPlacementIdx, subModels],
+    [effectiveSubModels, handleClearSelection, placementEntries, selectedNodeId, selectedPlacementIdx],
   );
 
   const outlinerChildren = useMemo((): StageTreeNode[] => {
     if (!treeRoot) {
-      const nodes: StageTreeNode[] = importedDaeObjects.map((obj) => ({
-        id: obj.id,
-        label: obj.name,
-        role: "imported_dae" as const,
-      }));
+      const nodes: StageTreeNode[] = importedDaeObjects.map((obj) => {
+        const ref = effectiveSubModels.find((model) => model.nodeId === obj.id);
+        const node: StageTreeNode = {
+          id: obj.id,
+          label: obj.name,
+          role: "imported_dae",
+          ...(ref ? { objectIndex: ref.objectIndex } : {}),
+        };
+        return ref ? buildSubModelOutlinerNode(node, placementEntries) : node;
+      });
 
       if (havokMetaMap.size > 0) {
         const colChildren: StageTreeNode[] = [];
@@ -3152,11 +3213,14 @@ export default function SceneEdit() {
     }
 
     for (const obj of importedDaeObjects) {
-      children.push({
+      const ref = effectiveSubModels.find((model) => model.nodeId === obj.id);
+      const node: StageTreeNode = {
         id: obj.id,
         label: obj.name,
         role: "imported_dae",
-      });
+        ...(ref ? { objectIndex: ref.objectIndex } : {}),
+      };
+      children.push(ref ? buildSubModelOutlinerNode(node, placementEntries) : node);
     }
 
     if (havokMetaMap.size > 0) {
@@ -3178,7 +3242,7 @@ export default function SceneEdit() {
     }
 
     return children;
-  }, [treeRoot, placementEntries, importedDaeObjects, havokMetaMap, t]);
+  }, [treeRoot, placementEntries, importedDaeObjects, effectiveSubModels, havokMetaMap, t]);
 
   const outlinerOrder = useSceneEditorStore((state) => state.outlinerOrder);
 
@@ -3288,7 +3352,7 @@ export default function SceneEdit() {
       const result = pastePlacementsAfter(placementEntries, copiedRows, selectedPlacementIdx);
       setPlacementEntries(result.entries);
       setSelectedPlacementIdxRaw(result.insertedStart);
-      const insertedNodeId = resolveNodeIdForPlacementIndex(result.insertedStart, result.entries, subModels);
+      const insertedNodeId = resolveNodeIdForPlacementIndex(result.insertedStart, result.entries, effectiveSubModels);
       setSelectedNodeIdRaw(insertedNodeId);
       if (insertedNodeId) useSceneEditorStore.getState().select(insertedNodeId);
       useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
@@ -3318,7 +3382,7 @@ export default function SceneEdit() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to paste selection");
     }
-  }, [handleClearSelection, handleSelectNode, importedDaeObjects, placementEntries, placementIndexForNodeId, selectedPlacementIdx, subModels]);
+  }, [effectiveSubModels, handleClearSelection, handleSelectNode, importedDaeObjects, placementEntries, placementIndexForNodeId, selectedPlacementIdx]);
 
   const handleImportDae = useCallback(async () => {
     const selected = await open({
@@ -3671,6 +3735,7 @@ export default function SceneEdit() {
               stageRoot,
               sourcePath: entry.filePath,
             });
+            await hydrateBundleGeometry(ssbhBundle);
             for (const warning of ssbhBundle.warnings) {
               toast.warning(warning);
             }
@@ -4304,7 +4369,7 @@ export default function SceneEdit() {
             });
             const firstDeleted = result.deleted[0]!;
             setSelectedPlacementIdxRaw(firstDeleted.index);
-            const restoredNodeId = resolveNodeIdForPlacementIndex(firstDeleted.index, placementEntries, subModels);
+            const restoredNodeId = resolveNodeIdForPlacementIndex(firstDeleted.index, placementEntries, effectiveSubModels);
             setSelectedNodeIdRaw(restoredNodeId);
             if (restoredNodeId) useSceneEditorStore.getState().select(restoredNodeId);
             useSceneDirtyStore.getState().markGlobalDirty("placementOrder");
@@ -4328,6 +4393,7 @@ export default function SceneEdit() {
       placementEntries,
       placementIndexForNodeId,
       removeHavokOverlayForFolders,
+      effectiveSubModels,
       sceneSessionId,
       selectedNodeId,
       selectedPlacementIdx,
@@ -4699,6 +4765,8 @@ export default function SceneEdit() {
       <div className="flex h-full min-h-0 min-w-0 flex-col bg-background">
         <MapToolbar
           onOpenFolder={handleOpenFolder}
+          onRestoreObjectOrder={handleRestoreObjectOrder}
+          restoreObjectOrderDisabled={!stageRoot || isLoading}
           onOpenMapLibrary={() => {
             setMapLibraryFocusHash(null);
             setMapLibraryOpen(true);

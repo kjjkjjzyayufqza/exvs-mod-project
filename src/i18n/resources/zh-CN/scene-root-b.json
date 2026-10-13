@@ -49,6 +49,8 @@
   "outliner.regenerateHkt": "重新生成 HKT",
   "outliner.replaceHkt": "替换 HKT…",
   "outliner.generateHktFromModel": "从模型生成 HKT…",
+  "outliner.expand": "展开",
+  "outliner.collapse": "折叠",
   "overlay.streamingModels": "正在流式加载模型（{{loaded}}/{{total}}）……",
   "overlay.loadingStage": "正在加载场景……",
   "overlay.loadingCollision": "正在加载碰撞（{{loaded}}/{{total}}）",

@@ -5,7 +5,8 @@
     "openStageFolder": "打开场景文件夹",
     "importFhm2d": "导入 .fhm2d",
     "extractFhm2d": "将 .fhm2d 解包到文件夹",
-    "openMapLibrary": "从地图库打开……"
+    "openMapLibrary": "从地图库打开……",
+    "restoreObjectOrder": "恢复原版对象顺序"
   },
   "save": {
     "folderAria": "保存为文件夹",

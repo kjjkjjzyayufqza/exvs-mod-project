@@ -745,7 +745,7 @@ export interface NumatbEmptyTexturePathError {
 
 /**
  * Empty texture path errors for a single model's numatb profiles, formatted to match the
- * backend save/repack pre-flight gate (`exvs_stage_validate_numatb_empty_params`). A profile
+ * backend save/repack pre-flight gate (`exvs_stage_validate_preflight`). A profile
  * is only validated when its numatb file is present, mirroring the gate that reads the files
  * actually on disk. Reuses the same required-param logic as the export gate so the live Material
  * view and the save/repack block stay in lockstep.

@@ -48,6 +48,11 @@ export const DEFAULT_TEST_EDITOR_WORKSPACE: TestEditorWorkspaceDocument = Object
       kind: "fhm2d-pack",
       label: "Character Sound",
     }),
+    "unit.waveform": freezeRoute({
+      prefix: "091waveform",
+      kind: "fhm2d-pack",
+      label: "Pilot Voice Waveform",
+    }),
     "list.character": freezeRoute({
       prefix: "012list",
       kind: "fhm2d-pack",

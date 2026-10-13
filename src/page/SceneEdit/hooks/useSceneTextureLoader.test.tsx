@@ -159,4 +159,37 @@ describe("useSceneTextureLoader", () => {
     );
     expect(mocks.getMemoryNutexbPreviewIdentity).not.toHaveBeenCalled();
   });
+
+  it("still decodes disk sky textures when an import adds a memory path and no session is open", async () => {
+    const skyPath = "D:/stage/textures/sky_alb.nutexb";
+    const memoryPath = "memory://scene-session/prop/prop_alb.nutexb";
+    const skyBundle = makeImportedMemoryBundle(skyPath);
+    const memoryBundle = makeImportedMemoryBundle(memoryPath);
+    memoryBundle.resolvedNutexbPaths = [memoryPath];
+    memoryBundle.textureResolve = [{ reference: "stage_wall_alb", nutexbPath: memoryPath }];
+    const importedBundles = [memoryBundle];
+    const subModels: Parameters<typeof useSceneTextureLoader>[1] = [];
+    const placementEntries: Parameters<typeof useSceneTextureLoader>[3] = [];
+    const objectTextureLoadState = {};
+
+    const { result } = renderHook(() =>
+      useSceneTextureLoader(
+        skyBundle,
+        subModels,
+        importedBundles,
+        placementEntries,
+        null,
+        null,
+        textureSlotLoadEnabled,
+        objectTextureLoadState,
+        true,
+      ),
+    );
+
+    await waitFor(() => {
+      expect(result.current.textureDataMap.get(skyPath)?.width).toBe(1);
+    });
+    expect(result.current.textureDataMap.has(memoryPath)).toBe(false);
+    expect(mocks.getMemoryNutexbPreviewIdentity).not.toHaveBeenCalled();
+  });
 });

@@ -28,6 +28,7 @@ import MotionFolderEditorView from "./motion-folder-editor/MotionFolderEditorVie
 import { resolveMotionPackFromStructureJson } from "./motion-folder-editor/motionFolderEditorUtils";
 import RawPathIdView from "./raw-path-id/RawPathIdView";
 import PilotVoiceResourceView from "./pilot-voice-resource/PilotVoiceResourceView";
+import PilotVoiceBankView from "./pilot-voice-bank/PilotVoiceBankView";
 import BgmTableView from "./bgm-table/BgmTableView";
 import BgmListView from "./bgm-list/BgmListView";
 import BgmBankView from "./bgm-bank/BgmBankView";
@@ -160,6 +161,19 @@ const tabs: StageTab[] = [
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}
         onPackMutated={props.onPackMutated}
+        workspaceDocument={props.workspaceDocument}
+      />
+    ),
+  },
+  {
+    name: "Pilot Voice Bank",
+    value: "pilot-voice-bank",
+    render: (props: MainViewProps) => (
+      <PilotVoiceBankView
+        folderPath={props.folderPath ?? ""}
+        isActive={false}
+        onUnsavedChanges={props.onUnsavedChanges}
+        onRequestFhm2dRepack={props.onRequestFhm2dRepack}
         workspaceDocument={props.workspaceDocument}
       />
     ),
@@ -451,6 +465,7 @@ const MainView = ({
   const [pendingNaviUniqueId, setPendingNaviUniqueId] = useState<number | null>(null);
   const [rawPathIdHasUnsaved, setRawPathIdHasUnsaved] = useState(false);
   const [pilotVoiceResourceHasUnsaved, setPilotVoiceResourceHasUnsaved] = useState(false);
+  const [pilotVoiceBankHasUnsaved, setPilotVoiceBankHasUnsaved] = useState(false);
   const [bgmTableHasUnsaved, setBgmTableHasUnsaved] = useState(false);
   const [bgmListHasUnsaved, setBgmListHasUnsaved] = useState(false);
   const [stageListHasUnsaved, setStageListHasUnsaved] = useState(false);
@@ -538,6 +553,9 @@ const MainView = ({
   const handlePilotVoiceResourceUnsaved = useCallback((hasChanges: boolean) => {
     setPilotVoiceResourceHasUnsaved(hasChanges);
   }, []);
+  const handlePilotVoiceBankUnsaved = useCallback((hasChanges: boolean) => {
+    setPilotVoiceBankHasUnsaved(hasChanges);
+  }, []);
   const handleBgmTableUnsaved = useCallback((hasChanges: boolean) => {
     setBgmTableHasUnsaved(hasChanges);
   }, []);
@@ -579,6 +597,7 @@ const MainView = ({
       "navi-list": naviListHasUnsaved,
       "raw-path-id": rawPathIdHasUnsaved,
       "pilot-voice-resource": pilotVoiceResourceHasUnsaved,
+      "pilot-voice-bank": pilotVoiceBankHasUnsaved,
       "bgm-table": bgmTableHasUnsaved,
       "bgm-list": bgmListHasUnsaved,
       "card-icon-list": stageIconListHasUnsaved,
@@ -598,6 +617,7 @@ const MainView = ({
       naviListHasUnsaved,
       rawPathIdHasUnsaved,
       pilotVoiceResourceHasUnsaved,
+      pilotVoiceBankHasUnsaved,
       bgmTableHasUnsaved,
       bgmListHasUnsaved,
       stageIconListHasUnsaved,
@@ -760,6 +780,21 @@ const MainView = ({
               isActive={activeTab === "pilot-voice-resource"}
               onUnsavedChanges={handlePilotVoiceResourceUnsaved}
               onPackMutated={props.onPackMutated}
+              workspaceDocument={props.workspaceDocument}
+            />
+          ),
+        };
+      }
+
+      if (tab.value === "pilot-voice-bank") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <PilotVoiceBankView
+              folderPath={props.folderPath ?? ""}
+              isActive={activeTab === "pilot-voice-bank"}
+              onUnsavedChanges={handlePilotVoiceBankUnsaved}
+              onRequestFhm2dRepack={props.onRequestFhm2dRepack}
               workspaceDocument={props.workspaceDocument}
             />
           ),
@@ -948,6 +983,7 @@ const MainView = ({
     handleSeriesListUnsaved,
     handleRawPathIdUnsaved,
     handlePilotVoiceResourceUnsaved,
+    handlePilotVoiceBankUnsaved,
     handleBgmTableUnsaved,
     handleStageIconListUnsaved,
     handleStageListUnsaved,

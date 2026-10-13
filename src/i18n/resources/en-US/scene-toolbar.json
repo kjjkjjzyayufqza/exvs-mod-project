@@ -5,7 +5,8 @@
     "openStageFolder": "Open Stage Folder",
     "importFhm2d": "Import .fhm2d",
     "extractFhm2d": "Extract .fhm2d to folder",
-    "openMapLibrary": "Open from map library…"
+    "openMapLibrary": "Open from map library…",
+    "restoreObjectOrder": "Restore vanilla object order"
   },
   "save": {
     "folderAria": "Save as Folder",

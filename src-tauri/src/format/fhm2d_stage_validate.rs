@@ -5,9 +5,11 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use super::fhm2d_stage::{
-    find_ssbh_folders, parse_numatb_texture_refs_by_role, resolve_content_root,
-    INFO_SUBFOLDER_NAMES, STAGE_BASE_NAME, STAGE_INFO_NAME,
+    collect_stage_anim_roles, find_ssbh_folders, parse_numatb_texture_refs_by_role,
+    parse_placement_csv, resolve_content_root, resolve_pack_root,
+    stage_sky_placement_object_number, INFO_SUBFOLDER_NAMES, STAGE_BASE_NAME, STAGE_INFO_NAME,
 };
+use super::fhm2d_stage_model_folder::collect_stage_model_folder_issues;
 use super::numatb_format;
 
 // ── Public types ────────────────────────────────────────────────────────────
@@ -36,18 +38,25 @@ const EXVS_STAGE_VALIDATION_FLOW: &[ExvsValidationStep] = &[
     exvs_stage_check_info,
     exvs_stage_check_content_order,
     exvs_stage_check_sub_models,
+    exvs_stage_check_model_folders,
+    exvs_stage_check_placement,
     exvs_stage_check_numatb_textures,
 ];
 
-/// Layout-independent pre-flight flow run before any save/repack mutation.
+/// Layout-independent pre-flight flow run on stage load and before any
+/// save/repack mutation.
 ///
-/// Only inspects numatb file contents (not the on-disk texture layout), so it is
-/// safe to run on both the shared `textures/` layout (Save as Folder / in-place
-/// repack) and the per-model subdir layout (FHM2D pack). The on-disk texture
-/// existence check (`exvs_stage_check_numatb_textures`) is intentionally NOT part
-/// of this flow — it assumes the per-model `0//1/` layout and is reused as-is via
-/// `exvs_stage_validate_for_repack` after `redistribute_stage_textures`.
-const EXVS_STAGE_PREFLIGHT_FLOW: &[ExvsValidationStep] = &[exvs_stage_check_numatb_empty_params];
+/// Only inspects model-folder files and numatb contents (not the on-disk texture
+/// layout), so it is safe to run on both the shared `textures/` layout (Save as
+/// Folder / in-place repack) and the per-model subdir layout (FHM2D pack). The
+/// on-disk texture existence check (`exvs_stage_check_numatb_textures`) is
+/// intentionally NOT part of this flow — it assumes the per-model `0//1/` layout
+/// and is reused as-is via `exvs_stage_validate_for_repack` after
+/// `redistribute_stage_textures`.
+const EXVS_STAGE_PREFLIGHT_FLOW: &[ExvsValidationStep] = &[
+    exvs_stage_check_model_folders,
+    exvs_stage_check_numatb_empty_params,
+];
 
 // ── Entry point ─────────────────────────────────────────────────────────────
 
@@ -74,10 +83,10 @@ pub fn exvs_stage_validate_for_repack(stage_root: &str) -> ExvsStageValidationRe
     }
 }
 
-/// Pre-flight gate: detect numatb material texture parameters whose path string
-/// is empty. Layout-independent — reads numatb content only. Used by every save
-/// and repack entry point before any file is mutated.
-pub fn exvs_stage_validate_numatb_empty_params(stage_root: &str) -> ExvsStageValidationResult {
+/// Pre-flight gate: stage model folders the game cannot load, and numatb material
+/// texture parameters whose path string is empty. Layout-independent. Run on
+/// stage load and by every save and repack entry point before any file is mutated.
+pub fn exvs_stage_validate_preflight(stage_root: &str) -> ExvsStageValidationResult {
     let root = Path::new(stage_root);
     let content_root = resolve_content_root(root);
 
@@ -243,12 +252,14 @@ fn exvs_stage_check_sub_models(content_root: &Path, errors: &mut Vec<ExvsStageVa
         }
 
         for ssbh_folder in &ssbh_folders {
-            exvs_stage_check_ssbh_folder(ssbh_folder, &dir_name, errors);
+            exvs_stage_check_ssbh_materials(ssbh_folder, &dir_name, errors);
         }
     }
 }
 
-fn exvs_stage_check_ssbh_folder(
+/// A material model needs both numatb files. Skeleton, mesh, model and joint
+/// table rules live in `exvs_stage_check_model_folders`.
+fn exvs_stage_check_ssbh_materials(
     ssbh_folder: &Path,
     model_name: &str,
     errors: &mut Vec<ExvsStageValidationError>,
@@ -261,17 +272,7 @@ fn exvs_stage_check_ssbh_folder(
         .map(|e| e.file_name().to_string_lossy().to_ascii_lowercase())
         .collect();
 
-    let has_ext = |ext: &str| entries.iter().any(|f| f.ends_with(ext));
     let count_ext = |ext: &str| entries.iter().filter(|f| f.ends_with(ext)).count();
-
-    // Must have: nusktb, numatb(×2), numshb, numdlb, jnttbl
-    if !has_ext(".nusktb") {
-        errors.push(ExvsStageValidationError {
-            phase: "sub_models".into(),
-            message: format!("Model '{}': missing .nusktb (skeleton) file.", model_name),
-            path: Some(ssbh_folder.to_string_lossy().into()),
-        });
-    }
 
     let numatb_count = count_ext(".numatb");
     if numatb_count < 2 {
@@ -312,32 +313,107 @@ fn exvs_stage_check_ssbh_folder(
             path: Some(ssbh_folder.to_string_lossy().into()),
         });
     }
+}
 
-    if !has_ext(".numshb") {
-        errors.push(ExvsStageValidationError {
-            phase: "sub_models".into(),
-            message: format!("Model '{}': missing .numshb (mesh) file.", model_name),
-            path: Some(ssbh_folder.to_string_lossy().into()),
-        });
+// ── Model folders: only files the game loads, one skeleton/mesh/model, one empty joint table ──
+
+/// Checks every model folder of the pack, including the material-less `0/1/*`
+/// models that sit outside the `0/0` content root.
+fn exvs_stage_check_model_folders(
+    content_root: &Path,
+    errors: &mut Vec<ExvsStageValidationError>,
+) {
+    let pack_root = resolve_pack_root(content_root);
+    let issues = collect_stage_anim_roles(&pack_root)
+        .and_then(|anim_roles| collect_stage_model_folder_issues(&pack_root, &anim_roles));
+    match issues {
+        Ok(issues) => errors.extend(issues.into_iter().map(|issue| {
+            ExvsStageValidationError {
+                phase: "model_folder".into(),
+                message: issue.message,
+                path: Some(issue.path.to_string_lossy().into()),
+            }
+        })),
+        Err(message) => errors.push(ExvsStageValidationError {
+            phase: "model_folder".into(),
+            message,
+            path: Some(pack_root.to_string_lossy().into()),
+        }),
+    }
+}
+
+fn exvs_stage_check_placement(content_root: &Path, errors: &mut Vec<ExvsStageValidationError>) {
+    let expected_sky = stage_sky_placement_object_number(content_root);
+    let mut warnings = Vec::new();
+    let (_, entries) = parse_placement_csv(content_root, &mut warnings);
+
+    let sky_rows: Vec<_> = entries
+        .iter()
+        .filter(|entry| entry.vdk_type.eq_ignore_ascii_case("SKY"))
+        .collect();
+
+    for sky in sky_rows {
+        match sky.object_number {
+            Some(num) if num == expected_sky as i32 => {}
+            Some(num) => {
+                errors.push(ExvsStageValidationError {
+                    phase: "placement".into(),
+                    message: format!(
+                        "SKY VDK_OBJECTNUMBER is {num} but stage layout requires {expected_sky}."
+                    ),
+                    path: None,
+                });
+            }
+            None => {
+                errors.push(ExvsStageValidationError {
+                    phase: "placement".into(),
+                    message: format!(
+                        "SKY row is missing VDK_OBJECTNUMBER (expected {expected_sky})."
+                    ),
+                    path: None,
+                });
+            }
+        }
     }
 
-    if !has_ext(".numdlb") {
-        errors.push(ExvsStageValidationError {
-            phase: "sub_models".into(),
-            message: format!("Model '{}': missing .numdlb (model) file.", model_name),
-            path: Some(ssbh_folder.to_string_lossy().into()),
-        });
+    for entry in &entries {
+        let typ = entry.vdk_type.to_ascii_uppercase();
+        if typ != "OBJECT" && typ != "PROP" {
+            continue;
+        }
+        if entry.object_number == Some(expected_sky as i32) {
+            errors.push(ExvsStageValidationError {
+                phase: "placement".into(),
+                message: format!(
+                    "{typ} row uses VDK_OBJECTNUMBER {expected_sky}, which is reserved for SKY."
+                ),
+                path: None,
+            });
+        }
     }
 
-    if !has_ext(".jnttbl") {
-        errors.push(ExvsStageValidationError {
-            phase: "sub_models".into(),
-            message: format!(
-                "Model '{}': missing .jnttbl (joint table) file.",
-                model_name
-            ),
-            path: Some(ssbh_folder.to_string_lossy().into()),
-        });
+    for sky in &entries {
+        if !sky.vdk_type.eq_ignore_ascii_case("SKY") {
+            continue;
+        }
+        let Some(sky_num) = sky.object_number else {
+            continue;
+        };
+        for entry in &entries {
+            let typ = entry.vdk_type.to_ascii_uppercase();
+            if typ != "OBJECT" && typ != "PROP" {
+                continue;
+            }
+            if entry.object_number == Some(sky_num) {
+                errors.push(ExvsStageValidationError {
+                    phase: "placement".into(),
+                    message: format!(
+                        "SKY and {typ} share VDK_OBJECTNUMBER {sky_num}; this can crash in-game."
+                    ),
+                    path: None,
+                });
+            }
+        }
     }
 }
 

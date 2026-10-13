@@ -15,7 +15,15 @@ import {
   Search,
   Layers,
   Copy,
+  ClipboardCopy,
 } from "lucide-react";
+import {
+  EditorContextMenuContent,
+  EditorContextMenuItem,
+  editorContextMenuIconClassName,
+  stopEditorContextMenuBubble,
+} from "@/components/editor/EditorContextMenu";
+import { ContextMenu, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -401,6 +409,7 @@ const TreeRow = memo(function TreeRow({
   row: FlatRow;
   onToggle: (pathKey: string) => void;
 }) {
+  const { t } = useTranslation("scene-structure-graphic");
   const { node, pathKey, hasChildren, isExpanded } = row;
   const meta = ROLE_META[node.semanticRole] ?? ROLE_META.file;
   const Icon = meta.icon;
@@ -409,13 +418,26 @@ const TreeRow = memo(function TreeRow({
     onToggle(pathKey);
   }, [onToggle, pathKey]);
 
-  return (
+  const copyText = useCallback(
+    async (text: string) => {
+      try {
+        await writeText(text);
+        toast.success(t("clipboard.lineCopied"));
+      } catch {
+        toast.error(t("clipboard.copyFailed"));
+      }
+    },
+    [t],
+  );
+
+  const rowBody = (
     <div
       className={cn(
         "group flex h-full items-center gap-1.5 rounded-sm px-2 select-none",
         "hover:bg-accent/60 cursor-default transition-colors",
       )}
       style={{ paddingLeft: `${node.depth * 16 + 6}px` }}
+      onContextMenu={stopEditorContextMenuBubble}
       onClick={hasChildren ? handleToggle : undefined}
     >
       {hasChildren ? (
@@ -441,6 +463,43 @@ const TreeRow = memo(function TreeRow({
         <ItemLabel node={node} />
       )}
     </div>
+  );
+
+  const fileUrl = node.resolvedFile?.fileUrl;
+  const fileIndex =
+    node.kind === "item" && node.entry.type === "Item" ? String(node.entry.fileIndex) : null;
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{rowBody}</ContextMenuTrigger>
+      <EditorContextMenuContent>
+        {hasChildren ? (
+          <>
+            <EditorContextMenuItem onSelect={handleToggle}>
+              {isExpanded ? (
+                <ChevronDown className={editorContextMenuIconClassName} />
+              ) : (
+                <ChevronRight className={editorContextMenuIconClassName} />
+              )}
+              <span>{isExpanded ? t("structure.collapse") : t("structure.expand")}</span>
+            </EditorContextMenuItem>
+            <ContextMenuSeparator />
+          </>
+        ) : null}
+        {fileUrl ? (
+          <EditorContextMenuItem onSelect={() => void copyText(fileUrl)}>
+            <ClipboardCopy className={editorContextMenuIconClassName} />
+            <span>{t("structure.copyFileUrl")}</span>
+          </EditorContextMenuItem>
+        ) : null}
+        {fileIndex ? (
+          <EditorContextMenuItem onSelect={() => void copyText(fileIndex)}>
+            <Copy className={editorContextMenuIconClassName} />
+            <span>{t("structure.copyFileIndex")}</span>
+          </EditorContextMenuItem>
+        ) : null}
+      </EditorContextMenuContent>
+    </ContextMenu>
   );
 });
 

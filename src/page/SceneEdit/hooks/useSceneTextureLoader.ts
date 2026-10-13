@@ -198,12 +198,17 @@ export function useSceneTextureLoader(
       return;
     }
 
-    if (uniquePaths.some((path) => path.startsWith("memory://")) && !sessionId) {
+    // Scene-session memory paths need a session id. Skip only those paths so a
+    // newly imported model cannot cancel the disk decode that keeps the sky lit.
+    const decodablePaths = uniquePaths.filter(
+      (path) => !(path.startsWith("memory://") && !sessionId),
+    );
+    if (decodablePaths.length === 0) {
       return;
     }
 
     const currentMap = textureDataMapRef.current;
-    if (uniquePaths.every((p) => currentMap.has(p))) {
+    if (decodablePaths.every((p) => currentMap.has(p))) {
       return;
     }
 
@@ -213,6 +218,12 @@ export function useSceneTextureLoader(
 
     (async () => {
     const nextMap = new Map<string, NutexbTextureData>();
+    for (const path of decodablePaths) {
+      const existing = currentMap.get(path) ?? currentMap.get(path.toLowerCase());
+      if (!existing) continue;
+      nextMap.set(path, existing);
+      nextMap.set(path.toLowerCase(), existing);
+    }
     const nextWarnings: string[] = [];
     const batchT0 = performance.now();
     let errors = 0;
@@ -223,7 +234,7 @@ export function useSceneTextureLoader(
     // optimization is still active below.
     const useCompressed = false;
 
-    setProgress({ done: 0, total: uniquePaths.length, currentLabel: "Resolving identities..." });
+    setProgress({ done: 0, total: decodablePaths.length, currentLabel: "Resolving identities..." });
 
     // Phase 1: Resolve all identities in parallel to get content-based keys
     type PathIdentity = { path: string; versionId: string };
@@ -235,7 +246,7 @@ export function useSceneTextureLoader(
 
     if (useCompressed) {
       // Single-read path: identity + compressed data together
-      const idQueue = [...uniquePaths];
+      const idQueue = [...decodablePaths];
       let idIdx = 0;
       const resolveWorker = async () => {
         while (idIdx < idQueue.length) {
@@ -256,7 +267,7 @@ export function useSceneTextureLoader(
       await Promise.all(Array.from({ length: Math.min(identityConcurrency, uniquePaths.length) }, () => resolveWorker()));
     } else {
       // Original path: identity only (memory source or downsampled)
-      const idQueue = [...uniquePaths];
+      const idQueue = [...decodablePaths];
       let idIdx = 0;
       const resolveWorker = async () => {
         while (idIdx < idQueue.length) {
@@ -296,7 +307,7 @@ export function useSceneTextureLoader(
     }
 
     const deduped = Array.from(uniqueByVersion.values());
-    const total = uniquePaths.length;
+    const total = decodablePaths.length;
     const uniqueCount = deduped.length;
     let done = 0;
     const concurrency = Math.min(DECODE_CONCURRENCY, deduped.length);

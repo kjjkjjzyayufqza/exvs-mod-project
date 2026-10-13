@@ -17,13 +17,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  ContextMenu,
-  ContextMenuTrigger,
-  ContextMenuContent,
-  ContextMenuItem,
-} from "@/components/ui/context-menu";
+  EditorContextMenuContent,
+  EditorContextMenuItem,
+  editorContextMenuIconClassName,
+  stopEditorContextMenuBubble,
+} from "@/components/editor/EditorContextMenu";
+import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
-import { Plus, Search, Image as ImageIcon, Download } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Image as ImageIcon,
+  Download,
+  Eye,
+  Replace,
+  Copy,
+  Trash2,
+} from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useMemo, useCallback, useEffect, useReducer, useState } from "react";
 import { toast } from "sonner";
@@ -794,13 +804,14 @@ function TextureRow({
               : "hover:bg-muted/40"
           )}
           onClick={onSelect}
+          onContextMenu={stopEditorContextMenuBubble}
         >
           <div className="w-8 h-8 shrink-0 rounded bg-muted/50 flex items-center justify-center overflow-hidden">
             {thumbnailDataUrl ? (
               <img
                 src={thumbnailDataUrl}
                 alt={entry.filename}
-                className="w-full h-full object-cover"
+                className="h-full w-full object-cover outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
               />
             ) : isConverting ? (
               <Skeleton className="h-full w-full rounded" />
@@ -837,25 +848,42 @@ function TextureRow({
         </div>
       </ContextMenuTrigger>
 
-      <ContextMenuContent>
-        <ContextMenuItem onClick={onPreview}>{t("actions.preview")}</ContextMenuItem>
-        {canExport && (
-          <ContextMenuItem onClick={onExport}>{t("actions.exportPng")}</ContextMenuItem>
-        )}
-        <ContextMenuItem onClick={onReplace}>{t("actions.replace")}</ContextMenuItem>
-        <ContextMenuItem onClick={onCopyPath}>{t("actions.copyPath")}</ContextMenuItem>
-        {!isInfoTexture && (
-          <ContextMenuItem
-            onClick={onDelete}
+      <EditorContextMenuContent>
+        <EditorContextMenuItem onSelect={onPreview}>
+          <Eye className={editorContextMenuIconClassName} />
+          <span>{t("actions.preview")}</span>
+        </EditorContextMenuItem>
+        {canExport ? (
+          <EditorContextMenuItem onSelect={onExport}>
+            <Download className={editorContextMenuIconClassName} />
+            <span>{t("actions.exportPng")}</span>
+          </EditorContextMenuItem>
+        ) : null}
+        <EditorContextMenuItem onSelect={onReplace}>
+          <Replace className={editorContextMenuIconClassName} />
+          <span>{t("actions.replace")}</span>
+        </EditorContextMenuItem>
+        <EditorContextMenuItem onSelect={onCopyPath}>
+          <Copy className={editorContextMenuIconClassName} />
+          <span>{t("actions.copyPath")}</span>
+        </EditorContextMenuItem>
+        {!isInfoTexture ? (
+          <EditorContextMenuItem
+            onSelect={onDelete}
             disabled={entry.referencedBy.length > 0}
-            className={entry.referencedBy.length > 0 ? undefined : "text-destructive"}
+            className={
+              entry.referencedBy.length > 0 ? undefined : "text-destructive focus:text-destructive"
+            }
           >
-            {entry.referencedBy.length > 0
-              ? t("actions.removeReferenced")
-              : t("actions.remove")}
-          </ContextMenuItem>
-        )}
-      </ContextMenuContent>
+            <Trash2 className={editorContextMenuIconClassName} />
+            <span>
+              {entry.referencedBy.length > 0
+                ? t("actions.removeReferenced")
+                : t("actions.remove")}
+            </span>
+          </EditorContextMenuItem>
+        ) : null}
+      </EditorContextMenuContent>
     </ContextMenu>
   );
 }

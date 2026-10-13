@@ -32,7 +32,8 @@ export function remapPlacementObjectNumbers(
     }
 
     const folderName = oldIndexToFolder.get(entry.objectNumber);
-    if (folderName === undefined) {
+    // Sky owns this number. An OBJECT row on it is a misplaced import, not the sky mesh.
+    if (folderName === undefined || folderName.toLowerCase() === "sky") {
       result.push(entry);
       continue;
     }
