@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.1.16"
+version = "0.1.17"
 description = "EXVS Mod Project"
 authors = ["kjjkjjzyayufqza"]
 license = "LicenseRef-PolyForm-Shield-1.0.0"
