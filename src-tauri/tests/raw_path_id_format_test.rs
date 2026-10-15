@@ -10,6 +10,10 @@ fn crc32_and_sha1_match_ob_vectors() {
     assert_eq!(crc32_ieee(b""), 0x0000_0000);
     assert_eq!(crc32_ieee(b"test"), 0xD87F_7E0C);
     assert_eq!(crc32_ieee(b"STREAMPATH_ST_VO_1000_P01_0"), 0x6862_87AC);
+    assert_eq!(crc32_ieee(b"VO_1001_P01_0"), 0x26C0_08DA);
+    assert_eq!(crc32_ieee(b"STREAMPATH_ST_VO_1001_P01_0"), 0xCE15_8C18);
+    assert_eq!(crc32_ieee(b"VO_1001_P01_0_bank"), 0xD1C5_9512);
+    assert_eq!(crc32_ieee(b"VO_1001_P01_0_01_ST_01_bank"), 0x04EF_8D7A);
     let source = "091waveform/se/stage/SE_STAGE_AMB_01.nus3audio";
     assert_eq!(
         sha1_hex(source.as_bytes()),

@@ -1,3 +1,4 @@
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import {
   Grid,
@@ -23,6 +24,10 @@ import {
 import * as THREE from "three";
 import { createSsbhWebGlRenderer } from "@/components/ssbh-model-preview/ssbhWebGlRenderer";
 import { MissionSpawnMarkers } from "./mission-preview/MissionSpawnMarkers";
+import { PlanParamMarkers } from "./plan-param/PlanParamMarkers";
+import { BorderHitMesh } from "./plan-param/BorderHitMesh";
+import { borderHitFolderKey, findBorderHitMesh } from "../utils/borderHitView";
+import type { PlanPointView } from "../types/planParam";
 import { frontMissionSpawnSlot } from "./mission-preview/missionSpawnPick";
 import type { MissionSpawnMarker } from "@/services/missionPreview/missionPreviewService";
 import { StageOrbitControls } from "./StageOrbitControls";
@@ -55,7 +60,6 @@ import {
   type TexturePreviewSlotKey,
 } from "@/components/ssbh-model-preview/meshFromSsbh";
 import type { NutexbTextureDataMap, NutexbTextureData } from "../hooks/useSceneTextureLoader";
-import { COMPRESSED_FORMAT_MAP, type NutexbCompressedData } from "@/components/ssbh-model-preview/nutexbPreviewCache";
 import type { PlacementRow } from "../types/placement";
 import type { GraphicParam } from "./GraphicParamPanel";
 import {
@@ -404,6 +408,20 @@ export interface MapViewportProps {
   selectedCollisionSourceId?: string | null;
   /** Mission script preview overlay; omitted when no script is loaded. */
   missionOverlay?: MissionOverlayProps | null;
+  /** Spawn-plan markers from `plan_param.spbin`. Omitted when the stage has none. */
+  planOverlay?: PlanOverlayProps | null;
+}
+
+export interface PlanOverlayProps {
+  points: readonly PlanPointView[];
+  limit: number;
+  selectedKey: string | null;
+  onSelect: (key: string) => void;
+  onMove: (key: string, position: [number, number, number]) => void;
+  onLimitChange: (limit: number) => void;
+  onMarkerParameter: (key: string, parameter: number) => void;
+  gizmoMode?: "translate" | "rotate" | "scale";
+  gizmoSize?: number;
 }
 
 /** Everything the mission-script preview draws on top of the loaded map. */
@@ -471,9 +489,18 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
       collisionVisibility,
       selectedCollisionSourceId,
       missionOverlay = null,
+      planOverlay = null,
     },
     ref
   ) {
+    const borderHit = useMemo(
+      () => (havokMeshDataMap ? findBorderHitMesh(havokMeshDataMap) : null),
+      [havokMeshDataMap],
+    );
+    const showBorderHit = viewMode !== "normal"
+      && borderHit != null
+      && collisionVisibility?.[borderHitFolderKey(borderHit.sourceId)] !== false;
+
     const controlsRef = useRef<OrbitControlsType>(null);
     const cameraRef = useRef<THREE.Camera | null>(null);
     const texturePool = useMemo(() => new SceneTexturePool(), []);
@@ -753,6 +780,15 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
         console.warn("[SceneEdit] WebGL context restored");
         gl.clear();
       });
+      const context = gl.getContext();
+      const debugInfo = context.getExtension("WEBGL_debug_renderer_info");
+      if (debugInfo) {
+        const renderer = String(context.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL));
+        console.info("[SceneEdit] WebGL renderer:", renderer);
+        if (/swiftshader|llvmpipe|basic render/i.test(renderer)) {
+          console.error("[SceneEdit] Software rasterizer is not allowed:", renderer);
+        }
+      }
     }, []);
 
     useEffect(() => {
@@ -808,13 +844,17 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           far: SCENE_EDIT_CAMERA_FAR,
         }}
         gl={(defaults) =>
-          createSsbhWebGlRenderer({
-            ...defaults,
-            antialias: sceneRasterProfile.antialias,
-            alpha: false,
-            powerPreference: "high-performance",
-            logarithmicDepthBuffer: true,
-          })
+          createSsbhWebGlRenderer(
+            {
+              ...defaults,
+              antialias: sceneRasterProfile.antialias,
+              alpha: false,
+              powerPreference: "high-performance",
+              logarithmicDepthBuffer: true,
+            },
+            undefined,
+            { allowSoftwareRasterizer: false },
+          )
         }
         performance={adaptivePerformanceOptions}
         dpr={sceneRasterProfile.dpr}
@@ -1220,6 +1260,24 @@ export const MapViewport = forwardRef<MapViewportHandle, MapViewportProps>(
           />
         )}
 
+        {showBorderHit && borderHit ? <BorderHitMesh data={borderHit.data} /> : null}
+
+        {planOverlay && planOverlay.points.length > 0 && (
+          <PlanParamMarkers
+            points={planOverlay.points}
+            limit={planOverlay.limit}
+            selectedKey={planOverlay.selectedKey}
+            onSelect={planOverlay.onSelect}
+            onMove={planOverlay.onMove}
+            onLimitChange={planOverlay.onLimitChange}
+            onMarkerParameter={planOverlay.onMarkerParameter}
+            gizmoMode={planOverlay.gizmoMode ?? placementGizmoMode}
+            gizmoSize={planOverlay.gizmoSize ?? transformGizmoSize}
+            gizmoDraggingRef={gizmoDraggingRef}
+            onClaimSceneSelection={() => onSelectNode(null)}
+          />
+        )}
+
         <StageViewportGizmo controlsRef={controlsRef} enabled={showAxes} />
 
         <StageOrbitControls
@@ -1467,7 +1525,7 @@ function pathForSlot(binding: ResolvedMaterialBinding, slot: PbrSlotKind): strin
   }
 }
 
-function buildTexturePoolKey(
+function buildTextureIdentity(
   path: string,
   slot: PbrSlotKind,
   binding: ResolvedMaterialBinding,
@@ -1489,6 +1547,24 @@ function buildTexturePoolKey(
   ].join("|");
 }
 
+function buildTexturePoolKey(
+  path: string,
+  slot: PbrSlotKind,
+  binding: ResolvedMaterialBinding,
+  dataWidth: number,
+  dataHeight: number,
+  revision: number,
+): string {
+  return `${buildTextureIdentity(path, slot, binding, dataWidth, dataHeight)}|r${revision}`;
+}
+
+function textureContentKey(data: NutexbTextureData): string {
+  if (data.kind === "png") {
+    return `png:${data.width}x${data.height}:r${data.revision}:${data.pngPath}`;
+  }
+  return `rgba:${data.width}x${data.height}:r${data.revision}`;
+}
+
 function lookupTextureData(
   textureDataMap: NutexbTextureDataMap,
   path: string | null,
@@ -1497,14 +1573,102 @@ function lookupTextureData(
   return textureDataMap.get(path) ?? textureDataMap.get(path.toLowerCase()) ?? null;
 }
 
+function applySceneTextureSampling(
+  tex: THREE.Texture,
+  slot: PbrSlotKind,
+  binding: ResolvedMaterialBinding,
+): void {
+  tex.colorSpace = SRGB_SLOTS.has(slot) ? THREE.SRGBColorSpace : THREE.LinearSRGBColorSpace;
+  // Nutexb RGBA was uploaded with flipY false. PNG cache bytes use that same
+  // row order, so flipping them puts each UV island on the wrong mesh.
+  tex.flipY = false;
+  tex.generateMipmaps = SCENE_EDIT_TEXTURE_MIPS;
+  tex.minFilter = SCENE_EDIT_TEXTURE_MIPS ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  if (slot === "cubeMap") {
+    tex.mapping = THREE.EquirectangularReflectionMapping;
+    return;
+  }
+  const sampling = samplingForSlot(binding, slot);
+  tex.wrapS = toThreeWrapping(sampling?.wrapS ?? "ClampToEdge");
+  tex.wrapT = toThreeWrapping(sampling?.wrapT ?? "ClampToEdge");
+  tex.center.set(0, 0);
+  tex.repeat.set(sampling?.uvTransform?.scale_u ?? 1, sampling?.uvTransform?.scale_v ?? 1);
+  tex.offset.set(sampling?.uvTransform?.translate_u ?? 0, sampling?.uvTransform?.translate_v ?? 0);
+  tex.rotation = sampling?.uvTransform?.rotation ?? 0;
+}
+
+function sliceVerticalCubeFaces(image: CanvasImageSource, faceSize: number): HTMLCanvasElement[] {
+  const faces: HTMLCanvasElement[] = [];
+  for (let face = 0; face < 6; face += 1) {
+    const canvas = document.createElement("canvas");
+    canvas.width = faceSize;
+    canvas.height = faceSize;
+    const context = canvas.getContext("2d");
+    if (!context) continue;
+    context.drawImage(image, 0, face * faceSize, faceSize, faceSize, 0, 0, faceSize, faceSize);
+    faces.push(canvas);
+  }
+  return faces;
+}
+
+function tagSceneTexture(tex: THREE.Texture, sourcePath: string, identity: string): void {
+  tex.userData.sceneTexturePath = sourcePath;
+  tex.userData.sceneTextureIdentity = identity;
+}
+
+function createPngSceneTexture(
+  data: Extract<NutexbTextureData, { kind: "png" }>,
+  slot: PbrSlotKind,
+  binding: ResolvedMaterialBinding,
+  sourcePath: string,
+  onReady: () => void,
+): THREE.Texture {
+  const identity = buildTextureIdentity(sourcePath, slot, binding, data.width, data.height);
+  const url = `${convertFileSrc(data.pngPath)}?v=${data.revision}`;
+  const cubeStrip = slot === "cubeMap" && data.width > 0 && data.height === data.width * 6;
+  if (cubeStrip) {
+    const cube = new THREE.CubeTexture();
+    cube.colorSpace = THREE.LinearSRGBColorSpace;
+    cube.mapping = THREE.CubeReflectionMapping;
+    cube.flipY = false;
+    cube.generateMipmaps = false;
+    cube.minFilter = THREE.LinearFilter;
+    cube.magFilter = THREE.LinearFilter;
+    tagSceneTexture(cube, sourcePath, identity);
+    const loader = new THREE.TextureLoader();
+    loader.load(url, (loaded) => {
+      const faces = sliceVerticalCubeFaces(loaded.image as CanvasImageSource, data.width);
+      if (faces.length === 6) {
+        cube.images = faces;
+        cube.needsUpdate = true;
+      }
+      loaded.dispose();
+      onReady();
+    });
+    return cube;
+  }
+
+  const loader = new THREE.TextureLoader();
+  const tex = loader.load(url, (loaded) => {
+    applySceneTextureSampling(loaded, slot, binding);
+    loaded.needsUpdate = true;
+    onReady();
+  });
+  applySceneTextureSampling(tex, slot, binding);
+  tagSceneTexture(tex, sourcePath, identity);
+  return tex;
+}
+
 function createDataTexture(
   data: NutexbTextureData,
   slot: PbrSlotKind,
   binding: ResolvedMaterialBinding,
   sourcePath: string,
+  onReady: () => void,
 ): THREE.Texture {
-  if (data.kind === "compressed") {
-    return createCompressedTexture(data, slot, binding, sourcePath);
+  if (data.kind === "png") {
+    return createPngSceneTexture(data, slot, binding, sourcePath, onReady);
   }
 
   const tex = new THREE.DataTexture(
@@ -1543,53 +1707,12 @@ function createDataTexture(
   }
 
   tex.needsUpdate = true;
-  tex.userData.sceneTexturePath = sourcePath;
-  return tex;
-}
-
-function createCompressedTexture(
-  data: NutexbCompressedData,
-  slot: PbrSlotKind,
-  binding: ResolvedMaterialBinding,
-  sourcePath: string,
-): THREE.CompressedTexture {
-  const entry = COMPRESSED_FORMAT_MAP[data.formatId]!;
-  const isSrgb = SRGB_SLOTS.has(slot);
-  const internalFormat = (isSrgb && entry.srgbInternalFormat) ? entry.srgbInternalFormat : entry.internalFormat;
-
-  const mipmaps = [{ data: data.data, width: data.width, height: data.height }];
-  const tex = new THREE.CompressedTexture(
-    mipmaps as unknown as ImageData[],
-    data.width,
-    data.height,
-    internalFormat as unknown as THREE.CompressedPixelFormat,
+  tagSceneTexture(
+    tex,
+    sourcePath,
+    buildTextureIdentity(sourcePath, slot, binding, data.width, data.height),
   );
-  tex.colorSpace = isSrgb ? THREE.SRGBColorSpace : THREE.LinearSRGBColorSpace;
-  tex.flipY = false;
-  tex.generateMipmaps = false;
-  tex.minFilter = THREE.LinearFilter;
-  tex.magFilter = THREE.LinearFilter;
-
-  if (slot === "cubeMap") {
-    tex.mapping = THREE.EquirectangularReflectionMapping;
-  } else {
-    const sampling = samplingForSlot(binding, slot);
-    tex.wrapS = toThreeWrapping(sampling?.wrapS ?? "ClampToEdge");
-    tex.wrapT = toThreeWrapping(sampling?.wrapT ?? "ClampToEdge");
-    tex.center.set(0, 0);
-    tex.repeat.set(
-      sampling?.uvTransform?.scale_u ?? 1,
-      sampling?.uvTransform?.scale_v ?? 1,
-    );
-    tex.offset.set(
-      sampling?.uvTransform?.translate_u ?? 0,
-      sampling?.uvTransform?.translate_v ?? 0,
-    );
-    tex.rotation = sampling?.uvTransform?.rotation ?? 0;
-  }
-
-  tex.needsUpdate = true;
-  tex.userData.sceneTexturePath = sourcePath;
+  queueMicrotask(onReady);
   return tex;
 }
 
@@ -1626,6 +1749,7 @@ const TexturedMesh = memo(function TexturedMesh({
   animeKeyLightDir: THREE.Vector3;
 }) {
   const { draw, binding } = drawBinding;
+  const invalidate = useThree((state) => state.invalidate);
 
   const slotDataEntries = useMemo(() => {
     return SLOT_KEYS.map((slot) => {
@@ -1642,7 +1766,7 @@ const TexturedMesh = memo(function TexturedMesh({
   }, [textureDataMap, binding, textureSlotLoadEnabled, objectTextureLoadState, objectId]);
 
   const dataKey = slotDataEntries
-    .map(([, d]) => (d ? `${d.width}x${d.height}` : ""))
+    .map(([, d]) => (d ? textureContentKey(d) : ""))
     .join("\0");
 
   const textures = useMemo(() => {
@@ -1652,13 +1776,14 @@ const TexturedMesh = memo(function TexturedMesh({
       if (!data) continue;
       const path = pathForSlot(binding, slot);
       if (!path) continue;
-      const poolKey = buildTexturePoolKey(path, slot, binding, data.width, data.height);
-      result[slot] = texturePool.acquire(poolKey, () => createDataTexture(data, slot, binding, path));
+      const poolKey = buildTexturePoolKey(path, slot, binding, data.width, data.height, data.revision);
+      const tex = texturePool.acquire(poolKey, () => createDataTexture(data, slot, binding, path, invalidate));
+      result[slot] = tex;
     }
 
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataKey, texturePool]);
+  }, [dataKey, invalidate, texturePool]);
 
   const exvsActive = previewRenderStyle === "anime";
   const exvsUniforms = useMemo(() => createAnimeExvsUniforms(), [draw.key]);
@@ -2083,6 +2208,7 @@ const InstancedTexturedMesh = memo(function InstancedTexturedMesh({
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const { draw, binding } = drawBinding;
+  const invalidate = useThree((state) => state.invalidate);
 
   useEffect(() => {
     const mesh = meshRef.current;
@@ -2104,7 +2230,7 @@ const InstancedTexturedMesh = memo(function InstancedTexturedMesh({
     });
   }, [textureDataMap, binding, textureSlotLoadEnabled]);
 
-  const dataKey = slotDataEntries.map(([, d]) => (d ? `${d.width}x${d.height}` : "")).join("\0");
+  const dataKey = slotDataEntries.map(([, d]) => (d ? textureContentKey(d) : "")).join("\0");
 
   const textures = useMemo(() => {
     const result: Partial<Record<PbrSlotKind, THREE.Texture>> = {};
@@ -2112,12 +2238,13 @@ const InstancedTexturedMesh = memo(function InstancedTexturedMesh({
       if (!data) continue;
       const path = pathForSlot(binding, slot);
       if (!path) continue;
-      const poolKey = buildTexturePoolKey(path, slot, binding, data.width, data.height);
-      result[slot] = texturePool.acquire(poolKey, () => createDataTexture(data, slot, binding, path));
+      const poolKey = buildTexturePoolKey(path, slot, binding, data.width, data.height, data.revision);
+      const tex = texturePool.acquire(poolKey, () => createDataTexture(data, slot, binding, path, invalidate));
+      result[slot] = tex;
     }
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataKey, texturePool]);
+  }, [dataKey, invalidate, texturePool]);
 
   const exvsActive = previewRenderStyle === "anime";
   const shaderFamily = binding.shaderFamily;

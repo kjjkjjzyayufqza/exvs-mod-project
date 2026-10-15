@@ -23,7 +23,7 @@ vi.mock("@tauri-apps/api/path", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import { copyFile, exists, mkdir } from "@tauri-apps/plugin-fs";
-import { ddsFormatToRust, replaceNutexbInPlace } from "./sceneTextureConvert";
+import { applySceneTextureReplace, ddsFormatToRust, replaceNutexbInPlace } from "./sceneTextureConvert";
 
 const mockInvoke = vi.mocked(invoke);
 const mockCopyFile = vi.mocked(copyFile);
@@ -81,6 +81,74 @@ describe("replaceNutexbInPlace", () => {
       convertDir: "C:/AppData/Local/app/scene_texture_convert",
       pngPath: "D:/incoming/light_map.png",
       ddsFormat: "BC7RgbaUnormSrgb",
+    });
+  });
+});
+
+describe("applySceneTextureReplace", () => {
+  it("overwrites an existing stage nutexb instead of a convert-dir copy", async () => {
+    mockExists.mockResolvedValue(true);
+    mockInvoke.mockResolvedValue({
+      outputNutexbPath: "E:/stage/0/0/textures/map.nutexb",
+      previewPngPath: "C:/AppData/Local/app/scene_texture_convert/map.png",
+      nutexbName: "map",
+    });
+
+    await expect(
+      applySceneTextureReplace({
+        targetNutexbPath: "E:/stage/0/0/textures/map.nutexb",
+        sourcePath: "D:/incoming/map.png",
+        ddsFormat: "BC3RgbaUnormSrgb",
+      }),
+    ).resolves.toEqual({
+      nutexbPath: "E:/stage/0/0/textures/map.nutexb",
+      wroteInPlace: true,
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("card_icon_replace_from_png_with_dds_format", {
+      nutexbPath: "E:/stage/0/0/textures/map.nutexb",
+      convertDir: "C:/AppData/Local/app/scene_texture_convert",
+      pngPath: "D:/incoming/map.png",
+      ddsFormat: "BC3RgbaUnormSrgb",
+    });
+  });
+
+  it("copies a replacement nutexb onto the existing stage file", async () => {
+    await expect(
+      applySceneTextureReplace({
+        targetNutexbPath: "E:/stage/0/0/textures/map.nutexb",
+        sourcePath: "D:/incoming/map.nutexb",
+        ddsFormat: "BC7RgbaUnormSrgb",
+      }),
+    ).resolves.toEqual({
+      nutexbPath: "E:/stage/0/0/textures/map.nutexb",
+      wroteInPlace: true,
+    });
+
+    expect(mockCopyFile).toHaveBeenCalledWith(
+      "D:/incoming/map.nutexb",
+      "E:/stage/0/0/textures/map.nutexb",
+    );
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it("keeps a not-yet-saved image in the convert dir", async () => {
+    mockExists.mockResolvedValue(false);
+    mockInvoke.mockResolvedValue({
+      outputNutexbPath: "C:/AppData/Local/app/scene_texture_convert/new.nutexb",
+      previewPngPath: "C:/AppData/Local/app/scene_texture_convert/new.png",
+      nutexbName: "new",
+    });
+
+    await expect(
+      applySceneTextureReplace({
+        targetNutexbPath: null,
+        sourcePath: "D:/incoming/new.png",
+        ddsFormat: "BC3RgbaUnormSrgb",
+      }),
+    ).resolves.toEqual({
+      nutexbPath: "C:/AppData/Local/app/scene_texture_convert/new.nutexb",
+      wroteInPlace: false,
     });
   });
 });

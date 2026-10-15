@@ -11,7 +11,7 @@ fn main() {
     // Without this, WebView2 may disable GPU after detecting instability, breaking THREE.js rendering.
     std::env::set_var(
         "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
-        "--enable-gpu --ignore-gpu-blocklist --enable-webgl --disable-gpu-sandbox",
+        "--enable-gpu --ignore-gpu-blocklist --enable-webgl --disable-gpu-sandbox --disable-software-rasterizer",
     );
 
     app_lib::run();

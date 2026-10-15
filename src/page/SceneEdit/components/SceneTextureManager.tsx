@@ -32,6 +32,7 @@ import {
   Eye,
   Replace,
   Copy,
+  RefreshCw,
   Trash2,
 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -46,6 +47,7 @@ import {
 } from "./TextureAddConfirmModal";
 import { VirtualizedList } from "./VirtualizedList";
 import {
+  applySceneTextureReplace,
   convertImageToNutexb,
   exportNutexbToPng,
   replaceNutexbInPlace,
@@ -80,11 +82,18 @@ function formatInfoCategory(category: TextureManagerEntry["infoCategory"], t: (k
 interface SceneTextureManagerProps {
   textureDataMap: NutexbTextureDataMap;
   decodeContext: SceneTextureDecodeContext;
+  onRegenerateCache: (nutexbPath: string) => Promise<void>;
+}
+
+function canRegenerateTextureCache(path: string | null | undefined): boolean {
+  const trimmed = path?.trim() ?? "";
+  return trimmed.length > 0 && !trimmed.startsWith("memory://");
 }
 
 export function SceneTextureManager({
   textureDataMap,
   decodeContext,
+  onRegenerateCache,
 }: SceneTextureManagerProps) {
   const { t } = useTranslation("scene-texture");
   const {
@@ -99,6 +108,7 @@ export function SceneTextureManager({
   } = useSceneTextureManagerStore();
   const [previewEntry, setPreviewEntry] = useState<TextureManagerEntry | null>(null);
   const [replaceTarget, setReplaceTarget] = useState<TextureManagerEntry | null>(null);
+  const [replacePhase, setReplacePhase] = useState<"idle" | "picking" | "working">("idle");
   const [addCandidates, setAddCandidates] = useState<AnalyzedAddCandidate[] | null>(
     null,
   );
@@ -385,9 +395,28 @@ export function SceneTextureManager({
 
   const handleReplace = useCallback(
     (entry: TextureManagerEntry) => {
+      if (replacePhase !== "idle") return;
       setReplaceTarget(entry);
     },
-    []
+    [replacePhase],
+  );
+
+  const handleRegenerate = useCallback(
+    (entry: TextureManagerEntry) => {
+      if (!canRegenerateTextureCache(entry.nutexbPath)) return;
+      void (async () => {
+        try {
+          await onRegenerateCache(entry.nutexbPath!);
+          clearSceneTextureThumbnailCache();
+          bumpThumbnailCache();
+          toast.success(t("success.cacheRegenerated", { filename: entry.filename }));
+        } catch (error) {
+          const message = error instanceof Error ? error.message : t("errors.cacheRegenerateFailed");
+          toast.error(message);
+        }
+      })();
+    },
+    [onRegenerateCache, t],
   );
 
   const handleDelete = useCallback(
@@ -531,6 +560,7 @@ export function SceneTextureManager({
               }}
               onPreview={handlePreview}
               onReplace={handleReplace}
+              onRegenerate={handleRegenerate}
               onDelete={handleDelete}
               onCopyPath={handleCopyPath}
               onExport={handleExport}
@@ -552,6 +582,7 @@ export function SceneTextureManager({
                 }}
                 onPreview={handlePreview}
                 onReplace={handleReplace}
+                onRegenerate={handleRegenerate}
                 onDelete={handleDelete}
                 onCopyPath={handleCopyPath}
                 onExport={handleExport}
@@ -595,77 +626,92 @@ export function SceneTextureManager({
       {replaceTarget && (
         <TextureReplaceModal
           entry={replaceTarget}
-          onClose={() => setReplaceTarget(null)}
-          onConfirm={(ddsFormat) => {
-            const entry = replaceTarget;
+          working={replacePhase === "working"}
+          locked={replacePhase !== "idle"}
+          onClose={() => {
+            if (replacePhase !== "idle") return;
             setReplaceTarget(null);
-            open({
-              title: t("actions.replaceNamed", { filename: entry.filename }),
-              multiple: false,
-              filters: [
-                { name: t("dialog.texturesFilter"), extensions: ["nutexb", "png", "dds", "tga"] },
-              ],
-            }).then((selected) => {
-              if (typeof selected !== "string" || !selected.trim()) return;
-              const filePath = selected.trim();
-              const isNutexb = filePath.toLowerCase().endsWith(".nutexb");
-              if (entry.scope === "info") {
-                if (!entry.nutexbPath) {
-                  toast.error(t("errors.noTargetPath"));
+          }}
+          onConfirm={(ddsFormat) => {
+            if (replacePhase !== "idle") return;
+            const entry = replaceTarget;
+            setReplacePhase("picking");
+            void (async () => {
+              let filePath = "";
+              let isNutexb = false;
+              try {
+                const selected = await open({
+                  title: t("actions.replaceNamed", { filename: entry.filename }),
+                  multiple: false,
+                  filters: [
+                    {
+                      name: t("dialog.texturesFilter"),
+                      extensions: ["nutexb", "png", "dds", "tga"],
+                    },
+                  ],
+                });
+                if (typeof selected !== "string" || !selected.trim()) {
+                  setReplacePhase("idle");
                   return;
                 }
-                replaceNutexbInPlace({
-                  sourcePath: filePath,
+                filePath = selected.trim();
+                isNutexb = filePath.toLowerCase().endsWith(".nutexb");
+                if (entry.status === "existing" && !entry.nutexbPath) {
+                  toast.error(t("errors.noTargetPath"));
+                  setReplacePhase("idle");
+                  setReplaceTarget(null);
+                  return;
+                }
+                if (!entry.nutexbPath && !isNutexb) {
+                  replaceEntry(entry.id, {
+                    sourceImagePath: filePath,
+                    format: "converting",
+                    thumbnailDataUrl: null,
+                  });
+                }
+                setReplacePhase("working");
+                const result = await applySceneTextureReplace({
                   targetNutexbPath: entry.nutexbPath,
+                  sourcePath: filePath,
                   ddsFormat,
-                })
-                  .then(() => {
-                    invalidateNutexbInternalName(entry.nutexbPath as string);
-                    clearNutexbRgbaCache();
-                    clearSceneTextureThumbnailCache();
-                    replaceEntry(entry.id, {
-                      format: isNutexb ? "unknown" : ddsFormat,
-                      thumbnailDataUrl: null,
-                    });
-                    bumpThumbnailCache();
-                    toast.success(t("success.replaced", { filename: entry.filename }));
-                  })
-                  .catch((error) => {
-                    console.error(error);
-                    const message =
-                      error instanceof Error
-                        ? error.message
-                        : t("errors.replaceFailed", { filename: entry.filename });
-                    toast.error(message);
-                  });
-                return;
-              }
-              if (isNutexb) {
-                invalidateNutexbInternalName(filePath);
+                });
+                invalidateNutexbInternalName(result.nutexbPath);
+                if (result.wroteInPlace) {
+                  clearNutexbRgbaCache();
+                  clearSceneTextureThumbnailCache();
+                  if (canRegenerateTextureCache(result.nutexbPath)) {
+                    await onRegenerateCache(result.nutexbPath);
+                  }
+                }
                 replaceEntry(entry.id, {
-                  nutexbPath: filePath,
-                  sourceImagePath: null,
+                  nutexbPath: result.nutexbPath,
+                  sourceImagePath: result.wroteInPlace || isNutexb ? null : filePath,
+                  format: isNutexb ? "unknown" : ddsFormat,
                   thumbnailDataUrl: null,
                 });
-              } else {
-                replaceEntry(entry.id, {
-                  sourceImagePath: filePath,
-                  format: "converting",
-                  thumbnailDataUrl: null,
-                });
-                convertImageToNutexb({ sourcePath: filePath, ddsFormat })
-                  .then((result) => {
-                    replaceEntry(entry.id, {
-                      nutexbPath: result.outputNutexbPath,
-                      format: ddsFormat,
-                      thumbnailDataUrl: null,
-                    });
-                  })
-                  .catch(() => {
-                    replaceEntry(entry.id, { format: "error" });
-                  });
+                if (result.wroteInPlace) {
+                  bumpThumbnailCache();
+                  if (entry.scope === "model") {
+                    useSceneDirtyStore.getState().markGlobalDirty("textures");
+                  }
+                }
+                toast.success(t("success.replaced", { filename: entry.filename }));
+                setReplaceTarget(null);
+                setReplacePhase("idle");
+              } catch (error) {
+                console.error(error);
+                if (filePath && !entry.nutexbPath && !isNutexb) {
+                  replaceEntry(entry.id, { format: "error" });
+                }
+                const message =
+                  error instanceof Error
+                    ? error.message
+                    : t("errors.replaceFailed", { filename: entry.filename });
+                toast.error(message);
+                setReplaceTarget(null);
+                setReplacePhase("idle");
               }
-            });
+            })();
           }}
         />
       )}
@@ -682,6 +728,7 @@ interface TextureSectionProps {
   onSelect: (entry: TextureManagerEntry) => void;
   onPreview: (entry: TextureManagerEntry) => void;
   onReplace: (entry: TextureManagerEntry) => void;
+  onRegenerate: (entry: TextureManagerEntry) => void;
   onDelete: (entry: TextureManagerEntry) => void;
   onCopyPath: (entry: TextureManagerEntry) => void;
   onExport: (entry: TextureManagerEntry) => void;
@@ -698,6 +745,7 @@ function TextureSection({
   onSelect,
   onPreview,
   onReplace,
+  onRegenerate,
   onDelete,
   onCopyPath,
   onExport,
@@ -738,7 +786,9 @@ function TextureSection({
             onSelect={() => onSelect(entry)}
             onPreview={() => onPreview(entry)}
             onReplace={() => onReplace(entry)}
+            onRegenerate={() => onRegenerate(entry)}
             onDelete={() => onDelete(entry)}
+            canRegenerate={canRegenerateTextureCache(entry.nutexbPath)}
             onCopyPath={() => onCopyPath(entry)}
             onExport={() => onExport(entry)}
             canExport={Boolean(entry.nutexbPath) && !isExporting}
@@ -756,10 +806,12 @@ interface TextureRowProps {
   onSelect: () => void;
   onPreview: () => void;
   onReplace: () => void;
+  onRegenerate: () => void;
   onDelete: () => void;
   onCopyPath: () => void;
   onExport: () => void;
   canExport: boolean;
+  canRegenerate: boolean;
 }
 
 function TextureRow({
@@ -769,10 +821,12 @@ function TextureRow({
   onSelect,
   onPreview,
   onReplace,
+  onRegenerate,
   onDelete,
   onCopyPath,
   onExport,
   canExport,
+  canRegenerate,
 }: TextureRowProps) {
   const { t } = useTranslation("scene-texture");
   const thumbnailDataUrl = entry.nutexbPath
@@ -857,6 +911,12 @@ function TextureRow({
           <EditorContextMenuItem onSelect={onExport}>
             <Download className={editorContextMenuIconClassName} />
             <span>{t("actions.exportPng")}</span>
+          </EditorContextMenuItem>
+        ) : null}
+        {canRegenerate ? (
+          <EditorContextMenuItem onSelect={onRegenerate}>
+            <RefreshCw className={editorContextMenuIconClassName} />
+            <span>{t("actions.regenerateCache")}</span>
           </EditorContextMenuItem>
         ) : null}
         <EditorContextMenuItem onSelect={onReplace}>

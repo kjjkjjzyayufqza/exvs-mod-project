@@ -13,6 +13,8 @@ import { CHARACTERLIST_STRING_FIELDS } from "@/models/characterListEntry";
 import { StringFieldGroup } from "./StringFieldGroup";
 import { SeriesIdPickerItem, SeriesIdPickerPopover } from "./SeriesIdPickerPopover";
 import { BgmCuePickerItem, BgmCuePickerPopover } from "./BgmCuePickerPopover";
+import { BgmCueFieldLink, PilotStemToVoiceKey, VoiceSlotFieldLink } from "../sound-table/SoundFieldLink";
+import type { SoundFocus } from "../sound-table/soundChainModel";
 import { CardIconIndexPickerItem, CardIconIndexPickerPopover } from "./CardIconIndexPickerPopover";
 import { GuiHashFieldExtras, GuiHashFieldPreview } from "./GuiHashFieldExtras";
 import { CloneGuiFieldDialog } from "./CloneGuiFieldDialog";
@@ -51,6 +53,7 @@ interface CharacterFormProps {
     tooltip: string;
     onClick: () => void;
   };
+  onOpenSoundFocus?: (focus: SoundFocus) => void;
   onChange: (character: CharacterListEntry) => void;
 }
 
@@ -76,6 +79,7 @@ export function CharacterForm({
   onCloneGuiPack,
   cloningGuiHash = null,
   jumpToCharacterIdTable,
+  onOpenSoundFocus,
   onChange,
 }: CharacterFormProps) {
   const [formData, setFormData] = useState<Record<string, number>>({});
@@ -436,6 +440,22 @@ export function CharacterForm({
                         <GuiHashFieldPreview
                           value={formData[field.name] ?? 0}
                           items={guiPackItems}
+                        />
+                      ) : field.name === "pilotPresentationHash" ? (
+                        <div className="space-y-2">
+                          <PilotStemToVoiceKey
+                            onVoiceKey={(voiceKey) => handleFieldChange("pilotPresentationHash", voiceKey)}
+                          />
+                          <VoiceSlotFieldLink
+                            voiceKey={formData.pilotPresentationHash ?? 0}
+                            onOpen={onOpenSoundFocus}
+                          />
+                        </div>
+                      ) : field.name === "pairedBgmMusicIdPrimary" || field.name === "pairedBgmMusicIdSecondary" ? (
+                        <BgmCueFieldLink
+                          cueHash={formData[field.name] ?? 0}
+                          items={bgmCuePickerItems}
+                          onOpen={onOpenSoundFocus}
                         />
                       ) : undefined
                     }

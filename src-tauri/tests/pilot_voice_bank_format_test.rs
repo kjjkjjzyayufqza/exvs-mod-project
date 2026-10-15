@@ -1,6 +1,7 @@
 use app_lib::format::fhm2d::{extract_fhm2d_to_memory_impl, Fhm2dFormat};
 use app_lib::format::pilot_voice_bank::{
-    apply_bank_file, parse_bank, read_audio_tracks, section_directory, set_n_samples, sync_bank,
+    apply_bank_file, clone_pilot_voice_bank_from_donor, parse_bank, read_audio_tracks,
+    section_directory, set_clock, set_n_samples, synthesize_pilot_voice_bank_from_audio, sync_bank,
     sync_bank_files, track_length, SampleEdit,
 };
 use std::path::PathBuf;
@@ -147,6 +148,40 @@ fn differing_offsets(left: &[u8], right: &[u8]) -> Vec<usize> {
         .enumerate()
         .filter_map(|(index, (a, b))| if a != b { Some(index) } else { None })
         .collect()
+}
+
+#[test]
+fn synthesize_refuses_without_a_proven_tone_donor() {
+    let err = synthesize_pilot_voice_bank_from_audio(&[]).unwrap_err();
+    assert!(err.contains("TONE donor"));
+    assert!(err.contains("empty nus3bank"));
+}
+
+#[test]
+fn clone_refuses_a_tight_name_and_a_bgm_width_slot() {
+    let names = vec!["VO_1001_P01_CHARA_SELECT_01".to_string()];
+    let tight = clone_pilot_voice_bank_from_donor(&one_cue_bank(), &names).unwrap_err();
+    assert!(tight.contains("TONE donor"));
+    assert!(tight.contains("empty nus3bank"));
+    assert!(tight.contains("measured"));
+    assert!(!tight.contains("0x19 is a BGM"));
+
+    let mut tone = b"CueA".to_vec();
+    tone.push(0);
+    while tone.len() < 0x19 {
+        tone.push(0);
+    }
+    let bgm_width = bank_with(&tone, b"PACK");
+    let bgm = clone_pilot_voice_bank_from_donor(&bgm_width, &names).unwrap_err();
+    assert!(bgm.contains("0x19 is a BGM name slot"));
+    assert!(bgm.contains("empty nus3bank"));
+    assert!(bgm.contains("1 new cues"));
+}
+
+#[test]
+fn clone_refuses_a_buffer_that_is_not_a_bank() {
+    let err = clone_pilot_voice_bank_from_donor(&[0, 1, 2, 3], &[]).unwrap_err();
+    assert!(err.contains("not a NUS3 BANK"));
 }
 
 #[test]
@@ -326,6 +361,30 @@ fn set_n_samples_accepts_one() {
 }
 
 #[test]
+fn set_clock_changes_only_the_loop_triple() {
+    let original = one_cue_bank();
+    let mut patched = original.clone();
+    set_clock(
+        &mut patched,
+        &SampleEdit {
+            name: "vo_01_p01_words_002_02".to_string(),
+            n_samples: 47824,
+            loop_start: Some(0x1122_3344),
+            loop_end: Some(0x5566_7788u32 as i32),
+            loop_flag: Some(-1),
+        },
+    )
+    .unwrap();
+    assert_eq!(patched.len(), original.len());
+    assert_eq!(differing_offsets(&original, &patched).len(), 12);
+    let cue = &parse_bank(&patched).unwrap().cues[0];
+    assert_eq!(cue.n_samples, 47824);
+    assert_eq!(cue.loop_start, 0x1122_3344);
+    assert_eq!(cue.loop_end, 0x5566_7788u32 as i32);
+    assert_eq!(cue.loop_flag, -1);
+}
+
+#[test]
 fn sync_files_does_not_write_the_bank() {
     let dir = std::env::temp_dir().join(format!("pilot-voice-bank-sync-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
@@ -356,6 +415,9 @@ fn apply_bank_file_writes_workspace_copy_and_backs_up_once() {
         &[SampleEdit {
             name: "vo_01_p01_words_002_02".to_string(),
             n_samples: 60000,
+            loop_start: None,
+            loop_end: None,
+            loop_flag: None,
         }],
     )
     .unwrap();
@@ -367,6 +429,9 @@ fn apply_bank_file_writes_workspace_copy_and_backs_up_once() {
         &[SampleEdit {
             name: "vo_01_p01_words_002_02".to_string(),
             n_samples: 12,
+            loop_start: None,
+            loop_end: None,
+            loop_flag: None,
         }],
     )
     .unwrap();

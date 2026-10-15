@@ -140,6 +140,8 @@ interface DaeImportConfigModalProps {
   workflowMode?: DaeImportWorkflowMode;
   /** When set, out-of-scene writes go to `{stageRoot}/{replaceFolderName}/0/...` only. */
   replaceFolderName?: string | null;
+  /** Model slot name shown read-only during a unit-model replace import. */
+  lockedOutputBaseName?: string | null;
   onConfigChange: (importId: string, config: DaeImportConfig) => void;
   onImport: () => void;
   onCancel: () => void;
@@ -159,6 +161,7 @@ interface DaeImportConfigModalBodyProps {
   stageRoot: string | null;
   workflowMode: DaeImportWorkflowMode;
   replaceFolderName?: string | null;
+  lockedOutputBaseName?: string | null;
   onConfigChange: (importId: string, config: DaeImportConfig) => void;
   onImport: () => void;
   onCancel: () => void;
@@ -172,6 +175,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
   stageRoot,
   workflowMode,
   replaceFolderName,
+  lockedOutputBaseName = null,
   onConfigChange,
   onImport,
   onCancel,
@@ -528,6 +532,7 @@ const DaeImportConfigModalBody = memo(function DaeImportConfigModalBody({
               unitModelMode={unitModelMode}
               replaceNumshbMode={replaceNumshbMode}
               replaceFullMode={replaceFullMode}
+              lockedOutputBaseName={lockedOutputBaseName}
               textureReferenceIssues={textureReferenceValidation.issues}
               textureReferenceValidationError={textureReferenceValidation.error}
               textureReferencesValidating={textureReferenceValidation.validating}
@@ -565,6 +570,7 @@ export function DaeImportConfigModal({
   stageRoot,
   workflowMode = "standard",
   replaceFolderName,
+  lockedOutputBaseName = null,
   onConfigChange,
   onImport,
   onCancel,
@@ -636,6 +642,7 @@ export function DaeImportConfigModal({
           stageRoot={stageRoot}
           workflowMode={workflowMode}
           replaceFolderName={replaceFolderName}
+          lockedOutputBaseName={lockedOutputBaseName}
           onConfigChange={onConfigChange}
           onImport={onImport}
           onCancel={onCancel}

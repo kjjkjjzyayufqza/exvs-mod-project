@@ -34,6 +34,9 @@
     "size": "ギズモサイズ"
   },
   "display": {
+    "spawnPositions": "出現位置",
+    "showSpawnPositions": "出現位置を表示",
+    "hideSpawnPositions": "出現位置を非表示",
     "grid": "グリッド",
     "showGrid": "グリッドを表示",
     "hideGrid": "グリッドを非表示",

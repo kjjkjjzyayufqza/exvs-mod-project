@@ -73,6 +73,11 @@ import {
 } from "./components/GraphicParamPanel";
 import { type PlacementRow } from "./types/placement";
 import { PlacementCsvEditorPanel } from "./components/PlacementCsvEditorPanel";
+import { PlanParamPanel } from "./components/plan-param/PlanParamPanel";
+import type { BorderHitSummary, PlanParam } from "./types/planParam";
+import { listPlanPoints, movePlanPoint, parsePlanPointKey, setMarkerParameter, setPlanLimit } from "./utils/planParamEdit";
+import { BORDER_HIT_TARGET_ID, borderHitFolderKey, findBorderHitMesh, isBorderHitSource } from "./utils/borderHitView";
+import { PlanViewportLegend } from "./components/plan-param/PlanViewportLegend";
 import {
   formatPlacementViewportNodeId,
   parsePlacementViewportNodeId,
@@ -112,7 +117,7 @@ import {
 } from "./components/SceneViewportOverlay";
 import { SceneInfoContent, SceneStatsContent } from "./components/SceneStatusPanel";
 import { useSceneTextureLoader } from "./hooks/useSceneTextureLoader";
-import { TextureQualityPanel, getMaxDimensionForQuality } from "./components/TextureQualityPanel";
+import { TextureQualityPanel } from "./components/TextureQualityPanel";
 import { disposeFhm2dMemorySession } from "@/components/ssbh-model-preview/fhm2dMemoryPreviewService";
 import { useDaeSsbhSessionStore } from "@/components/ssbh-model-preview/store/daeSsbhSessionStore";
 import {
@@ -245,6 +250,7 @@ import {
   sceneConfigureImport,
   sceneGenerateHkt,
   sceneGenerateHktFromMesh,
+  sceneGenerateBorderHktFromMesh,
   sceneGetHavokMeta,
   sceneGetImportConfig,
   sceneReplaceHkt,
@@ -614,7 +620,8 @@ export default function SceneEdit() {
       Object.keys(s.objects).length > 0 ||
       s.global.graphicParams ||
       s.global.placementOrder ||
-      s.global.textures,
+      s.global.textures ||
+      s.global.planParam,
   );
   const [saveProgressState, setSaveProgressState] = useState<{
     open: boolean;
@@ -673,6 +680,9 @@ export default function SceneEdit() {
     Record<string, number>
   >({});
   const [placementEntries, setPlacementEntries] = useState<PlacementRow[]>([]);
+  const [planParam, setPlanParam] = useState<PlanParam | null>(null);
+  const [borderHit, setBorderHit] = useState<BorderHitSummary | null>(null);
+  const [selectedPlanPoint, setSelectedPlanPoint] = useState<string | null>(null);
   const [treeRoot, setTreeRoot] = useState<StageTreeNode | null>(null);
 
   const initialSnapshotRef = useRef<{
@@ -685,6 +695,9 @@ export default function SceneEdit() {
   placementHeaderRef.current = placementHeader;
   const placementEntriesRef = useRef(placementEntries);
   placementEntriesRef.current = placementEntries;
+  const planParamRef = useRef<PlanParam | null>(planParam);
+  planParamRef.current = planParam;
+  const planLoadGenerationRef = useRef(0);
   const appliedGraphicParamKeysRef = useRef(appliedGraphicParamKeys);
   appliedGraphicParamKeysRef.current = appliedGraphicParamKeys;
   const subModelManifestRef = useRef<SubModelManifestEntry[]>([]);
@@ -759,6 +772,18 @@ export default function SceneEdit() {
   const showCollisionMesh = useSceneEditorStore((s) => s.showCollisionMesh);
   const setShowCollisionMesh = useSceneEditorStore((s) => s.setShowCollisionMesh);
   const collisionVisibility = useSceneEditorStore((s) => s.collisionVisibility);
+  const borderHitView = useMemo(() => findBorderHitMesh(havokMeshDataMap), [havokMeshDataMap]);
+  const borderHitVisible = viewMode !== "normal"
+    && borderHitView != null
+    && collisionVisibility[borderHitFolderKey(borderHitView.sourceId)] !== false;
+  const borderSourceModels = useMemo(() => {
+    const models: Array<{ id: string; label: string }> = [];
+    if (baseModel) models.push({ id: "base", label: "base" });
+    for (const model of subModels) {
+      models.push({ id: model.folderName, label: model.folderName });
+    }
+    return models;
+  }, [baseModel, subModels]);
 
   const INITIAL_STEPS: ImportStep[] = [
     { step: "read", label: t("progress.readingFile"), status: "pending" },
@@ -909,10 +934,10 @@ export default function SceneEdit() {
   const [standaloneTransforms, setStandaloneTransforms] = useState<Map<string, TransformData>>(new Map());
 
   const [showGrid, setShowGrid] = useState(true);
+  const [showSpawnPositions, setShowSpawnPositions] = useState(false);
   const [showAxes, setShowAxes] = useState(true);
   const [wireframe, setWireframe] = useState(false);
   const [showStats, setShowStats] = useState(false);
-  const [textureQuality, setTextureQuality] = useState("original");
   const sceneEditTexturesEnabled = useConfigStore((state) => state.sceneEditTexturesEnabled);
   const setSceneEditTexturesEnabled = useConfigStore((state) => state.setSceneEditTexturesEnabled);
   const sceneEditPreviewRenderStyle = useConfigStore((state) => state.sceneEditPreviewRenderStyle);
@@ -938,7 +963,6 @@ export default function SceneEdit() {
   const nodeVisibility = useSceneEditorStore((state) => state.nodeVisibility);
   const objectLocks = useSceneEditorStore((state) => state.objectLocks);
 
-  const textureMaxDimension = getMaxDimensionForQuality(textureQuality);
   // The two styles are mutually exclusive; the reconstructed pipeline wins because
   // it replaces the shading the anime style tints rather than layering on it.
   const scenePreviewRenderStyle: PreviewRenderStyle = sceneEditPreviewRenderStyle;
@@ -955,22 +979,22 @@ export default function SceneEdit() {
     () => ({
       sessionId,
       sourceKind: sceneTextureSourceKind,
-      maxDimension: textureMaxDimension,
+      maxDimension: null,
     }),
-    [sessionId, sceneTextureSourceKind, textureMaxDimension],
+    [sessionId, sceneTextureSourceKind],
   );
 
   const {
     textureDataMap,
     progress: textureProgress,
     warnings: textureWarnings,
+    regenerateTextureCache,
   } = useSceneTextureLoader(
     baseModel,
     subModels,
     importedSsbhBundles,
     placementEntries,
     sessionId,
-    textureMaxDimension,
     textureSlotLoadEnabled,
     objectTextureLoadState,
     sceneEditTexturesEnabled,
@@ -1050,6 +1074,7 @@ export default function SceneEdit() {
     (id: string | null, opts?: { ctrl?: boolean; shift?: boolean }) => {
       const store = useSceneEditorStore.getState();
       if (id) {
+        setSelectedPlanPoint(null);
         store.select(id, {
           ctrl: opts?.ctrl,
           shift: opts?.shift,
@@ -1063,6 +1088,73 @@ export default function SceneEdit() {
     },
     [applyPrimarySelectionState],
   );
+
+  const loadStagePlanFiles = useCallback(async (path: string, generation: number) => {
+    let nextPlan: PlanParam | null = null;
+    let nextBorder: BorderHitSummary | null = null;
+    try {
+      nextPlan = await invoke<PlanParam | null>("read_stage_plan_param", { stageRoot: path });
+    } catch (err) {
+      if (planLoadGenerationRef.current === generation) {
+        toast.error(t("planParam.loadFailed"), {
+          description: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    try {
+      nextBorder = await invoke<BorderHitSummary | null>("read_stage_border_hit", { stageRoot: path });
+    } catch (err) {
+      if (planLoadGenerationRef.current === generation) {
+        toast.error(t("planParam.borderLoadFailed"), {
+          description: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    if (planLoadGenerationRef.current !== generation) return;
+    planParamRef.current = nextPlan;
+    setPlanParam(nextPlan);
+    setBorderHit(nextBorder);
+    setSelectedPlanPoint(null);
+  }, [t]);
+
+  const handleSelectPlanPoint = useCallback((key: string) => {
+    setSelectedPlanPoint(key);
+    handleSelectNode(null);
+  }, [handleSelectNode]);
+
+  const handleMovePlanPoint = useCallback((key: string, position: [number, number, number]) => {
+    const id = parsePlanPointKey(key);
+    if (!id) return;
+    setPlanParam((prev) => {
+      if (!prev) return prev;
+      const next = movePlanPoint(prev, id, position);
+      planParamRef.current = next;
+      return next;
+    });
+    useSceneDirtyStore.getState().markGlobalDirty("planParam");
+  }, []);
+
+  const handlePlanLimitChange = useCallback((limit: number) => {
+    setPlanParam((prev) => {
+      if (!prev) return prev;
+      const next = setPlanLimit(prev, limit);
+      planParamRef.current = next;
+      return next;
+    });
+    useSceneDirtyStore.getState().markGlobalDirty("planParam");
+  }, []);
+
+  const handleMarkerParameter = useCallback((key: string, parameter: number) => {
+    const id = parsePlanPointKey(key);
+    if (!id || id.kind !== "marker") return;
+    setPlanParam((prev) => {
+      if (!prev) return prev;
+      const next = setMarkerParameter(prev, id.index, parameter);
+      planParamRef.current = next;
+      return next;
+    });
+    useSceneDirtyStore.getState().markGlobalDirty("planParam");
+  }, []);
 
   const handleSelectNodes = useCallback(
     (ids: string[], opts?: { ctrl?: boolean; shift?: boolean }) => {
@@ -1350,6 +1442,9 @@ export default function SceneEdit() {
         useSceneTextureManagerStore.getState().setEntries(texEntries);
       });
 
+      const generation = ++planLoadGenerationRef.current;
+      void loadStagePlanFiles(path, generation);
+
       const showToast = options.showToast ?? true;
       if (!showToast) return;
 
@@ -1362,7 +1457,7 @@ export default function SceneEdit() {
         toast.success(t("success.stageLoaded"));
       }
     },
-    []
+    [loadStagePlanFiles]
   );
 
   const applySkeleton = useCallback(
@@ -1440,6 +1535,9 @@ export default function SceneEdit() {
         );
       });
 
+      const generation = ++planLoadGenerationRef.current;
+      void loadStagePlanFiles(path, generation);
+
       if (skeleton.warnings.length > 0) {
         toast.warning(
           t("success.skeletonWarnings", { count: skeleton.warnings.length }),
@@ -1447,7 +1545,7 @@ export default function SceneEdit() {
         );
       }
     },
-    []
+    [loadStagePlanFiles]
   );
 
   const resetState = useCallback(() => {
@@ -1474,6 +1572,11 @@ export default function SceneEdit() {
     setPlacementHeader([]);
     setPlacementColMap({});
     setPlacementEntries([]);
+    planLoadGenerationRef.current += 1;
+    planParamRef.current = null;
+    setPlanParam(null);
+    setBorderHit(null);
+    setSelectedPlanPoint(null);
     setImportedDaeObjects([]);
     setModelReplacements([]);
     setTreeRoot(null);
@@ -2242,6 +2345,7 @@ export default function SceneEdit() {
         importedDaeObjects,
         sceneSessionId,
         modelReplacements,
+        planParam: planParamRef.current,
         onProgress: updateSaveProgress,
         onDeleteConfirm: autoApproveSaveDelete,
       });
@@ -2353,6 +2457,7 @@ export default function SceneEdit() {
         importedDaeObjects,
         sceneSessionId,
         modelReplacements,
+        planParam: planParamRef.current,
         outputFhm2dPath: outputPath,
         onProgress: updateSaveProgress,
         onDeleteConfirm: autoApproveSaveDelete,
@@ -2933,12 +3038,6 @@ export default function SceneEdit() {
 
   const handleDrawStatsChange = useCallback((stats: SceneDrawStats) => {
     setDrawStats(stats);
-  }, []);
-
-  const handleTextureQualityChange = useCallback((quality: string) => {
-    setTextureQuality(quality);
-    clearNutexbRgbaCache();
-    clearSceneTextureThumbnailCache();
   }, []);
 
   const handleTextureSlotMode = useCallback((mode: "all" | "none") => {
@@ -4419,6 +4518,54 @@ export default function SceneEdit() {
     [],
   );
 
+  const handleGenerateBorderHkt = useCallback(
+    async (folderName: string) => {
+      if (!sceneSessionId) {
+        toast.error(t("errors.noSceneSession"));
+        return;
+      }
+      const toastId = `border-hkt-${folderName}`;
+      try {
+        toast.loading(t("planParam.generatingBorder", { name: folderName }), { id: toastId });
+        await sceneGenerateBorderHktFromMesh(sceneSessionId, folderName, { ...DEFAULT_HKT_SIMPLIFY });
+        const havokResult = await sceneGetHavokMeta(sceneSessionId, BORDER_HIT_TARGET_ID);
+        if (havokResult?.hktXml) {
+          const meshData = parseHavokXML(havokResult.hktXml);
+          setHavokMeshDataMap((prev) => {
+            const next = new Map(prev);
+            for (const key of prev.keys()) {
+              if (isBorderHitSource(key)) next.delete(key);
+            }
+            next.set(havokResult.sourceId, meshData);
+            return next;
+          });
+          setHavokMetaMap((prev) => {
+            const next = new Map(prev);
+            for (const key of prev.keys()) {
+              if (isBorderHitSource(key)) next.delete(key);
+            }
+            next.set(havokResult.sourceId, {
+              displayName: havokResult.displayName,
+              objectNodeId: havokResult.objectNodeId,
+            });
+            return next;
+          });
+        }
+        if (stageRoot) {
+          const summary = await invoke<BorderHitSummary | null>("read_stage_border_hit", { stageRoot });
+          setBorderHit(summary);
+        }
+        toast.success(t("planParam.borderGenerated", { name: folderName }), { id: toastId });
+      } catch (err) {
+        toast.error(t("planParam.borderGenerateFailed", {
+          name: folderName,
+          message: err instanceof Error ? err.message : String(err),
+        }), { id: toastId });
+      }
+    },
+    [sceneSessionId, stageRoot, t],
+  );
+
   const handleGenerateHkt = useCallback(
     async (ids: string[]) => {
       if (!sceneSessionId) {
@@ -4794,10 +4941,12 @@ export default function SceneEdit() {
           showAxes={showAxes}
           wireframe={wireframe}
           showStats={showStats}
+          showSpawnPositions={showSpawnPositions}
           onToggleGrid={() => setShowGrid((v) => !v)}
           onToggleAxes={() => setShowAxes((v) => !v)}
           onToggleWireframe={() => setWireframe((v) => !v)}
           onToggleStats={() => setShowStats((v) => !v)}
+          onToggleSpawnPositions={() => setShowSpawnPositions((v) => !v)}
           onResetCamera={() => viewportRef.current?.resetCamera()}
           onClearCache={() => setClearCacheDialogOpen(true)}
           clearCacheDisabled={isLoading || isLoadingBundle}
@@ -4956,6 +5105,7 @@ export default function SceneEdit() {
                   <SceneTextureManager
                     textureDataMap={textureDataMap}
                     decodeContext={sceneTextureDecodeContext}
+                    onRegenerateCache={regenerateTextureCache}
                   />
                 </TabsContent>
                 <TabsContent value="structure" className="mt-0 min-h-0 flex-1 overflow-hidden">
@@ -4994,6 +5144,8 @@ export default function SceneEdit() {
               onDuplicateSelected={() => handleDuplicateSelected()}
               onDeleteSelected={handleDeleteSelected}
               hasSelection={hasSceneSelection}
+              borderModels={borderSourceModels}
+              onGenerateBorderHkt={(modelId) => void handleGenerateBorderHkt(modelId)}
             >
             <div
               className="relative h-full min-h-0 min-w-0 overflow-hidden"
@@ -5057,7 +5209,25 @@ export default function SceneEdit() {
                       }
                     : null
                 }
+                planOverlay={
+                  planParam && showSpawnPositions
+                    ? {
+                        points: listPlanPoints(planParam),
+                        limit: planParam.limit,
+                        selectedKey: selectedPlanPoint,
+                        onSelect: handleSelectPlanPoint,
+                        onMove: handleMovePlanPoint,
+                        onLimitChange: handlePlanLimitChange,
+                        onMarkerParameter: handleMarkerParameter,
+                        gizmoMode: placementGizmoMode,
+                        gizmoSize: sceneEditGizmoSize,
+                      }
+                    : null
+                }
               />
+              {((planParam != null && showSpawnPositions) || borderHitVisible) && (
+                <PlanViewportLegend showPlan={planParam != null && showSpawnPositions} showBorder={borderHitVisible} />
+              )}
               <SceneViewportOverlay isLoading={isLoading} modelLoadProgress={modelLoadProgress} textureProgress={textureProgress} hktLoadProgress={hktLoadProgress} />
               {missionMarkers.length > 0 && missionSpawnEdit !== "ready" && (
                 <MissionSpawnAuthoringHint
@@ -5172,8 +5342,6 @@ export default function SceneEdit() {
                 <>
                   <MayaSection title={t("tabs.textureQuality")} defaultOpen>
                     <TextureQualityPanel
-                      quality={textureQuality}
-                      onQualityChange={handleTextureQualityChange}
                       textureSlotLoadEnabled={textureSlotLoadEnabled}
                       onTextureSlotMode={handleTextureSlotMode}
                       onTextureSlotToggle={handleTextureSlotToggle}
@@ -5236,6 +5404,7 @@ export default function SceneEdit() {
                 </MayaSection>
               }
               placementContent={
+                <>
                 <MayaSection
                     title={t("tabs.placement")}
                   badge={placementEntries.length || undefined}
@@ -5272,6 +5441,24 @@ export default function SceneEdit() {
                     onResetField={handleResetPlacementField}
                   />
                 </MayaSection>
+                <MayaSection
+                  title={t("planParam.title")}
+                  badge={planParam ? listPlanPoints(planParam).length : undefined}
+                  defaultOpen
+                >
+                  <PlanParamPanel
+                    plan={planParam}
+                    border={borderHit}
+                    borderInViewport={borderHitVisible}
+                    selectedKey={selectedPlanPoint}
+                    onSelect={handleSelectPlanPoint}
+                    onMove={handleMovePlanPoint}
+                    onLimitChange={handlePlanLimitChange}
+                    borderModels={borderSourceModels}
+                    onGenerateBorder={(modelId) => void handleGenerateBorderHkt(modelId)}
+                  />
+                </MayaSection>
+                </>
               }
             />
           </ResizablePanel>

@@ -33,7 +33,7 @@
   "overlay.streamingModels": "モデルをストリーミング中（{{loaded}}/{{total}}）…",
   "overlay.loadingStage": "ステージを読み込み中…",
   "overlay.loadingCollision": "コリジョンを読み込み中（{{loaded}}/{{total}}）",
-  "overlay.decodingTextures": "テクスチャをデコード中（{{done}}/{{total}}）",
+  "overlay.decodingTextures": "テクスチャを読み込み中（{{done}}/{{total}}）",
   "import.title": "ステージをインポート中",
   "import.preparing": "準備中…"
 }

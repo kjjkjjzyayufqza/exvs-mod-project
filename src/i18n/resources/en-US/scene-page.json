@@ -177,7 +177,7 @@
     "assetConfig": "Asset Config",
     "hktCollision": "HKT Collision",
     "stats": "Stats",
-    "textureQuality": "Texture Quality",
+    "textureQuality": "Texture slots",
     "objectNutexb": "Object Nutexb",
     "loadedNutexb": "Loaded Nutexb",
     "graphicParam": "Graphic Param",
@@ -234,5 +234,46 @@
     "emptyTexturePaths": "{{count}} empty texture path(s) — blocks save & repack",
     "copyAllErrors": "Copy all errors",
     "copyAllMaterialErrors": "Copy all material errors"
+  },
+  "planParam": {
+    "title": "Spawn plan",
+    "limit": "Limit",
+    "missing": "No plan_param.spbin in this stage.",
+    "loadFailed": "Failed to read plan_param.spbin",
+    "trailing": "w {{value}}",
+    "borderTitle": "Border file",
+    "borderMissing": "No border_hit.hkt in this stage.",
+    "borderLoadFailed": "Failed to read border_hit.hkt",
+    "borderSummary": "SDK {{sdk}} · {{bytes}} bytes · {{items}} objects",
+    "borderViewOnly": "Right-click the viewport and choose Generate border HKT, or pick a stage model below. Havok Content Tools draws the result as an amber wireframe.",
+    "borderWhenCollision": "This border is loaded. The amber wireframe appears when the viewport is set to Collision or Both.",
+    "borderInViewport": "The amber wireframe is this border. It appears only in the Collision or Both view. Right-click the viewport, or use the model list below, to replace it.",
+    "generateBorder": "Generate HKT",
+    "noBorderModels": "No stage model",
+    "generatingBorder": "Generating border HKT from {{name}}...",
+    "borderGenerated": "Border HKT generated from {{name}}",
+    "borderGenerateFailed": "Border HKT from {{name}} failed: {{message}}",
+    "markerAngleHint": "Drag a point to move it. The ground ring is the limit; drag its handle to resize. A marker arrow uses the stored angle — the rotate gizmo writes that angle back.",
+    "limitHandle": "Limit {{value}}",
+    "markerLabel": {
+      "spawnFirst": "A{{index}}",
+      "spawnSecond": "B{{index}}",
+      "marker": "M{{index}}",
+      "respawn": "R{{index}}"
+    },
+    "legend": {
+      "spawnFirst": "Spawn A",
+      "spawnSecond": "Spawn B",
+      "marker": "Marker",
+      "respawn": "Respawn",
+      "limit": "Limit",
+      "border": "Border"
+    },
+    "groups": {
+      "spawnFirst": "Spawn A ({{count}})",
+      "spawnSecond": "Spawn B ({{count}})",
+      "marker": "Markers ({{count}})",
+      "respawn": "Respawns ({{count}})"
+    }
   }
 }

@@ -19,6 +19,7 @@ import { pickNextCharacterUniqueId } from "./characterUniqueId";
 import type { SeriesIdPickerItem } from "./SeriesIdPickerPopover";
 import type { CardIconIndexPickerItem } from "./CardIconIndexPickerPopover";
 import type { BgmCuePickerItem } from "./BgmCuePickerPopover";
+import type { SoundFocus } from "../sound-table/soundChainModel";
 import { CloneGuiDialog } from "./CloneGuiDialog";
 import type { CloneGuiSetResult } from "./guiClonePlan";
 import type { GuiPackPickerItem } from "./guiPackIndex";
@@ -51,6 +52,7 @@ interface CharacterEditorProps {
     tooltip: string;
     onClick: () => void;
   };
+  onOpenSoundFocus?: (focus: SoundFocus) => void;
   cloneGuiWritable?: boolean;
   onPackMutated?: (pack: WorkspacePackIdentity) => void;
   onRevealTreeFolder?: (path: string) => void;
@@ -194,6 +196,7 @@ export function CharacterEditor({
   onCloneGuiPack,
   cloningGuiHash,
   jumpToCharacterIdTable,
+  onOpenSoundFocus,
   cloneGuiWritable = true,
   onPackMutated,
   onRevealTreeFolder,
@@ -428,6 +431,7 @@ export function CharacterEditor({
             onCloneGuiPack={onCloneGuiPack ? handleCloneGuiPack : undefined}
             cloningGuiHash={cloningGuiHash}
             jumpToCharacterIdTable={jumpToCharacterIdTable}
+            onOpenSoundFocus={onOpenSoundFocus}
             onChange={handleUpdateCharacter}
           />
         ) : (

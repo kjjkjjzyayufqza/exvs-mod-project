@@ -105,12 +105,18 @@ describe("useSceneTextureLoader", () => {
     mocks.invoke.mockReset();
     mocks.getMemoryNutexbPreviewIdentity.mockReset();
     mocks.getOrDecodeNutexbRgba.mockReset();
-    mocks.invoke.mockImplementation((command: string) => {
-      if (command === "nutexb_preview_file_identity") {
-        return Promise.resolve({ nutexbSize: 16, crc32: 0x1234abcd });
-      }
-      if (command === "nutexb_rgba_bytes") {
-        return Promise.resolve(new Uint8Array([255, 255, 255, 255]));
+    mocks.invoke.mockImplementation((command: string, args?: { paths?: string[] }) => {
+      if (command === "ensure_scene_nutexb_png_cache") {
+        return Promise.resolve(
+          (args?.paths ?? []).map((nutexbPath) => ({
+            nutexbPath,
+            pngPath: `${nutexbPath}.cache.png`,
+            width: 1,
+            height: 1,
+            cacheHit: true,
+            error: null,
+          })),
+        );
       }
       return Promise.reject(new Error(`unexpected command: ${command}`));
     });
@@ -135,7 +141,6 @@ describe("useSceneTextureLoader", () => {
         importedBundles,
         placementEntries,
         "scene-session",
-        null,
         textureSlotLoadEnabled,
         objectTextureLoadState,
         true,
@@ -146,13 +151,12 @@ describe("useSceneTextureLoader", () => {
       expect(result.current.textureDataMap.get(diskTexturePath)?.width).toBe(1);
     });
 
-    expect(mocks.invoke).toHaveBeenCalledWith("nutexb_preview_file_identity", {
-      path: diskTexturePath,
+    expect(result.current.textureDataMap.get(diskTexturePath)?.kind).toBe("png");
+    expect(mocks.invoke).toHaveBeenCalledWith("ensure_scene_nutexb_png_cache", {
+      paths: [diskTexturePath],
+      force: false,
     });
-    expect(mocks.invoke).toHaveBeenCalledWith("nutexb_rgba_bytes", {
-      inputPath: diskTexturePath,
-      maxDimension: undefined,
-    });
+    expect(mocks.invoke).not.toHaveBeenCalledWith("nutexb_rgba_bytes", expect.anything());
     expect(mocks.invoke).not.toHaveBeenCalledWith(
       "fhm2d_memory_nutexb_rgba_bytes",
       expect.anything(),
@@ -178,7 +182,6 @@ describe("useSceneTextureLoader", () => {
         subModels,
         importedBundles,
         placementEntries,
-        null,
         null,
         textureSlotLoadEnabled,
         objectTextureLoadState,

@@ -6,7 +6,7 @@ use tauri::{ipc::Channel, Emitter, State};
 
 use crate::format::fhm2d_stage;
 use crate::havok_cli;
-use crate::jnttbl_format::{serialize_jnttbl, JnttblDocument, JnttblEntry};
+use crate::jnttbl_format::serialize_jnttbl;
 use crate::scene_memory_session::{
     GraphicParam, HavokCollisionData, ImportConfig, PlacementEntry, SceneMemorySession,
     SceneSessionState, SceneSource, SsbhArtifactPaths, SsbhArtifacts,
@@ -2108,6 +2108,20 @@ pub struct GenerateHktFromMeshOptions {
     pub session_id: String,
     pub folder_name: String,
     pub hkt_simplify: crate::scene_memory_session::HktSimplifyConfig,
+    /// When set, write `info/border_hit.hkt` instead of that model's `map_hit.hkt`.
+    #[serde(default)]
+    pub target_id: Option<String>,
+}
+
+fn require_border_hit_target(target_id: &str) -> Result<(), String> {
+    let normalized = target_id.replace('\\', "/");
+    if normalized.eq_ignore_ascii_case("info/border_hit.hkt") {
+        Ok(())
+    } else {
+        Err(format!(
+            "border HKT target must be info/border_hit.hkt, got {target_id}"
+        ))
+    }
 }
 
 #[tauri::command]
@@ -2221,6 +2235,35 @@ pub async fn scene_generate_hkt_from_mesh(
     };
 
     let folder_name = options.folder_name.clone();
+    if let Some(target_id) = options.target_id.clone() {
+        require_border_hit_target(&target_id)?;
+        let source_id = "info/border_hit.hkt".to_string();
+        let disk_path = state.with_session(&options.session_id, |session| {
+            Ok(session.resolve_hkt_disk_path(&source_id))
+        })?;
+        state.with_session_mut(&options.session_id, |session| {
+            session.store_stage_folder_hkt_bytes(&source_id, hkt_bytes.clone())?;
+            session.upsert_havok_data(HavokCollisionData {
+                source_id: source_id.clone(),
+                display_name: "border_hit.hkt".to_string(),
+                object_node_id: None,
+                hkt_xml: hkt_xml.clone(),
+                raw_bytes: hkt_bytes.clone(),
+            });
+            Ok(())
+        })?;
+        if let Some(disk_path) = disk_path {
+            if let Some(parent) = disk_path.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| {
+                    format!("Failed to create {}: {e}", parent.display())
+                })?;
+            }
+            write_hkt_bytes_to_stage_disk(&disk_path, &hkt_bytes)?;
+        }
+        eprintln!("[scene_generate_hkt_from_mesh] wrote border from {folder_name}");
+        return Ok(true);
+    }
+
     let source_id = format!("mesh-hkt-{}", folder_name);
     let display_name = format!("{}/map_hit.hkt", folder_name);
 
@@ -2782,18 +2825,7 @@ fn write_identity_jnttbl_for_nusktb(nusktb_path: &Path, output_path: &Path) -> R
     })?;
     let bone_count = u32::try_from(skel.bones.len())
         .map_err(|_| "Generated skeleton has too many bones for JNTT.".to_string())?;
-    let document = JnttblDocument {
-        version: 1,
-        bone_count,
-        flag: 0,
-        entries: (0..bone_count)
-            .map(|index| JnttblEntry {
-                hash_id: index,
-                bone_index: index,
-            })
-            .collect(),
-    };
-    let bytes = serialize_jnttbl(&document)?;
+    let bytes = serialize_jnttbl(&crate::jnttbl_format::identity_jnttbl(bone_count))?;
     std::fs::write(output_path, bytes).map_err(|e| {
         format!(
             "Failed to write generated jnttbl {}: {e}",

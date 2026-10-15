@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { DUMMY_VOICE_PACKAGE } from "../sound-table/soundChainModel";
 import { parseHashInput } from "../effect-folder-editor/effectFolderEditorUtils";
 
 export const PILOT_VOICE_RESOURCE_PACK_HASH = "0x8C428AF2";
@@ -28,7 +29,7 @@ export function emptyPilotVoiceResourceRecord(): PilotVoiceResourceRecord {
   return {
     voiceKey: 0,
     votPackage: 0,
-    dummyPackage: 0,
+    dummyPackage: DUMMY_VOICE_PACKAGE,
     bankPackage: 0,
     streamPathId: 0,
     voiceStem: "",

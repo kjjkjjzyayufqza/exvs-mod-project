@@ -107,6 +107,40 @@ export async function replaceNutexbInPlace(params: {
   });
 }
 
+/**
+ * Right-click replace for a texture that already has a stage file must overwrite
+ * that file. Save folder only copies `added` entries and deletes `removed` ones,
+ * so retargeting an existing entry at a temp convert path never reaches disk or
+ * the fhm2d pack. Entries with no target yet stay deferred until save.
+ */
+export async function applySceneTextureReplace(params: {
+  targetNutexbPath: string | null;
+  sourcePath: string;
+  ddsFormat: DdsFormat;
+}): Promise<{ nutexbPath: string; wroteInPlace: boolean }> {
+  const sourcePath = params.sourcePath.trim();
+  if (!sourcePath) {
+    throw new Error("Texture source path is empty.");
+  }
+  const targetNutexbPath = params.targetNutexbPath?.trim() ?? "";
+  if (targetNutexbPath) {
+    await replaceNutexbInPlace({
+      sourcePath,
+      targetNutexbPath,
+      ddsFormat: params.ddsFormat,
+    });
+    return { nutexbPath: targetNutexbPath, wroteInPlace: true };
+  }
+  if (sourcePath.toLowerCase().endsWith(".nutexb")) {
+    return { nutexbPath: sourcePath, wroteInPlace: false };
+  }
+  const converted = await convertImageToNutexb({
+    sourcePath,
+    ddsFormat: params.ddsFormat,
+  });
+  return { nutexbPath: converted.outputNutexbPath, wroteInPlace: false };
+}
+
 async function exportNutexbPreviewPng(
   nutexbPath: string,
   convertDir: string,

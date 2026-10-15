@@ -19,6 +19,14 @@ export type GlobalDirtyState = {
   graphicParams: boolean;
   placementOrder: boolean;
   textures: boolean;
+  planParam: boolean;
+};
+
+const CLEAN_GLOBAL: GlobalDirtyState = {
+  graphicParams: false,
+  placementOrder: false,
+  textures: false,
+  planParam: false,
 };
 
 const EMPTY_MODIFIED_FIELDS: ModifiedFields = {
@@ -54,7 +62,7 @@ export type SceneDirtyStore = SceneDirtyState & SceneDirtyActions;
 export const useSceneDirtyStore = create<SceneDirtyStore>()(
   immer((set, get) => ({
     objects: {} as Record<string, ObjectDirtyEntry>,
-    global: { graphicParams: false, placementOrder: false, textures: false },
+    global: { ...CLEAN_GLOBAL },
     replacedModels: {} as Record<string, boolean>,
 
     hasAnyChanges: () => {
@@ -64,7 +72,8 @@ export const useSceneDirtyStore = create<SceneDirtyStore>()(
       return (
         state.global.graphicParams ||
         state.global.placementOrder ||
-        state.global.textures
+        state.global.textures ||
+        state.global.planParam
       );
     },
 
@@ -144,7 +153,7 @@ export const useSceneDirtyStore = create<SceneDirtyStore>()(
     reset: () => {
       set((state) => {
         state.objects = {};
-        state.global = { graphicParams: false, placementOrder: false, textures: false };
+        state.global = { ...CLEAN_GLOBAL };
         state.replacedModels = {} as Record<string, boolean>;
       });
     },

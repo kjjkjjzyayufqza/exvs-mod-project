@@ -4,6 +4,8 @@ export type BgmCuePickerItem = {
   cueHash: number;
   cueName: string;
   bankGroup: number;
+  /** Saved HUD rows for this cueHash. Omitted when the HUD table is not unpacked. */
+  hudCount?: number;
 };
 
 export function BgmCuePickerPopover(props: {
@@ -19,7 +21,7 @@ export function BgmCuePickerPopover(props: {
     value: item.cueHash >>> 0,
     label: item.cueName || `0x${(item.cueHash >>> 0).toString(16).toUpperCase().padStart(8, "0")}`,
     previewSrc: "",
-    secondaryText: `group ${item.bankGroup}  0x${(item.cueHash >>> 0).toString(16).toUpperCase().padStart(8, "0")}`,
+    secondaryText: `group ${item.bankGroup}  0x${(item.cueHash >>> 0).toString(16).toUpperCase().padStart(8, "0")}${item.hudCount === 0 ? "  HUD missing" : ""}`,
   }));
 
   return (

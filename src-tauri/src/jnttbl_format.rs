@@ -74,6 +74,22 @@ pub fn parse_jnttbl_bytes(data: &[u8]) -> Result<JnttblDocument, String> {
     })
 }
 
+/// One row per bone, with `hash_id` and `bone_index` both equal to the bone order.
+/// Imported skeletons have no game bone-hash map, so this is the blank table.
+pub fn identity_jnttbl(bone_count: u32) -> JnttblDocument {
+    JnttblDocument {
+        version: 1,
+        bone_count,
+        flag: 0,
+        entries: (0..bone_count)
+            .map(|index| JnttblEntry {
+                hash_id: index,
+                bone_index: index,
+            })
+            .collect(),
+    }
+}
+
 pub fn serialize_jnttbl(doc: &JnttblDocument) -> Result<Vec<u8>, String> {
     let pairs_bytes = doc
         .entries
@@ -123,6 +139,26 @@ pub fn bytes_to_hex_upper_spaced(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn identity_table_uses_bone_order_for_hash_and_index() {
+        let doc = identity_jnttbl(2);
+        assert_eq!(doc.bone_count, 2);
+        assert_eq!(doc.flag, 0);
+        assert_eq!(
+            doc.entries,
+            vec![
+                JnttblEntry {
+                    hash_id: 0,
+                    bone_index: 0,
+                },
+                JnttblEntry {
+                    hash_id: 1,
+                    bone_index: 1,
+                },
+            ]
+        );
+    }
 
     #[test]
     fn roundtrip_header_via_binrw() {

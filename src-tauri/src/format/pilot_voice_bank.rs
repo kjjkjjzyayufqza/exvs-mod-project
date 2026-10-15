@@ -1,12 +1,15 @@
-//! In-place `n_samples` editor for a pilot-voice `.nus3bank` TONE clock.
+//! In-place clock editor for a pilot-voice `.nus3bank` TONE cue.
 //!
 //! The waveform bytes stay in the sibling `.nus3audio`. This module never
-//! reserializes the bank: it patches the four little-endian bytes that belong
-//! to one cue's own `48000, channels = 1` clock. A track in another rate or
-//! channel count still updates the clock: its duration is converted to 48000 Hz
-//! samples and the report says so.
+//! reserializes the bank: it patches the sixteen little-endian bytes that
+//! belong to one cue's own `48000, channels = 1` clock (`n_samples` and the
+//! loop triple). A track in another rate or channel count still updates
+//! `n_samples`: its duration is converted to 48000 Hz samples and the report
+//! says so.
 
+use crate::format::fhm2d::{extract_fhm2d_to_memory_impl, Fhm2dFormat};
 use crate::format::raw_path_id::backup_orig;
+use crate::format::voice_order_table::write_one_file_pack_structure;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -37,6 +40,13 @@ pub struct PilotVoiceBankDocument {
 pub struct SampleEdit {
     pub name: String,
     pub n_samples: i32,
+    /// `None` leaves the on-disk loop field untouched.
+    #[serde(default)]
+    pub loop_start: Option<i32>,
+    #[serde(default)]
+    pub loop_end: Option<i32>,
+    #[serde(default)]
+    pub loop_flag: Option<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -172,7 +182,42 @@ pub fn set_n_samples(bytes: &mut [u8], name: &str, n_samples: i32) -> Result<(),
     if at + 4 > bytes.len() {
         return Err(format!("no_clock: {name}"));
     }
-    bytes[at..at + 4].copy_from_slice(&n_samples.to_le_bytes());
+    write_i32(bytes, at, n_samples)
+}
+
+/// Patches `n_samples` and the three loop i32s that follow it in this cue's clock.
+pub fn set_clock(bytes: &mut [u8], edit: &SampleEdit) -> Result<(), String> {
+    set_n_samples(bytes, &edit.name, edit.n_samples)?;
+    let sites = cue_sites(bytes)?;
+    let matches: Vec<&CueSite> = sites.iter().filter(|site| site.name == edit.name).collect();
+    let site = match matches.as_slice() {
+        [site] => *site,
+        [] => return Err(format!("cue not found: {}", edit.name)),
+        _ => return Err(format!("duplicate cue name: {}", edit.name)),
+    };
+    let Some(at) = site.samples_at else {
+        return Err(format!("no_clock: {}", edit.name));
+    };
+    if let Some(value) = edit.loop_start {
+        write_i32(bytes, at + 4, value)?;
+    }
+    if let Some(value) = edit.loop_end {
+        write_i32(bytes, at + 8, value)?;
+    }
+    if let Some(value) = edit.loop_flag {
+        write_i32(bytes, at + 12, value)?;
+    }
+    Ok(())
+}
+
+fn write_i32(bytes: &mut [u8], at: usize, value: i32) -> Result<(), String> {
+    let end = at
+        .checked_add(4)
+        .ok_or_else(|| "clock field is outside the bank".to_string())?;
+    if end > bytes.len() {
+        return Err("clock field is outside the bank".to_string());
+    }
+    bytes[at..end].copy_from_slice(&value.to_le_bytes());
     Ok(())
 }
 
@@ -331,6 +376,119 @@ pub fn read_audio_tracks(bytes: &[u8]) -> Result<Vec<AudioTrack>, String> {
     Ok(tracks)
 }
 
+/// A new pilot-voice bank needs a proven TONE donor record.
+/// The documented 336-byte `0x19` name slot is a BGM append, not a pilot-voice
+/// template. Emitting one empty cue per audio track is not a loadable bank.
+pub fn synthesize_pilot_voice_bank_from_audio(_audio: &[u8]) -> Result<Vec<u8>, String> {
+    Err("no proven TONE donor; refusing to write an empty nus3bank".to_string())
+}
+
+/// BGM appends use a `0x19` name slot. That width is not a pilot-voice template.
+const BGM_NAME_SLOT_WIDTH: usize = 0x19;
+
+/// No measured width is a proven pilot-voice TONE slot. Zero is not a real slot;
+/// the check stays data-dependent so a future proven width can replace this.
+const PROVEN_PILOT_VOICE_NAME_SLOT: usize = 0;
+
+fn pilot_voice_name_slot_proven(widths: &[usize]) -> bool {
+    !widths.is_empty() && widths.iter().all(|width| *width == PROVEN_PILOT_VOICE_NAME_SLOT)
+}
+
+/// Clone a donor TONE onto `new_cue_names` only when every name slot has a
+/// proven pilot-voice width. Until that fixture exists, this refuses. It does
+/// not emit one empty file per cue.
+pub fn clone_pilot_voice_bank_from_donor(
+    donor: &[u8],
+    new_cue_names: &[String],
+) -> Result<Vec<u8>, String> {
+    let _sites = cue_sites(donor)?;
+    let widths = tone_name_slot_widths(donor)?;
+    let listed = if widths.is_empty() {
+        "none".to_string()
+    } else {
+        widths
+            .iter()
+            .map(|width| format!("{width:#x}"))
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+    let why = if widths.iter().any(|width| *width == BGM_NAME_SLOT_WIDTH) {
+        "0x19 is a BGM name slot, not a pilot-voice template"
+    } else if pilot_voice_name_slot_proven(&widths) {
+        "slot width matched a placeholder that is not a pilot-voice template"
+    } else {
+        "name slot width is not a proven pilot-voice template"
+    };
+    Err(format!(
+        "no proven TONE donor; refusing to write an empty nus3bank ({why}; measured {listed}; {} new cues)",
+        new_cue_names.len()
+    ))
+}
+
+/// Write the cloned bank and its structure json. A refused template returns
+/// before either file is created.
+pub fn write_cloned_pilot_voice_bank(
+    donor_bank_path: &Path,
+    donor_pack_path: &Path,
+    new_cue_names: &[String],
+    save_path: &Path,
+    structure_path: &Path,
+    hash_name: &str,
+    inner_name: &str,
+) -> Result<(), String> {
+    let donor = fs::read(donor_bank_path)
+        .map_err(|err| format!("Failed to read {}: {err}", donor_bank_path.display()))?;
+    let bytes = clone_pilot_voice_bank_from_donor(&donor, new_cue_names)?;
+    let pack = fs::read(donor_pack_path)
+        .map_err(|err| format!("Failed to read {}: {err}", donor_pack_path.display()))?;
+    let source_name = donor_pack_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("donor.fhm2d");
+    let extracted = extract_fhm2d_to_memory_impl(&pack, source_name, Some(Fhm2dFormat::Sound))?;
+    if let Some(parent) = save_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)
+                .map_err(|err| format!("Failed to create {}: {err}", parent.display()))?;
+        }
+    }
+    fs::write(save_path, bytes)
+        .map_err(|err| format!("Failed to write {}: {err}", save_path.display()))?;
+    let folder_name = save_path
+        .parent()
+        .and_then(|path| path.file_name())
+        .and_then(|name| name.to_str())
+        .unwrap_or(hash_name);
+    write_one_file_pack_structure(
+        structure_path,
+        hash_name,
+        folder_name,
+        extracted.meta_header,
+        extracted.unk_count,
+        ".nus3bank",
+        inner_name,
+    )
+}
+
+fn tone_name_slot_widths(bytes: &[u8]) -> Result<Vec<usize>, String> {
+    let sections = walk_bank_sections(bytes)?;
+    let tone = sections
+        .iter()
+        .find(|(magic, _, _, _)| magic_is(magic, b"TONE"))
+        .map(|(_, _, _, tone)| tone.as_slice())
+        .ok_or_else(|| "nus3bank has no TONE section".to_string())?;
+    let names = cue_names(tone);
+    let mut widths = Vec::with_capacity(names.len());
+    for (index, (name_at, _)) in names.iter().enumerate() {
+        let end = names
+            .get(index + 1)
+            .map(|(next, _)| *next)
+            .unwrap_or(tone.len());
+        widths.push(end.saturating_sub(*name_at));
+    }
+    Ok(widths)
+}
+
 pub fn sync_bank(bank: &[u8], audio: &[u8]) -> Result<(Vec<u8>, SyncReport), String> {
     let sites = cue_sites(bank)?;
     let tracks = read_audio_tracks(audio)?;
@@ -410,7 +568,7 @@ pub fn apply_bank_file(path: &Path, edits: &[SampleEdit]) -> Result<PilotVoiceBa
         fs::read(path).map_err(|err| format!("Failed to read {}: {err}", path.display()))?;
     let mut bytes = original.clone();
     for edit in edits {
-        set_n_samples(&mut bytes, &edit.name, edit.n_samples)?;
+        set_clock(&mut bytes, edit)?;
     }
     if bytes != original {
         backup_orig(path)?;

@@ -28,6 +28,10 @@ import {
   initBgmBankUpdate02Pack,
 } from "../bgm-table/initBgmBankUpdate02Pack";
 import { useTranslation } from "react-i18next";
+import { BgmChainRail } from "../sound-table/SoundChainRail";
+import type { SoundFocus } from "../sound-table/soundChainModel";
+import { openSoundChainPath } from "../sound-table/soundChainResolve";
+import { useBgmChain } from "../sound-table/useSoundChain";
 
 type LoadState =
   | { status: "idle" }
@@ -48,6 +52,9 @@ type BgmBankViewProps = {
   onPackMutated?: (pack: WorkspacePackIdentity) => void;
   onRequestFhm2dRepack?: (pack: WorkspacePackIdentity) => void;
   workspaceDocument: TestEditorWorkspaceDocument;
+  soundFocus?: SoundFocus | null;
+  onConsumeSoundFocus?: () => void;
+  onOpenSoundFocus?: (focus: SoundFocus) => void;
 };
 
 export default function BgmBankView({
@@ -56,11 +63,17 @@ export default function BgmBankView({
   onPackMutated,
   onRequestFhm2dRepack,
   workspaceDocument,
+  soundFocus = null,
+  onConsumeSoundFocus,
+  onOpenSoundFocus,
 }: BgmBankViewProps) {
   const { t } = useTranslation("test-lists");
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [isInitializing, setIsInitializing] = useState(false);
+  const [linkedCueHash, setLinkedCueHash] = useState(0);
+  const [chainRefresh, setChainRefresh] = useState(0);
   const lastLoadedKeyRef = useRef("");
+  const consumedFocus = useRef<SoundFocus | null>(null);
   const obDplCachePath = useConfigStore((s) => s.obDplCachePath);
 
   const load = useCallback(async () => {
@@ -69,6 +82,7 @@ export default function BgmBankView({
       return;
     }
     setLoadState({ status: "loading" });
+    setChainRefresh((value) => value + 1);
     try {
       const content = await promptAndMigrateWorkspaceContentIfNeeded(
         await resolveWorkspaceContent(folderPath, workspaceDocument, "bgm-bank-update-02"),
@@ -141,6 +155,28 @@ export default function BgmBankView({
     onRequestFhm2dRepack?.(workspacePackIdentityFromResolved(loadState.pack, "configured"));
   }, [loadState, onRequestFhm2dRepack]);
 
+  const { snapshot: bgmChain, loading: bgmChainLoading } = useBgmChain({
+    isActive,
+    workspaceRoot: folderPath,
+    workspaceDocument,
+    cueHash: linkedCueHash,
+    refreshKey: chainRefresh,
+  });
+
+  useEffect(() => {
+    if (!isActive || !soundFocus || soundFocus.tab !== "bgm-bank") return;
+    if (consumedFocus.current === soundFocus) return;
+    consumedFocus.current = soundFocus;
+    if (soundFocus.cueHash) setLinkedCueHash(soundFocus.cueHash >>> 0);
+    onConsumeSoundFocus?.();
+  }, [isActive, onConsumeSoundFocus, soundFocus]);
+
+  const openChainFile = useCallback((path: string) => {
+    void openSoundChainPath(path).then((result) => {
+      if (result === "missing") toast.error(t("common.pathMissing"));
+    });
+  }, [t]);
+
   const workbenchStatus =
     loadState.status === "ready"
       ? "ready"
@@ -210,6 +246,19 @@ export default function BgmBankView({
       detailPanel={
         loadState.status === "ready" ? (
           <div className="space-y-4 rounded-lg bg-muted/20 p-4">
+            <BgmChainRail
+              current="bank"
+              snapshot={bgmChain}
+              loading={bgmChainLoading}
+              onOpenStep={(step) => {
+                if (!onOpenSoundFocus || !linkedCueHash) return;
+                onOpenSoundFocus({
+                  tab: step === "bgm" ? "bgm-table" : "bgm-list",
+                  cueHash: linkedCueHash,
+                });
+              }}
+              onOpenFile={openChainFile}
+            />
             <div className="space-y-1 text-xs leading-5 text-muted-foreground">
               <div>{t("bgmBank.step1")}</div>
               <div>{t("bgmBank.step2")}</div>

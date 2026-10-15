@@ -29,9 +29,11 @@ import { resolveMotionPackFromStructureJson } from "./motion-folder-editor/motio
 import RawPathIdView from "./raw-path-id/RawPathIdView";
 import PilotVoiceResourceView from "./pilot-voice-resource/PilotVoiceResourceView";
 import PilotVoiceBankView from "./pilot-voice-bank/PilotVoiceBankView";
+import VoiceOrderTableView from "./voice-order-table/VoiceOrderTableView";
 import BgmTableView from "./bgm-table/BgmTableView";
 import BgmListView from "./bgm-list/BgmListView";
 import BgmBankView from "./bgm-bank/BgmBankView";
+import type { SoundFocus } from "./sound-table/soundChainModel";
 import CameraTableView from "./camera-table/CameraTableView";
 import type { TestEditorWorkspaceDocument, WorkspacePackIdentity } from "@/services/testEditorWorkspace/types";
 import { shouldAutoActivateMscWorkspaceTab } from "../utils/mscWorkspaceUtils";
@@ -157,6 +159,19 @@ const tabs: StageTab[] = [
     value: "pilot-voice-resource",
     render: (props: MainViewProps) => (
       <PilotVoiceResourceView
+        folderPath={props.folderPath ?? ""}
+        isActive={false}
+        onUnsavedChanges={props.onUnsavedChanges}
+        onPackMutated={props.onPackMutated}
+        workspaceDocument={props.workspaceDocument}
+      />
+    ),
+  },
+  {
+    name: "Voice order table",
+    value: "voice-order-table",
+    render: (props: MainViewProps) => (
+      <VoiceOrderTableView
         folderPath={props.folderPath ?? ""}
         isActive={false}
         onUnsavedChanges={props.onUnsavedChanges}
@@ -463,9 +478,11 @@ const MainView = ({
   const [seriesListHasUnsaved, setSeriesListHasUnsaved] = useState(false);
   const [naviListHasUnsaved, setNaviListHasUnsaved] = useState(false);
   const [pendingNaviUniqueId, setPendingNaviUniqueId] = useState<number | null>(null);
+  const [soundFocus, setSoundFocus] = useState<SoundFocus | null>(null);
   const [rawPathIdHasUnsaved, setRawPathIdHasUnsaved] = useState(false);
   const [pilotVoiceResourceHasUnsaved, setPilotVoiceResourceHasUnsaved] = useState(false);
   const [pilotVoiceBankHasUnsaved, setPilotVoiceBankHasUnsaved] = useState(false);
+  const [voiceOrderTableHasUnsaved, setVoiceOrderTableHasUnsaved] = useState(false);
   const [bgmTableHasUnsaved, setBgmTableHasUnsaved] = useState(false);
   const [bgmListHasUnsaved, setBgmListHasUnsaved] = useState(false);
   const [stageListHasUnsaved, setStageListHasUnsaved] = useState(false);
@@ -556,6 +573,9 @@ const MainView = ({
   const handlePilotVoiceBankUnsaved = useCallback((hasChanges: boolean) => {
     setPilotVoiceBankHasUnsaved(hasChanges);
   }, []);
+  const handleVoiceOrderTableUnsaved = useCallback((hasChanges: boolean) => {
+    setVoiceOrderTableHasUnsaved(hasChanges);
+  }, []);
   const handleBgmTableUnsaved = useCallback((hasChanges: boolean) => {
     setBgmTableHasUnsaved(hasChanges);
   }, []);
@@ -598,6 +618,7 @@ const MainView = ({
       "raw-path-id": rawPathIdHasUnsaved,
       "pilot-voice-resource": pilotVoiceResourceHasUnsaved,
       "pilot-voice-bank": pilotVoiceBankHasUnsaved,
+      "voice-order-table": voiceOrderTableHasUnsaved,
       "bgm-table": bgmTableHasUnsaved,
       "bgm-list": bgmListHasUnsaved,
       "card-icon-list": stageIconListHasUnsaved,
@@ -618,6 +639,7 @@ const MainView = ({
       rawPathIdHasUnsaved,
       pilotVoiceResourceHasUnsaved,
       pilotVoiceBankHasUnsaved,
+      voiceOrderTableHasUnsaved,
       bgmTableHasUnsaved,
       bgmListHasUnsaved,
       stageIconListHasUnsaved,
@@ -657,6 +679,21 @@ const MainView = ({
 
   const handleConsumePendingNaviSelection = useCallback(() => {
     setPendingNaviUniqueId(null);
+  }, []);
+
+  const openSoundFocus = useCallback((focus: SoundFocus) => {
+    setSoundFocus(focus);
+    setActiveTab(focus.tab);
+    setVisitedTabs((prev) => {
+      if (prev.has(focus.tab)) return prev;
+      const next = new Set(prev);
+      next.add(focus.tab);
+      return next;
+    });
+  }, []);
+
+  const consumeSoundFocus = useCallback(() => {
+    setSoundFocus(null);
   }, []);
 
   const resolvedTabs = useMemo<StageTab[]>(() => {
@@ -717,6 +754,7 @@ const MainView = ({
               onUnsavedChanges={handleCharacterListUnsaved}
               onJumpToCharacterIdTable={handleJumpToCharacterIdTable}
               onJumpToNaviList={handleJumpToNaviList}
+              onOpenSoundFocus={openSoundFocus}
               onPackMutated={props.onPackMutated}
               onRevealTreeFolder={props.onRevealTreeFolder}
               workspaceDocument={props.workspaceDocument}
@@ -766,6 +804,9 @@ const MainView = ({
               onUnsavedChanges={handleRawPathIdUnsaved}
               onPackMutated={props.onPackMutated}
               workspaceDocument={props.workspaceDocument}
+              soundFocus={soundFocus}
+              onConsumeSoundFocus={consumeSoundFocus}
+              onOpenSoundFocus={openSoundFocus}
             />
           ),
         };
@@ -781,6 +822,27 @@ const MainView = ({
               onUnsavedChanges={handlePilotVoiceResourceUnsaved}
               onPackMutated={props.onPackMutated}
               workspaceDocument={props.workspaceDocument}
+              soundFocus={soundFocus}
+              onConsumeSoundFocus={consumeSoundFocus}
+              onOpenSoundFocus={openSoundFocus}
+            />
+          ),
+        };
+      }
+
+      if (tab.value === "voice-order-table") {
+        return {
+          ...tab,
+          render: (props: MainViewProps) => (
+            <VoiceOrderTableView
+              folderPath={props.folderPath ?? ""}
+              isActive={activeTab === "voice-order-table"}
+              onUnsavedChanges={handleVoiceOrderTableUnsaved}
+              onPackMutated={props.onPackMutated}
+              workspaceDocument={props.workspaceDocument}
+              soundFocus={soundFocus}
+              onConsumeSoundFocus={consumeSoundFocus}
+              onOpenSoundFocus={openSoundFocus}
             />
           ),
         };
@@ -796,6 +858,9 @@ const MainView = ({
               onUnsavedChanges={handlePilotVoiceBankUnsaved}
               onRequestFhm2dRepack={props.onRequestFhm2dRepack}
               workspaceDocument={props.workspaceDocument}
+              soundFocus={soundFocus}
+              onConsumeSoundFocus={consumeSoundFocus}
+              onOpenSoundFocus={openSoundFocus}
             />
           ),
         };
@@ -811,6 +876,9 @@ const MainView = ({
               onUnsavedChanges={handleBgmTableUnsaved}
               onPackMutated={props.onPackMutated}
               workspaceDocument={props.workspaceDocument}
+              soundFocus={soundFocus}
+              onConsumeSoundFocus={consumeSoundFocus}
+              onOpenSoundFocus={openSoundFocus}
             />
           ),
         };
@@ -826,6 +894,9 @@ const MainView = ({
               onUnsavedChanges={handleBgmListUnsaved}
               onPackMutated={props.onPackMutated}
               workspaceDocument={props.workspaceDocument}
+              soundFocus={soundFocus}
+              onConsumeSoundFocus={consumeSoundFocus}
+              onOpenSoundFocus={openSoundFocus}
             />
           ),
         };
@@ -841,6 +912,9 @@ const MainView = ({
               onPackMutated={props.onPackMutated}
               onRequestFhm2dRepack={props.onRequestFhm2dRepack}
               workspaceDocument={props.workspaceDocument}
+              soundFocus={soundFocus}
+              onConsumeSoundFocus={consumeSoundFocus}
+              onOpenSoundFocus={openSoundFocus}
             />
           ),
         };
@@ -984,6 +1058,8 @@ const MainView = ({
     handleRawPathIdUnsaved,
     handlePilotVoiceResourceUnsaved,
     handlePilotVoiceBankUnsaved,
+    handleVoiceOrderTableUnsaved,
+    voiceOrderTableHasUnsaved,
     handleBgmTableUnsaved,
     handleStageIconListUnsaved,
     handleStageListUnsaved,
@@ -995,6 +1071,9 @@ const MainView = ({
     onMscWorkspaceFolderChange,
     pendingCharacterIdTableSelection,
     pendingNaviUniqueId,
+    soundFocus,
+    openSoundFocus,
+    consumeSoundFocus,
   ]);
 
   const activateMscWorkspace = useCallback((path: string) => {

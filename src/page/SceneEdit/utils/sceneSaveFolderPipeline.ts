@@ -1,7 +1,8 @@
-import { readDir, writeTextFile } from "@tauri-apps/plugin-fs";
+import { readDir, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { invoke } from "@tauri-apps/api/core";
 
 import type { PlacementRow } from "../types/placement";
+import type { PlanParam } from "../types/planParam";
 import type { ImportedDaeObject } from "../components/MapViewport";
 import type { SaveStepInfo } from "../components/SaveProgressDialog";
 import type { SceneDirtyStore } from "../store/sceneDirtyStore";
@@ -163,6 +164,8 @@ export type SaveFolderParams = {
   importedDaeObjects: readonly ImportedDaeObject[];
   sceneSessionId: string | null;
   modelReplacements?: ReadonlyArray<ModelReplacement>;
+  /** Loaded spawn plan. Written only when `dirtyStore.global.planParam` is set. */
+  planParam?: PlanParam | null;
   onProgress: (step: SaveStepInfo) => void;
   onDeleteConfirm: (preview: DeleteConfirmation) => Promise<boolean>;
   skipStructureRebuild?: boolean;
@@ -180,6 +183,14 @@ export type SaveFolderResult = {
   reloadedBundle: StageBundleResponse | null;
   hasStructuralChanges: boolean;
 };
+
+function commandBytes(value: number[] | Uint8Array): Uint8Array {
+  if (value instanceof Uint8Array) return value;
+  if (Array.isArray(value) && value.every((item) => typeof item === "number")) {
+    return Uint8Array.from(value);
+  }
+  throw new Error("encode_plan_param did not return bytes");
+}
 
 function emitStep(
   onProgress: (step: SaveStepInfo) => void,
@@ -407,6 +418,7 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
   // shares the sky number is rewritten onto the import index even when the
   // placement flag is clean.
   emitStep(onProgress, "csv", "Writing CSV files...", "running");
+  let spawnPlanWriteFailed = false;
   try {
     const infoFolder = await resolveOrCreateInfoFolder(stageRoot);
     if (sceneSessionId) {
@@ -500,6 +512,17 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
       csvDetails.push("placement.csv kept");
     }
 
+    if (dirtyStore.global.planParam) {
+      if (!params.planParam) {
+        throw new Error("Spawn plan is marked changed but no plan_param is loaded");
+      }
+      const encoded = await invoke<number[] | Uint8Array>("encode_plan_param", {
+        plan: params.planParam,
+      });
+      await writeFile(`${infoFolder}/plan_param.spbin`, commandBytes(encoded));
+      csvDetails.push("plan_param.spbin");
+    }
+
     for (const replacement of replacements) {
       if (replacement.legacySlotSubfolder) {
         await executeDelete(stageRoot, [
@@ -513,6 +536,7 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
 
     emitStep(onProgress, "csv", "Writing CSV files...", "done", csvDetails.join(", "));
   } catch (err) {
+    if (dirtyStore.global.planParam) spawnPlanWriteFailed = true;
     emitStep(onProgress, "csv", "Writing CSV files...", "error", undefined, err instanceof Error ? err.message : String(err));
   }
 
@@ -560,7 +584,7 @@ export async function executeSaveFolderPipeline(params: SaveFolderParams): Promi
   }
 
   return {
-    success: true,
+    success: !spawnPlanWriteFailed,
     convertedCount,
     failedCount,
     failedNames,

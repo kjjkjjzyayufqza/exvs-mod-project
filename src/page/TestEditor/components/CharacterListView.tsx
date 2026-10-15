@@ -27,6 +27,8 @@ import { CharacterEditor } from "./character-list/CharacterEditor";
 import type { SeriesIdPickerItem } from "./character-list/SeriesIdPickerPopover";
 import type { BgmCuePickerItem } from "./character-list/BgmCuePickerPopover";
 import { bgmEntryLabel, parseBgmTablePack } from "./bgm-table/bgmTableDocument";
+import { parseBgmListPack } from "./bgm-list/bgmListDocument";
+import type { SoundFocus } from "./sound-table/soundChainModel";
 import {
   pickCharaJsonImportPreview,
   type CharaJsonImportPreview,
@@ -70,6 +72,7 @@ interface CharacterListViewProps {
   onUnsavedChanges?: (hasChanges: boolean) => void;
   onJumpToCharacterIdTable?: (characterId: number) => void;
   onJumpToNaviList?: (uniqueId: number) => void;
+  onOpenSoundFocus?: (focus: SoundFocus) => void;
   onPackMutated?: (pack: WorkspacePackIdentity) => void;
   onRevealTreeFolder?: (path: string) => void;
   workspaceDocument: TestEditorWorkspaceDocument;
@@ -132,6 +135,7 @@ export default function CharacterListView({
   onUnsavedChanges,
   onJumpToCharacterIdTable,
   onJumpToNaviList,
+  onOpenSoundFocus,
   onPackMutated,
   onRevealTreeFolder,
   workspaceDocument,
@@ -273,12 +277,25 @@ export default function CharacterListView({
     try {
       const { pack } = await resolveContentPackPaths("bgm-table");
       const table = await parseBgmTablePack(pack.folderPath);
+      let hudCounts: Map<number, number> | undefined;
+      try {
+        const { pack: hudPack } = await resolveContentPackPaths("bgm-list");
+        const hud = await parseBgmListPack(hudPack.folderPath);
+        hudCounts = new Map();
+        for (const entry of hud.entries) {
+          const key = entry.cueHash >>> 0;
+          hudCounts.set(key, (hudCounts.get(key) ?? 0) + 1);
+        }
+      } catch {
+        hudCounts = undefined;
+      }
       setBgmPickerState({
         status: "ready",
         items: table.entries.map((entry) => ({
           cueHash: entry.entryId >>> 0,
           cueName: bgmEntryLabel(entry),
           bankGroup: entry.bankGroup,
+          hudCount: hudCounts ? (hudCounts.get(entry.entryId >>> 0) ?? 0) : undefined,
         })),
       });
     } catch (error) {
@@ -1094,6 +1111,7 @@ export default function CharacterListView({
             }
             cloningGuiHash={cloningGuiHash}
             jumpToCharacterIdTable={jumpToCharacterIdTable}
+            onOpenSoundFocus={onOpenSoundFocus}
             cloneGuiWritable={loadState.writable}
             onPackMutated={onPackMutated}
             onRevealTreeFolder={onRevealTreeFolder}

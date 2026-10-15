@@ -49,6 +49,9 @@ export function buildSaveChangePreview(store: SceneDirtyStore): SaveChangePrevie
   if (store.global.textures) {
     globalChanges.push("Scene textures (textures/ folder)");
   }
+  if (store.global.planParam) {
+    globalChanges.push("Spawn plan (plan_param.spbin)");
+  }
 
   const replaced = store.getReplacedModels();
 

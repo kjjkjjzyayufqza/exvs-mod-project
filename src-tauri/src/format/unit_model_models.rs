@@ -18,7 +18,7 @@ use ssbh_data::prelude::MatlData;
 use ssbh_data::prelude::{MeshData, ModlData, SkelData};
 
 use crate::format::fhm2d::SubFileStructureEntry;
-use crate::jnttbl_format::parse_jnttbl_bytes;
+use crate::jnttbl_format::{identity_jnttbl, parse_jnttbl_bytes, serialize_jnttbl};
 use crate::ssbh_dae::decode_exported_mesh_object_identity;
 
 const UNIT_MODEL_BASE_MATERIAL_VARIANT: i32 = 1;
@@ -2065,8 +2065,12 @@ pub fn replace_unit_model_model(
         &mut copies,
         &mut next_file_index,
     )?;
+    // The incoming skeleton replaces the target, so the old bone-hash map no longer
+    // applies. Write a blank identity table sized to that skeleton, same as FBX import.
+    let identity_jnttbl_path = numdlb_temp.path().join(format!("{old_name}.jnttbl"));
+    write_identity_jnttbl_for_nusktb(&source.nusktb, &identity_jnttbl_path)?;
     let jnttbl_fi = add_pool_file(
-        &source.jnttbl,
+        &identity_jnttbl_path,
         &model_rel_dir,
         ".jnttbl",
         &mut sub_file_data,
@@ -2137,9 +2141,9 @@ pub fn replace_unit_model_model(
         name: Some(old_name.clone()),
     });
     group_children.push(Node::Item {
-        entry: make_item(jnttbl_fi, "50000000", 0, &source.model_name),
+        entry: make_item(jnttbl_fi, "50000000", 0, &old_name),
         file_index: jnttbl_fi,
-        name: Some(source.model_name.clone()),
+        name: Some(old_name.clone()),
     });
 
     // Swap the target group's children in place, keeping its folder entry + position (folder_index).
@@ -2209,8 +2213,10 @@ pub fn replace_unit_model_model(
         .map_err(|e| format!("Failed to serialize structure JSON: {e}"))?;
 
     // ---- atomic commit (rollback-safe) ----
-    let backup_dir =
-        tempfile::tempdir().map_err(|e| format!("Failed to create backup temp dir: {e}"))?;
+    // Stage beside the model files. The process temp directory is often on another
+    // volume, and Windows `rename` then fails with os error 17 (ERROR_NOT_SAME_DEVICE).
+    let backup_dir = tempfile::tempdir_in(&json_dir)
+        .map_err(|e| format!("Failed to create backup temp dir: {e}"))?;
     let mut backups: Vec<(PathBuf, PathBuf)> = Vec::new();
     for url in &old_model_file_urls {
         let cleaned = url.replace('\\', "/");
@@ -2222,7 +2228,7 @@ pub fn replace_unit_model_model(
                 .ok_or_else(|| format!("Invalid old model file path: {}", orig.display()))?
                 .to_os_string();
             let bak = backup_dir.path().join(&fname);
-            if let Err(e) = fs::rename(&orig, &bak) {
+            if let Err(e) = relocate_file(&orig, &bak) {
                 restore_backups(&backups);
                 return Err(format!(
                     "Failed to stage old model file {}: {e}",
@@ -3033,9 +3039,26 @@ fn collect_numshb_stats(mesh: &MeshData) -> UnitModelNumshbStats {
     }
 }
 
+fn crosses_devices(error: &std::io::Error) -> bool {
+    // Windows ERROR_NOT_SAME_DEVICE is 17. Unix EXDEV is 18.
+    matches!(error.raw_os_error(), Some(17) | Some(18))
+}
+
+fn relocate_file(from: &Path, to: &Path) -> std::io::Result<()> {
+    match fs::rename(from, to) {
+        Ok(()) => Ok(()),
+        Err(error) if crosses_devices(&error) => {
+            fs::copy(from, to)?;
+            fs::remove_file(from)?;
+            Ok(())
+        }
+        Err(error) => Err(error),
+    }
+}
+
 fn restore_backups(backups: &[(PathBuf, PathBuf)]) {
     for (orig, bak) in backups {
-        let _ = fs::rename(bak, orig);
+        let _ = relocate_file(bak, orig);
     }
 }
 
@@ -3329,6 +3352,24 @@ fn read_skel_bone_names(path: &Path) -> Result<Vec<String>, String> {
     let skel = SkelData::from_file(path)
         .map_err(|e| format!("Failed to parse nusktb {}: {e}", path.display()))?;
     Ok(skel.bones.into_iter().map(|bone| bone.name).collect())
+}
+
+fn write_identity_jnttbl_for_nusktb(nusktb_path: &Path, output_path: &Path) -> Result<(), String> {
+    let skel = SkelData::from_file(nusktb_path).map_err(|e| {
+        format!(
+            "Failed to read nusktb for JNTT {}: {e}",
+            nusktb_path.display()
+        )
+    })?;
+    let bone_count = u32::try_from(skel.bones.len())
+        .map_err(|_| "Skeleton has too many bones for JNTT.".to_string())?;
+    let bytes = serialize_jnttbl(&identity_jnttbl(bone_count))?;
+    fs::write(output_path, &bytes).map_err(|e| {
+        format!(
+            "Failed to write identity jnttbl {}: {e}",
+            output_path.display()
+        )
+    })
 }
 
 fn read_jnttbl_bone_count(path: &Path) -> Result<u32, String> {
@@ -4211,6 +4252,16 @@ mod tests {
     }
 
     #[test]
+    fn crosses_devices_matches_windows_not_same_device() {
+        assert!(crosses_devices(&std::io::Error::from_raw_os_error(17)));
+        assert!(crosses_devices(&std::io::Error::from_raw_os_error(18)));
+        assert!(!crosses_devices(&std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "missing",
+        )));
+    }
+
+    #[test]
     fn replace_preserves_name_position_and_swaps_files() {
         let parent = tempfile::tempdir().unwrap();
         let fixture = write_replace_fixture(parent.path());
@@ -4284,6 +4335,67 @@ mod tests {
             vec![(1, 1), (1, 1)],
             "replace must not write the second base material pair as variant 2"
         );
+    }
+
+    #[test]
+    fn replace_rewrites_jnttbl_as_identity_for_incoming_skeleton() {
+        use crate::jnttbl_format::{identity_jnttbl, parse_jnttbl_bytes, serialize_jnttbl, JnttblDocument, JnttblEntry};
+
+        use glam::Mat4;
+        use ssbh_data::skel_data::{BillboardType, BoneData};
+
+        let parent = tempfile::tempdir().unwrap();
+        let fixture = write_replace_fixture(parent.path());
+        let beta = tempfile::tempdir().unwrap();
+        write_min_source(beta.path(), "beta");
+        SkelData {
+            major_version: 1,
+            minor_version: 0,
+            bones: vec![
+                BoneData {
+                    name: "root".to_string(),
+                    transform: Mat4::IDENTITY,
+                    parent_index: None,
+                    billboard_type: BillboardType::Disabled,
+                },
+                BoneData {
+                    name: "child".to_string(),
+                    transform: Mat4::IDENTITY,
+                    parent_index: Some(0),
+                    billboard_type: BillboardType::Disabled,
+                },
+            ],
+        }
+        .write_to_file(beta.path().join("beta.nusktb"))
+        .unwrap();
+        let stale = serialize_jnttbl(&JnttblDocument {
+            version: 1,
+            bone_count: 2,
+            flag: 9,
+            entries: vec![JnttblEntry {
+                hash_id: 0xDEAD,
+                bone_index: 4,
+            }],
+        })
+        .unwrap();
+        fs::write(beta.path().join("beta.jnttbl"), stale).unwrap();
+
+        replace_unit_model_model(
+            fixture.root.to_string_lossy().as_ref(),
+            Some(fixture.structure_path.to_string_lossy().as_ref()),
+            "alpha",
+            beta.path().to_string_lossy().as_ref(),
+        )
+        .expect("replace should succeed");
+
+        let installed = fixture.alpha_dir.join("alpha.jnttbl");
+        assert!(installed.is_file(), "jnttbl keeps the target model name");
+        assert!(
+            !fixture.alpha_dir.join("beta.jnttbl").exists(),
+            "source jnttbl name is not copied"
+        );
+        let doc = parse_jnttbl_bytes(&fs::read(&installed).unwrap()).unwrap();
+        assert_eq!(doc, identity_jnttbl(2));
     }
 
     #[test]

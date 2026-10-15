@@ -153,6 +153,10 @@ required-features = ["legacy-cli-tools"]
 
 # Default `cargo test` suite (agent-facing CLIs only — keep this list short).
 [[test]]
+name = "scene_nutexb_png_cache_test"
+path = "tests/scene_nutexb_png_cache_test.rs"
+
+[[test]]
 name = "msc_toolchain_identity_test"
 path = "tests/msc_toolchain_identity_test.rs"
 
@@ -197,6 +201,10 @@ name = "stage_model_folder_test"
 path = "tests/stage_model_folder_test.rs"
 
 [[test]]
+name = "stage_border_spawn_test"
+path = "tests/stage_border_spawn_test.rs"
+
+[[test]]
 name = "exvs_common_bundle_test"
 path = "tests/exvs_common_bundle_test.rs"
 
@@ -211,6 +219,10 @@ path = "tests/pilot_voice_resource_format_test.rs"
 [[test]]
 name = "pilot_voice_bank_format_test"
 path = "tests/pilot_voice_bank_format_test.rs"
+
+[[test]]
+name = "voice_order_table_format_test"
+path = "tests/voice_order_table_format_test.rs"
 
 [[test]]
 name = "characterlist_json_signed_hash_test"

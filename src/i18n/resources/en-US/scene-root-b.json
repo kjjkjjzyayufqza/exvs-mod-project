@@ -54,7 +54,7 @@
   "overlay.streamingModels": "Streaming models ({{loaded}}/{{total}})...",
   "overlay.loadingStage": "Loading stage...",
   "overlay.loadingCollision": "Loading collision ({{loaded}}/{{total}})",
-  "overlay.decodingTextures": "Decoding textures ({{done}}/{{total}})",
+  "overlay.decodingTextures": "Loading textures ({{done}}/{{total}})",
   "import.title": "Importing Stage",
   "import.preparing": "Preparing..."
 }

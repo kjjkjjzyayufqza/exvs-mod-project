@@ -295,6 +295,22 @@ export function sceneGenerateHktFromMesh(
   });
 }
 
+/** Build `info/border_hit.hkt` from a stage model's mesh. Does not replace that model's `map_hit.hkt`. */
+export function sceneGenerateBorderHktFromMesh(
+  sessionId: string,
+  folderName: string,
+  hktSimplify: HktSimplifyConfig,
+): Promise<boolean> {
+  return invoke<boolean>("scene_generate_hkt_from_mesh", {
+    options: {
+      sessionId,
+      folderName,
+      hktSimplify,
+      targetId: "info/border_hit.hkt",
+    },
+  });
+}
+
 export function sceneReplaceHkt(
   sessionId: string,
   importId: string,

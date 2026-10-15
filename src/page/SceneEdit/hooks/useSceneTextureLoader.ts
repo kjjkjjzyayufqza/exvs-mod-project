@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { SsbhModelPreviewBundle } from "@/components/ssbh-model-preview/types";
 import {
@@ -7,14 +7,9 @@ import {
 } from "@/components/ssbh-model-preview/meshFromSsbh";
 import {
   getOrDecodeNutexbRgba,
-  parseIdentityAndCompressedResponse,
-  COMPRESSED_FORMAT_MAP,
   type NutexbRgbaData,
-  type NutexbCompressedData,
 } from "@/components/ssbh-model-preview/nutexbPreviewCache";
-import {
-  getMemoryNutexbPreviewIdentity,
-} from "@/components/ssbh-model-preview/fhm2dMemoryPreviewService";
+import { getMemoryNutexbPreviewIdentity } from "@/components/ssbh-model-preview/fhm2dMemoryPreviewService";
 import type { PlacementRow } from "../types/placement";
 import {
   collectEnabledTexturePathsForBundle,
@@ -29,44 +24,30 @@ export interface TextureDecodeProgress {
   currentLabel: string;
 }
 
-export type NutexbTextureData = 
-  | (NutexbRgbaData & { kind: "rgba" })
-  | (NutexbCompressedData & { kind: "compressed" });
+export type NutexbTextureData =
+  | (NutexbRgbaData & { kind: "rgba"; revision: number })
+  | {
+      kind: "png";
+      pngPath: string;
+      width: number;
+      height: number;
+      revision: number;
+      cacheHit: boolean;
+    };
 
 export type NutexbTextureDataMap = Map<string, NutexbTextureData>;
 
-const DECODE_CONCURRENCY = 8;
-
-/** Detect which compressed texture WebGL extensions are available (cached). */
-let _gpuExtensions: Set<string> | null = null;
-function getGpuCompressedExtensions(): Set<string> {
-  if (_gpuExtensions) return _gpuExtensions;
-  _gpuExtensions = new Set<string>();
-  try {
-    const canvas = document.createElement("canvas");
-    const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
-    if (gl) {
-      for (const ext of [
-        "WEBGL_compressed_texture_s3tc",
-        "EXT_texture_compression_rgtc",
-        "EXT_texture_compression_bptc",
-      ]) {
-        if (gl.getExtension(ext)) _gpuExtensions.add(ext);
-      }
-      // SRGB variants
-      if (gl.getExtension("WEBGL_compressed_texture_s3tc_srgb")) _gpuExtensions.add("WEBGL_compressed_texture_s3tc_srgb");
-      if (gl.getExtension("EXT_texture_compression_bptc")) _gpuExtensions.add("EXT_texture_compression_bptc");
-    }
-    canvas.remove();
-  } catch { /* fallback to empty set */ }
-  return _gpuExtensions;
+interface SceneNutexbPngCacheEntry {
+  nutexbPath: string;
+  pngPath: string;
+  width: number;
+  height: number;
+  cacheHit: boolean;
+  error: string | null;
 }
 
-function canUseCompressedFormat(formatId: number): boolean {
-  const entry = COMPRESSED_FORMAT_MAP[formatId];
-  if (!entry) return false;
-  return getGpuCompressedExtensions().has(entry.ext);
-}
+const MEMORY_DECODE_CONCURRENCY = 8;
+const DISK_CACHE_CHUNK = 8;
 
 function collectUniqueNutexbPaths(
   baseModel: SsbhModelPreviewBundle | null,
@@ -131,13 +112,32 @@ function basenameOf(path: string): string {
   return parts[parts.length - 1] || path;
 }
 
+function rememberTexture(
+  map: NutexbTextureDataMap,
+  path: string,
+  data: NutexbTextureData,
+): void {
+  map.set(path, data);
+  map.set(path.toLowerCase(), data);
+}
+
+function pngTextureFromCache(entry: SceneNutexbPngCacheEntry, revision: number): NutexbTextureData {
+  return {
+    kind: "png",
+    pngPath: entry.pngPath,
+    width: entry.width,
+    height: entry.height,
+    revision,
+    cacheHit: entry.cacheHit,
+  };
+}
+
 export function useSceneTextureLoader(
   baseModel: SsbhModelPreviewBundle | null,
   subModels: Array<{ folderName: string; objectIndex: number; bundle: SsbhModelPreviewBundle }>,
   importedSsbhBundles: SsbhModelPreviewBundle[],
   placementEntries: PlacementRow[],
   sessionId: string | null,
-  maxDimension: number | null,
   textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>,
   objectTextureLoadState: ObjectTextureLoadState,
   /**
@@ -150,6 +150,7 @@ export function useSceneTextureLoader(
   textureDataMap: NutexbTextureDataMap;
   progress: TextureDecodeProgress | null;
   warnings: string[];
+  regenerateTextureCache: (nutexbPath: string) => Promise<void>;
 } {
   const [textureDataMap, setTextureDataMap] = useState<NutexbTextureDataMap>(() => new Map());
   const [progress, setProgress] = useState<TextureDecodeProgress | null>(null);
@@ -158,12 +159,6 @@ export function useSceneTextureLoader(
   const runIdRef = useRef(0);
   const textureDataMapRef = useRef(textureDataMap);
   textureDataMapRef.current = textureDataMap;
-
-  const sourceKind =
-    baseModel?.sourceKind ??
-    subModels[0]?.bundle.sourceKind ??
-    importedSsbhBundles[0]?.sourceKind ??
-    "disk";
 
   const stablePlacementIdentity = useMemo(
     () => placementEntries.map((e, i) => `${i}:${e.vdkType}:${e.objectNumber ?? ""}`).join("|"),
@@ -174,6 +169,43 @@ export function useSceneTextureLoader(
   if (stablePlacementIdentity) {
     stablePlacementEntries.current = placementEntries;
   }
+
+  const regenerateTextureCache = useCallback(async (nutexbPath: string) => {
+    const trimmed = nutexbPath.trim();
+    if (!trimmed || trimmed.startsWith("memory://")) {
+      throw new Error("Texture cache is only available for nutexb files on disk.");
+    }
+    const entries = await invoke<SceneNutexbPngCacheEntry[]>("ensure_scene_nutexb_png_cache", {
+      paths: [trimmed],
+      force: true,
+    });
+    const entry = entries[0];
+    if (!entry || entry.error) {
+      throw new Error(entry?.error || "Failed to regenerate the texture cache.");
+    }
+    const key = normalizeTexturePathKey(trimmed);
+    setTextureDataMap((prev) => {
+      const next = new Map(prev);
+      let revision = 1;
+      for (const [path, data] of prev) {
+        if (normalizeTexturePathKey(path) === key) {
+          revision = Math.max(revision, data.revision + 1);
+        }
+      }
+      const data = pngTextureFromCache(entry, revision);
+      let replaced = false;
+      for (const path of prev.keys()) {
+        if (normalizeTexturePathKey(path) === key) {
+          next.set(path, data);
+          replaced = true;
+        }
+      }
+      if (!replaced) {
+        rememberTexture(next, trimmed, data);
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (!texturesEnabled) {
@@ -198,8 +230,6 @@ export function useSceneTextureLoader(
       return;
     }
 
-    // Scene-session memory paths need a session id. Skip only those paths so a
-    // newly imported model cannot cancel the disk decode that keeps the sky lit.
     const decodablePaths = uniquePaths.filter(
       (path) => !(path.startsWith("memory://") && !sessionId),
     );
@@ -208,216 +238,109 @@ export function useSceneTextureLoader(
     }
 
     const currentMap = textureDataMapRef.current;
-    if (decodablePaths.every((p) => currentMap.has(p))) {
+    const missing = decodablePaths.filter(
+      (path) => !currentMap.has(path) && !currentMap.has(path.toLowerCase()),
+    );
+    if (missing.length === 0) {
       return;
     }
 
     cancelledRef.current = false;
     const currentRunId = ++runIdRef.current;
-    let pendingFlush: ReturnType<typeof requestAnimationFrame> | null = null;
+    const diskPaths = missing.filter((path) => !path.startsWith("memory://"));
+    const memoryPaths = missing.filter((path) => path.startsWith("memory://"));
 
     (async () => {
-    const nextMap = new Map<string, NutexbTextureData>();
-    for (const path of decodablePaths) {
-      const existing = currentMap.get(path) ?? currentMap.get(path.toLowerCase());
-      if (!existing) continue;
-      nextMap.set(path, existing);
-      nextMap.set(path.toLowerCase(), existing);
-    }
-    const nextWarnings: string[] = [];
-    const batchT0 = performance.now();
-    let errors = 0;
+      const nextMap = new Map(currentMap);
+      const nextWarnings: string[] = [];
+      const batchT0 = performance.now();
+      let done = 0;
+      const total = missing.length;
 
-    // Detect GPU compressed texture support once
-    // NOTE: Compressed GPU upload (B2) is disabled pending Three.js CompressedTexture
-    // integration with @react-three/fiber's WebGL context. The B4 single-read identity
-    // optimization is still active below.
-    const useCompressed = false;
+      console.log(
+        `[SceneEdit:Cache] START disk=${diskPaths.length} memory=${memoryPaths.length}`,
+      );
+      setProgress({ done: 0, total, currentLabel: basenameOf(missing[0] ?? "") });
 
-    setProgress({ done: 0, total: decodablePaths.length, currentLabel: "Resolving identities..." });
-
-    // Phase 1: Resolve all identities in parallel to get content-based keys
-    type PathIdentity = { path: string; versionId: string };
-    const identities: PathIdentity[] = [];
-    const identityConcurrency = 16;
-
-    // For compressed path: combined identity+data in one file read (B4 optimization)
-    const preloadedCompressed = new Map<string, NutexbCompressedData>();
-
-    if (useCompressed) {
-      // Single-read path: identity + compressed data together
-      const idQueue = [...decodablePaths];
-      let idIdx = 0;
-      const resolveWorker = async () => {
-        while (idIdx < idQueue.length) {
-          if (cancelledRef.current || currentRunId !== runIdRef.current) return;
-          const path = idQueue[idIdx++];
-          try {
-            const raw = await invoke<ArrayBuffer | Uint8Array>("nutexb_identity_and_compressed", { inputPath: path });
-            const { nutexbSize, crc32, compressed } = parseIdentityAndCompressedResponse(raw);
-            const versionId = `nutexb|${nutexbSize}|${(crc32 >>> 0).toString(16).padStart(8, "0")}@full`;
-            identities.push({ path, versionId });
-            preloadedCompressed.set(versionId, compressed);
-          } catch (err) {
-            errors++;
-            nextWarnings.push(`${basenameOf(path)}: identity failed: ${err}`);
-          }
-        }
-      };
-      await Promise.all(Array.from({ length: Math.min(identityConcurrency, uniquePaths.length) }, () => resolveWorker()));
-    } else {
-      // Original path: identity only (memory source or downsampled)
-      const idQueue = [...decodablePaths];
-      let idIdx = 0;
-      const resolveWorker = async () => {
-        while (idIdx < idQueue.length) {
-          if (cancelledRef.current || currentRunId !== runIdRef.current) return;
-          const path = idQueue[idIdx++];
-          try {
-            let versionId: string;
-            if (path.startsWith("memory://") && sessionId) {
-              const identity = await getMemoryNutexbPreviewIdentity({ sessionId, virtualPath: path });
-              versionId = `nutexb|${identity.nutexbSize}|${(identity.crc32 >>> 0).toString(16).padStart(8, "0")}@${maxDimension ?? "full"}`;
-            } else {
-              const identity = await invoke<{ nutexbSize: number; crc32: number }>("nutexb_preview_file_identity", { path });
-              versionId = `nutexb|${identity.nutexbSize}|${(identity.crc32 >>> 0).toString(16).padStart(8, "0")}@${maxDimension ?? "full"}`;
-            }
-            identities.push({ path, versionId });
-          } catch (err) {
-            errors++;
-            nextWarnings.push(`${basenameOf(path)}: identity failed: ${err}`);
-          }
-        }
-      };
-      await Promise.all(Array.from({ length: Math.min(identityConcurrency, uniquePaths.length) }, () => resolveWorker()));
-    }
-
-    if (cancelledRef.current || currentRunId !== runIdRef.current) return;
-
-    // Phase 2: Deduplicate by versionId
-    const uniqueByVersion = new Map<string, PathIdentity>();
-    const versionToPaths = new Map<string, string[]>();
-    for (const entry of identities) {
-      if (!uniqueByVersion.has(entry.versionId)) {
-        uniqueByVersion.set(entry.versionId, entry);
-        versionToPaths.set(entry.versionId, [entry.path]);
-      } else {
-        versionToPaths.get(entry.versionId)!.push(entry.path);
-      }
-    }
-
-    const deduped = Array.from(uniqueByVersion.values());
-    const total = decodablePaths.length;
-    const uniqueCount = deduped.length;
-    let done = 0;
-    const concurrency = Math.min(DECODE_CONCURRENCY, deduped.length);
-
-    console.log(
-      `[SceneEdit:Decode] START paths=${total} unique=${uniqueCount} (${total - uniqueCount} deduped)` +
-      ` source=${sourceKind} concurrency=${concurrency} maxDim=${maxDimension ?? "full"}`,
-    );
-
-    setProgress({ done: 0, total: uniqueCount, currentLabel: "Decoding textures..." });
-
-    // Phase 3: Decode only unique textures
-    const flushMap = () => {
-      if (cancelledRef.current || currentRunId !== runIdRef.current) return;
-      setTextureDataMap(new Map(nextMap));
-    };
-
-    const scheduleFlush = () => {
-      if (pendingFlush != null) return;
-      pendingFlush = requestAnimationFrame(() => {
-        pendingFlush = null;
-        flushMap();
-      });
-    };
-
-    let decodeIdx = 0;
-    const decodeWorker = async (): Promise<void> => {
-      while (decodeIdx < deduped.length) {
+      for (let offset = 0; offset < diskPaths.length; offset += DISK_CACHE_CHUNK) {
         if (cancelledRef.current || currentRunId !== runIdRef.current) return;
-
-        const { path, versionId } = deduped[decodeIdx++];
-        const label = basenameOf(path);
-
+        const chunk = diskPaths.slice(offset, offset + DISK_CACHE_CHUNK);
+        let entries: SceneNutexbPngCacheEntry[] = [];
         try {
-          let texData: NutexbTextureData;
-
-          const preloaded = preloadedCompressed.get(versionId);
-          if (preloaded) {
-            // B4: data already loaded in identity phase — zero additional I/O
-            if (preloaded.formatId !== 0 && canUseCompressedFormat(preloaded.formatId)) {
-              texData = { ...preloaded, kind: "compressed" };
-            } else if (preloaded.formatId === 0) {
-              texData = { width: preloaded.width, height: preloaded.height, rgba: preloaded.data, kind: "rgba" };
-            } else {
-              // GPU doesn't support this BCn — fall back to CPU RGBA decode
-              const rgbaFn = () => invoke<ArrayBuffer | Uint8Array>("nutexb_rgba_bytes", { inputPath: path, maxDimension: maxDimension ?? undefined });
-              const rgbaData = await getOrDecodeNutexbRgba(versionId, rgbaFn);
-              texData = { ...rgbaData, kind: "rgba" };
-            }
-          } else {
-            // Memory source or downsampled: use RGBA path
-            const decodeFn = path.startsWith("memory://") && sessionId
-              ? () => invoke<ArrayBuffer | Uint8Array>("fhm2d_memory_nutexb_rgba_bytes", {
-                  sessionId, virtualPath: path, maxDimension: maxDimension ?? undefined,
-                })
-              : () => invoke<ArrayBuffer | Uint8Array>("nutexb_rgba_bytes", {
-                  inputPath: path, maxDimension: maxDimension ?? undefined,
-                });
-            const rgbaData = await getOrDecodeNutexbRgba(versionId, decodeFn);
-            texData = { ...rgbaData, kind: "rgba" };
+          entries = await invoke<SceneNutexbPngCacheEntry[]>("ensure_scene_nutexb_png_cache", {
+            paths: chunk,
+            force: false,
+          });
+        } catch (error) {
+          for (const path of chunk) {
+            nextWarnings.push(`${basenameOf(path)}: ${error}`);
           }
-
-          if (cancelledRef.current || currentRunId !== runIdRef.current) return;
-
-          const allPaths = versionToPaths.get(versionId) ?? [path];
-          for (const p of allPaths) {
-            nextMap.set(p, texData);
-            nextMap.set(p.toLowerCase(), texData);
+          done += chunk.length;
+          setProgress({ done, total, currentLabel: basenameOf(chunk[0] ?? "") });
+          continue;
+        }
+        if (cancelledRef.current || currentRunId !== runIdRef.current) return;
+        for (const entry of entries) {
+          if (entry.error) {
+            nextWarnings.push(`${basenameOf(entry.nutexbPath)}: ${entry.error}`);
+            continue;
           }
-        } catch (err) {
-          errors++;
-          nextWarnings.push(`${label}: ${err}`);
+          rememberTexture(nextMap, entry.nutexbPath, pngTextureFromCache(entry, 0));
         }
-
-        done += 1;
-        setProgress({ done, total: uniqueCount, currentLabel: label });
-        if (done % 5 === 0 || done === uniqueCount) {
-          scheduleFlush();
-        }
+        done += chunk.length;
+        setProgress({ done, total, currentLabel: basenameOf(chunk[chunk.length - 1] ?? "") });
+        setTextureDataMap(new Map(nextMap));
       }
-    };
 
-    const workers = Array.from({ length: concurrency }, () => decodeWorker());
+      let memoryIndex = 0;
+      const decodeMemory = async (): Promise<void> => {
+        while (memoryIndex < memoryPaths.length) {
+          if (cancelledRef.current || currentRunId !== runIdRef.current) return;
+          const path = memoryPaths[memoryIndex++];
+          try {
+            if (!sessionId) {
+              throw new Error("memory texture has no session");
+            }
+            const identity = await getMemoryNutexbPreviewIdentity({ sessionId, virtualPath: path });
+            const versionId = `nutexb|${identity.nutexbSize}|${(identity.crc32 >>> 0).toString(16).padStart(8, "0")}@full`;
+            const rgbaData = await getOrDecodeNutexbRgba(versionId, () =>
+              invoke<ArrayBuffer | Uint8Array>("fhm2d_memory_nutexb_rgba_bytes", {
+                sessionId,
+                virtualPath: path,
+              }),
+            );
+            if (cancelledRef.current || currentRunId !== runIdRef.current) return;
+            rememberTexture(nextMap, path, { ...rgbaData, kind: "rgba", revision: 0 });
+          } catch (error) {
+            nextWarnings.push(`${basenameOf(path)}: ${error}`);
+          }
+          done += 1;
+          setProgress({ done, total, currentLabel: basenameOf(path) });
+        }
+      };
 
-    await Promise.all(workers);
+      const memoryWorkers = Array.from(
+        { length: Math.min(MEMORY_DECODE_CONCURRENCY, memoryPaths.length) },
+        () => decodeMemory(),
+      );
+      await Promise.all(memoryWorkers);
+      if (cancelledRef.current || currentRunId !== runIdRef.current) return;
 
-    if (cancelledRef.current || currentRunId !== runIdRef.current) return;
-    if (pendingFlush != null) {
-      cancelAnimationFrame(pendingFlush);
-      pendingFlush = null;
-    }
-    const elapsed = performance.now() - batchT0;
-    console.log(
-      `[SceneEdit:Decode] DONE paths=${total} unique=${uniqueCount} decoded=${done}` +
-      ` errors=${errors} elapsed=${(elapsed / 1000).toFixed(1)}s`,
-    );
-    setTextureDataMap(new Map(nextMap));
-    setProgress(null);
-    setWarnings(nextWarnings);
+      const elapsed = performance.now() - batchT0;
+      console.log(
+        `[SceneEdit:Cache] DONE disk=${diskPaths.length} memory=${memoryPaths.length}` +
+        ` warnings=${nextWarnings.length} elapsed=${(elapsed / 1000).toFixed(1)}s`,
+      );
+      setTextureDataMap(new Map(nextMap));
+      setProgress(null);
+      setWarnings(nextWarnings);
     })();
 
     return () => {
       cancelledRef.current = true;
-      if (pendingFlush != null) {
-        cancelAnimationFrame(pendingFlush);
-        pendingFlush = null;
-      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- stablePlacementIdentity replaces placementEntries to avoid re-decode on coordinate-only changes
-  }, [baseModel, subModels, importedSsbhBundles, stablePlacementIdentity, sessionId, sourceKind, maxDimension, textureSlotLoadEnabled, objectTextureLoadState, texturesEnabled]);
+  }, [baseModel, subModels, importedSsbhBundles, stablePlacementIdentity, sessionId, textureSlotLoadEnabled, objectTextureLoadState, texturesEnabled]);
 
-  return { textureDataMap, progress, warnings };
+  return { textureDataMap, progress, warnings, regenerateTextureCache };
 }

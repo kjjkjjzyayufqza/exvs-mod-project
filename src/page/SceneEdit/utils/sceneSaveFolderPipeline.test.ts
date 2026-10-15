@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
   readDir: vi.fn(),
+  writeFile: vi.fn(),
   writeTextFile: vi.fn(),
 }));
 
@@ -62,7 +63,7 @@ vi.mock("./sceneInfoFolder", () => ({
   resolveOrCreateInfoFolder: vi.fn((stageRoot: string) => Promise.resolve(`${stageRoot}/info`)),
 }));
 
-import { writeTextFile, readDir } from "@tauri-apps/plugin-fs";
+import { writeFile, writeTextFile, readDir } from "@tauri-apps/plugin-fs";
 import { invoke } from "@tauri-apps/api/core";
 import { buildDeletePreview, executeDelete } from "./sceneDeleteConfirm";
 import { executeSaveFolderPipeline, type SaveFolderParams } from "./sceneSaveFolderPipeline";
@@ -85,6 +86,7 @@ import { DEFAULT_HKT_SIMPLIFY } from "./hktSimplifyUtils";
 import { createBakedImportedDaeExportObject } from "./sceneSavePipeline";
 import { resolveStagePackStructureTarget } from "./sceneStageStructure";
 
+const mockWriteFile = vi.mocked(writeFile);
 const mockWriteTextFile = vi.mocked(writeTextFile);
 const mockReadDir = vi.mocked(readDir);
 const mockInvoke = vi.mocked(invoke);
@@ -145,6 +147,7 @@ describe("sceneSaveFolderPipeline", () => {
     vi.clearAllMocks();
     useSceneDirtyStore.getState().reset();
     mockReadDir.mockResolvedValue([]);
+    mockWriteFile.mockResolvedValue(undefined);
     mockWriteTextFile.mockResolvedValue(undefined);
     mockSceneSaveAsFolder.mockResolvedValue({ success: true, filesWritten: 4, warnings: [] });
     mockSceneImportDae.mockResolvedValue("import-new");
@@ -211,6 +214,56 @@ describe("sceneSaveFolderPipeline", () => {
       }
       return null;
     });
+  });
+
+  it("writes plan_param.spbin when the spawn plan is dirty", async () => {
+    useSceneDirtyStore.getState().markGlobalDirty("planParam");
+    const plan = {
+      limit: 1000,
+      limitPadding: 0,
+      spawnPairs: [{ first: [1, 2, 3, 1], second: [4, 5, 6, 3.5] }],
+      markers: [{ position: [0, 0, 0], parameter: 0 }],
+      respawnPoints: [],
+    };
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "encode_plan_param") return [9, 8, 7];
+      if (cmd === "restore_shared_textures") {
+        return { texturesCollected: 0, subdirsRemoved: 0, warnings: [] };
+      }
+      if (cmd === "load_stage_bundle") {
+        return {
+          rootPath: "E:/stage",
+          baseModel: null,
+          subModels: [],
+          graphicParams: [],
+          placementHeader: [],
+          placementEntries: [],
+          warnings: [],
+        };
+      }
+      return null;
+    });
+    const result = await executeSaveFolderPipeline(makeParams({ planParam: plan }));
+    expect(result.success).toBe(true);
+    expect(mockInvoke).toHaveBeenCalledWith("encode_plan_param", { plan });
+    expect(mockWriteFile).toHaveBeenCalledWith(
+      "E:/stage/16F73C97/0/0/info/plan_param.spbin",
+      Uint8Array.from([9, 8, 7]),
+    );
+  });
+
+  it("does not write plan_param.spbin when the spawn plan is clean", async () => {
+    const result = await executeSaveFolderPipeline(makeParams({
+      planParam: {
+        limit: 1000,
+        limitPadding: 0,
+        spawnPairs: [],
+        markers: [],
+        respawnPoints: [],
+      },
+    }));
+    expect(result.success).toBe(true);
+    expect(mockWriteFile).not.toHaveBeenCalled();
   });
 
   it("leaves graphic_param.csv on disk when graphic params are clean", async () => {

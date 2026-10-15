@@ -35,6 +35,9 @@
     "size": "Gizmo size"
   },
   "display": {
+    "spawnPositions": "Spawn positions",
+    "showSpawnPositions": "Show spawn positions",
+    "hideSpawnPositions": "Hide spawn positions",
     "grid": "Grid",
     "showGrid": "Show grid",
     "hideGrid": "Hide grid",

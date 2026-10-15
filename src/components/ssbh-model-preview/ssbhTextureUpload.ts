@@ -66,6 +66,15 @@ export class SceneTexturePool {
     const existing = this.pool.get(key);
     if (existing) return existing;
     const tex = factory();
+    const identity = tex.userData?.sceneTextureIdentity as string | undefined;
+    if (identity) {
+      for (const [otherKey, other] of [...this.pool]) {
+        if (other.userData?.sceneTextureIdentity === identity) {
+          other.dispose();
+          this.pool.delete(otherKey);
+        }
+      }
+    }
     this.pool.set(key, tex);
     return tex;
   }

@@ -14,6 +14,7 @@ import {
   Box,
   RotateCcw,
   Activity,
+  MapPin,
   Eraser,
   Upload,
   Download,
@@ -93,10 +94,12 @@ interface MapToolbarProps {
   showAxes: boolean;
   wireframe: boolean;
   showStats: boolean;
+  showSpawnPositions: boolean;
   onToggleGrid: () => void;
   onToggleAxes: () => void;
   onToggleWireframe: () => void;
   onToggleStats: () => void;
+  onToggleSpawnPositions: () => void;
   onResetCamera: () => void;
   onClearCache: () => void;
   clearCacheDisabled?: boolean;
@@ -144,10 +147,12 @@ export function MapToolbar({
   showAxes,
   wireframe,
   showStats,
+  showSpawnPositions,
   onToggleGrid,
   onToggleAxes,
   onToggleWireframe,
   onToggleStats,
+  onToggleSpawnPositions,
   onResetCamera,
   onClearCache,
   clearCacheDisabled,
@@ -436,6 +441,21 @@ export function MapToolbar({
 
       {/* ─── Viewport Display Group ─── */}
       <div className="flex items-center gap-0.5">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={showSpawnPositions ? "secondary" : "ghost"}
+              size="icon"
+              className="h-6 w-6"
+              onClick={onToggleSpawnPositions}
+              aria-label={t(showSpawnPositions ? "display.hideSpawnPositions" : "display.showSpawnPositions")}
+            >
+              <MapPin className="h-3 w-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{t("display.spawnPositions")}</TooltipContent>
+        </Tooltip>
+
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

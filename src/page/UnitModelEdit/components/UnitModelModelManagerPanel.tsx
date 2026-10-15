@@ -894,7 +894,7 @@ export function UnitModelModelManagerPanel({
         "file",
       );
       const fileName = filePath.split(/[/\\]/).pop() ?? "model.fbx";
-      const baseFilename = sanitizeBaseFilename(fileName);
+      const baseFilename = sanitizeBaseFilename(replaceTarget.label);
       const sourceFormat = detectStaticMeshImportFormat(fileName);
       let config = createDefaultDaeImportConfig(baseFilename);
       config.loadToScene = false;
@@ -1004,7 +1004,7 @@ export function UnitModelModelManagerPanel({
         "file",
       );
       const fileName = filePath.split(/[/\\]/).pop() ?? "model.fbx";
-      const baseFilename = sanitizeBaseFilename(fileName);
+      const baseFilename = sanitizeBaseFilename(replaceTarget.label);
       const sourceFormat = detectStaticMeshImportFormat(fileName);
       let config = createDefaultDaeImportConfig(baseFilename);
       config.loadToScene = false;
@@ -1102,7 +1102,8 @@ export function UnitModelModelManagerPanel({
       return;
     }
     const session = useDaeSsbhSessionStore.getState();
-    const baseFilename = sanitizeBaseFilename(session.outputBaseName);
+    const baseFilename = sanitizeBaseFilename(target.label);
+    session.setOutputBaseName(baseFilename);
     setBusy(`replace:${target.label}`);
     setShowImportConfig(false);
     setImportProgress({
@@ -1186,12 +1187,13 @@ export function UnitModelModelManagerPanel({
       return;
     }
     const session = useDaeSsbhSessionStore.getState();
-    const baseFilename = sanitizeBaseFilename(session.outputBaseName);
+    const baseFilename = sanitizeBaseFilename(target.label);
+    session.setOutputBaseName(baseFilename);
     setBusy(`replace:${target.label}`);
     setShowImportConfig(false);
     setImportProgress({
       open: true,
-      progress: 0,
+      progress: 0;
       steps: createUnitImportSteps(entry.fileName, t),
     });
     const stamp = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -1522,6 +1524,13 @@ export function UnitModelModelManagerPanel({
           havokInfo={null}
           stageRoot={modelRoot ?? null}
           workflowMode={importWorkflow}
+          lockedOutputBaseName={
+            (importWorkflow === "unitModelReplaceNumshb" ||
+              importWorkflow === "unitModelReplaceFull") &&
+            replaceTarget?.label
+              ? sanitizeBaseFilename(replaceTarget.label)
+              : null
+          }
           viewportSuspend={viewportSuspend}
           onConfigChange={handleImportConfigChange}
           onImport={() =>

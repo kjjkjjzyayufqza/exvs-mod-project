@@ -8,6 +8,7 @@
 pub mod armsparam;
 pub mod bgm_list;
 pub mod bgm_table;
+pub mod border_hit;
 pub mod bsfo;
 pub mod bulletparam;
 pub mod camera_table;
@@ -44,7 +45,9 @@ pub mod param_bin_format;
 pub mod param_entry_schema;
 pub mod pilot_voice_bank;
 pub mod pilot_voice_resource;
+pub mod voice_order_table;
 pub mod pilotlist;
+pub mod plan_param;
 pub mod projectile_depiction_table;
 pub mod raw_path_id;
 pub mod scene_id_table;

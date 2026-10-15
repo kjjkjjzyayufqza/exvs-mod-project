@@ -98,6 +98,16 @@ describe("sceneDirtyStore", () => {
     expect(useSceneDirtyStore.getState().global.graphicParams).toBe(false);
   });
 
+  it("markGlobalDirty sets the planParam flag", () => {
+    useSceneDirtyStore.getState().markGlobalDirty("planParam");
+    const state = useSceneDirtyStore.getState();
+    expect(state.global.planParam).toBe(true);
+    expect(state.hasAnyChanges()).toBe(true);
+    state.reset();
+    expect(useSceneDirtyStore.getState().global.planParam).toBe(false);
+    expect(useSceneDirtyStore.getState().hasAnyChanges()).toBe(false);
+  });
+
   it("reset clears all objects and global state", () => {
     const s = useSceneDirtyStore.getState();
     s.markObjectAdded("a");

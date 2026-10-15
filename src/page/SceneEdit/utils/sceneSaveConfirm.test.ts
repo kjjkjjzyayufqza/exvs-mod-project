@@ -78,6 +78,13 @@ describe("sceneSaveConfirm", () => {
     expect(lines).toContain("Rebuilt stage structure JSON");
   });
 
+  it("buildSaveChangePreview names a dirty spawn plan", () => {
+    useSceneDirtyStore.getState().markGlobalDirty("planParam");
+    const preview = buildSaveChangePreview(useSceneDirtyStore.getState());
+    expect(preview.hasChanges).toBe(true);
+    expect(preview.globalChanges).toEqual(["Spawn plan (plan_param.spbin)"]);
+  });
+
   it("buildSaveChangePreview includes replaced models and marks hasChanges", () => {
     const store = useSceneDirtyStore.getState();
     store.markModelReplaced("base");

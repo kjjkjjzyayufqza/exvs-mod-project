@@ -78,6 +78,7 @@ describe("mainViewTabGroups", () => {
       "raw-path-id",
       "pilot-voice-resource",
       "pilot-voice-bank",
+      "voice-order-table",
       "bgm-table",
       "bgm-list",
       "bgm-bank",

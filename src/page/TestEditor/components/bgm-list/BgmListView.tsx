@@ -38,6 +38,10 @@ import {
 } from "./bgmListDocument";
 import { buildBgmListSourceFhm2dPath, initBgmListPack } from "./initBgmListPack";
 import { useTranslation } from "react-i18next";
+import { BgmChainRail } from "../sound-table/SoundChainRail";
+import type { SoundFocus } from "../sound-table/soundChainModel";
+import { invalidateSoundChainCache, openSoundChainPath } from "../sound-table/soundChainResolve";
+import { useBgmChain } from "../sound-table/useSoundChain";
 
 type LoadState =
   | { status: "idle" }
@@ -58,6 +62,9 @@ type BgmListViewProps = {
   onUnsavedChanges?: (hasChanges: boolean) => void;
   onPackMutated?: (pack: WorkspacePackIdentity) => void;
   workspaceDocument: TestEditorWorkspaceDocument;
+  soundFocus?: SoundFocus | null;
+  onConsumeSoundFocus?: () => void;
+  onOpenSoundFocus?: (focus: SoundFocus) => void;
 };
 
 function HashField({
@@ -106,6 +113,9 @@ export default function BgmListView({
   onUnsavedChanges,
   onPackMutated,
   workspaceDocument,
+  soundFocus = null,
+  onConsumeSoundFocus,
+  onOpenSoundFocus,
 }: BgmListViewProps) {
   const { t } = useTranslation("test-lists");
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
@@ -115,7 +125,9 @@ export default function BgmListView({
   const [addTitle, setAddTitle] = useState("");
   const [isInitializing, setIsInitializing] = useState(false);
   const [cueItems, setCueItems] = useState<BgmCuePickerItem[]>([]);
+  const [chainRefresh, setChainRefresh] = useState(0);
   const lastLoadedKeyRef = useRef("");
+  const consumedFocus = useRef<SoundFocus | null>(null);
   const obDplCachePath = useConfigStore((s) => s.obDplCachePath);
 
   const markChanged = useCallback(
@@ -156,6 +168,8 @@ export default function BgmListView({
       return;
     }
     setLoadState({ status: "loading" });
+    invalidateSoundChainCache();
+    setChainRefresh((value) => value + 1);
     try {
       const content = await promptAndMigrateWorkspaceContentIfNeeded(
         await resolveWorkspaceContent(folderPath, workspaceDocument, "bgm-list"),
@@ -278,6 +292,9 @@ export default function BgmListView({
       setLoadState({ ...loadState, table: written, filePath: written.filePath ?? loadState.filePath });
       setHasChanges(false);
       onUnsavedChanges?.(false);
+      invalidateSoundChainCache();
+      setChainRefresh((value) => value + 1);
+      onUnsavedChanges?.(false);
       onPackMutated?.(workspacePackIdentityFromResolved(loadState.pack, "configured"));
       toast.success(t("sound.saved"));
     } catch (error) {
@@ -318,6 +335,32 @@ export default function BgmListView({
           : "loading";
 
   const selectedEmpty = selected ? emptyBgmListFields(selected) : [];
+  const { snapshot: bgmChain, loading: bgmChainLoading } = useBgmChain({
+    isActive,
+    workspaceRoot: folderPath,
+    workspaceDocument,
+    cueHash: selected?.cueHash ?? 0,
+    refreshKey: chainRefresh,
+  });
+
+  useEffect(() => {
+    if (!isActive || !soundFocus || soundFocus.tab !== "bgm-list") return;
+    if (loadState.status !== "ready") return;
+    if (consumedFocus.current === soundFocus) return;
+    consumedFocus.current = soundFocus;
+    const cueHash = soundFocus.cueHash;
+    if (cueHash) {
+      const index = loadState.table.entries.findIndex((entry) => (entry.cueHash >>> 0) === (cueHash >>> 0));
+      if (index >= 0) setSelectedIndex(index);
+    }
+    onConsumeSoundFocus?.();
+  }, [isActive, loadState, onConsumeSoundFocus, soundFocus]);
+
+  const openChainFile = useCallback((path: string) => {
+    void openSoundChainPath(path).then((result) => {
+      if (result === "missing") toast.error(t("common.pathMissing"));
+    });
+  }, [t]);
 
   return (
     <SoundTableWorkbench
@@ -431,6 +474,20 @@ export default function BgmListView({
       detailPanel={
         loadState.status === "ready" && selected && selectedIndex != null ? (
           <div className="space-y-4 rounded-lg bg-muted/20 p-4">
+            <BgmChainRail
+              current="hud"
+              snapshot={bgmChain}
+              loading={bgmChainLoading}
+              draftLabel={bgmListEntryLabel(selected)}
+              onOpenStep={(step) => {
+                if (!onOpenSoundFocus || !selected.cueHash) return;
+                onOpenSoundFocus({
+                  tab: step === "bgm" ? "bgm-table" : "bgm-bank",
+                  cueHash: selected.cueHash >>> 0,
+                });
+              }}
+              onOpenFile={openChainFile}
+            />
             {selectedEmpty.length > 0 ? (
               <div className="text-xs font-medium text-amber-600">
                 {t("sound.emptyFields", { fields: selectedEmpty.join(", ") })}

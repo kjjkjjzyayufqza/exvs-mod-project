@@ -45,6 +45,7 @@ export function applySafeWebGlDrawingBufferSize(
 
 export function buildSsbhWebGlRendererAttempts(
   defaults: SsbhWebGlRendererParameters,
+  options?: { allowSoftwareRasterizer?: boolean },
 ): SsbhWebGlRendererParameters[] {
   // Attempt 0 refuses a software rasterizer. A caller that passes
   // failIfMajorPerformanceCaveat: false must not weaken this attempt.
@@ -63,6 +64,9 @@ export function buildSsbhWebGlRendererAttempts(
     logarithmicDepthBuffer: false,
     powerPreference: "default",
   };
+  if (options?.allowSoftwareRasterizer === false) {
+    return [preferred];
+  }
   return [preferred, compatible];
 }
 
@@ -70,8 +74,9 @@ export function createSsbhWebGlRenderer(
   defaults: SsbhWebGlRendererParameters,
   construct: (params: SsbhWebGlRendererParameters) => WebGLRenderer = (params) =>
     new WebGLRenderer(params),
+  options?: { allowSoftwareRasterizer?: boolean },
 ): WebGLRenderer {
-  const attempts = buildSsbhWebGlRendererAttempts(defaults);
+  const attempts = buildSsbhWebGlRendererAttempts(defaults, options);
   let lastError: unknown;
   for (const params of attempts) {
     try {

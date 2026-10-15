@@ -14,27 +14,9 @@ import {
   type TexturePreviewSlotKey,
 } from "@/components/ssbh-model-preview/meshFromSsbh";
 
-export interface TextureQualityPreset {
-  key: string;
-  maxDimension: number | null;
-  badge: string;
-}
-
-export const TEXTURE_QUALITY_PRESETS: TextureQualityPreset[] = [
-  { key: "draft", maxDimension: 512, badge: "512px" },
-  { key: "standard", maxDimension: 1024, badge: "1K" },
-  { key: "high", maxDimension: 2048, badge: "2K" },
-  { key: "original", maxDimension: null, badge: "Full" },
-];
-
-export function getMaxDimensionForQuality(qualityKey: string): number | null {
-  const preset = TEXTURE_QUALITY_PRESETS.find((p) => p.key === qualityKey);
-  return preset ? preset.maxDimension : 2048;
-}
-
 interface TextureStats {
   uniqueCount: number;
-  totalRgbaBytes: number;
+  cacheHits: number;
   maxWidth: number;
   maxHeight: number;
   resolutionBuckets: Map<string, number>;
@@ -42,7 +24,7 @@ interface TextureStats {
 
 function computeTextureStats(textureDataMap: NutexbTextureDataMap): TextureStats {
   const seen = new Set<string>();
-  let totalRgbaBytes = 0;
+  let cacheHits = 0;
   let maxWidth = 0;
   let maxHeight = 0;
   const resolutionBuckets = new Map<string, number>();
@@ -52,7 +34,7 @@ function computeTextureStats(textureDataMap: NutexbTextureDataMap): TextureStats
     if (seen.has(key)) continue;
     seen.add(key);
 
-    totalRgbaBytes += data.kind === "rgba" ? data.rgba.byteLength : data.data.byteLength;
+    if (data.kind === "png" && data.cacheHit) cacheHits += 1;
     maxWidth = Math.max(maxWidth, data.width);
     maxHeight = Math.max(maxHeight, data.height);
 
@@ -60,14 +42,7 @@ function computeTextureStats(textureDataMap: NutexbTextureDataMap): TextureStats
     resolutionBuckets.set(bucket, (resolutionBuckets.get(bucket) ?? 0) + 1);
   }
 
-  return { uniqueCount: seen.size, totalRgbaBytes, maxWidth, maxHeight, resolutionBuckets };
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  return { uniqueCount: seen.size, cacheHits, maxWidth, maxHeight, resolutionBuckets };
 }
 
 /** Quick preset: all slots on, all off, or custom mix (toggle group shows no segment pressed). */
@@ -88,8 +63,6 @@ const SLOT_WARNINGS: Partial<Record<TexturePreviewSlotKey, string>> = {
 };
 
 interface TextureQualityPanelProps {
-  quality: string;
-  onQualityChange: (quality: string) => void;
   textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>;
   onTextureSlotMode: (mode: "all" | "none") => void;
   onTextureSlotToggle: (key: TexturePreviewSlotKey, enabled: boolean) => void;
@@ -98,8 +71,6 @@ interface TextureQualityPanelProps {
 }
 
 export function TextureQualityPanel({
-  quality,
-  onQualityChange,
   textureSlotLoadEnabled,
   onTextureSlotMode,
   onTextureSlotToggle,
@@ -120,45 +91,7 @@ export function TextureQualityPanel({
 
   return (
     <div className={`space-y-2 ${PROP_PANEL}`}>
-      <div className="flex flex-col gap-0.5">
-        {TEXTURE_QUALITY_PRESETS.map((preset) => {
-          const active = quality === preset.key;
-          return (
-            <button
-              key={preset.key}
-              type="button"
-              onClick={() => onQualityChange(preset.key)}
-              className={cn(
-                "flex min-w-0 items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-left transition-colors",
-                "hover:bg-accent/50",
-                active
-                  ? "bg-primary/10 text-foreground"
-                  : "text-muted-foreground",
-              )}
-            >
-              <span className={cn("truncate text-[11px] font-medium", active && "text-foreground")}>
-                {t(`quality.presets.${preset.key}.label`)}
-              </span>
-              <span
-                className={cn(
-                  "shrink-0 text-[10px] font-mono px-1.5 py-0.5 rounded",
-                  active ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground",
-                )}
-              >
-                {preset.badge}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {quality === "original" && (
-        <div className="text-[9px] text-amber-500 bg-amber-500/10 rounded px-2 py-1 leading-relaxed">
-          {t("quality.fullResolutionWarning")}
-        </div>
-      )}
-
-      <div className="space-y-1.5 border-t border-border/30 pt-1.5">
+      <div className="space-y-1.5">
         <div className={PROP_LABEL}>{t("quality.textureSlots")}</div>
         <ToggleGroup
           type="single"
@@ -240,8 +173,8 @@ export function TextureQualityPanel({
           <span className="font-mono text-[11px]">{stats.uniqueCount}</span>
         </div>
         <div className={PROP_ROW}>
-          <span className="text-[11px] text-muted-foreground">{t("quality.rgbaTotal")}</span>
-          <span className="font-mono text-[11px]">{formatBytes(stats.totalRgbaBytes)}</span>
+          <span className="text-[11px] text-muted-foreground">{t("quality.cacheHits")}</span>
+          <span className="font-mono text-[11px]">{stats.cacheHits}</span>
         </div>
         {stats.maxWidth > 0 && (
           <div className={PROP_ROW}>
@@ -266,7 +199,7 @@ export function TextureQualityPanel({
 
         {isDecoding && (
           <div className="text-[10px] text-blue-400 animate-pulse">
-            {t("quality.decoding")}
+            {t("quality.preparingCache")}
           </div>
         )}
       </div>

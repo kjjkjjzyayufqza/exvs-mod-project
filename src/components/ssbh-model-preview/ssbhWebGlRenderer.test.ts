@@ -100,7 +100,25 @@ describe("ssbhWebGlRenderer", () => {
     }
     const startup = readFileSync(resolve(__dirname, "../../../src-tauri/src/main.rs"), "utf8");
     expect(startup).toContain("--enable-gpu --ignore-gpu-blocklist --enable-webgl");
+    expect(startup).toContain("--disable-software-rasterizer");
     expect(startup.toLowerCase()).not.toContain("swiftshader");
     expect(startup.toLowerCase()).not.toContain("use-angle");
+    const sceneViewport = readFileSync(
+      resolve(__dirname, "../../page/SceneEdit/components/MapViewport.tsx"),
+      "utf8",
+    );
+    expect(sceneViewport).toContain("allowSoftwareRasterizer: false");
+  });
+
+  it("does not fall back to a software context when the caller forbids it", () => {
+    const construct = vi.fn(() => {
+      throw new Error("Error creating WebGL context.");
+    });
+    expect(() =>
+      createSsbhWebGlRenderer({ antialias: true }, construct, { allowSoftwareRasterizer: false }),
+    ).toThrow(/WebGL context/);
+    expect(construct).toHaveBeenCalledTimes(1);
+    expect(construct.mock.calls[0]?.[0].failIfMajorPerformanceCaveat).toBe(true);
+    expect(construct.mock.calls[0]?.[0].powerPreference).toBe("high-performance");
   });
 });

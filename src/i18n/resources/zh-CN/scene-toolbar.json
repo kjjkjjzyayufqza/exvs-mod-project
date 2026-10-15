@@ -35,6 +35,9 @@
     "size": "操纵器大小"
   },
   "display": {
+    "spawnPositions": "生成位置",
+    "showSpawnPositions": "显示生成位置",
+    "hideSpawnPositions": "隐藏生成位置",
     "grid": "网格",
     "showGrid": "显示网格",
     "hideGrid": "隐藏网格",

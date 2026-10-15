@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import * as THREE from "three";
 import type { HavokMeshData, HavokAabb } from "@/utils/havokXmlParser";
+import { isBorderHitSource } from "../../utils/borderHitView";
 import { generateHavokMesh } from "@/utils/havokMeshGenerator";
 import type { PlacementRow } from "../../types/placement";
 
@@ -112,6 +113,7 @@ export function HavokCollisionOverlay({
   const folderToMesh = useMemo(() => {
     const map = new Map<string, HavokMeshData>();
     for (const [sourceId, data] of meshDataMap) {
+      if (isBorderHitSource(sourceId)) continue;
       const folder = folderFromSourceId(sourceId);
       if (folder) {
         map.set(folder, data);
@@ -123,6 +125,7 @@ export function HavokCollisionOverlay({
   const folderToSourceId = useMemo(() => {
     const map = new Map<string, string>();
     for (const [sourceId] of meshDataMap) {
+      if (isBorderHitSource(sourceId)) continue;
       const folder = folderFromSourceId(sourceId);
       if (folder) map.set(folder, sourceId);
     }
@@ -135,6 +138,7 @@ export function HavokCollisionOverlay({
 
     if (!subModels || !placementEntries) {
       for (const [id, data] of meshDataMap) {
+        if (isBorderHitSource(id)) continue;
         const t = objectTransforms?.get(id);
         result.push({
           key: id,
@@ -182,6 +186,7 @@ export function HavokCollisionOverlay({
     }
 
     for (const [sourceId, data] of meshDataMap) {
+      if (isBorderHitSource(sourceId)) continue;
       const folder = folderFromSourceId(sourceId);
       if (!folder || folder === "base") {
         const t = objectTransforms?.get(sourceId);

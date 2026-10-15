@@ -242,4 +242,30 @@ describe("DaeImportSsbhFullPanel", () => {
     }
     expect(screen.getByRole("checkbox", { name: /\.nusktb/i })).toBeDisabled();
   });
+
+  it("shows the replaced model name as a read-only value", async () => {
+    useDaeSsbhSessionStore.setState({ outputBaseName: "Untitled" });
+
+    render(
+      <DaeImportSsbhFullPanel
+        analysis={analysis}
+        sourcePath="E:\\unit\\Untitled.fbx"
+        stageRoot="E:\\unit\\0"
+        directToDisk
+        replaceNumshbMode
+        lockedOutputBaseName="015gndmuc_008faunig_001_body_normal"
+      />,
+    );
+
+    const name = screen.getByLabelText(/model folder name/i);
+    expect(name).toHaveValue("015gndmuc_008faunig_001_body_normal");
+    expect(name).toHaveAttribute("readonly");
+    expect(screen.getByText(/taken from the model being replaced/i)).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(useDaeSsbhSessionStore.getState().outputBaseName).toBe(
+        "015gndmuc_008faunig_001_body_normal",
+      );
+    });
+  });
 });

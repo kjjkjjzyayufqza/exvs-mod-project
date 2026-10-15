@@ -1041,6 +1041,24 @@ mod tests {
     }
 
     #[test]
+    fn store_stage_folder_hkt_bytes_keeps_border_under_info() {
+        let mut s = SceneMemorySession::new(
+            "sid".into(),
+            SceneSource::Folder {
+                path: "E:/stage".into(),
+            },
+        );
+        s.store_stage_folder_hkt_bytes("info/border_hit.hkt", vec![4, 5])
+            .unwrap();
+        let artifacts = s.collect_save_artifacts();
+        assert!(artifacts.iter().any(|artifact| {
+            artifact.relative_path == "info/border_hit.hkt" && artifact.data == vec![4, 5]
+        }));
+        let path = s.resolve_hkt_disk_path("info/border_hit.hkt").unwrap();
+        assert_eq!(path, PathBuf::from("E:/stage/info/border_hit.hkt"));
+    }
+
+    #[test]
     fn resolve_hkt_disk_path_for_sub_model_target() {
         let s = SceneMemorySession::new(
             "sid".into(),

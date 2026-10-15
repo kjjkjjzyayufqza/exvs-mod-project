@@ -38,6 +38,21 @@ describe("SceneTexturePool.pruneExcept", () => {
     expect(pool.size).toBe(2);
   });
 
+  it("replaces an older revision that shares the scene texture identity", () => {
+    const pool = new SceneTexturePool();
+    const previous = fakeTexture();
+    previous.userData = { sceneTextureIdentity: "wall|map" };
+    const next = fakeTexture();
+    next.userData = { sceneTextureIdentity: "wall|map" };
+    pool.acquire("wall|map|r0", () => previous);
+    pool.acquire("wall|map|r1", () => next);
+
+    expect(pool.has("wall|map|r0")).toBe(false);
+    expect(pool.has("wall|map|r1")).toBe(true);
+    expect(previous.dispose).toHaveBeenCalledTimes(1);
+    expect(next.dispose).not.toHaveBeenCalled();
+  });
+
   it("disposes all entries when the active set is empty", () => {
     const pool = new SceneTexturePool();
     const a = fakeTexture();

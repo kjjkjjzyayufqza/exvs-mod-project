@@ -1,3 +1,4 @@
+import { convertFileSrc } from "@tauri-apps/api/core";
 import type { NutexbRgbaData } from "@/components/ssbh-model-preview/nutexbPreviewCache";
 import type { NutexbTextureData, NutexbTextureDataMap } from "../hooks/useSceneTextureLoader";
 import { normalizeTexturePathKey } from "./sceneTextureInventory";
@@ -30,17 +31,15 @@ export function lookupSceneTextureData(
   );
 }
 
+export function sceneTexturePngUrl(data: Extract<NutexbTextureData, { kind: "png" }>): string {
+  return `${convertFileSrc(data.pngPath)}?v=${data.revision}`;
+}
+
 export function extractRgbaFromTextureData(
   data: NutexbTextureData | null,
 ): NutexbRgbaData | null {
-  if (!data) return null;
-  if (data.kind === "rgba") {
-    return { width: data.width, height: data.height, rgba: data.rgba };
-  }
-  if (data.kind === "compressed" && data.formatId === 0) {
-    return { width: data.width, height: data.height, rgba: data.data };
-  }
-  return null;
+  if (!data || data.kind !== "rgba") return null;
+  return { width: data.width, height: data.height, rgba: data.rgba };
 }
 
 export function rgbaToPngDataUrl(
@@ -99,6 +98,8 @@ export function getSceneTextureThumbnailDataUrl(
   path: string,
   textureDataMap: NutexbTextureDataMap,
 ): string | null {
+  const loaded = lookupSceneTextureData(textureDataMap, path);
+  if (loaded?.kind === "png") return sceneTexturePngUrl(loaded);
   return tryCacheThumbnailFromMap(path, textureDataMap);
 }
 
@@ -107,6 +108,9 @@ export async function ensureSceneTextureThumbnailDataUrl(
   textureDataMap: NutexbTextureDataMap,
   decodeContext: SceneTextureDecodeContext,
 ): Promise<string | null> {
+  const loaded = lookupSceneTextureData(textureDataMap, path);
+  if (loaded?.kind === "png") return sceneTexturePngUrl(loaded);
+
   const fromMap = tryCacheThumbnailFromMap(path, textureDataMap);
   if (fromMap) return fromMap;
 
@@ -139,6 +143,9 @@ export async function resolveSceneTexturePreviewDataUrl(
   textureDataMap: NutexbTextureDataMap,
   decodeContext: SceneTextureDecodeContext,
 ): Promise<string | null> {
+  const loaded = lookupSceneTextureData(textureDataMap, path);
+  if (loaded?.kind === "png") return sceneTexturePngUrl(loaded);
+
   const previewKey = cacheKeyForPath(path, PREVIEW_MAX_DIM);
   const cachedPreview = previewCache.get(previewKey);
   if (cachedPreview) return cachedPreview;

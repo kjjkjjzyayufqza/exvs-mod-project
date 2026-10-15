@@ -44,4 +44,10 @@ describe("pilotVoiceBankDocument", () => {
     const current = [cue("Alpha", 300), cue("Beta", 200)];
     expect(dirtyCueNames(current, loaded)).toEqual(["Alpha"]);
   });
+
+  it("marks a row dirty when only a loop field differs", () => {
+    const loaded = [cue("Alpha", 100)];
+    const current = [{ ...cue("Alpha", 100), loopEnd: 48 }];
+    expect(dirtyCueNames(current, loaded)).toEqual(["Alpha"]);
+  });
 });

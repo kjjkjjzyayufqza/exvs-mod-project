@@ -25,6 +25,7 @@ import {
   Upload,
   Trash2,
   Copy,
+  Shield,
 } from "lucide-react";
 
 interface ViewportContextMenuProps {
@@ -44,6 +45,8 @@ interface ViewportContextMenuProps {
   onDeleteSelected?: () => void;
   onDuplicateSelected?: () => void;
   hasSelection: boolean;
+  borderModels?: ReadonlyArray<{ id: string; label: string }>;
+  onGenerateBorderHkt?: (modelId: string) => void;
 }
 
 export function ViewportContextMenu({
@@ -63,6 +66,8 @@ export function ViewportContextMenu({
   onDeleteSelected,
   onDuplicateSelected,
   hasSelection,
+  borderModels = [],
+  onGenerateBorderHkt,
 }: ViewportContextMenuProps) {
   const { t } = useTranslation("scene-context");
   return (
@@ -143,6 +148,22 @@ export function ViewportContextMenu({
         </ContextMenuSub>
 
         <ContextMenuSeparator />
+
+        {onGenerateBorderHkt && (
+          <ContextMenuSub>
+            <ContextMenuSubTrigger disabled={borderModels.length === 0}>
+              <Shield className="mr-2 h-3.5 w-3.5" />
+              {t("menu.generateBorderHkt")}
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="max-h-80 w-56 overflow-y-auto">
+              {borderModels.map((model) => (
+                <ContextMenuItem key={model.id} onClick={() => onGenerateBorderHkt(model.id)}>
+                  {model.label}
+                </ContextMenuItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        )}
 
         <ContextMenuItem onClick={onImportDAE}>
           <Upload className="mr-2 h-3.5 w-3.5" />

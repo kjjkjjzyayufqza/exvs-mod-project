@@ -177,7 +177,7 @@
     "assetConfig": "资产配置",
     "hktCollision": "HKT 碰撞",
     "stats": "统计",
-    "textureQuality": "纹理质量",
+    "textureQuality": "纹理槽位",
     "objectNutexb": "对象 Nutexb",
     "loadedNutexb": "已加载 Nutexb",
     "graphicParam": "图形参数",
@@ -234,5 +234,46 @@
     "emptyTexturePaths": "{{count}} 个空纹理路径 — 阻止保存和打包",
     "copyAllErrors": "复制全部错误",
     "copyAllMaterialErrors": "复制全部材质错误"
+  },
+  "planParam": {
+    "title": "出生点",
+    "limit": "范围",
+    "missing": "此地图没有 plan_param.spbin。",
+    "loadFailed": "无法读取 plan_param.spbin",
+    "trailing": "w {{value}}",
+    "borderTitle": "边界文件",
+    "borderMissing": "此地图没有 border_hit.hkt。",
+    "borderLoadFailed": "无法读取 border_hit.hkt",
+    "borderSummary": "SDK {{sdk}} · {{bytes}} 字节 · {{items}} 个对象",
+    "borderViewOnly": "在视口右键，选「生成边界 HKT」，或在下面选一个场景模型。装了 Havok Content Tools 后，结果会画成琥珀色线框。",
+    "borderWhenCollision": "这份边界已经在。把视口切到「碰撞」或「两者」后，才会画出琥珀色线框。",
+    "borderInViewport": "琥珀色线框就是这份边界，只在「碰撞」或「两者」视图里显示。在视口右键，或用下面的模型列表，可以换一份。",
+    "generateBorder": "生成 HKT",
+    "noBorderModels": "没有场景模型",
+    "generatingBorder": "正在用 {{name}} 生成边界 HKT…",
+    "borderGenerated": "已用 {{name}} 生成边界 HKT",
+    "borderGenerateFailed": "用 {{name}} 生成边界 HKT 失败：{{message}}",
+    "markerAngleHint": "拖动圆点移动位置。地面的圆是范围，拖它边缘的手柄可以改大小。标记上的箭头用文件里的角度，旋转手柄会把这个角度写回去。",
+    "limitHandle": "范围 {{value}}",
+    "markerLabel": {
+      "spawnFirst": "A{{index}}",
+      "spawnSecond": "B{{index}}",
+      "marker": "M{{index}}",
+      "respawn": "R{{index}}"
+    },
+    "legend": {
+      "spawnFirst": "出生点 A",
+      "spawnSecond": "出生点 B",
+      "marker": "标记",
+      "respawn": "重生点",
+      "limit": "范围",
+      "border": "边界"
+    },
+    "groups": {
+      "spawnFirst": "出生点 A（{{count}}）",
+      "spawnSecond": "出生点 B（{{count}}）",
+      "marker": "标记（{{count}}）",
+      "respawn": "重生点（{{count}}）"
+    }
   }
 }

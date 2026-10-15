@@ -404,6 +404,18 @@ pub async fn nutexb_stream_identities(
 }
 
 #[tauri::command]
+pub async fn ensure_scene_nutexb_png_cache(
+    paths: Vec<String>,
+    force: bool,
+) -> Result<Vec<crate::nutexb_lib::SceneNutexbPngCacheEntry>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::nutexb_lib::ensure_scene_nutexb_png_cache(&paths, force)
+    })
+    .await
+    .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub async fn nutexb_batch_export_png(
     root_dir: String,
     output_mode: String,
@@ -2452,6 +2464,46 @@ pub fn build_pilot_voice_resource_pack(data_json: Value, file_path: &str) -> Res
 }
 
 #[tauri::command]
+pub fn parse_voice_order_table(file_path: &str) -> Result<Value, String> {
+    let parsed = crate::format::voice_order_table::load_path(std::path::Path::new(file_path))?;
+    serde_json::to_value(&parsed).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[tauri::command]
+pub fn cue_id_for_voice_order_name(name: &str) -> u32 {
+    crate::format::voice_order_table::cue_id_for_name(name)
+}
+
+#[tauri::command]
+pub fn build_voice_order_table(data_json: Value, save_path: &str) -> Result<Value, String> {
+    let table: crate::format::voice_order_table::VoiceOrderTable =
+        serde_json::from_value(data_json).map_err(|e| format!("Deserialize failed: {e}"))?;
+    crate::format::voice_order_table::write_table(&table, std::path::Path::new(save_path))?;
+    serde_json::to_value(&table).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[tauri::command]
+pub fn write_remapped_voice_order_pack(
+    donor_path: &str,
+    donor_stem: &str,
+    new_stem: &str,
+    donor_cue_names: Vec<String>,
+    new_cue_names: Vec<String>,
+    vot_path: &str,
+    structure_path: &str,
+) -> Result<u32, String> {
+    crate::format::voice_order_table::write_remapped_voice_order_pack(
+        std::path::Path::new(donor_path),
+        donor_stem,
+        new_stem,
+        &donor_cue_names,
+        &new_cue_names,
+        std::path::Path::new(vot_path),
+        std::path::Path::new(structure_path),
+    )
+}
+
+#[tauri::command]
 pub fn parse_pilot_voice_bank(file_path: &str) -> Result<Value, String> {
     let parsed = crate::format::pilot_voice_bank::parse_bank_file(std::path::Path::new(file_path))?;
     serde_json::to_value(&parsed).map_err(|e| format!("Serialize failed: {e}"))
@@ -2464,6 +2516,45 @@ pub fn apply_pilot_voice_bank_samples(
 ) -> Result<Value, String> {
     let written = crate::format::pilot_voice_bank::apply_bank_file(std::path::Path::new(file_path), &edits)?;
     serde_json::to_value(&written).map_err(|e| format!("Serialize failed: {e}"))
+}
+
+#[tauri::command]
+pub fn list_nus3audio_track_names(file_path: &str) -> Result<Vec<String>, String> {
+    let bytes = std::fs::read(file_path)
+        .map_err(|err| format!("Failed to read {file_path}: {err}"))?;
+    let tracks = crate::format::pilot_voice_bank::read_audio_tracks(&bytes)?;
+    Ok(tracks.into_iter().map(|track| track.name).collect())
+}
+
+#[tauri::command]
+pub fn clone_pilot_voice_bank_from_donor(
+    donor_path: &str,
+    new_cue_names: Vec<String>,
+) -> Result<Vec<u8>, String> {
+    let donor = std::fs::read(donor_path)
+        .map_err(|err| format!("Failed to read {donor_path}: {err}"))?;
+    crate::format::pilot_voice_bank::clone_pilot_voice_bank_from_donor(&donor, &new_cue_names)
+}
+
+#[tauri::command]
+pub fn write_cloned_pilot_voice_bank(
+    donor_bank_path: &str,
+    donor_pack_path: &str,
+    new_cue_names: Vec<String>,
+    save_path: &str,
+    structure_path: &str,
+    hash_name: &str,
+    inner_name: &str,
+) -> Result<(), String> {
+    crate::format::pilot_voice_bank::write_cloned_pilot_voice_bank(
+        std::path::Path::new(donor_bank_path),
+        std::path::Path::new(donor_pack_path),
+        &new_cue_names,
+        std::path::Path::new(save_path),
+        std::path::Path::new(structure_path),
+        hash_name,
+        inner_name,
+    )
 }
 
 #[tauri::command]

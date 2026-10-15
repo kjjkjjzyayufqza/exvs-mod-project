@@ -13,6 +13,9 @@ use image::{ExtendedColorType, ImageEncoder};
 use serde::Serialize;
 use std::collections::HashSet;
 use std::io::Cursor;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
+use std::time::UNIX_EPOCH;
 use std::{
     fs,
     fs::File,
@@ -495,6 +498,276 @@ pub fn ensure_parent_dir(output_path: &str) -> Result<(), String> {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+const SCENE_NUTEXB_PNG_CACHE_WORKERS: usize = 2;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SceneNutexbPngCacheEntry {
+    pub nutexb_path: String,
+    pub png_path: String,
+    pub width: u32,
+    pub height: u32,
+    pub cache_hit: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Copy)]
+struct NutexbFileStamp {
+    size: u64,
+    mtime_secs: u64,
+    mtime_nanos: u32,
+}
+
+#[derive(Clone, Copy)]
+struct SceneNutexbPngCacheMeta {
+    size: u64,
+    mtime_secs: u64,
+    mtime_nanos: u32,
+    crc32: u32,
+    width: u32,
+    height: u32,
+}
+
+fn cache_error(nutexb_path: &str, message: impl Into<String>) -> SceneNutexbPngCacheEntry {
+    SceneNutexbPngCacheEntry {
+        nutexb_path: nutexb_path.to_string(),
+        png_path: String::new(),
+        width: 0,
+        height: 0,
+        cache_hit: false,
+        error: Some(message.into()),
+    }
+}
+
+fn scene_nutexb_cache_paths(nutexb_path: &Path) -> Result<(PathBuf, PathBuf), String> {
+    let parent = nutexb_path.parent().ok_or_else(|| {
+        format!(
+            "nutexb has no parent directory: {}",
+            nutexb_path.display()
+        )
+    })?;
+    let stem = nutexb_path
+        .file_stem()
+        .ok_or_else(|| format!("nutexb has no file name: {}", nutexb_path.display()))?
+        .to_string_lossy();
+    let dir = parent.join(".cache");
+    let png_path = dir.join(format!("{stem}.png"));
+    let meta_path = dir.join(format!("{stem}.png.meta"));
+    Ok((png_path, meta_path))
+}
+
+fn read_nutexb_file_stamp(path: &Path) -> Result<NutexbFileStamp, String> {
+    let meta = fs::metadata(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let modified = meta
+        .modified()
+        .map_err(|error| format!("{}: {error}", path.display()))?;
+    let elapsed = modified
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| format!("{}: {error}", path.display()))?;
+    Ok(NutexbFileStamp {
+        size: meta.len(),
+        mtime_secs: elapsed.as_secs(),
+        mtime_nanos: elapsed.subsec_nanos(),
+    })
+}
+
+fn write_scene_nutexb_cache_meta(path: &Path, meta: SceneNutexbPngCacheMeta) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let body = format!(
+        "v1\nsize={}\nmtimeSecs={}\nmtimeNanos={}\ncrc32={}\nwidth={}\nheight={}\n",
+        meta.size, meta.mtime_secs, meta.mtime_nanos, meta.crc32, meta.width, meta.height
+    );
+    fs::write(path, body).map_err(|error| format!("{}: {error}", path.display()))
+}
+
+fn read_scene_nutexb_cache_meta(path: &Path) -> Option<SceneNutexbPngCacheMeta> {
+    let text = fs::read_to_string(path).ok()?;
+    let mut size = None;
+    let mut mtime_secs = None;
+    let mut mtime_nanos = None;
+    let mut crc32 = None;
+    let mut width = None;
+    let mut height = None;
+    for line in text.lines() {
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        match key {
+            "size" => size = value.parse().ok(),
+            "mtimeSecs" => mtime_secs = value.parse().ok(),
+            "mtimeNanos" => mtime_nanos = value.parse().ok(),
+            "crc32" => crc32 = value.parse().ok(),
+            "width" => width = value.parse().ok(),
+            "height" => height = value.parse().ok(),
+            _ => {}
+        }
+    }
+    Some(SceneNutexbPngCacheMeta {
+        size: size?,
+        mtime_secs: mtime_secs?,
+        mtime_nanos: mtime_nanos?,
+        crc32: crc32?,
+        width: width?,
+        height: height?,
+    })
+}
+
+fn png_cache_file_ready(path: &Path) -> bool {
+    fs::metadata(path).is_ok_and(|meta| meta.is_file() && meta.len() > 0)
+}
+
+fn write_rgba_png_file(path: &Path, width: u32, height: u32, rgba: &[u8]) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let file = File::create(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let mut writer = BufWriter::new(file);
+    let encoder =
+        PngEncoder::new_with_quality(&mut writer, CompressionType::Fast, FilterType::NoFilter);
+    encoder
+        .write_image(rgba, width, height, ExtendedColorType::Rgba8)
+        .map_err(|error| error.to_string())?;
+    writer
+        .flush()
+        .map_err(|error| format!("{}: {error}", path.display()))
+}
+
+fn decode_nutexb_to_cache_png(
+    nutexb_path: &Path,
+    png_path: &Path,
+    meta_path: &Path,
+    bytes: &[u8],
+    stamp: NutexbFileStamp,
+    crc32: u32,
+) -> Result<SceneNutexbPngCacheEntry, String> {
+    let (width, height, rgba) = nutexb_to_rgba_from_bytes(bytes, None)?;
+    write_rgba_png_file(png_path, width, height, &rgba)?;
+    write_scene_nutexb_cache_meta(
+        meta_path,
+        SceneNutexbPngCacheMeta {
+            size: stamp.size,
+            mtime_secs: stamp.mtime_secs,
+            mtime_nanos: stamp.mtime_nanos,
+            crc32,
+            width,
+            height,
+        },
+    )?;
+    Ok(SceneNutexbPngCacheEntry {
+        nutexb_path: nutexb_path.to_string_lossy().into_owned(),
+        png_path: png_path.to_string_lossy().into_owned(),
+        width,
+        height,
+        cache_hit: false,
+        error: None,
+    })
+}
+
+fn ensure_one_scene_nutexb_png_cache(nutexb_path: &str, force: bool) -> SceneNutexbPngCacheEntry {
+    let path = Path::new(nutexb_path);
+    let (png_path, meta_path) = match scene_nutexb_cache_paths(path) {
+        Ok(paths) => paths,
+        Err(error) => return cache_error(nutexb_path, error),
+    };
+    let stamp = match read_nutexb_file_stamp(path) {
+        Ok(stamp) => stamp,
+        Err(error) => return cache_error(nutexb_path, error),
+    };
+
+    if !force {
+        if let Some(meta) = read_scene_nutexb_cache_meta(&meta_path) {
+            let same_stamp = meta.size == stamp.size
+                && meta.mtime_secs == stamp.mtime_secs
+                && meta.mtime_nanos == stamp.mtime_nanos;
+            if same_stamp && png_cache_file_ready(&png_path) {
+                return SceneNutexbPngCacheEntry {
+                    nutexb_path: nutexb_path.to_string(),
+                    png_path: png_path.to_string_lossy().into_owned(),
+                    width: meta.width,
+                    height: meta.height,
+                    cache_hit: true,
+                    error: None,
+                };
+            }
+        }
+    }
+
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) => return cache_error(nutexb_path, error.to_string()),
+    };
+    let crc32 = nutexb_file_crc32(&bytes);
+    if !force {
+        if let Some(meta) = read_scene_nutexb_cache_meta(&meta_path) {
+            if meta.crc32 == crc32
+                && meta.size == stamp.size
+                && png_cache_file_ready(&png_path)
+            {
+                let refreshed = SceneNutexbPngCacheMeta {
+                    size: stamp.size,
+                    mtime_secs: stamp.mtime_secs,
+                    mtime_nanos: stamp.mtime_nanos,
+                    crc32,
+                    width: meta.width,
+                    height: meta.height,
+                };
+                if let Err(error) = write_scene_nutexb_cache_meta(&meta_path, refreshed) {
+                    return cache_error(nutexb_path, error);
+                }
+                return SceneNutexbPngCacheEntry {
+                    nutexb_path: nutexb_path.to_string(),
+                    png_path: png_path.to_string_lossy().into_owned(),
+                    width: meta.width,
+                    height: meta.height,
+                    cache_hit: true,
+                    error: None,
+                };
+            }
+        }
+    }
+
+    match decode_nutexb_to_cache_png(path, &png_path, &meta_path, &bytes, stamp, crc32) {
+        Ok(entry) => entry,
+        Err(error) => cache_error(nutexb_path, error),
+    }
+}
+
+/// Writes `textures/.cache/<stem>.png` beside each nutexb. A hit returns the
+/// existing PNG path and does not send pixels to the caller.
+pub fn ensure_scene_nutexb_png_cache(
+    paths: &[String],
+    force: bool,
+) -> Vec<SceneNutexbPngCacheEntry> {
+    if paths.is_empty() {
+        return Vec::new();
+    }
+    let results = Mutex::new(vec![None; paths.len()]);
+    let next = AtomicUsize::new(0);
+    let workers = SCENE_NUTEXB_PNG_CACHE_WORKERS.min(paths.len()).max(1);
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| {
+                loop {
+                    let index = next.fetch_add(1, Ordering::Relaxed);
+                    if index >= paths.len() {
+                        break;
+                    }
+                    let entry = ensure_one_scene_nutexb_png_cache(&paths[index], force);
+                    results.lock().expect("scene nutexb cache results")[index] = Some(entry);
+                }
+            });
+        }
+    });
+    results
+        .into_inner()
+        .expect("scene nutexb cache results")
+        .into_iter()
+        .map(|entry| entry.expect("cache worker wrote every index"))
+        .collect()
 }
 
 #[derive(Debug, Clone, Serialize)]

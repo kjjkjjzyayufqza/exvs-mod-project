@@ -33,6 +33,10 @@ import {
 } from "./rawPathIdDocument";
 import { buildRawPathIdSourceFhm2dPath, initRawPathIdPack } from "./initRawPathIdPack";
 import { useTranslation } from "react-i18next";
+import { VoiceChainRail } from "../sound-table/SoundChainRail";
+import { pilotVoiceStemFromPathKey, voiceChainTabForStep, type SoundFocus } from "../sound-table/soundChainModel";
+import { invalidateSoundChainCache, openSoundChainPath } from "../sound-table/soundChainResolve";
+import { useVoiceChain } from "../sound-table/useSoundChain";
 
 type LoadState =
   | { status: "idle" }
@@ -55,6 +59,9 @@ type RawPathIdViewProps = {
   onUnsavedChanges?: (hasChanges: boolean) => void;
   onPackMutated?: (pack: WorkspacePackIdentity) => void;
   workspaceDocument: TestEditorWorkspaceDocument;
+  soundFocus?: SoundFocus | null;
+  onConsumeSoundFocus?: () => void;
+  onOpenSoundFocus?: (focus: SoundFocus) => void;
 };
 
 function entryGroup(entry: RawPathIdEntry): "voice" | "bgm" | "other" {
@@ -82,6 +89,9 @@ export default function RawPathIdView({
   onUnsavedChanges,
   onPackMutated,
   workspaceDocument,
+  soundFocus = null,
+  onConsumeSoundFocus,
+  onOpenSoundFocus,
 }: RawPathIdViewProps) {
   const { t } = useTranslation("test-lists");
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
@@ -91,7 +101,9 @@ export default function RawPathIdView({
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [voiceStem, setVoiceStem] = useState("VO_1000_P01_0");
   const [isInitializing, setIsInitializing] = useState(false);
+  const [chainRefresh, setChainRefresh] = useState(0);
   const lastLoadedKeyRef = useRef("");
+  const consumedFocus = useRef<SoundFocus | null>(null);
   const obDplCachePath = useConfigStore((s) => s.obDplCachePath);
 
   const markChanged = useCallback(
@@ -111,6 +123,8 @@ export default function RawPathIdView({
       return;
     }
     setLoadState({ status: "loading" });
+    invalidateSoundChainCache();
+    setChainRefresh((value) => value + 1);
     try {
       const content = await promptAndMigrateWorkspaceContentIfNeeded(
         await resolveWorkspaceContent(folderPath, workspaceDocument, "raw-path-id"),
@@ -220,6 +234,8 @@ export default function RawPathIdView({
       setLoadState({ ...loadState, entries: written.entries, issues: [] });
       setHasChanges(false);
       onUnsavedChanges?.(false);
+      invalidateSoundChainCache();
+      setChainRefresh((value) => value + 1);
       onPackMutated?.(workspacePackIdentityFromResolved(loadState.pack, "configured"));
       toast.success(t("sound.saved"));
     } catch (error) {
@@ -264,6 +280,33 @@ export default function RawPathIdView({
           : "loading";
 
   const pathPreview = previewAudioPath(voiceStem);
+  const voiceStemFromSelection = selected ? pilotVoiceStemFromPathKey(selected.key) : null;
+  const { snapshot: voiceChain, loading: voiceChainLoading } = useVoiceChain({
+    isActive,
+    workspaceRoot: folderPath,
+    workspaceDocument,
+    stem: voiceStemFromSelection ?? "",
+    refreshKey: chainRefresh,
+  });
+
+  useEffect(() => {
+    if (!isActive || !soundFocus || soundFocus.tab !== "raw-path-id") return;
+    if (loadState.status !== "ready") return;
+    if (consumedFocus.current === soundFocus) return;
+    consumedFocus.current = soundFocus;
+    const stem = soundFocus.voiceStem?.trim();
+    if (stem) {
+      const match = loadState.entries.find((entry) => pilotVoiceStemFromPathKey(entry.key) === stem.toUpperCase());
+      if (match) setSelectedKey(match.key);
+    }
+    onConsumeSoundFocus?.();
+  }, [isActive, loadState, onConsumeSoundFocus, soundFocus]);
+
+  const openChainFile = useCallback((path: string) => {
+    void openSoundChainPath(path).then((result) => {
+      if (result === "missing") toast.error(t("common.pathMissing"));
+    });
+  }, [t]);
 
   return (
     <SoundTableWorkbench
@@ -394,15 +437,36 @@ export default function RawPathIdView({
       detailPanel={
         loadState.status === "ready" && selected ? (
           <div className="space-y-4 rounded-lg bg-muted/20 p-4">
+            <VoiceChainRail
+              current="path"
+              snapshot={voiceChain}
+              loading={voiceChainLoading}
+              draftLabel={voiceStemFromSelection ?? selected.key}
+              onOpenStep={(step) => {
+                const stem = voiceStemFromSelection;
+                if (!stem || !onOpenSoundFocus) return;
+                onOpenSoundFocus({
+                  tab: voiceChainTabForStep(step),
+                  voiceStem: stem,
+                  filePath: step === "vot" && voiceChain?.votPackExists ? voiceChain.votPackPath : undefined,
+                });
+              }}
+              onOpenFile={openChainFile}
+            />
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">{t("rawPath.voice")}</Label>
+              <Label className="text-xs text-muted-foreground">
+                {voiceStemFromSelection ? t("rawPath.voice") : t("rawPath.streamKey")}
+              </Label>
               <Input
-                value={displayVoiceStem(selected.key)}
-                onChange={(event) =>
+                value={voiceStemFromSelection ?? selected.key}
+                onChange={(event) => {
+                  const next = event.target.value;
                   void updateSelected({
-                    key: `STREAMPATH_ST_${event.target.value.replace(/^STREAMPATH_ST_/i, "")}`,
-                  })
-                }
+                    key: voiceStemFromSelection
+                      ? `STREAMPATH_ST_${next.replace(/^STREAMPATH_ST_/i, "")}`
+                      : next,
+                  });
+                }}
                 className="h-8 font-mono text-xs"
                 disabled={!loadState.writable}
               />

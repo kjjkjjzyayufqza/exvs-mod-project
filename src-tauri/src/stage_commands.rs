@@ -19,7 +19,9 @@ use crate::fhm2d_memory_preview::Fhm2dMemorySessionState;
 use crate::format::effect_folder;
 use crate::format::exvs_common;
 use crate::format::fhm2d::{extract_fhm2d_to_memory_impl, InMemoryFhm2dExtraction};
+use crate::format::border_hit::{parse_border_hit, BorderHitFile};
 use crate::format::fhm2d_stage;
+use crate::format::plan_param::{parse_plan_param, write_plan_param, PlanParam};
 use crate::format::fhm2d_stage_object_order;
 use crate::format::fhm2d_stage_validate;
 use crate::format::unit_model_extract;
@@ -1750,6 +1752,49 @@ pub async fn preview_unit_model_model_replacement(
     .await
     .map_err(|e| format!("Task join error: {e}"))??;
     Ok(result)
+}
+
+fn stage_info_file(stage_root: &str, file_name: &str) -> Result<Option<std::path::PathBuf>, String> {
+    let root = std::path::PathBuf::from(stage_root);
+    let Some(info) = fhm2d_stage::find_info_dir(&root) else {
+        return Ok(None);
+    };
+    let path = info.join(file_name);
+    if path.is_file() {
+        Ok(Some(path))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Read `info/plan_param.spbin` from an opened stage content root (`…/0/0`).
+/// Missing file is `Ok(None)`. An empty or malformed file is an error.
+#[tauri::command]
+pub fn read_stage_plan_param(stage_root: String) -> Result<Option<PlanParam>, String> {
+    let Some(path) = stage_info_file(&stage_root, "plan_param.spbin")? else {
+        return Ok(None);
+    };
+    let bytes = std::fs::read(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+    if bytes.is_empty() {
+        return Err(format!("{} is empty", path.display()));
+    }
+    parse_plan_param(&bytes).map(Some)
+}
+
+/// Encode a spawn plan. The bytes match a parsed file when no field changed.
+#[tauri::command]
+pub fn encode_plan_param(plan: PlanParam) -> Vec<u8> {
+    write_plan_param(&plan)
+}
+
+/// Read `info/border_hit.hkt` container facts. Missing file is `Ok(None)`.
+#[tauri::command]
+pub fn read_stage_border_hit(stage_root: String) -> Result<Option<BorderHitFile>, String> {
+    let Some(path) = stage_info_file(&stage_root, "border_hit.hkt")? else {
+        return Ok(None);
+    };
+    let bytes = std::fs::read(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+    parse_border_hit(&bytes).map(Some)
 }
 
 #[tauri::command]

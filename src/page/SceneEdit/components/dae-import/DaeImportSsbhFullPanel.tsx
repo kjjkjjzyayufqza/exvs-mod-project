@@ -39,6 +39,8 @@ interface DaeImportSsbhFullPanelProps {
   unitModelMode?: boolean;
   replaceNumshbMode?: boolean;
   replaceFullMode?: boolean;
+  /** When set, the output model name is the slot being replaced and cannot be edited. */
+  lockedOutputBaseName?: string | null;
 }
 
 export function DaeImportSsbhFullPanel({
@@ -53,6 +55,7 @@ export function DaeImportSsbhFullPanel({
   unitModelMode = false,
   replaceNumshbMode = false,
   replaceFullMode = false,
+  lockedOutputBaseName = null,
 }: DaeImportSsbhFullPanelProps) {
   const { t } = useTranslation("scene-dae-full");
   const setSourcePath = useDaeSsbhSessionStore((state) => state.setSourcePath);
@@ -80,6 +83,16 @@ export function DaeImportSsbhFullPanel({
       state.setFlipUv(true);
     }
   }, [sourcePath, unitModelMode, replaceNumshbMode]);
+
+  const lockedName = lockedOutputBaseName?.trim() || null;
+
+  useEffect(() => {
+    if (!lockedName) return;
+    const state = useDaeSsbhSessionStore.getState();
+    if (state.outputBaseName !== lockedName) {
+      state.setOutputBaseName(lockedName);
+    }
+  }, [lockedName]);
 
   useEffect(() => {
     if (!analysis?.canConvert) {
@@ -197,12 +210,23 @@ export function DaeImportSsbhFullPanel({
             </p>
           ) : (
             <div className="space-y-1 md:col-span-2">
-              <Label className="text-[11px] text-muted-foreground">{t("output.modelFolderName")}</Label>
+              <Label htmlFor="dae-import-output-base-name" className="text-[11px] text-muted-foreground">
+                {t("output.modelFolderName")}
+              </Label>
               <Input
-                value={session.outputBaseName}
-                onChange={(e) => session.setOutputBaseName(e.target.value)}
-                className="h-8 text-[11px]"
+                id="dae-import-output-base-name"
+                value={lockedName ?? session.outputBaseName}
+                readOnly={Boolean(lockedName)}
+                onChange={(e) => {
+                  if (lockedName) return;
+                  session.setOutputBaseName(e.target.value);
+                }}
+                className={`h-8 font-mono text-[11px]${lockedName ? " bg-muted text-foreground" : ""}`}
+                aria-readonly={lockedName ? true : undefined}
               />
+              {lockedName ? (
+                <p className="text-[10px] text-muted-foreground">{t("output.lockedModelName")}</p>
+              ) : null}
             </div>
           )}
           <div className="grid grid-cols-2 gap-2">
