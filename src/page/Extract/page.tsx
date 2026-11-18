@@ -185,6 +185,8 @@ export default function SingleFhm2dPage() {
 
   // --- Repack state ---
   const [repackFolderPath, setRepackFolderPath] = useState("");
+  // Bumped to rediscover the structure JSON when the folder string is unchanged but its parent is not.
+  const [repackDiscoveryNonce, setRepackDiscoveryNonce] = useState(0);
   const [repackDiscovery, setRepackDiscovery] = useState<StructureJsonDiscovery | null>(null);
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [isRepacking, setIsRepacking] = useState(false);
@@ -318,7 +320,7 @@ export default function SingleFhm2dPage() {
     return () => {
       cancelled = true;
     };
-  }, [repackFolderPath]);
+  }, [repackFolderPath, repackDiscoveryNonce]);
 
   const handleExtract = async () => {
     if (isExtracting) return;
@@ -349,6 +351,7 @@ export default function SingleFhm2dPage() {
           duration: 20_000,
         });
       } else {
+        setRepackDiscoveryNonce((nonce) => nonce + 1);
         toast.success(t("unpackDone"), {
           description: t("toasts.unpackPaths", {
             folder: targetOutDir,
@@ -611,6 +614,7 @@ export default function SingleFhm2dPage() {
                       value={repackFolderPath}
                       onChange={(e) => setRepackFolderPath(e.target.value)}
                       storeKey="repackInputPath"
+                      onPickedValue={() => setRepackDiscoveryNonce((nonce) => nonce + 1)}
                       placeholder={t("selectExtracted")}
                       picker={{ kind: "folder", multiple: false }}
                     />
