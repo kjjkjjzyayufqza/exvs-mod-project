@@ -1,3 +1,4 @@
+import { formatCaughtError } from "@/utils/formatCaughtError";
 import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { join } from "@tauri-apps/api/path";
@@ -226,7 +227,7 @@ export function CardIconBatchReplaceDialog({
     } catch (error) {
       setReplaceProgress(null);
       console.error(error);
-      const message = error instanceof Error ? error.message : t("cardIcon.replaceFormatFailed");
+      const message = formatCaughtError(error, t("cardIcon.replaceFormatFailed"));
       toast.error(message);
     } finally {
       setIsReplacing(false);

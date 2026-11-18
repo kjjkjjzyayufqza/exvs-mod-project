@@ -1,3 +1,4 @@
+import { formatCaughtError } from "@/utils/formatCaughtError";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import { exists, readTextFile } from "@tauri-apps/plugin-fs";
@@ -592,7 +593,7 @@ function UnitModelEditWorkspace({
           "directory",
         );
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : t("errors.export"));
+        toast.error(formatCaughtError(err, t("errors.export")));
       } finally {
         toast.dismiss("unit-model-export");
       }

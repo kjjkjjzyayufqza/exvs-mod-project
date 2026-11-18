@@ -12,6 +12,11 @@ describe("formatCaughtError", () => {
     );
   });
 
+  it("uses the given fallback when there is no text", () => {
+    expect(formatCaughtError("  ", "Failed to save")).toBe("Failed to save");
+    expect(formatCaughtError({}, "Failed to save")).toBe("Failed to save");
+  });
+
   it("JSON-stringifies structured Tauri payloads", () => {
     expect(formatCaughtError({ message: "Access denied", path: "E:/x" })).toBe(
       '{"message":"Access denied","path":"E:/x"}',

@@ -1,3 +1,4 @@
+import { formatCaughtError } from "@/utils/formatCaughtError";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { basename, join } from "@tauri-apps/api/path";
@@ -277,7 +278,7 @@ export function CardIconAddDialog({
       await onAdded();
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : t("cardIcon.createFailed");
+      const message = formatCaughtError(error, t("cardIcon.createFailed"));
       toast.error(message);
     } finally {
       setIsCreating(false);
@@ -461,7 +462,7 @@ export function CardIconAddDialog({
           );
         } catch (error) {
           console.error(error);
-          const message = error instanceof Error ? error.message : t("cardIcon.createFailed");
+          const message = formatCaughtError(error, t("cardIcon.createFailed"));
           setBatchItems((prev) => prev.map((e) => (e.id === it.id ? { ...e, status: "error", progress: 100, message } : e)));
         }
       }
@@ -479,7 +480,7 @@ export function CardIconAddDialog({
       }
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : t("cardIcon.batchFailed");
+      const message = formatCaughtError(error, t("cardIcon.batchFailed"));
       toast.error(message);
     } finally {
       setIsBatchRunning(false);

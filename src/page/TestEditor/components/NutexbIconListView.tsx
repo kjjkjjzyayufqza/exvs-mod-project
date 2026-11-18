@@ -1,3 +1,4 @@
+import { formatCaughtError } from "@/utils/formatCaughtError";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { exists, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { dirname, join } from "@tauri-apps/api/path";
@@ -205,7 +206,7 @@ export function NutexbIconListView({
       onUnsavedChanges?.(false);
     } catch (error) {
       console.error(error);
-      setLoadState({ status: "error", filePath, message: error instanceof Error ? error.message : t("common.unknownError") });
+      setLoadState({ status: "error", filePath, message: formatCaughtError(error, t("common.unknownError")) });
     }
   }, [contentId, folderPath, getItemStableKey, loadState, onUnsavedChanges, resolveContentPack, selectedIndex, title]);
 
@@ -276,7 +277,7 @@ export function NutexbIconListView({
       setSecondaryLoadState({
         status: "error",
         filePath,
-        message: error instanceof Error ? error.message : t("common.unknownError"),
+        message: formatCaughtError(error, t("common.unknownError")),
       });
     }
   }, [
@@ -457,7 +458,7 @@ export function NutexbIconListView({
       await load();
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : t("common.unknownError");
+      const message = formatCaughtError(error, t("common.unknownError"));
       toast.error(t("nutexb.removeFailed", { message }));
     } finally {
       setIsUpdating(false);
@@ -486,7 +487,7 @@ export function NutexbIconListView({
       await loadSecondary();
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : t("common.unknownError");
+      const message = formatCaughtError(error, t("common.unknownError"));
       toast.error(t("nutexb.removeFailed", { message }));
     } finally {
       setIsUpdating(false);
@@ -571,7 +572,7 @@ export function NutexbIconListView({
       await openPath(normalizedPath);
     } catch (error) {
       console.error("Error opening path:", error);
-      const message = error instanceof Error ? error.message : t("common.unknownError");
+      const message = formatCaughtError(error, t("common.unknownError"));
       toast.error(message ? t("common.openFailedWithMessage", { message }) : t("common.openFailed"));
     }
   }, []);

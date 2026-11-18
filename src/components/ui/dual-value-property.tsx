@@ -1,3 +1,4 @@
+import { formatCaughtError } from "@/utils/formatCaughtError";
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { Button } from "@/components/ui/button";
@@ -236,7 +237,7 @@ export function DualValueProperty({
                   try {
                     commit(isFloat ? hexDisplayToFloat32(validation.formatted) : hexDisplayToInt32(validation.formatted));
                   } catch (error) {
-                    setLiveValidationError(error instanceof Error ? error.message : t("invalidHex"));
+                    setLiveValidationError(formatCaughtError(error, t("invalidHex")));
                   }
                 }}
                 placeholder={t("hexPlaceholder")}

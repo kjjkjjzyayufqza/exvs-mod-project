@@ -1,3 +1,4 @@
+import { formatCaughtError } from "@/utils/formatCaughtError";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { exists, readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { dirname, join } from "@tauri-apps/api/path";
@@ -222,7 +223,7 @@ export default function CharacterCostView({
           resetEditorForTab(tab);
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : t("unknownError");
+        const message = formatCaughtError(error, t("unknownError"));
         setPanelState((prev) => ({ ...prev, [tab]: { status: "error", filePath, message } }));
         setNewRowIndicesByTab((prev) => ({ ...prev, [tab]: new Set() }));
         resetEditorForTab(tab);
@@ -491,7 +492,7 @@ export default function CharacterCostView({
       toast.success(t("exportedRows", { count: result.count }));
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : t("unknownError");
+      const message = formatCaughtError(error, t("unknownError"));
       toast.error(t("exportFailed", { message }));
     } finally {
       setIsExporting(false);
@@ -517,7 +518,7 @@ export default function CharacterCostView({
       setIsImportDialogOpen(true);
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : t("unknownError");
+      const message = formatCaughtError(error, t("unknownError"));
       toast.error(t("importFailed", { message }));
     } finally {
       setIsImporting(false);

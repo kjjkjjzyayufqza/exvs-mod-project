@@ -1,3 +1,4 @@
+import { formatCaughtError } from "@/utils/formatCaughtError";
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useCallback, useMemo, useRef, useState, useTransition } from "react"
 import { createPortal } from "react-dom"
@@ -237,7 +238,7 @@ export function GvsMapToVs2Tool() {
     setIsStep21DialogOpen(true)
     void runGraphicParamScan().catch((error) => {
       setIsScanningGraphicParam(false)
-      toast.error(error instanceof Error ? error.message : t("gvs.errors.scanFailed"))
+      toast.error(formatCaughtError(error, t("gvs.errors.scanFailed")))
     })
   }
 
@@ -280,7 +281,7 @@ export function GvsMapToVs2Tool() {
       } catch (error) {
         failedItems.push({
           path: sourcePath,
-          reason: error instanceof Error ? error.message : t("common.unknownError"),
+          reason: formatCaughtError(error, t("common.unknownError")),
         })
       }
     }
@@ -429,7 +430,7 @@ export function GvsMapToVs2Tool() {
     } catch (error) {
       console.error(`Failed to load detail: ${jsonPath}`, error)
       toast.error(t("gvs.errors.loadDetail", {
-        message: error instanceof Error ? error.message : t("common.unknownError"),
+        message: formatCaughtError(error, t("common.unknownError")),
       }))
     } finally {
       setIsLoadingDetail(false)
@@ -539,7 +540,7 @@ export function GvsMapToVs2Tool() {
           )
         )
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : t("common.unknownError")
+        const errorMessage = formatCaughtError(error, t("common.unknownError"))
         failCount += 1
         setRecords((prev) =>
           prev.map((item) =>
@@ -661,7 +662,7 @@ export function GvsMapToVs2Tool() {
           )
         )
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : t("common.unknownError")
+        const errorMessage = formatCaughtError(error, t("common.unknownError"))
         failCount += 1
         setRecords((prev) =>
           prev.map((item) =>
@@ -777,7 +778,7 @@ export function GvsMapToVs2Tool() {
           )
         )
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : t("common.unknownError")
+        const errorMessage = formatCaughtError(error, t("common.unknownError"))
         failCount += 1
         setRecords((prev) =>
           prev.map((item) =>
@@ -816,7 +817,7 @@ export function GvsMapToVs2Tool() {
 
   const handleStep2FixNumatbFiles = () => {
     void runStep2FixNumatbFiles().catch((error) => {
-      toast.error(error instanceof Error ? error.message : t("gvs.errors.step2Failed"))
+      toast.error(formatCaughtError(error, t("gvs.errors.step2Failed")))
     })
   }
 
@@ -1107,7 +1108,7 @@ export function GvsMapToVs2Tool() {
 
   const handleStep3PackToObModPath = () => {
     void runStep3PackToObModPath().catch((error) => {
-      toast.error(error instanceof Error ? error.message : t("gvs.errors.step3Failed"))
+      toast.error(formatCaughtError(error, t("gvs.errors.step3Failed")))
     })
   }
 
@@ -1209,7 +1210,7 @@ export function GvsMapToVs2Tool() {
           )
         )
       } catch (error) {
-        const packErrorMessage = error instanceof Error ? error.message : t("common.unknownError")
+        const packErrorMessage = formatCaughtError(error, t("common.unknownError"))
         packFailedCount += 1
         setRecords((prev) =>
           prev.map((item) =>

@@ -1,3 +1,4 @@
+import { formatCaughtError } from "@/utils/formatCaughtError";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { exists, readFile, readTextFile, writeFile } from "@tauri-apps/plugin-fs";
@@ -284,7 +285,7 @@ export default function StageListView({
     } catch (error) {
       setStageIconState({
         status: "error",
-        message: error instanceof Error ? error.message : t("errors.unknown"),
+        message: formatCaughtError(error, t("errors.unknown")),
       });
     }
   }, [folderPath, resolveContentPackPaths, t]);
@@ -369,7 +370,7 @@ export default function StageListView({
       setLoadState({
         status: "error",
         filePath,
-        message: error instanceof Error ? error.message : t("errors.unknown"),
+        message: formatCaughtError(error, t("errors.unknown")),
       });
       resetEditorState();
     }
@@ -551,7 +552,7 @@ export default function StageListView({
       toast.success(t("toast.loadedGvs"));
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : t("errors.unknown");
+      const message = formatCaughtError(error, t("errors.unknown"));
       toast.error(t("errors.loadGvsFailed", { message }));
     } finally {
       setIsApplyingGvs(false);
@@ -565,7 +566,7 @@ export default function StageListView({
         toast.success(t("toast.reloadedGvs"));
       } catch (error) {
         console.error(error);
-        const message = error instanceof Error ? error.message : t("errors.unknown");
+        const message = formatCaughtError(error, t("errors.unknown"));
         toast.error(t("errors.reloadGvsFailed", { message }));
       }
       return;
@@ -624,7 +625,7 @@ export default function StageListView({
       );
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : t("errors.unknown");
+      const message = formatCaughtError(error, t("errors.unknown"));
       toast.error(t("errors.collectBinsFailed", { message }));
       setGvsAssetBinEntries([]);
       setGvsAssetBinPaths([]);
@@ -680,7 +681,7 @@ export default function StageListView({
       }
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : t("errors.unknown");
+      const message = formatCaughtError(error, t("errors.unknown"));
       toast.error(t("errors.extractAssetsFailed", { message }));
     } finally {
       setIsExtractingGvsAssets(false);
@@ -698,7 +699,7 @@ export default function StageListView({
       toast.success(t("toast.exportedStages", { count: result.count }));
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : t("errors.unknown");
+      const message = formatCaughtError(error, t("errors.unknown"));
       toast.error(t("errors.exportFailed", { message }));
     } finally {
       setIsExporting(false);
@@ -727,7 +728,7 @@ export default function StageListView({
       setIsImportDialogOpen(true);
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : t("errors.unknown");
+      const message = formatCaughtError(error, t("errors.unknown"));
       toast.error(t("errors.importFailed", { message }));
     } finally {
       setIsImporting(false);
@@ -758,7 +759,7 @@ export default function StageListView({
       toast.success(t("toast.importedStages", { count: importPreview.validCount }));
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : t("errors.unknown");
+      const message = formatCaughtError(error, t("errors.unknown"));
       toast.error(t("errors.applyImportFailed", { message }));
     } finally {
       setIsImporting(false);

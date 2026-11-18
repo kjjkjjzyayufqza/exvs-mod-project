@@ -1,3 +1,4 @@
+import { formatCaughtError } from "@/utils/formatCaughtError";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { exists, readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { dirname } from "@tauri-apps/api/path";
@@ -280,7 +281,7 @@ export default function NaviListView({
       onUnsavedChanges?.(false);
       setLoadState((prev) => (prev.status === "ready" ? { ...prev, list: sortedList } : prev));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("navi.saveFailed"));
+      toast.error(formatCaughtError(error, t("navi.saveFailed")));
     }
   }, [loadState, onPackMutated, onUnsavedChanges, resolveContent]);
 

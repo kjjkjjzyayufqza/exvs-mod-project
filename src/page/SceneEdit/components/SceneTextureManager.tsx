@@ -1,3 +1,4 @@
+import { formatCaughtError } from "@/utils/formatCaughtError";
 import {
   useSceneTextureManagerStore,
   type TextureManagerEntry,
@@ -411,7 +412,7 @@ export function SceneTextureManager({
           bumpThumbnailCache();
           toast.success(t("success.cacheRegenerated", { filename: entry.filename }));
         } catch (error) {
-          const message = error instanceof Error ? error.message : t("errors.cacheRegenerateFailed");
+          const message = formatCaughtError(error, t("errors.cacheRegenerateFailed"));
           toast.error(message);
         }
       })();
@@ -466,7 +467,7 @@ export function SceneTextureManager({
     } catch (error) {
       console.error(error);
       const message =
-        error instanceof Error ? error.message : t("errors.exportFailed");
+        formatCaughtError(error, t("errors.exportFailed"));
       toast.error(message);
     } finally {
       setIsExporting(false);

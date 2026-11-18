@@ -1,3 +1,4 @@
+import { formatCaughtError } from "@/utils/formatCaughtError";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { dirname } from "@tauri-apps/api/path";
@@ -211,7 +212,7 @@ export function SeriesImageReplaceDialog({
       setOpen(false);
     } catch (e) {
       console.error(e);
-      toast.error(e instanceof Error ? e.message : t("series.imageDialog.replaceFailed"));
+      toast.error(formatCaughtError(e, t("series.imageDialog.replaceFailed")));
     } finally {
       setIsReplacing(false);
     }
@@ -282,7 +283,7 @@ export function SeriesImageReplaceDialog({
       setOpen(false);
     } catch (e) {
       console.error(e);
-      toast.error(e instanceof Error ? e.message : t("series.imageDialog.createFailed"));
+      toast.error(formatCaughtError(e, t("series.imageDialog.createFailed")));
     } finally {
       setIsAppending(false);
     }

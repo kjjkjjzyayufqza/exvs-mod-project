@@ -1,3 +1,4 @@
+import { formatCaughtError } from "@/utils/formatCaughtError";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { exists, readFile, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
@@ -263,7 +264,7 @@ export default function CharacterListView({
       resetEditorState();
     } catch (error) {
       console.error(error);
-      setLoadState({ status: "error", filePath, message: error instanceof Error ? error.message : t("errors.unknown") });
+      setLoadState({ status: "error", filePath, message: formatCaughtError(error, t("errors.unknown")) });
       resetEditorState();
     }
   }, [folderPath, resetEditorState, resolveContentFilePath]);
@@ -301,7 +302,7 @@ export default function CharacterListView({
     } catch (error) {
       setBgmPickerState({
         status: "error",
-        message: error instanceof Error ? error.message : t("errors.bgmNotUnpacked"),
+        message: formatCaughtError(error, t("errors.bgmNotUnpacked")),
       });
     }
   }, [folderPath, resolveContentPackPaths]);

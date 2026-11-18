@@ -1,3 +1,4 @@
+import { formatCaughtError } from "@/utils/formatCaughtError";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { exists, readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { dirname } from "@tauri-apps/api/path";
@@ -407,7 +408,7 @@ export default function StrikerTableView({
       if (!result) return;
       toast.success(t("success.exported", { count: result.count }));
     } catch (error) {
-      const message = error instanceof Error ? error.message : t("errors.unknown");
+      const message = formatCaughtError(error, t("errors.unknown"));
       toast.error(t("errors.exportFailed", { message }));
     } finally {
       setIsExporting(false);
@@ -432,7 +433,7 @@ export default function StrikerTableView({
       setImportPreview(preview);
       setIsImportDialogOpen(true);
     } catch (error) {
-      const message = error instanceof Error ? error.message : t("errors.unknown");
+      const message = formatCaughtError(error, t("errors.unknown"));
       toast.error(t("errors.importFailed", { message }));
     } finally {
       setIsImporting(false);

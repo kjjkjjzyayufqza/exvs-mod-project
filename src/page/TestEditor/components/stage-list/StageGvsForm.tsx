@@ -1,3 +1,4 @@
+import { formatCaughtError } from "@/utils/formatCaughtError";
 import { useEffect, useState } from "react";
 
 import { Input } from "@/components/ui/input";
@@ -90,7 +91,7 @@ export function StageGvsForm({ stage, index, searchDir = "" }: StageGvsFormProps
       } catch (error) {
         if (cancelled) return;
         setResolvedRefs({});
-        setResolvedRefsError(error instanceof Error ? error.message : t("gvsForm.resolveFailed"));
+        setResolvedRefsError(formatCaughtError(error, t("gvsForm.resolveFailed")));
       } finally {
         if (!cancelled) {
           setResolvedRefsLoading(false);

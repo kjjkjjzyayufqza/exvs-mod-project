@@ -1,3 +1,4 @@
+import { formatCaughtError } from "@/utils/formatCaughtError";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { join } from "@tauri-apps/api/path";
@@ -100,7 +101,7 @@ export function CardIconReplaceDialog({
       } catch (error) {
         console.error(error);
         const message =
-          error instanceof Error ? error.message : t("cardIcon.detectFormatFailed");
+          formatCaughtError(error, t("cardIcon.detectFormatFailed"));
         toast.error(message);
       } finally {
         setIsDetectingFormat(false);
@@ -155,7 +156,7 @@ export function CardIconReplaceDialog({
       await onApplied();
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : t("cardIcon.replaceFailed");
+      const message = formatCaughtError(error, t("cardIcon.replaceFailed"));
       toast.error(message);
     } finally {
       setIsReplacing(false);

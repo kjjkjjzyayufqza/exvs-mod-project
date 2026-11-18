@@ -1,3 +1,4 @@
+import { formatCaughtError } from "@/utils/formatCaughtError";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { AppRndModalShell } from "@/components/AppRndModalShell";
@@ -460,7 +461,7 @@ export function NumatbEditor({ onClose }: NumatbEditorProps) {
         } catch (error) {
             console.error("Error selecting file:", error);
             toast.error(t("numatb.loadFailed", {
-                message: error instanceof Error ? error.message : t("common.unknownError"),
+                message: formatCaughtError(error, t("common.unknownError")),
             }));
         }
     };
