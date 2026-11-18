@@ -98,7 +98,7 @@ describe("LegacyWorkspaceMoveNotice", () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Move to New" }));
+    await userEvent.click(screen.getByRole("button", { name: "Move to new" }));
 
     expect(resolveWorkspaceContentMock).toHaveBeenCalledWith(
       "E:/workspace",
@@ -150,7 +150,7 @@ describe("LegacyWorkspaceMoveNotice", () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Move to New" }));
+    await userEvent.click(screen.getByRole("button", { name: "Move to new" }));
 
     await waitFor(() =>
       expect(toastErrorMock).toHaveBeenCalledWith(
