@@ -146,7 +146,7 @@ describe("Scene CSV editor panels", () => {
       </TooltipProvider>,
     );
 
-    fireEvent.click(screen.getByLabelText("Add Post Process parameter"));
+    fireEvent.click(screen.getByLabelText("Add Post-process parameter"));
     fireEvent.click(screen.getByRole("button", { name: "RGB set" }));
 
     expect(screen.getByText("fog_custom_color_r")).toBeInTheDocument();

@@ -44,7 +44,7 @@ describe("DaeImportAnalysisPanel", () => {
         analyzeError={null}
       />,
     );
-    expect(screen.getByText("Analyzing DAE...")).toBeInTheDocument();
+    expect(screen.getByText("Analyzing static mesh...")).toBeInTheDocument();
   });
 
   it("renders error when analyzeError is set", () => {
