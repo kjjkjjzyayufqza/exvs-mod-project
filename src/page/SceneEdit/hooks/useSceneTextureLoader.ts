@@ -49,6 +49,34 @@ interface SceneNutexbPngCacheEntry {
 const MEMORY_DECODE_CONCURRENCY = 8;
 const DISK_CACHE_CHUNK = 8;
 
+/**
+ * Texture path keys of in-memory bundles. Their relative paths are virtual paths inside the import
+ * session (`0x179EC42D.fhm2d/9.nutexb`) and decode through the session; absolute paths stay on disk.
+ */
+function collectMemoryTexturePathKeys(
+  baseModel: SsbhModelPreviewBundle | null,
+  subModels: Array<{ folderName: string; objectIndex: number; bundle: SsbhModelPreviewBundle }>,
+  importedSsbhBundles: SsbhModelPreviewBundle[],
+  textureSlotLoadEnabled: Record<TexturePreviewSlotKey, boolean>,
+): Set<string> {
+  const memoryBundles = [baseModel, ...subModels.map((sub) => sub.bundle), ...importedSsbhBundles].filter(
+    (bundle): bundle is SsbhModelPreviewBundle => bundle?.sourceKind === "memory",
+  );
+  if (memoryBundles.length === 0) return new Set();
+  const [first, ...rest] = memoryBundles;
+  return new Set(
+    collectUniqueTexturePathsForSceneBundles(
+      first,
+      rest.map((bundle) => ({ bundle })),
+      textureSlotLoadEnabled,
+    ).map(normalizeTexturePathKey),
+  );
+}
+
+function isAbsoluteDiskPath(path: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(path) || path.startsWith("/") || path.startsWith("\\\\");
+}
+
 function collectUniqueNutexbPaths(
   baseModel: SsbhModelPreviewBundle | null,
   subModels: Array<{ folderName: string; objectIndex: number; bundle: SsbhModelPreviewBundle }>,
@@ -230,9 +258,17 @@ export function useSceneTextureLoader(
       return;
     }
 
-    const decodablePaths = uniquePaths.filter(
-      (path) => !(path.startsWith("memory://") && !sessionId),
+    const memoryPathKeys = collectMemoryTexturePathKeys(
+      baseModel,
+      subModels,
+      importedSsbhBundles,
+      textureSlotLoadEnabled,
     );
+    const isMemoryPath = (path: string) =>
+      path.startsWith("memory://") ||
+      (memoryPathKeys.has(normalizeTexturePathKey(path)) && !isAbsoluteDiskPath(path));
+
+    const decodablePaths = uniquePaths.filter((path) => !(isMemoryPath(path) && !sessionId));
     if (decodablePaths.length === 0) {
       return;
     }
@@ -247,8 +283,8 @@ export function useSceneTextureLoader(
 
     cancelledRef.current = false;
     const currentRunId = ++runIdRef.current;
-    const diskPaths = missing.filter((path) => !path.startsWith("memory://"));
-    const memoryPaths = missing.filter((path) => path.startsWith("memory://"));
+    const diskPaths = missing.filter((path) => !isMemoryPath(path));
+    const memoryPaths = missing.filter(isMemoryPath);
 
     (async () => {
       const nextMap = new Map(currentMap);

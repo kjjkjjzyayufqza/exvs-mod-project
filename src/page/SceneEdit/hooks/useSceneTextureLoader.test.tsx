@@ -164,6 +164,45 @@ describe("useSceneTextureLoader", () => {
     expect(mocks.getMemoryNutexbPreviewIdentity).not.toHaveBeenCalled();
   });
 
+  it("decodes relative virtual paths of an imported .fhm2d stage through the memory session", async () => {
+    const virtualPath = "0x179EC42D.fhm2d/9.nutexb";
+    const stageBundle = makeImportedMemoryBundle(virtualPath);
+    const baseInvoke = mocks.invoke.getMockImplementation();
+    mocks.invoke.mockImplementation((command: string, args?: { paths?: string[] }) =>
+      command === "fhm2d_memory_nutexb_rgba_bytes"
+        ? Promise.resolve(new Uint8Array([255, 255, 255, 255]))
+        : baseInvoke?.(command, args),
+    );
+    mocks.getMemoryNutexbPreviewIdentity.mockResolvedValue({ nutexbSize: 64, crc32: 1 });
+    const subModels: Parameters<typeof useSceneTextureLoader>[1] = [];
+    const importedBundles: SsbhModelPreviewBundle[] = [];
+    const placementEntries: Parameters<typeof useSceneTextureLoader>[3] = [];
+    const objectTextureLoadState = {};
+
+    const { result } = renderHook(() =>
+      useSceneTextureLoader(
+        stageBundle,
+        subModels,
+        importedBundles,
+        placementEntries,
+        "scene-session",
+        textureSlotLoadEnabled,
+        objectTextureLoadState,
+        true,
+      ),
+    );
+
+    await waitFor(() => {
+      expect(result.current.textureDataMap.get(virtualPath)?.kind).toBe("rgba");
+    });
+    expect(mocks.invoke).toHaveBeenCalledWith("fhm2d_memory_nutexb_rgba_bytes", {
+      sessionId: "scene-session",
+      virtualPath,
+    });
+    expect(mocks.invoke).not.toHaveBeenCalledWith("ensure_scene_nutexb_png_cache", expect.anything());
+    expect(result.current.warnings).toEqual([]);
+  });
+
   it("still decodes disk sky textures when an import adds a memory path and no session is open", async () => {
     const skyPath = "D:/stage/textures/sky_alb.nutexb";
     const memoryPath = "memory://scene-session/prop/prop_alb.nutexb";
