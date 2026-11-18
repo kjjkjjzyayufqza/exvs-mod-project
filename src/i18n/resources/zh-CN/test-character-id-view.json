@@ -86,5 +86,14 @@
   "noScanResult": "尚无扫描结果。运行“提取全部 MSC”以分类每个唯一 MSC。",
   "mscOutputNotConfigured": "未配置 MSC 输出目录",
   "obDplcacheNotConfigured": "未配置 OB dplcache 源目录",
-  "noNonZeroMsc": "没有非零 MSC 行"
+  "noNonZeroMsc": "没有非零 MSC 行",
+  "loadedRows": "已加载：{{count}} 行",
+  "reload": "重新加载",
+  "importJson": "导入 JSON",
+  "exportJson": "导出 JSON",
+  "debug": "调试",
+  "saveFile": "保存文件",
+  "rowsHeading": "行（{{count}}）",
+  "add": "添加",
+  "selectRowToEdit": "选择一行进行编辑"
 }

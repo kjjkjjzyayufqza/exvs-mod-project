@@ -25,6 +25,7 @@
     "selectAll": "Select All ({{count}})",
     "extractItems": "Extract {{count}} items",
     "copyPath": "Copy Path",
+    "openFolder": "Open Folder",
     "again": "Again",
     "extract": "Extract",
     "close": "Close",

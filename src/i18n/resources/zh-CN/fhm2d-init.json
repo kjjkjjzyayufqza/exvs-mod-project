@@ -25,6 +25,7 @@
     "selectAll": "全选（{{count}}）",
     "extractItems": "提取 {{count}} 项",
     "copyPath": "复制路径",
+    "openFolder": "打开文件夹",
     "again": "再次提取",
     "extract": "提取",
     "close": "关闭",

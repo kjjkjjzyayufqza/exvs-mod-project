@@ -1263,7 +1263,7 @@ export default function CharacterIdTableView({
                         <div className="flex items-center gap-2 flex-wrap">
                             <Button size="sm" onClick={() => void load()} className="inline-flex items-center gap-2">
                                 <RefreshCw className="w-4 h-4" />
-                                Reload
+                                {t("reload")}
                             </Button>
                             <CatalogPackToolbarButtons
                                 contentId="character-id-table"
@@ -1308,7 +1308,7 @@ export default function CharacterIdTableView({
                                 </button>
                             </div>
                             <div className="text-xs text-muted-foreground mt-1">
-                                Loaded: {loadState.table.CharacterCount} rows
+                                {t("loadedRows", { count: loadState.table.CharacterCount })}
                             </div>
                             <LegacyWorkspaceMoveNotice
                                 workspaceRoot={folderPath}
@@ -1325,7 +1325,7 @@ export default function CharacterIdTableView({
                         <div className="workspace-pane-actions">
                             <Button size="sm" variant="outline" onClick={() => void load()} className="inline-flex items-center gap-2">
                                 <RefreshCw className="w-4 h-4" />
-                                Reload
+                                {t("reload")}
                             </Button>
                             <CatalogPackToolbarButtons
                                 contentId="character-id-table"
@@ -1344,7 +1344,7 @@ export default function CharacterIdTableView({
                                 title={t("importTableTooltip")}
                             >
                                 <Upload className="w-4 h-4" />
-                                Import JSON
+                                {t("importJson")}
                             </Button>
                             <Button
                                 size="sm"
@@ -1355,7 +1355,7 @@ export default function CharacterIdTableView({
                                 title={t("exportTableTooltip")}
                             >
                                 <Download className="w-4 h-4" />
-                                Export JSON
+                                {t("exportJson")}
                             </Button>
                             <Button
                                 size="sm"
@@ -1366,11 +1366,11 @@ export default function CharacterIdTableView({
                                 title={t("openDebugTooltip")}
                             >
                                 <Bug className="w-4 h-4" />
-                                Debug
+                                {t("debug")}
                             </Button>
                             <Button size="sm" onClick={() => void handleSaveFile()} disabled={!loadState.writable || !hasChanges} className="inline-flex items-center gap-2">
                                 <Save className="w-4 h-4" />
-                                Save File
+                                {t("saveFile")}
                             </Button>
                         </div>
                     </div>
@@ -1380,10 +1380,10 @@ export default function CharacterIdTableView({
                     <div className="workspace-split">
                         <div className="workspace-split-list border rounded-lg p-3">
                             <div className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-2">
-                                <div className="font-semibold text-sm">Rows ({tableData.length})</div>
+                                <div className="font-semibold text-sm">{t("rowsHeading", { count: tableData.length })}</div>
                                 <Button size="sm" onClick={handleAdd} disabled={!loadState.writable} className="inline-flex items-center gap-2">
                                     <Plus className="w-4 h-4" />
-                                    Add
+                                    {t("add")}
                                 </Button>
                             </div>
 
@@ -1714,7 +1714,7 @@ export default function CharacterIdTableView({
                                 </>
                             ) : (
                                 <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-                                    Select a row to edit
+                                    {t("selectRowToEdit")}
                                 </div>
                             )}
                         </div>

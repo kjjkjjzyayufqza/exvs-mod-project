@@ -86,5 +86,14 @@
   "noScanResult": "No scan result yet. Run Extract All MSC to classify every unique MSC as extracted, no source file, extract error, or naming warning.",
   "mscOutputNotConfigured": "MSC output is not configured",
   "obDplcacheNotConfigured": "OB dplcache source is not configured",
-  "noNonZeroMsc": "No non-zero MSC rows"
+  "noNonZeroMsc": "No non-zero MSC rows",
+  "loadedRows": "Loaded: {{count}} rows",
+  "reload": "Reload",
+  "importJson": "Import JSON",
+  "exportJson": "Export JSON",
+  "debug": "Debug",
+  "saveFile": "Save File",
+  "rowsHeading": "Rows ({{count}})",
+  "add": "Add",
+  "selectRowToEdit": "Select a row to edit"
 }
