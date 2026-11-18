@@ -44,6 +44,9 @@ describe("fhm2dFolderPathResolution", () => {
     expect(inferFhm2dStructurePathFromFolder("E:/workspace/006effect/0xBDBE6FEA")).toBe(
       "E:/workspace/006effect/0xBDBE6FEA_structure.json",
     );
+    expect(inferFhm2dStructurePathFromFolder("/workspace/006effect/0xBDBE6FEA")).toBe(
+      "/workspace/006effect/0xBDBE6FEA_structure.json",
+    );
   });
 
   it("returns the same folder path when it already exists", async () => {

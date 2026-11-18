@@ -30,7 +30,9 @@ export function inferFhm2dStructurePathFromFolder(folderPath: string): string {
   const separator = preferredSeparator(trimmed);
   const segments = trimmed.split(/[\\/]/).filter(Boolean);
   const baseName = segments.at(-1) ?? trimmed;
-  const parent = segments.slice(0, -1).join(separator);
+  // filter(Boolean) drops the leading separators of POSIX and UNC paths, so keep them as written.
+  const root = trimmed.match(/^[\\/]+/)?.[0] ?? "";
+  const parent = segments.length > 1 ? root + segments.slice(0, -1).join(separator) : "";
   if (!parent) {
     return `${baseName}${STRUCTURE_JSON_SUFFIX}`;
   }

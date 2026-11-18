@@ -73,6 +73,11 @@ function splitPath(path: string): string[] {
   return normalizeSlashes(path).split("/").filter(Boolean);
 }
 
+/** splitPath drops the empty first segment of a POSIX absolute path, so its root is kept here. */
+function rootPrefix(path: string): string {
+  return normalizeSlashes(path).startsWith("/") ? "/" : "";
+}
+
 export function resolveStagePackStructureTarget(stageRoot: string): StagePackStructureTarget {
   const parts = splitPath(stageRoot);
   let packIndex = -1;
@@ -99,8 +104,9 @@ export function resolveStagePackStructureTarget(stageRoot: string): StagePackStr
   const packFolderName = parsed?.folderName ?? parts[packIndex];
   const hashHex = parsed?.assetHashHex ?? null;
   const parentParts = parts.slice(0, packIndex);
-  const packRoot = joinPath(...parts.slice(0, packIndex + 1));
-  const parentDir = joinPath(...parentParts);
+  const root = rootPrefix(stageRoot);
+  const packRoot = root + joinPath(...parts.slice(0, packIndex + 1));
+  const parentDir = root + joinPath(...parentParts);
   const structurePathCandidates = hashHex
     ? buildStagePackStructureJsonCandidates(parentDir, packFolderName, hashHex)
     : [`${parentDir}/${packFolderName}_structure.json`];

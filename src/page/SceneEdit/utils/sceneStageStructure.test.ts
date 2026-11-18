@@ -38,6 +38,13 @@ describe("sceneStageStructure", () => {
     expect(target.hashHex).toBe("0x16F73C97");
   });
 
+  it("keeps the root of a POSIX stage path", () => {
+    const target = resolveStagePackStructureTarget("/EXVS2OB/stages/stage205/0/0");
+
+    expect(target.packRoot).toBe("/EXVS2OB/stages/stage205");
+    expect(target.structurePath).toBe("/EXVS2OB/stages/stage205_structure.json");
+  });
+
   it("names the game pack from HashName inside the OB mod folder", () => {
     expect(buildStageModFhm2dOutputPath("E:/OB/data/x64/mod", "0x4d1f5138")).toBe(
       "E:/OB/data/x64/mod\\0x4D1F5138.fhm2d",
