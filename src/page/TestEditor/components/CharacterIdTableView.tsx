@@ -1730,15 +1730,14 @@ export default function CharacterIdTableView({
                     <AlertDialogHeader>
                         <AlertDialogTitle>{t("extractAllToWorkspace")}</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Extract all non-zero assets for Character ID {selectedRow?.CharacterId} into the
-                            EXVS2 Workspace
+                            {t("extractAllDescription", { id: selectedRow?.CharacterId })}
                             {folderPath.trim() ? (
                                 <>
                                     {" "}
                                     (<span className="font-mono text-xs break-all">{folderPath}</span>)
                                 </>
                             ) : null}
-                            . Config Extract Output Path is not used.
+                            {t("extractAllDescriptionEnd")}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -1750,7 +1749,7 @@ export default function CharacterIdTableView({
                             }}
                             className="bg-black hover:bg-black/90 text-white"
                         >
-                            Extract to Workspace
+                            {t("extractToWorkspace")}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

@@ -95,5 +95,8 @@
   "saveFile": "Save File",
   "rowsHeading": "Rows ({{count}})",
   "add": "Add",
-  "selectRowToEdit": "Select a row to edit"
+  "selectRowToEdit": "Select a row to edit",
+  "extractAllDescription": "Extract all non-zero assets for Character ID {{id}} into the EXVS2 Workspace",
+  "extractAllDescriptionEnd": ". Config Extract Output Path is not used.",
+  "extractToWorkspace": "Extract to Workspace"
 }

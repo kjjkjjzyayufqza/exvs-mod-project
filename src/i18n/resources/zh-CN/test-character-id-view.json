@@ -95,5 +95,8 @@
   "saveFile": "保存文件",
   "rowsHeading": "行（{{count}}）",
   "add": "添加",
-  "selectRowToEdit": "选择一行进行编辑"
+  "selectRowToEdit": "选择一行进行编辑",
+  "extractAllDescription": "将角色 ID {{id}} 的全部非零资源提取到 EXVS2 Workspace",
+  "extractAllDescriptionEnd": "。不使用配置中的 Extract Output Path。",
+  "extractToWorkspace": "提取到工作区"
 }
