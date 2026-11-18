@@ -12,6 +12,7 @@ use crate::format::fhm2d_structure_metadata::{
 use crate::format::param_bin_format::{
     build_param_binary, read_param_binary, ParamBinaryFile, ParamBinaryHeader, ParamFieldSpec,
 };
+#[cfg(target_os = "windows")]
 use encoding_rs::GBK;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};

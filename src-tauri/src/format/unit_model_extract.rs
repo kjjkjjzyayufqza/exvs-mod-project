@@ -97,8 +97,9 @@ pub fn extract_unit_model_fhm2d_to_folder_impl(
             .unwrap_or_default();
 
         let mut dest_dir = out_root_path.clone();
-        if !folder.is_empty() {
-            dest_dir = dest_dir.join(&folder);
+        // `folder` is a logical structure path such as `models\name`; push each segment so it nests on every OS.
+        for segment in folder.split(['\\', '/']).filter(|s| !s.is_empty()) {
+            dest_dir.push(segment);
         }
         fs::create_dir_all(&dest_dir)
             .map_err(|e| format!("Failed to create {}: {e}", dest_dir.display()))?;

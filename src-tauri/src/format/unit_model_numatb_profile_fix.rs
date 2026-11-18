@@ -677,7 +677,7 @@ fn replace_filename_in_url(file_url: &str, new_filename: &str) -> String {
 
 fn resolve_file_path(json_dir: &Path, file_url: &str) -> PathBuf {
     let cleaned = file_url.trim().trim_start_matches(['.', '/', '\\']);
-    let relative = cleaned.replace('/', std::path::MAIN_SEPARATOR_STR);
+    let relative = cleaned.replace(['/', '\\'], std::path::MAIN_SEPARATOR_STR);
     json_dir.join(relative)
 }
 

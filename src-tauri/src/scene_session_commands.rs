@@ -2928,7 +2928,7 @@ fn resolve_unit_model_static_mesh_textures(
         })?;
         resolved_textures.push((
             reference.clone(),
-            PathBuf::from(resolved.replace('/', std::path::MAIN_SEPARATOR_STR)),
+            PathBuf::from(resolved.replace(['/', '\\'], std::path::MAIN_SEPARATOR_STR)),
         ));
     }
     Ok(resolved_textures)

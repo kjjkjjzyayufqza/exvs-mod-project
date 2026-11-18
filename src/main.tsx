@@ -6,6 +6,10 @@ import "@/utils/threeMeshBvh";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Fhm2dStructureMigrationProvider } from "@/components/fhm2d-metadata";
 import { AppI18nProvider } from "@/i18n/AppI18nProvider";
+import { installPosixPathBridge } from "@/lib/posixPathBridge";
+
+// Must run before the first IPC call, so it precedes the first render.
+installPosixPathBridge(window, navigator.userAgent);
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <AppI18nProvider>
