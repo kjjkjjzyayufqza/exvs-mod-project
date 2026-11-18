@@ -71,7 +71,7 @@ describe("createPlacementRowForType", () => {
   test("creates an OBJECT row with transform and objectNumber fields", () => {
     const row = createPlacementRowForType("OBJECT");
     expect(row.vdkType).toBe("OBJECT");
-    expect(row.objectNumber).toBeNull();
+    expect(row.objectNumber).toBe(0);
     expect(row.posX).toBe(0);
     expect(row.scaleX).toBe(1);
     expect(row.rawFields).toContain("VDK_TYPE");
@@ -104,14 +104,14 @@ describe("createPlacementRowForType", () => {
 describe("syncParsedFieldsFromRaw", () => {
   test("syncs objectNumber when VDK_OBJECTNUMBER rawField is edited", () => {
     const row = createPlacementRowForType("OBJECT");
-    expect(row.objectNumber).toBeNull();
+    expect(row.objectNumber).toBe(0);
 
     const rawFields = [...row.rawFields];
     const objNumIdx = rawFields.indexOf("VDK_OBJECTNUMBER");
-    rawFields[objNumIdx + 1] = "0";
+    rawFields[objNumIdx + 1] = "3";
 
     const synced = syncParsedFieldsFromRaw({ ...row, rawFields });
-    expect(synced.objectNumber).toBe(0);
+    expect(synced.objectNumber).toBe(3);
   });
 
   test("syncs vdkType when VDK_TYPE rawField is edited", () => {
