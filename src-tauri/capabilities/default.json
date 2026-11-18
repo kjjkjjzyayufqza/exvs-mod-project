@@ -19,6 +19,9 @@
       "allow": [
         {
           "path": "*/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
         }
       ]
     },
@@ -27,6 +30,9 @@
       "allow": [
         {
           "path": "*/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
         }
       ]
     },
@@ -35,6 +41,9 @@
       "allow": [
         {
           "path": "*/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
         }
       ]
     },
@@ -52,6 +61,9 @@
       "allow": [
         {
           "path": "*/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
         }
       ]
     },
@@ -60,6 +72,9 @@
       "allow": [
         {
           "path": "*/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
         }
       ]
     },
