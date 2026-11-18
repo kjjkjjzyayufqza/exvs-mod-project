@@ -53,7 +53,7 @@ import {
   type PerspectiveCamera,
   type Texture,
   type WebGLRenderer,
-  type WebGLRenderTarget,
+  WebGLRenderTarget,
 } from "three";
 
 import {
@@ -225,6 +225,11 @@ export class ExvsRenderPipeline {
   private readonly depthReadbackBuffer = new Float32Array(4);
 
   private readonly savedVisibility = new Map<Object3D, boolean>();
+  /** One-attachment framebuffers over G-buffer textures, keyed by attachment index. See `blitFullResolution`. */
+  private readonly singleAttachmentTargets = new Map<
+    number,
+    { target: WebGLRenderTarget; framebuffer: WebGLFramebuffer; texture: WebGLTexture | null }
+  >();
   private readonly savedMaterials = new Map<Mesh, Material | Material[]>();
 
   private readonly scratchMatrix4 = new Matrix4();
@@ -500,6 +505,12 @@ export class ExvsRenderPipeline {
   }
 
   dispose(): void {
+    const gl = this.renderer.getContext();
+    for (const entry of this.singleAttachmentTargets.values()) {
+      gl.deleteFramebuffer(entry.framebuffer);
+      entry.target.dispose();
+    }
+    this.singleAttachmentTargets.clear();
     this.targets.dispose();
     this.materials.dispose();
     this.lights.dispose();
@@ -718,8 +729,8 @@ export class ExvsRenderPipeline {
     try {
       for (let i = 0; i < EXVS_SHADOW_PARTITION_COUNT; i += 1) {
         const [col, row] = SHADOW_TILES[i];
-        renderer.setViewport(col * half, row * half, half, half);
-        renderer.setScissor(col * half, row * half, half, half);
+        this.setTexelViewport(col * half, row * half, half, half);
+        this.setTexelScissor(col * half, row * half, half, half);
         renderer.setScissorTest(true);
 
         shadowCamera.matrixWorld.identity();
@@ -733,7 +744,7 @@ export class ExvsRenderPipeline {
       }
     } finally {
       renderer.setScissorTest(false);
-      renderer.setViewport(0, 0, atlas.width, atlas.height);
+      this.setTexelViewport(0, 0, atlas.width, atlas.height);
       this.restoreMaterials();
       this.endIsolatedPass();
     }
@@ -748,7 +759,7 @@ export class ExvsRenderPipeline {
     const size = this.targets.getSize();
 
     renderer.setRenderTarget(this.targets.gBuffer);
-    renderer.setViewport(0, 0, size.width, size.height);
+    this.setTexelViewport(0, 0, size.width, size.height);
     renderer.state.buffers.depth.setMask(true);
     // Target 0's alpha is zero and target 1's alpha is one wherever geometry
     // lands, so clearing to zero leaves the sky reading as unlit, unshadowed.
@@ -1013,7 +1024,7 @@ export class ExvsRenderPipeline {
     uniforms.uMapfogAttenEnd.value = filter.mapfogAttenEnd;
 
     renderer.setRenderTarget(this.targets.sceneColor);
-    renderer.setViewport(0, 0, this.targets.sceneColor.width, this.targets.sceneColor.height);
+    this.setTexelViewport(0, 0, this.targets.sceneColor.width, this.targets.sceneColor.height);
     renderer.state.buffers.depth.setMask(true);
     // The composite discards where nothing was drawn, so this clear is what shows
     // through as the background.
@@ -1361,9 +1372,9 @@ export class ExvsRenderPipeline {
     if (resetViewport) {
       if (target === null) {
         const size = renderer.getDrawingBufferSize(this.scratchVector2);
-        renderer.setViewport(0, 0, size.x, size.y);
+        this.setTexelViewport(0, 0, size.x, size.y);
       } else {
-        renderer.setViewport(0, 0, target.width, target.height);
+        this.setTexelViewport(0, 0, target.width, target.height);
       }
     }
     this.fullscreenQuad.material = material;
@@ -1371,11 +1382,29 @@ export class ExvsRenderPipeline {
   }
 
   /**
+   * Viewport in texels of the bound target. three's `setViewport` and `setScissor`
+   * take CSS pixels and multiply them by the canvas pixel ratio, so a texel rect
+   * passed straight through draws every pass at twice its size on a 2x display.
+   */
+  private setTexelViewport(x: number, y: number, width: number, height: number): void {
+    const ratio = this.renderer.getPixelRatio();
+    this.renderer.setViewport(x / ratio, y / ratio, width / ratio, height / ratio);
+  }
+
+  private setTexelScissor(x: number, y: number, width: number, height: number): void {
+    const ratio = this.renderer.getPixelRatio();
+    this.renderer.setScissor(x / ratio, y / ratio, width / ratio, height / ratio);
+  }
+
+  /**
    * A blit into exactly one attachment of a multi-target framebuffer.
    *
    * The shadow resolve and the ambient occlusion blur each blend into a single
-   * G-buffer attachment and must leave the other three untouched, so every other
-   * draw buffer is masked off for the duration of the draw.
+   * G-buffer attachment and must leave the other three untouched. They draw
+   * through a framebuffer that holds only that attachment: the shaders' single
+   * `location = 0` output then lands on it, and the G-buffer textures and depth
+   * they sample are not attached to the framebuffer being drawn, which WebGL
+   * rejects as a feedback loop.
    */
   private blitFullResolution(
     material: ShaderMaterial,
@@ -1383,25 +1412,51 @@ export class ExvsRenderPipeline {
     attachmentIndex: number,
   ): void {
     const renderer = this.renderer;
-    const gl = renderer.getContext() as WebGL2RenderingContext;
-
-    renderer.setRenderTarget(target);
-    renderer.setViewport(0, 0, target.width, target.height);
-
-    const drawBuffers: number[] = [];
-    for (let i = 0; i < target.textures.length; i += 1) {
-      drawBuffers.push(i === attachmentIndex ? gl.COLOR_ATTACHMENT0 + i : gl.NONE);
-    }
-    gl.drawBuffers(drawBuffers);
+    renderer.setRenderTarget(this.singleAttachmentTarget(target, attachmentIndex));
+    this.setTexelViewport(0, 0, target.width, target.height);
 
     this.fullscreenQuad.material = material;
     renderer.render(this.fullscreenScene, this.fullscreenCamera);
+  }
 
-    const restored: number[] = [];
-    for (let i = 0; i < target.textures.length; i += 1) restored.push(gl.COLOR_ATTACHMENT0 + i);
-    gl.drawBuffers(restored);
+  private singleAttachmentTarget(target: WebGLRenderTarget, attachmentIndex: number): WebGLRenderTarget {
+    const renderer = this.renderer;
+    const gl = renderer.getContext() as WebGL2RenderingContext;
+    // three creates the GL texture when the G-buffer is first drawn, which always precedes these passes.
+    const textureProperties = renderer.properties.get(target.textures[attachmentIndex]) as {
+      __webglTexture?: WebGLTexture;
+    };
+    const texture = textureProperties.__webglTexture;
+    if (!texture) {
+      throw new Error(`ExvsRenderPipeline: G-buffer attachment ${attachmentIndex} has no GL texture yet`);
+    }
+
+    let entry = this.singleAttachmentTargets.get(attachmentIndex);
+    if (!entry) {
+      const framebuffer = gl.createFramebuffer();
+      if (!framebuffer) throw new Error("ExvsRenderPipeline: could not create a framebuffer");
+      const wrapper = new WebGLRenderTarget(target.width, target.height, {
+        depthBuffer: false,
+        stencilBuffer: false,
+      });
+      (renderer as ExternalFramebufferRenderer).setRenderTargetFramebuffer(wrapper, framebuffer);
+      entry = { target: wrapper, framebuffer, texture: null };
+      this.singleAttachmentTargets.set(attachmentIndex, entry);
+    }
+    if (entry.texture !== texture) {
+      renderer.state.bindFramebuffer(gl.FRAMEBUFFER, entry.framebuffer);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+      entry.texture = texture;
+    }
+    entry.target.setSize(target.width, target.height);
+    return entry.target;
   }
 }
+
+/** three r184 exposes this at runtime; the installed typings do not declare it yet. */
+type ExternalFramebufferRenderer = WebGLRenderer & {
+  setRenderTargetFramebuffer(renderTarget: WebGLRenderTarget, framebuffer: WebGLFramebuffer): void;
+};
 
 function imageEdge(image: unknown): { width: number; height: number } {
   if (Array.isArray(image)) return imageEdge(image[0]);
