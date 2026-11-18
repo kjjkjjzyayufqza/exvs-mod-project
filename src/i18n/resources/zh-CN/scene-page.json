@@ -5,7 +5,8 @@
     "stageStreamed": "场景流式加载完成，但有 {{count}} 个问题",
     "hktNotGenerated": "未为 {{name}} 生成 HKT 碰撞数据",
     "fbxObjectVisible": "导出 FBX 前，请确保选中对象在视口中可见",
-    "convertedFailed": "已转换 {{converted}} 个，失败 {{failed}} 个"
+    "convertedFailed": "已转换 {{converted}} 个，失败 {{failed}} 个",
+    "extractedWarnings": "解包完成，但有 {{count}} 个警告"
   },
   "errors": {
     "saveGizmoSize": "无法保存操纵器大小",
@@ -45,7 +46,11 @@
     "fhm2dSaveFailed": "重新打包失败",
     "fhm2dModPathMissing": "还没设置 OB mod 目录。请先在配置里填写，再重新打包。",
     "fhm2dRemoveVgsht2Failed": "已打包到 {{path}}，但无法删除同名 .vgsht2：{{message}}",
-    "infoCsvReloadFailed": "无法从磁盘重新加载 {{files}}：{{message}}"
+    "infoCsvReloadFailed": "无法从磁盘重新加载 {{files}}：{{message}}",
+    "allDaeFailed": "全部 {{count}} 个静态网格转换失败：{{names}}",
+    "directConvertFailed": "无法转换 {{name}}：{{message}}",
+    "rowAddedAfterLoad": "此行是在场景加载后添加的，没有可恢复的原始值",
+    "saveFailed": "无法保存场景"
   },
   "progress": {
     "preparing": "正在准备 {{fileName}}……",
@@ -90,7 +95,8 @@
     "replacementWritten": "模型替换已写入磁盘",
     "replacementStaged": "模型替换已暂存",
     "generatingHktFor": "正在为 {{name}} 生成 HKT……",
-    "replacingHkt": "正在替换 HKT……"
+    "replacingHkt": "正在替换 HKT……",
+    "directConversionCompleted": "转换完成"
   },
   "actions": {
     "migrateStructure": "迁移 Stage FHM2D 结构",
@@ -158,10 +164,20 @@
     "importedDae": "已将 {{count}} 个 DAE 对象导入场景",
     "fhm2dSaved": "已打包到 {{path}}（{{size}} MB）",
     "fhm2dRemovedVgsht2": "已删除同名 .vgsht2，游戏会读取新的包",
-    "infoCsvReloaded": "已从磁盘重新加载 {{files}}"
+    "infoCsvReloaded": "已从磁盘重新加载 {{files}}",
+    "changesReverted": "已撤销自场景加载以来的全部更改",
+    "convertedToDisk": "已将 {{name}} 转换到磁盘",
+    "extractedFiles": "已解包 {{count}} 个文件（{{size}} MB）",
+    "folderConverted": "已保存场景并转换 {{count}} 个静态网格",
+    "folderSaved": "已保存场景文件夹",
+    "graphicParamsReverted": "已恢复图形参数",
+    "partialSave": "已保存：{{converted}} 个静态网格转换成功，{{failed}} 个失败：{{names}}",
+    "placementsReverted": "已恢复放置行",
+    "replacementStaged": "已暂存 {{name}} 的替换，保存后写入磁盘"
   },
   "info": {
-    "noHktFiles": "未找到 HKT 碰撞文件"
+    "noHktFiles": "未找到 HKT 碰撞文件",
+    "noHktFilesStage": "此场景中没有 HKT 碰撞文件"
   },
   "dialogs": {
     "clearCacheTitle": "清除场景内存和缓存？",

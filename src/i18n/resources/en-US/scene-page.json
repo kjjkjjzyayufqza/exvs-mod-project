@@ -5,7 +5,8 @@
     "stageStreamed": "Stage streamed with {{count}} issue(s)",
     "hktNotGenerated": "HKT not generated for {{name}}",
     "fbxObjectVisible": "FBX export needs the selected object to be visible in the viewport",
-    "convertedFailed": "Converted {{converted}}, failed {{failed}}"
+    "convertedFailed": "Converted {{converted}}, failed {{failed}}",
+    "extractedWarnings": "Extracted with {{count}} warning(s)"
   },
   "errors": {
     "saveGizmoSize": "Failed to save gizmo size",
@@ -45,7 +46,11 @@
     "fhm2dSaveFailed": "Repack failed",
     "fhm2dModPathMissing": "OB mod folder is not configured. Set it in Config before repacking.",
     "fhm2dRemoveVgsht2Failed": "Repacked to {{path}}, but failed to remove .vgsht2: {{message}}",
-    "infoCsvReloadFailed": "Could not reload {{files}} from disk: {{message}}"
+    "infoCsvReloadFailed": "Could not reload {{files}} from disk: {{message}}",
+    "allDaeFailed": "All {{count}} static mesh(es) failed to convert: {{names}}",
+    "directConvertFailed": "Failed to convert {{name}}: {{message}}",
+    "rowAddedAfterLoad": "This row was added after the stage loaded, so there is no original to revert to",
+    "saveFailed": "Failed to save the stage"
   },
   "progress": {
     "preparing": "Preparing {{fileName}}...",
@@ -90,7 +95,8 @@
     "replacementWritten": "Model replacement written to disk",
     "replacementStaged": "Model replacement staged",
     "generatingHktFor": "Generating HKT for {{name}}...",
-    "replacingHkt": "Replacing HKT..."
+    "replacingHkt": "Replacing HKT...",
+    "directConversionCompleted": "Conversion complete"
   },
   "actions": {
     "migrateStructure": "Migrate Stage FHM2D structure",
@@ -158,10 +164,20 @@
     "importedDae": "Imported {{count}} DAE object(s) to scene",
     "fhm2dSaved": "Repacked to {{path}} ({{size}} MB)",
     "fhm2dRemovedVgsht2": "Removed the matching .vgsht2 so the game loads the new pack",
-    "infoCsvReloaded": "Reloaded {{files}} from disk"
+    "infoCsvReloaded": "Reloaded {{files}} from disk",
+    "changesReverted": "Reverted all changes since the stage loaded",
+    "convertedToDisk": "Converted {{name}} to disk",
+    "extractedFiles": "Extracted {{count}} file(s) ({{size}} MB)",
+    "folderConverted": "Saved the stage and converted {{count}} static mesh(es)",
+    "folderSaved": "Saved the stage folder",
+    "graphicParamsReverted": "Reverted graphic parameters",
+    "partialSave": "Saved with {{converted}} static mesh(es) converted and {{failed}} failed: {{names}}",
+    "placementsReverted": "Reverted placement rows",
+    "replacementStaged": "Staged the replacement for {{name}}. Save to write it to disk"
   },
   "info": {
-    "noHktFiles": "No HKT collision files found"
+    "noHktFiles": "No HKT collision files found",
+    "noHktFilesStage": "No HKT collision files in this stage"
   },
   "dialogs": {
     "clearCacheTitle": "Clear scene memory and caches?",
