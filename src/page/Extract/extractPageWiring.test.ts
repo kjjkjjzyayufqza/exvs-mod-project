@@ -44,7 +44,7 @@ describe("Single FHM2D page wiring", () => {
   it("exposes format selection and repack tab chrome", () => {
     expect(pageSource).toContain("Fhm2d_type_format");
     expect(pageSource).toContain('value="repack"');
-    expect(pageSource).toContain("Asset format");
+    expect(pageSource).toContain('t("assetFormat")');
     // Legacy dead option removed from UI
     expect(pageSource).not.toContain("FolderWithStructure");
     // Fake random progress removed

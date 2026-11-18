@@ -69,6 +69,7 @@ import { buildDeletePreview, executeDelete } from "./sceneDeleteConfirm";
 import { executeSaveFolderPipeline, type SaveFolderParams } from "./sceneSaveFolderPipeline";
 import { useSceneDirtyStore } from "../store/sceneDirtyStore";
 import type { SaveStepInfo } from "../components/SaveProgressDialog";
+import type { PlanParam } from "../types/planParam";
 import type { ImportedDaeObject } from "../components/MapViewport";
 import {
   sceneConfigureImport,
@@ -218,7 +219,7 @@ describe("sceneSaveFolderPipeline", () => {
 
   it("writes plan_param.spbin when the spawn plan is dirty", async () => {
     useSceneDirtyStore.getState().markGlobalDirty("planParam");
-    const plan = {
+    const plan: PlanParam = {
       limit: 1000,
       limitPadding: 0,
       spawnPairs: [{ first: [1, 2, 3, 1], second: [4, 5, 6, 3.5] }],

@@ -6,7 +6,7 @@ import type {
   SsbhModelPreviewBundle,
   SsbhModelPreviewInstance,
 } from "@/components/ssbh-model-preview/types";
-import type { NutexbTextureData } from "@/page/SceneEdit/hooks/useSceneTextureLoader";
+import type { NutexbTextureData } from "@/components/ssbh-model-preview/ssbhTextureUpload";
 import type { UnitModelTextureInventory } from "./unitModelTextureService";
 import type {
   UnitModelRepackResult,

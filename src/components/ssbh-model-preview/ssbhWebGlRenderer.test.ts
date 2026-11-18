@@ -111,7 +111,7 @@ describe("ssbhWebGlRenderer", () => {
   });
 
   it("does not fall back to a software context when the caller forbids it", () => {
-    const construct = vi.fn(() => {
+    const construct = vi.fn((_params: SsbhWebGlRendererParameters): WebGLRenderer => {
       throw new Error("Error creating WebGL context.");
     });
     expect(() =>

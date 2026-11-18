@@ -1193,7 +1193,7 @@ export function UnitModelModelManagerPanel({
     setShowImportConfig(false);
     setImportProgress({
       open: true,
-      progress: 0;
+      progress: 0,
       steps: createUnitImportSteps(entry.fileName, t),
     });
     const stamp = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
